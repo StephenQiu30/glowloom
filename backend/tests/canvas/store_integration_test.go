@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
@@ -18,6 +19,7 @@ import (
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func canvasDB(t *testing.T, key string) *gorm.DB {
@@ -43,11 +45,14 @@ func seedCanvasActor(t *testing.T, database *gorm.DB) (identityapp.Principal, uu
 	}{
 		{`INSERT INTO workspace.organization(id,name) VALUES(?, 'Canvas test')`, []any{a.OrgID}},
 		{`INSERT INTO identity."user"(id,org_id,login_name,display_name,role,password_hash,must_change_password) VALUES(?,?,?,'Canvas test','producer','synthetic',false)`, []any{a.ID, a.OrgID, "canvas-" + a.ID.String()}},
-		{`INSERT INTO workspace.project(id,org_id,owner_id,name,aspect_ratio,style_type) VALUES(?,?,?,'Canvas test','16:9','realistic')`, []any{p, a.OrgID, a.ID}},
 	} {
 		if err := database.Exec(statement.sql, statement.args...).Error; err != nil {
 			t.Fatal(err)
 		}
+	}
+	a = identityfixture.Session(t, database, a)
+	if err := database.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,owner_scope_id,name,aspect_ratio,style_type) VALUES(?,?,?,?,'Canvas test','16:9','realistic')`, p, a.OrgID, a.ID, a.ScopeID).Error; err != nil {
+		t.Fatal(err)
 	}
 	return a, p
 }
@@ -99,7 +104,7 @@ func TestCanvasPersistenceRevisionReplayRollbackAndRestore(t *testing.T) {
 		t.Fatalf("restore: %+v %v", result, err)
 	}
 	other, otherProject := seedCanvasActor(t, database)
-	if _, err := service.Get(t.Context(), other, doc.ID); !errors.Is(err, application.ErrNotFound) {
+	if _, err := service.Get(t.Context(), other, doc.ID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatalf("crossorg: %v", err)
 	}
 	otherDoc, err := service.Create(t.Context(), other, otherProject, uuid.NewString(), application.CreateInput{Name: "Other"})
@@ -113,7 +118,7 @@ func TestCanvasPersistenceRevisionReplayRollbackAndRestore(t *testing.T) {
 	if err := database.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Execute(t.Context(), actor, doc.ID, key, input); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := service.Execute(t.Context(), actor, doc.ID, key, input); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatalf("revoked actor replayed: %v", err)
 	}
 	var changes, audits, logs int64
@@ -161,5 +166,7 @@ func TestConcurrentCanvasCommandsAdvanceOneRevision(t *testing.T) {
 }
 
 func canvasStore(database *gorm.DB) *pgcanvas.Store {
-	return pgcanvas.NewStore(database, func(tx *gorm.DB) application.MediaReader { return mediaapp.NewAssetQuery(pgmedia.NewStore(tx), nil) })
+	return pgcanvas.NewScopedStore(database, func(tx *gorm.DB) application.MediaReader {
+		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, app.NewMediaScopeAccess), nil)
+	}, app.NewCanvasProjectAccess)
 }

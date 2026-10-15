@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/uuid"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
@@ -19,11 +18,11 @@ func TestMediaTransferQueuedCancellationIsPermanentAndNeverPublishesText(t *test
 	source := domain.LibraryScope{Kind: domain.LibraryPersonal}
 	target := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	text := "真实纯文本，不包含对象"
-	created, err := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: source, Action: "create_text", Key: uuid.New(), Metadata: &mediaapp.LibraryMetadata{Title: "等待转移", Category: "other", PlainText: &text}})
+	created, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: source, Action: "create_text", Key: uuid.New(), Metadata: &mediaapp.LibraryMetadata{Title: "等待转移", Category: "other", PlainText: &text}})
 	if err != nil || len(created.Items) != 1 {
 		t.Fatal(err)
 	}
-	repo := pgmedia.NewTransferStore(db, libraryTestAccess, transferTestGuards, time.Now)
+	repo := mediaTransferStore(db, libraryTestAccess, transferTestGuards, time.Now)
 	job, err := repo.CreateTransfer(t.Context(), actor, mediaapp.TransferInput{Source: source, Target: target, Key: uuid.New(), ExpectedSourceRevision: 1, ExpectedProjectRevision: 1, Items: []mediaapp.LibraryItemRevision{{ID: created.Items[0].ID, Revision: 1}}})
 	if err != nil {
 		t.Fatal(err)
@@ -40,7 +39,7 @@ func TestMediaTransferQueuedCancellationIsPermanentAndNeverPublishesText(t *test
 	if _, err := repo.ControlTransfer(t.Context(), actor, job.ID, key, job.Revision+1, "cancel"); !errors.Is(err, mediaapp.ErrLibraryKeyConflict) {
 		t.Fatal("same cancellation key accepted another input", err)
 	}
-	page, err := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now).ListLibrary(t.Context(), actor, target, libraryQuery())
+	page, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ListLibrary(t.Context(), actor, target, libraryQuery())
 	if err != nil || page.Total != 0 {
 		t.Fatal("cancelled unpublished text leaked into target", page, err)
 	}

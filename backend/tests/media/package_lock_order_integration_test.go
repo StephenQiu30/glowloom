@@ -17,7 +17,6 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
@@ -98,10 +97,10 @@ func TestMediaPackageReplayAndAdmissionUseCommandBeforeProjectLock(t *testing.T)
 	plan := packageLockPlan(t, actor, project)
 	readHeld, releaseRead := make(chan struct{}, 1), make(chan struct{})
 	writeEntered := make(chan struct{}, 1)
-	reader := pgmedia.NewPackageStore(db, func(tx *gorm.DB) mediaapp.LibraryProjectAccess {
+	reader := mediaPackageStore(db, func(tx *gorm.DB) mediaapp.LibraryProjectAccess {
 		return packageLockAccess{LibraryProjectAccess: packageTestAccess(tx), readHeld: readHeld, releaseRead: releaseRead}
 	}, transferTestGuards, time.Now)
-	writer := pgmedia.NewPackageStore(db, func(tx *gorm.DB) mediaapp.LibraryProjectAccess {
+	writer := mediaPackageStore(db, func(tx *gorm.DB) mediaapp.LibraryProjectAccess {
 		return packageLockAccess{LibraryProjectAccess: packageTestAccess(tx), writeEntered: writeEntered}
 	}, transferTestGuards, time.Now)
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
@@ -155,7 +154,7 @@ func TestMediaPackageReplayKeepsOriginalReceiptAndCurrentAuthority(t *testing.T)
 	db := packageLockDB(t)
 	actor, project := mediaStoreProject(t, db)
 	plan := packageLockPlan(t, actor, project)
-	repo := pgmedia.NewPackageStore(db, packageTestAccess, transferTestGuards, time.Now)
+	repo := mediaPackageStore(db, packageTestAccess, transferTestGuards, time.Now)
 	if _, err := repo.AdmitPackageImport(t.Context(), actor, plan.Request, plan); err != nil {
 		t.Fatal("complete durable SQL admission", err)
 	}
@@ -166,7 +165,7 @@ func TestMediaPackageReplayKeepsOriginalReceiptAndCurrentAuthority(t *testing.T)
 		t.Fatal("original permanent SQL receipt", err)
 	}
 	text := "后续目录修改"
-	if _, err := pgmedia.NewLibraryStore(db, packageTestAccess, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: plan.Request.Scope, Key: uuid.New(), Action: "create_text", Metadata: &mediaapp.LibraryMetadata{PlainText: &text, Title: "新增正文", Category: "material", Tags: []string{}}}); err != nil {
+	if _, err := mediaLibraryStore(db, packageTestAccess, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: plan.Request.Scope, Key: uuid.New(), Action: "create_text", Metadata: &mediaapp.LibraryMetadata{PlainText: &text, Title: "新增正文", Category: "material", Tags: []string{}}}); err != nil {
 		t.Fatal("later authorized catalog change", err)
 	}
 	replay, frozen, found, err := repo.FindPackageImport(t.Context(), actor, plan.Request)
@@ -187,7 +186,7 @@ func TestMediaPackageReplayKeepsOriginalReceiptAndCurrentAuthority(t *testing.T)
 	if err := db.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal("disable only the isolated fixture actor", err)
 	}
-	if _, _, _, err := repo.FindPackageImport(t.Context(), actor, plan.Request); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, _, _, err := repo.FindPackageImport(t.Context(), actor, plan.Request); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("permanent receipt bypassed current actor revocation", err)
 	}
 }

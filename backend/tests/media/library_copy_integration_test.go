@@ -11,7 +11,6 @@ import (
 	"gorm.io/gorm"
 
 	copyobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
@@ -22,7 +21,7 @@ func TestProjectCopyLibraryRetainedImagePreservesTrashAndIndependentBytes(t *tes
 	objects := glbTestObjects(t)
 	actor, project := mediaStoreProject(t, db)
 	original := documentUpload(t, db, objects, actor, project, "retained.png", uploadPNG(t))
-	store := pgmedia.NewStore(db)
+	store := mediaTestStore(db)
 	source, err := store.FindAsset(t.Context(), actor, project, original.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -35,7 +34,7 @@ func TestProjectCopyLibraryRetainedImagePreservesTrashAndIndependentBytes(t *tes
 		t.Cleanup(func() { _ = objects.Remove(context.Background(), r.ObjectKey) })
 	}
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
-	library := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now)
+	library := mediaLibraryStore(db, libraryTestAccess, time.Now)
 	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Action: "update_item", Key: uuid.New(), ItemID: &source.ID, Metadata: &mediaapp.LibraryMetadata{Title: "回收的原图", Category: "material", Tags: []string{"保留"}}}); err != nil {
 		t.Fatal(err)
 	}
@@ -53,11 +52,11 @@ func TestProjectCopyLibraryRetainedImagePreservesTrashAndIndependentBytes(t *tes
 		t.Fatal("ordinary read exposed retained image", err)
 	}
 	binding := mediaapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: uuid.New()}
-	if err := db.Exec(`INSERT INTO workspace.project(id,org_id,name,aspect_ratio,style_type,status) VALUES(?,?,'完整回收库副本','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID).Error; err != nil {
+	if err := db.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,owner_scope_id,name,aspect_ratio,style_type,status) VALUES(?,?,?,?,'完整回收库副本','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID, actor.ID, actor.ScopeID).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		_, err := pgmedia.NewProjectCopyStore(tx).FreezeWithReferences(t.Context(), actor, binding, time.Now(), []uuid.UUID{source.ID})
+		_, err := mediaCopyStore(tx).FreezeWithReferences(t.Context(), actor, binding, time.Now(), []uuid.UUID{source.ID})
 		return err
 	}); !errors.Is(err, mediaapp.ErrProjectCopyMediaUnavailable) {
 		t.Fatal("external Script history input accepted a non-document", err)
@@ -68,18 +67,18 @@ func TestProjectCopyLibraryRetainedImagePreservesTrashAndIndependentBytes(t *tes
 			return err
 		}
 		var err error
-		snapshot, err = pgmedia.NewProjectCopyStore(tx).Freeze(t.Context(), actor, binding, time.Now())
+		snapshot, err = mediaCopyStore(tx).Freeze(t.Context(), actor, binding, time.Now())
 		if err != nil {
 			return err
 		}
-		return tx.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,actor_id,source_project_id,source_revision,target_project_id,target_name,status,stage,manifest,workspace_snapshot,idem_key,request_sha256,admission_response) VALUES(?,?,?,?,1,?,'完整回收库副本','queued','media','{}','{}',gen_random_uuid(),repeat('a',64),'{}')`, binding.JobID, actor.OrgID, actor.ID, project, binding.TargetProjectID).Error
+		return tx.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,actor_id,owner_scope_id,source_project_id,source_revision,target_project_id,target_name,status,stage,manifest,workspace_snapshot,idem_key,request_sha256,admission_response) VALUES(?,?,?,?,?,1,?,'完整回收库副本','queued','media','{}','{}',gen_random_uuid(),repeat('a',64),'{}')`, binding.JobID, actor.OrgID, actor.ID, actor.ScopeID, project, binding.TargetProjectID).Error
 	}); err != nil {
 		t.Fatal("owning library must include retained original", err)
 	}
 	if snapshot.Assets != 1 || snapshot.Renditions != len(rends) {
 		t.Fatal("incomplete retained original and renditions", snapshot)
 	}
-	repo := pgmedia.NewProjectCopyStore(db)
+	repo := mediaCopyStore(db)
 	transfer := mediaapp.NewProjectCopyTransfer(repo, copyobjects.NewProjectCopyObjects(objects), t.TempDir())
 	if err := transfer.Transfer(t.Context(), actor, binding, snapshot); err != nil {
 		t.Fatal(err)
@@ -95,7 +94,7 @@ func TestProjectCopyLibraryRetainedImagePreservesTrashAndIndependentBytes(t *tes
 	})
 	rollback := errors.New("synthetic coordinator rollback")
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		if _, err := pgmedia.NewProjectCopyStore(tx).Register(t.Context(), actor, binding, snapshot); err != nil {
+		if _, err := mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot); err != nil {
 			return err
 		}
 		return rollback
@@ -115,7 +114,7 @@ func TestProjectCopyLibraryRetainedImagePreservesTrashAndIndependentBytes(t *tes
 		t.Fatal("outer rollback published catalog independently", registered, err)
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		_, err := pgmedia.NewProjectCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+		_, err := mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -166,7 +165,7 @@ func TestProjectCopyLibraryUnavailableOriginalNeverPublishesPartialMetadata(t *t
 			objects := glbTestObjects(t)
 			actor, project := mediaStoreProject(t, db)
 			original := documentUpload(t, db, objects, actor, project, "required.png", uploadPNG(t))
-			store := pgmedia.NewStore(db)
+			store := mediaTestStore(db)
 			source, err := store.FindAsset(t.Context(), actor, project, original.Asset.ID)
 			if err != nil {
 				t.Fatal(err)
@@ -178,7 +177,7 @@ func TestProjectCopyLibraryUnavailableOriginalNeverPublishesPartialMetadata(t *t
 			for _, r := range rends {
 				t.Cleanup(func() { _ = objects.Remove(context.Background(), r.ObjectKey) })
 			}
-			library := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now)
+			library := mediaLibraryStore(db, libraryTestAccess, time.Now)
 			scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 			if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Action: "update_item", Key: uuid.New(), ItemID: &source.ID, Metadata: &mediaapp.LibraryMetadata{Title: "不得省略", Category: "other", Tags: []string{}}}); err != nil {
 				t.Fatal(err)
@@ -197,17 +196,17 @@ func TestProjectCopyLibraryUnavailableOriginalNeverPublishesPartialMetadata(t *t
 				}
 			}
 			binding := mediaapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: uuid.New()}
-			if err := db.Exec(`INSERT INTO workspace.project(id,org_id,name,aspect_ratio,style_type,status) VALUES(?,?,'不完整不发布','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID).Error; err != nil {
+			if err := db.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,owner_scope_id,name,aspect_ratio,style_type,status) VALUES(?,?,?,?,'不完整不发布','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID, actor.ID, actor.ScopeID).Error; err != nil {
 				t.Fatal(err)
 			}
 			var snapshot mediaapp.ProjectCopySnapshot
 			freezeErr := db.Transaction(func(tx *gorm.DB) error {
 				var err error
-				snapshot, err = pgmedia.NewProjectCopyStore(tx).Freeze(t.Context(), actor, binding, time.Now())
+				snapshot, err = mediaCopyStore(tx).Freeze(t.Context(), actor, binding, time.Now())
 				if err != nil {
 					return err
 				}
-				return tx.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,actor_id,source_project_id,source_revision,target_project_id,target_name,status,stage,manifest,workspace_snapshot,idem_key,request_sha256,admission_response) VALUES(?,?,?,?,1,?,'不完整不发布','queued','media','{}','{}',gen_random_uuid(),repeat('a',64),'{}')`, binding.JobID, actor.OrgID, actor.ID, project, binding.TargetProjectID).Error
+				return tx.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,actor_id,owner_scope_id,source_project_id,source_revision,target_project_id,target_name,status,stage,manifest,workspace_snapshot,idem_key,request_sha256,admission_response) VALUES(?,?,?,?,?,1,?,'不完整不发布','queued','media','{}','{}',gen_random_uuid(),repeat('a',64),'{}')`, binding.JobID, actor.OrgID, actor.ID, actor.ScopeID, project, binding.TargetProjectID).Error
 			})
 			if failure == "unapproved" {
 				if !errors.Is(freezeErr, mediaapp.ErrProjectCopyMediaUnavailable) {
@@ -222,7 +221,7 @@ func TestProjectCopyLibraryUnavailableOriginalNeverPublishesPartialMetadata(t *t
 			if freezeErr != nil {
 				t.Fatal(freezeErr)
 			}
-			repo := pgmedia.NewProjectCopyStore(db)
+			repo := mediaCopyStore(db)
 			transfer := mediaapp.NewProjectCopyTransfer(repo, copyobjects.NewProjectCopyObjects(objects), t.TempDir())
 			if err := transfer.Transfer(t.Context(), actor, binding, snapshot); err == nil {
 				t.Fatal("missing required bytes copied as success")
@@ -237,7 +236,7 @@ func TestProjectCopyLibraryUnavailableOriginalNeverPublishesPartialMetadata(t *t
 				}
 			})
 			if err := db.Transaction(func(tx *gorm.DB) error {
-				_, err := pgmedia.NewProjectCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+				_, err := mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
 				return err
 			}); err == nil {
 				t.Fatal("incomplete bytes published catalog")
@@ -267,7 +266,7 @@ func TestProjectCopyLibraryPreservesFrozenFoldersTextAndIndependentBinaryMetadat
 	actor, project := mediaStoreProject(t, db)
 	original := documentUpload(t, db, objects, actor, project, "source.png", uploadPNG(t))
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
-	library := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now)
+	library := mediaLibraryStore(db, libraryTestAccess, time.Now)
 	folder, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Action: "create_folder", Key: uuid.New(), Folder: &mediaapp.LibraryFolderInput{Name: "分镜素材", Style: "cinema", Theme: "ember"}})
 	if err != nil {
 		t.Fatal(err)
@@ -282,7 +281,7 @@ func TestProjectCopyLibraryPreservesFrozenFoldersTextAndIndependentBinaryMetadat
 		t.Fatal(err)
 	}
 	binding := mediaapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: uuid.New()}
-	if err := db.Exec(`INSERT INTO workspace.project(id,org_id,name,aspect_ratio,style_type,status) VALUES(?,?,'完整库复制','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID).Error; err != nil {
+	if err := db.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,owner_scope_id,name,aspect_ratio,style_type,status) VALUES(?,?,?,?,'完整库复制','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID, actor.ID, actor.ScopeID).Error; err != nil {
 		t.Fatal(err)
 	}
 	var snapshot mediaapp.ProjectCopySnapshot
@@ -291,11 +290,11 @@ func TestProjectCopyLibraryPreservesFrozenFoldersTextAndIndependentBinaryMetadat
 			return err
 		}
 		var err error
-		snapshot, err = pgmedia.NewProjectCopyStore(tx).Freeze(t.Context(), actor, binding, time.Now())
+		snapshot, err = mediaCopyStore(tx).Freeze(t.Context(), actor, binding, time.Now())
 		if err != nil {
 			return err
 		}
-		return tx.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,actor_id,source_project_id,source_revision,target_project_id,target_name,status,stage,manifest,workspace_snapshot,idem_key,request_sha256,admission_response) VALUES(?,?,?,?,4,?,'完整库复制','queued','media','{}','{}',gen_random_uuid(),repeat('a',64),'{}')`, binding.JobID, actor.OrgID, actor.ID, project, binding.TargetProjectID).Error
+		return tx.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,actor_id,owner_scope_id,source_project_id,source_revision,target_project_id,target_name,status,stage,manifest,workspace_snapshot,idem_key,request_sha256,admission_response) VALUES(?,?,?,?,?,4,?,'完整库复制','queued','media','{}','{}',gen_random_uuid(),repeat('a',64),'{}')`, binding.JobID, actor.OrgID, actor.ID, actor.ScopeID, project, binding.TargetProjectID).Error
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -304,7 +303,7 @@ func TestProjectCopyLibraryPreservesFrozenFoldersTextAndIndependentBinaryMetadat
 	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Action: "update_item", Key: uuid.New(), ExpectedRevision: 3, ItemID: &original.Asset.ID, ExpectedItemRevision: 1, Metadata: metadata}); err != nil {
 		t.Fatal(err)
 	}
-	repo := pgmedia.NewProjectCopyStore(db)
+	repo := mediaCopyStore(db)
 	transfer := mediaapp.NewProjectCopyTransfer(repo, copyobjects.NewProjectCopyObjects(objects), t.TempDir())
 	if err := transfer.Transfer(t.Context(), actor, binding, snapshot); err != nil {
 		t.Fatal(err)
@@ -321,7 +320,7 @@ func TestProjectCopyLibraryPreservesFrozenFoldersTextAndIndependentBinaryMetadat
 		}
 	})
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		_, err := pgmedia.NewProjectCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+		_, err := mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
 		return err
 	}); err != nil {
 		t.Fatal(err)

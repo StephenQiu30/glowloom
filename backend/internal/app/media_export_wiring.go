@@ -14,7 +14,7 @@ import (
 // provideMediaExportStore binds source authorization and media publication to
 // the export command transaction through their owning application ports.
 func provideMediaExportStore(database *gorm.DB) *pgtool.Store {
-	return provideMediaExportStoreWithAccess(database, provideMediaScopeAccess)
+	return provideMediaExportStoreWithAccess(database, NewMediaScopeAccess)
 }
 
 func provideMediaExportStoreWithAccess(database *gorm.DB, scopes pgmedia.ScopeAccessFactory) *pgtool.Store {

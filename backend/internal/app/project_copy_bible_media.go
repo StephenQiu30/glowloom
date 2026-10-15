@@ -81,7 +81,7 @@ func (r projectCopyBibleMediaReader) read(ctx context.Context, actor identityapp
 			return err
 		}
 		var err error
-		owner := pgmedia.NewScopedProjectCopyStore(tx, provideMediaWorkerScopeAccess)
+		owner := pgmedia.NewScopedProjectCopyStore(tx, NewMediaWorkerScopeAccess)
 		if transferred {
 			result, err = owner.ReadTransferredCopyReference(ctx, actor, b, s, f)
 		} else {

@@ -12,12 +12,13 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialschema"
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func TestProviderDetailReadsSafeMetadataWithCurrentAdminOnLocalPostgres(t *testing.T) {
@@ -39,7 +40,9 @@ func TestProviderDetailReadsSafeMetadataWithCurrentAdminOnLocalPostgres(t *testi
 	`, actor.ID.String(), actor.OrgID.String(), "provider-detail-"+actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
-	store := pgcatalog.NewStore(conn.DB)
+
+	actor = identityfixture.Session(t, conn.DB, actor)
+	store := app.NewCatalogStore(conn.DB)
 	provider := validProvider()
 	provider.Key = "provider-detail-" + provider.ID.String()
 	if err := store.CreateProvider(ctx, provider); err != nil {

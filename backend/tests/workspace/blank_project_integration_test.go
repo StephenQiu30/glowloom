@@ -13,7 +13,6 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
@@ -61,7 +60,7 @@ func TestM1BlankProjectOwnsInitialCanvasAndReceipt(t *testing.T) {
 	if err := json.Unmarshal(first.Body.Bytes(), &receipt); err != nil || receipt.ID == uuid.Nil || receipt.CanvasID == uuid.Nil || receipt.StyleKey != "film" {
 		t.Fatal("invalid blank project receipt", err)
 	}
-	store := pgworkspace.NewStore(database)
+	store := workspaceStore(database)
 	project, err := store.FindProject(ctx, actor, receipt.ID)
 	if err != nil || project.AspectRatio != "1:1" {
 		t.Fatal("read real project", err)
@@ -76,7 +75,7 @@ func TestM1BlankProjectOwnsInitialCanvasAndReceipt(t *testing.T) {
 	if err := store.RequireOwnedProject(ctx, other, receipt.ID); !errors.Is(err, pgworkspace.ErrProjectNotFound) {
 		t.Fatal("project route guard", err)
 	}
-	canvas := canvasapp.NewService(pgcanvas.NewStore(database, nil))
+	canvas := canvasapp.NewService(workspaceCanvasStore(database, nil))
 	document, err := canvas.Get(ctx, actor, receipt.CanvasID)
 	if err != nil || document.ProjectID != receipt.ID || len(document.Nodes) != 0 || len(document.Edges) != 0 || document.Revision != 1 {
 		t.Fatal("read initial blank canvas", err)

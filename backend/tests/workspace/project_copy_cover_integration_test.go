@@ -13,9 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
@@ -25,11 +23,11 @@ import (
 type actualProjectCopyCoverOwner struct{ tx *gorm.DB }
 
 func (o actualProjectCopyCoverOwner) Freeze(ctx context.Context, actor identityapp.Principal, project uuid.UUID, asset *uuid.UUID) error {
-	return workspaceapp.FreezeProjectCover(ctx, mediaapp.NewAssetQuery(mediapg.NewStore(o.tx), nil), actor, project, asset)
+	return workspaceapp.FreezeProjectCover(ctx, mediaapp.NewAssetQuery(workspaceMediaStore(o.tx), nil), actor, project, asset)
 }
 
 func (o actualProjectCopyCoverOwner) Verify(ctx context.Context, actor identityapp.Principal, binding mediaapp.ProjectCopyBinding, expected, actual *uuid.UUID) error {
-	return workspaceapp.VerifyProjectCover(ctx, privateCopyReference{owner: mediapg.NewProjectCopyStore(o.tx), binding: binding}, actor, binding.TargetProjectID, expected, actual)
+	return workspaceapp.VerifyProjectCover(ctx, privateCopyReference{owner: workspaceMediaCopyStore(o.tx), binding: binding}, actor, binding.TargetProjectID, expected, actual)
 }
 
 func TestProjectCopyCoverRealPrivateImageMappedAndIndependent(t *testing.T) {
@@ -42,7 +40,7 @@ func TestProjectCopyCoverRealPrivateImageMappedAndIndependent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = file.Close() }()
-	media := mediapg.NewStore(db)
+	media := workspaceMediaStore(db)
 	upload := mediaapp.NewUploadService(media, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 	result, err := upload.Upload(ctx, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: source, Key: uuid.New(), RequestID: uuid.New(), FileName: "复制主图.png"}, File: file, LocalReviewConfirmed: true})
 	if err != nil {

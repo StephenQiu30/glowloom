@@ -8,7 +8,6 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 )
 
 // workspaceReferenceAllocation measures only the actual guard transaction. SQL
@@ -31,7 +30,7 @@ func workspaceReferenceAllocation(t *testing.T, db *gorm.DB, actor identityapp.P
 			t.Error("guard did not run with the actual nonowner role")
 		}
 		var err error
-		found, err = pgworkspace.NewMediaReferenceGuard(tx).HasMediaReferences(t.Context(), actor, project, uuid.New())
+		found, err = workspaceReferenceGuard(tx).HasMediaReferences(t.Context(), actor, project, uuid.New())
 		return err
 	})
 	runtime.ReadMemStats(&after)

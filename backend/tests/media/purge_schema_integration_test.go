@@ -6,14 +6,12 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
-
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 )
 
 func TestMediaPurgeRuntimeCannotRewriteOwnershipFrozenKeysOrPermanentReceipts(t *testing.T) {
 	db := libraryRuntimeDB(t)
 	actor, _, in, _, _ := purgeBinaryFixture(t, db)
-	repo := pgmedia.NewPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
+	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
 	job, err := repo.CreatePurge(t.Context(), actor, in)
 	if err != nil {
 		t.Fatal(err)

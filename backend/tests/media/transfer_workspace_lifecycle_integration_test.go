@@ -10,7 +10,6 @@ import (
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	copyobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
@@ -18,7 +17,7 @@ import (
 	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
-func transferLifecycleFixture(t *testing.T, sourceProject bool) (*gorm.DB, identityapp.Principal, uuid.UUID, *pgmedia.TransferStore, domain.TransferJob) {
+func transferLifecycleFixture(t *testing.T, sourceProject bool) (*gorm.DB, identityapp.Principal, uuid.UUID, *mediaTransferStores, domain.TransferJob) {
 	t.Helper()
 	db := libraryRuntimeDB(t)
 	actor, project := mediaStoreProject(t, db)
@@ -29,12 +28,12 @@ func transferLifecycleFixture(t *testing.T, sourceProject bool) (*gorm.DB, ident
 		in.Source, in.Target, in.ExpectedProjectRevision = projectScope, personal, 2
 	}
 	text := "真实目录文字转移"
-	created, err := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: in.Source, Key: uuid.New(), Action: "create_text", Metadata: &mediaapp.LibraryMetadata{PlainText: &text, Title: "生命周期门禁合成文字", Category: "other", Tags: []string{}}})
+	created, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: in.Source, Key: uuid.New(), Action: "create_text", Metadata: &mediaapp.LibraryMetadata{PlainText: &text, Title: "生命周期门禁合成文字", Category: "other", Tags: []string{}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	in.Items = []mediaapp.LibraryItemRevision{{ID: created.Items[0].ID, Revision: 1}}
-	repo := pgmedia.NewTransferStore(db, libraryTestAccess, transferTestGuards, time.Now)
+	repo := mediaTransferStore(db, libraryTestAccess, transferTestGuards, time.Now)
 	job, err := repo.CreateTransfer(t.Context(), actor, in)
 	if err != nil {
 		t.Fatal(err)
@@ -43,9 +42,9 @@ func transferLifecycleFixture(t *testing.T, sourceProject bool) (*gorm.DB, ident
 }
 
 func transferLifecycleService(db *gorm.DB) *workspaceapp.ProjectLifecycle {
-	store := pgworkspace.NewStoreWithProjectWorkGuard(db, func(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
-		return pgmedia.NewTransferStore(tx, libraryTestAccess, transferTestGuards, time.Now)
-	})
+	store := pgworkspace.NewScopedStore(db, mediaWorkspaceRequestScope, func(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
+		return mediaTransferStore(tx, libraryTestAccess, transferTestGuards, time.Now)
+	}, nil)
 	return workspaceapp.NewProjectLifecycle(store, time.Now)
 }
 
@@ -65,19 +64,19 @@ func TestMediaTransferWorkspaceLifecycleActualSourceAndTargetBlockUnsettledWork(
 					db, actor, project, repo, job := transferLifecycleFixture(t, sourceProject)
 					if state != "queued" {
 						work := transferExecution(job)
-						lease, err := repo.ClaimTransfer(t.Context(), work)
+						lease, err := repo.Worker.ClaimTransfer(t.Context(), work)
 						if err != nil {
 							t.Fatal(err)
 						}
 						switch state {
 						case "needs_reconciliation":
-							if err := repo.FailTransferItem(t.Context(), lease, 0, "object_write_unknown", true); err != nil {
+							if err := repo.Worker.FailTransferItem(t.Context(), lease, 0, "object_write_unknown", true); err != nil {
 								t.Fatal(err)
 							}
-							if err := repo.EndTransferPhysical(t.Context(), lease); err != nil {
+							if err := repo.Worker.EndTransferPhysical(t.Context(), lease); err != nil {
 								t.Fatal(err)
 							}
-							if _, err := repo.FinishTransfer(t.Context(), lease); err != nil {
+							if _, err := repo.Worker.FinishTransfer(t.Context(), lease); err != nil {
 								t.Fatal(err)
 							}
 						case "cancel_unended":
@@ -139,7 +138,7 @@ func TestMediaTransferWorkspaceLifecycleReleasesOnlyRealCompletedOrUnstartedCanc
 						t.Fatal("unstarted cancellation did not settle", result, err)
 					}
 				} else {
-					result, err := mediaapp.NewTransferWorker(repo, copyobjects.NewProjectCopyObjects(glbTestObjects(t)), t.TempDir()).Execute(t.Context(), transferExecution(job))
+					result, err := mediaapp.NewTransferWorker(repo.Worker, copyobjects.NewProjectCopyObjects(glbTestObjects(t)), t.TempDir()).Execute(t.Context(), transferExecution(job))
 					if err != nil || result.Status != "succeeded" {
 						t.Fatal("actual metadata transfer did not complete", result, err)
 					}

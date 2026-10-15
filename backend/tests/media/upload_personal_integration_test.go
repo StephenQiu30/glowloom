@@ -13,7 +13,6 @@ import (
 
 	"github.com/google/uuid"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -24,7 +23,7 @@ func TestPersonalUploadActualPrivateObjectsClosedScopeAndPermanentReplay(t *test
 	objects := glbTestObjects(t)
 	actor, project := mediaStoreProject(t, db)
 	foreign, _ := mediaStoreProject(t, db)
-	store := pgmedia.NewStore(db)
+	store := mediaTestStore(db)
 	service := mediaapp.NewScopedUploadService(store, store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 	in := uploadInput(t)
 	in.Actor = actor
@@ -95,7 +94,7 @@ func TestPersonalUploadActualPrivateObjectsClosedScopeAndPermanentReplay(t *test
 	if _, err := mediaapp.NewAssetQuery(store, nil).Reference(t.Context(), actor, project, first.Asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("personal became formal project reference", err)
 	}
-	catalog := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now)
+	catalog := mediaLibraryStore(db, libraryTestAccess, time.Now)
 	page, err := catalog.ListLibrary(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryPersonal}, libraryQuery())
 	if err != nil || page.Total != 1 || page.Items[0].AssetID == nil || *page.Items[0].AssetID != first.Asset.ID || page.Revision != 1 {
 		t.Fatal("actual personal library missing upload", page, err)

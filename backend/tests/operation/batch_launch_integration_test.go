@@ -25,7 +25,7 @@ func TestBatchLaunchProviderSlotReleasesWithTerminalSettlement(t *testing.T) {
 		providerID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	firstItem := quotedSnapshotItem(projectID, 1)
 	firstItem.Operation = first
 	firstItem.Inputs[0].OperationID = first.ID
@@ -120,7 +120,7 @@ func TestBatchLaunchProviderSlotReleasesWithTerminalSettlement(t *testing.T) {
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return err
 		}
-		roleStore := pgoperation.NewStore(tx)
+		roleStore := operationStore(tx)
 		return app.NewOperationFinalizer(tx, roleStore, pgbilling.NewStore(tx)).FinalizeOperation(t.Context(),
 			operationflow.SettlementInput{
 				OperationID: winner.String(), From: domain.StatusConfirmed, To: domain.StatusFailed,
@@ -142,7 +142,7 @@ func TestBatchLaunchProviderSlotReleasesWithTerminalSettlement(t *testing.T) {
 			if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 				return err
 			}
-			return change(pgoperation.NewStore(tx))
+			return change(operationStore(tx))
 		})
 	}
 	if err := roleBatchChange(func(roleStore *pgoperation.Store) error {
@@ -176,7 +176,7 @@ func TestBatchLaunchProviderSlotReleasesWithTerminalSettlement(t *testing.T) {
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return err
 		}
-		return pgoperation.NewStore(tx).FinishWorkflowBatch(t.Context(), completedBatchID)
+		return operationStore(tx).FinishWorkflowBatch(t.Context(), completedBatchID)
 	}); err != nil {
 		t.Fatalf("finish completed batch: %v", err)
 	}

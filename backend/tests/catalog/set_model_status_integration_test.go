@@ -11,15 +11,16 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/paramvalidation"
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/pricevalidation"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func TestSetModelStatusCommitsAuditAndGuardsActivationOnLocalPostgres(t *testing.T) {
@@ -41,7 +42,9 @@ func TestSetModelStatusCommitsAuditAndGuardsActivationOnLocalPostgres(t *testing
 	`, actor.ID.String(), actor.OrgID.String(), "status-admin-"+actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
-	store := pgcatalog.NewStore(conn.DB)
+
+	actor = identityfixture.Session(t, conn.DB, actor)
+	store := app.NewCatalogStore(conn.DB)
 	provider := validProvider()
 	provider.Key = "status-provider-" + provider.ID.String()
 	if err := store.CreateProvider(ctx, provider); err != nil {

@@ -29,7 +29,7 @@ func (a bibleCopyAccess) Authorize(ctx context.Context, actor identityapp.Princi
 }
 func bibleCopyStore(db *gorm.DB, authority workspaceapp.ProjectCopyAuthority) *pg.ProjectCopyStore {
 	return pg.NewProjectCopyStore(db, func(tx *gorm.DB) app.ProjectCopyAccess {
-		return bibleCopyAccess{owner: workspacepg.NewProjectCopyAccessStore(tx, authority)}
+		return bibleCopyAccess{owner: bibleFixtureCopyAccess(tx, authority)}
 	}, nil, nil)
 }
 
@@ -41,7 +41,7 @@ func bibleCopyFixture(t *testing.T, owner *gorm.DB, actor identityapp.Principal,
 	if err := owner.Raw(`SELECT revision FROM workspace.project WHERE id=?`, source).Scan(&revision).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := owner.Exec(`INSERT INTO workspace.project(id,org_id,name,description,aspect_ratio,style_type,resolution,status,revision,default_models) VALUES(?,?,'复制未发布','','16:9','realistic','1080p','copying',1,'{}')`, b.TargetProjectID, actor.OrgID).Error; err != nil {
+	if err := owner.Exec(`INSERT INTO workspace.project(id,org_id,owner_scope_id,name,description,aspect_ratio,style_type,resolution,status,revision,default_models) VALUES(?,?,?,'复制未发布','','16:9','realistic','1080p','copying',1,'{}')`, b.TargetProjectID, actor.OrgID, actor.ScopeID).Error; err != nil {
 		t.Fatal(err)
 	}
 	digest := strings.Repeat("a", 64)
@@ -56,7 +56,7 @@ func bibleCopyFixture(t *testing.T, owner *gorm.DB, actor identityapp.Principal,
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := owner.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,actor_id,request_id,idem_key,request_sha256,admission_response,source_project_id,source_revision,target_project_id,target_name,status,stage,revision,attempt,worker_id,started_at,manifest,workspace_snapshot,media_receipt) VALUES(?,?,?,?,?,?,'{}',?,?,?,'复制未发布','running','script',2,1,?,?,?::jsonb,'{}',?::jsonb)`, b.JobID, b.OrgID, actor.ID, uuid.New(), uuid.New(), digest, b.SourceProjectID, revision, b.TargetProjectID, worker, time.Now(), string(m), string(r)).Error; err != nil {
+	if err := owner.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,owner_scope_id,actor_id,request_id,idem_key,request_sha256,admission_response,source_project_id,source_revision,target_project_id,target_name,status,stage,revision,attempt,worker_id,started_at,manifest,workspace_snapshot,media_receipt) VALUES(?,?,?,?,?,?,?,'{}',?,?,?,'复制未发布','running','script',2,1,?,?,?::jsonb,'{}',?::jsonb)`, b.JobID, b.OrgID, actor.ScopeID, actor.ID, uuid.New(), uuid.New(), digest, b.SourceProjectID, revision, b.TargetProjectID, worker, time.Now(), string(m), string(r)).Error; err != nil {
 		t.Fatal(err)
 	}
 	return b, workspaceapp.ProjectCopyAuthority{Binding: workspaceapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}, ActorID: actor.ID, SourceRevision: revision, WorkerID: worker, Phase: "transfer"}

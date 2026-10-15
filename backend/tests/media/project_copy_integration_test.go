@@ -18,7 +18,6 @@ import (
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	copyobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
@@ -47,21 +46,21 @@ func seedCopyMedia(t *testing.T, database *gorm.DB, objects *objectstorage.Clien
 		t.Fatal(err)
 	}
 	binding := mediaapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: uuid.New()}
-	if err := database.Exec(`INSERT INTO workspace.project(id,org_id,name,aspect_ratio,style_type,status) VALUES(?,?,'复制媒体私有目标','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID).Error; err != nil {
+	if err := database.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,owner_scope_id,name,aspect_ratio,style_type,status) VALUES(?,?,?,?,'复制媒体私有目标','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID, actor.ID, actor.ScopeID).Error; err != nil {
 		t.Fatal(err)
 	}
 	var snapshot mediaapp.ProjectCopySnapshot
 	if err := database.Transaction(func(tx *gorm.DB) error {
 		var err error
-		snapshot, err = pgmedia.NewProjectCopyStore(tx).Freeze(t.Context(), actor, binding, time.Now())
+		snapshot, err = mediaCopyStore(tx).Freeze(t.Context(), actor, binding, time.Now())
 		if err != nil {
 			return err
 		}
-		return tx.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,actor_id,source_project_id,source_revision,target_project_id,target_name,status,stage,manifest,workspace_snapshot,idem_key,request_sha256,admission_response) VALUES(?,?,?,?,1,?,'复制媒体私有目标','queued','media','{}','{}',gen_random_uuid(),repeat('a',64),'{}')`, binding.JobID, actor.OrgID, actor.ID, project, binding.TargetProjectID).Error
+		return tx.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,actor_id,owner_scope_id,source_project_id,source_revision,target_project_id,target_name,status,stage,manifest,workspace_snapshot,idem_key,request_sha256,admission_response) VALUES(?,?,?,?,?,1,?,'复制媒体私有目标','queued','media','{}','{}',gen_random_uuid(),repeat('a',64),'{}')`, binding.JobID, actor.OrgID, actor.ID, actor.ScopeID, project, binding.TargetProjectID).Error
 	}); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := pgmedia.NewProjectCopyStore(database).Objects(t.Context(), actor, binding, snapshot)
+	rows, err := mediaCopyStore(database).Objects(t.Context(), actor, binding, snapshot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,9 +84,9 @@ func TestProjectCopyMediaRealObjectsRegistrationAndCleanup(t *testing.T) {
 	database := mediaStoreDB(t)
 	objects := glbTestObjects(t)
 	actor, binding, snapshot, keys := seedCopyMedia(t, database, objects)
-	repo := pgmedia.NewProjectCopyStore(database)
+	repo := mediaCopyStore(database)
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		_, err := pgmedia.NewProjectCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+		_, err := mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
 		return err
 	}); !errors.Is(err, mediaapp.ErrObjectMismatch) {
 		t.Fatal("metadata registered before object receipts", err)
@@ -121,13 +120,13 @@ func TestProjectCopyMediaRealObjectsRegistrationAndCleanup(t *testing.T) {
 	var receipt mediaapp.ProjectCopyReceipt
 	if err := database.Transaction(func(tx *gorm.DB) error {
 		var err error
-		receipt, err = pgmedia.NewProjectCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+		receipt, err = mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
 		return err
 	}); err != nil || receipt.Assets != 1 || receipt.Renditions != 1 {
 		t.Fatal("atomic real copy registration", receipt, err)
 	}
 	for _, targetAsset := range snapshot.AssetMapping {
-		if _, err := pgmedia.NewStore(database).FindAsset(t.Context(), actor, binding.TargetProjectID, targetAsset); !errors.Is(err, mediaapp.ErrNotFound) {
+		if _, err := mediaTestStore(database).FindAsset(t.Context(), actor, binding.TargetProjectID, targetAsset); !errors.Is(err, mediaapp.ErrNotFound) {
 			t.Fatal("unpublished copy media visible", err)
 		}
 		if ref, err := repo.ReferenceCopiedAsset(t.Context(), actor, binding, targetAsset); err != nil || ref.ID != targetAsset {
@@ -141,7 +140,7 @@ func TestProjectCopyMediaRealObjectsRegistrationAndCleanup(t *testing.T) {
 		t.Fatal("verified private cleanup", err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		return pgmedia.NewProjectCopyStore(tx).FinishCleanup(t.Context(), actor, binding, snapshot)
+		return mediaCopyStore(tx).FinishCleanup(t.Context(), actor, binding, snapshot)
 	}); err != nil {
 		t.Fatal("owner metadata cleanup", err)
 	}
@@ -173,7 +172,7 @@ func TestProjectCopyMediaRealUnknownWriteAndCollisionRecovery(t *testing.T) {
 			database := mediaStoreDB(t)
 			objects := glbTestObjects(t)
 			actor, binding, snapshot, _ := seedCopyMedia(t, database, objects)
-			repo := pgmedia.NewProjectCopyStore(database)
+			repo := mediaCopyStore(database)
 			adapter := copyobjects.NewProjectCopyObjects(objects)
 			intents, err := repo.Objects(t.Context(), actor, binding, snapshot)
 			if err != nil {

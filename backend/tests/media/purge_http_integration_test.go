@@ -14,7 +14,6 @@ import (
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediahttp "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/http"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
@@ -25,7 +24,7 @@ func purgeRouter(db *gorm.DB, actor identityapp.Principal) *gin.Engine {
 	router.Use(httpapi.Middleware("http://127.0.0.1:3000"))
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	mediahttp.NewPurgeHandler(pgmedia.NewPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)).Register(group)
+	mediahttp.NewPurgeHandler(mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)).Register(group)
 	return router
 }
 
@@ -94,7 +93,7 @@ func TestMediaPurgeHTTPActualExplicitConfirmationClosedScopesAndOriginalRecovery
 	if repeated := libraryHTTPRequest(t, purgeRouter(db, actor), http.MethodPost, path+"/"+job.ID.String()+"/cancel", control, key); repeated.Code != 202 || !bytes.Equal(cancel.Body.Bytes(), repeated.Body.Bytes()) {
 		t.Fatal("permanent HTTP cancel recovery", repeated.Code)
 	}
-	if _, err := pgmedia.NewPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now).GetPurge(t.Context(), actor, job.ID); err != nil {
+	if _, err := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now).GetPurge(t.Context(), actor, job.ID); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -102,13 +101,13 @@ func TestMediaPurgeHTTPActualExplicitConfirmationClosedScopesAndOriginalRecovery
 func TestMediaPurgeHTTPActualUnknownRequiresExplicitReconcileRevision(t *testing.T) {
 	db := libraryRuntimeDB(t)
 	actor, _, in, _, objects := purgeBinaryFixture(t, db)
-	repo := pgmedia.NewPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
+	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
 	job, err := repo.CreatePurge(t.Context(), actor, in)
 	if err != nil {
 		t.Fatal(err)
 	}
 	unknown := &purgeUnknownRemove{PurgeObjects: objects, once: true}
-	current, err := mediaapp.NewPurgeWorker(repo, unknown).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
+	current, err := mediaapp.NewPurgeWorker(repo.Worker, unknown).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
 	if err != nil {
 		t.Fatal(err)
 	}

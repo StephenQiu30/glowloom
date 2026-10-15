@@ -272,7 +272,7 @@ func TestWorkflowStarterReadsCommittedSingleAndSweepCandidates(t *testing.T) {
 	item := quotedSnapshotItem(projectID, 1)
 	item.Operation = quoted
 	item.Inputs[0].OperationID = quoted.ID
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	if err := store.CreateQuoteSnapshot(t.Context(), actor, nil, []pgoperation.QuoteItem{item}); err != nil {
 		t.Fatal(err)
 	}
@@ -352,7 +352,7 @@ func TestWorkflowStarterReadsCommittedSingleAndSweepCandidates(t *testing.T) {
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return err
 		}
-		_, err := pgoperation.NewStore(tx).LoadWorkflowBatch(t.Context(), batchID)
+		_, err := operationStore(tx).LoadWorkflowBatch(t.Context(), batchID)
 		return err
 	}); err != nil {
 		t.Fatalf("runtime role batch snapshot: %v", err)
@@ -375,7 +375,7 @@ func TestWorkflowStarterReadsCommittedSingleAndSweepCandidates(t *testing.T) {
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return err
 		}
-		acquired, err := pgoperation.NewStore(tx).AcquireBatchLaunch(t.Context(), batchID, quoted.ID)
+		acquired, err := operationStore(tx).AcquireBatchLaunch(t.Context(), batchID, quoted.ID)
 		if err == nil && !acquired {
 			return errors.New("runtime role did not acquire batch slot")
 		}

@@ -13,13 +13,12 @@ import (
 	promptpg "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/adapter/postgres"
 	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 )
 
 type draftAccess struct{ tx *gorm.DB }
 
 func (a draftAccess) AuthorizeDraft(ctx context.Context, actor identityapp.Principal, p uuid.UUID, write bool) error {
-	_, err := workspacepg.NewProjectContentAccessStore(a.tx).Authorize(ctx, actor, p, write)
+	_, err := preferenceProjectAccess(a.tx).Authorize(ctx, actor, p, write)
 	return err
 }
 func draftStore(db *gorm.DB) *promptpg.DraftStore {

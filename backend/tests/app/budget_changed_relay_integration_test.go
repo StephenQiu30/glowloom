@@ -16,10 +16,12 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	pginbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
@@ -30,6 +32,9 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/redisconn"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func TestBudgetChangeReachesSSEThroughRelay(t *testing.T) {
@@ -155,8 +160,17 @@ func TestBudgetChangeReachesSSEThroughRelay(t *testing.T) {
 	})
 	assertRoleHealth(ctx, t, healthAddr)
 
-	actor := identityapp.Principal{ID: actorID, OrgID: orgID, Role: identitydomain.RoleProducer}
-	changed, err := billingapp.NewChangeBudgetCommand(pgbilling.NewStore(dbConn.DB), time.Now).Execute(
+	actor := identityfixture.Session(t, dbConn.DB, identityapp.Principal{ID: actorID, OrgID: orgID, Role: identitydomain.RoleProducer})
+	if err := dbConn.DB.WithContext(ctx).Exec(`UPDATE workspace.project SET owner_scope_id=? WHERE id=?`, actor.ScopeID, projectID).Error; err != nil {
+		t.Fatal(err)
+	}
+	store := pgbilling.NewScopedStore(dbConn.DB, func(tx *gorm.DB) billingapp.ProjectAccess {
+		scopes := workspaceapp.NewRequestScopeAccess(pgworkspace.NewRequestScopeStore(tx, func(ownerTx *gorm.DB) workspaceapp.SessionActorAccess {
+			return pgidentity.NewStore(ownerTx)
+		}), time.Now)
+		return budgetRelayProjectAccess{store: pgworkspace.NewScopedProjectContentAccessStore(tx, scopes)}
+	})
+	changed, err := billingapp.NewChangeBudgetCommand(store, time.Now).Execute(
 		ctx, actor, billingapp.ChangeBudgetInput{
 			ProjectID: projectID, LimitMicros: 600, ExpectedRevision: 1, RequestID: uuid.NewString(),
 		},
@@ -312,4 +326,13 @@ func assertRelayBudgetData(t *testing.T, raw []byte, available int64) {
 	if err := json.Unmarshal(data["available_micros"], &got); err != nil || got != available {
 		t.Fatalf("budget available_micros = %d, error = %v; want %d", got, err, available)
 	}
+}
+
+type budgetRelayProjectAccess struct {
+	store *pgworkspace.ProjectContentAccessStore
+}
+
+func (a budgetRelayProjectAccess) AuthorizeBilling(ctx context.Context, actor identityapp.Principal, project uuid.UUID, write bool) error {
+	_, err := a.store.Authorize(ctx, actor, project, write)
+	return err
 }

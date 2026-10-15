@@ -25,7 +25,7 @@ func provideScriptProjectAccess(tx *gorm.DB) scriptapp.ProjectAccess {
 func provideScriptImportStore(database *gorm.DB) *pgscript.ImportStore {
 	return pgscript.NewImportStoreWithWorkerAccess(database, provideScriptProjectAccess, provideScriptWorkerAccess, func(tx *gorm.DB) scriptapp.SourceAssetReader {
 		// Admission freezes media facts in this transaction, without object I/O.
-		return mediaapp.NewDocumentSources(pgmedia.NewScopedDocumentSourceStore(tx, provideMediaScopeAccess), nil)
+		return mediaapp.NewDocumentSources(pgmedia.NewScopedDocumentSourceStore(tx, NewMediaScopeAccess), nil)
 	})
 }
 
@@ -56,7 +56,7 @@ func provideScriptImportWorker(database *gorm.DB, storage *objectstorage.Client)
 	// One worker owns extraction and publication I/O until the synchronous
 	// publication call and its durable exit proof both finish. Recovery runs
 	// after that join and checks the source owner's persistent I/O facts.
-	worker := scriptapp.NewImportWorker(store, mediaapp.NewDocumentSources(pgmedia.NewScopedDocumentSourceStore(database, provideMediaWorkerScopeAccess), storage), scriptextract.NewExtractor(), publication, recovery, time.Now)
+	worker := scriptapp.NewImportWorker(store, mediaapp.NewDocumentSources(pgmedia.NewScopedDocumentSourceStore(database, NewMediaWorkerScopeAccess), storage), scriptextract.NewExtractor(), publication, recovery, time.Now)
 	return worker, store
 }
 

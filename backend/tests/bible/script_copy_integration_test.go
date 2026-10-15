@@ -30,7 +30,7 @@ func (a bibleScriptCopyAccess) Authorize(ctx context.Context, actor identityapp.
 }
 func scriptCopyOwner(db *gorm.DB, a workspaceapp.ProjectCopyAuthority) *scriptpg.ProjectCopyStore {
 	return scriptpg.NewProjectCopyStore(db, func(tx *gorm.DB) scriptapp.ProjectCopyAccess {
-		return bibleScriptCopyAccess{workspacepg.NewProjectCopyAccessStore(tx, a)}
+		return bibleScriptCopyAccess{bibleFixtureCopyAccess(tx, a)}
 	})
 }
 
@@ -87,8 +87,8 @@ func TestBibleScriptCopyPGFullPinnedHistoryScopesAndActualPrivateObjects(t *test
 	db, owner := bibleTestDB(t)
 	objects := bibleObjects(t)
 	actor, project := bibleActorProject(t, owner)
-	sources := scriptpg.NewSourceStoreWithCharacters(db, func(tx *gorm.DB) scriptapp.ProjectAccess { return workspacepg.NewProjectContentAccessStore(tx) }, func(tx *gorm.DB) scriptapp.CharacterReferences {
-		return characterBridge{pg.NewReferences(tx, workspacepg.NewProjectContentAccessStore(tx))}
+	sources := scriptpg.NewSourceStoreWithCharacters(db, func(tx *gorm.DB) scriptapp.ProjectAccess { return bibleFixtureProjectAccess(tx) }, func(tx *gorm.DB) scriptapp.CharacterReferences {
+		return characterBridge{pg.NewReferences(tx, bibleFixtureProjectAccess(tx))}
 	})
 	saved, err := scriptapp.NewSourceService(sources, scriptobjects.NewStorage(objects), time.Now).Write(t.Context(), actor, scriptapp.SourceCommand{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), Action: "create", RightsConfirmed: true, Sources: []scriptapp.SourceInput{{Kind: "chapter", Title: "历史原文", Status: "draft", Document: scriptdomain.RichDocument{Type: "doc", Content: []scriptdomain.RichDocument{{Type: "paragraph", Content: []scriptdomain.RichDocument{{Type: "text", Text: "王总：你好😀"}}}}}}}})
 	if err != nil {
@@ -118,8 +118,8 @@ func TestBibleScriptCopyPGFullPinnedHistoryScopesAndActualPrivateObjects(t *test
 	if _, err := sources.ConfirmStructure(t.Context(), actor, scriptapp.StructureCommand{ProjectID: project, EpisodeID: formal.Episodes[0].ID, Key: uuid.New(), RequestID: uuid.New(), ExpectedRevision: 3, ExpectedEpisodeRevision: 2, BaseStructureVersionNo: 1}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	withScopes := app.NewService(pg.NewStore(db, pg.Factories{Access: func(tx *gorm.DB) app.ProjectAccess { return workspacepg.NewProjectContentAccessStore(tx) }, Scopes: func(tx *gorm.DB) app.ScriptScopes {
-		return currentBibleScopes{scriptpg.NewBibleScopes(tx, workspacepg.NewProjectContentAccessStore(tx))}
+	withScopes := app.NewService(pg.NewStore(db, pg.Factories{Access: func(tx *gorm.DB) app.ProjectAccess { return bibleFixtureProjectAccess(tx) }, Scopes: func(tx *gorm.DB) app.ScriptScopes {
+		return currentBibleScopes{scriptpg.NewBibleScopes(tx, bibleFixtureProjectAccess(tx))}
 	}}), time.Now)
 	detail, err := bible.Find(t.Context(), actor, project, domain.KindCharacter, character.EntryID)
 	if err != nil {
@@ -138,7 +138,7 @@ func TestBibleScriptCopyPGFullPinnedHistoryScopesAndActualPrivateObjects(t *test
 	sb := scriptapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}
 	err = db.WithContext(t.Context()).Transaction(func(tx *gorm.DB) error {
 		access := func(tx *gorm.DB) app.ProjectCopyAccess {
-			return bibleCopyAccess{workspacepg.NewProjectCopyAccessStore(tx, admission)}
+			return bibleCopyAccess{bibleFixtureCopyAccess(tx, admission)}
 		}
 		bowner := pg.NewProjectCopyStore(tx, access, nil, func(tx *gorm.DB) app.ProjectCopyScopes { return bibleCopyScopes{scriptCopyOwner(tx, admission)} })
 		var err error
@@ -162,7 +162,7 @@ func TestBibleScriptCopyPGFullPinnedHistoryScopesAndActualPrivateObjects(t *test
 			t.Fatal("missing owning mapping guessed UUID", err)
 		}
 		current := scriptpg.NewProjectCopyStoreWithCharacters(tx, func(tx *gorm.DB) scriptapp.ProjectCopyAccess {
-			return bibleScriptCopyAccess{workspacepg.NewProjectCopyAccessStore(tx, admission)}
+			return bibleScriptCopyAccess{bibleFixtureCopyAccess(tx, admission)}
 		}, func(_ *gorm.DB) scriptapp.ProjectCopyCharacters {
 			return scriptCopyCharacters{owner: bowner, snapshot: bibleSnapshot}
 		})

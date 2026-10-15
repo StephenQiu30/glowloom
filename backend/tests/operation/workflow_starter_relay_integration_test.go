@@ -50,7 +50,7 @@ func TestConfirmedOutboxStartsOneWorkflowThroughLocalKafkaAndTemporal(t *testing
 	item := quotedSnapshotItem(projectID, 1)
 	item.Operation = quoted
 	item.Inputs[0].OperationID = quoted.ID
-	operationStore := pgoperation.NewStore(database)
+	operationStore := operationStore(database)
 	if err := operationStore.CreateQuoteSnapshot(ctx, actor, nil, []pgoperation.QuoteItem{item}); err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func TestProductionRelayStartsConfirmedBatchThroughLocalKafka(t *testing.T) {
 	defer cancel()
 	database := operationStarterDB(t)
 	actor, projectID, batchID, _ := seedConfirmableBatch(t, database, 1)
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	if _, err := store.ConfirmBatchQuote(ctx, actor, operationapp.ConfirmBatchQuoteInput{
 		ProjectID: projectID, BatchID: batchID, RequestID: uuid.NewString(),
 	}); err != nil {

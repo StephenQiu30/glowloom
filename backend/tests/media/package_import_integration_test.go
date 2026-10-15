@@ -15,7 +15,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/gltf"
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -60,8 +59,8 @@ func TestMediaPackageImportCompleteAtomicPrivateFilesFoldersAndExportRoundtrip(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	uploads := mediaapp.NewScopedUploadService(pgmedia.NewStore(db), pgmedia.NewStore(db), mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
-	repo := pgmedia.NewPackageStore(db, libraryTestAccess, transferTestGuards, time.Now)
+	uploads := mediaapp.NewScopedUploadService(mediaTestStore(db), mediaTestStore(db), mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
+	repo := mediaPackageStore(db, libraryTestAccess, transferTestGuards, time.Now)
 	service := mediaapp.NewLibraryPackageService(repo, uploads, mediaobjects.NewProjectCopyObjects(objects), time.Now)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	in := mediaapp.PackageImportRequest{Scope: scope, ExpectedRevision: 0, ExpectedProjectRevision: 1, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}
@@ -79,7 +78,7 @@ func TestMediaPackageImportCompleteAtomicPrivateFilesFoldersAndExportRoundtrip(t
 			_ = objects.Remove(context.Background(), key)
 		}
 	})
-	page, err := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now).ListLibrary(t.Context(), actor, scope, mediaapp.LibraryQuery{Page: 1, PageSize: 120, State: "active", Order: "name_asc"})
+	page, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ListLibrary(t.Context(), actor, scope, mediaapp.LibraryQuery{Page: 1, PageSize: 120, State: "active", Order: "name_asc"})
 	if err != nil || page.Total != 2 || len(page.Folders) != 1 {
 		t.Fatal("formal full contents", page, err)
 	}
@@ -154,8 +153,8 @@ func TestMediaPackageUnknownWritePersistsWholeBatchAndReconcilesWithoutNewIdenti
 	if err != nil {
 		t.Fatal(err)
 	}
-	uploads := mediaapp.NewScopedUploadService(pgmedia.NewStore(db), pgmedia.NewStore(db), mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
-	repo := pgmedia.NewPackageStore(db, libraryTestAccess, transferTestGuards, time.Now)
+	uploads := mediaapp.NewScopedUploadService(mediaTestStore(db), mediaTestStore(db), mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
+	repo := mediaPackageStore(db, libraryTestAccess, transferTestGuards, time.Now)
 	base := mediaobjects.NewProjectCopyObjects(objects)
 	unknown := &packageUnknownWrite{PackageObjects: base}
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}

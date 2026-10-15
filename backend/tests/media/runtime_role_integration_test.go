@@ -27,8 +27,8 @@ func TestMediaIngestAndModerationUnderRuntimeRole(t *testing.T) {
 		t.Skip("set isolated PostgreSQL, native MinIO and root .env")
 	}
 	database := mediaStoreDB(t)
-	_, projectID := mediaStoreProject(t, database)
-	operationID := seedIngestOperation(t, database, projectID, "image")
+	actor, projectID := mediaStoreProject(t, database)
+	operationID := seedIngestOperation(t, database, actor, projectID, "image")
 	cfg, err := config.Load()
 	if err != nil {
 		t.Fatal(err)
@@ -56,7 +56,7 @@ func TestMediaIngestAndModerationUnderRuntimeRole(t *testing.T) {
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return fmt.Errorf("assume runtime role: %w", err)
 		}
-		activities, err := mediaflow.NewActivities(tx, objects, mediaflow.DownloadPolicy{
+		activities, err := mediaScopedIngestActivities(tx, objects, mediaflow.DownloadPolicy{
 			AllowedOrigins: []string{server.URL}, AllowTestLoopbackTLS: true, TLSRootCAs: pool,
 		})
 		if err != nil {

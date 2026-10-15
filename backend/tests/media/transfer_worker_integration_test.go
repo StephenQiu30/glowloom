@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 
 	copyobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -19,7 +18,7 @@ func TestMediaTransferActualPrivateOriginalAndAllRenditionsBecomeIndependentProj
 	db := libraryRuntimeDB(t)
 	objects := glbTestObjects(t)
 	actor, project := mediaStoreProject(t, db)
-	base := pgmedia.NewStore(db)
+	base := mediaTestStore(db)
 	uploads := mediaapp.NewScopedUploadService(base, base, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 	in := uploadInput(t)
 	in.Actor, in.Request.ProjectID = actor, uuid.Nil
@@ -38,13 +37,13 @@ func TestMediaTransferActualPrivateOriginalAndAllRenditionsBecomeIndependentProj
 			_ = objects.Remove(ctx, key)
 		}
 	})
-	repo := pgmedia.NewTransferStore(db, libraryTestAccess, transferTestGuards, time.Now)
+	repo := mediaTransferStore(db, libraryTestAccess, transferTestGuards, time.Now)
 	job, err := repo.CreateTransfer(t.Context(), actor, mediaapp.TransferInput{Source: domain.LibraryScope{Kind: domain.LibraryPersonal}, Target: domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, Items: []mediaapp.LibraryItemRevision{{ID: upload.Asset.ID}}, ExpectedSourceRevision: 1, ExpectedProjectRevision: 1, Key: uuid.New()})
 	if err != nil {
 		t.Fatal(err)
 	}
 	work := mediaapp.TransferWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()}
-	result, err := mediaapp.NewTransferWorker(repo, copyobjects.NewProjectCopyObjects(objects), t.TempDir()).Execute(t.Context(), work)
+	result, err := mediaapp.NewTransferWorker(repo.Worker, copyobjects.NewProjectCopyObjects(objects), t.TempDir()).Execute(t.Context(), work)
 	if err != nil || result.Status != "succeeded" || len(result.Items) != 1 || result.Items[0].Status != "succeeded" || result.ExecutionUnconfirmed || result.NeedsReconciliation {
 		t.Fatal("actual scoped transfer", result, err)
 	}
@@ -86,7 +85,7 @@ func TestMediaTransferActualPrivateOriginalAndAllRenditionsBecomeIndependentProj
 	if err := reader.Close(); err != nil {
 		t.Fatal(err)
 	}
-	replay, err := mediaapp.NewTransferWorker(repo, copyobjects.NewProjectCopyObjects(objects), t.TempDir()).Execute(t.Context(), work)
+	replay, err := mediaapp.NewTransferWorker(repo.Worker, copyobjects.NewProjectCopyObjects(objects), t.TempDir()).Execute(t.Context(), work)
 	if err != nil || replay.ID != result.ID || replay.Revision != result.Revision {
 		t.Fatal("completed delivery reexecuted physical ownership", replay, err)
 	}

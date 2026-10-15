@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
@@ -40,13 +41,13 @@ func insertWorkspaceOrganization(ctx context.Context, t *testing.T, database *go
 	return id
 }
 
-func insertWorkspaceProject(ctx context.Context, t *testing.T, database *gorm.DB, orgID, aspectRatio, styleType string, styleSubtype any) string {
+func insertWorkspaceProject(ctx context.Context, t *testing.T, database *gorm.DB, actor identityapp.Principal, aspectRatio, styleType string, styleSubtype any) string {
 	t.Helper()
 	id := uuid.NewString()
 	if err := database.WithContext(ctx).Exec(`
-		INSERT INTO workspace.project (id, org_id, owner_id, name, aspect_ratio, style_type, style_subtype)
-		VALUES (?::uuid, ?::uuid, (SELECT id FROM identity."user" WHERE org_id=?::uuid ORDER BY id LIMIT 1), ?, ?, ?, ?)
-	`, id, orgID, orgID, "project-"+id, aspectRatio, styleType, styleSubtype).Error; err != nil {
+		INSERT INTO workspace.project (id, org_id, owner_id, owner_scope_id, name, aspect_ratio, style_type, style_subtype)
+		VALUES (?::uuid, ?::uuid, ?::uuid, ?::uuid, ?, ?, ?, ?)
+	`, id, actor.OrgID, actor.ID, actor.ScopeID, "project-"+id, aspectRatio, styleType, styleSubtype).Error; err != nil {
 		t.Fatalf("insert project: %v", err)
 	}
 	return id
@@ -55,7 +56,8 @@ func insertWorkspaceProject(ctx context.Context, t *testing.T, database *gorm.DB
 func TestWorkspaceProjectMigrationEnforcesSpecification(t *testing.T) {
 	ctx, database := workspaceMigrationDB(t)
 	orgID := insertWorkspaceOrganization(ctx, t, database)
-	projectID := insertWorkspaceProject(ctx, t, database, orgID, "9:16", "realistic", nil)
+	actor := insertWorkspaceActor(ctx, t, database, orgID)
+	projectID := insertWorkspaceProject(ctx, t, database, actor, "9:16", "realistic", nil)
 
 	var defaults struct {
 		Resolution          string
@@ -99,7 +101,7 @@ func TestWorkspaceProjectMigrationEnforcesSpecification(t *testing.T) {
 		})
 	}
 
-	insertWorkspaceProject(ctx, t, database, orgID, "16:9", "stylized", "guofeng_xianxia")
+	insertWorkspaceProject(ctx, t, database, actor, "16:9", "stylized", "guofeng_xianxia")
 	for name, statement := range map[string]string{
 		"aspect ratio": `UPDATE workspace.project SET aspect_ratio = '16:9' WHERE id = ?::uuid`,
 		"style type":   `UPDATE workspace.project SET style_type = 'stylized', style_subtype = 'anime_jp' WHERE id = ?::uuid`,
@@ -140,7 +142,8 @@ func TestWorkspaceProjectMigrationEnforcesSpecification(t *testing.T) {
 func TestWorkspaceBudgetMigrationEnforcesOneBalancedBudgetPerProject(t *testing.T) {
 	ctx, database := workspaceMigrationDB(t)
 	orgID := insertWorkspaceOrganization(ctx, t, database)
-	projectID := insertWorkspaceProject(ctx, t, database, orgID, "9:16", "realistic", nil)
+	actor := insertWorkspaceActor(ctx, t, database, orgID)
+	projectID := insertWorkspaceProject(ctx, t, database, actor, "9:16", "realistic", nil)
 	budgetID := uuid.NewString()
 	if err := database.Exec(`
 		INSERT INTO billing.budget (id, project_id, limit_micros)
@@ -198,7 +201,8 @@ func TestWorkspaceBudgetMigrationEnforcesOneBalancedBudgetPerProject(t *testing.
 func TestWorkspaceStylePresetMigrationScopesOrganizationAndProject(t *testing.T) {
 	ctx, database := workspaceMigrationDB(t)
 	orgID := insertWorkspaceOrganization(ctx, t, database)
-	projectID := insertWorkspaceProject(ctx, t, database, orgID, "16:9", "stylized", "anime_jp")
+	actor := insertWorkspaceActor(ctx, t, database, orgID)
+	projectID := insertWorkspaceProject(ctx, t, database, actor, "16:9", "stylized", "anime_jp")
 	var projectPresetID string
 	for name, input := range map[string]struct {
 		orgID        string

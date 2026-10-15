@@ -13,7 +13,6 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	operationpg "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/http"
@@ -34,7 +33,7 @@ func lifecycleHTTPRouter(database *gorm.DB, actor identityapp.Principal) *gin.En
 func TestProjectLifecycleHTTPClosedReadPatchAndRecovery(t *testing.T) {
 	ctx, db := workspaceMigrationDB(t)
 	actor := insertWorkspaceActor(ctx, t, db, insertWorkspaceOrganization(ctx, t, db))
-	id := uuid.MustParse(insertWorkspaceProject(ctx, t, db, actor.OrgID.String(), "16:9", "realistic", nil))
+	id := uuid.MustParse(insertWorkspaceProject(ctx, t, db, actor, "16:9", "realistic", nil))
 	router := lifecycleHTTPRouter(db, actor)
 	path := "/api/projects/" + id.String()
 	read := projectHTTPRequest(ctx, router, http.MethodGet, path, "", nil)
@@ -96,7 +95,7 @@ func TestProjectLifecycleHTTPInFlightConflictAndDeadline(t *testing.T) {
 	ctx, db := workspaceMigrationDB(t)
 	actor, project := lifecycleActorProject(ctx, t, db)
 	quote := lifecycleQuote(t, db, actor, project)
-	if _, err := operationpg.NewStore(db).ConfirmSingleQuote(ctx, actor, operationapp.ConfirmSingleQuoteInput{ProjectID: project, OperationID: quote.OperationID, RequestID: uuid.NewString()}); err != nil {
+	if _, err := workspaceOperationStore(db).ConfirmSingleQuote(ctx, actor, operationapp.ConfirmSingleQuoteInput{ProjectID: project, OperationID: quote.OperationID, RequestID: uuid.NewString()}); err != nil {
 		t.Fatal(err)
 	}
 	router := lifecycleHTTPRouter(db, actor)

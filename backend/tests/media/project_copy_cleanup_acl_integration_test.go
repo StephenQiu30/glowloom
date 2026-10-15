@@ -10,7 +10,6 @@ import (
 	"gorm.io/gorm"
 
 	copyobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
@@ -55,13 +54,13 @@ func TestProjectCopyCleanupKeepsSourceMetadataAndObjects(t *testing.T) {
 	if err := database.Raw(`SELECT id,is_delete,revision,delete_time,purge_after,object_key FROM media.media_asset WHERE project_id=?`, binding.SourceProjectID).Scan(&before).Error; err != nil {
 		t.Fatal(err)
 	}
-	repo := pgmedia.NewProjectCopyStore(database)
+	repo := mediaCopyStore(database)
 	transfer := mediaapp.NewProjectCopyTransfer(repo, copyobjects.NewProjectCopyObjects(objects), t.TempDir())
 	if err := transfer.Transfer(t.Context(), actor, binding, snapshot); err != nil {
 		t.Fatal(err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		_, err := pgmedia.NewProjectCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+		_, err := mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -70,7 +69,7 @@ func TestProjectCopyCleanupKeepsSourceMetadataAndObjects(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		return pgmedia.NewProjectCopyStore(tx).FinishCleanup(t.Context(), actor, binding, snapshot)
+		return mediaCopyStore(tx).FinishCleanup(t.Context(), actor, binding, snapshot)
 	}); err != nil {
 		t.Fatal("actual nonowner cleanup", err)
 	}

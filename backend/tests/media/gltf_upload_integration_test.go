@@ -22,7 +22,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/gltf"
 	mediahttp "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/http"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -97,7 +96,7 @@ func TestGLBUploadRealHTTPPrivateStorageReplayAndAuthorization(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := pgmedia.NewStore(database)
+	store := mediaTestStore(database)
 	service := mediaapp.NewUploadService(store, mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 	query := mediaapp.NewAssetQuery(store, objects)
 	router := gin.New()

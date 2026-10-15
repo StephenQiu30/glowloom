@@ -12,7 +12,6 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
@@ -34,7 +33,7 @@ func TestMediaPurgeCurrentCoverBlockedAndPermanentReplayNoRawDeletion(t *testing
 	objects := glbTestObjects(t)
 	actor, project := mediaStoreProject(t, db)
 	upload := documentUpload(t, db, objects, actor, project, "cover-purge.png", uploadPNG(t))
-	library := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now)
+	library := mediaLibraryStore(db, libraryTestAccess, time.Now)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "update_item", ItemID: &upload.Asset.ID, Metadata: &mediaapp.LibraryMetadata{Title: "明确保留的封面", Category: "material", Tags: []string{}}}); err != nil {
 		t.Fatal(err)
@@ -46,7 +45,7 @@ func TestMediaPurgeCurrentCoverBlockedAndPermanentReplayNoRawDeletion(t *testing
 		t.Fatal(err)
 	}
 	request := mediaapp.PurgeInput{Scope: scope, Items: []mediaapp.LibraryItemRevision{{ID: upload.Asset.ID, Revision: 2}}, ExpectedRevision: 2, ExpectedProjectRevision: 3, PermanentDeleteConfirmed: true, Key: uuid.New()}
-	repo := pgmedia.NewPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
+	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
 	job, err := repo.CreatePurge(t.Context(), actor, request)
 	if err != nil || job.Status != "failed" || len(job.Items) != 1 || job.Items[0].Status != "blocked" || job.Items[0].FailureCode == nil || *job.Items[0].FailureCode != "in_use" {
 		t.Fatal("actual current cover did not block purge", job, err)
@@ -78,7 +77,7 @@ func TestMediaPurgeCurrentCoverBlockedAndPermanentReplayNoRawDeletion(t *testing
 func TestMediaPurgePersonalTextAdmissionNeverInventsProjectAndUnavailableReferenceFailsClosed(t *testing.T) {
 	db := libraryRuntimeDB(t)
 	actor, project := mediaStoreProject(t, db)
-	library := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now)
+	library := mediaLibraryStore(db, libraryTestAccess, time.Now)
 	scope := domain.LibraryScope{Kind: domain.LibraryPersonal}
 	text := "必须真正清空的个人原文"
 	created, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "create_text", Metadata: &mediaapp.LibraryMetadata{Title: "私有标题", Category: "material", Tags: []string{}, PlainText: &text}})
@@ -89,7 +88,7 @@ func TestMediaPurgePersonalTextAdmissionNeverInventsProjectAndUnavailableReferen
 	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), ExpectedRevision: 1, Action: "recycle_items", Items: []mediaapp.LibraryItemRevision{{ID: id, Revision: 1}}}); err != nil {
 		t.Fatal(err)
 	}
-	repo := pgmedia.NewPurgeStore(db, libraryTestAccess, transferTestGuards, nil, time.Now)
+	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, nil, time.Now)
 	job, err := repo.CreatePurge(t.Context(), actor, mediaapp.PurgeInput{Scope: scope, Items: []mediaapp.LibraryItemRevision{{ID: id, Revision: 2}}, ExpectedRevision: 2, PermanentDeleteConfirmed: true, Key: uuid.New()})
 	if err != nil || job.Scope.ProjectID != nil || job.Status != "queued" {
 		t.Fatal("personal text incorrectly depended on foreign project", job, err)

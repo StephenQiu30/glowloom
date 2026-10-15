@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
 	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
@@ -19,6 +20,7 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 type revokeAfterCredentialReadStore struct {
@@ -53,7 +55,7 @@ func TestDisableCredentialCommitsSafeEventsAndRollsBackOnAuditFailure(t *testing
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	store := pgcatalog.NewStore(conn.DB)
+	store := app.NewCatalogStore(conn.DB)
 	actor := adminPrincipal()
 	if err := conn.DB.WithContext(ctx).Exec(`
 		INSERT INTO identity."user" (id, org_id, login_name, display_name, role, password_hash, must_change_password, platform_role)
@@ -61,6 +63,8 @@ func TestDisableCredentialCommitsSafeEventsAndRollsBackOnAuditFailure(t *testing
 	`, actor.ID.String(), actor.OrgID.String(), "disable-"+actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
+
+	actor = identityfixture.Session(t, conn.DB, actor)
 	provider := validProvider()
 	provider.Key = "credential-disable-" + provider.ID.String()
 	if err := store.CreateProvider(ctx, provider); err != nil {

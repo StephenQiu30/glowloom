@@ -25,7 +25,7 @@ import (
 func TestUploadStorePersistsHumanEvidenceAndExactReplay(t *testing.T) {
 	database := mediaStoreDB(t)
 	actor, project := mediaStoreProject(t, database)
-	store := pgmedia.NewStore(database)
+	store := mediaTestStore(database)
 	objects := &uploadObjectsFake{}
 	service := mediaapp.NewUploadService(store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
 	in := uploadInput(t)
@@ -76,7 +76,7 @@ func TestUploadStoreConcurrentKeysHaveOneOwnedObjectSet(t *testing.T) {
 			actor, project := mediaStoreProject(t, database)
 			gate := uploadBlockingProber{entered: make(chan struct{}, 2), release: make(chan struct{})}
 			objects := &uploadObjectsFake{}
-			service := mediaapp.NewUploadService(pgmedia.NewStore(database), gate, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
+			service := mediaapp.NewUploadService(mediaTestStore(database), gate, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
 			inputs := []mediaapp.UploadInput{uploadInput(t), uploadInput(t)}
 			for i := range inputs {
 				inputs[i].Actor = actor
@@ -133,7 +133,7 @@ func TestUploadStoreRechecksArchiveAndRejectsForeignProject(t *testing.T) {
 	database := mediaStoreDB(t)
 	actor, project := mediaStoreProject(t, database)
 	foreign, _ := mediaStoreProject(t, database)
-	store := pgmedia.NewStore(database)
+	store := mediaTestStore(database)
 	if _, err := store.AuthorizeUpload(t.Context(), foreign, project); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatalf("foreign project upload permission=%v", err)
 	}
@@ -157,7 +157,7 @@ func TestUploadStoreRechecksArchiveAndRejectsForeignProject(t *testing.T) {
 func TestUploadStoreDifferentHashCannotRewriteReceipt(t *testing.T) {
 	database := mediaStoreDB(t)
 	actor, project := mediaStoreProject(t, database)
-	service := mediaapp.NewUploadService(pgmedia.NewStore(database), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, &uploadObjectsFake{}, time.Now)
+	service := mediaapp.NewUploadService(mediaTestStore(database), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, &uploadObjectsFake{}, time.Now)
 	in := uploadInput(t)
 	in.Actor = actor
 	in.Request.ProjectID = project
@@ -191,7 +191,7 @@ func (r *delayedUploadCommit) CommitUpload(_ context.Context, actor identityapp.
 	go func() {
 		defer close(r.done)
 		err := r.database.WithContext(r.commitCtx).Transaction(func(tx *gorm.DB) error {
-			if _, err := pgmedia.NewStore(tx).CommitUpload(r.commitCtx, actor, request, asset, rends); err != nil {
+			if _, err := mediaTestStore(tx).CommitUpload(r.commitCtx, actor, request, asset, rends); err != nil {
 				return err
 			}
 			close(r.pending)
@@ -223,7 +223,7 @@ func TestUploadCleanupWaitsForPendingRealCommit(t *testing.T) {
 	actor, project := mediaStoreProject(t, database)
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
-	repo := &delayedUploadCommit{Store: pgmedia.NewStore(database), database: database, commitCtx: ctx, release: make(chan struct{}), pending: make(chan struct{}), checking: make(chan struct{}), finished: make(chan error, 1), done: make(chan struct{})}
+	repo := &delayedUploadCommit{Store: mediaTestStore(database), database: database, commitCtx: ctx, release: make(chan struct{}), pending: make(chan struct{}), checking: make(chan struct{}), finished: make(chan error, 1), done: make(chan struct{})}
 	var releaseOnce sync.Once
 	objects := &uploadObjectsFake{}
 	service := mediaapp.NewUploadService(repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
@@ -283,7 +283,7 @@ func TestUploadStoreAuditFailureRollsBackPublication(t *testing.T) {
 		}
 	})
 	objects := &uploadObjectsFake{}
-	service := mediaapp.NewUploadService(pgmedia.NewStore(database), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
+	service := mediaapp.NewUploadService(mediaTestStore(database), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
 	in := uploadInput(t)
 	in.Actor = actor
 	in.Request.ProjectID = project

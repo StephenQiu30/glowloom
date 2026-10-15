@@ -15,7 +15,6 @@ import (
 	inboxpg "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
 	inboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 	mediaevent "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/event"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -46,14 +45,14 @@ func TestMediaPurgeActualTemporalPrivateObjectsAndUnknownRecovery(t *testing.T) 
 		t.Run(map[bool]string{false: "actual all-object removal", true: "actual unknown removal then exact reconciliation"}[unknownOutcome], func(t *testing.T) {
 			db := libraryRuntimeDB(t)
 			actor, _, in, keys, objects := purgeBinaryFixture(t, db)
-			repo := pgmedia.NewPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
+			repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
 			job, err := repo.CreatePurge(t.Context(), actor, in)
 			if err != nil {
 				t.Fatal(err)
 			}
 			queue := "mediaPurge-test-" + job.ID.String()
 			private := &purgeUnknownRemove{PurgeObjects: objects, once: unknownOutcome}
-			activities := mediaflow.NewPurgeActivities(mediaapp.NewPurgeWorker(repo, private), repo)
+			activities := mediaflow.NewPurgeActivities(mediaapp.NewPurgeWorker(repo.Worker, private), repo.Worker)
 			w := worker.New(c, queue, worker.Options{})
 			mediaflow.RegisterPurgeWorkflow(w)
 			mediaflow.RegisterPurgeActivities(w, activities)
@@ -61,7 +60,7 @@ func TestMediaPurgeActualTemporalPrivateObjectsAndUnknownRecovery(t *testing.T) 
 				t.Fatal(err)
 			}
 			t.Cleanup(w.Stop)
-			handler := mediaevent.NewPurgeHandler(inboxpg.NewStore(db), repo, mediaflow.NewPurgeStarter(isolatedPurgeClient{Client: c, queue: queue}))
+			handler := mediaevent.NewPurgeHandler(inboxpg.NewStore(db), repo.Worker, mediaflow.NewPurgeStarter(isolatedPurgeClient{Client: c, queue: queue}))
 			deliver := func(key uuid.UUID) (string, error) {
 				var row struct {
 					Payload      []byte

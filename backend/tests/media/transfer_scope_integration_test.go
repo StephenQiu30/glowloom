@@ -9,14 +9,13 @@ import (
 	"github.com/google/uuid"
 
 	copyobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 func TestMediaTransferActualProjectToPersonalCreatesIndependentOriginalAndRenditions(t *testing.T) {
 	f := newTransferRecoveryFixture(t, 1)
 	objects := copyobjects.NewProjectCopyObjects(f.objects)
-	projectResult, err := mediaapp.NewTransferWorker(f.repo, objects, t.TempDir()).Execute(t.Context(), transferExecution(f.job))
+	projectResult, err := mediaapp.NewTransferWorker(f.repo.Worker, objects, t.TempDir()).Execute(t.Context(), transferExecution(f.job))
 	if err != nil || projectResult.Status != "succeeded" {
 		t.Fatal(projectResult, err)
 	}
@@ -35,11 +34,11 @@ func TestMediaTransferActualProjectToPersonalCreatesIndependentOriginalAndRendit
 			_ = f.objects.Remove(context.Background(), key)
 		}
 	})
-	result, err := mediaapp.NewTransferWorker(f.repo, objects, t.TempDir()).Execute(t.Context(), transferExecution(job))
+	result, err := mediaapp.NewTransferWorker(f.repo.Worker, objects, t.TempDir()).Execute(t.Context(), transferExecution(job))
 	if err != nil || result.Status != "succeeded" {
 		t.Fatal("actual opposite scope transfer", result, err)
 	}
-	file, err := pgmedia.NewLibraryStore(f.db, libraryTestAccess, time.Now).FindLibraryMedia(t.Context(), f.actor, input.Target, *result.Items[0].TargetAssetID)
+	file, err := mediaLibraryStore(f.db, libraryTestAccess, time.Now).FindLibraryMedia(t.Context(), f.actor, input.Target, *result.Items[0].TargetAssetID)
 	if err != nil || file.Asset.Personal == nil || file.Asset.Personal.ActorID != f.actor.ID || file.Asset.ProjectID != uuid.Nil || len(file.Renditions) != 2 || file.Asset.ID == f.input.Items[0].ID || file.Asset.ID == projectResult.Items[0].TargetItemID {
 		t.Fatal("independent personal ownership missing", file, err)
 	}
@@ -52,7 +51,7 @@ func TestMediaTransferActualProjectToPersonalCreatesIndependentOriginalAndRendit
 	if err != nil || closeErr != nil || n != file.Asset.ByteSize {
 		t.Fatal("actual personal original bytes", n, err, closeErr)
 	}
-	if _, err := pgmedia.NewStore(f.db).FindAsset(t.Context(), f.actor, *input.Source.ProjectID, file.Asset.ID); err == nil {
+	if _, err := mediaTestStore(f.db).FindAsset(t.Context(), f.actor, *input.Source.ProjectID, file.Asset.ID); err == nil {
 		t.Fatal("personal original leaked into ordinary project reference")
 	}
 	var projectRevision int64
@@ -65,7 +64,7 @@ func TestMediaTransferQueuedSourceAndTargetFolderChangesFailBeforeAnyObjectWrite
 	for _, changeSource := range []bool{true, false} {
 		t.Run(map[bool]string{true: "source metadata changed", false: "target folder renamed"}[changeSource], func(t *testing.T) {
 			f := newTransferRecoveryFixture(t, 1)
-			library := pgmedia.NewLibraryStore(f.db, libraryTestAccess, time.Now)
+			library := mediaLibraryStore(f.db, libraryTestAccess, time.Now)
 			job := f.job
 			if changeSource {
 				_, err := library.ApplyLibraryCommand(t.Context(), f.actor, mediaapp.LibraryCommand{Scope: f.input.Source, Key: uuid.New(), ExpectedRevision: 1, Action: "update_item", ItemID: &f.input.Items[0].ID, Metadata: &mediaapp.LibraryMetadata{Title: "新分类描述", Category: "other"}})
@@ -91,7 +90,7 @@ func TestMediaTransferQueuedSourceAndTargetFolderChangesFailBeforeAnyObjectWrite
 				}
 			}
 			objects := &transferUnknownWrite{ProjectCopyObjects: copyobjects.NewProjectCopyObjects(f.objects), failAt: 100}
-			result, err := mediaapp.NewTransferWorker(f.repo, objects, t.TempDir()).Execute(t.Context(), transferExecution(job))
+			result, err := mediaapp.NewTransferWorker(f.repo.Worker, objects, t.TempDir()).Execute(t.Context(), transferExecution(job))
 			want := map[bool]string{true: "source_changed", false: "target_folder_changed"}[changeSource]
 			if err != nil || result.Status != "failed" || result.NeedsReconciliation || result.Items[0].FailureCode == nil || *result.Items[0].FailureCode != want || objects.writes != 0 {
 				t.Fatal("changed frozen source or folder admitted physical work", result, objects.writes, err)

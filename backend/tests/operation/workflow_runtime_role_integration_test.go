@@ -10,7 +10,6 @@ import (
 
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
@@ -33,7 +32,7 @@ func TestWorkflowTransitionAndSettlementUnderRuntimeRole(t *testing.T) {
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return fmt.Errorf("assume runtime role: %w", err)
 		}
-		operationStore := pgoperation.NewStore(tx)
+		operationStore := operationStore(tx)
 		if _, err := operationStore.TransitionWorkflowOperation(t.Context(), application.TransitionInput{
 			OperationID: operationID, From: []domain.Status{domain.StatusConfirmed},
 			To: domain.StatusSubmitting, ProviderRequestKey: &requestKey,

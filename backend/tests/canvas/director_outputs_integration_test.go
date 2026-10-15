@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
@@ -49,7 +50,7 @@ func TestDirectorOutputsPersistAndRejectUnavailableImages(t *testing.T) {
 		t.Fatalf("persistent screenshot replay: %+v %v", replayed, err)
 	}
 	otherProject := uuid.New()
-	if err := database.Exec(`INSERT INTO workspace.project(id,org_id,name,aspect_ratio,style_type) VALUES(?,?,'其他项目','16:9','realistic')`, otherProject, actor.OrgID).Error; err != nil {
+	if err := database.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,owner_scope_id,name,aspect_ratio,style_type) VALUES(?,?,?,?,'其他项目','16:9','realistic')`, otherProject, actor.OrgID, actor.ID, actor.ScopeID).Error; err != nil {
 		t.Fatal(err)
 	}
 	_, foreignProject := seedCanvasActor(t, database)
@@ -208,9 +209,9 @@ func TestDirectorOutputsHoldMediaEligibilityUntilCommit(t *testing.T) {
 			var workers sync.WaitGroup
 			var release sync.Once
 			defer func() { release.Do(func() { close(resume) }); cancel(); workers.Wait() }()
-			service := application.NewService(pgcanvas.NewStore(database, func(tx *gorm.DB) application.MediaReader {
-				return pausedMediaReference{reader: mediaapp.NewAssetQuery(pgmedia.NewStore(tx), nil), read: read, resume: resume}
-			}))
+			service := application.NewService(pgcanvas.NewScopedStore(database, func(tx *gorm.DB) application.MediaReader {
+				return pausedMediaReference{reader: mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, app.NewMediaScopeAccess), nil), read: read, resume: resume}
+			}, app.NewCanvasProjectAccess))
 			doc, err := service.Create(ctx, actor, project, uuid.NewString(), application.CreateInput{Name: "截图授权事务"})
 			if err != nil {
 				t.Fatal(err)
@@ -281,7 +282,7 @@ func TestDirectorOutputsHoldMediaEligibilityUntilCommit(t *testing.T) {
 			if err := <-mutated; err != nil {
 				t.Fatalf("media updater did not resume: %v", err)
 			}
-			if _, err := mediaapp.NewAssetQuery(pgmedia.NewStore(database), nil).Reference(ctx, actor, project, asset); !errors.Is(err, mediaapp.ErrNotFound) {
+			if _, err := mediaapp.NewAssetQuery(pgmedia.NewScopedStore(database, app.NewMediaScopeAccess), nil).Reference(ctx, actor, project, asset); !errors.Is(err, mediaapp.ErrNotFound) {
 				t.Fatalf("later media state bypassed current authorization: %v", err)
 			}
 		})

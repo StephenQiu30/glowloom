@@ -20,7 +20,6 @@ import (
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -40,7 +39,7 @@ func (a bibleLibraryAccess) TouchContent(ctx context.Context, actor identityapp.
 	return a.owner.TouchContent(ctx, actor, p, r)
 }
 func bibleLibraryFactory(tx *gorm.DB) mediaapp.LibraryProjectAccess {
-	return bibleLibraryAccess{workspacepg.NewProjectContentAccessStore(tx)}
+	return bibleLibraryAccess{bibleFixtureProjectAccess(tx)}
 }
 
 func mediaFact(f mediaapp.ReferenceFact) domain.MediaFact {
@@ -84,16 +83,16 @@ func bibleUploadedMedia(t *testing.T, db *gorm.DB, objects *objectstorage.Client
 			t.Error(err)
 		}
 	})
-	uploader := mediaapp.NewUploadService(mediapg.NewStore(db), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
+	uploader := mediaapp.NewUploadService(bibleFixtureMediaStore(db), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 	result, err := uploader.Upload(t.Context(), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: name}, File: input, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal("actual owner-reviewed upload", err)
 	}
-	asset, err := mediapg.NewStore(db).FindAsset(t.Context(), actor, project, result.Asset.ID)
+	asset, err := bibleFixtureMediaStore(db).FindAsset(t.Context(), actor, project, result.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rends, err := mediapg.NewStore(db).FindRenditions(t.Context(), actor, project, asset.ID)
+	rends, err := bibleFixtureMediaStore(db).FindRenditions(t.Context(), actor, project, asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,8 +136,8 @@ func TestBiblePGActualSixImageRolesSampleAndFrozenTrashBoundaries(t *testing.T) 
 		t.Fatal(err)
 	}
 	audioID := bibleUploadedMedia(t, db, objects, actor, project, "voice.wav", audioBytes)
-	factories := pg.Factories{Access: func(tx *gorm.DB) app.ProjectAccess { return workspacepg.NewProjectContentAccessStore(tx) }, Media: func(tx *gorm.DB) app.MediaReferences {
-		return actualBibleMedia{mediaapp.NewReferenceFactQuery(mediapg.NewLibraryStore(tx, bibleLibraryFactory, time.Now), objects)}
+	factories := pg.Factories{Access: func(tx *gorm.DB) app.ProjectAccess { return bibleFixtureProjectAccess(tx) }, Media: func(tx *gorm.DB) app.MediaReferences {
+		return actualBibleMedia{mediaapp.NewReferenceFactQuery(bibleFixtureLibraryStore(tx, bibleLibraryFactory, time.Now), objects)}
 	}}
 	service := app.NewService(pg.NewStore(db, factories), time.Now)
 	first, err := service.Change(t.Context(), actor, createCharacter(project))
@@ -175,7 +174,7 @@ func TestBiblePGActualSixImageRolesSampleAndFrozenTrashBoundaries(t *testing.T) 
 	if err != nil || old.Character.Voice != nil {
 		t.Fatal("sample rewrote prior immutable version", err)
 	}
-	if _, err := mediapg.NewLibraryStore(db, bibleLibraryFactory, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: mediadomain.LibraryScope{Kind: mediadomain.LibraryProject, ProjectID: &project}, Action: "recycle_items", Key: uuid.New(), Items: []mediaapp.LibraryItemRevision{{ID: imageID}}}); err != nil {
+	if _, err := bibleFixtureLibraryStore(db, bibleLibraryFactory, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: mediadomain.LibraryScope{Kind: mediadomain.LibraryProject, ProjectID: &project}, Action: "recycle_items", Key: uuid.New(), Items: []mediaapp.LibraryItemRevision{{ID: imageID}}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.Change(t.Context(), actor, app.Command{ProjectID: project, Kind: domain.KindCharacter, Action: "confirm", EntryID: first.EntryID, ExpectedRevision: third.Revision, Key: uuid.New(), RequestID: uuid.New()}); err != nil {

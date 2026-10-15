@@ -16,16 +16,17 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialschema"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialseal"
 	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/paramvalidation"
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/pricevalidation"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func adminCatalogRouter(t *testing.T, database *gorm.DB, actor identityapp.Principal) *gin.Engine {
@@ -50,7 +51,7 @@ func adminCatalogRouter(t *testing.T, database *gorm.DB, actor identityapp.Princ
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, registry := pgcatalog.NewStore(database), credentialschema.NewRegistry()
+	store, registry := app.NewCatalogStore(database), credentialschema.NewRegistry()
 	router := gin.New()
 	router.Use(httpapi.Middleware("http://localhost:3000"))
 	router.Use(func(c *gin.Context) { c.Set("principal", actor) })
@@ -76,6 +77,8 @@ func TestAdminCatalogHTTPManagementKeepsRolesAndRealPublication(t *testing.T) {
 	if err := database.Exec(`INSERT INTO identity."user"(id,org_id,login_name,display_name,role,password_hash,must_change_password,platform_role) VALUES(?::uuid,?::uuid,?,'HTTP Catalog Admin','admin','synthetic-test-hash',false,'platform_admin')`, actor.ID, org, "http-admin-"+actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
+
+	actor = identityfixture.Session(t, database, actor)
 	producer := insertModelCatalogActor(ctx, t, database, org)
 	denied := adminCatalogRequest(t, adminCatalogRouter(t, database, producer), "POST", "/api/admin/providers", `{"key":"denied"}`, uuid.NewString())
 	if denied.Code != 403 {
@@ -117,11 +120,11 @@ func TestAdminCatalogHTTPManagementKeepsRolesAndRealPublication(t *testing.T) {
 	if replay.Code != 202 || json.Unmarshal(replay.Body.Bytes(), &again) != nil || again != accepted {
 		t.Fatalf("test replay=%d %s", replay.Code, replay.Body)
 	}
-	if err := pgcatalog.NewStore(database).VerifyCredentialTestRequest(ctx, catalogapp.CredentialTestRequest{TestID: accepted.TestID, ProviderID: provider.ID, CredentialID: credential.ID, ActorID: actor.ID, OrgID: org, RequestID: testKey}, accepted.EventID); err != nil {
+	if err := app.NewCatalogStore(database).VerifyCredentialTestRequest(ctx, catalogapp.CredentialTestRequest{TestID: accepted.TestID, ProviderID: provider.ID, CredentialID: credential.ID, ActorID: actor.ID, OrgID: org, RequestID: testKey}, accepted.EventID); err != nil {
 		t.Fatalf("durable test request=%v", err)
 	}
 	capability := domain.Capability{ID: uuid.New(), Key: "http.image." + uuid.NewString(), OutputType: domain.OutputImage, Modes: []string{"text_to_image"}, InputRoles: []string{"prompt"}}
-	if err := pgcatalog.NewStore(database).CreateCapabilityForAdmin(ctx, actor, capability); err != nil {
+	if err := app.NewCatalogStore(database).CreateCapabilityForAdmin(ctx, actor, capability); err != nil {
 		t.Fatal(err)
 	}
 	res = adminCatalogRequest(t, router, "POST", "/api/admin/models", fmt.Sprintf(`{"model_key":"http-model-%s","provider_id":"%s","capability":"%s","display_name":"HTTP Model"}`, uuid.New(), provider.ID, capability.Key), uuid.NewString())

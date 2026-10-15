@@ -18,7 +18,7 @@ import (
 func provideMediaPackageStore(database *gorm.DB) *pgmedia.PackageStore {
 	// The constructor retains this factory without invoking it. The lifecycle
 	// and reference ports below authorize their own rows without calling guards.
-	return pgmedia.NewScopedPackageStore(database, NewMediaLibraryProjectAccess, provideMediaLibraryWorkGuards, time.Now, provideMediaScopeAccess)
+	return pgmedia.NewScopedPackageStore(database, NewMediaLibraryProjectAccess, provideMediaLibraryWorkGuards, time.Now, NewMediaScopeAccess)
 }
 
 func provideMediaPackages(database *gorm.DB, storage *objectstorage.Client, uploads *mediaapp.UploadService) *mediaapp.LibraryPackageService {

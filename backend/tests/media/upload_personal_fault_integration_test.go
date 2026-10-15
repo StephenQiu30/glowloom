@@ -35,7 +35,7 @@ func (r *pendingPersonalCommit) CommitPersonalUpload(_ context.Context, actor id
 	go func() {
 		defer close(r.done)
 		err := r.db.WithContext(r.ctx).Transaction(func(tx *gorm.DB) error {
-			if _, err := pgmedia.NewStore(tx).CommitPersonalUpload(r.ctx, actor, request, a, rends); err != nil {
+			if _, err := mediaTestStore(tx).CommitPersonalUpload(r.ctx, actor, request, a, rends); err != nil {
 				return err
 			}
 			close(r.pending)
@@ -67,7 +67,7 @@ func TestPersonalUploadCleanupJoinsUnknownRealCommitBeforeObjectRemoval(t *testi
 	actor, _ := mediaStoreProject(t, db)
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
-	repo := &pendingPersonalCommit{Store: pgmedia.NewStore(db), db: db, ctx: ctx, pending: make(chan struct{}), release: make(chan struct{}), checking: make(chan struct{}), done: make(chan struct{}), finished: make(chan error, 1)}
+	repo := &pendingPersonalCommit{Store: mediaTestStore(db), db: db, ctx: ctx, pending: make(chan struct{}), release: make(chan struct{}), checking: make(chan struct{}), done: make(chan struct{}), finished: make(chan error, 1)}
 	var release sync.Once
 	objects := glbTestObjects(t)
 	service := mediaapp.NewScopedUploadService(repo.Store, repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
@@ -134,7 +134,7 @@ func TestPersonalUploadZeroRowReceiptRollsBackObjectsAndAudit(t *testing.T) {
 		}
 	})
 	objects := &uploadObjectsFake{}
-	store := pgmedia.NewStore(db)
+	store := mediaTestStore(db)
 	service := mediaapp.NewScopedUploadService(store, store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
 	in := uploadInput(t)
 	in.Actor = actor

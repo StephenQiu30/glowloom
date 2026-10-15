@@ -10,11 +10,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func TestPresetManagementTransactions(t *testing.T) {
@@ -27,7 +28,8 @@ func TestPresetManagementTransactions(t *testing.T) {
 	t.Cleanup(func() { _ = conn.Close() })
 	actor := identityapp.Principal{ID: uuid.New(), OrgID: uuid.New(), PlatformRole: "platform_admin"}
 	require.NoError(t, conn.DB.Exec(`INSERT INTO identity."user"(id,org_id,login_name,display_name,role,password_hash,must_change_password,platform_role) VALUES(?,?,?,'Preset Admin','producer','synthetic',false,'platform_admin')`, actor.ID, actor.OrgID, "preset-"+actor.ID.String()).Error)
-	service := catalogapp.NewProviderPresets(pgcatalog.NewStore(conn.DB))
+	actor = identityfixture.Session(t, conn.DB, actor)
+	service := catalogapp.NewProviderPresets(app.NewCatalogStore(conn.DB))
 	presets, err := service.List(t.Context(), actor)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(presets), 2)
@@ -67,7 +69,7 @@ func TestPresetManagementTransactions(t *testing.T) {
 	updated.Config.TimeoutSeconds = 60
 	custom, err = service.Save(t.Context(), actor, catalogapp.SavePresetInput{ID: custom.ID, Slug: custom.Slug, ExpectedRevision: custom.Revision, RequestID: uuid.New(), Document: updated, PreviewHash: updated.Digest()})
 	require.NoError(t, err)
-	configs := catalogapp.NewProviderConfigs(pgcatalog.NewStore(conn.DB))
+	configs := catalogapp.NewProviderConfigs(app.NewCatalogStore(conn.DB))
 	upgrade := catalogapp.ConfigUpgradeInput{ExpectedRevision: 1, ExpectedConfigID: receipt.Config.ID, PresetVersionID: custom.VersionID}
 	preview, err := configs.Preview(t.Context(), actor, receipt.ProviderID, upgrade)
 	require.NoError(t, err)

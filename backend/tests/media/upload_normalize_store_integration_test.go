@@ -10,7 +10,6 @@ import (
 
 	"github.com/google/uuid"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
@@ -25,7 +24,7 @@ func (s *replayNormalizationSpy) Normalize(context.Context, *mediaapp.Downloaded
 func TestNormalizedUploadStoreKeepsOriginalReceiptAndDeduplicatesSource(t *testing.T) {
 	database := mediaStoreDB(t)
 	actor, project := mediaStoreProject(t, database)
-	store, objects := pgmedia.NewStore(database), &uploadObjectsFake{}
+	store, objects := mediaTestStore(database), &uploadObjectsFake{}
 	service := mediaapp.NewUploadService(store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
 	in := uploadInput(t)
 	in.Actor, in.Request.ProjectID = actor, project
@@ -71,7 +70,7 @@ func TestNormalizedUploadStoreKeepsOriginalReceiptAndDeduplicatesSource(t *testi
 func TestNormalizedUploadStoreRejectsAbsentForgedAndUnknownConversionProof(t *testing.T) {
 	database := mediaStoreDB(t)
 	actor, project := mediaStoreProject(t, database)
-	store, objects := pgmedia.NewStore(database), &uploadObjectsFake{}
+	store, objects := mediaTestStore(database), &uploadObjectsFake{}
 	record := &uploadRepoFake{}
 	in := uploadInput(t)
 	in.Actor, in.Request.ProjectID = actor, project

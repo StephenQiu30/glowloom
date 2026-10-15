@@ -11,7 +11,6 @@ import (
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	copyobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
@@ -20,7 +19,7 @@ func TestMediaTransferRevokedActorCannotReadReplayRecoverOrPublishUnknownObjects
 	f := newTransferRecoveryFixture(t, 1)
 	owner := libraryOwnerDB(t)
 	objects := &transferUnknownWrite{ProjectCopyObjects: copyobjects.NewProjectCopyObjects(f.objects), failAt: 1}
-	unknown, err := mediaapp.NewTransferWorker(f.repo, objects, t.TempDir()).Execute(t.Context(), transferExecution(f.job))
+	unknown, err := mediaapp.NewTransferWorker(f.repo.Worker, objects, t.TempDir()).Execute(t.Context(), transferExecution(f.job))
 	if err != nil || !unknown.NeedsReconciliation {
 		t.Fatal(unknown, err)
 	}
@@ -45,12 +44,16 @@ func TestMediaTransferRevokedActorCannotReadReplayRecoverOrPublishUnknownObjects
 			return err
 		},
 		func() error {
-			_, err := mediaapp.NewTransferWorker(f.repo, objects, t.TempDir()).Execute(t.Context(), transferExecution(requested))
+			_, err := mediaapp.NewTransferWorker(f.repo.Worker, objects, t.TempDir()).Execute(t.Context(), transferExecution(requested))
 			return err
 		},
 	}
 	for index, check := range checks {
-		if err := check(); !errors.Is(err, identityapp.ErrForbidden) {
+		want := identityapp.ErrSessionInvalid
+		if index == 3 {
+			want = identityapp.ErrForbidden
+		}
+		if err := check(); !errors.Is(err, want) {
 			t.Fatal("revocation granted cached or physical authority", index, err)
 		}
 	}
@@ -61,7 +64,7 @@ func TestMediaTransferRevokedActorCannotReadReplayRecoverOrPublishUnknownObjects
 	if err := owner.Exec(`UPDATE identity."user" SET status='active' WHERE id=?`, f.actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	result, err := mediaapp.NewTransferWorker(f.repo, objects, t.TempDir()).Execute(t.Context(), transferExecution(requested))
+	result, err := mediaapp.NewTransferWorker(f.repo.Worker, objects, t.TempDir()).Execute(t.Context(), transferExecution(requested))
 	if err != nil || result.Status != "succeeded" {
 		t.Fatal("authorized explicit original recovery failed", result, err)
 	}
@@ -70,21 +73,21 @@ func TestMediaTransferRevokedActorCannotReadReplayRecoverOrPublishUnknownObjects
 func TestMediaTransferExpiredLeaseNeverStealsPhysicalWorkAndEndedFenceIsExact(t *testing.T) {
 	f := newTransferRecoveryFixture(t, 1)
 	now := time.Now()
-	repo := pgmedia.NewTransferStore(f.db, libraryTestAccess, transferTestGuards, func() time.Time { return now })
-	lease, err := repo.ClaimTransfer(t.Context(), transferExecution(f.job))
+	repo := mediaTransferStore(f.db, libraryTestAccess, transferTestGuards, func() time.Time { return now })
+	lease, err := repo.Worker.ClaimTransfer(t.Context(), transferExecution(f.job))
 	if err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(time.Minute)
-	if _, err := repo.ClaimTransfer(t.Context(), transferExecution(f.job)); !errors.Is(err, domain.ErrTransferConflict) {
+	if _, err := repo.Worker.ClaimTransfer(t.Context(), transferExecution(f.job)); !errors.Is(err, domain.ErrTransferConflict) {
 		t.Fatal("expiry was mistaken for physical cessation", err)
 	}
-	if err := repo.BeginTransferWrite(t.Context(), lease, 0, ""); !errors.Is(err, domain.ErrTransferConflict) {
+	if err := repo.Worker.BeginTransferWrite(t.Context(), lease, 0, ""); !errors.Is(err, domain.ErrTransferConflict) {
 		t.Fatal("expired physical owner retained write authority", err)
 	}
 	forged := lease
 	forged.Fence = uuid.New()
-	if err := repo.EndTransferPhysical(t.Context(), forged); err == nil {
+	if err := repo.Worker.EndTransferPhysical(t.Context(), forged); err == nil {
 		t.Fatal("foreign fence declared physical work ended")
 	}
 	owner := libraryOwnerDB(t)
@@ -94,10 +97,10 @@ func TestMediaTransferExpiredLeaseNeverStealsPhysicalWorkAndEndedFenceIsExact(t 
 	t.Cleanup(func() {
 		_ = owner.WithContext(context.Background()).Exec(`UPDATE identity."user" SET status='active' WHERE id=?`, f.actor.ID).Error
 	})
-	if err := repo.EndTransferPhysical(t.Context(), lease); err != nil {
+	if err := repo.Worker.EndTransferPhysical(t.Context(), lease); err != nil {
 		t.Fatal("exact stopped writer could not record cessation after revocation", err)
 	}
-	if _, err := repo.FinishTransfer(t.Context(), lease); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := repo.Worker.FinishTransfer(t.Context(), lease); !errors.Is(err, identityapp.ErrForbidden) {
 		t.Fatal("cessation proof was mistaken for publication permission", err)
 	}
 	var facts struct{ ProcessEnded, ExecutionUnconfirmed bool }
@@ -115,7 +118,7 @@ func TestMediaTransferControlZeroRowsRollsBackEveryPermanentReceiptAndState(t *t
 				if action == "reconcile" {
 					objects := &transferUnknownWrite{ProjectCopyObjects: copyobjects.NewProjectCopyObjects(f.objects), failAt: 1}
 					var err error
-					before, err = mediaapp.NewTransferWorker(f.repo, objects, t.TempDir()).Execute(t.Context(), transferExecution(f.job))
+					before, err = mediaapp.NewTransferWorker(f.repo.Worker, objects, t.TempDir()).Execute(t.Context(), transferExecution(f.job))
 					if err != nil || !before.NeedsReconciliation {
 						t.Fatal(before, err)
 					}

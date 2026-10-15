@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
@@ -34,7 +33,7 @@ func TestUploadRealMinIOOriginalRenditionsAndPreview(t *testing.T) {
 	if err != nil {
 		t.Fatal("private object store configuration invalid")
 	}
-	store := pgmedia.NewStore(database)
+	store := mediaTestStore(database)
 	service := mediaapp.NewUploadService(store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 	for _, tc := range []struct {
 		name, kind string

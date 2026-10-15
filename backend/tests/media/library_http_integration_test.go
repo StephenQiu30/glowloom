@@ -14,7 +14,6 @@ import (
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediahttp "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/http"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
@@ -25,7 +24,7 @@ func libraryRouter(db *gorm.DB, actor identityapp.Principal) *gin.Engine {
 	router.Use(httpapi.Middleware("http://127.0.0.1:3000"))
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	mediahttp.NewLibraryHandler(pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now)).Register(group)
+	mediahttp.NewLibraryHandler(mediaLibraryStore(db, libraryTestAccess, time.Now)).Register(group)
 	return router
 }
 

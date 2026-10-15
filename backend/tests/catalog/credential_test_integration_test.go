@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
 	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
@@ -19,6 +20,7 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func TestCredentialTestRecordsCurrentResultAndEventsOnLocalPostgres(t *testing.T) {
@@ -33,7 +35,7 @@ func TestCredentialTestRecordsCurrentResultAndEventsOnLocalPostgres(t *testing.T
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	store := pgcatalog.NewStore(conn.DB)
+	store := app.NewCatalogStore(conn.DB)
 	service := catalogapp.NewCredentialTestService(store)
 	actor := adminPrincipal()
 	provider := validProvider()
@@ -44,6 +46,8 @@ func TestCredentialTestRecordsCurrentResultAndEventsOnLocalPostgres(t *testing.T
 	`, actor.ID.String(), actor.OrgID.String(), "test-"+actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
+
+	actor = identityfixture.Session(t, conn.DB, actor)
 	if err := store.CreateProvider(ctx, provider); err != nil {
 		t.Fatal(err)
 	}
@@ -54,10 +58,16 @@ func TestCredentialTestRecordsCurrentResultAndEventsOnLocalPostgres(t *testing.T
 	`, credentialID.String(), provider.ID.String(), []byte{0, 1, 2, 3}).Error; err != nil {
 		t.Fatal(err)
 	}
-	request := catalogapp.CredentialTestRequest{
-		TestID: uuid.New(), ProviderID: provider.ID, CredentialID: credentialID,
-		ActorID: actor.ID, OrgID: actor.OrgID, RequestID: uuid.NewString(),
+	requestTest := func(credential uuid.UUID) catalogapp.CredentialTestRequest {
+		t.Helper()
+		key := uuid.NewString()
+		accepted, err := catalogapp.NewRequestCredentialTestCommand(store).Execute(ctx, actor, provider.ID, credential, key)
+		if err != nil || !accepted.Accepted {
+			t.Fatal("credential test admission", accepted, err)
+		}
+		return catalogapp.CredentialTestRequest{TestID: accepted.TestID, ProviderID: provider.ID, CredentialID: credential, ActorID: actor.ID, OrgID: actor.OrgID, RequestID: key}
 	}
+	request := requestTest(credentialID)
 	loadedProvider, loadedCredential, err := service.Load(ctx, request)
 	if err != nil || loadedProvider.ID != provider.ID || loadedCredential.ID != credentialID ||
 		!bytes.Equal(loadedCredential.Ciphertext, []byte{0, 1, 2, 3}) {
@@ -85,15 +95,27 @@ func TestCredentialTestRecordsCurrentResultAndEventsOnLocalPostgres(t *testing.T
 	if err := conn.DB.WithContext(ctx).Raw(`
 		SELECT topic, partition_key, payload FROM infra.outbox
 		WHERE partition_key = ? ORDER BY topic
-	`, actor.OrgID.String()).Scan(&events).Error; err != nil || len(events) != 2 {
+	`, actor.OrgID.String()).Scan(&events).Error; err != nil || len(events) != 3 {
 		t.Fatalf("test outbox rows %d: %v", len(events), err)
 	}
-	var sawAudit, sawChange bool
+	var sawAudit, sawChange, sawRequest bool
 	for _, event := range events {
 		if bytes.Contains(event.Payload, []byte("ciphertext")) || bytes.Contains(event.Payload, []byte("agent-2026")) {
 			t.Fatal("credential test outbox contains sealed credential material")
 		}
 		switch event.Topic {
+		case "lanverse.catalog.credential_test_requested.v1":
+			var payload struct {
+				Data struct {
+					TestID       uuid.UUID `json:"test_id"`
+					ProviderID   uuid.UUID `json:"provider_id"`
+					CredentialID uuid.UUID `json:"credential_id"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal(event.Payload, &payload); err != nil || payload.Data.TestID != request.TestID || payload.Data.ProviderID != provider.ID || payload.Data.CredentialID != credentialID {
+				t.Fatal("invalid accepted test request", err)
+			}
+			sawRequest = true
 		case "lanverse.audit.recorded.v1":
 			audit, err := auditapp.NewRecordedActionParser().Parse(inbox.Record{
 				Topic: event.Topic, Key: []byte(event.PartitionKey), Value: event.Payload,
@@ -132,16 +154,20 @@ func TestCredentialTestRecordsCurrentResultAndEventsOnLocalPostgres(t *testing.T
 			sawChange = true
 		}
 	}
-	if !sawAudit || !sawChange {
+	if !sawAudit || !sawChange || !sawRequest {
 		t.Fatalf("missing safe events: audit %t change %t", sawAudit, sawChange)
 	}
 	stale := first
-	stale.TestID = uuid.New()
+	stale.CredentialTestRequest = requestTest(credentialID)
 	stale.Result = domain.TestAuthFailed
 	stale.TestedAt = first.TestedAt.Add(-time.Second)
 	if err := service.Record(ctx, stale); !errors.Is(err, pgcatalog.ErrTestSuperseded) {
 		t.Fatalf("older test replaced current result: %v", err)
 	}
+	failed := first
+	failed.CredentialTestRequest = requestTest(credentialID)
+	failed.Result = domain.TestAuthFailed
+	failed.TestedAt = first.TestedAt.Add(time.Second)
 	if err := conn.DB.WithContext(ctx).Exec(`
 		CREATE FUNCTION reject_test_audit() RETURNS trigger LANGUAGE plpgsql AS $$
 		BEGIN
@@ -161,10 +187,6 @@ func TestCredentialTestRecordsCurrentResultAndEventsOnLocalPostgres(t *testing.T
 		_ = conn.DB.Exec(`DROP TRIGGER IF EXISTS reject_test_audit_before_insert ON infra.outbox`).Error
 		_ = conn.DB.Exec(`DROP FUNCTION IF EXISTS reject_test_audit()`).Error
 	})
-	failed := first
-	failed.TestID = uuid.New()
-	failed.Result = domain.TestAuthFailed
-	failed.TestedAt = first.TestedAt.Add(time.Second)
 	if err := service.Record(ctx, failed); err == nil {
 		t.Fatal("audit insertion failure did not roll back test result")
 	}
@@ -191,18 +213,18 @@ func TestCredentialTestRecordsCurrentResultAndEventsOnLocalPostgres(t *testing.T
 	if _, _, err := service.Load(ctx, request); !errors.Is(err, pgcatalog.ErrCredentialNotFound) {
 		t.Fatalf("loaded replaced credential: %v", err)
 	}
+	revokedRequest := requestTest(newCredential.ID)
 	if err := conn.DB.WithContext(ctx).Exec(`
 		UPDATE identity."user" SET platform_role = 'creator' WHERE id = ?::uuid
 	`, actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
-	request.CredentialID = newCredential.ID
+	request = revokedRequest
 	if _, _, err := service.Load(ctx, request); !errors.Is(err, identityapp.ErrForbidden) {
 		t.Fatalf("revoked administrator loaded credential: %v", err)
 	}
 	revoked := failed
-	revoked.TestID = uuid.New()
-	revoked.CredentialID = newCredential.ID
+	revoked.CredentialTestRequest = revokedRequest
 	revoked.Last4 = "5678"
 	if err := service.Record(ctx, revoked); !errors.Is(err, identityapp.ErrForbidden) {
 		t.Fatalf("revoked administrator recorded result: %v", err)

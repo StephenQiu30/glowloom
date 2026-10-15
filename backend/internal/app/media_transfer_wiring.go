@@ -12,7 +12,7 @@ import (
 )
 
 func provideMediaTransferStore(database *gorm.DB) *pgmedia.TransferStore {
-	return pgmedia.NewScopedTransferStore(database, NewMediaLibraryProjectAccess, provideMediaLibraryWorkGuards, time.Now, provideMediaScopeAccess)
+	return pgmedia.NewScopedTransferStore(database, NewMediaLibraryProjectAccess, provideMediaLibraryWorkGuards, time.Now, NewMediaScopeAccess)
 }
 
 func provideMediaTransferWorker(database *gorm.DB, storage *objectstorage.Client) (*mediaapp.TransferWorker, *pgmedia.TransferStore) {
@@ -21,5 +21,5 @@ func provideMediaTransferWorker(database *gorm.DB, storage *objectstorage.Client
 }
 
 func provideMediaTransferWorkerStore(database *gorm.DB) *pgmedia.TransferStore {
-	return pgmedia.NewScopedTransferStore(database, provideMediaLibraryWorkerProjectAccess, provideMediaLibraryWorkGuards, time.Now, provideMediaWorkerScopeAccess)
+	return pgmedia.NewScopedTransferStore(database, NewMediaLibraryWorkerProjectAccess, provideMediaLibraryWorkGuards, time.Now, NewMediaWorkerScopeAccess)
 }

@@ -11,8 +11,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/http"
-	catalogpg "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	mediahttp "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/http"
 	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
@@ -55,12 +55,12 @@ func TestEditorBrowserFixture(t *testing.T) {
 	api.GET("/session", func(c *gin.Context) {
 		c.JSON(200, gin.H{"actor": gin.H{"id": actor.ID, "org_id": actor.OrgID, "role": actor.Role}, "session_id": uuid.NewString()})
 	})
-	mediahttp.NewHandler(mediaapp.NewAssetQuery(mediapg.NewStore(db), nil)).Register(api)
+	mediahttp.NewHandler(mediaapp.NewAssetQuery(mediapg.NewScopedStore(db, app.NewMediaScopeAccess), nil)).Register(api)
 	prompthttp.NewDraftHandler(editorDraftStore(db)).Register(api)
 	store := editorOperationStore(db)
 	operationhttp.NewSubmissionHandler(store).Register(api)
 	operationhttp.NewHandler(operationhttp.Dependencies{FreeQuote: operationapp.NewCreateFreeQuoteCommand(store), Confirm: operationapp.NewConfirmSingleQuoteCommand(store), Query: operationapp.NewPublicQuery(store)}).Register(api)
-	cataloghttp.NewHandler(catalogapp.NewListModelsQuery(catalogpg.NewStore(db))).Register(api)
+	cataloghttp.NewHandler(catalogapp.NewListModelsQuery(app.NewCatalogStore(db))).Register(api)
 	var listenerConfig net.ListenConfig
 	listener, err := listenerConfig.Listen(t.Context(), "tcp", "127.0.0.1:55588")
 	if err != nil {

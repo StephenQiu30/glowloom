@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
 
@@ -64,7 +63,7 @@ func TestCanvasSplitBatchesShareSavedConcurrencyAndReleaseOnlySettledSlots(t *te
 		return batch
 	}
 	groups := []operationapp.CreateBatchFreeQuoteResult{create(sourceA, 0), create(sourceA, 2)}
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	var workers sync.WaitGroup
 	admitted := make([]bool, 2)
 	errors := make([]error, 2)

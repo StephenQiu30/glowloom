@@ -111,12 +111,12 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	mediahttp.NewStorageUsageHandler(provideMediaStorageUsage(database, storage)).Register(protected)
 	workspacehttp.NewProjectFolderHandler(workspaceapp.NewProjectFolders(provideProjectFolderStore(database), time.Now)).Register(protected)
 	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader {
-		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, provideMediaScopeAccess), nil)
+		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, NewMediaScopeAccess), nil)
 	}
-	canvashttp.NewHandler(canvasapp.NewService(pgcanvas.NewScopedStore(database, mediaFactory, provideCanvasProjectAccess))).Register(protected)
-	mediahttp.NewHandler(mediaapp.NewAssetQuery(pgmedia.NewScopedStore(database, provideMediaScopeAccess), storage)).Register(protected)
-	mediahttp.NewDocumentHandler(mediaapp.NewDocumentSources(pgmedia.NewScopedDocumentSourceStore(database, provideMediaScopeAccess), storage)).Register(protected)
-	library := pgmedia.NewScopedLibraryStore(database, NewMediaLibraryProjectAccess, time.Now, provideMediaScopeAccess)
+	canvashttp.NewHandler(canvasapp.NewService(pgcanvas.NewScopedStore(database, mediaFactory, NewCanvasProjectAccess))).Register(protected)
+	mediahttp.NewHandler(mediaapp.NewAssetQuery(pgmedia.NewScopedStore(database, NewMediaScopeAccess), storage)).Register(protected)
+	mediahttp.NewDocumentHandler(mediaapp.NewDocumentSources(pgmedia.NewScopedDocumentSourceStore(database, NewMediaScopeAccess), storage)).Register(protected)
+	library := pgmedia.NewScopedLibraryStore(database, NewMediaLibraryProjectAccess, time.Now, NewMediaScopeAccess)
 	mediahttp.NewLibraryHandler(library).Register(protected)
 	mediahttp.NewLibraryMediaHandler(mediaapp.NewLibraryMediaQuery(library, storage, storage)).Register(protected)
 	script := provideScriptServices(database, storage)
@@ -129,7 +129,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	if err != nil {
 		return nil, fmt.Errorf("configure model upload validation: %w", err)
 	}
-	uploadStore := pgmedia.NewScopedStore(database, provideMediaScopeAccess)
+	uploadStore := pgmedia.NewScopedStore(database, NewMediaScopeAccess)
 	scopedUpload := mediaapp.NewScopedUploadService(uploadStore, uploadStore, mediaflow.NewUploadProber(modelValidator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(storage), time.Now)
 	mediahttp.NewUploadHandler(scopedUpload).Register(protected)
 	mediahttp.NewPackageHandler(provideMediaPackages(database, storage, scopedUpload)).Register(protected)
@@ -142,7 +142,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	toolhttp.NewTranscriptionHandler(provideMediaTranscriptionStore(database, transcriber != nil)).Register(protected)
 	depths := provideMediaDepthStore(database, cfg.VideoDepthPythonPath != "")
 	toolhttp.NewDepthHandler(depths, toolapp.NewDepthQuery(depths, storage, storage)).Register(protected)
-	catalogStore := provideCatalogStore(database)
+	catalogStore := NewCatalogStore(database)
 	cataloghttp.NewPresetHandler(catalogapp.NewProviderPresets(catalogStore)).Register(identityProtected)
 	cataloghttp.NewConfigHandler(catalogapp.NewProviderConfigs(catalogStore)).Register(identityProtected)
 	cataloghttp.NewReleaseHandler(catalogapp.NewModelReleases(catalogStore)).Register(identityProtected)

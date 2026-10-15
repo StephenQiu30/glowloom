@@ -14,7 +14,6 @@ import (
 	"gorm.io/gorm"
 
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
@@ -24,7 +23,7 @@ func TestGIFActualPrivateUploadReviewThumbnailsAndCompleteIndependentCopy(t *tes
 	actor, project := mediaStoreProject(t, db)
 	data := uploadGIF(t, 3)
 	asset := documentUpload(t, db, objects, actor, project, "完整动画.gif", data)
-	store := pgmedia.NewStore(db)
+	store := mediaTestStore(db)
 	original, err := store.FindAsset(t.Context(), actor, project, asset.Asset.ID)
 	if err != nil || original.MimeType != "image/gif" || original.Codec == nil || *original.Codec != "gif" || original.SHA256 == nil || original.Width == nil || *original.Width != 3 || original.Height == nil || *original.Height != 4 || original.DurationMS != nil {
 		t.Fatal("formal GIF original facts", original, err)
@@ -64,21 +63,21 @@ func TestGIFActualPrivateUploadReviewThumbnailsAndCompleteIndependentCopy(t *tes
 		}
 	}
 	binding := mediaapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: uuid.New()}
-	if err := db.Exec(`INSERT INTO workspace.project(id,org_id,name,aspect_ratio,style_type,status) VALUES(?,?,'动画完整副本','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID).Error; err != nil {
+	if err := db.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,owner_scope_id,name,aspect_ratio,style_type,status) VALUES(?,?,?,?,'动画完整副本','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID, actor.ID, actor.ScopeID).Error; err != nil {
 		t.Fatal(err)
 	}
 	var snapshot mediaapp.ProjectCopySnapshot
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		var err error
-		snapshot, err = pgmedia.NewProjectCopyStore(tx).Freeze(t.Context(), actor, binding, time.Now())
+		snapshot, err = mediaCopyStore(tx).Freeze(t.Context(), actor, binding, time.Now())
 		if err != nil {
 			return err
 		}
-		return tx.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,actor_id,source_project_id,source_revision,target_project_id,target_name,status,stage,manifest,workspace_snapshot,idem_key,request_sha256,admission_response) VALUES(?,?,?,?,1,?,'动画完整副本','queued','media','{}','{}',gen_random_uuid(),repeat('a',64),'{}')`, binding.JobID, actor.OrgID, actor.ID, project, binding.TargetProjectID).Error
+		return tx.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,actor_id,owner_scope_id,source_project_id,source_revision,target_project_id,target_name,status,stage,manifest,workspace_snapshot,idem_key,request_sha256,admission_response) VALUES(?,?,?,?,?,1,?,'动画完整副本','queued','media','{}','{}',gen_random_uuid(),repeat('a',64),'{}')`, binding.JobID, actor.OrgID, actor.ID, actor.ScopeID, project, binding.TargetProjectID).Error
 	}); err != nil || snapshot.Assets != 1 || snapshot.Renditions != 2 {
 		t.Fatal("complete GIF owning snapshot", snapshot, err)
 	}
-	repo := pgmedia.NewProjectCopyStore(db)
+	repo := mediaCopyStore(db)
 	if err := mediaapp.NewProjectCopyTransfer(repo, mediaobjects.NewProjectCopyObjects(objects), t.TempDir()).Transfer(t.Context(), actor, binding, snapshot); err != nil {
 		t.Fatal("GIF full private bytes transfer", err)
 	}
@@ -97,7 +96,7 @@ func TestGIFActualPrivateUploadReviewThumbnailsAndCompleteIndependentCopy(t *tes
 		}
 	})
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		_, err := pgmedia.NewProjectCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+		_, err := mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
 		return err
 	}); err != nil {
 		t.Fatal("register real independent GIF assets", err)

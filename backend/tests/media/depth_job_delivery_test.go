@@ -45,7 +45,7 @@ func TestDepthJobPGExactOutboxAndInboxDelivery(t *testing.T) {
 		t.Fatal("missing exact depth outbox", err)
 	}
 	starter := &depthDeliveryRecorder{fail: true}
-	h := toolevent.NewDepthHandler(inboxpg.NewStore(f.db), f.store, starter)
+	h := toolevent.NewDepthHandler(inboxpg.NewStore(f.db), f.workerStore, starter)
 	record := inboxapp.Record{Topic: toolevent.DepthTopic, Key: []byte(row.PartitionKey), Value: row.Payload}
 	var body map[string]any
 	if err := json.Unmarshal(row.Payload, &body); err != nil {

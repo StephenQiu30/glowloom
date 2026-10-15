@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"go.opentelemetry.io/otel/trace/noop"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
@@ -30,7 +31,7 @@ func TestProviderCredentialsWithRealPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	store := pgcatalog.NewStore(conn.DB)
+	store := app.NewCatalogStore(conn.DB)
 	provider := validProvider()
 	provider.Key = "minimax-" + provider.ID.String()
 	if err := store.CreateProvider(ctx, provider); err != nil {
@@ -137,7 +138,7 @@ func TestConcurrentCredentialReplacementKeepsOneActive(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	store := pgcatalog.NewStore(conn.DB)
+	store := app.NewCatalogStore(conn.DB)
 	provider := validProvider()
 	provider.Key = "parallel-" + provider.ID.String()
 	if err := store.CreateProvider(ctx, provider); err != nil {

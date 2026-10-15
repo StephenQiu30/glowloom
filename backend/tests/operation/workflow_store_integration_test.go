@@ -20,7 +20,7 @@ func TestWorkflowFinalizationRollbackAndReplay(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
 	_, operationID, _, reservationID := operationStoreRows(t, database, actor, projectID)
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	billingStore := pgbilling.NewStore(database)
 	if err := database.Exec(`UPDATE billing.budget SET reserved_micros = 10 WHERE project_id = ?::uuid`, projectID.String()).Error; err != nil {
 		t.Fatalf("seed reserved budget: %v", err)
@@ -142,7 +142,7 @@ func TestLoadWorkflowOperationUsesFrozenModelAndPrivateTaskID(t *testing.T) {
 	`, frozen.PriceRuleVersionID.String(), profileID.String()).Error; err != nil {
 		t.Fatalf("insert price rule: %v", err)
 	}
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	loaded, err := store.LoadWorkflowOperation(t.Context(), operationID)
 	if err != nil {
 		t.Fatalf("load workflow operation: %v", err)
@@ -209,7 +209,7 @@ func TestWorkflowTransitionIsConditionalAndReplaySafe(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
 	_, operationID, _, _ := operationStoreRows(t, database, actor, projectID)
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	requestKey := "operation/" + operationID.String()
 	start := application.TransitionInput{
 		OperationID:        operationID,
@@ -253,7 +253,7 @@ func TestWorkflowTransitionNeverEntersTerminalWithoutSettlement(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
 	_, operationID, _, _ := operationStoreRows(t, database, actor, projectID)
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	if _, err := store.TransitionWorkflowOperation(t.Context(), application.TransitionInput{
 		OperationID: operationID, From: []domain.Status{domain.StatusConfirmed}, To: domain.StatusCompleted,
 	}); !errors.Is(err, pgoperation.ErrTerminalTransitionRequiresSettlement) {
@@ -269,7 +269,7 @@ func TestWorkflowManualEventIsReplaySafe(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
 	_, operationID, _, _ := operationStoreRows(t, database, actor, projectID)
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	requestKey := "operation/" + operationID.String()
 	for _, transition := range []application.TransitionInput{
 		{OperationID: operationID, From: []domain.Status{domain.StatusConfirmed}, To: domain.StatusSubmitting, ProviderRequestKey: &requestKey},
@@ -307,7 +307,7 @@ func TestWorkflowSubmissionChecksFrozenMediaInsideTransition(t *testing.T) {
 	if err := database.Exec(`UPDATE operation.operation_input SET media_asset_id = ?::uuid WHERE id = ?::uuid`, assetID.String(), inputID.String()).Error; err != nil {
 		t.Fatalf("attach frozen media: %v", err)
 	}
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	requestKey := "operation/" + operationID.String()
 	start := application.TransitionInput{
 		OperationID: operationID, From: []domain.Status{domain.StatusConfirmed},

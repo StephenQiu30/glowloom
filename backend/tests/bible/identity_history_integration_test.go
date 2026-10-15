@@ -14,7 +14,6 @@ import (
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 )
 
 // This explicit protocol fixture proves the consumer's acknowledgment contract,
@@ -56,7 +55,7 @@ func TestBiblePGRedirectSplitPinnedVersionsAndCompleteCopyHistory(t *testing.T) 
 		t.Fatal("missing actual downstream owner reported zero", err)
 	}
 	proof := app.ImpactProof{SHA256: strings.Repeat("b", 64), Revision: 1}
-	protocol := app.NewService(pg.NewStore(db, pg.Factories{Access: func(tx *gorm.DB) app.ProjectAccess { return workspacepg.NewProjectContentAccessStore(tx) }, Impacts: func(_ *gorm.DB) app.Impacts { return bibleImpactProtocol{proof} }}), time.Now)
+	protocol := app.NewService(pg.NewStore(db, pg.Factories{Access: func(tx *gorm.DB) app.ProjectAccess { return bibleFixtureProjectAccess(tx) }, Impacts: func(_ *gorm.DB) app.Impacts { return bibleImpactProtocol{proof} }}), time.Now)
 	if _, err := protocol.Change(t.Context(), actor, merge); err == nil {
 		t.Fatal("downstream evidence published without acknowledgment")
 	} else {
@@ -71,7 +70,7 @@ func TestBiblePGRedirectSplitPinnedVersionsAndCompleteCopyHistory(t *testing.T) 
 		t.Fatal("permanent redirect", merged, err)
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		refs := pg.NewReferences(tx, workspacepg.NewProjectContentAccessStore(tx))
+		refs := pg.NewReferences(tx, bibleFixtureProjectAccess(tx))
 		current, err := refs.Reference(t.Context(), actor, project, a.EntryID, nil)
 		if err != nil || current.CharacterID != b.EntryID || current.VersionID != b.VersionID {
 			t.Fatal("current alias does not follow confirmed redirect", current, err)

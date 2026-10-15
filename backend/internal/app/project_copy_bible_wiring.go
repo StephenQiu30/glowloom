@@ -76,9 +76,9 @@ func projectCopyBibleError(err error) error {
 	return err
 }
 func provideBibleProjectCopyStore(database *gorm.DB, authority workspaceapp.ProjectCopyAuthority, mediaSnapshot mediaapp.ProjectCopySnapshot) *pgbible.ProjectCopyStore {
-	scopes := provideMediaScopeAccess
+	scopes := NewMediaScopeAccess
 	if authority.WorkerID != uuid.Nil {
-		scopes = provideMediaWorkerScopeAccess
+		scopes = NewMediaWorkerScopeAccess
 	}
 	return pgbible.NewProjectCopyStore(database, func(tx *gorm.DB) bibleapp.ProjectCopyAccess {
 		return projectCopyBibleAccess{store: provideCopyAccess(tx, authority)}

@@ -21,11 +21,8 @@ import (
 	pg "github.com/StephenQiu30/glowloom-server/backend/internal/bible/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
-	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
-	canvaspg "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
@@ -70,28 +67,28 @@ type bibleTransferredReferences struct {
 
 func (r bibleTransferredReferences) VerifyTransferred(ctx context.Context, actor identityapp.Principal, b app.ProjectCopyBinding, rows []app.ReferenceMapping) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := (bibleCopyAccess{workspacepg.NewProjectCopyAccessStore(tx, r.authority)}).Authorize(ctx, actor, b, true); err != nil {
+		if err := (bibleCopyAccess{bibleFixtureCopyAccess(tx, r.authority)}).Authorize(ctx, actor, b, true); err != nil {
 			return err
 		}
 		input := make([]mediaapp.ProjectCopyReferenceMapping, len(rows))
 		for i, row := range rows {
 			input[i] = mediaapp.ProjectCopyReferenceMapping{Source: referenceFact(row.Source), Target: referenceFact(row.Target)}
 		}
-		return mediaapp.NewProjectCopyReferenceQuery(mediapg.NewProjectCopyStore(tx), r.objects).VerifyTransferred(ctx, actor, bibleMediaBinding(b), r.snapshot, input)
+		return mediaapp.NewProjectCopyReferenceQuery(bibleFixtureMediaCopyStore(tx), r.objects).VerifyTransferred(ctx, actor, bibleMediaBinding(b), r.snapshot, input)
 	})
 }
 
 func bibleCopyMediaStore(db *gorm.DB, authority workspaceapp.ProjectCopyAuthority, media mediaapp.ProjectCopySnapshot) *pg.ProjectCopyStore {
 	return pg.NewProjectCopyStore(db, func(tx *gorm.DB) app.ProjectCopyAccess {
-		return bibleCopyAccess{workspacepg.NewProjectCopyAccessStore(tx, authority)}
+		return bibleCopyAccess{bibleFixtureCopyAccess(tx, authority)}
 	}, func(tx *gorm.DB) app.ProjectCopyMedia {
-		return bibleCopyMedia{mediaapp.NewProjectCopyReferenceQuery(mediapg.NewProjectCopyStore(tx), nil), media}
+		return bibleCopyMedia{mediaapp.NewProjectCopyReferenceQuery(bibleFixtureMediaCopyStore(tx), nil), media}
 	}, nil)
 }
 
 func bibleCoordinatorObjects(db *gorm.DB) *workspacepg.ProjectCopyStore {
-	return workspacepg.NewProjectCopyStore(db, nil, func(tx *gorm.DB) workspaceapp.ProjectCopyOwners {
-		return workspaceapp.ProjectCopyOwners{Media: mediapg.NewProjectCopyStore(tx), Canvas: canvaspg.NewProjectCopyStore(tx, nil, nil), Budget: billingpg.NewStore(tx)}
+	return bibleFixtureWorkspaceCopyStore(db, nil, func(tx *gorm.DB) workspaceapp.ProjectCopyOwners {
+		return workspaceapp.ProjectCopyOwners{Media: bibleFixtureMediaCopyStore(tx), Canvas: bibleFixtureCanvasCopyStore(tx, nil, nil), Budget: bibleFixtureBudgetStore(tx)}
 	})
 }
 
@@ -128,9 +125,9 @@ func TestBibleCopyPGActualImageAudioRetainedHistoryAndMissingBytesFence(t *testi
 	}
 	audioID := bibleUploadedMedia(t, db, objects, actor, source, "historical.wav", audioBytes)
 	service := app.NewService(pg.NewStore(db, pg.Factories{
-		Access: func(tx *gorm.DB) app.ProjectAccess { return workspacepg.NewProjectContentAccessStore(tx) },
+		Access: func(tx *gorm.DB) app.ProjectAccess { return bibleFixtureProjectAccess(tx) },
 		Media: func(tx *gorm.DB) app.MediaReferences {
-			return actualBibleMedia{mediaapp.NewReferenceFactQuery(mediapg.NewLibraryStore(tx, bibleLibraryFactory, time.Now), objects)}
+			return actualBibleMedia{mediaapp.NewReferenceFactQuery(bibleFixtureLibraryStore(tx, bibleLibraryFactory, time.Now), objects)}
 		},
 	}), time.Now)
 	first, err := service.Change(t.Context(), actor, createCharacter(source))
@@ -156,7 +153,7 @@ func TestBibleCopyPGActualImageAudioRetainedHistoryAndMissingBytesFence(t *testi
 	// The owning soft-delete retains bytes. Version fact rev 1 is not rewritten;
 	// media's explicit retained-history proof relates it to current rev 2.
 	for _, id := range []uuid.UUID{imageID, audioID} {
-		asset, err := mediapg.NewStore(db).FindAsset(t.Context(), actor, source, id)
+		asset, err := bibleFixtureMediaStore(db).FindAsset(t.Context(), actor, source, id)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -182,7 +179,7 @@ func TestBibleCopyPGActualImageAudioRetainedHistoryAndMissingBytesFence(t *testi
 		for i, f := range facts {
 			input[i] = referenceFact(f)
 		}
-		media, err = mediapg.NewProjectCopyStore(tx).FreezeWithReferenceFacts(t.Context(), actor, bibleMediaBinding(b), time.Now(), nil, input)
+		media, err = bibleFixtureMediaCopyStore(tx).FreezeWithReferenceFacts(t.Context(), actor, bibleMediaBinding(b), time.Now(), nil, input)
 		if err != nil {
 			return err
 		}

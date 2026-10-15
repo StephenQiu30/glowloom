@@ -36,7 +36,7 @@ func (r copiedCanvasMedia) Reference(ctx context.Context, actor identityapp.Prin
 }
 
 func provideProjectCopyStore(database *gorm.DB) *pgworkspace.ProjectCopyStore {
-	return provideProjectCopyStoreWithAccess(database, provideMediaScopeAccess)
+	return provideProjectCopyStoreWithAccess(database, NewMediaScopeAccess)
 }
 
 func provideProjectCopyStoreWithAccess(database *gorm.DB, scopes pgmedia.ScopeAccessFactory) *pgworkspace.ProjectCopyStore {
@@ -61,7 +61,7 @@ func provideProjectCopyStoreWithAccess(database *gorm.DB, scopes pgmedia.ScopeAc
 }
 
 func provideProjectCopyWorker(database *gorm.DB, storage *objectstorage.Client) (*workspaceapp.ProjectCopyWorker, *pgworkspace.ProjectCopyStore) {
-	store := provideProjectCopyStoreWithAccess(database, provideMediaWorkerScopeAccess)
+	store := provideProjectCopyStoreWithAccess(database, NewMediaWorkerScopeAccess)
 	transfer := func(job workspacedomain.ProjectCopyJob, worker uuid.UUID, cleanup bool) *mediaapp.ProjectCopyTransfer {
 		return mediaapp.NewProjectCopyTransfer(pgworkspace.NewProjectCopyMediaObjects(store, job.ID, worker, cleanup), mediaobjects.NewProjectCopyObjects(storage), "")
 	}

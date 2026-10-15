@@ -15,6 +15,7 @@ import (
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func insertWorkspaceActor(ctx context.Context, t *testing.T, database *gorm.DB, orgID string) identityapp.Principal {
@@ -31,7 +32,7 @@ func insertWorkspaceActor(ctx context.Context, t *testing.T, database *gorm.DB, 
 	if err != nil {
 		t.Fatalf("parse organization ID: %v", err)
 	}
-	return identityapp.Principal{ID: id, OrgID: parsedOrgID, Role: identitydomain.RoleProducer}
+	return identityfixture.Session(t, database.WithContext(ctx), identityapp.Principal{ID: id, OrgID: parsedOrgID, Role: identitydomain.RoleProducer})
 }
 
 func projectForActor(actor identityapp.Principal) domain.Project {
@@ -86,7 +87,7 @@ func createWorkspaceProjectInStore(ctx context.Context, store *pgworkspace.Store
 	return err
 }
 
-func insertStylePreset(ctx context.Context, t *testing.T, database *gorm.DB, orgID, projectID string, deleted bool) uuid.UUID {
+func insertStylePreset(ctx context.Context, t *testing.T, database *gorm.DB, actor identityapp.Principal, projectID string, deleted bool) uuid.UUID {
 	t.Helper()
 	id := uuid.New()
 	var scopedProject any
@@ -95,22 +96,22 @@ func insertStylePreset(ctx context.Context, t *testing.T, database *gorm.DB, org
 	}
 	if err := database.WithContext(ctx).Exec(`
 		INSERT INTO workspace.style_preset
-		  (id, org_id, project_id, name, style_type, style_subtype, is_delete)
-		VALUES (?::uuid, ?::uuid, ?::uuid, '国风仙侠', 'stylized', 'guofeng_xianxia', ?)
-	`, id.String(), orgID, scopedProject, deleted).Error; err != nil {
+		  (id, org_id, owner_scope_id, project_id, name, style_type, style_subtype, is_delete)
+		VALUES (?::uuid, ?::uuid, ?::uuid, ?::uuid, '国风仙侠', 'stylized', 'guofeng_xianxia', ?)
+	`, id.String(), actor.OrgID, actor.ScopeID, scopedProject, deleted).Error; err != nil {
 		t.Fatalf("insert style preset: %v", err)
 	}
 	return id
 }
 
-func insertRealisticPreset(ctx context.Context, t *testing.T, database *gorm.DB, orgID string) uuid.UUID {
+func insertRealisticPreset(ctx context.Context, t *testing.T, database *gorm.DB, actor identityapp.Principal) uuid.UUID {
 	t.Helper()
 	id := uuid.New()
 	if err := database.WithContext(ctx).Exec(`
 		INSERT INTO workspace.style_preset
-		  (id, org_id, name, style_type)
-		VALUES (?::uuid, ?::uuid, '写实', 'realistic')
-	`, id.String(), orgID).Error; err != nil {
+		  (id, org_id, owner_scope_id, name, style_type)
+		VALUES (?::uuid, ?::uuid, ?::uuid, '写实', 'realistic')
+	`, id.String(), actor.OrgID, actor.ScopeID).Error; err != nil {
 		t.Fatalf("insert realistic style preset: %v", err)
 	}
 	return id
@@ -132,10 +133,10 @@ func TestWorkspaceStoreCreateProjectAndZeroBudgetAtomically(t *testing.T) {
 	ctx, database := workspaceMigrationDB(t)
 	orgID := insertWorkspaceOrganization(ctx, t, database)
 	actor := insertWorkspaceActor(ctx, t, database, orgID)
-	store := pgworkspace.NewStore(database)
+	store := workspaceStore(database)
 
 	project := projectForActor(actor)
-	project.StylePresetID = insertStylePreset(ctx, t, database, orgID, "", false)
+	project.StylePresetID = insertStylePreset(ctx, t, database, actor, "", false)
 	if err := createWorkspaceProjectInStore(ctx, store, actor, project); err != nil {
 		t.Fatalf("create project with organization preset: %v", err)
 	}
@@ -195,19 +196,20 @@ func TestWorkspaceStoreRejectsUnusablePresetWithoutPartialProject(t *testing.T) 
 	ctx, database := workspaceMigrationDB(t)
 	orgID := insertWorkspaceOrganization(ctx, t, database)
 	otherOrgID := insertWorkspaceOrganization(ctx, t, database)
+	otherActor := insertWorkspaceActor(ctx, t, database, otherOrgID)
 	actor := insertWorkspaceActor(ctx, t, database, orgID)
-	store := pgworkspace.NewStore(database)
-	otherProjectID := insertWorkspaceProject(ctx, t, database, orgID, "16:9", "stylized", "guofeng_xianxia")
+	store := workspaceStore(database)
+	otherProjectID := insertWorkspaceProject(ctx, t, database, actor, "16:9", "stylized", "guofeng_xianxia")
 
 	for _, test := range []struct {
 		name string
 		id   uuid.UUID
 	}{
 		{name: "missing preset", id: uuid.New()},
-		{name: "other organization", id: insertStylePreset(ctx, t, database, otherOrgID, "", false)},
-		{name: "deleted preset", id: insertStylePreset(ctx, t, database, orgID, "", true)},
-		{name: "different project", id: insertStylePreset(ctx, t, database, orgID, otherProjectID, false)},
-		{name: "different style", id: insertRealisticPreset(ctx, t, database, orgID)},
+		{name: "other organization", id: insertStylePreset(ctx, t, database, otherActor, "", false)},
+		{name: "deleted preset", id: insertStylePreset(ctx, t, database, actor, "", true)},
+		{name: "different project", id: insertStylePreset(ctx, t, database, actor, otherProjectID, false)},
+		{name: "different style", id: insertRealisticPreset(ctx, t, database, actor)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			project := projectForActor(actor)
@@ -236,9 +238,10 @@ func TestWorkspaceStoreReadsOnlyCurrentActorsOrganization(t *testing.T) {
 	ctx, database := workspaceMigrationDB(t)
 	orgID := insertWorkspaceOrganization(ctx, t, database)
 	otherOrgID := insertWorkspaceOrganization(ctx, t, database)
-	actor := insertWorkspaceActor(ctx, t, database, orgID)
 	otherActor := insertWorkspaceActor(ctx, t, database, otherOrgID)
-	store := pgworkspace.NewStore(database)
+	actor := insertWorkspaceActor(ctx, t, database, orgID)
+	actor = workspaceTeamActor(t, database, actor)
+	store := workspaceStore(database)
 	project := projectForActor(actor)
 	if err := createWorkspaceProjectInStore(ctx, store, actor, project); err != nil {
 		t.Fatalf("create actor project: %v", err)
@@ -317,34 +320,37 @@ func TestWorkspaceStoreReadsOnlyCurrentActorsOrganization(t *testing.T) {
 		t.Fatalf("restore actor: %v", err)
 	}
 	if err := database.WithContext(ctx).Exec(`
-		UPDATE workspace.organization SET status = 'disabled' WHERE id = ?::uuid
-	`, actor.OrgID.String()).Error; err != nil {
-		t.Fatalf("disable organization: %v", err)
+		UPDATE workspace.team SET status = 'suspended', resume_status = 'active' WHERE id = (SELECT team_id FROM workspace.creation_scope WHERE id = ?::uuid)
+	`, actor.ScopeID.String()).Error; err != nil {
+		t.Fatalf("suspend team scope: %v", err)
 	}
 	if _, err := store.FindProject(ctx, actor, project.ID); err == nil {
-		t.Fatal("disabled organization read project")
+		t.Fatal("suspended team scope read project")
 	}
 	if _, err := store.FindBudget(ctx, actor, project.ID); err == nil {
-		t.Fatal("disabled organization read budget")
+		t.Fatal("suspended team scope read budget")
 	}
 	newProject := projectForActor(actor)
 	if err := createWorkspaceProjectInStore(ctx, store, actor, newProject); err == nil {
-		t.Fatal("disabled organization created project")
+		t.Fatal("suspended team scope created project")
 	}
 	projectCount, budgetCount = projectAndBudgetCount(ctx, t, database, newProject.ID)
 	if projectCount != 0 || budgetCount != 0 {
-		t.Fatalf("disabled organization left project/budget rows = %d/%d", projectCount, budgetCount)
+		t.Fatalf("suspended team scope left project/budget rows = %d/%d", projectCount, budgetCount)
+	}
+	if err := database.WithContext(ctx).Exec(`UPDATE workspace.team SET status='active',resume_status=NULL WHERE id=(SELECT team_id FROM workspace.creation_scope WHERE id=?)`, actor.ScopeID).Error; err != nil {
+		t.Fatalf("restore team before membership revocation: %v", err)
 	}
 	if err := database.WithContext(ctx).Exec(`
-		UPDATE workspace.organization SET status = 'active', is_delete = true WHERE id = ?::uuid
-	`, actor.OrgID.String()).Error; err != nil {
-		t.Fatalf("soft-delete organization: %v", err)
+		UPDATE workspace.team_member SET status = 'removed' WHERE team_id = (SELECT team_id FROM workspace.creation_scope WHERE id = ?::uuid)
+	`, actor.ScopeID.String()).Error; err != nil {
+		t.Fatalf("remove team membership: %v", err)
 	}
 	if _, err := store.FindProject(ctx, actor, project.ID); err == nil {
-		t.Fatal("deleted organization read project")
+		t.Fatal("removed team membership read project")
 	}
 	if err := createWorkspaceProjectInStore(ctx, store, actor, projectForActor(actor)); err == nil {
-		t.Fatal("deleted organization created project")
+		t.Fatal("removed team membership created project")
 	}
 }
 
@@ -352,8 +358,9 @@ func TestWorkspaceStoreListsOnlyVisibleStylePresets(t *testing.T) {
 	ctx, database := workspaceMigrationDB(t)
 	orgID := insertWorkspaceOrganization(ctx, t, database)
 	otherOrgID := insertWorkspaceOrganization(ctx, t, database)
+	otherActor := insertWorkspaceActor(ctx, t, database, otherOrgID)
 	actor := insertWorkspaceActor(ctx, t, database, orgID)
-	store := pgworkspace.NewStore(database)
+	store := workspaceStore(database)
 	project := projectForActor(actor)
 	if err := createWorkspaceProjectInStore(ctx, store, actor, project); err != nil {
 		t.Fatalf("create project: %v", err)
@@ -362,11 +369,11 @@ func TestWorkspaceStoreListsOnlyVisibleStylePresets(t *testing.T) {
 	if err := createWorkspaceProjectInStore(ctx, store, actor, otherProject); err != nil {
 		t.Fatalf("create other project: %v", err)
 	}
-	orgPresetID := insertStylePreset(ctx, t, database, orgID, "", false)
-	projectPresetID := insertStylePreset(ctx, t, database, orgID, project.ID.String(), false)
-	insertStylePreset(ctx, t, database, orgID, otherProject.ID.String(), false)
-	insertStylePreset(ctx, t, database, orgID, "", true)
-	insertStylePreset(ctx, t, database, otherOrgID, "", false)
+	orgPresetID := insertStylePreset(ctx, t, database, actor, "", false)
+	projectPresetID := insertStylePreset(ctx, t, database, actor, project.ID.String(), false)
+	insertStylePreset(ctx, t, database, actor, otherProject.ID.String(), false)
+	insertStylePreset(ctx, t, database, actor, "", true)
+	insertStylePreset(ctx, t, database, otherActor, "", false)
 
 	organizationPresets, err := store.ListStylePresets(ctx, actor, nil)
 	if err != nil {
@@ -404,7 +411,7 @@ func TestWorkspaceStoreReturnsStylePresetGenerationContent(t *testing.T) {
 	ctx, database := workspaceMigrationDB(t)
 	orgID := insertWorkspaceOrganization(ctx, t, database)
 	actor := insertWorkspaceActor(ctx, t, database, orgID)
-	presetID := insertStylePreset(ctx, t, database, orgID, "", false)
+	presetID := insertStylePreset(ctx, t, database, actor, "", false)
 	referenceIDs := []uuid.UUID{uuid.New(), uuid.New()}
 	if err := database.WithContext(ctx).Exec(`
 		UPDATE workspace.style_preset
@@ -414,7 +421,7 @@ func TestWorkspaceStoreReturnsStylePresetGenerationContent(t *testing.T) {
 	`, "古风光影", "现代建筑", referenceIDs[0].String(), referenceIDs[1].String(), presetID.String()).Error; err != nil {
 		t.Fatalf("set style preset generation content: %v", err)
 	}
-	presets, err := pgworkspace.NewStore(database).ListStylePresets(ctx, actor, nil)
+	presets, err := workspaceStore(database).ListStylePresets(ctx, actor, nil)
 	if err != nil {
 		t.Fatalf("list style presets: %v", err)
 	}

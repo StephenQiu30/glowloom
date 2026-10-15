@@ -15,20 +15,19 @@ import (
 	pgprompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/adapter/postgres"
 	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
 	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 )
 
 type editorAccess struct{ tx *gorm.DB }
 
 func (a editorAccess) AuthorizeDraft(ctx context.Context, actor identityapp.Principal, p uuid.UUID, write bool) error {
-	_, err := pgworkspace.NewProjectContentAccessStore(a.tx).Authorize(ctx, actor, p, write)
+	_, err := operationProjectContentAccess(a.tx).Authorize(ctx, actor, p, write)
 	return err
 }
 func editorDraftStore(db *gorm.DB) *pgprompt.DraftStore {
 	return pgprompt.NewDraftStore(db, func(tx *gorm.DB) promptapp.DraftAccess { return editorAccess{tx} })
 }
 func editorOperationStore(db *gorm.DB) *pgoperation.Store {
-	return pgoperation.NewStoreWithEditor(db, nil, func(tx *gorm.DB) operationapp.EditorSnapshots { return editorDraftStore(tx) })
+	return pgoperation.NewScopedStoreWithEditor(db, nil, func(tx *gorm.DB) operationapp.EditorSnapshots { return editorDraftStore(tx) }, operationRequestAccess, operationWorkerAccess, operationPlatformAccess)
 }
 func TestEditorSubmissionRecoveryDiscardAndLateEpoch(t *testing.T) {
 	db := operationStoreDB(t)

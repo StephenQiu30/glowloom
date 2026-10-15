@@ -141,7 +141,7 @@ func newMediaCompositionFixture(t *testing.T) mediaCompositionFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = file.Close() })
-	store := mediapg.NewStore(fixture.runtime)
+	store := mediapg.NewScopedStore(fixture.runtime, app.NewMediaScopeAccess)
 	uploads := mediaapp.NewScopedUploadService(store, store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(fixture.objects), time.Now)
 	uploaded, err := uploads.Upload(t.Context(), mediaapp.UploadInput{Actor: fixture.actor, Request: mediaapp.UploadRequest{ProjectID: fixture.project, Key: uuid.New(), FileName: "组合验证.png", RequestID: uuid.New()}, File: file, LocalReviewConfirmed: true})
 	if err != nil {

@@ -10,12 +10,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/paramvalidation"
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/pricevalidation"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func TestManagedConnectionKeyRotationAndReleaseGate(t *testing.T) {
@@ -28,7 +29,8 @@ func TestManagedConnectionKeyRotationAndReleaseGate(t *testing.T) {
 	t.Cleanup(func() { _ = conn.Close() })
 	actor := adminPrincipal()
 	require.NoError(t, conn.DB.Exec(`INSERT INTO identity."user"(id,org_id,login_name,display_name,role,password_hash,must_change_password,platform_role) VALUES(?,?,?,'Managed admin','producer','synthetic',false,'platform_admin')`, actor.ID, actor.OrgID, "managed-"+actor.ID.String()).Error)
-	store := pgcatalog.NewStore(conn.DB)
+	actor = identityfixture.Session(t, conn.DB, actor)
+	store := app.NewCatalogStore(conn.DB)
 	presets := catalogapp.NewProviderPresets(store)
 	connection, err := presets.Connect(t.Context(), actor, uuid.MustParse("6da07a10-0000-4000-8000-000000000002"), catalogapp.ConnectPresetInput{VersionID: uuid.MustParse("6da07a11-0000-4000-8000-000000000002"), Key: "managed-" + uuid.NewString(), Name: "Managed", RequestID: uuid.New()})
 	require.NoError(t, err)
@@ -124,7 +126,7 @@ func TestManagedConnectionKeyRotationAndReleaseGate(t *testing.T) {
 	require.NoError(t, err)
 	org := insertModelCatalogOrganization(t.Context(), t, conn.DB)
 	creator := insertModelCatalogActor(t.Context(), t, conn.DB, org)
-	project := insertModelCatalogProject(t.Context(), t, conn.DB, org, true)
+	project := insertModelCatalogProject(t.Context(), t, conn.DB, creator, true)
 	page, err := store.ListModelsForProject(t.Context(), creator, catalogapp.ListModelsInput{ProjectID: project, Capability: "video.generate", Limit: 200})
 	require.NoError(t, err)
 	found := false

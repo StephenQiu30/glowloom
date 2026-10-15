@@ -31,7 +31,7 @@ func transferCommittedDelivery(t *testing.T, f transferRecoveryFixture) mediaapp
 func TestMediaTransferDeliveryRequiresExactPermanentOutboxAndCurrentActor(t *testing.T) {
 	f := newTransferRecoveryFixture(t, 1)
 	delivery := transferCommittedDelivery(t, f)
-	if ok, err := f.repo.VerifyTransferDelivery(t.Context(), delivery); err != nil || !ok {
+	if ok, err := f.repo.Worker.VerifyTransferDelivery(t.Context(), delivery); err != nil || !ok {
 		t.Fatal("committed permanent delivery was not proven", ok, err)
 	}
 	for _, change := range []func(*mediaapp.TransferDelivery){
@@ -45,7 +45,7 @@ func TestMediaTransferDeliveryRequiresExactPermanentOutboxAndCurrentActor(t *tes
 	} {
 		forged := delivery
 		change(&forged)
-		if ok, err := f.repo.VerifyTransferDelivery(t.Context(), forged); ok || err == nil {
+		if ok, err := f.repo.Worker.VerifyTransferDelivery(t.Context(), forged); ok || err == nil {
 			t.Fatal("foreign command reached physical dispatch", ok, err)
 		}
 	}
@@ -56,7 +56,7 @@ func TestMediaTransferDeliveryRequiresExactPermanentOutboxAndCurrentActor(t *tes
 	t.Cleanup(func() {
 		_ = owner.WithContext(context.Background()).Exec(`UPDATE identity."user" SET status='active' WHERE id=?`, f.actor.ID).Error
 	})
-	if ok, err := f.repo.VerifyTransferDelivery(t.Context(), delivery); ok || !errors.Is(err, identityapp.ErrForbidden) {
+	if ok, err := f.repo.Worker.VerifyTransferDelivery(t.Context(), delivery); ok || !errors.Is(err, identityapp.ErrForbidden) {
 		t.Fatal("committed event resurrected revoked actor", ok, err)
 	}
 }
@@ -64,27 +64,27 @@ func TestMediaTransferDeliveryRequiresExactPermanentOutboxAndCurrentActor(t *tes
 func TestMediaTransferInterruptRetainsUnknownFenceUntilActualCessation(t *testing.T) {
 	f := newTransferRecoveryFixture(t, 1)
 	work := transferExecution(f.job)
-	lease, err := f.repo.ClaimTransfer(t.Context(), work)
+	lease, err := f.repo.Worker.ClaimTransfer(t.Context(), work)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := f.repo.InterruptTransfer(t.Context(), work); err != nil {
+	if err := f.repo.Worker.InterruptTransfer(t.Context(), work); err != nil {
 		t.Fatal(err)
 	}
 	unknown, err := f.repo.GetTransfer(t.Context(), f.actor, f.job.ID)
 	if err != nil || !unknown.NeedsReconciliation || !unknown.ExecutionUnconfirmed || unknown.Status != "needs_reconciliation" {
 		t.Fatal("orchestrator timeout released unconfirmed physical owner", unknown, err)
 	}
-	if _, err := f.repo.ClaimTransfer(t.Context(), transferExecution(f.job)); !errors.Is(err, domain.ErrTransferConflict) {
+	if _, err := f.repo.Worker.ClaimTransfer(t.Context(), transferExecution(f.job)); !errors.Is(err, domain.ErrTransferConflict) {
 		t.Fatal("unknown physical owner was stolen", err)
 	}
 	if _, err := f.repo.ControlTransfer(t.Context(), f.actor, f.job.ID, uuid.New(), unknown.Revision, "reconcile"); !errors.Is(err, domain.ErrTransferConflict) {
 		t.Fatal("unknown physical owner was considered ended", err)
 	}
-	if err := f.repo.EndTransferPhysical(t.Context(), lease); err != nil {
+	if err := f.repo.Worker.EndTransferPhysical(t.Context(), lease); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.repo.InterruptTransfer(t.Context(), work); err != nil {
+	if err := f.repo.Worker.InterruptTransfer(t.Context(), work); err != nil {
 		t.Fatal(err)
 	}
 	ended, err := f.repo.GetTransfer(t.Context(), f.actor, f.job.ID)
@@ -95,10 +95,10 @@ func TestMediaTransferInterruptRetainsUnknownFenceUntilActualCessation(t *testin
 	if err != nil || queued.Attempt != 2 {
 		t.Fatal("actual ceased owner could not enter explicit recovery", queued, err)
 	}
-	if ok, err := f.repo.VerifyTransferDelivery(t.Context(), transferCommittedDelivery(t, f)); err != nil || ok {
+	if ok, err := f.repo.Worker.VerifyTransferDelivery(t.Context(), transferCommittedDelivery(t, f)); err != nil || ok {
 		t.Fatal("obsolete proven attempt was dispatched again", ok, err)
 	}
-	if err := f.repo.EndTransferPhysical(t.Context(), lease); err == nil {
+	if err := f.repo.Worker.EndTransferPhysical(t.Context(), lease); err == nil {
 		t.Fatal("old fence changed a newer accepted attempt")
 	}
 }

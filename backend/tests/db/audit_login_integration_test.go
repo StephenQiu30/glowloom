@@ -7,8 +7,6 @@ import (
 	"testing"
 	"time"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"go.opentelemetry.io/otel/trace/noop"
@@ -17,7 +15,10 @@ import (
 	pgaudit "github.com/StephenQiu30/glowloom-server/backend/internal/audit/adapter/postgres"
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/audit/domain"
+	identitypg "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 // This test uses a real restricted LOGIN account rather than SET ROLE on the
@@ -142,23 +143,24 @@ func TestAuditRestrictedLoginCanAppendAndReadButCannotRewrite(t *testing.T) {
 	}
 	actorID := uuid.New()
 	if err := tx.Exec(`
-		INSERT INTO identity."user" (id, org_id, login_name, display_name, role, password_hash, must_change_password)
-		VALUES (?::uuid, ?::uuid, ?, 'Audit Administrator', 'admin', 'unused-test-hash', false)
+		INSERT INTO identity."user" (id, org_id, login_name, display_name, role, password_hash, must_change_password, platform_role)
+		VALUES (?::uuid, ?::uuid, ?, 'Audit Administrator', 'admin', 'unused-test-hash', false, 'platform_admin')
 	`, actorID.String(), record.OrgID.String(), actorID.String()).Error; err != nil {
 		t.Fatalf("insert administrator through restricted login: %v", err)
 	}
-	read := auditapp.NewReadQuery(store)
-	adminPage, err := read.List(ctx, identityapp.Principal{ID: actorID}, record.OrgID, domain.Filter{Limit: 10})
+	actor := identityfixture.Session(t, tx, identityapp.Principal{ID: actorID, OrgID: record.OrgID, Role: "admin"})
+	read := auditapp.NewReadQuery(pgaudit.NewScopedStore(tx, func(db *gorm.DB) auditapp.ActorAccess { return identitypg.NewStore(db) }))
+	adminPage, err := read.List(ctx, actor, record.OrgID, domain.Filter{Limit: 10})
 	if err != nil || len(adminPage.Items) != 1 || adminPage.Items[0].ID != record.ID {
 		t.Fatalf("restricted-login administrator page = %+v, error = %v", adminPage, err)
 	}
-	if _, err := read.Get(ctx, identityapp.Principal{ID: actorID}, uuid.New(), record.ID); !errors.Is(err, auditapp.ErrForbidden) {
-		t.Fatalf("cross-organization administrator read = %v, want forbidden", err)
+	if _, err := read.Get(ctx, actor, uuid.New(), record.ID); !errors.Is(err, pgaudit.ErrNotFound) {
+		t.Fatalf("cross-organization administrator read = %v, want not found", err)
 	}
-	if err := tx.Exec(`UPDATE identity."user" SET role = 'producer' WHERE id = ?::uuid`, actorID.String()).Error; err != nil {
+	if err := tx.Exec(`UPDATE identity."user" SET platform_role = 'creator' WHERE id = ?::uuid`, actorID.String()).Error; err != nil {
 		t.Fatalf("revoke administrator through restricted login: %v", err)
 	}
-	if _, err := read.List(ctx, identityapp.Principal{ID: actorID}, record.OrgID, domain.Filter{Limit: 10}); !errors.Is(err, auditapp.ErrForbidden) {
+	if _, err := read.List(ctx, actor, record.OrgID, domain.Filter{Limit: 10}); !errors.Is(err, identityapp.ErrForbidden) {
 		t.Fatalf("revoked administrator read = %v, want forbidden", err)
 	}
 	var actualPartition string

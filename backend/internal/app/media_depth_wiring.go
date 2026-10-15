@@ -28,7 +28,7 @@ func provideMediaToolSourceWithAccess(tx *gorm.DB, scopes pgmedia.ScopeAccessFac
 // provideMediaDepthStore retains read, cancellation and exact reconciliation
 // while unconfigured inference refuses new creation and retry before writes.
 func provideMediaDepthStore(database *gorm.DB, enabled bool) *pgtool.DepthStore {
-	return provideMediaDepthStoreWithAccess(database, enabled, provideMediaScopeAccess)
+	return provideMediaDepthStoreWithAccess(database, enabled, NewMediaScopeAccess)
 }
 
 func provideMediaDepthStoreWithAccess(database *gorm.DB, enabled bool, scopes pgmedia.ScopeAccessFactory) *pgtool.DepthStore {
@@ -62,7 +62,7 @@ func provideMediaDepthWorker(database *gorm.DB, storage *objectstorage.Client, c
 			return nil, nil, fmt.Errorf("configure offline video depth inference: %w", err)
 		}
 	}
-	store := provideMediaDepthStoreWithAccess(database, processor != nil, provideMediaWorkerScopeAccess)
+	store := provideMediaDepthStoreWithAccess(database, processor != nil, NewMediaWorkerScopeAccess)
 	consumer := toolapp.NewDepthWorker(store, toolflow.NewObjects(storage), processor, mediaflow.FFProber{}, mediaflow.FFUploadRenderer{}, verifier)
 	return consumer, store, nil
 }

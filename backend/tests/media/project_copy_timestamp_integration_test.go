@@ -7,7 +7,6 @@ import (
 	"gorm.io/gorm"
 
 	copyobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
@@ -15,7 +14,7 @@ func TestProjectCopyMediaVerificationPreservesTimestampInstantsAcrossSessionTime
 	database := mediaStoreDB(t)
 	objects := glbTestObjects(t)
 	actor, binding, snapshot, _ := seedCopyMedia(t, database, objects)
-	transfer := mediaapp.NewProjectCopyTransfer(pgmedia.NewProjectCopyStore(database), copyobjects.NewProjectCopyObjects(objects), t.TempDir())
+	transfer := mediaapp.NewProjectCopyTransfer(mediaCopyStore(database), copyobjects.NewProjectCopyObjects(objects), t.TempDir())
 	if err := transfer.Transfer(t.Context(), actor, binding, snapshot); err != nil {
 		t.Fatal("transfer synthetic copy", err)
 	}
@@ -25,7 +24,7 @@ func TestProjectCopyMediaVerificationPreservesTimestampInstantsAcrossSessionTime
 			return err
 		}
 		var err error
-		receipt, err = pgmedia.NewProjectCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+		receipt, err = mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
 		return err
 	}); err != nil {
 		t.Fatal("register complete metadata under UTC", err)
@@ -36,7 +35,7 @@ func TestProjectCopyMediaVerificationPreservesTimestampInstantsAcrossSessionTime
 				if err := tx.Exec(`SELECT set_config('TimeZone', ?, true)`, zone).Error; err != nil {
 					return err
 				}
-				actual, err := pgmedia.NewProjectCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+				actual, err := mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
 				if err == nil && actual != receipt {
 					t.Fatal("session timezone changed frozen content receipt")
 				}
@@ -52,7 +51,7 @@ func TestProjectCopyMediaVerificationPreservesTimestampInstantsAcrossSessionTime
 		}
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		_, err := pgmedia.NewProjectCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+		_, err := mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
 		return err
 	}); !errors.Is(err, mediaapp.ErrObjectMismatch) {
 		t.Fatal("actual changed timestamp must remain a mismatched copy", err)

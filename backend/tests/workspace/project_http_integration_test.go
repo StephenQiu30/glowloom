@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -24,7 +25,6 @@ import (
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/http"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
@@ -37,7 +37,7 @@ func projectHTTPRouter(database *gorm.DB, actor identityapp.Principal) *gin.Engi
 	router.Use(httpapi.Middleware(workspaceTestOrigin))
 	api := router.Group("/api")
 	api.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	store := pgworkspace.NewStore(database)
+	store := workspaceStore(database)
 	workspacehttp.NewHandler(workspaceapp.NewListProjectsQuery(store), workspaceapp.NewCreateProjectCommand(store, time.Now), workspaceapp.NewListStylePresetsQuery(store)).Register(api)
 	return router
 }
@@ -122,6 +122,7 @@ func TestProjectHTTPCreatePersistsFirstResponseAcrossConcurrentRequests(t *testi
 func TestProjectHTTPCreateRechecksScopeAndRollsBackReceiptFailure(t *testing.T) {
 	ctx, database := workspaceMigrationDB(t)
 	actor := insertWorkspaceActor(ctx, t, database, insertWorkspaceOrganization(ctx, t, database))
+	actor = workspaceTeamActor(t, database, actor)
 	router := projectHTTPRouter(database, actor)
 	body := []byte(`{"name":"回执原子事务","aspect_ratio":"9:16","style_type":"realistic"}`)
 	key := uuid.NewString()
@@ -164,16 +165,17 @@ func TestProjectHTTPCreateRechecksScopeAndRollsBackReceiptFailure(t *testing.T) 
 	for _, test := range []struct {
 		name, statement, restore string
 		id                       uuid.UUID
+		status                   int
 	}{
-		{"disabled actor", `UPDATE identity."user" SET status='disabled' WHERE id=?`, `UPDATE identity."user" SET status='active' WHERE id=?`, actor.ID},
-		{"disabled organization", `UPDATE workspace.organization SET status='disabled' WHERE id=?`, `UPDATE workspace.organization SET status='active' WHERE id=?`, actor.OrgID},
+		{"disabled actor", `UPDATE identity."user" SET status='disabled' WHERE id=?`, `UPDATE identity."user" SET status='active' WHERE id=?`, actor.ID, http.StatusUnauthorized},
+		{"suspended team scope", `UPDATE workspace.team SET status='suspended',resume_status='active' WHERE id=(SELECT team_id FROM workspace.creation_scope WHERE id=?)`, `UPDATE workspace.team SET status='active',resume_status=NULL WHERE id=(SELECT team_id FROM workspace.creation_scope WHERE id=?)`, actor.ScopeID, http.StatusNotFound},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if err := database.Exec(test.statement, test.id).Error; err != nil {
 				t.Fatal(err)
 			}
 			response := projectHTTPRequest(t.Context(), router, http.MethodPost, "/api/projects", key, body)
-			if response.Code != 403 {
+			if response.Code != test.status {
 				t.Fatalf("revoked caller replay: %d %s", response.Code, response.Body.String())
 			}
 			if err := database.Exec(test.restore, test.id).Error; err != nil {
@@ -199,9 +201,9 @@ func TestProjectHTTPListDeletedAndBindsCursorToCallerAndFilters(t *testing.T) {
 	orgID := insertWorkspaceOrganization(ctx, t, database)
 	actor := insertWorkspaceActor(ctx, t, database, orgID)
 	for range 3 {
-		insertWorkspaceProject(ctx, t, database, orgID, "9:16", "realistic", nil)
+		insertWorkspaceProject(ctx, t, database, actor, "9:16", "realistic", nil)
 	}
-	deletedID := insertWorkspaceProject(ctx, t, database, orgID, "9:16", "realistic", nil)
+	deletedID := insertWorkspaceProject(ctx, t, database, actor, "9:16", "realistic", nil)
 	if err := database.Exec(`UPDATE workspace.project SET is_delete=true,delete_time=now(),purge_after=now()+interval '30 days' WHERE id=?`, deletedID).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -248,11 +250,11 @@ func TestProjectHTTPListsOnlySafeOrganizationStylePresets(t *testing.T) {
 	ctx, database := workspaceMigrationDB(t)
 	orgID := insertWorkspaceOrganization(ctx, t, database)
 	actor := insertWorkspaceActor(ctx, t, database, orgID)
-	presetID := insertStylePreset(ctx, t, database, orgID, "", false)
-	insertStylePreset(ctx, t, database, orgID, "", true)
-	projectID := insertWorkspaceProject(ctx, t, database, orgID, "16:9", "stylized", "guofeng_xianxia")
-	insertStylePreset(ctx, t, database, orgID, projectID, false)
-	insertStylePreset(ctx, t, database, insertWorkspaceOrganization(ctx, t, database), "", false)
+	presetID := insertStylePreset(ctx, t, database, actor, "", false)
+	insertStylePreset(ctx, t, database, actor, "", true)
+	projectID := insertWorkspaceProject(ctx, t, database, actor, "16:9", "stylized", "guofeng_xianxia")
+	insertStylePreset(ctx, t, database, actor, projectID, false)
+	insertStylePreset(ctx, t, database, insertWorkspaceActor(ctx, t, database, insertWorkspaceOrganization(ctx, t, database)), "", false)
 	if err := database.Exec(`UPDATE workspace.style_preset SET prompt_fragment='SECRET_PROMPT', negative_prompt='PRIVATE_NEGATIVE' WHERE id=?`, presetID).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +287,7 @@ func TestProjectHTTPStylePresetPaginationAndCreationAuthorization(t *testing.T) 
 	}
 	var presetIDs []uuid.UUID
 	for range 3 {
-		presetIDs = append(presetIDs, insertStylePreset(ctx, t, database, orgID, "", false))
+		presetIDs = append(presetIDs, insertStylePreset(ctx, t, database, actor, "", false))
 	}
 	first := projectHTTPRequest(t.Context(), router, http.MethodGet, "/api/style-presets?style_type=stylized&limit=1", "", nil)
 	var page workspacehttp.StylePresetListResponse
@@ -311,15 +313,15 @@ func TestProjectHTTPStylePresetPaginationAndCreationAuthorization(t *testing.T) 
 	if mixed.Code != 422 {
 		t.Fatalf("mixed preset cursor: %d %s", mixed.Code, mixed.Body.String())
 	}
-	projectID := insertWorkspaceProject(ctx, t, database, orgID, "16:9", "stylized", "guofeng_xianxia")
+	projectID := insertWorkspaceProject(ctx, t, database, actor, "16:9", "stylized", "guofeng_xianxia")
 	for _, test := range []struct {
 		name   string
 		id     uuid.UUID
 		status int
 	}{
-		{"other organization", insertStylePreset(ctx, t, database, insertWorkspaceOrganization(ctx, t, database), "", false), 404},
-		{"project scoped", insertStylePreset(ctx, t, database, orgID, projectID, false), 404},
-		{"deleted", insertStylePreset(ctx, t, database, orgID, "", true), 404},
+		{"other organization", insertStylePreset(ctx, t, database, insertWorkspaceActor(ctx, t, database, insertWorkspaceOrganization(ctx, t, database)), "", false), 404},
+		{"project scoped", insertStylePreset(ctx, t, database, actor, projectID, false), 404},
+		{"deleted", insertStylePreset(ctx, t, database, actor, "", true), 404},
 		{"specification mismatch", presetIDs[0], 422},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -408,7 +410,7 @@ func TestProjectHTTPStylePresetCursorRoundTripsEscapedNameAtFieldLimit(t *testin
 	orgID := insertWorkspaceOrganization(ctx, t, database)
 	actor := insertWorkspaceActor(ctx, t, database, orgID)
 	for range 2 {
-		presetID := insertStylePreset(ctx, t, database, orgID, "", false)
+		presetID := insertStylePreset(ctx, t, database, actor, "", false)
 		if err := database.Exec(`UPDATE workspace.style_preset SET name=? WHERE id=?`, strings.Repeat(`"`, 4096), presetID).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -437,7 +439,19 @@ func TestProjectHTTPCreationReceiptReplaysInAnotherProcess(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		actor := identityapp.Principal{ID: actorID, OrgID: orgID, Role: identitydomain.RoleProducer}
+		sessionID, err := uuid.Parse(os.Getenv("LV_TEST_PROJECT_SESSION"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		scopeID, err := uuid.Parse(os.Getenv("LV_TEST_PROJECT_SCOPE"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		epoch, err := strconv.ParseInt(os.Getenv("LV_TEST_PROJECT_EPOCH"), 10, 64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		actor := identityapp.Principal{ID: actorID, OrgID: orgID, Role: identitydomain.RoleProducer, SessionID: sessionID, ScopeID: scopeID, CredentialEpoch: epoch}
 		response := projectHTTPRequest(t.Context(), projectHTTPRouter(database, actor), http.MethodPost, "/api/projects", os.Getenv("LV_TEST_PROJECT_KEY"), []byte(`{"name":"跨进程回执","aspect_ratio":"16:9","style_type":"realistic"}`))
 		if response.Code != 201 {
 			t.Fatalf("child-process replay: %d %s", response.Code, response.Body.String())
@@ -465,6 +479,9 @@ func TestProjectHTTPCreationReceiptReplaysInAnotherProcess(t *testing.T) {
 		"LV_TEST_PROJECT_REPLAY_CHILD=1", "LV_TEST_PROJECT_ACTOR=" + actor.ID.String(),
 		"LV_TEST_PROJECT_ORG=" + actor.OrgID.String(), "LV_TEST_PROJECT_KEY=" + key,
 		"LV_TEST_PROJECT_RESPONSE=" + responsePath,
+		"LV_TEST_PROJECT_SESSION=" + actor.SessionID.String(),
+		"LV_TEST_PROJECT_SCOPE=" + actor.ScopeID.String(),
+		"LV_TEST_PROJECT_EPOCH=" + strconv.FormatInt(actor.CredentialEpoch, 10),
 	}
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("owned child process: %v %s", err, output)

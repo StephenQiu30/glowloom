@@ -17,7 +17,7 @@ import (
 func TestExpireQuotedOperationsAndBatchWithoutTouchingConfirmedFunds(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	first, second := oldQuotedSnapshotItem(projectID, 1), oldQuotedSnapshotItem(projectID, 1)
 	batchID := uuid.New()
 	first.Operation.BatchID, second.Operation.BatchID = &batchID, &batchID
@@ -95,7 +95,7 @@ func TestExpireQuotedUnderRuntimeRole(t *testing.T) {
 		ID: batchID, ProjectID: projectID, Kind: "mixed", Scope: json.RawMessage(`{}`),
 		Status: domain.BatchStatusQuoted, TotalCount: 1, QuoteTotalMicros: 1,
 	}
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	if err := store.CreateQuoteSnapshot(t.Context(), actor, &batch, []pgoperation.QuoteItem{item}); err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestExpireQuotedUnderRuntimeRole(t *testing.T) {
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return err
 		}
-		counts, err := pgoperation.NewStore(tx).ExpireQuoted(t.Context(), item.Operation.QuoteExpiresAt.Add(time.Minute), 10)
+		counts, err := operationStore(tx).ExpireQuoted(t.Context(), item.Operation.QuoteExpiresAt.Add(time.Minute), 10)
 		if err != nil {
 			return err
 		}

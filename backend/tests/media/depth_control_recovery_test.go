@@ -26,7 +26,7 @@ func TestDepthJobPGRejectedUndispatchedCancelHasPublicRecovery(t *testing.T) {
 			controller, replacement := depthControlAdmin(t, f), depthControlAdmin(t, f)
 			id := toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New()}
 			if phase == "before_finish" {
-				if _, err := f.store.Claim(t.Context(), id); err != nil {
+				if _, err := f.workerStore.Claim(t.Context(), id); err != nil {
 					t.Fatal(err)
 				}
 				// Only the persisted undispatched owner is exercised here. No
@@ -47,15 +47,15 @@ func TestDepthJobPGRejectedUndispatchedCancelHasPublicRecovery(t *testing.T) {
 			var err error
 			switch phase {
 			case "consumer_cleanup":
-				store := &depthCleanupRevocation{DepthWorkerStore: f.store, fixture: f, controller: controller.ID}
+				store := &depthCleanupRevocation{DepthWorkerStore: f.workerStore, fixture: f, controller: controller.ID}
 				_, err = toolapp.NewDepthWorker(store, toolflow.NewObjects(f.objects), nil, nil, nil, nil).Execute(t.Context(), id)
 				if !store.revoked {
 					t.Fatal("consumer did not enter its actual cleanup path")
 				}
 			case "before_claim":
-				_, err = toolapp.NewDepthWorker(f.store, toolflow.NewObjects(f.objects), nil, nil, nil, nil).Execute(t.Context(), id)
+				_, err = toolapp.NewDepthWorker(f.workerStore, toolflow.NewObjects(f.objects), nil, nil, nil, nil).Execute(t.Context(), id)
 			case "before_finish":
-				_, err = f.store.Finish(t.Context(), id, true, false, "")
+				_, err = f.workerStore.Finish(t.Context(), id, true, false, "")
 			}
 			if !errors.Is(err, identityapp.ErrForbidden) {
 				t.Fatal("revoked controller was not rejected", err)
@@ -84,7 +84,7 @@ func TestDepthJobPGRejectedUndispatchedCancelHasPublicRecovery(t *testing.T) {
 				t.Fatal("rejected cancel unexpectedly permits fresh inference", r.Code, r.Body.String())
 			}
 			depthControlThroughHTTP(t, f, failed, "cancel")
-			stopped := depthControlWorkflow(t, f, toolapp.NewDepthWorker(f.store, toolflow.NewObjects(f.objects), nil, nil, nil, nil), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1})
+			stopped := depthControlWorkflow(t, f, toolapp.NewDepthWorker(f.workerStore, toolflow.NewObjects(f.objects), nil, nil, nil, nil), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1})
 			if stopped.Status != tooldomain.DepthCancelled || stopped.NeedsReconciliation || stopped.ExecutionUnconfirmed {
 				t.Fatalf("replacement current controller cannot complete existing public cancel: %+v", stopped)
 			}
@@ -108,7 +108,7 @@ func TestDepthJobPGUndispatchedRejectionRetainsUnknownEvidence(t *testing.T) {
 				j := f.create(t)
 				id := toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New()}
 				if phase == "before_finish" {
-					if _, err := f.store.Claim(t.Context(), id); err != nil {
+					if _, err := f.workerStore.Claim(t.Context(), id); err != nil {
 						t.Fatal(err)
 					}
 					j = depthPublicGet(t, f, j.ID)
@@ -154,7 +154,7 @@ func TestDepthJobPGUndispatchedRejectionRetainsUnknownEvidence(t *testing.T) {
 						if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 							return err
 						}
-						return invoke(depthStore(tx, true))
+						return invoke(depthWorkerStore(tx, true))
 					})
 					if restoreErr := f.db.Exec(`GRANT SELECT ON mediatool.depth_result_intent TO lanverse_app`).Error; restoreErr != nil {
 						t.Fatal("restore isolated permission", restoreErr)
@@ -183,14 +183,14 @@ func TestDepthJobPGRejectedRedeliveryPreservesCompletedCancel(t *testing.T) {
 	controller, reader := depthControlAdmin(t, f), depthControlAdmin(t, f)
 	f.actor = controller
 	depthControlThroughHTTP(t, f, j, "cancel")
-	completed := depthControlWorkflow(t, f, toolapp.NewDepthWorker(f.store, toolflow.NewObjects(f.objects), nil, nil, nil, nil), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1})
+	completed := depthControlWorkflow(t, f, toolapp.NewDepthWorker(f.workerStore, toolflow.NewObjects(f.objects), nil, nil, nil, nil), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1})
 	if completed.Status != tooldomain.DepthCancelled {
 		t.Fatal("fixture did not complete actual cancellation", completed)
 	}
 	if err := f.db.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, controller.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	_, err := f.store.Claim(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New()})
+	_, err := f.workerStore.Claim(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New()})
 	if !errors.Is(err, identityapp.ErrForbidden) {
 		t.Fatal("redelivery did not reject revoked current controller", err)
 	}

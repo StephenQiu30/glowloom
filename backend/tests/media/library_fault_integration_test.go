@@ -10,7 +10,6 @@ import (
 
 	"github.com/google/uuid"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
@@ -18,7 +17,7 @@ import (
 func TestLibraryConcurrentIdenticalKeyHasOnePermanentAcceptance(t *testing.T) {
 	db := libraryRuntimeDB(t)
 	actor, _ := mediaStoreProject(t, db)
-	store := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now)
+	store := mediaLibraryStore(db, libraryTestAccess, time.Now)
 	text := "并发唯一"
 	c := mediaapp.LibraryCommand{Scope: domain.LibraryScope{Kind: domain.LibraryPersonal}, Key: uuid.New(), Action: "create_text", Metadata: &mediaapp.LibraryMetadata{PlainText: &text, Title: "唯一", Category: "other"}}
 	var wg sync.WaitGroup
@@ -66,7 +65,7 @@ func TestLibraryZeroRowReceiptRollsBackContentRevisionAndAudit(t *testing.T) {
 	db := libraryRuntimeDB(t)
 	owner := libraryOwnerDB(t)
 	actor, _ := mediaStoreProject(t, db)
-	store := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now)
+	store := mediaLibraryStore(db, libraryTestAccess, time.Now)
 	scope := domain.LibraryScope{Kind: domain.LibraryPersonal}
 	library, _ := scope.Identity(actor.OrgID, actor.ID)
 	function := "library_zero_" + uuid.NewString()

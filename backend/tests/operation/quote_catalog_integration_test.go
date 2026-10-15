@@ -9,14 +9,14 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 func TestReadCurrentQuoteCatalogTracksPublishedVersionsAndAvailability(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	now := time.Now().UTC()
 	quoted, modelID, providerID := seedQuoteCatalog(t, database, projectID, now)
 
@@ -32,7 +32,7 @@ func TestReadCurrentQuoteCatalogTracksPublishedVersionsAndAvailability(t *testin
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return err
 		}
-		model, price, err := pgoperation.NewStore(tx).ReadCurrentQuoteCatalog(t.Context(), actor, quoted, now)
+		model, price, err := operationStore(tx).ReadCurrentQuoteCatalog(t.Context(), actor, quoted, now)
 		if err != nil {
 			return err
 		}
@@ -107,13 +107,13 @@ func TestReadCurrentQuoteCatalogTracksPublishedVersionsAndAvailability(t *testin
 	assertCatalog(&version2, &price2)
 
 	foreign, _ := operationStoreProject(t, database)
-	if _, _, err := store.ReadCurrentQuoteCatalog(t.Context(), foreign, quoted, now); !errors.Is(err, pgoperation.ErrNotFound) {
+	if _, _, err := store.ReadCurrentQuoteCatalog(t.Context(), foreign, quoted, now); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
 		t.Fatalf("foreign organization catalog read = %v", err)
 	}
 	if err := database.Exec(`UPDATE identity."user" SET status = 'disabled' WHERE id = ?::uuid`, actor.ID.String()).Error; err != nil {
 		t.Fatalf("disable actor: %v", err)
 	}
-	if _, _, err := store.ReadCurrentQuoteCatalog(t.Context(), actor, quoted, now); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, _, err := store.ReadCurrentQuoteCatalog(t.Context(), actor, quoted, now); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatalf("revoked actor catalog read = %v", err)
 	}
 }

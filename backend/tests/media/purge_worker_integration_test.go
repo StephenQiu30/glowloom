@@ -12,7 +12,6 @@ import (
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	copyobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
@@ -32,7 +31,7 @@ func purgeBinaryFixture(t *testing.T, db *gorm.DB) (identityapp.Principal, uuid.
 		}
 	})
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
-	library := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now)
+	library := mediaLibraryStore(db, libraryTestAccess, time.Now)
 	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "update_item", ItemID: &result.Asset.ID, Metadata: &mediaapp.LibraryMetadata{Title: "仅合成测试原件", Category: "material", Tags: []string{}}}); err != nil {
 		t.Fatal(err)
 	}
@@ -45,13 +44,13 @@ func purgeBinaryFixture(t *testing.T, db *gorm.DB) (identityapp.Principal, uuid.
 func TestMediaPurgeActualOriginalAndEveryRenditionAbsentBeforeTombstone(t *testing.T) {
 	db := libraryRuntimeDB(t)
 	actor, project, in, keys, objects := purgeBinaryFixture(t, db)
-	repo := pgmedia.NewPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
+	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
 	job, err := repo.CreatePurge(t.Context(), actor, in)
 	if err != nil {
 		t.Fatal(err)
 	}
 	work := mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()}
-	completed, err := mediaapp.NewPurgeWorker(repo, objects).Execute(t.Context(), work)
+	completed, err := mediaapp.NewPurgeWorker(repo.Worker, objects).Execute(t.Context(), work)
 	if err != nil || completed.Status != "succeeded" || completed.Items[0].Status != "succeeded" {
 		t.Fatal("real private-object cleanup", completed, err)
 	}
@@ -69,10 +68,10 @@ func TestMediaPurgeActualOriginalAndEveryRenditionAbsentBeforeTombstone(t *testi
 	if err := db.Raw(`SELECT title,COALESCE(plain_text,'') AS plain_text,source_label,note,purged_at IS NOT NULL AS purged,catalog_state FROM media.library_item WHERE id=?`, in.Items[0].ID).Scan(&row).Error; err != nil || !row.Purged || row.Title != "已永久清理" || row.CatalogState != "removed" || row.PlainText != "" || row.Note != "" {
 		t.Fatal("visible title/content was not scrubbed", row, err)
 	}
-	if _, err := pgmedia.NewStore(db).FindAsset(t.Context(), actor, project, in.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := mediaTestStore(db).FindAsset(t.Context(), actor, project, in.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("purged original became formally readable", err)
 	}
-	repeated, err := mediaapp.NewPurgeWorker(repo, objects).Execute(t.Context(), work)
+	repeated, err := mediaapp.NewPurgeWorker(repo.Worker, objects).Execute(t.Context(), work)
 	if err != nil || repeated.Revision != completed.Revision {
 		t.Fatal("duplicate physical delivery changed terminal result", repeated, err)
 	}
@@ -99,13 +98,13 @@ func (p *purgeUnknownRemove) Remove(ctx context.Context, key string) error {
 func TestMediaPurgeActualUnknownDeleteReconcileOriginalIntentAndPermanentKey(t *testing.T) {
 	db := libraryRuntimeDB(t)
 	actor, _, in, keys, objects := purgeBinaryFixture(t, db)
-	repo := pgmedia.NewPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
+	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
 	job, err := repo.CreatePurge(t.Context(), actor, in)
 	if err != nil {
 		t.Fatal(err)
 	}
 	unknown := &purgeUnknownRemove{PurgeObjects: objects, once: true}
-	current, err := mediaapp.NewPurgeWorker(repo, unknown).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
+	current, err := mediaapp.NewPurgeWorker(repo.Worker, unknown).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
 	if err != nil || current.Status != "needs_reconciliation" || !current.NeedsReconciliation || unknown.removeCount != 1 {
 		t.Fatal("unknown actual deletion was not retained", current, err)
 	}
@@ -118,7 +117,7 @@ func TestMediaPurgeActualUnknownDeleteReconcileOriginalIntentAndPermanentKey(t *
 	if err != nil || queued.Attempt != 2 || queued.Status != "queued" {
 		t.Fatal("exact original cleanup could not resume", queued, err)
 	}
-	complete, err := mediaapp.NewPurgeWorker(repo, unknown).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 2, ExecutionID: uuid.NewString()})
+	complete, err := mediaapp.NewPurgeWorker(repo.Worker, unknown).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 2, ExecutionID: uuid.NewString()})
 	if err != nil || complete.Status != "succeeded" || unknown.removeCount != len(keys) {
 		t.Fatal("absence receipt retried a destructively completed key", complete, err, unknown.removeCount)
 	}
@@ -144,13 +143,13 @@ func (p purgeFailureReceiptFault) FailPurgeItem(context.Context, mediaapp.PurgeL
 func TestMediaPurgeFailureReceiptErrorIsReturnedAfterActualPhysicalOwnerEnds(t *testing.T) {
 	db := libraryRuntimeDB(t)
 	actor, _, in, _, objects := purgeBinaryFixture(t, db)
-	repo := pgmedia.NewPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
+	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
 	job, err := repo.CreatePurge(t.Context(), actor, in)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := errors.New("owning failure receipt unavailable")
-	fault := purgeFailureReceiptFault{PurgeWorkerRepository: repo, err: want}
+	fault := purgeFailureReceiptFault{PurgeWorkerRepository: repo.Worker, err: want}
 	unknown := &purgeUnknownRemove{PurgeObjects: objects, once: true}
 	current, err := mediaapp.NewPurgeWorker(fault, unknown).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
 	if !errors.Is(err, want) {

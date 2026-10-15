@@ -18,7 +18,7 @@ import (
 
 func TestMediaIngestRejectsPermanentProviderResults(t *testing.T) {
 	database := mediaStoreDB(t)
-	_, projectID := mediaStoreProject(t, database)
+	actor, projectID := mediaStoreProject(t, database)
 	var body bytes.Buffer
 	if err := png.Encode(&body, image.NewRGBA(image.Rect(0, 0, 2, 2))); err != nil {
 		t.Fatal(err)
@@ -44,8 +44,8 @@ func TestMediaIngestRejectsPermanentProviderResults(t *testing.T) {
 		{"wrong_output_type", "video", 1024},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			opID := seedIngestOperation(t, database, projectID, tc.kind)
-			activities, err := mediaflow.NewActivities(database, objects, mediaflow.DownloadPolicy{
+			opID := seedIngestOperation(t, database, actor, projectID, tc.kind)
+			activities, err := mediaScopedIngestActivities(database, objects, mediaflow.DownloadPolicy{
 				AllowedOrigins: []string{server.URL}, AllowTestLoopbackTLS: true,
 				TLSRootCAs: pool, MaxBytes: tc.maxBytes,
 			})

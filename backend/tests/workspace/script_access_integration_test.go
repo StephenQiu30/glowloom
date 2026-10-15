@@ -8,7 +8,6 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
@@ -16,12 +15,12 @@ import (
 func TestScriptProjectAccessPGRequiresOwningTransactionAndCurrentFacts(t *testing.T) {
 	ctx, db, owner := folderTestDB(t)
 	actor, project := lifecycleActorProject(ctx, t, owner)
-	if _, err := workspacepg.NewProjectContentAccessStore(db).Authorize(ctx, actor, project, true); !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable) {
+	if _, err := workspaceProjectAccess(db).Authorize(ctx, actor, project, true); !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable) {
 		t.Fatal("project lock escaped its owning transaction", err)
 	}
 	rollback := errors.New("owning script rollback")
 	err := db.Transaction(func(tx *gorm.DB) error {
-		access := workspacepg.NewProjectContentAccessStore(tx)
+		access := workspaceProjectAccess(tx)
 		facts, err := access.Authorize(ctx, actor, project, true)
 		if err != nil || facts.ProjectID != project || facts.OrgID != actor.OrgID || facts.Revision != 1 {
 			t.Fatal("current project facts", facts, err)
@@ -46,7 +45,7 @@ func TestScriptProjectAccessPGRequiresOwningTransactionAndCurrentFacts(t *testin
 			t.Fatal(err)
 		}
 		if err := db.Transaction(func(tx *gorm.DB) error {
-			access := workspacepg.NewProjectContentAccessStore(tx)
+			access := workspaceProjectAccess(tx)
 			_, readErr := access.Authorize(ctx, actor, project, false)
 			if status == "archived" && readErr != nil {
 				t.Fatal("archived history unreadable", readErr)
@@ -66,7 +65,7 @@ func TestScriptProjectAccessPGRequiresOwningTransactionAndCurrentFacts(t *testin
 		t.Fatal(err)
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		_, err := workspacepg.NewProjectContentAccessStore(tx).TouchContent(ctx, actor, project, math.MaxInt32)
+		_, err := workspaceProjectAccess(tx).TouchContent(ctx, actor, project, math.MaxInt32)
 		if !errors.Is(err, domain.ErrProjectRevisionConflict) {
 			t.Fatal("revision budget did not reject before overflow", err)
 		}
@@ -78,8 +77,8 @@ func TestScriptProjectAccessPGRequiresOwningTransactionAndCurrentFacts(t *testin
 		t.Fatal(err)
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		_, err := workspacepg.NewProjectContentAccessStore(tx).Authorize(ctx, actor, project, false)
-		if !errors.Is(err, identityapp.ErrForbidden) {
+		_, err := workspaceProjectAccess(tx).Authorize(ctx, actor, project, false)
+		if !errors.Is(err, identityapp.ErrSessionInvalid) {
 			t.Fatal("revoked actor reused frozen permission", err)
 		}
 		return nil
@@ -92,7 +91,7 @@ func TestScriptProjectAccessPGCommitsContentInvalidationAtomically(t *testing.T)
 	ctx, db, owner := folderTestDB(t)
 	actor, project := lifecycleActorProject(ctx, t, owner)
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		_, err := workspacepg.NewProjectContentAccessStore(tx).TouchContent(ctx, actor, project, 1)
+		_, err := workspaceProjectAccess(tx).TouchContent(ctx, actor, project, 1)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -120,7 +119,7 @@ func TestScriptProjectAccessPGCommitsContentInvalidationAtomically(t *testing.T)
 				if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 					return err
 				}
-				if _, err := workspacepg.NewProjectContentAccessStore(tx).TouchContent(ctx, actor, project, 2); err == nil {
+				if _, err := workspaceProjectAccess(tx).TouchContent(ctx, actor, project, 2); err == nil {
 					t.Error("missing invalidation reported committed content")
 				}
 				return rollback

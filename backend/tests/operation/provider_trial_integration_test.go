@@ -10,6 +10,7 @@ import (
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func TestProviderTrialQuoteRequiresAdminAndBudgetAndCanConfirmDraft(t *testing.T) {
@@ -24,11 +25,13 @@ func TestProviderTrialQuoteRequiresAdminAndBudgetAndCanConfirmDraft(t *testing.T
 	require.NoError(t, database.Exec(`UPDATE workspace.project SET allow_overseas_models=true WHERE id=?`, i.ProjectID).Error)
 	var actor identityapp.Principal
 	require.NoError(t, database.Raw(`SELECT actor.id,actor.org_id,actor.role FROM identity."user" actor JOIN workspace.project p ON p.org_id=actor.org_id WHERE p.id=?`, i.ProjectID).Scan(&actor).Error)
+	actor = identityfixture.Session(t, database, actor)
 	input := application.ProviderTrialQuote{ProjectID: i.ProjectID, Mode: "text_to_text", Prompt: "fixture prompt", Params: json.RawMessage(`{}`), MaxChargeMicros: 10, SupplierMaxMicros: 100, SupplierCurrency: "USD", RequestID: uuid.New()}
 	_, err := f.store.CreateProviderTrialQuote(t.Context(), actor, f.release, input)
 	require.ErrorIs(t, err, identityapp.ErrForbidden)
 	actor.PlatformRole = "platform_admin"
 	require.NoError(t, database.Exec(`UPDATE identity."user" SET platform_role='platform_admin' WHERE id=?`, actor.ID).Error)
+	actor = identityfixture.Session(t, database, actor)
 	low := input
 	low.SupplierMaxMicros = 99
 	_, err = f.store.CreateProviderTrialQuote(t.Context(), actor, f.release, low)
@@ -42,9 +45,9 @@ func TestProviderTrialQuoteRequiresAdminAndBudgetAndCanConfirmDraft(t *testing.T
 	input.Prompt = "different intent"
 	_, err = f.store.CreateProviderTrialQuote(t.Context(), actor, f.release, input)
 	require.ErrorIs(t, err, application.ErrQuoteKeyReused)
-	loaded, err := f.store.LoadWorkflowOperation(t.Context(), quote.OperationID)
+	loaded, err := f.store.FindOperation(t.Context(), actor, i.ProjectID, quote.OperationID)
 	require.NoError(t, err)
-	model, price, err := f.store.ReadCurrentQuoteCatalog(t.Context(), actor, loaded.Operation, time.Now())
+	model, price, err := f.store.ReadCurrentQuoteCatalog(t.Context(), actor, loaded, time.Now())
 	require.NoError(t, err)
 	require.NotNil(t, model)
 	require.NotNil(t, price)
@@ -53,7 +56,7 @@ func TestProviderTrialQuoteRequiresAdminAndBudgetAndCanConfirmDraft(t *testing.T
 	require.NotEqual(t, uuid.Nil, confirmed.ReservationID)
 	require.NoError(t, database.Exec(`UPDATE identity."user" SET platform_role='creator' WHERE id=?`, actor.ID).Error)
 	// Revoking platform authority invalidates a still-open trial before dispatch.
-	model, price, err = f.store.ReadCurrentQuoteCatalog(t.Context(), actor, loaded.Operation, time.Now())
+	model, price, err = f.store.ReadCurrentQuoteCatalog(t.Context(), actor, loaded, time.Now())
 	require.NoError(t, err)
 	require.Nil(t, model)
 	require.Nil(t, price)

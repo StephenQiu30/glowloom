@@ -13,7 +13,6 @@ import (
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediahttp "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/http"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
@@ -24,7 +23,7 @@ func personalUploadRouter(db *gorm.DB, actor identityapp.Principal, objects *upl
 	router.Use(httpapi.Middleware("http://localhost:3000"))
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	store := pgmedia.NewStore(db)
+	store := mediaTestStore(db)
 	service := mediaapp.NewScopedUploadService(store, store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
 	mediahttp.NewUploadHandler(service).Register(group)
 	return router
@@ -77,7 +76,7 @@ func TestPersonalUploadHTTPCurrentActorStrictBodyAndFreshRouterReplay(t *testing
 	request.Header.Set("Content-Type", "multipart/form-data; boundary=x")
 	denied := httptest.NewRecorder()
 	router.ServeHTTP(denied, request)
-	if denied.Code != 403 || body.reads.Load() != 0 {
+	if denied.Code != 401 || body.reads.Load() != 0 {
 		t.Fatal("revoked actor receipt replay read body", denied.Code, body.reads.Load())
 	}
 }

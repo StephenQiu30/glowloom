@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/extract"
 	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
@@ -112,7 +111,7 @@ func TestScriptCopyPGActualImportedDocumentHistoryWarningsAndIndependentObjects(
 	if err := json.Unmarshal([]byte(target.Provenance), &provenance); err != nil || len(provenance.Warnings) != 1 || provenance.Warnings[0].Code != "table_layout_flattened" {
 		t.Fatal("copy discarded formal warnings", provenance, err)
 	}
-	media, err := mediapg.NewStore(db).FindAsset(t.Context(), actor, job.TargetProjectID, target.MediaAssetID)
+	media, err := scriptFixtureMediaStore(db).FindAsset(t.Context(), actor, job.TargetProjectID, target.MediaAssetID)
 	if err != nil || media.IsDelete {
 		t.Fatal("retained original not independently ready", media, err)
 	}

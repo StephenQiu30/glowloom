@@ -18,22 +18,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/trace/noop"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
-
-	"github.com/gin-gonic/gin"
-	"go.opentelemetry.io/otel/trace/noop"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
-
-	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 )
 
@@ -217,18 +214,6 @@ func TestMediaPackageProductionRouterActualBothScopesCompleteUsageAndAllSixRoute
 	}
 }
 
-type packageCompositionAccess struct {
-	store *pgworkspace.ProjectContentAccessStore
-}
-
-func (a packageCompositionAccess) Authorize(ctx context.Context, actor identityapp.Principal, id uuid.UUID, write bool) (mediaapp.LibraryProjectFacts, error) {
-	facts, err := a.store.Authorize(ctx, actor, id, write)
-	return mediaapp.LibraryProjectFacts{ProjectID: facts.ProjectID, OrgID: facts.OrgID, Revision: facts.Revision}, err
-}
-func (a packageCompositionAccess) TouchContent(ctx context.Context, actor identityapp.Principal, id uuid.UUID, revision int64) (int64, error) {
-	return a.store.TouchContent(ctx, actor, id, revision)
-}
-
 type packageCompositionIdleGuard struct{}
 
 func (packageCompositionIdleGuard) HasInflightProjectWork(context.Context, identityapp.Principal, uuid.UUID) (bool, error) {
@@ -250,10 +235,8 @@ func (o *packageCompositionUnknownWrite) PutIfAbsent(ctx context.Context, key st
 }
 func TestMediaPackageProductionLifecycleUnknownAndOtherUnreadableOwnerRemainClosed(t *testing.T) {
 	f := newMediaCompositionFixture(t)
-	repo := pgmedia.NewPackageStore(f.runtime, func(tx *gorm.DB) mediaapp.LibraryProjectAccess {
-		return packageCompositionAccess{pgworkspace.NewProjectContentAccessStore(tx)}
-	}, func(*gorm.DB) mediaapp.LibraryWorkGuards { return packageCompositionIdleGuard{} }, time.Now)
-	uploads := mediaapp.NewScopedUploadService(pgmedia.NewStore(f.runtime), pgmedia.NewStore(f.runtime), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, nil, time.Now)
+	repo := pgmedia.NewScopedPackageStore(f.runtime, app.NewMediaLibraryProjectAccess, func(*gorm.DB) mediaapp.LibraryWorkGuards { return packageCompositionIdleGuard{} }, time.Now, app.NewMediaScopeAccess)
+	uploads := mediaapp.NewScopedUploadService(pgmedia.NewScopedStore(f.runtime, app.NewMediaScopeAccess), pgmedia.NewScopedStore(f.runtime, app.NewMediaScopeAccess), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, nil, time.Now)
 	objects := mediaobjects.NewProjectCopyObjects(f.objects)
 	service := mediaapp.NewLibraryPackageService(repo, uploads, &packageCompositionUnknownWrite{PackageObjects: objects}, time.Now)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &f.project}

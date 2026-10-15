@@ -18,6 +18,7 @@ import (
 	objectsadapter "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 func scriptAdmin(t *testing.T, owner *gorm.DB, org uuid.UUID) identityapp.Principal {
@@ -26,7 +27,7 @@ func scriptAdmin(t *testing.T, owner *gorm.DB, org uuid.UUID) identityapp.Princi
 	if err := owner.Exec(`INSERT INTO identity."user"(id,org_id,login_name,display_name,password_hash,role,status,must_change_password) VALUES(?,?,?,?,?,'admin','active',false)`, actor.ID, org, "script-admin-"+actor.ID.String(), "测试管理员", "test-only-not-a-credential").Error; err != nil {
 		t.Fatal(err)
 	}
-	return actor
+	return scriptFixtureTeamAdmin(t, owner, actor)
 }
 
 func TestScriptSourceRecoveryPGPrivateCancelRevokedCreatorAndImmutableControl(t *testing.T) {
@@ -70,7 +71,7 @@ func TestScriptSourceRecoveryPGPrivateCancelRevokedCreatorAndImmutableControl(t 
 	if blocked, err := store.HasInflightWork(t.Context(), admin, pid); err != nil || blocked {
 		t.Fatal("stopped cleanup fence", blocked, err)
 	}
-	if _, err := sources.Write(t.Context(), creator, input); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := sources.Write(t.Context(), creator, input); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("borrowed admin to publish", err)
 	}
 	command.Key = uuid.New()
@@ -222,13 +223,17 @@ func TestScriptSourceRecoveryPGUnknownIOObjectsAndCurrentControlPermissionFence(
 				}
 			}
 			if scenario == "spoof_admin_role" {
-				controller = creator
+				controller = scriptFixtureNonmember(t, owner, creator)
 				controller.Role = identitydomain.RoleAdmin
 			}
 			command := app.SourceControlCommand{ProjectID: pid, IntentID: before.ID, Key: uuid.New(), RequestID: uuid.New(), Action: "cancel", ExpectedRevision: before.Revision}
 			_, err = recovery.Control(t.Context(), controller, command)
 			if scenario == "disabled_controller" || scenario == "spoof_admin_role" {
-				if !errors.Is(err, identityapp.ErrForbidden) {
+				expected := identityapp.ErrSessionInvalid
+				if scenario == "spoof_admin_role" {
+					expected = workspaceapp.ErrScopeNotFound
+				}
+				if !errors.Is(err, expected) {
 					t.Fatal("non-current authority accepted", err)
 				}
 				var controls int64

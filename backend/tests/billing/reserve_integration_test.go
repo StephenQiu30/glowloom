@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
 	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 )
@@ -18,7 +17,7 @@ func TestReserveInTransactionPreservesBudgetAndLedger(t *testing.T) {
 	_, database := billingDB(t)
 	actor, projectID := billingProject(t, database)
 	seedReserveBudget(t, database, projectID, 100)
-	store := pgbilling.NewStore(database)
+	store := billingStore(database)
 	first := seedReserveOperation(t, database, projectID, 60)
 	second := seedReserveOperation(t, database, projectID, 40)
 	for _, tc := range []struct {
@@ -30,7 +29,7 @@ func TestReserveInTransactionPreservesBudgetAndLedger(t *testing.T) {
 		{second, 40, 0},
 	} {
 		input := billingapp.ReserveInput{
-			ProjectID: projectID, OperationID: tc.operationID, ActorID: actor.ID,
+			Actor: actor, ProjectID: projectID, OperationID: tc.operationID, ActorID: actor.ID,
 			AmountMicros: tc.amount, OccurredAt: time.Now().UTC(),
 		}
 		var result billingapp.ReserveResult
@@ -52,7 +51,7 @@ func TestReserveInTransactionPreservesBudgetAndLedger(t *testing.T) {
 	tooExpensive := seedReserveOperation(t, database, projectID, 1)
 	if err := database.Transaction(func(tx *gorm.DB) error {
 		_, err := store.ReserveInTransaction(t.Context(), tx, billingapp.ReserveInput{
-			ProjectID: projectID, OperationID: tooExpensive,
+			Actor: actor, ProjectID: projectID, OperationID: tooExpensive,
 			ActorID: actor.ID, AmountMicros: 1, OccurredAt: time.Now().UTC(),
 		})
 		return err
@@ -67,9 +66,9 @@ func TestReserveInTransactionRollbackAndZeroCost(t *testing.T) {
 	actor, projectID := billingProject(t, database)
 	seedReserveBudget(t, database, projectID, 0)
 	operationID := seedReserveOperation(t, database, projectID, 0)
-	store := pgbilling.NewStore(database)
+	store := billingStore(database)
 	input := billingapp.ReserveInput{
-		ProjectID: projectID, OperationID: operationID, ActorID: actor.ID,
+		Actor: actor, ProjectID: projectID, OperationID: operationID, ActorID: actor.ID,
 		AmountMicros: 0, OccurredAt: time.Now().UTC(),
 	}
 	rollback := errors.New("caller rejects confirmation")
@@ -106,7 +105,7 @@ func TestReserveInTransactionSerializesCompetingQuotes(t *testing.T) {
 	_, database := billingDB(t)
 	actor, projectID := billingProject(t, database)
 	seedReserveBudget(t, database, projectID, 100)
-	store := pgbilling.NewStore(database)
+	store := billingStore(database)
 	operations := []uuid.UUID{
 		seedReserveOperation(t, database, projectID, 60),
 		seedReserveOperation(t, database, projectID, 60),
@@ -119,7 +118,7 @@ func TestReserveInTransactionSerializesCompetingQuotes(t *testing.T) {
 			defer wg.Done()
 			results[index] = database.Transaction(func(tx *gorm.DB) error {
 				result, err := store.ReserveInTransaction(t.Context(), tx, billingapp.ReserveInput{
-					ProjectID: projectID, OperationID: operationID, ActorID: actor.ID,
+					Actor: actor, ProjectID: projectID, OperationID: operationID, ActorID: actor.ID,
 					AmountMicros: 60, OccurredAt: time.Now().UTC(),
 				})
 				if err != nil {
@@ -152,9 +151,9 @@ func TestReserveInTransactionDoesNotDoubleHoldAnOperation(t *testing.T) {
 	actor, projectID := billingProject(t, database)
 	seedReserveBudget(t, database, projectID, 120)
 	operationID := seedReserveOperation(t, database, projectID, 60)
-	store := pgbilling.NewStore(database)
+	store := billingStore(database)
 	input := billingapp.ReserveInput{
-		ProjectID: projectID, OperationID: operationID, ActorID: actor.ID,
+		Actor: actor, ProjectID: projectID, OperationID: operationID, ActorID: actor.ID,
 		AmountMicros: 60, OccurredAt: time.Now().UTC(),
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {

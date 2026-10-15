@@ -11,10 +11,12 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 func canvasReferenceCheck(t *testing.T, db *gorm.DB, actor identityapp.Principal, project, asset uuid.UUID) (bool, error) {
@@ -25,7 +27,7 @@ func canvasReferenceCheck(t *testing.T, db *gorm.DB, actor identityapp.Principal
 			return err
 		}
 		var err error
-		found, err = pgcanvas.NewMediaReferenceGuard(tx).HasMediaReferences(t.Context(), actor, project, asset)
+		found, err = pgcanvas.NewScopedMediaReferenceGuard(tx, app.NewCanvasProjectAccess).HasMediaReferences(t.Context(), actor, project, asset)
 		return err
 	})
 	return found, err
@@ -81,17 +83,17 @@ func TestCanvasMediaReferenceGuardRetainsSoftRemovedNodesAndCompleteConfigHistor
 func TestCanvasMediaReferenceGuardRequiresCallerTransactionAndCurrentScope(t *testing.T) {
 	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, db)
-	if _, err := pgcanvas.NewMediaReferenceGuard(db).HasMediaReferences(context.Background(), actor, project, uuid.New()); err == nil {
+	if _, err := pgcanvas.NewScopedMediaReferenceGuard(db, app.NewCanvasProjectAccess).HasMediaReferences(context.Background(), actor, project, uuid.New()); err == nil {
 		t.Fatal("pool accepted as retained transaction")
 	}
 	foreign, _ := seedCanvasActor(t, db)
-	if _, err := canvasReferenceCheck(t, db, foreign, project, uuid.New()); !errors.Is(err, application.ErrNotFound) {
+	if _, err := canvasReferenceCheck(t, db, foreign, project, uuid.New()); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("foreign scope", err)
 	}
 	if err := db.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := canvasReferenceCheck(t, db, actor, project, uuid.New()); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := canvasReferenceCheck(t, db, actor, project, uuid.New()); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("disabled caller", err)
 	}
 }
@@ -173,7 +175,7 @@ func TestCanvasMediaReferenceGuardBoundsCombinedRetainedHistory(t *testing.T) {
 			if err := tx.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "lanverse_app" {
 				t.Fatal("history guard lacks actual nonowner", role, err)
 			}
-			found, err := pgcanvas.NewMediaReferenceGuard(tx).HasMediaReferences(t.Context(), actor, project, asset)
+			found, err := pgcanvas.NewScopedMediaReferenceGuard(tx, app.NewCanvasProjectAccess).HasMediaReferences(t.Context(), actor, project, asset)
 			if err == nil || found {
 				t.Fatal("oversized combined retained history became no reference", found, err)
 			}
@@ -188,7 +190,7 @@ func TestCanvasMediaReferenceGuardRetainsHistoryBudgetLock(t *testing.T) {
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return err
 		}
-		if found, err := pgcanvas.NewMediaReferenceGuard(tx).HasMediaReferences(t.Context(), actor, project, uuid.New()); err != nil || found {
+		if found, err := pgcanvas.NewScopedMediaReferenceGuard(tx, app.NewCanvasProjectAccess).HasMediaReferences(t.Context(), actor, project, uuid.New()); err != nil || found {
 			t.Fatal("authorized empty retained history", found, err)
 		}
 		// Current canvas writers take SHARE before any graph/history mutation.

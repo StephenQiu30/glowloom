@@ -14,9 +14,14 @@ import (
 	"gorm.io/gorm"
 
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func billingDB(t *testing.T) (context.Context, *gorm.DB) {
@@ -47,13 +52,32 @@ func billingProject(t *testing.T, database *gorm.DB) (identityapp.Principal, uui
 	`, userID.String(), orgID.String(), "billing-"+userID.String()).Error; err != nil {
 		t.Fatalf("create actor: %v", err)
 	}
+	actor := identityfixture.Session(t, database, identityapp.Principal{ID: userID, OrgID: orgID, Role: identitydomain.RoleProducer})
 	if err := database.Exec(`
-		INSERT INTO workspace.project (id, org_id, name, aspect_ratio, style_type)
-		VALUES (?::uuid, ?::uuid, '预算测试', '16:9', 'realistic')
-	`, projectID.String(), orgID.String()).Error; err != nil {
+		INSERT INTO workspace.project (id, org_id, owner_scope_id, name, aspect_ratio, style_type)
+		VALUES (?::uuid, ?::uuid, ?::uuid, '预算测试', '16:9', 'realistic')
+	`, projectID.String(), orgID.String(), actor.ScopeID.String()).Error; err != nil {
 		t.Fatalf("create project: %v", err)
 	}
-	return identityapp.Principal{ID: userID, OrgID: orgID, Role: identitydomain.RoleProducer}, projectID
+	return actor, projectID
+}
+
+type billingProjectAccess struct {
+	store *pgworkspace.ProjectContentAccessStore
+}
+
+func (a billingProjectAccess) AuthorizeBilling(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID, write bool) error {
+	_, err := a.store.Authorize(ctx, actor, projectID, write)
+	return err
+}
+
+func billingStore(database *gorm.DB) *pgbilling.Store {
+	return pgbilling.NewScopedStore(database, func(tx *gorm.DB) billingapp.ProjectAccess {
+		scopes := workspaceapp.NewRequestScopeAccess(pgworkspace.NewRequestScopeStore(tx, func(ownerTx *gorm.DB) workspaceapp.SessionActorAccess {
+			return pgidentity.NewStore(ownerTx)
+		}), time.Now)
+		return billingProjectAccess{store: pgworkspace.NewScopedProjectContentAccessStore(tx, scopes)}
+	})
 }
 
 func TestBillingStoreScopesBudgetAndLedgerToLiveProject(t *testing.T) {
@@ -79,7 +103,7 @@ func TestBillingStoreScopesBudgetAndLedgerToLiveProject(t *testing.T) {
 	`, entryID.String(), projectID.String(), actor.ID.String()).Error; err != nil {
 		t.Fatalf("create ledger entry: %v", err)
 	}
-	store := pgbilling.NewStore(database)
+	store := billingStore(database)
 	budget, err := store.FindBudget(t.Context(), actor, projectID)
 	if err != nil || budget.ID != budgetID || budget.ProjectID != projectID || budget.LimitMicros != 0 {
 		t.Fatalf("own budget = %+v: %v", budget, err)
@@ -97,26 +121,26 @@ func TestBillingStoreScopesBudgetAndLedgerToLiveProject(t *testing.T) {
 		{"wrong project ID", actor, otherProjectID},
 	} {
 		t.Run(scoped.name, func(t *testing.T) {
-			if _, err := store.FindBudget(t.Context(), scoped.actor, scoped.projectID); !errors.Is(err, pgbilling.ErrNotFound) {
+			if _, err := store.FindBudget(t.Context(), scoped.actor, scoped.projectID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
 				t.Fatalf("budget visibility error = %v", err)
 			}
-			if _, err := store.FindLedgerEntry(t.Context(), scoped.actor, scoped.projectID, entryID); !errors.Is(err, pgbilling.ErrNotFound) {
+			if _, err := store.FindLedgerEntry(t.Context(), scoped.actor, scoped.projectID, entryID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
 				t.Fatalf("ledger visibility error = %v", err)
 			}
 		})
 	}
 	forged := actor
 	forged.ID = uuid.New()
-	if _, err := store.FindBudget(t.Context(), forged, projectID); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := store.FindBudget(t.Context(), forged, projectID); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatalf("forged actor budget error = %v", err)
 	}
 	if err := database.Exec(`UPDATE workspace.project SET is_delete = true, delete_time = now(), purge_after = now() + interval '30 days' WHERE id = ?::uuid`, projectID.String()).Error; err != nil {
 		t.Fatalf("mark project deleted: %v", err)
 	}
-	if _, err := store.FindBudget(t.Context(), actor, projectID); !errors.Is(err, pgbilling.ErrNotFound) {
+	if _, err := store.FindBudget(t.Context(), actor, projectID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
 		t.Fatalf("deleted project budget error = %v", err)
 	}
-	if _, err := store.FindLedgerEntry(t.Context(), actor, projectID, entryID); !errors.Is(err, pgbilling.ErrNotFound) {
+	if _, err := store.FindLedgerEntry(t.Context(), actor, projectID, entryID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
 		t.Fatalf("deleted project ledger error = %v", err)
 	}
 }

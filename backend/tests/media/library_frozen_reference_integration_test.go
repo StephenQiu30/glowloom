@@ -13,7 +13,6 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
@@ -34,12 +33,12 @@ func TestLibraryFrozenAudioReferenceKeepsOriginalProofWithoutImageRendition(t *t
 	var fact mediaapp.ReferenceFact
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		var err error
-		fact, err = mediaapp.NewReferenceFactQuery(pgmedia.NewLibraryStore(tx, libraryTestAccess, time.Now), objects).Reference(t.Context(), actor, project, upload.Asset.ID, domain.KindAudio)
+		fact, err = mediaapp.NewReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), objects).Reference(t.Context(), actor, project, upload.Asset.ID, domain.KindAudio)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
-	rends, err := pgmedia.NewStore(db).FindRenditions(t.Context(), actor, project, upload.Asset.ID)
+	rends, err := mediaTestStore(db).FindRenditions(t.Context(), actor, project, upload.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,11 +46,11 @@ func TestLibraryFrozenAudioReferenceKeepsOriginalProofWithoutImageRendition(t *t
 		t.Cleanup(func() { _ = objects.Remove(context.Background(), r.ObjectKey) })
 	}
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
-	if _, err := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "remove_items", Items: []mediaapp.LibraryItemRevision{{ID: upload.Asset.ID}}}); err != nil {
+	if _, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "remove_items", Items: []mediaapp.LibraryItemRevision{{ID: upload.Asset.ID}}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return mediaapp.NewReferenceFactQuery(pgmedia.NewLibraryStore(tx, libraryTestAccess, time.Now), objects).VerifyFrozenReference(t.Context(), actor, project, fact)
+		return mediaapp.NewReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), objects).VerifyFrozenReference(t.Context(), actor, project, fact)
 	}); err != nil || fact.RenditionID != nil || fact.RenditionSHA256 != nil {
 		t.Fatal("existing actual audio acquired an image proof", fact, err)
 	}
@@ -65,12 +64,12 @@ func TestLibraryFrozenImageReferenceSurvivesCatalogTrashAndRemoval(t *testing.T)
 	var frozen mediaapp.ReferenceFact
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		var err error
-		frozen, err = mediaapp.NewReferenceFactQuery(pgmedia.NewLibraryStore(tx, libraryTestAccess, time.Now), objects).Reference(t.Context(), actor, project, upload.Asset.ID, domain.KindImage)
+		frozen, err = mediaapp.NewReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), objects).Reference(t.Context(), actor, project, upload.Asset.ID, domain.KindImage)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
-	rends, err := pgmedia.NewStore(db).FindRenditions(t.Context(), actor, project, upload.Asset.ID)
+	rends, err := mediaTestStore(db).FindRenditions(t.Context(), actor, project, upload.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,14 +78,14 @@ func TestLibraryFrozenImageReferenceSurvivesCatalogTrashAndRemoval(t *testing.T)
 	}
 	verify := func(principal identityapp.Principal, pid uuid.UUID, fact mediaapp.ReferenceFact) error {
 		return db.Transaction(func(tx *gorm.DB) error {
-			return mediaapp.NewReferenceFactQuery(pgmedia.NewLibraryStore(tx, libraryTestAccess, time.Now), objects).VerifyFrozenReference(t.Context(), principal, pid, fact)
+			return mediaapp.NewReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), objects).VerifyFrozenReference(t.Context(), principal, pid, fact)
 		})
 	}
 	if err := verify(actor, project, frozen); err != nil {
 		t.Fatal("fresh immutable proof", err)
 	}
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
-	library := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now)
+	library := mediaLibraryStore(db, libraryTestAccess, time.Now)
 	for i, action := range []string{"recycle_items", "restore_items", "remove_items"} {
 		if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: action, ExpectedRevision: int64(i), Items: []mediaapp.LibraryItemRevision{{ID: upload.Asset.ID, Revision: int64(i)}}}); err != nil {
 			t.Fatal(action, err)
@@ -98,7 +97,7 @@ func TestLibraryFrozenImageReferenceSurvivesCatalogTrashAndRemoval(t *testing.T)
 			continue
 		}
 		if err := db.Transaction(func(tx *gorm.DB) error {
-			_, err := mediaapp.NewReferenceFactQuery(pgmedia.NewLibraryStore(tx, libraryTestAccess, time.Now), objects).Reference(t.Context(), actor, project, frozen.AssetID, domain.KindImage)
+			_, err := mediaapp.NewReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), objects).Reference(t.Context(), actor, project, frozen.AssetID, domain.KindImage)
 			return err
 		}); !errors.Is(err, mediaapp.ErrNotFound) {
 			t.Fatal("hidden catalog permitted a new binding", action, err)
@@ -148,12 +147,12 @@ func TestLibraryFrozenReferenceRejectsMissingOriginalAndUnprovedSoftDeletion(t *
 	var frozen mediaapp.ReferenceFact
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		var err error
-		frozen, err = mediaapp.NewReferenceFactQuery(pgmedia.NewLibraryStore(tx, libraryTestAccess, time.Now), objects).Reference(t.Context(), actor, project, upload.Asset.ID, domain.KindImage)
+		frozen, err = mediaapp.NewReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), objects).Reference(t.Context(), actor, project, upload.Asset.ID, domain.KindImage)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
-	store := pgmedia.NewStore(db)
+	store := mediaTestStore(db)
 	asset, err := store.FindAsset(t.Context(), actor, project, frozen.AssetID)
 	if err != nil {
 		t.Fatal(err)
@@ -167,7 +166,7 @@ func TestLibraryFrozenReferenceRejectsMissingOriginalAndUnprovedSoftDeletion(t *
 	}
 	verify := func() error {
 		return db.Transaction(func(tx *gorm.DB) error {
-			return mediaapp.NewReferenceFactQuery(pgmedia.NewLibraryStore(tx, libraryTestAccess, time.Now), objects).VerifyFrozenReference(t.Context(), actor, project, frozen)
+			return mediaapp.NewReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), objects).VerifyFrozenReference(t.Context(), actor, project, frozen)
 		})
 	}
 	deleted, err := asset.Delete(time.Now().UTC())

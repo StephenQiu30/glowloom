@@ -18,7 +18,6 @@ import (
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediahttp "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/http"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -33,7 +32,7 @@ func libraryPersonalFixture(t *testing.T, db *gorm.DB, objects *objectstorage.Cl
 		t.Fatal(err)
 	}
 	defer func() { _ = file.Close() }()
-	store := pgmedia.NewStore(db)
+	store := mediaTestStore(db)
 	service := mediaapp.NewScopedUploadService(store, store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 	uploaded, err := service.UploadPersonal(t.Context(), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{Key: uuid.New(), RequestID: uuid.New(), FileName: name}, File: file, LocalReviewConfirmed: true})
 	if err != nil {
@@ -59,7 +58,7 @@ func libraryMediaRouter(db *gorm.DB, objects *objectstorage.Client, actor identi
 	router.Use(httpapi.Middleware("http://127.0.0.1:3000"))
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	mediahttp.NewLibraryMediaHandler(mediaapp.NewLibraryMediaQuery(pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now), objects, objects)).Register(group)
+	mediahttp.NewLibraryMediaHandler(mediaapp.NewLibraryMediaQuery(mediaLibraryStore(db, libraryTestAccess, time.Now), objects, objects)).Register(group)
 	return router
 }
 func TestLibraryMediaActualScopedSignedPreviewsAndAttachmentOnlyDocument(t *testing.T) {
@@ -113,7 +112,7 @@ func TestLibraryMediaDownloadRejectsCorruptBytesAndStorageFactsNeverEnterMetadat
 	if err := db.Raw(`SELECT object_key FROM media.media_asset WHERE id=?`, uploaded.Asset.ID).Scan(&key).Error; err != nil {
 		t.Fatal(err)
 	}
-	query := mediaapp.NewLibraryMediaQuery(pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now), objects, objects)
+	query := mediaapp.NewLibraryMediaQuery(mediaLibraryStore(db, libraryTestAccess, time.Now), objects, objects)
 	file, asset, err := query.Download(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryPersonal}, uploaded.Asset.ID)
 	if err != nil {
 		t.Fatal(err)

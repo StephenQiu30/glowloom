@@ -15,7 +15,6 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/http"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
@@ -25,9 +24,10 @@ func folderRouter(db *gorm.DB, actor identityapp.Principal) *gin.Engine {
 	api := router.Group("/api")
 	api.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
 	workspacehttp.NewProjectFolderHandler(workspaceapp.NewProjectFolders(folderStore(db), time.Now)).Register(api)
-	workspacehttp.NewHandler(workspaceapp.NewListProjectsQuery(workspacepg.NewStore(db)), nil, nil).Register(api)
+	workspacehttp.NewHandler(workspaceapp.NewListProjectsQuery(workspaceStore(db)), nil, nil).Register(api)
 	return router
 }
+
 func TestProjectFolderHTTPClosedFieldsReplayAndPagination(t *testing.T) {
 	ctx, db, owner := folderTestDB(t)
 	actor := insertWorkspaceActor(ctx, t, owner, insertWorkspaceOrganization(ctx, t, owner))
@@ -59,7 +59,7 @@ func TestProjectFolderHTTPClosedFieldsReplayAndPagination(t *testing.T) {
 	if response := projectHTTPRequest(ctx, router, http.MethodPost, "/api/project-folders", uuid.NewString(), invalid); response.Code != 422 {
 		t.Fatal("invalid utf8 accepted")
 	}
-	id := uuid.MustParse(insertWorkspaceProject(ctx, t, owner, actor.OrgID.String(), "16:9", "realistic", nil))
+	id := uuid.MustParse(insertWorkspaceProject(ctx, t, owner, actor, "16:9", "realistic", nil))
 	path := "/api/projects/" + id.String() + "/folder"
 	for _, bad := range []string{`{"expected_project_revision":1,"expected_placement_revision":0}`, `{"expected_project_revision":1,"expected_placement_revision":null,"folder_id":null}`, `{"expected_project_revision":1,"expected_placement_revision":0,"folder_id":"00000000-0000-0000-0000-000000000000"}`, `{"expected_project_revision":1,"expected_placement_revision":0,"folder_id":null,"status":"ready"}`} {
 		response := projectHTTPRequest(ctx, router, http.MethodPut, path, uuid.NewString(), []byte(bad))

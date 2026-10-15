@@ -21,8 +21,9 @@ func TestProjectCopyPlacementPGCurrentActorPrivateScopeAndRevocation(t *testing.
 	f := createTestFolder(ctx, t, folders, actor, "另一制片人的私人分类")
 	f = *moveTestProject(ctx, t, folders, actor, source, f, 0).Folder
 	service := workspaceapp.NewProjectCopyService(projectCopyStore(db), time.Now)
-	foreignPlacement := copyInput(source)
-	foreignPlacement.Placement = &workspaceapp.CopyPlacementExpectation{ExpectedPlacementRevision: 1, FolderID: &f.ID, ExpectedFolderRevision: f.Revision}
+	otherSource := uuid.MustParse(insertWorkspaceProject(ctx, t, owner, other, "16:9", "realistic", nil))
+	foreignPlacement := copyInput(otherSource)
+	foreignPlacement.Placement = &workspaceapp.CopyPlacementExpectation{ExpectedPlacementRevision: 0, FolderID: &f.ID, ExpectedFolderRevision: f.Revision}
 	if _, err := service.Create(ctx, other, foreignPlacement); !errors.Is(err, domain.ErrProjectFolderRevisionConflict) {
 		t.Fatalf("another actor's folder bound to copy %v", err)
 	}
@@ -33,8 +34,6 @@ func TestProjectCopyPlacementPGCurrentActorPrivateScopeAndRevocation(t *testing.
 	if err := db.Raw(`SELECT count(*) FROM workspace.project_copy_job WHERE actor_id=?`, other.ID).Scan(&unauthorizedJobs).Error; err != nil || unauthorizedJobs != 0 {
 		t.Fatalf("rejected cross-owner copy left jobs %d %v", unauthorizedJobs, err)
 	}
-	otherSource := uuid.MustParse(insertWorkspaceProject(ctx, t, owner, actor.OrgID.String(), "16:9", "realistic", nil))
-	lifecycleFixtureSQL(t, owner, `UPDATE workspace.project SET owner_id=? WHERE id=?`, other.ID, otherSource)
 	input := copyInput(otherSource)
 	job, err := service.Create(ctx, other, input)
 	if err != nil {
@@ -49,7 +48,7 @@ func TestProjectCopyPlacementPGCurrentActorPrivateScopeAndRevocation(t *testing.
 		t.Fatalf("private folder visible to other actor %+v %v", list, err)
 	}
 	lifecycleFixtureSQL(t, owner, `UPDATE identity."user" SET is_delete=true WHERE id=?`, other.ID)
-	if _, err = service.Create(ctx, other, input); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err = service.Create(ctx, other, input); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatalf("revoked current actor replayed old acceptance %v", err)
 	}
 	_, foreignSource := lifecycleActorProject(ctx, t, owner)

@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
@@ -23,7 +22,7 @@ func libraryQuery() mediaapp.LibraryQuery {
 func TestLibraryPersonalCommandsPermanentReplayAndCurrentIdentity(t *testing.T) {
 	db := libraryRuntimeDB(t)
 	actor, _ := mediaStoreProject(t, db)
-	store := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now)
+	store := mediaLibraryStore(db, libraryTestAccess, time.Now)
 	scope := domain.LibraryScope{Kind: domain.LibraryPersonal}
 	initial, err := store.ListLibrary(t.Context(), actor, scope, libraryQuery())
 	if err != nil || initial.Revision != 0 || len(initial.Items) != 0 || initial.CurrentActorID != actor.ID {
@@ -69,7 +68,7 @@ func TestLibraryPersonalCommandsPermanentReplayAndCurrentIdentity(t *testing.T) 
 		t.Fatal(err)
 	}
 	command.Folder.Name = "角色"
-	if _, err := store.ApplyLibraryCommand(t.Context(), actor, command); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := store.ApplyLibraryCommand(t.Context(), actor, command); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("receipt bypassed current identity revocation", err)
 	}
 }
@@ -77,7 +76,7 @@ func TestLibraryPersonalCommandsPermanentReplayAndCurrentIdentity(t *testing.T) 
 func TestLibraryProjectHierarchyCASAndAtomicMove(t *testing.T) {
 	db := libraryRuntimeDB(t)
 	actor, project := mediaStoreProject(t, db)
-	store := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now)
+	store := mediaLibraryStore(db, libraryTestAccess, time.Now)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	var parent *uuid.UUID
 	var first uuid.UUID
@@ -120,7 +119,7 @@ func TestLibraryFullQueryFiltersBeforePageAndStableThreeOrders(t *testing.T) {
 	db := libraryRuntimeDB(t)
 	actor, _ := mediaStoreProject(t, db)
 	scope := domain.LibraryScope{Kind: domain.LibraryPersonal}
-	store := pgmedia.NewLibraryStore(db, libraryTestAccess, func() time.Time { return domainNow })
+	store := mediaLibraryStore(db, libraryTestAccess, func() time.Time { return domainNow })
 	for i := int64(0); i < 43; i++ {
 		text := fmt.Sprintf("原文%d", i)
 		category := "material"

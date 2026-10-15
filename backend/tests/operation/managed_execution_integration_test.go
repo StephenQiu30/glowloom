@@ -10,7 +10,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
-	catalogpg "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
@@ -18,6 +17,7 @@ import (
 	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 type fixtureUnsealer struct{}
@@ -71,8 +71,10 @@ func TestManagedTextDispatchRecoveryAndSettlement(t *testing.T) {
 	require.Equal(t, int64(10), cost.ActualCostMicros)
 	var actor identityapp.Principal
 	require.NoError(t, database.Raw(`SELECT actor.id,actor.org_id,actor.role FROM identity."user" actor JOIN workspace.project p ON p.org_id=actor.org_id WHERE p.id=?`, i.ProjectID).Scan(&actor).Error)
+	actor = identityfixture.Session(t, database, actor)
 	actor.PlatformRole = "platform_admin"
 	require.NoError(t, database.Exec(`UPDATE identity."user" SET platform_role='platform_admin' WHERE id=?`, actor.ID).Error)
+	actor = identityfixture.Session(t, database, actor)
 	require.NoError(t, database.Exec(`INSERT INTO operation.provider_trial(operation_id,actor_id,max_charge_micros,supplier_max_micros,supplier_currency) VALUES(?,?,100,100,'USD')`, i.OperationID, actor.ID).Error)
 	finalizer := app.NewOperationFinalizer(database, store, billingpg.NewStore(database))
 	finish := operationflow.SettlementInput{OperationID: i.OperationID.String(), From: domain.StatusIngesting, To: domain.StatusCompleted, ActualCostMicros: 10}
@@ -90,7 +92,7 @@ func TestManagedTextDispatchRecoveryAndSettlement(t *testing.T) {
 	require.NoError(t, database.Raw(`SELECT m.id,m.revision FROM catalog.model_profile m JOIN catalog.model_profile_version v ON v.model_profile_id=m.id WHERE v.id=?`, i.ModelProfileVersionID).Scan(&model).Error)
 	require.NoError(t, database.Exec(`UPDATE catalog.model_profile SET active_release_id=NULL,status='disabled' WHERE id=?`, model.ID).Error)
 	require.NoError(t, database.Exec(`UPDATE catalog.model_release SET status='draft' WHERE id=?`, fixture.release).Error)
-	releases := catalogapp.NewModelReleases(catalogpg.NewStore(database))
+	releases := catalogapp.NewModelReleases(app.NewCatalogStore(database))
 	listed, err := releases.List(t.Context(), actor, model.ID)
 	require.NoError(t, err)
 	require.Len(t, listed, 1)

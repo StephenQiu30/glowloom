@@ -25,7 +25,7 @@ func (g fixedProjectWork) HasInflightWork(_ context.Context, _ identityapp.Princ
 }
 
 func lifecycleStore(db *gorm.DB, work workspaceapp.ProjectWorkGuard) *pgworkspace.Store {
-	return pgworkspace.NewStoreWithProjectWorkGuard(db, func(*gorm.DB) workspaceapp.ProjectWorkGuard { return work })
+	return workspaceStoreWithWork(db, func(*gorm.DB) workspaceapp.ProjectWorkGuard { return work })
 }
 
 func projectChange(id uuid.UUID, revision int64, action string) workspaceapp.ProjectChangeInput {
@@ -35,7 +35,7 @@ func projectChange(id uuid.UUID, revision int64, action string) workspaceapp.Pro
 func TestProjectLifecyclePersistsReplayRecoveryAndScope(t *testing.T) {
 	ctx, db := workspaceMigrationDB(t)
 	actor := insertWorkspaceActor(ctx, t, db, insertWorkspaceOrganization(ctx, t, db))
-	id := uuid.MustParse(insertWorkspaceProject(ctx, t, db, actor.OrgID.String(), "16:9", "realistic", nil))
+	id := uuid.MustParse(insertWorkspaceProject(ctx, t, db, actor, "16:9", "realistic", nil))
 	now := time.Now().UTC()
 	service := workspaceapp.NewProjectLifecycle(lifecycleStore(db, fixedProjectWork{}), func() time.Time { return now })
 	read, err := service.Get(ctx, actor, id)
@@ -90,7 +90,7 @@ func TestProjectLifecyclePersistsReplayRecoveryAndScope(t *testing.T) {
 	if err := db.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Change(ctx, actor, archive); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := service.Change(ctx, actor, archive); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatalf("revoked replay %v", err)
 	}
 }
@@ -98,9 +98,9 @@ func TestProjectLifecyclePersistsReplayRecoveryAndScope(t *testing.T) {
 func TestProjectLifecycleRejectsMissingWorkEvidenceAndStaleCAS(t *testing.T) {
 	ctx, db := workspaceMigrationDB(t)
 	actor := insertWorkspaceActor(ctx, t, db, insertWorkspaceOrganization(ctx, t, db))
-	id := uuid.MustParse(insertWorkspaceProject(ctx, t, db, actor.OrgID.String(), "16:9", "realistic", nil))
+	id := uuid.MustParse(insertWorkspaceProject(ctx, t, db, actor, "16:9", "realistic", nil))
 	input := projectChange(id, 1, "delete")
-	service := workspaceapp.NewProjectLifecycle(pgworkspace.NewStore(db), time.Now)
+	service := workspaceapp.NewProjectLifecycle(workspaceStore(db), time.Now)
 	if _, err := service.Change(ctx, actor, input); !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable) {
 		t.Fatalf("missing guard %v", err)
 	}

@@ -334,7 +334,7 @@ func TestM1DispatchClaimUnderRuntimeRole(t *testing.T) {
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return err
 		}
-		store := pgoperation.NewStore(tx)
+		store := operationStore(tx)
 		if err := store.BeginProviderCall(t.Context(), application.BeginProviderCallInput{
 			OperationID: identity.OperationID, Action: "submit", Attempt: 1, DispatchRequired: true,
 		}); err != nil {
@@ -393,7 +393,7 @@ func TestM1CompletedEvidenceBlocksManualNotExecuted(t *testing.T) {
 			}
 			adminID := seedDispatchAdministrator(t, database, opID)
 			if err := store.RecordManualNotExecuted(t.Context(), application.ManualNotExecutedInput{
-				OperationID: opID, AdminID: adminID, Evidence: "request did not execute",
+				Actor: operationReviewerSession(t, database, opID, adminID), OperationID: opID, AdminID: adminID, Evidence: "request did not execute",
 			}); !errors.Is(err, application.ErrProviderCallConflict) {
 				t.Errorf("completed execution accepted as not executed: %v", err)
 			}
@@ -439,9 +439,10 @@ func TestM1CompletedEvidenceInvalidatesManualDecisionReplay(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	adminID := seedDispatchAdministrator(t, database, identity.OperationID)
 	decision := application.ManualNotExecutedInput{
-		OperationID: identity.OperationID,
-		AdminID:     seedDispatchAdministrator(t, database, identity.OperationID), Evidence: "provider audit found no execution",
+		Actor: operationReviewerSession(t, database, identity.OperationID, adminID), OperationID: identity.OperationID,
+		AdminID: adminID, Evidence: "provider audit found no execution",
 	}
 	if err := store.RecordManualNotExecuted(t.Context(), decision); err != nil {
 		t.Fatalf("record initial decision: %v", err)
@@ -656,8 +657,8 @@ func seedDispatchAdministrator(t *testing.T, database *gorm.DB, operationID uuid
 	adminID := uuid.New()
 	if err := database.Exec(`
 		INSERT INTO identity."user"
-		  (id, org_id, login_name, display_name, role, password_hash, must_change_password)
-		SELECT ?::uuid, p.org_id, ?, 'Dispatch Reviewer', 'admin', 'test-hash', false
+		  (id, org_id, login_name, display_name, role, platform_role, password_hash, must_change_password)
+		SELECT ?::uuid, p.org_id, ?, 'Dispatch Reviewer', 'admin', 'platform_admin', 'test-hash', false
 		FROM operation.operation AS o
 		JOIN workspace.project AS p ON p.id = o.project_id WHERE o.id = ?::uuid
 	`, adminID.String(), "dispatch-admin-"+adminID.String(), operationID.String()).Error; err != nil {

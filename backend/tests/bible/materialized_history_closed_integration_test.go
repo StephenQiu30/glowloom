@@ -17,12 +17,10 @@ import (
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 	scriptpg "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 )
 
 func bibleClosedHistoryDB(t *testing.T) (*gorm.DB, *gorm.DB) {
@@ -60,11 +58,11 @@ func bibleClosedHistoryDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 
 func bibleClosedService(db *gorm.DB, objects *objectstorage.Client) *app.Service {
 	return app.NewService(pg.NewStore(db, pg.Factories{Access: func(tx *gorm.DB) app.ProjectAccess {
-		return workspacepg.NewProjectContentAccessStore(tx)
+		return bibleFixtureProjectAccess(tx)
 	}, Media: func(tx *gorm.DB) app.MediaReferences {
-		return actualBibleMedia{mediaapp.NewReferenceFactQuery(mediapg.NewLibraryStore(tx, bibleLibraryFactory, time.Now), objects)}
+		return actualBibleMedia{mediaapp.NewReferenceFactQuery(bibleFixtureLibraryStore(tx, bibleLibraryFactory, time.Now), objects)}
 	}, Scopes: func(tx *gorm.DB) app.ScriptScopes {
-		return currentBibleScopes{scriptpg.NewBibleScopes(tx, workspacepg.NewProjectContentAccessStore(tx))}
+		return currentBibleScopes{scriptpg.NewBibleScopes(tx, bibleFixtureProjectAccess(tx))}
 	}}), time.Now)
 }
 
@@ -129,7 +127,7 @@ func bibleClosedReaders(t *testing.T, tx *gorm.DB, actor identityapp.Principal, 
 			return err
 		}},
 		{"confirmed_reference", func() error {
-			_, err := pg.NewReferences(tx, workspacepg.NewProjectContentAccessStore(tx)).Reference(t.Context(), actor, version.ProjectID, version.EntryID, &version.ID)
+			_, err := pg.NewReferences(tx, bibleFixtureProjectAccess(tx)).Reference(t.Context(), actor, version.ProjectID, version.EntryID, &version.ID)
 			return err
 		}},
 	}

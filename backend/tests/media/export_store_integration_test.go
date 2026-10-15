@@ -12,7 +12,6 @@ import (
 
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	toolpg "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
@@ -32,14 +31,15 @@ func TestExportDurableCancelGateRejectsChangedReplayAndForeignRead(t *testing.T)
 	sha := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	asset.SHA256 = &sha
 	asset.Status, asset.ModerationStatus = mediadomain.StatusProcessing, mediadomain.ModerationPending
-	if err := pgmedia.NewStore(db).CreateAsset(t.Context(), actor, asset); err != nil {
+	if err := mediaTestStore(db).CreateAsset(t.Context(), actor, asset); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`UPDATE media.media_asset SET status='ready',moderation_status='passed' WHERE id=?`, asset.ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	freeze := &fixedTimeline{timeline: timeline}
-	store := toolpg.NewStore(db, func(*gorm.DB) toolapp.TimelineReader { return freeze }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(pgmedia.NewStore(tx)) })
+	store := toolpg.NewStore(db, func(*gorm.DB) toolapp.TimelineReader { return freeze }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
+	workerStore := toolpg.NewStore(db, func(*gorm.DB) toolapp.TimelineReader { return freeze }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaWorkerStore(tx)) })
 	input := toolapp.CreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1}
 	key := uuid.New()
 	job, err := store.Create(t.Context(), actor, project, key, input)
@@ -62,7 +62,7 @@ func TestExportDurableCancelGateRejectsChangedReplayAndForeignRead(t *testing.T)
 	if err != nil || cancelled.Status != tooldomain.CancelRequested {
 		t.Fatalf("cancel accepted: %+v %v", cancelled, err)
 	}
-	work, err := store.Claim(t.Context(), toolapp.WorkID{JobID: job.ID, Attempt: 1})
+	work, err := workerStore.Claim(t.Context(), toolapp.WorkID{JobID: job.ID, Attempt: 1})
 	if !errors.Is(err, toolapp.ErrCancelled) || work.Job.ID != uuid.Nil {
 		t.Fatalf("dispatch gate: %+v %v", work, err)
 	}
@@ -100,43 +100,44 @@ func TestExportCancellationCannotBorrowAnotherWorkersCessation(t *testing.T) {
 	timeline.Clips[0].Kind = "subtitle"
 	timeline.Clips[0].AssetID = nil
 	timeline.Clips[0].Text = "caption"
-	store := toolpg.NewStore(db, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(pgmedia.NewStore(tx)) })
+	store := toolpg.NewStore(db, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
+	workerStore := toolpg.NewStore(db, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaWorkerStore(tx)) })
 	job, err := store.Create(t.Context(), actor, project, uuid.New(), toolapp.CreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
 	owner := toolapp.WorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.New()}
-	running, err := store.Claim(t.Context(), owner)
+	running, err := workerStore.Claim(t.Context(), owner)
 	if err != nil {
 		t.Fatal(err)
 	}
 	stranger := owner
 	stranger.ExecutionID = uuid.New()
-	if _, err := store.Claim(t.Context(), stranger); !errors.Is(err, toolapp.ErrWorkerBusy) {
+	if _, err := workerStore.Claim(t.Context(), stranger); !errors.Is(err, toolapp.ErrWorkerBusy) {
 		t.Fatalf("overlapping active execution admitted: %v", err)
 	}
 	cancel, err := store.Control(t.Context(), actor, project, job.ID, uuid.New(), running.Job.Revision, "cancel")
 	if err != nil || cancel.Status != tooldomain.CancelRequested {
 		t.Fatal(err)
 	}
-	if _, err := store.Claim(t.Context(), stranger); !errors.Is(err, toolapp.ErrCancelled) {
+	if _, err := workerStore.Claim(t.Context(), stranger); !errors.Is(err, toolapp.ErrCancelled) {
 		t.Fatal(err)
 	}
-	if err := store.Finish(t.Context(), stranger, true, ""); !errors.Is(err, toolapp.ErrConflict) {
+	if err := workerStore.Finish(t.Context(), stranger, true, ""); !errors.Is(err, toolapp.ErrConflict) {
 		t.Fatalf("another worker claimed cessation: %v", err)
 	}
-	if err := store.FailWorkflow(t.Context(), owner); err != nil {
+	if err := workerStore.FailWorkflow(t.Context(), owner); err != nil {
 		t.Fatal(err)
 	}
 	pending, err := store.Get(t.Context(), actor, project, job.ID)
 	if err != nil || pending.Status != tooldomain.CancelRequested {
 		t.Fatal("orchestration timeout fabricated cancelled")
 	}
-	if err := store.Progress(t.Context(), owner, 20, "rendering"); !errors.Is(err, toolapp.ErrCancelled) {
+	if err := workerStore.Progress(t.Context(), owner, 20, "rendering"); !errors.Is(err, toolapp.ErrCancelled) {
 		t.Fatal(err)
 	}
 	// Only the owner returning from its real subprocess has this right.
-	if err := store.Finish(t.Context(), owner, true, ""); err != nil {
+	if err := workerStore.Finish(t.Context(), owner, true, ""); err != nil {
 		t.Fatal(err)
 	}
 	stopped, err := store.Get(t.Context(), actor, project, job.ID)
@@ -147,7 +148,7 @@ func TestExportCancellationCannotBorrowAnotherWorkersCessation(t *testing.T) {
 	if err != nil || retry.Attempt != 2 || retry.Status != tooldomain.Queued {
 		t.Fatal(err)
 	}
-	if err := store.Progress(t.Context(), owner, 90, "previews"); !errors.Is(err, toolapp.ErrConflict) {
+	if err := workerStore.Progress(t.Context(), owner, 90, "previews"); !errors.Is(err, toolapp.ErrConflict) {
 		t.Fatal("old attempt mutated retry")
 	}
 }
@@ -181,13 +182,13 @@ func TestExportRejectsUnverifiableRealPersonConsentBeforeQueueing(t *testing.T) 
 	asset.ConsentRecordID = &consent
 	asset.Status = mediadomain.StatusProcessing
 	asset.ModerationStatus = mediadomain.ModerationPending
-	if err := pgmedia.NewStore(db).CreateAsset(t.Context(), actor, asset); err != nil {
+	if err := mediaTestStore(db).CreateAsset(t.Context(), actor, asset); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`UPDATE media.media_asset SET status='ready',moderation_status='passed' WHERE id=?`, asset.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	store := toolpg.NewStore(db, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(pgmedia.NewStore(tx)) })
+	store := toolpg.NewStore(db, func(*gorm.DB) toolapp.TimelineReader { return &fixedTimeline{timeline: timeline} }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
 	if _, err := store.Create(t.Context(), actor, project, uuid.New(), toolapp.CreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1}); !errors.Is(err, toolapp.ErrNotFound) {
 		t.Fatalf("unknown consent registry bypassed: %v", err)
 	}

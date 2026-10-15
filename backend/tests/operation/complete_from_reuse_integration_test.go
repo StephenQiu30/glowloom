@@ -38,7 +38,7 @@ func TestCompleteFromReuseCopiesOutputsAndSettlesZeroOnce(t *testing.T) {
 	item := quotedSnapshotItem(projectID, 0)
 	item.Operation = quoted
 	item.Inputs[0].OperationID = quoted.ID
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	if err := store.CreateQuoteSnapshot(t.Context(), actor, nil, []pgoperation.QuoteItem{item}); err != nil {
 		t.Fatalf("seed reuse quote: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestCompleteFromReuseRejectsSourceRevokedAfterConfirmation(t *testing.T) {
 	item := quotedSnapshotItem(projectID, 0)
 	item.Operation = quoted
 	item.Inputs[0].OperationID = quoted.ID
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	if err := store.CreateQuoteSnapshot(t.Context(), actor, nil, []pgoperation.QuoteItem{item}); err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestCompleteFromReuseRunsAsRuntimeRole(t *testing.T) {
 	item := quotedSnapshotItem(projectID, 0)
 	item.Operation = quoted
 	item.Inputs[0].OperationID = quoted.ID
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	if err := store.CreateQuoteSnapshot(t.Context(), actor, nil, []pgoperation.QuoteItem{item}); err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestCompleteFromReuseRunsAsRuntimeRole(t *testing.T) {
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return err
 		}
-		finalizer := app.NewOperationFinalizer(tx, pgoperation.NewStore(tx), pgbilling.NewStore(tx))
+		finalizer := app.NewOperationFinalizer(tx, operationStore(tx), pgbilling.NewStore(tx))
 		return finalizer.CompleteFromReuse(t.Context(), quoted.ID.String())
 	}); err != nil {
 		t.Fatalf("complete reuse as runtime role: %v", err)

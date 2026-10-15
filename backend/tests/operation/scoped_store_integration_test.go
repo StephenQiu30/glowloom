@@ -11,11 +11,11 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func operationStoreDB(t *testing.T) *gorm.DB {
@@ -47,10 +47,11 @@ func operationStoreProject(t *testing.T, database *gorm.DB) (identityapp.Princip
 	`, userID.String(), orgID.String(), "operation-"+userID.String()).Error; err != nil {
 		t.Fatalf("create actor: %v", err)
 	}
+	actor := identityfixture.Session(t, database, identityapp.Principal{ID: userID, OrgID: orgID, Role: identitydomain.RoleProducer})
 	if err := database.Exec(`
-		INSERT INTO workspace.project (id, org_id, name, aspect_ratio, style_type)
-		VALUES (?::uuid, ?::uuid, '操作测试', '16:9', 'realistic')
-	`, projectID.String(), orgID.String()).Error; err != nil {
+		INSERT INTO workspace.project (id, org_id, owner_scope_id, name, aspect_ratio, style_type)
+		VALUES (?::uuid, ?::uuid, ?::uuid, '操作测试', '16:9', 'realistic')
+	`, projectID.String(), orgID.String(), actor.ScopeID.String()).Error; err != nil {
 		t.Fatalf("create project: %v", err)
 	}
 	if err := database.Exec(`
@@ -59,7 +60,7 @@ func operationStoreProject(t *testing.T, database *gorm.DB) (identityapp.Princip
 	`, uuid.NewString(), projectID.String()).Error; err != nil {
 		t.Fatalf("create project budget: %v", err)
 	}
-	return identityapp.Principal{ID: userID, OrgID: orgID, Role: identitydomain.RoleProducer}, projectID
+	return actor, projectID
 }
 
 func operationStoreRows(t *testing.T, database *gorm.DB, actor identityapp.Principal, projectID uuid.UUID) (uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID) {
@@ -112,7 +113,7 @@ func TestOperationStoresReturnProjectScopedSnapshots(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
 	batchID, operationID, inputID, reservationID := operationStoreRows(t, database, actor, projectID)
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	batch, err := store.FindBatch(t.Context(), actor, projectID, batchID)
 	if err != nil || batch.ID != batchID || batch.ProjectID != projectID || batch.TotalCount != 1 || batch.QuoteTotalMicros != 10 {
 		t.Fatalf("scoped batch = %+v: %v", batch, err)
@@ -126,7 +127,7 @@ func TestOperationStoresReturnProjectScopedSnapshots(t *testing.T) {
 	if err != nil || len(inputs) != 1 || inputs[0].ID != inputID || inputs[0].OperationID != operationID || inputs[0].SeqNo != 1 {
 		t.Fatalf("scoped frozen inputs = %+v: %v", inputs, err)
 	}
-	reservation, err := pgbilling.NewStore(database).FindReservation(t.Context(), actor, projectID, reservationID)
+	reservation, err := operationBillingStore(database).FindReservation(t.Context(), actor, projectID, reservationID)
 	if err != nil || reservation.ID != reservationID || reservation.ProjectID != projectID ||
 		reservation.OperationID != operationID || reservation.AmountMicros != 10 {
 		t.Fatalf("scoped reservation = %+v: %v", reservation, err)
@@ -138,8 +139,8 @@ func TestOperationStoresHideOtherProjectsAndRevokedActors(t *testing.T) {
 	actor, projectID := operationStoreProject(t, database)
 	batchID, operationID, _, reservationID := operationStoreRows(t, database, actor, projectID)
 	otherActor, otherProjectID := operationStoreProject(t, database)
-	store := pgoperation.NewStore(database)
-	billingStore := pgbilling.NewStore(database)
+	store := operationStore(database)
+	billingStore := operationBillingStore(database)
 	for _, tc := range []struct {
 		name      string
 		actor     identityapp.Principal
@@ -149,35 +150,35 @@ func TestOperationStoresHideOtherProjectsAndRevokedActors(t *testing.T) {
 		{"wrong project", actor, otherProjectID},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := store.FindBatch(t.Context(), tc.actor, tc.projectID, batchID); !errors.Is(err, pgoperation.ErrNotFound) {
+			if _, err := store.FindBatch(t.Context(), tc.actor, tc.projectID, batchID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
 				t.Fatalf("batch visibility: %v", err)
 			}
-			if _, err := store.FindOperation(t.Context(), tc.actor, tc.projectID, operationID); !errors.Is(err, pgoperation.ErrNotFound) {
+			if _, err := store.FindOperation(t.Context(), tc.actor, tc.projectID, operationID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
 				t.Fatalf("operation visibility: %v", err)
 			}
-			if _, err := store.FindOperationInputs(t.Context(), tc.actor, tc.projectID, operationID); !errors.Is(err, pgoperation.ErrNotFound) {
+			if _, err := store.FindOperationInputs(t.Context(), tc.actor, tc.projectID, operationID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
 				t.Fatalf("input visibility: %v", err)
 			}
-			if _, err := billingStore.FindReservation(t.Context(), tc.actor, tc.projectID, reservationID); !errors.Is(err, pgbilling.ErrNotFound) {
+			if _, err := billingStore.FindReservation(t.Context(), tc.actor, tc.projectID, reservationID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
 				t.Fatalf("reservation visibility: %v", err)
 			}
 		})
 	}
 	forged := actor
 	forged.ID = uuid.New()
-	if _, err := store.FindOperation(t.Context(), forged, projectID, operationID); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := store.FindOperation(t.Context(), forged, projectID, operationID); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatalf("forged actor operation: %v", err)
 	}
-	if _, err := billingStore.FindReservation(t.Context(), forged, projectID, reservationID); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := billingStore.FindReservation(t.Context(), forged, projectID, reservationID); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatalf("forged actor reservation: %v", err)
 	}
 	if err := database.Exec(`UPDATE identity."user" SET status = 'disabled' WHERE id = ?::uuid`, actor.ID.String()).Error; err != nil {
 		t.Fatalf("disable actor: %v", err)
 	}
-	if _, err := store.FindOperation(t.Context(), actor, projectID, operationID); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := store.FindOperation(t.Context(), actor, projectID, operationID); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatalf("revoked actor operation: %v", err)
 	}
-	if _, err := billingStore.FindReservation(t.Context(), actor, projectID, reservationID); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := billingStore.FindReservation(t.Context(), actor, projectID, reservationID); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatalf("revoked actor reservation: %v", err)
 	}
 	if err := database.Exec(`UPDATE identity."user" SET status = 'active' WHERE id = ?::uuid`, actor.ID.String()).Error; err != nil {
@@ -189,13 +190,13 @@ func TestOperationStoresHideOtherProjectsAndRevokedActors(t *testing.T) {
 	`, projectID.String()).Error; err != nil {
 		t.Fatalf("soft delete project: %v", err)
 	}
-	if _, err := store.FindBatch(t.Context(), actor, projectID, batchID); !errors.Is(err, pgoperation.ErrNotFound) {
+	if _, err := store.FindBatch(t.Context(), actor, projectID, batchID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
 		t.Fatalf("deleted project batch: %v", err)
 	}
-	if _, err := store.FindOperationInputs(t.Context(), actor, projectID, operationID); !errors.Is(err, pgoperation.ErrNotFound) {
+	if _, err := store.FindOperationInputs(t.Context(), actor, projectID, operationID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
 		t.Fatalf("deleted project input: %v", err)
 	}
-	if _, err := billingStore.FindReservation(t.Context(), actor, projectID, reservationID); !errors.Is(err, pgbilling.ErrNotFound) {
+	if _, err := billingStore.FindReservation(t.Context(), actor, projectID, reservationID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
 		t.Fatalf("deleted project reservation: %v", err)
 	}
 }

@@ -16,7 +16,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
@@ -38,7 +37,7 @@ func TestLibraryNewAudioBindingUsesOnlyActualOriginalProof(t *testing.T) {
 	var fact mediaapp.ReferenceFact
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		var err error
-		fact, err = mediaapp.NewReferenceFactQuery(pgmedia.NewLibraryStore(tx, libraryTestAccess, time.Now), objects).Reference(t.Context(), actor, project, upload.Asset.ID, domain.KindAudio)
+		fact, err = mediaapp.NewReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), objects).Reference(t.Context(), actor, project, upload.Asset.ID, domain.KindAudio)
 		return err
 	}); err != nil || fact.Kind != domain.KindAudio || fact.RenditionID != nil || fact.RenditionSHA256 != nil || fact.AssetID != upload.Asset.ID {
 		t.Fatal("actual audio proof invented an image rendition", fact, err)
@@ -47,7 +46,7 @@ func TestLibraryNewAudioBindingUsesOnlyActualOriginalProof(t *testing.T) {
 	if fact.SHA256 != hex.EncodeToString(sha[:]) || fact.ByteSize != int64(len(body)) {
 		t.Fatal("audio proof does not describe actual source", fact)
 	}
-	rends, err := pgmedia.NewStore(db).FindRenditions(t.Context(), actor, project, upload.Asset.ID)
+	rends, err := mediaTestStore(db).FindRenditions(t.Context(), actor, project, upload.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +60,7 @@ func TestLibraryNewBindingActualOriginalAndDistinctRenditionProof(t *testing.T) 
 	objects := glbTestObjects(t)
 	actor, project := mediaStoreProject(t, db)
 	upload := documentUpload(t, db, objects, actor, project, "binding.png", uploadPNG(t))
-	store := pgmedia.NewStore(db)
+	store := mediaTestStore(db)
 	asset, err := store.FindAsset(t.Context(), actor, project, upload.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -77,7 +76,7 @@ func TestLibraryNewBindingActualOriginalAndDistinctRenditionProof(t *testing.T) 
 	query := func() error {
 		return db.Transaction(func(tx *gorm.DB) error {
 			var err error
-			fact, err = mediaapp.NewReferenceFactQuery(pgmedia.NewLibraryStore(tx, libraryTestAccess, time.Now), objects).Reference(t.Context(), actor, project, asset.ID, domain.KindImage)
+			fact, err = mediaapp.NewReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), objects).Reference(t.Context(), actor, project, asset.ID, domain.KindImage)
 			return err
 		})
 	}
@@ -122,7 +121,7 @@ func TestLibraryNewBindingActualOriginalAndDistinctRenditionProof(t *testing.T) 
 	if err := objects.PutIfAbsent(t.Context(), rendition.ObjectKey, bytes.NewReader(body), int64(len(body)), "image/png", hex.EncodeToString(digest[:])); err != nil {
 		t.Fatal(err)
 	}
-	library := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now)
+	library := mediaLibraryStore(db, libraryTestAccess, time.Now)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "recycle_items", Items: []mediaapp.LibraryItemRevision{{ID: asset.ID}}}); err != nil {
 		t.Fatal(err)
@@ -135,7 +134,7 @@ func TestLibraryNewBindingActualOriginalAndDistinctRenditionProof(t *testing.T) 
 	}
 	// Existing evidence is verified through its owning reader and actual bytes.
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return mediaapp.NewReferenceFactQuery(pgmedia.NewLibraryStore(tx, libraryTestAccess, time.Now), objects).VerifyFrozenReference(t.Context(), actor, project, frozen)
+		return mediaapp.NewReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), objects).VerifyFrozenReference(t.Context(), actor, project, frozen)
 	}); err != nil {
 		t.Fatal("catalog trash invalidated the unchanged frozen proof", err)
 	}

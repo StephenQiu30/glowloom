@@ -11,7 +11,6 @@ import (
 	"gorm.io/gorm"
 
 	copyobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
@@ -26,7 +25,7 @@ func TestProjectCopyRetainedDocumentActualPrivateBytesAndOrdinaryReadFence(t *te
 	actor, project := mediaStoreProject(t, database)
 	body := []byte("历史原件\n角色：保留它。\n")
 	upload := documentUpload(t, database, objects, actor, project, "历史.txt", body)
-	source, err := pgmedia.NewStore(database).FindAsset(t.Context(), actor, project, upload.Asset.ID)
+	source, err := mediaTestStore(database).FindAsset(t.Context(), actor, project, upload.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,38 +36,38 @@ func TestProjectCopyRetainedDocumentActualPrivateBytesAndOrdinaryReadFence(t *te
 	if err := owner.Exec(`UPDATE media.media_asset SET is_delete=true,delete_time=?,purge_after=?,revision=?,update_time=? WHERE id=? AND project_id=?`, deleted.DeleteTime, deleted.PurgeAfter, deleted.Revision, deleted.UpdateTime, source.ID, project).Error; err != nil {
 		t.Fatal(err)
 	}
-	store := pgmedia.NewStore(database)
+	store := mediaTestStore(database)
 	if _, err := store.FindAsset(t.Context(), actor, project, source.ID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("ordinary read exposed deleted historical document", err)
 	}
-	if _, err := mediaapp.NewDocumentSources(pgmedia.NewDocumentSourceStore(database), objects).Freeze(t.Context(), actor, project, []uuid.UUID{source.ID}); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := mediaapp.NewDocumentSources(mediaDocumentStore(database), objects).Freeze(t.Context(), actor, project, []uuid.UUID{source.ID}); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("ordinary script source freeze exposed retired original", err)
 	}
 	binding := mediaapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: uuid.New()}
-	if err := database.Exec(`INSERT INTO workspace.project(id,org_id,name,aspect_ratio,style_type,status) VALUES(?,?,'保留历史文档副本','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID).Error; err != nil {
+	if err := database.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,owner_scope_id,name,aspect_ratio,style_type,status) VALUES(?,?,?,?,'保留历史文档副本','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID, actor.ID, actor.ScopeID).Error; err != nil {
 		t.Fatal(err)
 	}
 	var frozen mediaapp.ProjectCopySnapshot
 	if err := database.Transaction(func(tx *gorm.DB) error {
 		var err error
-		frozen, err = pgmedia.NewProjectCopyStore(tx).FreezeWithReferences(t.Context(), actor, binding, time.Now(), []uuid.UUID{source.ID})
+		frozen, err = mediaCopyStore(tx).FreezeWithReferences(t.Context(), actor, binding, time.Now(), []uuid.UUID{source.ID})
 		if err != nil {
 			return err
 		}
-		return tx.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,actor_id,source_project_id,source_revision,target_project_id,target_name,status,stage,manifest,workspace_snapshot,idem_key,request_sha256,admission_response) VALUES(?,?,?,?,1,?,'保留历史文档副本','queued','media','{}','{}',gen_random_uuid(),repeat('a',64),'{}')`, binding.JobID, actor.OrgID, actor.ID, project, binding.TargetProjectID).Error
+		return tx.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,actor_id,owner_scope_id,source_project_id,source_revision,target_project_id,target_name,status,stage,manifest,workspace_snapshot,idem_key,request_sha256,admission_response) VALUES(?,?,?,?,?,1,?,'保留历史文档副本','queued','media','{}','{}',gen_random_uuid(),repeat('a',64),'{}')`, binding.JobID, actor.OrgID, actor.ID, actor.ScopeID, project, binding.TargetProjectID).Error
 	}); err != nil {
 		t.Fatal("freeze exact retained original", err)
 	}
 	if frozen.Assets != 1 || frozen.AssetMapping[source.ID] == uuid.Nil {
 		t.Fatal("retained original was silently omitted", frozen)
 	}
-	copyStore := pgmedia.NewProjectCopyStore(database)
+	copyStore := mediaCopyStore(database)
 	transfer := mediaapp.NewProjectCopyTransfer(copyStore, copyobjects.NewProjectCopyObjects(objects), t.TempDir())
 	if err := transfer.Transfer(t.Context(), actor, binding, frozen); err != nil {
 		t.Fatal("actual SHA verified retained original transfer", err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		_, err := pgmedia.NewProjectCopyStore(tx).Register(t.Context(), actor, binding, frozen)
+		_, err := mediaCopyStore(tx).Register(t.Context(), actor, binding, frozen)
 		return err
 	}); err != nil {
 		t.Fatal("register target facts", err)
@@ -93,7 +92,7 @@ func TestProjectCopyRetainedDocumentActualPrivateBytesAndOrdinaryReadFence(t *te
 	if err := objects.Remove(t.Context(), source.ObjectKey); err != nil {
 		t.Fatal("remove only this synthetic source object")
 	}
-	docs := mediaapp.NewDocumentSources(pgmedia.NewDocumentSourceStore(database), objects)
+	docs := mediaapp.NewDocumentSources(mediaDocumentStore(database), objects)
 	facts, err := docs.Freeze(t.Context(), actor, binding.TargetProjectID, []uuid.UUID{targetID})
 	if err != nil {
 		t.Fatal(err)
@@ -127,11 +126,11 @@ func TestProjectCopyRetainedReferencesMissingForeignAndDuplicateFailAtomically(t
 	foreign := documentUpload(t, database, glbTestObjects(t), foreignActor, foreignProject, "foreign.txt", []byte("unrelated original"))
 	for _, refs := range [][]uuid.UUID{{uuid.New()}, {uuid.Nil}, {project, project}, {foreign.Asset.ID}} {
 		binding := mediaapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: uuid.New()}
-		if err := database.Exec(`INSERT INTO workspace.project(id,org_id,name,aspect_ratio,style_type,status) VALUES(?,?,'缺原件不得复制','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID).Error; err != nil {
+		if err := database.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,owner_scope_id,name,aspect_ratio,style_type,status) VALUES(?,?,?,?,'缺原件不得复制','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID, actor.ID, actor.ScopeID).Error; err != nil {
 			t.Fatal(err)
 		}
 		if err := database.Transaction(func(tx *gorm.DB) error {
-			_, err := pgmedia.NewProjectCopyStore(tx).FreezeWithReferences(t.Context(), actor, binding, time.Now(), refs)
+			_, err := mediaCopyStore(tx).FreezeWithReferences(t.Context(), actor, binding, time.Now(), refs)
 			return err
 		}); !errors.Is(err, mediaapp.ErrProjectCopyMediaUnavailable) {
 			t.Fatal("invalid retained reference admitted", err)

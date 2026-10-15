@@ -20,7 +20,7 @@ import (
 func TestConfirmBatchQuoteCommitsSelectedReservationsAndOneBatchEvent(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID, batchID, items := seedConfirmableBatch(t, database, 20, 30)
-	result, err := pgoperation.NewStore(database).ConfirmBatchQuote(t.Context(), actor, operationapp.ConfirmBatchQuoteInput{
+	result, err := operationStore(database).ConfirmBatchQuote(t.Context(), actor, operationapp.ConfirmBatchQuoteInput{
 		ProjectID: projectID, BatchID: batchID, RequestID: uuid.NewString(),
 		ExcludeOperationIDs: []uuid.UUID{items[1].Operation.ID},
 	})
@@ -89,7 +89,7 @@ func TestConfirmBatchQuoteCommitsSelectedReservationsAndOneBatchEvent(t *testing
 func TestConfirmBatchQuoteKeepsAllSelectedQuotedWhenBudgetIsInsufficient(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID, batchID, items := seedConfirmableBatch(t, database, 60, 50)
-	result, err := pgoperation.NewStore(database).ConfirmBatchQuote(t.Context(), actor,
+	result, err := operationStore(database).ConfirmBatchQuote(t.Context(), actor,
 		operationapp.ConfirmBatchQuoteInput{ProjectID: projectID, BatchID: batchID,
 			RequestID: uuid.NewString()})
 	if !errors.Is(err, billingdomain.ErrBudgetInsufficient) || result.ConfirmedCount != 0 || len(result.Items) != 0 {
@@ -121,7 +121,7 @@ func TestConfirmBatchQuoteKeepsAllSelectedQuotedWhenBudgetIsInsufficient(t *test
 func TestConfirmBatchQuotePreservesExclusionWhenReservationRollsBack(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID, batchID, items := seedConfirmableBatch(t, database, 110, 20)
-	result, err := pgoperation.NewStore(database).ConfirmBatchQuote(t.Context(), actor,
+	result, err := operationStore(database).ConfirmBatchQuote(t.Context(), actor,
 		operationapp.ConfirmBatchQuoteInput{ProjectID: projectID, BatchID: batchID,
 			RequestID: uuid.NewString(), ExcludeOperationIDs: []uuid.UUID{items[1].Operation.ID}})
 	if !errors.Is(err, billingdomain.ErrBudgetInsufficient) || result.ConfirmedCount != 0 ||
@@ -143,11 +143,11 @@ func TestConfirmBatchQuoteExpiresAllExcludedItemsWithoutReservation(t *testing.T
 	actor, projectID, batchID, items := seedConfirmableBatch(t, database, 20, 30)
 	input := operationapp.ConfirmBatchQuoteInput{ProjectID: projectID, BatchID: batchID,
 		RequestID: uuid.NewString(), ExcludeOperationIDs: []uuid.UUID{items[0].Operation.ID, items[1].Operation.ID}}
-	result, err := pgoperation.NewStore(database).ConfirmBatchQuote(t.Context(), actor, input)
+	result, err := operationStore(database).ConfirmBatchQuote(t.Context(), actor, input)
 	if !errors.Is(err, operationapp.ErrQuoteStale) || len(result.Items) != 2 || result.ConfirmedCount != 0 {
 		t.Fatalf("empty selected set = %+v, %v", result, err)
 	}
-	replay, replayErr := pgoperation.NewStore(database).ConfirmBatchQuote(t.Context(), actor, input)
+	replay, replayErr := operationStore(database).ConfirmBatchQuote(t.Context(), actor, input)
 	if !errors.Is(replayErr, operationapp.ErrQuoteStale) || !reflect.DeepEqual(replay, result) {
 		t.Fatalf("empty selected set replay = %+v, %v", replay, replayErr)
 	}
@@ -170,7 +170,7 @@ func TestConfirmBatchQuoteRunsAsRuntimeRole(t *testing.T) {
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return err
 		}
-		_, err := pgoperation.NewStore(tx).ConfirmBatchQuote(t.Context(), actor,
+		_, err := operationStore(tx).ConfirmBatchQuote(t.Context(), actor,
 			operationapp.ConfirmBatchQuoteInput{ProjectID: projectID, BatchID: batchID,
 				RequestID: uuid.NewString()})
 		return err
@@ -189,7 +189,7 @@ func TestConfirmBatchQuoteKeepsFreshSiblingWhenOneQuoteExpires(t *testing.T) {
 		WHERE id = ?::uuid`, items[1].Operation.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
-	result, err := pgoperation.NewStore(database).ConfirmBatchQuote(t.Context(), actor,
+	result, err := operationStore(database).ConfirmBatchQuote(t.Context(), actor,
 		operationapp.ConfirmBatchQuoteInput{ProjectID: projectID, BatchID: batchID,
 			RequestID: uuid.NewString()})
 	if err != nil || result.ConfirmedCount != 1 || result.QuoteTotalMicros != 20 || len(result.Items) != 2 {
@@ -214,7 +214,7 @@ func TestConfirmBatchQuoteIncludesPreviouslyExpiredSibling(t *testing.T) {
 		WHERE id = ?::uuid`, items[1].Operation.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
-	result, err := pgoperation.NewStore(database).ConfirmBatchQuote(t.Context(), actor,
+	result, err := operationStore(database).ConfirmBatchQuote(t.Context(), actor,
 		operationapp.ConfirmBatchQuoteInput{ProjectID: projectID, BatchID: batchID,
 			RequestID: uuid.NewString()})
 	if err != nil || result.ConfirmedCount != 1 || len(result.Items) != 2 {
@@ -241,7 +241,7 @@ func seedConfirmableBatch(t *testing.T, database *gorm.DB, amounts ...int64) (id
 	batch := domain.Batch{ID: batchID, ProjectID: projectID, Kind: "mixed",
 		Scope: json.RawMessage(`{}`), Status: domain.BatchStatusQuoted,
 		TotalCount: int32(len(items)), QuoteTotalMicros: total}
-	if err := pgoperation.NewStore(database).CreateQuoteSnapshot(t.Context(), actor, &batch, items); err != nil {
+	if err := operationStore(database).CreateQuoteSnapshot(t.Context(), actor, &batch, items); err != nil {
 		t.Fatal(err)
 	}
 	return actor, projectID, batchID, items

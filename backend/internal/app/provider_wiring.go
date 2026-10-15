@@ -35,7 +35,7 @@ func registerProviderActivities(w worker.Worker, database *gorm.DB, cfg config.C
 	if err != nil {
 		return fmt.Errorf("configure provider worker sealing key: %w", err)
 	}
-	activities := providerprobe.NewScopedActivities(database, unsealer, providerhttp.NewClient(&http.Client{}), provideCatalogStore(database))
+	activities := providerprobe.NewScopedActivities(database, unsealer, providerhttp.NewClient(&http.Client{}), NewCatalogStore(database))
 	w.RegisterActivityWithOptions(activities.TestCredential, activity.RegisterOptions{Name: "provider.test_credential"})
 
 	storage, err := objectstorage.Open(cfg.ObjectStorageEndpoint, cfg.ObjectStorageBucket, cfg.ObjectStorageAccessKey, cfg.ObjectStorageSecretKey, cfg.ObjectStorageRegion)

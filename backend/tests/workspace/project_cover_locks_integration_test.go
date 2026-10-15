@@ -11,9 +11,9 @@ import (
 	"github.com/google/uuid"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func TestProjectCoverPGCurrentRoleClearAndReplay(t *testing.T) {
@@ -25,16 +25,16 @@ func TestProjectCoverPGCurrentRoleClearAndReplay(t *testing.T) {
 	if _, err := s.Change(ctx, actor, set); err != nil {
 		t.Fatal(err)
 	}
-	lifecycleFixtureSQL(t, owner, `UPDATE identity."user" SET role='admin' WHERE id=?`, actor.ID)
-	if _, err := s.Change(ctx, actor, coverChange(project, 2, nil)); !errors.Is(err, identityapp.ErrForbidden) {
-		t.Fatal("stale principal role cleared cover", err)
+	lifecycleFixtureSQL(t, owner, `UPDATE identity."user" SET session_epoch=session_epoch+1 WHERE id=?`, actor.ID)
+	if _, err := s.Change(ctx, actor, coverChange(project, 2, nil)); !errors.Is(err, identityapp.ErrSessionInvalid) {
+		t.Fatal("stale credential epoch cleared cover", err)
 	}
-	if _, err := s.Change(ctx, actor, set); !errors.Is(err, identityapp.ErrForbidden) {
-		t.Fatal("stale role replay exposed cover", err)
+	if _, err := s.Change(ctx, actor, set); !errors.Is(err, identityapp.ErrSessionInvalid) {
+		t.Fatal("stale session replay exposed cover", err)
 	}
-	actor.Role = identitydomain.RoleAdmin
+	actor = identityfixture.Session(t, owner, actor)
 	if _, err := s.Change(ctx, actor, coverChange(project, 2, nil)); err != nil {
-		t.Fatal("fresh role cannot clear", err)
+		t.Fatal("fresh session cannot clear", err)
 	}
 }
 

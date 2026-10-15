@@ -57,13 +57,7 @@ func TestPublicCanvasAPIWithLocalPostgres(t *testing.T) {
 	if err := database.Exec(`UPDATE identity."user" SET password_hash=?,email_key=login_name::text || '@fixture.invalid',email_verified_at=now() WHERE id=?::uuid`, hash, actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
-	scope := uuid.New()
-	if err := database.Exec(`INSERT INTO workspace.creation_scope(id,kind,owner_user_id,physical_scope_id) VALUES(?,'personal',?,?)`, scope, actor.ID, actor.OrgID).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Exec(`UPDATE workspace.project SET owner_scope_id=? WHERE id=?`, scope, project).Error; err != nil {
-		t.Fatal(err)
-	}
+	scope := actor.ScopeID
 	authResult := identityfixture.Login(t, database, cfg, actor.ID, "CanvasPassword123")
 	server := httptest.NewServer(router)
 	t.Cleanup(server.Close)

@@ -58,6 +58,11 @@ func NewActivities(db *gorm.DB, objects *objectstorage.Client, policy DownloadPo
 	return newScopedActivities(db, objects, policy, nil)
 }
 
+// NewScopedActivities injects durable authority for URL ingest without a staged source.
+func NewScopedActivities(db *gorm.DB, objects *objectstorage.Client, policy DownloadPolicy, scopes pgmedia.ScopeAccessFactory) (*Activities, error) {
+	return newScopedActivities(db, objects, policy, scopes)
+}
+
 func newScopedActivities(db *gorm.DB, objects *objectstorage.Client, policy DownloadPolicy, scopes pgmedia.ScopeAccessFactory) (*Activities, error) {
 	if db == nil || objects == nil {
 		return nil, fmt.Errorf("configure media activity: %w", ErrResultUnavailable)

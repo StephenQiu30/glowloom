@@ -12,7 +12,6 @@ import (
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/http"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
@@ -21,9 +20,10 @@ func placementRouter(db *gorm.DB, actor identityapp.Principal) *gin.Engine {
 	api := router.Group("/api")
 	api.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
 	workspacehttp.NewProjectCopyHandler(workspaceapp.NewProjectCopyService(projectCopyStore(db), time.Now)).Register(api)
-	workspacehttp.NewProjectLifecycleHandler(workspaceapp.NewProjectLifecycle(workspacepg.NewStoreWithProjectWorkGuard(db, folderWork), time.Now)).Register(api)
+	workspacehttp.NewProjectLifecycleHandler(workspaceapp.NewProjectLifecycle(workspaceStoreWithWork(db, folderWork), time.Now)).Register(api)
 	return router
 }
+
 func TestProjectCopyPlacementHTTPClosedCASAndRetiredRestore(t *testing.T) {
 	ctx, db, owner := folderTestDB(t)
 	actor, source := lifecycleActorProject(ctx, t, owner)

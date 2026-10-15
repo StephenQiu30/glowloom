@@ -16,6 +16,7 @@ import (
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func TestProjectCoverPermanentExpiredLegacyReceiptPromotion(t *testing.T) {
@@ -207,8 +208,9 @@ func TestProjectCoverPermanentActualOldProductionFingerprintGolden(t *testing.T)
 	tx := owner.Begin()
 	defer rollbackLifecycleTest(t, tx)
 	lifecycleFixtureSQL(t, tx, `INSERT INTO workspace.organization(id,name)VALUES(?,'fixed old golden')`, actor.OrgID)
-	lifecycleFixtureSQL(t, tx, `INSERT INTO identity."user"(id,org_id,login_name,display_name,password_hash,role,must_change_password)VALUES(?,?,'cover-golden@example.test','Cover Golden','synthetic-never-authenticates','producer',false)`, actor.ID, actor.OrgID)
-	lifecycleFixtureSQL(t, tx, `INSERT INTO workspace.project(id,org_id,name,aspect_ratio,style_type,resolution,revision)VALUES(?,?,'later content','16:9','realistic','1080p',9)`, input.Patch.ProjectID, actor.OrgID)
+	lifecycleFixtureSQL(t, tx, `INSERT INTO identity."user"(id,org_id,login_name,display_name,password_hash,role,must_change_password)VALUES(?,?,?,'Cover Golden','synthetic-never-authenticates','producer',false)`, actor.ID, actor.OrgID, "cover-golden-"+actor.ID.String())
+	actor = identityfixture.Session(t, tx, actor)
+	lifecycleFixtureSQL(t, tx, `INSERT INTO workspace.project(id,org_id,owner_id,owner_scope_id,name,aspect_ratio,style_type,resolution,revision)VALUES(?,?,?,?,'later content','16:9','realistic','1080p',9)`, input.Patch.ProjectID, actor.OrgID, actor.ID, actor.ScopeID)
 	lifecycleFixtureSQL(t, tx, `INSERT INTO infra.idempotency_record(id,actor_id,idem_key,request_hash,status_code,response_body,expires_at)VALUES(?,?,?,?,200,?::jsonb,clock_timestamp()-interval '1 year')`, uuid.New(), actor.ID, input.IdempotencyKey.String(), golden.Fingerprint, golden.ResponseBytes)
 	lifecycleFixtureSQL(t, tx, `SET LOCAL ROLE lanverse_app`)
 	replayed, err := workspaceapp.NewProjectLifecycle(coverStore(tx), time.Now).Change(ctx, actor, input)

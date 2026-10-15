@@ -31,7 +31,6 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	inboxpg "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
 	inboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
-	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	toolevent "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/event"
@@ -47,15 +46,16 @@ import (
 )
 
 type speechHTTPFixture struct {
-	db        *gorm.DB
-	store     *toolpg.TranscriptionStore
-	objects   *objectstorage.Client
-	actor     identityapp.Principal
-	project   uuid.UUID
-	assetID   uuid.UUID
-	sourceSHA string
-	input     toolapp.TranscriptionCreateInput
-	router    *gin.Engine
+	db          *gorm.DB
+	store       *toolpg.TranscriptionStore
+	workerStore *toolpg.TranscriptionStore
+	objects     *objectstorage.Client
+	actor       identityapp.Principal
+	project     uuid.UUID
+	assetID     uuid.UUID
+	sourceSHA   string
+	input       toolapp.TranscriptionCreateInput
+	router      *gin.Engine
 }
 
 func speechFixture(t *testing.T) *speechHTTPFixture {
@@ -92,12 +92,12 @@ func speechFixtureFrom(t *testing.T, sample, mime, kind string) *speechHTTPFixtu
 	db := mediaStoreDB(t)
 	objects := glbTestObjects(t)
 	actor, project := mediaStoreProject(t, db)
-	upload := mediaapp.NewUploadService(mediapg.NewStore(db), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
+	upload := mediaapp.NewUploadService(mediaTestStore(db), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 	uploaded, err := upload.Upload(t.Context(), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: filepath.Base(sample)}, File: download, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal("actual reviewed speech upload", err)
 	}
-	f := &speechHTTPFixture{db: db, store: transcriptionStore(t, db), objects: objects, actor: actor, project: project, assetID: uploaded.Asset.ID, sourceSHA: sha}
+	f := &speechHTTPFixture{db: db, store: transcriptionStore(t, db), workerStore: transcriptionWorkerStore(db), objects: objects, actor: actor, project: project, assetID: uploaded.Asset.ID, sourceSHA: sha}
 	f.input = transcriptionNode(t, db, actor, project, uploaded.Asset.ID, kind)
 	f.router = gin.New()
 	f.router.Use(httpapi.Middleware("http://localhost:3000"))
@@ -168,7 +168,7 @@ func (f *speechHTTPFixture) worker(t *testing.T, client toolapp.Transcriber) *to
 	if err != nil {
 		t.Fatal(err)
 	}
-	return toolapp.NewTranscriptionWorker(f.store, toolflow.NewObjects(f.objects), prepare, client)
+	return toolapp.NewTranscriptionWorker(f.workerStore, toolflow.NewObjects(f.objects), prepare, client)
 }
 
 func TestTranscriptionActualHTTPWhisperPrivateDraftSourceAndSRT(t *testing.T) {
@@ -206,7 +206,7 @@ func TestTranscriptionActualHTTPWhisperPrivateDraftSourceAndSRT(t *testing.T) {
 		t.Fatalf("stale source admitted %d", response.Code)
 	}
 	worker := f.worker(t, client)
-	activities := toolflow.NewTranscriptionActivities(worker, f.store)
+	activities := toolflow.NewTranscriptionActivities(worker, f.workerStore)
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()
 	env.RegisterActivityWithOptions(activities.TranscribeSpeech, activity.RegisterOptions{Name: toolflow.TranscribeActivity})
@@ -315,7 +315,7 @@ func TestTranscriptionSoftCancelActualHTTPWaitsForNativeResponse(t *testing.T) {
 			close(finish)
 			<-exited
 		}
-		_ = f.store.Release(t.Context(), id)
+		_ = f.workerStore.Release(t.Context(), id)
 	}()
 	select {
 	case <-started:
@@ -376,13 +376,13 @@ func TestTranscriptionUnknownConnectionCannotRePOST(t *testing.T) {
 	if _, err := worker.Execute(t.Context(), id); !errors.Is(err, toolapp.ErrInferenceUncertain) {
 		t.Fatal("disconnected request completion forged", err)
 	}
-	if err := f.store.Finish(t.Context(), id, false, "inference_unknown"); err != nil {
+	if err := f.workerStore.Finish(t.Context(), id, false, "inference_unknown"); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.store.Release(t.Context(), id); err != nil {
+	if err := f.workerStore.Release(t.Context(), id); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.store.FailWorkflow(t.Context(), id); err != nil {
+	if err := f.workerStore.FailWorkflow(t.Context(), id); err != nil {
 		t.Fatal(err)
 	}
 	next := id
@@ -423,7 +423,7 @@ func TestTranscriptionProducedCommandReceiptAndInboxRejectForgery(t *testing.T) 
 		t.Fatal("actual committed speech delivery missing", err)
 	}
 	starter := &transcriptionDispatchCounter{}
-	handler := toolevent.NewTranscriptionHandler(inboxpg.NewStore(db), store, starter)
+	handler := toolevent.NewTranscriptionHandler(inboxpg.NewStore(db), transcriptionWorkerStore(db), starter)
 	record := inboxapp.Record{Topic: row.Topic, Key: []byte(row.PartitionKey), Value: row.Payload}
 	for range 2 {
 		if err := handler.Handle(t.Context(), record); err != nil {
@@ -468,7 +468,7 @@ func TestTranscriptionSilentVideoFailsBeforeNativeDispatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	activities := toolflow.NewTranscriptionActivities(f.worker(t, client), f.store)
+	activities := toolflow.NewTranscriptionActivities(f.worker(t, client), f.workerStore)
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()
 	env.RegisterActivityWithOptions(activities.TranscribeSpeech, activity.RegisterOptions{Name: toolflow.TranscribeActivity})
@@ -501,10 +501,10 @@ func TestTranscriptionInsufficientActivityBudgetNeverSubmitsNative(t *testing.T)
 	if calls.Load() != 0 {
 		t.Fatal("inference submitted without finalization budget")
 	}
-	if err := f.store.Finish(t.Context(), id, true, "dependency_unavailable"); err != nil {
+	if err := f.workerStore.Finish(t.Context(), id, true, "dependency_unavailable"); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.store.Release(t.Context(), id); err != nil {
+	if err := f.workerStore.Release(t.Context(), id); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -517,7 +517,7 @@ func TestTranscriptionUnconfiguredActivityFailsOldQueuedWithoutSubmission(t *tes
 	}
 	// Dependencies are absent before claim/dispatch. Production workflow cleanup
 	// must terminate this historical queued request rather than leave it orphaned.
-	activities := toolflow.NewTranscriptionActivities(toolapp.NewTranscriptionWorker(store, nil, nil, nil), store)
+	activities := toolflow.NewTranscriptionActivities(toolapp.NewTranscriptionWorker(transcriptionWorkerStore(db), nil, nil, nil), transcriptionWorkerStore(db))
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()
 	env.RegisterActivityWithOptions(activities.TranscribeSpeech, activity.RegisterOptions{Name: toolflow.TranscribeActivity})

@@ -19,7 +19,6 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 )
 
 func deletionDatabase(t *testing.T) (*gorm.DB, *gorm.DB) {
@@ -132,7 +131,7 @@ func TestSubjectDeletionRechecksRealReferencesAndRestoresIdentity(t *testing.T) 
 	checkReference := func(wantDeleted bool) {
 		t.Helper()
 		err := db.Transaction(func(tx *gorm.DB) error {
-			_, err := pg.NewReferences(tx, workspacepg.NewProjectContentAccessStore(tx)).Reference(t.Context(), actor, project, created.EntryID, &created.VersionID)
+			_, err := pg.NewReferences(tx, bibleFixtureProjectAccess(tx)).Reference(t.Context(), actor, project, created.EntryID, &created.VersionID)
 			return err
 		})
 		if wantDeleted && !errors.Is(err, app.ErrNotFound) || !wantDeleted && err != nil {

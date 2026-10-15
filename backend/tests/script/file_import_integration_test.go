@@ -15,7 +15,6 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
@@ -23,7 +22,6 @@ import (
 	objectsadapter "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
 	pg "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 )
 
 func scriptDocument(t *testing.T, db *gorm.DB, objects *objectstorage.Client, actor identityapp.Principal, project uuid.UUID, name string, data []byte) uuid.UUID {
@@ -37,12 +35,12 @@ func scriptDocument(t *testing.T, db *gorm.DB, objects *objectstorage.Client, ac
 			t.Error(err)
 		}
 	}()
-	upload := mediaapp.NewUploadService(mediapg.NewStore(db), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
+	upload := mediaapp.NewUploadService(scriptFixtureMediaStore(db), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 	result, err := upload.Upload(t.Context(), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: name}, File: file, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	asset, err := mediapg.NewStore(db).FindAsset(t.Context(), actor, project, result.Asset.ID)
+	asset, err := scriptFixtureMediaStore(db).FindAsset(t.Context(), actor, project, result.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,8 +55,8 @@ func scriptDocument(t *testing.T, db *gorm.DB, objects *objectstorage.Client, ac
 }
 
 func scriptImportStore(db *gorm.DB, objects *objectstorage.Client) *pg.ImportStore {
-	return pg.NewImportStore(db, func(tx *gorm.DB) app.ProjectAccess { return workspacepg.NewProjectContentAccessStore(tx) }, func(tx *gorm.DB) app.SourceAssetReader {
-		return mediaapp.NewDocumentSources(mediapg.NewDocumentSourceStore(tx), objects)
+	return scriptFixtureImportStore(db, func(tx *gorm.DB) app.ProjectAccess { return scriptFixtureProjectAccess(tx) }, func(tx *gorm.DB) app.SourceAssetReader {
+		return mediaapp.NewDocumentSources(scriptFixtureDocumentStore(tx), objects)
 	})
 }
 
@@ -74,7 +72,7 @@ func TestScriptFileImportPGAdmissionFreezeReplayAndProjectFence(t *testing.T) {
 	if err != nil || accepted.Status != "queued" || len(accepted.Files) != 2 || accepted.Files[0].AssetID != two {
 		t.Fatal("ordered freeze", accepted, err)
 	}
-	replay, err := app.NewImportService(pg.NewImportStore(db, func(tx *gorm.DB) app.ProjectAccess { return workspacepg.NewProjectContentAccessStore(tx) }, nil), time.Now).Create(t.Context(), actor, input)
+	replay, err := app.NewImportService(scriptFixtureImportStore(db, func(tx *gorm.DB) app.ProjectAccess { return scriptFixtureProjectAccess(tx) }, nil), time.Now).Create(t.Context(), actor, input)
 	if err != nil || replay.ID != accepted.ID || replay.Revision != 1 {
 		t.Fatal("disabled runtime must preserve durable replay", replay, err)
 	}
@@ -103,7 +101,7 @@ func TestScriptFileImportPGAdmissionFreezeReplayAndProjectFence(t *testing.T) {
 	if err := owner.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Get(t.Context(), actor, pid, accepted.ID); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := service.Get(t.Context(), actor, pid, accepted.ID); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("revoked source owner", err)
 	}
 }
@@ -130,9 +128,9 @@ func scriptImportWorker(db *gorm.DB, storage *objectstorage.Client, extractor ap
 func scriptImportWorkerWithObjects(db *gorm.DB, storage *objectstorage.Client, extractor app.SourceExtractor, objects app.PrivateObjects) *app.ImportWorker {
 	store := scriptImportStore(db, storage)
 	sources := app.NewSourceService(scriptStore(db), objects, time.Now)
-	return app.NewImportWorker(store, mediaapp.NewDocumentSources(mediapg.NewDocumentSourceStore(db), storage), extractor, func(a app.ImportAuthority) *app.SourceService {
-		return app.NewSourceServiceSharingIO(pg.NewImportSourceStore(db, func(tx *gorm.DB) app.ProjectAccess { return workspacepg.NewProjectContentAccessStore(tx) }, a), objects, time.Now, sources)
-	}, app.NewSourceRecovery(pg.NewImportRecoveryStore(db, func(tx *gorm.DB) app.ProjectAccess { return workspacepg.NewProjectContentAccessStore(tx) }), sources, time.Now), time.Now)
+	return app.NewImportWorker(store, mediaapp.NewDocumentSources(scriptFixtureWorkerDocumentStore(db), storage), extractor, func(a app.ImportAuthority) *app.SourceService {
+		return app.NewSourceServiceSharingIO(pg.NewImportSourceStore(db, func(tx *gorm.DB) app.ProjectAccess { return scriptFixtureWorkerAccess(tx) }, a), objects, time.Now, sources)
+	}, app.NewSourceRecovery(pg.NewImportRecoveryStore(db, func(tx *gorm.DB) app.ProjectAccess { return scriptFixtureWorkerAccess(tx) }), sources, time.Now), time.Now)
 }
 
 func recoverableSourceExitFault(t *testing.T, owner *gorm.DB, actor uuid.UUID) func() {

@@ -4,19 +4,17 @@ import (
 	"context"
 	"errors"
 
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
-	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
-
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
-	pgprompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/adapter/postgres"
-	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
-
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	operation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	pgprompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/adapter/postgres"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
 	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
@@ -55,7 +53,9 @@ func providePromptPreferenceStore(db *gorm.DB) *pgprompt.Store {
 func (a operationProjectAccess) AuthorizeCatalog(ctx context.Context, actor identity.Principal, project uuid.UUID) error {
 	return a.AuthorizeOperation(ctx, actor, project, false)
 }
-func provideCatalogStore(db *gorm.DB) *pgcatalog.Store {
+
+// NewCatalogStore composes current platform sessions and project scope authorization.
+func NewCatalogStore(db *gorm.DB) *pgcatalog.Store {
 	return pgcatalog.NewScopedStore(db, func(tx *gorm.DB) catalog.ActorAccess { return pgidentity.NewStore(tx) }, func(tx *gorm.DB) catalog.ProjectAccess {
 		return operationProjectAccess{store: provideProjectContentAccess(tx)}
 	})

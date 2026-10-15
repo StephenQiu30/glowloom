@@ -10,7 +10,6 @@ import (
 
 	"github.com/google/uuid"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
@@ -27,7 +26,7 @@ func TestMediaGenericReferenceRejectsCatalogTrashRemovalAndCancelledPurge(t *tes
 		t.Run(phase, func(t *testing.T) {
 			db := libraryRuntimeDB(t)
 			actor, project, input, _, _ := purgeBinaryFixture(t, db)
-			library := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now)
+			library := mediaLibraryStore(db, libraryTestAccess, time.Now)
 			if phase == "removed" {
 				restored, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: input.Scope, Key: uuid.New(), Action: "restore_items", ExpectedRevision: 2, Items: input.Items})
 				if err != nil {
@@ -38,7 +37,7 @@ func TestMediaGenericReferenceRejectsCatalogTrashRemovalAndCancelledPurge(t *tes
 				}
 			}
 			if phase == "cancelled" {
-				repo := pgmedia.NewPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
+				repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
 				job, err := repo.CreatePurge(t.Context(), actor, input)
 				if err != nil {
 					t.Fatal(err)
@@ -51,7 +50,7 @@ func TestMediaGenericReferenceRejectsCatalogTrashRemovalAndCancelledPurge(t *tes
 			if err := db.Raw(`SELECT is_delete FROM media.media_asset WHERE id=?`, input.Items[0].ID).Scan(&deleted).Error; err != nil || deleted {
 				t.Fatal("catalog-only hiding must retain the reviewed original", deleted, err)
 			}
-			store := pgmedia.NewStore(db)
+			store := mediaTestStore(db)
 			if _, err := store.FindAsset(t.Context(), actor, project, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
 				t.Fatal("hidden retained original formed a new ordinary binding", err)
 			}
@@ -99,12 +98,12 @@ func TestMediaDocumentNewFreezeRejectsHiddenCatalogButKeepsFrozenOriginal(t *tes
 	actor, project := mediaStoreProject(t, db)
 	body := []byte("只能由既有不可变剧本证据读回的原文")
 	upload := documentUpload(t, db, objects, actor, project, "frozen-document.txt", body)
-	reader := mediaapp.NewDocumentSources(pgmedia.NewDocumentSourceStore(db), objects)
+	reader := mediaapp.NewDocumentSources(mediaDocumentStore(db), objects)
 	frozen, err := reader.Freeze(t.Context(), actor, project, []uuid.UUID{upload.Asset.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	library := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now)
+	library := mediaLibraryStore(db, libraryTestAccess, time.Now)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	for i, action := range []string{"recycle_items", "restore_items", "remove_items"} {
 		if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: action, ExpectedRevision: int64(i), Items: []mediaapp.LibraryItemRevision{{ID: upload.Asset.ID, Revision: int64(i)}}}); err != nil {
@@ -134,7 +133,7 @@ func TestMediaPurgeReservationRejectsInconsistentCatalogAndOriginalFlags(t *test
 	db := libraryRuntimeDB(t)
 	owner := libraryOwnerDB(t)
 	actor, project, input, _, _ := purgeBinaryFixture(t, db)
-	repo := pgmedia.NewPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
+	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
 	if _, err := repo.CreatePurge(t.Context(), actor, input); err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +145,7 @@ func TestMediaPurgeReservationRejectsInconsistentCatalogAndOriginalFlags(t *test
 	if err := owner.Exec(`UPDATE media.library_item SET catalog_state='active',trashed_at=NULL WHERE id=?`, input.Items[0].ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pgmedia.NewStore(db).FindAsset(t.Context(), actor, project, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := mediaTestStore(db).FindAsset(t.Context(), actor, project, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("physical reservation was replaced by mutable visibility flags", err)
 	}
 }
@@ -156,23 +155,23 @@ func TestMediaPurgeGenericReferencePreviewAndRenditionsRejectReservedOriginals(t
 		t.Run(phase, func(t *testing.T) {
 			db := libraryRuntimeDB(t)
 			actor, project, input, _, objects := purgeBinaryFixture(t, db)
-			library := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now)
+			library := mediaLibraryStore(db, libraryTestAccess, time.Now)
 			if _, err := library.FindLibraryMedia(t.Context(), actor, input.Scope, input.Items[0].ID); err != nil {
 				t.Fatal("trash preview before physical admission must remain available", err)
 			}
-			repo := pgmedia.NewPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
+			repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
 			job, err := repo.CreatePurge(t.Context(), actor, input)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if phase == "unknown" {
 				unknown := &purgeUnknownRemove{PurgeObjects: objects, once: true}
-				job, err = mediaapp.NewPurgeWorker(repo, unknown).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
+				job, err = mediaapp.NewPurgeWorker(repo.Worker, unknown).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
 				if err != nil || !job.NeedsReconciliation || job.Status != "needs_reconciliation" {
 					t.Fatal("actual unknown removal did not retain admission", job, err)
 				}
 			}
-			base := pgmedia.NewStore(db)
+			base := mediaTestStore(db)
 			if _, err := base.FindAsset(t.Context(), actor, project, input.Items[0].ID); !errors.Is(err, mediaapp.ErrNotFound) {
 				t.Fatal("accepted physical purge still allowed ordinary new reference", err)
 			}

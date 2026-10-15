@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
@@ -56,9 +57,9 @@ func TestMediaReferenceRemainsLockedUntilCanvasCommit(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	var workers sync.WaitGroup
 	defer func() { cancel(); workers.Wait() }()
-	store := pgcanvas.NewStore(database, func(tx *gorm.DB) application.MediaReader {
-		return pausedMediaReference{reader: mediaapp.NewAssetQuery(pgmedia.NewStore(tx), nil), read: read, resume: resume}
-	})
+	store := pgcanvas.NewScopedStore(database, func(tx *gorm.DB) application.MediaReader {
+		return pausedMediaReference{reader: mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, app.NewMediaScopeAccess), nil), read: read, resume: resume}
+	}, app.NewCanvasProjectAccess)
 	service := application.NewService(store)
 	doc, err := service.Create(ctx, actor, project, uuid.NewString(), application.CreateInput{Name: "绑定提交事务"})
 	if err != nil {
@@ -159,10 +160,10 @@ func TestResourcePersistenceScopesMediaAndSoftDeleteReplay(t *testing.T) {
 	if _, err := service.Get(t.Context(), actor, doc.ID); !errors.Is(err, application.ErrNotFound) {
 		t.Fatalf("deleted readable %v", err)
 	}
-	if _, err := pgmedia.NewStore(database).FindAsset(t.Context(), actor, project, asset); err != nil {
+	if _, err := pgmedia.NewScopedStore(database, app.NewMediaScopeAccess).FindAsset(t.Context(), actor, project, asset); err != nil {
 		t.Fatalf("source media deleted %v", err)
 	}
-	query := mediaapp.NewAssetQuery(pgmedia.NewStore(database), nil)
+	query := mediaapp.NewAssetQuery(pgmedia.NewScopedStore(database, app.NewMediaScopeAccess), nil)
 	page, err := query.List(t.Context(), actor, project, "image", "", 1)
 	if err != nil || len(page.Items) != 1 || page.Items[0].ID != asset {
 		t.Fatalf("media list %+v %v", page, err)

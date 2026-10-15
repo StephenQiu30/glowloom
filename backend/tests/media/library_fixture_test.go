@@ -1,19 +1,13 @@
 package media_test
 
 import (
-	"context"
-	"errors"
 	"os"
 	"testing"
 
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
-	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 func libraryRuntimeDB(t *testing.T) *gorm.DB {
@@ -29,26 +23,6 @@ func libraryRuntimeDB(t *testing.T) *gorm.DB {
 	return db
 }
 
-type libraryTestProjectAccess struct {
-	store *pgworkspace.ProjectContentAccessStore
-}
-
 func libraryTestAccess(tx *gorm.DB) mediaapp.LibraryProjectAccess {
-	return libraryTestProjectAccess{pgworkspace.NewProjectContentAccessStore(tx)}
-}
-
-func (a libraryTestProjectAccess) Authorize(ctx context.Context, actor identityapp.Principal, id uuid.UUID, write bool) (mediaapp.LibraryProjectFacts, error) {
-	facts, err := a.store.Authorize(ctx, actor, id, write)
-	if errors.Is(err, workspaceapp.ErrProjectNotFound) {
-		err = errors.Join(mediaapp.ErrNotFound, err)
-	}
-	return mediaapp.LibraryProjectFacts{ProjectID: facts.ProjectID, OrgID: facts.OrgID, Revision: facts.Revision}, err
-}
-
-func (a libraryTestProjectAccess) TouchContent(ctx context.Context, actor identityapp.Principal, id uuid.UUID, revision int64) (int64, error) {
-	next, err := a.store.TouchContent(ctx, actor, id, revision)
-	if errors.Is(err, workspacedomain.ErrProjectRevisionConflict) {
-		err = errors.Join(mediaapp.ErrLibraryConflict, err)
-	}
-	return next, err
+	return app.NewMediaLibraryProjectAccess(tx)
 }

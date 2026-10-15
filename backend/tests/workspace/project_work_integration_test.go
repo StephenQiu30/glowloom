@@ -15,11 +15,9 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	canvaspg "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	toolpg "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
@@ -44,20 +42,23 @@ func (g owningProjectWork) HasInflightWork(ctx context.Context, actor identityap
 	}
 	return blocked, nil
 }
+
 func owningLifecycleStore(db *gorm.DB) *workspacepg.Store {
-	return workspacepg.NewStoreWithProjectWorkGuard(db, func(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
-		return owningProjectWork{operationpg.NewStore(tx), mediapg.NewStore(tx), toolpg.NewStore(tx, nil, nil)}
+	return workspaceStoreWithWork(db, func(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
+		return owningProjectWork{workspaceOperationStore(tx), workspaceMediaStore(tx), toolpg.NewStore(tx, nil, nil)}
 	})
 }
+
 func lifecycleActorProject(ctx context.Context, t *testing.T, db *gorm.DB) (identityapp.Principal, uuid.UUID) {
 	t.Helper()
 	actor := insertWorkspaceActor(ctx, t, db, insertWorkspaceOrganization(ctx, t, db))
-	id := uuid.MustParse(insertWorkspaceProject(ctx, t, db, actor.OrgID.String(), "16:9", "realistic", nil))
+	id := uuid.MustParse(insertWorkspaceProject(ctx, t, db, actor, "16:9", "realistic", nil))
 	if err := db.Exec(`INSERT INTO billing.budget(id,project_id,limit_micros) VALUES(?,?,1000)`, uuid.New(), id).Error; err != nil {
 		t.Fatal(err)
 	}
 	return actor, id
 }
+
 func lifecycleFixtureSQL(t *testing.T, db *gorm.DB, query string, args ...any) {
 	t.Helper()
 	if err := db.Exec(query, args...).Error; err != nil {
@@ -230,6 +231,7 @@ func projectTransactionPID(t *testing.T, tx *gorm.DB) int {
 	}
 	return pid
 }
+
 func waitProjectLock(ctx context.Context, t *testing.T, db *gorm.DB, blocker, blocked int) {
 	t.Helper()
 	timer := time.NewTimer(3 * time.Second)
@@ -268,7 +270,7 @@ func TestProjectLifecycleProjectLockSerializesRealMediaAdmission(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	if err := mediapg.NewStore(admission).AuthorizeDerivedProject(ctx, actor, project, true); err != nil {
+	if err := workspaceMediaStore(admission).AuthorizeDerivedProject(ctx, actor, project, true); err != nil {
 		t.Fatal(err)
 	}
 	archiveTx := db.WithContext(ctx).Begin()
@@ -298,7 +300,7 @@ func TestProjectLifecycleProjectLockSerializesRealMediaAdmission(t *testing.T) {
 	id := uuid.New()
 	sha := strings.Repeat("a", 64)
 	asset := mediadomain.MediaAsset{ID: id, ProjectID: project, Kind: mediadomain.KindImage, Origin: mediadomain.OriginSystem, Status: mediadomain.StatusProcessing, ObjectKey: fmt.Sprintf("projects/%s/image/2026/10/%s.png", project, id), MimeType: "image/png", ByteSize: 12, SHA256: &sha, ModerationStatus: mediadomain.ModerationPending, Revision: 1, CreateTime: now, UpdateTime: now}
-	if err := mediapg.NewStore(admission).StoreDerived(ctx, actor, asset, nil); err != nil {
+	if err := workspaceMediaStore(admission).StoreDerived(ctx, actor, asset, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := admission.Commit().Error; err != nil {
@@ -321,7 +323,7 @@ func TestProjectLifecycleProjectLockSerializesRealMediaAdmission(t *testing.T) {
 	if _, err := workspaceapp.NewProjectLifecycle(owningLifecycleStore(db), time.Now).Change(ctx, actor, projectChange(project, 1, "delete")); err != nil {
 		t.Fatal(err)
 	}
-	if err := mediapg.NewStore(db).AuthorizeDerivedProject(ctx, actor, project, true); !errors.Is(err, mediaapp.ErrNotFound) {
+	if err := workspaceMediaStore(db).AuthorizeDerivedProject(ctx, actor, project, true); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatalf("new media admission ignored deletion: %v", err)
 	}
 }
@@ -338,7 +340,7 @@ func lifecycleQuote(t *testing.T, db *gorm.DB, actor identityapp.Principal, proj
 	lifecycleFixtureSQL(t, db, `INSERT INTO catalog.model_profile_version(id,model_profile_id,version_no,provider_model_id,modes,limits,param_schema,supports_query,supports_cancel,supports_callback,expected_max_ms) VALUES(?,?,1,'test',ARRAY['text_to_image'],'{"max_outputs":1}','[]',true,false,false,30000)`, version, model)
 	lifecycleFixtureSQL(t, db, `UPDATE catalog.model_profile SET current_version_id=? WHERE id=?`, version, model)
 	lifecycleFixtureSQL(t, db, `INSERT INTO catalog.price_rule_version(id,model_profile_id,version_no,unit,rule,effective_from) VALUES(?,?,1,'per_image','{"base_micros":1}',clock_timestamp()-interval '1 minute')`, price, model)
-	quote, err := operationpg.NewStore(db).CreateFreeQuote(t.Context(), actor, operationapp.CreateFreeQuoteInput{ProjectID: project, RequestID: uuid.NewString(), FreeQuoteItemInput: operationapp.FreeQuoteItemInput{ModelKey: modelKey, Capability: capability, Mode: "text_to_image", Prompt: "合成行锁报价", Params: json.RawMessage(`{}`), OutputCount: 1}})
+	quote, err := workspaceOperationStore(db).CreateFreeQuote(t.Context(), actor, operationapp.CreateFreeQuoteInput{ProjectID: project, RequestID: uuid.NewString(), FreeQuoteItemInput: operationapp.FreeQuoteItemInput{ModelKey: modelKey, Capability: capability, Mode: "text_to_image", Prompt: "合成行锁报价", Params: json.RawMessage(`{}`), OutputCount: 1}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -349,7 +351,7 @@ func TestProjectLifecycleBlocksConfirmedQuoteAndRejectsNewAdmission(t *testing.T
 	ctx, db := workspaceMigrationDB(t)
 	actor, project := lifecycleActorProject(ctx, t, db)
 	quote := lifecycleQuote(t, db, actor, project)
-	operations := operationpg.NewStore(db)
+	operations := workspaceOperationStore(db)
 	if _, err := operations.ConfirmSingleQuote(ctx, actor, operationapp.ConfirmSingleQuoteInput{ProjectID: project, OperationID: quote.OperationID, RequestID: uuid.NewString()}); err != nil {
 		t.Fatal(err)
 	}
@@ -365,11 +367,13 @@ func TestProjectLifecycleBlocksConfirmedQuoteAndRejectsNewAdmission(t *testing.T
 	if _, err := operations.ConfirmSingleQuote(ctx, actor2, operationapp.ConfirmSingleQuoteInput{ProjectID: project2, OperationID: quote2.OperationID, RequestID: uuid.NewString()}); !errors.Is(err, operationpg.ErrNotFound) {
 		t.Fatalf("archived quote newly confirmed: %v", err)
 	}
-	if _, err := canvasapp.NewService(canvaspg.NewStore(db, nil)).Create(ctx, actor2, project2, uuid.NewString(), canvasapp.CreateInput{Name: "should reject"}); !errors.Is(err, canvasapp.ErrNotFound) {
+	if _, err := canvasapp.NewService(workspaceCanvasStore(db, nil)).Create(ctx, actor2, project2, uuid.NewString(), canvasapp.CreateInput{Name: "should reject"}); !errors.Is(err, canvasapp.ErrNotFound) {
 		t.Fatalf("archived canvas admission: %v", err)
 	}
 	// Formal tool admission reaches its real project authorizer before source processing.
-	exports := toolpg.NewStore(db, func(*gorm.DB) toolapp.TimelineReader { return canvasapp.NewTimelineReader(canvaspg.NewStore(db, nil)) }, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediapg.NewStore(tx)) })
+	exports := toolpg.NewStore(db, func(*gorm.DB) toolapp.TimelineReader {
+		return canvasapp.NewTimelineReader(workspaceCanvasStore(db, nil))
+	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(workspaceMediaStore(tx)) })
 	if _, err := exports.Create(ctx, actor2, project2, uuid.New(), toolapp.CreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1}); !errors.Is(err, toolapp.ErrConflict) {
 		t.Fatalf("archived export admission: %v", err)
 	}
@@ -433,13 +437,13 @@ func TestProjectLifecycleOperationAndExportAdmissionLocks(t *testing.T) {
 		actor, project := lifecycleActorProject(ctx, t, db)
 		quote := lifecycleQuote(t, db, actor, project)
 		assertLifecycleFence(ctx, t, db, actor, project, func(tx *gorm.DB) error {
-			_, err := operationpg.NewStore(tx).ConfirmSingleQuote(ctx, actor, operationapp.ConfirmSingleQuoteInput{ProjectID: project, OperationID: quote.OperationID, RequestID: uuid.NewString()})
+			_, err := workspaceOperationStore(tx).ConfirmSingleQuote(ctx, actor, operationapp.ConfirmSingleQuoteInput{ProjectID: project, OperationID: quote.OperationID, RequestID: uuid.NewString()})
 			return err
 		})
 	})
 	t.Run("formal export start", func(t *testing.T) {
 		actor, project := lifecycleActorProject(ctx, t, db)
-		canvasStore := canvaspg.NewStore(db, nil)
+		canvasStore := workspaceCanvasStore(db, nil)
 		canvas := canvasapp.NewService(canvasStore)
 		doc, err := canvas.Create(ctx, actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "生命周期导出竞态"})
 		if err != nil {
@@ -453,9 +457,9 @@ func TestProjectLifecycleOperationAndExportAdmissionLocks(t *testing.T) {
 		}
 		assertLifecycleFence(ctx, t, db, actor, project, func(tx *gorm.DB) error {
 			exports := toolpg.NewStore(tx, func(ownerTx *gorm.DB) toolapp.TimelineReader {
-				return canvasapp.NewTimelineReader(canvaspg.NewStore(ownerTx, nil))
+				return canvasapp.NewTimelineReader(workspaceCanvasStore(ownerTx, nil))
 			}, func(ownerTx *gorm.DB) toolapp.DerivedMedia {
-				return mediaapp.NewDerivedService(mediapg.NewStore(ownerTx))
+				return mediaapp.NewDerivedService(workspaceMediaStore(ownerTx))
 			})
 			_, err := exports.Create(ctx, actor, project, uuid.New(), toolapp.CreateInput{CanvasID: doc.ID, NodeID: node, Revision: saved.Revision})
 			return err

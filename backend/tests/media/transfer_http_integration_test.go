@@ -13,7 +13,6 @@ import (
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediahttp "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/http"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
@@ -23,7 +22,7 @@ func transferRouter(db *gorm.DB, actor identityapp.Principal) *gin.Engine {
 	router.Use(httpapi.Middleware("http://127.0.0.1:3000"))
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
-	mediahttp.NewTransferHandler(pgmedia.NewTransferStore(db, libraryTestAccess, transferTestGuards, time.Now)).Register(group)
+	mediahttp.NewTransferHandler(mediaTransferStore(db, libraryTestAccess, transferTestGuards, time.Now)).Register(group)
 	return router
 }
 

@@ -11,7 +11,6 @@ import (
 
 	"github.com/google/uuid"
 
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
@@ -120,7 +119,7 @@ func TestProjectCopyPlacementPGLegacyManifestPublicationAndReceipt(t *testing.T)
 		t.Fatalf("historical nil-placement digest rejected publication %v", err)
 	}
 	root := uuid.Nil
-	page, err := workspaceapp.NewListProjectsQuery(workspacepg.NewStore(db)).Execute(ctx, actor, workspaceapp.ListProjectsInput{FolderID: &root, Limit: 50})
+	page, err := workspaceapp.NewListProjectsQuery(workspaceStore(db)).Execute(ctx, actor, workspaceapp.ListProjectsInput{FolderID: &root, Limit: 50})
 	if err != nil || len(page.Projects) != 1 || page.Projects[0].ID != job.TargetProjectID || page.Projects[0].PlacementRevision != 0 {
 		t.Fatalf("historical target acquired current source folder %+v %v", page, err)
 	}

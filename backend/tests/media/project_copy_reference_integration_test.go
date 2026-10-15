@@ -15,7 +15,6 @@ import (
 	"gorm.io/gorm"
 
 	copyobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
@@ -44,12 +43,12 @@ func TestProjectCopyTypedHistoricalReferencesIncludeUncatalogedImageAndAudio(t *
 			var fact mediaapp.ReferenceFact
 			if err := db.Transaction(func(tx *gorm.DB) error {
 				var err error
-				fact, err = mediaapp.NewReferenceFactQuery(pgmedia.NewLibraryStore(tx, libraryTestAccess, time.Now), objects).Reference(t.Context(), actor, project, upload.Asset.ID, kind)
+				fact, err = mediaapp.NewReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), objects).Reference(t.Context(), actor, project, upload.Asset.ID, kind)
 				return err
 			}); err != nil {
 				t.Fatal(err)
 			}
-			base := pgmedia.NewStore(db)
+			base := mediaTestStore(db)
 			asset, err := base.FindAsset(t.Context(), actor, project, fact.AssetID)
 			if err != nil {
 				t.Fatal(err)
@@ -73,11 +72,11 @@ func TestProjectCopyTypedHistoricalReferencesIncludeUncatalogedImageAndAudio(t *
 				t.Fatal(err)
 			}
 			binding := mediaapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: uuid.New()}
-			if err := db.Exec(`INSERT INTO workspace.project(id,org_id,name,aspect_ratio,style_type,status) VALUES(?,?,'无目录历史媒体完整副本','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID).Error; err != nil {
+			if err := db.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,owner_scope_id,name,aspect_ratio,style_type,status) VALUES(?,?,?,?,'无目录历史媒体完整副本','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID, actor.ID, actor.ScopeID).Error; err != nil {
 				t.Fatal(err)
 			}
 			if err := db.Transaction(func(tx *gorm.DB) error {
-				_, err := pgmedia.NewProjectCopyStore(tx).FreezeWithReferences(t.Context(), actor, binding, time.Now(), []uuid.UUID{fact.AssetID})
+				_, err := mediaCopyStore(tx).FreezeWithReferences(t.Context(), actor, binding, time.Now(), []uuid.UUID{fact.AssetID})
 				return err
 			}); !errors.Is(err, mediaapp.ErrProjectCopyMediaUnavailable) {
 				t.Fatal("document-only caller was widened", err)
@@ -85,7 +84,7 @@ func TestProjectCopyTypedHistoricalReferencesIncludeUncatalogedImageAndAudio(t *
 			bad := fact
 			bad.SHA256 = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
 			if err := db.Transaction(func(tx *gorm.DB) error {
-				_, err := pgmedia.NewProjectCopyStore(tx).FreezeWithReferenceFacts(t.Context(), actor, binding, time.Now(), nil, []mediaapp.ReferenceFact{bad})
+				_, err := mediaCopyStore(tx).FreezeWithReferenceFacts(t.Context(), actor, binding, time.Now(), nil, []mediaapp.ReferenceFact{bad})
 				return err
 			}); !errors.Is(err, mediaapp.ErrProjectCopyMediaUnavailable) {
 				t.Fatal("mismatched immutable original accepted", err)
@@ -98,7 +97,7 @@ func TestProjectCopyTypedHistoricalReferencesIncludeUncatalogedImageAndAudio(t *
 			var mappings []mediaapp.ProjectCopyReferenceMapping
 			if err := db.Transaction(func(tx *gorm.DB) error {
 				var err error
-				repo := pgmedia.NewProjectCopyStore(tx)
+				repo := mediaCopyStore(tx)
 				snapshot, err = repo.FreezeWithReferenceFacts(t.Context(), actor, binding, time.Now(), nil, []mediaapp.ReferenceFact{fact})
 				if err != nil {
 					return err
@@ -107,11 +106,11 @@ func TestProjectCopyTypedHistoricalReferencesIncludeUncatalogedImageAndAudio(t *
 				if err != nil {
 					return err
 				}
-				return tx.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,actor_id,source_project_id,source_revision,target_project_id,target_name,status,stage,manifest,workspace_snapshot,idem_key,request_sha256,admission_response) VALUES(?,?,?,?,1,?,'无目录历史媒体完整副本','queued','media','{}','{}',gen_random_uuid(),repeat('a',64),'{}')`, binding.JobID, actor.OrgID, actor.ID, project, binding.TargetProjectID).Error
+				return tx.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,actor_id,owner_scope_id,source_project_id,source_revision,target_project_id,target_name,status,stage,manifest,workspace_snapshot,idem_key,request_sha256,admission_response) VALUES(?,?,?,?,?,1,?,'无目录历史媒体完整副本','queued','media','{}','{}',gen_random_uuid(),repeat('a',64),'{}')`, binding.JobID, actor.OrgID, actor.ID, actor.ScopeID, project, binding.TargetProjectID).Error
 			}); err != nil || snapshot.Assets != 1 || len(mappings) != 1 || mappings[0].Source.Revision != fact.Revision {
 				t.Fatal("trusted uncataloged historical source omitted", snapshot, mappings, err)
 			}
-			repo := pgmedia.NewProjectCopyStore(db)
+			repo := mediaCopyStore(db)
 			if err := mediaapp.NewProjectCopyTransfer(repo, copyobjects.NewProjectCopyObjects(objects), t.TempDir()).Transfer(t.Context(), actor, binding, snapshot); err != nil {
 				t.Fatal(err)
 			}
@@ -123,7 +122,7 @@ func TestProjectCopyTypedHistoricalReferencesIncludeUncatalogedImageAndAudio(t *
 				t.Cleanup(func() { _ = objects.Remove(context.Background(), object.TargetObjectKey) })
 			}
 			if err := db.Transaction(func(tx *gorm.DB) error {
-				_, err := pgmedia.NewProjectCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+				_, err := mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
 				return err
 			}); err != nil {
 				t.Fatal(err)
@@ -147,12 +146,12 @@ func TestProjectCopyFrozenReferencesKeepHistoricalRevisionAndProveActualTransfer
 	var fact mediaapp.ReferenceFact
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		var err error
-		fact, err = mediaapp.NewReferenceFactQuery(pgmedia.NewLibraryStore(tx, libraryTestAccess, time.Now), objects).Reference(t.Context(), actor, project, upload.Asset.ID, domain.KindImage)
+		fact, err = mediaapp.NewReferenceFactQuery(mediaLibraryStore(tx, libraryTestAccess, time.Now), objects).Reference(t.Context(), actor, project, upload.Asset.ID, domain.KindImage)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
-	base := pgmedia.NewStore(db)
+	base := mediaTestStore(db)
 	asset, err := base.FindAsset(t.Context(), actor, project, fact.AssetID)
 	if err != nil {
 		t.Fatal(err)
@@ -165,7 +164,7 @@ func TestProjectCopyFrozenReferencesKeepHistoricalRevisionAndProveActualTransfer
 		t.Cleanup(func() { _ = objects.Remove(context.Background(), r.ObjectKey) })
 	}
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
-	if _, err := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "remove_items", Items: []mediaapp.LibraryItemRevision{{ID: asset.ID}}}); err != nil {
+	if _, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "remove_items", Items: []mediaapp.LibraryItemRevision{{ID: asset.ID}}}); err != nil {
 		t.Fatal(err)
 	}
 	deleted, err := asset.Delete(time.Now().UTC())
@@ -176,14 +175,14 @@ func TestProjectCopyFrozenReferencesKeepHistoricalRevisionAndProveActualTransfer
 		t.Fatal(err)
 	}
 	binding := mediaapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: uuid.New()}
-	if err := db.Exec(`INSERT INTO workspace.project(id,org_id,name,aspect_ratio,style_type,status) VALUES(?,?,'历史引用完整副本','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID).Error; err != nil {
+	if err := db.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,owner_scope_id,name,aspect_ratio,style_type,status) VALUES(?,?,?,?,'历史引用完整副本','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID, actor.ID, actor.ScopeID).Error; err != nil {
 		t.Fatal(err)
 	}
 	var snapshot mediaapp.ProjectCopySnapshot
 	var mapping []mediaapp.ProjectCopyReferenceMapping
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		var err error
-		repo := pgmedia.NewProjectCopyStore(tx)
+		repo := mediaCopyStore(tx)
 		snapshot, err = repo.Freeze(t.Context(), actor, binding, time.Now())
 		if err != nil {
 			return err
@@ -193,14 +192,14 @@ func TestProjectCopyFrozenReferencesKeepHistoricalRevisionAndProveActualTransfer
 		if err != nil {
 			return err
 		}
-		return tx.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,actor_id,source_project_id,source_revision,target_project_id,target_name,status,stage,manifest,workspace_snapshot,idem_key,request_sha256,admission_response) VALUES(?,?,?,?,1,?,'历史引用完整副本','queued','media','{}','{}',gen_random_uuid(),repeat('a',64),'{}')`, binding.JobID, actor.OrgID, actor.ID, project, binding.TargetProjectID).Error
+		return tx.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,actor_id,owner_scope_id,source_project_id,source_revision,target_project_id,target_name,status,stage,manifest,workspace_snapshot,idem_key,request_sha256,admission_response) VALUES(?,?,?,?,?,1,?,'历史引用完整副本','queued','media','{}','{}',gen_random_uuid(),repeat('a',64),'{}')`, binding.JobID, actor.OrgID, actor.ID, actor.ScopeID, project, binding.TargetProjectID).Error
 	}); err != nil {
 		t.Fatal("SQL-only historical mapping", err)
 	}
 	if len(mapping) != 1 || !reflect.DeepEqual(mapping[0].Source, fact) || mapping[0].Target.AssetID != snapshot.AssetMapping[fact.AssetID] || mapping[0].Target.Revision != 1 || mapping[0].Target.RenditionID == nil || *mapping[0].Target.RenditionID == *fact.RenditionID || *mapping[0].Target.RenditionSHA256 != *fact.RenditionSHA256 {
 		t.Fatal("owner mapping changed source history or guessed target evidence", mapping)
 	}
-	repo := pgmedia.NewProjectCopyStore(db)
+	repo := mediaCopyStore(db)
 	query := mediaapp.NewProjectCopyReferenceQuery(repo, objects)
 	if err := query.VerifyTransferred(t.Context(), actor, binding, snapshot, mapping); err == nil {
 		t.Fatal("unregistered/untransferred references passed verification")
@@ -216,7 +215,7 @@ func TestProjectCopyFrozenReferencesKeepHistoricalRevisionAndProveActualTransfer
 		t.Cleanup(func() { _ = objects.Remove(context.Background(), object.TargetObjectKey) })
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		_, err := pgmedia.NewProjectCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+		_, err := mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
 		return err
 	}); err != nil {
 		t.Fatal(err)

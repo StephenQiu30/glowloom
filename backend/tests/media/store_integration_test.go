@@ -16,6 +16,7 @@ import (
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func mediaStoreDB(t *testing.T) *gorm.DB {
@@ -47,20 +48,21 @@ func mediaStoreProject(t *testing.T, database *gorm.DB) (identityapp.Principal, 
 	`, userID.String(), orgID.String(), "media-"+userID.String()).Error; err != nil {
 		t.Fatalf("create actor: %v", err)
 	}
+	actor := identityfixture.Session(t, database, identityapp.Principal{ID: userID, OrgID: orgID, Role: identitydomain.RoleProducer})
 	if err := database.Exec(`
-		INSERT INTO workspace.project (id, org_id, owner_id, name, aspect_ratio, style_type)
-		VALUES (?::uuid, ?::uuid, ?::uuid, '媒体测试', '16:9', 'realistic')
-	`, projectID.String(), orgID.String(), userID.String()).Error; err != nil {
+		INSERT INTO workspace.project (id, org_id, owner_id, owner_scope_id, name, aspect_ratio, style_type)
+		VALUES (?::uuid, ?::uuid, ?::uuid, ?::uuid, '媒体测试', '16:9', 'realistic')
+	`, projectID.String(), orgID.String(), userID.String(), actor.ScopeID).Error; err != nil {
 		t.Fatalf("create project: %v", err)
 	}
-	return identityapp.Principal{ID: userID, OrgID: orgID, Role: identitydomain.RoleProducer}, projectID
+	return actor, projectID
 }
 
 func TestMediaStoreScopesAssetsAndRenditionsToLiveProject(t *testing.T) {
 	database := mediaStoreDB(t)
 	actor, projectID := mediaStoreProject(t, database)
 	otherActor, otherProjectID := mediaStoreProject(t, database)
-	store := pgmedia.NewStore(database)
+	store := mediaTestStore(database)
 	assetID, renditionID := uuid.New(), uuid.New()
 	now := time.Now().UTC()
 	asset := domain.MediaAsset{
@@ -116,7 +118,7 @@ func TestMediaStoreScopesAssetsAndRenditionsToLiveProject(t *testing.T) {
 			if err := store.AddRendition(t.Context(), scope.actor, scope.projectID, domain.Rendition{
 				ID: uuid.New(), MediaAssetID: assetID, Kind: domain.RenditionThumb640,
 				ObjectKey: "should-not-exist", CreateTime: now, UpdateTime: now,
-			}); !errors.Is(err, pgmedia.ErrNotFound) && !errors.Is(err, identityapp.ErrForbidden) {
+			}); !errors.Is(err, pgmedia.ErrNotFound) && !errors.Is(err, identityapp.ErrSessionInvalid) {
 				t.Fatalf("cross-project rendition write error = %v", err)
 			}
 		})
@@ -124,7 +126,7 @@ func TestMediaStoreScopesAssetsAndRenditionsToLiveProject(t *testing.T) {
 	if err := database.Exec(`UPDATE identity."user" SET status = 'disabled' WHERE id = ?::uuid`, actor.ID.String()).Error; err != nil {
 		t.Fatalf("disable actor: %v", err)
 	}
-	if _, err := store.FindAsset(t.Context(), actor, projectID, assetID); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := store.FindAsset(t.Context(), actor, projectID, assetID); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatalf("revoked actor read error = %v", err)
 	}
 	if err := database.Exec(`UPDATE identity."user" SET status = 'active' WHERE id = ?::uuid`, actor.ID.String()).Error; err != nil {
@@ -142,7 +144,7 @@ func TestMediaStoreRequiresActiveProjectForCreation(t *testing.T) {
 	database := mediaStoreDB(t)
 	actor, projectID := mediaStoreProject(t, database)
 	otherActor, _ := mediaStoreProject(t, database)
-	store := pgmedia.NewStore(database)
+	store := mediaTestStore(database)
 	now := time.Now().UTC()
 	makeAsset := func() domain.MediaAsset {
 		assetID := uuid.New()
@@ -185,7 +187,7 @@ func TestMediaStoreReturnsEmptyRenditionListForVisibleAsset(t *testing.T) {
 	`, assetID.String(), projectID.String(), "projects/"+projectID.String()+"/audio/2026/09/"+assetID.String()+".mp3").Error; err != nil {
 		t.Fatalf("seed asset: %v", err)
 	}
-	rends, err := pgmedia.NewStore(database).FindRenditions(t.Context(), actor, projectID, assetID)
+	rends, err := mediaTestStore(database).FindRenditions(t.Context(), actor, projectID, assetID)
 	if err != nil || len(rends) != 0 {
 		t.Fatalf("empty renditions = %+v: %v", rends, err)
 	}
@@ -223,7 +225,7 @@ func TestMediaStorePreservesGeneratedProvenanceAndRejectsForeignOperation(t *tes
 		Region: &region, ModerationStatus: domain.ModerationPending,
 		Revision: 1, CreateTime: now, UpdateTime: now,
 	}
-	store := pgmedia.NewStore(database)
+	store := mediaTestStore(database)
 	if err := store.CreateAsset(t.Context(), actor, asset); err != nil {
 		t.Fatalf("create generated asset: %v", err)
 	}

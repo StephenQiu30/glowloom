@@ -23,7 +23,6 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
@@ -94,7 +93,7 @@ func TestOperationWorkflowResumesAfterFlowWorkerRestartOnLocalServices(t *testin
 	t.Cleanup(mediaWorker.Stop)
 	newFlowWorker := func() worker.Worker {
 		flowWorker := worker.New(temporalClient, "flow", worker.Options{})
-		store := pgoperation.NewStore(database)
+		store := operationStore(database)
 		finalizer := app.NewOperationFinalizer(database, store, pgbilling.NewStore(database))
 		operationflow.Register(flowWorker, operationflow.NewActivities(store, finalizer))
 		return flowWorker
@@ -128,7 +127,7 @@ func TestOperationWorkflowResumesAfterFlowWorkerRestartOnLocalServices(t *testin
 	}
 	assertOperationHistoryReplays(ctx, t, temporalClient, namespace, run)
 	assertLiveOperationResult(ctx, t, database, objects, operationID, projectID)
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	finalizer := app.NewOperationFinalizer(database, store, pgbilling.NewStore(database))
 	if err := finalizer.FinalizeOperation(ctx, operationflow.SettlementInput{
 		OperationID: operationID.String(), From: domain.StatusIngesting,

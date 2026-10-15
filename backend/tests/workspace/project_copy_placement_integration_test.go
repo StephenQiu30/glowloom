@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
@@ -79,7 +78,7 @@ func TestProjectCopyPlacementPGAtomicFreezePublicationAndReplay(t *testing.T) {
 	if _, err = store.Publish(ctx, actor, job.ID, worker); err != nil {
 		t.Fatalf("source folder change invalidated frozen target %v", err)
 	}
-	page, err := workspaceapp.NewListProjectsQuery(workspacepg.NewStore(db)).Execute(ctx, actor, workspaceapp.ListProjectsInput{FolderID: &f.ID, Limit: 50})
+	page, err := workspaceapp.NewListProjectsQuery(workspaceStore(db)).Execute(ctx, actor, workspaceapp.ListProjectsInput{FolderID: &f.ID, Limit: 50})
 	if err != nil || len(page.Projects) != 1 || page.Projects[0].ID != job.TargetProjectID {
 		t.Fatalf("published target location %+v %v", page, err)
 	}

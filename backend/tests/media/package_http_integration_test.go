@@ -51,8 +51,8 @@ func packageActualService(t *testing.T, db *gorm.DB, objects mediaapp.PackageObj
 	if err != nil {
 		t.Fatal(err)
 	}
-	uploads := mediaapp.NewScopedUploadService(pgmedia.NewStore(db), pgmedia.NewStore(db), mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, nil, time.Now)
-	repo := pgmedia.NewPackageStore(db, access, transferTestGuards, time.Now)
+	uploads := mediaapp.NewScopedUploadService(mediaTestStore(db), mediaTestStore(db), mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, nil, time.Now)
+	repo := mediaPackageStore(db, access, transferTestGuards, time.Now)
 	return repo, mediaapp.NewLibraryPackageService(repo, uploads, objects, time.Now)
 }
 
@@ -218,7 +218,7 @@ func TestMediaPackageHTTPAllSixRoutesClosedMultipartActualAttachmentAndCurrentAu
 	if err := db.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if response := packageHTTPImport(t, router, path, body, data, key, false); response.Code != 403 {
+	if response := packageHTTPImport(t, router, path, body, data, key, false); response.Code != 401 {
 		t.Fatal("disabled actor received permanent source receipt", response.Code)
 	}
 }

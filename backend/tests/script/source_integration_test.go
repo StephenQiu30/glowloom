@@ -19,7 +19,7 @@ import (
 	pg "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func scriptTestDB(t *testing.T) (*gorm.DB, *gorm.DB) {
@@ -70,10 +70,15 @@ func scriptActorProject(t *testing.T, db *gorm.DB) (identityapp.Principal, uuid.
 			t.Fatal(err)
 		}
 	}
+	actor = identityfixture.Session(t, db, actor)
+	actor = scriptFixtureTeamActor(t, db, actor)
+	if err := db.Exec(`UPDATE workspace.project SET owner_scope_id=? WHERE id=?`, actor.ScopeID, pid).Error; err != nil {
+		t.Fatal(err)
+	}
 	return actor, pid
 }
 func scriptStore(db *gorm.DB) *pg.SourceStore {
-	return pg.NewSourceStore(db, func(tx *gorm.DB) app.ProjectAccess { return workspacepg.NewProjectContentAccessStore(tx) })
+	return pg.NewSourceStore(db, func(tx *gorm.DB) app.ProjectAccess { return scriptFixtureProjectAccess(tx) })
 }
 func scriptCounts(t *testing.T, db *gorm.DB, pid uuid.UUID) (int64, int64, int64) {
 	t.Helper()
@@ -192,7 +197,7 @@ func TestScriptSourcePGWholeReorderRightsAndRevokedReplay(t *testing.T) {
 	if err := owner.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Write(context.Background(), actor, input); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := service.Write(context.Background(), actor, input); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("revoked original replay", err)
 	}
 }

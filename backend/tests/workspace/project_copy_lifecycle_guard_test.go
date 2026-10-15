@@ -41,7 +41,7 @@ func TestProjectLifecycleStoreRequiresCopyEvidenceBeforeRecovery(t *testing.T) {
 	actor := insertWorkspaceActor(ctx, t, db, insertWorkspaceOrganization(ctx, t, db))
 	for _, action := range []string{"unarchive", "restore"} {
 		t.Run(action, func(t *testing.T) {
-			id := uuid.MustParse(insertWorkspaceProject(ctx, t, db, actor.OrgID.String(), "16:9", "realistic", nil))
+			id := uuid.MustParse(insertWorkspaceProject(ctx, t, db, actor, "16:9", "realistic", nil))
 			idle := workspaceapp.NewProjectLifecycle(lifecycleStore(db, fixedProjectWork{}), time.Now)
 			initial := "archive"
 			if action == "restore" {

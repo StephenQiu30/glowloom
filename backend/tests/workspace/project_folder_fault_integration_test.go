@@ -8,14 +8,13 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 func TestProjectFolderPGWriteFaultsCannotCommitPartialRecycle(t *testing.T) {
 	ctx, db, owner := folderTestDB(t)
 	actor := insertWorkspaceActor(ctx, t, owner, insertWorkspaceOrganization(ctx, t, owner))
-	project := uuid.MustParse(insertWorkspaceProject(ctx, t, owner, actor.OrgID.String(), "16:9", "realistic", nil))
+	project := uuid.MustParse(insertWorkspaceProject(ctx, t, owner, actor, "16:9", "realistic", nil))
 	service := workspaceapp.NewProjectFolders(folderStore(db), time.Now)
 	f := createTestFolder(ctx, t, service, actor, "原子提交故障")
 	f = *moveTestProject(ctx, t, service, actor, project, f, 0).Folder
@@ -52,11 +51,11 @@ func TestProjectFolderPGWriteFaultsCannotCommitPartialRecycle(t *testing.T) {
 	in := folderCommand("recycle")
 	in.FolderID = f.ID
 	in.ExpectedRevision = f.Revision
-	missing := workspaceapp.NewProjectFolders(workspacepg.NewFolderStore(db, nil, nil), time.Now)
+	missing := workspaceapp.NewProjectFolders(workspaceFolderStore(db, nil, nil), time.Now)
 	if _, err := missing.Change(ctx, actor, in); !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable) {
 		t.Fatalf("missing evidence admitted %v", err)
 	}
-	degraded := workspaceapp.NewProjectFolders(workspacepg.NewFolderStore(db, func(*gorm.DB) workspaceapp.ProjectWorkGuard {
+	degraded := workspaceapp.NewProjectFolders(workspaceFolderStore(db, func(*gorm.DB) workspaceapp.ProjectWorkGuard {
 		return fixedProjectWork{err: workspaceapp.ErrProjectDependencyUnavailable}
 	}, nil), time.Now)
 	if _, err := degraded.Change(ctx, actor, in); !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable) {

@@ -18,7 +18,6 @@ import (
 	"gorm.io/gorm"
 
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
-	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -127,13 +126,13 @@ func TestExportAudioKindIsFrozenImmutableAndBoundToIdempotentRequest(t *testing.
 	sha := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	asset.DurationMS, asset.SHA256 = &duration, &sha
 	asset.Status, asset.ModerationStatus = mediadomain.StatusProcessing, mediadomain.ModerationPending
-	if err := mediapg.NewStore(db).CreateAsset(t.Context(), actor, asset); err != nil {
+	if err := mediaTestStore(db).CreateAsset(t.Context(), actor, asset); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`UPDATE media.media_asset SET status='ready',moderation_status='passed' WHERE id=?`, asset.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	store := exportpg.NewStore(db, func(*gorm.DB) exportapp.TimelineReader { return &fixedTimeline{timeline: config} }, func(tx *gorm.DB) exportapp.DerivedMedia { return mediaapp.NewDerivedService(mediapg.NewStore(tx)) })
+	store := exportpg.NewStore(db, func(*gorm.DB) exportapp.TimelineReader { return &fixedTimeline{timeline: config} }, func(tx *gorm.DB) exportapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
 	canvas, node, key := uuid.New(), uuid.New(), uuid.New()
 	createInput := func(kind string) exportapp.CreateInput {
 		var input exportapp.CreateInput
@@ -191,7 +190,7 @@ func TestExportDefaultVideoPreservesPersistedFingerprintAndExplicitReplay(t *tes
 	config := exportTimeline(t)
 	config.Tracks[0].Kind, config.Clips[0].Kind = "subtitle", "subtitle"
 	config.Clips[0].AssetID, config.Clips[0].Text = nil, "中文"
-	store := exportpg.NewStore(db, func(*gorm.DB) exportapp.TimelineReader { return &fixedTimeline{timeline: config} }, func(tx *gorm.DB) exportapp.DerivedMedia { return mediaapp.NewDerivedService(mediapg.NewStore(tx)) })
+	store := exportpg.NewStore(db, func(*gorm.DB) exportapp.TimelineReader { return &fixedTimeline{timeline: config} }, func(tx *gorm.DB) exportapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
 	input := exportapp.CreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1}
 	key := uuid.New()
 	job, err := store.Create(t.Context(), actor, project, key, input)

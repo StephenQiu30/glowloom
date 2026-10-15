@@ -67,7 +67,7 @@ func (g mediaReferenceOwners) HasMediaReferences(ctx context.Context, actor iden
 }
 
 func provideMediaReferenceOwners(tx *gorm.DB) mediaapp.LibraryReferences {
-	return provideMediaReferenceOwnersWithAccess(tx, provideProjectContentAccess(tx), NewMediaLibraryProjectAccess, provideMediaScopeAccess)
+	return provideMediaReferenceOwnersWithAccess(tx, provideProjectContentAccess(tx), NewMediaLibraryProjectAccess, NewMediaScopeAccess)
 }
 
 // The same installed reference owners use the transaction-bound authority of
@@ -86,7 +86,7 @@ func provideMediaReferenceOwnersWithAccess(tx *gorm.DB, access *pgworkspace.Proj
 }
 
 func provideMediaPurgeStore(database *gorm.DB) *pgmedia.PurgeStore {
-	return pgmedia.NewScopedPurgeStore(database, NewMediaLibraryProjectAccess, provideMediaLibraryWorkGuards, provideMediaReferenceOwners, time.Now, provideMediaScopeAccess)
+	return pgmedia.NewScopedPurgeStore(database, NewMediaLibraryProjectAccess, provideMediaLibraryWorkGuards, provideMediaReferenceOwners, time.Now, NewMediaScopeAccess)
 }
 
 // NewMediaPurgeWorker composes the worker with current membership and reference owners.
@@ -97,9 +97,9 @@ func NewMediaPurgeWorker(database *gorm.DB, storage *objectstorage.Client) (*med
 
 // NewMediaWorkerReferenceOwners composes retained owners without an initiating request session.
 func NewMediaWorkerReferenceOwners(tx *gorm.DB) mediaapp.LibraryReferences {
-	return provideMediaReferenceOwnersWithAccess(tx, provideWorkerProjectContentAccess(tx), provideMediaLibraryWorkerProjectAccess, provideMediaWorkerScopeAccess)
+	return provideMediaReferenceOwnersWithAccess(tx, provideWorkerProjectContentAccess(tx), NewMediaLibraryWorkerProjectAccess, NewMediaWorkerScopeAccess)
 }
 
 func provideMediaPurgeWorkerStore(database *gorm.DB) *pgmedia.PurgeStore {
-	return pgmedia.NewScopedPurgeStore(database, provideMediaLibraryWorkerProjectAccess, provideMediaLibraryWorkGuards, NewMediaWorkerReferenceOwners, time.Now, provideMediaWorkerScopeAccess)
+	return pgmedia.NewScopedPurgeStore(database, NewMediaLibraryWorkerProjectAccess, provideMediaLibraryWorkGuards, NewMediaWorkerReferenceOwners, time.Now, NewMediaWorkerScopeAccess)
 }

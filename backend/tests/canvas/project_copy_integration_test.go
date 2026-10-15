@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
@@ -29,17 +30,17 @@ func TestProjectCopyCanvasPersistsFrozenGraphsAndHidesTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	binding := application.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: uuid.New()}
-	if err := database.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,name,aspect_ratio,style_type,status) VALUES(?,?,?,'未发布完整复制','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID, actor.ID).Error; err != nil {
+	if err := database.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,owner_scope_id,name,aspect_ratio,style_type,status) VALUES(?,?,?,?,'未发布完整复制','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID, actor.ID, actor.ScopeID).Error; err != nil {
 		t.Fatal(err)
 	}
 	var snapshot application.ProjectCopySnapshot
 	if err := database.Transaction(func(tx *gorm.DB) error {
 		var err error
-		snapshot, err = pgcanvas.NewProjectCopyStore(tx, nil, nil).Freeze(t.Context(), actor, binding, map[uuid.UUID]uuid.UUID{})
+		snapshot, err = pgcanvas.NewScopedProjectCopyStore(tx, nil, nil, app.NewCanvasProjectAccess).Freeze(t.Context(), actor, binding, map[uuid.UUID]uuid.UUID{})
 		if err != nil {
 			return err
 		}
-		return tx.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,actor_id,source_project_id,source_revision,target_project_id,target_name,status,stage,manifest,workspace_snapshot,idem_key,request_sha256,admission_response) VALUES(?,?,?,?,1,?,'未发布完整复制','queued','media','{}','{}',gen_random_uuid(),repeat('a',64),'{}')`, binding.JobID, actor.OrgID, actor.ID, project, binding.TargetProjectID).Error
+		return tx.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,actor_id,owner_scope_id,source_project_id,source_revision,target_project_id,target_name,status,stage,manifest,workspace_snapshot,idem_key,request_sha256,admission_response) VALUES(?,?,?,?,?,1,?,'未发布完整复制','queued','media','{}','{}',gen_random_uuid(),repeat('a',64),'{}')`, binding.JobID, actor.OrgID, actor.ID, actor.ScopeID, project, binding.TargetProjectID).Error
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -49,12 +50,12 @@ func TestProjectCopyCanvasPersistsFrozenGraphsAndHidesTarget(t *testing.T) {
 	// No referenced media exists in this text-only graph; the reader remains an
 	// actual owner query so an unexpected reference would fail closed.
 	factory := func(tx *gorm.DB, _ application.ProjectCopyBinding) application.MediaReader {
-		return mediaapp.NewAssetQuery(pgmedia.NewStore(tx), nil)
+		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, app.NewMediaScopeAccess), nil)
 	}
 	var receipt application.ProjectCopyReceipt
 	if err := database.Transaction(func(tx *gorm.DB) error {
 		var err error
-		receipt, err = pgcanvas.NewProjectCopyStore(tx, nil, factory).Copy(t.Context(), actor, binding, snapshot)
+		receipt, err = pgcanvas.NewScopedProjectCopyStore(tx, nil, factory, app.NewCanvasProjectAccess).Copy(t.Context(), actor, binding, snapshot)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -62,18 +63,18 @@ func TestProjectCopyCanvasPersistsFrozenGraphsAndHidesTarget(t *testing.T) {
 	if receipt.Documents != 1 || receipt.ContentSHA256 == "" {
 		t.Fatal("missing content receipt", receipt)
 	}
-	if _, err := service.List(t.Context(), actor, binding.TargetProjectID); !errors.Is(err, application.ErrNotFound) {
+	if _, err := service.List(t.Context(), actor, binding.TargetProjectID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("unpublished canvas visible through normal list", err)
 	}
 	var target struct{ ID uuid.UUID }
 	if err := database.Raw(`SELECT id FROM canvas.document WHERE project_id=?`, binding.TargetProjectID).Scan(&target).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Get(t.Context(), actor, target.ID); !errors.Is(err, application.ErrNotFound) {
+	if _, err := service.Get(t.Context(), actor, target.ID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("unpublished canvas visible through normal get", err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		replayed, err := pgcanvas.NewProjectCopyStore(tx, nil, factory).Copy(t.Context(), actor, binding, snapshot)
+		replayed, err := pgcanvas.NewScopedProjectCopyStore(tx, nil, factory, app.NewCanvasProjectAccess).Copy(t.Context(), actor, binding, snapshot)
 		if err != nil || replayed != receipt {
 			return errors.New("persistent receipt mismatch")
 		}
@@ -91,7 +92,7 @@ func TestProjectCopyCanvasPersistsFrozenGraphsAndHidesTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = database.Transaction(func(tx *gorm.DB) error {
-		return pgcanvas.NewProjectCopyStore(tx, nil, factory).Cleanup(t.Context(), actor, binding, snapshot)
+		return pgcanvas.NewScopedProjectCopyStore(tx, nil, factory, app.NewCanvasProjectAccess).Cleanup(t.Context(), actor, binding, snapshot)
 	})
 	if !errors.Is(err, domain.ErrInvalidProjectCopy) {
 		t.Fatal("corrupt snapshot accepted for destructive cleanup", err)
@@ -123,11 +124,11 @@ func TestProjectCopyCanvasRejectsUnknownConfigWithoutPartialSnapshot(t *testing.
 		t.Fatal(err)
 	}
 	binding := application.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: uuid.New()}
-	if err := database.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,name,aspect_ratio,style_type,status) VALUES(?,?,?,'未发布','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID, actor.ID).Error; err != nil {
+	if err := database.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,owner_scope_id,name,aspect_ratio,style_type,status) VALUES(?,?,?,?,'未发布','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID, actor.ID, actor.ScopeID).Error; err != nil {
 		t.Fatal(err)
 	}
 	err = database.Transaction(func(tx *gorm.DB) error {
-		_, err := pgcanvas.NewProjectCopyStore(tx, nil, nil).Freeze(t.Context(), actor, binding, map[uuid.UUID]uuid.UUID{})
+		_, err := pgcanvas.NewScopedProjectCopyStore(tx, nil, nil, app.NewCanvasProjectAccess).Freeze(t.Context(), actor, binding, map[uuid.UUID]uuid.UUID{})
 		return err
 	})
 	if !errors.Is(err, domain.ErrUnsupportedProjectCopy) {

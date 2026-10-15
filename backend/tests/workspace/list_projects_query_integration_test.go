@@ -11,13 +11,12 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 func insertProjectListFixture(
 	ctx context.Context, t *testing.T, database *gorm.DB,
-	orgID, name, status string, deleted bool, updatedAt time.Time,
+	actor identityapp.Principal, name, status string, deleted bool, updatedAt time.Time,
 ) uuid.UUID {
 	t.Helper()
 	id := uuid.New()
@@ -32,10 +31,10 @@ func insertProjectListFixture(
 	}
 	result := database.WithContext(ctx).Exec(`
 		INSERT INTO workspace.project
-		  (id, org_id, owner_id, name, aspect_ratio, style_type, status, archived_at,
+		  (id, org_id, owner_id, owner_scope_id, name, aspect_ratio, style_type, status, archived_at,
 		   is_delete, delete_time, purge_after, revision, create_time, update_time)
-		VALUES (?::uuid, ?::uuid, (SELECT id FROM identity."user" WHERE org_id=?::uuid ORDER BY id LIMIT 1), ?, '16:9', 'realistic', ?, ?, ?, ?, ?, 2, ?, ?)
-	`, id.String(), orgID, orgID, name, status, archivedAt, deleted, deletedAt,
+		VALUES (?::uuid, ?::uuid, ?::uuid, ?::uuid, ?, '16:9', 'realistic', ?, ?, ?, ?, ?, 2, ?, ?)
+	`, id.String(), actor.OrgID, actor.ID, actor.ScopeID, name, status, archivedAt, deleted, deletedAt,
 		purgeAfter, updatedAt.Add(-7*24*time.Hour), updatedAt)
 	if result.Error != nil || result.RowsAffected != 1 {
 		t.Fatalf("insert project list fixture: rows=%d err=%v", result.RowsAffected, result.Error)
@@ -47,15 +46,16 @@ func TestListProjectsScopesStatusesRecycleBinAndLiteralSearchOnPostgres(t *testi
 	ctx, database := workspaceMigrationDB(t)
 	orgID := insertWorkspaceOrganization(ctx, t, database)
 	otherOrgID := insertWorkspaceOrganization(ctx, t, database)
+	otherActor := insertWorkspaceActor(ctx, t, database, otherOrgID)
 	actor := insertWorkspaceActor(ctx, t, database, orgID)
-	query := workspaceapp.NewListProjectsQuery(pgworkspace.NewStore(database))
+	query := workspaceapp.NewListProjectsQuery(workspaceStore(database))
 	updatedAt := time.Date(2026, time.September, 27, 8, 0, 0, 0, time.UTC)
-	activeID := insertProjectListFixture(ctx, t, database, orgID, "逆光", "active", false, updatedAt)
-	specialID := insertProjectListFixture(ctx, t, database, orgID, "片名%_终章", "active", false, updatedAt.Add(time.Minute))
-	decoyID := insertProjectListFixture(ctx, t, database, orgID, "片名甲乙终章", "active", false, updatedAt.Add(2*time.Minute))
-	archivedID := insertProjectListFixture(ctx, t, database, orgID, "往事", "archived", false, updatedAt.Add(3*time.Minute))
-	deletedID := insertProjectListFixture(ctx, t, database, orgID, "回收中", "archived", true, updatedAt.Add(4*time.Minute))
-	insertProjectListFixture(ctx, t, database, otherOrgID, "片名%_他人", "active", false, updatedAt.Add(5*time.Minute))
+	activeID := insertProjectListFixture(ctx, t, database, actor, "逆光", "active", false, updatedAt)
+	specialID := insertProjectListFixture(ctx, t, database, actor, "片名%_终章", "active", false, updatedAt.Add(time.Minute))
+	decoyID := insertProjectListFixture(ctx, t, database, actor, "片名甲乙终章", "active", false, updatedAt.Add(2*time.Minute))
+	archivedID := insertProjectListFixture(ctx, t, database, actor, "往事", "archived", false, updatedAt.Add(3*time.Minute))
+	deletedID := insertProjectListFixture(ctx, t, database, actor, "回收中", "archived", true, updatedAt.Add(4*time.Minute))
+	insertProjectListFixture(ctx, t, database, otherActor, "片名%_他人", "active", false, updatedAt.Add(5*time.Minute))
 
 	page, err := query.Execute(ctx, actor, workspaceapp.ListProjectsInput{Limit: 20})
 	if err != nil || len(page.Projects) != 4 || page.Next != nil {
@@ -102,7 +102,7 @@ func TestListProjectsUsesUpdateTimeAndIDKeysetOnPostgres(t *testing.T) {
 	ctx, database := workspaceMigrationDB(t)
 	orgID := insertWorkspaceOrganization(ctx, t, database)
 	actor := insertWorkspaceActor(ctx, t, database, orgID)
-	query := workspaceapp.NewListProjectsQuery(pgworkspace.NewStore(database))
+	query := workspaceapp.NewListProjectsQuery(workspaceStore(database))
 	recent := time.Date(2026, time.September, 27, 10, 0, 0, 0, time.UTC)
 	older := recent.Add(-time.Hour)
 	type expected struct {
@@ -110,10 +110,10 @@ func TestListProjectsUsesUpdateTimeAndIDKeysetOnPostgres(t *testing.T) {
 		updatedAt time.Time
 	}
 	want := []expected{
-		{insertProjectListFixture(ctx, t, database, orgID, "同刻一", "active", false, recent), recent},
-		{insertProjectListFixture(ctx, t, database, orgID, "同刻二", "active", false, recent), recent},
-		{insertProjectListFixture(ctx, t, database, orgID, "较早一", "active", false, older), older},
-		{insertProjectListFixture(ctx, t, database, orgID, "较早二", "active", false, older), older},
+		{insertProjectListFixture(ctx, t, database, actor, "同刻一", "active", false, recent), recent},
+		{insertProjectListFixture(ctx, t, database, actor, "同刻二", "active", false, recent), recent},
+		{insertProjectListFixture(ctx, t, database, actor, "较早一", "active", false, older), older},
+		{insertProjectListFixture(ctx, t, database, actor, "较早二", "active", false, older), older},
 	}
 	sort.Slice(want, func(i, j int) bool {
 		if want[i].updatedAt.Equal(want[j].updatedAt) {
@@ -139,8 +139,9 @@ func TestListProjectsRechecksRevokedActorAndOrganizationOnPostgres(t *testing.T)
 	ctx, database := workspaceMigrationDB(t)
 	orgID := insertWorkspaceOrganization(ctx, t, database)
 	actor := insertWorkspaceActor(ctx, t, database, orgID)
-	insertProjectListFixture(ctx, t, database, orgID, "待撤权", "active", false, time.Now().UTC())
-	query := workspaceapp.NewListProjectsQuery(pgworkspace.NewStore(database))
+	actor = workspaceTeamActor(t, database, actor)
+	insertProjectListFixture(ctx, t, database, actor, "待撤权", "active", false, time.Now().UTC())
+	query := workspaceapp.NewListProjectsQuery(workspaceStore(database))
 	if _, err := query.Execute(ctx, actor, workspaceapp.ListProjectsInput{}); err != nil {
 		t.Fatalf("list for current producer: %v", err)
 	}
@@ -149,7 +150,7 @@ func TestListProjectsRechecksRevokedActorAndOrganizationOnPostgres(t *testing.T)
 	`, actor.ID.String()).Error; err != nil {
 		t.Fatalf("disable actor: %v", err)
 	}
-	if _, err := query.Execute(ctx, actor, workspaceapp.ListProjectsInput{}); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := query.Execute(ctx, actor, workspaceapp.ListProjectsInput{}); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatalf("disabled actor list = %v, want forbidden", err)
 	}
 	if err := database.WithContext(ctx).Exec(`
@@ -158,11 +159,11 @@ func TestListProjectsRechecksRevokedActorAndOrganizationOnPostgres(t *testing.T)
 		t.Fatalf("restore actor for organization revocation: %v", err)
 	}
 	if err := database.WithContext(ctx).Exec(`
-		UPDATE workspace.organization SET status = 'disabled' WHERE id = ?::uuid
-	`, orgID).Error; err != nil {
-		t.Fatalf("disable organization: %v", err)
+		UPDATE workspace.team SET status = 'suspended', resume_status = 'active' WHERE id = (SELECT team_id FROM workspace.creation_scope WHERE id = ?::uuid)
+	`, actor.ScopeID).Error; err != nil {
+		t.Fatalf("suspend team scope: %v", err)
 	}
-	if _, err := query.Execute(ctx, actor, workspaceapp.ListProjectsInput{}); !errors.Is(err, identityapp.ErrForbidden) {
-		t.Fatalf("disabled organization list = %v, want forbidden", err)
+	if _, err := query.Execute(ctx, actor, workspaceapp.ListProjectsInput{}); !errors.Is(err, workspaceapp.ErrScopeNotFound) {
+		t.Fatalf("suspended team scope list = %v, want forbidden", err)
 	}
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
@@ -81,7 +82,7 @@ func seedProviderCallOperation(t *testing.T, database *gorm.DB) (uuid.UUID, *pgo
 	if err := database.Exec(`UPDATE operation.operation SET batch_id = NULL WHERE id = ?::uuid`, operationID.String()).Error; err != nil {
 		t.Fatalf("clear batch for single operation: %v", err)
 	}
-	return operationID, pgoperation.NewStore(database)
+	return operationID, operationStore(database)
 }
 
 func TestMockProviderCallEvidenceSettlesOnce(t *testing.T) {
@@ -297,7 +298,7 @@ func TestRealProviderUsagePricesFrozenRuleOnce(t *testing.T) {
 				if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 					return err
 				}
-				return pgoperation.NewStore(tx).CompleteProviderCall(t.Context(), result)
+				return operationStore(tx).CompleteProviderCall(t.Context(), result)
 			}); err != nil {
 				t.Fatalf("complete priced query under runtime role: %v", err)
 			}
@@ -508,13 +509,19 @@ func TestManualNotExecutedRequiresAdministratorEvidence(t *testing.T) {
 			t.Fatalf("seed reviewer: %v", err)
 		}
 	}
-	decision := application.ManualNotExecutedInput{
-		OperationID: opID, AdminID: producerID, Evidence: "mock task absent in provider console",
+	if err := database.Exec(`UPDATE identity."user" SET platform_role='platform_admin' WHERE id=?`, adminID).Error; err != nil {
+		t.Fatal(err)
 	}
-	if err := store.RecordManualNotExecuted(t.Context(), decision); !errors.Is(err, application.ErrManualResolutionUnverified) {
+	producer := operationReviewerSession(t, database, opID, producerID)
+	admin := operationReviewerSession(t, database, opID, adminID)
+	decision := application.ManualNotExecutedInput{
+		Actor: producer, OperationID: opID, AdminID: producerID, Evidence: "mock task absent in provider console",
+	}
+	if err := store.RecordManualNotExecuted(t.Context(), decision); !errors.Is(err, identityapp.ErrForbidden) {
 		t.Fatalf("producer was allowed to resolve: %v", err)
 	}
 	decision.AdminID = adminID
+	decision.Actor = admin
 	for range 2 {
 		if err := store.RecordManualNotExecuted(t.Context(), decision); err != nil {
 			t.Fatalf("administrator decision/replay: %v", err)
@@ -593,13 +600,13 @@ func TestRealProviderManualNotExecutedRequiresAdministratorEvidence(t *testing.T
 	adminID := uuid.New()
 	if err := database.Exec(`
 		INSERT INTO identity."user"
-		  (id, org_id, login_name, display_name, role, password_hash, must_change_password)
-		VALUES (?::uuid, ?::uuid, ?, 'Reviewer', 'admin', 'hash', false)
+		  (id, org_id, login_name, display_name, role, platform_role, password_hash, must_change_password)
+		VALUES (?::uuid, ?::uuid, ?, 'Reviewer', 'admin', 'platform_admin', 'hash', false)
 	`, adminID.String(), organization.OrgID.String(), "real-manual-"+adminID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := store.RecordManualNotExecuted(t.Context(), application.ManualNotExecutedInput{
-		OperationID: opID, AdminID: adminID, Evidence: "provider audit confirms request not accepted",
+		Actor: operationReviewerSession(t, database, opID, adminID), OperationID: opID, AdminID: adminID, Evidence: "provider audit confirms request not accepted",
 	}); err != nil {
 		t.Fatalf("record administrator evidence: %v", err)
 	}
@@ -677,13 +684,13 @@ func TestRealProviderManualNotExecutedCannotOverrideKnownExecution(t *testing.T)
 	adminID := uuid.New()
 	if err := database.Exec(`
 		INSERT INTO identity."user"
-		  (id, org_id, login_name, display_name, role, password_hash, must_change_password)
-		VALUES (?::uuid, ?::uuid, ?, 'Reviewer', 'admin', 'hash', false)
+		  (id, org_id, login_name, display_name, role, platform_role, password_hash, must_change_password)
+		VALUES (?::uuid, ?::uuid, ?, 'Reviewer', 'admin', 'platform_admin', 'hash', false)
 	`, adminID.String(), organization.OrgID.String(), "known-execution-"+adminID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := store.RecordManualNotExecuted(t.Context(), application.ManualNotExecutedInput{
-		OperationID: opID, AdminID: adminID, Evidence: "request not executed",
+		Actor: operationReviewerSession(t, database, opID, adminID), OperationID: opID, AdminID: adminID, Evidence: "request not executed",
 	}); !errors.Is(err, application.ErrProviderCallConflict) {
 		t.Fatalf("administrator no-execution claim accepted after confirmed execution: %v", err)
 	}
@@ -719,7 +726,7 @@ func TestProviderCallSettlementUnderRuntimeRole(t *testing.T) {
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return fmt.Errorf("assume runtime role: %w", err)
 		}
-		store := pgoperation.NewStore(tx)
+		store := operationStore(tx)
 		if _, err := store.TransitionWorkflowOperation(t.Context(), application.TransitionInput{
 			OperationID: opID, From: []domain.Status{domain.StatusConfirmed}, To: domain.StatusSubmitting,
 			ProviderRequestKey: &requestKey,

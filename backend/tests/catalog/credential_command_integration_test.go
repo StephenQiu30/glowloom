@@ -12,14 +12,15 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func TestSetCredentialCommitsSealedDataAndEventsOnLocalPostgres(t *testing.T) {
@@ -34,7 +35,7 @@ func TestSetCredentialCommitsSealedDataAndEventsOnLocalPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	store := pgcatalog.NewStore(conn.DB)
+	store := app.NewCatalogStore(conn.DB)
 	actor := adminPrincipal()
 	hash, err := identitydomain.HashPassword("temporary-admin-password1", "")
 	if err != nil {
@@ -49,6 +50,8 @@ func TestSetCredentialCommitsSealedDataAndEventsOnLocalPostgres(t *testing.T) {
 	`, actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
+	actor = identityfixture.Session(t, conn.DB, actor)
+
 	provider := validProvider()
 	provider.Key = "credential-command-" + provider.ID.String()
 	if err := store.CreateProvider(ctx, provider); err != nil {

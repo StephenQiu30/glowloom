@@ -17,7 +17,6 @@ import (
 	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
 	pg "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 )
 
 func scriptReferenceDB(t *testing.T) (*gorm.DB, *gorm.DB) {
@@ -34,7 +33,7 @@ func scriptMediaReference(ctx context.Context, db *gorm.DB, actor identityapp.Pr
 	var found bool
 	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var err error
-		found, err = pg.NewMediaReferenceGuard(tx, workspacepg.NewProjectContentAccessStore(tx)).HasMediaReferences(ctx, actor, project, asset)
+		found, err = pg.NewMediaReferenceGuard(tx, scriptFixtureProjectAccess(tx)).HasMediaReferences(ctx, actor, project, asset)
 		return err
 	})
 	return found, err
@@ -61,7 +60,7 @@ func scriptReferenceMutation(t *testing.T, owner *gorm.DB, actor identityapp.Pri
 	if err := tx.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "lanverse_app" {
 		t.Fatal("guard mutation fixture lacks actual nonowner", role, err)
 	}
-	return pg.NewMediaReferenceGuard(tx, workspacepg.NewProjectContentAccessStore(tx)).HasMediaReferences(t.Context(), actor, project, asset)
+	return pg.NewMediaReferenceGuard(tx, scriptFixtureProjectAccess(tx)).HasMediaReferences(t.Context(), actor, project, asset)
 }
 
 type failedReferenceObjects struct{ *scriptobjects.Storage }
@@ -260,7 +259,7 @@ func TestScriptMediaReferenceGuardPGCallerTransactionAndCurrentScope(t *testing.
 	if found, err := scriptMediaReference(t.Context(), db, actor, project, asset); err != nil || found {
 		t.Fatal("authorized empty history", found, err)
 	}
-	if _, err := pg.NewMediaReferenceGuard(db, workspacepg.NewProjectContentAccessStore(db)).HasMediaReferences(t.Context(), actor, project, asset); err == nil {
+	if _, err := pg.NewMediaReferenceGuard(db, scriptFixtureProjectAccess(db)).HasMediaReferences(t.Context(), actor, project, asset); err == nil {
 		t.Fatal("guard accepted connection pool instead of owning transaction")
 	}
 	if _, err := scriptMediaReference(t.Context(), db, actor, foreign, asset); err == nil {

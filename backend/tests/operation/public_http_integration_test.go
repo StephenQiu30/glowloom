@@ -14,15 +14,15 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/http"
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	operationhttp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/http"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func publicOperationRouter(actor identityapp.Principal, database *gorm.DB) *gin.Engine {
@@ -30,9 +30,9 @@ func publicOperationRouter(actor identityapp.Principal, database *gorm.DB) *gin.
 	router.Use(httpapi.Middleware("http://localhost:3000"))
 	router.Use(func(c *gin.Context) { c.Set("principal", actor) })
 	group := router.Group("/api")
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	operationhttp.NewHandler(operationhttp.Dependencies{FreeQuote: operationapp.NewCreateFreeQuoteCommand(store), BatchQuote: operationapp.NewCreateBatchFreeQuoteCommand(store), Confirm: operationapp.NewConfirmSingleQuoteCommand(store), ConfirmBatch: operationapp.NewConfirmBatchQuoteCommand(store), Query: operationapp.NewPublicQuery(store), Control: operationapp.NewWorkflowControlCommand(store)}).Register(group)
-	cataloghttp.NewHandler(catalogapp.NewListModelsQuery(pgcatalog.NewStore(database))).Register(group)
+	cataloghttp.NewHandler(catalogapp.NewListModelsQuery(app.NewCatalogStore(database))).Register(group)
 	return router
 }
 
@@ -210,7 +210,7 @@ func TestPublicCancelAndSubmissionRaceHasOneWinner(t *testing.T) {
 	if err := database.Raw(`SELECT o.project_id, p.org_id, o.confirmed_by AS actor_id FROM operation.operation o JOIN workspace.project p ON p.id=o.project_id WHERE o.id=?::uuid`, operation).Scan(&scope).Error; err != nil {
 		t.Fatal(err)
 	}
-	actor := identityapp.Principal{ID: scope.ActorID, OrgID: scope.OrgID, Role: "producer"}
+	actor := identityfixture.Session(t, database, identityapp.Principal{ID: scope.ActorID, OrgID: scope.OrgID, Role: "producer"})
 	project := scope.ProjectID
 	requestKey := "operation/" + operation.String()
 	var cancelErr, submitErr error
@@ -293,7 +293,7 @@ func TestPublicCanvasBatchSourceSurvivesRefreshAndEnforcesSavedCapacity(t *testi
 		for _, r := range requested.Items {
 			inputs = append(inputs, operationapp.FreeQuoteItemInput{ModelKey: r.ModelKey, Capability: r.Capability, Mode: r.Mode, Prompt: r.Prompt, Params: r.Params, OutputCount: r.OutputCount, Source: r.Source})
 		}
-		_, err := pgoperation.NewStore(database).CreateBatchFreeQuote(t.Context(), actor, operationapp.CreateBatchFreeQuoteInput{ProjectID: project, RequestID: uuid.NewString(), Items: inputs})
+		_, err := operationStore(database).CreateBatchFreeQuote(t.Context(), actor, operationapp.CreateBatchFreeQuoteInput{ProjectID: project, RequestID: uuid.NewString(), Items: inputs})
 		t.Fatalf("source quote=%d %s: %v", res.Code, res.Body, err)
 	}
 	res = publicOperationRequest(t, router, "GET", "/api/projects/"+project.String()+"/operations?canvas_id="+canvasID.String()+"&node_id="+nodeID.String()+"&row_id="+rowA.String(), "", "")
@@ -315,7 +315,7 @@ func TestPublicCanvasBatchSourceSurvivesRefreshAndEnforcesSavedCapacity(t *testi
 	if err := database.Exec(`UPDATE operation.batch SET status='running' WHERE id=?::uuid`, batch.BatchID).Error; err != nil {
 		t.Fatal(err)
 	}
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	if acquired, err := store.AcquireBatchLaunch(t.Context(), *batch.BatchID, *batch.Items[0].OperationID); err != nil || !acquired {
 		t.Fatalf("first saved slot=%t %v", acquired, err)
 	}

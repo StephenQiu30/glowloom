@@ -12,11 +12,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
-	canvaspg "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
 	scriptpg "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
@@ -36,7 +33,7 @@ func (a actualScriptCopyAccess) Authorize(ctx context.Context, actor identityapp
 }
 func actualScriptCopyStore(db *gorm.DB, authority workspaceapp.ProjectCopyAuthority) *scriptpg.ProjectCopyStore {
 	return scriptpg.NewProjectCopyStore(db, func(tx *gorm.DB) app.ProjectCopyAccess {
-		return actualScriptCopyAccess{workspacepg.NewProjectCopyAccessStore(tx, authority)}
+		return actualScriptCopyAccess{scriptFixtureCopyAccess(tx, authority)}
 	})
 }
 
@@ -60,8 +57,10 @@ func (o actualScriptHistoryOwner) FinishCleanup(ctx context.Context, a identitya
 	return o.store.FinishCleanup(ctx, a, app.ProjectCopyBinding(b), ownScriptSnapshot(s))
 }
 func workspaceWithActualScript(db *gorm.DB) *workspacepg.ProjectCopyStore {
-	return workspacepg.NewProjectCopyStoreWithScript(db, func(tx *gorm.DB) workspaceapp.ProjectWorkGuard { return scriptStore(tx) }, func(tx *gorm.DB) workspaceapp.ProjectCopyOwners {
-		return workspaceapp.ProjectCopyOwners{Media: mediapg.NewProjectCopyStore(tx), Budget: billingpg.NewStore(tx), Canvas: canvaspg.NewProjectCopyStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediapg.NewStore(tx), nil) }, nil)}
+	return scriptFixtureWorkspaceCopyWithScript(db, func(tx *gorm.DB) workspaceapp.ProjectWorkGuard { return scriptStore(tx) }, func(tx *gorm.DB) workspaceapp.ProjectCopyOwners {
+		return workspaceapp.ProjectCopyOwners{Media: scriptFixtureMediaCopyStore(tx), Budget: scriptFixtureBudgetStore(tx), Canvas: scriptFixtureCanvasCopyStore(tx, func(tx *gorm.DB) canvasapp.MediaReader {
+			return mediaapp.NewAssetQuery(scriptFixtureWorkerMediaStore(tx), nil)
+		}, nil)}
 	}, func(tx *gorm.DB, a workspaceapp.ProjectCopyAuthority) workspaceapp.ProjectCopyScriptOwner {
 		return actualScriptHistoryOwner{actualScriptCopyStore(tx, a)}
 	})
@@ -353,7 +352,7 @@ func TestScriptCopyPGReferencedMediaIncludesOldHistoryWithTrustedAdmissionOnly(t
 		t.Fatal("pool mimicked owning admission", err)
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`INSERT INTO workspace.project(id,org_id,name,description,aspect_ratio,style_type,resolution,status,revision,default_models) VALUES(?,?,'own reference target','','16:9','realistic','1080p','copying',1,'{}')`, b.TargetProjectID, b.OrgID).Error; err != nil {
+		if err := tx.Exec(`INSERT INTO workspace.project(id,org_id,owner_scope_id,name,description,aspect_ratio,style_type,resolution,status,revision,default_models) VALUES(?,?,?,'own reference target','','16:9','realistic','1080p','copying',1,'{}')`, b.TargetProjectID, b.OrgID, actor.ScopeID).Error; err != nil {
 			return err
 		}
 		refs, err := actualScriptCopyStore(tx, authority).ReferencedMedia(t.Context(), actor, b)
@@ -379,7 +378,7 @@ func TestScriptCopyPGReferencedMediaIncludesOldHistoryWithTrustedAdmissionOnly(t
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		_, err := actualScriptCopyStore(tx, authority).ReferencedMedia(t.Context(), actor, b)
 		return err
-	}); !errors.Is(err, identityapp.ErrForbidden) {
+	}); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("old creator authority accepted", err)
 	}
 }

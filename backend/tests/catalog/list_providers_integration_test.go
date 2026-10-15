@@ -12,11 +12,12 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func TestListProvidersPagesSafeSummariesAndRealModelCountsOnLocalPostgres(t *testing.T) {
@@ -38,7 +39,9 @@ func TestListProvidersPagesSafeSummariesAndRealModelCountsOnLocalPostgres(t *tes
 	`, actor.ID.String(), actor.OrgID.String(), "provider-list-"+actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
-	store := pgcatalog.NewStore(conn.DB)
+
+	actor = identityfixture.Session(t, conn.DB, actor)
+	store := app.NewCatalogStore(conn.DB)
 	providers := make([]domain.Provider, 3)
 	var latest struct{ CreateTime *time.Time }
 	if err := conn.DB.WithContext(ctx).Raw(`

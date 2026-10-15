@@ -44,8 +44,8 @@ func NewMediaLibraryProjectAccess(tx *gorm.DB) mediaapp.LibraryProjectAccess {
 	return mediaLibraryProjectAccess{store: provideProjectContentAccess(tx)}
 }
 
-// provideMediaLibraryWorkerProjectAccess never requires an initiating HTTP session.
-func provideMediaLibraryWorkerProjectAccess(tx *gorm.DB) mediaapp.LibraryProjectAccess {
+// NewMediaLibraryWorkerProjectAccess never requires an initiating HTTP session.
+func NewMediaLibraryWorkerProjectAccess(tx *gorm.DB) mediaapp.LibraryProjectAccess {
 	return mediaLibraryProjectAccess{store: provideWorkerProjectContentAccess(tx)}
 }
 

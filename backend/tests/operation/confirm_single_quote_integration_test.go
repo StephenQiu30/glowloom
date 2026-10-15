@@ -15,6 +15,7 @@ import (
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 func TestConfirmSingleQuoteCommitsReservationAndEvents(t *testing.T) {
@@ -26,7 +27,7 @@ func TestConfirmSingleQuoteCommitsReservationAndEvents(t *testing.T) {
 	item := quotedSnapshotItem(projectID, 60)
 	item.Operation = quoted
 	item.Inputs[0].OperationID = quoted.ID
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	if err := store.CreateQuoteSnapshot(t.Context(), actor, nil, []pgoperation.QuoteItem{item}); err != nil {
 		t.Fatalf("seed quote: %v", err)
 	}
@@ -74,7 +75,7 @@ func TestConfirmSingleQuoteRollsBackOnInsufficientBudget(t *testing.T) {
 	item := quotedSnapshotItem(projectID, 101)
 	item.Operation = quoted
 	item.Inputs[0].OperationID = quoted.ID
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	if err := store.CreateQuoteSnapshot(t.Context(), actor, nil, []pgoperation.QuoteItem{item}); err != nil {
 		t.Fatalf("seed quote: %v", err)
 	}
@@ -100,7 +101,7 @@ func TestConfirmSingleQuoteRejectsForeignAndRevokedActors(t *testing.T) {
 	item := quotedSnapshotItem(projectID, 1)
 	item.Operation = quoted
 	item.Inputs[0].OperationID = quoted.ID
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	if err := store.CreateQuoteSnapshot(t.Context(), actor, nil, []pgoperation.QuoteItem{item}); err != nil {
 		t.Fatalf("seed quote: %v", err)
 	}
@@ -108,13 +109,13 @@ func TestConfirmSingleQuoteRejectsForeignAndRevokedActors(t *testing.T) {
 		ProjectID: projectID, OperationID: quoted.ID,
 		RequestID: uuid.NewString(),
 	}
-	if _, err := store.ConfirmSingleQuote(t.Context(), foreign, input); !errors.Is(err, pgoperation.ErrNotFound) {
+	if _, err := store.ConfirmSingleQuote(t.Context(), foreign, input); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
 		t.Fatalf("foreign actor = %v", err)
 	}
 	if err := database.Exec(`UPDATE identity."user" SET status = 'disabled' WHERE id = ?::uuid`, actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.ConfirmSingleQuote(t.Context(), actor, input); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := store.ConfirmSingleQuote(t.Context(), actor, input); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatalf("revoked actor = %v", err)
 	}
 }
@@ -127,7 +128,7 @@ func TestConfirmSingleQuoteExpiresChangedModelBeforeReservation(t *testing.T) {
 	item := quotedSnapshotItem(projectID, 1)
 	item.Operation = quoted
 	item.Inputs[0].OperationID = quoted.ID
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	if err := store.CreateQuoteSnapshot(t.Context(), actor, nil, []pgoperation.QuoteItem{item}); err != nil {
 		t.Fatal(err)
 	}
@@ -167,14 +168,14 @@ func TestConfirmSingleQuoteRunsAsRuntimeRole(t *testing.T) {
 	item := quotedSnapshotItem(projectID, 1)
 	item.Operation = quoted
 	item.Inputs[0].OperationID = quoted.ID
-	if err := pgoperation.NewStore(database).CreateQuoteSnapshot(t.Context(), actor, nil, []pgoperation.QuoteItem{item}); err != nil {
+	if err := operationStore(database).CreateQuoteSnapshot(t.Context(), actor, nil, []pgoperation.QuoteItem{item}); err != nil {
 		t.Fatal(err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return err
 		}
-		_, err := pgoperation.NewStore(tx).ConfirmSingleQuote(t.Context(), actor, operationapp.ConfirmSingleQuoteInput{
+		_, err := operationStore(tx).ConfirmSingleQuote(t.Context(), actor, operationapp.ConfirmSingleQuoteInput{
 			ProjectID: projectID, OperationID: quoted.ID, RequestID: uuid.NewString(),
 		})
 		return err
@@ -190,7 +191,7 @@ func TestConfirmSingleQuoteRollsBackWhenOutboxInsertFails(t *testing.T) {
 	item := quotedSnapshotItem(projectID, 1)
 	item.Operation = quoted
 	item.Inputs[0].OperationID = quoted.ID
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	if err := store.CreateQuoteSnapshot(t.Context(), actor, nil, []pgoperation.QuoteItem{item}); err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +207,7 @@ func TestConfirmSingleQuoteRollsBackWhenOutboxInsertFails(t *testing.T) {
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return err
 		}
-		_, err := pgoperation.NewStore(tx).ConfirmSingleQuote(t.Context(), actor, operationapp.ConfirmSingleQuoteInput{
+		_, err := operationStore(tx).ConfirmSingleQuote(t.Context(), actor, operationapp.ConfirmSingleQuoteInput{
 			ProjectID: projectID, OperationID: quoted.ID, RequestID: uuid.NewString(),
 		})
 		return err
@@ -234,7 +235,7 @@ func TestConfirmSingleQuoteSerializesCompetingBudgetReservations(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
 	quoted, _, _ := seedQuoteCatalog(t, database, projectID, time.Now().UTC())
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	operationIDs := make([]uuid.UUID, 2)
 	for index := range operationIDs {
 		item := quotedSnapshotItem(projectID, 60)

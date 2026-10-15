@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
@@ -65,23 +64,23 @@ func TestDocumentSchemaPreservesLegacyRowsButAllOwningReadsAndCopyFailClosed(t *
 	if err := owner.Exec(`INSERT INTO media.upload_request(project_id,principal_id,request_key,sha256,file_name,byte_size,asset_id,response) VALUES(?,?,?,?,?,1,?,?::jsonb)`, project, actor.ID, key, strings.Repeat("a", 64), "legacy.pdf", id, string(response)).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := pgmedia.NewStore(db).FindUpload(t.Context(), actor, mediaapp.UploadRequest{ProjectID: project, Key: key, RequestID: uuid.New(), SHA256: strings.Repeat("a", 64), FileName: "legacy.pdf", ByteSize: 1}); !errors.Is(err, mediaapp.ErrUnavailable) {
+	if _, _, err := mediaTestStore(db).FindUpload(t.Context(), actor, mediaapp.UploadRequest{ProjectID: project, Key: key, RequestID: uuid.New(), SHA256: strings.Repeat("a", 64), FileName: "legacy.pdf", ByteSize: 1}); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("legacy invalid document upload receipt bypassed owner closure", err)
 	}
-	reader := mediaapp.NewDocumentSources(pgmedia.NewDocumentSourceStore(db), nil)
+	reader := mediaapp.NewDocumentSources(mediaDocumentStore(db), nil)
 	if _, err := reader.Freeze(t.Context(), actor, project, []uuid.UUID{id}); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("legacy invalid document silently exposed", err)
 	}
-	query := mediaapp.NewAssetQuery(pgmedia.NewStore(db), nil)
+	query := mediaapp.NewAssetQuery(mediaTestStore(db), nil)
 	if _, err := query.List(t.Context(), actor, project, "document", "", 50); err == nil {
 		t.Fatal("legacy invalid document silently listed or skipped")
 	}
 	binding := mediaapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: uuid.New()}
-	if err := owner.Exec(`INSERT INTO workspace.project(id,org_id,name,aspect_ratio,style_type,status) VALUES(?,?,'legacy复制拒绝目标','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID).Error; err != nil {
+	if err := owner.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,owner_scope_id,name,aspect_ratio,style_type,status) VALUES(?,?,?,?,'legacy复制拒绝目标','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID, actor.ID, actor.ScopeID).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		_, err := pgmedia.NewProjectCopyStore(tx).Freeze(t.Context(), actor, binding, time.Now())
+		_, err := mediaCopyStore(tx).Freeze(t.Context(), actor, binding, time.Now())
 		return err
 	}); !errors.Is(err, mediaapp.ErrProjectCopyMediaUnavailable) {
 		t.Fatal("copy silently dropped legacy source", err)

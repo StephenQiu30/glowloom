@@ -25,7 +25,7 @@ func TestConfirmationWritesUnderRuntimeRole(t *testing.T) {
 		Scope: json.RawMessage(`{}`), Status: domain.BatchStatusQuoted,
 		TotalCount: 1, QuoteTotalMicros: 20,
 	}
-	if err := pgoperation.NewStore(database).CreateQuoteSnapshot(t.Context(), actor, &batch, []pgoperation.QuoteItem{item}); err != nil {
+	if err := operationStore(database).CreateQuoteSnapshot(t.Context(), actor, &batch, []pgoperation.QuoteItem{item}); err != nil {
 		t.Fatalf("seed quoted batch: %v", err)
 	}
 	reservationID, ledgerID := uuid.New(), uuid.New()

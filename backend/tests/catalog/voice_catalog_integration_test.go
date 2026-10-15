@@ -10,9 +10,10 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/paramvalidation"
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 func insertVoiceCatalogCapability(ctx context.Context, t *testing.T, database *gorm.DB) {
@@ -36,8 +37,8 @@ func TestVoiceCatalogPGCurrentConfigurationScopeAndNonOwnerLocks(t *testing.T) {
 	ctx, database := modelCatalogDB(t)
 	org := insertModelCatalogOrganization(ctx, t, database)
 	actor := insertModelCatalogActor(ctx, t, database, org)
-	project := insertModelCatalogProject(ctx, t, database, org, false)
-	foreignProject := insertModelCatalogProject(ctx, t, database, insertModelCatalogOrganization(ctx, t, database), false)
+	project := insertModelCatalogProject(ctx, t, database, actor, false)
+	foreignProject := insertModelCatalogProject(ctx, t, database, insertModelCatalogActor(ctx, t, database, insertModelCatalogOrganization(ctx, t, database)), false)
 	insertVoiceCatalogCapability(ctx, t, database)
 	provider := insertModelCatalogProvider(ctx, t, database, "domestic", "active", "ok")
 	prefix := "voice-catalog-" + uuid.NewString()
@@ -57,7 +58,7 @@ func TestVoiceCatalogPGCurrentConfigurationScopeAndNonOwnerLocks(t *testing.T) {
 		if err := tx.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "lanverse_app" {
 			t.Fatalf("missing actual non-owner role: %s %v", role, err)
 		}
-		q := catalogapp.NewVoiceCatalog(pgcatalog.NewStore(tx), validator)
+		q := catalogapp.NewVoiceCatalog(app.NewCatalogStore(tx), validator)
 		fact, err := q.Reference(ctx, actor, project, catalogapp.VoiceSelection{ModelKey: prefix + "-a", ExpectedVersion: 1, VoiceKey: "a_voice", Params: json.RawMessage(`{"speed":1.2}`)})
 		if err != nil || fact.ModelVersionID != version || fact.ModelKey != prefix+"-a" {
 			t.Fatalf("actual published binding failed: %+v %v", fact, err)
@@ -69,7 +70,7 @@ func TestVoiceCatalogPGCurrentConfigurationScopeAndNonOwnerLocks(t *testing.T) {
 			}
 		}
 		_, err = q.List(ctx, actor, foreignProject, 10, nil)
-		if !errors.Is(err, catalogapp.ErrModelCatalogProjectNotFound) {
+		if !errors.Is(err, workspaceapp.ErrProjectNotFound) {
 			t.Fatalf("foreign project catalog disclosed: %v", err)
 		}
 		page, err := q.List(ctx, actor, project, 1, &catalogapp.VoiceCursor{ModelKey: prefix + "-a", VoiceKey: "a_voice"})

@@ -73,7 +73,7 @@ func TestScheduledQuoteExpiryRunsAgainstLocalPostgresAndTemporal(t *testing.T) {
 	expires := created.Add(15 * time.Minute)
 	item.Operation.CreateTime = created
 	item.Operation.QuoteExpiresAt = &expires
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	if err := store.CreateQuoteSnapshot(ctx, actor, nil, []pgoperation.QuoteItem{item}); err != nil {
 		t.Fatal(err)
 	}

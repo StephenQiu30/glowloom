@@ -28,12 +28,10 @@ import (
 
 	auditevent "github.com/StephenQiu30/glowloom-server/backend/internal/audit/adapter/event"
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
-	canvaspg "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	inboxpg "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
 	inboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
-	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	toolff "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/ffmpeg"
@@ -77,7 +75,7 @@ func TestExportRealHTTPFrozenCanvasPrivateRenderingReviewAndDownload(t *testing.
 	hash := sha256.Sum256(imageBytes.Bytes())
 	download := &mediaapp.Downloaded{File: file, Size: int64(imageBytes.Len()), MIMEType: "image/png", SHA256: hex.EncodeToString(hash[:])}
 	defer func() { _ = download.Close() }()
-	mediaStore := mediapg.NewStore(db)
+	mediaStore := mediaTestStore(db)
 	upload := mediaapp.NewUploadService(mediaStore, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 	uploaded, err := upload.Upload(t.Context(), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "source.png"}, File: download, LocalReviewConfirmed: true})
 	if err != nil {
@@ -98,8 +96,8 @@ func TestExportRealHTTPFrozenCanvasPrivateRenderingReviewAndDownload(t *testing.
 			}
 		}
 	})
-	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediapg.NewStore(tx), nil) }
-	canvasStore := canvaspg.NewStore(db, mediaFactory)
+	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx), nil) }
+	canvasStore := mediaCanvasStore(db, mediaFactory)
 	canvasService := canvasapp.NewService(canvasStore)
 	doc, err := canvasService.Create(t.Context(), actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "Export real fixture"})
 	if err != nil {
@@ -117,8 +115,11 @@ func TestExportRealHTTPFrozenCanvasPrivateRenderingReviewAndDownload(t *testing.
 		t.Fatal(err)
 	}
 	store := toolpg.NewStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
-		return canvasapp.NewTimelineReader(canvaspg.NewStore(tx, mediaFactory))
-	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediapg.NewStore(tx)) })
+		return canvasapp.NewTimelineReader(mediaCanvasStore(tx, mediaFactory))
+	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
+	workerStore := toolpg.NewStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
+		return canvasapp.NewTimelineReader(mediaCanvasWorkerStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaWorkerStore(tx), nil) }))
+	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaWorkerStore(tx)) })
 	query := toolapp.NewExportQuery(store, objects, objects)
 	router := gin.New()
 	router.Use(httpapi.Middleware("http://localhost:3000"))
@@ -174,10 +175,10 @@ func TestExportRealHTTPFrozenCanvasPrivateRenderingReviewAndDownload(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	worker := toolapp.NewWorker(store, toolflow.NewObjects(objects), renderer, mediaflow.FFProber{}, mediaflow.FFRenderer{})
+	worker := toolapp.NewWorker(workerStore, toolflow.NewObjects(objects), renderer, mediaflow.FFProber{}, mediaflow.FFRenderer{})
 	var suite testsuite.WorkflowTestSuite
 	workflowEnv := suite.NewTestWorkflowEnvironment()
-	activities := toolflow.NewActivities(worker, store, store)
+	activities := toolflow.NewActivities(worker, workerStore, workerStore)
 	workflowEnv.RegisterWorkflow(toolflow.ExportWorkflow)
 	workflowEnv.RegisterActivityWithOptions(activities.RenderExport, activity.RegisterOptions{Name: toolflow.RenderActivity})
 	workflowEnv.RegisterActivityWithOptions(activities.FailExportWorkflow, activity.RegisterOptions{Name: toolflow.FailureActivity})

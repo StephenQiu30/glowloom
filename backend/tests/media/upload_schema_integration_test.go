@@ -9,7 +9,6 @@ import (
 
 	"go.opentelemetry.io/otel/trace/noop"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
@@ -32,7 +31,7 @@ func TestMediaUploadSchemaPersistsReceiptAndReplay(t *testing.T) {
 		t.Fatal("upload receipt relation missing from initialized schema")
 	}
 	actor, project := mediaStoreProject(t, database)
-	service := mediaapp.NewUploadService(pgmedia.NewStore(database), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, &uploadObjectsFake{}, time.Now)
+	service := mediaapp.NewUploadService(mediaTestStore(database), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, &uploadObjectsFake{}, time.Now)
 	in := uploadInput(t)
 	in.Actor = actor
 	in.Request.ProjectID = project

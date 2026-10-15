@@ -9,13 +9,14 @@ import (
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 func TestFindReusableCompletedRequiresSameProjectAndSafeOutputs(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
 	otherActor, otherProjectID := operationStoreProject(t, database)
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	hash := uuid.NewString()
 
 	seedCompletedOutput(t, database, projectID, hash, "rejected", "ready", "passed")
@@ -56,7 +57,7 @@ func TestFindReusableCompletedRequiresSameProjectAndSafeOutputs(t *testing.T) {
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return err
 		}
-		got, err := pgoperation.NewStore(tx).FindReusableCompleted(t.Context(), actor, projectID, hash)
+		got, err := operationStore(tx).FindReusableCompleted(t.Context(), actor, projectID, hash)
 		if err != nil {
 			return err
 		}
@@ -85,7 +86,7 @@ func TestFindReusableCompletedRequiresSameProjectAndSafeOutputs(t *testing.T) {
 	if err := database.Exec(`UPDATE identity."user" SET status = 'disabled' WHERE id = ?::uuid`, actor.ID.String()).Error; err != nil {
 		t.Fatalf("disable actor: %v", err)
 	}
-	if _, err := store.FindReusableCompleted(t.Context(), actor, projectID, hash); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := store.FindReusableCompleted(t.Context(), actor, projectID, hash); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatalf("revoked actor reuse = %v, want forbidden", err)
 	}
 	if err := database.Exec(`UPDATE identity."user" SET status = 'active' WHERE id = ?::uuid`, actor.ID.String()).Error; err != nil {
@@ -94,7 +95,7 @@ func TestFindReusableCompletedRequiresSameProjectAndSafeOutputs(t *testing.T) {
 	if err := database.Exec(`UPDATE workspace.project SET is_delete = true, delete_time = now(), purge_after = now() + interval '30 days' WHERE id = ?::uuid`, projectID.String()).Error; err != nil {
 		t.Fatalf("delete project: %v", err)
 	}
-	if _, err := store.FindReusableCompleted(t.Context(), actor, projectID, hash); !errors.Is(err, pgoperation.ErrNotFound) {
+	if _, err := store.FindReusableCompleted(t.Context(), actor, projectID, hash); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
 		t.Fatalf("deleted project reuse = %v, want no candidate", err)
 	}
 }

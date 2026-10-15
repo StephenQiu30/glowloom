@@ -10,7 +10,6 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
@@ -18,7 +17,7 @@ import (
 func TestProjectFolderPGAssignmentAndRecycleHavePhysicalFence(t *testing.T) {
 	ctx, db, owner := folderTestDB(t)
 	actor := insertWorkspaceActor(ctx, t, owner, insertWorkspaceOrganization(ctx, t, owner))
-	project := uuid.MustParse(insertWorkspaceProject(ctx, t, owner, actor.OrgID.String(), "16:9", "realistic", nil))
+	project := uuid.MustParse(insertWorkspaceProject(ctx, t, owner, actor, "16:9", "realistic", nil))
 	service := workspaceapp.NewProjectFolders(folderStore(db), time.Now)
 	f := createTestFolder(ctx, t, service, actor, "实际成员锁")
 	f = *moveTestProject(ctx, t, service, actor, project, f, 0).Folder
@@ -85,14 +84,15 @@ func (g pausedFolderGuard) HasInflightWork(ctx context.Context, actor identityap
 	}
 	return g.owner.HasInflightWork(ctx, actor, project)
 }
+
 func TestProjectFolderPGAlreadyDeletedMemberRestoreIsSerialized(t *testing.T) {
 	ctx, db, owner := folderTestDB(t)
 	actor := insertWorkspaceActor(ctx, t, owner, insertWorkspaceOrganization(ctx, t, owner))
-	project := uuid.MustParse(insertWorkspaceProject(ctx, t, owner, actor.OrgID.String(), "16:9", "realistic", nil))
+	project := uuid.MustParse(insertWorkspaceProject(ctx, t, owner, actor, "16:9", "realistic", nil))
 	service := workspaceapp.NewProjectFolders(folderStore(db), time.Now)
 	f := createTestFolder(ctx, t, service, actor, "保留已回收成员锁")
 	f = *moveTestProject(ctx, t, service, actor, project, f, 0).Folder
-	lifecycle := workspaceapp.NewProjectLifecycle(workspacepg.NewStoreWithProjectWorkGuard(db, folderWork), time.Now)
+	lifecycle := workspaceapp.NewProjectLifecycle(workspaceStoreWithWork(db, folderWork), time.Now)
 	if _, err := lifecycle.Change(ctx, actor, projectChange(project, 1, "delete")); err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestProjectFolderPGAlreadyDeletedMemberRestoreIsSerialized(t *testing.T) {
 	guardFactory := func(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
 		return pausedFolderGuard{folderWork(tx), entered, release}
 	}
-	recycler := workspaceapp.NewProjectFolders(workspacepg.NewFolderStore(recycleTx, guardFactory, nil), time.Now)
+	recycler := workspaceapp.NewProjectFolders(workspaceFolderStore(recycleTx, guardFactory, nil), time.Now)
 	recycle := folderCommand("recycle")
 	recycle.FolderID = f.ID
 	recycle.ExpectedRevision = f.Revision
@@ -131,7 +131,7 @@ func TestProjectFolderPGAlreadyDeletedMemberRestoreIsSerialized(t *testing.T) {
 	blocker, blocked := projectTransactionPID(t, recycleTx), projectTransactionPID(t, restoreTx)
 	restoreStarted = true
 	go func() {
-		_, err := workspaceapp.NewProjectLifecycle(workspacepg.NewStoreWithProjectWorkGuard(restoreTx, folderWork), time.Now).Change(owned, actor, projectChange(project, 2, "restore"))
+		_, err := workspaceapp.NewProjectLifecycle(workspaceStoreWithWork(restoreTx, folderWork), time.Now).Change(owned, actor, projectChange(project, 2, "restore"))
 		restoreDone <- err
 	}()
 	waitProjectLock(owned, t, db, blocker, blocked)
@@ -161,7 +161,7 @@ func TestProjectFolderPGAlreadyDeletedMemberRestoreIsSerialized(t *testing.T) {
 		t.Fatal(err)
 	}
 	root := uuid.Nil
-	page, err := workspaceapp.NewListProjectsQuery(workspacepg.NewStore(db)).Execute(ctx, actor, workspaceapp.ListProjectsInput{FolderID: &root, Limit: 50})
+	page, err := workspaceapp.NewListProjectsQuery(workspaceStore(db)).Execute(ctx, actor, workspaceapp.ListProjectsInput{FolderID: &root, Limit: 50})
 	if err != nil || len(page.Projects) != 1 || page.Projects[0].ID != project || page.Projects[0].PlacementRevision != 2 {
 		t.Fatalf("serialized restore root %+v %v", page, err)
 	}
@@ -170,7 +170,7 @@ func TestProjectFolderPGAlreadyDeletedMemberRestoreIsSerialized(t *testing.T) {
 func TestProjectFolderPGCoverReferenceLockSurvivesUntilCommit(t *testing.T) {
 	ctx, db, owner := folderTestDB(t)
 	actor := insertWorkspaceActor(ctx, t, owner, insertWorkspaceOrganization(ctx, t, owner))
-	project := uuid.MustParse(insertWorkspaceProject(ctx, t, owner, actor.OrgID.String(), "16:9", "realistic", nil))
+	project := uuid.MustParse(insertWorkspaceProject(ctx, t, owner, actor, "16:9", "realistic", nil))
 	asset := uuid.New()
 	lifecycleFixtureSQL(t, owner, `INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,mime_type,byte_size,moderation_status,sha256)VALUES(?,?,'image','upload','ready',?,'image/png',12,'passed',repeat('a',64))`, asset, project, "projects/"+project.String()+"/image/2026/10/"+asset.String()+".png")
 	owned, cancel := context.WithCancel(ctx)

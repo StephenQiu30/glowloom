@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
@@ -36,7 +35,7 @@ func TestCreateBatchFreeQuoteKeepsValidItemsAndCanConfirmThem(t *testing.T) {
 		ProjectID: projectID, RequestID: uuid.NewString(),
 		Items: []operationapp.FreeQuoteItemInput{good, missingModel, second, missingPrompt},
 	}
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	result, err := operationapp.NewCreateBatchFreeQuoteCommand(store).Execute(t.Context(), actor, input)
 	if err != nil || result.BatchID == nil || result.TotalMicros != 3 ||
 		result.AvailableMicros != 100 || !result.Confirmable || len(result.Items) != 4 {
@@ -91,7 +90,7 @@ func TestCreateBatchFreeQuoteReplaysAllInvalidResultAndRejectsChangedRequest(t *
 			{ModelKey: "missing-b", Capability: "image.generate", Mode: "text_to_image", Prompt: "B", OutputCount: 1},
 		},
 	}
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	first, err := store.CreateBatchFreeQuote(t.Context(), actor, input)
 	if err != nil || first.BatchID != nil || first.Confirmable || len(first.Items) != 2 ||
 		first.Items[0].ErrorCode != "model_unavailable" || first.Items[1].ErrorCode != "model_unavailable" {
@@ -137,7 +136,7 @@ func TestCreateBatchFreeQuoteRejectsChangedDuplicateParameterRequest(t *testing.
 			{ModelKey: "missing-b", Capability: "image.generate", Mode: "text_to_image", Prompt: "B", OutputCount: 1},
 		},
 	}
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	first, err := store.CreateBatchFreeQuote(t.Context(), actor, input)
 	if err != nil || first.Items[0].ErrorCode != "input_not_ready" {
 		t.Fatalf("duplicate parameter quote = %+v, %v", first, err)
@@ -167,7 +166,7 @@ func TestCreateBatchFreeQuoteAsRuntimeRole(t *testing.T) {
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return err
 		}
-		result, err := pgoperation.NewStore(tx).CreateBatchFreeQuote(t.Context(), actor, input)
+		result, err := operationStore(tx).CreateBatchFreeQuote(t.Context(), actor, input)
 		if err != nil {
 			return err
 		}
@@ -195,7 +194,7 @@ func TestCreateBatchFreeQuoteConcurrentSameKeyCreatesOneBatch(t *testing.T) {
 		ProjectID: projectID, RequestID: uuid.NewString(),
 		Items: []operationapp.FreeQuoteItemInput{item, item},
 	}
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	ctx := t.Context()
 	var results [2]operationapp.CreateBatchFreeQuoteResult
 	var failures [2]error
@@ -242,7 +241,7 @@ func TestCreateBatchFreeQuoteSupportsMaximumItemCount(t *testing.T) {
 		ProjectID: projectID, RequestID: uuid.NewString(), Items: items,
 	}
 	started := time.Now()
-	result, err := pgoperation.NewStore(database).CreateBatchFreeQuote(t.Context(), actor, input)
+	result, err := operationStore(database).CreateBatchFreeQuote(t.Context(), actor, input)
 	if err != nil || result.BatchID == nil || len(result.Items) != 150 || result.TotalMicros != 150 || result.Confirmable {
 		t.Fatalf("150-item batch = batch %v, items %d, total %d, confirmable %v, err %v",
 			result.BatchID, len(result.Items), result.TotalMicros, result.Confirmable, err)

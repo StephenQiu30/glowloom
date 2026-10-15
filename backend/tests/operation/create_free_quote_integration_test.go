@@ -14,6 +14,7 @@ import (
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 func TestCreateFreeQuoteUsesCurrentCatalogAndCanBeConfirmed(t *testing.T) {
@@ -26,7 +27,7 @@ func TestCreateFreeQuoteUsesCurrentCatalogAndCanBeConfirmed(t *testing.T) {
 	`, quoted.ModelProfileVersionID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	command := operationapp.NewCreateFreeQuoteCommand(store)
 	input := operationapp.CreateFreeQuoteInput{
 		ProjectID: projectID, RequestID: uuid.NewString(),
@@ -109,7 +110,7 @@ func TestCreateFreeQuoteLocksReadyMediaAndFreezesAssetIdentity(t *testing.T) {
 			MediaInputs: []operationapp.FreeQuoteMediaInput{{Role: "subject", MediaAssetID: assetID}},
 		},
 	}
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	result, err := store.CreateFreeQuote(t.Context(), actor, input)
 	if err != nil || result.OperationID == uuid.Nil {
 		t.Fatalf("ready media quote = %+v, %v", result, err)
@@ -147,7 +148,7 @@ func TestCreateFreeQuoteLocksReadyMediaAndFreezesAssetIdentity(t *testing.T) {
 		}
 		runtimeInput := input
 		runtimeInput.RequestID = uuid.NewString()
-		_, err := pgoperation.NewStore(tx).CreateFreeQuote(t.Context(), actor, runtimeInput)
+		_, err := operationStore(tx).CreateFreeQuote(t.Context(), actor, runtimeInput)
 		return err
 	}); err != nil {
 		t.Fatalf("runtime role media quote: %v", err)
@@ -205,7 +206,7 @@ func TestCreateFreeQuoteUsesProjectDefaultModelAndReplaysResolvedQuote(t *testin
 		quoted.Capability, modelKey, projectID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	input := operationapp.CreateFreeQuoteInput{
 		ProjectID: projectID, RequestID: uuid.NewString(),
 		FreeQuoteItemInput: operationapp.FreeQuoteItemInput{
@@ -231,7 +232,7 @@ func TestCreateFreeQuoteUsesProjectDefaultModelAndReplaysResolvedQuote(t *testin
 		}
 		runtimeInput := input
 		runtimeInput.RequestID = uuid.NewString()
-		_, err := pgoperation.NewStore(tx).CreateFreeQuote(t.Context(), actor, runtimeInput)
+		_, err := operationStore(tx).CreateFreeQuote(t.Context(), actor, runtimeInput)
 		return err
 	}); err != nil {
 		t.Fatalf("runtime role project default quote: %v", err)
@@ -273,7 +274,7 @@ func TestCreateFreeQuoteReusesCompletedInputUnlessForced(t *testing.T) {
 	if err := database.Exec(`UPDATE catalog.model_profile_version SET limits = '{"max_outputs":4}'::jsonb WHERE id = ?::uuid`, quoted.ModelProfileVersionID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	input := operationapp.CreateFreeQuoteInput{
 		ProjectID: projectID, RequestID: uuid.NewString(),
 		FreeQuoteItemInput: operationapp.FreeQuoteItemInput{
@@ -310,7 +311,7 @@ func TestCreateFreeQuotePersistsRequestKeyAcrossRetries(t *testing.T) {
 	if err := database.Exec(`UPDATE catalog.model_profile_version SET limits = '{"max_outputs":4}'::jsonb WHERE id = ?::uuid`, quoted.ModelProfileVersionID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	input := operationapp.CreateFreeQuoteInput{
 		ProjectID: projectID, RequestID: uuid.NewString(),
 		FreeQuoteItemInput: operationapp.FreeQuoteItemInput{
@@ -351,7 +352,7 @@ func TestCreateFreeQuotePersistsRequestKeyAcrossRetries(t *testing.T) {
 		t.Fatal(err)
 	}
 	input.Prompt = "重试的海面"
-	if _, err := store.CreateFreeQuote(t.Context(), actor, input); !errors.Is(err, pgoperation.ErrNotFound) {
+	if _, err := store.CreateFreeQuote(t.Context(), actor, input); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
 		t.Fatalf("deleted project quote replay = %v", err)
 	}
 }
@@ -370,7 +371,7 @@ func TestCreateFreeQuoteConcurrentSameKeyCreatesOneSnapshot(t *testing.T) {
 			Mode: "text_to_image", Prompt: "同时重试", OutputCount: 1,
 		},
 	}
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	var results [2]operationapp.CreateFreeQuoteResult
 	var failures [2]error
 	var workers sync.WaitGroup
@@ -409,8 +410,8 @@ func TestCreateFreeQuoteRejectsUnavailableModelAndForeignProjectWithoutWrites(t 
 			Mode: "text_to_image", Prompt: "测试权限", Params: json.RawMessage(`{}`), OutputCount: 1,
 		},
 	}
-	store := pgoperation.NewStore(database)
-	if _, err := store.CreateFreeQuote(t.Context(), foreign, input); !errors.Is(err, pgoperation.ErrNotFound) {
+	store := operationStore(database)
+	if _, err := store.CreateFreeQuote(t.Context(), foreign, input); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
 		t.Fatalf("foreign project quote = %v", err)
 	}
 	if err := database.Exec(`UPDATE catalog.model_profile SET status = 'disabled' WHERE id = ?::uuid`, modelID.String()).Error; err != nil {
@@ -427,7 +428,7 @@ func TestCreateFreeQuoteRejectsUnavailableModelAndForeignProjectWithoutWrites(t 
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return err
 		}
-		if _, err := pgoperation.NewStore(tx).CreateFreeQuote(t.Context(), actor, input); !errors.Is(err, operationapp.ErrFreeQuoteModelMissing) {
+		if _, err := operationStore(tx).CreateFreeQuote(t.Context(), actor, input); !errors.Is(err, operationapp.ErrFreeQuoteModelMissing) {
 			t.Errorf("runtime role disabled model = %v", err)
 		}
 		return nil
@@ -441,7 +442,7 @@ func TestCreateFreeQuoteRejectsUnavailableModelAndForeignProjectWithoutWrites(t 
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return err
 		}
-		created, err := pgoperation.NewStore(tx).CreateFreeQuote(t.Context(), actor, input)
+		created, err := operationStore(tx).CreateFreeQuote(t.Context(), actor, input)
 		if err != nil {
 			return err
 		}
@@ -471,7 +472,7 @@ func TestCreateFreeQuoteRejectsRevokedActor(t *testing.T) {
 			Mode: "text_to_image", Prompt: "测试撤权", Params: json.RawMessage(`{}`), OutputCount: 1,
 		},
 	}
-	if _, err := pgoperation.NewStore(database).CreateFreeQuote(t.Context(), actor, input); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := operationStore(database).CreateFreeQuote(t.Context(), actor, input); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatalf("revoked actor quote = %v", err)
 	}
 }

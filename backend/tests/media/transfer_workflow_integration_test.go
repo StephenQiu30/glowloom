@@ -52,7 +52,7 @@ func transferEventRecord(t *testing.T, f transferRecoveryFixture, key uuid.UUID)
 func TestMediaTransferPGPermanentInboxRetriesOnlyFailedExternalDelivery(t *testing.T) {
 	f := newTransferRecoveryFixture(t, 1)
 	starter := &transferDeliveryRecorder{fail: true}
-	handler := mediaevent.NewTransferHandler(inboxpg.NewStore(f.db), f.repo, starter)
+	handler := mediaevent.NewTransferHandler(inboxpg.NewStore(f.db), f.repo.Worker, starter)
 	record := transferEventRecord(t, f, f.input.Key)
 	forged := record
 	forged.Key = []byte(uuid.NewString())
@@ -120,7 +120,7 @@ func TestMediaTransferActualTemporalPrivateObjectsCancellationAndRecovery(t *tes
 			if cancelTransfer {
 				objects = blocking
 			}
-			activities := mediaflow.NewTransferActivities(mediaapp.NewTransferWorker(f.repo, objects, t.TempDir()), f.repo)
+			activities := mediaflow.NewTransferActivities(mediaapp.NewTransferWorker(f.repo.Worker, objects, t.TempDir()), f.repo.Worker)
 			w := worker.New(c, queue, worker.Options{})
 			mediaflow.RegisterTransferWorkflow(w)
 			mediaflow.RegisterTransferActivities(w, activities)
@@ -131,7 +131,7 @@ func TestMediaTransferActualTemporalPrivateObjectsCancellationAndRecovery(t *tes
 			ctx, stop := context.WithTimeout(t.Context(), 50*time.Second)
 			defer stop()
 			starter := mediaflow.NewTransferStarter(isolatedTransferClient{Client: c, queue: queue})
-			handler := mediaevent.NewTransferHandler(inboxpg.NewStore(f.db), f.repo, starter)
+			handler := mediaevent.NewTransferHandler(inboxpg.NewStore(f.db), f.repo.Worker, starter)
 			record := transferEventRecord(t, f, f.input.Key)
 			if err := handler.Handle(ctx, record); err != nil {
 				t.Fatal(err)

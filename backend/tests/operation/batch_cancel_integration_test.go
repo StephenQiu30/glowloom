@@ -21,7 +21,7 @@ func TestBatchCancelQueuedChildReleasesReservationOnce(t *testing.T) {
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return err
 		}
-		roleStore := pgoperation.NewStore(tx)
+		roleStore := operationStore(tx)
 		if err := roleStore.MarkWorkflowBatchCancelRequested(t.Context(), batchID); err != nil {
 			return err
 		}
@@ -234,7 +234,7 @@ func confirmedOneItemBatchOnDB(t *testing.T, database *gorm.DB) (*gorm.DB, *pgop
 	item := quotedSnapshotItem(projectID, 1)
 	item.Operation = quoted
 	item.Inputs[0].OperationID = quoted.ID
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	if err := store.CreateQuoteSnapshot(t.Context(), actor, nil, []pgoperation.QuoteItem{item}); err != nil {
 		t.Fatal(err)
 	}

@@ -16,7 +16,6 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	toolpg "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
@@ -76,7 +75,7 @@ func retainedRuntimeRead(t *testing.T, database *gorm.DB, use func(*toolpg.Retai
 		if role != "lanverse_app" {
 			t.Fatal("retained reader requires the actual non-owner role")
 		}
-		return use(toolpg.NewRetainedMediaReader(tx, mediaapp.NewDerivedService(pgmedia.NewStore(tx))))
+		return use(toolpg.NewRetainedMediaReader(tx, mediaapp.NewDerivedService(mediaTestStore(tx))))
 	}); err != nil {
 		t.Fatal(err)
 	}

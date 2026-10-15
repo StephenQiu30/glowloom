@@ -26,10 +26,10 @@ func createProjectForUpdate(ctx context.Context, t *testing.T, database *gorm.DB
 	t.Helper()
 	project := projectForActor(actor)
 	project.Description = "原说明"
-	if err := createWorkspaceProjectInStore(ctx, pgworkspace.NewStore(database), actor, project); err != nil {
+	if err := createWorkspaceProjectInStore(ctx, workspaceStore(database), actor, project); err != nil {
 		t.Fatalf("create update fixture: %v", err)
 	}
-	loaded, err := pgworkspace.NewStore(database).FindProject(ctx, actor, project.ID)
+	loaded, err := workspaceStore(database).FindProject(ctx, actor, project.ID)
 	if err != nil {
 		t.Fatalf("load update fixture: %v", err)
 	}
@@ -88,10 +88,10 @@ func TestUpdateProjectCommandCommitsMutableSettingsAndBothEvents(t *testing.T) {
 	orgID := insertWorkspaceOrganization(ctx, t, database)
 	actor := insertWorkspaceActor(ctx, t, database, orgID)
 	project := createProjectForUpdate(ctx, t, database, actor)
-	presetID := insertStylePreset(ctx, t, database, orgID, project.ID.String(), false)
+	presetID := insertStylePreset(ctx, t, database, actor, project.ID.String(), false)
 	input := updateProjectInput(project.ID)
 	input.StylePresetID = &presetID
-	updated, err := workspaceapp.NewUpdateProjectCommand(pgworkspace.NewStore(database), time.Now).Execute(ctx, actor, input)
+	updated, err := workspaceapp.NewUpdateProjectCommand(workspaceStore(database), time.Now).Execute(ctx, actor, input)
 	if err != nil || updated.ID != project.ID || updated.Name != "新名称" ||
 		updated.Description != *input.Description || updated.StylePresetID == nil ||
 		*updated.StylePresetID != presetID || !updated.AllowOverseasModels || updated.Revision != 2 {
@@ -157,7 +157,7 @@ func TestUpdateProjectCommandCommitsMutableSettingsAndBothEvents(t *testing.T) {
 	// A later patch may clear a preset without changing the immutable style.
 	clearedPresetID := uuid.Nil
 	description := "只改说明"
-	cleared, err := workspaceapp.NewUpdateProjectCommand(pgworkspace.NewStore(database), time.Now).Execute(ctx, actor, workspaceapp.UpdateProjectInput{
+	cleared, err := workspaceapp.NewUpdateProjectCommand(workspaceStore(database), time.Now).Execute(ctx, actor, workspaceapp.UpdateProjectInput{
 		ProjectID: project.ID, ExpectedRevision: 2, StylePresetID: &clearedPresetID,
 		Description: &description, RequestID: uuid.NewString(),
 	})
@@ -169,7 +169,7 @@ func TestUpdateProjectCommandCommitsMutableSettingsAndBothEvents(t *testing.T) {
 	}
 	eventsBeforeNoop := projectUpdateEventCount(ctx, t, database, project.ID)
 	sameName := "  新名称  "
-	unchanged, err := workspaceapp.NewUpdateProjectCommand(pgworkspace.NewStore(database), time.Now).Execute(ctx, actor, workspaceapp.UpdateProjectInput{
+	unchanged, err := workspaceapp.NewUpdateProjectCommand(workspaceStore(database), time.Now).Execute(ctx, actor, workspaceapp.UpdateProjectInput{
 		ProjectID: project.ID, ExpectedRevision: 3,
 		Name: &sameName, Description: &description, StylePresetID: &clearedPresetID,
 		RequestID: uuid.NewString(),
@@ -192,7 +192,7 @@ func TestUpdateProjectCommandRejectsStaleStateScopeAndPreset(t *testing.T) {
 	actor := insertWorkspaceActor(ctx, t, database, orgID)
 	otherActor := insertWorkspaceActor(ctx, t, database, otherOrgID)
 	project := createProjectForUpdate(ctx, t, database, actor)
-	command := workspaceapp.NewUpdateProjectCommand(pgworkspace.NewStore(database), time.Now)
+	command := workspaceapp.NewUpdateProjectCommand(workspaceStore(database), time.Now)
 	initialEvents := projectUpdateEventCount(ctx, t, database, project.ID)
 
 	stale := updateProjectInput(project.ID)
@@ -205,7 +205,7 @@ func TestUpdateProjectCommandRejectsStaleStateScopeAndPreset(t *testing.T) {
 	}
 	forged := otherActor
 	forged.OrgID = actor.OrgID
-	if _, err := command.Execute(ctx, forged, updateProjectInput(project.ID)); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := command.Execute(ctx, forged, updateProjectInput(project.ID)); !errors.Is(err, workspaceapp.ErrScopeNotFound) {
 		t.Fatalf("forged organization update result = %v", err)
 	}
 	for _, tc := range []struct {
@@ -213,9 +213,9 @@ func TestUpdateProjectCommandRejectsStaleStateScopeAndPreset(t *testing.T) {
 		preset uuid.UUID
 	}{
 		{"missing", uuid.New()},
-		{"other organization", insertStylePreset(ctx, t, database, otherOrgID, "", false)},
-		{"deleted", insertStylePreset(ctx, t, database, orgID, "", true)},
-		{"wrong style", insertRealisticPreset(ctx, t, database, orgID)},
+		{"other organization", insertStylePreset(ctx, t, database, otherActor, "", false)},
+		{"deleted", insertStylePreset(ctx, t, database, actor, "", true)},
+		{"wrong style", insertRealisticPreset(ctx, t, database, actor)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			input := updateProjectInput(project.ID)
@@ -226,7 +226,7 @@ func TestUpdateProjectCommandRejectsStaleStateScopeAndPreset(t *testing.T) {
 		})
 	}
 	otherProject := createProjectForUpdate(ctx, t, database, actor)
-	otherProjectPreset := insertStylePreset(ctx, t, database, orgID, otherProject.ID.String(), false)
+	otherProjectPreset := insertStylePreset(ctx, t, database, actor, otherProject.ID.String(), false)
 	projectScoped := updateProjectInput(project.ID)
 	projectScoped.StylePresetID = &otherProjectPreset
 	if _, err := command.Execute(ctx, actor, projectScoped); err == nil {
@@ -242,7 +242,7 @@ func TestUpdateProjectCommandRejectsStaleStateScopeAndPreset(t *testing.T) {
 	if err := database.WithContext(ctx).Exec(`UPDATE identity."user" SET status = 'disabled' WHERE id = ?::uuid`, actor.ID.String()).Error; err != nil {
 		t.Fatalf("disable actor: %v", err)
 	}
-	if _, err := command.Execute(ctx, actor, updateProjectInput(project.ID)); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := command.Execute(ctx, actor, updateProjectInput(project.ID)); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatalf("revoked actor update result = %v", err)
 	}
 	if err := database.WithContext(ctx).Exec(`UPDATE identity."user" SET status = 'active' WHERE id = ?::uuid`, actor.ID.String()).Error; err != nil {
@@ -298,7 +298,7 @@ func TestUpdateProjectCommandRollsBackWhenAuditInsertFails(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = database.Exec("DROP TRIGGER IF EXISTS " + trigger + " ON infra.outbox").Error })
 
-	if _, err := workspaceapp.NewUpdateProjectCommand(pgworkspace.NewStore(database), time.Now).Execute(ctx, actor, input); err == nil {
+	if _, err := workspaceapp.NewUpdateProjectCommand(workspaceStore(database), time.Now).Execute(ctx, actor, input); err == nil {
 		t.Fatal("audit insert failure committed update")
 	}
 	if row := projectRowForUpdate(ctx, t, database, project.ID); row.Revision != 1 ||
@@ -355,7 +355,7 @@ func TestUpdateProjectStoreRejectsTamperedEventsBeforeWriting(t *testing.T) {
 				t.Fatalf("build valid project update: %v", err)
 			}
 			tc.change(t, capture.events)
-			_, err := pgworkspace.NewStore(database).UpdateProjectWithEvents(ctx, actor, capture.before, capture.after, capture.events)
+			_, err := workspaceStore(database).UpdateProjectWithEvents(ctx, actor, capture.before, capture.after, capture.events)
 			if !errors.Is(err, workspaceapp.ErrInvalidUpdateProject) {
 				t.Fatalf("tampered update result = %v, want invalid command", err)
 			}
@@ -374,7 +374,7 @@ func TestUpdateProjectCommandConcurrentSameRevisionHasOneWinner(t *testing.T) {
 	orgID := insertWorkspaceOrganization(ctx, t, database)
 	actor := insertWorkspaceActor(ctx, t, database, orgID)
 	project := createProjectForUpdate(ctx, t, database, actor)
-	command := workspaceapp.NewUpdateProjectCommand(pgworkspace.NewStore(database), time.Now)
+	command := workspaceapp.NewUpdateProjectCommand(workspaceStore(database), time.Now)
 	start := make(chan struct{})
 	results := make(chan error, 2)
 	var wait sync.WaitGroup

@@ -19,7 +19,7 @@ func TestConfirmSingleQuoteRejectsReusedKeyForDifferentOperation(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
 	quoted, _, _ := seedQuoteCatalog(t, database, projectID, time.Now().UTC())
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	ids := make([]uuid.UUID, 2)
 	for index := range ids {
 		item := quotedSnapshotItem(projectID, 20)
@@ -55,17 +55,17 @@ func TestConfirmBatchQuoteReplaysFirstResultAndRejectsChangedExclusions(t *testi
 		ProjectID: projectID, BatchID: batchID, RequestID: uuid.NewString(),
 		ExcludeOperationIDs: []uuid.UUID{items[1].Operation.ID},
 	}
-	first, err := pgoperation.NewStore(database).ConfirmBatchQuote(t.Context(), actor, input)
+	first, err := operationStore(database).ConfirmBatchQuote(t.Context(), actor, input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	replay, err := pgoperation.NewStore(database).ConfirmBatchQuote(t.Context(), actor, input)
+	replay, err := operationStore(database).ConfirmBatchQuote(t.Context(), actor, input)
 	if err != nil || !reflect.DeepEqual(replay, first) {
 		t.Fatalf("durable batch replay = %+v, %v; first %+v", replay, err, first)
 	}
 	changed := input
 	changed.ExcludeOperationIDs = nil
-	if _, err := pgoperation.NewStore(database).ConfirmBatchQuote(t.Context(), actor, changed); !errors.Is(err, operationapp.ErrConfirmationKeyReused) {
+	if _, err := operationStore(database).ConfirmBatchQuote(t.Context(), actor, changed); !errors.Is(err, operationapp.ErrConfirmationKeyReused) {
 		t.Fatalf("changed exclusion with same key = %v", err)
 	}
 	var reservations, events int64
@@ -99,7 +99,7 @@ func TestConfirmBatchQuoteConcurrentSameKeyCreatesOneReservation(t *testing.T) {
 		wait.Add(1)
 		go func() {
 			defer wait.Done()
-			result, err := pgoperation.NewStore(database).ConfirmBatchQuote(t.Context(), actor, input)
+			result, err := operationStore(database).ConfirmBatchQuote(t.Context(), actor, input)
 			results <- outcome{result: result, err: err}
 		}()
 	}
@@ -129,7 +129,7 @@ func TestConfirmBatchQuoteReplaysBudgetRejectionAfterBudgetChanges(t *testing.T)
 	input := operationapp.ConfirmBatchQuoteInput{
 		ProjectID: projectID, BatchID: batchID, RequestID: uuid.NewString(),
 	}
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	first, err := store.ConfirmBatchQuote(t.Context(), actor, input)
 	if !errors.Is(err, billingdomain.ErrBudgetInsufficient) {
 		t.Fatalf("first budget rejection = %+v, %v", first, err)

@@ -38,13 +38,13 @@ func (g projectWorkGuard) HasInflightWork(ctx context.Context, actor identityapp
 
 func provideWorkspaceLifecycleStore(database *gorm.DB) *pgworkspace.Store {
 	return pgworkspace.NewScopedStore(database, provideRequestScopeAccess, provideProjectWorkGuard, func(tx *gorm.DB) workspaceapp.ProjectCoverReference {
-		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, provideMediaScopeAccess), nil)
+		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, NewMediaScopeAccess), nil)
 	})
 }
 
 func provideProjectWorkGuard(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
 	return projectWorkGuard{owners: []workspaceapp.ProjectWorkGuard{
-		provideOperationStore(tx), pgmedia.NewScopedStore(tx, provideMediaScopeAccess), pgmediatool.NewStore(tx, nil, nil), provideMediaTranscriptionStore(tx, false),
+		provideOperationStore(tx), pgmedia.NewScopedStore(tx, NewMediaScopeAccess), pgmediatool.NewStore(tx, nil, nil), provideMediaTranscriptionStore(tx, false),
 		pgworkspace.NewProjectCopyStore(tx, nil, nil),
 		provideMediaDepthStore(tx, false),
 		provideScriptSourceStore(tx),

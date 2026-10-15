@@ -12,7 +12,6 @@ import (
 	"github.com/google/uuid"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
@@ -20,19 +19,19 @@ import (
 func TestMediaPurgeCancelBeforeIORestoresTrashBytesAndRejectsNewWorkWhileReserved(t *testing.T) {
 	db := libraryRuntimeDB(t)
 	actor, project, in, keys, objects := purgeBinaryFixture(t, db)
-	repo := pgmedia.NewPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
+	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
 	job, err := repo.CreatePurge(t.Context(), actor, in)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: in.Scope, Key: uuid.New(), ExpectedRevision: 3, Action: "restore_items", Items: in.Items}); !errors.Is(err, domain.ErrPurgeConflict) {
+	if _, err := mediaLibraryStore(db, libraryTestAccess, time.Now).ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: in.Scope, Key: uuid.New(), ExpectedRevision: 3, Action: "restore_items", Items: in.Items}); !errors.Is(err, domain.ErrPurgeConflict) {
 		t.Fatal("new metadata restore bypassed physical reservation", err)
 	}
 	target := uuid.New()
-	if err := db.Exec(`INSERT INTO workspace.project(id,org_id,name,aspect_ratio,style_type,status) VALUES(?,?,'reservation fixture','16:9','realistic','copying')`, target, actor.OrgID).Error; err != nil {
+	if err := db.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,owner_scope_id,name,aspect_ratio,style_type,status) VALUES(?,?,?,?,'reservation fixture','16:9','realistic','copying')`, target, actor.OrgID, actor.ID, actor.ScopeID).Error; err != nil {
 		t.Fatal(err)
 	}
-	_, err = pgmedia.NewProjectCopyStore(db).FreezeWithReferences(t.Context(), actor, mediaapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: target}, time.Now(), []uuid.UUID{in.Items[0].ID})
+	_, err = mediaCopyStore(db).FreezeWithReferences(t.Context(), actor, mediaapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: target}, time.Now(), []uuid.UUID{in.Items[0].ID})
 	if !errors.Is(err, domain.ErrPurgeConflict) {
 		t.Fatal("history admission ignored purge reservation", err)
 	}
@@ -47,7 +46,7 @@ func TestMediaPurgeCancelBeforeIORestoresTrashBytesAndRejectsNewWorkWhileReserve
 			t.Fatal("cancel deleted source bytes", err)
 		}
 	}
-	detail, err := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now).LibraryDetail(t.Context(), actor, in.Scope, in.Items[0].ID)
+	detail, err := mediaLibraryStore(db, libraryTestAccess, time.Now).LibraryDetail(t.Context(), actor, in.Scope, in.Items[0].ID)
 	if err != nil || detail.State != "trashed" {
 		t.Fatal("cancel restored the asset to active instead of its original trash", detail, err)
 	}
@@ -62,7 +61,7 @@ func TestMediaPurgeCancelBeforeIORestoresTrashBytesAndRejectsNewWorkWhileReserve
 func TestMediaPurgeActualPersonalTextScrubsContentAndNoObjectsAreInvented(t *testing.T) {
 	db := libraryRuntimeDB(t)
 	actor, _ := mediaStoreProject(t, db)
-	library := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now)
+	library := mediaLibraryStore(db, libraryTestAccess, time.Now)
 	scope := domain.LibraryScope{Kind: domain.LibraryPersonal}
 	text := "真实待清理正文"
 	created, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "create_text", Metadata: &mediaapp.LibraryMetadata{PlainText: &text, Title: "私有名称", Tags: []string{"私有标签"}, Note: "私有备注", SourceLabel: "私有来源", Category: "other"}})
@@ -73,13 +72,13 @@ func TestMediaPurgeActualPersonalTextScrubsContentAndNoObjectsAreInvented(t *tes
 	if _, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), ExpectedRevision: 1, Action: "recycle_items", Items: []mediaapp.LibraryItemRevision{{ID: id, Revision: 1}}}); err != nil {
 		t.Fatal(err)
 	}
-	repo := pgmedia.NewPurgeStore(db, libraryTestAccess, transferTestGuards, nil, time.Now)
+	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, nil, time.Now)
 	job, err := repo.CreatePurge(t.Context(), actor, mediaapp.PurgeInput{Scope: scope, Items: []mediaapp.LibraryItemRevision{{ID: id, Revision: 2}}, ExpectedRevision: 2, PermanentDeleteConfirmed: true, Key: uuid.New()})
 	if err != nil {
 		t.Fatal(err)
 	}
 	objects := &purgePhysicalFixture{objects: map[string][]byte{}, started: map[string]bool{}, removed: map[string]bool{}}
-	complete, err := mediaapp.NewPurgeWorker(repo, objects).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
+	complete, err := mediaapp.NewPurgeWorker(repo.Worker, objects).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
 	if err != nil || complete.Status != "succeeded" || objects.deleteCalls != 0 {
 		t.Fatal("text fabricated a physical object", complete, err)
 	}
@@ -112,7 +111,7 @@ func TestMediaPurgeZeroRowPermanentReceiptRollsBackRawDeletionAndReservation(t *
 			t.Error(err)
 		}
 	})
-	repo := pgmedia.NewPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
+	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
 	if _, err := repo.CreatePurge(t.Context(), actor, in); !errors.Is(err, mediaapp.ErrLibraryConflict) {
 		t.Fatal("zero-row permanent receipt was treated as a committed mutation", err)
 	}
@@ -139,32 +138,32 @@ func TestMediaPurgeExpiredFenceCannotStealOrPublishAndRevocationStillAllowsExact
 	db := libraryRuntimeDB(t)
 	actor, _, in, keys, objects := purgeBinaryFixture(t, db)
 	now := time.Now()
-	repo := pgmedia.NewPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, func() time.Time { return now })
+	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, func() time.Time { return now })
 	job, err := repo.CreatePurge(t.Context(), actor, in)
 	if err != nil {
 		t.Fatal(err)
 	}
 	work := mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()}
-	lease, err := repo.ClaimPurge(t.Context(), work)
+	lease, err := repo.Worker.ClaimPurge(t.Context(), work)
 	if err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(time.Minute)
 	other := work
 	other.ExecutionID = uuid.NewString()
-	if _, err := repo.ClaimPurge(t.Context(), other); !errors.Is(err, domain.ErrPurgeConflict) {
+	if _, err := repo.Worker.ClaimPurge(t.Context(), other); !errors.Is(err, domain.ErrPurgeConflict) {
 		t.Fatal("expired lease stole an unended physical owner", err)
 	}
 	if err := db.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repo.GetPurge(t.Context(), actor, job.ID); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := repo.GetPurge(t.Context(), actor, job.ID); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("revoked actor read private cleanup", err)
 	}
-	if _, err := repo.ControlPurge(t.Context(), actor, job.ID, uuid.New(), job.Revision, "cancel"); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := repo.ControlPurge(t.Context(), actor, job.ID, uuid.New(), job.Revision, "cancel"); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("revoked actor controlled cleanup", err)
 	}
-	if err := repo.EndPurgePhysical(context.Background(), lease); err != nil {
+	if err := repo.Worker.EndPurgePhysical(context.Background(), lease); err != nil {
 		t.Fatal("exact cessation fact incorrectly required current permissions", err)
 	}
 	for _, key := range keys {
@@ -179,22 +178,22 @@ func TestMediaPurgeMissingIntentRowsCannotFabricateCompleteDeletion(t *testing.T
 	db := libraryRuntimeDB(t)
 	owner := libraryOwnerDB(t)
 	actor, _, in, _, _ := purgeBinaryFixture(t, db)
-	repo := pgmedia.NewPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
+	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
 	job, err := repo.CreatePurge(t.Context(), actor, in)
 	if err != nil {
 		t.Fatal(err)
 	}
-	lease, err := repo.ClaimPurge(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
+	lease, err := repo.Worker.ClaimPurge(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repo.StartPurgeItem(t.Context(), lease, 0); err != nil {
+	if _, err := repo.Worker.StartPurgeItem(t.Context(), lease, 0); err != nil {
 		t.Fatal(err)
 	}
 	if err := owner.Exec(`DELETE FROM media.purge_object WHERE job_id=?`, job.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.CompletePurgeItem(t.Context(), lease, 0); !errors.Is(err, domain.ErrPurgeConflict) {
+	if err := repo.Worker.CompletePurgeItem(t.Context(), lease, 0); !errors.Is(err, domain.ErrPurgeConflict) {
 		t.Fatal("zero surviving proof rows falsely proved absence", err)
 	}
 }
@@ -202,13 +201,13 @@ func TestMediaPurgeMissingIntentRowsCannotFabricateCompleteDeletion(t *testing.T
 func TestMediaPurgeUnknownRemovalCancelRetainsPurposeAndFinishesOnlyOriginalObjects(t *testing.T) {
 	db := libraryRuntimeDB(t)
 	actor, _, in, keys, objects := purgeBinaryFixture(t, db)
-	repo := pgmedia.NewPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
+	repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
 	job, err := repo.CreatePurge(t.Context(), actor, in)
 	if err != nil {
 		t.Fatal(err)
 	}
 	unknown := &purgeUnknownRemove{PurgeObjects: objects, once: true}
-	current, err := mediaapp.NewPurgeWorker(repo, unknown).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
+	current, err := mediaapp.NewPurgeWorker(repo.Worker, unknown).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
 	if err != nil || current.Status != "needs_reconciliation" {
 		t.Fatal("unknown original outcome was not retained", current, err)
 	}
@@ -217,7 +216,7 @@ func TestMediaPurgeUnknownRemovalCancelRetainsPurposeAndFinishesOnlyOriginalObje
 	if err != nil || cancelled.Status != "cancel_requested" || !cancelled.CancellationRequested {
 		t.Fatal("unknown removal falsely became cancelled or lost cancellation purpose", cancelled, err)
 	}
-	complete, err := mediaapp.NewPurgeWorker(repo, unknown).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
+	complete, err := mediaapp.NewPurgeWorker(repo.Worker, unknown).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
 	if err != nil || complete.Status != "succeeded" || !complete.CancellationRequested || unknown.removeCount != len(keys) {
 		t.Fatal("started irreversible cleanup did not finish only its original object set", complete, err, unknown.removeCount)
 	}
@@ -239,7 +238,7 @@ func TestMediaPurgeUnknownRemovalCancelRetainsPurposeAndFinishesOnlyOriginalObje
 	if err := db.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repo.ControlPurge(t.Context(), actor, job.ID, key, current.Revision, "cancel"); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := repo.ControlPurge(t.Context(), actor, job.ID, key, current.Revision, "cancel"); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("revoked actor replayed a private permanent response", err)
 	}
 }
@@ -250,13 +249,13 @@ func TestMediaPurgeControlZeroRowReceiptsRollbackCancelAndReconcile(t *testing.T
 			db := libraryRuntimeDB(t)
 			owner := libraryOwnerDB(t)
 			actor, _, in, _, objects := purgeBinaryFixture(t, db)
-			repo := pgmedia.NewPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
+			repo := mediaPurgeStore(db, libraryTestAccess, transferTestGuards, purgeTestReferenceFactory, time.Now)
 			job, err := repo.CreatePurge(t.Context(), actor, in)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if action == "reconcile" {
-				job, err = mediaapp.NewPurgeWorker(repo, &purgeUnknownRemove{PurgeObjects: objects, once: true}).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
+				job, err = mediaapp.NewPurgeWorker(repo.Worker, &purgeUnknownRemove{PurgeObjects: objects, once: true}).Execute(t.Context(), mediaapp.PurgeWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.NewString()})
 				if err != nil || job.Status != "needs_reconciliation" {
 					t.Fatal("unknown fixture", job, err)
 				}

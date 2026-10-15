@@ -14,7 +14,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
@@ -31,7 +30,7 @@ func TestProductionFlowWorkerCancelsBatchOnLocalTemporal(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID, batchID, items := seedConfirmableBatch(t, database, 1)
 	operationID := items[0].Operation.ID
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	if _, err := store.ConfirmBatchQuote(ctx, actor, operationapp.ConfirmBatchQuoteInput{
 		ProjectID: projectID, BatchID: batchID, RequestID: uuid.NewString(),
 	}); err != nil {

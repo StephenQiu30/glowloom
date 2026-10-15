@@ -13,7 +13,6 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
 	kafkaoutbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/adapter/kafka"
 	pgoutbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/adapter/postgres"
@@ -75,6 +74,9 @@ func TestBudgetThresholdEventReachesKafkaThroughOutboxRelay(t *testing.T) {
 			{`UPDATE billing.ledger_entry SET is_delete = true WHERE project_id = ?::uuid AND NOT is_delete`, projectID},
 			{`DELETE FROM billing.budget WHERE project_id = ?::uuid`, projectID},
 			{`DELETE FROM workspace.project WHERE id = ?::uuid`, projectID},
+			{`DELETE FROM workspace.creation_scope WHERE id = ?::uuid`, actor.ScopeID},
+			{`DELETE FROM identity.user_session WHERE account_id = ?::uuid`, actor.ID},
+			{`DELETE FROM identity.auth_event WHERE account_id = ?::uuid`, actor.ID},
 			{`DELETE FROM identity."user" WHERE id = ?::uuid`, actor.ID},
 			{`DELETE FROM workspace.organization WHERE id = ?::uuid`, actor.OrgID},
 		} {
@@ -89,7 +91,7 @@ func TestBudgetThresholdEventReachesKafkaThroughOutboxRelay(t *testing.T) {
 	`, budgetID.String(), projectID.String()).Error; err != nil {
 		t.Fatalf("create budget at 25 percent available: %v", err)
 	}
-	changed, err := billingapp.NewChangeBudgetCommand(pgbilling.NewStore(database), time.Now).Execute(ctx, actor, billingapp.ChangeBudgetInput{
+	changed, err := billingapp.NewChangeBudgetCommand(billingStore(database), time.Now).Execute(ctx, actor, billingapp.ChangeBudgetInput{
 		ProjectID: projectID, LimitMicros: 900, ExpectedRevision: 1, RequestID: uuid.NewString(),
 	})
 	if err != nil || changed.LimitMicros != 900 || changed.SettledMicros != 750 || changed.Revision != 2 {

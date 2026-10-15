@@ -16,7 +16,6 @@ import (
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
@@ -43,8 +42,8 @@ func TestCreateProjectCommandCommitsProjectBudgetAndSafeEvents(t *testing.T) {
 	ctx, database := workspaceMigrationDB(t)
 	orgID := insertWorkspaceOrganization(ctx, t, database)
 	actor := insertWorkspaceActor(ctx, t, database, orgID)
-	presetID := insertStylePreset(ctx, t, database, orgID, "", false)
-	command := workspaceapp.NewCreateProjectCommand(pgworkspace.NewStore(database), time.Now)
+	presetID := insertStylePreset(ctx, t, database, actor, "", false)
+	command := workspaceapp.NewCreateProjectCommand(workspaceStore(database), time.Now)
 	input := projectCreateIntegrationInput(presetID)
 
 	created, err := command.Execute(ctx, actor, input)
@@ -177,18 +176,19 @@ func TestCreateProjectCommandRejectsUnusablePresetWithoutWrites(t *testing.T) {
 	ctx, database := workspaceMigrationDB(t)
 	orgID := insertWorkspaceOrganization(ctx, t, database)
 	otherOrgID := insertWorkspaceOrganization(ctx, t, database)
+	otherActor := insertWorkspaceActor(ctx, t, database, otherOrgID)
 	actor := insertWorkspaceActor(ctx, t, database, orgID)
-	otherProjectID := insertWorkspaceProject(ctx, t, database, orgID, "16:9", "stylized", "guofeng_xianxia")
-	command := workspaceapp.NewCreateProjectCommand(pgworkspace.NewStore(database), time.Now)
+	otherProjectID := insertWorkspaceProject(ctx, t, database, actor, "16:9", "stylized", "guofeng_xianxia")
+	command := workspaceapp.NewCreateProjectCommand(workspaceStore(database), time.Now)
 	for _, test := range []struct {
 		name     string
 		presetID uuid.UUID
 	}{
 		{"missing", uuid.New()},
-		{"other organization", insertStylePreset(ctx, t, database, otherOrgID, "", false)},
-		{"deleted", insertStylePreset(ctx, t, database, orgID, "", true)},
-		{"other project", insertStylePreset(ctx, t, database, orgID, otherProjectID, false)},
-		{"wrong style", insertRealisticPreset(ctx, t, database, orgID)},
+		{"other organization", insertStylePreset(ctx, t, database, otherActor, "", false)},
+		{"deleted", insertStylePreset(ctx, t, database, actor, "", true)},
+		{"other project", insertStylePreset(ctx, t, database, actor, otherProjectID, false)},
+		{"wrong style", insertRealisticPreset(ctx, t, database, actor)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			input := projectCreateIntegrationInput(test.presetID)
@@ -213,16 +213,17 @@ func TestCreateProjectCommandRechecksCurrentActorAndOrganization(t *testing.T) {
 	ctx, database := workspaceMigrationDB(t)
 	orgID := insertWorkspaceOrganization(ctx, t, database)
 	otherOrgID := insertWorkspaceOrganization(ctx, t, database)
-	actor := insertWorkspaceActor(ctx, t, database, orgID)
 	otherActor := insertWorkspaceActor(ctx, t, database, otherOrgID)
-	command := workspaceapp.NewCreateProjectCommand(pgworkspace.NewStore(database), time.Now)
+	actor := insertWorkspaceActor(ctx, t, database, orgID)
+	actor = workspaceTeamActor(t, database, actor)
+	command := workspaceapp.NewCreateProjectCommand(workspaceStore(database), time.Now)
 
 	forged := otherActor
 	forged.OrgID = actor.OrgID
 	input := projectCreateIntegrationInput(uuid.Nil)
 	input.Name = "伪造组织"
-	if _, err := command.Execute(ctx, forged, input); !errors.Is(err, identityapp.ErrForbidden) {
-		t.Fatalf("forged organization result = %v, want forbidden", err)
+	if _, err := command.Execute(ctx, forged, input); !errors.Is(err, workspaceapp.ErrScopeNotFound) {
+		t.Fatalf("forged organization result = %v, want current scope rejection", err)
 	}
 	if count := countProjectsNamed(ctx, t, database, actor.OrgID, input.Name); count != 0 {
 		t.Fatalf("forged organization left %d projects", count)
@@ -233,9 +234,10 @@ func TestCreateProjectCommandRechecksCurrentActorAndOrganization(t *testing.T) {
 		change     string
 		restore    string
 		identifier uuid.UUID
+		want       error
 	}{
-		{"disabled actor", `UPDATE identity."user" SET status = 'disabled' WHERE id = ?::uuid`, `UPDATE identity."user" SET status = 'active' WHERE id = ?::uuid`, actor.ID},
-		{"disabled organization", `UPDATE workspace.organization SET status = 'disabled' WHERE id = ?::uuid`, `UPDATE workspace.organization SET status = 'active' WHERE id = ?::uuid`, actor.OrgID},
+		{"disabled actor", `UPDATE identity."user" SET status = 'disabled' WHERE id = ?::uuid`, `UPDATE identity."user" SET status = 'active' WHERE id = ?::uuid`, actor.ID, identityapp.ErrSessionInvalid},
+		{"suspended team scope", `UPDATE workspace.team SET status = 'suspended', resume_status = 'active' WHERE id = (SELECT team_id FROM workspace.creation_scope WHERE id = ?::uuid)`, `UPDATE workspace.team SET status = 'active', resume_status = NULL WHERE id = (SELECT team_id FROM workspace.creation_scope WHERE id = ?::uuid)`, actor.ScopeID, workspaceapp.ErrScopeNotFound},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if err := database.WithContext(ctx).Exec(test.change, test.identifier.String()).Error; err != nil {
@@ -243,8 +245,8 @@ func TestCreateProjectCommandRechecksCurrentActorAndOrganization(t *testing.T) {
 			}
 			input := projectCreateIntegrationInput(uuid.Nil)
 			input.Name = "撤权-" + uuid.NewString()[:8]
-			if _, err := command.Execute(ctx, actor, input); !errors.Is(err, identityapp.ErrForbidden) {
-				t.Fatalf("revoked actor result = %v, want forbidden", err)
+			if _, err := command.Execute(ctx, actor, input); !errors.Is(err, test.want) {
+				t.Fatalf("revoked actor result = %v, want current scope rejection", err)
 			}
 			if count := countProjectsNamed(ctx, t, database, actor.OrgID, input.Name); count != 0 {
 				t.Fatalf("revoked actor left %d projects", count)
@@ -291,7 +293,7 @@ func TestCreateProjectCommandRollsBackWhenAuditOutboxInsertFails(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = database.Exec("DROP TRIGGER IF EXISTS " + trigger + " ON infra.outbox").Error })
 
-	command := workspaceapp.NewCreateProjectCommand(pgworkspace.NewStore(database), time.Now)
+	command := workspaceapp.NewCreateProjectCommand(workspaceStore(database), time.Now)
 	if _, err := command.Execute(ctx, actor, input); err == nil {
 		t.Fatal("audit insert failure committed project")
 	}
@@ -350,7 +352,7 @@ func TestCreateProjectStoreRejectsTamperedEventsBeforeWriting(t *testing.T) {
 				t.Fatalf("build valid project events: %v", err)
 			}
 			test.change(t, capture.events)
-			_, err = pgworkspace.NewStore(database).CreateProjectWithEvents(ctx, actor, capture.project, capture.events)
+			_, err = workspaceStore(database).CreateProjectWithEvents(ctx, actor, capture.project, capture.events)
 			if !errors.Is(err, workspaceapp.ErrInvalidCreateProject) {
 				t.Fatalf("tampered event result = %v, want invalid command", err)
 			}

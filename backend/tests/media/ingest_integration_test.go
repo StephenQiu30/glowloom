@@ -20,13 +20,14 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
-func seedIngestOperation(t *testing.T, database *gorm.DB, projectID uuid.UUID, outputType string) uuid.UUID {
+func seedIngestOperation(t *testing.T, database *gorm.DB, actor identityapp.Principal, projectID uuid.UUID, outputType string) uuid.UUID {
 	t.Helper()
 	suffix := uuid.NewString()
 	capability, providerKey, modelKey := outputType+".generate."+suffix, "mock-"+suffix, "mock-"+outputType+"-"+suffix
@@ -67,10 +68,10 @@ func seedIngestOperation(t *testing.T, database *gorm.DB, projectID uuid.UUID, o
 	if err := database.Exec(`
 		INSERT INTO operation.operation
 		  (id, project_id, target_type, capability, mode, model_profile_version_id,
-		   input_hash, origin, status, region)
+		   input_hash, origin, status, region, confirmed_by)
 		VALUES (?::uuid, ?::uuid, 'free', ?, ?, ?::uuid,
-		        ?, 'canvas', 'ingesting', 'overseas')
-	`, operationID.String(), projectID.String(), capability, mode, versionID.String(), suffix).Error; err != nil {
+		        ?, 'canvas', 'ingesting', 'overseas', ?::uuid)
+	`, operationID.String(), projectID.String(), capability, mode, versionID.String(), suffix, actor.ID).Error; err != nil {
 		t.Fatalf("seed ingest operation: %v", err)
 	}
 	return operationID
@@ -81,8 +82,8 @@ func TestMediaIngestPersistsOneCandidateAndModeratesExactlyOnce(t *testing.T) {
 		t.Skip("set LV_TEST_MEDIA_STORE_DB_DSN, LV_TEST_OBJECT_STORAGE=1 and LV_ENV_FILE for PostgreSQL and host MinIO")
 	}
 	database := mediaStoreDB(t)
-	_, projectID := mediaStoreProject(t, database)
-	opID := seedIngestOperation(t, database, projectID, "image")
+	actor, projectID := mediaStoreProject(t, database)
+	opID := seedIngestOperation(t, database, actor, projectID, "image")
 	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("load MinIO configuration: %v", err)
@@ -105,7 +106,7 @@ func TestMediaIngestPersistsOneCandidateAndModeratesExactlyOnce(t *testing.T) {
 	t.Cleanup(server.Close)
 	pool := x509.NewCertPool()
 	pool.AddCert(server.Certificate())
-	activities, err := mediaflow.NewActivities(database, objects, mediaflow.DownloadPolicy{
+	activities, err := mediaScopedIngestActivities(database, objects, mediaflow.DownloadPolicy{
 		AllowedOrigins: []string{server.URL}, AllowTestLoopbackTLS: true, TLSRootCAs: pool,
 	})
 	if err != nil {
@@ -196,8 +197,8 @@ func TestVideoIngestCreatesProjectAspectProxyAndPoster(t *testing.T) {
 		t.Skip("set LV_TEST_MEDIA_STORE_DB_DSN, LV_TEST_OBJECT_STORAGE=1 and LV_ENV_FILE for PostgreSQL and host MinIO")
 	}
 	database := mediaStoreDB(t)
-	_, projectID := mediaStoreProject(t, database) // Project fixture uses 16:9.
-	opID := seedIngestOperation(t, database, projectID, "video")
+	actor, projectID := mediaStoreProject(t, database) // Project fixture uses 16:9.
+	opID := seedIngestOperation(t, database, actor, projectID, "video")
 	cfg, err := config.Load()
 	if err != nil {
 		t.Fatal(err)
@@ -225,7 +226,7 @@ func TestVideoIngestCreatesProjectAspectProxyAndPoster(t *testing.T) {
 	t.Cleanup(server.Close)
 	pool := x509.NewCertPool()
 	pool.AddCert(server.Certificate())
-	activities, err := mediaflow.NewActivities(database, objects, mediaflow.DownloadPolicy{
+	activities, err := mediaScopedIngestActivities(database, objects, mediaflow.DownloadPolicy{
 		AllowedOrigins: []string{server.URL}, AllowTestLoopbackTLS: true, TLSRootCAs: pool,
 	})
 	if err != nil {

@@ -67,7 +67,7 @@ func TestBibleHTTPCurrentAuthorityClosedBodyAndPermanentRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	denied := call("POST", path, body, key)
-	if denied.Code != 403 {
+	if denied.Code != 401 {
 		t.Fatal("disabled replay", denied.Code, denied.Body.String())
 	}
 }

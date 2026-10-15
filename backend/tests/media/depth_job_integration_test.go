@@ -21,11 +21,11 @@ import (
 	"go.temporal.io/sdk/testsuite"
 	"gorm.io/gorm"
 
-	canvaspg "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	toolhttp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/http"
@@ -41,6 +41,7 @@ import (
 type depthHTTPFixture struct {
 	db              *gorm.DB
 	store           *toolpg.DepthStore
+	workerStore     *toolpg.DepthStore
 	objects         *objectstorage.Client
 	actor           identityapp.Principal
 	project, source uuid.UUID
@@ -49,13 +50,25 @@ type depthHTTPFixture struct {
 }
 
 func depthStore(db *gorm.DB, enabled bool) *toolpg.DepthStore {
+	return depthStoreWithScope(db, enabled, app.NewMediaScopeAccess)
+}
+
+func depthWorkerStore(db *gorm.DB, enabled bool) *toolpg.DepthStore {
+	return depthStoreWithScope(db, enabled, app.NewMediaWorkerScopeAccess)
+}
+
+func depthStoreWithScope(db *gorm.DB, enabled bool, scopes pgmedia.ScopeAccessFactory) *toolpg.DepthStore {
 	var source toolpg.TranscriptionSourceFactory
 	if enabled {
 		source = func(tx *gorm.DB) toolapp.TranscriptionSourceReader {
-			return canvasapp.NewTranscriptionSourceReader(canvaspg.NewStore(tx, func(t *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediapg.NewStore(t), nil) }))
+			return canvasapp.NewTranscriptionSourceReader(mediaCanvasStoreWithScope(tx, func(db *gorm.DB) canvasapp.MediaReader {
+				return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(db, scopes), nil)
+			}, scopes))
 		}
 	}
-	return toolpg.NewDepthStore(db, source, func(tx *gorm.DB) toolapp.DepthDerivedMedia { return mediaapp.NewDerivedService(mediapg.NewStore(tx)) })
+	return toolpg.NewDepthStore(db, source, func(tx *gorm.DB) toolapp.DepthDerivedMedia {
+		return mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, scopes))
+	})
 }
 
 func depthHTTP(t *testing.T) *depthHTTPFixture {
@@ -64,13 +77,13 @@ func depthHTTP(t *testing.T) *depthHTTPFixture {
 	objects := glbTestObjects(t)
 	actor, project := mediaStoreProject(t, db)
 	input := depthTestVideo(t, "30", "2")
-	upload := mediaapp.NewUploadService(mediapg.NewStore(db), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
+	upload := mediaapp.NewUploadService(mediaTestStore(db), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 	result, err := upload.Upload(t.Context(), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "source.mp4"}, File: input, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal("actual private video upload", err)
 	}
 	node := transcriptionNode(t, db, actor, project, result.Asset.ID, "video")
-	f := &depthHTTPFixture{db: db, store: depthStore(db, true), objects: objects, actor: actor, project: project, source: result.Asset.ID, input: toolapp.DepthCreateInput{CanvasID: node.CanvasID, NodeID: node.NodeID, Revision: node.Revision}, router: gin.New()}
+	f := &depthHTTPFixture{db: db, store: depthStore(db, true), workerStore: depthWorkerStore(db, true), objects: objects, actor: actor, project: project, source: result.Asset.ID, input: toolapp.DepthCreateInput{CanvasID: node.CanvasID, NodeID: node.NodeID, Revision: node.Revision}, router: gin.New()}
 	f.router.Use(httpapi.Middleware("http://localhost:3000"))
 	g := f.router.Group("/api")
 	g.Use(func(c *gin.Context) { c.Set("principal", f.actor); c.Next() })
@@ -123,7 +136,7 @@ func (f *depthHTTPFixture) worker(t *testing.T, p toolapp.DepthProcessor, o tool
 	if err != nil {
 		t.Fatal(err)
 	}
-	return toolapp.NewDepthWorker(f.store, o, p, mediaflow.FFProber{}, mediaflow.FFRenderer{}, check)
+	return toolapp.NewDepthWorker(f.workerStore, o, p, mediaflow.FFProber{}, mediaflow.FFRenderer{}, check)
 }
 
 func TestDepthJobActualNativeHTTPPrivateReviewCanvas(t *testing.T) {
@@ -133,7 +146,7 @@ func TestDepthJobActualNativeHTTPPrivateReviewCanvas(t *testing.T) {
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()
 	env.SetTestTimeout(2 * time.Minute)
-	a := toolflow.NewDepthActivities(f.worker(t, native, toolflow.NewObjects(f.objects)), f.store)
+	a := toolflow.NewDepthActivities(f.worker(t, native, toolflow.NewObjects(f.objects)), f.workerStore)
 	env.RegisterActivityWithOptions(a.ProcessDepth, activity.RegisterOptions{Name: toolflow.DepthActivity})
 	env.RegisterActivityWithOptions(a.InterruptDepth, activity.RegisterOptions{Name: toolflow.DepthFailureActivity})
 	env.ExecuteWorkflow(toolflow.DepthWorkflow, toolapp.DepthWorkID{JobID: j.ID, Attempt: j.Attempt})
@@ -149,7 +162,7 @@ func TestDepthJobActualNativeHTTPPrivateReviewCanvas(t *testing.T) {
 	if rec := f.request(t, "GET", base+"/download"+scope, uuid.Nil, nil); rec.Code != 409 {
 		t.Fatal("pending output downloaded", rec.Code)
 	}
-	if _, err := mediaapp.NewAssetQuery(mediapg.NewStore(f.db), nil).Reference(t.Context(), f.actor, f.project, *rendered.AssetID); !errors.Is(err, mediaapp.ErrNotFound) {
+	if _, err := mediaapp.NewAssetQuery(mediaTestStore(f.db), nil).Reference(t.Context(), f.actor, f.project, *rendered.AssetID); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("pending output referenceable", err)
 	}
 	rec := f.request(t, "GET", base+"/preview"+scope, uuid.Nil, nil)
@@ -185,8 +198,8 @@ func TestDepthJobActualNativeHTTPPrivateReviewCanvas(t *testing.T) {
 	if json.Unmarshal(artifact.Artifact, &frozen) != nil || !frozen.Receipt.Native.ProcessGroupJoined || frozen.Receipt.Output.FrameCount != 60 || len(frozen.Renditions) != 2 {
 		t.Fatal("actual permanent native receipt incomplete")
 	}
-	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediapg.NewStore(tx), nil) }
-	service := canvasapp.NewService(canvaspg.NewStore(f.db, mediaFactory))
+	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx), nil) }
+	service := canvasapp.NewService(mediaCanvasStore(f.db, mediaFactory))
 	doc, err := service.Get(t.Context(), f.actor, f.input.CanvasID)
 	if err != nil {
 		t.Fatal(err)
@@ -257,18 +270,18 @@ func TestDepthJobActualReconcileAllObjectsThenCancelPendingWithoutInference(t *t
 		t.Fatal("original reconcile command not replayable", err)
 	}
 	o.unknown.Store(false)
-	recovered, err := toolapp.NewDepthWorker(f.store, o, nil, nil, nil, nil).Execute(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New(), Reconcile: true})
+	recovered, err := toolapp.NewDepthWorker(f.workerStore, o, nil, nil, nil, nil).Execute(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New(), Reconcile: true})
 	if err != nil || recovered.Status != tooldomain.DepthReviewRequired || recovered.ReconciliationRequested || recovered.NeedsReconciliation || p.calls.Load() != 1 {
 		t.Fatalf("exact receipt recovery %+v %v", recovered, err)
 	}
 	if _, err = f.store.Control(t.Context(), f.actor, f.project, j.ID, uuid.New(), recovered.Revision, "cancel"); err != nil {
 		t.Fatal(err)
 	}
-	cancelled, err := toolapp.NewDepthWorker(f.store, toolflow.NewObjects(f.objects), nil, nil, nil, nil).Execute(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New()})
+	cancelled, err := toolapp.NewDepthWorker(f.workerStore, toolflow.NewObjects(f.objects), nil, nil, nil, nil).Execute(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New()})
 	if err != nil || cancelled.Status != tooldomain.DepthCancelled || p.calls.Load() != 1 {
 		t.Fatalf("pending physical cleanup %+v %v", cancelled, err)
 	}
-	asset, err := mediapg.NewStore(f.db).FindAsset(t.Context(), f.actor, f.project, *recovered.AssetID)
+	asset, err := mediaTestStore(f.db).FindAsset(t.Context(), f.actor, f.project, *recovered.AssetID)
 	if err != nil || asset.Status != "rejected" || asset.ModerationStatus != "rejected" {
 		t.Fatal("pending asset not permanently rejected", err)
 	}
@@ -279,7 +292,7 @@ func TestDepthJobActualReconcileAllObjectsThenCancelPendingWithoutInference(t *t
 	if err != nil || next.Attempt != 2 || next.Status != tooldomain.DepthQueued || next.SourceAssetID != j.SourceAssetID || next.SourceSHA256 != j.SourceSHA256 || next.Source != j.Source {
 		t.Fatal("explicit retry did not keep source/fence", err)
 	}
-	if err := f.store.EndProcess(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New()}); !errors.Is(err, toolapp.ErrConflict) {
+	if err := f.workerStore.EndProcess(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New()}); !errors.Is(err, toolapp.ErrConflict) {
 		t.Fatal("old physical attempt wrote new state", err)
 	}
 }
@@ -330,7 +343,7 @@ func TestDepthJobActualUnknownPutCancelReconcileWithoutInference(t *testing.T) {
 			t.Fatal("unpublished result retained", err)
 		}
 	}
-	source, err := mediapg.NewStore(f.db).FindAsset(t.Context(), f.actor, f.project, f.source)
+	source, err := mediaTestStore(f.db).FindAsset(t.Context(), f.actor, f.project, f.source)
 	if err != nil || !source.CanReference() {
 		t.Fatal("source media changed", err)
 	}
@@ -365,7 +378,7 @@ func TestDepthJobPGCommandsNilRuntimeCASAndImmutableACL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stopped, err := toolapp.NewDepthWorker(disabled, toolflow.NewObjects(f.objects), nil, nil, nil, nil).Execute(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New()})
+	stopped, err := toolapp.NewDepthWorker(depthWorkerStore(f.db, false), toolflow.NewObjects(f.objects), nil, nil, nil, nil).Execute(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New()})
 	if err != nil || stopped.Status != tooldomain.DepthCancelled {
 		t.Fatalf("disabled queued cancel did not complete %+v %v (cmdrev%d)", stopped, err, cancel.Revision)
 	}
@@ -404,7 +417,7 @@ func TestDepthJobPGNonOwnerTransactionAndWriteDenials(t *testing.T) {
 		if _, err = s.Control(t.Context(), f.actor, f.project, j.ID, uuid.New(), j.Revision, "cancel"); err != nil {
 			return err
 		}
-		stop, err := toolapp.NewDepthWorker(s, toolflow.NewObjects(f.objects), nil, nil, nil, nil).Execute(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New()})
+		stop, err := toolapp.NewDepthWorker(depthWorkerStore(tx, true), toolflow.NewObjects(f.objects), nil, nil, nil, nil).Execute(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New()})
 		if err != nil || stop.Status != tooldomain.DepthCancelled {
 			return errors.Join(err, errors.New("nonowner queued cancel did not stop"))
 		}
@@ -451,14 +464,14 @@ func TestDepthJobPGUnknownNativeFenceAndNoInferredStop(t *testing.T) {
 			t.Fatal("unknown execution admitted "+action, err)
 		}
 	}
-	if _, err := f.store.Claim(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New()}); !errors.Is(err, toolapp.ErrWorkerBusy) {
+	if _, err := f.workerStore.Claim(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New()}); !errors.Is(err, toolapp.ErrWorkerBusy) {
 		t.Fatal("unknown native owner replaced", err)
 	}
 	active, err := f.store.HasInflightWork(t.Context(), f.actor, f.project)
 	if err != nil || !active {
 		t.Fatal("unknown native omitted from project guard", err)
 	}
-	if err := f.store.EndProcess(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New()}); !errors.Is(err, toolapp.ErrConflict) {
+	if err := f.workerStore.EndProcess(t.Context(), toolapp.DepthWorkID{JobID: j.ID, Attempt: 1, ExecutionID: uuid.New()}); !errors.Is(err, toolapp.ErrConflict) {
 		t.Fatal("foreign worker declared cessation", err)
 	}
 }

@@ -18,7 +18,6 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/gltf"
 	mediahttp "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/http"
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -34,7 +33,7 @@ func TestGLTFJSONActualHTTPPrivateOriginalAndIndependentProjectCopy(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := pgmedia.NewStore(db)
+	store := mediaTestStore(db)
 	service := mediaapp.NewScopedUploadService(store, store, mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 	query := mediaapp.NewAssetQuery(store, objects)
 	router := gin.New()
@@ -113,21 +112,21 @@ func TestGLTFJSONActualHTTPPrivateOriginalAndIndependentProjectCopy(t *testing.T
 		t.Fatal("bad JSON model created durable partial output", counts, err)
 	}
 	binding := mediaapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: uuid.New()}
-	if err := db.Exec(`INSERT INTO workspace.project(id,org_id,name,aspect_ratio,style_type,status) VALUES(?,?,'JSON模型独立副本','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID).Error; err != nil {
+	if err := db.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,owner_scope_id,name,aspect_ratio,style_type,status) VALUES(?,?,?,?,'JSON模型独立副本','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID, actor.ID, actor.ScopeID).Error; err != nil {
 		t.Fatal(err)
 	}
 	var snapshot mediaapp.ProjectCopySnapshot
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		var err error
-		snapshot, err = pgmedia.NewProjectCopyStore(tx).Freeze(t.Context(), actor, binding, time.Now())
+		snapshot, err = mediaCopyStore(tx).Freeze(t.Context(), actor, binding, time.Now())
 		if err != nil {
 			return err
 		}
-		return tx.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,actor_id,source_project_id,source_revision,target_project_id,target_name,status,stage,manifest,workspace_snapshot,idem_key,request_sha256,admission_response) VALUES(?,?,?,?,1,?,'JSON模型独立副本','queued','media','{}','{}',gen_random_uuid(),repeat('a',64),'{}')`, binding.JobID, actor.OrgID, actor.ID, project, binding.TargetProjectID).Error
+		return tx.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,actor_id,owner_scope_id,source_project_id,source_revision,target_project_id,target_name,status,stage,manifest,workspace_snapshot,idem_key,request_sha256,admission_response) VALUES(?,?,?,?,?,1,?,'JSON模型独立副本','queued','media','{}','{}',gen_random_uuid(),repeat('a',64),'{}')`, binding.JobID, actor.OrgID, actor.ID, actor.ScopeID, project, binding.TargetProjectID).Error
 	}); err != nil || snapshot.Assets != 1 || snapshot.Renditions != 0 {
 		t.Fatal("complete JSON model Copy snapshot failed", snapshot, err)
 	}
-	repo := pgmedia.NewProjectCopyStore(db)
+	repo := mediaCopyStore(db)
 	if err := mediaapp.NewProjectCopyTransfer(repo, mediaobjects.NewProjectCopyObjects(objects), t.TempDir()).Transfer(t.Context(), actor, binding, snapshot); err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +136,7 @@ func TestGLTFJSONActualHTTPPrivateOriginalAndIndependentProjectCopy(t *testing.T
 	}
 	keys = append(keys, intents[0].TargetObjectKey)
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		_, err := pgmedia.NewProjectCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
+		_, err := mediaCopyStore(tx).Register(t.Context(), actor, binding, snapshot)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -163,7 +162,7 @@ func TestGLTFJSONActualHTTPPrivateOriginalAndIndependentProjectCopy(t *testing.T
 	if err != nil || personal.Asset.MIMEType != "model/gltf+json" || personal.Asset.Kind != "model" {
 		t.Fatal("same personal pipeline lost JSON model facts", personal, err)
 	}
-	p, err := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now).FindLibraryMedia(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryPersonal}, personal.Asset.ID)
+	p, err := mediaLibraryStore(db, libraryTestAccess, time.Now).FindLibraryMedia(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryPersonal}, personal.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,12 +186,12 @@ func TestGLTFJSONSchemaFactsAndRetainedOriginalContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = file.Close() }()
-	service := mediaapp.NewUploadService(pgmedia.NewStore(db), mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
+	service := mediaapp.NewUploadService(mediaTestStore(db), mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 	result, err := service.Upload(t.Context(), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "约束模型.gltf"}, File: file, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	asset, err := pgmedia.NewStore(db).FindAsset(t.Context(), actor, project, result.Asset.ID)
+	asset, err := mediaTestStore(db).FindAsset(t.Context(), actor, project, result.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

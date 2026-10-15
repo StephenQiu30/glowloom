@@ -9,11 +9,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	canvaspg "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	toolpg "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
@@ -23,16 +23,28 @@ import (
 
 func transcriptionStore(t *testing.T, db *gorm.DB) *toolpg.TranscriptionStore {
 	t.Helper()
-	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediapg.NewStore(tx), nil) }
+	return transcriptionStoreWithScope(db, app.NewMediaScopeAccess)
+}
+
+func transcriptionWorkerStore(db *gorm.DB) *toolpg.TranscriptionStore {
+	return transcriptionStoreWithScope(db, app.NewMediaWorkerScopeAccess)
+}
+
+func transcriptionStoreWithScope(db *gorm.DB, scopes pgmedia.ScopeAccessFactory) *toolpg.TranscriptionStore {
+	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader {
+		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, scopes), nil)
+	}
 	return toolpg.NewTranscriptionStore(db, func(tx *gorm.DB) toolapp.TranscriptionSourceReader {
-		return canvasapp.NewTranscriptionSourceReader(canvaspg.NewStore(tx, mediaFactory))
-	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediapg.NewStore(tx)) })
+		return canvasapp.NewTranscriptionSourceReader(mediaCanvasStoreWithScope(tx, mediaFactory, scopes))
+	}, func(tx *gorm.DB) toolapp.DerivedMedia {
+		return mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, scopes))
+	})
 }
 
 func transcriptionNode(t *testing.T, db *gorm.DB, actor identityapp.Principal, project, asset uuid.UUID, kind string) toolapp.TranscriptionCreateInput {
 	t.Helper()
-	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediapg.NewStore(tx), nil) }
-	service := canvasapp.NewService(canvaspg.NewStore(db, mediaFactory))
+	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx), nil) }
+	service := canvasapp.NewService(mediaCanvasStore(db, mediaFactory))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "Actual speech source"})
 	if err != nil {
 		t.Fatal(err)
@@ -59,7 +71,7 @@ func transcriptionPGFixture(t *testing.T) (*gorm.DB, *toolpg.TranscriptionStore,
 	asset.SHA256 = &sha
 	asset.Status = mediadomain.StatusProcessing
 	asset.ModerationStatus = mediadomain.ModerationPending
-	if err := mediapg.NewStore(db).CreateAsset(t.Context(), actor, asset); err != nil {
+	if err := mediaTestStore(db).CreateAsset(t.Context(), actor, asset); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`UPDATE media.media_asset SET status='ready',moderation_status='passed' WHERE id=?`, asset.ID).Error; err != nil {
@@ -88,6 +100,7 @@ func TestTranscriptionRuntimeRoleOwnsOnlyMutableFacts(t *testing.T) {
 
 func TestTranscriptionDurableCancelBeforeDispatchAndIdempotentReplay(t *testing.T) {
 	db, store, actor, project, input := transcriptionPGFixture(t)
+	workerStore := transcriptionWorkerStore(db)
 	key := uuid.New()
 	job, err := store.Create(t.Context(), actor, project, key, input)
 	if err != nil {
@@ -111,7 +124,7 @@ func TestTranscriptionDurableCancelBeforeDispatchAndIdempotentReplay(t *testing.
 		t.Fatal(err)
 	}
 	id := toolapp.TranscriptionWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.New()}
-	if _, err := store.Claim(t.Context(), id); !errors.Is(err, toolapp.ErrCancelled) {
+	if _, err := workerStore.Claim(t.Context(), id); !errors.Is(err, toolapp.ErrCancelled) {
 		t.Fatal("cancel gate", err)
 	}
 	actual, err := store.Get(t.Context(), actor, project, job.ID)
@@ -122,22 +135,23 @@ func TestTranscriptionDurableCancelBeforeDispatchAndIdempotentReplay(t *testing.
 
 func TestTranscriptionLostSubmittedOwnerCannotDispatchOrRetry(t *testing.T) {
 	db, store, actor, project, input := transcriptionPGFixture(t)
+	workerStore := transcriptionWorkerStore(db)
 	job, err := store.Create(t.Context(), actor, project, uuid.New(), input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	owner := toolapp.TranscriptionWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.New()}
-	if _, err := store.Claim(t.Context(), owner); err != nil {
+	if _, err := workerStore.Claim(t.Context(), owner); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.StartInference(t.Context(), owner); err != nil {
+	if err := workerStore.StartInference(t.Context(), owner); err != nil {
 		t.Fatal(err)
 	}
 	// A hard process loss leaves no Go defer or HTTP termination receipt. The
 	// committed submitted state must block a later actual execution owner.
 	replacement := owner
 	replacement.ExecutionID = uuid.New()
-	if _, err := store.Claim(t.Context(), replacement); !errors.Is(err, toolapp.ErrInferenceUncertain) {
+	if _, err := workerStore.Claim(t.Context(), replacement); !errors.Is(err, toolapp.ErrInferenceUncertain) {
 		t.Fatal("lost owner admitted inference", err)
 	}
 	pending, err := store.Get(t.Context(), actor, project, job.ID)
@@ -150,25 +164,26 @@ func TestTranscriptionLostSubmittedOwnerCannotDispatchOrRetry(t *testing.T) {
 	if err := db.Exec(`UPDATE mediatool.transcription_job SET active_worker=NULL WHERE id=?`, job.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Claim(t.Context(), replacement); !errors.Is(err, toolapp.ErrInferenceUncertain) {
+	if _, err := workerStore.Claim(t.Context(), replacement); !errors.Is(err, toolapp.ErrInferenceUncertain) {
 		t.Fatal("unowned submitted dispatched", err)
 	}
-	if err := store.Finish(t.Context(), replacement, true, ""); !errors.Is(err, toolapp.ErrConflict) {
+	if err := workerStore.Finish(t.Context(), replacement, true, ""); !errors.Is(err, toolapp.ErrConflict) {
 		t.Fatal("borrowed native cessation", err)
 	}
 }
 
 func TestTranscriptionSoftCancelRequiresActualTerminalResponse(t *testing.T) {
-	_, store, actor, project, input := transcriptionPGFixture(t)
+	db, store, actor, project, input := transcriptionPGFixture(t)
+	workerStore := transcriptionWorkerStore(db)
 	job, err := store.Create(t.Context(), actor, project, uuid.New(), input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	owner := toolapp.TranscriptionWorkID{JobID: job.ID, Attempt: 1, ExecutionID: uuid.New()}
-	if _, err := store.Claim(t.Context(), owner); err != nil {
+	if _, err := workerStore.Claim(t.Context(), owner); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.StartInference(t.Context(), owner); err != nil {
+	if err := workerStore.StartInference(t.Context(), owner); err != nil {
 		t.Fatal(err)
 	}
 	before, err := store.Get(t.Context(), actor, project, job.ID)
@@ -179,29 +194,29 @@ func TestTranscriptionSoftCancelRequiresActualTerminalResponse(t *testing.T) {
 	if err != nil || pending.Status != tooldomain.TranscriptionCancelRequested {
 		t.Fatal(err)
 	}
-	if err := store.FailWorkflow(t.Context(), owner); err != nil {
+	if err := workerStore.FailWorkflow(t.Context(), owner); err != nil {
 		t.Fatal(err)
 	}
 	still, err := store.Get(t.Context(), actor, project, job.ID)
 	if err != nil || still.Status != tooldomain.TranscriptionCancelRequested {
 		t.Fatal("workflow error forged cancellation", err)
 	}
-	if err := store.EndInference(t.Context(), owner); err != nil {
+	if err := workerStore.EndInference(t.Context(), owner); err != nil {
 		t.Fatal(err)
 	}
 	draft := tooldomain.Transcript{Version: 1, Language: "english", DurationMS: 1000, Segments: []tooldomain.SubtitleSegment{{StartMS: 0, EndMS: 1000, Text: "Actual terminal response"}}}
-	completed, err := store.Complete(t.Context(), owner, draft)
+	completed, err := workerStore.Complete(t.Context(), owner, draft)
 	if err != nil || completed.Status != tooldomain.TranscriptionCancelled || completed.ResultSHA256 != nil {
 		t.Fatal("soft cancellation published result", err)
 	}
-	if err := store.Release(t.Context(), owner); err != nil {
+	if err := workerStore.Release(t.Context(), owner); err != nil {
 		t.Fatal(err)
 	}
 	retried, err := store.Control(t.Context(), actor, project, job.ID, uuid.New(), completed.Revision, "retry")
 	if err != nil || retried.Attempt != 2 {
 		t.Fatal("known cessation retry", err)
 	}
-	if err := store.StartInference(t.Context(), owner); !errors.Is(err, toolapp.ErrConflict) {
+	if err := workerStore.StartInference(t.Context(), owner); !errors.Is(err, toolapp.ErrConflict) {
 		t.Fatal("old attempt changed retry", err)
 	}
 }
@@ -222,7 +237,7 @@ func TestTranscriptionMissingConfigRejectsNewJobsButKeepsReceiptsAndRead(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	disabled := toolpg.NewTranscriptionStore(db, nil, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediapg.NewStore(tx)) })
+	disabled := toolpg.NewTranscriptionStore(db, nil, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
 	if _, err := disabled.Create(t.Context(), actor, project, uuid.New(), input); !errors.Is(err, toolapp.ErrUnavailable) {
 		t.Fatal("unconfigured new speech job admitted", err)
 	}

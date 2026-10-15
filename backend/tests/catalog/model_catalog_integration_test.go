@@ -13,12 +13,13 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func modelCatalogDB(t *testing.T) (context.Context, *gorm.DB) {
@@ -58,17 +59,19 @@ func insertModelCatalogActor(ctx context.Context, t *testing.T, database *gorm.D
 	`, actor.ID.String(), orgID.String(), "model-catalog-"+actor.ID.String()).Error; err != nil {
 		t.Fatalf("insert actor: %v", err)
 	}
+
+	actor = identityfixture.Session(t, database, actor)
 	return actor
 }
 
-func insertModelCatalogProject(ctx context.Context, t *testing.T, database *gorm.DB, orgID uuid.UUID, allowOverseas bool) uuid.UUID {
+func insertModelCatalogProject(ctx context.Context, t *testing.T, database *gorm.DB, actor identityapp.Principal, allowOverseas bool) uuid.UUID {
 	t.Helper()
 	id := uuid.New()
 	if err := database.WithContext(ctx).Exec(`
 		INSERT INTO workspace.project
-		  (id, org_id, name, aspect_ratio, style_type, allow_overseas_models)
-		VALUES (?::uuid, ?::uuid, '模型选择', '16:9', 'realistic', ?)
-	`, id.String(), orgID.String(), allowOverseas).Error; err != nil {
+		  (id, org_id, owner_id, owner_scope_id, name, aspect_ratio, style_type, allow_overseas_models)
+		VALUES (?::uuid, ?::uuid, ?::uuid, ?::uuid, '模型选择', '16:9', 'realistic', ?)
+	`, id.String(), actor.OrgID.String(), actor.ID.String(), actor.ScopeID.String(), allowOverseas).Error; err != nil {
 		t.Fatalf("insert project: %v", err)
 	}
 	return id
@@ -156,8 +159,8 @@ func TestModelCatalogReadsProjectPolicyCurrentVersionsAndEffectivePricesOnLocalP
 	ctx, database := modelCatalogDB(t)
 	orgID := insertModelCatalogOrganization(ctx, t, database)
 	actor := insertModelCatalogActor(ctx, t, database, orgID)
-	domesticOnly := insertModelCatalogProject(ctx, t, database, orgID, false)
-	allowOverseas := insertModelCatalogProject(ctx, t, database, orgID, true)
+	domesticOnly := insertModelCatalogProject(ctx, t, database, actor, false)
+	allowOverseas := insertModelCatalogProject(ctx, t, database, actor, true)
 	capability := insertModelCatalogCapability(ctx, t, database)
 	otherCapability := insertModelCatalogCapability(ctx, t, database)
 	domestic := insertModelCatalogProvider(ctx, t, database, "domestic", "active", "ok")
@@ -207,7 +210,7 @@ func TestModelCatalogReadsProjectPolicyCurrentVersionsAndEffectivePricesOnLocalP
 	insertModelCatalogPrice(ctx, t, database, textModeID, 1, past)
 	insertModelCatalogPrice(ctx, t, database, failedCredentialID, 1, past)
 
-	store := pgcatalog.NewStore(database)
+	store := app.NewCatalogStore(database)
 	input := catalogapp.ListModelsInput{ProjectID: domesticOnly, Capability: capability, Mode: "image2video", Limit: 2}
 	var models []catalogapp.ModelCatalogItem
 	var after *catalogapp.ModelCatalogCursor
@@ -317,8 +320,8 @@ func TestModelCatalogRejectsStaleActorAndInvisibleProjectOnLocalPostgres(t *test
 	otherOrgID := insertModelCatalogOrganization(ctx, t, database)
 	actor := insertModelCatalogActor(ctx, t, database, orgID)
 	otherActor := insertModelCatalogActor(ctx, t, database, otherOrgID)
-	projectID := insertModelCatalogProject(ctx, t, database, orgID, false)
-	store := pgcatalog.NewStore(database)
+	projectID := insertModelCatalogProject(ctx, t, database, actor, false)
+	store := app.NewCatalogStore(database)
 	input := catalogapp.ListModelsInput{ProjectID: projectID}
 
 	for name, principal := range map[string]identityapp.Principal{

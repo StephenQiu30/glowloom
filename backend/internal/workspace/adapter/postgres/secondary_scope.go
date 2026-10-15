@@ -19,6 +19,11 @@ func NewScopedProjectCopyStore(db *gorm.DB, requests RequestScopeFactory, worker
 	return &ProjectCopyStore{db: db, requests: requests, workers: workers, work: work, owners: owners}
 }
 
+// NewScopedProjectCopyStoreWithScript binds script-only copy owners to current request and worker authority.
+func NewScopedProjectCopyStoreWithScript(db *gorm.DB, requests RequestScopeFactory, workers WorkerScopeFactory, work ProjectWorkFactory, owners ProjectCopyOwnersFactory, script ProjectCopyScriptOwnerFactory) *ProjectCopyStore {
+	return &ProjectCopyStore{db: db, requests: requests, workers: workers, work: work, owners: owners, script: script, withScript: true}
+}
+
 // NewScopedProjectCopyStoreWithBible explicitly separates HTTP session and durable worker authority.
 func NewScopedProjectCopyStoreWithBible(db *gorm.DB, requests RequestScopeFactory, workers WorkerScopeFactory, work ProjectWorkFactory, owners ProjectCopyOwnersFactory, script ProjectCopyScriptOwnerFactory, bible ProjectCopyBibleOwnerFactory) *ProjectCopyStore {
 	return &ProjectCopyStore{db: db, requests: requests, workers: workers, work: work, owners: owners, script: script, withScript: true, bible: bible, withBible: true}

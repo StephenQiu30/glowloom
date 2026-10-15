@@ -14,7 +14,6 @@ import (
 	"github.com/google/uuid"
 
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
@@ -48,7 +47,7 @@ func TestProjectCopyDocumentRealNonownerCompleteOriginalPublicationAndIndependen
 	ctx, db, owner := folderTestDB(t)
 	objects := projectCopyObjects(t)
 	actor, source := lifecycleActorProject(ctx, t, owner)
-	store := mediapg.NewStore(db)
+	store := workspaceMediaStore(db)
 	upload := mediaapp.NewUploadService(store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 	samples := []struct {
 		name string
@@ -91,7 +90,7 @@ func TestProjectCopyDocumentRealNonownerCompleteOriginalPublicationAndIndependen
 	if err != nil || finished.Status != "succeeded" {
 		t.Fatal("actual whole project copy publication", finished.Status, err)
 	}
-	reader := mediaapp.NewDocumentSources(mediapg.NewDocumentSourceStore(db), objects)
+	reader := mediaapp.NewDocumentSources(workspaceMediaDocumentStore(db), objects)
 	query := mediaapp.NewAssetQuery(store, objects)
 	page, err := query.List(ctx, actor, finished.TargetProjectID, "document", "", 100)
 	if err != nil || len(page.Items) != 2 {

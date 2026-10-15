@@ -46,7 +46,7 @@ func TestCreateQuoteSnapshotAtomicallyPersistsBatchAndInputs(t *testing.T) {
 		Scope: json.RawMessage(`{}`), Status: domain.BatchStatusQuoted,
 		TotalCount: 2, QuoteTotalMicros: 50,
 	}
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	if err := store.CreateQuoteSnapshot(t.Context(), actor, &batch, []pgoperation.QuoteItem{first, second}); err != nil {
 		t.Fatalf("create quoted batch: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestCreateQuoteSnapshotAtomicallyPersistsBatchAndInputs(t *testing.T) {
 func TestCreateQuoteSnapshotRollsBackOnFrozenInputConflict(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	existing := quotedSnapshotItem(projectID, 1)
 	if err := store.CreateQuoteSnapshot(t.Context(), actor, nil, []pgoperation.QuoteItem{existing}); err != nil {
 		t.Fatalf("seed quote: %v", err)
@@ -110,7 +110,7 @@ func TestCreateQuoteSnapshotRejectsForeignActorAndArchivedProject(t *testing.T) 
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
 	foreign, _ := operationStoreProject(t, database)
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	item := quotedSnapshotItem(projectID, 5)
 	if err := store.CreateQuoteSnapshot(t.Context(), foreign, nil, []pgoperation.QuoteItem{item}); err == nil {
 		t.Fatal("foreign organization created a project quote")

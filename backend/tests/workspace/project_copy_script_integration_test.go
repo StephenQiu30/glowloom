@@ -11,11 +11,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
-	canvaspg "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/http"
@@ -33,7 +30,7 @@ type scriptCopyContractOwner struct {
 }
 
 func (o scriptCopyContractOwner) ReferencedMedia(ctx context.Context, actor identityapp.Principal, b workspaceapp.ProjectCopyBinding) ([]uuid.UUID, error) {
-	if err := workspacepg.NewProjectCopyAccessStore(o.tx, o.authority).Authorize(ctx, actor, b, false); err != nil {
+	if err := workspaceCopyAccess(o.tx, o.authority).Authorize(ctx, actor, b, false); err != nil {
 		return nil, err
 	}
 	return []uuid.UUID{}, nil
@@ -91,13 +88,14 @@ func TestProjectCopyScriptHTTPReportsExactSafeHistoricalProgress(t *testing.T) {
 }
 
 func (o scriptCopyContractOwner) Freeze(ctx context.Context, actor identityapp.Principal, b workspaceapp.ProjectCopyBinding, _ map[uuid.UUID]uuid.UUID, _ time.Time) (domain.ProjectCopyScriptSnapshot, error) {
-	if err := workspacepg.NewProjectCopyAccessStore(o.tx, o.authority).Authorize(ctx, actor, b, false); err != nil {
+	if err := workspaceCopyAccess(o.tx, o.authority).Authorize(ctx, actor, b, false); err != nil {
 		return domain.ProjectCopyScriptSnapshot{}, err
 	}
 	return domain.ProjectCopyScriptSnapshot{ID: uuid.NewSHA1(b.JobID, []byte("script-contract")), ManifestSHA256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", ContentSHA256: "fedcba98fedcba98fedcba98fedcba98fedcba98fedcba98fedcba98fedcba98", Counts: domain.ProjectCopyScriptCounts{Sources: 2, Versions: 2, VersionHeads: 2, VersionSources: 3, Objects: 8}}, nil
 }
+
 func (o scriptCopyContractOwner) Register(ctx context.Context, actor identityapp.Principal, b workspaceapp.ProjectCopyBinding, s domain.ProjectCopyScriptSnapshot) (domain.ProjectCopyScriptReceipt, error) {
-	if err := workspacepg.NewProjectCopyAccessStore(o.tx, o.authority).Authorize(ctx, actor, b, true); err != nil {
+	if err := workspaceCopyAccess(o.tx, o.authority).Authorize(ctx, actor, b, true); err != nil {
 		return domain.ProjectCopyScriptReceipt{}, err
 	}
 	r := domain.ProjectCopyScriptReceipt{ManifestSHA256: s.ManifestSHA256, ContentSHA256: s.ContentSHA256, Counts: s.Counts}
@@ -106,8 +104,9 @@ func (o scriptCopyContractOwner) Register(ctx context.Context, actor identityapp
 	}
 	return r, nil
 }
+
 func (o scriptCopyContractOwner) FinishCleanup(ctx context.Context, actor identityapp.Principal, b workspaceapp.ProjectCopyBinding, _ domain.ProjectCopyScriptSnapshot) error {
-	if err := workspacepg.NewProjectCopyAccessStore(o.tx, o.authority).Authorize(ctx, actor, b, true); err != nil {
+	if err := workspaceCopyAccess(o.tx, o.authority).Authorize(ctx, actor, b, true); err != nil {
 		return err
 	}
 	if o.cleanupBlocked != nil && *o.cleanupBlocked {
@@ -115,13 +114,15 @@ func (o scriptCopyContractOwner) FinishCleanup(ctx context.Context, actor identi
 	}
 	return nil
 }
+
 func scriptCopyContractStore(db *gorm.DB, factory workspacepg.ProjectCopyScriptOwnerFactory) *workspacepg.ProjectCopyStore {
-	return workspacepg.NewProjectCopyStoreWithScript(db, folderWork, func(tx *gorm.DB) workspaceapp.ProjectCopyOwners {
-		return workspaceapp.ProjectCopyOwners{Media: mediapg.NewProjectCopyStore(tx), Budget: billingpg.NewStore(tx), Cover: actualProjectCopyCoverOwner{tx: tx}, Canvas: canvaspg.NewProjectCopyStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediapg.NewStore(tx), nil) }, func(tx *gorm.DB, b canvasapp.ProjectCopyBinding) canvasapp.MediaReader {
-			return privateCopyReference{owner: mediapg.NewProjectCopyStore(tx), binding: mediaapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}}
+	return workspacepg.NewScopedProjectCopyStoreWithScript(db, workspaceRequestScope, workspaceWorkerScope, folderWork, func(tx *gorm.DB) workspaceapp.ProjectCopyOwners {
+		return workspaceapp.ProjectCopyOwners{Media: workspaceMediaCopyStore(tx), Budget: workspaceCopyBudgetStore(tx), Cover: actualProjectCopyCoverOwner{tx: tx}, Canvas: workspaceCanvasCopyStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(workspaceMediaStore(tx), nil) }, func(tx *gorm.DB, b canvasapp.ProjectCopyBinding) canvasapp.MediaReader {
+			return privateCopyReference{owner: workspaceMediaCopyStore(tx), binding: mediaapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}}
 		})}
 	}, factory)
 }
+
 func TestProjectCopyScriptPGOwnStageReceiptAndPublicationFence(t *testing.T) {
 	ctx, db, owner := folderTestDB(t)
 	actor, source := lifecycleActorProject(ctx, t, owner)
@@ -143,12 +144,12 @@ func TestProjectCopyScriptPGOwnStageReceiptAndPublicationFence(t *testing.T) {
 	}
 	authority := workspaceapp.ProjectCopyAuthority{Binding: workspaceapp.ProjectCopyBinding{JobID: job.ID, OrgID: job.OrgID, SourceProjectID: job.SourceProjectID, TargetProjectID: job.TargetProjectID}, ActorID: actor.ID, WorkerID: worker, SourceRevision: 1, Phase: "transfer"}
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		if err := workspacepg.NewProjectCopyAccessStore(tx, authority).Authorize(ctx, actor, authority.Binding, true); err != nil {
+		if err := workspaceCopyAccess(tx, authority).Authorize(ctx, actor, authority.Binding, true); err != nil {
 			t.Fatal("current transfer scope", err)
 		}
 		stale := authority
 		stale.WorkerID = uuid.New()
-		if err := workspacepg.NewProjectCopyAccessStore(tx, stale).Authorize(ctx, actor, authority.Binding, true); !errors.Is(err, domain.ErrProjectCopyWorkerConflict) {
+		if err := workspaceCopyAccess(tx, stale).Authorize(ctx, actor, authority.Binding, true); !errors.Is(err, domain.ErrProjectCopyWorkerConflict) {
 			t.Fatal("stale private transfer", err)
 		}
 		return nil

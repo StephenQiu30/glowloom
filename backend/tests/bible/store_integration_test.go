@@ -17,7 +17,7 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func bibleTestDB(t *testing.T) (*gorm.DB, *gorm.DB) {
@@ -69,11 +69,15 @@ func bibleActorProject(t *testing.T, owner *gorm.DB) (identityapp.Principal, uui
 			t.Fatal(err)
 		}
 	}
+	actor = identityfixture.Session(t, owner, actor)
+	if err := owner.Exec(`UPDATE workspace.project SET owner_scope_id=? WHERE id=?`, actor.ScopeID, project).Error; err != nil {
+		t.Fatal(err)
+	}
 	return actor, project
 }
 
 func bibleStore(db *gorm.DB) *pg.Store {
-	return pg.NewStore(db, pg.Factories{Access: func(tx *gorm.DB) app.ProjectAccess { return workspacepg.NewProjectContentAccessStore(tx) }})
+	return pg.NewStore(db, pg.Factories{Access: func(tx *gorm.DB) app.ProjectAccess { return bibleFixtureProjectAccess(tx) }})
 }
 
 func createCharacter(project uuid.UUID) app.Command {
@@ -129,7 +133,7 @@ func TestBiblePGNoSeedImmutableVersionsPermanentReplayAndCAS(t *testing.T) {
 	if err := owner.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Change(t.Context(), actor, confirmation); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := service.Change(t.Context(), actor, confirmation); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("replay bypassed live actor", err)
 	}
 }

@@ -22,11 +22,16 @@ type mediaScopeAccess struct {
 	worker bool
 }
 
-func provideMediaScopeAccess(tx *gorm.DB) mediaapp.ScopeAccess { return mediaScopeAccess{tx: tx} }
-func provideMediaWorkerScopeAccess(tx *gorm.DB) mediaapp.ScopeAccess {
+// NewMediaScopeAccess binds a media request to the current session and creation scope.
+func NewMediaScopeAccess(tx *gorm.DB) mediaapp.ScopeAccess { return mediaScopeAccess{tx: tx} }
+
+// NewMediaWorkerScopeAccess resolves current durable authority for asynchronous media work.
+func NewMediaWorkerScopeAccess(tx *gorm.DB) mediaapp.ScopeAccess {
 	return mediaScopeAccess{tx: tx, worker: true}
 }
-func provideCanvasProjectAccess(tx *gorm.DB) canvasapp.ProjectAccess { return mediaScopeAccess{tx: tx} }
+
+// NewCanvasProjectAccess binds canvas access to the current request authority.
+func NewCanvasProjectAccess(tx *gorm.DB) canvasapp.ProjectAccess { return mediaScopeAccess{tx: tx} }
 
 func (a mediaScopeAccess) CheckActor(ctx context.Context, actor identity.Principal) error {
 	if a.worker {

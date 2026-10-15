@@ -12,7 +12,6 @@ import (
 
 	"github.com/google/uuid"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
@@ -26,7 +25,7 @@ func TestLibraryActualReviewedProjectImageUsesLegacyIdentityAndSeparateMetadata(
 		t.Fatal(err)
 	}
 	upload := documentUpload(t, db, objects, actor, project, "actual-source.png", data.Bytes())
-	media := pgmedia.NewStore(db)
+	media := mediaTestStore(db)
 	before, err := media.FindAsset(t.Context(), actor, project, upload.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +43,7 @@ func TestLibraryActualReviewedProjectImageUsesLegacyIdentityAndSeparateMetadata(
 			}
 		}
 	})
-	store := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now)
+	store := mediaLibraryStore(db, libraryTestAccess, time.Now)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
 	page, err := store.ListLibrary(t.Context(), actor, scope, libraryQuery())
 	if err != nil || page.Total != 1 || page.Items[0].ID != before.ID || page.Items[0].Revision != 0 || page.Items[0].Media == nil || *page.Items[0].Media.Width != 3 {

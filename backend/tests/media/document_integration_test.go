@@ -22,7 +22,6 @@ import (
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediahttp "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/http"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -54,7 +53,7 @@ func documentTestDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 }
 
 func documentUploadService(db *gorm.DB, objects *objectstorage.Client) *mediaapp.UploadService {
-	return mediaapp.NewUploadService(pgmedia.NewStore(db), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
+	return mediaapp.NewUploadService(mediaTestStore(db), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 }
 
 func documentUpload(t *testing.T, db *gorm.DB, objects *objectstorage.Client, actor identityapp.Principal, project uuid.UUID, name string, data []byte) mediaapp.UploadResult {
@@ -68,7 +67,7 @@ func documentUpload(t *testing.T, db *gorm.DB, objects *objectstorage.Client, ac
 	if err != nil {
 		t.Fatal("document actual reviewed upload", err)
 	}
-	asset, err := pgmedia.NewStore(db).FindAsset(t.Context(), actor, project, result.Asset.ID)
+	asset, err := mediaTestStore(db).FindAsset(t.Context(), actor, project, result.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,8 +87,8 @@ func documentRouter(db *gorm.DB, objects *objectstorage.Client, actor identityap
 	group := router.Group("/api")
 	group.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
 	mediahttp.NewUploadHandler(documentUploadService(db, objects)).Register(group)
-	mediahttp.NewHandler(mediaapp.NewAssetQuery(pgmedia.NewStore(db), objects)).Register(group)
-	mediahttp.NewDocumentHandler(mediaapp.NewDocumentSources(pgmedia.NewDocumentSourceStore(db), objects)).Register(group)
+	mediahttp.NewHandler(mediaapp.NewAssetQuery(mediaTestStore(db), objects)).Register(group)
+	mediahttp.NewDocumentHandler(mediaapp.NewDocumentSources(mediaDocumentStore(db), objects)).Register(group)
 	return router
 }
 
@@ -145,7 +144,7 @@ func TestDocumentHTTPNonownerActualPrivateOriginalReviewReplayAndAttachment(t *t
 			if json.Unmarshal(out.Body.Bytes(), &result) != nil || result.Asset.Kind != "document" || result.Asset.Width != nil || result.Asset.DurationMS != nil {
 				t.Fatal("safe formal document projection")
 			}
-			asset, err := pgmedia.NewStore(db).FindAsset(t.Context(), actor, project, result.Asset.ID)
+			asset, err := mediaTestStore(db).FindAsset(t.Context(), actor, project, result.Asset.ID)
 			if err != nil || asset.Codec == nil || asset.SHA256 == nil {
 				t.Fatal("durable document facts", err)
 			}
@@ -154,7 +153,7 @@ func TestDocumentHTTPNonownerActualPrivateOriginalReviewReplayAndAttachment(t *t
 				defer cancel()
 				_ = objects.Remove(ctx, asset.ObjectKey)
 			})
-			rends, err := pgmedia.NewStore(db).FindRenditions(t.Context(), actor, project, asset.ID)
+			rends, err := mediaTestStore(db).FindRenditions(t.Context(), actor, project, asset.ID)
 			if err != nil || len(rends) != 0 {
 				t.Fatal("document fake rendition", err)
 			}
@@ -185,13 +184,13 @@ func TestDocumentHTTPNonownerActualPrivateOriginalReviewReplayAndAttachment(t *t
 			if wrong.Code != 404 {
 				t.Fatal("cross-project attachment", wrong.Code)
 			}
-			query := mediaapp.NewAssetQuery(pgmedia.NewStore(db), objects)
+			query := mediaapp.NewAssetQuery(mediaTestStore(db), objects)
 			if _, err := query.Reference(t.Context(), actor, project, asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
 				t.Fatal("document canvas reference", err)
 			}
 		})
 	}
-	query := mediaapp.NewAssetQuery(pgmedia.NewStore(db), objects)
+	query := mediaapp.NewAssetQuery(mediaTestStore(db), objects)
 	page, err := query.List(t.Context(), actor, project, "document", "", 1)
 	if err != nil || len(page.Items) != 1 || page.NextCursor == nil {
 		t.Fatal("document page1", err)
@@ -212,7 +211,7 @@ func TestDocumentSourcesPGReauthorizationFrozenCASAndActualObjectHash(t *testing
 	actor, project := mediaStoreProject(t, owner)
 	data := []byte("可靠原文")
 	result := documentUpload(t, db, objects, actor, project, "剧本.txt", data)
-	reader := mediaapp.NewDocumentSources(pgmedia.NewDocumentSourceStore(db), objects)
+	reader := mediaapp.NewDocumentSources(mediaDocumentStore(db), objects)
 	frozen, err := reader.Freeze(t.Context(), actor, project, []uuid.UUID{result.Asset.ID})
 	if err != nil {
 		t.Fatal(err)
@@ -232,7 +231,7 @@ func TestDocumentSourcesPGReauthorizationFrozenCASAndActualObjectHash(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	asset, err := pgmedia.NewStore(db).FindAsset(t.Context(), actor, project, result.Asset.ID)
+	asset, err := mediaTestStore(db).FindAsset(t.Context(), actor, project, result.Asset.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +244,7 @@ func TestDocumentSourcesPGReauthorizationFrozenCASAndActualObjectHash(t *testing
 	if err := owner.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := reader.Freeze(t.Context(), actor, project, []uuid.UUID{result.Asset.ID}); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := reader.Freeze(t.Context(), actor, project, []uuid.UUID{result.Asset.ID}); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("stale actor eligibility", err)
 	}
 }
@@ -282,16 +281,16 @@ func TestDocumentHTTPLifecycleAndContainerRejectsBeforePublishing(t *testing.T) 
 	if malformed.Code != 415 {
 		t.Fatal("malformed container HTTP boundary", malformed.Code)
 	}
-	page, err := mediaapp.NewAssetQuery(pgmedia.NewStore(db), objects).List(t.Context(), actor, project, "document", "", 100)
+	page, err := mediaapp.NewAssetQuery(mediaTestStore(db), objects).List(t.Context(), actor, project, "document", "", 100)
 	if err != nil || len(page.Items) != 1 {
 		t.Fatal("invalid document published", err)
 	}
-	if err := owner.Exec(`UPDATE identity."user" SET must_change_password=true WHERE id=?`, actor.ID).Error; err != nil {
+	if err := owner.Exec(`UPDATE identity."user" SET session_epoch=session_epoch+1 WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	denied := httptest.NewRecorder()
 	router.ServeHTTP(denied, httptest.NewRequestWithContext(t.Context(), "GET", url, nil))
-	if denied.Code != 403 {
+	if denied.Code != 401 {
 		t.Fatal("stale principal served original", denied.Code)
 	}
 }
@@ -306,7 +305,7 @@ func TestDocumentSourcesPGSharedLocksRetainFrozenFactsUntilOwningCommit(t *testi
 		t.Fatal(tx.Error)
 	}
 	defer func() { _ = tx.Rollback().Error }()
-	frozen, err := mediaapp.NewDocumentSources(pgmedia.NewDocumentSourceStore(tx), objects).Freeze(t.Context(), actor, project, []uuid.UUID{result.Asset.ID})
+	frozen, err := mediaapp.NewDocumentSources(mediaDocumentStore(tx), objects).Freeze(t.Context(), actor, project, []uuid.UUID{result.Asset.ID})
 	if err != nil || len(frozen) != 1 {
 		t.Fatal("owning source freeze", err)
 	}
@@ -375,7 +374,7 @@ func TestDocumentActualUploadUnknownCommitPreservesOriginalAndPermanentReplay(t 
 	}
 	defer func() { _ = file.Close() }()
 	in := mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "source.txt"}, File: file, LocalReviewConfirmed: true}
-	store := pgmedia.NewStore(db)
+	store := mediaTestStore(db)
 	service := mediaapp.NewUploadService(documentUnknownUpload{store}, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 	if _, err := service.Upload(t.Context(), in); !errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Fatal("unknown commit not propagated", err)
@@ -397,7 +396,7 @@ func TestDocumentActualUploadUnknownCommitPreservesOriginalAndPermanentReplay(t 
 		defer cancel()
 		_ = objects.Remove(ctx, asset.ObjectKey)
 	})
-	reader := mediaapp.NewDocumentSources(pgmedia.NewDocumentSourceStore(db), objects)
+	reader := mediaapp.NewDocumentSources(mediaDocumentStore(db), objects)
 	frozen, err := reader.Freeze(t.Context(), actor, project, []uuid.UUID{asset.ID})
 	if err != nil {
 		t.Fatal(err)

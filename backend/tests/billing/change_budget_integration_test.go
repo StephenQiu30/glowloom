@@ -11,9 +11,9 @@ import (
 
 	"github.com/google/uuid"
 
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
+	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 func TestChangeBudgetCommitsSignedLedgerAndBothEvents(t *testing.T) {
@@ -26,7 +26,7 @@ func TestChangeBudgetCommitsSignedLedgerAndBothEvents(t *testing.T) {
 	`, budgetID.String(), projectID.String()).Error; err != nil {
 		t.Fatalf("create budget: %v", err)
 	}
-	command := billingapp.NewChangeBudgetCommand(pgbilling.NewStore(database), time.Now)
+	command := billingapp.NewChangeBudgetCommand(billingStore(database), time.Now)
 	first, err := command.Execute(t.Context(), actor, billingapp.ChangeBudgetInput{
 		ProjectID: projectID, LimitMicros: 500, ExpectedRevision: 1, RequestID: uuid.NewString(),
 	})
@@ -134,7 +134,7 @@ func TestChangeBudgetRollsBackWhenOutboxWriteFails(t *testing.T) {
 			t.Errorf("remove outbox failure constraint: %v", err)
 		}
 	})
-	_, err := billingapp.NewChangeBudgetCommand(pgbilling.NewStore(database), time.Now).Execute(t.Context(), actor, billingapp.ChangeBudgetInput{
+	_, err := billingapp.NewChangeBudgetCommand(billingStore(database), time.Now).Execute(t.Context(), actor, billingapp.ChangeBudgetInput{
 		ProjectID: projectID, LimitMicros: 500, ExpectedRevision: 1, RequestID: uuid.NewString(),
 	})
 	if err == nil {
@@ -169,7 +169,7 @@ func TestChangeBudgetConcurrentRevisionAllowsOneWinner(t *testing.T) {
 	`, budgetID.String(), projectID.String()).Error; err != nil {
 		t.Fatalf("create budget: %v", err)
 	}
-	command := billingapp.NewChangeBudgetCommand(pgbilling.NewStore(database), time.Now)
+	command := billingapp.NewChangeBudgetCommand(billingStore(database), time.Now)
 	start := make(chan struct{})
 	results := make(chan error, 2)
 	var wg sync.WaitGroup
@@ -235,10 +235,10 @@ func TestChangeBudgetRejectsArchivedProject(t *testing.T) {
 	`, projectID.String()).Error; err != nil {
 		t.Fatalf("archive project: %v", err)
 	}
-	_, err := billingapp.NewChangeBudgetCommand(pgbilling.NewStore(database), time.Now).Execute(t.Context(), actor, billingapp.ChangeBudgetInput{
+	_, err := billingapp.NewChangeBudgetCommand(billingStore(database), time.Now).Execute(t.Context(), actor, billingapp.ChangeBudgetInput{
 		ProjectID: projectID, LimitMicros: 500, ExpectedRevision: 1, RequestID: uuid.NewString(),
 	})
-	if !errors.Is(err, pgbilling.ErrProjectNotWritable) {
+	if !errors.Is(err, workspacedomain.ErrProjectStateConflict) {
 		t.Fatalf("archived project change error = %v", err)
 	}
 	var ledgerCount, eventCount int64
@@ -263,7 +263,7 @@ func TestChangeBudgetPersistsLowEventOnThresholdCrossing(t *testing.T) {
 	`, budgetID.String(), projectID.String()).Error; err != nil {
 		t.Fatalf("create budget at 20 percent: %v", err)
 	}
-	command := billingapp.NewChangeBudgetCommand(pgbilling.NewStore(database), time.Now)
+	command := billingapp.NewChangeBudgetCommand(billingStore(database), time.Now)
 	changed, err := command.Execute(t.Context(), actor, billingapp.ChangeBudgetInput{
 		ProjectID: projectID, LimitMicros: 499, ExpectedRevision: 1, RequestID: uuid.NewString(),
 	})
@@ -328,7 +328,7 @@ func TestChangeBudgetRollsBackWhenLowEventFails(t *testing.T) {
 			t.Errorf("remove low event failure constraint: %v", err)
 		}
 	})
-	_, err := billingapp.NewChangeBudgetCommand(pgbilling.NewStore(database), time.Now).Execute(t.Context(), actor, billingapp.ChangeBudgetInput{
+	_, err := billingapp.NewChangeBudgetCommand(billingStore(database), time.Now).Execute(t.Context(), actor, billingapp.ChangeBudgetInput{
 		ProjectID: projectID, LimitMicros: 499, ExpectedRevision: 1, RequestID: uuid.NewString(),
 	})
 	if err == nil {

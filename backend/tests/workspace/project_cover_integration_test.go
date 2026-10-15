@@ -17,7 +17,6 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
@@ -53,10 +52,11 @@ func coverTestDB(t *testing.T) (context.Context, *gorm.DB, *gorm.DB) {
 }
 
 func coverStore(db *gorm.DB) *workspacepg.Store {
-	return workspacepg.NewStoreWithProjectCover(db, folderWork, func(tx *gorm.DB) workspaceapp.ProjectCoverReference {
-		return mediaapp.NewAssetQuery(mediapg.NewStore(tx), nil)
+	return workspaceStoreWithCover(db, folderWork, func(tx *gorm.DB) workspaceapp.ProjectCoverReference {
+		return mediaapp.NewAssetQuery(workspaceMediaStore(tx), nil)
 	})
 }
+
 func coverRouter(db *gorm.DB, actor identityapp.Principal) *gin.Engine {
 	r := gin.New()
 	r.Use(httpapi.Middleware(workspaceTestOrigin))
@@ -67,6 +67,7 @@ func coverRouter(db *gorm.DB, actor identityapp.Principal) *gin.Engine {
 	workspacehttp.NewProjectLifecycleHandler(workspaceapp.NewProjectLifecycle(s, time.Now)).Register(api)
 	return r
 }
+
 func seedCoverAsset(t *testing.T, owner *gorm.DB, project uuid.UUID, kind string) uuid.UUID {
 	t.Helper()
 	id := uuid.New()
@@ -77,6 +78,7 @@ func seedCoverAsset(t *testing.T, owner *gorm.DB, project uuid.UUID, kind string
 	}
 	return id
 }
+
 func coverChange(project uuid.UUID, revision int64, asset *uuid.UUID) workspaceapp.ProjectChangeInput {
 	i := projectChange(project, revision, "patch")
 	i.Patch.SetCover, i.Patch.CoverAssetID = true, asset
@@ -123,10 +125,10 @@ func TestProjectCoverPGCurrentOwnershipReplayAndUnavailable(t *testing.T) {
 	if _, err := s.Change(ctx, actor, coverChange(project, 4, &asset)); !errors.Is(err, workspaceapp.ErrProjectCoverUnavailable) {
 		t.Fatal("invalid cover no-op accepted", err)
 	}
-	if _, err := workspaceapp.NewProjectLifecycle(workspacepg.NewStore(db), time.Now).Get(ctx, actor, project); !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable) {
+	if _, err := workspaceapp.NewProjectLifecycle(workspaceStore(db), time.Now).Get(ctx, actor, project); !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable) {
 		t.Fatal("missing cover owner presented empty", err)
 	}
-	if _, err := workspaceapp.NewListProjectsQuery(workspacepg.NewStore(db)).Execute(ctx, actor, workspaceapp.ListProjectsInput{Limit: 50}); !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable) {
+	if _, err := workspaceapp.NewListProjectsQuery(workspaceStore(db)).Execute(ctx, actor, workspaceapp.ListProjectsInput{Limit: 50}); !errors.Is(err, workspaceapp.ErrProjectDependencyUnavailable) {
 		t.Fatal("list missing owner", err)
 	}
 	if _, err := s.Change(ctx, actor, coverChange(project, 4, nil)); err != nil {
@@ -138,7 +140,7 @@ func TestProjectCoverPGClosedMediaScopesCurrentActorAndArchived(t *testing.T) {
 	ctx, db, owner := coverTestDB(t)
 	actor, project := lifecycleActorProject(ctx, t, owner)
 	_, foreign := lifecycleActorProject(ctx, t, owner)
-	otherProject := uuid.MustParse(insertWorkspaceProject(ctx, t, owner, actor.OrgID.String(), "16:9", "realistic", nil))
+	otherProject := uuid.MustParse(insertWorkspaceProject(ctx, t, owner, actor, "16:9", "realistic", nil))
 	for _, id := range []uuid.UUID{uuid.New(), seedCoverAsset(t, owner, foreign, "image"), seedCoverAsset(t, owner, otherProject, "image"), seedCoverAsset(t, owner, project, "audio")} {
 		if _, err := workspaceapp.NewProjectLifecycle(coverStore(db), time.Now).Change(ctx, actor, coverChange(project, 1, &id)); !errors.Is(err, workspaceapp.ErrProjectCoverUnavailable) {
 			t.Fatal("invalid cover accepted", err)
@@ -160,7 +162,7 @@ func TestProjectCoverPGClosedMediaScopesCurrentActorAndArchived(t *testing.T) {
 		t.Fatal("archived cover write", err)
 	}
 	lifecycleFixtureSQL(t, owner, `UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID)
-	if _, err := s.Get(ctx, actor, project); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := s.Get(ctx, actor, project); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("revoked actor cover exposed", err)
 	}
 }
@@ -175,7 +177,7 @@ func TestProjectCoverHTTPActualReviewedUploadNullableAndRefresh(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = file.Close() }()
-	mediaStore := mediapg.NewStore(db)
+	mediaStore := workspaceMediaStore(db)
 	upload := mediaapp.NewUploadService(mediaStore, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 	result, err := upload.Upload(ctx, mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "正式主图.png"}, File: file, LocalReviewConfirmed: true})
 	if err != nil {

@@ -19,13 +19,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	canvaspg "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	cd "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/gltf"
 	mo "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mf "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	ma "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
@@ -65,6 +63,7 @@ func projectCopyObjects(t *testing.T) *objectstorage.Client {
 	}
 	return objects
 }
+
 func copyPNG(t *testing.T) []byte {
 	t.Helper()
 	var b bytes.Buffer
@@ -73,6 +72,7 @@ func copyPNG(t *testing.T) []byte {
 	}
 	return b.Bytes()
 }
+
 func copyGLB(t *testing.T) []byte {
 	t.Helper()
 	document := map[string]any{"asset": map[string]any{"version": "2.0"}, "scene": 0, "scenes": []any{map[string]any{"nodes": []int{0}}}, "nodes": []any{map[string]any{"mesh": 0}}, "meshes": []any{map[string]any{"primitives": []any{map[string]any{"attributes": map[string]any{"POSITION": 0}}}}}, "accessors": []any{map[string]any{"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": []int{0, 0, 0}, "max": []int{1, 1, 0}}}, "bufferViews": []any{map[string]any{"buffer": 0, "byteLength": 36}}, "buffers": []any{map[string]any{"byteLength": 36}}}
@@ -108,6 +108,7 @@ func copyGLB(t *testing.T) []byte {
 	}
 	return out.Bytes()
 }
+
 func copyAV(t *testing.T, kind string) []byte {
 	t.Helper()
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
@@ -130,6 +131,7 @@ func copyAV(t *testing.T, kind string) []byte {
 	}
 	return data
 }
+
 func seedProjectCopyContent(ctx context.Context, t *testing.T, db *gorm.DB, objects *objectstorage.Client, all bool) (identityapp.Principal, uuid.UUID, map[string]uuid.UUID, uuid.UUID) {
 	t.Helper()
 	actor, project := lifecycleActorProject(ctx, t, db)
@@ -137,7 +139,7 @@ func seedProjectCopyContent(ctx context.Context, t *testing.T, db *gorm.DB, obje
 	if err != nil {
 		t.Fatal(err)
 	}
-	upload := ma.NewUploadService(mediapg.NewStore(db), mf.NewUploadProber(validator), mf.FFUploadNormalizer{}, mf.FFUploadRenderer{}, mf.NewUploadObjects(objects), time.Now)
+	upload := ma.NewUploadService(workspaceMediaStore(db), mf.NewUploadProber(validator), mf.FFUploadNormalizer{}, mf.FFUploadRenderer{}, mf.NewUploadObjects(objects), time.Now)
 	samples := []struct {
 		Kind, Name string
 		Bytes      []byte
@@ -180,7 +182,7 @@ func seedProjectCopyContent(ctx context.Context, t *testing.T, db *gorm.DB, obje
 			}
 		}
 	})
-	canvas := canvasapp.NewService(canvaspg.NewStore(db, func(tx *gorm.DB) canvasapp.MediaReader { return ma.NewAssetQuery(mediapg.NewStore(tx), nil) }))
+	canvas := canvasapp.NewService(workspaceCanvasStore(db, func(tx *gorm.DB) canvasapp.MediaReader { return ma.NewAssetQuery(workspaceMediaStore(tx), nil) }))
 	doc, err := canvas.Create(ctx, actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "全部媒体与导演"})
 	if err != nil {
 		t.Fatal(err)
@@ -209,6 +211,7 @@ func seedProjectCopyContent(ctx context.Context, t *testing.T, db *gorm.DB, obje
 	}
 	return actor, project, assets, doc.ID
 }
+
 func actualCopyWorker(t *testing.T, db *gorm.DB, objects ma.ProjectCopyObjects) *wa.ProjectCopyWorker {
 	t.Helper()
 	store := projectCopyStore(db)
@@ -217,6 +220,7 @@ func actualCopyWorker(t *testing.T, db *gorm.DB, objects ma.ProjectCopyObjects) 
 		return ma.NewProjectCopyTransfer(wp.NewProjectCopyMediaObjects(store, job.ID, worker, cleanup), objects, temp)
 	}, time.Now)
 }
+
 func TestProjectCopyRealCompletePrivateMediaAndIndependentRefresh(t *testing.T) {
 	ctx, db := workspaceMigrationDB(t)
 	objects := projectCopyObjects(t)
@@ -231,19 +235,19 @@ func TestProjectCopyRealCompletePrivateMediaAndIndependentRefresh(t *testing.T) 
 	if err != nil || finished.Status != "succeeded" {
 		t.Fatal("real owning copy execution", finished.Status, finished.FailureCode, err)
 	}
-	query := ma.NewAssetQuery(mediapg.NewStore(db), objects)
+	query := ma.NewAssetQuery(workspaceMediaStore(db), objects)
 	items, err := query.List(ctx, actor, finished.TargetProjectID, "", "", 100)
 	if err != nil || len(items.Items) != 4 {
 		t.Fatal("fresh complete media library", items, err)
 	}
 	var sourceKeys []string
 	for _, sourceAsset := range assets {
-		a, err := mediapg.NewStore(db).FindAsset(ctx, actor, source, sourceAsset)
+		a, err := workspaceMediaStore(db).FindAsset(ctx, actor, source, sourceAsset)
 		if err != nil {
 			t.Fatal(err)
 		}
 		sourceKeys = append(sourceKeys, a.ObjectKey)
-		r, err := mediapg.NewStore(db).FindRenditions(ctx, actor, source, sourceAsset)
+		r, err := workspaceMediaStore(db).FindRenditions(ctx, actor, source, sourceAsset)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -262,7 +266,7 @@ func TestProjectCopyRealCompletePrivateMediaAndIndependentRefresh(t *testing.T) 
 				t.Fatal("copied identity shares source")
 			}
 		}
-		actual, err := mediapg.NewStore(db).FindAsset(ctx, actor, finished.TargetProjectID, asset.ID)
+		actual, err := workspaceMediaStore(db).FindAsset(ctx, actor, finished.TargetProjectID, asset.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -274,7 +278,7 @@ func TestProjectCopyRealCompletePrivateMediaAndIndependentRefresh(t *testing.T) 
 		if err := errors.Join(readErr, reader.Close()); err != nil || size != actual.ByteSize {
 			t.Fatal("real private original readback", err)
 		}
-		renditions, err := mediapg.NewStore(db).FindRenditions(ctx, actor, finished.TargetProjectID, asset.ID)
+		renditions, err := workspaceMediaStore(db).FindRenditions(ctx, actor, finished.TargetProjectID, asset.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -285,7 +289,7 @@ func TestProjectCopyRealCompletePrivateMediaAndIndependentRefresh(t *testing.T) 
 			}
 		}
 	}
-	canvas := canvasapp.NewService(canvaspg.NewStore(db, nil))
+	canvas := canvasapp.NewService(workspaceCanvasStore(db, nil))
 	docs, err := canvas.List(ctx, actor, finished.TargetProjectID)
 	if err != nil || len(docs) != 2 {
 		t.Fatal("fresh complete canvas list", err)
@@ -335,6 +339,7 @@ func (o *unknownCopyObjects) PutIfAbsent(ctx context.Context, key string, reader
 	}
 	return o.ProjectCopyObjects.PutIfAbsent(ctx, key, reader, size, mime, digest)
 }
+
 func TestProjectCopyRealUnknownRecoveryAndCancellation(t *testing.T) {
 	for _, tc := range []struct {
 		Name               string
@@ -414,6 +419,7 @@ func TestProjectCopyRealUnknownRecoveryAndCancellation(t *testing.T) {
 		})
 	}
 }
+
 func TestProjectCopyRealNonOwnerPermissionsAndObjectFence(t *testing.T) {
 	ctx, db := workspaceMigrationDB(t)
 	objects := projectCopyObjects(t)

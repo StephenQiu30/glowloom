@@ -13,7 +13,6 @@ import (
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
@@ -45,7 +44,7 @@ func TestMediaPackagePersonalUnknownBlocksPurgeUntilActualCancellation(t *testin
 	db := packagePurgeDB(t, false)
 	actor, _ := mediaStoreProject(t, db)
 	scope := domain.LibraryScope{Kind: domain.LibraryPersonal}
-	library := pgmedia.NewLibraryStore(db, packageTestAccess, time.Now)
+	library := mediaLibraryStore(db, packageTestAccess, time.Now)
 	text := "待清理的实际个人正文"
 	created, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "create_text", Metadata: &mediaapp.LibraryMetadata{Title: "个人正文", Category: "material", Tags: []string{}, PlainText: &text}})
 	if err != nil {
@@ -71,10 +70,10 @@ func TestMediaPackagePersonalUnknownBlocksPurgeUntilActualCancellation(t *testin
 	}
 	spoof := actor
 	spoof.OrgID = foreign.OrgID
-	if _, err := repo.HasInflightLibraryPackageWork(t.Context(), spoof, scope); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := repo.HasInflightLibraryPackageWork(t.Context(), spoof, scope); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("guard trusted a stale actor/organization declaration", err)
 	}
-	purges := pgmedia.NewPurgeStore(db, packageTestAccess, transferTestGuards, nil, time.Now)
+	purges := mediaPurgeStore(db, packageTestAccess, transferTestGuards, nil, time.Now)
 	in := mediaapp.PurgeInput{Scope: scope, Items: []mediaapp.LibraryItemRevision{{ID: item, Revision: 2}}, ExpectedRevision: 2, PermanentDeleteConfirmed: true, Key: uuid.New()}
 	if _, err := purges.CreatePurge(t.Context(), actor, in); !errors.Is(err, domain.ErrPurgeConflict) {
 		t.Fatal("unknown personal package did not block purge", err)
@@ -102,7 +101,7 @@ func TestMediaPackagePersonalUnreadableOwnerAndRevokedActorNeverAdmitPurge(t *te
 	db, owner := packagePurgeDB(t, false), packagePurgeDB(t, true)
 	actor, _ := mediaStoreProject(t, db)
 	scope := domain.LibraryScope{Kind: domain.LibraryPersonal}
-	library := pgmedia.NewLibraryStore(db, packageTestAccess, time.Now)
+	library := mediaLibraryStore(db, packageTestAccess, time.Now)
 	text := "仍保留的个人正文"
 	created, err := library.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), Action: "create_text", Metadata: &mediaapp.LibraryMetadata{Title: "正文", Category: "material", Tags: []string{}, PlainText: &text}})
 	if err != nil {
@@ -124,7 +123,7 @@ func TestMediaPackagePersonalUnreadableOwnerAndRevokedActorNeverAdmitPurge(t *te
 			t.Error("restore only this isolated database package read permission", err)
 		}
 	})
-	purges := pgmedia.NewPurgeStore(db, packageTestAccess, transferTestGuards, nil, time.Now)
+	purges := mediaPurgeStore(db, packageTestAccess, transferTestGuards, nil, time.Now)
 	in := mediaapp.PurgeInput{Scope: scope, Items: []mediaapp.LibraryItemRevision{{ID: id, Revision: 2}}, ExpectedRevision: 2, PermanentDeleteConfirmed: true, Key: uuid.New()}
 	if _, err := purges.CreatePurge(t.Context(), actor, in); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("unreadable personal package owner was treated as idle", err)
@@ -136,10 +135,10 @@ func TestMediaPackagePersonalUnreadableOwnerAndRevokedActorNeverAdmitPurge(t *te
 		t.Fatal(err)
 	}
 	in.Key = uuid.New()
-	if _, err := purges.CreatePurge(t.Context(), actor, in); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := purges.CreatePurge(t.Context(), actor, in); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("revoked current actor admitted permanent cleanup")
 	}
-	if _, err := pgmedia.NewPackageStore(db, packageTestAccess, nil, time.Now).HasInflightLibraryPackageWork(t.Context(), actor, scope); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := mediaPackageStore(db, packageTestAccess, nil, time.Now).HasInflightLibraryPackageWork(t.Context(), actor, scope); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("package reader skipped current actor revocation", err)
 	}
 	var count int64

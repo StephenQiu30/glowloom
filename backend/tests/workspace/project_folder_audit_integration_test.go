@@ -18,7 +18,7 @@ import (
 func TestProjectFolderPGSafetyAuditActualInbox(t *testing.T) {
 	ctx, db, owner := folderTestDB(t)
 	actor := insertWorkspaceActor(ctx, t, owner, insertWorkspaceOrganization(ctx, t, owner))
-	project := uuid.MustParse(insertWorkspaceProject(ctx, t, owner, actor.OrgID.String(), "16:9", "realistic", nil))
+	project := uuid.MustParse(insertWorkspaceProject(ctx, t, owner, actor, "16:9", "realistic", nil))
 	service := workspaceapp.NewProjectFolders(folderStore(db), time.Now)
 	f := createTestFolder(ctx, t, service, actor, "不进入审计的私有标题")
 	out := moveTestProject(ctx, t, service, actor, project, f, 0)

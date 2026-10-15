@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
@@ -20,7 +19,7 @@ func TestPersonalUploadConcurrentAcceptanceHasOneOriginalAndLibraryRevision(t *t
 		t.Run(map[bool]string{true: "one permanent key", false: "same source different keys"}[sameKey], func(t *testing.T) {
 			db := libraryRuntimeDB(t)
 			actor, project := mediaStoreProject(t, db)
-			store := pgmedia.NewStore(db)
+			store := mediaTestStore(db)
 			gate := uploadBlockingProber{entered: make(chan struct{}, 2), release: make(chan struct{})}
 			objects := &uploadObjectsFake{}
 			service := mediaapp.NewScopedUploadService(store, store, gate, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
@@ -69,7 +68,7 @@ func TestPersonalUploadRechecksRevocationBeforePublishing(t *testing.T) {
 	db := libraryRuntimeDB(t)
 	owner := libraryOwnerDB(t)
 	actor, _ := mediaStoreProject(t, db)
-	store := pgmedia.NewStore(db)
+	store := mediaTestStore(db)
 	objects := &uploadObjectsFake{}
 	probe := archiveUploadProber{afterProbe: func() error {
 		return owner.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error

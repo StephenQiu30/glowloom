@@ -9,7 +9,7 @@ import (
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 func operationReferenceFixture(t *testing.T) (*gorm.DB, identityapp.Principal, uuid.UUID) {
@@ -31,7 +31,7 @@ func operationReferenceCheck(t *testing.T, database *gorm.DB, actor identityapp.
 			return err
 		}
 		var err error
-		found, err = pgoperation.NewMediaReferenceGuard(tx).HasMediaReferences(t.Context(), actor, project, asset)
+		found, err = pgoperation.NewScopedMediaReferenceGuard(tx, operationRequestAccess).HasMediaReferences(t.Context(), actor, project, asset)
 		return err
 	})
 	return found, err
@@ -78,13 +78,13 @@ func TestOperationMediaReferenceGuardRequiresCallerTransactionAndCurrentScope(t 
 		t.Fatal("pool accepted")
 	}
 	foreign, _ := operationStoreProject(t, database)
-	if _, err := operationReferenceCheck(t, database, foreign, project, uuid.New()); !errors.Is(err, operationapp.ErrPublicNotFound) {
+	if _, err := operationReferenceCheck(t, database, foreign, project, uuid.New()); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
 		t.Fatal("foreign scope", err)
 	}
 	if err := database.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := operationReferenceCheck(t, database, actor, project, uuid.New()); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := operationReferenceCheck(t, database, actor, project, uuid.New()); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatal("disabled actor", err)
 	}
 }

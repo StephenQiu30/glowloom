@@ -11,15 +11,12 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
-	canvaspg "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	toolpg "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
-	operationpg "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
@@ -38,13 +35,13 @@ func (r privateCopyReference) Reference(ctx context.Context, actor identityapp.P
 }
 
 func projectCopyStore(db *gorm.DB) *workspacepg.ProjectCopyStore {
-	return workspacepg.NewProjectCopyStore(db, func(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
-		return owningProjectWork{operationpg.NewStore(tx), mediapg.NewStore(tx), toolpg.NewStore(tx, nil, nil), toolpg.NewTranscriptionStore(tx, nil, nil), toolpg.NewDepthStore(tx, nil, nil), workspacepg.NewProjectCopyStore(tx, nil, nil)}
+	return workspaceCopyStore(db, func(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
+		return owningProjectWork{workspaceOperationStore(tx), workspaceMediaStore(tx), toolpg.NewStore(tx, nil, nil), toolpg.NewTranscriptionStore(tx, nil, nil), toolpg.NewDepthStore(tx, nil, nil), workspaceCopyStore(tx, nil, nil)}
 	}, func(tx *gorm.DB) workspaceapp.ProjectCopyOwners {
 		return workspaceapp.ProjectCopyOwners{
-			Media: mediapg.NewProjectCopyStore(tx), Budget: billingpg.NewStore(tx), Cover: actualProjectCopyCoverOwner{tx: tx},
-			Canvas: canvaspg.NewProjectCopyStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediapg.NewStore(tx), nil) }, func(tx *gorm.DB, b canvasapp.ProjectCopyBinding) canvasapp.MediaReader {
-				return privateCopyReference{owner: mediapg.NewProjectCopyStore(tx), binding: mediaapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}}
+			Media: workspaceMediaCopyStore(tx), Budget: workspaceCopyBudgetStore(tx), Cover: actualProjectCopyCoverOwner{tx: tx},
+			Canvas: workspaceCanvasCopyStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(workspaceMediaStore(tx), nil) }, func(tx *gorm.DB, b canvasapp.ProjectCopyBinding) canvasapp.MediaReader {
+				return privateCopyReference{owner: workspaceMediaCopyStore(tx), binding: mediaapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}}
 			}),
 		}
 	})
@@ -58,10 +55,10 @@ func TestProjectCopyAtomicAdmissionCompleteGraphAndPublication(t *testing.T) {
 	ctx, db := workspaceMigrationDB(t)
 	actor, project := lifecycleActorProject(ctx, t, db)
 	orgPreset, projectPreset := uuid.New(), uuid.New()
-	lifecycleFixtureSQL(t, db, `INSERT INTO workspace.style_preset(id,org_id,name,style_type,prompt_fragment) VALUES(?,?,'组织风格','realistic','组织风格不引用财务')`, orgPreset, actor.OrgID)
-	lifecycleFixtureSQL(t, db, `INSERT INTO workspace.style_preset(id,org_id,project_id,name,style_type,prompt_fragment,negative_prompt) VALUES(?,?,?,'项目风格','realistic','保持角色','不模糊')`, projectPreset, actor.OrgID, project)
+	lifecycleFixtureSQL(t, db, `INSERT INTO workspace.style_preset(id,org_id,owner_scope_id,name,style_type,prompt_fragment) VALUES(?,?,?,'组织风格','realistic','组织风格不引用财务')`, orgPreset, actor.OrgID, actor.ScopeID)
+	lifecycleFixtureSQL(t, db, `INSERT INTO workspace.style_preset(id,org_id,owner_scope_id,project_id,name,style_type,prompt_fragment,negative_prompt) VALUES(?,?,?,?,'项目风格','realistic','保持角色','不模糊')`, projectPreset, actor.OrgID, actor.ScopeID, project)
 	lifecycleFixtureSQL(t, db, `UPDATE workspace.project SET style_preset_id=?,description='完整描述',allow_overseas_models=true,default_models='{"image":"configured-image"}',aigc_mark_style='{"preset":"bottom_right","opacity":0.5}' WHERE id=?`, orgPreset, project)
-	canvas := canvasapp.NewService(canvaspg.NewStore(db, nil))
+	canvas := canvasapp.NewService(workspaceCanvasStore(db, nil))
 	document, err := canvas.Create(ctx, actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "独立画布"})
 	if err != nil {
 		t.Fatal(err)
@@ -78,7 +75,7 @@ func TestProjectCopyAtomicAdmissionCompleteGraphAndPublication(t *testing.T) {
 	if err != nil || job.Manifest.Documents != 1 || job.Status != "queued" {
 		t.Fatal("atomic admission", job, err)
 	}
-	if _, err := workspacepg.NewStore(db).FindProject(ctx, actor, job.TargetProjectID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if _, err := workspaceStore(db).FindProject(ctx, actor, job.TargetProjectID); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
 		t.Fatal("copying project visible", err)
 	}
 	var budget struct{ LimitMicros, ReservedMicros, SettledMicros int64 }
@@ -140,11 +137,11 @@ func TestProjectCopyAtomicAdmissionCompleteGraphAndPublication(t *testing.T) {
 	if err != nil || published.Status != "succeeded" {
 		t.Fatal("atomic publication", published, err)
 	}
-	settings, err := workspaceapp.NewProjectLifecycle(workspacepg.NewStore(db), time.Now).Get(ctx, actor, job.TargetProjectID)
+	settings, err := workspaceapp.NewProjectLifecycle(workspaceStore(db), time.Now).Get(ctx, actor, job.TargetProjectID)
 	if err != nil || settings.Project.Name != input.TargetName || settings.Project.Description != "完整描述" || !settings.Project.AllowOverseasModels || settings.DefaultModels["image"] != "configured-image" || settings.Project.StylePresetID == orgPreset {
 		t.Fatal("own settings incomplete", settings, err)
 	}
-	presets, err := workspacepg.NewStore(db).ListStylePresets(ctx, actor, &job.TargetProjectID)
+	presets, err := workspaceStore(db).ListStylePresets(ctx, actor, &job.TargetProjectID)
 	if err != nil || len(presets) != 3 {
 		t.Fatal("global context plus copied private styles missing", presets, err)
 	}

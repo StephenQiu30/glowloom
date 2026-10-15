@@ -9,13 +9,13 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 func TestReadReuseSourceAvailableRechecksMutableOutputs(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID := operationStoreProject(t, database)
-	store := pgoperation.NewStore(database)
+	store := operationStore(database)
 	hash := uuid.NewString()
 	sourceID := seedCompletedOutput(t, database, projectID, hash, "passed", "ready", "passed")
 	quoted := quotedSnapshotItem(projectID, 0).Operation
@@ -56,7 +56,7 @@ func TestReadReuseSourceAvailableRechecksMutableOutputs(t *testing.T) {
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return err
 		}
-		available, err := pgoperation.NewStore(tx).ReadReuseSourceAvailable(t.Context(), actor, quoted)
+		available, err := operationStore(tx).ReadReuseSourceAvailable(t.Context(), actor, quoted)
 		if err != nil {
 			return err
 		}
@@ -102,13 +102,13 @@ func TestReadReuseSourceAvailableRechecksMutableOutputs(t *testing.T) {
 	assertAvailable(false)
 
 	foreign, _ := operationStoreProject(t, database)
-	if _, err := store.ReadReuseSourceAvailable(t.Context(), foreign, quoted); !errors.Is(err, pgoperation.ErrNotFound) {
+	if _, err := store.ReadReuseSourceAvailable(t.Context(), foreign, quoted); !errors.Is(err, workspaceapp.ErrProjectNotFound) {
 		t.Fatalf("foreign project source read = %v", err)
 	}
 	if err := database.Exec(`UPDATE identity."user" SET status = 'disabled' WHERE id = ?::uuid`, actor.ID.String()).Error; err != nil {
 		t.Fatalf("disable actor: %v", err)
 	}
-	if _, err := store.ReadReuseSourceAvailable(t.Context(), actor, quoted); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := store.ReadReuseSourceAvailable(t.Context(), actor, quoted); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatalf("revoked actor source read = %v", err)
 	}
 }
@@ -125,7 +125,7 @@ func TestReadReuseSourceAvailableHoldsMediaLockThroughOuterTransaction(t *testin
 		t.Fatalf("read source asset id: %v", err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		available, err := pgoperation.NewStore(tx).ReadReuseSourceAvailable(t.Context(), actor, quoted)
+		available, err := operationStore(tx).ReadReuseSourceAvailable(t.Context(), actor, quoted)
 		if err != nil || !available {
 			t.Fatalf("lock available source = %v, %v", available, err)
 		}

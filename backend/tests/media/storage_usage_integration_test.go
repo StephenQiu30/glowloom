@@ -19,7 +19,6 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediahttp "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/http"
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -39,7 +38,7 @@ func (f usageIntentFixture) StorageUsageKeys(context.Context, identityapp.Princi
 }
 
 func usageReader(db *gorm.DB, objects *objectstorage.Client, fixture usageIntentFixture) *mediaapp.StorageUsageReader {
-	store := pgmedia.NewStorageUsageStore(db, libraryTestAccess, func(*gorm.DB) mediaapp.StorageUsageIntentSource { return fixture })
+	store := mediaStorageUsageStore(db, libraryTestAccess, func(*gorm.DB) mediaapp.StorageUsageIntentSource { return fixture })
 	return mediaapp.NewStorageUsageReader(store, mediaobjects.NewStorageUsageObjects(objects), time.Now)
 }
 
@@ -89,7 +88,7 @@ func TestMediaStorageUsageActualObjectsIncludesTrashUnknownIntentAndPhysicalRemo
 	if err != nil || initial.UsedBytes != expected || initial.ObjectCount != 5 || initial.LimitBytes != nil {
 		t.Fatal("actual unique objects omitted unregistered work or counted foreign objects", initial, err)
 	}
-	catalog := pgmedia.NewLibraryStore(db, libraryTestAccess, time.Now)
+	catalog := mediaLibraryStore(db, libraryTestAccess, time.Now)
 	page, err := catalog.ListLibrary(t.Context(), actor, scope, libraryQuery())
 	if err != nil || len(page.Items) != 1 {
 		t.Fatal("load actual catalog revisions", page, err)
@@ -129,7 +128,7 @@ func TestMediaStorageUsageActualProjectAuthorityAndHTTPClosedQuery(t *testing.T)
 	objects := glbTestObjects(t)
 	actor, project := mediaStoreProject(t, db)
 	foreign, foreignProject := mediaStoreProject(t, db)
-	base := pgmedia.NewStore(db)
+	base := mediaTestStore(db)
 	uploads := mediaapp.NewScopedUploadService(base, base, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 	input := uploadInput(t)
 	input.Actor, input.Request.ProjectID = actor, project
@@ -179,7 +178,7 @@ func TestMediaStorageUsageActualProjectAuthorityAndHTTPClosedQuery(t *testing.T)
 	if err := db.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if bad := libraryHTTPRequest(t, router, http.MethodGet, url, nil, uuid.Nil); bad.Code != 403 {
+	if bad := libraryHTTPRequest(t, router, http.MethodGet, url, nil, uuid.Nil); bad.Code != 401 {
 		t.Fatal("revoked identity retained current occupancy access", bad.Code, bad.Body.String())
 	}
 }
@@ -189,7 +188,7 @@ func TestMediaStorageUsageActualMissingIntentOwnerAndCancelledReadsFailClosed(t 
 	objects := glbTestObjects(t)
 	actor, _ := mediaStoreProject(t, db)
 	scope := domain.LibraryScope{Kind: domain.LibraryPersonal}
-	missing := mediaapp.NewStorageUsageReader(pgmedia.NewStorageUsageStore(db, libraryTestAccess, nil), mediaobjects.NewStorageUsageObjects(objects), time.Now)
+	missing := mediaapp.NewStorageUsageReader(mediaStorageUsageStore(db, libraryTestAccess, nil), mediaobjects.NewStorageUsageObjects(objects), time.Now)
 	if _, err := missing.StorageUsage(t.Context(), actor, scope); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("missing installed owning query returned zero usage", err)
 	}
@@ -216,7 +215,7 @@ func TestMediaStorageUsageActualUnknownTransferCountsIndependentTargetBeforeRegi
 		t.Fatal("pending object intent without a real object was counted", before, err)
 	}
 	objects := &transferUnknownWrite{ProjectCopyObjects: mediaobjects.NewProjectCopyObjects(f.objects), failAt: 1}
-	unknown, err := mediaapp.NewTransferWorker(f.repo, objects, t.TempDir()).Execute(t.Context(), transferExecution(f.job))
+	unknown, err := mediaapp.NewTransferWorker(f.repo.Worker, objects, t.TempDir()).Execute(t.Context(), transferExecution(f.job))
 	if err != nil || !unknown.NeedsReconciliation || unknown.Status != "needs_reconciliation" {
 		t.Fatal("actual unknown transfer write fixture", unknown, err)
 	}
@@ -232,7 +231,7 @@ func TestMediaStorageUsageActualUnknownTransferCountsIndependentTargetBeforeRegi
 	if err != nil {
 		t.Fatal(err)
 	}
-	ready, err := mediaapp.NewTransferWorker(f.repo, objects, t.TempDir()).Execute(t.Context(), transferExecution(reconcile))
+	ready, err := mediaapp.NewTransferWorker(f.repo.Worker, objects, t.TempDir()).Execute(t.Context(), transferExecution(reconcile))
 	if err != nil || ready.Status != "succeeded" {
 		t.Fatal("actual transfer recovery", ready, err)
 	}

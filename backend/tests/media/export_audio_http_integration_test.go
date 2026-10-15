@@ -23,10 +23,8 @@ import (
 	"go.temporal.io/sdk/testsuite"
 	"gorm.io/gorm"
 
-	canvaspg "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
-	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -58,7 +56,7 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 	digest := sha256.Sum256(data)
 	download := &mediaapp.Downloaded{File: file, Size: int64(len(data)), MIMEType: "video/mp4", SHA256: hex.EncodeToString(digest[:])}
 	defer func() { _ = download.Close() }()
-	mediaStore := mediapg.NewStore(db)
+	mediaStore := mediaTestStore(db)
 	upload := mediaapp.NewUploadService(mediaStore, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 	uploaded, err := upload.Upload(t.Context(), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "source.mp4"}, File: download, LocalReviewConfirmed: true})
 	if err != nil {
@@ -78,8 +76,8 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 			}
 		}
 	})
-	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediapg.NewStore(tx), nil) }
-	canvasService := canvasapp.NewService(canvaspg.NewStore(db, mediaFactory))
+	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx), nil) }
+	canvasService := canvasapp.NewService(mediaCanvasStore(db, mediaFactory))
 	doc, err := canvasService.Create(t.Context(), actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "Audio export actual fixture"})
 	if err != nil {
 		t.Fatal(err)
@@ -94,8 +92,11 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := toolpg.NewStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
-		return canvasapp.NewTimelineReader(canvaspg.NewStore(tx, mediaFactory))
-	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediapg.NewStore(tx)) })
+		return canvasapp.NewTimelineReader(mediaCanvasStore(tx, mediaFactory))
+	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaTestStore(tx)) })
+	workerStore := toolpg.NewStore(db, func(tx *gorm.DB) toolapp.TimelineReader {
+		return canvasapp.NewTimelineReader(mediaCanvasWorkerStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaWorkerStore(tx), nil) }))
+	}, func(tx *gorm.DB) toolapp.DerivedMedia { return mediaapp.NewDerivedService(mediaWorkerStore(tx)) })
 	router := gin.New()
 	router.Use(httpapi.Middleware("http://localhost:3000"))
 	g := router.Group("/api")
@@ -133,8 +134,8 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	worker := toolapp.NewWorker(store, toolflow.NewObjects(objects), renderer, mediaflow.FFProber{}, mediaflow.FFUploadRenderer{})
-	activities := toolflow.NewActivities(worker, store, store)
+	worker := toolapp.NewWorker(workerStore, toolflow.NewObjects(objects), renderer, mediaflow.FFProber{}, mediaflow.FFUploadRenderer{})
+	activities := toolflow.NewActivities(worker, workerStore, workerStore)
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()
 	env.RegisterActivityWithOptions(activities.RenderExport, activity.RegisterOptions{Name: toolflow.RenderActivity})

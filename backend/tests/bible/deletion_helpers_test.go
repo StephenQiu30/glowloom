@@ -10,7 +10,6 @@ import (
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	scriptpg "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 )
 
 type deletionUsage struct{ reader *scriptpg.BibleScopes }
@@ -20,8 +19,8 @@ func (u deletionUsage) Read(ctx context.Context, actor identityapp.Principal, pr
 	return app.CharacterUsage{SHA256: fact.SHA256, CurrentLines: fact.CurrentLines, HistoricalLines: fact.HistoricalLines}, err
 }
 func deletionStore(db *gorm.DB) *pg.Store {
-	return pg.NewStore(db, pg.Factories{Access: func(tx *gorm.DB) app.ProjectAccess { return workspacepg.NewProjectContentAccessStore(tx) }, Impacts: func(tx *gorm.DB) app.Impacts {
-		access := workspacepg.NewProjectContentAccessStore(tx)
+	return pg.NewStore(db, pg.Factories{Access: func(tx *gorm.DB) app.ProjectAccess { return bibleFixtureProjectAccess(tx) }, Impacts: func(tx *gorm.DB) app.Impacts {
+		access := bibleFixtureProjectAccess(tx)
 		return pg.NewDeletionImpacts(tx, access, deletionUsage{scriptpg.NewBibleScopes(tx, access)})
 	}})
 }
