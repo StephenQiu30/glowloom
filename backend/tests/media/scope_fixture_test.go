@@ -66,8 +66,8 @@ func mediaPurgeStore(db *gorm.DB, project pgmedia.LibraryProjectAccessFactory, g
 	}
 }
 
-func mediaCopyStore(db *gorm.DB) *pgmedia.ProjectCopyStore {
-	return pgmedia.NewScopedProjectCopyStore(db, app.NewMediaWorkerScopeAccess)
+func mediaCopyStore(db *gorm.DB) *copyMediaTransactions {
+	return &copyMediaTransactions{ProjectCopyStore: pgmedia.NewScopedProjectCopyStore(db, app.NewMediaWorkerScopeAccess), db: db}
 }
 
 func mediaDocumentStore(db *gorm.DB) *pgmedia.DocumentSourceStore {

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -31,7 +32,10 @@ func TestMediaPurgeCancelBeforeIORestoresTrashBytesAndRejectsNewWorkWhileReserve
 	if err := db.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,owner_scope_id,name,aspect_ratio,style_type,status) VALUES(?,?,?,?,'reservation fixture','16:9','realistic','copying')`, target, actor.OrgID, actor.ID, actor.ScopeID).Error; err != nil {
 		t.Fatal(err)
 	}
-	_, err = mediaCopyStore(db).FreezeWithReferences(t.Context(), actor, mediaapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: target}, time.Now(), []uuid.UUID{in.Items[0].ID})
+	err = db.Transaction(func(tx *gorm.DB) error {
+		_, err := mediaCopyStore(tx).FreezeWithReferences(t.Context(), actor, mediaapp.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: target}, time.Now(), []uuid.UUID{in.Items[0].ID})
+		return err
+	})
 	if !errors.Is(err, domain.ErrPurgeConflict) {
 		t.Fatal("history admission ignored purge reservation", err)
 	}
