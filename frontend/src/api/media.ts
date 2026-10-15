@@ -7,7 +7,7 @@ import type { RequestOptions } from "@/lib/request";
 export async function listMediaLibrary(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listMediaLibraryParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.LibraryPage>("/api/media/library", {
     method: "GET",
@@ -21,7 +21,7 @@ export async function listMediaLibrary(
 /** 修改素材库目录或元数据 POST /api/media/library/commands */
 export async function applyMediaLibraryCommand(
   body: API.LibraryCommand,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.LibraryReceipt>("/api/media/library/commands", {
     method: "POST",
@@ -37,7 +37,7 @@ export async function applyMediaLibraryCommand(
 export async function getMediaLibraryItem(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getMediaLibraryItemParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { item_id: param0, ...queryParams } = params;
   return request<API.LibraryItemDetail>(`/api/media/library/items/${param0}`, {
@@ -53,7 +53,7 @@ export async function getMediaLibraryItem(
 export async function downloadLibraryMediaAsset(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.downloadLibraryMediaAssetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { item_id: param0, ...queryParams } = params;
   return request<Blob>(`/api/media/library/items/${param0}/download`, {
@@ -69,7 +69,7 @@ export async function downloadLibraryMediaAsset(
 export async function previewLibraryMediaAsset(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.previewLibraryMediaAssetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { item_id: param0, ...queryParams } = params;
   return request<API.LibraryMediaPreview>(
@@ -80,7 +80,7 @@ export async function previewLibraryMediaAsset(
         ...queryParams,
       },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -88,7 +88,7 @@ export async function previewLibraryMediaAsset(
 export async function exportMediaLibraryPackage(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.exportMediaLibraryPackageParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<Blob>("/api/media/library/packages/export", {
     method: "GET",
@@ -103,7 +103,7 @@ export async function exportMediaLibraryPackage(
 export async function listMediaLibraryPackages(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listMediaLibraryPackagesParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.PackagePage>("/api/media/library/packages/imports", {
     method: "GET",
@@ -121,7 +121,7 @@ export async function importMediaLibraryPackage(
     request: string;
   },
   file?: File,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const formData = new FormData();
 
@@ -139,7 +139,7 @@ export async function importMediaLibraryPackage(
         } else {
           formData.append(
             ele,
-            new Blob([JSON.stringify(item)], { type: "application/json" })
+            new Blob([JSON.stringify(item)], { type: "application/json" }),
           );
         }
       } else {
@@ -160,7 +160,7 @@ export async function importMediaLibraryPackage(
 export async function getMediaLibraryPackage(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getMediaLibraryPackageParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { job_id: param0, ...queryParams } = params;
   return request<API.PackageJob>(
@@ -169,7 +169,7 @@ export async function getMediaLibraryPackage(
       method: "GET",
       params: { ...queryParams },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -178,7 +178,7 @@ export async function cancelMediaLibraryPackage(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.cancelMediaLibraryPackageParams,
   body: API.PackageControl,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { job_id: param0, ...queryParams } = params;
   return request<any>(`/api/media/library/packages/imports/${param0}/cancel`, {
@@ -197,7 +197,7 @@ export async function reconcileMediaLibraryPackage(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.reconcileMediaLibraryPackageParams,
   body: API.PackageControl,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { job_id: param0, ...queryParams } = params;
   return request<any>(
@@ -210,7 +210,7 @@ export async function reconcileMediaLibraryPackage(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -218,7 +218,7 @@ export async function reconcileMediaLibraryPackage(
 export async function listMediaPurges(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listMediaPurgesParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.PurgePage>("/api/media/library/purges", {
     method: "GET",
@@ -232,7 +232,7 @@ export async function listMediaPurges(
 /** 明确确认后永久清理回收素材 POST /api/media/library/purges */
 export async function createMediaPurge(
   body: API.PurgeInput,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<any>("/api/media/library/purges", {
     method: "POST",
@@ -248,7 +248,7 @@ export async function createMediaPurge(
 export async function getMediaPurge(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getMediaPurgeParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { job_id: param0, ...queryParams } = params;
   return request<API.PurgeJob>(`/api/media/library/purges/${param0}`, {
@@ -263,7 +263,7 @@ export async function cancelMediaPurge(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.cancelMediaPurgeParams,
   body: API.PurgeControlRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { job_id: param0, ...queryParams } = params;
   return request<any>(`/api/media/library/purges/${param0}/cancel`, {
@@ -282,7 +282,7 @@ export async function reconcileMediaPurge(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.reconcileMediaPurgeParams,
   body: API.PurgeControlRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { job_id: param0, ...queryParams } = params;
   return request<any>(`/api/media/library/purges/${param0}/reconcile`, {
@@ -300,7 +300,7 @@ export async function reconcileMediaPurge(
 export async function getMediaLibraryStorageUsage(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getMediaLibraryStorageUsageParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.StorageUsage>("/api/media/library/storage-usage", {
     method: "GET",
@@ -315,7 +315,7 @@ export async function getMediaLibraryStorageUsage(
 export async function listMediaTransfers(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listMediaTransfersParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.TransferPage>("/api/media/library/transfers", {
     method: "GET",
@@ -329,7 +329,7 @@ export async function listMediaTransfers(
 /** 在个人库与项目库间独立转移素材 POST /api/media/library/transfers */
 export async function createMediaTransfer(
   body: API.TransferInput,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<any>("/api/media/library/transfers", {
     method: "POST",
@@ -345,7 +345,7 @@ export async function createMediaTransfer(
 export async function getMediaTransfer(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getMediaTransferParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { job_id: param0, ...queryParams } = params;
   return request<API.TransferJob>(`/api/media/library/transfers/${param0}`, {
@@ -360,7 +360,7 @@ export async function cancelMediaTransfer(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.cancelMediaTransferParams,
   body: API.TransferControlRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { job_id: param0, ...queryParams } = params;
   return request<any>(`/api/media/library/transfers/${param0}/cancel`, {
@@ -379,7 +379,7 @@ export async function reconcileMediaTransfer(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.reconcileMediaTransferParams,
   body: API.TransferControlRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { job_id: param0, ...queryParams } = params;
   return request<any>(`/api/media/library/transfers/${param0}/reconcile`, {
@@ -398,7 +398,7 @@ export async function retryMediaTransfer(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.retryMediaTransferParams,
   body: API.TransferControlRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { job_id: param0, ...queryParams } = params;
   return request<any>(`/api/media/library/transfers/${param0}/retry`, {
@@ -419,7 +419,7 @@ export async function uploadPersonalMediaAsset(
     local_review_confirmed: boolean;
   },
   file?: File,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const formData = new FormData();
 
@@ -437,7 +437,7 @@ export async function uploadPersonalMediaAsset(
         } else {
           formData.append(
             ele,
-            new Blob([JSON.stringify(item)], { type: "application/json" })
+            new Blob([JSON.stringify(item)], { type: "application/json" }),
           );
         }
       } else {
@@ -458,7 +458,7 @@ export async function uploadPersonalMediaAsset(
 export async function listMediaAssets(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listMediaAssetsParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.AssetPage>(`/api/projects/${param0}/media`, {
@@ -474,7 +474,7 @@ export async function listMediaAssets(
 export async function downloadDocumentAsset(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.downloadDocumentAssetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, asset_id: param1, ...queryParams } = params;
   return request<Blob>(`/api/projects/${param0}/media/${param1}/download`, {
@@ -488,7 +488,7 @@ export async function downloadDocumentAsset(
 export async function getMediaPreview(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getMediaPreviewParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, asset_id: param1, ...queryParams } = params;
   return request<API.Preview>(
@@ -497,7 +497,7 @@ export async function getMediaPreview(
       method: "GET",
       params: { ...queryParams },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -510,7 +510,7 @@ export async function uploadMediaAsset(
     local_review_confirmed: boolean;
   },
   file?: File,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   const formData = new FormData();
@@ -529,7 +529,7 @@ export async function uploadMediaAsset(
         } else {
           formData.append(
             ele,
-            new Blob([JSON.stringify(item)], { type: "application/json" })
+            new Blob([JSON.stringify(item)], { type: "application/json" }),
           );
         }
       } else {

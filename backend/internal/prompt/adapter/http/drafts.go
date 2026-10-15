@@ -3,26 +3,34 @@ package http
 import (
 	"errors"
 
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
+// DraftHandler exposes atomic private draft persistence.
 type DraftHandler struct{ store application.DraftStore }
 
+// NewDraftHandler injects authorized draft storage.
 func NewDraftHandler(store application.DraftStore) *DraftHandler { return &DraftHandler{store} }
+
+// Register installs authenticated project draft routes.
 func (h *DraftHandler) Register(g *gin.RouterGroup) {
+	g.POST("/projects/:pid/prompt-references/validate", h.ValidateFragment)
+	g.GET("/projects/:pid/prompt-uploads/:attempt", h.ResolveUpload)
 	g.POST("/projects/:pid/prompt-drafts", h.Create)
 	g.PUT("/projects/:pid/prompt-drafts/:id", h.SaveDraft)
 	g.GET("/projects/:pid/prompt-drafts/:id", h.ReadDraft)
 	g.GET("/projects/:pid/prompt-drafts", h.ListDrafts)
 }
 
+// DraftRequest replaces complete intent at an expected server revision.
 type DraftRequest struct {
 	ExpectedRevision int64        `json:"expected_revision"`
 	Draft            domain.Draft `json:"draft"`
@@ -156,4 +164,59 @@ func writeDraftError(c *gin.Context, err error) {
 	default:
 		httpapi.WriteProblem(c, 503, "dependency_unavailable", nil)
 	}
+}
+
+// ValidateFragment checks all pinned identities in the destination project's current authorization.
+// @Summary 校验站内粘贴引用
+// @ID validatePromptFragment
+// @Tags promptEditor
+// @Accept json
+// @Produce json
+// @Param pid path string true "目标项目"
+// @Param body body domain.Draft true "结构片段"
+// @Success 204 "已授权"
+// @Failure 422 {object} httpapi.Problem
+// @Router /api/projects/{pid}/prompt-references/validate [post]
+func (h *DraftHandler) ValidateFragment(c *gin.Context) {
+	p, ok := httpapi.PathUUID(c, "pid")
+	if !ok {
+		return
+	}
+	var draft domain.Draft
+	if !httpapi.Decode(c, &draft) {
+		return
+	}
+	if err := h.store.ValidateFragment(c.Request.Context(), identityhttp.Principal(c), p, draft); err != nil {
+		writeDraftError(c, err)
+		return
+	}
+	c.Status(204)
+}
+
+// ResolveUpload rechecks a completed upload before repairing a pending binding.
+// @Summary 找回原上传尝试结果
+// @ID resolvePromptUpload
+// @Tags promptEditor
+// @Produce json
+// @Param pid path string true "项目"
+// @Param attempt path string true "原上传尝试 UUID"
+// @Success 200 {object} application.UploadResolution
+// @Failure 403 {object} httpapi.Problem
+// @Router /api/projects/{pid}/prompt-uploads/{attempt} [get]
+func (h *DraftHandler) ResolveUpload(c *gin.Context) {
+	p, ok := httpapi.PathUUID(c, "pid")
+	if !ok {
+		return
+	}
+	attempt, ok := httpapi.PathUUID(c, "attempt")
+	if !ok {
+		return
+	}
+	out, err := h.store.ResolveUpload(c.Request.Context(), identityhttp.Principal(c), p, attempt)
+	if err != nil {
+		writeDraftError(c, err)
+		return
+	}
+	c.Header("Cache-Control", "private, no-store")
+	c.JSON(200, out)
 }

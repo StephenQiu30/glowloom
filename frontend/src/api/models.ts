@@ -7,7 +7,7 @@ import type { RequestOptions } from "@/lib/request";
 export async function listProjectModels(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listProjectModelsParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.ModelPage>("/api/models", {
     method: "GET",

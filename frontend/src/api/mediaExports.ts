@@ -7,7 +7,7 @@ import type { RequestOptions } from "@/lib/request";
 export async function getMediaExport(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getMediaExportParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { job_id: param0, ...queryParams } = params;
   return request<API.ExportJobResponse>(`/api/media-exports/${param0}`, {
@@ -24,7 +24,7 @@ export async function cancelMediaExport(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.cancelMediaExportParams,
   body: API.ControlInput,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { job_id: param0, ...queryParams } = params;
   return request<any>(`/api/media-exports/${param0}/cancel`, {
@@ -42,7 +42,7 @@ export async function cancelMediaExport(
 export async function downloadMediaExport(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.downloadMediaExportParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { job_id: param0, ...queryParams } = params;
   return request<Blob>(`/api/media-exports/${param0}/download`, {
@@ -58,7 +58,7 @@ export async function downloadMediaExport(
 export async function previewMediaExport(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.previewMediaExportParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { job_id: param0, ...queryParams } = params;
   return request<API.ExportPreview>(`/api/media-exports/${param0}/preview`, {
@@ -75,7 +75,7 @@ export async function retryMediaExport(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.retryMediaExportParams,
   body: API.ControlInput,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { job_id: param0, ...queryParams } = params;
   return request<any>(`/api/media-exports/${param0}/retry`, {
@@ -94,7 +94,7 @@ export async function reviewMediaExport(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.reviewMediaExportParams,
   body: API.ReviewInput,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { job_id: param0, ...queryParams } = params;
   return request<API.ExportJobResponse>(`/api/media-exports/${param0}/review`, {
@@ -112,7 +112,7 @@ export async function reviewMediaExport(
 export async function downloadMediaExportSubtitles(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.downloadMediaExportSubtitlesParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { job_id: param0, ...queryParams } = params;
   return request<Blob>(`/api/media-exports/${param0}/subtitles`, {
@@ -128,7 +128,7 @@ export async function downloadMediaExportSubtitles(
 export async function listMediaExports(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listMediaExportsParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.ExportPage>(`/api/projects/${param0}/media-exports`, {
@@ -145,7 +145,7 @@ export async function createMediaExport(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.createMediaExportParams,
   body: API.MediatoolCreateInput,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<any>(`/api/projects/${param0}/media-exports`, {

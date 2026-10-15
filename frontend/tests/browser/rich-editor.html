@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>编辑器隔离 API 验证</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      window.process = { env: { NODE_ENV: "development" } };
+    </script>
+    <script type="module" src="./rich-editor.tsx"></script>
+  </body>
+</html>

@@ -1,15 +1,18 @@
 package postgres
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
 
-	bibledomain "github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	bibledomain "github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 )
 
 // ValidateDraftSources rechecks pinned source facts inside the owning save/quote transaction.
@@ -23,6 +26,9 @@ func ValidateDraftSources(tx *gorm.DB, a identityapp.Principal, p uuid.UUID, d d
 				return domain.ErrReferenceUnavailable
 			}
 			if s.UploadSessionID != "" {
+				if s.UploadSessionID != s.UploadAttemptID {
+					return domain.ErrReferenceUnavailable
+				}
 				id, err := uuid.Parse(s.UploadSessionID)
 				if err != nil {
 					return domain.ErrReferenceUnavailable
@@ -129,4 +135,28 @@ func subjectSource(tx *gorm.DB, p uuid.UUID, sourceID, versionID string) (domain
 		return out, nil
 	}
 	return out, domain.ErrReferenceUnavailable
+}
+
+// ResolveUpload returns only the current actor's original successful upload attempt.
+func (s *DraftStore) ResolveUpload(ctx context.Context, a identityapp.Principal, p, attempt uuid.UUID) (application.UploadResolution, error) {
+	var out application.UploadResolution
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.authorize(ctx, tx, a, p, false); err != nil {
+			return err
+		}
+		var row struct{ SourceID, SourceVersion, MediaKind string }
+		result := tx.Raw(`SELECT m.id::text AS source_id,m.revision::text AS source_version,m.kind AS media_kind FROM media.upload_request u JOIN media.media_asset m ON m.id=u.asset_id AND m.project_id=u.project_id WHERE u.project_id=? AND u.principal_id=? AND u.request_key=? AND NOT m.is_delete FOR SHARE OF m`, p, a.ID, attempt).Scan(&row)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return nil
+		}
+		if err := checkDraftMedia(tx, p, domain.SourceMedia{SourceID: row.SourceID, SourceVersion: row.SourceVersion, MediaKind: row.MediaKind}, true); err != nil {
+			return err
+		}
+		out = application.UploadResolution{Found: true, MediaKind: row.MediaKind, Source: &domain.ReferenceSource{Kind: "media", SourceID: row.SourceID, SourceVersion: row.SourceVersion}}
+		return nil
+	})
+	return out, err
 }

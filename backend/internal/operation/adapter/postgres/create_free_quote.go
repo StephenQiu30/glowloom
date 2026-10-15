@@ -117,7 +117,7 @@ func (s *Store) CreateFreeQuote(ctx context.Context, actor identityapp.Principal
 			Confirmable:       available >= *item.Operation.QuoteMicros,
 			PromptPreparation: item.PromptPreparation,
 		}
-		if item.PromptPreparation != nil {
+		if item.PromptPreparation != nil || editorDraft != nil {
 			result.FinalPrompt = *item.Inputs[0].TextValue
 		}
 		if originalSource != nil {

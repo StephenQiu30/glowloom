@@ -221,6 +221,18 @@ export function duplicateNode(n: Node): Node {
   copy.title = Array.from(n.title).slice(0, 125).join("") + " 副本";
   copy.x = Math.min(1e6, n.x + 32);
   copy.y = Math.min(1e6, n.y + 32);
+  if (isDraft(copy) && copy.config.draft.composer) {
+    for (const ref of copy.config.draft.composer.references) {
+      if (ref.source.kind === "pending_upload") {
+        ref.bindingGeneration++;
+        ref.source = {
+          kind: "pending_upload",
+          clientUploadId: crypto.randomUUID(),
+          uploadAttemptId: crypto.randomUUID(),
+        };
+      }
+    }
+  }
   delete copy.input_revision;
   return copy;
 }

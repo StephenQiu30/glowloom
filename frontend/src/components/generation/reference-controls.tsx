@@ -1,5 +1,11 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
+import {
+  resolvePromptUpload,
+  validatePromptFragment,
+} from "@/api/promptEditor";
+import { draftRequest } from "./draft-save";
+import { validatePromptDraft } from "./prompt-document";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -16,6 +22,7 @@ import { SubjectList } from "@/components/subjects/subject-list";
 import { subjectText, type Subject } from "@/components/subjects/contracts";
 import { uploadMediaAsset } from "@/api/media";
 import { validateUpload } from "@/components/media/library";
+import { ReferenceSearch } from "./reference-search";
 import { ComposerSession } from "./composer-session";
 import {
   referenceLabel,
@@ -81,36 +88,72 @@ export function ReferenceControls({
   projectID,
   model,
   disabled = false,
+  authorized = false,
 }: {
   session: ComposerSession;
   draft: PromptDraft;
   projectID: string;
   model?: API.ModelResponse;
   disabled?: boolean;
+  authorized?: boolean;
 }) {
   const [picker, setPicker] = useState<{
       kind: MediaKind;
       replace?: string;
     } | null>(null),
     [subjects, setSubjects] = useState(false),
+    [subjectReplace, setSubjectReplace] = useState<string | null>(null),
     [menu, setMenu] = useState(false),
     [search, setSearch] = useState(""),
     [role, setRole] = useState("reference_image"),
     [error, setError] = useState(""),
     [remove, setRemove] = useState<string | null>(null),
     [review, setReview] = useState(false);
-  const [fileIds,setFileIds]=useState<string[]>([]);
+  const [lookup, setLookup] = useState<{
+    query: string;
+    seq: number;
+    range?: { from: number; to: number };
+  } | null>(null);
+  const [fileIds, setFileIds] = useState<string[]>([]);
+  const [unavailablePaste, setUnavailablePaste] = useState<string | null>(null);
   const files = useRef(new Map<string, File>()),
     [uploading, setUploading] = useState<string[]>([]);
+  const [mention, setMention] = useState<{
+    range: { from: number; to: number };
+    index: number;
+  } | null>(null);
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "@" && !event.isComposing) {
+    const changed = (
+      value: {
+        query: string;
+        range: { from: number; to: number };
+        index: number;
+      } | null,
+    ) => {
+      setMention(value);
+      if (value) {
         setMenu(true);
-        setSearch("");
-      }
+        setSearch(value.query);
+      } else setMenu(false);
     };
-    session.editor.view.dom.addEventListener("keyup", onKey);
-    return () => session.editor.view.dom.removeEventListener("keyup", onKey);
+    session.editor.on("composerMention", changed);
+    return () => {
+      session.editor.off("composerMention", changed);
+    };
+  }, [session]);
+  const panel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const reveal = ({ referenceId }: { referenceId: string }) => {
+      const card = panel.current?.querySelector<HTMLElement>(
+        `[data-reference-card="${CSS.escape(referenceId)}"]`,
+      );
+      card?.scrollIntoView({ block: "nearest" });
+      card?.focus();
+    };
+    session.editor.on("composerReferenceSelected", reveal);
+    return () => {
+      session.editor.off("composerReferenceSelected", reveal);
+    };
   }, [session]);
   const roles = [
     ...new Set([
@@ -119,15 +162,20 @@ export function ReferenceControls({
       role,
     ]),
   ];
-  function add(binding: ReferenceBinding) {
+  function add(binding: ReferenceBinding, inline = false) {
     try {
-      session.insertReference(binding);
+      session.insertReference(
+        binding,
+        inline,
+        inline ? mention?.range : undefined,
+      );
       setMenu(false);
+      setError("");
     } catch (e) {
       setError(String(e));
     }
   }
-  function choose(file: File, replace?: ReferenceBinding) {
+  function choose(file: File, replace?: ReferenceBinding, inline = false) {
     const error = validateUpload(file);
     if (error) {
       setError(error);
@@ -155,11 +203,63 @@ export function ReferenceControls({
         setError("原位重选需保持相同媒体类型。");
         return;
       }
-    } else add(pending);
+    } else add(pending, inline);
     files.current.set(pending.id, file);
-    setFileIds(ids=>[...new Set([...ids,pending.id])]);
+    setFileIds((ids) => [...new Set([...ids, pending.id])]);
     setReview(false);
   }
+  const acceptFiles = useEffectEvent((values: File[]) => {
+    if (!disabled) values.forEach((file) => choose(file, undefined, true));
+  });
+  useEffect(() => {
+    const accept = (value: { files: File[] }) => acceptFiles(value.files);
+    session.editor.on("composerFiles", accept);
+    return () => {
+      session.editor.off("composerFiles", accept);
+    };
+  }, [session]);
+  const checkedUploads = useRef(new Set<string>());
+  async function recoverUpload(ref: ReferenceBinding) {
+    if (ref.source.kind !== "pending_upload") return;
+    const current = session.snapshot();
+    const ticket = {
+      contextKey: current.contextKey,
+      replicaId: current.replicaId,
+      referenceId: ref.id,
+      generation: ref.bindingGeneration,
+      attempt: ref.source.uploadAttemptId,
+    };
+    try {
+      const result = await resolvePromptUpload({
+        pid: projectID,
+        attempt: ticket.attempt,
+      });
+      if (
+        result.found &&
+        result.source &&
+        result.media_kind === ref.mediaKind
+      ) {
+        session.resolveUpload(ticket, {
+          kind: "media",
+          sourceId: result.source.sourceId!,
+          sourceVersion: result.source.sourceVersion!,
+        });
+      }
+    } catch {
+      setError("原上传结果暂时无法核验；保留占位，请重试查询或原位重选文件。");
+    }
+  }
+  const recoverOnMount = useEffectEvent(recoverUpload);
+  useEffect(() => {
+    for (const ref of draft.references) {
+      if (ref.source.kind !== "pending_upload") continue;
+      const key = `${ref.id}:${ref.bindingGeneration}:${ref.source.uploadAttemptId}`;
+      if (!checkedUploads.current.has(key)) {
+        checkedUploads.current.add(key);
+        void recoverOnMount(ref);
+      }
+    }
+  }, [draft.references]);
   async function upload(id: string) {
     const snapshot = session.snapshot(),
       ref = snapshot.draft.references.find((r) => r.id === id),
@@ -200,6 +300,58 @@ export function ReferenceControls({
       setUploading((v) => v.filter((x) => x !== id));
     }
   }
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(
+        "glowloom-prompt-v1\n" + JSON.stringify(session.snapshot().draft),
+      );
+    } catch {
+      setError("剪贴板不可用，请检查浏览器权限。");
+    }
+  }
+  async function paste() {
+    try {
+      const seq = session.snapshot().localSeq;
+      const text = await navigator.clipboard.readText();
+      if (!text.startsWith("glowloom-prompt-v1\n"))
+        throw new Error(
+          "请使用站内“复制正文与引用”获取片段；普通文字可直接粘贴到正文。",
+        );
+      const fragment: unknown = JSON.parse(
+        text.slice("glowloom-prompt-v1\n".length),
+      );
+      validatePromptDraft(fragment);
+      try {
+        await validatePromptFragment(
+          { pid: projectID },
+          draftRequest(fragment),
+        );
+      } catch {
+        setUnavailablePaste(
+          fragment.document.content
+            .map((paragraph) =>
+              (paragraph.content ?? [])
+                .map((node) =>
+                  node.type === "text"
+                    ? node.text
+                    : node.type === "hardBreak"
+                      ? "\n"
+                      : "[不可用引用]",
+                )
+                .join(""),
+            )
+            .join("\n"),
+        );
+        throw new Error(
+          "引用未通过目标项目授权，可选择仅保留正文和不可用占位。素材需先明确导入目标项目。",
+        );
+      }
+      if (!session.importFragment(fragment, seq))
+        throw new Error("校验期间正文已变化，请重新粘贴；当前输入未被覆盖。");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "引用未通过授权校验");
+    }
+  }
   const mentioned = new Set(
     draft.document.content.flatMap(
       (p) =>
@@ -209,7 +361,61 @@ export function ReferenceControls({
     ),
   );
   return (
-    <section aria-label="参考素材" className="space-y-3">
+    <section ref={panel} aria-label="参考素材" className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        本次参考 {draft.references.length} 项 · 正文提及{" "}
+        {draft.document.content.reduce(
+          (count, p) =>
+            count +
+            (p.content?.filter((n) => n.type === "reference").length ?? 0),
+          0,
+        )}{" "}
+        处
+      </p>
+      {draft.references.some((r) => r.role === "first_frame") &&
+        draft.references.some((r) => r.role === "last_frame") && (
+          <Button
+            variant="outline"
+            disabled={disabled}
+            onClick={() => {
+              const current = session.snapshot();
+              session.applyConversion(
+                current.localSeq,
+                current.draft.params,
+                current.draft.references.map((ref) =>
+                  ["first_frame", "last_frame"].includes(ref.role)
+                    ? {
+                        ...ref,
+                        role:
+                          ref.role === "first_frame"
+                            ? "last_frame"
+                            : "first_frame",
+                        bindingGeneration: ref.bindingGeneration + 1,
+                      }
+                    : ref,
+                ),
+              );
+            }}
+          >
+            交换首尾帧
+          </Button>
+        )}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="ghost"
+          disabled={!authorized}
+          onClick={() => void copy()}
+        >
+          复制正文与引用
+        </Button>
+        <Button
+          variant="ghost"
+          disabled={disabled}
+          onClick={() => void paste()}
+        >
+          粘贴站内引用
+        </Button>
+      </div>
       <div className="flex flex-wrap gap-2">
         <Button
           variant="outline"
@@ -231,7 +437,10 @@ export function ReferenceControls({
         <Button
           variant="outline"
           disabled={disabled}
-          onClick={() => setSubjects(true)}
+          onClick={() => {
+            setSubjectReplace(null);
+            setSubjects(true);
+          }}
         >
           添加主体
         </Button>
@@ -267,7 +476,6 @@ export function ReferenceControls({
       {menu && (
         <div className="rounded border p-3" aria-label="引用候选">
           <Input
-            autoFocus
             placeholder="按编号查找引用"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -278,20 +486,71 @@ export function ReferenceControls({
                 referenceLabel(draft.labelState, r.id).includes(search),
               )
               .map((r) => (
-                <Button key={r.id} variant="ghost" onClick={() => add(r)}>
+                <Button key={r.id} variant="ghost" onClick={() => add(r, true)}>
                   {referenceLabel(draft.labelState, r.id)}
                 </Button>
               ))}
           </div>
-          <Button variant="ghost" onClick={() => setMenu(false)}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setLookup({
+                query: search,
+                seq: session.snapshot().localSeq,
+                range: mention?.range,
+              });
+              setMenu(false);
+            }}
+          >
+            搜索项目素材与主体
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setMenu(false);
+              session.editor.commands.focus();
+            }}
+          >
             关闭候选
           </Button>
         </div>
+      )}
+      {lookup && (
+        <ReferenceSearch
+          projectID={projectID}
+          initialQuery={lookup.query}
+          onClose={() => {
+            setLookup(null);
+            session.editor.commands.focus();
+          }}
+          onSelect={(candidates) => {
+            if (session.snapshot().localSeq !== lookup.seq) {
+              setError("检索期间草稿已变化，请重新打开候选后插入。");
+              setLookup(null);
+              return;
+            }
+            try {
+              const bindings = candidates.map((candidate) =>
+                candidate.media
+                  ? mediaBinding(candidate.media, role)
+                  : subjectBinding(candidate.subject!, role),
+              );
+              session.insertReferences(bindings, lookup.range);
+              setError("");
+              setLookup(null);
+              session.editor.commands.focus();
+            } catch (e) {
+              setError(String(e));
+            }
+          }}
+        />
       )}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {draft.references.map((ref) => (
           <article
             key={ref.id}
+            data-reference-card={ref.id}
+            tabIndex={-1}
             className="min-w-0 space-y-2 rounded-lg border p-3"
           >
             <div className="flex items-center justify-between">
@@ -300,7 +559,7 @@ export function ReferenceControls({
                 {mentioned.has(ref.id) ? "已提及" : "作为全局参考发送"}
               </span>
             </div>
-            {ref.source.kind === "media" && (
+            {authorized && ref.source.kind === "media" && (
               <div className="relative h-24 overflow-hidden rounded">
                 <ProjectMediaPreview
                   projectID={projectID}
@@ -309,10 +568,13 @@ export function ReferenceControls({
                 />
               </div>
             )}
-            {ref.source.kind === "subject" && (
+            {authorized && ref.source.kind === "subject" && (
               <p className="text-sm">
                 {ref.source.description} · {ref.source.media.length} 个素材
               </p>
+            )}
+            {!authorized && ref.source.kind !== "pending_upload" && (
+              <p className="text-sm">来源待核验；确认权限前隐藏内容。</p>
             )}
             <select
               aria-label={`${referenceLabel(draft.labelState, ref.id)}角色`}
@@ -337,6 +599,13 @@ export function ReferenceControls({
                     ? "待上传，草稿可保存"
                     : "请原位重选文件，引用编号会保留"}
                 </p>
+                <Button
+                  disabled={disabled}
+                  variant="ghost"
+                  onClick={() => void recoverUpload(ref)}
+                >
+                  查询原上传结果
+                </Button>
                 <input
                   aria-label={`重选${referenceLabel(draft.labelState, ref.id)}`}
                   type="file"
@@ -364,10 +633,36 @@ export function ReferenceControls({
                 size="sm"
                 variant="ghost"
                 disabled={disabled}
-                onClick={() => add(ref)}
+                onClick={() => add(ref, true)}
               >
                 提及
               </Button>
+              {mentioned.has(ref.id) && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    let target: number | undefined;
+                    session.editor.state.doc.descendants((node, position) => {
+                      if (
+                        target === undefined &&
+                        node.type.name === "reference" &&
+                        node.attrs.referenceId === ref.id
+                      )
+                        target = position;
+                    });
+                    if (target !== undefined)
+                      session.editor
+                        .chain()
+                        .focus()
+                        .setNodeSelection(target)
+                        .scrollIntoView()
+                        .run();
+                  }}
+                >
+                  定位正文
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="ghost"
@@ -384,6 +679,19 @@ export function ReferenceControls({
               >
                 后移
               </Button>
+              {ref.source.kind === "subject" && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={disabled}
+                  onClick={() => {
+                    setSubjectReplace(ref.id);
+                    setSubjects(true);
+                  }}
+                >
+                  更新 / 替换主体版本
+                </Button>
+              )}
               {ref.source.kind !== "subject" && (
                 <Button
                   size="sm"
@@ -419,6 +727,30 @@ export function ReferenceControls({
         </label>
       )}
       {error && <p role="alert">{error}</p>}
+      {unavailablePaste !== null && (
+        <div className="rounded border p-3">
+          <p>
+            无法访问的引用将转为“[不可用引用]”文字，不携带素材身份、地址或主体描述。
+          </p>
+          <Button
+            disabled={disabled}
+            onClick={() => {
+              session.editor.commands.insertContent(
+                unavailablePaste.split("\n").map((text) => ({
+                  type: "paragraph",
+                  content: text ? [{ type: "text", text }] : [],
+                })),
+              );
+              setUnavailablePaste(null);
+            }}
+          >
+            仅粘贴文字与不可用占位
+          </Button>
+          <Button variant="ghost" onClick={() => setUnavailablePaste(null)}>
+            取消粘贴
+          </Button>
+        </div>
+      )}
       {picker && (
         <ProjectMediaPicker
           projectID={projectID}
@@ -453,7 +785,15 @@ export function ReferenceControls({
             <SubjectList
               projectID={projectID}
               onSelect={(subject) => {
-                add(subjectBinding(subject, role));
+                const original = draft.references.find(
+                  (r) => r.id === subjectReplace,
+                );
+                if (original)
+                  session.replaceReference(
+                    original.id,
+                    subjectBinding(subject, original.role),
+                  );
+                else add(subjectBinding(subject, role));
                 setSubjects(false);
               }}
             />

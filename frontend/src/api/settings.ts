@@ -23,7 +23,7 @@ export async function listCapabilityDefaults(options?: RequestOptions) {
 export async function getConfigReceipt(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getConfigReceiptParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.ConfigReceipt>(`/api/admin/config-requests/${param0}`, {
@@ -40,7 +40,7 @@ export async function activateModelRelease(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.activateModelReleaseParams,
   body: API.ActivateReleaseInput,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.ModelRelease>(
@@ -53,7 +53,7 @@ export async function activateModelRelease(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -61,7 +61,7 @@ export async function activateModelRelease(
 export async function listAdminModels(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listAdminModelsParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.AdminModelPage>("/api/admin/models", {
     method: "GET",
@@ -75,7 +75,7 @@ export async function listAdminModels(
 /** 创建模型 POST /api/admin/models */
 export async function createAdminModel(
   body: API.CreateModelRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.CreatedModel>("/api/admin/models", {
     method: "POST",
@@ -91,7 +91,7 @@ export async function createAdminModel(
 export async function getAdminModel(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getAdminModelParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.AdminModelDetail>(`/api/admin/models/${param0}`, {
@@ -106,7 +106,7 @@ export async function publishAdminModelPrice(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.publishAdminModelPriceParams,
   body: API.PublishPriceRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.PublishedPriceRule>(`/api/admin/models/${param0}/prices`, {
@@ -124,7 +124,7 @@ export async function publishAdminModelPrice(
 export async function listModelReleases(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listModelReleasesParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.ReleasePage>(`/api/admin/models/${param0}/releases`, {
@@ -139,7 +139,7 @@ export async function createModelRelease(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.createModelReleaseParams,
   body: API.CreateReleaseInput,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.ModelRelease>(`/api/admin/models/${param0}/releases`, {
@@ -158,7 +158,7 @@ export async function setAdminModelStatus(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.setAdminModelStatusParams,
   body: API.SetModelStatusRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.ChangedModelStatus>(`/api/admin/models/${param0}/status`, {
@@ -177,7 +177,7 @@ export async function publishAdminModelVersion(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.publishAdminModelVersionParams,
   body: API.PublishVersionRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.PublishedModelVersion>(
@@ -190,7 +190,7 @@ export async function publishAdminModelVersion(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -198,7 +198,7 @@ export async function publishAdminModelVersion(
 export async function getProviderCheck(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getProviderCheckParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.ProviderCheck>(`/api/admin/provider-checks/${param0}`, {
@@ -219,7 +219,7 @@ export async function listProviderPresets(options?: RequestOptions) {
 /** 保存自定义预设 POST /api/admin/provider-presets */
 export async function createProviderPreset(
   body: API.SavePresetInput,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.Preset>("/api/admin/provider-presets", {
     method: "POST",
@@ -236,7 +236,7 @@ export async function connectProviderPreset(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.connectProviderPresetParams,
   body: API.ConnectPresetInput,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.PresetConnection>(
@@ -249,7 +249,7 @@ export async function connectProviderPreset(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -257,7 +257,7 @@ export async function connectProviderPreset(
 export async function exportProviderPreset(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.exportProviderPresetParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.PresetDocument>(
@@ -266,7 +266,7 @@ export async function exportProviderPreset(
       method: "GET",
       params: { ...queryParams },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -275,7 +275,7 @@ export async function updateProviderPresetState(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.updateProviderPresetStateParams,
   body: API.PresetStateInput,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.Preset>(`/api/admin/provider-presets/${param0}/state`, {
@@ -294,7 +294,7 @@ export async function publishProviderPresetVersion(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.publishProviderPresetVersionParams,
   body: API.SavePresetInput,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.Preset>(`/api/admin/provider-presets/${param0}/versions`, {
@@ -311,7 +311,7 @@ export async function publishProviderPresetVersion(
 /** 预览预设导入 POST /api/admin/provider-presets/import-preview */
 export async function previewProviderPreset(
   body: API.PresetImportRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.PresetPreview>(
     "/api/admin/provider-presets/import-preview",
@@ -322,7 +322,7 @@ export async function previewProviderPreset(
       },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -330,7 +330,7 @@ export async function previewProviderPreset(
 export async function listAdminProviders(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listAdminProvidersParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.ProviderPage>("/api/admin/providers", {
     method: "GET",
@@ -344,7 +344,7 @@ export async function listAdminProviders(
 /** 创建渠道 POST /api/admin/providers */
 export async function createAdminProvider(
   body: API.CreateProviderRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.CreatedProvider>("/api/admin/providers", {
     method: "POST",
@@ -360,7 +360,7 @@ export async function createAdminProvider(
 export async function getAdminProvider(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getAdminProviderParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.ProviderDetail>(`/api/admin/providers/${param0}`, {
@@ -375,7 +375,7 @@ export async function updateAdminProvider(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.updateAdminProviderParams,
   body: API.UpdateProviderRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.CreatedProvider>(`/api/admin/providers/${param0}`, {
@@ -394,7 +394,7 @@ export async function applyProviderPreset(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.applyProviderPresetParams,
   body: API.ApplyConfigInput,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.ConnectionConfig>(
@@ -407,7 +407,7 @@ export async function applyProviderPreset(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -415,7 +415,7 @@ export async function applyProviderPreset(
 export async function getProviderConfig(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getProviderConfigParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.ConnectionConfig>(
@@ -424,7 +424,7 @@ export async function getProviderConfig(
       method: "GET",
       params: { ...queryParams },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -432,7 +432,7 @@ export async function getProviderConfig(
 export async function listProviderCredentials(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listProviderCredentialsParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.ProviderCredentialSummary[]>(
@@ -441,7 +441,7 @@ export async function listProviderCredentials(
       method: "GET",
       params: { ...queryParams },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -450,7 +450,7 @@ export async function setAdminCredential(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.setAdminCredentialParams,
   body: API.SetCredentialRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.SavedCredential>(
@@ -463,7 +463,7 @@ export async function setAdminCredential(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -471,7 +471,7 @@ export async function setAdminCredential(
 export async function disableAdminCredential(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.disableAdminCredentialParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, credential_id: param1, ...queryParams } = params;
   return request<API.SavedCredential>(
@@ -480,7 +480,7 @@ export async function disableAdminCredential(
       method: "POST",
       params: { ...queryParams },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -488,7 +488,7 @@ export async function disableAdminCredential(
 export async function testAdminCredential(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.testAdminCredentialParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, credential_id: param1, ...queryParams } = params;
   return request<any>(
@@ -497,7 +497,7 @@ export async function testAdminCredential(
       method: "POST",
       params: { ...queryParams },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -506,7 +506,7 @@ export async function previewProviderUpgrade(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.previewProviderUpgradeParams,
   body: API.ConfigUpgradeInput,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.ConfigUpgradePreview>(
@@ -519,7 +519,7 @@ export async function previewProviderUpgrade(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -527,7 +527,7 @@ export async function previewProviderUpgrade(
 export async function getProjectModelDefaults(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getProjectModelDefaultsParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.ModelDefaults>(`/api/projects/${param0}/model-defaults`, {
@@ -542,7 +542,7 @@ export async function saveProjectModelDefaults(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.saveProjectModelDefaultsParams,
   body: API.ModelDefaultsRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.ModelDefaults>(`/api/projects/${param0}/model-defaults`, {
@@ -569,7 +569,7 @@ export async function savePromptPreference(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.savePromptPreferenceParams,
   body: API.SaveRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { operation: param0, ...queryParams } = params;
   return request<API.Customization>(
@@ -582,6 +582,6 @@ export async function savePromptPreference(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }

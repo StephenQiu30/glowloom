@@ -40,6 +40,12 @@ import {
   emptyPromptDraft,
   type PromptDraft,
 } from "@/components/generation/prompt-document";
+import { getSession } from "@/api/identity";
+import {
+  branchJournal,
+  canonical,
+  type LocalBranch,
+} from "@/components/generation/draft-save";
 import { RequestError } from "@/lib/request";
 import { applyCanvasCommands, getCanvas } from "@/api/canvases";
 import type { Project } from "@/components/projects/project";
@@ -99,7 +105,14 @@ export function CanvasEditor({
   } | null>(null);
   const [upload, setUpload] = useState(false);
   const [preview, setPreview] = useState<Node | null>(null);
-  const [base, setBase] = useState(initial);
+  const [base, setBaseState] = useState(initial);
+  const savedBase = useRef(initial);
+  const setBase = (value: Canvas) => {
+    savedBase.current = value;
+    setBaseState(value);
+  };
+  const privateInvalid = useRef(false);
+  const [identityInvalid, setIdentityInvalid] = useState(false);
   const [nodes, setNodes] = useState(initial.nodes);
   const local = useRef(initial.nodes);
   const [selected, setSelected] = useState<string>();
@@ -148,6 +161,106 @@ export function CanvasEditor({
       (n) => !baseline.has(n.id) || !sameEditable(n, baseline.get(n.id)!),
     );
   const current = nodes.find((n) => n.id === selected);
+  const [replicaId] = useState(() => crypto.randomUUID());
+  const [recoveryContext, setRecoveryContext] = useState("");
+  const [recoveryBranches, setRecoveryBranches] = useState<LocalBranch[]>([]);
+  const recordRevision = useRef(0),
+    journal = useRef(Promise.resolve());
+  useEffect(() => {
+    let active = true;
+    getSession()
+      .then(async (identity) => {
+        if (!identity.actor?.id) throw new Error("session_invalid");
+        const context = `${identity.actor.id}/${project.id}/canvas/${initial.id}`;
+        const branches = await branchJournal.list(context);
+        if (active) {
+          setRecoveryContext(context);
+          setRecoveryBranches(
+            branches.filter(
+              (b) =>
+                b.replicaId !== replicaId && b.ackedSeq !== b.snapshot.localSeq,
+            ),
+          );
+        }
+      })
+      .catch(() => {
+        if (active)
+          setMessage("本地恢复待核验；请保持当前页面并确认登录状态。");
+      });
+    return () => {
+      active = false;
+    };
+  }, [project.id, initial.id, replicaId]);
+  useEffect(() => {
+    const suspend = () => {
+      privateInvalid.current = true;
+      request.current?.abort();
+      setIdentityInvalid(true);
+      setGeneration(null);
+    };
+    const channel =
+      typeof BroadcastChannel !== "undefined"
+        ? new BroadcastChannel("glowloom-private-cache")
+        : null;
+    if (channel) channel.onmessage = suspend;
+    window.addEventListener("glowloom:private-cache-cleared", suspend);
+    const verify = () => {
+      if (document.visibilityState === "visible" && recoveryContext) {
+        void getSession()
+          .then((identity) => {
+            if (
+              !identity.actor?.id ||
+              !recoveryContext.startsWith(identity.actor.id + "/")
+            )
+              suspend();
+          })
+          .catch(suspend);
+      }
+    };
+    document.addEventListener("visibilitychange", verify);
+    return () => {
+      channel?.close();
+      window.removeEventListener("glowloom:private-cache-cleared", suspend);
+      document.removeEventListener("visibilitychange", verify);
+    };
+  }, [recoveryContext]);
+  const persistCanvas = useCallback(async () => {
+    if (!recoveryContext || privateInvalid.current) return;
+    const revision = ++recordRevision.current;
+    const record: LocalBranch = {
+      contextKey: recoveryContext,
+      replicaId,
+      localRecordRevision: revision,
+      snapshot: {
+        contextKey: recoveryContext,
+        replicaId,
+        localSeq: revision,
+        draft: emptyPromptDraft(),
+      },
+      serverRevision: savedBase.current.revision,
+      ackedSeq: dirty || pending.current ? -1 : revision,
+      ownerState: {
+        base: savedBase.current,
+        nodes: structuredClone(local.current),
+        pending: structuredClone(pending.current),
+      },
+    };
+    journal.current = journal.current
+      .catch(() => {})
+      .then(() =>
+        privateInvalid.current ? undefined : branchJournal.write(record),
+      );
+    try {
+      await journal.current;
+    } catch {
+      if (alive.current)
+        setMessage("本地恢复不可用；请保存到服务端后再关闭页面。");
+    }
+  }, [recoveryContext, replicaId, dirty]);
+  useEffect(() => {
+    void persistCanvas();
+  }, [nodes, base, recoveryContext, saving, unconfirmed, persistCanvas]);
+
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -447,7 +560,18 @@ export function CanvasEditor({
   );
   async function save() {
     if (saveFlight.current) return saveFlight.current;
-    const flight = saveOnce();
+    const flight = (async () => {
+      let result = await saveOnce();
+      while (
+        result &&
+        alive.current &&
+        !privateInvalid.current &&
+        commandBatch(result, local.current).commands?.length
+      ) {
+        result = await saveOnce();
+      }
+      return result;
+    })();
     saveFlight.current = flight;
     try {
       return await flight;
@@ -456,7 +580,8 @@ export function CanvasEditor({
     }
   }
   async function saveOnce() {
-    if (busy.current || conflict) return;
+    if (busy.current || conflict || privateInvalid.current) return;
+    const base = savedBase.current;
     let operation = pending.current;
     if (!operation) {
       try {
@@ -475,6 +600,7 @@ export function CanvasEditor({
     busy.current = true;
     setSaving(true);
     setMessage("");
+    await persistCanvas();
     const controller = new AbortController();
     request.current = controller;
     try {
@@ -540,6 +666,56 @@ export function CanvasEditor({
   useEffect(() => {
     saveLatest.current = save;
   });
+  useEffect(() => {
+    if (!dirty || saving || unconfirmed || conflict || identityInvalid) return;
+    const timer = setTimeout(() => {
+      void saveLatest.current();
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [nodes, dirty, saving, unconfirmed, conflict, identityInvalid]);
+  async function recoverCanvas(branch: LocalBranch) {
+    try {
+      const value = branch.ownerState as {
+        base: Canvas;
+        nodes: Node[];
+        pending: Pending | null;
+      };
+      let baseline = requireCanvas(value.base, project.id, initial.id);
+      commandBatch(baseline, value.nodes);
+      if (value.pending) {
+        if (
+          canonical(value.pending.body) !==
+          canonical(commandBatch(value.pending.base, value.pending.nodes))
+        )
+          throw new Error("恢复请求不完整");
+        const replay = await applyCanvasCommands(
+          { id: initial.id },
+          value.pending.body,
+          { headers: { "Idempotency-Key": value.pending.key } },
+        );
+        baseline = requireSaveResult(
+          replay,
+          value.pending.base,
+          value.pending.nodes,
+          value.pending.body,
+        );
+      }
+      const server = requireCanvas(
+        await getCanvas({ id: initial.id }),
+        project.id,
+        initial.id,
+      );
+      edit(value.nodes);
+      if (server.revision !== baseline.revision) {
+        setConflict({ server });
+        setMessage("已恢复所选本地分支，请处理服务端冲突。");
+      } else setBase(server);
+    } catch (e) {
+      setMessage(
+        e instanceof Error ? e.message : "本地恢复失败；原分支仍保留。",
+      );
+    }
+  }
   async function generateCurrent(pickSubject = false) {
     if (!current || !isDraft(current) || busy.current) return;
     const saved = await save();
@@ -551,12 +727,10 @@ export function CanvasEditor({
       composer = emptyPromptDraft();
       composer.document = {
         type: "doc",
-        content: node.config.draft.prompt
-          .split("\n")
-          .map((text) => ({
-            type: "paragraph",
-            ...(text ? { content: [{ type: "text" as const, text }] } : {}),
-          })),
+        content: node.config.draft.prompt.split("\n").map((text) => ({
+          type: "paragraph",
+          ...(text ? { content: [{ type: "text" as const, text }] } : {}),
+        })),
       };
       composer.params = {
         aspect_ratio: node.config.draft.aspect_ratio,
@@ -686,6 +860,8 @@ export function CanvasEditor({
         : dirty
           ? "有未保存的编辑"
           : `已保存 · 版本 ${base.revision}`;
+  if (identityInvalid)
+    return <p role="alert">身份已变化，请重新登录后打开画布。</p>;
   return (
     <main className="creation-canvas relative h-dvh overflow-hidden">
       <header
@@ -967,6 +1143,39 @@ export function CanvasEditor({
             blocked={!!conflict || unconfirmed}
           />
         </CanvasNodePanel>
+      )}
+      {recoveryBranches.length > 0 && (
+        <div
+          className="fixed bottom-4 left-4 z-40 max-w-lg space-y-2 rounded-lg border bg-background p-4"
+          role="status"
+        >
+          <p>发现 {recoveryBranches.length} 份未同步画布分支</p>
+          {recoveryBranches.map((branch) => (
+            <div key={branch.replicaId} className="flex gap-2">
+              <span>基线 r{branch.serverRevision}</span>
+              <Button
+                disabled={saving}
+                onClick={() => void recoverCanvas(branch)}
+              >
+                恢复此分支
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  void branchJournal.remove(branch).then((removed) => {
+                    if (removed)
+                      setRecoveryBranches((v) =>
+                        v.filter((b) => b.replicaId !== branch.replicaId),
+                      );
+                    else setMessage("该分支已有新修改，未删除。");
+                  });
+                }}
+              >
+                丢弃此分支
+              </Button>
+            </div>
+          ))}
+        </div>
       )}
       {generation && (
         <GenerationDialog

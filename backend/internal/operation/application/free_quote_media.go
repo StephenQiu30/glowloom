@@ -12,6 +12,8 @@ import (
 )
 
 type freeQuoteRoleLimit struct {
+	MinCount      int64    `json:"min_count"`
+	ForModes      []string `json:"for_modes"`
 	MaxCount      int64    `json:"max_count"`
 	Types         []string `json:"types"`
 	MaxMS         int64    `json:"max_ms"`
@@ -20,18 +22,15 @@ type freeQuoteRoleLimit struct {
 }
 
 func prepareFreeQuoteMedia(requested []FreeQuoteMediaInput, media []FreeQuoteMediaFact,
-	inputRoles []string, rawLimits json.RawMessage, operationID uuid.UUID,
+	inputRoles []string, rawLimits json.RawMessage, operationID uuid.UUID, mode string,
 ) ([]FingerprintPart, []domain.OperationInput, error) {
 	if len(requested) != len(media) {
 		return nil, nil, ErrFreeQuoteInputNotReady
 	}
-	if len(requested) == 0 {
-		return nil, nil, nil
-	}
 	var limits struct {
 		Roles map[string]json.RawMessage `json:"roles"`
 	}
-	if err := json.Unmarshal(rawLimits, &limits); err != nil || len(limits.Roles) == 0 {
+	if err := json.Unmarshal(rawLimits, &limits); err != nil || (len(requested) > 0 && len(limits.Roles) == 0) {
 		return nil, nil, ErrFreeQuoteInputNotReady
 	}
 	counts := make(map[string]int64)
@@ -55,6 +54,7 @@ func prepareFreeQuoteMedia(requested []FreeQuoteMediaInput, media []FreeQuoteMed
 		var limit freeQuoteRoleLimit
 		if err := json.Unmarshal(raw, &limit); err != nil || limit.MaxCount < 0 ||
 			!slices.Contains(limit.Types, fact.Kind) ||
+			(len(limit.ForModes) > 0 && !slices.Contains(limit.ForModes, mode)) ||
 			(limit.MaxBytes > 0 && fact.ByteSize > limit.MaxBytes) ||
 			(fact.DurationMS != nil && *fact.DurationMS <= 0) ||
 			(limit.MaxMS > 0 && (fact.DurationMS == nil || *fact.DurationMS > limit.MaxMS)) ||
@@ -80,6 +80,18 @@ func prepareFreeQuoteMedia(requested []FreeQuoteMediaInput, media []FreeQuoteMed
 			Role: request.Role, RefType: "media_asset", RefID: &assetID,
 			RefVersion: &contentHash, MediaAssetID: &assetID,
 		})
+	}
+	for name, raw := range limits.Roles {
+		if strings.HasPrefix(name, "_") {
+			continue
+		}
+		var role freeQuoteRoleLimit
+		if json.Unmarshal(raw, &role) != nil || role.MinCount < 0 || role.MinCount > role.MaxCount {
+			return nil, nil, ErrFreeQuoteInputNotReady
+		}
+		if (len(role.ForModes) == 0 || slices.Contains(role.ForModes, mode)) && counts[name] < role.MinCount {
+			return nil, nil, ErrFreeQuoteInputNotReady
+		}
 	}
 	for kind, count := range totals {
 		raw, ok := limits.Roles["_total_"+kind+"s"]

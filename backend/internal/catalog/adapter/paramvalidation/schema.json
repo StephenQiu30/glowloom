@@ -11,6 +11,7 @@
       "additionalProperties": false,
       "properties": {
         "max_outputs": {"type": "integer", "minimum": 1},
+        "provider_endpoint": {"type":"string","minLength":1,"maxLength":128,"pattern":"^[A-Za-z0-9_./:-]+$"},
         "aspect_ratios": {"$ref": "#/$defs/nonEmptyStrings"},
         "resolutions": {"$ref": "#/$defs/nonEmptyStrings"},
         "durations_ms": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "integer", "minimum": 1}},
@@ -28,6 +29,8 @@
               "additionalProperties": false,
               "properties": {
                 "max_count": {"type": "integer", "minimum": 0},
+                "min_count": {"type": "integer", "minimum": 0},
+                "for_modes": {"$ref": "#/$defs/nonEmptyStrings"},
                 "types": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["image", "video", "audio"]}},
                 "max_ms": {"type": "integer", "minimum": 1},
                 "max_bytes": {"type": "integer", "minimum": 1},

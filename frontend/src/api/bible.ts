@@ -7,7 +7,7 @@ import type { RequestOptions } from "@/lib/request";
 export async function listBibleVoices(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listBibleVoicesParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.VoiceResponse>(`/api/projects/${param0}/bible-voices`, {
@@ -23,7 +23,7 @@ export async function listBibleVoices(
 export async function listBibleEntries(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listBibleEntriesParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, kind: param1, ...queryParams } = params;
   return request<API.PageResponse>(`/api/projects/${param0}/bible/${param1}`, {
@@ -40,7 +40,7 @@ export async function createBibleEntry(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.createBibleEntryParams,
   body: API.ContentRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, kind: param1, ...queryParams } = params;
   return request<API.Receipt>(`/api/projects/${param0}/bible/${param1}`, {
@@ -58,7 +58,7 @@ export async function createBibleEntry(
 export async function getBibleEntry(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getBibleEntryParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, kind: param1, id: param2, ...queryParams } = params;
   return request<API.Detail>(
@@ -67,7 +67,7 @@ export async function getBibleEntry(
       method: "GET",
       params: { ...queryParams },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -76,7 +76,7 @@ export async function updateBibleEntry(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.updateBibleEntryParams,
   body: API.ContentRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, kind: param1, id: param2, ...queryParams } = params;
   return request<API.Receipt>(
@@ -89,7 +89,7 @@ export async function updateBibleEntry(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -98,7 +98,7 @@ export async function deleteBibleEntry(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.deleteBibleEntryParams,
   body: API.ControlRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, kind: param1, id: param2, ...queryParams } = params;
   return request<API.Receipt>(
@@ -111,7 +111,7 @@ export async function deleteBibleEntry(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -120,7 +120,7 @@ export async function adoptBibleResult(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.adoptBibleResultParams,
   body: API.ResultRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, kind: param1, id: param2, ...queryParams } = params;
   return request<API.Receipt>(
@@ -133,7 +133,7 @@ export async function adoptBibleResult(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -142,7 +142,7 @@ export async function confirmBibleEntry(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.confirmBibleEntryParams,
   body: API.ControlRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, kind: param1, id: param2, ...queryParams } = params;
   return request<API.Receipt>(
@@ -155,7 +155,7 @@ export async function confirmBibleEntry(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -164,7 +164,7 @@ export async function createBibleLook(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.createBibleLookParams,
   body: API.LookRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, kind: param1, id: param2, ...queryParams } = params;
   return request<API.Receipt>(
@@ -177,7 +177,7 @@ export async function createBibleLook(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -186,7 +186,7 @@ export async function updateBibleLook(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.updateBibleLookParams,
   body: API.LookRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const {
     pid: param0,
@@ -205,7 +205,7 @@ export async function updateBibleLook(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -214,7 +214,7 @@ export async function deleteBibleLook(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.deleteBibleLookParams,
   body: API.ControlRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const {
     pid: param0,
@@ -233,7 +233,7 @@ export async function deleteBibleLook(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -242,7 +242,7 @@ export async function setBibleDefaultLook(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.setBibleDefaultLookParams,
   body: API.ControlRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const {
     pid: param0,
@@ -261,7 +261,7 @@ export async function setBibleDefaultLook(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -270,7 +270,7 @@ export async function replaceBibleReferences(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.replaceBibleReferencesParams,
   body: API.ReferencesRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const {
     pid: param0,
@@ -289,7 +289,7 @@ export async function replaceBibleReferences(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -298,7 +298,7 @@ export async function mergeBibleCharacter(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.mergeBibleCharacterParams,
   body: API.MergeRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, kind: param1, id: param2, ...queryParams } = params;
   return request<API.Receipt>(
@@ -311,7 +311,7 @@ export async function mergeBibleCharacter(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -320,7 +320,7 @@ export async function restoreBibleEntry(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.restoreBibleEntryParams,
   body: API.ControlRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, kind: param1, id: param2, ...queryParams } = params;
   return request<API.Receipt>(
@@ -333,7 +333,7 @@ export async function restoreBibleEntry(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -342,7 +342,7 @@ export async function splitBibleCharacter(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.splitBibleCharacterParams,
   body: API.SplitRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, kind: param1, id: param2, ...queryParams } = params;
   return request<API.Receipt>(
@@ -355,7 +355,7 @@ export async function splitBibleCharacter(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -363,7 +363,7 @@ export async function splitBibleCharacter(
 export async function listBibleVersions(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listBibleVersionsParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, kind: param1, id: param2, ...queryParams } = params;
   return request<API.HistoryResponse>(
@@ -374,7 +374,7 @@ export async function listBibleVersions(
         ...queryParams,
       },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -382,7 +382,7 @@ export async function listBibleVersions(
 export async function getBibleVersion(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getBibleVersionParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const {
     pid: param0,
@@ -397,7 +397,7 @@ export async function getBibleVersion(
       method: "GET",
       params: { ...queryParams },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -406,7 +406,7 @@ export async function bindBibleVoice(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.bindBibleVoiceParams,
   body: API.VoiceRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, kind: param1, id: param2, ...queryParams } = params;
   return request<API.Receipt>(
@@ -419,7 +419,7 @@ export async function bindBibleVoice(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -428,7 +428,7 @@ export async function unbindBibleVoice(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.unbindBibleVoiceParams,
   body: API.ControlRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, kind: param1, id: param2, ...queryParams } = params;
   return request<API.Receipt>(
@@ -441,7 +441,7 @@ export async function unbindBibleVoice(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -450,7 +450,7 @@ export async function createBibleEntryFromResult(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.createBibleEntryFromResultParams,
   body: API.ResultRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, kind: param1, ...queryParams } = params;
   return request<API.Receipt>(
@@ -463,6 +463,6 @@ export async function createBibleEntryFromResult(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }

@@ -15,6 +15,7 @@ export type SaveRequest = {
   snapshot: ComposerSnapshot;
 };
 export type LocalBranch = {
+  ownerState?: unknown;
   contextKey: string;
   replicaId: string;
   localRecordRevision: number;
@@ -57,6 +58,7 @@ export class DraftSaver {
       revision: number;
       draftId?: string;
       branch?: LocalBranch;
+      saved?: SavedDraft;
       send: (r: SaveRequest) => Promise<SavedDraft>;
       persist: (b: LocalBranch) => Promise<void>;
       changed?: () => void;
@@ -70,9 +72,11 @@ export class DraftSaver {
         snapshot: options.snapshot,
         serverRevision: options.revision,
         draftId: options.draftId,
-        ackedSeq: -1,
+        ackedSeq: options.saved ? options.snapshot.localSeq : -1,
       },
     );
+    this.saved = options.saved;
+    if (options.saved) this.status = "saved";
   }
   edit(snapshot: ComposerSnapshot) {
     if (
@@ -93,11 +97,12 @@ export class DraftSaver {
     this.options.changed?.();
   }
   private persist() {
+    if (this.disposed) return Promise.resolve();
     this.branch.localRecordRevision++;
     const value = structuredClone(this.branch);
     this.journal = this.journal
       .catch(() => {})
-      .then(() => this.options.persist(value))
+      .then(() => (this.disposed ? undefined : this.options.persist(value)))
       .catch(() => {
         this.localError = true;
         this.options.changed?.();
@@ -124,6 +129,7 @@ export class DraftSaver {
       this.branch.ackedSeq !== this.branch.snapshot.localSeq ||
       !this.saved
     ) {
+      if (this.disposed) throw new Error("owner_disposed");
       const request = this.branch.pendingSave ?? {
         key: crypto.randomUUID(),
         draftId: this.branch.draftId,
@@ -134,21 +140,16 @@ export class DraftSaver {
       this.status = "saving";
       await this.persist();
       this.options.changed?.();
+      if (this.disposed) throw new Error("owner_disposed");
       try {
         const saved = await this.options.send(structuredClone(request));
         validatePromptDraft(saved.draft);
         if (
           saved.revision !== request.expectedRevision + 1 ||
           (request.draftId && saved.draft_id !== request.draftId) ||
-          JSON.stringify(saved.draft) !== JSON.stringify(request.snapshot.draft)
-        ) {
-          // JSON object key ordering is not semantically significant.
-          if (
-            saved.revision !== request.expectedRevision + 1 ||
-            canonical(saved.draft) !== canonical(request.snapshot.draft)
-          )
-            throw new RequestError("invalid_receipt");
-        }
+          canonical(saved.draft) !== canonical(request.snapshot.draft)
+        )
+          throw new RequestError("invalid_receipt");
         this.saved = saved;
         this.branch.draftId = saved.draft_id;
         this.branch.serverRevision = saved.revision;
@@ -173,6 +174,14 @@ export class DraftSaver {
       }
     }
     return this.saved!;
+  }
+  rebase(saved: SavedDraft) {
+    if (this.flight) throw new Error("save_in_flight");
+    this.saved = saved;
+    this.branch.serverRevision = saved.revision;
+    this.branch.draftId = saved.draft_id;
+    this.branch.pendingSave = undefined;
+    this.status = "dirty";
   }
   dispose() {
     this.disposed = true;
@@ -260,6 +269,13 @@ export const branchJournal = {
     });
   },
   async clear() {
+    window.dispatchEvent(new Event("glowloom:private-cache-cleared"));
+    if (typeof BroadcastChannel !== "undefined") {
+      const channel = new BroadcastChannel("glowloom-private-cache");
+      channel.postMessage("clear");
+      channel.close();
+    }
+
     await transaction<void>("readwrite", (store) => {
       store.clear();
     });

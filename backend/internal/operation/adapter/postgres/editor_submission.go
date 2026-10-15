@@ -8,11 +8,12 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 func (s *Store) lockEditorOwner(ctx context.Context, tx *gorm.DB, a identityapp.Principal, p uuid.UUID, source promptdomain.InputSource) (application.SubmissionCurrent, error) {
@@ -68,9 +69,11 @@ func readEditorSubmission(tx *gorm.DB, a identityapp.Principal, p, id uuid.UUID)
 	if err := json.Unmarshal(row.Quote, &quote); err != nil {
 		return out, err
 	}
-	out.Quote = &application.EditorQuote{QuoteMicros: quote.QuoteMicros, AvailableMicros: quote.AvailableMicros, FinalPrompt: quote.FinalPrompt, ExpiresAt: quote.ExpiresAt, Confirmable: quote.Confirmable}
+	out.Quote = &application.EditorQuote{CompilerVersion: quote.CompilerVersion, ReferenceMapping: quote.ReferenceMapping, QuoteMicros: quote.QuoteMicros, AvailableMicros: quote.AvailableMicros, FinalPrompt: quote.FinalPrompt, ExpiresAt: quote.ExpiresAt, Confirmable: quote.Confirmable}
 	return out, nil
 }
+
+// CurrentSubmission discovers the current private slot without relying on browser state.
 func (s *Store) CurrentSubmission(ctx context.Context, a identityapp.Principal, p uuid.UUID, source promptdomain.InputSource) (application.SubmissionCurrent, error) {
 	var out application.SubmissionCurrent
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -92,6 +95,12 @@ func recordEditorSubmission(tx *gorm.DB, a identityapp.Principal, p uuid.UUID, s
 	result.ConfirmKey = &key
 	result.SubmissionEpoch = epoch + 1
 	result.EditorDraft = &draft
+	compiled, err := draft.Compile()
+	if err != nil {
+		return err
+	}
+	result.CompilerVersion = promptdomain.CompilerVersion
+	result.ReferenceMapping = compiled.Mapping
 	rawSource, err := json.Marshal(source)
 	if err != nil {
 		return err
@@ -186,6 +195,8 @@ func (s *Store) lockEditorConfirmation(ctx context.Context, tx *gorm.DB, a ident
 	}
 	return &id, nil
 }
+
+// ResolveSubmission serializes explicit closing with quote confirmation.
 func (s *Store) ResolveSubmission(ctx context.Context, a identityapp.Principal, in application.SubmissionResolution) (application.SubmissionCurrent, error) {
 	var out application.SubmissionCurrent
 	if in.Key == uuid.Nil || in.ID == uuid.Nil || in.ExpectedEpoch < 1 || (in.Action != "acknowledge_result" && in.Action != "discard_quote") {

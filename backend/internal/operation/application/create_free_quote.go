@@ -202,7 +202,7 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 		ID: uuid.New(), OperationID: operationID, SeqNo: 0,
 		Role: "prompt", RefType: "text", TextValue: &text,
 	}}
-	mediaParts, mediaInputs, err := prepareFreeQuoteMedia(input.MediaInputs, media, catalog.InputRoles, catalog.Limits, operationID)
+	mediaParts, mediaInputs, err := prepareFreeQuoteMedia(input.MediaInputs, media, catalog.InputRoles, catalog.Limits, operationID, input.Mode)
 	if err != nil {
 		return PreparedFreeQuote{}, err
 	}
@@ -281,10 +281,12 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 
 // CreateFreeQuoteResult contains the committed quote and observed balance.
 type CreateFreeQuoteResult struct {
-	SubmissionID      *uuid.UUID          `json:"submission_id,omitempty"`
-	SubmissionEpoch   int64               `json:"submission_epoch,omitempty"`
-	ConfirmKey        *uuid.UUID          `json:"confirm_key,omitempty"`
-	EditorDraft       *promptdomain.Draft `json:"editor_draft,omitempty"`
+	CompilerVersion   string                          `json:"compiler_version,omitempty"`
+	ReferenceMapping  []promptdomain.ReferenceMapping `json:"reference_mapping,omitempty"`
+	SubmissionID      *uuid.UUID                      `json:"submission_id,omitempty"`
+	SubmissionEpoch   int64                           `json:"submission_epoch,omitempty"`
+	ConfirmKey        *uuid.UUID                      `json:"confirm_key,omitempty"`
+	EditorDraft       *promptdomain.Draft             `json:"editor_draft,omitempty"`
 	OperationID       uuid.UUID
 	QuoteMicros       int64
 	QuoteDetail       json.RawMessage

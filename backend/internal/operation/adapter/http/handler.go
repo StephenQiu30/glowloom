@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -19,7 +20,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
-	pgprompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/adapter/postgres"
+
 	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
 	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 )
@@ -76,6 +77,30 @@ type QuoteItemRequest struct {
 	PromptTemplate          *promptapp.TemplateRequest `json:"prompt_template,omitempty"`
 }
 
+// UnmarshalJSON rejects mixed saved-pointer and inline intent, even if legacy values are empty.
+func (i *QuoteItemRequest) UnmarshalJSON(body []byte) error {
+	type request QuoteItemRequest
+	var value request
+	decoder := json.NewDecoder(strings.NewReader(string(body)))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&value); err != nil {
+		return err
+	}
+	if value.InputSource != nil {
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(body, &fields); err != nil {
+			return err
+		}
+		for _, key := range []string{"model_key", "capability", "mode", "prompt", "params", "output_count", "media_inputs", "source", "prompt_template"} {
+			if _, found := fields[key]; found {
+				return application.ErrInvalidFreeQuote
+			}
+		}
+	}
+	*i = QuoteItemRequest(value)
+	return nil
+}
+
 func (i QuoteItemRequest) input() application.FreeQuoteItemInput {
 	media := make([]application.FreeQuoteMediaInput, 0, len(i.MediaInputs))
 	for _, item := range i.MediaInputs {
@@ -86,19 +111,21 @@ func (i QuoteItemRequest) input() application.FreeQuoteItemInput {
 
 // QuoteResponse is an immutable estimate, not an execution result.
 type QuoteResponse struct {
-	SubmissionID      *uuid.UUID                `json:"submission_id,omitempty"`
-	SubmissionEpoch   int64                     `json:"submission_epoch,omitempty"`
-	ConfirmKey        *uuid.UUID                `json:"confirm_key,omitempty"`
-	EditorDraft       *promptdomain.Draft       `json:"editor_draft,omitempty"`
-	OperationID       uuid.UUID                 `json:"operation_id"`
-	QuoteMicros       int64                     `json:"quote_micros"`
-	QuoteDetail       json.RawMessage           `json:"quote_detail" swaggertype:"object"`
-	AvailableMicros   int64                     `json:"available_micros"`
-	ExpiresAt         time.Time                 `json:"expires_at"`
-	ReusedFromID      *uuid.UUID                `json:"reused_from_id" extensions:"x-nullable"`
-	Confirmable       bool                      `json:"confirmable"`
-	PromptPreparation *domain.PromptPreparation `json:"prompt_preparation,omitempty"`
-	FinalPrompt       string                    `json:"final_prompt,omitempty"`
+	CompilerVersion   string                          `json:"compiler_version,omitempty"`
+	ReferenceMapping  []promptdomain.ReferenceMapping `json:"reference_mapping,omitempty"`
+	SubmissionID      *uuid.UUID                      `json:"submission_id,omitempty"`
+	SubmissionEpoch   int64                           `json:"submission_epoch,omitempty"`
+	ConfirmKey        *uuid.UUID                      `json:"confirm_key,omitempty"`
+	EditorDraft       *promptdomain.Draft             `json:"editor_draft,omitempty"`
+	OperationID       uuid.UUID                       `json:"operation_id"`
+	QuoteMicros       int64                           `json:"quote_micros"`
+	QuoteDetail       json.RawMessage                 `json:"quote_detail" swaggertype:"object"`
+	AvailableMicros   int64                           `json:"available_micros"`
+	ExpiresAt         time.Time                       `json:"expires_at"`
+	ReusedFromID      *uuid.UUID                      `json:"reused_from_id" extensions:"x-nullable"`
+	Confirmable       bool                            `json:"confirmable"`
+	PromptPreparation *domain.PromptPreparation       `json:"prompt_preparation,omitempty"`
+	FinalPrompt       string                          `json:"final_prompt,omitempty"`
 }
 
 // QuotesRequest contains one or more independent free-generation items.
@@ -140,7 +167,7 @@ func (h *Handler) FreeQuote(c *gin.Context) {
 }
 
 func quoteResponse(result application.CreateFreeQuoteResult) QuoteResponse {
-	return QuoteResponse{SubmissionID: result.SubmissionID, SubmissionEpoch: result.SubmissionEpoch, ConfirmKey: result.ConfirmKey, EditorDraft: result.EditorDraft, OperationID: result.OperationID, QuoteMicros: result.QuoteMicros, QuoteDetail: result.QuoteDetail, AvailableMicros: result.AvailableMicros, ExpiresAt: result.ExpiresAt, ReusedFromID: result.ReusedFromID, Confirmable: result.Confirmable, PromptPreparation: result.PromptPreparation, FinalPrompt: result.FinalPrompt}
+	return QuoteResponse{CompilerVersion: result.CompilerVersion, ReferenceMapping: result.ReferenceMapping, SubmissionID: result.SubmissionID, SubmissionEpoch: result.SubmissionEpoch, ConfirmKey: result.ConfirmKey, EditorDraft: result.EditorDraft, OperationID: result.OperationID, QuoteMicros: result.QuoteMicros, QuoteDetail: result.QuoteDetail, AvailableMicros: result.AvailableMicros, ExpiresAt: result.ExpiresAt, ReusedFromID: result.ReusedFromID, Confirmable: result.Confirmable, PromptPreparation: result.PromptPreparation, FinalPrompt: result.FinalPrompt}
 }
 
 // Quotes creates a bounded batch, preserving invalid-item results in request order.
@@ -560,11 +587,15 @@ func writeError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 409, "template_changed", nil)
 	case errors.Is(err, promptapp.ErrTemplateContextUnavailable):
 		httpapi.WriteProblem(c, 409, "context_unavailable", nil)
-	case errors.Is(err, application.ErrSubmissionUnresolved), errors.Is(err, application.ErrSubmissionEpoch), errors.Is(err, application.ErrSubmissionAccepted):
-		httpapi.WriteProblem(c, 409, err.Error(), nil)
+	case errors.Is(err, application.ErrSubmissionUnresolved):
+		httpapi.WriteProblem(c, 409, "submission_unresolved", nil)
+	case errors.Is(err, application.ErrSubmissionEpoch):
+		httpapi.WriteProblem(c, 409, "submission_epoch_conflict", nil)
+	case errors.Is(err, application.ErrSubmissionAccepted):
+		httpapi.WriteProblem(c, 409, "submission_already_accepted", nil)
 	case errors.Is(err, promptdomain.ErrReferenceUnavailable):
 		httpapi.WriteProblem(c, 422, "reference_unavailable", nil)
-	case errors.Is(err, application.ErrQuoteSourceStale), errors.Is(err, pgprompt.ErrInputStale):
+	case errors.Is(err, application.ErrQuoteSourceStale), errors.Is(err, promptdomain.ErrInputStale):
 		httpapi.WriteProblem(c, 409, "canvas_revision_conflict", nil)
 	case errors.Is(err, identityapp.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)

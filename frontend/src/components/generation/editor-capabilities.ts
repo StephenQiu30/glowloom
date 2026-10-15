@@ -30,7 +30,7 @@ export function editorIssues(
         _total_images?: number;
       }
     | undefined;
-  const physical = new Map<string, number>();
+  const physical = new Map<string, string>();
   for (const ref of draft.references) {
     const label = referenceLabel(draft.labelState, ref.id),
       role = limits?.roles?.[ref.role];
@@ -47,9 +47,21 @@ export function editorIssues(
       for (const m of ref.source.kind === "subject"
         ? ref.source.media
         : [ref.source])
-        physical.set(`${ref.role}/${m.sourceId}/${m.sourceVersion}`, 1);
+        physical.set(
+          `${ref.role}/${m.sourceId}/${m.sourceVersion}`,
+          "mediaKind" in m ? m.mediaKind : ref.mediaKind,
+        );
   }
   for (const [name, role] of Object.entries(limits?.roles ?? {})) {
+    if (name.startsWith("_total_")) {
+      const kind = name.slice(7, -1);
+      if (
+        [...physical.values()].filter((k) => k === kind).length > Number(role)
+      )
+        issues.push(`${kind} 实际输入总数超出模型上限。`);
+      continue;
+    }
+    if (role.for_modes && !role.for_modes.includes(draft.mode ?? "")) continue;
     const count = [...physical.keys()].filter((k) =>
       k.startsWith(name + "/"),
     ).length;
@@ -72,7 +84,10 @@ export function editorIssues(
       else if (
         v !== undefined &&
         v !== null &&
-        ((f.enum && !f.enum.includes(v as string | number)) ||
+        ((f.type === "string" && typeof v !== "string") ||
+          (f.type === "boolean" && typeof v !== "boolean") ||
+          (["number", "integer"].includes(f.type) && typeof v !== "number") ||
+          (f.enum && !f.enum.includes(v as string | number)) ||
           (typeof v === "number" &&
             ((f.min !== undefined && v < f.min) ||
               (f.max !== undefined && v > f.max) ||

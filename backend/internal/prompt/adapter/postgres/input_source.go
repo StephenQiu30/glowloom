@@ -3,17 +3,19 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"errors"
+
 	"github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
-var ErrInputStale = errors.New("quote_source_stale")
+// ErrInputStale identifies a saved source revision conflict.
+var ErrInputStale = domain.ErrInputStale
 
 // ReadInput retains owner share locks through the caller's transaction; confirm permits layout-only changes.
 func (s *DraftStore) ReadInput(ctx context.Context, a identityapp.Principal, p uuid.UUID, source domain.InputSource, confirm bool) (domain.Draft, error) {

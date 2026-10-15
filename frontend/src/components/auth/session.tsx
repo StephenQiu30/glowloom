@@ -1,4 +1,5 @@
 "use client";
+import { branchJournal } from "@/components/generation/draft-save";
 import {
   createContext,
   useContext,
@@ -104,4 +105,5 @@ export function SessionGate({
 }
 export async function revokeSession(session: API.SessionView) {
   await deleteSession({ session_id: session.session_id });
+  await branchJournal.clear().catch(() => {});
 }

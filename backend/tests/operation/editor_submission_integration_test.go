@@ -6,6 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
@@ -13,8 +16,6 @@ import (
 	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
 	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 type editorAccess struct{ tx *gorm.DB }
@@ -59,7 +60,7 @@ func TestEditorSubmissionRecoveryDiscardAndLateEpoch(t *testing.T) {
 	epoch := int64(0)
 	input := operationapp.CreateFreeQuoteInput{ProjectID: p, RequestID: uuid.NewString(), FreeQuoteItemInput: operationapp.FreeQuoteItemInput{InputSource: &source, ExpectedSubmissionEpoch: &epoch}}
 	quote, err := operationapp.NewCreateFreeQuoteCommand(store).Execute(t.Context(), actor, input)
-	if err != nil || quote.SubmissionID == nil || quote.ConfirmKey == nil {
+	if err != nil || quote.SubmissionID == nil || quote.ConfirmKey == nil || quote.FinalPrompt != "测试" || quote.CompilerVersion == "" {
 		t.Fatal(quote, err)
 	}
 	recovered, err := store.CurrentSubmission(t.Context(), actor, p, source)
@@ -110,5 +111,56 @@ func TestEditorSubmissionRecoveryDiscardAndLateEpoch(t *testing.T) {
 	}
 	if _, err := store.ResolveSubmission(t.Context(), actor, operationapp.SubmissionResolution{ProjectID: p, ID: *next.SubmissionID, ExpectedEpoch: 3, Action: "acknowledge_result", Key: uuid.New()}); err != nil {
 		t.Fatal("acknowledge", err)
+	}
+	epoch = 4
+	input.RequestID = uuid.NewString()
+	staleQuote, err := store.CreateFreeQuote(t.Context(), actor, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft.Document.Content[0].Content[0].Text = "new intent"
+	if _, err := editorDraftStore(db).SaveDraft(t.Context(), actor, promptapp.DraftWrite{ProjectID: p, DraftID: saved.DraftID, ExpectedRevision: 1, Key: uuid.New(), Draft: draft}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ConfirmSingleQuote(t.Context(), actor, operationapp.ConfirmSingleQuoteInput{ProjectID: p, OperationID: staleQuote.OperationID, RequestID: staleQuote.ConfirmKey.String()}); !errors.Is(err, promptdomain.ErrInputStale) {
+		t.Fatal("edited source confirmed", err)
+	}
+	if _, err := store.ResolveSubmission(t.Context(), actor, operationapp.SubmissionResolution{ProjectID: p, ID: *staleQuote.SubmissionID, ExpectedEpoch: 5, Action: "discard_quote", Key: uuid.New()}); err != nil {
+		t.Fatal(err)
+	}
+	source.Revision = 2
+	epoch = 6
+	input.RequestID = uuid.NewString()
+	racing, err := store.CreateFreeQuote(t.Context(), actor, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	go func() {
+		<-start
+		_, err := store.ConfirmSingleQuote(t.Context(), actor, operationapp.ConfirmSingleQuoteInput{ProjectID: p, OperationID: racing.OperationID, RequestID: racing.ConfirmKey.String()})
+		results <- err
+	}()
+	go func() {
+		<-start
+		_, err := store.ResolveSubmission(t.Context(), actor, operationapp.SubmissionResolution{ProjectID: p, ID: *racing.SubmissionID, ExpectedEpoch: 7, Action: "discard_quote", Key: uuid.New()})
+		results <- err
+	}()
+	close(start)
+	first, second := <-results, <-results
+	if (first == nil) == (second == nil) {
+		t.Fatal("confirm/discard must have exactly one winner", first, second)
+	}
+	var count int
+	if err := db.Raw(`SELECT count(*) FROM billing.reservation WHERE operation_id=?`, racing.OperationID).Scan(&count).Error; err != nil || count > 1 {
+		t.Fatal("duplicate reservation", count, err)
+	}
+
+	if err := db.Exec(`UPDATE workspace.project SET is_delete=true WHERE id=?`, p).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ConfirmSingleQuote(t.Context(), actor, confirm); err == nil {
+		t.Fatal("confirmation replay bypassed revoked owner")
 	}
 }

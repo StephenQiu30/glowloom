@@ -7,7 +7,7 @@ import type { RequestOptions } from "@/lib/request";
 export async function getScriptEpisodeSourceText(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getScriptEpisodeSourceTextParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { eid: param0, ...queryParams } = params;
   return request<API.EpisodeText>(`/api/episodes/${param0}/source-text`, {
@@ -23,7 +23,7 @@ export async function getScriptEpisodeSourceText(
 export async function getScriptEpisodeStructure(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getScriptEpisodeStructureParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { eid: param0, ...queryParams } = params;
   return request<API.StructureDetail>(`/api/episodes/${param0}/structure`, {
@@ -38,7 +38,7 @@ export async function saveScriptEpisodeStructure(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.saveScriptEpisodeStructureParams,
   body: API.StructureSaveRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { eid: param0, ...queryParams } = params;
   return request<API.StructureReceipt>(`/api/episodes/${param0}/structure`, {
@@ -57,7 +57,7 @@ export async function confirmScriptEpisodeStructure(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.confirmScriptEpisodeStructureParams,
   body: API.StructureConfirmRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { eid: param0, ...queryParams } = params;
   return request<API.StructureReceipt>(
@@ -70,7 +70,7 @@ export async function confirmScriptEpisodeStructure(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -78,7 +78,7 @@ export async function confirmScriptEpisodeStructure(
 export async function listScriptEpisodeStructureVersions(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listScriptEpisodeStructureVersionsParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { eid: param0, ...queryParams } = params;
   return request<API.StructurePage>(
@@ -89,7 +89,7 @@ export async function listScriptEpisodeStructureVersions(
         ...queryParams,
       },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -97,7 +97,7 @@ export async function listScriptEpisodeStructureVersions(
 export async function getScriptEpisodeStructureVersion(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getScriptEpisodeStructureVersionParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { eid: param0, version: param1, ...queryParams } = params;
   return request<API.StructureDetail>(
@@ -106,7 +106,7 @@ export async function getScriptEpisodeStructureVersion(
       method: "GET",
       params: { ...queryParams },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -114,7 +114,7 @@ export async function getScriptEpisodeStructureVersion(
 export async function listScriptEpisodes(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listScriptEpisodesParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.EpisodeView>(`/api/projects/${param0}/episodes`, {
@@ -131,7 +131,7 @@ export async function confirmScriptEpisodeSplit(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.confirmScriptEpisodeSplitParams,
   body: API.SplitReviewRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.SplitReceipt>(
@@ -144,7 +144,7 @@ export async function confirmScriptEpisodeSplit(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -153,7 +153,7 @@ export async function resplitScriptEpisodes(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.resplitScriptEpisodesParams,
   body: API.SplitReviewRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.SplitReceipt>(
@@ -166,7 +166,7 @@ export async function resplitScriptEpisodes(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -174,7 +174,7 @@ export async function resplitScriptEpisodes(
 export async function listScriptFileImports(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listScriptFileImportsParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.ImportPage>(
@@ -187,7 +187,7 @@ export async function listScriptFileImports(
         ...queryParams,
       },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -196,7 +196,7 @@ export async function createScriptFileImport(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.createScriptFileImportParams,
   body: API.FileImportRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<any>(`/api/projects/${param0}/script-file-imports`, {
@@ -214,7 +214,7 @@ export async function createScriptFileImport(
 export async function getScriptFileImport(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getScriptFileImportParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, id: param1, ...queryParams } = params;
   return request<API.ImportJob>(
@@ -223,7 +223,7 @@ export async function getScriptFileImport(
       method: "GET",
       params: { ...queryParams },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -232,7 +232,7 @@ export async function cancelScriptFileImport(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.cancelScriptFileImportParams,
   body: API.FileImportControlRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, id: param1, ...queryParams } = params;
   return request<any>(
@@ -245,7 +245,7 @@ export async function cancelScriptFileImport(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -254,7 +254,7 @@ export async function reconcileScriptFileImport(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.reconcileScriptFileImportParams,
   body: API.FileImportControlRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, id: param1, ...queryParams } = params;
   return request<any>(
@@ -267,7 +267,7 @@ export async function reconcileScriptFileImport(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -276,7 +276,7 @@ export async function retryScriptFileImport(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.retryScriptFileImportParams,
   body: API.FileImportControlRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, id: param1, ...queryParams } = params;
   return request<any>(
@@ -289,7 +289,7 @@ export async function retryScriptFileImport(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -297,7 +297,7 @@ export async function retryScriptFileImport(
 export async function getScriptSourceSnapshot(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getScriptSourceSnapshotParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, sid: param1, ...queryParams } = params;
   return request<API.SourceSnapshotDetail>(
@@ -306,7 +306,7 @@ export async function getScriptSourceSnapshot(
       method: "GET",
       params: { ...queryParams },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -314,7 +314,7 @@ export async function getScriptSourceSnapshot(
 export async function listScriptSourceWrites(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listScriptSourceWritesParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.SourceWritePage>(
@@ -325,7 +325,7 @@ export async function listScriptSourceWrites(
         ...queryParams,
       },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -333,7 +333,7 @@ export async function listScriptSourceWrites(
 export async function getScriptSourceWrite(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getScriptSourceWriteParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, wid: param1, ...queryParams } = params;
   return request<API.SourceWriteIntent>(
@@ -342,7 +342,7 @@ export async function getScriptSourceWrite(
       method: "GET",
       params: { ...queryParams },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -351,7 +351,7 @@ export async function cancelScriptSourceWrite(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.cancelScriptSourceWriteParams,
   body: API.SourceControlRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, wid: param1, ...queryParams } = params;
   return request<any>(
@@ -364,7 +364,7 @@ export async function cancelScriptSourceWrite(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -373,7 +373,7 @@ export async function reconcileScriptSourceWrite(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.reconcileScriptSourceWriteParams,
   body: API.SourceControlRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, wid: param1, ...queryParams } = params;
   return request<any>(
@@ -386,7 +386,7 @@ export async function reconcileScriptSourceWrite(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -394,7 +394,7 @@ export async function reconcileScriptSourceWrite(
 export async function listScriptSources(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listScriptSourcesParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.SourcePage>(`/api/projects/${param0}/script-sources`, {
@@ -411,7 +411,7 @@ export async function createScriptSource(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.createScriptSourceParams,
   body: API.SourceWriteRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.SourceReceipt>(`/api/projects/${param0}/script-sources`, {
@@ -429,7 +429,7 @@ export async function createScriptSource(
 export async function getScriptSource(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getScriptSourceParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, lineage: param1, ...queryParams } = params;
   return request<API.SourceDetail>(
@@ -440,7 +440,7 @@ export async function getScriptSource(
         ...queryParams,
       },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -449,7 +449,7 @@ export async function updateScriptSource(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.updateScriptSourceParams,
   body: API.SourceWriteRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, lineage: param1, ...queryParams } = params;
   return request<API.SourceReceipt>(
@@ -462,7 +462,7 @@ export async function updateScriptSource(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -471,7 +471,7 @@ export async function deleteScriptSource(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.deleteScriptSourceParams,
   body: API.SourceDeleteRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, lineage: param1, ...queryParams } = params;
   return request<API.SourceReceipt>(
@@ -484,7 +484,7 @@ export async function deleteScriptSource(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -492,7 +492,7 @@ export async function deleteScriptSource(
 export async function listScriptSourceHistory(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listScriptSourceHistoryParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, lineage: param1, ...queryParams } = params;
   return request<API.SourceHistoryPage>(
@@ -503,7 +503,7 @@ export async function listScriptSourceHistory(
         ...queryParams,
       },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -512,7 +512,7 @@ export async function importScriptSources(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.importScriptSourcesParams,
   body: API.SourceImportRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.SourceReceipt>(
@@ -525,7 +525,7 @@ export async function importScriptSources(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -534,7 +534,7 @@ export async function reorderScriptSources(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.reorderScriptSourcesParams,
   body: API.SourceReorderRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.SourceReceipt>(
@@ -547,7 +547,7 @@ export async function reorderScriptSources(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -555,7 +555,7 @@ export async function reorderScriptSources(
 export async function listScriptVersions(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listScriptVersionsParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.VersionPage>(`/api/projects/${param0}/script-versions`, {
@@ -572,7 +572,7 @@ export async function adoptScriptVersion(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.adoptScriptVersionParams,
   body: API.AdoptVersionRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, vid: param1, ...queryParams } = params;
   return request<API.AdoptReceipt>(
@@ -585,7 +585,7 @@ export async function adoptScriptVersion(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -593,7 +593,7 @@ export async function adoptScriptVersion(
 export async function getScriptVersionSourceText(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getScriptVersionSourceTextParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, vid: param1, ...queryParams } = params;
   return request<API.VersionText>(
@@ -604,7 +604,7 @@ export async function getScriptVersionSourceText(
         ...queryParams,
       },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -612,7 +612,7 @@ export async function getScriptVersionSourceText(
 export async function listScriptSplitConfirmations(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listScriptSplitConfirmationsParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, vid: param1, ...queryParams } = params;
   return request<API.ConfirmationPage>(
@@ -623,7 +623,7 @@ export async function listScriptSplitConfirmations(
         ...queryParams,
       },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -631,7 +631,7 @@ export async function listScriptSplitConfirmations(
 export async function getScriptSplitConfirmation(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getScriptSplitConfirmationParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, vid: param1, cid: param2, ...queryParams } = params;
   return request<API.SplitConfirmation>(
@@ -640,7 +640,7 @@ export async function getScriptSplitConfirmation(
       method: "GET",
       params: { ...queryParams },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -648,7 +648,7 @@ export async function getScriptSplitConfirmation(
 export async function getScriptWorkspace(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getScriptWorkspaceParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.WorkspaceView>(
@@ -657,6 +657,6 @@ export async function getScriptWorkspace(
       method: "GET",
       params: { ...queryParams },
       ...(options || {}),
-    }
+    },
   );
 }

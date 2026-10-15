@@ -7,7 +7,7 @@ import type { RequestOptions } from "@/lib/request";
 export async function getLoginAvailability(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getLoginAvailabilityParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.AvailabilityView>("/api/accounts/availability", {
     method: "GET",
@@ -21,7 +21,7 @@ export async function getLoginAvailability(
 /** Register a creator and establish a session POST /api/accounts/register */
 export async function registerAccount(
   body: API.RegisterRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.SessionView>("/api/accounts/register", {
     method: "POST",
@@ -37,7 +37,7 @@ export async function registerAccount(
 export async function listAdminUsers(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listAdminUsersParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.AdminUserPage>("/api/admin/users", {
     method: "GET",
@@ -51,7 +51,7 @@ export async function listAdminUsers(
 /** 此处后端没有提供注释 POST /api/admin/users */
 export async function createAdminUser(
   body: API.AdminCreateRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.AdminMutationReceipt>("/api/admin/users", {
     method: "POST",
@@ -68,7 +68,7 @@ export async function updateAdminUser(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.updateAdminUserParams,
   body: API.AdminUpdateRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.AdminMutationReceipt>(`/api/admin/users/${param0}`, {
@@ -87,7 +87,7 @@ export async function disableAdminUser(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.disableAdminUserParams,
   body: API.AdminRevisionRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.AdminMutationReceipt>(
@@ -100,7 +100,7 @@ export async function disableAdminUser(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -109,7 +109,7 @@ export async function enableAdminUser(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.enableAdminUserParams,
   body: API.AdminRevisionRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.AdminMutationReceipt>(
@@ -122,7 +122,7 @@ export async function enableAdminUser(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -131,7 +131,7 @@ export async function resetAdminPassword(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.resetAdminPasswordParams,
   body: API.AdminPasswordRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.AdminMutationReceipt>(
@@ -144,7 +144,7 @@ export async function resetAdminPassword(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -153,7 +153,7 @@ export async function unlockAdminUser(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.unlockAdminUserParams,
   body: API.AdminRevisionRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.AdminMutationReceipt>(
@@ -166,14 +166,14 @@ export async function unlockAdminUser(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
 /** Change a password and rotate this device's session POST /api/me/password */
 export async function changePassword(
   body: API.PasswordChange,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.SessionView>("/api/me/password", {
     method: "POST",
@@ -196,7 +196,7 @@ export async function getSession(options?: RequestOptions) {
 /** Establish a real session POST /api/sessions */
 export async function createSession(
   body: API.LoginRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.SessionView>("/api/sessions", {
     method: "POST",
@@ -212,7 +212,7 @@ export async function createSession(
 export async function deleteSession(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.deleteSessionParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { session_id: param0, ...queryParams } = params;
   return request<any>(`/api/sessions/${param0}`, {

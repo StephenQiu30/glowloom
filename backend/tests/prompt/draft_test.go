@@ -71,3 +71,16 @@ func TestEditorDraftReferenceCompilation(t *testing.T) {
 		t.Fatal("dangling reference accepted")
 	}
 }
+
+func TestReferenceSourceRejectsFieldsFromOtherVariants(t *testing.T) {
+	for _, raw := range []string{
+		`{"kind":"pending_upload","clientUploadId":"f","uploadAttemptId":"a","sourceId":""}`,
+		`{"kind":"media","sourceId":"m","sourceVersion":"1","clientUploadId":""}`,
+		`{"kind":"subject","sourceId":"s","sourceVersion":"1","description":"","media":[],"uploadSessionId":""}`,
+	} {
+		var source domain.ReferenceSource
+		if json.Unmarshal([]byte(raw), &source) == nil {
+			t.Errorf("accepted mixed source: %s", raw)
+		}
+	}
+}

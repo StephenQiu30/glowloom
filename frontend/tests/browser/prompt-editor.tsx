@@ -12,6 +12,33 @@ import {
   type ModeRequest,
 } from "../../src/components/generation/composer-session";
 
+const performanceMode = new URLSearchParams(location.search).has("performance");
+function initialDraft() {
+  const draft = emptyPromptDraft();
+  if (!performanceMode) return draft;
+  draft.references = Array.from({ length: 50 }, (_, i) => ({
+    id: `perf-${i}`,
+    bindingGeneration: 1,
+    mediaKind: "image",
+    role: "reference_image",
+    order: i,
+    source: { kind: "media", sourceId: `asset-${i}`, sourceVersion: "1" },
+  }));
+  draft.labelState.highWater.image = 50;
+  for (let i = 0; i < 50; i++)
+    draft.labelState.allocations[`perf-${i}`] = {
+      labelKind: "image",
+      ordinal: i + 1,
+    };
+  draft.document.content[0].content = [
+    { type: "text", text: "汉字🐈测试".repeat(2000) },
+    ...Array.from({ length: 200 }, (_, i) => ({
+      type: "reference" as const,
+      attrs: { referenceId: `perf-${i % 50}` },
+    })),
+  ];
+  return draft;
+}
 function Fixture() {
   const session = useRef<ComposerSession | null>(null);
   const counter = useRef(0);
@@ -19,7 +46,8 @@ function Fixture() {
   const frozen = useRef<ComposerSnapshot | null>(null);
   const [snapshot, setSnapshot] = useState<ComposerSnapshot | null>(null);
   const [saved, setSaved] = useState("");
-  const [seed, setSeed] = useState(emptyPromptDraft);
+  const [measurement, setMeasurement] = useState("");
+  const [seed, setSeed] = useState(initialDraft);
   const [replicaId, setReplicaId] = useState("browser-1");
   const publish = () => setSnapshot(session.current?.snapshot() ?? null);
   const insert = (role = "reference_image", duplicate = false) => {
@@ -120,6 +148,39 @@ function Fixture() {
           从冻结快照重建
         </button>
         <button onClick={publish}>读取当前快照</button>
+        {performanceMode && (
+          <button
+            onClick={() =>
+              void (async () => {
+                const samples: number[] = [];
+                for (let i = 0; i < 30; i++) {
+                  const start = performance.now();
+                  session.current!.editor.commands.insertContent("中");
+                  await new Promise<void>((resolve) =>
+                    requestAnimationFrame(() =>
+                      requestAnimationFrame(() => resolve()),
+                    ),
+                  );
+                  samples.push(performance.now() - start);
+                }
+                samples.sort((a, b) => a - b);
+                setMeasurement(
+                  JSON.stringify({
+                    kind: "programmatic-edit-to-two-animation-frames",
+                    samples: samples.length,
+                    p95ms: samples[Math.ceil(samples.length * 0.95) - 1],
+                    maxms: samples.at(-1),
+                    textCodePoints: 10000,
+                    references: 50,
+                    mentions: 200,
+                  }),
+                );
+              })()
+            }
+          >
+            运行编辑绘制采样
+          </button>
+        )}
       </div>
       <PromptEditor
         contextKey="fixture-account/project/draft"
@@ -140,12 +201,15 @@ function Fixture() {
         ；参考数：
         <output id="count">{snapshot?.draft.references.length ?? 0}</output>
       </p>
+      <output id="measurement">{measurement}</output>
       <h2>当前完整快照</h2>
       <pre
         id="current"
         style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}
       >
-        {JSON.stringify(snapshot, null, 2)}
+        {performanceMode
+          ? "性能模式省略调试 JSON"
+          : JSON.stringify(snapshot, null, 2)}
       </pre>
       <h2>冻结快照（本页内存）</h2>
       <pre

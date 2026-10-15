@@ -1,3 +1,4 @@
+import Suggestion, { exitSuggestion } from "@tiptap/suggestion";
 import { Editor, Extension, Node, type EditorOptions } from "@tiptap/core";
 import Document from "@tiptap/extension-document";
 import Paragraph from "@tiptap/extension-paragraph";
@@ -13,6 +14,7 @@ import {
   type EditorState,
 } from "@tiptap/pm/state";
 import {
+  emptyPromptDraft,
   labelKind,
   referenceLabel,
   sameReference,
@@ -45,7 +47,14 @@ export type ComposerSnapshot = {
 declare module "@tiptap/core" {
   interface EditorEvents {
     composerSaveRequested: ComposerSnapshot;
+    composerMention: {
+      query: string;
+      range: { from: number; to: number };
+      index: number;
+    } | null;
     composerSubmitRequested: undefined;
+    composerReferenceSelected: { referenceId: string };
+    composerFiles: { files: File[] };
   }
 }
 type HistoryEntry = { before: Frame; after: Frame };
@@ -53,6 +62,7 @@ type SessionState = {
   contextKey: string;
   replicaId: string;
   frame: Frame;
+  completedUploads: Record<string, ReferenceBinding["source"]>;
   labels: LabelState;
   past: HistoryEntry[];
   future: HistoryEntry[];
@@ -65,6 +75,7 @@ type SessionState = {
   group: { kind: string; time: number } | null;
 };
 type Action = {
+  settledUpload?: { key: string; source: ReferenceBinding["source"] };
   intent?: Intent;
   labels?: LabelState;
   isolated?: boolean;
@@ -77,6 +88,78 @@ type Action = {
 };
 const sessionKey = new PluginKey<SessionState>("composerSession");
 const HISTORY_LIMIT = 100;
+const mentionKey = new PluginKey("promptReferences");
+function referenceSuggestions() {
+  return Extension.create({
+    name: "referenceSuggestions",
+    addProseMirrorPlugins() {
+      const editor = this.editor;
+      let index = 0;
+      let candidates: ReferenceBinding[] = [];
+      let range = { from: 0, to: 0 };
+      let query = "";
+      const show = (props: {
+        query: string;
+        range: { from: number; to: number };
+        items: ReferenceBinding[];
+      }) => {
+        query = props.query;
+        range = props.range;
+        candidates = props.items;
+        index = Math.min(index, Math.max(0, candidates.length - 1));
+        editor.emit("composerMention", { query, range, index });
+      };
+      return [
+        Suggestion<ReferenceBinding>({
+          editor,
+          pluginKey: mentionKey,
+          char: "@",
+          allowedPrefixes: null,
+          allow: () => editor.isEditable && !inComposition(editor),
+          items: ({ query }) => {
+            const state = stateOf(editor.state);
+            return state.frame.intent.references.filter((r) =>
+              referenceLabel(state.labels, r.id).includes(query),
+            );
+          },
+          render: () => ({
+            onStart: (props) => {
+              index = 0;
+              show(props);
+            },
+            onUpdate: show,
+            onExit: () => editor.emit("composerMention", null),
+            onKeyDown: ({ event }) => {
+              if (event.key === "Escape") {
+                exitSuggestion(editor.view, mentionKey);
+                return true;
+              }
+              if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                index =
+                  (index +
+                    (event.key === "ArrowDown" ? 1 : -1) +
+                    Math.max(1, candidates.length)) %
+                  Math.max(1, candidates.length);
+                editor.emit("composerMention", { query, range, index });
+                return true;
+              }
+              if (event.key === "Enter" && candidates[index]) {
+                new ComposerSession(editor).insertReference(
+                  candidates[index],
+                  true,
+                  range,
+                );
+                return true;
+              }
+              return false;
+            },
+          }),
+        }),
+      ];
+    },
+  });
+}
+
 function stateOf(state: EditorState): SessionState {
   const session = sessionKey.getState(state);
   if (!session) throw new Error("composer_session_missing");
@@ -85,12 +168,44 @@ function stateOf(state: EditorState): SessionState {
 function frameDraft(frame: Frame, labels: LabelState): PromptDraft {
   return { ...frame.intent, document: frame.doc.toJSON(), labelState: labels };
 }
+function uploadKey(reference: ReferenceBinding) {
+  return reference.source.kind === "pending_upload"
+    ? JSON.stringify([
+        reference.id,
+        reference.bindingGeneration,
+        reference.source.uploadAttemptId,
+      ])
+    : "";
+}
+function completedIntent(
+  intent: Intent,
+  completed: SessionState["completedUploads"],
+): Intent {
+  return {
+    ...intent,
+    references: intent.references.map((ref) => {
+      const source = completed[uploadKey(ref)];
+      return source ? { ...ref, source: structuredClone(source) } : ref;
+    }),
+  };
+}
 function candidate(previous: SessionState, tr: Transaction): Frame {
   const action: Action = tr.getMeta(sessionKey) ?? {};
   return {
     doc: tr.doc,
     selection: tr.selection.toJSON(),
-    intent: action.intent ?? previous.frame.intent,
+    intent:
+      action.intent || action.settledUpload
+        ? completedIntent(
+            action.intent ?? previous.frame.intent,
+            action.settledUpload
+              ? {
+                  ...previous.completedUploads,
+                  [action.settledUpload.key]: action.settledUpload.source,
+                }
+              : previous.completedUploads,
+          )
+        : previous.frame.intent,
   };
 }
 function apply(tr: Transaction, previous: SessionState): SessionState {
@@ -100,6 +215,13 @@ function apply(tr: Transaction, previous: SessionState): SessionState {
     frame: candidate(previous, tr),
     labels: action.labels ?? previous.labels,
   };
+  if (action.settledUpload) {
+    next.completedUploads = {
+      ...previous.completedUploads,
+      [action.settledUpload.key]: structuredClone(action.settledUpload.source),
+    };
+    return { ...next, localSeq: previous.localSeq + 1, group: null };
+  }
   if (action.deferMode) next.deferredMode = action.deferMode;
   if (action.deferSave !== undefined) next.deferredSave = action.deferSave;
   if (action.selection || action.history) {
@@ -270,6 +392,7 @@ export function composerEditorOptions(
                 intent,
               },
               labels: labelState,
+              completedUploads: {},
               past: [],
               future: [],
               localSeq: 0,
@@ -299,6 +422,13 @@ export function composerEditorOptions(
           },
           view: () => ({ destroy: () => clearTimeout(settleTimer) }),
           props: {
+            handleClickOn: (_view, _pos, node, _nodePos, _event, direct) => {
+              if (direct && node.type.name === "reference")
+                editor.emit("composerReferenceSelected", {
+                  referenceId: node.attrs.referenceId,
+                });
+              return false;
+            },
             handleDOMEvents: {
               keydown: (_, event) => {
                 event.stopPropagation();
@@ -403,6 +533,17 @@ export function composerEditorOptions(
                   editor.emit("composerSubmitRequested", undefined);
                 return true;
               }
+              if (
+                key === "enter" &&
+                view.state.selection instanceof NodeSelection &&
+                view.state.selection.node.type.name === "reference"
+              ) {
+                event.preventDefault();
+                editor.emit("composerReferenceSelected", {
+                  referenceId: view.state.selection.node.attrs.referenceId,
+                });
+                return true;
+              }
               if (key !== "backspace" && key !== "delete") return false;
               const selection = view.state.selection;
               if (
@@ -434,8 +575,12 @@ export function composerEditorOptions(
               return true;
             },
             handlePaste(view, event) {
-              // E0 imports readable text only. Authorized in-app structural import is an E2 boundary.
-              if (event.clipboardData?.files.length) return true;
+              if (event.clipboardData?.files.length) {
+                editor.emit("composerFiles", {
+                  files: Array.from(event.clipboardData.files),
+                });
+                return true;
+              }
               const text = event.clipboardData?.getData("text/plain");
               if (text === undefined || text === "") return false;
               const nodes = text
@@ -453,7 +598,13 @@ export function composerEditorOptions(
               );
               return true;
             },
-            handleDrop: () => true,
+            handleDrop: (_, event) => {
+              if (event.dataTransfer?.files.length)
+                editor.emit("composerFiles", {
+                  files: Array.from(event.dataTransfer.files),
+                });
+              return true;
+            },
           },
         }),
       ];
@@ -467,6 +618,7 @@ export function composerEditorOptions(
       HardBreak,
       referenceToken(labelState),
       sessionExtension,
+      referenceSuggestions(),
     ],
     content: initialDocument,
     enableContentCheck: true,
@@ -499,6 +651,9 @@ export class ComposerSession {
   get pendingTarget(): ModeRequest | null {
     return structuredClone(stateOf(this.editor.state).pendingTarget);
   }
+  get composing() {
+    return inComposition(this.editor);
+  }
   undo() {
     return history(this.editor, "undo");
   }
@@ -512,7 +667,11 @@ export class ComposerSession {
       this.editor.isEditable
     );
   }
-  insertReference(input: ReferenceBinding, insertOccurrence = true) {
+  insertReference(
+    input: ReferenceBinding,
+    insertOccurrence = true,
+    range?: { from: number; to: number },
+  ) {
     if (!this.editable()) return false;
     validateReference(input);
     const s = stateOf(this.editor.state);
@@ -550,10 +709,19 @@ export class ComposerSession {
           references: [...s.frame.intent.references, binding],
         };
     let tr = this.editor.state.tr;
-    if (insertOccurrence)
-      tr = tr.replaceSelectionWith(
-        this.editor.schema.nodes.reference.create({ referenceId: binding.id }),
-      );
+    if (insertOccurrence) {
+      const node = this.editor.schema.nodes.reference.create({
+        referenceId: binding.id,
+      });
+      if (
+        range &&
+        range.to <= tr.doc.content.size &&
+        tr.doc.textBetween(range.from, range.to).startsWith("@")
+      ) {
+        tr = tr.replaceWith(range.from, range.to, node);
+        tr.setSelection(Selection.near(tr.doc.resolve(range.from + 1)));
+      } else tr = tr.replaceSelectionWith(node);
+    }
     this.editor.view.dispatch(
       tr.setMeta(sessionKey, {
         intent,
@@ -601,7 +769,9 @@ export class ComposerSession {
       r.id === id
         ? {
             ...r,
-            ...structuredClone(replacement),
+            source: structuredClone(replacement.source),
+            role: replacement.role,
+            mediaKind: replacement.mediaKind,
             bindingGeneration: r.bindingGeneration + 1,
           }
         : r,
@@ -645,26 +815,34 @@ export class ComposerSession {
     source: ReferenceBinding["source"],
   ) {
     if (!this.editable()) return false;
-    const state = stateOf(this.editor.state),
-      ref = state.frame.intent.references.find(
-        (r) => r.id === ticket.referenceId,
-      );
+    const state = stateOf(this.editor.state);
     if (
       ticket.contextKey !== state.contextKey ||
       ticket.replicaId !== state.replicaId ||
-      !ref ||
-      ref.bindingGeneration !== ticket.generation ||
-      ref.source.kind !== "pending_upload" ||
-      ref.source.uploadAttemptId !== ticket.attempt ||
       source.kind !== "media"
     )
       return false;
-    return this.replaceIntent({
-      ...state.frame.intent,
-      references: state.frame.intent.references.map((r) =>
-        r.id === ref.id ? { ...r, source: structuredClone(source) } : r,
-      ),
-    });
+    const key = JSON.stringify([
+      ticket.referenceId,
+      ticket.generation,
+      ticket.attempt,
+    ]);
+    const ref = state.frame.intent.references.find((r) => uploadKey(r) === key);
+    const known =
+      ref ||
+      [...state.past, ...state.future].some((entry) =>
+        [
+          ...entry.before.intent.references,
+          ...entry.after.intent.references,
+        ].some((r) => uploadKey(r) === key),
+      );
+    if (!known) return false;
+    this.editor.view.dispatch(
+      this.editor.state.tr.setMeta(sessionKey, {
+        settledUpload: { key, source },
+      } satisfies Action),
+    );
+    return !!ref;
   }
   applyConversion(
     expectedSeq: number,
@@ -732,6 +910,95 @@ export class ComposerSession {
           selection: "cancel",
           isolated: true,
         } satisfies Action),
+    );
+    return true;
+  }
+  insertReferences(
+    inputs: ReferenceBinding[],
+    range?: { from: number; to: number },
+  ) {
+    const fragment = emptyPromptDraft();
+    fragment.references = inputs.map((input, order) => ({ ...input, order }));
+    for (const ref of fragment.references) {
+      const kind = labelKind(ref);
+      fragment.labelState.allocations[ref.id] = {
+        labelKind: kind,
+        ordinal: ++fragment.labelState.highWater[kind],
+      };
+    }
+    fragment.document.content[0].content = inputs.map((input) => ({
+      type: "reference",
+      attrs: { referenceId: input.id },
+    }));
+    return this.importFragment(fragment, this.snapshot().localSeq, range);
+  }
+  importFragment(
+    fragment: PromptDraft,
+    expectedSeq: number,
+    range?: { from: number; to: number },
+  ) {
+    if (!this.editable()) return false;
+    validatePromptDraft(fragment);
+    const state = stateOf(this.editor.state);
+    if (state.localSeq !== expectedSeq) return false;
+    const labels = structuredClone(state.labels),
+      references = structuredClone(state.frame.intent.references),
+      mapping = new Map<string, string>();
+    for (const old of fragment.references) {
+      const known = references.find((r) => sameReference(r, old));
+      if (known) {
+        mapping.set(old.id, known.id);
+        continue;
+      }
+      const ref = structuredClone(old);
+      ref.id = crypto.randomUUID();
+      ref.order = references.length;
+      if (ref.source.kind === "pending_upload") {
+        ref.bindingGeneration++;
+        ref.source = {
+          kind: "pending_upload",
+          clientUploadId: crypto.randomUUID(),
+          uploadAttemptId: crypto.randomUUID(),
+        };
+      }
+      const kind = labelKind(ref);
+      labels.allocations[ref.id] = {
+        labelKind: kind,
+        ordinal: ++labels.highWater[kind],
+      };
+      references.push(ref);
+      mapping.set(old.id, ref.id);
+    }
+    const document = structuredClone(fragment.document);
+    for (const p of document.content)
+      for (const n of p.content ?? [])
+        if (n.type === "reference")
+          n.attrs.referenceId = mapping.get(n.attrs.referenceId)!;
+    const slice = new Slice(
+      this.editor.schema.nodeFromJSON(document).content,
+      1,
+      1,
+    );
+    const tr = this.editor.state.tr;
+    if (
+      range &&
+      range.to <= tr.doc.content.size &&
+      tr.doc.textBetween(range.from, range.to).startsWith("@")
+    )
+      tr.replaceRange(range.from, range.to, slice);
+    else tr.replaceSelection(slice);
+    const intent = { ...state.frame.intent, references };
+    validatePromptDraft({
+      ...intent,
+      document: tr.doc.toJSON(),
+      labelState: labels,
+    });
+    this.editor.view.dispatch(
+      tr.setMeta(sessionKey, {
+        intent,
+        labels,
+        isolated: true,
+      } satisfies Action),
     );
     return true;
   }

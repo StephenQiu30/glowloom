@@ -7,7 +7,7 @@ import type { RequestOptions } from "@/lib/request";
 export async function listProjectFolders(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listProjectFoldersParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.ProjectFolderListResponse>("/api/project-folders", {
     method: "GET",
@@ -21,7 +21,7 @@ export async function listProjectFolders(
 /** 新建项目目录 POST /api/project-folders */
 export async function createProjectFolder(
   body: API.ProjectFolderCreateRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.ProjectFolderChangeResponse>("/api/project-folders", {
     method: "POST",
@@ -38,7 +38,7 @@ export async function recycleProjectFolder(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.recycleProjectFolderParams,
   body: API.ProjectTransitionRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { folder_id: param0, ...queryParams } = params;
   return request<API.ProjectFolderChangeResponse>(
@@ -51,7 +51,7 @@ export async function recycleProjectFolder(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -60,7 +60,7 @@ export async function updateProjectFolder(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.updateProjectFolderParams,
   body: API.ProjectFolderUpdateRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { folder_id: param0, ...queryParams } = params;
   return request<API.ProjectFolderChangeResponse>(
@@ -73,7 +73,7 @@ export async function updateProjectFolder(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -81,7 +81,7 @@ export async function updateProjectFolder(
 export async function listProjects(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listProjectsParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.WorkspaceListResponse>("/api/projects", {
     method: "GET",
@@ -95,7 +95,7 @@ export async function listProjects(
 /** 创建项目 POST /api/projects */
 export async function createProject(
   body: API.CreateProjectRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.CreatedProject>("/api/projects", {
     method: "POST",
@@ -111,7 +111,7 @@ export async function createProject(
 export async function getProject(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getProjectParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.ProjectDetailResponse>(`/api/projects/${param0}`, {
@@ -126,7 +126,7 @@ export async function deleteProject(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.deleteProjectParams,
   body: API.ProjectTransitionRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.ProjectDetailResponse>(`/api/projects/${param0}`, {
@@ -145,7 +145,7 @@ export async function updateProject(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.updateProjectParams,
   body: API.ProjectUpdateRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.ProjectDetailResponse>(`/api/projects/${param0}`, {
@@ -164,7 +164,7 @@ export async function archiveProject(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.archiveProjectParams,
   body: API.ProjectTransitionRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.ProjectDetailResponse>(`/api/projects/${param0}/archive`, {
@@ -183,7 +183,7 @@ export async function moveProjectToFolder(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.moveProjectToFolderParams,
   body: API.ProjectFolderMoveRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.ProjectFolderChangeResponse>(
@@ -196,7 +196,7 @@ export async function moveProjectToFolder(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -205,7 +205,7 @@ export async function restoreProject(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.restoreProjectParams,
   body: API.ProjectTransitionRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.ProjectDetailResponse>(`/api/projects/${param0}/restore`, {
@@ -224,7 +224,7 @@ export async function unarchiveProject(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.unarchiveProjectParams,
   body: API.ProjectTransitionRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.ProjectDetailResponse>(
@@ -237,7 +237,7 @@ export async function unarchiveProject(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -245,7 +245,7 @@ export async function unarchiveProject(
 export async function listStylePresets(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listStylePresetsParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   return request<API.StylePresetListResponse>("/api/style-presets", {
     method: "GET",

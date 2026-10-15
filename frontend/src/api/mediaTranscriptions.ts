@@ -7,7 +7,7 @@ import type { RequestOptions } from "@/lib/request";
 export async function getMediaTranscription(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getMediaTranscriptionParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { job_id: param0, ...queryParams } = params;
   return request<API.TranscriptionJobResponse>(
@@ -18,7 +18,7 @@ export async function getMediaTranscription(
         ...queryParams,
       },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -27,7 +27,7 @@ export async function cancelMediaTranscription(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.cancelMediaTranscriptionParams,
   body: API.ControlInput,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { job_id: param0, ...queryParams } = params;
   return request<any>(`/api/media-transcriptions/${param0}/cancel`, {
@@ -45,7 +45,7 @@ export async function cancelMediaTranscription(
 export async function getMediaTranscriptionResult(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getMediaTranscriptionResultParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { job_id: param0, ...queryParams } = params;
   return request<API.TranscriptionResult>(
@@ -56,7 +56,7 @@ export async function getMediaTranscriptionResult(
         ...queryParams,
       },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -65,7 +65,7 @@ export async function retryMediaTranscription(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.retryMediaTranscriptionParams,
   body: API.ControlInput,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { job_id: param0, ...queryParams } = params;
   return request<any>(`/api/media-transcriptions/${param0}/retry`, {
@@ -83,7 +83,7 @@ export async function retryMediaTranscription(
 export async function downloadMediaTranscriptionSubtitles(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.downloadMediaTranscriptionSubtitlesParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { job_id: param0, ...queryParams } = params;
   return request<Blob>(`/api/media-transcriptions/${param0}/subtitles`, {
@@ -99,7 +99,7 @@ export async function downloadMediaTranscriptionSubtitles(
 export async function listMediaTranscriptions(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listMediaTranscriptionsParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.TranscriptionPage>(
@@ -110,7 +110,7 @@ export async function listMediaTranscriptions(
         ...queryParams,
       },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -119,7 +119,7 @@ export async function createMediaTranscription(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.createMediaTranscriptionParams,
   body: API.TranscriptionCreateInput,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<any>(`/api/projects/${param0}/media-transcriptions`, {

@@ -7,7 +7,7 @@ import type { RequestOptions } from "@/lib/request";
 export async function getProjectCopy(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getProjectCopyParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.ProjectCopyResponse>(`/api/project-copies/${param0}`, {
@@ -22,7 +22,7 @@ export async function cancelProjectCopy(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.cancelProjectCopyParams,
   body: API.ProjectTransitionRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<any>(`/api/project-copies/${param0}/cancel`, {
@@ -41,7 +41,7 @@ export async function reconcileProjectCopy(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.reconcileProjectCopyParams,
   body: API.ProjectTransitionRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<any>(`/api/project-copies/${param0}/reconcile`, {
@@ -60,7 +60,7 @@ export async function retryProjectCopy(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.retryProjectCopyParams,
   body: API.ProjectTransitionRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<any>(`/api/project-copies/${param0}/retry`, {
@@ -78,7 +78,7 @@ export async function retryProjectCopy(
 export async function listProjectCopies(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listProjectCopiesParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.ProjectCopyListResponse>(
@@ -89,7 +89,7 @@ export async function listProjectCopies(
         ...queryParams,
       },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -98,7 +98,7 @@ export async function createProjectCopy(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.createProjectCopyParams,
   body: API.ProjectCopyRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<any>(`/api/projects/${param0}/copies`, {

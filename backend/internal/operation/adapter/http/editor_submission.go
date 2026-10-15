@@ -3,24 +3,30 @@ package http
 import (
 	"strconv"
 
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
+// SubmissionHandler exposes private submission discovery and explicit resolution.
 type SubmissionHandler struct{ store application.EditorSubmissions }
 
+// NewSubmissionHandler injects the durable submission owner.
 func NewSubmissionHandler(store application.EditorSubmissions) *SubmissionHandler {
 	return &SubmissionHandler{store}
 }
+
+// Register installs authenticated submission routes.
 func (h *SubmissionHandler) Register(g *gin.RouterGroup) {
 	g.GET("/projects/:pid/prompt-submissions/current", h.Current)
 	g.POST("/projects/:pid/prompt-submissions/:id/resolve", h.Resolve)
 }
 
+// ResolveSubmissionRequest names the expected slot generation and user decision.
 type ResolveSubmissionRequest struct {
 	ExpectedEpoch int64  `json:"expected_epoch"`
 	Action        string `json:"action"`

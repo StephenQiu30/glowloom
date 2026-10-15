@@ -5,8 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 	"time"
+
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -166,8 +167,8 @@ func (s *Store) ReadPublicTask(ctx context.Context, actor identityapp.Principal,
 		if err != nil {
 			return err
 		}
-		var editorSnapshot struct{ Snapshot []byte }
-		if err := tx.Raw(`SELECT snapshot FROM operation.prompt_submission WHERE operation_id=? AND project_id=? AND actor_id=?`, operationID, projectID, actor.ID).Scan(&editorSnapshot).Error; err != nil {
+		var editorSnapshot struct{ Snapshot, Quote []byte }
+		if err := tx.Raw(`SELECT snapshot,quote FROM operation.prompt_submission WHERE operation_id=? AND project_id=? AND actor_id=?`, operationID, projectID, actor.ID).Scan(&editorSnapshot).Error; err != nil {
 			return err
 		}
 		if len(editorSnapshot.Snapshot) > 0 {
@@ -176,6 +177,12 @@ func (s *Store) ReadPublicTask(ctx context.Context, actor identityapp.Principal,
 				return err
 			}
 			result.EditorDraft = &draft
+			var quote application.CreateFreeQuoteResult
+			if err := json.Unmarshal(editorSnapshot.Quote, &quote); err != nil {
+				return err
+			}
+			result.EditorCompilerVersion = quote.CompilerVersion
+			result.EditorReferenceMapping = quote.ReferenceMapping
 		}
 		result.Params, result.QuoteDetail = json.RawMessage(task.Params), json.RawMessage(task.QuoteDetail)
 		result.OutputCount, result.QuoteExpiresAt, result.ReusedFromID = task.OutputCount, task.QuoteExpiresAt, task.ReusedFromID

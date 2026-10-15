@@ -6,13 +6,14 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	promptpg "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/adapter/postgres"
 	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 type draftAccess struct{ tx *gorm.DB }
@@ -91,15 +92,48 @@ func TestEditorDraftConcurrentWriters(t *testing.T) {
 	close(results)
 	ok, conflict := 0, 0
 	for err := range results {
-		if err == nil {
+		switch {
+		case err == nil:
 			ok++
-		} else if errors.Is(err, promptapp.ErrRevisionConflict) {
+		case errors.Is(err, promptapp.ErrRevisionConflict):
 			conflict++
-		} else {
+		default:
 			t.Fatal(err)
 		}
 	}
 	if ok != 1 || conflict != 1 {
 		t.Fatal(ok, conflict)
+	}
+}
+
+func TestEditorUploadRecoveryIsPrivateAndReauthorized(t *testing.T) {
+	f := newPreferenceFixture(t)
+	store := draftStore(f.db)
+	attempt, asset := uuid.New(), uuid.New()
+	if err := f.db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,moderation_status) VALUES(?,?,'image','upload','ready','test/recovery.png','recovery.png','image/png',50,repeat('a',64),'passed')`, asset, f.project).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := f.db.Exec(`INSERT INTO media.upload_request(project_id,principal_id,request_key,sha256,file_name,byte_size,asset_id,response) VALUES(?,?,?,repeat('a',64),'recovery.png',50,?,'{}')`, f.project, f.actor.ID, attempt, asset).Error; err != nil {
+		t.Fatal(err)
+	}
+	out, err := store.ResolveUpload(t.Context(), f.actor, f.project, attempt)
+	if err != nil || !out.Found || out.Source == nil || out.Source.SourceID != asset.String() {
+		t.Fatal("recover original attempt", out, err)
+	}
+	out, err = store.ResolveUpload(t.Context(), f.actor, f.project, uuid.New())
+	if err != nil || out.Found {
+		t.Fatal("unknown attempt must not guess", out, err)
+	}
+	other := f.actor
+	other.ID = uuid.New()
+	if out, err = store.ResolveUpload(t.Context(), other, f.project, attempt); err == nil && out.Found {
+		t.Fatal("exposed another actor's upload")
+	}
+	if err = f.db.Exec(`UPDATE media.media_asset SET is_delete=true WHERE id=?`, asset).Error; err != nil {
+		t.Fatal(err)
+	}
+	out, err = store.ResolveUpload(t.Context(), f.actor, f.project, attempt)
+	if err != nil || out.Found {
+		t.Fatal("deleted asset restored", out, err)
 	}
 }

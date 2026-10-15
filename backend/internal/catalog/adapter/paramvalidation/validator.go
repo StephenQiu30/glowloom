@@ -71,6 +71,37 @@ func (v *Validator) Validate(version domain.ModelVersion) error {
 		return ErrInvalidConfiguration
 	}
 	root := value.(map[string]any)
+	if limits, ok := root["limits"].(map[string]any); ok {
+		if roles, ok := limits["roles"].(map[string]any); ok {
+			for _, raw := range roles {
+				role, ok := raw.(map[string]any)
+				if !ok {
+					continue
+				}
+				if minimum, present := role["min_count"]; present {
+					low, valid := number(minimum)
+					high, maxValid := number(role["max_count"])
+					if !valid || !maxValid || low.Cmp(high) > 0 {
+						return ErrInvalidConfiguration
+					}
+				}
+				if selected, ok := role["for_modes"].([]any); ok {
+					for _, selectedMode := range selected {
+						found := false
+						for _, mode := range version.Modes {
+							if mode == selectedMode {
+								found = true
+								break
+							}
+						}
+						if !found {
+							return ErrInvalidConfiguration
+						}
+					}
+				}
+			}
+		}
+	}
 	return validateFields(root["param_schema"].([]any), version.Modes)
 }
 

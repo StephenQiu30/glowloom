@@ -7,7 +7,7 @@ import type { RequestOptions } from "@/lib/request";
 export async function listPromptDrafts(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listPromptDraftsParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.DraftPage>(`/api/projects/${param0}/prompt-drafts`, {
@@ -24,7 +24,7 @@ export async function createPromptDraft(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.createPromptDraftParams,
   body: API.DraftRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.DraftSnapshot>(`/api/projects/${param0}/prompt-drafts`, {
@@ -42,7 +42,7 @@ export async function createPromptDraft(
 export async function readPromptDraft(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.readPromptDraftParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, id: param1, ...queryParams } = params;
   return request<API.DraftSnapshot>(
@@ -51,7 +51,7 @@ export async function readPromptDraft(
       method: "GET",
       params: { ...queryParams },
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -60,7 +60,7 @@ export async function savePromptDraft(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.savePromptDraftParams,
   body: API.DraftRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, id: param1, ...queryParams } = params;
   return request<API.DraftSnapshot>(
@@ -73,8 +73,27 @@ export async function savePromptDraft(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
+}
+
+/** 校验站内粘贴引用 POST /api/projects/${param0}/prompt-references/validate */
+export async function validatePromptFragment(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.validatePromptFragmentParams,
+  body: API.PromptDraft,
+  options?: RequestOptions,
+) {
+  const { pid: param0, ...queryParams } = params;
+  return request<any>(`/api/projects/${param0}/prompt-references/validate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    params: { ...queryParams },
+    data: body,
+    ...(options || {}),
+  });
 }
 
 /** 知晓接受结果或放弃未确认报价 POST /api/projects/${param0}/prompt-submissions/${param1}/resolve */
@@ -82,7 +101,7 @@ export async function resolvePromptSubmission(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.resolvePromptSubmissionParams,
   body: API.ResolveSubmissionRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, id: param1, ...queryParams } = params;
   return request<API.SubmissionCurrent>(
@@ -95,7 +114,7 @@ export async function resolvePromptSubmission(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }
 
@@ -103,7 +122,7 @@ export async function resolvePromptSubmission(
 export async function currentPromptSubmission(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.currentPromptSubmissionParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.SubmissionCurrent>(
@@ -114,6 +133,23 @@ export async function currentPromptSubmission(
         ...queryParams,
       },
       ...(options || {}),
-    }
+    },
+  );
+}
+
+/** 找回原上传尝试结果 GET /api/projects/${param0}/prompt-uploads/${param1} */
+export async function resolvePromptUpload(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.resolvePromptUploadParams,
+  options?: RequestOptions,
+) {
+  const { pid: param0, attempt: param1, ...queryParams } = params;
+  return request<API.UploadResolution>(
+    `/api/projects/${param0}/prompt-uploads/${param1}`,
+    {
+      method: "GET",
+      params: { ...queryParams },
+      ...(options || {}),
+    },
   );
 }

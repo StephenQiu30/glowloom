@@ -1,8 +1,9 @@
 package domain
 
 import (
-	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 	"unicode/utf8"
+
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 )
 
 // Draft holds editable intent; no provider execution or candidate state belongs here.

@@ -7,7 +7,7 @@ import type { RequestOptions } from "@/lib/request";
 export async function getCanvas(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getCanvasParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.CanvasDocument>(`/api/canvases/${param0}`, {
@@ -22,7 +22,7 @@ export async function deleteCanvas(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.deleteCanvasParams,
   body: API.DeleteInput,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.DeleteResult>(`/api/canvases/${param0}`, {
@@ -41,7 +41,7 @@ export async function renameCanvas(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.renameCanvasParams,
   body: API.RenameInput,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.CanvasDocument>(`/api/canvases/${param0}`, {
@@ -60,7 +60,7 @@ export async function applyCanvasCommands(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.applyCanvasCommandsParams,
   body: API.CommandsInput,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.Result>(`/api/canvases/${param0}/commands`, {
@@ -78,7 +78,7 @@ export async function applyCanvasCommands(
 export async function listCanvases(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listCanvasesParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.CanvasListResponse>(`/api/projects/${param0}/canvases`, {
@@ -93,7 +93,7 @@ export async function createCanvas(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.createCanvasParams,
   body: API.CanvasCreateInput,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.CanvasDocument>(`/api/projects/${param0}/canvases`, {

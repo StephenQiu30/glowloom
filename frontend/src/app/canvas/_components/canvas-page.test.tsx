@@ -81,7 +81,15 @@ it("保存中的后续编辑不会被旧回执标成已保存", async () => {
         finish = resolve;
       }),
   );
+  let finishLatest!: (value: unknown) => void;
+  api.save.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finishLatest = resolve;
+      }),
+  );
   fireEvent.click(screen.getByRole("button", { name: "保存画布" }));
+  await waitFor(() => expect(api.save).toHaveBeenCalledOnce());
   const frozen = structuredClone(
     api.save.mock.calls[0][1],
   ) as API.CommandsInput;
@@ -92,8 +100,30 @@ it("保存中的后续编辑不会被旧回执标成已保存", async () => {
   expect((screen.getByLabelText("提示词") as HTMLTextAreaElement).value).toBe(
     "保存中继续编辑",
   );
-  expect(screen.getByRole("status").textContent).toContain("未保存");
+  await waitFor(() => expect(api.save).toHaveBeenCalledTimes(2));
+  expect(
+    screen
+      .getAllByRole("status")
+      .some((node) => node.textContent?.includes("正在保存")),
+  ).toBe(true);
   expect(screen.queryByText("所有更改已保存")).toBeNull();
+  const nextBody = api.save.mock.calls[1][1];
+  const committed = addReceipt(frozen);
+  await act(async () =>
+    finishLatest({
+      ...committed,
+      revision: 3,
+      nodes: committed.nodes?.map((n) => ({
+        ...n,
+        config: nextBody.commands[0].config,
+        input_revision: 2,
+      })),
+      results: nextBody.commands.map(() => ({ ok: true })),
+    }),
+  );
+  await waitFor(() =>
+    expect(screen.getByRole("status").textContent).toContain("已保存"),
+  );
 });
 it("丢回执重试保留原key和冻结body，键盘移动可保存", async () => {
   await openDraft();

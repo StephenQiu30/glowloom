@@ -13,9 +13,15 @@ import (
 )
 
 var (
-	ErrInvalidDraft         = errors.New("invalid_prompt_draft")
-	ErrUnsupportedSchema    = errors.New("unsupported_schema")
-	ErrLabelConflict        = errors.New("label_allocation_conflict")
+	// ErrInputStale means the saved generation intent changed after quoting.
+	ErrInputStale = errors.New("quote_source_stale")
+	// ErrInvalidDraft rejects malformed or inconsistent editor intent.
+	ErrInvalidDraft = errors.New("invalid_prompt_draft")
+	// ErrUnsupportedSchema prevents unknown versions from being overwritten.
+	ErrUnsupportedSchema = errors.New("unsupported_schema")
+	// ErrLabelConflict rejects reassignment or loss of existing display numbers.
+	ErrLabelConflict = errors.New("label_allocation_conflict")
+	// ErrReferenceUnavailable rejects unavailable or unauthorized source facts.
 	ErrReferenceUnavailable = errors.New("reference_unavailable")
 )
 
@@ -29,22 +35,32 @@ type Draft struct {
 	Params        map[string]any `json:"params"`
 	LabelState    LabelState     `json:"labelState"`
 }
+
+// Document is the versioned prompt tree root.
 type Document struct {
 	Type    string      `json:"type"`
 	Content []Paragraph `json:"content"`
 }
+
+// Paragraph holds text, breaks and atomic references.
 type Paragraph struct {
 	Type    string   `json:"type"`
 	Content []Inline `json:"content,omitempty"`
 }
+
+// Inline is one discriminated inline node.
 type Inline struct {
 	Type  string          `json:"type"`
 	Text  string          `json:"text,omitempty"`
 	Attrs *ReferenceAttrs `json:"attrs,omitempty"`
 }
+
+// ReferenceAttrs links a mention to its stable binding.
 type ReferenceAttrs struct {
 	ReferenceID string `json:"referenceId"`
 }
+
+// Reference pins source facts, role and ordering in a draft.
 type Reference struct {
 	ID                string          `json:"id"`
 	Source            ReferenceSource `json:"source"`
@@ -53,6 +69,8 @@ type Reference struct {
 	Role              string          `json:"role"`
 	Order             int             `json:"order"`
 }
+
+// ReferenceSource holds exactly one authorized source variant.
 type ReferenceSource struct {
 	Kind            string        `json:"kind"`
 	ClientUploadID  string        `json:"clientUploadId,omitempty"`
@@ -63,20 +81,27 @@ type ReferenceSource struct {
 	Description     string        `json:"description,omitempty"`
 	Media           []SourceMedia `json:"media,omitempty"`
 }
+
+// SourceMedia pins a physical media version.
 type SourceMedia struct {
 	SourceID      string `json:"sourceId"`
 	SourceVersion string `json:"sourceVersion"`
 	MediaKind     string `json:"mediaKind"`
 }
+
+// LabelAllocation assigns a stable type-specific display number.
 type LabelAllocation struct {
 	LabelKind string `json:"labelKind"`
 	Ordinal   int64  `json:"ordinal"`
 }
+
+// LabelState persists allocations and monotonic counters, including tombstones.
 type LabelState struct {
 	HighWater   map[string]int64           `json:"highWater"`
 	Allocations map[string]LabelAllocation `json:"allocations"`
 }
 
+// DecodeDraft strictly validates the supported JSON schema.
 func DecodeDraft(body []byte) (Draft, error) {
 	var version struct {
 		SchemaVersion int `json:"schemaVersion"`
@@ -100,6 +125,8 @@ func identifier(s string) bool {
 }
 func mediaKind(s string) bool { return s == "image" || s == "video" || s == "audio" }
 func labelKind(s string) bool { return mediaKind(s) || s == "subject" }
+
+// Validate checks complete draft shape and cross-reference invariants.
 func (d Draft) Validate() error {
 	if d.SchemaVersion != 1 {
 		return ErrUnsupportedSchema
@@ -242,13 +269,28 @@ func (d Draft) Hashes() (draftHash, inputHash string) {
 	return draftHash, hashValue(d)
 }
 
+// CompiledMedia is one deduplicated physical input and role.
 type CompiledMedia struct {
 	SourceMedia
 	Role string `json:"role"`
 }
+
+// ReferenceMapping maps a display label to one-based physical input positions.
+type ReferenceMapping struct {
+	ReferenceID string `json:"reference_id"`
+	Label       string `json:"label"`
+	MediaSeqNos []int  `json:"media_seq_nos"`
+	Role        string `json:"role"`
+}
+
+// CompilerVersion identifies the persisted mapping and text rules.
+const CompilerVersion = "prompt-reference-v1"
+
+// CompiledDraft is the deterministic text and ordered media projection.
 type CompiledDraft struct {
-	Prompt string          `json:"prompt"`
-	Media  []CompiledMedia `json:"media"`
+	Mapping []ReferenceMapping `json:"mapping"`
+	Prompt  string             `json:"prompt"`
+	Media   []CompiledMedia    `json:"media"`
 }
 
 // Compile uses authorized frozen facts supplied by the storage boundary; repeated mentions do not duplicate physical inputs.
@@ -257,28 +299,31 @@ func (d Draft) Compile() (CompiledDraft, error) {
 		return CompiledDraft{}, err
 	}
 	out := CompiledDraft{Media: []CompiledMedia{}}
-	seen := map[CompiledMedia]bool{}
+	seen := map[CompiledMedia]int{}
 	subjects := []string{}
-	add := func(m SourceMedia, role string) {
+	add := func(m SourceMedia, role string) int {
 		item := CompiledMedia{m, role}
-		if !seen[item] {
-			seen[item] = true
+		if seen[item] == 0 {
 			out.Media = append(out.Media, item)
+			seen[item] = len(out.Media)
 		}
+		return seen[item]
 	}
 	for _, r := range d.References {
 		s := r.Source
+		mapping := ReferenceMapping{ReferenceID: r.ID, Label: d.Label(r.ID), Role: r.Role, MediaSeqNos: []int{}}
 		switch s.Kind {
 		case "pending_upload":
 			return CompiledDraft{}, ErrReferenceUnavailable
 		case "media":
-			add(SourceMedia{s.SourceID, s.SourceVersion, r.MediaKind}, r.Role)
+			mapping.MediaSeqNos = append(mapping.MediaSeqNos, add(SourceMedia{s.SourceID, s.SourceVersion, r.MediaKind}, r.Role))
 		case "subject":
 			subjects = append(subjects, "["+d.Label(r.ID)+"] "+s.Description)
 			for _, m := range s.Media {
-				add(m, r.Role)
+				mapping.MediaSeqNos = append(mapping.MediaSeqNos, add(m, r.Role))
 			}
 		}
+		out.Mapping = append(out.Mapping, mapping)
 	}
 	var text strings.Builder
 	for i, p := range d.Document.Content {
@@ -302,6 +347,8 @@ func (d Draft) Compile() (CompiledDraft, error) {
 	}
 	return out, nil
 }
+
+// Label derives the display name from persistent allocation metadata.
 func (d Draft) Label(id string) string {
 	a := d.LabelState.Allocations[id]
 	name := map[string]string{"image": "图片", "video": "视频", "audio": "音频", "subject": "主体"}[a.LabelKind]
@@ -338,4 +385,85 @@ func (s ReferenceSource) MarshalJSON() ([]byte, error) {
 			SourceVersion string `json:"sourceVersion"`
 		}{s.Kind, s.SourceID, s.SourceVersion})
 	}
+}
+
+// UnmarshalJSON rejects fields belonging to another source variant, including empty values.
+func (s *ReferenceSource) UnmarshalJSON(body []byte) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil {
+		return ErrInvalidDraft
+	}
+	var kind string
+	if json.Unmarshal(fields["kind"], &kind) != nil {
+		return ErrInvalidDraft
+	}
+	allowed := map[string]bool{"kind": true}
+	var required []string
+	switch kind {
+	case "pending_upload":
+		required = []string{"clientUploadId", "uploadAttemptId"}
+		allowed["uploadSessionId"] = true
+	case "media":
+		required = []string{"sourceId", "sourceVersion"}
+	case "subject":
+		required = []string{"sourceId", "sourceVersion", "description", "media"}
+	default:
+		return ErrInvalidDraft
+	}
+	for _, key := range required {
+		allowed[key] = true
+		if raw, ok := fields[key]; !ok || bytes.Equal(raw, []byte("null")) {
+			return ErrInvalidDraft
+		}
+	}
+	for key := range fields {
+		if !allowed[key] {
+			return ErrInvalidDraft
+		}
+	}
+	type source ReferenceSource
+	var value source
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&value) != nil {
+		return ErrInvalidDraft
+	}
+	*s = ReferenceSource(value)
+	return nil
+}
+
+// UnmarshalJSON rejects attributes that do not belong to the inline node variant.
+func (n *Inline) UnmarshalJSON(body []byte) error {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(body, &fields) != nil {
+		return ErrInvalidDraft
+	}
+	var kind string
+	if json.Unmarshal(fields["type"], &kind) != nil {
+		return ErrInvalidDraft
+	}
+	allowed := map[string]bool{"type": true}
+	switch kind {
+	case "text":
+		allowed["text"] = true
+	case "hardBreak":
+	case "reference":
+		allowed["attrs"] = true
+	default:
+		return ErrInvalidDraft
+	}
+	for key := range fields {
+		if !allowed[key] {
+			return ErrInvalidDraft
+		}
+	}
+	type inline Inline
+	var value inline
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&value) != nil {
+		return ErrInvalidDraft
+	}
+	*n = Inline(value)
+	return nil
 }

@@ -9,18 +9,21 @@ import (
 	"math"
 	"time"
 
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
+// DraftStore persists complete private intent and permanent request receipts.
 type DraftStore struct {
 	db     *gorm.DB
 	access func(*gorm.DB) application.DraftAccess
 }
 
+// NewDraftStore injects transaction-scoped project authorization.
 func NewDraftStore(db *gorm.DB, access func(*gorm.DB) application.DraftAccess) *DraftStore {
 	return &DraftStore{db, access}
 }
@@ -33,6 +36,8 @@ func (s *DraftStore) authorize(ctx context.Context, tx *gorm.DB, a identityapp.P
 	}
 	return s.access(tx).AuthorizeDraft(ctx, a, p, write)
 }
+
+// ReadDraft authorizes before returning the caller-owned draft.
 func (s *DraftStore) ReadDraft(ctx context.Context, a identityapp.Principal, p, id uuid.UUID) (application.DraftSnapshot, error) {
 	var out application.DraftSnapshot
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -63,6 +68,8 @@ func readDraft(tx *gorm.DB, actor, p, id uuid.UUID) (application.DraftSnapshot, 
 	draft, err := domain.DecodeDraft(raw.Draft)
 	return application.DraftSnapshot{DraftID: raw.DraftID, Revision: raw.Revision, DraftHash: raw.DraftHash, InputHash: raw.InputHash, Draft: draft, UpdatedAt: raw.UpdatedAt}, err
 }
+
+// SaveDraft replays an exact request or atomically advances the expected revision.
 func (s *DraftStore) SaveDraft(ctx context.Context, a identityapp.Principal, in application.DraftWrite) (application.DraftSnapshot, error) {
 	if in.Key == uuid.Nil || in.ExpectedRevision < 0 || in.ExpectedRevision >= math.MaxInt32 || (in.ExpectedRevision > 0 && in.DraftID == uuid.Nil) {
 		return application.DraftSnapshot{}, domain.ErrInvalidDraft
@@ -144,6 +151,8 @@ func (s *DraftStore) SaveDraft(ctx context.Context, a identityapp.Principal, in 
 	})
 	return out, err
 }
+
+// ListDrafts discovers only caller-owned drafts with bounded keyset pagination.
 func (s *DraftStore) ListDrafts(ctx context.Context, a identityapp.Principal, p uuid.UUID, cursor string) (application.DraftPage, error) {
 	out := application.DraftPage{Items: []application.DraftSnapshot{}}
 	after := uuid.Nil
@@ -176,4 +185,17 @@ func (s *DraftStore) ListDrafts(ctx context.Context, a identityapp.Principal, p 
 		return nil
 	})
 	return out, err
+}
+
+// ValidateFragment authorizes a clipboard fragment without creating a draft or trusting its URLs/readiness.
+func (s *DraftStore) ValidateFragment(ctx context.Context, a identityapp.Principal, p uuid.UUID, d domain.Draft) error {
+	if err := d.Validate(); err != nil {
+		return err
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.authorize(ctx, tx, a, p, true); err != nil {
+			return err
+		}
+		return ValidateDraftSources(tx, a, p, d, false)
+	})
 }

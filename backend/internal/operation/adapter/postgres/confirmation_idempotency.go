@@ -19,12 +19,15 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 )
 
 type confirmationKey struct {
 	orgID       uuid.UUID
 	actorID     uuid.UUID
 	requestID   uuid.UUID
+	projectID   uuid.UUID
+	operationID uuid.UUID
 	fingerprint [sha256.Size]byte
 }
 
@@ -37,6 +40,7 @@ type confirmationOutcome struct {
 func singleConfirmationKey(actor identityapp.Principal, input application.ConfirmSingleQuoteInput) confirmationKey {
 	return confirmationKey{
 		orgID: actor.OrgID, actorID: actor.ID, requestID: uuid.MustParse(input.RequestID),
+		projectID: input.ProjectID, operationID: input.OperationID,
 		fingerprint: sha256.Sum256([]byte("operation.confirm:" + input.ProjectID.String() + ":" + input.OperationID.String())),
 	}
 }
@@ -97,7 +101,27 @@ func (s *Store) withConfirmationKey(ctx context.Context, actor identityapp.Princ
 				callbackErr = errors.Join(callbackErr, errors.New("confirmation request lock was not held"))
 			}
 		}()
-		if actorErr := conn.Transaction(func(tx *gorm.DB) error { return requireCurrentActor(tx, actor) }); actorErr != nil {
+		if actorErr := conn.Transaction(func(tx *gorm.DB) error {
+			if err := requireCurrentActor(tx, actor); err != nil {
+				return err
+			}
+			if key.operationID == uuid.Nil || s.editorSnapshots == nil {
+				return nil
+			}
+			var row struct{ InputSource []byte }
+			result := tx.Raw(`SELECT input_source FROM operation.prompt_submission WHERE operation_id=? AND actor_id=? AND project_id=?`, key.operationID, actor.ID, key.projectID).Scan(&row)
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected == 0 {
+				return nil
+			}
+			var source promptdomain.InputSource
+			if err := json.Unmarshal(row.InputSource, &source); err != nil {
+				return err
+			}
+			return s.editorSnapshots(tx).AuthorizeOwner(ctx, actor, key.projectID, source)
+		}); actorErr != nil {
 			return actorErr
 		}
 		stored, found, readErr := readConfirmationOutcome(conn, key)

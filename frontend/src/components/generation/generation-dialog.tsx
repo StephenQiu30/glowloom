@@ -55,6 +55,18 @@ export function GenerationDialog({
 }) {
   const [project, setProject] = useState<Project | null>(seed.project ?? null);
   const [locked, setLocked] = useState(false);
+  const closeGuard = useRef<(() => Promise<boolean>) | null>(null);
+  const [closing, setClosing] = useState(false),
+    [closeFailed, setCloseFailed] = useState(false);
+  async function closeSaved() {
+    setClosing(true);
+    try {
+      if (!closeGuard.current || (await closeGuard.current())) onClose();
+      else setCloseFailed(true);
+    } finally {
+      setClosing(false);
+    }
+  }
   useEffect(() => {
     if (!locked) return;
     const guard = (e: BeforeUnloadEvent) => e.preventDefault();
@@ -65,11 +77,11 @@ export function GenerationDialog({
     <Dialog
       open
       onOpenChange={(v) => {
-        if (!v && !locked) onClose();
+        if (!v && !locked && !closing) void closeSaved();
       }}
     >
       <DialogContent
-        showCloseButton={!locked}
+        showCloseButton={!locked && !closing}
         className="generation-dialog sm:max-w-4xl"
         onInteractOutside={(e) => e.preventDefault()}
       >
@@ -79,6 +91,26 @@ export function GenerationDialog({
         <DialogDescription>
           选择模型与参考素材，确认报价后开始生成。任务保留在所选项目中。
         </DialogDescription>
+        {closeFailed && (
+          <div
+            role="alertdialog"
+            aria-label="保存尚未确认"
+            className="rounded border p-3"
+          >
+            <p>
+              保存尚未确认。可继续等待或重试；明确离开会保留已有本地恢复分支，未决生成仍需下次核对。
+            </p>
+            <Button disabled={closing} onClick={() => void closeSaved()}>
+              重试保存并关闭
+            </Button>
+            <Button variant="outline" onClick={() => setCloseFailed(false)}>
+              继续编辑
+            </Button>
+            <Button variant="ghost" onClick={onClose}>
+              保留恢复分支并离开
+            </Button>
+          </div>
+        )}
         {!seed.project && (
           <ProjectPicker
             value={project}
@@ -94,6 +126,9 @@ export function GenerationDialog({
             onAdopt={onAdopt}
             locked={locked}
             onLock={setLocked}
+            onCloseGuard={(guard) => {
+              closeGuard.current = guard;
+            }}
           />
         ) : (
           <div className="empty-state">
@@ -110,14 +145,18 @@ function GenerationForm({
   onAdopt,
   onLock,
   locked,
+  onCloseGuard,
 }: {
   project: Project;
   seed: GenerationSeed;
   onAdopt?: (id: string, kind: string) => Promise<void> | void;
   locked: boolean;
+  onCloseGuard: (guard: (() => Promise<boolean>) | null) => void;
   onLock: (v: boolean) => void;
 }) {
   const [reuse, setReuse] = useState<Task | undefined>(seed.reuse);
+  const guard = useRef<(() => Promise<boolean>) | null>(null);
+  const [reuseError, setReuseError] = useState("");
   return (
     <>
       <RichGeneration
@@ -128,12 +167,28 @@ function GenerationForm({
         canvas={seed.canvasOwner}
         onAdopt={onAdopt}
         onLock={onLock}
+        onCloseGuard={(next) => {
+          guard.current = next;
+          onCloseGuard(next);
+        }}
       />
+      {reuseError && <p role="alert">{reuseError}</p>}
       <TaskHistory
         projectID={project.id}
         capability={seed.capability + ".generate"}
         onAdopt={onAdopt}
-        onReuse={setReuse}
+        onReuse={(task) => {
+          void (async () => {
+            if (guard.current && !(await guard.current())) {
+              setReuseError(
+                "当前草稿尚未确认保存，请先恢复保存或处理未决提交，再复用历史任务。",
+              );
+              return;
+            }
+            setReuseError("");
+            setReuse(task);
+          })();
+        }}
         locked={locked}
       />
     </>
@@ -336,6 +391,29 @@ export function TaskDetail({
         <p role="alert" className="flow-error">
           {error}
         </p>
+      )}
+      {task?.editor_draft && (
+        <details className="rounded border p-3 text-sm">
+          <summary>当时使用的完整输入</summary>
+          <p>
+            模式：{task.editor_draft.mode} · 编译：
+            {task.editor_compiler_version}
+          </p>
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap">
+            {task.inputs
+              ?.filter((i) => i.text)
+              .map((i) => i.text)
+              .join("\n")}
+          </pre>
+          <ul>
+            {task.editor_reference_mapping?.map((m) => (
+              <li key={m.reference_id}>
+                {m.label} · {m.role} · 媒体位置{" "}
+                {m.media_seq_nos?.join("、") || "仅描述"}
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
       {task?.failure_code && (
         <p>

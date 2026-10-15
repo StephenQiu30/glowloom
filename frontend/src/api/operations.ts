@@ -7,7 +7,7 @@ import type { RequestOptions } from "@/lib/request";
 export async function getOperationBatch(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getOperationBatchParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.BatchDetail>(`/api/batches/${param0}`, {
@@ -24,7 +24,7 @@ export async function cancelOperationBatch(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.cancelOperationBatchParams,
   body: API.ProjectRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<any>(`/api/batches/${param0}/cancel`, {
@@ -43,7 +43,7 @@ export async function confirmBatchQuote(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.confirmBatchQuoteParams,
   body: API.ConfirmBatchRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.ConfirmBatchResponse>(`/api/batches/${param0}/confirm`, {
@@ -62,7 +62,7 @@ export async function resumeOperationBatch(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.resumeOperationBatchParams,
   body: API.ProjectRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<any>(`/api/batches/${param0}/resume`, {
@@ -80,7 +80,7 @@ export async function resumeOperationBatch(
 export async function getOperation(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.getOperationParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.TaskDetail>(`/api/operations/${param0}`, {
@@ -97,7 +97,7 @@ export async function cancelOperation(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.cancelOperationParams,
   body: API.ProjectRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<any>(`/api/operations/${param0}/cancel`, {
@@ -116,7 +116,7 @@ export async function confirmOperationQuote(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.confirmOperationQuoteParams,
   body: API.ProjectRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
   return request<API.ConfirmResponse>(`/api/operations/${param0}/confirm`, {
@@ -135,7 +135,7 @@ export async function createFreeQuote(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.createFreeQuoteParams,
   body: API.QuoteItemRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.QuoteResponse>(`/api/projects/${param0}/free-operations`, {
@@ -153,7 +153,7 @@ export async function createFreeQuote(
 export async function listProjectOperations(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listProjectOperationsParams,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.TaskPageResponse>(`/api/projects/${param0}/operations`, {
@@ -170,7 +170,7 @@ export async function createGenerationQuotes(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.createGenerationQuotesParams,
   body: API.QuotesRequest,
-  options?: RequestOptions
+  options?: RequestOptions,
 ) {
   const { pid: param0, ...queryParams } = params;
   return request<API.CreateBatchFreeQuoteResult>(
@@ -183,6 +183,6 @@ export async function createGenerationQuotes(
       params: { ...queryParams },
       data: body,
       ...(options || {}),
-    }
+    },
   );
 }

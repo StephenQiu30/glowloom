@@ -47,3 +47,26 @@ func TestModelVersionValidatorUsesSharedParamSchemaCases(t *testing.T) {
 		})
 	}
 }
+
+func TestModelRoleModeAndMinimumConstraints(t *testing.T) {
+	validator, err := paramvalidation.NewValidator()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		limits string
+		valid  bool
+	}{
+		{`{"max_outputs":1,"roles":{"first_frame":{"min_count":1,"max_count":1,"types":["image"],"for_modes":["first_last"]}}}`, true},
+		{`{"max_outputs":1,"roles":{"first_frame":{"min_count":2,"max_count":1,"types":["image"]}}}`, false},
+		{`{"max_outputs":1,"roles":{"first_frame":{"min_count":1,"max_count":1,"types":["image"],"for_modes":["unknown"]}}}`, false},
+	} {
+		version := validModelVersion(uuid.New())
+		version.Modes = []string{"first_last"}
+		version.ParamSchema = json.RawMessage(`[]`)
+		version.Limits = json.RawMessage(c.limits)
+		if err := validator.Validate(version); (err == nil) != c.valid {
+			t.Fatal(c.limits, err)
+		}
+	}
+}

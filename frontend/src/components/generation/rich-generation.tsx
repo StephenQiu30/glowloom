@@ -17,9 +17,12 @@ import {
   listPromptDrafts,
   currentPromptSubmission,
   resolvePromptSubmission,
+  validatePromptFragment,
 } from "@/api/promptEditor";
 import { createFreeQuote, confirmOperationQuote } from "@/api/operations";
 import { RequestError } from "@/lib/request";
+import { reconcileLabels } from "./draft-resolution";
+import { canonical } from "./draft-save";
 import { PromptEditor } from "./prompt-editor";
 import { ComposerSession, type ComposerSnapshot } from "./composer-session";
 import {
@@ -31,7 +34,6 @@ import {
   DraftSaver,
   draftRequest,
   branchJournal,
-  canonical,
   requireSaved,
   type SavedDraft,
   type LocalBranch,
@@ -42,13 +44,7 @@ import {
   subjectBinding,
 } from "./reference-controls";
 import { editorIssues, compatibleParams } from "./editor-capabilities";
-import {
-  fieldsForMode,
-  initialParams,
-  requireQuote,
-  money,
-  type Quote,
-} from "./contracts";
+import { fieldsForMode, requireQuote, money, type Quote } from "./contracts";
 import { TaskDetail, type GenerationSeed } from "./generation-dialog";
 export type CanvasComposerOwner = {
   contextKey: string;
@@ -60,6 +56,7 @@ type Props = {
   projectID: string;
   seed: GenerationSeed;
   onLock?: (locked: boolean) => void;
+  onCloseGuard?: (guard: (() => Promise<boolean>) | null) => void;
   onAdopt?: (id: string, kind: string) => Promise<void> | void;
   canvas?: CanvasComposerOwner;
   draftID?: string;
@@ -70,12 +67,10 @@ function plainSeed(seed: GenerationSeed) {
     seed.reuse?.inputs?.find((i) => i.role === "prompt")?.text ?? seed.prompt;
   draft.document = {
     type: "doc",
-    content: text
-      .split("\n")
-      .map((text) => ({
-        type: "paragraph",
-        ...(text ? { content: [{ type: "text" as const, text }] } : {}),
-      })),
+    content: text.split("\n").map((text) => ({
+      type: "paragraph",
+      ...(text ? { content: [{ type: "text" as const, text }] } : {}),
+    })),
   };
   draft.params = {
     ...(seed.draft?.aspect_ratio
@@ -119,6 +114,7 @@ export function RichGeneration(props: Props) {
       current: API.SubmissionCurrent;
     } | null>(null),
     [error, setError] = useState("");
+  const bootDraft = useRef<PromptDraft | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
@@ -171,48 +167,52 @@ export function RichGeneration(props: Props) {
             ),
           );
         } else {
-          let draft = props.seed.composer ?? plainSeed(props.seed);
-          if (props.seed.reuse?.editor_draft) {
-            validatePromptDraft(props.seed.reuse.editor_draft);
-            draft = structuredClone(props.seed.reuse.editor_draft);
-          }
-          draft = structuredClone(draft);
-          const add = (ref: ReturnType<typeof mediaBinding>) => {
-            ref.order = draft.references.length;
-            draft.references.push(ref);
-            const kind =
-              ref.source.kind === "subject" ? "subject" : ref.mediaKind;
-            draft.labelState.allocations[ref.id] = {
-              labelKind: kind,
-              ordinal: ++draft.labelState.highWater[kind],
+          let draft =
+            bootDraft.current ?? props.seed.composer ?? plainSeed(props.seed);
+          if (!bootDraft.current) {
+            if (props.seed.reuse?.editor_draft) {
+              validatePromptDraft(props.seed.reuse.editor_draft);
+              draft = structuredClone(props.seed.reuse.editor_draft);
+            }
+            draft = structuredClone(draft);
+            const add = (ref: ReturnType<typeof mediaBinding>) => {
+              ref.order = draft.references.length;
+              draft.references.push(ref);
+              const kind =
+                ref.source.kind === "subject" ? "subject" : ref.mediaKind;
+              draft.labelState.allocations[ref.id] = {
+                labelKind: kind,
+                ordinal: ++draft.labelState.highWater[kind],
+              };
+              draft.document.content[0].content ??= [];
+              draft.document.content[0].content.push({
+                type: "reference",
+                attrs: { referenceId: ref.id },
+              });
             };
-            draft.document.content[0].content ??= [];
-            draft.document.content[0].content.push({
-              type: "reference",
-              attrs: { referenceId: ref.id },
-            });
-          };
-          if (props.seed.subject)
-            add(subjectBinding(props.seed.subject, "subject"));
-          const oldMedia = props.seed.reference
-            ? [
-                {
-                  media_asset_id: props.seed.reference.assetID,
-                  role: "reference_" + props.seed.reference.kind,
-                },
-              ]
-            : props.seed.reuse?.editor_draft
-              ? []
-              : (props.seed.reuse?.inputs?.filter((i) => i.media_asset_id) ??
-                []);
-          for (const ref of oldMedia) {
-            const preview = await getMediaPreview(
-              { pid: props.projectID, asset_id: ref.media_asset_id! },
-              { signal: controller.signal },
-            );
-            if (preview.asset?.project_id !== props.projectID)
-              throw new RequestError("invalid_receipt");
-            add(mediaBinding(preview.asset, ref.role ?? "reference_image"));
+            if (props.seed.subject)
+              add(subjectBinding(props.seed.subject, "subject"));
+            const oldMedia = props.seed.reference
+              ? [
+                  {
+                    media_asset_id: props.seed.reference.assetID,
+                    role: "reference_" + props.seed.reference.kind,
+                  },
+                ]
+              : props.seed.reuse?.editor_draft
+                ? []
+                : (props.seed.reuse?.inputs?.filter((i) => i.media_asset_id) ??
+                  []);
+            for (const ref of oldMedia) {
+              const preview = await getMediaPreview(
+                { pid: props.projectID, asset_id: ref.media_asset_id! },
+                { signal: controller.signal },
+              );
+              if (preview.asset?.project_id !== props.projectID)
+                throw new RequestError("invalid_receipt");
+              add(mediaBinding(preview.asset, ref.role ?? "reference_image"));
+            }
+            bootDraft.current = structuredClone(draft);
           }
           snapshot = requireSaved(
             await createPromptDraft(
@@ -269,6 +269,7 @@ export function RichGeneration(props: Props) {
       onOpen={(id) => {
         setReady(null);
         setOpened(id);
+        setRetry((n) => n + 1);
       }}
     />
   );
@@ -277,11 +278,12 @@ function EditorWorkspace({
   projectID,
   seed,
   onLock,
+  onCloseGuard,
   onAdopt,
   canvas,
   snapshot,
   actor,
-  models,
+  models: initialModels,
   current: initialCurrent,
   onOpen,
 }: Props & {
@@ -291,6 +293,7 @@ function EditorWorkspace({
   current: API.SubmissionCurrent;
   onOpen: (id: string) => void;
 }) {
+  const [models, setModels] = useState(initialModels);
   const [replicaId] = useState(() => crypto.randomUUID()),
     [session, setSession] = useState<ComposerSession | null>(null),
     [draft, setDraft] = useState(snapshot.draft),
@@ -309,14 +312,22 @@ function EditorWorkspace({
     [full, setFull] = useState(false),
     [revision, setRevision] = useState(snapshot.revision),
     [saveState, setSaveState] = useState("已保存"),
+    [suspended, setSuspended] = useState(false),
+    [sourceCheck, setSourceCheck] = useState<{
+      key: string;
+      error?: string;
+    } | null>(null),
     [branches, setBranches] = useState<LocalBranch[]>([]),
     [drafts, setDrafts] = useState<API.DraftSnapshot[]>([]),
+    [draftCursor, setDraftCursor] = useState<string | undefined>(),
     [conversion, setConversion] = useState<{
       seq: number;
       params: PromptDraft["params"];
     } | null>(null),
     [serverConflict, setServerConflict] = useState<SavedDraft | null>(null);
   const contextKey = `${actor}/${projectID}/${canvas?.contextKey ?? snapshot.draft_id}`;
+  const sessionRef = useRef<ComposerSession | null>(null);
+  const firstDirtyAt = useRef<number | null>(null);
   const saver = useRef<DraftSaver | null>(null),
     busy = useRef(false),
     alive = useRef(true),
@@ -328,7 +339,59 @@ function EditorWorkspace({
       localSeq: 0,
       draft: snapshot.draft,
     });
-  const frozen = confirmUnknown || pending;
+  const sourceKey = JSON.stringify(draft.references);
+  const sourceReady =
+    draft.references.length === 0 ||
+    (sourceCheck?.key === sourceKey && !sourceCheck.error);
+  useEffect(() => {
+    if (!latest.current.draft.references.length) return;
+    const controller = new AbortController();
+    const value = structuredClone(latest.current.draft);
+    value.document = { type: "doc", content: [{ type: "paragraph" }] };
+    void validatePromptFragment({ pid: projectID }, draftRequest(value), {
+      signal: controller.signal,
+    })
+      .then(() => {
+        if (!controller.signal.aborted) setSourceCheck({ key: sourceKey });
+      })
+      .catch((e) => {
+        if (!controller.signal.aborted)
+          setSourceCheck({ key: sourceKey, error: errorText(e) });
+      });
+    return () => controller.abort();
+  }, [sourceKey, projectID]);
+  const frozen = confirmUnknown;
+  const recoveredChanged =
+    !quote &&
+    !!current.submission?.draft &&
+    canonical(draft) !== canonical(current.submission.draft);
+  const activeQuote = quote ?? current.submission?.quote;
+  const [expiredQuote, setExpiredQuote] = useState<API.EditorQuote | null>(
+    null,
+  );
+  const quoteExpired = !!activeQuote && expiredQuote === activeQuote;
+  useEffect(() => {
+    if (!activeQuote) return;
+    const expires = Date.parse(activeQuote.expires_at ?? "");
+    let timeout: ReturnType<typeof setTimeout>;
+    function schedule() {
+      const remaining = expires - Date.now();
+      timeout = setTimeout(
+        () => {
+          if (!Number.isFinite(remaining) || Date.now() >= expires) {
+            setExpiredQuote(activeQuote!);
+          } else {
+            schedule();
+          }
+        },
+        Number.isFinite(remaining)
+          ? Math.max(0, Math.min(remaining, 2_147_483_647))
+          : 0,
+      );
+    }
+    schedule();
+    return () => clearTimeout(timeout);
+  }, [activeQuote]);
   const model = models.find(
     (m) => m.current_version?.id === draft.modelVersion,
   );
@@ -357,6 +420,7 @@ function EditorWorkspace({
     if (!canvas) {
       saver.current = new DraftSaver({
         snapshot: latest.current,
+        saved: snapshot,
         revision: snapshot.revision,
         draftId: snapshot.draft_id,
         send: async (request) =>
@@ -399,12 +463,12 @@ function EditorWorkspace({
     };
   }, [contextKey, replicaId, snapshot, projectID, updateStatus, canvas]);
   useEffect(() => {
-    onLock?.(frozen);
+    onLock?.(frozen || pending);
     session?.editor.setEditable(!frozen);
     return () => {
       onLock?.(false);
     };
-  }, [frozen, onLock, session]);
+  }, [frozen, pending, onLock, session]);
   useEffect(() => {
     const before = (e: BeforeUnloadEvent) => {
       if (saver.current?.status !== "saved" || confirmUnknown) {
@@ -414,27 +478,73 @@ function EditorWorkspace({
     window.addEventListener("beforeunload", before);
     return () => window.removeEventListener("beforeunload", before);
   }, [confirmUnknown]);
+  useEffect(() => {
+    const suspend = () => {
+      saver.current?.dispose();
+      session?.cancelModeSelection();
+      session?.editor.setEditable(false);
+      setSuspended(true);
+    };
+    const check = () => {
+      if (document.visibilityState === "visible")
+        void getSession()
+          .then((identity) => {
+            if (identity.actor?.id !== actor) suspend();
+          })
+          .catch(suspend);
+    };
+    const channel =
+      typeof BroadcastChannel !== "undefined"
+        ? new BroadcastChannel("glowloom-private-cache")
+        : null;
+    if (channel) channel.onmessage = suspend;
+    window.addEventListener("glowloom:private-cache-cleared", suspend);
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      channel?.close();
+      window.removeEventListener("glowloom:private-cache-cleared", suspend);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, [actor, session]);
   const changed = useCallback(
     (value: ComposerSnapshot) => {
+      const previous = latest.current;
       latest.current = value;
       setDraft(value.draft);
       setSeq(value.localSeq);
       saver.current?.edit(value);
-      canvas?.onChange(value.draft);
+      if (!sessionRef.current?.composing) canvas?.onChange(value.draft);
+      if (previous.localSeq === value.localSeq && !firstDirtyAt.current) return;
+      firstDirtyAt.current ??= Date.now();
       if (timer.current) clearTimeout(timer.current);
-      if (!canvas)
-        timer.current = setTimeout(() => {
-          void saver.current?.flush().catch((e) => {
-            if (alive.current) setError(errorText(e));
-          });
-        }, 700);
+      if (!canvas) {
+        const autosave = () => {
+          if (sessionRef.current?.composing) {
+            timer.current = setTimeout(autosave, 100);
+            return;
+          }
+          void saver.current
+            ?.flush()
+            .then(() => {
+              firstDirtyAt.current = null;
+            })
+            .catch((e) => {
+              if (alive.current) setError(errorText(e));
+            });
+        };
+        timer.current = setTimeout(
+          autosave,
+          Math.max(
+            0,
+            Math.min(800, 5000 - (Date.now() - firstDirtyAt.current)),
+          ),
+        );
+      }
     },
     [canvas],
   );
   async function flush() {
-    if (session?.pendingTarget) throw new Error("模式选择尚未完成。");
-    if (session?.editor.view.composing)
-      throw new Error("请先完成当前输入法组合。");
+    if (session?.composing) throw new Error("请先完成当前输入法组合。");
     if (canvas) return canvas.flush();
     if (!saver.current) throw new Error("保存协调器尚未就绪");
     const saved = await saver.current.flush();
@@ -444,6 +554,19 @@ function EditorWorkspace({
       revision: saved.revision,
     } satisfies API.InputSource;
   }
+  useEffect(() => {
+    onCloseGuard?.(async () => {
+      if (confirmUnknown || busy.current) return false;
+      try {
+        await flush();
+        return true;
+      } catch (e) {
+        setError(errorText(e));
+        return false;
+      }
+    });
+    return () => onCloseGuard?.(null);
+  });
   async function discover() {
     const source = canvas
       ? {
@@ -478,7 +601,8 @@ function EditorWorkspace({
   }
   async function getQuote() {
     await run(async () => {
-      if (issues.length || pendingMode) throw new Error("请先修复当前输入。");
+      if (issues.length || pendingMode || !sourceReady)
+        throw new Error("请先修复当前输入。");
       const captured = latest.current.localSeq;
       const pointer = await flush();
       if (latest.current.localSeq !== captured)
@@ -516,6 +640,15 @@ function EditorWorkspace({
   }
   async function confirm() {
     await run(async () => {
+      // An unknown confirmation must retain its original key even after expiry.
+      if (!confirmUnknown) {
+        const expires = Date.parse(activeQuote?.expires_at ?? "");
+        if (!Number.isFinite(expires) || Date.now() >= expires)
+          throw new Error("报价已过期，请重新检查费用。");
+        if (activeQuote?.confirmable !== true)
+          throw new Error("当前报价不可确认，请重新检查费用。");
+      }
+      if (session?.pendingTarget) throw new Error("模式选择尚未完成。");
       const sub = current.submission;
       const confirmKey = sub?.confirm_key ?? quote?.confirm_key;
       const operation = sub?.operation_id ?? quote?.operation_id;
@@ -524,7 +657,7 @@ function EditorWorkspace({
         throw new Error("输入已变化，请重新报价。");
       if (!quote && !confirmUnknown) {
         const saved = await flush();
-        if (canonical(saved) !== canonical(sub?.input_source))
+        if (!sameSource(saved, sub?.input_source))
           throw new Error("草稿已变化，请放弃旧报价后重新检查。");
       }
       const intent = submission.current ?? {
@@ -574,30 +707,53 @@ function EditorWorkspace({
     });
   }
   const resolveKeys = useRef(new Map<string, string>());
-  function selectMode(version: string, mode: string) {
-    if (!session) return;
+  async function selectMode(version: string, mode: string) {
+    if (!session || !version || !mode) return;
     const request = session.beginModeSelection({ modelVersion: version, mode });
-    const found = models.find((m) => m.current_version?.id === version);
-    if (!found?.current_version?.modes?.includes(mode)) {
-      session.cancelModeSelection();
-      setError("该模型模式已不可用");
-      return;
-    }
-    session.resolveModeSelection(request);
-    if (
-      Object.keys(session.snapshot().draft.params).every(
-        (k) => k === "output_count",
-      )
-    )
-      session.updateParams({
-        ...initialParams(
-          fieldsForMode(found.current_version.param_schema, mode),
-        ),
-        ...session.snapshot().draft.params,
+    try {
+      const page = await listProjectModels({
+        project_id: projectID,
+        capability: seed.capability + ".generate",
+        limit: 100,
       });
+      let found = page.items?.find((m) => m.current_version?.id === version);
+      let cursor = page.next_cursor;
+      const seen = new Set<string>();
+      while (!found && cursor && !seen.has(cursor)) {
+        seen.add(cursor);
+        const next = await listProjectModels({
+          project_id: projectID,
+          capability: seed.capability + ".generate",
+          limit: 100,
+          cursor,
+        });
+        found = next.items?.find((m) => m.current_version?.id === version);
+        cursor = next.next_cursor;
+      }
+      if (session.pendingTarget?.selectionEpoch !== request.selectionEpoch)
+        return;
+      if (!found?.current_version?.modes?.includes(mode))
+        throw new Error("该模型模式已不可用");
+      if (
+        found.status !== "active" ||
+        found.provider_status !== "active" ||
+        !found.credential_present
+      )
+        throw new Error("该模型当前不可用");
+      setModels((values) =>
+        values.map((value) => (value.id === found!.id ? found! : value)),
+      );
+      session.resolveModeSelection(request);
+    } catch (error) {
+      if (session.pendingTarget?.selectionEpoch !== request.selectionEpoch)
+        return;
+      session.cancelModeSelection();
+      setError(errorText(error));
+    }
   }
   async function recover(branch: LocalBranch) {
     await run(async () => {
+      let expectedRevision = branch.serverRevision;
       if (branch.pendingSave) {
         const r = branch.pendingSave;
         const saved = r.draftId
@@ -614,7 +770,7 @@ function EditorWorkspace({
               { expected_revision: 0, draft: draftRequest(r.snapshot.draft) },
               { headers: { "Idempotency-Key": r.key } },
             );
-        requireSaved(saved);
+        expectedRevision = requireSaved(saved).revision;
       }
       if (branch.pendingSubmission) {
         submission.current = structuredClone(branch.pendingSubmission);
@@ -627,14 +783,26 @@ function EditorWorkspace({
         id: snapshot.draft_id,
       });
       const server = requireSaved(saved);
-      if (server.revision !== branch.serverRevision) {
+      if (server.revision !== expectedRevision) {
         setServerConflict(server);
         throw new Error("该本地分支的服务端基线已变化，可将它保留为新副本。");
       }
+      saver.current?.rebase(server);
       session?.adoptDraft(branch.snapshot.draft);
     });
   }
   async function copyDraft(value: PromptDraft) {
+    value = structuredClone(value);
+    for (const ref of value.references) {
+      if (ref.source.kind === "pending_upload") {
+        ref.bindingGeneration++;
+        ref.source = {
+          kind: "pending_upload",
+          clientUploadId: crypto.randomUUID(),
+          uploadAttemptId: crypto.randomUUID(),
+        };
+      }
+    }
     const saved = requireSaved(
       await createPromptDraft(
         { pid: projectID },
@@ -644,6 +812,38 @@ function EditorWorkspace({
     );
     onOpen(saved.draft_id);
   }
+  async function resolveDraftConflict(useLocal: boolean) {
+    if (!serverConflict) return;
+    const result = reconcileLabels(
+      useLocal ? draft : serverConflict.draft,
+      serverConflict.draft,
+      draft,
+    );
+    const body = {
+      expected_revision: serverConflict.revision,
+      draft: draftRequest(result.draft),
+    };
+    const identity = "draft-resolution:" + canonical(body);
+    const key = resolveKeys.current.get(identity) ?? crypto.randomUUID();
+    resolveKeys.current.set(identity, key);
+    await savePromptDraft(
+      { pid: projectID, id: serverConflict.draft_id },
+      body,
+      { headers: { "Idempotency-Key": key } },
+    );
+    onOpen(serverConflict.draft_id);
+  }
+  if (suspended)
+    return (
+      <div role="alert">
+        <p>
+          身份已变化或无法核验。当前页面已停止私有缓存写入；本地分支在重新核验后恢复。
+        </p>
+        <Button onClick={() => onOpen(snapshot.draft_id)}>
+          重新核验并找回草稿
+        </Button>
+      </div>
+    );
   return (
     <section
       className={
@@ -679,6 +879,7 @@ function EditorWorkspace({
                 void run(async () => {
                   const page = await listPromptDrafts({ pid: projectID });
                   setDrafts(page.items ?? []);
+                  setDraftCursor(page.next_cursor);
                 })
               }
             >
@@ -688,12 +889,33 @@ function EditorWorkspace({
         </div>
         {drafts.length > 0 && (
           <div className="rounded border p-3" aria-label="服务端草稿">
+            {draftCursor && (
+              <Button
+                onClick={() =>
+                  void run(async () => {
+                    const page = await listPromptDrafts({
+                      pid: projectID,
+                      cursor: draftCursor,
+                    });
+                    setDrafts((v) => [...v, ...(page.items ?? [])]);
+                    setDraftCursor(page.next_cursor);
+                  })
+                }
+              >
+                更多草稿
+              </Button>
+            )}
             {drafts.map((d) => (
               <Button
                 key={d.draft_id}
                 variant="ghost"
                 disabled={frozen}
-                onClick={() => onOpen(d.draft_id!)}
+                onClick={() =>
+                  void run(async () => {
+                    await flush();
+                    onOpen(d.draft_id!);
+                  })
+                }
               >
                 草稿 {d.draft_id?.slice(0, 8)} · r{d.revision}
               </Button>
@@ -798,6 +1020,7 @@ function EditorWorkspace({
             replicaId={replicaId}
             draft={snapshot.draft}
             onReady={(value) => {
+              sessionRef.current = value;
               setSession(value);
               canvas?.onChange(value.snapshot().draft);
             }}
@@ -834,6 +1057,7 @@ function EditorWorkspace({
               projectID={projectID}
               model={model}
               disabled={frozen}
+              authorized={sourceReady}
             />
           </>
         )}
@@ -992,12 +1216,23 @@ function EditorWorkspace({
                 )}
               </pre>
               <Button
-                onClick={() => {
-                  onOpen(serverConflict.draft_id);
-                  setServerConflict(null);
-                }}
+                disabled={pending}
+                onClick={() => void run(() => resolveDraftConflict(false))}
               >
                 采用服务端
+              </Button>
+              <p className="text-sm">
+                覆盖前编号调整：
+                {reconcileLabels(draft, serverConflict.draft).changes.join(
+                  "；",
+                ) || "无需改号"}
+                。原本地分支保留。
+              </p>
+              <Button
+                disabled={pending}
+                onClick={() => void run(() => resolveDraftConflict(true))}
+              >
+                确认编号调整并覆盖此修订
               </Button>
               <Button
                 variant="outline"
@@ -1063,9 +1298,37 @@ function EditorWorkspace({
             {!quote && current.submission.quote && (
               <p>原报价：{money(current.submission.quote.quote_micros ?? 0)}</p>
             )}
+            {current.submission.state !== "accepted" &&
+              !confirmUnknown &&
+              quoteExpired && <p role="alert">报价已过期，请重新检查费用。</p>}
             <pre className="max-h-36 overflow-auto text-xs whitespace-pre-wrap">
               {quote?.final_prompt ?? current.submission.quote?.final_prompt}
             </pre>
+            <p className="text-sm">
+              冻结模式：{current.submission.draft?.mode} · 编译：
+              {activeQuote?.compiler_version}
+            </p>
+            {activeQuote?.reference_mapping?.length ? (
+              <table className="w-full text-left text-xs">
+                <caption>显示标签与实际媒体输入顺序</caption>
+                <thead>
+                  <tr>
+                    <th>引用</th>
+                    <th>角色</th>
+                    <th>媒体位置</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activeQuote.reference_mapping.map((m) => (
+                    <tr key={m.reference_id}>
+                      <td>{m.label}</td>
+                      <td>{m.role}</td>
+                      <td>{m.media_seq_nos?.join("、") || "仅描述"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
@@ -1091,7 +1354,12 @@ function EditorWorkspace({
                     disabled={
                       pending ||
                       (!confirmUnknown &&
-                        (issues.length > 0 ||
+                        (quoteExpired ||
+                          recoveredChanged ||
+                          !!pendingMode ||
+                          activeQuote?.confirmable !== true ||
+                          issues.length > 0 ||
+                          !sourceReady ||
                           (quote !== null && quoteSeq !== seq)))
                     }
                     onClick={() => void confirm()}
@@ -1110,10 +1378,21 @@ function EditorWorkspace({
             </div>
           </div>
         )}
+        {!sourceReady && (
+          <p role="status">
+            {sourceCheck?.key === sourceKey
+              ? "参考已失效或暂时无法核验，请重新选择或重试保存。"
+              : "正在核验参考权限与版本…"}
+          </p>
+        )}
         {!current.submission && (
           <Button
             disabled={
-              pending || issues.length > 0 || !!pendingMode || confirmUnknown
+              pending ||
+              issues.length > 0 ||
+              !!pendingMode ||
+              confirmUnknown ||
+              !sourceReady
             }
             onClick={() => void getQuote()}
           >
@@ -1125,5 +1404,17 @@ function EditorWorkspace({
         )}
       </div>
     </section>
+  );
+}
+
+function sameSource(a: API.InputSource, b?: API.InputSource) {
+  return (
+    !!b &&
+    a.kind === b.kind &&
+    (a.kind === "prompt_draft"
+      ? a.draft_id === b.draft_id && a.revision === b.revision
+      : a.canvas_id === b.canvas_id &&
+        a.node_id === b.node_id &&
+        a.input_revision === b.input_revision)
   );
 }

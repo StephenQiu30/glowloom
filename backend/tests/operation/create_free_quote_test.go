@@ -163,6 +163,17 @@ func TestPrepareFreeQuoteFreezesMediaAndChecksPublishedRoles(t *testing.T) {
 		*prepared.Inputs[1].MediaAssetID != assetID || prepared.Inputs[1].Role != "subject" {
 		t.Fatalf("media quote = %+v, %v", prepared, err)
 	}
+	guarded := catalog
+	guarded.Limits = json.RawMessage(`{"max_outputs":1,"roles":{"subject":{"min_count":1,"max_count":1,"types":["image"],"for_modes":["image_to_image"]}}}`)
+	missing := input
+	missing.MediaInputs = nil
+	if _, err := operationapp.PrepareFreeQuote(missing, guarded, nil, now, nil); !errors.Is(err, operationapp.ErrFreeQuoteInputNotReady) {
+		t.Fatal("required role missing", err)
+	}
+	guarded.Limits = json.RawMessage(`{"max_outputs":1,"roles":{"subject":{"max_count":1,"types":["image"],"for_modes":["other_mode"]}}}`)
+	if _, err := operationapp.PrepareFreeQuote(input, guarded, facts, now, nil); !errors.Is(err, operationapp.ErrFreeQuoteInputNotReady) {
+		t.Fatal("inactive role accepted", err)
+	}
 	changed := append([]operationapp.FreeQuoteMediaFact(nil), facts...)
 	changed[0].SHA256 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	other, err := operationapp.PrepareFreeQuote(input, catalog, changed, now, nil)

@@ -222,12 +222,7 @@ declare namespace API {
   };
 
   type BatchStatus =
-    | "quoted"
-    | "confirmed"
-    | "running"
-    | "finished"
-    | "cancelled"
-    | "expired";
+    "quoted" | "confirmed" | "running" | "finished" | "cancelled" | "expired";
 
   type BatchTableConfig = {
     concurrency?: number;
@@ -1170,10 +1165,12 @@ declare namespace API {
 
   type EditorQuote = {
     available_micros?: number;
+    compiler_version?: string;
     confirmable?: boolean;
     expires_at?: string;
     final_prompt?: string;
     quote_micros?: number;
+    reference_mapping?: ReferenceMapping[];
   };
 
   type enableAdminUserParams = {
@@ -3040,6 +3037,7 @@ declare namespace API {
 
   type QuoteResponse = {
     available_micros?: number;
+    compiler_version?: string;
     confirm_key?: string;
     confirmable?: boolean;
     editor_draft?: PromptDraft;
@@ -3049,6 +3047,7 @@ declare namespace API {
     prompt_preparation?: PromptPreparation;
     quote_detail?: Record<string, any>;
     quote_micros?: number;
+    reference_mapping?: ReferenceMapping[];
     reused_from_id?: string;
     submission_epoch?: number;
     submission_id?: string;
@@ -3141,6 +3140,13 @@ declare namespace API {
     role?: ImageRole;
   };
 
+  type ReferenceMapping = {
+    label?: string;
+    media_seq_nos?: number[];
+    reference_id?: string;
+    role?: string;
+  };
+
   type ReferenceSource = {
     clientUploadId?: string;
     description?: string;
@@ -3206,6 +3212,13 @@ declare namespace API {
     pid: string;
     /** 提交 */
     id: string;
+  };
+
+  type resolvePromptUploadParams = {
+    /** 项目 */
+    pid: string;
+    /** 原上传尝试 UUID */
+    attempt: string;
   };
 
   type ResolveSubmissionRequest = {
@@ -3834,7 +3847,9 @@ declare namespace API {
     cancel_requested?: boolean;
     capability?: string;
     create_time?: string;
+    editor_compiler_version?: string;
     editor_draft?: PromptDraft;
+    editor_reference_mapping?: ReferenceMapping[];
     events?: TaskEvent[];
     failure_code?: string;
     finished_at?: string;
@@ -3941,11 +3956,7 @@ declare namespace API {
   };
 
   type TestResult =
-    | "ok"
-    | "auth_failed"
-    | "unreachable"
-    | "timeout"
-    | "unsupported";
+    "ok" | "auth_failed" | "unreachable" | "timeout" | "unsupported";
 
   type TimelineClip = {
     asset_id?: string;
@@ -4208,6 +4219,12 @@ declare namespace API {
     pid: string;
   };
 
+  type UploadResolution = {
+    found?: boolean;
+    media_kind?: string;
+    source?: ReferenceSource;
+  };
+
   type UploadResult = {
     asset?: AssetSummary;
     duplicate_of?: string;
@@ -4218,6 +4235,11 @@ declare namespace API {
     max_micros?: number;
     reviewed_at?: string;
     source?: string;
+  };
+
+  type validatePromptFragmentParams = {
+    /** 目标项目 */
+    pid: string;
   };
 
   type Variable = {
