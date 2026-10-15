@@ -674,6 +674,14 @@ export function CanvasEditor({
     return () => clearTimeout(timer);
   }, [nodes, dirty, saving, unconfirmed, conflict, identityInvalid]);
   async function recoverCanvas(branch: LocalBranch) {
+    if (busy.current || privateInvalid.current) return;
+    if (pending.current) {
+      setMessage("请先重试原保存，确认结果后再恢复其他分支。");
+      return;
+    }
+    const expectedNodes = local.current;
+    busy.current = true;
+    setSaving(true);
     try {
       const value = branch.ownerState as {
         base: Canvas;
@@ -705,15 +713,22 @@ export function CanvasEditor({
         project.id,
         initial.id,
       );
+      if (!alive.current || privateInvalid.current) return;
+      if (local.current !== expectedNodes)
+        throw new Error("恢复期间有新编辑，未覆盖；原分支仍保留。");
       edit(value.nodes);
       if (server.revision !== baseline.revision) {
         setConflict({ server });
         setMessage("已恢复所选本地分支，请处理服务端冲突。");
       } else setBase(server);
     } catch (e) {
-      setMessage(
-        e instanceof Error ? e.message : "本地恢复失败；原分支仍保留。",
-      );
+      if (alive.current && !privateInvalid.current)
+        setMessage(
+          e instanceof Error ? e.message : "本地恢复失败；原分支仍保留。",
+        );
+    } finally {
+      busy.current = false;
+      if (alive.current) setSaving(false);
     }
   }
   async function generateCurrent(pickSubject = false) {

@@ -35,9 +35,9 @@ func TestEditorBrowserFixture(t *testing.T) {
 		args []any
 	}{
 		{`UPDATE catalog.provider SET status='active' WHERE id=?`, []any{provider}},
-		{`INSERT INTO catalog.capability(id,key,output_type,modes,input_roles) VALUES(?,'image.generate','image',ARRAY['text_to_image','image_to_image'],ARRAY['prompt','reference_image','first_frame']) ON CONFLICT(key) DO NOTHING`, []any{uuid.New()}},
+		{`INSERT INTO catalog.capability(id,key,output_type,modes,input_roles) VALUES(?,'image.generate','image',ARRAY['text2image','image2image'],ARRAY['prompt','reference_image','first_frame']) ON CONFLICT(key) DO NOTHING`, []any{uuid.New()}},
 		{`UPDATE catalog.model_profile SET capability='image.generate' WHERE id=?`, []any{model}},
-		{`UPDATE catalog.model_profile_version SET modes=ARRAY['text_to_image','image_to_image'],limits='{"max_outputs":4,"roles":{"reference_image":{"types":["image"],"max_count":4,"max_bytes":10000},"first_frame":{"types":["image"],"max_count":1,"max_bytes":10000}}}',param_schema='[{"field":"aspect_ratio","label":"画幅","type":"string","component":"select","enum":["1:1","16:9"],"default":"1:1"}]' WHERE id=?`, []any{*catalog.ModelProfileVersionID}},
+		{`UPDATE catalog.model_profile_version SET modes=ARRAY['text2image','image2image'],limits='{"max_outputs":4,"roles":{"reference_image":{"types":["image"],"max_count":4,"max_bytes":10000},"first_frame":{"types":["image"],"max_count":1,"max_bytes":10000}}}',param_schema='[{"field":"aspect_ratio","label":"画幅","type":"string","component":"select","enum":["1:1","16:9"],"default":"1:1"}]' WHERE id=?`, []any{*catalog.ModelProfileVersionID}},
 	} {
 		if err := db.Exec(command.sql, command.args...).Error; err != nil {
 			t.Fatal(err)

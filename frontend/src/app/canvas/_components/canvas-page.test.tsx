@@ -13,6 +13,18 @@ const api = vi.hoisted(() => ({
   project: vi.fn(),
   canvas: vi.fn(),
   save: vi.fn(),
+  branches: vi.fn(),
+}));
+vi.mock("@/api/identity", () => ({
+  getSession: async () => ({ actor: { id: "actor" } }),
+}));
+vi.mock("@/components/generation/draft-save", async (original) => ({
+  ...(await original<typeof import("@/components/generation/draft-save")>()),
+  branchJournal: {
+    list: api.branches,
+    write: async () => {},
+    remove: async () => true,
+  },
 }));
 vi.mock("@/api/canvases", () => ({
   getCanvas: api.canvas,
@@ -43,7 +55,10 @@ const canvas = {
   nodes: [],
   edges: [],
 };
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  api.branches.mockResolvedValue([]);
+});
 afterEach(cleanup);
 it("缺少上下文不请求或展示固定项目", () => {
   render(<CanvasPage />);
@@ -328,4 +343,48 @@ it("媒体节点移动使用真实命令，复制保留媒体身份，移除本�
   );
   expect(api.save).toHaveBeenCalledOnce();
   expect(screen.getByRole("status").textContent).toContain("已保存");
+});
+
+it("恢复画布的迟到结果不覆盖等待期间的新编辑", async () => {
+  const { createDraftNode } = await import("./editor-state");
+  const node = {
+    ...createDraftNode("image_generation", "1:1", 0),
+    input_revision: 1,
+  };
+  const remote = { ...canvas, nodes: [node] };
+  const recovered = structuredClone(node);
+  recovered.config.draft.prompt = "旧分支";
+  api.branches.mockResolvedValue([
+    {
+      replicaId: "old",
+      serverRevision: 1,
+      ackedSeq: -1,
+      snapshot: { localSeq: 1 },
+      ownerState: { base: remote, nodes: [recovered], pending: null },
+    },
+  ]);
+  api.project.mockResolvedValue(project);
+  api.canvas.mockResolvedValue(remote);
+  render(<CanvasPage projectID={projectID} canvasID={canvasID} />);
+  await screen.findByRole("button", { name: "恢复此分支" });
+  fireEvent.click(screen.getByRole("button", { name: "移动 图片草稿" }));
+  let release!: (value: unknown) => void;
+  api.canvas.mockImplementationOnce(
+    () =>
+      new Promise((r) => {
+        release = r;
+      }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "恢复此分支" }));
+  await waitFor(() => expect(api.canvas).toHaveBeenCalledTimes(2));
+  fireEvent.change(screen.getByLabelText("提示词"), {
+    target: { value: "等待中新增的意图" },
+  });
+  await act(async () => release(remote));
+  expect((screen.getByLabelText("提示词") as HTMLTextAreaElement).value).toBe(
+    "等待中新增的意图",
+  );
+  expect(
+    screen.getByText("恢复期间有新编辑，未覆盖；原分支仍保留。"),
+  ).toBeTruthy();
 });

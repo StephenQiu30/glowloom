@@ -22,6 +22,7 @@ const api = vi.hoisted(() => ({
   current: vi.fn(),
   resolve: vi.fn(),
   preview: vi.fn(),
+  validate: vi.fn(),
 }));
 vi.mock("@/api/identity", () => ({ getSession: api.identity }));
 vi.mock("@/api/models", () => ({ listProjectModels: api.models }));
@@ -33,7 +34,7 @@ vi.mock("@/api/operations", () => ({
   cancelOperation: api.cancel,
 }));
 vi.mock("@/api/promptEditor", () => ({
-  validatePromptFragment: async () => {},
+  validatePromptFragment: api.validate,
   createPromptDraft: api.create,
   savePromptDraft: api.save,
   readPromptDraft: vi.fn(),
@@ -91,6 +92,7 @@ function saved(body: API.DraftRequest) {
 }
 beforeEach(() => {
   vi.resetAllMocks();
+  api.validate.mockResolvedValue({});
   current = { epoch: 0 };
   quote = {
     operation_id: id,
@@ -305,4 +307,97 @@ it("确认结果未知时锁定编辑并使用原确认键重试", async () => {
   fireEvent.click(retry);
   await screen.findByRole("heading", { name: "已完成" });
   expect(api.confirm.mock.calls[0]).toEqual(api.confirm.mock.calls[1]);
+});
+
+it("模式查询发现当前模型停用后保留输入并禁用报价", async () => {
+  const page = await api.models();
+  page.items[0].current_version.modes = ["text_to_image", "image_to_image"];
+  await open();
+  api.models.mockResolvedValue({
+    items: [{ ...page.items[0], status: "disabled" }],
+  });
+  fireEvent.change(screen.getByLabelText("生成模式"), {
+    target: { value: "image_to_image" },
+  });
+  await screen.findByText("该模型当前不可用");
+  expect(
+    screen.getByRole("button", { name: "检查费用" }).hasAttribute("disabled"),
+  ).toBe(true);
+  expect((screen.getByLabelText("生成模式") as HTMLSelectElement).value).toBe(
+    "text_to_image",
+  );
+  expect(
+    screen.getByRole("textbox", { name: "创作提示词" }).textContent,
+  ).toContain("清晨的海边");
+  expect(api.quote).not.toHaveBeenCalled();
+});
+
+it("重新显示页面时重新核验参考，撤权后保留正文并阻止报价", async () => {
+  const page = await api.models();
+  page.items[0].input_roles = ["reference_image"];
+  page.items[0].current_version.limits.roles = {
+    reference_image: { types: ["image"] },
+  };
+  await open(true);
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "检查费用" }).hasAttribute("disabled"),
+    ).toBe(false),
+  );
+  api.validate.mockRejectedValue(new Error("来源权限已撤销"));
+  fireEvent(document, new Event("visibilitychange"));
+  await waitFor(() => expect(api.validate).toHaveBeenCalledTimes(2));
+  await screen.findByText("参考已失效或暂时无法核验，请重新选择或重新核验。");
+  expect(
+    screen.getByRole("button", { name: "检查费用" }).hasAttribute("disabled"),
+  ).toBe(true);
+  expect(
+    screen.getByRole("textbox", { name: "创作提示词" }).textContent,
+  ).toContain("清晨的海边");
+  expect(api.quote).not.toHaveBeenCalled();
+  api.validate.mockResolvedValue({});
+  fireEvent.click(screen.getByRole("button", { name: "重新核验参考" }));
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "检查费用" }).hasAttribute("disabled"),
+    ).toBe(false),
+  );
+});
+
+it("恢复报价即使正文相同也必须核对独立草稿修订", async () => {
+  api.create.mockImplementation(async (_, body) => {
+    const result = saved(body);
+    result.revision = 2;
+    result.draft = {
+      ...result.draft,
+      modelVersion: version,
+      mode: "text_to_image",
+    };
+    current = {
+      epoch: 1,
+      submission: {
+        id,
+        state: "quoted",
+        operation_id: id,
+        confirm_key: "confirm-key",
+        quote,
+        input_source: { kind: "prompt_draft", draft_id: id, revision: 1 },
+        draft: {
+          ...result.draft,
+          mode: "text_to_image",
+          modelVersion: version,
+        },
+      },
+    };
+    return result;
+  });
+  render(
+    <GenerationDialog
+      seed={{ project, prompt: "清晨的海边", capability: "image" }}
+      onClose={() => {}}
+    />,
+  );
+  const confirm = await screen.findByRole("button", { name: "确认费用并生成" });
+  expect(confirm.hasAttribute("disabled")).toBe(true);
+  expect(api.confirm).not.toHaveBeenCalled();
 });

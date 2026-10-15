@@ -339,7 +339,8 @@ function EditorWorkspace({
       localSeq: 0,
       draft: snapshot.draft,
     });
-  const sourceKey = JSON.stringify(draft.references);
+  const [sourceEpoch, setSourceEpoch] = useState(0);
+  const sourceKey = JSON.stringify([draft.references, sourceEpoch]);
   const sourceReady =
     draft.references.length === 0 ||
     (sourceCheck?.key === sourceKey && !sourceCheck.error);
@@ -364,7 +365,10 @@ function EditorWorkspace({
   const recoveredChanged =
     !quote &&
     !!current.submission?.draft &&
-    canonical(draft) !== canonical(current.submission.draft);
+    (canonical(draft) !== canonical(current.submission.draft) ||
+      (!canvas &&
+        current.submission.input_source?.kind === "prompt_draft" &&
+        current.submission.input_source.revision !== revision));
   const activeQuote = quote ?? current.submission?.quote;
   const [expiredQuote, setExpiredQuote] = useState<API.EditorQuote | null>(
     null,
@@ -486,12 +490,14 @@ function EditorWorkspace({
       setSuspended(true);
     };
     const check = () => {
-      if (document.visibilityState === "visible")
+      if (document.visibilityState === "visible") {
+        setSourceEpoch((epoch) => epoch + 1);
         void getSession()
           .then((identity) => {
             if (identity.actor?.id !== actor) suspend();
           })
           .catch(suspend);
+      }
     };
     const channel =
       typeof BroadcastChannel !== "undefined"
@@ -500,10 +506,12 @@ function EditorWorkspace({
     if (channel) channel.onmessage = suspend;
     window.addEventListener("glowloom:private-cache-cleared", suspend);
     document.addEventListener("visibilitychange", check);
+    window.addEventListener("online", check);
     return () => {
       channel?.close();
       window.removeEventListener("glowloom:private-cache-cleared", suspend);
       document.removeEventListener("visibilitychange", check);
+      window.removeEventListener("online", check);
     };
   }, [actor, session]);
   const changed = useCallback(
@@ -732,6 +740,14 @@ function EditorWorkspace({
       }
       if (session.pendingTarget?.selectionEpoch !== request.selectionEpoch)
         return;
+      // Apply fresh capability facts even when the requested mode is rejected.
+      setModels((values) =>
+        values.map((value) =>
+          value.current_version?.id === version
+            ? (found ?? { ...value, status: "disabled" })
+            : value,
+        ),
+      );
       if (!found?.current_version?.modes?.includes(mode))
         throw new Error("该模型模式已不可用");
       if (
@@ -740,9 +756,6 @@ function EditorWorkspace({
         !found.credential_present
       )
         throw new Error("该模型当前不可用");
-      setModels((values) =>
-        values.map((value) => (value.id === found!.id ? found! : value)),
-      );
       session.resolveModeSelection(request);
     } catch (error) {
       if (session.pendingTarget?.selectionEpoch !== request.selectionEpoch)
@@ -1379,11 +1392,21 @@ function EditorWorkspace({
           </div>
         )}
         {!sourceReady && (
-          <p role="status">
-            {sourceCheck?.key === sourceKey
-              ? "参考已失效或暂时无法核验，请重新选择或重试保存。"
-              : "正在核验参考权限与版本…"}
-          </p>
+          <div>
+            <p role="status">
+              {sourceCheck?.key === sourceKey
+                ? "参考已失效或暂时无法核验，请重新选择或重新核验。"
+                : "正在核验参考权限与版本…"}
+            </p>
+            {sourceCheck?.key === sourceKey && (
+              <Button
+                variant="outline"
+                onClick={() => setSourceEpoch((epoch) => epoch + 1)}
+              >
+                重新核验参考
+              </Button>
+            )}
+          </div>
         )}
         {!current.submission && (
           <Button

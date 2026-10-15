@@ -110,7 +110,7 @@ func TestEditorUploadRecoveryIsPrivateAndReauthorized(t *testing.T) {
 	f := newPreferenceFixture(t)
 	store := draftStore(f.db)
 	attempt, asset := uuid.New(), uuid.New()
-	if err := f.db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,moderation_status) VALUES(?,?,'image','upload','ready','test/recovery.png','recovery.png','image/png',50,repeat('a',64),'passed')`, asset, f.project).Error; err != nil {
+	if err := f.db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,moderation_status) VALUES(?,?,'image','upload','ready',?,'recovery.png','image/png',50,repeat('a',64),'passed')`, asset, f.project, "test/"+asset.String()+"/recovery.png").Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := f.db.Exec(`INSERT INTO media.upload_request(project_id,principal_id,request_key,sha256,file_name,byte_size,asset_id,response) VALUES(?,?,?,repeat('a',64),'recovery.png',50,?,'{}')`, f.project, f.actor.ID, attempt, asset).Error; err != nil {
