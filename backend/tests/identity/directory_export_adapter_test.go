@@ -1,4 +1,4 @@
-package postgres
+package identity_test
 
 import (
 	"context"
@@ -17,15 +17,16 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func TestDirectoryExportCanonicalSchemaAndGrantParity(t *testing.T) {
-	migration, err := os.ReadFile("../../../../db/migrations/011_identity_directory_export.sql")
+	migration, err := os.ReadFile("../../db/migrations/011_identity_directory_export.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
-	schema, err := os.ReadFile("../../../../db/schema.sql")
+	schema, err := os.ReadFile("../../db/schema.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +113,7 @@ func (r *cleanupRows) Next(dest []driver.Value) error {
 	r.done = true
 	return nil
 }
-func cleanupTestStore(t *testing.T) (*DirectoryExportStore, *cleanupSQLState) {
+func cleanupTestStore(t *testing.T) (*pgidentity.DirectoryExportStore, *cleanupSQLState) {
 	t.Helper()
 	state := &cleanupSQLState{now: time.Now().UTC().Truncate(time.Microsecond), job: uuid.New(), object: uuid.New(), finalizeRows: 1}
 	name := "directory-cleanup-" + uuid.NewString()
@@ -126,7 +127,7 @@ func cleanupTestStore(t *testing.T) (*DirectoryExportStore, *cleanupSQLState) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return NewDirectoryExportStore(gdb), state
+	return pgidentity.NewDirectoryExportStore(gdb), state
 }
 func TestDirectoryExportCleanupObjectIOOutsideSQLTransaction(t *testing.T) {
 	store, state := cleanupTestStore(t)

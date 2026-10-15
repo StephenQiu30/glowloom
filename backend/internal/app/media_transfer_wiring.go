@@ -12,7 +12,7 @@ import (
 )
 
 func provideMediaTransferStore(database *gorm.DB) *pgmedia.TransferStore {
-	return pgmedia.NewScopedTransferStore(database, provideMediaLibraryProjectAccess, provideMediaLibraryWorkGuards, time.Now, provideMediaScopeAccess)
+	return pgmedia.NewScopedTransferStore(database, NewMediaLibraryProjectAccess, provideMediaLibraryWorkGuards, time.Now, provideMediaScopeAccess)
 }
 
 func provideMediaTransferWorker(database *gorm.DB, storage *objectstorage.Client) (*mediaapp.TransferWorker, *pgmedia.TransferStore) {

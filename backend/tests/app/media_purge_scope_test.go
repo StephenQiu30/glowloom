@@ -1,4 +1,4 @@
-package app
+package app_test
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
@@ -167,13 +168,13 @@ func TestPurgeWorkerUsesCurrentMembershipWithoutRequestSession(t *testing.T) {
 	if err := tx.Exec(`UPDATE identity.user_session SET revoked_at=now() WHERE id=?`, actor.SessionID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := provideMediaLibraryProjectAccess(tx).Authorize(t.Context(), actor, project, true); !errors.Is(err, identity.ErrSessionInvalid) {
+	if _, err := app.NewMediaLibraryProjectAccess(tx).Authorize(t.Context(), actor, project, true); !errors.Is(err, identity.ErrSessionInvalid) {
 		t.Fatalf("revoked request session unexpectedly admitted: %v", err)
 	}
 	actor.SessionID = uuid.Nil
 	actor.CredentialEpoch = 0
 	actor.ScopeID = uuid.Nil
-	_, workerStore := provideMediaPurgeWorker(tx, nil)
+	_, workerStore := app.NewMediaPurgeWorker(tx, nil)
 	lease, err := workerStore.ClaimPurge(t.Context(), work)
 	if err != nil {
 		t.Fatalf("purge worker required revoked request session: %v", err)
@@ -181,7 +182,7 @@ func TestPurgeWorkerUsesCurrentMembershipWithoutRequestSession(t *testing.T) {
 	if err := workerStore.HeartbeatPurge(t.Context(), lease); err != nil {
 		t.Fatalf("worker writeback: %v", err)
 	}
-	if _, err := provideMediaWorkerReferenceOwners(tx).HasMediaReferences(t.Context(), actor, project, uuid.New()); err != nil {
+	if _, err := app.NewMediaWorkerReferenceOwners(tx).HasMediaReferences(t.Context(), actor, project, uuid.New()); err != nil {
 		t.Fatalf("worker reference factory required session: %v", err)
 	}
 	var leaseBefore time.Time
@@ -201,7 +202,7 @@ func TestPurgeWorkerUsesCurrentMembershipWithoutRequestSession(t *testing.T) {
 	if !leaseAfter.Equal(leaseBefore) {
 		t.Fatal("denied worker changed purge lease")
 	}
-	if _, err := provideMediaWorkerReferenceOwners(tx).HasMediaReferences(t.Context(), actor, project, uuid.New()); !errors.Is(err, workspace.ErrScopeNotFound) {
+	if _, err := app.NewMediaWorkerReferenceOwners(tx).HasMediaReferences(t.Context(), actor, project, uuid.New()); !errors.Is(err, workspace.ErrScopeNotFound) {
 		t.Fatalf("removed member retained worker reference access: %v", err)
 	}
 }

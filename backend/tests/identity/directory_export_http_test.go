@@ -1,4 +1,4 @@
-package http
+package identity_test
 
 import (
 	"encoding/json"
@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
@@ -18,8 +19,8 @@ func TestDirectoryExportHTTPStrictFiltersAndMetadata(t *testing.T) {
 	router := gin.New()
 	service := application.NewDirectoryExport(nil, nil, nil, time.Now)
 	stats := application.NewDirectoryStatistics(nil, time.Now)
-	NewDirectoryExportHandler(service, stats).Register(router.Group("/api"))
-	NewInvitationHandler(nil).Register(router.Group("/api"))
+	identityhttp.NewDirectoryExportHandler(service, stats).Register(router.Group("/api"))
+	identityhttp.NewInvitationHandler(nil).Register(router.Group("/api"))
 	team := uuid.NewString()
 	for _, path := range []string{
 		"/api/platform/user-statistics?status=pending_deletion",
@@ -51,17 +52,37 @@ func TestDirectoryExportHTTPStrictFiltersAndMetadata(t *testing.T) {
 	}
 	now := time.Now()
 	object := uuid.New()
-	view := exportView(application.DirectoryExportJob{ID: uuid.New(), Status: "completed", ObjectID: &object, KeyID: "private", Snapshot: []byte("secret"), ExpiresAt: now})
-	raw, err := json.Marshal(view)
-	if err != nil {
-		t.Fatal(err)
+	job := application.DirectoryExportJob{ID: uuid.New(), Status: "completed", ObjectID: &object, KeyID: "private", Snapshot: []byte("secret"), ExpiresAt: now.Add(time.Minute)}
+	store := &exportMemoryStore{jobs: map[uuid.UUID]application.DirectoryExportJob{job.ID: job}, revision: 1}
+	router = gin.New()
+	identityhttp.NewDirectoryExportHandler(application.NewDirectoryExport(store, nil, nil, func() time.Time { return now }), stats).Register(router.Group("/api"))
+	read := func() []byte {
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequestWithContext(t.Context(), "GET", "/api/platform/user-exports/"+job.ID.String(), nil))
+		if response.Code != 200 {
+			t.Fatal(response.Code, response.Body.String())
+		}
+		return response.Body.Bytes()
 	}
+	raw := read()
 	for _, secret := range []string{object.String(), "private", "secret", "snapshot", "object_id", "actor_id"} {
 		if strings.Contains(string(raw), secret) {
 			t.Fatalf("private export field %q escaped DTO", secret)
 		}
 	}
-	if exportView(application.DirectoryExportJob{Status: "pending", ExpiresAt: now}).ExpiresAt != nil {
+	var view identityhttp.DirectoryExportView
+	if err := json.Unmarshal(raw, &view); err != nil {
+		t.Fatal(err)
+	}
+	if view.ExpiresAt == nil || !view.ExpiresAt.Equal(job.ExpiresAt) {
+		t.Fatal("completed download expiry missing")
+	}
+	job.Status = "pending"
+	store.jobs[job.ID] = job
+	if err := json.Unmarshal(read(), &view); err != nil {
+		t.Fatal(err)
+	}
+	if view.ExpiresAt != nil {
 		t.Fatal("pending job exposed a completed-download expiry")
 	}
 }

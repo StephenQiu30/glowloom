@@ -6,11 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"go.temporal.io/sdk/activity"
-
-	managedprovider "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/managed"
-
 	"go.opentelemetry.io/otel/trace"
+	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/worker"
 	"go.uber.org/zap"
 
@@ -38,6 +35,7 @@ import (
 	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/workflow"
 	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	operationevent "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/event"
+	managedprovider "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/managed"
 	operationstaging "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/staging"
 	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
@@ -185,7 +183,7 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		scriptflow.RegisterImportActivities(queueWorker, scriptflow.NewImportActivities(importWorker, imports))
 		transferWorker, transfers := provideMediaTransferWorker(dbConn.DB, storage)
 		mediaflow.RegisterTransferActivities(queueWorker, mediaflow.NewTransferActivities(transferWorker, transfers))
-		purgeWorker, purges := provideMediaPurgeWorker(dbConn.DB, storage)
+		purgeWorker, purges := NewMediaPurgeWorker(dbConn.DB, storage)
 		mediaflow.RegisterPurgeActivities(queueWorker, mediaflow.NewPurgeActivities(purgeWorker, purges))
 	default:
 		return nil, fmt.Errorf("%w: worker queue %q", ErrRoleNotAvailable, queue)

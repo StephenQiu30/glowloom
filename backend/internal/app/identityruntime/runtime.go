@@ -9,12 +9,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
-
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
 	identitymail "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/mail"
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
@@ -111,14 +109,16 @@ func StartMailLoop(ctx context.Context, database *gorm.DB, cfg config.Config, lo
 	if err != nil {
 		return nil, err
 	}
-	return startMailRunner(ctx, delivery, logger, time.Second), nil
+	return StartMailRunner(ctx, delivery, logger, time.Second), nil
 }
 
-type mailBatchRunner interface {
+// BatchRunner executes one bounded identity work batch.
+type BatchRunner interface {
 	RunOnce(context.Context, int) (int, error)
 }
 
-func startMailRunner(ctx context.Context, delivery mailBatchRunner, logger *zap.Logger, interval time.Duration) func() {
+// StartMailRunner owns delivery cancellation and joins the active batch on cleanup.
+func StartMailRunner(ctx context.Context, delivery BatchRunner, logger *zap.Logger, interval time.Duration) func() {
 	runCtx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
 	go func() {
@@ -153,9 +153,11 @@ func StartDirectoryExportLoop(ctx context.Context, database *gorm.DB, cfg config
 		return nil, err
 	}
 	service := identityapp.NewDirectoryExport(pgidentity.NewDirectoryExportStore(database), protector, storage, time.Now)
-	return startExportRunner(ctx, service, logger, 5*time.Second), nil
+	return StartExportRunner(ctx, service, logger, 5*time.Second), nil
 }
-func startExportRunner(ctx context.Context, runner mailBatchRunner, logger *zap.Logger, interval time.Duration) func() {
+
+// StartExportRunner owns export cancellation and joins the active batch on cleanup.
+func StartExportRunner(ctx context.Context, runner BatchRunner, logger *zap.Logger, interval time.Duration) func() {
 	runCtx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
 	go func() {

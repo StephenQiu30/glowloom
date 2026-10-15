@@ -24,31 +24,33 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
-type identityCommand struct {
-	action, login, email string
-	operation            uuid.UUID
-	platformAdmin        bool
+// Command is one validated, explicitly targeted operator request.
+type Command struct {
+	Action, Login, Email string
+	Operation            uuid.UUID
+	PlatformAdmin        bool
 }
 
-func parseIdentityCommand(args []string) (identityCommand, error) {
-	var command identityCommand
+// ParseCommand validates arguments without loading configuration or changing resources.
+func ParseCommand(args []string) (Command, error) {
+	var command Command
 	usage := errors.New("usage: lanverse identity key-init | bind-start --login-name NAME --email EMAIL [--platform-admin] | bind-complete --operation UUID [--platform-admin] | mail-run --operation UUID")
 	if len(args) == 0 {
 		return command, usage
 	}
-	command.action = args[0]
-	flags := flag.NewFlagSet("identity "+command.action, flag.ContinueOnError)
+	command.Action = args[0]
+	flags := flag.NewFlagSet("identity "+command.Action, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	var operation string
-	switch command.action {
+	switch command.Action {
 	case "key-init":
 	case "bind-start":
-		flags.StringVar(&command.login, "login-name", "", "explicit legacy account")
-		flags.StringVar(&command.email, "email", "", "email to verify")
-		flags.BoolVar(&command.platformAdmin, "platform-admin", false, "explicit first platform administrator")
+		flags.StringVar(&command.Login, "login-name", "", "explicit legacy account")
+		flags.StringVar(&command.Email, "email", "", "email to verify")
+		flags.BoolVar(&command.PlatformAdmin, "platform-admin", false, "explicit first platform administrator")
 	case "bind-complete":
 		flags.StringVar(&operation, "operation", "", "binding operation UUID")
-		flags.BoolVar(&command.platformAdmin, "platform-admin", false, "must match requested authority")
+		flags.BoolVar(&command.PlatformAdmin, "platform-admin", false, "must match requested authority")
 	case "mail-run":
 		flags.StringVar(&operation, "operation", "", "one mail operation UUID")
 	default:
@@ -57,27 +59,27 @@ func parseIdentityCommand(args []string) (identityCommand, error) {
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 {
 		return command, usage
 	}
-	if command.action == "bind-start" {
-		if _, err := domain.NormalizeLogin(command.login); err != nil {
+	if command.Action == "bind-start" {
+		if _, err := domain.NormalizeLogin(command.Login); err != nil {
 			return command, usage
 		}
-		if _, err := domain.NormalizeEmail(command.email); err != nil {
+		if _, err := domain.NormalizeEmail(command.Email); err != nil {
 			return command, usage
 		}
 	}
-	if command.action == "bind-complete" || command.action == "mail-run" {
+	if command.Action == "bind-complete" || command.Action == "mail-run" {
 		id, err := uuid.Parse(operation)
 		if err != nil || id == uuid.Nil {
 			return command, usage
 		}
-		command.operation = id
+		command.Operation = id
 	}
 	return command, nil
 }
 
 // Run executes one explicit identity operator command against existing resources.
 func Run(args []string) (runErr error) {
-	command, err := parseIdentityCommand(args)
+	command, err := ParseCommand(args)
 	if err != nil {
 		return err
 	}
@@ -85,7 +87,7 @@ func Run(args []string) (runErr error) {
 	if err != nil {
 		return err
 	}
-	if command.action == "key-init" {
+	if command.Action == "key-init" {
 		if err := credentialproof.CreateFile(cfg.IdentityKeyFile); err != nil {
 			return err
 		}
@@ -110,8 +112,8 @@ func Run(args []string) (runErr error) {
 	if err := conn.DB.WithContext(ctx).Raw(`SELECT to_regclass('identity.auth_challenge') IS NOT NULL AND to_regclass('workspace.creation_scope') IS NOT NULL`).Scan(&ready).Error; err != nil || !ready {
 		return errors.New("identity expansion is not installed; review and apply the incremental migration first")
 	}
-	if command.action == "mail-run" {
-		worker, err := identityruntime.NewMailDelivery(pgidentity.NewOperationMailStore(conn.DB, command.operation), cfg, time.Now)
+	if command.Action == "mail-run" {
+		worker, err := identityruntime.NewMailDelivery(pgidentity.NewOperationMailStore(conn.DB, command.Operation), cfg, time.Now)
 		if err != nil {
 			return err
 		}
@@ -123,7 +125,7 @@ func Run(args []string) (runErr error) {
 			Status string
 			Count  int64
 		}
-		if err := conn.DB.WithContext(ctx).Raw(`SELECT m.status,count(*) FROM identity.mail_delivery m JOIN identity.auth_challenge c ON c.id=m.challenge_id WHERE c.operation_id=? GROUP BY m.status`, command.operation).Scan(&states).Error; err != nil {
+		if err := conn.DB.WithContext(ctx).Raw(`SELECT m.status,count(*) FROM identity.mail_delivery m JOIN identity.auth_challenge c ON c.id=m.challenge_id WHERE c.operation_id=? GROUP BY m.status`, command.Operation).Scan(&states).Error; err != nil {
 			return errors.New("read mail submission status failed")
 		}
 		if _, err := fmt.Fprintf(os.Stdout, "Processed %d mail job(s). SMTP submission is not proof of inbox delivery.\n", count); err != nil {
@@ -140,8 +142,8 @@ func Run(args []string) (runErr error) {
 	if err != nil {
 		return err
 	}
-	if command.action == "bind-start" {
-		result, err := auth.StartMigrationBinding(ctx, command.login, command.email, command.platformAdmin)
+	if command.Action == "bind-start" {
+		result, err := auth.StartMigrationBinding(ctx, command.Login, command.Email, command.PlatformAdmin)
 		if err != nil {
 			return err
 		}
@@ -153,7 +155,7 @@ func Run(args []string) (runErr error) {
 		return err
 	}
 	defer clear(code)
-	id, err := auth.CompleteMigrationBinding(ctx, command.operation, string(code), command.platformAdmin)
+	id, err := auth.CompleteMigrationBinding(ctx, command.Operation, string(code), command.PlatformAdmin)
 	if err != nil {
 		return err
 	}

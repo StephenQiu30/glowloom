@@ -1,4 +1,4 @@
-package postgres
+package identity_test
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
@@ -70,9 +71,9 @@ func TestDirectoryExportWaitingTransactionGetsFreshReceiptSnapshot(t *testing.T)
 	result := make(chan error, 1)
 	observation := make(chan observed, 1)
 	go func() {
-		result <- NewDirectoryExportStore(gdb).Transaction(ctx, func(tx application.ExportTx) error {
+		result <- pgidentity.NewDirectoryExportStore(gdb).Transaction(ctx, func(_ application.ExportTx) error {
 			var row observed
-			err := tx.(*exportTx).db.Raw(`SELECT current_setting('transaction_isolation') AS isolation,txid_visible_in_snapshot(?::bigint,txid_current_snapshot()) AS prior_visible`, priorXID).Scan(&row).Error
+			err := second.QueryRowContext(ctx, `SELECT current_setting('transaction_isolation'),txid_visible_in_snapshot($1::bigint,txid_current_snapshot())`, priorXID).Scan(&row.Isolation, &row.PriorVisible)
 			observation <- row
 			return err
 		})

@@ -116,7 +116,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	canvashttp.NewHandler(canvasapp.NewService(pgcanvas.NewScopedStore(database, mediaFactory, provideCanvasProjectAccess))).Register(protected)
 	mediahttp.NewHandler(mediaapp.NewAssetQuery(pgmedia.NewScopedStore(database, provideMediaScopeAccess), storage)).Register(protected)
 	mediahttp.NewDocumentHandler(mediaapp.NewDocumentSources(pgmedia.NewScopedDocumentSourceStore(database, provideMediaScopeAccess), storage)).Register(protected)
-	library := pgmedia.NewScopedLibraryStore(database, provideMediaLibraryProjectAccess, time.Now, provideMediaScopeAccess)
+	library := pgmedia.NewScopedLibraryStore(database, NewMediaLibraryProjectAccess, time.Now, provideMediaScopeAccess)
 	mediahttp.NewLibraryHandler(library).Register(protected)
 	mediahttp.NewLibraryMediaHandler(mediaapp.NewLibraryMediaQuery(library, storage, storage)).Register(protected)
 	script := provideScriptServices(database, storage)

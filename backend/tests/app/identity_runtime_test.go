@@ -1,4 +1,4 @@
-package identityruntime
+package app_test
 
 import (
 	"context"
@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
@@ -21,7 +21,7 @@ func TestPreparedAgreementCannotEnableRegistration(t *testing.T) {
 	if err := credentialproof.CreateFile(path); err != nil {
 		t.Fatal(err)
 	}
-	auth, err := NewAuth(&gorm.DB{}, config.Config{IdentityKeyFile: path, IdentityTermsVersion: "2026-10-15.1", IdentityMailSourceHourlyLimit: 10, IdentityMailGlobalHourlyLimit: 100}, time.Now)
+	auth, err := identityruntime.NewAuth(&gorm.DB{}, config.Config{IdentityKeyFile: path, IdentityTermsVersion: "2026-10-15.1", IdentityMailSourceHourlyLimit: 10, IdentityMailGlobalHourlyLimit: 100}, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func (f mailLoopFixture) RunOnce(ctx context.Context, _ int) (int, error) {
 }
 func TestMailLoopCleanupCancelsAndJoinsActiveBatch(t *testing.T) {
 	f := mailLoopFixture{make(chan struct{}), make(chan struct{})}
-	stop := startMailRunner(t.Context(), f, zap.NewNop(), time.Millisecond)
+	stop := identityruntime.StartMailRunner(t.Context(), f, zap.NewNop(), time.Millisecond)
 	select {
 	case <-f.entered:
 	case <-time.After(time.Second):
@@ -59,7 +59,7 @@ func TestMailLoopCleanupCancelsAndJoinsActiveBatch(t *testing.T) {
 
 func TestExportLoopCleanupCancelsAndJoinsActiveBatch(t *testing.T) {
 	f := mailLoopFixture{make(chan struct{}), make(chan struct{})}
-	stop := startExportRunner(t.Context(), f, zap.NewNop(), time.Millisecond)
+	stop := identityruntime.StartExportRunner(t.Context(), f, zap.NewNop(), time.Millisecond)
 	select {
 	case <-f.entered:
 	case <-time.After(time.Second):
@@ -73,7 +73,7 @@ func TestExportLoopCleanupCancelsAndJoinsActiveBatch(t *testing.T) {
 	}
 }
 func TestExportLoopDisabledStorageDoesNotRequireSMTPOrKeys(t *testing.T) {
-	stop, err := StartDirectoryExportLoop(t.Context(), nil, config.Config{}, nil, zap.NewNop())
+	stop, err := identityruntime.StartDirectoryExportLoop(t.Context(), nil, config.Config{}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatal(err)
 	}

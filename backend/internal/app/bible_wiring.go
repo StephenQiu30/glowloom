@@ -33,7 +33,7 @@ func provideBibleStore(database *gorm.DB, storage *objectstorage.Client, validat
 		Impacts: provideBibleDeletionImpacts,
 		Media: func(tx *gorm.DB) bibleapp.MediaReferences {
 			return bibleMediaReferences{query: mediaapp.NewReferenceFactQuery(
-				pgmedia.NewScopedLibraryStore(tx, provideMediaLibraryProjectAccess, time.Now, provideMediaScopeAccess), storage)}
+				pgmedia.NewScopedLibraryStore(tx, NewMediaLibraryProjectAccess, time.Now, provideMediaScopeAccess), storage)}
 		},
 		Scopes: func(tx *gorm.DB) bibleapp.ScriptScopes {
 			return bibleScriptScopes{query: pgscript.NewBibleScopes(tx, provideScriptProjectAccess(tx))}

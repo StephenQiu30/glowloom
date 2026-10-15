@@ -67,7 +67,7 @@ func (g mediaReferenceOwners) HasMediaReferences(ctx context.Context, actor iden
 }
 
 func provideMediaReferenceOwners(tx *gorm.DB) mediaapp.LibraryReferences {
-	return provideMediaReferenceOwnersWithAccess(tx, provideProjectContentAccess(tx), provideMediaLibraryProjectAccess, provideMediaScopeAccess)
+	return provideMediaReferenceOwnersWithAccess(tx, provideProjectContentAccess(tx), NewMediaLibraryProjectAccess, provideMediaScopeAccess)
 }
 
 // The same installed reference owners use the transaction-bound authority of
@@ -86,18 +86,20 @@ func provideMediaReferenceOwnersWithAccess(tx *gorm.DB, access *pgworkspace.Proj
 }
 
 func provideMediaPurgeStore(database *gorm.DB) *pgmedia.PurgeStore {
-	return pgmedia.NewScopedPurgeStore(database, provideMediaLibraryProjectAccess, provideMediaLibraryWorkGuards, provideMediaReferenceOwners, time.Now, provideMediaScopeAccess)
+	return pgmedia.NewScopedPurgeStore(database, NewMediaLibraryProjectAccess, provideMediaLibraryWorkGuards, provideMediaReferenceOwners, time.Now, provideMediaScopeAccess)
 }
 
-func provideMediaPurgeWorker(database *gorm.DB, storage *objectstorage.Client) (*mediaapp.PurgeWorker, *pgmedia.PurgeStore) {
+// NewMediaPurgeWorker composes the worker with current membership and reference owners.
+func NewMediaPurgeWorker(database *gorm.DB, storage *objectstorage.Client) (*mediaapp.PurgeWorker, *pgmedia.PurgeStore) {
 	store := provideMediaPurgeWorkerStore(database)
 	return mediaapp.NewPurgeWorker(store, mediaobjects.NewProjectCopyObjects(storage)), store
 }
 
-func provideMediaWorkerReferenceOwners(tx *gorm.DB) mediaapp.LibraryReferences {
+// NewMediaWorkerReferenceOwners composes retained owners without an initiating request session.
+func NewMediaWorkerReferenceOwners(tx *gorm.DB) mediaapp.LibraryReferences {
 	return provideMediaReferenceOwnersWithAccess(tx, provideWorkerProjectContentAccess(tx), provideMediaLibraryWorkerProjectAccess, provideMediaWorkerScopeAccess)
 }
 
 func provideMediaPurgeWorkerStore(database *gorm.DB) *pgmedia.PurgeStore {
-	return pgmedia.NewScopedPurgeStore(database, provideMediaLibraryWorkerProjectAccess, provideMediaLibraryWorkGuards, provideMediaWorkerReferenceOwners, time.Now, provideMediaWorkerScopeAccess)
+	return pgmedia.NewScopedPurgeStore(database, provideMediaLibraryWorkerProjectAccess, provideMediaLibraryWorkGuards, NewMediaWorkerReferenceOwners, time.Now, provideMediaWorkerScopeAccess)
 }

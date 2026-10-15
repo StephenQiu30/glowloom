@@ -39,7 +39,8 @@ func (g mediaLibraryWorkGuards) HasInflightProjectWork(ctx context.Context, acto
 	return active, mediaLibraryProjectError(err)
 }
 
-func provideMediaLibraryProjectAccess(tx *gorm.DB) mediaapp.LibraryProjectAccess {
+// NewMediaLibraryProjectAccess constructs current request-bound project authorization.
+func NewMediaLibraryProjectAccess(tx *gorm.DB) mediaapp.LibraryProjectAccess {
 	return mediaLibraryProjectAccess{store: provideProjectContentAccess(tx)}
 }
 
