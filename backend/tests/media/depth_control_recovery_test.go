@@ -164,7 +164,7 @@ func TestDepthJobPGUndispatchedRejectionRetainsUnknownEvidence(t *testing.T) {
 						t.Fatal("missing proof read did not fail closed", err)
 					}
 				} else {
-					err = invoke(f.store)
+					err = invoke(f.workerStore)
 					if !errors.Is(err, identityapp.ErrForbidden) {
 						t.Fatal("existing private result obligations were discarded", err)
 					}
