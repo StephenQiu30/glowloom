@@ -14,6 +14,7 @@ var ErrInventoryLimit = errors.New("object inventory exceeds limit")
 
 // ObjectMetadata is actual private listing metadata; callers own scope selection.
 type ObjectMetadata struct {
+	Ref  Ref
 	Key  string
 	Size int64
 }

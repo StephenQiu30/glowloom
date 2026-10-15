@@ -163,6 +163,9 @@ func (s *Store) CommitPersonalUpload(ctx context.Context, actor identityapp.Prin
 			}
 			result = application.PersonalUploadResult{Asset: application.PersonalUploadSummary(a)}
 		}
+		if err := acceptUploadLocations(tx, actor, r, a, renditions, result.Asset.ID); err != nil {
+			return err
+		}
 		body, err := json.Marshal(result)
 		if err != nil {
 			return err

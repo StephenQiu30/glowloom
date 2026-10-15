@@ -34,6 +34,7 @@ type UploadResult struct {
 
 // UploadRequest is the immutable, server-hashed local upload command.
 type UploadRequest struct {
+	Target    *UploadTarget `json:"-"`
 	ProjectID uuid.UUID
 	Key       uuid.UUID
 	SHA256    string
@@ -61,6 +62,7 @@ type UploadObjects interface {
 
 // UploadInput carries already bounded bytes and the explicit local review declaration.
 type UploadInput struct {
+	Target               *UploadTarget `json:"-"`
 	Actor                identityapp.Principal
 	Request              UploadRequest
 	File                 *Downloaded
@@ -69,13 +71,16 @@ type UploadInput struct {
 
 // UploadService validates local input and publishes it only after durable object checks.
 type UploadService struct {
-	repo       UploadRepository
-	personal   PersonalUploadRepository
-	prober     Prober
-	normalizer UploadNormalizer
-	renderer   Renderer
-	objects    UploadObjects
-	now        func() time.Time
+	repo          UploadRepository
+	personal      PersonalUploadRepository
+	prober        Prober
+	normalizer    UploadNormalizer
+	renderer      Renderer
+	objects       UploadObjects
+	admission     UploadAdmission
+	routedObjects RoutedUploadObjects
+	routed        bool
+	now           func() time.Time
 }
 
 // NewUploadService injects current permissions, real media tools and private storage.
@@ -126,10 +131,11 @@ func (s *UploadService) Upload(ctx context.Context, in UploadInput) (UploadResul
 
 // upload is the single local review, normalization and private object pipeline.
 func (s *UploadService) upload(ctx context.Context, in UploadInput, destination uploadDestination) (result uploadAccepted, err error) {
-	if s == nil || s.prober == nil || s.normalizer == nil || s.renderer == nil || s.objects == nil || s.now == nil {
+	if s == nil || s.prober == nil || s.normalizer == nil || s.renderer == nil || (s.objects == nil && s.routedObjects == nil) || s.now == nil {
 		return result, ErrUnavailable
 	}
 	r := in.Request
+	r.Target = nil
 	file := in.File
 	name, nameErr := SafeUploadFileName(r.FileName)
 	if !in.LocalReviewConfirmed || nameErr != nil || name != r.FileName || file == nil || file.File == nil {
@@ -145,6 +151,19 @@ func (s *UploadService) upload(ctx context.Context, in UploadInput, destination 
 	}
 	if result, found, err := destination.replay(ctx, r); err != nil || found {
 		return result, err
+	}
+	if s.routed {
+		if in.Target == nil || s.admission == nil {
+			return result, ErrStorageNotReady
+		}
+		pinned, pinErr := s.admission.PinUpload(ctx, in.Actor, uploadScope(r), r.Key)
+		if pinErr != nil {
+			return result, pinErr
+		}
+		if pinned != *in.Target || pinned.SessionID == uuid.Nil || pinned.Policy.Validate() != nil || !pinned.ExpiresAt.After(s.now()) {
+			return result, ErrUploadConflict
+		}
+		r.Target = in.Target
 	}
 
 	var normalization *UploadNormalization
@@ -168,6 +187,9 @@ func (s *UploadService) upload(ctx context.Context, in UploadInput, destination 
 	if !validUploadProbe(file, probe) {
 		return result, ErrUnsupportedUpload
 	}
+	if r.Target != nil && (in.File.Size > r.Target.Policy.limit(probe.Kind) || file.Size > r.Target.Policy.limit(probe.Kind)) {
+		return result, ErrUploadTooLarge
+	}
 	rendered, err := s.renderer.Render(ctx, file, probe, aspect)
 	if err != nil {
 		return result, err
@@ -189,6 +211,7 @@ func (s *UploadService) upload(ctx context.Context, in UploadInput, destination 
 	id := uuid.New()
 	key := uploadObjectKey(r, probe, now, id)
 	owned := make([]string, 0, len(rendered)+1)
+	locations := make([]domain.ObjectLocation, 0, len(rendered)+1)
 	commitAttempted := false
 	defer func() {
 		if err == nil && result.ID == id {
@@ -205,9 +228,30 @@ func (s *UploadService) upload(ctx context.Context, in UploadInput, destination 
 		for _, objectKey := range owned {
 			_ = s.objects.Remove(cleanCtx, objectKey)
 		}
+		for _, location := range locations {
+			_ = s.routedObjects.RemoveUploadObject(cleanCtx, location)
+		}
 	}()
-	owned = append(owned, key)
-	if err = s.putUpload(ctx, key, file); err != nil {
+	put := func(key string, file *Downloaded) (*domain.ObjectLocation, error) {
+		if s.routedObjects != nil {
+			location, writeErr := s.routedObjects.CreateUploadObject(ctx, *r.Target, key, file)
+			if location.ID != uuid.Nil {
+				locations = append(locations, location)
+			}
+			if writeErr != nil {
+				return nil, writeErr
+			}
+			if location.Ref.Key != key || location.Ref.ProfileID != r.Target.ProfileID || location.Ref.Bucket != r.Target.Bucket || location.Ref.Validate() != nil || location.State != "present" {
+				return nil, ErrObjectMismatch
+			}
+			return &location, nil
+		}
+		owned = append(owned, key)
+		return nil, s.putUpload(ctx, key, file)
+	}
+	originalLocation, writeErr := put(key, file)
+	if writeErr != nil {
+		err = writeErr
 		return result, err
 	}
 	sha := file.SHA256
@@ -226,18 +270,22 @@ func (s *UploadService) upload(ctx context.Context, in UploadInput, destination 
 		ObjectKey: key, FileName: name, MimeType: file.MIMEType, ByteSize: file.Size, SHA256: &sha, Width: probe.Width, Height: probe.Height,
 		DurationMS: probe.DurationMS, FPS: probe.FPS, AudioChannels: probe.AudioChannels, Codec: probe.Codec,
 		ModerationStatus: domain.ModerationPassed, ModerationDetail: review, Revision: 1, CreateTime: now, UpdateTime: now}
+	if originalLocation != nil {
+		asset.ObjectLocation = originalLocation
+	}
 	if err = asset.Validate(); err != nil {
 		return result, err
 	}
 	rends := make([]domain.Rendition, 0, len(rendered))
 	for _, rendition := range rendered {
 		objectKey := path.Join(strings.TrimSuffix(key, path.Ext(key)), string(rendition.Kind)+"."+rendition.Ext)
-		owned = append(owned, objectKey)
-		if err = s.putUpload(ctx, objectKey, rendition.Result); err != nil {
+		location, writeErr := put(objectKey, rendition.Result)
+		if writeErr != nil {
+			err = writeErr
 			return result, err
 		}
 		width, height, size := rendition.Width, rendition.Height, rendition.Result.Size
-		rends = append(rends, domain.Rendition{ID: uuid.New(), MediaAssetID: id, Kind: rendition.Kind, ObjectKey: objectKey,
+		rends = append(rends, domain.Rendition{ID: uuid.New(), MediaAssetID: id, Kind: rendition.Kind, ObjectKey: objectKey, ObjectLocation: location,
 			Width: &width, Height: &height, ByteSize: &size, CreateTime: now, UpdateTime: now})
 	}
 	commitAttempted = true

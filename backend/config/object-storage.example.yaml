@@ -1,0 +1,41 @@
+# Use LV_OBJECT_STORAGE_CONFIG to select this file; clear legacy LV_OBJECT_STORAGE_* fields.
+# This example names no real resource and contains no credential values.
+object_storage:
+  schema_version: 1
+  revision: storage-example-1
+  default_write_profile: minio-main
+  upload:
+    mode: relay
+    signed_url_ttl: 10m
+    session_ttl: 24h
+    # Reserved/validated for accepted multipart; relay currently uses one conditional PUT.
+    multipart_threshold_bytes: 33554432
+    part_size_bytes: 8388608
+    part_concurrency: 3
+    staging_retention: 48h
+  access:
+    preview_ttl: 5m
+    max_signed_url_ttl: 15m
+  limits:
+    max_image_bytes: 20971520
+    max_video_bytes: 524288000
+    max_audio_bytes: 104857600
+    max_model_bytes: 67108864
+    max_document_bytes: 20971520
+    per_scope_capacity_bytes: null
+  profiles:
+    minio-main:
+      provider: minio
+      mode: read_write
+      endpoint: https://minio.storage.example
+      signing_endpoint: https://minio.storage.example
+      bucket: glowloom-assets
+      region: us-east-1
+      addressing_style: path
+      credentials:
+        source: env
+        access_key_env: GLOWLOOM_MINIO_ACCESS_KEY
+        secret_key_env: GLOWLOOM_MINIO_SECRET_KEY
+# To add COS, use provider: cos, its bucket-APPID origin, region, bucket and credential refs.
+# To add TOS, use provider: tos, its service origin, region, bucket and credential refs.
+# Keep referenced historical profiles; loading this file does not activate a new route.

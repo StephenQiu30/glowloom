@@ -14,6 +14,7 @@ import (
 
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
@@ -96,6 +97,18 @@ func (h *UploadHandler) receiveUpload(c *gin.Context, project uuid.UUID, persona
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Minute)
 	defer cancel()
 	c.Request = c.Request.WithContext(ctx)
+	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
+	if personal {
+		scope = domain.LibraryScope{Kind: domain.LibraryPersonal}
+	}
+	target, err := h.service.BeginUpload(ctx, actor, scope, key)
+	if err != nil {
+		uploadError(c, err)
+		return
+	}
+	if target.SessionID != uuid.Nil {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, target.Policy.MaximumBytes()+uploadEnvelopeBytes)
+	}
 	controller := http.NewResponseController(c.Writer)
 	deadline, _ := ctx.Deadline()
 	if err := controller.SetReadDeadline(deadline); err != nil && !errors.Is(err, http.ErrNotSupported) {
@@ -125,6 +138,9 @@ func (h *UploadHandler) receiveUpload(c *gin.Context, project uuid.UUID, persona
 		return
 	}
 	input := application.UploadInput{Actor: actor, Request: application.UploadRequest{ProjectID: project, Key: key, FileName: name, RequestID: requestID}, File: file, LocalReviewConfirmed: true}
+	if target.SessionID != uuid.Nil {
+		input.Target = &target
+	}
 	if personal {
 		result, err := h.service.UploadPersonal(ctx, input)
 		if err != nil {

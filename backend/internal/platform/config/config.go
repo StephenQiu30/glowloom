@@ -34,6 +34,7 @@ type Config struct {
 	ObjectStorageAccessKey        string
 	ObjectStorageSecretKey        string
 	ObjectStorageRegion           string
+	ObjectStorage                 *ObjectStorageConfig
 	CredentialPublicKeyFile       string
 	CredentialKeyID               string
 	CredentialRequestMACKey       string
@@ -125,6 +126,16 @@ func Load() (Config, error) {
 		IdentityTermsVersion:          strings.TrimSpace(v.GetString("LV_IDENTITY_TERMS_VERSION")),
 		IdentityMailSourceHourlyLimit: v.GetInt("LV_IDENTITY_MAIL_SOURCE_HOURLY_LIMIT"),
 		IdentityMailGlobalHourlyLimit: v.GetInt("LV_IDENTITY_MAIL_GLOBAL_HOURLY_LIMIT"),
+	}
+	if path := strings.TrimSpace(v.GetString("LV_OBJECT_STORAGE_CONFIG")); path != "" {
+		if cfg.ObjectStorageEndpoint != "" || cfg.ObjectStorageBucket != "" || cfg.ObjectStorageAccessKey != "" || cfg.ObjectStorageSecretKey != "" || cfg.ObjectStorageRegion != "" {
+			return Config{}, fmt.Errorf("%w: YAML and legacy object storage settings conflict", ErrInvalid)
+		}
+		storage, err := LoadObjectStorage(path, cfg.Env)
+		if err != nil {
+			return Config{}, err
+		}
+		cfg.ObjectStorage = &storage
 	}
 	if err := cfg.validate(); err != nil {
 		return Config{}, err

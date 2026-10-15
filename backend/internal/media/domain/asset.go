@@ -99,6 +99,7 @@ const mediaRetention = 30 * 24 * time.Hour
 // Consent status and references live in other contexts and must be checked by
 // the application before allowing a reference or deletion.
 type MediaAsset struct {
+	ObjectLocation     *ObjectLocation `json:"object_location,omitempty"`
 	ID                 uuid.UUID
 	ProjectID          uuid.UUID
 	Personal           *PersonalOwnership `json:"personal,omitempty"`
@@ -138,6 +139,12 @@ type MediaAsset struct {
 // Validate checks only facts available in the asset itself. It does not prove
 // that linked consent remains active or that the operation belongs to the project.
 func (a MediaAsset) Validate() error {
+	if a.ObjectLocation != nil {
+		location := a.ObjectLocation
+		if location.ID == uuid.Nil || location.Ref.Validate() != nil || location.Ref.Key != a.ObjectKey || location.ByteSize != nil && *location.ByteSize != a.ByteSize || location.MIMEType != nil && *location.MIMEType != a.MimeType || location.SHA256 != nil && (a.SHA256 == nil || *location.SHA256 != *a.SHA256) {
+			return ErrInvalidMediaAsset
+		}
+	}
 	if a.ID == uuid.Nil || !a.validOwnership() || !a.Kind.valid() ||
 		!a.Origin.valid() || !a.Status.valid() || !a.ModerationStatus.valid() ||
 		!validAssetObjectKey(a) || strings.TrimSpace(a.MimeType) == "" ||
@@ -303,20 +310,27 @@ func (a MediaAsset) Delete(now time.Time) (MediaAsset, error) {
 
 // Rendition is scoped through its parent MediaAsset, never by its own project ID.
 type Rendition struct {
-	ID           uuid.UUID
-	MediaAssetID uuid.UUID
-	Kind         RenditionKind
-	ObjectKey    string
-	Width        *int32
-	Height       *int32
-	ByteSize     *int64
-	CreateTime   time.Time
-	UpdateTime   time.Time
-	IsDelete     bool
+	ObjectLocation *ObjectLocation `json:"object_location,omitempty"`
+	ID             uuid.UUID
+	MediaAssetID   uuid.UUID
+	Kind           RenditionKind
+	ObjectKey      string
+	Width          *int32
+	Height         *int32
+	ByteSize       *int64
+	CreateTime     time.Time
+	UpdateTime     time.Time
+	IsDelete       bool
 }
 
 // Validate checks a rendition's local metadata and parent identity.
 func (r Rendition) Validate() error {
+	if r.ObjectLocation != nil {
+		location := r.ObjectLocation
+		if location.ID == uuid.Nil || location.Ref.Validate() != nil || location.Ref.Key != r.ObjectKey || location.ByteSize != nil && (r.ByteSize == nil || *location.ByteSize != *r.ByteSize) {
+			return ErrInvalidRendition
+		}
+	}
 	if r.ID == uuid.Nil || r.MediaAssetID == uuid.Nil || !r.Kind.valid() ||
 		strings.TrimSpace(r.ObjectKey) == "" || !validPositive(r.Width) ||
 		!validPositive(r.Height) || (r.ByteSize != nil && *r.ByteSize < 0) ||

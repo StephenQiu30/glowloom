@@ -164,6 +164,9 @@ func (s *Store) CommitUpload(ctx context.Context, actor identityapp.Principal, r
 			}
 			result = application.UploadResult{Asset: application.UploadSummary(asset)}
 		}
+		if err := acceptUploadLocations(tx, actor, r, asset, renditions, result.Asset.ID); err != nil {
+			return err
+		}
 		body, err := json.Marshal(result)
 		if err != nil {
 			return err
