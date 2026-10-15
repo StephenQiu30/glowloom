@@ -1,12 +1,16 @@
 package operation_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
@@ -47,5 +51,35 @@ func TestOperationScopeFixturesInRollbackTransaction(t *testing.T) {
 	withoutSession.SessionID = uuid.Nil
 	if _, err := store.FindOperation(t.Context(), withoutSession, project, operationID); !errors.Is(err, workspaceapp.ErrScopeNotFound) {
 		t.Fatalf("sessionless operation error = %v", err)
+	}
+}
+
+// batchAuthorityProbe stops before any business rows are read or changed.
+type batchAuthorityProbe struct {
+	seenProject uuid.UUID
+	seenActor   identityapp.Principal
+	write       bool
+	calls       int
+	err         error
+}
+
+func (p *batchAuthorityProbe) AuthorizeOperation(_ context.Context, actor identityapp.Principal, project uuid.UUID, write bool) error {
+	p.seenProject, p.seenActor, p.write = project, actor, write
+	p.calls++
+	return p.err
+}
+
+func TestConfirmBatchQuotePoolPreservesRequestedProjectAuthority(t *testing.T) {
+	database := operationStoreDB(t)
+	actor := identityapp.Principal{ID: uuid.New(), OrgID: uuid.New(), ScopeID: uuid.New(), SessionID: uuid.New(), CredentialEpoch: 1}
+	input := operationapp.ConfirmBatchQuoteInput{ProjectID: uuid.New(), BatchID: uuid.New(), RequestID: uuid.NewString()}
+	stop := errors.New("stop after transaction-bound authority")
+	probe := &batchAuthorityProbe{err: stop}
+	store := pgoperation.NewScopedStore(database, func(*gorm.DB) operationapp.ProjectAccess { return probe }, nil)
+	if _, err := store.ConfirmBatchQuote(t.Context(), actor, input); !errors.Is(err, stop) {
+		t.Fatal("authority rejection not preserved", err)
+	}
+	if probe.calls != 1 || probe.seenProject != input.ProjectID || probe.seenActor.ID != actor.ID || probe.seenActor.ScopeID != actor.ScopeID || probe.seenActor.SessionID != actor.SessionID || !probe.write {
+		t.Fatal("confirmation lost the requested project or principal before authorizing", probe.seenProject, probe.calls)
 	}
 }

@@ -1,7 +1,9 @@
 package operation_test
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -15,7 +17,7 @@ import (
 )
 
 func TestExpireQuotedOperationsAndBatchWithoutTouchingConfirmedFunds(t *testing.T) {
-	database := operationStoreDB(t)
+	database := quoteExpiryDB(t)
 	actor, projectID := operationStoreProject(t, database)
 	store := operationStore(database)
 	first, second := oldQuotedSnapshotItem(projectID, 1), oldQuotedSnapshotItem(projectID, 1)
@@ -86,7 +88,7 @@ func TestExpireQuotedOperationsAndBatchWithoutTouchingConfirmedFunds(t *testing.
 }
 
 func TestExpireQuotedUnderRuntimeRole(t *testing.T) {
-	database := operationStoreDB(t)
+	database := quoteExpiryDB(t)
 	actor, projectID := operationStoreProject(t, database)
 	item := oldQuotedSnapshotItem(projectID, 1)
 	batchID := uuid.New()
@@ -115,6 +117,37 @@ func TestExpireQuotedUnderRuntimeRole(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expire under runtime role: %v", err)
 	}
+}
+
+func quoteExpiryDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	database := operationStoreDB(t)
+	tx := database.Begin(&sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	if tx.Error != nil {
+		t.Fatalf("begin quote expiry isolation: %v", tx.Error)
+	}
+	t.Cleanup(func() {
+		// t.Context is cancelled before cleanup, so database/sql may have
+		// already rolled the transaction back.
+		if err := tx.Rollback().Error; err != nil && !errors.Is(err, sql.ErrTxDone) {
+			t.Errorf("roll back quote expiry isolation: %v", err)
+		}
+	})
+
+	// Expiry scans all projects, while other integration fixtures are committed
+	// to the same database. Hide their quoted work only inside this transaction;
+	// repeatable read also excludes fixtures committed after this snapshot.
+	// Cleanup restores those rows and discards this test's fixtures and sweeps.
+	// All setup and store calls must use the returned transaction; never commit it.
+	for _, query := range []string{
+		`UPDATE operation.operation SET is_delete = true WHERE status = 'quoted' AND NOT is_delete`,
+		`UPDATE operation.batch SET is_delete = true WHERE status = 'quoted' AND NOT is_delete`,
+	} {
+		if err := tx.Exec(query).Error; err != nil {
+			t.Fatalf("isolate existing quote expiry work: %v", err)
+		}
+	}
+	return tx
 }
 
 func oldQuotedSnapshotItem(projectID uuid.UUID, amount int64) pgoperation.QuoteItem {

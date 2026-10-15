@@ -53,6 +53,7 @@ func batchConfirmationKey(actor identityapp.Principal, input application.Confirm
 	sort.Strings(excluded)
 	return confirmationKey{
 		orgID: actor.OrgID, actorID: actor.ID, requestID: uuid.MustParse(input.RequestID),
+		projectID: input.ProjectID,
 		fingerprint: sha256.Sum256([]byte("batch.confirm:" + input.ProjectID.String() + ":" +
 			input.BatchID.String() + ":" + strings.Join(excluded, ","))),
 	}
