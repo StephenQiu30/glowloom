@@ -34,7 +34,6 @@ CREATE TABLE catalog.provider_config_version (
 ALTER TABLE catalog.provider ADD COLUMN current_config_version_id uuid;
 ALTER TABLE catalog.provider ADD CONSTRAINT provider_current_config_fk
     FOREIGN KEY (id,current_config_version_id) REFERENCES catalog.provider_config_version(provider_id,id);
-ALTER TABLE catalog.provider ALTER COLUMN status SET DEFAULT 'disabled';
 ALTER TABLE catalog.provider_credential DROP CONSTRAINT provider_credential_status_check;
 ALTER TABLE catalog.provider_credential ADD CONSTRAINT provider_credential_status_check CHECK (status IN ('active','draining','disabled'));
 CREATE TABLE catalog.config_request (
@@ -120,7 +119,9 @@ INSERT INTO catalog.capability(id,key,output_type,modes,input_roles) VALUES
  ('6da07a12-0000-4000-8000-000000000001','text.generate','json',ARRAY['text_to_text'],ARRAY['prompt']),
  ('6da07a12-0000-4000-8000-000000000002','image.generate','image',ARRAY['text2image','image2image'],ARRAY['prompt','reference_image','subject']),
  ('6da07a12-0000-4000-8000-000000000003','video.generate','video',ARRAY['text2video','image2video','omni_reference'],ARRAY['prompt','first_frame','last_frame','reference_image','subject'])
-ON CONFLICT(key) DO NOTHING;
+ON CONFLICT(key) DO UPDATE SET
+ modes=ARRAY(SELECT DISTINCT value FROM unnest(catalog.capability.modes || EXCLUDED.modes) AS value ORDER BY value),
+ input_roles=ARRAY(SELECT DISTINCT value FROM unnest(catalog.capability.input_roles || EXCLUDED.input_roles) AS value ORDER BY value);
 GRANT SELECT,INSERT,UPDATE ON catalog.provider_preset,catalog.provider_check,catalog.model_release,catalog.model_validation,catalog.capability_default TO lanverse_app;
 GRANT SELECT,INSERT ON catalog.provider_preset_version,catalog.provider_config_version,catalog.config_request,catalog.model_candidate TO lanverse_app;
 COMMIT;

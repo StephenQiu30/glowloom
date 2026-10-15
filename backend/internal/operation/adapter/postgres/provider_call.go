@@ -348,7 +348,31 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 			return application.ErrProviderCallConflict
 		}
 		call := calls[0]
-		if input.State == "completed" {
+		if input.Managed {
+			identity := application.ProviderDispatchIdentity{ProjectID: op.ProjectID, OperationID: input.OperationID, ModelProfileVersionID: *op.ModelProfileVersionID, PriceRuleVersionID: *op.PriceRuleVersionID, Action: "submit", Attempt: 1}
+			if op.ProviderRequestKey == nil {
+				return application.ErrProviderCallConflict
+			}
+			identity.RequestKey = *op.ProviderRequestKey
+			evidence, err := NewStore(tx).ReadManagedResult(ctx, identity)
+			if err != nil {
+				return err
+			}
+			if evidence == nil || evidence.State != "succeeded" {
+				return application.ErrProviderCallConflict
+			}
+			if input.Action == "query" && (input.ProviderTaskID == nil || evidence.TaskID != *input.ProviderTaskID) {
+				return application.ErrProviderCallConflict
+			}
+			if input.Action == "submit" && (evidence.TaskID != "" || !callHasDispatchIdentity(call, identity) || call.DispatchStartedAt == nil) {
+				return application.ErrProviderCallConflict
+			}
+			input.Usage, err = managedBillableUsage(tx, *op.PriceRuleVersionID, evidence.Usage)
+			if err != nil {
+				return err
+			}
+		}
+		if input.State == "completed" && !input.Managed {
 			identity := input.Receipt.Identity
 			if identity.ProjectID != op.ProjectID || op.ProviderRequestKey == nil ||
 				identity.RequestKey != *op.ProviderRequestKey || identity.ModelProfileVersionID != *op.ModelProfileVersionID ||
@@ -404,13 +428,13 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 		}
 		var cost *int64
 		switch {
-		case input.Action == "submit" && input.State == "completed":
+		case input.Action == "submit" && input.State == "completed" && !input.Managed:
 			// Artifact completion proves execution, but synchronous pricing is a
 			// later contract. Persist usage without inventing a zero charge.
 		case adapter.AdapterKey == "mock":
 			zero := int64(0)
 			cost = &zero
-		case input.Action == "query" && (input.State == "succeeded" || input.State == "failed") ||
+		case input.Managed || input.Action == "query" && (input.State == "succeeded" || input.State == "failed") ||
 			input.Action == "cancel" && input.State == "cancelled":
 			priced, err := priceProviderUsage(tx, op.ModelProfileVersionID, op.PriceRuleVersionID,
 				op.Mode, op.Params, input.Usage)
@@ -589,7 +613,16 @@ func (s *Store) ProviderCostInTransaction(ctx context.Context, tx *gorm.DB, oper
 		}
 		cost.ActualCostMicros += *call.CostMicros
 	}
+	var managedCompletion bool
 	if completedSubmission {
+		if op.Status == "manual" {
+			return application.ProviderCost{}, application.ErrManualResolutionUnverified
+		}
+		if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM operation.provider_result WHERE operation_id=? AND result->>'state'='succeeded')`, operationID).Scan(&managedCompletion).Error; err != nil {
+			return application.ProviderCost{}, err
+		}
+	}
+	if completedSubmission && (unknownCost || !managedCompletion) {
 		if op.Status == "manual" {
 			return application.ProviderCost{}, application.ErrManualResolutionUnverified
 		}
@@ -648,4 +681,25 @@ func jsonEqual(a, b []byte) bool {
 	var left, right any
 	return json.Unmarshal(a, &left) == nil && json.Unmarshal(b, &right) == nil &&
 		reflect.DeepEqual(left, right)
+}
+
+func managedBillableUsage(tx *gorm.DB, priceID uuid.UUID, raw []byte) (json.RawMessage, error) {
+	var unit string
+	if err := tx.Raw(`SELECT unit FROM catalog.price_rule_version WHERE id=?`, priceID).Scan(&unit).Error; err != nil {
+		return nil, err
+	}
+	keys := map[string][]string{"per_request": {"billable_requests"}, "per_image": {"output_count"}, "per_second": {"billed_duration_ms"}, "per_1k_tokens": {"input_tokens", "output_tokens"}}[unit]
+	var original map[string]json.RawMessage
+	if len(keys) == 0 || json.Unmarshal(raw, &original) != nil {
+		return nil, application.ErrProviderCostUnknown
+	}
+	selected := map[string]json.RawMessage{}
+	for _, key := range keys {
+		value, ok := original[key]
+		if !ok {
+			return nil, application.ErrProviderCostUnknown
+		}
+		selected[key] = value
+	}
+	return json.Marshal(selected)
 }

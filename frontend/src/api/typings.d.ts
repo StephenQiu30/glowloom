@@ -708,6 +708,11 @@ declare namespace API {
     region?: Region;
   };
 
+  type createProviderTrialQuoteParams = {
+    /** 发布ID */
+    id: string;
+  };
+
   type CreateReleaseInput = {
     config_version_id?: string;
     model_version_id?: string;
@@ -2914,6 +2919,18 @@ declare namespace API {
 
   type ProviderStatus = "active" | "disabled";
 
+  type ProviderTrialQuote = {
+    max_charge_micros?: number;
+    media_inputs?: TrialMediaInput[];
+    mode?: string;
+    params?: Record<string, any>;
+    project_id?: string;
+    prompt?: string;
+    request_id?: string;
+    supplier_currency?: string;
+    supplier_max_micros?: number;
+  };
+
   type publishAdminModelPriceParams = {
     /** 模型UUID */
     id: string;
@@ -4127,6 +4144,11 @@ declare namespace API {
     items?: TransferJob[];
     page?: number;
     page_size?: number;
+  };
+
+  type TrialMediaInput = {
+    media_asset_id?: string;
+    role?: string;
   };
 
   type unarchiveProjectParams = {

@@ -6,15 +6,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace/noop"
+
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/paramvalidation"
 	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/pricevalidation"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/trace/noop"
 )
 
 func TestManagedConnectionKeyRotationAndReleaseGate(t *testing.T) {
@@ -137,7 +138,6 @@ func TestManagedConnectionKeyRotationAndReleaseGate(t *testing.T) {
 		}
 	}
 	require.True(t, found, "published model missing from creator catalog")
-
 }
 
 func sameReceipt(t *testing.T, a, b any) {

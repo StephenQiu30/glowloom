@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 func catalogEventRequest(event identityapp.OutboxEvent) uuid.UUID {

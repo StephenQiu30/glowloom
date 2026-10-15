@@ -57,6 +57,28 @@ export async function activateModelRelease(
   );
 }
 
+/** 准备模型试运行报价（不调用供应商） POST /api/admin/model-releases/${param0}/trial-quotes */
+export async function createProviderTrialQuote(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.createProviderTrialQuoteParams,
+  body: API.ProviderTrialQuote,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.QuoteResponse>(
+    `/api/admin/model-releases/${param0}/trial-quotes`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    },
+  );
+}
+
 /** 管理员模型目录 GET /api/admin/models */
 export async function listAdminModels(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

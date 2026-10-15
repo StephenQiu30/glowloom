@@ -36,6 +36,7 @@ type WorkflowProvider struct {
 	AdapterKey      string
 	ModelKey        string
 	ProviderModelID string
+	EndpointTag     string
 	Queue           string
 	SupportsQuery   bool
 	SupportsCancel  bool
@@ -57,6 +58,7 @@ type WorkflowOutput struct {
 // WorkflowOperation contains only nonsecret facts used to resume an Operation.
 // ProviderRequestKey is deterministic even before its first database write.
 type WorkflowOperation struct {
+	LastQueryAttempt   int32
 	Operation          domain.Operation
 	Inputs             []domain.OperationInput
 	Outputs            []WorkflowOutput

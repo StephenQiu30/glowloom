@@ -62,6 +62,7 @@ func TestInputHashChangesWhenSubmittedOutputChanges(t *testing.T) {
 		{"capability", func(v *application.FingerprintInput) { v.Capability = "video.generate" }},
 		{"mode", func(v *application.FingerprintInput) { v.Mode = "text2image" }},
 		{"model version", func(v *application.FingerprintInput) { v.ModelProfileVersionID = uuid.New() }},
+		{"release binding", func(v *application.FingerprintInput) { v.ReleaseID = uuid.New() }},
 		{"provider model", func(v *application.FingerprintInput) { v.ProviderModelID = "provider-image-v2" }},
 		{"output count", func(v *application.FingerprintInput) { v.OutputCount = 1 }},
 		{"parameter", func(v *application.FingerprintInput) { v.Params = json.RawMessage(`{"seed":42,"guidance":1.5}`) }},

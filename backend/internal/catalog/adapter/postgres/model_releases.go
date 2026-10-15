@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 type releaseRow struct {
@@ -21,7 +22,10 @@ type releaseRow struct {
 const releaseSelect = `SELECT r.id,r.model_id,r.model_version_id,r.price_version_id,r.config_version_id,r.status,r.revision,r.upstream_cost AS cost,r.create_time AS created_at,
  to_jsonb(v.modes) AS modes,COALESCE((SELECT jsonb_agg(DISTINCT x.mode) FROM catalog.model_validation x
  JOIN catalog.provider_credential c ON c.id=x.credential_id AND c.status='active' AND NOT c.is_delete
- WHERE x.release_id=r.id AND x.status='succeeded' AND x.adapter_version='ai-provider-v1' AND x.evidence->>'kind'='real_provider'), '[]'::jsonb) AS validated
+ JOIN operation.operation op ON op.id=x.operation_id AND op.status='completed' AND NOT op.is_delete
+ JOIN operation.provider_binding b ON b.operation_id=op.id AND b.release_id=x.release_id
+ JOIN operation.provider_credential_binding k ON k.operation_id=op.id AND k.credential_id=x.credential_id
+ WHERE op.mode=x.mode AND op.model_profile_version_id=r.model_version_id AND op.price_rule_version_id=r.price_version_id AND x.release_id=r.id AND x.status='succeeded' AND x.adapter_version='ai-provider-v1' AND x.evidence->>'kind'='real_provider'), '[]'::jsonb) AS validated
  FROM catalog.model_release r JOIN catalog.model_profile_version v ON v.id=r.model_version_id`
 
 func readRelease(tx *gorm.DB, id uuid.UUID) (application.ModelRelease, error) {
@@ -82,6 +86,12 @@ func (s *Store) CreateModelRelease(ctx context.Context, actor identityapp.Princi
  JOIN catalog.provider_preset_version pv ON pv.id=config.preset_version_id
  JOIN catalog.provider_preset preset ON preset.id=pv.preset_id AND NOT preset.emergency_disabled
  WHERE m.id=? AND v.id=? AND price.id=? AND config.id=? AND NOT m.is_delete
+ AND ((m.capability='text.generate' AND price.unit IN ('per_request','per_1k_tokens') AND v.modes <@ ARRAY['text_to_text']::text[])
+ OR (m.capability='image.generate' AND price.unit IN ('per_request','per_image') AND v.modes <@ ARRAY['text2image','image2image']::text[])
+ OR (m.capability='video.generate' AND price.unit IN ('per_request','per_second') AND v.modes <@ ARRAY['text2video','image2video','omni_reference']::text[]))
+ AND (m.capability='image.generate' OR (v.limits->>'max_outputs')::int=1)
+ AND v.supports_query=(m.capability='video.generate')
+ AND (NOT v.limits ? 'provider_endpoint' OR (config.config->>'adapter_key'='openrouter' AND m.capability IN ('text.generate','image.generate')))
  AND v.queue='provider' AND v.moderation='provider' AND NOT v.supports_cancel AND NOT v.supports_callback
  AND ((m.capability='video.generate' AND config.config->>'adapter_key' IN ('openrouter','volcengine_ark'))
  OR (m.capability IN ('image.generate','text.generate') AND config.config->>'adapter_key'='openrouter'))
@@ -160,10 +170,12 @@ func (s *Store) ActivateModelRelease(ctx context.Context, actor identityapp.Prin
 			return application.ModelRelease{}, application.ErrPresetConflict
 		}
 		var ready bool
-		if err := tx.Raw(`SELECT r.status='draft' AND price.effective_from<=now() AND NOT price.is_delete AND NOT v.is_delete
+		if err := tx.Raw(`SELECT r.status IN ('draft','retired') AND price.effective_from<=now() AND NOT price.is_delete AND NOT v.is_delete
  AND NOT EXISTS(SELECT 1 FROM unnest(v.modes) AS required(mode) WHERE NOT EXISTS(
  SELECT 1 FROM catalog.model_validation validation
  JOIN operation.operation op ON op.id=validation.operation_id AND op.status='completed' AND NOT op.is_delete
+ JOIN operation.provider_binding execution ON execution.operation_id=op.id AND execution.release_id=validation.release_id
+ JOIN operation.provider_credential_binding used_key ON used_key.operation_id=op.id AND used_key.credential_id=validation.credential_id
  WHERE validation.release_id=r.id AND validation.mode=required.mode AND validation.credential_id=? AND validation.status='succeeded'
  AND validation.adapter_version='ai-provider-v1' AND validation.evidence->>'kind'='real_provider'
  AND op.mode=validation.mode AND op.model_profile_version_id=r.model_version_id AND op.price_rule_version_id=r.price_version_id))

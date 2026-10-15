@@ -79,7 +79,7 @@ func (s Status) CanTransitionTo(next Status) error {
 		allowed = next == StatusSubmitting || next == StatusCompleted ||
 			next == StatusFailed || next == StatusCancelling
 	case StatusSubmitting:
-		allowed = next == StatusSubmitted || next == StatusUnknown ||
+		allowed = next == StatusSucceeded || next == StatusSubmitted || next == StatusUnknown ||
 			next == StatusFailed || next == StatusCancelling
 	case StatusSubmitted:
 		allowed = next == StatusSucceeded || next == StatusFailed ||
@@ -91,9 +91,9 @@ func (s Status) CanTransitionTo(next Status) error {
 	case StatusUnknown:
 		allowed = next == StatusReconciling
 	case StatusReconciling:
-		allowed = next == StatusSubmitted || next == StatusFailed || next == StatusManual
+		allowed = next == StatusSucceeded || next == StatusSubmitted || next == StatusFailed || next == StatusManual
 	case StatusManual:
-		allowed = next == StatusIngesting || next == StatusFailed
+		allowed = next == StatusSucceeded || next == StatusIngesting || next == StatusFailed
 	case StatusCancelling:
 		allowed = next == StatusCancelled || next == StatusSubmitted
 	}

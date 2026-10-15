@@ -49,12 +49,25 @@ func (s *Store) ReadCurrentQuoteCatalog(ctx context.Context, actor identityapp.P
 		if quoted.ModelProfileVersionID == nil {
 			return nil // agent_session has no single model or price snapshot.
 		}
+		trial, trialModel, trialPrice, err := currentTrialCatalog(tx, actor, quoted, project.AllowOverseasModels)
+		if err != nil {
+			return err
+		}
+		if trial {
+			modelID, priceID = trialModel, trialPrice
+			return nil
+		}
+		var frozen struct{ ReleaseID uuid.UUID }
+		if err := tx.Raw(`SELECT release_id FROM operation.provider_binding WHERE operation_id=?`, quoted.ID).Scan(&frozen).Error; err != nil {
+			return err
+		}
 		var current struct {
+			ReleaseID      *uuid.UUID
 			ModelVersionID *uuid.UUID
 			PriceVersionID *uuid.UUID
 		}
 		result = tx.Raw(`
-			SELECT CASE WHEN provider.adapter_key IN ('volcengine_ark','openrouter') THEN published.model_version_id ELSE m.current_version_id END AS model_version_id,
+			SELECT published.id AS release_id, CASE WHEN provider.adapter_key IN ('volcengine_ark','openrouter') THEN published.model_version_id ELSE m.current_version_id END AS model_version_id,
 			       price.id AS price_version_id
 			FROM catalog.model_profile_version AS quoted_version
 			JOIN catalog.model_profile AS m
@@ -88,7 +101,7 @@ func (s *Store) ReadCurrentQuoteCatalog(ctx context.Context, actor identityapp.P
 		if result.Error != nil {
 			return fmt.Errorf("read current quote model and price: %w", result.Error)
 		}
-		if result.RowsAffected == 1 {
+		if result.RowsAffected == 1 && (current.ReleaseID == nil || (frozen.ReleaseID != uuid.Nil && *current.ReleaseID == frozen.ReleaseID)) {
 			modelID, priceID = current.ModelVersionID, current.PriceVersionID
 		}
 		return nil

@@ -27,6 +27,7 @@ type FingerprintInput struct {
 	Capability            string
 	Mode                  string
 	ModelProfileVersionID uuid.UUID
+	ReleaseID             uuid.UUID
 	ProviderModelID       string
 	OutputCount           int32
 	Params                json.RawMessage
@@ -80,8 +81,13 @@ func InputHash(input FingerprintInput) (string, bool, error) {
 	if err != nil {
 		return "", false, err
 	}
+	var releaseID *uuid.UUID
+	if input.ReleaseID != uuid.Nil {
+		releaseID = &input.ReleaseID
+	}
 	payload, err := json.Marshal(struct {
 		Version               int                         `json:"version"`
+		ReleaseID             *uuid.UUID                  `json:"release_id,omitempty"`
 		Capability            string                      `json:"capability"`
 		Mode                  string                      `json:"mode"`
 		ModelProfileVersionID uuid.UUID                   `json:"model_profile_version_id"`
@@ -91,7 +97,7 @@ func InputHash(input FingerprintInput) (string, bool, error) {
 		Inputs                []FingerprintPart           `json:"inputs"`
 		FinalPrompt           string                      `json:"prompt"`
 	}{
-		Version: 1, Capability: input.Capability, Mode: input.Mode,
+		Version: 1, ReleaseID: releaseID, Capability: input.Capability, Mode: input.Mode,
 		ModelProfileVersionID: input.ModelProfileVersionID, ProviderModelID: input.ProviderModelID,
 		OutputCount: input.OutputCount, Params: params, Inputs: parts, FinalPrompt: input.FinalPrompt,
 	})

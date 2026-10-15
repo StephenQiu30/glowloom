@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"slices"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func recordProviderCheck(tx *gorm.DB, observation application.CredentialTestObservation) error {

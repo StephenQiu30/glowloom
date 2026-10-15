@@ -4548,7 +4548,6 @@ CREATE TABLE catalog.provider_config_version (
 ALTER TABLE catalog.provider ADD COLUMN current_config_version_id uuid;
 ALTER TABLE catalog.provider ADD CONSTRAINT provider_current_config_fk
     FOREIGN KEY (id,current_config_version_id) REFERENCES catalog.provider_config_version(provider_id,id);
-ALTER TABLE catalog.provider ALTER COLUMN status SET DEFAULT 'disabled';
 ALTER TABLE catalog.provider_credential DROP CONSTRAINT provider_credential_status_check;
 ALTER TABLE catalog.provider_credential ADD CONSTRAINT provider_credential_status_check CHECK (status IN ('active','draining','disabled'));
 CREATE TABLE catalog.config_request (
@@ -4634,7 +4633,9 @@ INSERT INTO catalog.capability(id,key,output_type,modes,input_roles) VALUES
  ('6da07a12-0000-4000-8000-000000000001','text.generate','json',ARRAY['text_to_text'],ARRAY['prompt']),
  ('6da07a12-0000-4000-8000-000000000002','image.generate','image',ARRAY['text2image','image2image'],ARRAY['prompt','reference_image','subject']),
  ('6da07a12-0000-4000-8000-000000000003','video.generate','video',ARRAY['text2video','image2video','omni_reference'],ARRAY['prompt','first_frame','last_frame','reference_image','subject'])
-ON CONFLICT(key) DO NOTHING;
+ON CONFLICT(key) DO UPDATE SET
+ modes=ARRAY(SELECT DISTINCT value FROM unnest(catalog.capability.modes || EXCLUDED.modes) AS value ORDER BY value),
+ input_roles=ARRAY(SELECT DISTINCT value FROM unnest(catalog.capability.input_roles || EXCLUDED.input_roles) AS value ORDER BY value);
 GRANT SELECT,INSERT,UPDATE ON catalog.provider_preset,catalog.provider_check,catalog.model_release,catalog.model_validation,catalog.capability_default TO lanverse_app;
 GRANT SELECT,INSERT ON catalog.provider_preset_version,catalog.provider_config_version,catalog.config_request,catalog.model_candidate TO lanverse_app;
 
@@ -4691,3 +4692,32 @@ CREATE TABLE operation.prompt_resolution_receipt (
 );
 GRANT SELECT,INSERT,UPDATE ON workspace.prompt_draft,operation.prompt_submission_slot,operation.prompt_submission TO lanverse_app;
 GRANT SELECT,INSERT ON workspace.prompt_draft_receipt,operation.prompt_resolution_receipt TO lanverse_app;
+
+-- Managed operation final-state additions (003).
+CREATE TABLE operation.provider_binding (
+    operation_id uuid PRIMARY KEY REFERENCES operation.operation(id),
+    release_id uuid NOT NULL REFERENCES catalog.model_release(id),
+    create_time timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE operation.provider_credential_binding (
+    operation_id uuid PRIMARY KEY REFERENCES operation.provider_binding(operation_id),
+    credential_id uuid NOT NULL REFERENCES catalog.provider_credential(id),
+    create_time timestamptz NOT NULL DEFAULT now()
+);
+GRANT SELECT,INSERT ON operation.provider_binding,operation.provider_credential_binding TO lanverse_app;
+
+CREATE TABLE operation.provider_result (
+ operation_id uuid PRIMARY KEY REFERENCES operation.provider_credential_binding(operation_id),
+ result jsonb NOT NULL CHECK(jsonb_typeof(result)='object' AND octet_length(result::text)<=2097152),
+ update_time timestamptz NOT NULL DEFAULT now()
+);
+GRANT SELECT,INSERT,UPDATE ON operation.provider_result TO lanverse_app;
+
+CREATE TABLE operation.provider_trial (
+ operation_id uuid PRIMARY KEY REFERENCES operation.provider_binding(operation_id),
+ actor_id uuid NOT NULL REFERENCES identity."user"(id),
+ max_charge_micros bigint NOT NULL CHECK(max_charge_micros>=0),
+ supplier_max_micros bigint NOT NULL CHECK(supplier_max_micros BETWEEN 0 AND 1000000000),
+ supplier_currency text NOT NULL CHECK(supplier_currency IN ('CNY','USD'))
+);
+GRANT SELECT,INSERT ON operation.provider_trial TO lanverse_app;

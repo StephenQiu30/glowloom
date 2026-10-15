@@ -3,8 +3,9 @@ package application
 import (
 	"context"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/google/uuid"
+
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // CredentialHistoryStore exposes display metadata only, including draining keys.

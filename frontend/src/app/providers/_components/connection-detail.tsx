@@ -126,8 +126,15 @@ export function ConnectionDetail({
                   { id },
                   { label: "平台统一 Key", secret: { api_key: key } },
                   { headers: { "Idempotency-Key": requestID } },
-                ).then(result=>{
-                  if(!result.id || result.provider_id!==id || result.status!=="active" || typeof result.last4!=="string" || result.last4.length!==4) throw new RequestError("request_unconfirmed");
+                ).then((result) => {
+                  if (
+                    !result.id ||
+                    result.provider_id !== id ||
+                    result.status !== "active" ||
+                    typeof result.last4 !== "string" ||
+                    result.last4.length !== 4
+                  )
+                    throw new RequestError("request_unconfirmed");
                   return result;
                 }),
               );

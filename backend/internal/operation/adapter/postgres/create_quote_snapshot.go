@@ -24,6 +24,7 @@ var ErrInvalidQuoteSnapshot = errors.New("invalid quote snapshot")
 // must validate current targets, model availability, price, and consent before
 // persistence; this store does not confirm or reserve the quote.
 type QuoteItem struct {
+	trial             *trialBinding
 	Operation         domain.Operation
 	Inputs            []domain.OperationInput
 	PromptPreparation *domain.PromptPreparation
@@ -76,6 +77,13 @@ func (s *Store) CreateQuoteSnapshot(ctx context.Context, actor identityapp.Princ
 		}
 		for _, item := range items {
 			if err := insertQuotedOperation(tx, item.Operation, item.PromptPreparation); err != nil {
+				return err
+			}
+			if item.trial != nil {
+				if err := freezeTrialRelease(tx, actor, item.Operation, *item.trial); err != nil {
+					return err
+				}
+			} else if err := freezeManagedRelease(tx, item.Operation); err != nil {
 				return err
 			}
 			for _, input := range item.Inputs {

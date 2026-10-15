@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"time"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/google/uuid"
+
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // ModelCandidate is a discovered model, not proof of account access or execution.

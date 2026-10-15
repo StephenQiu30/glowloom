@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	"github.com/stretchr/testify/require"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 )
 
 func TestBuiltinPresetsAreIsolatedAndContainNoCredentials(t *testing.T) {

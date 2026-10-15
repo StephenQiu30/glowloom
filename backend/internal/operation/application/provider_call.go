@@ -52,6 +52,7 @@ type BeginProviderCallInput struct {
 // Usage contains normalized, non-sensitive billable quantities from a trusted
 // provider adapter. The mock adapter is explicitly free.
 type CompleteProviderCallInput struct {
+	Managed        bool             `json:"managed,omitempty"`
 	OperationID    uuid.UUID        `json:"operation_id"`
 	Action         string           `json:"action"`
 	Attempt        int32            `json:"attempt"`
@@ -86,6 +87,9 @@ func (i CompleteProviderCallInput) Validate() error {
 		(i.Usage != nil && (len(i.Usage) > 16*1024 || !json.Valid(i.Usage) || i.Usage[0] != '{')) {
 		return ErrInvalidProviderCall
 	}
+	if i.Managed && (i.Receipt != nil || len(i.Usage) > 0 || (i.State != "completed" && i.State != "succeeded")) {
+		return ErrInvalidProviderCall
+	}
 	switch i.Outcome {
 	case "ok", "error", "timeout", "unknown":
 	default:
@@ -103,9 +107,9 @@ func (i CompleteProviderCallInput) Validate() error {
 	}
 	if i.State == "completed" {
 		if i.Action != "submit" || i.Outcome != "ok" || i.ProviderTaskID != nil ||
-			i.Receipt == nil || i.Receipt.Validate() != nil ||
-			i.Receipt.Identity.OperationID != i.OperationID ||
-			i.Receipt.Identity.Action != i.Action || i.Receipt.Identity.Attempt != i.Attempt {
+			(!i.Managed && (i.Receipt == nil || i.Receipt.Validate() != nil ||
+				i.Receipt.Identity.OperationID != i.OperationID ||
+				i.Receipt.Identity.Action != i.Action || i.Receipt.Identity.Attempt != i.Attempt)) || (i.Managed && i.Receipt != nil) {
 			return ErrInvalidProviderCall
 		}
 		if i.Usage != nil {

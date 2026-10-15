@@ -76,6 +76,26 @@ export function useCatalogMutation(onSaved: () => void, scope = "registry") {
       )
         clear();
       setMessage(catalogMessage(error));
+      if (error instanceof RequestError && error.status === 409) {
+        try {
+          await getConfigReceipt({
+            id: request.id,
+            action: request.action,
+            target_id: request.target,
+          });
+          clear();
+          setMessage("请求已有成功回执，已刷新当前配置。");
+          onSaved();
+        } catch (receiptError) {
+          if (
+            receiptError instanceof RequestError &&
+            receiptError.status === 404
+          ) {
+            clear();
+            setMessage("本次变更未保存，当前配置已变化。请刷新后重新编辑。");
+          }
+        }
+      }
     } finally {
       writeLock.current = false;
       setBusy(false);

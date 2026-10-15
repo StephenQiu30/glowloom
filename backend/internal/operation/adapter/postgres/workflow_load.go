@@ -119,6 +119,9 @@ func (s *Store) LoadWorkflowOperation(ctx context.Context, operationID uuid.UUID
 		if result.Error != nil {
 			return fmt.Errorf("read workflow provider task: %w", result.Error)
 		}
+		if err := tx.Raw(`SELECT COALESCE(MAX(attempt),0) FROM operation.provider_call WHERE operation_id=? AND action='query' AND NOT is_delete`, operationID).Scan(&loaded.LastQueryAttempt).Error; err != nil {
+			return err
+		}
 		loaded.ProviderTaskID = latest.ProviderTaskID
 		return nil
 	})
@@ -139,7 +142,7 @@ func loadWorkflowModel(tx *gorm.DB, loaded *application.WorkflowOperation) error
 	var provider application.WorkflowProvider
 	result := tx.Raw(`
 		SELECT p.key AS provider_key, p.adapter_key, m.model_key,
-		       v.provider_model_id,
+		       v.provider_model_id, COALESCE(v.limits->>'provider_endpoint','') AS endpoint_tag,
 		       v.queue, v.supports_query, v.supports_cancel,
 		       v.expected_max_ms, v.moderation
 		FROM catalog.model_profile_version AS v

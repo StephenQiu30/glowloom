@@ -116,6 +116,7 @@ func (i CreateFreeQuoteInput) Validate() error {
 
 // FreeQuoteCatalog is a locked, current model and effective price snapshot.
 type FreeQuoteCatalog struct {
+	ReleaseID       uuid.UUID
 	ModelVersionID  uuid.UUID
 	ProviderModelID string
 	Region          string
@@ -210,9 +211,9 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 	inputs = append(inputs, mediaInputs...)
 	hash, reusable, err := InputHash(FingerprintInput{
 		Capability: input.Capability, Mode: input.Mode,
-		ModelProfileVersionID: catalog.ModelVersionID,
-		ProviderModelID:       catalog.ProviderModelID,
-		OutputCount:           input.OutputCount, Params: input.Params,
+		ModelProfileVersionID: catalog.ModelVersionID, ReleaseID: catalog.ReleaseID,
+		ProviderModelID: catalog.ProviderModelID,
+		OutputCount:     input.OutputCount, Params: input.Params,
 		ParamSchema: catalog.ParamSchema, Inputs: parts,
 		FinalPrompt: input.Prompt,
 	})
@@ -235,6 +236,17 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 			return PreparedFreeQuote{}, ErrFreeQuoteInputNotReady
 		}
 		pricing.TargetDurationMS = exact.Num().Int64()
+	}
+	if catalog.ReleaseID != uuid.Nil && catalog.Price.Unit == catalogdomain.PricePer1KTokens {
+		// Byte length is a tokenizer-independent estimate, not supplier usage or
+		// a hard upper bound. Settlement still requires actual billable usage.
+		pricing.EstimatedInputTokens = int64(len([]byte(input.Prompt)))
+		if value, ok := params["max_tokens"].(json.Number); ok {
+			pricing.MaxOutputTokens, err = value.Int64()
+			if err != nil {
+				return PreparedFreeQuote{}, ErrFreeQuoteInputNotReady
+			}
+		}
 	}
 	amount, costs, err := CalculateQuoteDetailed(catalog.Price, pricing)
 	if err != nil {
@@ -259,11 +271,18 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 	expires := now.Add(15 * time.Minute)
 	region := catalog.Region
 	versionID, priceID := catalog.ModelVersionID, catalog.Price.ID
+	frozenParams := input.Params
+	if catalog.ReleaseID != uuid.Nil {
+		frozenParams, err = json.Marshal(params)
+		if err != nil {
+			return PreparedFreeQuote{}, err
+		}
+	}
 	op := domain.Operation{
 		ID: operationID, ProjectID: input.ProjectID, TargetType: "free",
 		Capability: input.Capability, Mode: input.Mode,
 		ModelProfileVersionID: &versionID, PriceRuleVersionID: &priceID,
-		Params: input.Params, OutputCount: input.OutputCount,
+		Params: frozenParams, OutputCount: input.OutputCount,
 		Source:    input.Source,
 		InputHash: hash, Origin: "canvas", Status: domain.StatusQuoted,
 		QuoteMicros: &amount, QuoteDetail: quoteDetail, QuoteExpiresAt: &expires,

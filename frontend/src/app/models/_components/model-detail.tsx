@@ -1,5 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
+import {
+  ModelSetup,
+  PriceSetup,
+  modelConfiguration,
+  priceRule,
+} from "./model-setup";
+import { ProviderTrial } from "./provider-trial";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -76,8 +83,18 @@ export function ModelDetail({
   const currentDefault = defaults.find(
     (d) => d.capability === model?.capability,
   );
-  const modes =
-    capabilities.find((c) => c.key === model?.capability)?.modes ?? [];
+  const modes = (
+    capabilities.find((c) => c.key === model?.capability)?.modes ?? []
+  ).filter((mode) =>
+    [
+      "text_to_text",
+      "text2image",
+      "image2image",
+      "text2video",
+      "image2video",
+      "omni_reference",
+    ].includes(mode),
+  );
   return (
     <section
       className="min-w-0 space-y-5 rounded-xl border p-4"
@@ -114,10 +131,10 @@ export function ModelDetail({
                 e.preventDefault();
                 const f = new FormData(e.currentTarget);
                 try {
-                  const limits: API.PublishVersionRequest["limits"] =
-                    JSON.parse(String(f.get("limits")));
-                  const parameters: API.PublishVersionRequest["param_schema"] =
-                    JSON.parse(String(f.get("parameters")));
+                  const configuration = modelConfiguration(
+                    f,
+                    model?.capability ?? "",
+                  );
                   await mutation.run("model.version", id, (request) =>
                     publishAdminModelVersion(
                       { id },
@@ -126,8 +143,7 @@ export function ModelDetail({
                         version_no: (latest?.version_no ?? 0) + 1,
                         provider_model_id: String(f.get("upstream")),
                         modes: f.getAll("modes").map(String),
-                        limits,
-                        param_schema: parameters,
+                        ...configuration,
                         expected_max_ms: Number(f.get("timeout")) * 1000,
                         moderation: "provider",
                         queue: "provider",
@@ -185,15 +201,10 @@ export function ModelDetail({
                   defaultValue={(latest?.expected_max_ms ?? 600000) / 1000}
                 />
               </label>
-              <JSONField
-                name="limits"
-                label="输入与输出限制"
-                value={latest?.limits ?? { max_outputs: 1 }}
-              />
-              <JSONField
-                name="parameters"
-                label="参数表单定义"
-                value={latest?.param_schema ?? []}
+              <ModelSetup
+                capability={model?.capability ?? ""}
+                limits={latest?.limits}
+                parameters={latest?.param_schema}
               />
               <p className="text-xs text-muted-foreground">
                 参数和限制以账号对应模型文档为准。首轮不开放回调及自动取消。
@@ -217,9 +228,7 @@ export function ModelDetail({
                 e.preventDefault();
                 const f = new FormData(e.currentTarget);
                 try {
-                  const rule: API.PublishPriceRequest["rule"] = JSON.parse(
-                    String(f.get("rule")),
-                  );
+                  const rule = priceRule(f);
                   await mutation.run("model.price", id, (request) =>
                     publishAdminModelPrice(
                       { id },
@@ -254,11 +263,7 @@ export function ModelDetail({
                   <option value="per_1k_tokens">每千 Token</option>
                 </select>
               </label>
-              <JSONField
-                name="rule"
-                label="人民币微元计费规则（1 元 = 1,000,000 微元）"
-                value={latestPrice?.rule ?? { base_micros: 0 }}
-              />
+              <PriceSetup rule={latestPrice?.rule} />
               <label className="block space-y-1 text-sm">
                 生效时间
                 <Input type="datetime-local" name="effective" required />
@@ -380,7 +385,7 @@ export function ModelDetail({
                   (mode) => !r.validated_modes?.includes(mode),
                 ) ?? [];
               const ready =
-                r.status === "draft" &&
+                (r.status === "draft" || r.status === "retired") &&
                 !!r.required_modes?.length &&
                 !missing.length;
               return (
@@ -404,6 +409,9 @@ export function ModelDetail({
                     <p>尚需真实验证：{missing.join("、")}</p>
                   ) : null}
                   {r.status === "draft" ? (
+                    <ProviderTrial release={r} onVerified={onSaved} />
+                  ) : null}
+                  {r.status === "draft" || r.status === "retired" ? (
                     <form
                       className="space-y-2"
                       onSubmit={async (e) => {
@@ -438,7 +446,9 @@ export function ModelDetail({
                         同时设为此能力的平台默认
                       </label>
                       <Button disabled={!ready || mutation.busy}>
-                        激活已验证发布
+                        {r.status === "retired"
+                          ? "恢复此历史发布"
+                          : "激活已验证发布"}
                       </Button>
                     </form>
                   ) : null}
@@ -469,27 +479,5 @@ export function ModelDetail({
         </>
       )}
     </section>
-  );
-}
-function JSONField({
-  name,
-  label,
-  value,
-}: {
-  name: string;
-  label: string;
-  value: unknown;
-}) {
-  return (
-    <label className="block space-y-1 text-sm">
-      {label}
-      <textarea
-        name={name}
-        required
-        spellCheck={false}
-        className="min-h-32 w-full rounded-md border bg-background p-3 font-mono text-xs"
-        defaultValue={JSON.stringify(value, null, 2)}
-      />
-    </label>
   );
 }

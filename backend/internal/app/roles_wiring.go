@@ -6,6 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"go.temporal.io/sdk/activity"
+
+	managedprovider "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/managed"
+
 	"go.opentelemetry.io/otel/trace"
 	"go.temporal.io/sdk/worker"
 	"go.uber.org/zap"
@@ -149,6 +153,10 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		if err != nil {
 			return nil, fmt.Errorf("configure media activities: %w", err)
 		}
+
+		managedResults := operationapp.NewManagedResults(operationstaging.NewObjects(storage), pgoperation.NewStore(dbConn.DB))
+		managedIngest := managedprovider.NewIngestActivities(dbConn.DB, storage, managedResults)
+		queueWorker.RegisterActivityWithOptions(managedIngest.Ingest, activity.RegisterOptions{Name: "media.IngestManaged"})
 		mediaflow.Register(queueWorker, activities)
 		exportRenderer, err := toolff.NewRenderer(mediaflow.FFProber{})
 		if err != nil {

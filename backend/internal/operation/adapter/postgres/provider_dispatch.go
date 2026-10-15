@@ -87,6 +87,9 @@ func (s *Store) ClaimProviderDispatch(ctx context.Context, identity application.
 		if cancelled {
 			return application.ErrProviderDispatchCancelled
 		}
+		if err := admitManagedDispatch(tx, identity); err != nil {
+			return err
+		}
 		var claimed struct{ DispatchStartedAt *time.Time }
 		result = tx.Raw(`
 			UPDATE operation.provider_call

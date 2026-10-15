@@ -9,10 +9,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/providerhttp"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	"github.com/stretchr/testify/require"
 )
 
 type providerTransport func(*http.Request) (*http.Response, error)
@@ -75,5 +76,33 @@ func TestProviderModesRejectMismatchedReferencesBeforeDispatch(t *testing.T) {
 		result, err := client.Submit(t.Context(), input, "fixture-key")
 		require.NoError(t, err)
 		require.Equal(t, "not_submitted", result.Outcome)
+	}
+}
+
+func TestProviderVideoMapsInternalDurationWithoutChangingFrozenInput(t *testing.T) {
+	for _, config := range domain.BuiltinPresets() {
+		calls := 0
+		client := providerhttp.NewClient(&http.Client{Transport: providerTransport(func(r *http.Request) (*http.Response, error) {
+			calls++
+			var body map[string]any
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			require.Equal(t, float64(5), body["duration"])
+			require.NotContains(t, body, "duration_ms")
+			if config.Config.AdapterKey == "volcengine_ark" {
+				require.Equal(t, "16:9", body["ratio"])
+			}
+			return providerResponse(200, `{"id":"fixture-task"}`), nil
+		})})
+		params := map[string]any{"duration_ms": int64(5000), "aspect_ratio": "16:9"}
+		result, err := client.Submit(t.Context(), operationapp.GenerationRequest{Config: config.Config, ModelID: "fixture", Capability: "video.generate", Mode: "text2video", Prompt: "fixture", OutputCount: 1, Params: params}, "fixture-only")
+		require.NoError(t, err)
+		require.Equal(t, "accepted", result.Outcome)
+		require.Equal(t, 1, calls)
+		require.Equal(t, int64(5000), params["duration_ms"])
+		params["duration"] = 5
+		result, err = client.Submit(t.Context(), operationapp.GenerationRequest{Config: config.Config, ModelID: "fixture", Capability: "video.generate", Mode: "text2video", Prompt: "fixture", OutputCount: 1, Params: params}, "fixture-only")
+		require.NoError(t, err)
+		require.Equal(t, "not_submitted", result.Outcome)
+		require.Equal(t, 1, calls)
 	}
 }

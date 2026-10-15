@@ -83,6 +83,16 @@ func (s *Store) TransitionWorkflowOperation(ctx context.Context, input applicati
 		if row.TargetType == nil || *row.TargetType == "" {
 			return ErrInvalidTransitionInput
 		}
+		if input.To == domain.StatusSucceeded && current != domain.StatusSubmitted {
+			var present int
+			r := tx.Raw(`SELECT 1 FROM operation.provider_result WHERE operation_id=? AND result->>'state'='succeeded'`, input.OperationID).Scan(&present)
+			if r.Error != nil {
+				return r.Error
+			}
+			if r.RowsAffected != 1 {
+				return application.ErrProviderCallConflict
+			}
+		}
 		if input.To == domain.StatusSubmitting {
 			if err := checkWorkflowInputsForSubmission(tx, input.OperationID, row.ProjectID); err != nil {
 				return err

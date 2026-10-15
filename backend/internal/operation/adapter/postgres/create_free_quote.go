@@ -165,7 +165,7 @@ func (s *Store) prepareFreeQuoteItem(ctx context.Context, tx *gorm.DB, actor ide
 	if err := input.Validate(); err != nil {
 		return QuoteItem{}, "", err
 	}
-	modelKey, err := resolveFreeQuoteModelKey(input.FreeQuoteItemInput, project)
+	modelKey, err := resolveEffectiveQuoteModelKey(tx, input.FreeQuoteItemInput, project)
 	if err != nil {
 		return QuoteItem{}, "", err
 	}
@@ -218,6 +218,33 @@ func (s *Store) prepareFreeQuoteItem(ctx context.Context, tx *gorm.DB, actor ide
 	return QuoteItem{Operation: prepared.Operation, Inputs: prepared.Inputs, PromptPreparation: prepared.PromptPreparation}, modelKey, nil
 }
 
+// A project selection always wins; an unavailable explicit selection never
+// silently routes a paid request to another model.
+func resolveEffectiveQuoteModelKey(tx *gorm.DB, input application.FreeQuoteItemInput, project freeQuoteProject) (string, error) {
+	if input.ModelKey != "" {
+		return input.ModelKey, nil
+	}
+	var defaults map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(project.DefaultModels), &defaults); err != nil || defaults == nil {
+		return "", application.ErrFreeQuoteModelMissing
+	}
+	if _, exists := defaults[input.Capability]; exists {
+		return resolveFreeQuoteModelKey(input, project)
+	}
+	var row struct{ Key string }
+	r := tx.Raw(`SELECT m.model_key AS key FROM catalog.capability_default d
+ JOIN catalog.model_release r ON r.id=d.release_id AND r.status='active'
+ JOIN catalog.model_profile m ON m.id=r.model_id AND m.active_release_id=r.id
+ WHERE d.capability=? AND m.capability=d.capability AND m.status='active' AND NOT m.is_delete FOR SHARE OF d,m,r`, input.Capability).Scan(&row)
+	if r.Error != nil {
+		return "", r.Error
+	}
+	if r.RowsAffected != 1 {
+		return "", application.ErrFreeQuoteModelMissing
+	}
+	return row.Key, nil
+}
+
 func resolveFreeQuoteModelKey(input application.FreeQuoteItemInput, project freeQuoteProject) (string, error) {
 	if input.ModelKey != "" {
 		return input.ModelKey, nil
@@ -234,6 +261,7 @@ func resolveFreeQuoteModelKey(input application.FreeQuoteItemInput, project free
 }
 
 type freeQuoteCatalogRow struct {
+	ReleaseID          uuid.UUID
 	ModelID            uuid.UUID
 	VersionID          uuid.UUID
 	ProviderModelID    string
@@ -254,7 +282,7 @@ type freeQuoteCatalogRow struct {
 func readFreeQuoteCatalog(tx *gorm.DB, input application.CreateFreeQuoteInput, allowOverseas bool, now time.Time) (application.FreeQuoteCatalog, error) {
 	var row freeQuoteCatalogRow
 	read := tx.Raw(`
-		SELECT m.id AS model_id, v.id AS version_id,
+		SELECT published.id AS release_id, m.id AS model_id, v.id AS version_id,
 		       v.provider_model_id, provider.region,
 		       to_jsonb(v.modes)::text AS modes,
 		       to_jsonb(capability.input_roles)::text AS input_roles,
@@ -293,6 +321,10 @@ func readFreeQuoteCatalog(tx *gorm.DB, input application.CreateFreeQuoteInput, a
 	if read.RowsAffected != 1 {
 		return application.FreeQuoteCatalog{}, application.ErrFreeQuoteModelMissing
 	}
+	return freeCatalogFromRow(row)
+}
+
+func freeCatalogFromRow(row freeQuoteCatalogRow) (application.FreeQuoteCatalog, error) {
 	var modes []string
 	if err := json.Unmarshal([]byte(row.Modes), &modes); err != nil {
 		return application.FreeQuoteCatalog{}, fmt.Errorf("decode free quote model modes: %w", err)
@@ -306,7 +338,7 @@ func readFreeQuoteCatalog(tx *gorm.DB, input application.CreateFreeQuoteInput, a
 		fx = *row.PriceFXRateToCNY
 	}
 	return application.FreeQuoteCatalog{
-		ModelVersionID: row.VersionID, ProviderModelID: row.ProviderModelID,
+		ReleaseID: row.ReleaseID, ModelVersionID: row.VersionID, ProviderModelID: row.ProviderModelID,
 		Region: row.Region, Modes: modes, InputRoles: roles,
 		Limits: json.RawMessage(row.Limits), ParamSchema: json.RawMessage(row.ParamSchema),
 		Price: catalogdomain.PriceRuleVersion{

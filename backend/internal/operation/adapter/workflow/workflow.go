@@ -124,6 +124,12 @@ func OperationWorkflow(ctx workflow.Context, input OperationInput) error {
 		}
 		return nil
 	}
+	if loaded.Provider.AdapterKey == "openrouter" || loaded.Provider.AdapterKey == "volcengine_ark" {
+		if workflow.GetVersion(ctx, "operation-managed-provider-v1", workflow.DefaultVersion, 1) == workflow.DefaultVersion {
+			return ErrUnsupportedOperation
+		}
+		return runManagedProvider(ctx, flowCtx, loaded)
+	}
 	if loaded.Provider.AdapterKey == "codex" {
 		if workflow.GetVersion(ctx, "operation-codex-image-v1", workflow.DefaultVersion, 1) == workflow.DefaultVersion {
 			return ErrUnsupportedOperation

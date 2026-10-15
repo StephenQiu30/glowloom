@@ -117,6 +117,16 @@ func (s *Store) FinalizeInTransaction(ctx context.Context, tx *gorm.DB, input ap
 	if err := appendWorkflowTransition(tx.WithContext(ctx), row, from, transition, detail); err != nil {
 		return err
 	}
+	if input.To == domain.StatusCompleted {
+		if err := tx.WithContext(ctx).Exec(`INSERT INTO catalog.model_validation(id,release_id,credential_id,adapter_version,mode,input_digest,operation_id,status,evidence,completed_at)
+       SELECT ?,b.release_id,cb.credential_id,'ai-provider-v1',op.mode,op.input_hash,op.id,'succeeded','{"kind":"real_provider"}'::jsonb,now()
+       FROM operation.operation op JOIN operation.provider_trial trial ON trial.operation_id=op.id
+       JOIN operation.provider_binding b ON b.operation_id=op.id JOIN operation.provider_credential_binding cb ON cb.operation_id=op.id
+       JOIN operation.provider_result result ON result.operation_id=op.id AND result.result->>'state'='succeeded'
+       WHERE op.id=? ON CONFLICT(operation_id) DO NOTHING`, uuid.New(), input.OperationID).Error; err != nil {
+			return err
+		}
+	}
 	if err := appendWorkflowTerminalEvent(tx.WithContext(ctx), row, input); err != nil {
 		return err
 	}

@@ -3,10 +3,11 @@ package postgres
 import (
 	"context"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // ListCredentialHistory lists bounded metadata without selecting ciphertext or fingerprints.

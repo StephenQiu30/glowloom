@@ -1,6 +1,7 @@
 package providerhttp
 
 import (
+	"encoding/json"
 	"net/url"
 	"slices"
 	"strings"
@@ -37,19 +38,41 @@ func submission(input application.GenerationRequest) (string, map[string]any, bo
 			return "", nil, false
 		}
 		path = "/videos"
-		allowed = []string{"duration", "resolution", "aspect_ratio", "generate_audio", "seed"}
+		allowed = []string{"duration", "duration_ms", "resolution", "aspect_ratio", "generate_audio", "seed"}
 		if input.Config.AdapterKey == "volcengine_ark" {
 			path = "/contents/generations/tasks"
-			allowed = []string{"duration", "resolution", "ratio", "generate_audio", "seed", "watermark", "camera_fixed"}
+			allowed = []string{"duration", "duration_ms", "resolution", "ratio", "aspect_ratio", "generate_audio", "seed", "watermark", "camera_fixed"}
 		}
 	default:
 		return "", nil, false
+	}
+	if _, milliseconds := input.Params["duration_ms"]; milliseconds {
+		if _, seconds := input.Params["duration"]; seconds {
+			return "", nil, false
+		}
+	}
+	if _, ratio := input.Params["ratio"]; ratio {
+		if _, aspect := input.Params["aspect_ratio"]; aspect {
+			return "", nil, false
+		}
 	}
 	for key, value := range input.Params {
 		if !slices.Contains(allowed, key) {
 			return "", nil, false
 		}
-		payload[key] = value
+		switch {
+		case key == "duration_ms":
+			raw, err := json.Marshal(value)
+			var milliseconds int64
+			if err != nil || json.Unmarshal(raw, &milliseconds) != nil || milliseconds <= 0 || milliseconds%1000 != 0 {
+				return "", nil, false
+			}
+			payload["duration"] = milliseconds / 1000
+		case key == "aspect_ratio" && input.Config.AdapterKey == "volcengine_ark":
+			payload["ratio"] = value
+		default:
+			payload[key] = value
+		}
 	}
 	if input.EndpointTag != "" {
 		if input.Config.AdapterKey != "openrouter" || input.Capability == "video.generate" || len(input.EndpointTag) > 128 {
@@ -57,7 +80,7 @@ func submission(input application.GenerationRequest) (string, map[string]any, bo
 		}
 		payload["provider"] = map[string]any{"only": []string{input.EndpointTag}, "allow_fallbacks": false, "require_parameters": true}
 	} else if input.Capability == "text.generate" || input.Capability == "image.generate" {
-		payload["provider"] = map[string]any{"allow_fallbacks": false}
+		payload["provider"] = map[string]any{"allow_fallbacks": false, "require_parameters": true}
 	}
 	references := []map[string]any{}
 	frames := []map[string]any{}

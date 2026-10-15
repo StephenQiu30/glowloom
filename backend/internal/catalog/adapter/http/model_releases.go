@@ -1,10 +1,11 @@
 package http
 
 import (
+	"github.com/gin-gonic/gin"
+
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
-	"github.com/gin-gonic/gin"
 )
 
 // ReleaseHandler exposes drafts and evidence-gated publication.
