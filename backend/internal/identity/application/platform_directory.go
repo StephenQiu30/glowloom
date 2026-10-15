@@ -66,8 +66,8 @@ type DirectoryPosition struct {
 
 // PlatformDirectoryStore supplies platform-authorized account projections.
 type PlatformDirectoryStore interface {
-	ReadDirectory(context.Context, Principal, DirectoryFilter, DirectoryPosition, time.Time) ([]UserSummary, error)
-	ReadUserDetail(context.Context, Principal, uuid.UUID, time.Time) (UserDetail, error)
+	ReadDirectory(context.Context, Principal, DirectoryFilter, DirectoryPosition, func() time.Time) ([]UserSummary, error)
+	ReadUserDetail(context.Context, Principal, uuid.UUID, func() time.Time) (UserDetail, error)
 }
 
 // DirectorySigner authenticates directory cursors for one authority and filter.
@@ -157,7 +157,7 @@ func (d *PlatformDirectory) List(ctx context.Context, actor Principal, filter Di
 			return UserPage{}, ErrInvalidDirectoryFilter
 		}
 	}
-	items, err := d.store.ReadDirectory(ctx, actor, f, position, now)
+	items, err := d.store.ReadDirectory(ctx, actor, f, position, d.now)
 	if err != nil {
 		return UserPage{}, err
 	}
@@ -184,5 +184,5 @@ func (d *PlatformDirectory) Detail(ctx context.Context, actor Principal, id uuid
 	if id == uuid.Nil {
 		return UserDetail{}, ErrInvalidDirectoryFilter
 	}
-	return d.store.ReadUserDetail(ctx, actor, id, d.now().UTC())
+	return d.store.ReadUserDetail(ctx, actor, id, d.now)
 }

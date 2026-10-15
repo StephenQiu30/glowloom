@@ -49,7 +49,7 @@ func NewAvatarStore(db *gorm.DB, actors AvatarActorAccessFactory) *AvatarStore {
 	return &AvatarStore{db: db, actors: actors}
 }
 
-func (s *AvatarStore) authorize(ctx context.Context, tx *gorm.DB, a identityapp.Principal, now time.Time) error {
+func (s *AvatarStore) authorize(ctx context.Context, tx *gorm.DB, a identityapp.Principal, clock func() time.Time) error {
 	if s.actors == nil {
 		return identityapp.ErrSessionInvalid
 	}
@@ -57,7 +57,7 @@ func (s *AvatarStore) authorize(ctx context.Context, tx *gorm.DB, a identityapp.
 	if access == nil {
 		return identityapp.ErrSessionInvalid
 	}
-	if err := access.CheckSession(ctx, a, now); err != nil {
+	if err := access.CheckSession(ctx, a, clock); err != nil {
 		return err
 	}
 	// Storage ownership is a media concern; never accept a client-selected org.
@@ -72,23 +72,23 @@ func (s *AvatarStore) authorize(ctx context.Context, tx *gorm.DB, a identityapp.
 }
 
 // AuthorizeAvatar checks current identity and session before decoding.
-func (s *AvatarStore) AuthorizeAvatar(ctx context.Context, a identityapp.Principal, now time.Time) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return s.authorize(ctx, tx, a, now) })
+func (s *AvatarStore) AuthorizeAvatar(ctx context.Context, a identityapp.Principal, clock func() time.Time) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return s.authorize(ctx, tx, a, clock) })
 }
 
 // CommitAvatar repeats current authorization when publishing immutable metadata.
-func (s *AvatarStore) CommitAvatar(ctx context.Context, a identityapp.Principal, m domain.MediaAsset, now time.Time) error {
+func (s *AvatarStore) CommitAvatar(ctx context.Context, a identityapp.Principal, m domain.MediaAsset, clock func() time.Time) error {
 	if m.Validate() != nil || m.Personal == nil || m.Personal.ActorID != a.ID || m.Personal.OrgID != a.OrgID || m.ProjectID != uuid.Nil || m.Kind != domain.KindImage || m.MimeType != "image/png" {
 		return application.ErrInvalidUpload
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := s.authorize(ctx, tx, a, now); err != nil {
+		if err := s.authorize(ctx, tx, a, clock); err != nil {
 			return err
 		}
 		if err := tx.Exec(`INSERT INTO media.media_asset(id,personal_org_id,personal_actor_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,width,height,codec,moderation_status,moderation_detail,revision,create_time,update_time) VALUES(?,?,?,'image','upload','ready',?,'avatar.png','image/png',?,?,?,?,'png','passed',?::jsonb,1,?,?)`, m.ID, a.OrgID, a.ID, m.ObjectKey, m.ByteSize, m.SHA256, m.Width, m.Height, string(m.ModerationDetail), m.CreateTime, m.UpdateTime).Error; err != nil {
 			return err
 		}
-		return tx.Exec(`INSERT INTO identity.security_event(id,actor_id,target_user_id,scope_kind,action,result,created_at) VALUES(?,?,?,'self','avatar.uploaded','success',?)`, uuid.New(), a.ID, a.ID, now).Error
+		return tx.Exec(`INSERT INTO identity.security_event(id,actor_id,target_user_id,scope_kind,action,result,created_at) VALUES(?,?,?,'self','avatar.uploaded','success',?)`, uuid.New(), a.ID, a.ID, clock().UTC()).Error
 	})
 }
 
@@ -100,9 +100,9 @@ func (s *AvatarStore) AvatarExists(ctx context.Context, id uuid.UUID) (bool, err
 }
 
 // AvatarTransaction keeps identity and avatar locks until preview signing finishes.
-func (s *AvatarStore) AvatarTransaction(ctx context.Context, a identityapp.Principal, now time.Time, run func(domain.MediaAsset) error) error {
+func (s *AvatarStore) AvatarTransaction(ctx context.Context, a identityapp.Principal, clock func() time.Time, run func(domain.MediaAsset) error) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := s.authorize(ctx, tx, a, now); err != nil {
+		if err := s.authorize(ctx, tx, a, clock); err != nil {
 			return err
 		}
 		var binding struct{ ID *uuid.UUID }

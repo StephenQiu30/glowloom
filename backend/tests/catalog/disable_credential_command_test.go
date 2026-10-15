@@ -99,7 +99,6 @@ func TestDisableCredentialCommandRejectsInvalidCallerAndTarget(t *testing.T) {
 		input catalogapp.DisableCredentialInput
 	}{
 		{"producer", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: identitydomain.RoleProducer}, catalogapp.DisableCredentialInput{ProviderID: target.ProviderID, CredentialID: target.ID, RequestID: uuid.NewString()}},
-		{"first login", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: identitydomain.RoleAdmin, MustChangePassword: true}, catalogapp.DisableCredentialInput{ProviderID: target.ProviderID, CredentialID: target.ID, RequestID: uuid.NewString()}},
 		{"wrong provider", actor, catalogapp.DisableCredentialInput{ProviderID: uuid.New(), CredentialID: target.ID, RequestID: uuid.NewString()}},
 		{"untrusted request", actor, catalogapp.DisableCredentialInput{ProviderID: target.ProviderID, CredentialID: target.ID, RequestID: "not-a-uuid"}},
 	} {

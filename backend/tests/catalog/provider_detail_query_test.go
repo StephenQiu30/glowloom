@@ -67,7 +67,6 @@ func TestProviderDetailQueryRejectsInvalidCallerAndUnsupportedAdapter(t *testing
 		read     bool
 	}{
 		{"producer", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: identitydomain.RoleProducer}, provider, identityapp.ErrForbidden, false},
-		{"first login", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: identitydomain.RoleAdmin, MustChangePassword: true}, provider, identityapp.ErrForbidden, false},
 		{"unsupported adapter", actor, func() domain.Provider { p := provider; p.AdapterKey = "missing"; return p }(), catalogapp.ErrUnsupportedCredentialSchema, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

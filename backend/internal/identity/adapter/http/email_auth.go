@@ -179,7 +179,9 @@ func (h *EmailAuthHandler) authenticated() gin.HandlerFunc {
 			httpapi.WriteProblem(c, 403, "forbidden", nil)
 			return
 		}
-		c.Set("principal", application.Principal{ID: u.ID, SessionID: result.Session.ID, CredentialEpoch: u.SessionEpoch, PlatformEpoch: u.PlatformEpoch, PlatformRole: u.PlatformRole, LoginName: u.LoginName, DisplayName: u.DisplayName})
+		// OrgID is the server-resolved personal storage coordinate, never authority.
+		// Content middleware replaces it with the explicitly authorized creation scope.
+		c.Set("principal", application.Principal{ID: u.ID, OrgID: u.OrgID, SessionID: result.Session.ID, CredentialEpoch: u.SessionEpoch, PlatformEpoch: u.PlatformEpoch, PlatformRole: u.PlatformRole, LoginName: u.LoginName, DisplayName: u.DisplayName})
 		c.Set("email_session", result)
 		c.Next()
 	}
@@ -318,6 +320,8 @@ func (h *EmailAuthHandler) complete(c *gin.Context) {
 // @Produce json
 // @Param body body EmailLoginRequest true "Request"
 // @Success 201 {object} EmailSessionView
+// @Failure 401 {object} httpapi.Problem
+// @Failure 429 {object} httpapi.Problem
 // @Failure 422 {object} httpapi.Problem
 // @Router /api/sessions [post]
 func (h *EmailAuthHandler) login(c *gin.Context) {
@@ -325,7 +329,7 @@ func (h *EmailAuthHandler) login(c *gin.Context) {
 	if !httpapi.Decode(c, &input) {
 		return
 	}
-	r, err := h.auth.Login(c.Request.Context(), input.Email, input.Password, input.Persistent)
+	r, err := h.auth.LoginFrom(c.Request.Context(), input.Email, input.Password, input.Persistent, requestSource(c))
 	h.respond(c, r, err, 201)
 }
 

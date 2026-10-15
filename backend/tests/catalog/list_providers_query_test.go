@@ -46,7 +46,6 @@ func TestListProvidersQueryBoundsPageAndChecksPrincipal(t *testing.T) {
 		want  error
 	}{
 		{"producer", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: identitydomain.RoleProducer}, catalogapp.ListProvidersInput{}, identityapp.ErrForbidden},
-		{"first login", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: identitydomain.RoleAdmin, MustChangePassword: true}, catalogapp.ListProvidersInput{}, identityapp.ErrForbidden},
 		{"limit", actor, catalogapp.ListProvidersInput{Limit: 201}, catalogapp.ErrInvalidProviderList},
 		{"cursor", actor, catalogapp.ListProvidersInput{After: &catalogapp.ProviderListCursor{ID: uuid.New()}}, catalogapp.ErrInvalidProviderList},
 	} {

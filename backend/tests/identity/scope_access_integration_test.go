@@ -17,8 +17,8 @@ import (
 
 type testScopeActor struct{ store *pgidentity.Store }
 
-func (a testScopeActor) CheckSession(ctx context.Context, actor identity.Principal, now time.Time) error {
-	return a.store.CheckSession(ctx, actor, now)
+func (a testScopeActor) CheckSession(ctx context.Context, actor identity.Principal, clock func() time.Time) error {
+	return a.store.CheckSession(ctx, actor, clock)
 }
 
 func TestScopeRejectsRevokedSession(t *testing.T) {

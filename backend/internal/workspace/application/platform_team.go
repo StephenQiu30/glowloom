@@ -64,7 +64,7 @@ func NewPlatformTeams(store TeamStore, signer TeamCursorSigner, now func() time.
 }
 func (s *PlatformTeams) Read(ctx context.Context, a identity.Principal, id uuid.UUID) (PlatformTeam, error) {
 	var out PlatformTeam
-	err := s.store.TeamTransaction(ctx, a, s.now().UTC(), func(tx TeamTx) error {
+	err := s.store.TeamTransaction(ctx, a, s.now, func(tx TeamTx) error {
 		if err := tx.RequirePlatform(); err != nil {
 			return err
 		}
@@ -107,7 +107,8 @@ func (s *PlatformTeams) List(ctx context.Context, a identity.Principal, f Platfo
 	}
 	now := s.now().UTC()
 	p := PlatformTeamPosition{AsOf: now}
-	err := s.store.TeamTransaction(ctx, a, now, func(tx TeamTx) error {
+	err := s.store.TeamTransaction(ctx, a, s.now, func(tx TeamTx) error {
+		now := s.now().UTC()
 		if err := tx.RequirePlatform(); err != nil {
 			return err
 		}
@@ -155,8 +156,8 @@ func (s *PlatformTeams) change(ctx context.Context, a identity.Principal, id uui
 	if id == uuid.Nil || v < 1 || !validTeamText(reason, 5, 500) {
 		return ErrInvalidTeam
 	}
-	now := s.now().UTC()
-	return s.store.TeamTransaction(ctx, a, now, func(tx TeamTx) error {
+	return s.store.TeamTransaction(ctx, a, s.now, func(tx TeamTx) error {
+		now := s.now().UTC()
 		if err := tx.RequirePlatform(); err != nil {
 			return err
 		}
@@ -209,8 +210,8 @@ func (s *PlatformTeams) Update(ctx context.Context, a identity.Principal, id uui
 	if err := validateTeamProfile(in, true); err != nil {
 		return out, err
 	}
-	now := s.now().UTC()
-	err := s.store.TeamTransaction(ctx, a, now, func(tx TeamTx) error {
+	err := s.store.TeamTransaction(ctx, a, s.now, func(tx TeamTx) error {
+		now := s.now().UTC()
 		if err := tx.RequirePlatform(); err != nil {
 			return err
 		}
@@ -258,8 +259,8 @@ func (s *Teams) UpdateProfile(ctx context.Context, a identity.Principal, id uuid
 	if err := validateTeamProfile(in, false); err != nil {
 		return out, err
 	}
-	now := s.now().UTC()
-	err := s.store.TeamTransaction(ctx, a, now, func(tx TeamTx) error {
+	err := s.store.TeamTransaction(ctx, a, s.now, func(tx TeamTx) error {
+		now := s.now().UTC()
 		team, err := tx.LoadTeam(id)
 		if err != nil {
 			return err

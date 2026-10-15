@@ -75,12 +75,12 @@ func resolveScopeFacts(facts ScopeFacts, actor, scope uuid.UUID, write bool) (do
 // retain their exact session and credential epoch until the content commit.
 type SessionActorAccess interface {
 	ActorAccess
-	CheckSession(context.Context, identity.Principal, time.Time) error
+	CheckSession(context.Context, identity.Principal, func() time.Time) error
 }
 
 // RequestScopeFactsStore rechecks the exact session before loading scope facts.
 type RequestScopeFactsStore interface {
-	LoadRequestScopeFacts(context.Context, identity.Principal, uuid.UUID, time.Time) (ScopeFacts, error)
+	LoadRequestScopeFacts(context.Context, identity.Principal, uuid.UUID, func() time.Time) (ScopeFacts, error)
 }
 
 // RequestScopeAccess binds content scope authorization to a live request session.
@@ -99,7 +99,7 @@ func (s *RequestScopeAccess) Resolve(ctx context.Context, actor identity.Princip
 	if actor.ID == uuid.Nil || actor.SessionID == uuid.Nil || actor.CredentialEpoch < 1 || scope == uuid.Nil {
 		return domain.Scope{}, ErrScopeNotFound
 	}
-	facts, err := s.store.LoadRequestScopeFacts(ctx, actor, scope, s.now().UTC())
+	facts, err := s.store.LoadRequestScopeFacts(ctx, actor, scope, s.now)
 	if err != nil {
 		return domain.Scope{}, err
 	}

@@ -92,7 +92,6 @@ func TestCreateModelCommandRejectsInvalidCallerAndModel(t *testing.T) {
 		change func(*catalogapp.CreateModelInput)
 	}{
 		{"producer", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: identitydomain.RoleProducer}, nil},
-		{"first login", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: identitydomain.RoleAdmin, MustChangePassword: true}, nil},
 		{"missing provider", actor, func(v *catalogapp.CreateModelInput) { v.ProviderID = uuid.Nil }},
 		{"bad key", actor, func(v *catalogapp.CreateModelInput) { v.Key = "Ark/Seedance" }},
 		{"blank name", actor, func(v *catalogapp.CreateModelInput) { v.DisplayName = " " }},

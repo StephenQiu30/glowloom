@@ -20,23 +20,25 @@ func NewSessionDirectoryStore(db *gorm.DB) *SessionDirectoryStore {
 }
 
 // ListSelfSessions returns only valid sessions belonging to the actor.
-func (s *SessionDirectoryStore) ListSelfSessions(ctx context.Context, actor application.Principal, now time.Time) ([]application.SessionSummary, error) {
+func (s *SessionDirectoryStore) ListSelfSessions(ctx context.Context, actor application.Principal, clock func() time.Time) ([]application.SessionSummary, error) {
 	out := []application.SessionSummary{}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if _, err := lockSelfActor(tx, actor, now); err != nil {
+		if _, err := lockSelfActor(tx, actor, clock); err != nil {
 			return err
 		}
+		now := clock().UTC()
 		return tx.Raw(`SELECT id,id=? AS current,device_summary,created_at,last_active_at,absolute_expires_at FROM identity.user_session WHERE account_id=? AND credential_revision=? AND revoked_at IS NULL AND last_active_at<=? AND last_active_at>? AND absolute_expires_at>? ORDER BY last_active_at DESC,id DESC`, actor.SessionID, actor.ID, actor.CredentialEpoch, now, now.Add(-12*time.Hour), now).Scan(&out).Error
 	})
 	return out, err
 }
 
 // RevokeSelfSession revokes one owned session idempotently.
-func (s *SessionDirectoryStore) RevokeSelfSession(ctx context.Context, actor application.Principal, id uuid.UUID, now time.Time) error {
+func (s *SessionDirectoryStore) RevokeSelfSession(ctx context.Context, actor application.Principal, id uuid.UUID, clock func() time.Time) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if _, err := lockSelfActor(tx, actor, now); err != nil {
+		if _, err := lockSelfActor(tx, actor, clock); err != nil {
 			return err
 		}
+		now := clock().UTC()
 		var row struct {
 			ID        uuid.UUID
 			RevokedAt *time.Time
@@ -59,11 +61,12 @@ func (s *SessionDirectoryStore) RevokeSelfSession(ctx context.Context, actor app
 }
 
 // RevokeOtherSessions preserves the requesting session while revoking the others.
-func (s *SessionDirectoryStore) RevokeOtherSessions(ctx context.Context, actor application.Principal, now time.Time) error {
+func (s *SessionDirectoryStore) RevokeOtherSessions(ctx context.Context, actor application.Principal, clock func() time.Time) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if _, err := lockSelfActor(tx, actor, now); err != nil {
+		if _, err := lockSelfActor(tx, actor, clock); err != nil {
 			return err
 		}
+		now := clock().UTC()
 		result := tx.Exec(`UPDATE identity.user_session SET revoked_at=? WHERE account_id=? AND id<>? AND revoked_at IS NULL`, now, actor.ID, actor.SessionID)
 		if result.Error != nil {
 			return fmt.Errorf("revoke other devices: %w", result.Error)

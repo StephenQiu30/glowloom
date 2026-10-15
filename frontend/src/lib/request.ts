@@ -147,10 +147,20 @@ export async function request<T>(
       identityProof: { csrf: proof, scope: creationScope },
     };
     const response = await client.request<T>(outgoing);
-    if (scopeSignal.aborted || generation !== sessionGeneration)
+    if (
+      signal.aborted ||
+      scopeSignal.aborted ||
+      generation !== sessionGeneration
+    )
       throw new axios.CanceledError("identity_or_scope_changed");
     return response.status === 204 ? (undefined as T) : response.data;
   } catch (error) {
+    if (
+      signal.aborted ||
+      scopeSignal.aborted ||
+      generation !== sessionGeneration
+    )
+      throw new axios.CanceledError("identity_or_scope_changed");
     if (
       creationScope &&
       !scopeSignal.aborted &&

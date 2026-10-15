@@ -61,7 +61,7 @@ func (s *Store) requireCurrentAuditAdmin(tx *gorm.DB, actor identityapp.Principa
 	if s.actors == nil || s.actors(tx) == nil {
 		return application.ErrForbidden
 	}
-	return s.actors(tx).CheckPlatformSession(tx.Statement.Context, actor, time.Now().UTC())
+	return s.actors(tx).CheckPlatformSession(tx.Statement.Context, actor, time.Now)
 }
 
 // NewScopedStore injects current platform-session authority for metadata reads.

@@ -135,7 +135,6 @@ func TestPublishPriceRuleCommandRejectsBeforeStore(t *testing.T) {
 		change func(*catalogapp.PublishPriceRuleInput)
 	}{
 		{"producer", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: identitydomain.RoleProducer}, nil},
-		{"first login", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: identitydomain.RoleAdmin, MustChangePassword: true}, nil},
 		{"missing model", actor, func(v *catalogapp.PublishPriceRuleInput) { v.ModelID = uuid.Nil }},
 		{"missing revision", actor, func(v *catalogapp.PublishPriceRuleInput) { v.ExpectedRevision = 0 }},
 		{"missing version number", actor, func(v *catalogapp.PublishPriceRuleInput) { v.VersionNo = 0 }},

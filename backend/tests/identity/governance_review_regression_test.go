@@ -167,7 +167,7 @@ func TestRevokingSessionsPreservesCredentialAndTeamQualification(t *testing.T) {
 	if err := tx.Raw(`SELECT governance_blocked FROM workspace.team WHERE id=?`, team.ID).Scan(&blocked).Error; err != nil || blocked {
 		t.Fatal("password recovery froze sole administrator team", err)
 	}
-	if err := pgidentity.NewStore(tx).CheckSession(t.Context(), owner, now); !errors.Is(err, identity.ErrSessionInvalid) {
+	if err := pgidentity.NewStore(tx).CheckSession(t.Context(), owner, func() time.Time { return now }); !errors.Is(err, identity.ErrSessionInvalid) {
 		t.Fatal("revoked session retained access", err)
 	}
 	login, err := ownerAuth.Login(t.Context(), "password-required-admin@example.invalid", "long password for tests", false)
@@ -175,7 +175,7 @@ func TestRevokingSessionsPreservesCredentialAndTeamQualification(t *testing.T) {
 		t.Fatal(err)
 	}
 	restrictedActor := identity.Principal{ID: owner.ID, SessionID: login.Session.ID, CredentialEpoch: login.User.SessionEpoch, PlatformEpoch: login.User.PlatformEpoch}
-	if err := pgidentity.NewStore(tx).CheckSession(t.Context(), restrictedActor, now); err != nil {
+	if err := pgidentity.NewStore(tx).CheckSession(t.Context(), restrictedActor, func() time.Time { return now }); err != nil {
 		t.Fatal("fresh session lost normal access", err)
 	}
 	if err := tx.Exec(`INSERT INTO workspace.team_member(team_id,user_id,role,status,joined_at,source) VALUES(?,?,'team_admin','active',?,'invited')`, team.ID, other.ID, now).Error; err != nil {

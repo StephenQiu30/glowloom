@@ -30,7 +30,7 @@ type EmailChangeTx interface {
 
 // EmailChangeStore locks the current account before the proof operation.
 type EmailChangeStore interface {
-	EmailChangeTransaction(context.Context, Principal, time.Time, func(EmailChangeTx) error) error
+	EmailChangeTransaction(context.Context, Principal, func() time.Time, func(EmailChangeTx) error) error
 }
 
 // EmailChange owns one session-bound pair of mailbox proofs.
@@ -73,8 +73,8 @@ func (s *EmailChange) StartFrom(ctx context.Context, a Principal, email string, 
 		return uuid.Nil, err
 	}
 	op := uuid.New()
-	now := s.now().UTC()
-	err = s.store.EmailChangeTransaction(ctx, a, now, func(tx EmailChangeTx) error {
+	err = s.store.EmailChangeTransaction(ctx, a, s.now, func(tx EmailChangeTx) error {
+		now := s.now().UTC()
 		u := tx.Account()
 		if u.Revision != revision {
 			return domain.ErrRevisionConflict
@@ -139,9 +139,9 @@ func (s *EmailChange) Verify(ctx context.Context, a Principal, op uuid.UUID, sid
 	if (side != "old" && side != "new") || op == uuid.Nil {
 		return ErrProofInvalid
 	}
-	now := s.now().UTC()
 	var rejected error
-	err := s.store.EmailChangeTransaction(ctx, a, now, func(tx EmailChangeTx) error {
+	err := s.store.EmailChangeTransaction(ctx, a, s.now, func(tx EmailChangeTx) error {
+		now := s.now().UTC()
 		if err := s.recent(tx, now); err != nil {
 			return err
 		}
@@ -163,6 +163,13 @@ func (s *EmailChange) Verify(ctx context.Context, a Principal, op uuid.UUID, sid
 		b, err := tx.Budget(bucket)
 		if err != nil {
 			return err
+		}
+		now = s.now().UTC()
+		if err := s.recent(tx, now); err != nil {
+			return err
+		}
+		if !s.bound(c, tx, now) {
+			return ErrProofInvalid
 		}
 		b.Prune(now)
 		if len(b.FailedAt) >= 5 {
@@ -194,8 +201,8 @@ func (s *EmailChange) Complete(ctx context.Context, a Principal, op uuid.UUID, r
 	if !s.auth.emailReady() {
 		return ErrRegistrationUnavailable
 	}
-	now := s.now().UTC()
-	return s.store.EmailChangeTransaction(ctx, a, now, func(tx EmailChangeTx) error {
+	return s.store.EmailChangeTransaction(ctx, a, s.now, func(tx EmailChangeTx) error {
+		now := s.now().UTC()
 		u := tx.Account()
 		if u.Revision != revision {
 			return domain.ErrRevisionConflict
@@ -209,6 +216,10 @@ func (s *EmailChange) Complete(ctx context.Context, a Principal, op uuid.UUID, r
 		}
 		next, err := tx.Challenge(op, "email_new")
 		if err != nil {
+			return err
+		}
+		now = s.now().UTC()
+		if err := s.recent(tx, now); err != nil {
 			return err
 		}
 		if !s.bound(old, tx, now) || !s.bound(next, tx, now) || old.ConsumedAt == nil || next.ConsumedAt == nil || !old.CreatedAt.Equal(next.CreatedAt) || !old.ExpiresAt.Equal(next.ExpiresAt) || old.EmailKey != u.Email || next.EmailKey == u.Email {
@@ -248,8 +259,8 @@ func (s *EmailChange) Cancel(ctx context.Context, a Principal, op uuid.UUID) err
 	if !s.auth.emailReady() {
 		return ErrRegistrationUnavailable
 	}
-	now := s.now().UTC()
-	return s.store.EmailChangeTransaction(ctx, a, now, func(tx EmailChangeTx) error {
+	return s.store.EmailChangeTransaction(ctx, a, s.now, func(tx EmailChangeTx) error {
+		now := s.now().UTC()
 		for _, side := range []string{"old", "new"} {
 			c, err := tx.Challenge(op, "email_"+side)
 			if err != nil {

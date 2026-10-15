@@ -117,8 +117,8 @@ func (s *Governance) listInvitations(ctx context.Context, a Principal, team *uui
 	if err != nil || s.protector == nil {
 		return page, ErrInvalidGovernance
 	}
-	now := s.now().UTC()
-	err = s.store.GovernanceTransaction(ctx, a, false, now, func(tx GovernanceTx) error {
+	err = s.store.GovernanceTransaction(ctx, a, false, s.now, func(tx GovernanceTx) error {
+		now := s.now().UTC()
 		revision, err := directoryAuthority(tx, a, team, scope)
 		if err != nil {
 			return err
@@ -150,8 +150,8 @@ func (s *Governance) ListProposals(ctx context.Context, a Principal, team *uuid.
 	if err != nil || s.protector == nil || (scope != "mine" && scope != "platform" && scope != "team" && scope != "platform_team") || (scope == "team" || scope == "platform_team") != (team != nil) {
 		return page, ErrInvalidGovernance
 	}
-	now := s.now().UTC()
-	err = s.store.GovernanceTransaction(ctx, a, false, now, func(tx GovernanceTx) error {
+	err = s.store.GovernanceTransaction(ctx, a, false, s.now, func(tx GovernanceTx) error {
+		now := s.now().UTC()
 		revision, err := directoryAuthority(tx, a, team, scope)
 		if err != nil {
 			return err

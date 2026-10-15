@@ -113,7 +113,7 @@ func (s *Store) requirePlatform(tx *gorm.DB, actor identity.Principal) error {
 	if s.platformAccess == nil || s.platformAccess(tx) == nil {
 		return identity.ErrForbidden
 	}
-	return s.platformAccess(tx).CheckPlatformSession(tx.Statement.Context, actor, time.Now().UTC())
+	return s.platformAccess(tx).CheckPlatformSession(tx.Statement.Context, actor, time.Now)
 }
 
 // AuthorizeBatchWorker rechecks every durable confirmer before starting a batch.

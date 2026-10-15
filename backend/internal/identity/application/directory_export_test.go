@@ -7,6 +7,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -49,6 +50,7 @@ func TestDirectoryExportCSVFormulaSafety(t *testing.T) {
 }
 
 type exportMemoryStore struct {
+	mu       sync.Mutex
 	jobs     map[uuid.UUID]DirectoryExportJob
 	rows     [][]string
 	denied   bool
@@ -56,9 +58,11 @@ type exportMemoryStore struct {
 }
 
 func (f *exportMemoryStore) Transaction(_ context.Context, run func(ExportTx) error) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	return run(f)
 }
-func (f *exportMemoryStore) Authorize(_ Principal, _ *uuid.UUID, revision int64, _ bool, _ time.Time) (int64, error) {
+func (f *exportMemoryStore) Authorize(_ Principal, _ *uuid.UUID, revision int64, _ bool, _ func() time.Time) (int64, error) {
 	if f.denied || revision != 0 && revision != f.revision {
 		return 0, ErrForbidden
 	}
@@ -92,11 +96,11 @@ func (f *exportMemoryStore) Pending(_ context.Context, limit int, now time.Time)
 	}
 	return ids, nil
 }
-func (f *exportMemoryStore) Cleanup(_ context.Context, _ int, now time.Time, remove func(DirectoryExportJob) error) (int, error) {
+func (f *exportMemoryStore) Cleanup(ctx context.Context, _ int, now time.Time, remove func(context.Context, DirectoryExportJob) error) (int, error) {
 	n := 0
 	for id, j := range f.jobs {
 		if !now.Before(j.ExpiresAt) && j.Status != "expired" {
-			if err := remove(j); err != nil {
+			if err := remove(ctx, j); err != nil {
 				return n, err
 			}
 			j.Status = "expired"
@@ -242,6 +246,79 @@ func TestDirectoryExportTenThousandBoundary(t *testing.T) {
 				}
 			} else if !errors.Is(err, ErrExportLimit) || len(store.jobs) != 0 {
 				t.Fatal("10001 not rejected atomically", err)
+			}
+		})
+	}
+}
+
+type cleanupContextStore struct {
+	*exportMemoryStore
+	job DirectoryExportJob
+}
+
+func (s cleanupContextStore) Cleanup(ctx context.Context, _ int, _ time.Time, remove func(context.Context, DirectoryExportJob) error) (int, error) {
+	bounded, cancel := context.WithTimeout(ctx, 20*time.Millisecond)
+	defer cancel()
+	return 0, remove(bounded, s.job)
+}
+
+type cleanupBlockingObjects struct {
+	*exportMemoryObjects
+	sawDeadline bool
+}
+
+func (o *cleanupBlockingObjects) Remove(ctx context.Context, _ string) error {
+	_, o.sawDeadline = ctx.Deadline()
+	if !o.sawDeadline {
+		return errors.New("Remove received unbounded parent context")
+	}
+	<-ctx.Done()
+	return ctx.Err()
+}
+func TestDirectoryExportCleanupDeadlineReachesObjectClient(t *testing.T) {
+	service, store, objects, _, _ := exportFixture(t)
+	object := uuid.New()
+	service.store = cleanupContextStore{exportMemoryStore: store, job: DirectoryExportJob{ObjectID: &object}}
+	blocking := &cleanupBlockingObjects{exportMemoryObjects: objects}
+	service.objects = blocking
+	_, err := service.RunOnce(t.Context(), 1)
+	if !blocking.sawDeadline || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("cleanup discarded its I/O deadline", err)
+	}
+}
+func TestDirectoryExportConcurrentRequestBinding(t *testing.T) {
+	for _, different := range []bool{false, true} {
+		t.Run(strconv.FormatBool(different), func(t *testing.T) {
+			service, store, _, _, actor := exportFixture(t)
+			key := uuid.New()
+			start := make(chan struct{})
+			type outcome struct {
+				job DirectoryExportJob
+				err error
+			}
+			results := make(chan outcome, 2)
+			for i := 0; i < 2; i++ {
+				go func(index int) {
+					<-start
+					filter := ExportFilter{}
+					if different && index == 1 {
+						filter.Status = "deleted"
+					}
+					job, err := service.Create(t.Context(), actor, nil, filter, key)
+					results <- outcome{job, err}
+				}(i)
+			}
+			close(start)
+			a, b := <-results, <-results
+			if len(store.jobs) != 1 {
+				t.Fatal("concurrent requests created multiple jobs")
+			}
+			if !different {
+				if a.err != nil || b.err != nil || a.job.ID != b.job.ID {
+					t.Fatal("equal concurrent requests did not replay", a.err, b.err)
+				}
+			} else if (a.err != nil || !errors.Is(b.err, ErrExportConflict)) && (b.err != nil || !errors.Is(a.err, ErrExportConflict)) {
+				t.Fatal("changed concurrent request did not conflict", a.err, b.err)
 			}
 		})
 	}

@@ -31,8 +31,8 @@ func (s *PlatformPasswordReset) Send(ctx context.Context, a Principal, id uuid.U
 	if s.auth == nil || !s.auth.mailReady() {
 		return ErrRegistrationUnavailable
 	}
-	now := s.now().UTC()
-	return s.store.GovernanceTransaction(ctx, a, true, now, func(tx GovernanceTx) error {
+	return s.store.GovernanceTransaction(ctx, a, true, s.now, func(tx GovernanceTx) error {
+		now := s.now().UTC()
 		if err := tx.RequirePlatform(); err != nil {
 			return err
 		}

@@ -22,7 +22,7 @@ func requirePlatformCatalogAdmin(tx *gorm.DB, actors ActorAccessFactory, actor i
 	if actors == nil || actors(tx) == nil {
 		return identityapp.ErrForbidden
 	}
-	return actors(tx).CheckPlatformSession(tx.Statement.Context, actor, time.Now().UTC())
+	return actors(tx).CheckPlatformSession(tx.Statement.Context, actor, time.Now)
 }
 func (s *Store) requirePlatformAdmin(tx *gorm.DB, actor identityapp.Principal) error {
 	return requirePlatformCatalogAdmin(tx, s.actors, actor)

@@ -84,7 +84,7 @@ func TestPlatformGovernanceAtomicFreeze(t *testing.T) {
 	if err := svc.Enable(t.Context(), actor, target.ID, 2, "Restore after review"); err != nil {
 		t.Fatal(err)
 	}
-	if err := pgidentity.NewStore(tx).CheckSession(t.Context(), target, now); !errors.Is(err, identity.ErrSessionInvalid) {
+	if err := pgidentity.NewStore(tx).CheckSession(t.Context(), target, func() time.Time { return now }); !errors.Is(err, identity.ErrSessionInvalid) {
 		t.Fatal("old session resurrected", err)
 	}
 	var count int64

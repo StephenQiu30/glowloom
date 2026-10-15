@@ -159,7 +159,7 @@ func TestVoiceCatalogPagesSortedRealChoicesAndPreservesOwnerErrors(t *testing.T)
 		t.Fatalf("lost owning authorization error: %v", err)
 	}
 	store.err = nil
-	actor.MustChangePassword = true
+	actor.ID = uuid.Nil
 	before := store.calls
 	_, err = q.List(t.Context(), actor, project, 10, nil)
 	if !errors.Is(err, identityapp.ErrForbidden) || store.calls != before {

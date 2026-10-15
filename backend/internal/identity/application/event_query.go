@@ -49,7 +49,7 @@ type EventPosition struct {
 
 // EventStore supplies authorized security event reads.
 type EventStore interface {
-	ReadEvents(context.Context, Principal, EventFilter, EventPosition, time.Time) ([]SecurityEvent, error)
+	ReadEvents(context.Context, Principal, EventFilter, EventPosition, func() time.Time) ([]SecurityEvent, error)
 }
 
 // EventSigner authenticates continuation cursors without exposing key material.
@@ -147,7 +147,7 @@ func (q *EventQuery) List(ctx context.Context, actor Principal, filter EventFilt
 			return EventPage{}, ErrInvalidEventFilter
 		}
 	}
-	items, err := q.store.ReadEvents(ctx, actor, f, position, now)
+	items, err := q.store.ReadEvents(ctx, actor, f, position, q.now)
 	if err != nil {
 		return EventPage{}, err
 	}

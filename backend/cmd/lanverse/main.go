@@ -2,22 +2,18 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"flag"
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
 	"go.uber.org/zap"
-	"golang.org/x/term"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityoperator"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	lvlog "github.com/StephenQiu30/glowloom-server/backend/internal/platform/log"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/redisconn"

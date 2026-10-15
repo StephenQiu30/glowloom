@@ -17,9 +17,9 @@ type SessionSummary struct {
 
 // SessionDirectoryStore checks current identity before listing or revoking sessions.
 type SessionDirectoryStore interface {
-	ListSelfSessions(context.Context, Principal, time.Time) ([]SessionSummary, error)
-	RevokeSelfSession(context.Context, Principal, uuid.UUID, time.Time) error
-	RevokeOtherSessions(context.Context, Principal, time.Time) error
+	ListSelfSessions(context.Context, Principal, func() time.Time) ([]SessionSummary, error)
+	RevokeSelfSession(context.Context, Principal, uuid.UUID, func() time.Time) error
+	RevokeOtherSessions(context.Context, Principal, func() time.Time) error
 }
 
 // SessionDirectory lists and revokes only the current account sessions.
@@ -35,7 +35,7 @@ func NewSessionDirectory(store SessionDirectoryStore, now func() time.Time) *Ses
 
 // List returns the actor session metadata with no secret material.
 func (s *SessionDirectory) List(ctx context.Context, actor Principal) ([]SessionSummary, error) {
-	return s.store.ListSelfSessions(ctx, actor, s.now().UTC())
+	return s.store.ListSelfSessions(ctx, actor, s.now)
 }
 
 // Revoke revokes the selected session only when owned by the actor.
@@ -43,10 +43,10 @@ func (s *SessionDirectory) Revoke(ctx context.Context, actor Principal, id uuid.
 	if id == uuid.Nil {
 		return ErrSessionInvalid
 	}
-	return s.store.RevokeSelfSession(ctx, actor, id, s.now().UTC())
+	return s.store.RevokeSelfSession(ctx, actor, id, s.now)
 }
 
 // RevokeOthers preserves the current session and revokes all other sessions.
 func (s *SessionDirectory) RevokeOthers(ctx context.Context, actor Principal) error {
-	return s.store.RevokeOtherSessions(ctx, actor, s.now().UTC())
+	return s.store.RevokeOtherSessions(ctx, actor, s.now)
 }

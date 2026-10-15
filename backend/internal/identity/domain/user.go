@@ -3,11 +3,7 @@ package domain
 
 import (
 	"errors"
-	"math"
-	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/google/uuid"
 )
@@ -26,26 +22,20 @@ var (
 	ErrAccountLocked = errors.New("account is temporarily locked")
 	// ErrAccountDisabled means the account is unavailable for login or another disable.
 	ErrAccountDisabled = errors.New("account is disabled")
-	// ErrAccountActive means an account cannot be enabled again.
-	ErrAccountActive = errors.New("account is already active")
 	// ErrInvalidAccountState means a mutation would overflow a persisted counter.
 	ErrInvalidAccountState = errors.New("invalid account state")
-	// ErrLastActiveAdmin means a change would leave no active administrator.
-	ErrLastActiveAdmin = errors.New("cannot remove the last active administrator")
 	// ErrUserNotFound means an account is unavailable in the requested organization.
 	ErrUserNotFound = errors.New("user not found")
 	// ErrRevisionConflict means an account changed after the caller read it.
 	ErrRevisionConflict = errors.New("user revision conflict")
 	// ErrInvalidProfile means the requested display name, role, or stored state is invalid.
 	ErrInvalidProfile = errors.New("invalid account profile")
-	// ErrAccountUnchanged means the requested profile equals the current profile.
-	ErrAccountUnchanged = errors.New("account profile is unchanged")
 )
 
-// Role is the account's organization-level permission tier.
+// Role is retained organization-role metadata; current authority uses platform roles and scopes.
 type Role string
 
-// Account roles are the two permission tiers in the MVP.
+// Account roles retain the legacy storage vocabulary for existing records.
 const (
 	RoleAdmin    Role = "admin"
 	RoleProducer Role = "producer"
@@ -63,24 +53,25 @@ const (
 // User contains the account state needed by authentication and account commands.
 // PasswordHash is a versioned credential and must never be logged or returned in an API DTO.
 type User struct {
-	ID                 uuid.UUID
-	OrgID              uuid.UUID
-	LoginName          string
-	Email              string
-	EmailVerifiedAt    time.Time
-	EmailVersion       int64
-	PlatformRole       string
-	PlatformEpoch      int64
-	AvatarAssetID      *uuid.UUID
-	TermsVersion       string
-	TermsAcceptedAt    time.Time
-	Theme              string
-	PromptSuffix       string
-	DeletedAt          time.Time
-	DisplayName        string
-	Role               Role
-	Status             Status
-	PasswordHash       string
+	ID              uuid.UUID
+	OrgID           uuid.UUID
+	LoginName       string
+	Email           string
+	EmailVerifiedAt time.Time
+	EmailVersion    int64
+	PlatformRole    string
+	PlatformEpoch   int64
+	AvatarAssetID   *uuid.UUID
+	TermsVersion    string
+	TermsAcceptedAt time.Time
+	Theme           string
+	PromptSuffix    string
+	DeletedAt       time.Time
+	DisplayName     string
+	Role            Role
+	Status          Status
+	PasswordHash    string
+	// MustChangePassword is historical storage data and never restricts access.
 	MustChangePassword bool
 	PasswordChangedAt  time.Time
 	FailedLoginCount   int
@@ -140,97 +131,6 @@ func (u *User) RegisterLoginSuccess(now time.Time) {
 	u.LockedUntil = time.Time{}
 	u.LastLoginAt = now
 	u.Revision++
-}
-
-// Disable invalidates all sessions while preserving the last active admin.
-// The caller must count active administrators under a database lock.
-func (u *User) Disable(activeAdmins int) error {
-	if u.Status != StatusActive {
-		return ErrAccountDisabled
-	}
-	if u.Role == RoleAdmin && activeAdmins <= 1 {
-		return ErrLastActiveAdmin
-	}
-	u.Status = StatusDisabled
-	u.SessionEpoch++
-	u.Revision++
-	return nil
-}
-
-// Enable restores an account and invalidates every session from before disable.
-func (u *User) Enable() error {
-	if u.Status == StatusActive {
-		return ErrAccountActive
-	}
-	if u.Status != StatusDisabled || u.SessionEpoch < 1 || u.SessionEpoch >= math.MaxInt32 ||
-		u.Revision < 1 || u.Revision >= math.MaxInt32 {
-		return ErrInvalidAccountState
-	}
-	u.Status = StatusActive
-	u.FailedLoginCount = 0
-	u.LockedUntil = time.Time{}
-	u.SessionEpoch++
-	u.Revision++
-	return nil
-}
-
-// UpdateProfile changes only the display name or role. The caller must count
-// active administrators under the organization change lock before invoking it.
-func (u *User) UpdateProfile(displayName *string, role *Role, activeAdmins int) error {
-	if (displayName == nil && role == nil) || u.Revision < 1 || u.Revision >= math.MaxInt32 ||
-		(u.Status != StatusActive && u.Status != StatusDisabled) {
-		return ErrInvalidProfile
-	}
-	nextName, nextRole := u.DisplayName, u.Role
-	if displayName != nil {
-		nextName = strings.TrimSpace(*displayName)
-		if !utf8.ValidString(nextName) || utf8.RuneCountInString(nextName) < 1 ||
-			utf8.RuneCountInString(nextName) > 50 {
-			return ErrInvalidProfile
-		}
-		for _, r := range nextName {
-			if unicode.IsControl(r) {
-				return ErrInvalidProfile
-			}
-		}
-	}
-	if role != nil {
-		nextRole = *role
-		if nextRole != RoleAdmin && nextRole != RoleProducer {
-			return ErrInvalidProfile
-		}
-	}
-	if nextName == u.DisplayName && nextRole == u.Role {
-		return ErrAccountUnchanged
-	}
-	if u.Role == RoleAdmin && nextRole != RoleAdmin && u.Status == StatusActive && activeAdmins <= 1 {
-		return ErrLastActiveAdmin
-	}
-	u.DisplayName, u.Role = nextName, nextRole
-	u.Revision++
-	return nil
-}
-
-// ResetPassword replaces a credential, requires a first-login change, and
-// invalidates every existing session. Disabled accounts remain disabled.
-func (u *User) ResetPassword(password string) error {
-	if (u.Status != StatusActive && u.Status != StatusDisabled) ||
-		!ValidPasswordHash(u.PasswordHash) || u.SessionEpoch < 1 ||
-		u.SessionEpoch >= math.MaxInt32 || u.Revision < 1 || u.Revision >= math.MaxInt32 {
-		return ErrInvalidAccountState
-	}
-	hash, err := HashPassword(password, u.PasswordHash)
-	if err != nil {
-		return err
-	}
-	u.PasswordHash = hash
-	u.MustChangePassword = true
-	u.PasswordChangedAt = time.Time{}
-	u.FailedLoginCount = 0
-	u.LockedUntil = time.Time{}
-	u.SessionEpoch++
-	u.Revision++
-	return nil
 }
 
 // SessionMatches checks the durable epoch and account availability.

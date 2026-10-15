@@ -2,14 +2,9 @@
 package postgres
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"

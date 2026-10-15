@@ -192,3 +192,64 @@ it("超过10000行的409明确要求缩小筛选，不误报资料冲突或成�
   await screen.findByText(/当前筛选超过导出上限/);
   expect(screen.queryByText(/导出状态/)).toBeNull();
 });
+
+it("刷新统计被403撤权后清除已完成导出和下载按钮", async () => {
+  let deny = false;
+  vi.mocked(request).mockImplementation(async (url) => {
+    if (url === "/api/platform/user-statistics") {
+      if (deny) throw new RequestError("forbidden", 403);
+      return snapshot;
+    }
+    if (url === "/api/me/reauthentication") return undefined;
+    if (url === "/api/platform/user-exports") return pending;
+    return {
+      ...pending,
+      status: "completed",
+      expires_at: new Date(Date.now() + 60000).toISOString(),
+    };
+  });
+  render(<DirectoryTools filter={filter} />);
+  await create();
+  fireEvent.click(screen.getByText("检查导出状态"));
+  await screen.findByText("导出状态：可下载");
+  deny = true;
+  fireEvent.click(screen.getByText("刷新统计"));
+  await screen.findByRole("alert");
+  expect(screen.queryByText("下载 CSV")).toBeNull();
+  expect(screen.queryByText("导出状态：可下载")).toBeNull();
+});
+
+it("统计403中止在途CSV，迟到字节没有本地输出", async () => {
+  let deny = false;
+  let finish!: (blob: Blob) => void;
+  const slow = new Promise<Blob>((resolve) => (finish = resolve));
+  vi.mocked(request).mockImplementation(async (url) => {
+    if (url === "/api/platform/user-statistics") {
+      if (deny) throw new RequestError("forbidden", 403);
+      return snapshot;
+    }
+    if (url === "/api/me/reauthentication") return undefined;
+    if (url.endsWith("/download")) return slow;
+    if (url === "/api/platform/user-exports") return pending;
+    return {
+      ...pending,
+      status: "completed",
+      expires_at: new Date(Date.now() + 60000).toISOString(),
+    };
+  });
+  render(<DirectoryTools filter={filter} />);
+  await create();
+  fireEvent.click(screen.getByText("检查导出状态"));
+  await screen.findByText("导出状态：可下载");
+  fireEvent.click(screen.getByText("下载 CSV"));
+  deny = true;
+  fireEvent.click(screen.getByText("刷新统计"));
+  await screen.findByRole("alert");
+  const downloadOptions = vi
+    .mocked(request)
+    .mock.calls.find(([url]) => url.endsWith("/download"))?.[1];
+  expect(downloadOptions?.signal?.aborted).toBe(true);
+  await act(async () => finish(new Blob(["old private rows"])));
+  expect(URL.createObjectURL).not.toHaveBeenCalled();
+  expect(screen.queryByText("下载 CSV")).toBeNull();
+});

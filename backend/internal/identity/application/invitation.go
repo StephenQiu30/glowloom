@@ -73,8 +73,8 @@ func (s *Governance) createInvitation(ctx context.Context, a Principal, key uuid
 	raw, _ := json.Marshal([]any{team, normalized, role, platform, reason})
 	hash := sha256.Sum256(raw)
 	requestHash := hex.EncodeToString(hash[:])
-	now := s.now().UTC()
-	err = s.store.GovernanceTransaction(ctx, a, team == nil || platform || role == "team_admin", now, func(base GovernanceTx) error {
+	err = s.store.GovernanceTransaction(ctx, a, team == nil || platform || role == "team_admin", s.now, func(base GovernanceTx) error {
+		now := s.now().UTC()
 		tx, ok := base.(InvitationTx)
 		if !ok {
 			return ErrGovernanceConflict
@@ -177,9 +177,9 @@ func (s *Governance) consumeInvitation(ctx context.Context, a Principal, token s
 	if len(token) != 43 {
 		return ErrProofInvalid
 	}
-	now := s.now().UTC()
 	hash := sha256.Sum256([]byte(token))
-	return s.store.GovernanceTransaction(ctx, a, false, now, func(base GovernanceTx) error {
+	return s.store.GovernanceTransaction(ctx, a, false, s.now, func(base GovernanceTx) error {
+		now := s.now().UTC()
 		tx, ok := base.(InvitationTx)
 		if !ok {
 			return ErrGovernanceConflict
@@ -247,8 +247,8 @@ func (s *Governance) changeInvitation(ctx context.Context, a Principal, id uuid.
 	if revision < 1 || (revoke && !validGovernanceReason(reason)) {
 		return ErrInvalidGovernance
 	}
-	now := s.now().UTC()
-	return s.store.GovernanceTransaction(ctx, a, true, now, func(base GovernanceTx) error {
+	return s.store.GovernanceTransaction(ctx, a, true, s.now, func(base GovernanceTx) error {
+		now := s.now().UTC()
 		tx, ok := base.(InvitationTx)
 		if !ok {
 			return ErrGovernanceConflict

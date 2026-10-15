@@ -19,7 +19,7 @@ func NewTeamProfileStore(db *gorm.DB, actors TeamActorAccessFactory, avatars Tea
 	return &TeamStore{db: db, actors: actors, avatars: avatars}
 }
 func (t *teamTx) RequirePlatform() error {
-	return t.actors.CheckPlatformSession(t.db.Statement.Context, t.actor, t.now)
+	return t.actors.CheckPlatformSession(t.db.Statement.Context, t.actor, t.clock)
 }
 
 const platformTeamProjection = `t.id,t.name,t.avatar_asset_id AS avatar_id,t.created_by,t.status,t.resume_status,t.governance_blocked,t.invitation_enabled,t.revision,t.create_time AS created_at,(SELECT count(*) FROM workspace.team_member m WHERE m.team_id=t.id AND m.status IN ('active','suspended')) AS member_count,(SELECT count(*) FROM workspace.team_member m JOIN identity."user" u ON u.id=m.user_id WHERE m.team_id=t.id AND m.status='active' AND m.role='team_admin' AND u.status='active' AND u.email_verified_at IS NOT NULL AND NOT u.is_delete) AS administrator_count`

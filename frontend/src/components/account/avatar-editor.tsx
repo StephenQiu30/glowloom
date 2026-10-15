@@ -18,13 +18,20 @@ export function BoundAvatar({
   assetID?: string;
   label?: string;
 }) {
-  const [url, setURL] = useState("");
-  const [error, setError] = useState("");
+  const [preview, setPreview] = useState<{
+    assetID: string;
+    url: string;
+    error: string;
+  } | null>(null);
+  const current = preview?.assetID === assetID ? preview : null;
+  const url = current?.url ?? "";
+  const error = current?.error ?? "";
   const [retry, setRetry] = useState(0);
   const host = useRef<HTMLDivElement>(null);
   const readPreview = useEffectEvent(load);
   useEffect(() => {
     if (!assetID) return;
+    const boundAssetID = assetID;
     const c = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let visible = document.visibilityState !== "hidden";
@@ -37,8 +44,7 @@ export function BoundAvatar({
         const p = await readPreview(c.signal);
         if (!c.signal.aborted && visible) {
           if (!p.url) throw new Error("头像预览不可用");
-          setURL(p.url);
-          setError("");
+          setPreview({ assetID: boundAssetID, url: p.url, error: "" });
           timer = setTimeout(
             () => {
               if (visible) void read();
@@ -51,9 +57,11 @@ export function BoundAvatar({
         }
       } catch (e) {
         if (!c.signal.aborted) {
-          setURL("");
-          if (!(e instanceof RequestError && e.status === 404))
-            setError(authErrorMessage(e));
+          setPreview(
+            e instanceof RequestError && e.status === 404
+              ? null
+              : { assetID: boundAssetID, url: "", error: authErrorMessage(e) },
+          );
         }
       } finally {
         reading = false;
@@ -67,7 +75,7 @@ export function BoundAvatar({
               document.visibilityState !== "hidden";
             if (!visible) {
               clearTimeout(timer);
-              setURL("");
+              setPreview(null);
             } else void read();
           })
         : null;
@@ -78,7 +86,7 @@ export function BoundAvatar({
       if (visible) void read();
       else {
         clearTimeout(timer);
-        setURL("");
+        setPreview(null);
       }
     }
     document.addEventListener("visibilitychange", visibility);
@@ -180,14 +188,16 @@ export function AvatarEditor({
       let id: string | null = null;
       if (!remove) {
         if (!file) return;
-        const uploaded = await uploadMyAvatar(
-          {},
-          crop ? await cropSquare(file) : file,
-          { signal: c.signal },
-        );
+        const outgoingFile = crop ? await cropSquare(file) : file;
+        if (c.signal.aborted) return;
+        const uploaded = await uploadMyAvatar({}, outgoingFile, {
+          signal: c.signal,
+        });
+        if (c.signal.aborted) return;
         if (!uploaded.id) throw new Error("头像上传回执不完整");
         id = uploaded.id;
       }
+      if (c.signal.aborted) return;
       await bind(id, c.signal);
       if (!c.signal.aborted) {
         setFile(null);

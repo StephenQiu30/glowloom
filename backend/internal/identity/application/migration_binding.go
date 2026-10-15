@@ -15,6 +15,9 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
+// ErrAlreadyBootstrapped prevents granting a second bootstrap administrator.
+var ErrAlreadyBootstrapped = errors.New("platform administrator already initialized")
+
 // StartMigrationBinding is an operator-only command, never a public API. The
 // explicitly selected legacy account remains unchanged until email proof succeeds.
 func (a *Auth) StartMigrationBinding(ctx context.Context, login, email string, platformAdmin bool) (RegistrationStart, error) {

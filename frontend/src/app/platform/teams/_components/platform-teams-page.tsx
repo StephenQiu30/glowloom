@@ -1,7 +1,7 @@
 "use client";
 import { PlatformTeamInvitations } from "./platform-team-invitations";
 import { FieldLabel } from "@/components/ui/field";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   platformTeams,
@@ -31,6 +31,8 @@ export function PlatformTeamsPage() {
     resolve: () => void;
     reject: (e: Error) => void;
   } | null>(null);
+  const selectionGeneration = useRef(0);
+  const [selection, setSelection] = useState(0);
   const [page, setPage] = useState<API.PlatformTeamPage | null>(null);
   const [team, setTeam] = useState<API.PlatformTeam | null>(null);
   const [filters, setFilters] = useState<API.platformTeamsParams>({
@@ -44,6 +46,15 @@ export function PlatformTeamsPage() {
   const [target, setTarget] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("member");
+  const clearDetail = useCallback(() => {
+    const generation = ++selectionGeneration.current;
+    avatarDeferred.current?.reject(new Error("团队选择已变化，已取消头像保存"));
+    avatarDeferred.current = null;
+    setAction(null);
+    setTeam(null);
+    setSelection(generation);
+    return generation;
+  }, []);
   const read = useReadBoundary(`${JSON.stringify(filters)}:${reload}`);
   useEffect(() => {
     const c = new AbortController();
@@ -57,24 +68,25 @@ export function PlatformTeamsPage() {
       .catch((e) => {
         if (!c.signal.aborted) {
           setPage(null);
-          setTeam(null);
+          clearDetail();
           setError(authErrorMessage(e));
         }
       });
     return () => c.abort();
-  }, [filters, reload]);
+  }, [filters, reload, clearDetail]);
   async function refresh() {
     if (team?.id) {
       try {
         await read(
           (signal) => platformTeam({ id: team.id! }, { signal }),
           (t) => {
+            if (selectionGeneration.current !== selection) return;
             setTeam(t);
             setName(t.name ?? "");
           },
         );
       } catch (e) {
-        setTeam(null);
+        clearDetail();
         setError(authErrorMessage(e));
       }
     }
@@ -102,7 +114,7 @@ export function PlatformTeamsPage() {
             if (typeof v === "string" && v.trim())
               f[k] = k === "governance_blocked" ? v === "true" : v.trim();
           setPage(null);
-          setTeam(null);
+          clearDetail();
           setFilters(f);
         }}
       >
@@ -162,11 +174,13 @@ export function PlatformTeamsPage() {
             disabled={pending}
             key={t.id}
             onClick={async () => {
+              const generation = clearDetail();
               setPending(true);
               try {
                 await read(
                   (signal) => platformTeam({ id: t.id! }, { signal }),
                   (detail) => {
+                    if (selectionGeneration.current !== generation) return;
                     setTeam(detail);
                     setName(detail.name ?? "");
                   },
@@ -223,28 +237,53 @@ export function PlatformTeamsPage() {
             {team.governance_blocked ? " · 治理冻结" : ""}
           </p>
           <AvatarEditor
+            key={`${team.id}:${selection}`}
             assetID={team.avatar_asset_id}
             load={(signal) => platformTeamAvatar({ id: team.id! }, { signal })}
             bind={(asset, signal) =>
               new Promise<void>((resolve, reject) => {
-                avatarDeferred.current = { resolve, reject };
+                if (
+                  signal.aborted ||
+                  selectionGeneration.current !== selection
+                ) {
+                  reject(new Error("团队选择已变化"));
+                  return;
+                }
+                const deferred = { resolve, reject };
+                avatarDeferred.current = deferred;
                 signal.addEventListener(
                   "abort",
-                  () => reject(new Error("已取消")),
+                  () => {
+                    if (avatarDeferred.current === deferred)
+                      avatarDeferred.current = null;
+                    reject(new Error("已取消"));
+                  },
                   { once: true },
                 );
                 setAction({
-                  title: "修改团队头像",
+                  title: `修改 ${team.name} 的头像`,
                   effect: "修改公开团队资料，不取得团队内容访问权限。",
                   reason: true,
                   run: async (reason, proofSignal) => {
+                    if (
+                      signal.aborted ||
+                      proofSignal.aborted ||
+                      selectionGeneration.current !== selection
+                    )
+                      return;
                     const body = { expected_revision: team.revision, reason };
                     await updatePlatformTeam({ id: team.id! }, body, {
                       signal: proofSignal,
                       data: { ...body, avatar_asset_id: asset },
                     });
+                    if (
+                      proofSignal.aborted ||
+                      selectionGeneration.current !== selection
+                    )
+                      return;
                     await refresh();
-                    avatarDeferred.current = null;
+                    if (avatarDeferred.current === deferred)
+                      avatarDeferred.current = null;
                     resolve();
                   },
                 });
@@ -383,13 +422,13 @@ export function PlatformTeamsPage() {
             reload={reload}
             onAction={setAction}
           />
-          <Button variant="outline" onClick={() => setTeam(null)}>
+          <Button variant="outline" onClick={clearDetail}>
             关闭团队详情
           </Button>
         </section>
       ) : null}
       <Confirmation
-        key={action?.title ?? "closed"}
+        key={`${selection}:${action?.title ?? "closed"}`}
         action={action}
         onClose={() => {
           avatarDeferred.current?.reject(new Error("头像保存已取消"));

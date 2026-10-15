@@ -38,6 +38,7 @@ func projectConsumerFixture(t *testing.T) (*gorm.DB, identity.Principal, uuid.UU
 		}
 	}
 	installSecondaryScope(t, tx)
+	installUserRuntimeDependencies(t, tx)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	_, actor := verifiedTestActor(t, tx, "project-consumer@example.invalid", now)
 	var personal struct{ ID, PhysicalScopeID uuid.UUID }

@@ -69,5 +69,5 @@ func (q *ReadQuery) Get(ctx context.Context, actor identityapp.Principal, orgID,
 
 // ActorAccess verifies the exact platform session before reading metadata.
 type ActorAccess interface {
-	CheckPlatformSession(context.Context, identityapp.Principal, time.Time) error
+	CheckPlatformSession(context.Context, identityapp.Principal, func() time.Time) error
 }

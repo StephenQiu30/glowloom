@@ -72,9 +72,9 @@ type TeamInvitationRevoker interface {
 type TeamActorAccess interface {
 	TeamInvitationRevoker
 	NotifyTeamAccounts(context.Context, []uuid.UUID, time.Time) error
-	CheckSession(context.Context, identity.Principal, time.Time) error
-	CheckPlatformSession(context.Context, identity.Principal, time.Time) error
-	CheckRecentSession(context.Context, identity.Principal, time.Time) error
+	CheckSession(context.Context, identity.Principal, func() time.Time) error
+	CheckPlatformSession(context.Context, identity.Principal, func() time.Time) error
+	CheckRecentSession(context.Context, identity.Principal, func() time.Time) error
 }
 
 // TeamTx keeps team, membership and receipt writes atomic under governance locks.
@@ -116,7 +116,7 @@ type Space struct {
 // Spaces returns only current personal ownership and active team memberships.
 func (s *Teams) Spaces(ctx context.Context, actor identity.Principal) ([]Space, error) {
 	var result []Space
-	err := s.store.TeamTransaction(ctx, actor, s.now().UTC(), func(tx TeamTx) error { var err error; result, err = tx.Spaces(); return err })
+	err := s.store.TeamTransaction(ctx, actor, s.now, func(tx TeamTx) error { var err error; result, err = tx.Spaces(); return err })
 	return result, err
 }
 
@@ -126,8 +126,8 @@ func (s *Teams) ChangeRole(ctx context.Context, actor identity.Principal, teamID
 	if revision < 1 || (role != "member" && role != "team_admin") || !validTeamText(reason, 5, 500) {
 		return ErrInvalidTeam
 	}
-	now := s.now().UTC()
-	return s.store.TeamTransaction(ctx, actor, now, func(tx TeamTx) error {
+	return s.store.TeamTransaction(ctx, actor, s.now, func(tx TeamTx) error {
+		now := s.now().UTC()
 		team, err := tx.LoadTeam(teamID)
 		if err != nil {
 			return err
@@ -170,7 +170,7 @@ func (s *Teams) ChangeRole(ctx context.Context, actor identity.Principal, teamID
 
 // TeamStore binds current identity, settings and team state to one transaction.
 type TeamStore interface {
-	TeamTransaction(context.Context, identity.Principal, time.Time, func(TeamTx) error) error
+	TeamTransaction(context.Context, identity.Principal, func() time.Time, func(TeamTx) error) error
 }
 
 // Teams implements team creation, directories and membership lifecycle.
@@ -208,9 +208,9 @@ func (s *Teams) CreateWithAvatar(ctx context.Context, actor identity.Principal, 
 	payload, _ := json.Marshal([]any{name, avatar})
 	sum := sha256.Sum256(payload)
 	hash := hex.EncodeToString(sum[:])
-	now := s.now().UTC()
 	var result Team
-	err := s.store.TeamTransaction(ctx, actor, now, func(tx TeamTx) error {
+	err := s.store.TeamTransaction(ctx, actor, s.now, func(tx TeamTx) error {
+		now := s.now().UTC()
 		prior, found, err := tx.CreationReceipt(key, hash)
 		if err != nil {
 			return err
@@ -252,7 +252,7 @@ func (s *Teams) CreateWithAvatar(ctx context.Context, actor identity.Principal, 
 // Read exposes a team only to its current active members.
 func (s *Teams) Read(ctx context.Context, actor identity.Principal, id uuid.UUID) (Team, error) {
 	var result Team
-	err := s.store.TeamTransaction(ctx, actor, s.now().UTC(), func(tx TeamTx) error { var err error; result, err = tx.LoadTeam(id); return err })
+	err := s.store.TeamTransaction(ctx, actor, s.now, func(tx TeamTx) error { var err error; result, err = tx.LoadTeam(id); return err })
 	return result, err
 }
 
@@ -260,7 +260,7 @@ func (s *Teams) Read(ctx context.Context, actor identity.Principal, id uuid.UUID
 // The active directory is bounded by the team's 100-seat capacity.
 func (s *Teams) Members(ctx context.Context, actor identity.Principal, id uuid.UUID) ([]TeamMember, error) {
 	var result []TeamMember
-	err := s.store.TeamTransaction(ctx, actor, s.now().UTC(), func(tx TeamTx) error {
+	err := s.store.TeamTransaction(ctx, actor, s.now, func(tx TeamTx) error {
 		team, err := tx.LoadTeam(id)
 		if err != nil {
 			return err
@@ -278,8 +278,8 @@ func (s *Teams) Rename(ctx context.Context, actor identity.Principal, id uuid.UU
 		return Team{}, ErrInvalidTeam
 	}
 	var result Team
-	now := s.now().UTC()
-	err := s.store.TeamTransaction(ctx, actor, now, func(tx TeamTx) error {
+	err := s.store.TeamTransaction(ctx, actor, s.now, func(tx TeamTx) error {
+		now := s.now().UTC()
 		team, err := tx.LoadTeam(id)
 		if err != nil {
 			return err
@@ -310,8 +310,8 @@ func (s *Teams) ChangeMember(ctx context.Context, actor identity.Principal, team
 	if revision < 1 || !validTeamText(reason, 5, 500) || (action != "suspend" && action != "restore" && action != "remove") {
 		return ErrInvalidTeam
 	}
-	now := s.now().UTC()
-	return s.store.TeamTransaction(ctx, actor, now, func(tx TeamTx) error {
+	return s.store.TeamTransaction(ctx, actor, s.now, func(tx TeamTx) error {
+		now := s.now().UTC()
 		team, err := tx.LoadTeam(teamID)
 		if err != nil {
 			return err
@@ -376,8 +376,8 @@ func (s *Teams) Leave(ctx context.Context, actor identity.Principal, id uuid.UUI
 	if revision < 1 {
 		return ErrInvalidTeam
 	}
-	now := s.now().UTC()
-	return s.store.TeamTransaction(ctx, actor, now, func(tx TeamTx) error {
+	return s.store.TeamTransaction(ctx, actor, s.now, func(tx TeamTx) error {
+		now := s.now().UTC()
 		if _, err := tx.LoadTeam(id); err != nil {
 			return err
 		}
@@ -419,8 +419,8 @@ func (s *Teams) lifecycle(ctx context.Context, actor identity.Principal, id uuid
 	if revision < 1 || (invites == nil && !validTeamText(reason, 5, 500)) {
 		return ErrInvalidTeam
 	}
-	now := s.now().UTC()
-	return s.store.TeamTransaction(ctx, actor, now, func(tx TeamTx) error {
+	return s.store.TeamTransaction(ctx, actor, s.now, func(tx TeamTx) error {
+		now := s.now().UTC()
 		team, err := tx.LoadTeam(id)
 		if err != nil {
 			return err

@@ -20,10 +20,9 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	bibleapp "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
-	identitypg "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func TestSubjectRecoveryPublicRouter(t *testing.T) {
@@ -57,15 +56,13 @@ func TestSubjectRecoveryPublicRouter(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{Env: "local", HTTPAddr: "127.0.0.1:18089", PublicOrigin: "http://127.0.0.1:3000"}, db.DB, nil)
+	cfg := identityfixture.Configure(t, config.Config{Env: "local", HTTPAddr: "127.0.0.1:18089", PublicOrigin: "http://127.0.0.1:3000"})
+	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, db.DB, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	login := "subject-" + uuid.NewString()
-	account, err := identityapp.NewAuth(identitypg.NewStore(db.DB), time.Now).Register(t.Context(), login, "Subject Acceptance", "SyntheticSubject123", "SyntheticSubject123")
-	if err != nil {
-		t.Fatal(err)
-	}
+	account := identityfixture.Create(t, db.DB, cfg, "Subject Acceptance", "SyntheticSubject123")
+	scope := identityfixture.Scope(t, db.DB, account.User.ID)
 	call := func(method, path string, body any, key string) *httptest.ResponseRecorder {
 		t.Helper()
 		data, err := json.Marshal(body)
@@ -75,6 +72,8 @@ func TestSubjectRecoveryPublicRouter(t *testing.T) {
 		req := httptest.NewRequestWithContext(t.Context(), method, path, bytes.NewReader(data))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Origin", "http://127.0.0.1:3000")
+		req.Header.Set("X-CSRF-Token", account.CSRFToken)
+		req.Header.Set("X-Creation-Scope", scope.String())
 		req.Header.Set("Idempotency-Key", key)
 		req.AddCookie(&http.Cookie{Name: "lanverse_session", Value: account.Token})
 		w := httptest.NewRecorder()
@@ -133,7 +132,7 @@ func TestSubjectRecoveryPublicRouter(t *testing.T) {
 	if !strings.HasPrefix(evidence, "/Users/stephenqiu/.codex/visualizations/") {
 		t.Fatal("explicit task evidence path required")
 	}
-	info, _ := json.Marshal(map[string]string{"login": login, "project": project.ID.String(), "subject": receipt.EntryID.String()})
+	info, _ := json.Marshal(map[string]string{"email": account.User.Email, "project": project.ID.String(), "subject": receipt.EntryID.String()})
 	if err := os.WriteFile(evidence+"/browser-account.json", info, 0600); err != nil {
 		t.Fatal(err)
 	}

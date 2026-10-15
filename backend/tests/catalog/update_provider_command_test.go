@@ -96,7 +96,6 @@ func TestUpdateProviderCommandRejectsInvalidOrStaleRequest(t *testing.T) {
 		want   error
 	}{
 		{"producer", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: identitydomain.RoleProducer}, nil, identityapp.ErrForbidden},
-		{"first login", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: identitydomain.RoleAdmin, MustChangePassword: true}, nil, identityapp.ErrForbidden},
 		{"nil provider", actor, func(v *catalogapp.UpdateProviderInput) { v.ProviderID = uuid.Nil }, catalogapp.ErrInvalidUpdateProvider},
 		{"invalid request", actor, func(v *catalogapp.UpdateProviderInput) { v.RequestID = "bad" }, catalogapp.ErrInvalidUpdateProvider},
 		{"empty patch", actor, func(v *catalogapp.UpdateProviderInput) { v.Status = nil }, catalogapp.ErrInvalidUpdateProvider},

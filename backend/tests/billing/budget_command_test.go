@@ -207,7 +207,6 @@ func TestChangeBudgetCommandRejectsInvalidInputBeforeStorage(t *testing.T) {
 	}{
 		{"missing actor", identityapp.Principal{OrgID: actor.OrgID, Role: actor.Role}, nil, identityapp.ErrForbidden},
 		{"missing organization", identityapp.Principal{ID: actor.ID, Role: actor.Role}, nil, identityapp.ErrForbidden},
-		{"password change required", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: actor.Role, MustChangePassword: true}, nil, identityapp.ErrForbidden},
 		{"missing project", actor, func(v *billingapp.ChangeBudgetInput) { v.ProjectID = uuid.Nil }, billingapp.ErrInvalidChangeBudget},
 		{"missing revision", actor, func(v *billingapp.ChangeBudgetInput) { v.ExpectedRevision = 0 }, billingapp.ErrInvalidChangeBudget},
 		{"revision overflow", actor, func(v *billingapp.ChangeBudgetInput) { v.ExpectedRevision = math.MaxInt32 }, billingapp.ErrInvalidChangeBudget},

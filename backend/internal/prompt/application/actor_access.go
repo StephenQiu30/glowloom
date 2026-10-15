@@ -9,5 +9,5 @@ import (
 
 // ActorAccess retains the exact account session in the preference transaction.
 type ActorAccess interface {
-	CheckSession(context.Context, identity.Principal, time.Time) error
+	CheckSession(context.Context, identity.Principal, func() time.Time) error
 }

@@ -26,8 +26,8 @@ type MemberStatistics struct {
 
 // DirectoryStatisticsStore supplies a single consistent filtered aggregate.
 type DirectoryStatisticsStore interface {
-	UserStatistics(context.Context, Principal, DirectoryFilter, time.Time) (UserStatistics, error)
-	MemberStatistics(context.Context, Principal, uuid.UUID, ExportFilter, time.Time) (MemberStatistics, error)
+	UserStatistics(context.Context, Principal, DirectoryFilter, func() time.Time) (UserStatistics, error)
+	MemberStatistics(context.Context, Principal, uuid.UUID, ExportFilter, func() time.Time) (MemberStatistics, error)
 }
 
 // DirectoryStatistics validates scope-specific filters before querying aggregates.
@@ -47,7 +47,7 @@ func (s *DirectoryStatistics) Users(ctx context.Context, a Principal, f ExportFi
 	if err != nil {
 		return UserStatistics{}, err
 	}
-	value, err := s.store.UserStatistics(ctx, a, DirectoryFilter{Search: f.Search, Status: f.Status, PlatformRole: f.PlatformRole, Order: f.Order, Verified: f.Verified, InTeam: f.InTeam, From: f.From, To: f.To}, s.now().UTC())
+	value, err := s.store.UserStatistics(ctx, a, DirectoryFilter{Search: f.Search, Status: f.Status, PlatformRole: f.PlatformRole, Order: f.Order, Verified: f.Verified, InTeam: f.InTeam, From: f.From, To: f.To}, s.now)
 	value.Filter = f
 	return value, err
 }
@@ -58,7 +58,7 @@ func (s *DirectoryStatistics) Members(ctx context.Context, a Principal, team uui
 	if err != nil {
 		return MemberStatistics{}, err
 	}
-	return s.store.MemberStatistics(ctx, a, team, f, s.now().UTC())
+	return s.store.MemberStatistics(ctx, a, team, f, s.now)
 }
 
 // Statistics applies the directory's normalized filters without pagination.
@@ -71,5 +71,5 @@ func (d *PlatformDirectory) Statistics(ctx context.Context, a Principal, f Direc
 	if !ok {
 		return UserStatistics{}, ErrExportUnavailable
 	}
-	return store.UserStatistics(ctx, a, f, d.now().UTC())
+	return store.UserStatistics(ctx, a, f, d.now)
 }

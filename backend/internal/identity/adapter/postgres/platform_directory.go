@@ -21,8 +21,8 @@ func NewPlatformDirectoryStore(db *gorm.DB) *PlatformDirectoryStore {
 	return &PlatformDirectoryStore{db: db}
 }
 
-func lockPlatformReader(tx *gorm.DB, actor application.Principal, now time.Time) error {
-	u, err := lockSelfActor(tx, actor, now)
+func lockPlatformReader(tx *gorm.DB, actor application.Principal, clock func() time.Time) error {
+	u, err := lockSelfActor(tx, actor, clock)
 	if err != nil {
 		return err
 	}
@@ -41,10 +41,10 @@ func directoryQuery(tx *gorm.DB) *gorm.DB {
 }
 
 // ReadDirectory queries bounded account summaries under current platform authority.
-func (s *PlatformDirectoryStore) ReadDirectory(ctx context.Context, actor application.Principal, f application.DirectoryFilter, pos application.DirectoryPosition, now time.Time) ([]application.UserSummary, error) {
+func (s *PlatformDirectoryStore) ReadDirectory(ctx context.Context, actor application.Principal, f application.DirectoryFilter, pos application.DirectoryPosition, clock func() time.Time) ([]application.UserSummary, error) {
 	items := make([]application.UserSummary, 0)
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := lockPlatformReader(tx, actor, now); err != nil {
+		if err := lockPlatformReader(tx, actor, clock); err != nil {
 			return err
 		}
 		q := filteredDirectory(tx, f, pos.AsOf)
@@ -64,10 +64,10 @@ func (s *PlatformDirectoryStore) ReadDirectory(ctx context.Context, actor applic
 }
 
 // ReadUserDetail returns one authorized account and team summary.
-func (s *PlatformDirectoryStore) ReadUserDetail(ctx context.Context, actor application.Principal, id uuid.UUID, now time.Time) (application.UserDetail, error) {
+func (s *PlatformDirectoryStore) ReadUserDetail(ctx context.Context, actor application.Principal, id uuid.UUID, clock func() time.Time) (application.UserDetail, error) {
 	detail := application.UserDetail{Teams: []application.TeamMembershipSummary{}}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := lockPlatformReader(tx, actor, now); err != nil {
+		if err := lockPlatformReader(tx, actor, clock); err != nil {
 			return err
 		}
 		r := directoryQuery(tx).Where("u.id=?", id).Scan(&detail.User)
@@ -99,7 +99,7 @@ func (s *PlatformDirectoryStore) ReadUserDetail(ctx context.Context, actor appli
 				}
 				if u.PlatformRole == "creator" && u.Verified && u.ID != actor.ID {
 					var pending bool
-					if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM identity.authority_proposal WHERE kind='platform_grant' AND target_user_id=? AND status='pending' AND expires_at>?)`, u.ID, now).Scan(&pending).Error; err != nil {
+					if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM identity.authority_proposal WHERE kind='platform_grant' AND target_user_id=? AND status='pending' AND expires_at>?)`, u.ID, clock().UTC()).Scan(&pending).Error; err != nil {
 						return err
 					}
 					if !pending {

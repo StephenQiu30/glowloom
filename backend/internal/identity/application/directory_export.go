@@ -91,7 +91,7 @@ type DirectoryExportJob struct {
 
 // ExportTx holds identity/team authorization and the job under one transaction.
 type ExportTx interface {
-	Authorize(Principal, *uuid.UUID, int64, bool, time.Time) (int64, error)
+	Authorize(Principal, *uuid.UUID, int64, bool, func() time.Time) (int64, error)
 	Request(uuid.UUID, uuid.UUID, uuid.UUID) (DirectoryExportJob, bool, error)
 	Load(uuid.UUID) (DirectoryExportJob, error)
 	Snapshot(*uuid.UUID, ExportFilter, time.Time) ([][]string, error)
@@ -102,7 +102,7 @@ type ExportTx interface {
 type DirectoryExportStore interface {
 	Transaction(context.Context, func(ExportTx) error) error
 	Pending(context.Context, int, time.Time) ([]uuid.UUID, error)
-	Cleanup(context.Context, int, time.Time, func(DirectoryExportJob) error) (int, error)
+	Cleanup(context.Context, int, time.Time, func(context.Context, DirectoryExportJob) error) (int, error)
 }
 
 // ExportProtector authenticates encrypted snapshots and private CSV objects.
@@ -144,17 +144,17 @@ func (s *DirectoryExport) Create(ctx context.Context, actor Principal, team *uui
 	if s.objects == nil || s.protector == nil {
 		return DirectoryExportJob{}, ErrExportUnavailable
 	}
-	now := s.now().UTC()
 	scope := uuid.Nil
 	if team != nil {
 		scope = *team
 	}
 	var job DirectoryExportJob
 	err = s.store.Transaction(ctx, func(tx ExportTx) error {
-		revision, err := tx.Authorize(actor, team, 0, true, now)
+		revision, err := tx.Authorize(actor, team, 0, true, s.now)
 		if err != nil {
 			return err
 		}
+		now := s.now().UTC()
 		prior, found, err := tx.Request(actor.ID, scope, key)
 		if err != nil {
 			return err
@@ -203,7 +203,7 @@ func (s *DirectoryExport) Read(ctx context.Context, actor Principal, team *uuid.
 
 func (s *DirectoryExport) withJob(ctx context.Context, actor Principal, team *uuid.UUID, id uuid.UUID, run func(DirectoryExportJob) error) error {
 	return s.store.Transaction(ctx, func(tx ExportTx) error {
-		if _, err := tx.Authorize(actor, team, 0, false, s.now().UTC()); err != nil {
+		if _, err := tx.Authorize(actor, team, 0, false, s.now); err != nil {
 			return err
 		}
 		job, err := tx.Load(id)
@@ -216,7 +216,7 @@ func (s *DirectoryExport) withJob(ctx context.Context, actor Principal, team *uu
 		if actor.CredentialEpoch != job.Actor.CredentialEpoch || team == nil && actor.PlatformEpoch != job.Actor.PlatformEpoch {
 			return ErrForbidden
 		}
-		if _, err := tx.Authorize(actor, team, job.TeamRevision, false, s.now().UTC()); err != nil {
+		if _, err := tx.Authorize(actor, team, job.TeamRevision, false, s.now); err != nil {
 			return err
 		}
 		if job.Status == "expired" || job.Status == "revoked" || !s.now().UTC().Before(job.ExpiresAt) {
@@ -277,9 +277,9 @@ func (s *DirectoryExport) RunOnce(ctx context.Context, limit int) (int, error) {
 	if limit < 1 || limit > 20 {
 		limit = 20
 	}
-	count, err := s.store.Cleanup(ctx, limit, s.now().UTC(), func(job DirectoryExportJob) error {
+	count, err := s.store.Cleanup(ctx, limit, s.now().UTC(), func(cleanupCtx context.Context, job DirectoryExportJob) error {
 		if job.ObjectID != nil {
-			return s.objects.Remove(ctx, exportObjectKey(*job.ObjectID))
+			return s.objects.Remove(cleanupCtx, exportObjectKey(*job.ObjectID))
 		}
 		return nil
 	})
@@ -323,7 +323,7 @@ func (s *DirectoryExport) process(ctx context.Context, id uuid.UUID) error {
 			job.UpdatedAt = now
 			return tx.Save(job)
 		}
-		if _, err := tx.Authorize(job.Actor, job.TeamID, job.TeamRevision, false, now); err != nil {
+		if _, err := tx.Authorize(job.Actor, job.TeamID, job.TeamRevision, false, s.now); err != nil {
 			if !errors.Is(err, ErrForbidden) && !errors.Is(err, ErrSessionInvalid) {
 				return err
 			}
@@ -384,7 +384,7 @@ func (s *DirectoryExport) process(ctx context.Context, id uuid.UUID) error {
 			current.UpdatedAt = now
 			return tx.Save(current)
 		}
-		if _, err := tx.Authorize(current.Actor, current.TeamID, current.TeamRevision, false, now); err != nil {
+		if _, err := tx.Authorize(current.Actor, current.TeamID, current.TeamRevision, false, s.now); err != nil {
 			if !errors.Is(err, ErrForbidden) && !errors.Is(err, ErrSessionInvalid) {
 				return err
 			}

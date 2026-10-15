@@ -130,7 +130,7 @@ func (s *Store) requireCurrentActor(tx *gorm.DB, actor identityapp.Principal) er
 	if s.actors == nil || s.actors(tx) == nil {
 		return identityapp.ErrForbidden
 	}
-	return s.actors(tx).CheckSession(tx.Statement.Context, actor, time.Now().UTC())
+	return s.actors(tx).CheckSession(tx.Statement.Context, actor, time.Now)
 }
 
 func replayPreference(tx *gorm.DB, actor, key uuid.UUID, fingerprint string, saved *domain.Customization) (bool, error) {

@@ -65,10 +65,48 @@ func installDirectoryExport(t *testing.T, tx *gorm.DB) {
 		t.Fatal(err)
 	}
 	if installed {
-		t.Fatal("unexpected persistent directory export schema: test requires reviewed absent table")
+		// The reviewed migration may already be deployed. Validate its contract
+		// without applying DDL; every fixture still belongs to the outer rollback.
+		assertDirectoryExportSchema(t, tx)
+		return
 	}
 	if err := tx.Exec(sql).Error; err != nil {
 		t.Fatal(err)
+	}
+}
+func assertDirectoryExportSchema(t *testing.T, tx *gorm.DB) {
+	t.Helper()
+	expected := map[string]string{
+		"id": "uuid NOT NULL", "actor_id": "uuid NOT NULL", "team_id": "uuid",
+		"scope_kind": "text NOT NULL", "scope_id": "uuid NOT NULL", "request_key": "uuid NOT NULL",
+		"actor_session_id": "uuid NOT NULL", "credential_epoch": "bigint NOT NULL", "platform_epoch": "bigint NOT NULL", "team_revision": "bigint NOT NULL",
+		"filter_snapshot": "jsonb NOT NULL", "snapshot_payload": "bytea", "snapshot_key_id": "text NOT NULL",
+		"as_of": "timestamp with time zone NOT NULL", "status": "text NOT NULL", "row_count": "integer NOT NULL", "private_object_id": "uuid",
+		"expires_at": "timestamp with time zone NOT NULL", "created_at": "timestamp with time zone NOT NULL", "updated_at": "timestamp with time zone NOT NULL", "error_category": "text NOT NULL",
+	}
+	var columns []struct{ Name, Contract string }
+	if err := tx.Raw(`SELECT attname AS name,format_type(atttypid,atttypmod)||CASE WHEN attnotnull THEN ' NOT NULL' ELSE '' END AS contract FROM pg_attribute WHERE attrelid='identity.directory_export'::regclass AND attnum>0 AND NOT attisdropped`).Scan(&columns).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range columns {
+		if want, ok := expected[c.Name]; !ok || want != c.Contract {
+			t.Fatalf("directory export schema drift: column %s", c.Name)
+		}
+		delete(expected, c.Name)
+	}
+	if len(expected) != 0 {
+		t.Fatalf("directory export missing columns: %v", expected)
+	}
+	var valid bool
+	if err := tx.Raw(`SELECT
+      (SELECT count(*)=1 FROM pg_constraint WHERE conrelid='identity.directory_export'::regclass AND contype='p') AND
+      (SELECT count(*)=1 FROM pg_constraint WHERE conrelid='identity.directory_export'::regclass AND contype='u') AND
+      (SELECT count(*)=2 FROM pg_constraint WHERE conrelid='identity.directory_export'::regclass AND contype='f') AND
+      (SELECT count(*)=4 FROM pg_constraint WHERE conrelid='identity.directory_export'::regclass AND contype='c') AND
+      has_table_privilege('lanverse_app','identity.directory_export','SELECT') AND
+      has_table_privilege('lanverse_app','identity.directory_export','INSERT') AND
+      has_table_privilege('lanverse_app','identity.directory_export','UPDATE')`).Scan(&valid).Error; err != nil || !valid {
+		t.Fatal("directory export constraint/privilege contract differs", err)
 	}
 }
 func TestDirectoryExportPostgresSnapshotStatisticsAndRevocation(t *testing.T) {
@@ -206,5 +244,42 @@ func TestPlatformTeamInvitationMetadataAuthority(t *testing.T) {
 	}
 	if _, err := gov.ListPlatformTeamInvitations(t.Context(), actor, team, identity.GovernanceFilter{}); !errors.Is(err, identity.ErrForbidden) {
 		t.Fatal("stale platform epoch accepted", err)
+	}
+}
+
+func TestDirectoryExportRestrictedApplicationRole(t *testing.T) {
+	tx, _, actor, now := governanceFixture(t)
+	installDirectoryExport(t, tx)
+	// SET LOCAL affects this rollback transaction only; no role/grant is changed
+	// globally. The migration's ACL must work when the runtime assumes its role.
+	if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		t.Fatal("approved connection cannot verify restricted application role", err)
+	}
+	var role string
+	if err := tx.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "lanverse_app" {
+		t.Fatal("test did not run as application role", err)
+	}
+	var grants struct{ SelectOK, InsertOK, UpdateOK bool }
+	if err := tx.Raw(`SELECT has_table_privilege(current_user,'identity.directory_export','SELECT') AS select_ok,has_table_privilege(current_user,'identity.directory_export','INSERT') AS insert_ok,has_table_privilege(current_user,'identity.directory_export','UPDATE') AS update_ok`).Scan(&grants).Error; err != nil || !grants.SelectOK || !grants.InsertOK || !grants.UpdateOK {
+		t.Fatal("runtime role lacks export privileges", err)
+	}
+	objects := &directoryTestObjects{values: map[string][]byte{}}
+	service := identity.NewDirectoryExport(pgidentity.NewDirectoryExportStore(tx), completionProtector(t), objects, func() time.Time { return now })
+	job, err := service.Create(t.Context(), actor, nil, identity.ExportFilter{Search: "governance-admin@example.invalid"}, uuid.New())
+	if err != nil {
+		t.Fatal("restricted role create", err)
+	}
+	if _, err := service.RunOnce(t.Context(), 1); err != nil {
+		t.Fatal("restricted role worker", err)
+	}
+	current, err := service.Read(t.Context(), actor, nil, job.ID)
+	if err != nil || current.Status != "completed" {
+		t.Fatal("restricted role read", err)
+	}
+	if err := tx.Exec(`UPDATE identity.directory_export SET expires_at=? WHERE id=?`, now.Add(-time.Second), job.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.RunOnce(t.Context(), 1); err != nil || len(objects.values) != 0 {
+		t.Fatal("restricted role cleanup", err)
 	}
 }

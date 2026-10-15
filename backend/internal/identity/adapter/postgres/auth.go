@@ -1,13 +1,10 @@
 package postgres
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 
@@ -20,6 +17,10 @@ type authTx struct {
 	invitationTeams TeamGovernanceFactory
 }
 
+// AccountByLogin is retained only for the explicit legacy-account email binding operator.
+func (t *authTx) AccountByLogin(key string) (domain.User, error) {
+	return t.account(`lower(btrim(login_name::text)) = ?`, key)
+}
 func (t *authTx) AccountByID(id uuid.UUID) (domain.User, error) {
 	return t.account(`id = ?::uuid`, id.String())
 }
@@ -150,5 +151,4 @@ func (t *authTx) AppendAuthEvent(account uuid.UUID, action string, now time.Time
 	return nil
 }
 
-var _ application.AuthStore = (*Store)(nil)
 var _ application.AuthTx = (*authTx)(nil)

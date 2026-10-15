@@ -220,6 +220,7 @@ export function MemberDirectory({
           className="flex flex-wrap items-center gap-3 rounded-xl border p-4"
         >
           <BoundAvatar
+            key={m.avatar_asset_id || "default"}
             assetID={m.avatar_asset_id}
             load={(signal) =>
               teamMemberAvatar({ id: team.id, uid: m.user_id }, { signal })

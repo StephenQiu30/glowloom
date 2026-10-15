@@ -31,13 +31,13 @@ func NewRequestScopeStore(db *gorm.DB, sessions SessionActorAccessFactory) *Scop
 }
 
 // LoadRequestScopeFacts retains session and scope locks until the outer transaction ends.
-func (s *ScopeStore) LoadRequestScopeFacts(ctx context.Context, actor identity.Principal, scope uuid.UUID, now time.Time) (application.ScopeFacts, error) {
+func (s *ScopeStore) LoadRequestScopeFacts(ctx context.Context, actor identity.Principal, scope uuid.UUID, clock func() time.Time) (application.ScopeFacts, error) {
 	var facts application.ScopeFacts
 	if s.sessions == nil {
 		return facts, application.ErrScopeNotFound
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := s.sessions(tx).CheckSession(ctx, actor, now); err != nil {
+		if err := s.sessions(tx).CheckSession(ctx, actor, clock); err != nil {
 			return err
 		}
 		var err error

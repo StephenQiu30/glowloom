@@ -131,7 +131,6 @@ func TestPublishModelVersionCommandRejectsBeforeStore(t *testing.T) {
 		change func(*catalogapp.PublishModelVersionInput)
 	}{
 		{"producer", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: identitydomain.RoleProducer}, nil},
-		{"first login", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: identitydomain.RoleAdmin, MustChangePassword: true}, nil},
 		{"missing model", actor, func(v *catalogapp.PublishModelVersionInput) { v.ModelID = uuid.Nil }},
 		{"missing revision", actor, func(v *catalogapp.PublishModelVersionInput) { v.ExpectedRevision = 0 }},
 		{"missing version number", actor, func(v *catalogapp.PublishModelVersionInput) { v.VersionNo = 0 }},

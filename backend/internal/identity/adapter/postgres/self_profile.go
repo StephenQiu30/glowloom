@@ -36,7 +36,9 @@ type selfProfileTx struct {
 func (t *selfProfileTx) Account() domain.User { return t.user }
 
 // lockSelfActor locks user before session and rejects stale principals.
-func lockSelfActor(tx *gorm.DB, actor application.Principal, now time.Time) (domain.User, error) {
+// Sample the injected clock only after the locks: a waiting request may observe
+// activity committed by a later request, or expire while it waits.
+func lockSelfActor(tx *gorm.DB, actor application.Principal, clock func() time.Time) (domain.User, error) {
 	if actor.ID == uuid.Nil || actor.SessionID == uuid.Nil || actor.CredentialEpoch < 1 {
 		return domain.User{}, application.ErrSessionInvalid
 	}
@@ -59,6 +61,7 @@ func lockSelfActor(tx *gorm.DB, actor application.Principal, now time.Time) (dom
 	if r.Error != nil {
 		return domain.User{}, fmt.Errorf("lock self session: %w", r.Error)
 	}
+	now := clock().UTC()
 	if r.RowsAffected != 1 || !session.Valid(user, now) || user.EmailVerifiedAt.IsZero() || user.SessionEpoch != actor.CredentialEpoch {
 		return domain.User{}, application.ErrSessionInvalid
 	}
@@ -66,9 +69,9 @@ func lockSelfActor(tx *gorm.DB, actor application.Principal, now time.Time) (dom
 }
 
 // ProfileTransaction keeps identity checks and profile updates under the same locks.
-func (s *SelfProfileStore) ProfileTransaction(ctx context.Context, actor application.Principal, now time.Time, run func(application.SelfProfileTx) error) error {
+func (s *SelfProfileStore) ProfileTransaction(ctx context.Context, actor application.Principal, clock func() time.Time, run func(application.SelfProfileTx) error) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		u, err := lockSelfActor(tx, actor, now)
+		u, err := lockSelfActor(tx, actor, clock)
 		if err != nil {
 			return err
 		}

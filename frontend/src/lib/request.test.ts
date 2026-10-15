@@ -187,9 +187,7 @@ it("401 invalidation is bound to the sending session generation and keeps the or
   await new Promise((resolve) => setTimeout(resolve, 0));
   setCSRFToken("new-proof");
   rejectOld();
-  await expect(pending).rejects.toEqual(
-    new RequestError("unauthenticated", 401),
-  );
+  expect(axios.isCancel(await pending.catch((error) => error))).toBe(true);
   expect(originalProof).toBe("old-proof");
   expect(notifications).toEqual([]);
   await expect(
@@ -291,3 +289,68 @@ it("旧身份的成功响应在新身份激活后同样作废", async () => {
   expect(axios.isCancel(result)).toBe(true);
   setCSRFToken(null);
 });
+
+it.each([
+  { boundary: "scope", status: 401 },
+  { boundary: "caller", status: 401 },
+  { boundary: "scope", status: 403 },
+  { boundary: "caller", status: 403 },
+])(
+  "迟到Blob$status解析期间$boundary取消后没有会话失效或权限刷新副作用",
+  async ({ boundary, status }) => {
+    const {
+      setCSRFToken,
+      setCreationScope,
+      subscribeSessionInvalidation,
+      subscribeScopeDenied,
+    } = await import("./request");
+    const invalidations: number[] = [];
+    let denials = 0;
+    const stop = subscribeSessionInvalidation((n) => invalidations.push(n));
+    const stopDenied = subscribeScopeDenied(() => denials++);
+    setCSRFToken("blob-proof");
+    setCreationScope("old");
+    let finish!: (value: string) => void;
+    let started!: () => void;
+    const parsing = new Promise<void>((resolve) => (started = resolve));
+    const problem = new Blob();
+    problem.text = () => {
+      started();
+      return new Promise<string>((resolve) => (finish = resolve));
+    };
+    const controller = new AbortController();
+    const pending = request("/api/platform/user-exports/export/download", {
+      signal: controller.signal,
+      adapter: async (config) => {
+        throw new axios.AxiosError(
+          "unauthenticated",
+          undefined,
+          config,
+          undefined,
+          {
+            status,
+            statusText: status === 401 ? "Unauthorized" : "Forbidden",
+            headers: {},
+            config,
+            data: problem,
+          },
+        );
+      },
+    });
+    await parsing;
+    if (boundary === "scope") setCreationScope("new");
+    else controller.abort();
+    finish(
+      JSON.stringify({
+        code: status === 401 ? "unauthenticated" : "forbidden",
+      }),
+    );
+    const result = await pending.catch((e) => e);
+    expect(axios.isCancel(result)).toBe(true);
+    expect(invalidations).toEqual([]);
+    expect(denials).toBe(0);
+    stop();
+    stopDenied();
+    setCSRFToken(null);
+  },
+);

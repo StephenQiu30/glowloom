@@ -17,7 +17,7 @@ type ProjectAccess interface {
 
 // PlatformAccess checks the current exact platform session for governance commands.
 type PlatformAccess interface {
-	CheckPlatformSession(context.Context, identity.Principal, time.Time) error
+	CheckPlatformSession(context.Context, identity.Principal, func() time.Time) error
 }
 
 // ErrExecutionAuthorityRevoked stops execution without retrying or dropping supplier facts.

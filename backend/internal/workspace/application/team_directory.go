@@ -85,7 +85,8 @@ func (s *TeamDirectory) List(ctx context.Context, actor identity.Principal, id u
 	}
 	now := s.now().UTC()
 	page := MemberPage{Items: []TeamMember{}, AsOf: now}
-	err = s.store.TeamTransaction(ctx, actor, now, func(tx TeamTx) error {
+	err = s.store.TeamTransaction(ctx, actor, s.now, func(tx TeamTx) error {
+		now := s.now().UTC()
 		team, err := tx.LoadTeam(id)
 		if err != nil {
 			return err

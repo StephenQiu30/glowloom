@@ -32,17 +32,17 @@ func (h *PlatformDirectoryHandler) Register(group *gin.RouterGroup) {
 
 // PlatformUserView excludes credentials and private creation data from the directory.
 type PlatformUserView struct {
-	ID                 uuid.UUID  `json:"id" binding:"required"`
-	Email              string     `json:"email" binding:"required"`
-	EmailVerifiedAt    *time.Time `json:"email_verified_at" binding:"required"`
-	DisplayName        string     `json:"display_name" binding:"required"`
-	AvatarAssetID      *uuid.UUID `json:"avatar_asset_id" binding:"required"`
-	Status             string     `json:"status" binding:"required"`
-	PlatformRole       string     `json:"platform_role" binding:"required"`
-	Revision           string     `json:"revision" binding:"required"`
-	CreateTime         time.Time  `json:"create_time" binding:"required"`
-	LastLoginAt        *time.Time `json:"last_login_at" binding:"required"`
-	ActiveTeamCount    int        `json:"active_team_count" binding:"required"`
+	ID              uuid.UUID  `json:"id" binding:"required"`
+	Email           string     `json:"email" binding:"required"`
+	EmailVerifiedAt *time.Time `json:"email_verified_at" binding:"required"`
+	DisplayName     string     `json:"display_name" binding:"required"`
+	AvatarAssetID   *uuid.UUID `json:"avatar_asset_id" binding:"required"`
+	Status          string     `json:"status" binding:"required"`
+	PlatformRole    string     `json:"platform_role" binding:"required"`
+	Revision        string     `json:"revision" binding:"required"`
+	CreateTime      time.Time  `json:"create_time" binding:"required"`
+	LastLoginAt     *time.Time `json:"last_login_at" binding:"required"`
+	ActiveTeamCount int        `json:"active_team_count" binding:"required"`
 }
 
 // PlatformUserPageView returns a bounded directory page and stable cursor.

@@ -131,13 +131,13 @@ func (w *avatarWriter) Write(b []byte) (int, error) {
 
 // AvatarActorAccess consumes the identity-owned live-session authority.
 type AvatarActorAccess interface {
-	CheckSession(context.Context, identityapp.Principal, time.Time) error
+	CheckSession(context.Context, identityapp.Principal, func() time.Time) error
 }
 
 // AvatarRepository publishes only service-reencoded, account-owned images.
 type AvatarRepository interface {
-	AuthorizeAvatar(context.Context, identityapp.Principal, time.Time) error
-	CommitAvatar(context.Context, identityapp.Principal, domain.MediaAsset, time.Time) error
+	AuthorizeAvatar(context.Context, identityapp.Principal, func() time.Time) error
+	CommitAvatar(context.Context, identityapp.Principal, domain.MediaAsset, func() time.Time) error
 	AvatarExists(context.Context, uuid.UUID) (bool, error)
 }
 
@@ -158,7 +158,7 @@ func (s *AvatarService) Authorize(ctx context.Context, a identityapp.Principal) 
 	if s == nil || s.repo == nil || s.objects == nil {
 		return ErrUnavailable
 	}
-	return s.repo.AuthorizeAvatar(ctx, a, s.now().UTC())
+	return s.repo.AuthorizeAvatar(ctx, a, s.now)
 }
 
 // Upload returns an eligible asset; binding still uses identity's profile CAS.
@@ -190,7 +190,7 @@ func (s *AvatarService) Upload(ctx context.Context, a identityapp.Principal, dat
 		err = ErrObjectMismatch
 	}
 	if err == nil {
-		err = s.repo.CommitAvatar(ctx, a, asset, s.now().UTC())
+		err = s.repo.CommitAvatar(ctx, a, asset, s.now)
 	}
 	if err != nil {
 		exists, checkErr := s.repo.AvatarExists(ctx, id)
@@ -204,7 +204,7 @@ func (s *AvatarService) Upload(ctx context.Context, a identityapp.Principal, dat
 
 // AvatarReader loads only the current account's bound, eligible avatar.
 type AvatarReader interface {
-	AvatarTransaction(context.Context, identityapp.Principal, time.Time, func(domain.MediaAsset) error) error
+	AvatarTransaction(context.Context, identityapp.Principal, func() time.Time, func(domain.MediaAsset) error) error
 }
 
 // AvatarPreview contains a short-lived private URL without exposing its object key.
@@ -233,7 +233,7 @@ func (q *AvatarQuery) Read(ctx context.Context, a identityapp.Principal) (Avatar
 	}
 	now := q.now().UTC()
 	var asset domain.MediaAsset
-	if err := q.reader.AvatarTransaction(ctx, a, now, func(current domain.MediaAsset) error { asset = current; return nil }); err != nil {
+	if err := q.reader.AvatarTransaction(ctx, a, q.now, func(current domain.MediaAsset) error { asset = current; return nil }); err != nil {
 		return AvatarPreview{}, err
 	}
 	// MinIO may resolve an uncached bucket region over the network. Sign without
@@ -244,7 +244,7 @@ func (q *AvatarQuery) Read(ctx context.Context, a identityapp.Principal) (Avatar
 	if err != nil {
 		return AvatarPreview{}, err
 	}
-	err = q.reader.AvatarTransaction(ctx, a, q.now().UTC(), func(current domain.MediaAsset) error {
+	err = q.reader.AvatarTransaction(ctx, a, q.now, func(current domain.MediaAsset) error {
 		if current.ID != asset.ID || current.ObjectKey != asset.ObjectKey {
 			return ErrNotFound
 		}

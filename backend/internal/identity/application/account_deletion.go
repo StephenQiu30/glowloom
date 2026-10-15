@@ -42,7 +42,7 @@ type AccountDeletionTx interface {
 
 // AccountDeletionStore serializes identity revocation and retained-resource soft deletion.
 type AccountDeletionStore interface {
-	DeletionTransaction(context.Context, Principal, time.Time, func(AccountDeletionTx) error) error
+	DeletionTransaction(context.Context, Principal, func() time.Time, func(AccountDeletionTx) error) error
 }
 
 // AccountDeletion retains records and resources; only identity and access change.
@@ -60,7 +60,7 @@ func NewAccountDeletion(auth *Auth, store AccountDeletionStore, now func() time.
 // Preview reports duties and the version required for confirmation.
 func (s *AccountDeletion) Preview(ctx context.Context, actor Principal) (DeletionImpact, error) {
 	var impact DeletionImpact
-	err := s.store.DeletionTransaction(ctx, actor, s.now().UTC(), func(tx AccountDeletionTx) error {
+	err := s.store.DeletionTransaction(ctx, actor, s.now, func(tx AccountDeletionTx) error {
 		var err error
 		impact, err = tx.Impact()
 		return err
@@ -87,9 +87,9 @@ func (s *AccountDeletion) Start(ctx context.Context, actor Principal, source str
 	if !s.auth.mailReady() {
 		return RegistrationStart{}, ErrRegistrationUnavailable
 	}
-	now := s.now().UTC()
 	op := uuid.New()
-	err := s.store.DeletionTransaction(ctx, actor, now, func(tx AccountDeletionTx) error {
+	err := s.store.DeletionTransaction(ctx, actor, s.now, func(tx AccountDeletionTx) error {
+		now := s.now().UTC()
 		if err := checkDeletion(tx, now); err != nil {
 			return err
 		}
@@ -122,9 +122,9 @@ func (s *AccountDeletion) Confirm(ctx context.Context, actor Principal, revision
 	if !s.auth.emailReady() {
 		return ErrRegistrationUnavailable
 	}
-	now := s.now().UTC()
 	var rejected error
-	err := s.store.DeletionTransaction(ctx, actor, now, func(tx AccountDeletionTx) error {
+	err := s.store.DeletionTransaction(ctx, actor, s.now, func(tx AccountDeletionTx) error {
+		now := s.now().UTC()
 		u := tx.Account()
 		if revision != u.Revision {
 			return domain.ErrRevisionConflict
@@ -144,6 +144,13 @@ func (s *AccountDeletion) Confirm(ctx context.Context, actor Principal, revision
 		budget, err := tx.Budget(bucket)
 		if err != nil {
 			return err
+		}
+		now = s.now().UTC()
+		if !tx.Session().RecentlyAuthenticated(u, now) {
+			return ErrReauthenticationRequired
+		}
+		if !c.Available(now) {
+			return ErrProofInvalid
 		}
 		budget.Prune(now)
 		if len(budget.FailedAt) >= 5 {

@@ -27,13 +27,13 @@ func (t *emailChangeTx) Account() domain.User        { return t.user }
 func (t *emailChangeTx) Session() domain.AuthSession { return t.session }
 
 // EmailChangeTransaction follows settings -> account -> session -> proof lock order.
-func (s *EmailChangeStore) EmailChangeTransaction(ctx context.Context, a application.Principal, now time.Time, run func(application.EmailChangeTx) error) error {
+func (s *EmailChangeStore) EmailChangeTransaction(ctx context.Context, a application.Principal, clock func() time.Time, run func(application.EmailChangeTx) error) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		base := &emailAuthTx{authTx: &authTx{db: tx}}
 		if _, err := base.RegistrationEnabled(); err != nil {
 			return err
 		}
-		u, err := lockSelfActor(tx, a, now)
+		u, err := lockSelfActor(tx, a, clock)
 		if err != nil {
 			return err
 		}

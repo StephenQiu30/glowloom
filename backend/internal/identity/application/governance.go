@@ -90,7 +90,7 @@ type GovernanceTx interface {
 
 // GovernanceStore authenticates inside the shared governance transaction.
 type GovernanceStore interface {
-	GovernanceTransaction(context.Context, Principal, bool, time.Time, func(GovernanceTx) error) error
+	GovernanceTransaction(context.Context, Principal, bool, func() time.Time, func(GovernanceTx) error) error
 	PreviewInvitationProof(context.Context, []byte, time.Time) (Invitation, error)
 }
 
@@ -136,8 +136,8 @@ func (s *Governance) mutateUser(ctx context.Context, actor Principal, target uui
 	if target == uuid.Nil || revision < 1 || !validGovernanceReason(reason) {
 		return ErrInvalidGovernance
 	}
-	now := s.now().UTC()
-	return s.store.GovernanceTransaction(ctx, actor, true, now, func(tx GovernanceTx) error {
+	return s.store.GovernanceTransaction(ctx, actor, true, s.now, func(tx GovernanceTx) error {
+		now := s.now().UTC()
 		if err := tx.RequirePlatform(); err != nil {
 			return err
 		}
@@ -229,7 +229,7 @@ func (s *Governance) ResetProfile(ctx context.Context, a Principal, id uuid.UUID
 // Settings reads current platform policy under current platform authorization.
 func (s *Governance) Settings(ctx context.Context, a Principal) (PlatformSettings, error) {
 	var out PlatformSettings
-	err := s.store.GovernanceTransaction(ctx, a, false, s.now().UTC(), func(tx GovernanceTx) error {
+	err := s.store.GovernanceTransaction(ctx, a, false, s.now, func(tx GovernanceTx) error {
 		if err := tx.RequirePlatform(); err != nil {
 			return err
 		}
@@ -246,8 +246,8 @@ func (s *Governance) UpdateSettings(ctx context.Context, a Principal, revision i
 	if revision < 1 || !validGovernanceReason(reason) || (registration == nil && teamCreation == nil) {
 		return out, ErrInvalidGovernance
 	}
-	now := s.now().UTC()
-	err := s.store.GovernanceTransaction(ctx, a, true, now, func(tx GovernanceTx) error {
+	err := s.store.GovernanceTransaction(ctx, a, true, s.now, func(tx GovernanceTx) error {
+		now := s.now().UTC()
 		if err := tx.RequirePlatform(); err != nil {
 			return err
 		}
@@ -293,8 +293,8 @@ func (s *Governance) propose(ctx context.Context, a Principal, key, target uuid.
 	if key == uuid.Nil || target == uuid.Nil || target == a.ID || revision < 1 || !validGovernanceReason(reason) {
 		return out, ErrInvalidGovernance
 	}
-	now := s.now().UTC()
-	err := s.store.GovernanceTransaction(ctx, a, true, now, func(tx GovernanceTx) error {
+	err := s.store.GovernanceTransaction(ctx, a, true, s.now, func(tx GovernanceTx) error {
+		now := s.now().UTC()
 		if kind != "team_transfer" {
 			if err := tx.RequirePlatform(); err != nil {
 				return err
@@ -385,8 +385,8 @@ func (s *Governance) finishProposal(ctx context.Context, a Principal, id uuid.UU
 	if id == uuid.Nil || revision < 1 {
 		return ErrInvalidGovernance
 	}
-	now := s.now().UTC()
-	return s.store.GovernanceTransaction(ctx, a, status != "declined", now, func(tx GovernanceTx) error {
+	return s.store.GovernanceTransaction(ctx, a, status != "declined", s.now, func(tx GovernanceTx) error {
+		now := s.now().UTC()
 		p, err := tx.Proposal(id)
 		if err != nil {
 			return err

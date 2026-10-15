@@ -16,7 +16,6 @@ import (
 	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
@@ -41,12 +40,10 @@ func TestSetCredentialCommitsSealedDataAndEventsOnLocalPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := pgidentity.NewStore(conn.DB).Create(ctx, identitydomain.User{
-		ID: actor.ID, OrgID: actor.OrgID, LoginName: "admin-" + actor.ID.String(), DisplayName: "Admin",
-		Role: identitydomain.RoleAdmin, PasswordHash: hash,
-	}); err != nil {
-		t.Fatalf("create test administrator: %v", err)
+	if err := conn.DB.WithContext(ctx).Exec(`INSERT INTO identity."user"(id,org_id,login_name,display_name,role,password_hash) VALUES(?,?,?,'Admin','producer',?)`, actor.ID, actor.OrgID, "admin-"+actor.ID.String(), hash).Error; err != nil {
+		t.Fatal(err)
 	}
+
 	if err := conn.DB.WithContext(ctx).Exec(`
 		UPDATE identity."user" SET must_change_password = false, platform_role='platform_admin' WHERE id = ?::uuid
 	`, actor.ID.String()).Error; err != nil {

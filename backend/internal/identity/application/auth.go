@@ -8,10 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -42,6 +39,7 @@ type AuthTx interface {
 	RevokeSession(uuid.UUID, uuid.UUID, time.Time) error
 	RevokeAccountSessions(uuid.UUID, time.Time) error
 	AppendAuthEvent(uuid.UUID, string, time.Time) error
+	EnqueueMail(QueuedMail) error
 }
 
 // Auth coordinates registration and server-authoritative authentication.
@@ -60,7 +58,16 @@ type AuthResult struct {
 
 // Login verifies the existing email credential and creates an ordinary session.
 func (a *Auth) Login(ctx context.Context, email, password string, persistent bool) (AuthResult, error) {
- return a.loginEmail(ctx, email, password, persistent)
+	return a.LoginFrom(ctx, email, password, persistent, "unknown")
+}
+
+// LoginFrom verifies a credential with a trusted transport peer source budget.
+// Callers without a transport peer share the bounded unknown source bucket.
+func (a *Auth) LoginFrom(ctx context.Context, email, password string, persistent bool, source string) (AuthResult, error) {
+	if source == "" {
+		source = "unknown"
+	}
+	return a.loginEmail(ctx, email, password, persistent, source)
 }
 
 // Current validates durable state and advances last activity under account/session locks.
@@ -108,12 +115,18 @@ func (a *Auth) ChangePassword(ctx context.Context, token string, revision int64,
 		}
 	}
 	var result AuthResult
+	var rejected error
 	err := a.withSession(ctx, token, func(tx AuthTx, user domain.User, session domain.AuthSession, now time.Time) error {
 		if revision != user.SessionEpoch {
 			return domain.ErrRevisionConflict
 		}
-		if !domain.VerifyPassword(user.PasswordHash, current) {
-			return ErrCurrentPassword
+		verified, err := a.verifyCurrentPassword(tx, user, current, now)
+		if err != nil {
+			return err
+		}
+		if !verified {
+			rejected = ErrCurrentPassword
+			return nil
 		}
 		hash, err := domain.HashPassword(password, user.PasswordHash)
 		if err != nil {
@@ -137,9 +150,15 @@ func (a *Auth) ChangePassword(ctx context.Context, token string, revision int64,
 		if err != nil {
 			return err
 		}
-		return tx.AppendAuthEvent(user.ID, "password_changed", now)
+		if err := tx.AppendAuthEvent(user.ID, "password_changed", now); err != nil {
+			return err
+		}
+		return a.queueEmail(tx, "password_changed", user.Email, map[string]string{}, now, now.Add(24*time.Hour))
 	})
-	return result, err
+	if err != nil {
+		return AuthResult{}, err
+	}
+	return result, rejected
 }
 
 func (a *Auth) withSession(ctx context.Context, token string, execute func(AuthTx, domain.User, domain.AuthSession, time.Time) error) error {

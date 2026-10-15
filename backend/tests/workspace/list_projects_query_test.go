@@ -73,7 +73,6 @@ func TestListProjectsQueryRejectsInvalidCallerAndInputBeforeStorage(t *testing.T
 		{"missing actor", identityapp.Principal{OrgID: actor.OrgID, Role: identitydomain.RoleProducer}, workspaceapp.ListProjectsInput{}, identityapp.ErrForbidden},
 		{"missing organization", identityapp.Principal{ID: actor.ID, Role: identitydomain.RoleProducer}, workspaceapp.ListProjectsInput{}, identityapp.ErrForbidden},
 		{"missing session and scope", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: "viewer"}, workspaceapp.ListProjectsInput{}, identityapp.ErrForbidden},
-		{"must change password", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: actor.Role, MustChangePassword: true}, workspaceapp.ListProjectsInput{}, identityapp.ErrForbidden},
 		{"invalid status", actor, workspaceapp.ListProjectsInput{Status: "paused"}, workspaceapp.ErrInvalidProjectList},
 		{"negative limit", actor, workspaceapp.ListProjectsInput{Limit: -1}, workspaceapp.ErrInvalidProjectList},
 		{"over limit", actor, workspaceapp.ListProjectsInput{Limit: 201}, workspaceapp.ErrInvalidProjectList},

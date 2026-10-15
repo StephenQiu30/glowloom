@@ -28,7 +28,7 @@ func (t *teamTx) BoundTeamAvatar(team uuid.UUID, member *uuid.UUID, platform boo
 		}
 		id = current.AvatarID
 		if member != nil {
-			rows, err := t.QueryMembers(team, current.ActorRole == "team_admin", application.MemberFilter{UserID: *member, Limit: 1}, application.MemberPosition{AsOf: t.now})
+			rows, err := t.QueryMembers(team, current.ActorRole == "team_admin", application.MemberFilter{UserID: *member, Limit: 1}, application.MemberPosition{AsOf: t.clock().UTC()})
 			if err != nil {
 				return application.TeamAvatarObject{}, err
 			}

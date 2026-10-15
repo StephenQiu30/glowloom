@@ -16,21 +16,30 @@ import (
 
 const unavailableArgonHash = "$argon2id$v=19$m=19456,t=2,p=1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
-func (a *Auth) loginEmail(ctx context.Context, email, password string, persistent bool) (AuthResult, error) {
+func (a *Auth) loginEmail(ctx context.Context, email, password string, persistent bool, source string) (AuthResult, error) {
 	if !a.emailReady() {
 		return AuthResult{}, ErrRegistrationUnavailable
 	}
-	key, err := domain.NormalizeEmail(email)
-	if err != nil {
-		domain.VerifyPassword(unavailableArgonHash, password)
-		return AuthResult{}, ErrInvalidCredentials
-	}
 	var result AuthResult
 	var rejected error
-	err = a.email.store.EmailTransaction(ctx, func(tx EmailTx) error {
+	err := a.email.store.EmailTransaction(ctx, func(tx EmailTx) error {
 		// The settings row serializes the lock order with credential/governance changes.
 		if _, err := tx.RegistrationEnabled(); err != nil {
 			return err
+		}
+		now := a.now().UTC()
+		if err := a.reserveLoginSource(tx, source, now); err != nil {
+			if errors.Is(err, ErrRateLimited) {
+				rejected = err
+				return nil
+			}
+			return err
+		}
+		key, err := domain.NormalizeEmail(email)
+		if err != nil {
+			domain.VerifyPassword(unavailableArgonHash, password)
+			rejected = ErrInvalidCredentials
+			return tx.AppendAuthEvent(uuid.Nil, "login_failed", now)
 		}
 		guardKey := hex.EncodeToString(a.email.protector.Digest("login_guard", uuid.Nil, key))
 		guard, err := tx.Guard(guardKey)
@@ -46,7 +55,6 @@ func (a *Auth) loginEmail(ctx context.Context, email, password string, persisten
 			hash = unavailableArgonHash
 		}
 		correct := domain.VerifyPassword(hash, password)
-		now := a.now().UTC()
 		if !correct || lookupErr != nil || u.EmailVerifiedAt.IsZero() || u.Status != domain.StatusActive || guard.Locked(now) || now.Before(u.LockedUntil) {
 			guard.Fail(now)
 			if err := tx.SaveGuard(guardKey, guard); err != nil {
@@ -82,6 +90,31 @@ func (a *Auth) loginEmail(ctx context.Context, email, password string, persisten
 		return AuthResult{}, err
 	}
 	return result, rejected
+}
+
+// reserveLoginSource uses a distinct persistent bucket, independent of email
+// failure guards and SMTP quotas. FailedAt stores all admitted login attempts
+// here, including successful, unknown-account, and malformed-email attempts.
+func (a *Auth) reserveLoginSource(tx EmailTx, source string, now time.Time) error {
+	const limit = 100
+	const window = 15 * time.Minute
+	key := "login_source/" + hex.EncodeToString(a.email.protector.Digest("login_source", uuid.Nil, source))
+	budget, err := tx.Budget(key)
+	if err != nil {
+		return err
+	}
+	recent := budget.FailedAt[:0]
+	for _, attempt := range budget.FailedAt {
+		if attempt.After(now.Add(-window)) {
+			recent = append(recent, attempt)
+		}
+	}
+	budget.FailedAt = recent
+	if len(recent) >= limit {
+		return &RateLimit{RetryAfter: recent[0].Add(window).Sub(now)}
+	}
+	budget.FailedAt = append(budget.FailedAt, now)
+	return tx.SaveBudget(key, budget)
 }
 
 // StartPasswordReset always accepts the same shape; only verified accounts get

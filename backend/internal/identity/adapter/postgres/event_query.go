@@ -19,10 +19,10 @@ type EventStore struct{ db *gorm.DB }
 func NewEventStore(db *gorm.DB) *EventStore { return &EventStore{db: db} }
 
 // ReadEvents rechecks current authority before querying the requested event scope.
-func (s *EventStore) ReadEvents(ctx context.Context, actor application.Principal, f application.EventFilter, pos application.EventPosition, now time.Time) ([]application.SecurityEvent, error) {
+func (s *EventStore) ReadEvents(ctx context.Context, actor application.Principal, f application.EventFilter, pos application.EventPosition, clock func() time.Time) ([]application.SecurityEvent, error) {
 	items := make([]application.SecurityEvent, 0)
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		u, err := lockSelfActor(tx, actor, now)
+		u, err := lockSelfActor(tx, actor, clock)
 		if err != nil {
 			return err
 		}

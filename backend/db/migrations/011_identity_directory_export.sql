@@ -27,4 +27,5 @@ CREATE TABLE identity.directory_export (
 );
 CREATE INDEX directory_export_actor_idx ON identity.directory_export(actor_id,created_at DESC,id);
 CREATE INDEX directory_export_work_idx ON identity.directory_export(status,expires_at,created_at,id);
+GRANT SELECT,INSERT,UPDATE ON identity.directory_export TO lanverse_app;
 COMMIT;

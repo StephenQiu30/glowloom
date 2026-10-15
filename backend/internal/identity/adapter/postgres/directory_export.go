@@ -22,7 +22,9 @@ func NewDirectoryExportStore(db *gorm.DB) *DirectoryExportStore { return &Direct
 
 type exportTx struct{ db *gorm.DB }
 
-// Transaction follows the shared governance lock order before job/actor locks.
+// Transaction takes the governance lock before authority and receipt reads.
+// READ COMMITTED gives a waiter a fresh receipt snapshot after the lock holder
+// commits. Snapshot materialization itself remains one consistent SQL statement.
 func (s *DirectoryExportStore) Transaction(ctx context.Context, run func(application.ExportTx) error) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -41,20 +43,20 @@ func (s *DirectoryExportStore) Transaction(ctx context.Context, run func(applica
 			return application.ErrSessionInvalid
 		}
 		return run(&exportTx{db: tx})
-	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	}, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 }
-func (t *exportTx) Authorize(actor application.Principal, team *uuid.UUID, revision int64, recent bool, now time.Time) (int64, error) {
+func (t *exportTx) Authorize(actor application.Principal, team *uuid.UUID, revision int64, recent bool, clock func() time.Time) (int64, error) {
 	if team == nil {
-		if err := lockPlatformReader(t.db, actor, now); err != nil {
+		if err := lockPlatformReader(t.db, actor, clock); err != nil {
 			return 0, err
 		}
 	} else {
-		if _, err := lockSelfActor(t.db, actor, now); err != nil {
+		if _, err := lockSelfActor(t.db, actor, clock); err != nil {
 			return 0, err
 		}
 	}
 	if recent {
-		if err := NewStore(t.db).CheckRecentSession(t.db.Statement.Context, actor, now); err != nil {
+		if err := NewStore(t.db).CheckRecentSession(t.db.Statement.Context, actor, clock); err != nil {
 			return 0, err
 		}
 	}
@@ -130,21 +132,25 @@ func (t *exportTx) Save(j application.DirectoryExportJob) error {
 }
 
 // Pending lists a bounded batch without retaining locks across object I/O.
-// Pending returns a bounded batch of unexpired exports ready for processing.
 func (s *DirectoryExportStore) Pending(ctx context.Context, limit int, now time.Time) ([]uuid.UUID, error) {
 	var ids []uuid.UUID
 	err := s.db.WithContext(ctx).Table("identity.directory_export").Where("status='pending' AND expires_at>?", now).Order("created_at,id").Limit(limit).Pluck("id", &ids).Error
 	return ids, err
 }
 
-// Cleanup deletes only server-owned temporary export objects, then clears payloads.
-func (s *DirectoryExportStore) Cleanup(ctx context.Context, limit int, now time.Time, remove func(application.DirectoryExportJob) error) (int, error) {
+// Cleanup claims immutable expired objects, deletes outside SQL transactions,
+// then clears the reference only if the same claim and object still own the row.
+// An uncertain DELETE retains its object ID and is retryable after a minute.
+func (s *DirectoryExportStore) Cleanup(ctx context.Context, limit int, now time.Time, remove func(context.Context, application.DirectoryExportJob) error) (int, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	count := 0
+	if limit < 1 || limit > 20 {
+		limit = 20
+	}
+	var claimed []application.DirectoryExportJob
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var records []exportRecord
-		if err := tx.Raw(`SELECT * FROM identity.directory_export WHERE expires_at<=? AND (status<>'expired' OR private_object_id IS NOT NULL OR snapshot_payload IS NOT NULL) AND (status<>'running' OR updated_at<=?::timestamptz - interval '1 minute') ORDER BY expires_at,id LIMIT ? FOR UPDATE SKIP LOCKED`, now, now, limit).Scan(&records).Error; err != nil {
+		if err := tx.Raw(`SELECT * FROM identity.directory_export WHERE expires_at<=? AND ((status<>'expired' AND (status<>'running' OR updated_at<=?::timestamptz - interval '1 minute')) OR (status='expired' AND (private_object_id IS NOT NULL OR snapshot_payload IS NOT NULL) AND updated_at<=?::timestamptz - interval '1 minute')) ORDER BY expires_at,id LIMIT ? FOR UPDATE SKIP LOCKED`, now, now, now, limit).Scan(&records).Error; err != nil {
 			return err
 		}
 		for _, r := range records {
@@ -152,17 +158,36 @@ func (s *DirectoryExportStore) Cleanup(ctx context.Context, limit int, now time.
 			if err != nil {
 				return err
 			}
-			if err := remove(j); err != nil {
+			if err := tx.Exec(`UPDATE identity.directory_export SET status='expired',snapshot_payload=NULL,updated_at=? WHERE id=?`, now, j.ID).Error; err != nil {
 				return err
 			}
-			if err := tx.Exec(`UPDATE identity.directory_export SET status='expired',snapshot_payload=NULL,private_object_id=NULL,updated_at=? WHERE id=?`, now, j.ID).Error; err != nil {
-				return err
-			}
-			count++
+			j.Status = "expired"
+			j.Snapshot = nil
+			j.UpdatedAt = now
+			claimed = append(claimed, j)
 		}
 		return nil
 	})
-	return count, err
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, job := range claimed {
+		if err := ctx.Err(); err != nil {
+			return count, err
+		}
+		if err := remove(ctx, job); err != nil {
+			return count, err
+		}
+		// This single statement owns its short implicit transaction. No object call
+		// runs with its row lock held. A newer claim cannot be finalized by this one.
+		result := s.db.WithContext(ctx).Exec(`UPDATE identity.directory_export SET private_object_id=NULL,snapshot_payload=NULL WHERE id=? AND status='expired' AND updated_at=? AND private_object_id IS NOT DISTINCT FROM ?::uuid AND expires_at<=?`, job.ID, job.UpdatedAt, job.ObjectID, now)
+		if result.Error != nil {
+			return count, result.Error
+		}
+		count += int(result.RowsAffected)
+	}
+	return count, nil
 }
 
 func memberExportQuery(tx *gorm.DB, team uuid.UUID, f application.ExportFilter, asOf time.Time) *gorm.DB {

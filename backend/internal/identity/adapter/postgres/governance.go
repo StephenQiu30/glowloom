@@ -35,7 +35,7 @@ type governanceTx struct {
 }
 
 // GovernanceTransaction holds the shared settings lock before checking current session and authority.
-func (s *GovernanceStore) GovernanceTransaction(ctx context.Context, actor application.Principal, recent bool, now time.Time, run func(application.GovernanceTx) error) error {
+func (s *GovernanceStore) GovernanceTransaction(ctx context.Context, actor application.Principal, recent bool, clock func() time.Time, run func(application.GovernanceTx) error) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var settings application.PlatformSettings
 		r := tx.Raw(`SELECT registration_enabled,team_creation_enabled,revision FROM identity.platform_settings WHERE singleton FOR UPDATE`).Scan(&settings)
@@ -45,12 +45,12 @@ func (s *GovernanceStore) GovernanceTransaction(ctx context.Context, actor appli
 		if r.RowsAffected != 1 {
 			return application.ErrForbidden
 		}
-		user, err := lockSelfActor(tx, actor, now)
+		user, err := lockSelfActor(tx, actor, clock)
 		if err != nil {
 			return err
 		}
 		if recent {
-			if err := NewStore(tx).CheckRecentSession(ctx, actor, now); err != nil {
+			if err := NewStore(tx).CheckRecentSession(ctx, actor, clock); err != nil {
 				return err
 			}
 		}

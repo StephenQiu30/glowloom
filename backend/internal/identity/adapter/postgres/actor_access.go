@@ -15,20 +15,20 @@ import (
 // CheckSession retains identity/session locks in the caller's content transaction.
 // A connection-pool call is rejected because releasing the locks before a write
 // would allow a concurrent revocation to race the authorization decision.
-func (s *Store) CheckSession(ctx context.Context, actor application.Principal, now time.Time) error {
+func (s *Store) CheckSession(ctx context.Context, actor application.Principal, clock func() time.Time) error {
 	if s == nil || s.db == nil || s.db.Statement == nil {
 		return application.ErrSessionInvalid
 	}
 	if _, ok := s.db.Statement.ConnPool.(gorm.TxCommitter); !ok {
 		return application.ErrSessionInvalid
 	}
-	_, err := lockSelfActor(s.db.WithContext(ctx), actor, now)
+	_, err := lockSelfActor(s.db.WithContext(ctx), actor, clock)
 	return err
 }
 
 // CheckRecentSession requires a password proof bound to this live session and epoch.
-func (s *Store) CheckRecentSession(ctx context.Context, actor application.Principal, now time.Time) error {
-	if err := s.CheckSession(ctx, actor, now); err != nil {
+func (s *Store) CheckRecentSession(ctx context.Context, actor application.Principal, clock func() time.Time) error {
+	if err := s.CheckSession(ctx, actor, clock); err != nil {
 		return err
 	}
 	u, err := (&authTx{db: s.db.WithContext(ctx)}).AccountByID(actor.ID)
@@ -39,7 +39,7 @@ func (s *Store) CheckRecentSession(ctx context.Context, actor application.Princi
 	if err := s.db.WithContext(ctx).Raw(`SELECT * FROM identity.user_session WHERE id=? AND account_id=?`, actor.SessionID, actor.ID).Scan(&session).Error; err != nil {
 		return err
 	}
-	if !session.RecentlyAuthenticated(u, now) {
+	if !session.RecentlyAuthenticated(u, clock().UTC()) {
 		return application.ErrReauthenticationRequired
 	}
 	return nil
@@ -59,8 +59,8 @@ func (s *Store) CheckActive(ctx context.Context, id uuid.UUID) error {
 }
 
 // CheckPlatformSession reuses current session checks and adds exact platform epoch authority.
-func (s *Store) CheckPlatformSession(ctx context.Context, a application.Principal, now time.Time) error {
-	if err := s.CheckSession(ctx, a, now); err != nil {
+func (s *Store) CheckPlatformSession(ctx context.Context, a application.Principal, clock func() time.Time) error {
+	if err := s.CheckSession(ctx, a, clock); err != nil {
 		return err
 	}
 	u, err := (&authTx{db: s.db.WithContext(ctx)}).AccountByID(a.ID)

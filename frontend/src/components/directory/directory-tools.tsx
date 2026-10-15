@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createPlatformUserExport,
   createTeamMemberExport,
@@ -96,6 +96,17 @@ export function DirectoryTools({
   const [action, setAction] = useState<ConfirmAction | null>(null);
   const flight = useRef<AbortController | null>(null);
   const locked = useRef(false);
+  const clearDenied = useCallback((error: unknown) => {
+    if (error instanceof RequestError && [401, 403].includes(error.status)) {
+      flight.current?.abort();
+      setPending(false);
+      setAction(null);
+      setStatistics(null);
+      setJob(null);
+      setStatsError("当前权限已变化，请重新读取统计。");
+      setForbidden(true);
+    }
+  }, []);
   useEffect(() => {
     const c = new AbortController();
     (teamID
@@ -136,12 +147,11 @@ export function DirectoryTools({
         if (!c.signal.aborted) {
           setStatistics(null);
           setStatsError(authErrorMessage(e));
-          if (e instanceof RequestError && [401, 403].includes(e.status))
-            setForbidden(true);
+          clearDenied(e);
         }
       });
     return () => c.abort();
-  }, [filter, teamID, retry, reload]);
+  }, [filter, teamID, retry, reload, clearDenied]);
   useEffect(() => () => flight.current?.abort(), []);
   useEffect(() => {
     if (job?.status !== "completed" || !job.expires_at) return;
@@ -149,16 +159,8 @@ export function DirectoryTools({
     const timer = setTimeout(() => setExpired(true), Math.max(0, remaining));
     return () => clearTimeout(timer);
   }, [job]);
-  function clearDenied(error: unknown) {
-    if (error instanceof RequestError && [401, 403].includes(error.status)) {
-      setStatistics(null);
-      setJob(null);
-      setStatsError("当前权限已变化，请重新读取统计。");
-      setForbidden(true);
-    }
-  }
   async function inspect() {
-    if (!job || locked.current) return;
+    if (!job || forbidden || locked.current) return;
     locked.current = true;
     setPending(true);
     setError("");
@@ -201,7 +203,14 @@ export function DirectoryTools({
     }
   }
   async function download() {
-    if (!job || expired || job.status !== "completed" || locked.current) return;
+    if (
+      !job ||
+      forbidden ||
+      expired ||
+      job.status !== "completed" ||
+      locked.current
+    )
+      return;
     locked.current = true;
     setPending(true);
     setError("");
@@ -369,7 +378,9 @@ export function DirectoryTools({
               检查导出状态
             </Button>
             <Button
-              disabled={pending || expired || job.status !== "completed"}
+              disabled={
+                pending || forbidden || expired || job.status !== "completed"
+              }
               onClick={() => void download()}
             >
               {pending ? "正在处理…" : "下载 CSV"}

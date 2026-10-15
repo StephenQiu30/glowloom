@@ -10,7 +10,6 @@ import (
 	"go.temporal.io/sdk/worker"
 	"go.uber.org/zap"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	maintenanceflow "github.com/StephenQiu30/glowloom-server/backend/internal/infra/maintenance/adapter/temporal"
 	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"

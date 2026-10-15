@@ -158,20 +158,27 @@ export function GovernanceLists({
                       effect: resend
                         ? "旧链接立即失效；新链接进入通知队列。"
                         : "此邀请立即失效。",
-                      run: (_r, signal) =>
+                      reason: !resend,
+                      run: (reason, signal) =>
                         teamID
                           ? (resend
                               ? resendTeamInvitation
                               : revokeTeamInvitation)(
                               { id: teamID, iid: i.id! },
-                              { expected_revision: i.revision },
+                              {
+                                expected_revision: i.revision,
+                                ...(!resend ? { reason } : {}),
+                              },
                               { signal },
                             )
                           : (resend
                               ? resendAccountInvitation
                               : revokeAccountInvitation)(
                               { id: i.id! },
-                              { expected_revision: i.revision },
+                              {
+                                expected_revision: i.revision,
+                                ...(!resend ? { reason } : {}),
+                              },
                               { signal },
                             ),
                     })

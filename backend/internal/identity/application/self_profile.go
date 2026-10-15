@@ -56,7 +56,7 @@ type SelfProfileTx interface {
 
 // SelfProfileStore coordinates current-identity checks and profile updates.
 type SelfProfileStore interface {
-	ProfileTransaction(context.Context, Principal, time.Time, func(SelfProfileTx) error) error
+	ProfileTransaction(context.Context, Principal, func() time.Time, func(SelfProfileTx) error) error
 }
 
 // SelfProfile validates and updates the current account profile and preferences.
@@ -74,14 +74,14 @@ func profileView(u domain.User) Profile {
 }
 func (s *SelfProfile) Read(ctx context.Context, actor Principal) (Profile, error) {
 	var out Profile
-	err := s.store.ProfileTransaction(ctx, actor, s.now().UTC(), func(tx SelfProfileTx) error { out = profileView(tx.Account()); return nil })
+	err := s.store.ProfileTransaction(ctx, actor, s.now, func(tx SelfProfileTx) error { out = profileView(tx.Account()); return nil })
 	return out, err
 }
 
 // ReadPreferences loads preferences after checking the live session.
 func (s *SelfProfile) ReadPreferences(ctx context.Context, actor Principal) (Preferences, error) {
 	var out Preferences
-	err := s.store.ProfileTransaction(ctx, actor, s.now().UTC(), func(tx SelfProfileTx) error {
+	err := s.store.ProfileTransaction(ctx, actor, s.now, func(tx SelfProfileTx) error {
 		u := tx.Account()
 		out = Preferences{Theme: u.Theme, PromptSuffix: u.PromptSuffix, Revision: u.Revision}
 		return nil
@@ -95,8 +95,8 @@ func (s *SelfProfile) Update(ctx context.Context, actor Principal, in ProfileInp
 		return Profile{}, domain.ErrInvalidProfile
 	}
 	var out Profile
-	now := s.now().UTC()
-	err := s.store.ProfileTransaction(ctx, actor, now, func(tx SelfProfileTx) error {
+	err := s.store.ProfileTransaction(ctx, actor, s.now, func(tx SelfProfileTx) error {
+		now := s.now().UTC()
 		u := tx.Account()
 		if u.Revision != in.ExpectedRevision {
 			return domain.ErrRevisionConflict
@@ -129,8 +129,8 @@ func (s *SelfProfile) UpdatePreferences(ctx context.Context, actor Principal, ex
 		return 0, domain.ErrInvalidProfile
 	}
 	var revision int64
-	now := s.now().UTC()
-	err := s.store.ProfileTransaction(ctx, actor, now, func(tx SelfProfileTx) error {
+	err := s.store.ProfileTransaction(ctx, actor, s.now, func(tx SelfProfileTx) error {
+		now := s.now().UTC()
 		u := tx.Account()
 		if u.Revision != expected {
 			return domain.ErrRevisionConflict

@@ -45,28 +45,20 @@ func (a *Auth) newSession(tx AuthTx, u domain.User, persistent bool, now time.Ti
 	return result, nil
 }
 
-// Reauthenticate proves this credential on this session only, with its own lock.
+// Reauthenticate proves this credential on this session with the shared account guard.
 func (a *Auth) Reauthenticate(ctx context.Context, token, password string) error {
 	if !a.emailReady() {
 		return ErrRegistrationUnavailable
 	}
 	var rejected error
 	err := a.withSession(ctx, token, func(tx AuthTx, u domain.User, s domain.AuthSession, now time.Time) error {
-		key := hex.EncodeToString(a.email.protector.Digest("reauth_guard", u.ID, ""))
-		guard, err := tx.Guard(key)
+		verified, err := a.verifyCurrentPassword(tx, u, password, now)
 		if err != nil {
 			return err
 		}
-		if !domain.VerifyPassword(u.PasswordHash, password) || guard.Locked(now) {
-			guard.Fail(now)
-			if err := tx.SaveGuard(key, guard); err != nil {
-				return err
-			}
+		if !verified {
 			rejected = ErrInvalidCredentials
-			return tx.AppendAuthEvent(u.ID, "login_failed", now)
-		}
-		if err := tx.SaveGuard(key, domain.LoginGuard{}); err != nil {
-			return err
+			return nil
 		}
 		return tx.ReauthenticateSession(s.ID, u.SessionEpoch, now)
 	})
@@ -74,4 +66,29 @@ func (a *Auth) Reauthenticate(ctx context.Context, token, password string) error
 		return err
 	}
 	return rejected
+}
+
+// verifyCurrentPassword shares one account guard across all password proof
+// endpoints. A false result must commit this transaction before rejection is
+// returned to the caller, so failures and their audit cannot be rolled back.
+func (a *Auth) verifyCurrentPassword(tx AuthTx, u domain.User, password string, now time.Time) (bool, error) {
+	key := hex.EncodeToString(a.email.protector.Digest("reauth_guard", u.ID, ""))
+	guard, err := tx.Guard(key)
+	if err != nil {
+		return false, err
+	}
+	if guard.Locked(now) {
+		return false, tx.AppendAuthEvent(u.ID, "login_failed", now)
+	}
+	if !domain.VerifyPassword(u.PasswordHash, password) {
+		guard.Fail(now)
+		if err := tx.SaveGuard(key, guard); err != nil {
+			return false, err
+		}
+		return false, tx.AppendAuthEvent(u.ID, "login_failed", now)
+	}
+	if err := tx.SaveGuard(key, domain.LoginGuard{}); err != nil {
+		return false, err
+	}
+	return true, nil
 }

@@ -36,7 +36,7 @@ func (a mediaScopeTestAccess) CheckActor(ctx context.Context, p identity.Princip
 	if a.worker {
 		return pgidentity.NewStore(a.tx).CheckActive(ctx, p.ID)
 	}
-	return pgidentity.NewStore(a.tx).CheckSession(ctx, p, time.Now())
+	return pgidentity.NewStore(a.tx).CheckSession(ctx, p, time.Now)
 }
 func (a mediaScopeTestAccess) AuthorizeProject(ctx context.Context, p identity.Principal, id uuid.UUID, w bool) error {
 	var store *pgworkspace.ProjectContentAccessStore

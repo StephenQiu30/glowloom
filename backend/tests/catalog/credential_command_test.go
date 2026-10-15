@@ -130,7 +130,6 @@ func TestSetCredentialCommandRejectsInvalidActorAndSecret(t *testing.T) {
 		disabled bool
 	}{
 		{name: "producer", actor: identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: identitydomain.RoleProducer}, adapter: "minimax", secret: json.RawMessage(`{"api_key":"test1234","group_id":"g"}`)},
-		{name: "first login", actor: identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: identitydomain.RoleAdmin, MustChangePassword: true}, adapter: "minimax", secret: json.RawMessage(`{"api_key":"test1234","group_id":"g"}`)},
 		{name: "unknown adapter", actor: actor, adapter: "unknown", secret: json.RawMessage(`{"api_key":"test1234"}`)},
 		{name: "missing group ID", actor: actor, adapter: "minimax", secret: json.RawMessage(`{"api_key":"test1234"}`)},
 		{name: "disabled provider", actor: actor, adapter: "minimax", secret: json.RawMessage(`{"api_key":"test1234","group_id":"g"}`), disabled: true},

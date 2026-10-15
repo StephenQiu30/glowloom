@@ -92,7 +92,6 @@ func TestCreateProviderCommandRejectsInvalidCallerAndAdapter(t *testing.T) {
 		change func(*catalogapp.CreateProviderInput)
 	}{
 		{"producer", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: identitydomain.RoleProducer}, nil},
-		{"first login", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: identitydomain.RoleAdmin, MustChangePassword: true}, nil},
 		{"unknown adapter", actor, func(v *catalogapp.CreateProviderInput) { v.AdapterKey = "unknown" }},
 		{"invalid key", actor, func(v *catalogapp.CreateProviderInput) { v.Key = "Open Router" }},
 		{"invalid request", actor, func(v *catalogapp.CreateProviderInput) { v.RequestID = "not-a-uuid" }},

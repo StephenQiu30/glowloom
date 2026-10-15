@@ -284,8 +284,8 @@ func TestWorkspaceStoreReadsOnlyCurrentActorsOrganization(t *testing.T) {
 	`, actor.ID.String()).Error; err != nil {
 		t.Fatalf("require actor password change: %v", err)
 	}
-	if _, err := store.FindProject(ctx, actor, project.ID); err == nil {
-		t.Fatal("actor required to change password read project")
+	if _, err := store.FindProject(ctx, actor, project.ID); err != nil {
+		t.Fatal("historical password flag blocked project", err)
 	}
 	if err := database.WithContext(ctx).Exec(`
 		UPDATE identity."user" SET must_change_password = false WHERE id = ?::uuid

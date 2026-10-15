@@ -32,12 +32,12 @@ type teamTx struct {
 	actor           identity.Principal
 	creationEnabled bool
 	actors          application.TeamActorAccess
-	now             time.Time
+	clock           func() time.Time
 	avatars         application.TeamAvatarAccess
 }
 
 // TeamTransaction holds the shared governance lock before identity and team locks.
-func (s *TeamStore) TeamTransaction(ctx context.Context, actor identity.Principal, now time.Time, run func(application.TeamTx) error) error {
+func (s *TeamStore) TeamTransaction(ctx context.Context, actor identity.Principal, clock func() time.Time, run func(application.TeamTx) error) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var settings struct{ TeamCreationEnabled bool }
 		r := tx.Raw(`SELECT team_creation_enabled FROM identity.platform_settings WHERE singleton FOR UPDATE`).Scan(&settings)
@@ -50,19 +50,19 @@ func (s *TeamStore) TeamTransaction(ctx context.Context, actor identity.Principa
 		if s.actors == nil {
 			return application.ErrTeamForbidden
 		}
-		if err := s.actors(tx).CheckSession(ctx, actor, now); err != nil {
+		if err := s.actors(tx).CheckSession(ctx, actor, clock); err != nil {
 			return err
 		}
 		var avatars application.TeamAvatarAccess
 		if s.avatars != nil {
 			avatars = s.avatars(tx)
 		}
-		return run(&teamTx{avatars: avatars, db: tx, actor: actor, creationEnabled: settings.TeamCreationEnabled, actors: s.actors(tx), now: now})
+		return run(&teamTx{avatars: avatars, db: tx, actor: actor, creationEnabled: settings.TeamCreationEnabled, actors: s.actors(tx), clock: clock})
 	})
 }
 
 func (t *teamTx) RequireRecentAuthentication() error {
-	return t.actors.CheckRecentSession(t.db.Statement.Context, t.actor, t.now)
+	return t.actors.CheckRecentSession(t.db.Statement.Context, t.actor, t.clock)
 }
 func (t *teamTx) Spaces() ([]application.Space, error) {
 	spaces := []application.Space{}
@@ -203,7 +203,7 @@ func (t *teamTx) AppendTeamEvent(team uuid.UUID, target *uuid.UUID, action, reas
 
 func (t *teamTx) CanArchive(id uuid.UUID) error {
 	var busy bool
-	if err := t.db.Raw(`SELECT EXISTS(SELECT 1 FROM operation.operation o JOIN workspace.project p ON p.id=o.project_id JOIN workspace.creation_scope s ON s.physical_scope_id=p.org_id WHERE s.team_id=? AND NOT o.is_delete AND o.status IN ('confirmed','submitting','submitted','succeeded','ingesting','unknown','reconciling','manual','cancelling')) OR EXISTS(SELECT 1 FROM identity.authority_proposal WHERE team_id=? AND status='pending' AND expires_at>?)`, id, id, t.now).Scan(&busy).Error; err != nil {
+	if err := t.db.Raw(`SELECT EXISTS(SELECT 1 FROM operation.operation o JOIN workspace.project p ON p.id=o.project_id JOIN workspace.creation_scope s ON s.physical_scope_id=p.org_id WHERE s.team_id=? AND NOT o.is_delete AND o.status IN ('confirmed','submitting','submitted','succeeded','ingesting','unknown','reconciling','manual','cancelling')) OR EXISTS(SELECT 1 FROM identity.authority_proposal WHERE team_id=? AND status='pending' AND expires_at>?)`, id, id, t.clock().UTC()).Scan(&busy).Error; err != nil {
 		return err
 	}
 	if busy {

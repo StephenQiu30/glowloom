@@ -13,6 +13,10 @@ RUN go build -p 2 -o /usr/local/bin/lanverse ./cmd/lanverse
 COPY --chmod=755 <<'ENTRYPOINT' /usr/local/bin/glowloom-dev-entrypoint
 #!/bin/sh
 set -eu
+# Optional private settings for this existing local container; explicit env wins.
+if [ -z "${LV_ENV_FILE:-}" ] && [ -r /run/secrets/identity-runtime.env ]; then
+  export LV_ENV_FILE=/run/secrets/identity-runtime.env
+fi
 for port in ${LV_HOST_SERVICE_PORTS:-5432 6379 7233 9000 9092}; do
   case "$port" in
     ''|*[!0-9]*) echo "Invalid host service port" >&2; exit 1 ;;

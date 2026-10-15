@@ -11,7 +11,7 @@ import (
 
 // ActorAccess checks exact platform sessions and current asynchronous platform authority.
 type ActorAccess interface {
-	CheckPlatformSession(context.Context, identity.Principal, time.Time) error
+	CheckPlatformSession(context.Context, identity.Principal, func() time.Time) error
 	CheckActive(context.Context, uuid.UUID) error
 }
 

@@ -166,7 +166,6 @@ func TestProjectHTTPCreateRechecksScopeAndRollsBackReceiptFailure(t *testing.T) 
 		id                       uuid.UUID
 	}{
 		{"disabled actor", `UPDATE identity."user" SET status='disabled' WHERE id=?`, `UPDATE identity."user" SET status='active' WHERE id=?`, actor.ID},
-		{"must change password", `UPDATE identity."user" SET must_change_password=true WHERE id=?`, `UPDATE identity."user" SET must_change_password=false WHERE id=?`, actor.ID},
 		{"disabled organization", `UPDATE workspace.organization SET status='disabled' WHERE id=?`, `UPDATE workspace.organization SET status='active' WHERE id=?`, actor.OrgID},
 	} {
 		t.Run(test.name, func(t *testing.T) {

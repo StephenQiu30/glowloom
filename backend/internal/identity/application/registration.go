@@ -69,6 +69,7 @@ type EmailStore interface {
 // EmailTx combines account, proof, budget and outbox writes in one transaction.
 type EmailTx interface {
 	AuthTx
+	AccountByLogin(string) (domain.User, error)
 	RegistrationEnabled() (bool, error)
 	RegistrationInvitation(uuid.UUID, []byte, string, time.Time) (Invitation, error)
 	AccountByEmail(string) (domain.User, error)
@@ -81,7 +82,6 @@ type EmailTx interface {
 	CreatePersonalAccount(domain.User) error
 	BindVerifiedAccount(domain.User) error
 	HasPlatformAdministrator() (bool, error)
-	EnqueueMail(QueuedMail) error
 }
 
 type emailRuntime struct {
@@ -415,7 +415,7 @@ func (a *Auth) reserveEmail(tx EmailTx, email, source string, now time.Time) err
 	return nil
 }
 
-func (a *Auth) queueEmail(tx EmailTx, template, email string, payload any, now, expires time.Time, challengeID ...uuid.UUID) error {
+func (a *Auth) queueEmail(tx interface{ EnqueueMail(QueuedMail) error }, template, email string, payload any, now, expires time.Time, challengeID ...uuid.UUID) error {
 	id := uuid.New()
 	plain, err := json.Marshal(payload)
 	if err != nil {

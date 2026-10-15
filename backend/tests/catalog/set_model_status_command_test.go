@@ -139,7 +139,6 @@ func TestSetModelStatusCommandRejectsInvalidInputBeforeStore(t *testing.T) {
 		want   error
 	}{
 		{name: "producer", actor: identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: identitydomain.RoleProducer}, want: identityapp.ErrForbidden},
-		{name: "first login", actor: identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: identitydomain.RoleAdmin, MustChangePassword: true}, want: identityapp.ErrForbidden},
 		{name: "missing actor", actor: identityapp.Principal{OrgID: actor.OrgID, Role: identitydomain.RoleAdmin}, want: identityapp.ErrForbidden},
 		{name: "missing organization", actor: identityapp.Principal{ID: actor.ID, Role: identitydomain.RoleAdmin}, want: identityapp.ErrForbidden},
 		{name: "missing model", actor: actor, change: func(v *catalogapp.SetModelStatusInput) { v.ModelID = uuid.Nil }},

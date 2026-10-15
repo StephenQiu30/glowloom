@@ -307,7 +307,7 @@ func TestPlatformResetAndAllowedActions(t *testing.T) {
 	if err := service.Send(t.Context(), actor, target.ID, revision, "Recover account by email"); err != nil {
 		t.Fatal(err)
 	}
-	if err := pgidentity.NewStore(tx).CheckSession(t.Context(), target, now); err != nil {
+	if err := pgidentity.NewStore(tx).CheckSession(t.Context(), target, func() time.Time { return now }); err != nil {
 		t.Fatal("recovery request revoked existing session before proof", err)
 	}
 	if _, err := auth.Login(t.Context(), "reset-target@example.invalid", "long password for tests", false); err != nil {

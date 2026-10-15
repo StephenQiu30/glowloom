@@ -234,7 +234,6 @@ func TestCreateProjectCommandRechecksCurrentActorAndOrganization(t *testing.T) {
 		restore    string
 		identifier uuid.UUID
 	}{
-		{"password change required", `UPDATE identity."user" SET must_change_password = true WHERE id = ?::uuid`, `UPDATE identity."user" SET must_change_password = false WHERE id = ?::uuid`, actor.ID},
 		{"disabled actor", `UPDATE identity."user" SET status = 'disabled' WHERE id = ?::uuid`, `UPDATE identity."user" SET status = 'active' WHERE id = ?::uuid`, actor.ID},
 		{"disabled organization", `UPDATE workspace.organization SET status = 'disabled' WHERE id = ?::uuid`, `UPDATE workspace.organization SET status = 'active' WHERE id = ?::uuid`, actor.OrgID},
 	} {

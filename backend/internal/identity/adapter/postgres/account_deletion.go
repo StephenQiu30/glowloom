@@ -28,7 +28,7 @@ func (t *accountDeletionTx) Account() domain.User        { return t.user }
 func (t *accountDeletionTx) Session() domain.AuthSession { return t.session }
 
 // DeletionTransaction locks governance, identity and session state before mutation.
-func (s *AccountDeletionStore) DeletionTransaction(ctx context.Context, actor application.Principal, now time.Time, run func(application.AccountDeletionTx) error) error {
+func (s *AccountDeletionStore) DeletionTransaction(ctx context.Context, actor application.Principal, clock func() time.Time, run func(application.AccountDeletionTx) error) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		base := &emailAuthTx{authTx: &authTx{db: tx}}
 		// Serialize governance before taking user/session/team locks. Every operation
@@ -36,7 +36,7 @@ func (s *AccountDeletionStore) DeletionTransaction(ctx context.Context, actor ap
 		if _, err := base.RegistrationEnabled(); err != nil {
 			return err
 		}
-		u, err := lockSelfActor(tx, actor, now)
+		u, err := lockSelfActor(tx, actor, clock)
 		if err != nil {
 			return err
 		}

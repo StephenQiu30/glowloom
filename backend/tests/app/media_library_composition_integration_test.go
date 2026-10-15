@@ -23,7 +23,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	identitypg "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
@@ -32,6 +31,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 type mediaCompositionFixture struct {
@@ -104,19 +104,20 @@ func newMediaCompositionFixture(t *testing.T) mediaCompositionFixture {
 	if err != nil {
 		t.Fatal("open synthetic private storage")
 	}
-	fixture.router, err = app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000"}, fixture.runtime, fixture.objects)
+	cfg := identityfixture.Configure(t, config.Config{Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000"})
+	fixture.router, err = app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, fixture.runtime, fixture.objects)
 	if err != nil {
 		t.Fatal(err)
 	}
-	authResult, err := identityapp.NewAuth(identitypg.NewStore(fixture.runtime), time.Now).Register(t.Context(), "composition-"+uuid.NewString(), "Composition", "CompositionPassword123", "CompositionPassword123")
-	if err != nil {
-		t.Fatal("resolve formal workspace identity", err)
-	}
+	authResult := identityfixture.Create(t, fixture.runtime, cfg, "Composition", "CompositionPassword123")
+	scope := identityfixture.Scope(t, fixture.runtime, authResult.User.ID)
 	user := authResult.User
-	fixture.actor = identityapp.Principal{ID: user.ID, OrgID: user.OrgID, Role: user.Role}
+	fixture.actor = identityapp.Principal{ID: user.ID, OrgID: user.OrgID, ScopeID: scope, SessionID: authResult.Session.ID, CredentialEpoch: user.SessionEpoch, PlatformEpoch: user.PlatformEpoch, Role: user.Role}
 	baseRouter := fixture.router
 	fixture.router = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.AddCookie(&http.Cookie{Name: "lanverse_session", Value: authResult.Token})
+		r.Header.Set("X-CSRF-Token", authResult.CSRFToken)
+		r.Header.Set("X-Creation-Scope", scope.String())
 		baseRouter.ServeHTTP(w, r)
 	})
 	created := mediaCompositionRequest(t, fixture.router, http.MethodPost, "/api/projects", map[string]string{"name": "素材组合验收 " + uuid.NewString()[:8], "aspect_ratio": "16:9", "style_type": "realistic"})

@@ -55,18 +55,13 @@ func TestLoginLockAndRecovery(t *testing.T) {
 	}
 }
 
-func TestDisableProtectsLastAdminAndInvalidatesSession(t *testing.T) {
-	user := domain.User{Role: domain.RoleAdmin, Status: domain.StatusActive, SessionEpoch: 4, Revision: 2}
-	if err := user.Disable(1); !errors.Is(err, domain.ErrLastActiveAdmin) {
-		t.Fatalf("disable last admin = %v", err)
+func TestSessionMatchesRequiresActiveAccountAndCurrentEpoch(t *testing.T) {
+	user := domain.User{Status: domain.StatusActive, SessionEpoch: 4}
+	if !user.SessionMatches(4) || user.SessionMatches(3) || user.SessionMatches(0) {
+		t.Fatal("credential epoch boundary failed")
 	}
-	if !user.SessionMatches(4) {
-		t.Fatal("rejected disable changed the account")
-	}
-	if err := user.Disable(2); err != nil {
-		t.Fatalf("disable admin with peer: %v", err)
-	}
-	if user.Status != domain.StatusDisabled || user.SessionEpoch != 5 || user.Revision != 3 || user.SessionMatches(4) {
-		t.Fatalf("disabled account state = %+v", user)
+	user.Status = domain.StatusDisabled
+	if user.SessionMatches(4) {
+		t.Fatal("disabled account session remains usable")
 	}
 }

@@ -49,7 +49,7 @@ func (s *TeamAvatars) Read(ctx context.Context, a identity.Principal, team uuid.
 	var object TeamAvatarObject
 	read := func() (TeamAvatarObject, error) {
 		var out TeamAvatarObject
-		err := s.store.TeamTransaction(ctx, a, s.now().UTC(), func(tx TeamTx) error {
+		err := s.store.TeamTransaction(ctx, a, s.now, func(tx TeamTx) error {
 			var err error
 			out, err = tx.BoundTeamAvatar(team, member, platform)
 			return err

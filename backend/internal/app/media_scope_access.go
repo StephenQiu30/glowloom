@@ -32,7 +32,7 @@ func (a mediaScopeAccess) CheckActor(ctx context.Context, actor identity.Princip
 	if a.worker {
 		return pgidentity.NewStore(a.tx).CheckActive(ctx, actor.ID)
 	}
-	return pgidentity.NewStore(a.tx).CheckSession(ctx, actor, time.Now())
+	return pgidentity.NewStore(a.tx).CheckSession(ctx, actor, time.Now)
 }
 func (a mediaScopeAccess) AuthorizePersonal(ctx context.Context, actor identity.Principal, write bool) error {
 	id := actor.ScopeID

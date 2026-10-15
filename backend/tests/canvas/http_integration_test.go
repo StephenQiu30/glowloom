@@ -20,12 +20,11 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
 func TestPublicCanvasAPIWithLocalPostgres(t *testing.T) {
@@ -46,7 +45,8 @@ func TestPublicCanvasAPIWithLocalPostgres(t *testing.T) {
 		mediaDigests = seedOwnedCanvasBrowserMedia(t, database, storage, project)
 	}
 	const origin = "http://127.0.0.1:3140"
-	router, err := app.NewBusinessRouter(zap.NewNop(), func(_ context.Context) error { return nil }, noop.NewTracerProvider(), config.Config{Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: origin}, database, storage)
+	cfg := identityfixture.Configure(t, config.Config{Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: origin})
+	router, err := app.NewBusinessRouter(zap.NewNop(), func(_ context.Context) error { return nil }, noop.NewTracerProvider(), cfg, database, storage)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,13 +54,17 @@ func TestPublicCanvasAPIWithLocalPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := database.Exec(`UPDATE identity."user" SET password_hash=? WHERE id=?::uuid`, hash, actor.ID.String()).Error; err != nil {
+	if err := database.Exec(`UPDATE identity."user" SET password_hash=?,email_key=login_name::text || '@fixture.invalid',email_verified_at=now() WHERE id=?::uuid`, hash, actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
-	authResult, err := identityapp.NewAuth(pgidentity.NewStore(database), time.Now).Login(t.Context(), "canvas-"+actor.ID.String(), "CanvasPassword123", false)
-	if err != nil {
+	scope := uuid.New()
+	if err := database.Exec(`INSERT INTO workspace.creation_scope(id,kind,owner_user_id,physical_scope_id) VALUES(?,'personal',?,?)`, scope, actor.ID, actor.OrgID).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := database.Exec(`UPDATE workspace.project SET owner_scope_id=? WHERE id=?`, scope, project).Error; err != nil {
+		t.Fatal(err)
+	}
+	authResult := identityfixture.Login(t, database, cfg, actor.ID, "CanvasPassword123")
 	server := httptest.NewServer(router)
 	t.Cleanup(server.Close)
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -73,6 +77,8 @@ func TestPublicCanvasAPIWithLocalPostgres(t *testing.T) {
 		}
 		req.AddCookie(&http.Cookie{Name: "lanverse_session", Value: authResult.Token})
 		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-CSRF-Token", authResult.CSRFToken)
+		req.Header.Set("X-Creation-Scope", scope.String())
 		if originHeader != "" {
 			req.Header.Set("Origin", originHeader)
 		}
@@ -96,18 +102,11 @@ func TestPublicCanvasAPIWithLocalPostgres(t *testing.T) {
 	if code, body := request("GET", "/api/projects", nil, "", ""); code != 200 || !bytes.Contains(body, []byte(project.String())) {
 		t.Fatalf("project %d %s", code, body)
 	}
-	// A valid same-organization session must not authorize another creator's
-	// project route, even though the older lifecycle adapters use organization IDs.
-	peer := uuid.New()
-	if err := database.Exec(`INSERT INTO identity."user"(id,org_id,login_name,display_name,role,password_hash,must_change_password) VALUES(?,?,?,'Peer','producer',?,false)`, peer, actor.OrgID, "peer-"+peer.String(), hash).Error; err != nil {
-		t.Fatal(err)
-	}
-	peerSession, err := identityapp.NewAuth(pgidentity.NewStore(database), time.Now).Login(t.Context(), "peer-"+peer.String(), "CanvasPassword123", false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	// Another verified creator must not gain access to this private project.
+	peerSession := identityfixture.Create(t, database, cfg, "Peer", "CanvasPassword123")
 	ownerSession := authResult
 	authResult = peerSession
+	scope = identityfixture.Scope(t, database, peerSession.User.ID)
 	if code, body := request("GET", "/api/projects", nil, "", ""); code != 200 || bytes.Contains(body, []byte(project.String())) {
 		t.Fatalf("peer list: %d %s", code, body)
 	}
@@ -117,6 +116,7 @@ func TestPublicCanvasAPIWithLocalPostgres(t *testing.T) {
 		}
 	}
 	authResult = ownerSession
+	scope = identityfixture.Scope(t, database, ownerSession.User.ID)
 	createPath := "/api/projects/" + project.String() + "/canvases"
 	if code, _ := request("POST", createPath, map[string]any{"name": "HTTP画布", "scope": map[string]any{}}, uuid.NewString(), "http://evil.invalid"); code != 403 {
 		t.Fatalf("origin %d", code)
