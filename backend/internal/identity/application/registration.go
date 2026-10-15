@@ -107,7 +107,13 @@ func (a *Auth) mailReady() bool {
 }
 
 func (a *Auth) registrationReady() bool {
-	return a.mailReady() && a.email.policy.TermsVersion != ""
+	if !a.mailReady() {
+		return false
+	}
+	version := a.email.policy.TermsVersion
+	// Drafts can be reviewed without accidentally becoming a registration policy.
+	// Publishing still requires the deployment's immutable document manifest.
+	return version != "" && version == strings.TrimSpace(version) && !strings.Contains(strings.ToLower(version), "draft")
 }
 
 func (a *Auth) StartRegistration(ctx context.Context, email, invitation string) (RegistrationStart, error) {

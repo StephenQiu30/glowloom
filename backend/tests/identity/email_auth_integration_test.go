@@ -198,9 +198,24 @@ func TestRegistrationReplayAndBudget(t *testing.T) {
 		t.Fatalf("verify: %v", err)
 	}
 	input := identity.CompleteRegistrationInput{OperationID: start.OperationID, FlowSecret: start.FlowSecret, Grant: proof.Grant, DisplayName: "创作者", Password: "a long pass phrase", ConfirmPassword: "a long pass phrase", TermsVersion: "test-terms", TermsAccepted: true}
+	for _, invalid := range []identity.CompleteRegistrationInput{
+		func() identity.CompleteRegistrationInput { v := input; v.TermsAccepted = false; return v }(),
+		func() identity.CompleteRegistrationInput { v := input; v.TermsVersion = "older-terms"; return v }(),
+	} {
+		if _, err := auth.CompleteRegistration(t.Context(), invalid); !errors.Is(err, domain.ErrInvalidProfile) {
+			t.Fatal("registration accepted missing or stale consent")
+		}
+	}
 	id, err := auth.CompleteRegistration(t.Context(), input)
 	if err != nil || id == uuid.Nil {
 		t.Fatalf("complete: %v", err)
+	}
+	var consent struct {
+		TermsVersion    string
+		TermsAcceptedAt time.Time
+	}
+	if err := tx.Raw(`SELECT terms_version,terms_accepted_at FROM identity."user" WHERE id=?`, id).Scan(&consent).Error; err != nil || consent.TermsVersion != "test-terms" || !consent.TermsAcceptedAt.Equal(now) {
+		t.Fatal("consent was not atomically recorded at server time")
 	}
 	for range 20 {
 		if _, err := auth.CompleteRegistration(t.Context(), input); !errors.Is(err, identity.ErrProofInvalid) {

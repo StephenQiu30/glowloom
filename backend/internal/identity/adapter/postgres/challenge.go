@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -13,7 +14,42 @@ import (
 )
 
 func (s *Store) EmailTransaction(ctx context.Context, run func(application.EmailTx) error) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return run(&authTx{db: tx}) })
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return run(&emailAuthTx{authTx: &authTx{db: tx}})
+	})
+}
+
+// emailAuthTx writes the current security event contract. Legacy routes retain
+// their old event adapter until the coordinated public-router cutover.
+type emailAuthTx struct{ *authTx }
+
+func (t *emailAuthTx) AppendAuthEvent(account uuid.UUID, action string, now time.Time) error {
+	var target, actor *uuid.UUID
+	if account != uuid.Nil {
+		target = &account
+		actor = &account
+	}
+	result := "success"
+	switch action {
+	case "registered":
+		action = "account.registered"
+	case "logged_in":
+		action = "session.created"
+	case "logged_out":
+		action = "session.revoked"
+	case "password_changed":
+		action = "password.changed"
+	case "login_failed":
+		action = "authentication.failed"
+		result = "failure"
+		actor = nil
+	default:
+		return fmt.Errorf("unsupported email authentication event")
+	}
+	if err := t.db.Exec(`INSERT INTO identity.security_event(id,actor_id,target_user_id,scope_kind,action,result,created_at) VALUES(?,?,?,'self',?,?,?)`, uuid.New(), actor, target, action, result, now).Error; err != nil {
+		return fmt.Errorf("append email security event: %w", err)
+	}
+	return nil
 }
 
 // RegistrationEnabled takes the governance lock before accounts and proofs.
