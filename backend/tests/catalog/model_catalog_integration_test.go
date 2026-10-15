@@ -320,6 +320,20 @@ func TestModelCatalogRejectsStaleActorAndInvisibleProjectOnLocalPostgres(t *test
 	otherOrgID := insertModelCatalogOrganization(ctx, t, database)
 	actor := insertModelCatalogActor(ctx, t, database, orgID)
 	otherActor := insertModelCatalogActor(ctx, t, database, otherOrgID)
+	team, scope := uuid.New(), uuid.New()
+	for _, row := range []struct {
+		sql  string
+		args []any
+	}{
+		{`INSERT INTO workspace.team(id,name,created_by) VALUES(?,'Catalog fixture team',?)`, []any{team, actor.ID}},
+		{`INSERT INTO workspace.team_member(team_id,user_id,role,status,joined_at,source) VALUES(?,?,'team_admin','active',now(),'created')`, []any{team, actor.ID}},
+		{`INSERT INTO workspace.creation_scope(id,kind,team_id,physical_scope_id) VALUES(?,'team',?,?)`, []any{scope, team, actor.OrgID}},
+	} {
+		if err := database.WithContext(ctx).Exec(row.sql, row.args...).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	actor.ScopeID = scope
 	projectID := insertModelCatalogProject(ctx, t, database, actor, false)
 	store := app.NewCatalogStore(database)
 	input := catalogapp.ListModelsInput{ProjectID: projectID}
@@ -354,10 +368,10 @@ func TestModelCatalogRejectsStaleActorAndInvisibleProjectOnLocalPostgres(t *test
 	if err := database.WithContext(ctx).Exec(`UPDATE workspace.project SET is_delete = false WHERE id = ?::uuid`, projectID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := database.WithContext(ctx).Exec(`UPDATE workspace.organization SET status = 'disabled' WHERE id = ?::uuid`, orgID.String()).Error; err != nil {
+	if err := database.WithContext(ctx).Exec(`UPDATE workspace.team SET status = 'disabled' WHERE id = ?::uuid`, team.String()).Error; err != nil {
 		t.Fatal(err)
 	}
 	if page, err := store.ListModelsForProject(ctx, actor, input); err == nil || len(page.Models) != 0 {
-		t.Fatalf("disabled organization exposed catalog: %+v: %v", page, err)
+		t.Fatalf("disabled team exposed catalog: %+v: %v", page, err)
 	}
 }

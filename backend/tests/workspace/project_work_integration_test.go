@@ -22,7 +22,6 @@ import (
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	toolpg "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
 	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
-	operationpg "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
@@ -364,10 +363,10 @@ func TestProjectLifecycleBlocksConfirmedQuoteAndRejectsNewAdmission(t *testing.T
 	if _, err := lifecycle.Change(ctx, actor2, projectChange(project2, 1, "archive")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := operations.ConfirmSingleQuote(ctx, actor2, operationapp.ConfirmSingleQuoteInput{ProjectID: project2, OperationID: quote2.OperationID, RequestID: uuid.NewString()}); !errors.Is(err, operationpg.ErrNotFound) {
+	if _, err := operations.ConfirmSingleQuote(ctx, actor2, operationapp.ConfirmSingleQuoteInput{ProjectID: project2, OperationID: quote2.OperationID, RequestID: uuid.NewString()}); !errors.Is(err, domain.ErrProjectStateConflict) {
 		t.Fatalf("archived quote newly confirmed: %v", err)
 	}
-	if _, err := canvasapp.NewService(workspaceCanvasStore(db, nil)).Create(ctx, actor2, project2, uuid.NewString(), canvasapp.CreateInput{Name: "should reject"}); !errors.Is(err, canvasapp.ErrNotFound) {
+	if _, err := canvasapp.NewService(workspaceCanvasStore(db, nil)).Create(ctx, actor2, project2, uuid.NewString(), canvasapp.CreateInput{Name: "should reject"}); !errors.Is(err, domain.ErrProjectStateConflict) {
 		t.Fatalf("archived canvas admission: %v", err)
 	}
 	// Formal tool admission reaches its real project authorizer before source processing.

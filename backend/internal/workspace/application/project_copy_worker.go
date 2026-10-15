@@ -33,7 +33,7 @@ type ProjectCopyDelivery struct {
 // ProjectCopyExecutionStore persists current actor authority, attempts and owner receipts.
 type ProjectCopyExecutionStore interface {
 	WorkerActor(context.Context, uuid.UUID, uuid.UUID) (identityapp.Principal, error)
-	Find(context.Context, identityapp.Principal, uuid.UUID) (domain.ProjectCopyJob, error)
+	FindForWorker(context.Context, identityapp.Principal, uuid.UUID) (domain.ProjectCopyJob, error)
 	Claim(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, bool, time.Time) (domain.ProjectCopyJob, error)
 	CompleteMedia(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (domain.ProjectCopyJob, error)
 	CompleteScript(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (domain.ProjectCopyJob, error)
@@ -109,7 +109,7 @@ func (w *ProjectCopyWorker) Execute(ctx context.Context, id ProjectCopyWorkID) (
 	if err != nil {
 		return domain.ProjectCopyJob{}, err
 	}
-	job, err := w.store.Find(ctx, actor, id.JobID)
+	job, err := w.store.FindForWorker(ctx, actor, id.JobID)
 	if err != nil {
 		return job, err
 	}
@@ -127,7 +127,7 @@ func (w *ProjectCopyWorker) Execute(ctx context.Context, id ProjectCopyWorkID) (
 		if ctx.Err() != nil {
 			return w.finishFailure(ctx, id, ctx.Err())
 		}
-		current, err := w.store.Find(ctx, actor, id.JobID)
+		current, err := w.store.FindForWorker(ctx, actor, id.JobID)
 		if err != nil {
 			return w.finishFailure(ctx, id, err)
 		}
@@ -227,7 +227,7 @@ func (w *ProjectCopyWorker) Execute(ctx context.Context, id ProjectCopyWorkID) (
 			var bibleTransfer *ProjectCopyBibleTransferError
 			unknown = unknown || errors.As(err, &bibleTransfer) && bibleTransfer.NeedsReconciliation
 			if !unknown && ctx.Err() == nil {
-				current, readErr := w.store.Find(ctx, actor, id.JobID)
+				current, readErr := w.store.FindForWorker(ctx, actor, id.JobID)
 				if readErr == nil && current.Status == "cancel_requested" && current.WorkerID == id.WorkerID {
 					continue
 				}

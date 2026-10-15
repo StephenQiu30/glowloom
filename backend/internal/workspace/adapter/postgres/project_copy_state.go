@@ -85,15 +85,24 @@ func readCopyJob(tx *gorm.DB, actor identityapp.Principal, id uuid.UUID, write b
 	return row.job()
 }
 
-// Find reads a current job in the actor's organization without private snapshot data.
+// Find reads a current job under the actor's live request session and scope.
 func (s *ProjectCopyStore) Find(ctx context.Context, actor identityapp.Principal, id uuid.UUID) (domain.ProjectCopyJob, error) {
+	return s.find(ctx, actor, id, false)
+}
+
+// FindForWorker reads a bound execution job under current durable worker authority.
+func (s *ProjectCopyStore) FindForWorker(ctx context.Context, actor identityapp.Principal, id uuid.UUID) (domain.ProjectCopyJob, error) {
+	return s.find(ctx, actor, id, true)
+}
+
+func (s *ProjectCopyStore) find(ctx context.Context, actor identityapp.Principal, id uuid.UUID, worker bool) (domain.ProjectCopyJob, error) {
 	if s == nil || s.db == nil || id == uuid.Nil {
 		return domain.ProjectCopyJob{}, application.ErrProjectDependencyUnavailable
 	}
 	var saved domain.ProjectCopyJob
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var err error
-		saved, err = s.authorizedCopy(ctx, tx, actor, id, false, false)
+		saved, err = s.authorizedCopy(ctx, tx, actor, id, false, worker)
 		return err
 	})
 	return saved, err

@@ -1,6 +1,7 @@
 package operation_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -137,7 +138,7 @@ func TestPublicTaskHTTPHidesForeignScopeAndRevokedActor(t *testing.T) {
 		t.Fatal(err)
 	}
 	res := publicOperationRequest(t, publicOperationRouter(actor, database), "GET", "/api/projects/"+project.String()+"/operations", "", "")
-	if res.Code != 403 {
+	if res.Code != 401 || !bytes.Contains(res.Body.Bytes(), []byte("session_invalid")) {
 		t.Fatalf("revoked actor=%d %s", res.Code, res.Body)
 	}
 }
