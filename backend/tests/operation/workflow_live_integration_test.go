@@ -78,10 +78,10 @@ func TestOperationWorkflowResumesAfterFlowWorkerRestartOnLocalServices(t *testin
 		t.Fatalf("connect local Temporal: %v", err)
 	}
 	t.Cleanup(temporalClient.Close)
-	mediaActivities, err := mediaflow.NewActivities(database, objects, mediaflow.DownloadPolicy{
+	mediaActivities, err := mediaflow.NewScopedActivities(database, objects, mediaflow.DownloadPolicy{
 		AllowedOrigins: []string{resultServer.URL}, AllowTestLoopbackTLS: true,
 		TLSRootCAs: pool,
-	})
+	}, app.NewMediaWorkerScopeAccess)
 	if err != nil {
 		t.Fatalf("construct media activities: %v", err)
 	}

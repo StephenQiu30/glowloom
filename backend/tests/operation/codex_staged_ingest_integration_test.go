@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/staged"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
@@ -39,7 +40,7 @@ func TestM1StagedIngestPrivateImageCreatesOneCandidate(t *testing.T) {
 	if err := database.Exec(`UPDATE operation.operation SET status='ingesting' WHERE id=?::uuid`, identity.OperationID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
-	repo := &stagedFaultRepository{Repository: pgmedia.NewIngestRepository(database), failSave: true}
+	repo := &stagedFaultRepository{Repository: pgmedia.NewScopedIngestRepository(database, app.NewMediaWorkerScopeAccess), failSave: true}
 	service := mediaapp.NewStagedIngestService(repo, staged.NewReader(receipts), mediaflow.FFProber{}, mediaflow.FFRenderer{}, stagedMediaObjects{client: objects})
 	input := mediaapp.IngestInput{OperationID: identity.OperationID.String(), SeqNo: 1, Receipt: result.Receipt}
 	if _, err := service.Ingest(t.Context(), input); err == nil {

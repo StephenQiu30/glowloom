@@ -13,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/managed"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/staging"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
@@ -57,7 +58,7 @@ func TestManagedMediaRealStorageAndProbeAreIdempotent(t *testing.T) {
 			require.NoError(t, err)
 			_, err = f.store.TransitionWorkflowOperation(t.Context(), application.TransitionInput{OperationID: i.OperationID, From: []domain.Status{domain.StatusSucceeded}, To: domain.StatusIngesting})
 			require.NoError(t, err)
-			activity := managed.NewIngestActivities(db, objects, results)
+			activity := managed.NewScopedIngestActivities(db, objects, results, app.NewMediaWorkerScopeAccess, f.store)
 			require.NoError(t, activity.Ingest(t.Context(), i.OperationID))
 			require.NoError(t, activity.Ingest(t.Context(), i.OperationID))
 			var rows []struct {

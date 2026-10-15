@@ -8,7 +8,9 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
@@ -35,6 +37,14 @@ func TestOperationScopeFixturesInRollbackTransaction(t *testing.T) {
 		t.Fatalf("own explicit project operation = %+v: %v", operation, err)
 	}
 
+	if _, _, err := pgmedia.NewIngestRepository(tx).FindOutput(t.Context(), operationID, 1); !errors.Is(err, pgmedia.ErrUnavailable) {
+		t.Fatal("missing ingest authority did not fail closed", err)
+	}
+	ingest := pgmedia.NewScopedIngestRepository(tx, app.NewMediaWorkerScopeAccess)
+	if _, found, err := ingest.FindOutput(t.Context(), operationID, 1); err != nil || found {
+		t.Fatal("durable worker ingest authority rejected an empty output", found, err)
+	}
+
 	peer := identityapp.Principal{ID: uuid.New(), OrgID: actor.OrgID}
 	if err := tx.Exec(`INSERT INTO identity."user"(id,org_id,login_name,display_name,role,password_hash,must_change_password)
 		VALUES(?,?,?,'Operation scope peer','producer','synthetic',false)`, peer.ID, peer.OrgID, "operation-scope-"+peer.ID.String()).Error; err != nil {
@@ -51,6 +61,12 @@ func TestOperationScopeFixturesInRollbackTransaction(t *testing.T) {
 	withoutSession.SessionID = uuid.Nil
 	if _, err := store.FindOperation(t.Context(), withoutSession, project, operationID); !errors.Is(err, workspaceapp.ErrScopeNotFound) {
 		t.Fatalf("sessionless operation error = %v", err)
+	}
+	if err := tx.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := ingest.FindOutput(t.Context(), operationID, 1); !errors.Is(err, pgmedia.ErrNotFound) || !errors.Is(err, workspaceapp.ErrScopeNotFound) {
+		t.Fatal("disabled ingest worker retained output access", err)
 	}
 }
 
