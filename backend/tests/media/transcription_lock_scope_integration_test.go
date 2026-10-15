@@ -2,10 +2,10 @@ package media_test
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -45,12 +45,17 @@ func (m transcriptionPermissionTrace) AuthorizeProject(ctx context.Context, acto
 
 func transcriptionLockFixture(t *testing.T) (*gorm.DB, identityapp.Principal, uuid.UUID, *toolpg.TranscriptionStore, toolapp.TranscriptionWorkID, *[]string) {
 	t.Helper()
-	tx := mediaStoreDB(t).Begin()
+	database := mediaStoreDB(t)
+	// This transaction outlives test-context cancellation so Cleanup can
+	// explicitly roll it back before cancelling its bounded lifetime.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
+	t.Cleanup(cancel)
+	tx := database.WithContext(ctx).Begin()
 	if tx.Error != nil {
 		t.Fatal(tx.Error)
 	}
 	t.Cleanup(func() {
-		if err := tx.Rollback().Error; err != nil && !errors.Is(err, sql.ErrTxDone) {
+		if err := tx.Rollback().Error; err != nil {
 			t.Error("roll back synthetic transcription lock fixtures", err)
 		}
 	})

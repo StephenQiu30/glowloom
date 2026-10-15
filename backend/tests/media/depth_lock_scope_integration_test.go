@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -23,11 +24,20 @@ import (
 // starts inference, or contacts object storage or Temporal.
 func depthLockFixture(t *testing.T) (*depthHTTPFixture, tooldomain.DepthJob) {
 	t.Helper()
-	tx := mediaStoreDB(t).Begin()
+	database := mediaStoreDB(t)
+	// This transaction outlives test-context cancellation so Cleanup can
+	// explicitly roll it back before cancelling its bounded lifetime.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
+	t.Cleanup(cancel)
+	tx := database.WithContext(ctx).Begin()
 	if tx.Error != nil {
 		t.Fatal(tx.Error)
 	}
-	t.Cleanup(func() { _ = tx.Rollback().Error })
+	t.Cleanup(func() {
+		if err := tx.Rollback().Error; err != nil {
+			t.Error("roll back synthetic depth lock fixtures", err)
+		}
+	})
 	actor, project := mediaStoreProject(t, tx)
 	a := imageAsset(project, uuid.New())
 	a.Kind, a.MimeType, a.FileName = mediadomain.KindVideo, "video/mp4", "lock-fixture.mp4"
