@@ -1,14 +1,13 @@
 # syntax=docker/dockerfile:1
 FROM golang:1.26.9-bookworm AS dev
-ENV CGO_ENABLED=0 GOMAXPROCS=2
+ENV CGO_ENABLED=0 GOMAXPROCS=2 GOCACHE=/go/build-cache
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg curl socat \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN go build -p 2 -o /usr/local/bin/lanverse ./cmd/lanverse
-# Keep the development-only loopback bridges when starting the compiled binary.
+# Build the mounted source on every start; never fall back to an image binary.
 # The entrypoint lives outside /src, which Compose mounts read-only.
 COPY --chmod=755 <<'ENTRYPOINT' /usr/local/bin/glowloom-dev-entrypoint
 #!/bin/sh
@@ -16,6 +15,12 @@ set -eu
 # Optional private settings for this existing local container; explicit env wins.
 if [ -z "${LV_ENV_FILE:-}" ] && [ -r /run/secrets/identity-runtime.env ]; then
   export LV_ENV_FILE=/run/secrets/identity-runtime.env
+fi
+mkdir -p /tmp/glowloom-dev
+printf '%s\n' '[glowloom-dev] Building current source in /src...' >&2
+if ! go build -mod=readonly -p 2 -o /tmp/glowloom-dev/lanverse ./cmd/lanverse; then
+  printf '%s\n' '[glowloom-dev] Build failed; application was not started. Fix the source and restart.' >&2
+  exit 1
 fi
 for port in ${LV_HOST_SERVICE_PORTS:-5432 6379 7233 9000 9092}; do
   case "$port" in
@@ -26,7 +31,8 @@ done
 if [ "${LV_DEV_API_PROXY:-false}" = "true" ]; then
   socat TCP-LISTEN:18080,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:8080 &
 fi
-exec /usr/local/bin/lanverse "$@"
+printf '%s\n' '[glowloom-dev] Build succeeded; starting current source.' >&2
+exec /tmp/glowloom-dev/lanverse "$@"
 ENTRYPOINT
 ENTRYPOINT ["/usr/local/bin/glowloom-dev-entrypoint"]
 CMD ["--role=api"]

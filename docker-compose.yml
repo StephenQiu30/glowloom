@@ -1,5 +1,5 @@
 # Development application stack; existing host middleware retains its data.
-# Run independently: docker compose up -d --build
+# Start/update applications: docker compose up -d --build
 name: glowloom
 
 services:
@@ -56,6 +56,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./backend:/src:ro
+      - backend-go-build:/go/build-cache
     secrets:
       - source: identity-key
         target: identity-key
@@ -68,7 +69,7 @@ services:
       interval: 10s
       timeout: 3s
       retries: 3
-      start_period: 90s
+      start_period: 180s
     command: ["--role=all"]
     tmpfs:
       - /work:rw,noexec,nosuid,size=8g
@@ -120,6 +121,7 @@ secrets:
     file: ${LV_IDENTITY_KEY_FILE:-./.identity.key}
 
 volumes:
+  backend-go-build:
   frontend-modules:
     name: lanverse-dev_frontend-modules
     external: true
