@@ -1,9 +1,9 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import {
   ApplicationLoading,
   ApplicationState,
 } from "@/components/layout/application-state";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -66,9 +66,7 @@ function LoadedCanvas({
       title="暂时无法打开画布"
       description="请重试读取，或返回我的画布选择其他项目。"
     >
-      <Alert variant="destructive">
-        <AlertDescription className="break-words">{error}</AlertDescription>
-      </Alert>
+      <FeedbackToast message={error} />
       <Button
         variant="outline"
         onClick={() => {

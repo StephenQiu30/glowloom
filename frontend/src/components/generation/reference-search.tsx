@@ -1,6 +1,6 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { LoadingState } from "@/components/layout/loading-state";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   FieldSet,
@@ -206,14 +206,10 @@ export function ReferenceSearch({
       </NativeSelect>
       {result.loading && <LoadingState>正在检索当前项目…</LoadingState>}
       {result.error && (
-        <Alert variant="destructive">
-          <AlertDescription>
-            {result.error}
-            <Button variant="ghost" onClick={() => setRetry((n) => n + 1)}>
-              重试检索
-            </Button>
-          </AlertDescription>
-        </Alert>
+        <FeedbackToast
+          message={result.error}
+          action={{ label: "重试检索", onClick: () => setRetry((n) => n + 1) }}
+        />
       )}
       <Command shouldFilter={false} loop>
         <CommandInput

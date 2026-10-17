@@ -1,10 +1,5 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { render, findFeedback } from "../../../../tests/feedback";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ProjectsPage } from "./projects-page";
 const api = vi.hoisted(() => ({
@@ -44,7 +39,7 @@ it("丢回执重试保持请求键与输入，只在真实回执后跳转", asyn
     target: { value: "真实项目" },
   });
   fireEvent.click(screen.getByRole("button", { name: "创建画布" }));
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(api.push).not.toHaveBeenCalled();
   expect((screen.getByLabelText("画布名称") as HTMLInputElement).value).toBe(
     "真实项目",
@@ -77,7 +72,7 @@ it("创建不重入，残缺回执不会回退到固定项目", async () => {
   fireEvent.click(button);
   expect(api.create).toHaveBeenCalledTimes(1);
   finish({ ...project, canvas_id: null });
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(api.push).not.toHaveBeenCalled();
 });
 it("列表加载失败不显示示例项目，名称搜索传到服务端", async () => {
@@ -85,7 +80,7 @@ it("列表加载失败不显示示例项目，名称搜索传到服务端", asyn
     .mockRejectedValueOnce(new Error("offline"))
     .mockResolvedValue({ items: [project], next_cursor: null });
   render(<ProjectsPage />);
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(screen.queryByText("雾港来信")).toBeNull();
   fireEvent.change(screen.getByLabelText("搜索画布"), {
     target: { value: "真实" },

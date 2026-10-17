@@ -1,10 +1,5 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  act,
-} from "@testing-library/react";
+import { render, findFeedback } from "../../../tests/feedback";
+import { cleanup, fireEvent, screen, act } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DirectoryTools } from "./directory-tools";
 import { request, RequestError } from "@/lib/request";
@@ -96,7 +91,7 @@ it("下载被撤权不创建任何本地输出", async () => {
   fireEvent.click(screen.getByText("检查导出状态"));
   await screen.findByText("导出状态：可下载");
   fireEvent.click(screen.getByText("下载 CSV"));
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(URL.createObjectURL).not.toHaveBeenCalled();
   expect(screen.queryByText("下载 CSV")).toBeNull();
   expect(screen.queryByText("账号总数")).toBeNull();
@@ -141,7 +136,7 @@ it("团队统计保留member角色及暂停筛选，普通失败不伪造为零"
       filter={{ role: "member", status: "suspended" }}
     />,
   );
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(screen.queryByText("成员关系总数")).toBeNull();
   expect(request).toHaveBeenCalledWith(
     "/api/teams/team/member-statistics",
@@ -214,7 +209,7 @@ it("刷新统计被403撤权后清除已完成导出和下载按钮", async () =
   await screen.findByText("导出状态：可下载");
   deny = true;
   fireEvent.click(screen.getByText("刷新统计"));
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(screen.queryByText("下载 CSV")).toBeNull();
   expect(screen.queryByText("导出状态：可下载")).toBeNull();
 });
@@ -244,7 +239,7 @@ it("统计403中止在途CSV，迟到字节没有本地输出", async () => {
   fireEvent.click(screen.getByText("下载 CSV"));
   deny = true;
   fireEvent.click(screen.getByText("刷新统计"));
-  await screen.findByRole("alert");
+  await findFeedback();
   const downloadOptions = vi
     .mocked(request)
     .mock.calls.find(([url]) => url.endsWith("/download"))?.[1];

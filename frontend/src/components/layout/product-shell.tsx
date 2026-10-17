@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import {
   createContext,
   useContext,
@@ -26,7 +27,6 @@ import {
 import { AuthDialog, type AuthMode } from "@/components/auth/auth-dialog";
 import { UnavailableDialog } from "@/components/availability/unavailable";
 import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Dialog,
   DialogContent,
@@ -203,11 +203,7 @@ function Shell({
           <DialogDescription>
             将结束当前设备的登录会话。已保存的画布仍保留在你的账号中。
           </DialogDescription>
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+          {error && <FeedbackToast message={error} />}
           <DialogFooter>
             <Button
               variant="outline"

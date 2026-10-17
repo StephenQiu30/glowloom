@@ -1,10 +1,5 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { render, findFeedback } from "../../../tests/feedback";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ReferenceSearch } from "./reference-search";
 const api = vi.hoisted(() => ({ media: vi.fn() }));
@@ -87,7 +82,7 @@ it("rejects a response from a different project", async () => {
       onClose={() => {}}
     />,
   );
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(screen.queryByText("私有图片")).toBeNull();
 });
 

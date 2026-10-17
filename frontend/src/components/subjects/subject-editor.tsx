@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { FieldSet, Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { useRef, useState, useId } from "react";
 import { ImagePlus } from "lucide-react";
@@ -9,7 +10,6 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -291,11 +291,7 @@ export function SubjectEditor({
                   名称与描述已保存。参考图尚未确认，重试将继续完成同一个主体。
                 </p>
               )}
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
+              {error && <FeedbackToast message={error} />}
               <div className="flow-actions">
                 <Button
                   type="button"

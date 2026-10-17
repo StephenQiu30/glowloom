@@ -1,6 +1,13 @@
 "use client";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
+
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { LoadingState } from "@/components/layout/loading-state";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import {
   NativeSelect,
@@ -81,9 +88,12 @@ export function ModelsPage() {
   );
   if (session.actor.platform_role !== "platform_admin")
     return (
-      <Alert variant="destructive">
-        <AlertDescription>此页面仅向平台管理员开放。</AlertDescription>
-      </Alert>
+      <Empty>
+        <EmptyHeader>
+          <EmptyTitle>暂无访问权限</EmptyTitle>
+          <EmptyDescription>此页面仅向平台管理员开放。</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     );
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
@@ -98,11 +108,7 @@ export function ModelsPage() {
           <Link href="/providers">管理平台连接</Link>
         </Button>
       </header>
-      {error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      ) : null}
+      {error ? <FeedbackToast message={error} /> : null}
       <form
         onSubmit={async (event) => {
           event.preventDefault();

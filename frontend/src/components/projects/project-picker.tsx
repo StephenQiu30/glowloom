@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useEffect, useState, useId } from "react";
 import { Folder, Search } from "lucide-react";
 import Link from "next/link";
@@ -28,7 +29,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 export function ProjectPicker({
   value,
   onChange,
@@ -161,20 +161,17 @@ export function ProjectPicker({
         </Button>
       )}
       {error ? (
-        <Alert variant="destructive">
-          <AlertDescription>
-            {error}
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setLoading(true);
-                setRetry((n) => n + 1);
-              }}
-            >
-              重新读取
-            </Button>
-          </AlertDescription>
-        </Alert>
+        <FeedbackToast
+          message={error}
+          action={{
+            label: "重新读取",
+            onClick: () => {
+              setError("");
+              setLoading(true);
+              setRetry((n) => n + 1);
+            },
+          }}
+        />
       ) : !loading && items.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           没有匹配的项目。<Link href="/projects">创建项目</Link>

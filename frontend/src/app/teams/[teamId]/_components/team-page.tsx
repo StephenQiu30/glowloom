@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getTeam, renameTeam, leaveTeam, teamAvatar } from "@/api/identity";
@@ -49,12 +50,16 @@ export function TeamPage({ id }: { id: string }) {
     <div className="mx-auto grid w-full max-w-5xl gap-6 p-4">
       <h1 className="text-2xl">团队管理</h1>
       {error ? (
-        <div role="alert">
-          {error}
-          <Button variant="outline" onClick={() => setReload((n) => n + 1)}>
-            重新读取团队
-          </Button>
-        </div>
+        <FeedbackToast
+          message={error}
+          action={{
+            label: "重新读取团队",
+            onClick: () => {
+              setError("");
+              setReload((n) => n + 1);
+            },
+          }}
+        />
       ) : !team ? (
         <p role="status">正在读取团队…</p>
       ) : null}

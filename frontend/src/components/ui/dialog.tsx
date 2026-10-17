@@ -46,6 +46,7 @@ function DialogContent({
   children,
   showCloseButton = true,
   overlayClassName,
+  onInteractOutside,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
@@ -61,6 +62,16 @@ function DialogContent({
           className,
         )}
         {...props}
+        onInteractOutside={(event) => {
+          const target = event.target;
+          if (
+            target instanceof Element &&
+            target.closest("[data-sonner-toast]")
+          ) {
+            event.preventDefault();
+          }
+          onInteractOutside?.(event);
+        }}
       >
         {children}
         {showCloseButton && (

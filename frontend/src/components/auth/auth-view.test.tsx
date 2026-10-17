@@ -1,10 +1,5 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { render, findFeedback } from "../../../tests/feedback";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AuthView } from "./auth-view";
 import { request, RequestError } from "@/lib/request";
@@ -156,7 +151,7 @@ it("registration verifies email then requires explicit agreement and server vers
     target: { value: "abC789xy" },
   });
   fireEvent.click(screen.getByRole("button", { name: "创建账号" }));
-  expect(await screen.findByRole("alert")).toHaveProperty(
+  expect(await findFeedback("请先阅读并同意协议。")).toHaveProperty(
     "textContent",
     "请先阅读并同意协议。",
   );
@@ -184,7 +179,7 @@ it("recovery acknowledges queued request without claiming mail delivery", async 
     target: { value: "alice@example.com" },
   });
   fireEvent.click(screen.getByRole("button", { name: "发送恢复链接" }));
-  expect(await screen.findByRole("status")).toHaveProperty(
+  expect(await findFeedback()).toHaveProperty(
     "textContent",
     expect.stringContaining("不代表邮件已送达"),
   );
@@ -195,7 +190,7 @@ it("network failure preserves visible input", async () => {
   );
   render(<AuthView mode="login" />);
   login();
-  expect(await screen.findByRole("alert")).toBeTruthy();
+  expect(await findFeedback()).toBeTruthy();
   expect(screen.getByLabelText("邮箱")).toHaveProperty(
     "value",
     "alice@example.com",
@@ -207,7 +202,7 @@ it("invalid receipt never reports authentication success", async () => {
   const onAuthenticated = vi.fn();
   render(<AuthView mode="login" onAuthenticated={onAuthenticated} />);
   login();
-  expect(await screen.findByRole("alert")).toBeTruthy();
+  expect(await findFeedback()).toBeTruthy();
   expect(onAuthenticated).not.toHaveBeenCalled();
   expect(router.push).not.toHaveBeenCalled();
 });
@@ -222,7 +217,7 @@ it("empty login focuses first invalid field without sending a request", async ()
     "true",
   );
   expect(screen.getByLabelText("邮箱").getAttribute("aria-describedby")).toBe(
-    screen.getByRole("alert").id,
+    document.querySelector("form .sr-only")?.id,
   );
 });
 it("optional password change uses session epoch and retains input after failure", async () => {
@@ -250,7 +245,7 @@ it("optional password change uses session epoch and retains input after failure"
     target: { value: "another long password" },
   });
   fireEvent.click(screen.getByRole("button", { name: "保存新密码" }));
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(screen.getByLabelText("新密码", { exact: true })).toHaveProperty(
     "value",
     "another long password",
@@ -286,14 +281,14 @@ it("restricted password page explains the requirement and clears an inline valid
     target: { value: "abcdef7" },
   });
   fireEvent.click(screen.getByRole("button", { name: "保存新密码" }));
-  const fieldError = await screen.findByRole("alert");
-  expect(fieldError.getAttribute("data-slot")).toBe("field-error");
+  const fieldError = await findFeedback();
+  expect(fieldError.closest("[data-sonner-toast]")).not.toBeNull();
   expect(container.querySelector('[data-slot="alert"]')).toBeNull();
   expect(
     screen
       .getByLabelText("新密码", { exact: true })
       .getAttribute("aria-describedby"),
-  ).toBe(fieldError.id);
+  ).toBe(document.querySelector("form .sr-only")?.id);
   expect(request).toHaveBeenCalledTimes(1);
   fireEvent.change(screen.getByLabelText("新密码", { exact: true }), {
     target: { value: "a new long password" },
@@ -368,7 +363,7 @@ it("failed registration policy ends loading and offers retry", async () => {
     .mockRejectedValueOnce(new RequestError("temporarily_unavailable", 503))
     .mockResolvedValueOnce(policy);
   render(<AuthView mode="register" />);
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(screen.queryByText("正在读取注册策略…")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "重新读取注册策略" }));
   expect(await screen.findByText("协议版本 2026-10-15.1")).toBeTruthy();
@@ -383,7 +378,7 @@ it("malformed accepted mail receipt never shows queued success", async () => {
     target: { value: "alice@example.com" },
   });
   fireEvent.click(screen.getByRole("button", { name: "发送恢复链接" }));
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(screen.queryByText(/请求已受理，不代表邮件已送达/)).toBeNull();
 });
 
@@ -422,7 +417,7 @@ it("recovery keeps an invalid email error visible", async () => {
     target: { value: "invalid" },
   });
   fireEvent.submit(screen.getByRole("form"));
-  expect(await screen.findByRole("alert")).toHaveProperty(
+  expect(await findFeedback()).toHaveProperty(
     "textContent",
     "请输入有效的邮箱地址。",
   );
@@ -463,7 +458,7 @@ it("failed account switching stays on the form and preserves input", async () =>
     target: { value: "fixture current" },
   });
   fireEvent.click(button);
-  expect(await screen.findByRole("alert")).toHaveProperty(
+  expect(await findFeedback()).toHaveProperty(
     "textContent",
     "服务暂时不可用，请稍后重试。",
   );

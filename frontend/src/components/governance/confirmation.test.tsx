@@ -1,10 +1,5 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { render, findFeedback } from "../../../tests/feedback";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { Confirmation } from "./confirmation";
 import { request, RequestError } from "@/lib/request";
@@ -39,7 +34,7 @@ it("冲突重读一次且不重试业务动作，关闭清除密码", async () =
     target: { value: "测试治理原因" },
   });
   fireEvent.click(screen.getByText("确认操作"));
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(run).toHaveBeenCalledTimes(1);
   expect(done).toHaveBeenCalledTimes(1);
   expect(close).not.toHaveBeenCalled();
@@ -69,6 +64,6 @@ it("错误密码不执行业务动作", async () => {
     target: { value: "wrong" },
   });
   fireEvent.click(screen.getByText("确认操作"));
-  await screen.findByRole("alert");
+  await findFeedback();
   await waitFor(() => expect(run).not.toHaveBeenCalled());
 });

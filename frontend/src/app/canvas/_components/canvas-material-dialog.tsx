@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -7,7 +8,6 @@ import {
   Check,
   FolderOpen,
   ImageIcon,
-  RotateCw,
   Search,
   Upload,
   VideoIcon,
@@ -35,7 +35,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Empty,
   EmptyDescription,
@@ -338,22 +337,17 @@ function MaterialList({
       </InputGroup>
       <div className="canvas-material-content" data-canvas-wheel-scroll>
         {error && (
-          <Alert variant="destructive">
-            <AlertDescription>
-              <p>{error}</p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setLoading(true);
-                  setRetry((v) => v + 1);
-                }}
-              >
-                <RotateCw data-icon="inline-start" />
-                重新读取
-              </Button>
-            </AlertDescription>
-          </Alert>
+          <FeedbackToast
+            message={error}
+            action={{
+              label: "重新读取",
+              onClick: () => {
+                setError("");
+                setLoading(true);
+                setRetry((v) => v + 1);
+              },
+            }}
+          />
         )}
         <div className="canvas-material-grid">
           {filtered.map((a) => {

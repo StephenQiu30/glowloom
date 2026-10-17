@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { pendingInvitation } from "./invitation-continuity";
 import Image from "next/image";
 import Link from "next/link";
@@ -42,9 +43,7 @@ import {
   FieldGroup,
   FieldLabel,
   FieldDescription,
-  FieldError,
 } from "@/components/ui/field";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Card,
   CardHeader,
@@ -188,11 +187,11 @@ export function AuthView({
   const [session, setSession] = useState<API.EmailSessionView | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [feedbackAttempt, setFeedbackAttempt] = useState(0);
   const [notice, setNotice] = useState("");
   const [retryAt, setRetryAt] = useState(0);
   const [now, setNow] = useState(0);
   const flight = useRef<AbortController | null>(null);
-  const errorElement = useRef<HTMLDivElement>(null);
   const form = useRef<HTMLFormElement>(null);
   const errorField = useRef("");
   const lock = useRef(false);
@@ -297,9 +296,8 @@ export function AuthView({
           )
         : null;
       if (input) input.focus();
-      else errorElement.current?.focus();
     }
-  }, [error]);
+  }, [error, feedbackAttempt]);
   const remaining = Math.max(0, Math.ceil((retryAt - now) / 1000));
   async function switchAccount() {
     if (!session || lock.current) return;
@@ -329,6 +327,7 @@ export function AuthView({
       (register && (policyStatus !== "ready" || !registrationAllowed))
     )
       return;
+    setFeedbackAttempt((value) => value + 1);
     setError("");
     errorField.current = "";
     setInvalidField("");
@@ -519,10 +518,6 @@ export function AuthView({
           ? "设置新密码"
           : "找回密码"
         : "登录织光";
-  const fieldError =
-    securityPage &&
-    Boolean(error) &&
-    ["current-password", "password", "confirm-password"].includes(invalidField);
   function clearFieldError(field: string) {
     if (field === invalidField) {
       setInvalidField("");
@@ -565,21 +560,18 @@ export function AuthView({
           </p>
         ) : null}
         {register && policyStatus === "error" ? (
-          <div role="alert">
-            <p>{policyError}</p>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
+          <FeedbackToast
+            message={policyError}
+            action={{
+              label: "重新读取注册策略",
+              onClick: () => {
                 setPolicyStatus("loading");
                 setPolicy(null);
                 setPolicyError("");
                 setPolicyRetry((n) => n + 1);
-              }}
-            >
-              重新读取注册策略
-            </Button>
-          </div>
+              },
+            }}
+          />
         ) : null}
         {!change && !recoveryToken ? (
           <Field
@@ -675,9 +667,6 @@ export function AuthView({
               autoComplete="current-password"
               placeholder="输入当前登录密码"
             />
-            {fieldError && invalidField === "current-password" ? (
-              <FieldError id={errorID}>{error}</FieldError>
-            ) : null}
           </Field>
         ) : null}
         {passwordStage ? (
@@ -720,9 +709,6 @@ export function AuthView({
                   使用 {PASSWORD_LENGTH_HINT}，支持空格和中文。
                 </FieldDescription>
               ) : null}
-              {fieldError && invalidField === "password" ? (
-                <FieldError id={errorID}>{error}</FieldError>
-              ) : null}
             </Field>
             {mode !== "login" ? (
               <>
@@ -751,9 +737,6 @@ export function AuthView({
                     disabled={pending}
                     placeholder="再次输入新密码"
                   />
-                  {fieldError && invalidField === "confirm-password" ? (
-                    <FieldError id={errorID}>{error}</FieldError>
-                  ) : null}
                 </Field>
               </>
             ) : (
@@ -793,21 +776,15 @@ export function AuthView({
           </Field>
         ) : null}
       </FieldGroup>
-      {error && !fieldError ? (
-        <Alert
-          id={errorID}
-          variant="destructive"
-          ref={errorElement}
-          tabIndex={-1}
-        >
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+      {error ? (
+        <>
+          <FeedbackToast message={error} attempt={feedbackAttempt} />
+          <span id={errorID} className="sr-only">
+            {error}
+          </span>
+        </>
       ) : null}
-      {notice ? (
-        <Alert role="status">
-          <AlertDescription>{notice}</AlertDescription>
-        </Alert>
-      ) : null}
+      {notice ? <FeedbackToast message={notice} tone="info" /> : null}
       <Button
         type="submit"
         className={securityPage ? "h-10 max-md:h-11" : undefined}

@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useRef, useState } from "react";
 import {
   Dialog,
@@ -7,7 +8,6 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ProjectMediaPreview } from "@/components/media/project-media";
 import { RequestError } from "@/lib/request";
 import { flowError } from "@/components/generation/contracts";
@@ -290,11 +290,7 @@ export function SubjectDetail({
                   刷新
                 </Button>
               </div>
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
+              {error && <FeedbackToast message={error} />}
             </>
           )}
           {action && (
@@ -328,11 +324,7 @@ export function SubjectDetail({
                   </p>
                 )}
                 {action === "delete" && <p>删除后可在“已删除”中恢复。</p>}
-                {error && (
-                  <Alert variant="destructive">
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
-                )}
+                {error && <FeedbackToast message={error} />}
                 {error && !uncertain && (
                   <Button
                     variant="link"

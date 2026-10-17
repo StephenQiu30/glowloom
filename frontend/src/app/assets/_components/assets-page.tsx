@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { FieldSet } from "@/components/ui/field";
 import Link from "next/link";
 import { cn } from "cn";
@@ -20,7 +21,6 @@ import { ProductShell } from "@/components/layout/product-shell";
 import { useSession } from "@/components/auth/session";
 import { RequestError } from "@/lib/request";
 import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import {
   InputGroup,
@@ -270,29 +270,23 @@ function Library({
         </Button>
       </div>
       {writeError && (
-        <Alert variant="destructive" className="mb-5">
-          <AlertDescription>{writeError}</AlertDescription>
-          {pendingOperation ? (
-            <Button
-              className="mt-3"
-              disabled={saving}
-              onClick={() => void command()}
-            >
-              重试原操作
-            </Button>
-          ) : (
-            <Button
-              className="mt-3"
-              variant="outline"
-              onClick={() => {
-                setWriteError("");
-                reload();
-              }}
-            >
-              刷新资产版本
-            </Button>
-          )}
-        </Alert>
+        <FeedbackToast
+          message={writeError}
+          action={
+            saving
+              ? undefined
+              : {
+                  label: pendingOperation ? "重试原操作" : "刷新资产版本",
+                  onClick: () => {
+                    if (pendingOperation) void command();
+                    else {
+                      setWriteError("");
+                      reload();
+                    }
+                  },
+                }
+          }
+        />
       )}
       {batch && (
         <div className="mb-5 flex items-center gap-4 rounded-lg border p-3">
@@ -343,10 +337,11 @@ function Library({
           ))}
         </div>
       ) : error ? (
-        <Empty className="min-h-80" role="alert">
+        <Empty className="min-h-80">
+          <FeedbackToast message={error} />
           <EmptyHeader>
             <EmptyTitle>无法读取资产</EmptyTitle>
-            <EmptyDescription>{error}</EmptyDescription>
+            <EmptyDescription>请重试读取。</EmptyDescription>
           </EmptyHeader>
           <Button variant="outline" onClick={reload}>
             重试读取资产
@@ -551,11 +546,7 @@ function Library({
               </Button>
             </DialogFooter>
           </form>
-          {writeError && (
-            <Alert variant="destructive">
-              <AlertDescription>{writeError}</AlertDescription>
-            </Alert>
-          )}
+          {writeError && <></>}
           {pendingOperation && !saving && (
             <Button onClick={() => void command()}>重试原操作</Button>
           )}
@@ -603,11 +594,7 @@ function Library({
               {saving ? "正在处理…" : pendingOperation ? "重试原操作" : "确认"}
             </Button>
           </DialogFooter>
-          {writeError && (
-            <Alert variant="destructive">
-              <AlertDescription>{writeError}</AlertDescription>
-            </Alert>
-          )}
+          {writeError && <></>}
         </DialogContent>
       </Dialog>
     </>

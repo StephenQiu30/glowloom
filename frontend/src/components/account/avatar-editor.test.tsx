@@ -1,10 +1,5 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { render, findFeedback } from "../../../tests/feedback";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AvatarEditor } from "./avatar-editor";
 import { request, RequestError } from "@/lib/request";
@@ -35,7 +30,7 @@ it("上传失败保留已绑定头像，不进行绑定；取消选择释放本�
     target: { files: [new File(["pixels"], "a.png", { type: "image/png" })] },
   });
   fireEvent.click(screen.getByText("上传并保存头像"));
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(bind).not.toHaveBeenCalled();
   expect(screen.getByText("恢复默认头像")).toBeTruthy();
   fireEvent.click(screen.getByText("取消选择"));
@@ -55,7 +50,7 @@ it("移除绑定发送明确 null，绑定失败仍保留旧头像和重试按�
     />,
   );
   fireEvent.click(screen.getByText("恢复默认头像"));
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(bind).toHaveBeenCalledWith(null, expect.any(AbortSignal));
   expect(screen.queryByText("已恢复默认头像。")).toBeNull();
   expect(screen.getByText("恢复默认头像")).toBeTruthy();

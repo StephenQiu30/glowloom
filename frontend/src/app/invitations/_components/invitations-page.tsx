@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
@@ -71,14 +72,18 @@ export function InvitationsPage() {
   return (
     <div className="mx-auto grid w-full max-w-3xl gap-6 p-4">
       <h1 className="text-2xl">邀请与授权</h1>
-      {notice ? <p role="status">{notice}</p> : null}
+      {notice ? <FeedbackToast message={notice} tone="info" /> : null}
       {error ? (
-        <div role="alert">
-          {error}
-          <Button variant="outline" onClick={() => setRetry((n) => n + 1)}>
-            重新读取
-          </Button>
-        </div>
+        <FeedbackToast
+          message={error}
+          action={{
+            label: "重新读取",
+            onClick: () => {
+              setError("");
+              setRetry((n) => n + 1);
+            },
+          }}
+        />
       ) : null}
       {preview ? (
         <section className="grid gap-3 rounded-xl border p-4">

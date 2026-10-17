@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import {
   Collapsible,
   CollapsibleContent,
@@ -16,7 +17,6 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ProjectPicker } from "@/components/projects/project-picker";
 import { type Project } from "@/components/projects/project";
 import { ProjectMediaPreview } from "@/components/media/project-media";
@@ -179,11 +179,7 @@ function GenerationForm({
           onCloseGuard(next);
         }}
       />
-      {reuseError && (
-        <Alert variant="destructive">
-          <AlertDescription>{reuseError}</AlertDescription>
-        </Alert>
-      )}
+      {reuseError && <FeedbackToast message={reuseError} />}
       <TaskHistory
         projectID={project.id}
         capability={seed.capability + ".generate"}
@@ -252,11 +248,7 @@ function TaskHistory({
         <History />
         {pending ? "正在读取…" : "查看生成历史"}
       </Button>
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+      {error && <FeedbackToast message={error} />}
       {open && (
         <>
           <div className="task-list">
@@ -405,11 +397,7 @@ export function TaskDetail({
           <RotateCw />
         </Button>
       </div>
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+      {error && <FeedbackToast message={error} />}
       {task?.editor_draft && (
         <Collapsible className="rounded border p-3 text-sm">
           <CollapsibleTrigger asChild>

@@ -1,5 +1,5 @@
 "use client";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -749,11 +749,7 @@ export function ReferenceControls({
           </FieldLabel>
         </Field>
       )}
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+      {error && <FeedbackToast message={error} />}
       {unavailablePaste !== null && (
         <div className="rounded border p-3">
           <p>

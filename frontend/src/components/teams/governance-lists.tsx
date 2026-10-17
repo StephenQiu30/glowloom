@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { FieldLabel } from "@/components/ui/field";
 import { useEffect, useState } from "react";
 import {
@@ -138,7 +139,7 @@ export function GovernanceLists({
           </NativeSelectOption>
         ))}
       </NativeSelect>
-      {error ? <p role="alert">{error}</p> : null}
+      {error ? <FeedbackToast message={error} /> : null}
       {invites?.items?.length === 0 ? <p>暂无邀请。</p> : null}
       {invites?.items?.map((i) => (
         <article key={i.id} className="grid gap-2 rounded-xl border p-4">

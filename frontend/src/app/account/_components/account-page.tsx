@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { LoadingState } from "@/components/layout/loading-state";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
@@ -226,35 +227,27 @@ export function Settings() {
         </nav>
         <section className="settings-card">
           {error ? (
-            <Alert variant="destructive">
-              <AlertDescription>
-                <p>{error}</p>
-                <Button variant="outline" onClick={refresh} disabled={pending}>
-                  重新加载
-                </Button>
-              </AlertDescription>
-            </Alert>
+            <FeedbackToast
+              message={error}
+              action={
+                pending ? undefined : { label: "重新加载", onClick: refresh }
+              }
+            />
           ) : null}
-          {notice ? <p role="status">{notice}</p> : null}
+          {notice ? <FeedbackToast message={notice} tone="info" /> : null}
           {tab === "profile" && blockErrors.profile ? (
-            <Alert variant="destructive">
-              <AlertDescription>
-                个人资料读取失败：{blockErrors.profile}
-                <Button variant="outline" onClick={refresh}>
-                  重新加载个人资料
-                </Button>
-              </AlertDescription>
-            </Alert>
+            <FeedbackToast
+              message={["个人资料读取失败：", blockErrors.profile].join(" ")}
+              action={{ label: "重新加载个人资料", onClick: refresh }}
+            />
           ) : null}
           {tab === "preferences" && blockErrors.preferences ? (
-            <Alert variant="destructive">
-              <AlertDescription>
-                创作偏好读取失败：{blockErrors.preferences}
-                <Button variant="outline" onClick={refresh}>
-                  重新加载创作偏好
-                </Button>
-              </AlertDescription>
-            </Alert>
+            <FeedbackToast
+              message={["创作偏好读取失败：", blockErrors.preferences].join(
+                " ",
+              )}
+              action={{ label: "重新加载创作偏好", onClick: refresh }}
+            />
           ) : null}
           {tab === "profile" && profile ? (
             <EmailChange revision={profile.revision} onConflict={refresh} />
@@ -406,14 +399,10 @@ export function Settings() {
               {loadingBlocks.sessions ? (
                 <LoadingState>正在读取设备…</LoadingState>
               ) : blockErrors.sessions ? (
-                <Alert variant="destructive">
-                  <AlertDescription>
-                    设备读取失败：{blockErrors.sessions}
-                    <Button variant="outline" onClick={refresh}>
-                      重试读取设备
-                    </Button>
-                  </AlertDescription>
-                </Alert>
+                <FeedbackToast
+                  message={["设备读取失败：", blockErrors.sessions].join(" ")}
+                  action={{ label: "重试读取设备", onClick: refresh }}
+                />
               ) : sessions.length === 0 ? (
                 <p>暂无登录设备。</p>
               ) : null}
@@ -461,14 +450,10 @@ export function Settings() {
               {loadingBlocks.events ? (
                 <LoadingState>正在读取安全活动…</LoadingState>
               ) : blockErrors.events ? (
-                <Alert variant="destructive">
-                  <AlertDescription>
-                    安全活动读取失败：{blockErrors.events}
-                    <Button variant="outline" onClick={refresh}>
-                      重试安全活动
-                    </Button>
-                  </AlertDescription>
-                </Alert>
+                <FeedbackToast
+                  message={["安全活动读取失败：", blockErrors.events].join(" ")}
+                  action={{ label: "重试安全活动", onClick: refresh }}
+                />
               ) : null}
               {events?.items.length === 0 ? (
                 <p>暂无安全活动。</p>

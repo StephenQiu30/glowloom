@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useEffect, useState } from "react";
 import {
   listPlatformTeamInvitations,
@@ -75,7 +76,7 @@ export function PlatformTeamInvitations({
         ))}
       </NativeSelect>
       {error ? (
-        <p role="alert">{error}</p>
+        <FeedbackToast message={error} />
       ) : !page ? (
         <p role="status">正在读取历史邀请…</p>
       ) : null}

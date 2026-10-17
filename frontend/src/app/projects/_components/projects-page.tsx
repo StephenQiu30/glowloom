@@ -1,5 +1,5 @@
 "use client";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { FieldSet, Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { useRef, useState, useId } from "react";
 import Link from "next/link";
@@ -158,11 +158,7 @@ export function ProjectsPage() {
                       </SelectContent>
                     </Select>
                   </Field>
-                  {error && (
-                    <Alert variant="destructive">
-                      <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                  )}
+                  {error && <FeedbackToast message={error} />}
                   <DialogFooter>
                     <Button
                       variant="outline"

@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 
 import { useRef, useState, useSyncExternalStore } from "react";
 import { useSession } from "@/components/auth/session";
@@ -144,9 +145,7 @@ export function MutationStatus({
   return (
     <div className="space-y-2" aria-live="polite">
       {mutation.message ? (
-        <p role="status" className="text-sm">
-          {mutation.message}
-        </p>
+        <FeedbackToast message={mutation.message} tone="info" />
       ) : null}
       {mutation.pending ? (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm">

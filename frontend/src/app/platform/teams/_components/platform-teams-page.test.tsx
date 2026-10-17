@@ -1,10 +1,5 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  act,
-} from "@testing-library/react";
+import { render } from "../../../../../tests/feedback";
+import { cleanup, fireEvent, screen, act } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { PlatformTeamsPage } from "./platform-teams-page";
 import { request } from "@/lib/request";

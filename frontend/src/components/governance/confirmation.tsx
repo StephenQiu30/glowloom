@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { FieldLabel } from "@/components/ui/field";
 import { useEffect, useRef, useState } from "react";
 import { reauthenticate } from "@/api/identity";
@@ -125,7 +126,7 @@ export function Confirmation({
               />
             </FieldLabel>
           ) : null}
-          {error ? <p role="alert">{error}</p> : null}
+          {error ? <FeedbackToast message={error} /> : null}
           <div className="flex flex-wrap gap-2">
             <Button
               disabled={

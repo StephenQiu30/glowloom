@@ -1,5 +1,5 @@
 "use client";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 
 import { useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
@@ -51,11 +51,7 @@ export function DownloadButton({
       >
         {pending ? "正在下载…" : children}
       </Button>
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+      {error && <FeedbackToast message={error} />}
     </span>
   );
 }

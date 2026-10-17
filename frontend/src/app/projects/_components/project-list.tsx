@@ -1,6 +1,6 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { LoadingState } from "@/components/layout/loading-state";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Grid2X2 } from "lucide-react";
@@ -80,28 +80,26 @@ export function ProjectList({ query, view }: { query: string; view: string }) {
         </LoadingState>
       )}
       {error && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertDescription>
-            <p>{error}</p>
-            <Button
-              variant="outline"
-              className="mt-2"
-              disabled={loading}
-              onClick={() => {
-                if (page?.next_cursor) {
-                  void loadMore();
-                } else {
-                  setPage(null);
-                  setError("");
-                  setLoading(true);
-                  setRetry((n) => n + 1);
+        <FeedbackToast
+          message={error}
+          action={
+            loading
+              ? undefined
+              : {
+                  label: "重试读取",
+                  onClick: () => {
+                    if (page?.next_cursor) {
+                      void loadMore();
+                    } else {
+                      setPage(null);
+                      setError("");
+                      setLoading(true);
+                      setRetry((n) => n + 1);
+                    }
+                  },
                 }
-              }}
-            >
-              重试读取
-            </Button>
-          </AlertDescription>
-        </Alert>
+          }
+        />
       )}
       {page?.items.length === 0 && (
         <div className="rounded-2xl border border-dashed p-12 text-center">

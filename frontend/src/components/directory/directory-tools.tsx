@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createPlatformUserExport,
@@ -300,7 +301,9 @@ export function DirectoryTools({
       ) : !statsError ? (
         <p role="status">正在读取统计…</p>
       ) : null}
-      {statsError ? <p role="alert">统计暂不可用：{statsError}</p> : null}
+      {statsError ? (
+        <FeedbackToast message={["统计暂不可用：", statsError].join(" ")} />
+      ) : null}
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" onClick={() => setRetry((n) => n + 1)}>
           刷新统计
@@ -363,11 +366,13 @@ export function DirectoryTools({
             <p>尚未生成可下载文件。</p>
           )}
           {job.status === "failed" ? (
-            <p role="alert">
-              {job.error_category === "authority_revoked"
-                ? "当前权限已变化，无法生成。"
-                : "导出生成失败，请重新读取状态或创建新导出。"}
-            </p>
+            <FeedbackToast
+              message={
+                job.error_category === "authority_revoked"
+                  ? "当前权限已变化，无法生成。"
+                  : "导出生成失败，请重新读取状态或创建新导出。"
+              }
+            />
           ) : null}
           <div className="flex flex-wrap gap-2">
             <Button
@@ -388,7 +393,9 @@ export function DirectoryTools({
           </div>
         </article>
       ) : null}
-      {error && !(forbidden && statsError) ? <p role="alert">{error}</p> : null}
+      {error && !(forbidden && statsError) ? (
+        <FeedbackToast message={error} />
+      ) : null}
       <Confirmation
         key={action?.title ?? "closed"}
         action={action}

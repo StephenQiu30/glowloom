@@ -1,10 +1,5 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { render, findFeedback } from "../../../tests/feedback";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SubjectEditor } from "./subject-editor";
 import { RequestError } from "@/lib/request";
@@ -115,7 +110,7 @@ it("参考图保存断网后继续原主体，不再创建新身份或换请求�
   fireEvent.click(screen.getByRole("button", { name: "选择主体参考图" }));
   fireEvent.click(screen.getByText("测试素材"));
   fireEvent.click(screen.getByRole("button", { name: "保存主体" }));
-  await screen.findByRole("alert");
+  await findFeedback();
   fireEvent.click(screen.getByRole("button", { name: "重试原保存" }));
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());
   expect(api.create).toHaveBeenCalledOnce();

@@ -1,5 +1,7 @@
 "use client";
 
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
+
 import {
   useCallback,
   useEffectEvent,
@@ -10,15 +12,15 @@ import {
 } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { ArrowLeft, Check, CircleAlert, Plus, Save, X } from "lucide-react";
+import { ArrowLeft, Check, CircleAlert, Plus, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Brand } from "@/components/brand/brand";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
+  EmptyContent,
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
@@ -877,9 +879,17 @@ export function CanvasEditor({
           : `已保存 · 版本 ${base.revision}`;
   if (identityInvalid)
     return (
-      <Alert variant="destructive">
-        <AlertDescription>身份已变化，请重新登录后打开画布。</AlertDescription>
-      </Alert>
+      <Empty>
+        <EmptyHeader>
+          <EmptyTitle>请重新打开画布</EmptyTitle>
+          <EmptyDescription>登录状态已变化，本地编辑已保留。</EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button asChild>
+            <Link href="/login">重新登录</Link>
+          </Button>
+        </EmptyContent>
+      </Empty>
     );
   return (
     <main className="creation-canvas relative h-dvh overflow-hidden">
@@ -947,21 +957,7 @@ export function CanvasEditor({
           </Button>
         </div>
       </header>
-      {message && (
-        <Alert className="canvas-feedback canvas-notice">
-          <AlertDescription className="flex items-center justify-between gap-3">
-            {message}
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label="关闭画布提示"
-              onClick={() => setMessage("")}
-            >
-              <X data-icon="inline-start" />
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
+      {message && <FeedbackToast message={message} tone="info" />}
       <Dialog open={leave} onOpenChange={setLeave}>
         <DialogContent role="alertdialog" showCloseButton={false}>
           <DialogTitle>确认离开画布</DialogTitle>

@@ -1,10 +1,5 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { render, findFeedback } from "../../../../tests/feedback";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { UserDirectory } from "./users-page";
 import { request, RequestError } from "@/lib/request";
@@ -80,7 +75,7 @@ it("permission loss clears private directory while retaining retry", async () =>
   render(<UserDirectory />);
   await screen.findByText("private@example.com");
   fireEvent.click(screen.getByText("刷新"));
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(screen.queryByText("private@example.com")).toBeNull();
   expect(screen.getByText("刷新")).toBeTruthy();
 });

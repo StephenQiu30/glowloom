@@ -1,4 +1,12 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyContent,
+} from "@/components/ui/empty";
+import { Button } from "@/components/ui/button";
 import {
   createContext,
   useContext,
@@ -25,7 +33,6 @@ import {
   NativeSelect,
   NativeSelectOption,
 } from "@/components/ui/native-select";
-import { Button } from "@/components/ui/button";
 const SpaceContext = createContext<{
   spaces: API.SpaceView[];
   selected: API.SpaceView | null;
@@ -126,27 +133,40 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
         select: (id) => load(id),
       }}
     >
-      {notice ? (
-        <p role="status" className="p-3 text-sm">
-          {notice}
-        </p>
-      ) : null}
+      {notice ? <FeedbackToast message={notice} tone="info" /> : null}
       {error ? (
-        <div role="alert" className="p-3">
-          {error}
-          <Button variant="outline" onClick={() => void load()}>
-            重新读取空间
-          </Button>
-        </div>
+        <FeedbackToast
+          message={error}
+          action={{
+            label: "重新读取空间",
+            onClick: () => {
+              setError("");
+              void load();
+            },
+          }}
+        />
       ) : null}
       <div
         key={`${session?.actor.id ?? "guest"}:${generation}`}
         className="contents"
       >
         {session && !selected ? (
-          <p role="status" className="p-6">
-            {pending && selected ? "正在切换空间…" : "正在读取空间…"}
-          </p>
+          error && !pending ? (
+            <Empty>
+              <EmptyHeader>
+                <EmptyTitle>暂时无法打开空间</EmptyTitle>
+              </EmptyHeader>
+              <EmptyContent>
+                <Button variant="outline" onClick={() => void load()}>
+                  重试
+                </Button>
+              </EmptyContent>
+            </Empty>
+          ) : (
+            <p role="status" className="p-6">
+              正在读取空间…
+            </p>
+          )
         ) : (
           children
         )}

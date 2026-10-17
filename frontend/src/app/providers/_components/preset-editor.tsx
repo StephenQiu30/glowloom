@@ -1,5 +1,5 @@
 "use client";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useId } from "react";
@@ -87,11 +87,7 @@ export function PresetEditor({
             spellCheck={false}
           />
         </Field>
-        {error ? (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : null}
+        {error ? <FeedbackToast message={error} /> : null}
         {preview ? (
           <div className="rounded-lg bg-muted p-3 text-sm">
             <p>

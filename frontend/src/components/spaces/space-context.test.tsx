@@ -1,10 +1,5 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { render } from "../../../tests/feedback";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { StrictMode, useState } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { SpaceProvider, SpaceSwitcher, useSpace } from "./space-context";
@@ -107,7 +102,7 @@ it("403 重新确认空间后只在真实成员丢失时回个人空间", async 
   items = [personal];
   triggerScopeDenied();
   await screen.findByText("personal");
-  expect(screen.getByText(/已返回个人空间/)).toBeTruthy();
+  expect(await screen.findByText(/已返回个人空间/)).toBeTruthy();
 });
 
 it("同一空间失去管理员角色也清除旧私有视图", async () => {

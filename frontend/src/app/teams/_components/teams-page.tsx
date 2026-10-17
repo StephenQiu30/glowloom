@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { FieldLabel } from "@/components/ui/field";
 import { useRef, useState } from "react";
 import Link from "next/link";
@@ -82,7 +83,7 @@ export function TeamsPage() {
         <Button disabled={pending || !name.trim()}>
           {pending ? "正在创建…" : "创建团队"}
         </Button>
-        {error ? <p role="alert">{error}</p> : null}
+        {error ? <FeedbackToast message={error} /> : null}
         {created ? (
           <Link href={`/teams/${created}`} className="underline">
             管理新团队

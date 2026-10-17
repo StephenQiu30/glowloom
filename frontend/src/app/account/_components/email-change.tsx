@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { FieldLabel } from "@/components/ui/field";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -201,8 +202,8 @@ export function EmailChange({
           </Button>
         </>
       )}
-      {error ? <p role="alert">{error}</p> : null}
-      {notice ? <p role="status">{notice}</p> : null}
+      {error ? <FeedbackToast message={error} /> : null}
+      {notice ? <FeedbackToast message={notice} tone="info" /> : null}
     </section>
   );
 }

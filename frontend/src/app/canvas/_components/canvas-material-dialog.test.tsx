@@ -1,8 +1,8 @@
+import { render, findFeedback } from "../../../../tests/feedback";
 import {
   act,
   cleanup,
   fireEvent,
-  render,
   screen,
   waitFor,
 } from "@testing-library/react";
@@ -84,7 +84,7 @@ it("跨项目回执不进入可选素材，重新读取可恢复", async () => {
       onSubject={vi.fn()}
     />,
   );
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(
     screen.queryByRole("button", { name: "选择素材 海边香氛.png" }),
   ).toBeNull();

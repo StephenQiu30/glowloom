@@ -1,5 +1,14 @@
 "use client";
 import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from "@/components/ui/empty";
+
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import {
   Table,
   TableCaption,
   TableHeader,
@@ -8,7 +17,6 @@ import {
   TableBody,
   TableCell,
 } from "@/components/ui/table";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -873,16 +881,17 @@ function EditorWorkspace({
   }
   if (suspended)
     return (
-      <Alert variant="destructive">
-        <AlertDescription>
-          <p>
-            身份已变化或无法核验。当前页面已停止私有缓存写入；本地分支在重新核验后恢复。
-          </p>
+      <Empty>
+        <EmptyHeader>
+          <EmptyTitle>请重新核验登录状态</EmptyTitle>
+          <EmptyDescription>本地草稿已保留。</EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
           <Button onClick={() => onOpen(snapshot.draft_id)}>
             重新核验并找回草稿
           </Button>
-        </AlertDescription>
-      </Alert>
+        </EmptyContent>
+      </Empty>
     );
   return (
     <section
@@ -1226,11 +1235,7 @@ function EditorWorkspace({
             )}
           </div>
         )}
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
+        {error && <FeedbackToast message={error} />}
         {saveState === "保存冲突" && !canvas && (
           <div className="flex gap-2">
             <Button
@@ -1355,11 +1360,7 @@ function EditorWorkspace({
             {current.submission.state !== "accepted" &&
               !confirmUnknown &&
               quoteExpired && (
-                <Alert variant="destructive">
-                  <AlertDescription>
-                    报价已过期，请重新检查费用。
-                  </AlertDescription>
-                </Alert>
+                <FeedbackToast message="报价已过期，请重新检查费用。" />
               )}
             <pre className="max-h-36 overflow-auto text-xs whitespace-pre-wrap">
               {quote?.final_prompt ?? current.submission.quote?.final_prompt}

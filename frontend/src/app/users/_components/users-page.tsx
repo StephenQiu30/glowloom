@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import Link from "next/link";
 import { DirectoryTools } from "@/components/directory/directory-tools";
 import { UserActions } from "./user-actions";
@@ -16,7 +17,6 @@ import {
   TableBody,
   TableCell,
 } from "@/components/ui/table";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   NativeSelect,
   NativeSelectOption,
@@ -281,11 +281,7 @@ export function UserDirectory() {
           刷新
         </Button>
       </form>
-      {error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      ) : null}
+      {error ? <FeedbackToast message={error} /> : null}
       {pending && !page ? <LoadingState>正在读取用户…</LoadingState> : null}
       <Button
         variant="outline"

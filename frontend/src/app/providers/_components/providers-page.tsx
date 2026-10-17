@@ -1,6 +1,13 @@
 "use client";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
+
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { LoadingState } from "@/components/layout/loading-state";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import {
   NativeSelect,
@@ -66,9 +73,12 @@ export function ProvidersPage() {
   }, [refresh]);
   if (session.actor.platform_role !== "platform_admin")
     return (
-      <Alert variant="destructive">
-        <AlertDescription>此页面仅向平台管理员开放。</AlertDescription>
-      </Alert>
+      <Empty>
+        <EmptyHeader>
+          <EmptyTitle>暂无访问权限</EmptyTitle>
+          <EmptyDescription>此页面仅向平台管理员开放。</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     );
   const preset = presets.find((item) => item.id === presetID);
   return (
@@ -103,18 +113,16 @@ export function ProvidersPage() {
       </div>
       <MutationStatus mutation={mutation} />
       {error ? (
-        <Alert variant="destructive">
-          <AlertDescription>
-            <p>{error}</p>
-            <Button
-              className="mt-2"
-              variant="outline"
-              onClick={() => setRefresh((v) => v + 1)}
-            >
-              重新加载
-            </Button>
-          </AlertDescription>
-        </Alert>
+        <FeedbackToast
+          message={error}
+          action={{
+            label: "重新加载",
+            onClick: () => {
+              setError("");
+              setRefresh((v) => v + 1);
+            },
+          }}
+        />
       ) : null}
       {loading ? <LoadingState>正在加载平台配置…</LoadingState> : null}
       {tab === "connections" ? (

@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { PlatformTeamInvitations } from "./platform-team-invitations";
 import { FieldLabel } from "@/components/ui/field";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -157,12 +158,16 @@ export function PlatformTeamsPage() {
         <Button disabled={pending}>查询团队</Button>
       </form>
       {error ? (
-        <div role="alert">
-          {error}
-          <Button variant="outline" onClick={() => setReload((n) => n + 1)}>
-            重新读取
-          </Button>
-        </div>
+        <FeedbackToast
+          message={error}
+          action={{
+            label: "重新读取",
+            onClick: () => {
+              setError("");
+              setReload((n) => n + 1);
+            },
+          }}
+        />
       ) : null}
       {page?.items?.length === 0 ? <p>没有符合条件的团队。</p> : null}
       {!page && !error ? <p role="status">正在读取团队…</p> : null}

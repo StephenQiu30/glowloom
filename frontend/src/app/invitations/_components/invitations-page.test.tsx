@@ -1,10 +1,5 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { render } from "../../../../tests/feedback";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { StrictMode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { InvitationsPage } from "./invitations-page";

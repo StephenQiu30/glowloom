@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { LoadingState } from "@/components/layout/loading-state";
 import { ChevronDown } from "lucide-react";
 import {
@@ -6,7 +7,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -117,11 +117,7 @@ export function ConnectionDetail({
       aria-label="连接详情"
     >
       <h2 className="text-lg font-medium">{provider?.name ?? "连接详情"}</h2>
-      {error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      ) : null}
+      {error ? <FeedbackToast message={error} /> : null}
       {!detail ? (
         <LoadingState>正在加载连接…</LoadingState>
       ) : (

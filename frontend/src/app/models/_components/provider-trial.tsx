@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ChevronDown } from "lucide-react";
 import {
@@ -182,11 +183,7 @@ export function ProviderTrial({
             </AlertDescription>
           </Alert>
         )}
-        {message && (
-          <p role="status" className="text-sm">
-            {message}
-          </p>
-        )}
+        {message && <FeedbackToast message={message} tone="info" />}
         {!pending?.operation && (
           <form
             onSubmit={(e) => {

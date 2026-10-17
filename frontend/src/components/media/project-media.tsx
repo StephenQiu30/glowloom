@@ -1,6 +1,6 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { LoadingState } from "@/components/layout/loading-state";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { ImageIcon, Upload, RotateCw } from "lucide-react";
@@ -204,20 +204,17 @@ export function ProjectMediaPicker({
             从本地添加
           </Button>
           {error && (
-            <Alert variant="destructive">
-              <AlertDescription>
-                {error}
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setLoading(true);
-                    setRetry((n) => n + 1);
-                  }}
-                >
-                  重新读取
-                </Button>
-              </AlertDescription>
-            </Alert>
+            <FeedbackToast
+              message={error}
+              action={{
+                label: "重新读取",
+                onClick: () => {
+                  setError("");
+                  setLoading(true);
+                  setRetry((n) => n + 1);
+                },
+              }}
+            />
           )}
           <div className="media-picker-grid">
             {items.map((a) => (

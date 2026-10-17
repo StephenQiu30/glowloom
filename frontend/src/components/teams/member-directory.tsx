@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { DirectoryTools } from "@/components/directory/directory-tools";
 import { useEffect, useState } from "react";
 import {
@@ -212,7 +213,7 @@ export function MemberDirectory({
         </p>
       ) : null}
       {pending ? <p role="status">正在读取成员…</p> : null}
-      {error ? <p role="alert">{error}</p> : null}
+      {error ? <FeedbackToast message={error} /> : null}
       {page?.items.length === 0 ? <p>没有符合条件的成员。</p> : null}
       {page?.items.map((m) => (
         <article

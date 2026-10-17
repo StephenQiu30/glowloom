@@ -1,5 +1,5 @@
 "use client";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useEffect, useRef, useState, useId } from "react";
@@ -157,11 +157,7 @@ export function UploadDialog({
               </FieldLabel>
             </Field>
             {pending && <LoadingState>正在上传并验证文件…</LoadingState>}
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
+            {error && <FeedbackToast message={error} />}
             {unconfirmed && (
               <p className="text-xs text-muted-foreground">
                 保留当前文件和原请求编号以安全重试。关闭后，请先刷新资产列表确认结果。

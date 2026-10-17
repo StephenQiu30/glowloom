@@ -1,10 +1,5 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { render, findFeedback } from "../../../tests/feedback";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { DownloadButton } from "./download-button";
 
@@ -62,7 +57,7 @@ it("失败不会保存错误响应，显示重试入口并阻止重复请求", a
   fireEvent.click(pending);
   expect(load).toHaveBeenCalledOnce();
   reject(new Error("forbidden"));
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(click).not.toHaveBeenCalled();
   expect(
     screen.getByRole("button", { name: "下载原件" }).hasAttribute("disabled"),

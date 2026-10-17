@@ -1,10 +1,5 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { render, findFeedback } from "../../../tests/feedback";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { GenerationDialog } from "./generation-dialog";
 import { RequestError } from "@/lib/request";
@@ -203,7 +198,7 @@ it("未确认的报价重试复用保存后的草稿指针和幂等键，确认�
   api.quote.mockRejectedValueOnce(new RequestError("request_unconfirmed"));
   await open();
   fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
-  await screen.findByRole("alert");
+  await findFeedback();
   fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
   await screen.findByRole("button", { name: "确认费用并生成" });
   expect(api.models.mock.calls[0][0].capability).toBe("image.generate");

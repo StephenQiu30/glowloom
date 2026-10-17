@@ -18,3 +18,26 @@ if (
 ) {
   HTMLElement.prototype.scrollIntoView = vi.fn();
 }
+
+// Sonner follows the viewport media query; jsdom has no browser media engine.
+if (typeof window !== "undefined" && !window.matchMedia) {
+  window.matchMedia = (query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  });
+}
+
+// Pointer capture is a browser layout API used by Sonner swipe handling.
+if (
+  typeof HTMLElement !== "undefined" &&
+  !HTMLElement.prototype.setPointerCapture
+) {
+  HTMLElement.prototype.setPointerCapture = () => undefined;
+  HTMLElement.prototype.releasePointerCapture = () => undefined;
+}

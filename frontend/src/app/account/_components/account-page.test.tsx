@@ -1,10 +1,5 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { render, findFeedback } from "../../../../tests/feedback";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { Settings } from "./account-page";
 import { request, RequestError } from "@/lib/request";
@@ -106,7 +101,7 @@ it("profile conflict preserves unsaved intent and offers reload", async () => {
   const name = await screen.findByLabelText("显示名");
   fireEvent.change(name, { target: { value: "Unsaved" } });
   fireEvent.click(screen.getByText("保存资料"));
-  expect(await screen.findByRole("alert")).toBeTruthy();
+  expect(await findFeedback()).toBeTruthy();
   expect(name).toHaveProperty("value", "Unsaved");
   expect(mocks.update).not.toHaveBeenCalled();
 });

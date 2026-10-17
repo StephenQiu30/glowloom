@@ -1,8 +1,8 @@
+import { render, findFeedback } from "../../../../tests/feedback";
 import {
   act,
   cleanup,
   fireEvent,
-  render,
   screen,
   waitFor,
 } from "@testing-library/react";
@@ -256,7 +256,7 @@ it("并行读回真实空画布，拒绝项目与画布串线", async () => {
   api.project.mockResolvedValue(project);
   api.canvas.mockResolvedValue({ ...canvas, project_id: canvasID });
   render(<CanvasPage projectID={projectID} canvasID={canvasID} />);
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(screen.queryByText("画布暂无节点")).toBeNull();
   expect(screen.queryByText("所有更改已保存")).toBeNull();
 });
@@ -385,6 +385,6 @@ it("恢复画布的迟到结果不覆盖等待期间的新编辑", async () => {
     "等待中新增的意图",
   );
   expect(
-    screen.getByText("恢复期间有新编辑，未覆盖；原分支仍保留。"),
+    await screen.findByText("恢复期间有新编辑，未覆盖；原分支仍保留。"),
   ).toBeTruthy();
 });

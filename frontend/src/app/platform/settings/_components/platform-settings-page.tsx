@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FieldLabel } from "@/components/ui/field";
 import { useEffect, useState } from "react";
@@ -36,12 +37,16 @@ export function PlatformSettingsPage() {
     <div className="mx-auto grid w-full max-w-2xl gap-4 p-4">
       <h1 className="text-2xl">平台设置</h1>
       {error ? (
-        <div role="alert">
-          {error}
-          <Button variant="outline" onClick={() => setReload((n) => n + 1)}>
-            重新读取设置
-          </Button>
-        </div>
+        <FeedbackToast
+          message={error}
+          action={{
+            label: "重新读取设置",
+            onClick: () => {
+              setError("");
+              setReload((n) => n + 1);
+            },
+          }}
+        />
       ) : null}
       {settings ? (
         <form

@@ -1,9 +1,9 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Plus, Search, UserRound, MapPin, Box } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   InputGroup,
   InputGroupInput,
@@ -190,18 +190,17 @@ export function SubjectList({
         </Button>
       </div>
       {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-          <Button
-            variant="ghost"
-            onClick={() => {
+        <FeedbackToast
+          message={error}
+          action={{
+            label: "重试读取",
+            onClick: () => {
+              setError("");
               setLoading(true);
               setRetry((n) => n + 1);
-            }}
-          >
-            重试读取
-          </Button>
-        </Alert>
+            },
+          }}
+        />
       )}
       {loading && items.length === 0 ? (
         <div className="subject-grid" aria-label="正在读取主体">

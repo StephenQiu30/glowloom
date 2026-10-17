@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FieldLabel } from "@/components/ui/field";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
@@ -104,16 +105,16 @@ export function BoundAvatar({
         <AvatarFallback>头像</AvatarFallback>
       </Avatar>
       {error ? (
-        <div className="text-sm" role="alert">
-          {error}
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setRetry((n) => n + 1)}
-          >
-            重新读取头像
-          </Button>
-        </div>
+        <FeedbackToast
+          message={error}
+          action={{
+            label: "重新读取头像",
+            onClick: () => {
+              setPreview(null);
+              setRetry((n) => n + 1);
+            },
+          }}
+        />
       ) : null}
     </div>
   );
@@ -289,8 +290,8 @@ export function AvatarEditor({
         </Button>
       ) : null}
       {pending ? <p role="status">正在保存头像…</p> : null}
-      {error ? <p role="alert">{error}</p> : null}
-      {notice ? <p role="status">{notice}</p> : null}
+      {error ? <FeedbackToast message={error} /> : null}
+      {notice ? <FeedbackToast message={notice} tone="info" /> : null}
     </section>
   );
 }

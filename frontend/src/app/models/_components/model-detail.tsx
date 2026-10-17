@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { LoadingState } from "@/components/layout/loading-state";
 import { ChevronDown } from "lucide-react";
 import {
@@ -6,7 +7,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   NativeSelect,
   NativeSelectOption,
@@ -128,11 +128,7 @@ export function ModelDetail({
       <h2 className="text-lg font-medium">
         {model?.display_name ?? "模型详情"}
       </h2>
-      {error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      ) : null}
+      {error ? <FeedbackToast message={error} /> : null}
       <MutationStatus mutation={mutation} />
       {!detail ? (
         <LoadingState>正在加载配置…</LoadingState>
