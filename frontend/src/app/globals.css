@@ -206,9 +206,11 @@ button:not(:disabled),
 }
 .product-header {
   height: 64px;
-  padding: 0 16px;
+  padding: 0 24px;
   display: flex;
   align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -382,23 +384,18 @@ button:not(:disabled),
     transition: none;
   }
 }
-.account-controls {
-  margin-left: auto;
+.product-header-location {
   display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
   gap: 8px;
-  align-items: center;
 }
-.account-cluster {
-  height: 36px;
+.product-header-actions {
   display: flex;
-  gap: 4px;
+  flex-shrink: 0;
   align-items: center;
-  padding: 0 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-}
-.account-controls > button {
-  min-width: 96px;
+  gap: 8px;
 }
 .workspace-page {
   padding: 24px 40px 40px;
@@ -772,9 +769,14 @@ button:not(:disabled),
 }
 @media (max-width: 767px) {
   .product-header {
-    height: 72px;
-    padding: 0 12px;
-    gap: 8px;
+    padding-inline: 16px;
+  }
+  .product-header-actions {
+    gap: 0;
+  }
+  .product-header .brand-mark {
+    width: 24px;
+    height: 24px;
   }
   .mobile-navigation-trigger,
   [data-mobile="true"] .sidebar-toggle {
@@ -802,28 +804,6 @@ button:not(:disabled),
   }
   [data-mobile="true"] .sidebar-footer {
     padding-bottom: max(16px, env(safe-area-inset-bottom));
-  }
-  .product-header .product-brand small {
-    display: none;
-  }
-  .account-controls > button,
-  .account-cluster > button:not([aria-label="账号菜单"]) {
-    display: none;
-  }
-  .account-controls {
-    gap: 0;
-  }
-  .account-cluster {
-    border: 0;
-    padding: 0;
-  }
-  .account-cluster [data-slot="avatar"] {
-    width: 32px;
-    height: 32px;
-  }
-  .account-controls > button:last-child {
-    display: inline-flex;
-    min-width: 0;
   }
   .mobile-navigation {
     padding: 8px 16px;

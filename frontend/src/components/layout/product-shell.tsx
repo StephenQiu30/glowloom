@@ -11,13 +11,7 @@ import {
 } from "react";
 import { cn } from "cn";
 import { useRouter } from "next/navigation";
-import { Bell, Gift, Menu } from "lucide-react";
-import {
-  SpaceProvider,
-  SpaceSwitcher,
-} from "@/components/spaces/space-context";
-import { AccountMenu } from "@/components/account/account-menu";
-import { Brand } from "@/components/brand/brand";
+import { SpaceProvider } from "@/components/spaces/space-context";
 import {
   SessionGate,
   useOptionalSession,
@@ -37,6 +31,7 @@ import {
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { Navigation, ProductNavigation } from "./product-navigation";
 import type { Screen } from "./routes";
+import { ProductHeader } from "./product-header";
 const adminScreens = [
   "users",
   "models",
@@ -72,7 +67,7 @@ function Shell({
   fullBleed,
   initialAuthMode,
 }: {
-  screen: string;
+  screen: Screen;
   children: ReactNode;
   fullBleed?: boolean;
   initialAuthMode?: AuthMode;
@@ -114,64 +109,17 @@ function Shell({
         }}
       />
       <div className="product-content">
-        <header className="product-header">
-          {isMobile && (
-            <>
-              <Button
-                variant="ghost"
-                size="icon"
-                ref={mobileNavigationTrigger}
-                className="mobile-navigation-trigger"
-                aria-label="打开导航"
-                aria-expanded={openMobile}
-                onClick={() => setOpenMobile(true)}
-              >
-                <Menu />
-              </Button>
-              <Brand wordmark />
-            </>
-          )}
-          <div className="account-controls">
-            {session ? (
-              <>
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onClick={() => setFeature("积分商城")}
-                >
-                  <Gift data-icon="inline-start" />
-                  积分商城
-                </Button>
-                <div className="account-cluster">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="消息中心"
-                    onClick={() => setFeature("消息中心")}
-                  >
-                    <Bell />
-                  </Button>
-                  <Button variant="ghost" onClick={() => setFeature("会员")}>
-                    开通会员
-                  </Button>
-                  <AccountMenu
-                    actor={session.actor}
-                    onLogout={() => setLogout(true)}
-                  />
-                </div>
-              </>
-            ) : (
-              <Button size="lg" onClick={() => setAuth(true)}>
-                登录 / 注册
-              </Button>
-            )}
-          </div>
-        </header>
-        {session ? (
-          <div className="border-b px-4 py-2">
-            <SpaceSwitcher />
-          </div>
-        ) : null}
+        <ProductHeader
+          screen={screen}
+          actor={session?.actor}
+          isMobile={isMobile}
+          navigationOpen={openMobile}
+          navigationTriggerRef={mobileNavigationTrigger}
+          onOpenNavigation={() => setOpenMobile(true)}
+          onLogin={() => setAuth(true)}
+          onLogout={() => setLogout(true)}
+          onFeature={setFeature}
+        />
         {isMobile && <Navigation screen={screen} mobile />}
         <main id="main-content" className={cn(!fullBleed && "workspace-page")}>
           {children}

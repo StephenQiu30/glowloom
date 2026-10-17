@@ -96,6 +96,12 @@ it("R6 主导航与画布入口指向真实路由，支持收起和展开", asyn
   expect(screen.getByRole("button", { name: "展开导航" })).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "展开导航" }));
   expect(screen.queryByRole("button", { name: "展开导航" })).toBeNull();
+  const header = screen.getByRole("banner", { name: "页面顶栏" });
+  expect(within(header).getByText("创作")).toBeTruthy();
+  expect(within(header).getByRole("button", { name: "账号菜单" })).toBeTruthy();
+  expect(screen.queryByRole("combobox", { name: "当前创作空间" })).toBeNull();
+  expect(screen.queryByRole("link", { name: "团队" })).toBeNull();
+  expect(screen.queryByRole("link", { name: "邀请与授权" })).toBeNull();
 });
 
 it("会话失效时不渲染工作台内容", async () => {
@@ -206,4 +212,33 @@ it("游客从抽屉打开登录弹窗，关闭后返回移动导航入口", asyn
       screen.getByRole("button", { name: "打开导航" }),
     ),
   );
+});
+
+it("手机顶栏将积分和会员放进菜单，保留通知、账号与原可用性反馈", async () => {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn().mockImplementation(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+  render(
+    <ProductShell screen="subjects">
+      <h1>主体内容</h1>
+    </ProductShell>,
+  );
+  const header = await screen.findByRole("banner", { name: "页面顶栏" });
+  expect(within(header).getByText("主体")).toBeTruthy();
+  expect(within(header).getByRole("button", { name: "消息中心" })).toBeTruthy();
+  expect(within(header).queryByRole("button", { name: "积分商城" })).toBeNull();
+  expect(within(header).getByRole("button", { name: "账号菜单" })).toBeTruthy();
+  const more = within(header).getByRole("button", { name: "更多操作" });
+  fireEvent.keyDown(more, { key: "ArrowDown" });
+  const item = await screen.findByRole("menuitem", { name: "积分商城" });
+  expect(screen.getByRole("menuitem", { name: "开通会员" })).toBeTruthy();
+  fireEvent.click(item);
+  expect(
+    await screen.findByRole("dialog", { name: "积分商城暂未开放" }),
+  ).toBeTruthy();
 });
