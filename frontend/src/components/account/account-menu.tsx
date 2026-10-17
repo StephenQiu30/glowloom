@@ -12,7 +12,10 @@ import {
 } from "lucide-react";
 import { AccountAvatar } from "./account-avatar";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { ThemeMenuItems } from "@/components/controls/theme-controls";
+import {
+  ThemeMenuItems,
+  useThemeMenuSelection,
+} from "@/components/controls/theme-controls";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -38,6 +41,7 @@ export function AccountMenu({
   onLogout: () => void;
 }) {
   const isMobile = useIsMobile();
+  const themeSelection = useThemeMenuSelection();
   const name = actor.display_name.trim() || "创作者";
   const accountName = actor.email.trim();
   const isAdmin = actor.platform_role === "platform_admin";
@@ -112,7 +116,7 @@ export function AccountMenu({
           )}
           {isMobile ? (
             <DropdownMenuGroup className="*:data-[slot=dropdown-menu-radio-group]:*:min-h-11">
-              <ThemeMenuItems />
+              <ThemeMenuItems selection={themeSelection} />
             </DropdownMenuGroup>
           ) : (
             <DropdownMenuSub>
@@ -122,7 +126,7 @@ export function AccountMenu({
               </DropdownMenuSubTrigger>
               <DropdownMenuPortal>
                 <DropdownMenuSubContent collisionPadding={16}>
-                  <ThemeMenuItems />
+                  <ThemeMenuItems selection={themeSelection} />
                 </DropdownMenuSubContent>
               </DropdownMenuPortal>
             </DropdownMenuSub>

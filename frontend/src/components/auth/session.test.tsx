@@ -7,6 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { StrictMode } from "react";
+import { ThemeProvider, useTheme } from "next-themes";
 import { afterEach, expect, it, vi } from "vitest";
 import { SessionGate } from "./session";
 import { request, RequestError } from "@/lib/request";
@@ -152,6 +153,45 @@ const validSession = {
   last_active_at: new Date().toISOString(),
   absolute_expires_at: new Date(Date.now() + 86400000).toISOString(),
 };
+function LocalThemeChange() {
+  const { setTheme } = useTheme();
+  return <button onClick={() => setTheme("dark")}>切换测试主题</button>;
+}
+it("主题 setter 随选择变化时不重新读取并覆盖账号默认主题", async () => {
+  localStorage.clear();
+  vi.stubGlobal("matchMedia", (media: string) => ({
+    matches: false,
+    media,
+    addListener() {},
+    removeListener() {},
+  }));
+  vi.mocked(request).mockImplementation(async (url) =>
+    url === "/api/session"
+      ? validSession
+      : { theme: "system", prompt_suffix: "", revision: "1" },
+  );
+  const view = render(
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <SessionGate>
+        <LocalThemeChange />
+      </SessionGate>
+    </ThemeProvider>,
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "切换测试主题" }));
+  await waitFor(() =>
+    expect(document.documentElement.classList.contains("dark")).toBe(true),
+  );
+  expect(
+    vi
+      .mocked(request)
+      .mock.calls.filter(([url]) => url === "/api/me/preferences"),
+  ).toHaveLength(1);
+  view.unmount();
+  vi.unstubAllGlobals();
+  localStorage.clear();
+  document.documentElement.removeAttribute("class");
+  document.documentElement.removeAttribute("style");
+});
 it.each(["authenticated", "guest"])(
   "toast retry keeps the page mounted while checking, then reaches %s",
   async (terminal) => {

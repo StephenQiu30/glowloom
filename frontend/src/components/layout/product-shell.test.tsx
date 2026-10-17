@@ -197,6 +197,7 @@ it("游客从抽屉打开登录弹窗，关闭后返回移动导航入口", asyn
       <h1>游客首页</h1>
     </ProductShell>,
   );
+  expect(await screen.findByRole("button", { name: "切换主题" })).toBeTruthy();
   fireEvent.click(await screen.findByRole("button", { name: "打开导航" }));
   fireEvent.click(
     within(screen.getByRole("dialog", { name: "导航" })).getByRole("button", {
@@ -214,7 +215,7 @@ it("游客从抽屉打开登录弹窗，关闭后返回移动导航入口", asyn
   );
 });
 
-it("手机顶栏将积分和会员放进菜单，保留通知、账号与原可用性反馈", async () => {
+it("手机顶栏提供独立主题入口，移除积分会员并保留通知反馈", async () => {
   vi.stubGlobal(
     "matchMedia",
     vi.fn().mockImplementation(() => ({
@@ -233,12 +234,11 @@ it("手机顶栏将积分和会员放进菜单，保留通知、账号与原可�
   expect(within(header).getByRole("button", { name: "消息中心" })).toBeTruthy();
   expect(within(header).queryByRole("button", { name: "积分商城" })).toBeNull();
   expect(within(header).getByRole("button", { name: "账号菜单" })).toBeTruthy();
-  const more = within(header).getByRole("button", { name: "更多操作" });
-  fireEvent.keyDown(more, { key: "ArrowDown" });
-  const item = await screen.findByRole("menuitem", { name: "积分商城" });
-  expect(screen.getByRole("menuitem", { name: "开通会员" })).toBeTruthy();
-  fireEvent.click(item);
+  expect(within(header).getByRole("button", { name: "切换主题" })).toBeTruthy();
+  expect(within(header).queryByRole("button", { name: "更多操作" })).toBeNull();
+  expect(within(header).queryByText("开通会员")).toBeNull();
+  fireEvent.click(within(header).getByRole("button", { name: "消息中心" }));
   expect(
-    await screen.findByRole("dialog", { name: "积分商城暂未开放" }),
+    await screen.findByRole("dialog", { name: "消息中心暂未开放" }),
   ).toBeTruthy();
 });

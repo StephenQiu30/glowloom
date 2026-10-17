@@ -5,6 +5,7 @@ import {
   useContext,
   useId,
   useEffect,
+  useEffectEvent,
   useState,
   useRef,
   type ReactNode,
@@ -128,9 +129,10 @@ export function SessionGate({
     [allowGuest, router, noticeID],
   );
   const accountID = session?.actor.id;
+  const restoreTheme = useEffectEvent((value: string) => setTheme(value));
   useEffect(() => {
     if (!accountID) return;
-    setTheme("system");
+    restoreTheme("system");
     const controller = new AbortController();
     getMyPreferences({ signal: controller.signal })
       .then((value) => {
@@ -138,11 +140,11 @@ export function SessionGate({
           !controller.signal.aborted &&
           ["light", "dark", "system"].includes(value.theme)
         )
-          setTheme(value.theme);
+          restoreTheme(value.theme);
       })
       .catch(() => {});
     return () => controller.abort();
-  }, [accountID, setTheme]);
+  }, [accountID]);
   if (!allowGuest && error)
     return (
       <ApplicationState title={error} description="请稍后重试。">
