@@ -3,11 +3,10 @@ import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { FieldSet } from "@/components/ui/field";
 import Link from "next/link";
 import { cn } from "cn";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Upload,
-  Search,
   Trash2,
   Heart,
   FolderPlus,
@@ -17,16 +16,11 @@ import {
   ArrowLeft,
   CheckSquare,
 } from "lucide-react";
-import { ProductShell } from "@/components/layout/product-shell";
+import { BasicLayout } from "@/components/layout/basic-layout";
 import { useSession } from "@/components/auth/session";
 import { RequestError } from "@/lib/request";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  InputGroup,
-  InputGroupInput,
-  InputGroupAddon,
-} from "@/components/ui/input-group";
 import {
   Card,
   CardContent,
@@ -95,14 +89,12 @@ function Library({
   onFolder,
   refresh,
   onRefresh,
-  searchForm,
   onLock,
 }: {
   filter: Filter;
   onFolder: (id: string) => void;
   refresh: number;
   onRefresh: () => void;
-  searchForm: ReactNode;
   onLock: (locked: boolean) => void;
 }) {
   const session = useSession();
@@ -229,7 +221,6 @@ function Library({
   return (
     <>
       <div className="asset-actions">
-        {searchForm}
         <Button
           variant="ghost"
           disabled={saving || !!pendingOperation}
@@ -600,7 +591,7 @@ function Library({
     </>
   );
 }
-function AssetLibrary() {
+export function AssetsPage() {
   const [filter, setFilter] = useState<Filter>({
     kind: "image",
     search: "",
@@ -614,7 +605,16 @@ function AssetLibrary() {
   const [refresh, setRefresh] = useState(0);
   const [locked, setLocked] = useState(false);
   return (
-    <>
+    <BasicLayout
+      screen="assets"
+      search={{
+        value: search,
+        onValueChange: setSearch,
+        onSearch: (value) => setFilter((f) => ({ ...f, search: value })),
+        label: "搜索资产",
+        disabled: locked,
+      }}
+    >
       <nav className="workspace-tabs asset-tabs">
         <Link href="/assets" aria-current="page">
           生成历史
@@ -687,34 +687,6 @@ function AssetLibrary() {
         key={JSON.stringify(filter)}
         filter={filter}
         onLock={setLocked}
-        searchForm={
-          <form
-            className="asset-search-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              setFilter((f) => ({ ...f, search: search.trim() }));
-            }}
-          >
-            <InputGroup>
-              <InputGroupAddon>
-                <Search />
-              </InputGroupAddon>
-              <InputGroupInput
-                disabled={locked}
-                aria-label="搜索资产"
-                placeholder="搜索资产"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                maxLength={512}
-              />
-              <InputGroupAddon align="inline-end">
-                <Button disabled={locked} type="submit" variant="ghost">
-                  搜索
-                </Button>
-              </InputGroupAddon>
-            </InputGroup>
-          </form>
-        }
         onFolder={(folder) => setFilter((f) => ({ ...f, folder }))}
         refresh={refresh}
         onRefresh={() => setRefresh((n) => n + 1)}
@@ -726,13 +698,6 @@ function AssetLibrary() {
         />
       )}
       <GenerationComposer />
-    </>
-  );
-}
-export function AssetsPage() {
-  return (
-    <ProductShell screen="assets">
-      <AssetLibrary />
-    </ProductShell>
+    </BasicLayout>
   );
 }

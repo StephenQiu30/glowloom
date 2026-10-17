@@ -1,11 +1,8 @@
-import { ProductShell } from "@/components/layout/product-shell";
-import { InspirationGallery } from "@/components/inspiration/gallery";
+import { ExplorePage } from "./_components/explore-page";
 export const metadata = { title: "探索 · 织光" };
-export default function Page() {
+export default async function Page({ searchParams }: PageProps<"/explore">) {
+  const params = await searchParams;
   return (
-    <ProductShell screen="explore" allowGuest>
-      <h1 className="sr-only">探索创作灵感</h1>
-      <InspirationGallery showUpdates={false} />
-    </ProductShell>
+    <ExplorePage initialQuery={typeof params.q === "string" ? params.q : ""} />
   );
 }

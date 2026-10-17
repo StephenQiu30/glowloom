@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { ProductShell } from "@/components/layout/product-shell";
+import { BasicLayout } from "@/components/layout/basic-layout";
 import { ProjectPicker } from "@/components/projects/project-picker";
 import { type Project } from "@/components/projects/project";
 import { SubjectList } from "@/components/subjects/subject-list";
@@ -18,11 +18,23 @@ import {
   EmptyDescription,
 } from "@/components/ui/empty";
 export function SubjectsPage() {
+  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
   const [project, setProject] = useState<Project | null>(null),
     [kind, setKind] = useState<API.Kind>("character"),
     [generation, setGeneration] = useState<GenerationSeed | null>(null);
   return (
-    <ProductShell screen="subjects">
+    <BasicLayout
+      screen="subjects"
+      search={{
+        value: search,
+        onValueChange: setSearch,
+        onSearch: setQuery,
+        label: "搜索主体",
+        placeholder: "搜索已加载主体",
+        disabled: !project,
+      }}
+    >
       <div className="flow-page-heading subjects-heading">
         <div>
           <h1>主体</h1>
@@ -33,6 +45,7 @@ export function SubjectsPage() {
       {project ? (
         <SubjectList
           key={project.id + kind}
+          searchQuery={query}
           projectID={project.id}
           kind={kind}
           filters={
@@ -78,6 +91,6 @@ export function SubjectsPage() {
           onClose={() => setGeneration(null)}
         />
       )}
-    </ProductShell>
+    </BasicLayout>
   );
 }

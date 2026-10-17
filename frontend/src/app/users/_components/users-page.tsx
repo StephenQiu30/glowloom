@@ -22,7 +22,7 @@ import {
   NativeSelectOption,
 } from "@/components/ui/native-select";
 import { useEffect, useRef, useState } from "react";
-import { ProductShell } from "@/components/layout/product-shell";
+import { BasicLayout } from "@/components/layout/basic-layout";
 import { listPlatformUsers, getPlatformUser } from "@/api/identity";
 import { RequestError } from "@/lib/request";
 import { authErrorMessage } from "@/components/auth/contracts";
@@ -426,8 +426,8 @@ export function UserDirectory() {
 }
 export function UsersPage() {
   return (
-    <ProductShell screen="users">
+    <BasicLayout screen="users">
       <UserDirectory />
-    </ProductShell>
+    </BasicLayout>
   );
 }

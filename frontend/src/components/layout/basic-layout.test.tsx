@@ -8,7 +8,7 @@ import {
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { ProductShell } from "./product-shell";
+import { BasicLayout } from "./basic-layout";
 import { request, RequestError } from "@/lib/request";
 vi.mock("@/lib/request", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/request")>();
@@ -79,9 +79,9 @@ beforeEach(() => {
 });
 it("R6 主导航与画布入口指向真实路由，支持收起和展开", async () => {
   render(
-    <ProductShell screen="home">
+    <BasicLayout screen="home">
       <h1>创作工作区</h1>
-    </ProductShell>,
+    </BasicLayout>,
   );
   expect(
     (await screen.findByRole("link", { name: "创作" })).getAttribute("href"),
@@ -109,9 +109,9 @@ it("会话失效时不渲染工作台内容", async () => {
     new RequestError("session_invalid", 401),
   );
   render(
-    <ProductShell screen="home">
+    <BasicLayout screen="home">
       <p>私有工作台内容</p>
-    </ProductShell>,
+    </BasicLayout>,
   );
   const { waitFor } = await import("@testing-library/react");
   await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/login"));
@@ -120,9 +120,9 @@ it("会话失效时不渲染工作台内容", async () => {
 
 it("收起后保留可访问导航和当前页，重新挂载保持偏好", async () => {
   const view = render(
-    <ProductShell screen="explore">
+    <BasicLayout screen="explore">
       <h1>探索内容</h1>
-    </ProductShell>,
+    </BasicLayout>,
   );
   fireEvent.click(await screen.findByRole("button", { name: "收起导航" }));
   expect(
@@ -134,18 +134,18 @@ it("收起后保留可访问导航和当前页，重新挂载保持偏好", asyn
   expect(document.querySelector('[data-collapsible="icon"]')).toBeTruthy();
   view.unmount();
   render(
-    <ProductShell screen="home">
+    <BasicLayout screen="home">
       <h1>首页内容</h1>
-    </ProductShell>,
+    </BasicLayout>,
   );
   expect(await screen.findByRole("button", { name: "展开导航" })).toBeTruthy();
 });
 
 it("快捷键切换导航，编辑输入时不抢占快捷键", async () => {
   render(
-    <ProductShell screen="home">
+    <BasicLayout screen="home">
       <input aria-label="提示词" />
-    </ProductShell>,
+    </BasicLayout>,
   );
   await screen.findByRole("button", { name: "收起导航" });
   fireEvent.keyDown(screen.getByRole("textbox", { name: "提示词" }), {
@@ -168,9 +168,9 @@ it("手机抽屉保持完整导航，同路由点击关闭抽屉且保留桌面�
     })),
   );
   render(
-    <ProductShell screen="home">
+    <BasicLayout screen="home">
       <h1>手机首页</h1>
-    </ProductShell>,
+    </BasicLayout>,
   );
   fireEvent.click(await screen.findByRole("button", { name: "打开导航" }));
   const dialog = screen.getByRole("dialog", { name: "导航" });
@@ -193,9 +193,9 @@ it("游客从抽屉打开登录弹窗，关闭后返回移动导航入口", asyn
     new RequestError("session_invalid", 401),
   );
   render(
-    <ProductShell screen="home" allowGuest>
+    <BasicLayout screen="home" allowGuest>
       <h1>游客首页</h1>
-    </ProductShell>,
+    </BasicLayout>,
   );
   expect(await screen.findByRole("button", { name: "切换主题" })).toBeTruthy();
   fireEvent.click(await screen.findByRole("button", { name: "打开导航" }));
@@ -225,9 +225,9 @@ it("手机顶栏提供独立主题入口，移除积分会员并保留通知反�
     })),
   );
   render(
-    <ProductShell screen="subjects">
+    <BasicLayout screen="subjects">
       <h1>主体内容</h1>
-    </ProductShell>,
+    </BasicLayout>,
   );
   const header = await screen.findByRole("banner", { name: "页面顶栏" });
   expect(within(header).getByText("主体")).toBeTruthy();

@@ -8,9 +8,23 @@ const api = vi.hoisted(() => ({
   push: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: api.push }) }));
-vi.mock("@/components/layout/product-shell", () => ({
-  ProductShell: ({ children }: { children: React.ReactNode }) => children,
-}));
+vi.mock("@/components/layout/basic-layout", async () => {
+  const { ProductSearch } = await import("@/components/layout/product-search");
+  return {
+    BasicLayout: ({
+      children,
+      search,
+    }: {
+      children: React.ReactNode;
+      search: import("@/components/layout/product-search").PageSearch;
+    }) => (
+      <>
+        <ProductSearch search={search} />
+        {children}
+      </>
+    ),
+  };
+});
 vi.mock("@/api/projects", () => ({
   createProject: api.create,
   listProjects: api.list,
@@ -25,10 +39,22 @@ const project = {
   update_time: "2026-10-09T00:00:00Z",
 };
 beforeEach(() => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  Element.prototype.scrollIntoView = vi.fn();
   vi.clearAllMocks();
   api.list.mockResolvedValue({ items: [], next_cursor: null });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 it("丢回执重试保持请求键与输入，只在真实回执后跳转", async () => {
   api.create
     .mockRejectedValueOnce(new Error("lost receipt"))
@@ -82,10 +108,11 @@ it("列表加载失败不显示示例项目，名称搜索传到服务端", asyn
   render(<ProjectsPage />);
   await findFeedback();
   expect(screen.queryByText("雾港来信")).toBeNull();
-  fireEvent.change(screen.getByLabelText("搜索画布"), {
+  fireEvent.click(screen.getByRole("button", { name: "搜索画布" }));
+  fireEvent.change(await screen.findByRole("combobox", { name: "搜索画布" }), {
     target: { value: "真实" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+  fireEvent.click(screen.getByRole("option", { name: /搜索画布/ }));
   await screen.findByText("真实项目");
   expect(api.list.mock.calls.at(-1)?.[0]).toEqual({ q: "真实", limit: 50 });
   expect(

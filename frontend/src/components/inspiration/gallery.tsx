@@ -167,12 +167,15 @@ function InspirationPreview({
 }
 export function InspirationGallery({
   showUpdates = true,
+  searchQuery,
 }: {
   showUpdates?: boolean;
+  searchQuery?: string;
 }) {
   const [category, setCategory] = useState(showUpdates ? "精选" : "广告营销");
   const [scene, setScene] = useState("品牌广告");
-  const [query, setQuery] = useState("");
+  const [localQuery, setQuery] = useState("");
+  const query = searchQuery ?? localQuery;
   const [publish, setPublish] = useState(false);
   const matches = showUpdates
     ? homeWorks.filter(
@@ -247,7 +250,7 @@ export function InspirationGallery({
             ))}
           </TabsList>
         </Tabs>
-        {showUpdates && (
+        {showUpdates && searchQuery === undefined && (
           <InputGroup className="gallery-search">
             <InputGroupAddon>
               <Search />
@@ -274,17 +277,19 @@ export function InspirationGallery({
             <ToggleGroupItem value="品牌广告">品牌广告</ToggleGroupItem>
             <ToggleGroupItem value="社媒营销">社媒营销</ToggleGroupItem>
           </ToggleGroup>
-          <InputGroup className="explore-search">
-            <InputGroupAddon>
-              <Search />
-            </InputGroupAddon>
-            <InputGroupInput
-              aria-label="搜索作品"
-              placeholder="搜索作品"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </InputGroup>
+          {searchQuery === undefined ? (
+            <InputGroup className="explore-search">
+              <InputGroupAddon>
+                <Search />
+              </InputGroupAddon>
+              <InputGroupInput
+                aria-label="搜索作品"
+                placeholder="搜索作品"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </InputGroup>
+          ) : null}
           <Button size="lg" onClick={() => setPublish(true)}>
             发布短片
           </Button>

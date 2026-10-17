@@ -47,6 +47,7 @@ export function SubjectList({
   selectedID,
   onGenerate,
   filters,
+  searchQuery,
 }: {
   projectID: string;
   kind?: API.Kind;
@@ -54,16 +55,18 @@ export function SubjectList({
   selectedID?: string;
   onGenerate?: (s: Subject) => void;
   filters?: ReactNode;
+  searchQuery?: string;
 }) {
   const [items, setItems] = useState<Subject[]>([]),
     [cursor, setCursor] = useState<string | undefined>(),
-    [query, setQuery] = useState(""),
+    [localQuery, setQuery] = useState(""),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(true),
     [retry, setRetry] = useState(0),
     [create, setCreate] = useState(false),
     [selected, setSelected] = useState<Subject | null>(null),
     [deleted, setDeleted] = useState(false);
+  const query = searchQuery ?? localQuery;
   const read = useCallback(
     async (next?: string, signal?: AbortSignal) => {
       const p = await listBibleEntries(
@@ -145,18 +148,20 @@ export function SubjectList({
   return (
     <>
       <div className="subject-toolbar">
-        <InputGroup className="subject-search">
-          <InputGroupAddon>
-            <Search />
-          </InputGroupAddon>
-          <InputGroupInput
-            aria-label="搜索主体"
-            placeholder="搜索已加载主体"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            maxLength={100}
-          />
-        </InputGroup>
+        {searchQuery === undefined ? (
+          <InputGroup className="subject-search">
+            <InputGroupAddon>
+              <Search />
+            </InputGroupAddon>
+            <InputGroupInput
+              aria-label="搜索主体"
+              placeholder="搜索已加载主体"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              maxLength={100}
+            />
+          </InputGroup>
+        ) : null}
         {filters}
         <Button
           variant={deleted ? "outline" : "secondary"}

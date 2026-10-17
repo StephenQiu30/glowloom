@@ -14,10 +14,7 @@ import {
   X,
   Search,
 } from "lucide-react";
-import {
-  ProductShell,
-  useLoginDialog,
-} from "@/components/layout/product-shell";
+import { BasicLayout, useLoginDialog } from "@/components/layout/basic-layout";
 import { useOptionalSession } from "@/components/auth/session";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -85,7 +82,7 @@ const skills = [
     badge: "Hot",
   },
 ];
-function HomeContent() {
+function HomeContent({ searchQuery }: { searchQuery: string }) {
   const session = useOptionalSession();
   const login = useLoginDialog();
   const [mode, setMode] = useState("generate");
@@ -392,7 +389,7 @@ function HomeContent() {
           </div>
         )}
       </section>
-      <InspirationGallery />
+      <InspirationGallery searchQuery={searchQuery} />
       {generation && (
         <GenerationDialog
           seed={generation}
@@ -404,9 +401,21 @@ function HomeContent() {
   );
 }
 export function HomePage() {
+  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
   return (
-    <ProductShell screen="home" fullBleed allowGuest>
-      <HomeContent />
-    </ProductShell>
+    <BasicLayout
+      screen="home"
+      fullBleed
+      allowGuest
+      search={{
+        value: search,
+        onValueChange: setSearch,
+        onSearch: setQuery,
+        label: "搜索灵感",
+      }}
+    >
+      <HomeContent searchQuery={query} />
+    </BasicLayout>
   );
 }

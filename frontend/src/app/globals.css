@@ -205,6 +205,8 @@ button:not(:disabled),
   flex: 1;
 }
 .product-header {
+  border: 0;
+  box-shadow: none;
   height: 64px;
   padding: 0 24px;
   display: flex;
@@ -395,6 +397,12 @@ button:not(:disabled),
   flex-shrink: 0;
   align-items: center;
   gap: 8px;
+}
+.product-header-search {
+  flex: 0 1 22.5rem;
+  min-width: 0;
+  height: 36px;
+  justify-content: flex-start;
 }
 .workspace-page {
   padding: 24px 40px 40px;
@@ -776,6 +784,9 @@ button:not(:disabled),
   .product-header .brand-mark {
     width: 24px;
     height: 24px;
+  }
+  .product-header-location {
+    gap: 4px;
   }
   .mobile-navigation-trigger,
   [data-mobile="true"] .sidebar-toggle {

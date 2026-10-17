@@ -12,10 +12,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { screens, type Screen } from "./routes";
+import { ProductSearch, type PageSearch } from "./product-search";
 
 /** Figma ProductHeader 620:24416; shared by ordinary product pages. */
 export function ProductHeader({
   screen,
+  search,
   actor,
   isMobile,
   navigationOpen,
@@ -26,6 +28,7 @@ export function ProductHeader({
   onFeature,
 }: {
   screen: Screen;
+  search?: PageSearch;
   actor?: API.EmailSessionView["actor"];
   isMobile: boolean;
   navigationOpen: boolean;
@@ -56,10 +59,14 @@ export function ProductHeader({
             <Brand />
           </>
         ) : null}
-        <span className="truncate text-sm font-medium" title={title}>
+        <span
+          className="truncate text-sm font-medium max-[359px]:sr-only"
+          title={title}
+        >
           {title}
         </span>
       </div>
+      <ProductSearch search={search} isMobile={isMobile} />
       <div className="product-header-actions">
         {actor ? (
           <Tooltip>

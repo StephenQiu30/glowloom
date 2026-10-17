@@ -4,8 +4,8 @@ import { FieldSet, Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { useRef, useState, useId } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Search } from "lucide-react";
-import { ProductShell } from "@/components/layout/product-shell";
+import { Plus } from "lucide-react";
+import { BasicLayout } from "@/components/layout/basic-layout";
 import { createProject } from "@/api/projects";
 import {
   canvasHref,
@@ -71,7 +71,15 @@ export function ProjectsPage() {
     }
   }
   return (
-    <ProductShell screen="projects">
+    <BasicLayout
+      screen="projects"
+      search={{
+        value: search,
+        onValueChange: setSearch,
+        onSearch: setQuery,
+        label: "搜索画布",
+      }}
+    >
       <nav className="workspace-tabs">
         <Link href="/assets">生成历史</Link>
         <Link href="/projects" aria-current="page">
@@ -79,24 +87,6 @@ export function ProjectsPage() {
         </Link>
       </nav>
       <div className="workspace-toolbar">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            setQuery(search.trim());
-          }}
-          className="search-form"
-        >
-          <Search size={16} />
-          <Input
-            aria-label="搜索画布"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜索画布"
-          />
-          <Button variant="ghost" type="submit">
-            搜索
-          </Button>
-        </form>
         <span className="text-xs text-muted-foreground">最近修改</span>
         <Button className="ml-auto" onClick={() => setOpen(true)}>
           <Plus />
@@ -177,6 +167,6 @@ export function ProjectsPage() {
           </form>
         </DialogContent>
       </Dialog>
-    </ProductShell>
+    </BasicLayout>
   );
 }

@@ -12,7 +12,7 @@ vi.mock("@/lib/request", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/request")>();
   return { ...actual, request: vi.fn() };
 });
-import { ProductShell } from "@/components/layout/product-shell";
+import { BasicLayout } from "@/components/layout/basic-layout";
 import { TooltipProvider } from "@/components/ui/tooltip";
 const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
@@ -81,9 +81,9 @@ it("会话服务不可用时仍可浏览公共灵感，但资产页面不会因 
     new RequestError("session_invalid", 401),
   );
   render(
-    <ProductShell screen="assets" allowGuest>
+    <BasicLayout screen="assets" allowGuest>
       <p>私有资产数据</p>
-    </ProductShell>,
+    </BasicLayout>,
   );
   await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/login"));
   expect(screen.queryByText("私有资产数据")).toBeNull();

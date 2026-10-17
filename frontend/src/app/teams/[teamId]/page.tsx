@@ -1,4 +1,4 @@
-import { ProductShell } from "@/components/layout/product-shell";
+import { BasicLayout } from "@/components/layout/basic-layout";
 import { TeamPage } from "./_components/team-page";
 export const metadata = { title: "团队管理" };
 export default async function Page({
@@ -8,8 +8,8 @@ export default async function Page({
 }) {
   const { teamId } = await params;
   return (
-    <ProductShell screen="teams">
+    <BasicLayout screen="teams">
       <TeamPage id={teamId} />
-    </ProductShell>
+    </BasicLayout>
   );
 }

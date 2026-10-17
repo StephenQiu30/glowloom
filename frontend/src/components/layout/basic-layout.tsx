@@ -28,10 +28,15 @@ import {
   DialogFooter,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
+import {
+  SidebarInset,
+  SidebarProvider,
+  useSidebar,
+} from "@/components/ui/sidebar";
 import { Navigation, ProductNavigation } from "./product-navigation";
 import type { Screen } from "./routes";
 import { ProductHeader } from "./product-header";
+import type { PageSearch } from "./product-search";
 const adminScreens = [
   "users",
   "models",
@@ -66,11 +71,13 @@ function Shell({
   children,
   fullBleed,
   initialAuthMode,
+  search,
 }: {
   screen: Screen;
   children: ReactNode;
   fullBleed?: boolean;
   initialAuthMode?: AuthMode;
+  search?: PageSearch;
 }) {
   const session = useOptionalSession();
   const updateSession = useSessionUpdate();
@@ -108,9 +115,10 @@ function Shell({
           if (!auth) mobileNavigationTrigger.current?.focus();
         }}
       />
-      <div className="product-content">
+      <SidebarInset className="product-content">
         <ProductHeader
           screen={screen}
+          search={search}
           actor={session?.actor}
           isMobile={isMobile}
           navigationOpen={openMobile}
@@ -121,10 +129,10 @@ function Shell({
           onFeature={setFeature}
         />
         {isMobile && <Navigation screen={screen} mobile />}
-        <main id="main-content" className={cn(!fullBleed && "workspace-page")}>
+        <div id="main-content" className={cn(!fullBleed && "workspace-page")}>
           {children}
-        </main>
-      </div>
+        </div>
+      </SidebarInset>
       <UnavailableDialog feature={feature} onClose={() => setFeature(null)} />
       <AuthDialog
         fallbackFocusRef={mobileNavigationTrigger}
@@ -169,12 +177,13 @@ function Shell({
     </LoginContext.Provider>
   );
 }
-export function ProductShell({
+export function BasicLayout({
   screen,
   children,
   fullBleed = false,
   allowGuest = false,
   initialAuthMode,
+  search,
 }: {
   screen: Screen;
   children: ReactNode;
@@ -182,6 +191,7 @@ export function ProductShell({
   contextual?: boolean;
   allowGuest?: boolean;
   initialAuthMode?: AuthMode;
+  search?: PageSearch;
 }) {
   const sidebarOpen = useSyncExternalStore(
     subscribeSidebarPreference,
@@ -212,6 +222,7 @@ export function ProductShell({
             screen={screen}
             fullBleed={fullBleed}
             initialAuthMode={initialAuthMode}
+            search={search}
           >
             {children}
           </Shell>
