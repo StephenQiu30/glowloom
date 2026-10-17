@@ -353,7 +353,7 @@ func (a *Auth) CompleteRegistration(ctx context.Context, input CompleteRegistrat
 			return err
 		}
 		id = uuid.New()
-		u := domain.User{ID: id, OrgID: uuid.New(), LoginName: id.String(), Email: c.EmailKey, EmailVerifiedAt: now, EmailVersion: 1, DisplayName: name, Role: domain.RoleProducer, PlatformRole: "creator", PlatformEpoch: 1, Status: domain.StatusActive, PasswordHash: hash, PasswordChangedAt: now, SessionEpoch: 1, Revision: 1, TermsVersion: input.TermsVersion, TermsAcceptedAt: now, Theme: "system"}
+		u := domain.User{ID: id, OrgID: uuid.New(), LoginName: id.String(), Email: c.EmailKey, EmailVerifiedAt: now, EmailVersion: 1, DisplayName: name, Role: domain.RoleProducer, PlatformRole: "creator", PlatformEpoch: 1, Status: domain.StatusActive, PasswordHash: hash, PasswordChangedAt: now, SessionEpoch: 1, Revision: 1, TermsVersion: input.TermsVersion, TermsAcceptedAt: now, Theme: domain.DefaultTheme}
 		if err := tx.CreatePersonalAccount(u); err != nil {
 			return err
 		}

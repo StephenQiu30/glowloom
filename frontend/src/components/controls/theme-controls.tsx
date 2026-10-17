@@ -124,7 +124,7 @@ export function ThemeToggle() {
   const selection = useThemeMenuSelection();
   const { theme, hydrated, pending } = selection;
   const Icon =
-    themeOptions.find((option) => option.value === theme)?.icon ?? Monitor;
+    themeOptions.find((option) => option.value === theme)?.icon ?? Moon;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

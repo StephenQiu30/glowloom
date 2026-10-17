@@ -157,6 +157,83 @@ function LocalThemeChange() {
   const { setTheme } = useTheme();
   return <button onClick={() => setTheme("dark")}>切换测试主题</button>;
 }
+function SavedThemeState() {
+  const { theme } = useTheme();
+  return <p>主题偏好：{theme}</p>;
+}
+it.each(["light", "dark", "system"])(
+  "默认深色仍恢复已保存的 %s 偏好",
+  async (theme) => {
+    localStorage.clear();
+    vi.stubGlobal("matchMedia", (media: string) => ({
+      matches: false,
+      media,
+      addListener() {},
+      removeListener() {},
+    }));
+    vi.mocked(request).mockImplementation(async (url) =>
+      url === "/api/session"
+        ? validSession
+        : { theme, prompt_suffix: "", revision: "2" },
+    );
+    const view = render(
+      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+        <SessionGate>
+          <SavedThemeState />
+        </SessionGate>
+      </ThemeProvider>,
+    );
+    await screen.findByText(`主题偏好：${theme}`);
+    await waitFor(() =>
+      expect(
+        document.documentElement.classList.contains(
+          theme === "dark" ? "dark" : "light",
+        ),
+      ).toBe(true),
+    );
+    view.unmount();
+    vi.unstubAllGlobals();
+    localStorage.clear();
+    document.documentElement.removeAttribute("class");
+    document.documentElement.removeAttribute("style");
+  },
+);
+it("账号偏好读取失败时保持默认深色，不被浅色系统外观覆盖", async () => {
+  localStorage.clear();
+  vi.stubGlobal("matchMedia", (media: string) => ({
+    matches: false,
+    media,
+    addListener() {},
+    removeListener() {},
+  }));
+  let rejectPreferences!: (error: Error) => void;
+  const pendingPreferences = new Promise((_, reject) => {
+    rejectPreferences = reject;
+  });
+  vi.mocked(request).mockImplementation(async (url) => {
+    if (url === "/api/session") return validSession;
+    return pendingPreferences;
+  });
+  const view = render(
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+      <SessionGate>
+        <p>深色默认内容</p>
+      </SessionGate>
+    </ThemeProvider>,
+  );
+  await screen.findByText("深色默认内容");
+  await act(async () =>
+    rejectPreferences(new Error("preferences unavailable")),
+  );
+  await waitFor(() =>
+    expect(document.documentElement.classList.contains("dark")).toBe(true),
+  );
+  view.unmount();
+  vi.unstubAllGlobals();
+  localStorage.clear();
+  document.documentElement.removeAttribute("class");
+  document.documentElement.removeAttribute("style");
+});
 it("主题 setter 随选择变化时不重新读取并覆盖账号默认主题", async () => {
   localStorage.clear();
   vi.stubGlobal("matchMedia", (media: string) => ({

@@ -132,7 +132,7 @@ export function SessionGate({
   const restoreTheme = useEffectEvent((value: string) => setTheme(value));
   useEffect(() => {
     if (!accountID) return;
-    restoreTheme("system");
+    restoreTheme("dark");
     const controller = new AbortController();
     getMyPreferences({ signal: controller.signal })
       .then((value) => {

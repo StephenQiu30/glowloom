@@ -217,6 +217,10 @@ func TestRegistrationReplayAndBudget(t *testing.T) {
 	if err != nil || id == uuid.Nil {
 		t.Fatalf("complete: %v", err)
 	}
+	var theme string
+	if err := tx.Raw(`SELECT theme FROM identity."user" WHERE id=?`, id).Scan(&theme).Error; err != nil || theme != "dark" {
+		t.Fatalf("new account theme = %q, error = %v; want dark", theme, err)
+	}
 	var consent struct {
 		TermsVersion    string
 		TermsAcceptedAt time.Time

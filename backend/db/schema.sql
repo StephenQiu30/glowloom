@@ -4382,7 +4382,7 @@ ALTER TABLE identity."user"
     ADD COLUMN avatar_asset_id uuid REFERENCES media.media_asset(id) ON DELETE RESTRICT,
     ADD COLUMN terms_version text,
     ADD COLUMN terms_accepted_at timestamptz,
-    ADD COLUMN theme text NOT NULL DEFAULT 'system' CHECK (theme IN ('light','dark','system')),
+    ADD COLUMN theme text NOT NULL DEFAULT 'dark' CHECK (theme IN ('light','dark','system')),
     ADD COLUMN prompt_suffix text NOT NULL DEFAULT '' CHECK (char_length(prompt_suffix) <= 2000),
     ADD COLUMN deleted_at timestamptz,
     ADD CONSTRAINT user_email_key_check CHECK (email_key IS NULL OR (

@@ -13,6 +13,9 @@ const (
 	lockDuration = 15 * time.Minute
 )
 
+// DefaultTheme is used for newly created accounts without a saved preference.
+const DefaultTheme = "dark"
+
 var (
 	// ErrWeakPassword means a password violates the account policy.
 	ErrWeakPassword = errors.New("password must contain 8 to 128 Unicode characters")

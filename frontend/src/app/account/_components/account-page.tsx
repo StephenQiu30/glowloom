@@ -53,7 +53,7 @@ export function Settings() {
     null,
   );
   const [name, setName] = useState("");
-  const [theme, changeTheme] = useState("system");
+  const [theme, changeTheme] = useState("dark");
   const [suffix, setSuffix] = useState("");
   const [sessions, setSessions] = useState<API.SessionItemView[]>([]);
   const [loadingBlocks, setLoadingBlocks] = useState({

@@ -2,7 +2,7 @@
 
 ## 1. 当前视觉方向
 
-产品功能、页面布局与主要交互参考即梦；视觉使用 Vercel/Geist 方向的中性色体系。组件采用官方 shadcn/ui Radix Nova，功能图标为 Lucide，品牌为 React SVG icon，英文 Geist、中文 Noto Sans SC。支持浅色、深色与跟随系统，颜色通过语义 token 表达。
+产品功能、页面布局与主要交互参考即梦；视觉使用 Vercel/Geist 方向的中性色体系。组件采用官方 shadcn/ui Radix Nova，功能图标为 Lucide，品牌为 React SVG icon，英文 Geist、中文 Noto Sans SC。默认深色（dark），支持浅色、深色与跟随系统，保留用户已保存的选择，颜色通过语义 token 表达。
 
 现有设计参照为 Figma 文件 `uLqmeRWuQuzfrp9xOYg6FT`；首页、探索、资产、主体和画布节点分别为 `271:3620`、`435:17516`、`436:17767`、`437:18259`、`438:18566`，移动首页为 `407:17422`。上述为原有页面基线，头像与账号菜单的设计更新见下文。新用户系统字段以[用户需求](docs/requirement/01-用户系统需求.md)为准，设计稿需在实现批次同步。
 
