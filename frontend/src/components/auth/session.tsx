@@ -18,6 +18,8 @@ import {
   RequestError,
   setCSRFToken,
   subscribeSessionInvalidation,
+  getSessionGeneration,
+  notifySessionInvalidation,
 } from "@/lib/request";
 import { requireSession } from "./contracts";
 import { Button } from "@/components/ui/button";
@@ -65,12 +67,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [guest, setGuest] = useState(false);
   const updateVersion = useRef(0);
   const [publicUnavailable, setPublicUnavailable] = useState(false);
+  const prepareIdentity = useEffectEvent((next: API.EmailSessionView) => {
+    if (session && session.actor.id !== next.actor.id) {
+      setCSRFToken(null);
+      setSession(null);
+      void queuePrivateCleanup();
+    }
+  });
   useEffect(() => {
     const controller = new AbortController();
     const version = ++updateVersion.current;
     getSession({ signal: controller.signal })
       .then(requireSession)
       .then(async (s) => {
+        if (controller.signal.aborted || updateVersion.current !== version)
+          return;
+        prepareIdentity(s);
         await privateCleanup;
         if (controller.signal.aborted || updateVersion.current !== version)
           return;
@@ -216,6 +228,9 @@ export async function clearPrivateSession() {
 }
 export async function revokeSession(session: API.EmailSessionView) {
   await deleteSession({ id: session.session_id });
-  setCSRFToken(null);
-  await queuePrivateCleanup();
+  const generation = getSessionGeneration();
+  notifySessionInvalidation(generation);
+  // The root subscriber clears proof immediately and queues private draft cleanup.
+  if (generation === getSessionGeneration()) await clearPrivateSession();
+  else await privateCleanup;
 }

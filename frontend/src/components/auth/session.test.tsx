@@ -1,3 +1,4 @@
+import { branchJournal } from "@/components/generation/draft-save";
 import {
   cleanup,
   act,
@@ -9,7 +10,12 @@ import {
 import { StrictMode } from "react";
 import { ThemeProvider, useTheme } from "next-themes";
 import { afterEach, expect, it, vi } from "vitest";
-import { SessionGate, SessionProvider } from "./session";
+import {
+  SessionGate,
+  SessionProvider,
+  revokeSession,
+  useOptionalSession,
+} from "./session";
 import { request, RequestError } from "@/lib/request";
 vi.mock("@/lib/request", async (original) => ({
   ...(await original<typeof import("@/lib/request")>()),
@@ -449,4 +455,88 @@ it("a saved local light theme remains visible while account preferences are pend
   localStorage.clear();
   document.documentElement.removeAttribute("class");
   document.documentElement.removeAttribute("style");
+});
+
+function LogoutWithoutNavigation() {
+  const session = useOptionalSession();
+  return session ? (
+    <button onClick={() => void revokeSession(session)}>
+      退出当前测试账号
+    </button>
+  ) : (
+    <p>会话已清理</p>
+  );
+}
+it("explicit logout clears the persistent identity before another route check", async () => {
+  vi.mocked(request).mockImplementation(async (url) =>
+    url === "/api/session" ? validSession : {},
+  );
+  render(
+    <SessionProvider>
+      <SessionGate allowGuest>
+        <LogoutWithoutNavigation />
+      </SessionGate>
+    </SessionProvider>,
+  );
+  fireEvent.click(
+    await screen.findByRole("button", { name: "退出当前测试账号" }),
+  );
+  await screen.findByText("会话已清理");
+  expect(screen.queryByRole("button", { name: "退出当前测试账号" })).toBeNull();
+  expect(
+    vi.mocked(request).mock.calls.filter(([url]) => url === "/api/session"),
+  ).toHaveLength(1);
+});
+
+function SessionIdentity() {
+  const session = useOptionalSession();
+  return <p>{session?.actor.display_name ?? "guest identity"}</p>;
+}
+it("a different identity returned by a route check waits for private draft cleanup", async () => {
+  const next = {
+    ...validSession,
+    csrf_token: "next-proof",
+    actor: {
+      ...validSession.actor,
+      id: "33333333-3333-4333-8333-333333333333",
+      display_name: "Next creator",
+    },
+  };
+  vi.mocked(request).mockImplementation(async (url) =>
+    url === "/api/session"
+      ? navigation.pathname === "/"
+        ? validSession
+        : next
+      : { theme: "light" },
+  );
+  const view = render(
+    <SessionProvider>
+      <SessionGate allowGuest>
+        <SessionIdentity />
+      </SessionGate>
+    </SessionProvider>,
+  );
+  await screen.findByText("Creator");
+  let finish!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const clear = vi.spyOn(branchJournal, "clear").mockReturnValue(pending);
+  try {
+    navigation.pathname = "/explore";
+    view.rerender(
+      <SessionProvider>
+        <SessionGate key="next" allowGuest>
+          <SessionIdentity />
+        </SessionGate>
+      </SessionProvider>,
+    );
+    await waitFor(() => expect(clear).toHaveBeenCalledOnce());
+    expect(screen.queryByText("Next creator")).toBeNull();
+    expect(screen.queryByText("Creator")).toBeNull();
+  } finally {
+    await act(async () => finish());
+    clear.mockRestore();
+  }
+  await screen.findByText("Next creator");
 });

@@ -17,7 +17,9 @@ const pendingSearch = {
 /** Keep the ordinary page shell in place while the route payload is pending. */
 export function RouteLoading() {
   const pathname = usePathname();
-  const screen = screens.find((screen) => screenHref(screen.id) === pathname);
+  const screen =
+    screens.find((screen) => screenHref(screen.id) === pathname) ??
+    screens.find((screen) => pathname.startsWith(`${screenHref(screen.id)}/`));
   if (
     !screen ||
     ["canvas", "layout", "design-system", "reset-password"].includes(screen.id)

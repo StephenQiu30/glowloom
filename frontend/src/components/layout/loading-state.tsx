@@ -28,7 +28,10 @@ export function LoadingState({
 /** Neutral content placeholder; navigation stays available outside this boundary. */
 export function PageLoading({ message = "正在加载…" }: { message?: string }) {
   return (
-    <section aria-busy="true" className="flex flex-col gap-6">
+    <section
+      aria-busy="true"
+      className="flex flex-col gap-6 in-data-[full-bleed=true]:p-4 md:in-data-[full-bleed=true]:px-10 md:in-data-[full-bleed=true]:py-6"
+    >
       <LoadingState>{message}</LoadingState>
       <div aria-hidden="true" className="flex flex-col gap-4">
         <Skeleton className="h-8 w-1/4" />

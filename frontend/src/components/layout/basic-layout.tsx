@@ -131,7 +131,11 @@ function Shell({
         {isMobile && screen !== "assets" && (
           <Navigation screen={screen} mobile />
         )}
-        <div id="main-content" className={cn(!fullBleed && "workspace-page")}>
+        <div
+          id="main-content"
+          data-full-bleed={fullBleed}
+          className={cn(!fullBleed && "workspace-page")}
+        >
           <SpaceProvider>{children}</SpaceProvider>
         </div>
       </SidebarInset>
