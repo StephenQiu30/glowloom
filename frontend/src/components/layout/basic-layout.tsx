@@ -128,7 +128,9 @@ function Shell({
           onLogout={() => setLogout(true)}
           onFeature={setFeature}
         />
-        {isMobile && <Navigation screen={screen} mobile />}
+        {isMobile && screen !== "assets" && (
+          <Navigation screen={screen} mobile />
+        )}
         <div id="main-content" className={cn(!fullBleed && "workspace-page")}>
           {children}
         </div>
@@ -203,7 +205,10 @@ export function BasicLayout({
       admin={adminScreens.includes(screen)}
       allowGuest={
         allowGuest &&
-        (screen === "home" || screen === "explore" || screen === "invitations")
+        (screen === "home" ||
+          screen === "explore" ||
+          screen === "invitations" ||
+          screen === "assets")
       }
     >
       <SpaceProvider>

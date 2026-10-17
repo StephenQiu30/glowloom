@@ -2,10 +2,14 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
-import { cn } from "cn";
 import { Search, X, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Kbd, KbdGroup } from "@/components/ui/kbd";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Command,
   CommandDialog,
@@ -102,37 +106,32 @@ export function ProductSearch({
   );
   return (
     <>
-      <Button
-        variant={isMobile ? "ghost" : "secondary"}
-        size={isMobile ? "icon-lg" : "lg"}
-        className={cn({
-          "size-11": isMobile,
-          "product-header-search": !isMobile,
-        })}
-        aria-label={current.label}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-keyshortcuts="Meta+K Control+K"
-        disabled={disabled}
-        ref={triggerRef}
-        onClick={(event) => {
-          returnFocusRef.current = event.currentTarget;
-          setOpen(true);
-        }}
-      >
-        <Search data-icon="inline-start" />
-        {!isMobile ? (
-          <>
-            <span className="truncate">
-              {current.placeholder ?? current.label}
-            </span>
-            <KbdGroup className="ml-auto">
-              <Kbd>{modifier}</Kbd>
-              <Kbd>K</Kbd>
-            </KbdGroup>
-          </>
-        ) : null}
-      </Button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              className={isMobile ? "size-11" : undefined}
+              aria-label={current.label}
+              aria-haspopup="dialog"
+              aria-expanded={open}
+              aria-keyshortcuts="Meta+K Control+K"
+              disabled={disabled}
+              ref={triggerRef}
+              onClick={(event) => {
+                returnFocusRef.current = event.currentTarget;
+                setOpen(true);
+              }}
+            >
+              <Search />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {current.label}（{modifier}+K）
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <CommandDialog
         open={open}
         onOpenChange={setOpen}

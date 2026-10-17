@@ -1,10 +1,4 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { HomePage } from "./home-page";
 import { request, RequestError } from "@/lib/request";
@@ -12,7 +6,7 @@ vi.mock("@/lib/request", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/request")>();
   return { ...actual, request: vi.fn() };
 });
-import { BasicLayout } from "@/components/layout/basic-layout";
+import { AssetsPage } from "@/app/assets/_components/assets-page";
 import { TooltipProvider } from "@/components/ui/tooltip";
 const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
@@ -67,7 +61,7 @@ it("游客可浏览首页，提交时打开登录弹窗，关闭和切换模式�
       .mock.calls.every(([path]) => String(path) === "/api/session"),
   ).toBe(true);
 });
-it("会话服务不可用时仍可浏览公共灵感，但资产页面不会因 allowGuest 暴露内容", async () => {
+it("会话服务不可用时仍可浏览公共灵感，未登录的素材库只展示登录引导且不读取私人素材", async () => {
   vi.mocked(request).mockRejectedValue(new RequestError("unavailable", 503));
   const home = render(
     <TooltipProvider>
@@ -81,10 +75,15 @@ it("会话服务不可用时仍可浏览公共灵感，但资产页面不会因 
     new RequestError("session_invalid", 401),
   );
   render(
-    <BasicLayout screen="assets" allowGuest>
-      <p>私有资产数据</p>
-    </BasicLayout>,
+    <TooltipProvider>
+      <AssetsPage />
+    </TooltipProvider>,
   );
-  await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/login"));
-  expect(screen.queryByText("私有资产数据")).toBeNull();
+  await screen.findByText("登录查看你的素材");
+  expect(router.replace).not.toHaveBeenCalled();
+  expect(
+    vi
+      .mocked(request)
+      .mock.calls.every(([path]) => String(path) === "/api/session"),
+  ).toBe(true);
 });

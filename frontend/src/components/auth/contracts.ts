@@ -44,6 +44,8 @@ export function authErrorMessage(error: unknown) {
     invalid_request: "输入不符合规则，请检查邮箱、显示名与密码。",
     session_invalid: "登录已失效，请重新登录。",
     forbidden: "当前账号无权执行此操作。",
+    origin_forbidden:
+      "当前访问地址不受信任，请使用系统配置的网站地址重新打开。",
     invalid_receipt: "暂时无法确认结果，请重试。",
     dependency_unavailable: "登录服务暂不可用，请稍后重试。",
     request_unconfirmed: "连接异常，请稍后重试。",

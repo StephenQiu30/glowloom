@@ -86,9 +86,9 @@ it("R6 主导航与画布入口指向真实路由，支持收起和展开", asyn
   expect(
     (await screen.findByRole("link", { name: "创作" })).getAttribute("href"),
   ).toBe("/");
-  expect(screen.getByRole("link", { name: "资产" }).getAttribute("href")).toBe(
-    "/assets",
-  );
+  expect(
+    screen.getByRole("link", { name: "素材库" }).getAttribute("href"),
+  ).toBe("/assets");
   expect(
     screen.getByRole("link", { name: "查看我的画布" }).getAttribute("href"),
   ).toBe("/projects");
@@ -116,6 +116,22 @@ it("会话失效时不渲染工作台内容", async () => {
   const { waitFor } = await import("@testing-library/react");
   await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/login"));
   expect(screen.queryByText("私有工作台内容")).toBeNull();
+});
+
+it("素材库允许未登录页面外壳，私人数据仍由页面会话边界控制", async () => {
+  vi.mocked(request).mockRejectedValue(
+    new RequestError("unauthenticated", 401),
+  );
+  render(
+    <BasicLayout screen="assets" allowGuest>
+      <p>素材库登录引导</p>
+    </BasicLayout>,
+  );
+  expect(await screen.findByText("素材库登录引导")).toBeTruthy();
+  expect(mocks.replace).not.toHaveBeenCalled();
+  expect(
+    screen.getByRole("link", { name: "素材库" }).getAttribute("href"),
+  ).toBe("/assets");
 });
 
 it("收起后保留可访问导航和当前页，重新挂载保持偏好", async () => {

@@ -1,14 +1,19 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   cleanup,
   fireEvent,
-  render,
+  render as renderUI,
   screen,
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ProductSearch } from "./product-search";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { TooltipProvider } from "@/components/ui/tooltip";
+
+function render(children: ReactNode) {
+  return renderUI(children, { wrapper: TooltipProvider });
+}
 
 const push = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
@@ -47,6 +52,16 @@ async function openSearch() {
   fireEvent.click(screen.getByRole("button", { name: "搜索画布" }));
   return await screen.findByRole("combobox");
 }
+it.each([false, true])(
+  "搜索入口只显示官方图标，保留可访问名称（手机=%s）",
+  (mobile) => {
+    render(<SearchFixture mobile={mobile} />);
+    const trigger = screen.getByRole("button", { name: "搜索画布" });
+    expect(trigger.textContent).toBe("");
+    expect(trigger.querySelector("svg.lucide-search")).toBeTruthy();
+    expect(trigger.getAttribute("aria-keyshortcuts")).toBe("Meta+K Control+K");
+  },
+);
 it("官方 Command 输入不请求，选择搜索去除空白，清除恢复列表", async () => {
   const onSearch = vi.fn();
   render(<SearchFixture onSearch={onSearch} />);

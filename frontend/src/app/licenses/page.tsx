@@ -84,6 +84,30 @@ export default function LicensesPage() {
               Noto CJK 字幕字体 SIL Open Font License 1.1
             </a>
           </li>
+          <li>
+            <a
+              className="underline underline-offset-4"
+              href="/licenses/geist-ofl.txt"
+            >
+              Geist 界面字体 SIL Open Font License 1.1
+            </a>
+          </li>
+          <li>
+            <a
+              className="underline underline-offset-4"
+              href="/licenses/geist-mono-ofl.txt"
+            >
+              Geist Mono 界面字体 SIL Open Font License 1.1
+            </a>
+          </li>
+          <li>
+            <a
+              className="underline underline-offset-4"
+              href="/licenses/noto-sans-sc-ofl.txt"
+            >
+              Noto Sans SC 界面字体 SIL Open Font License 1.1
+            </a>
+          </li>
         </ul>
         <p className="text-sm text-muted-foreground">
           当前画布来源：BeefTV a2196d3；历史来源为 0d9e9f48 / 1ae25027。© 2026

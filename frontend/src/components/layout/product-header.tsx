@@ -66,7 +66,14 @@ export function ProductHeader({
           {title}
         </span>
       </div>
-      <ProductSearch search={search} isMobile={isMobile} />
+      <ProductSearch
+        search={
+          screen === "assets" && !actor && search
+            ? { ...search, disabled: true }
+            : search
+        }
+        isMobile={isMobile}
+      />
       <div className="product-header-actions">
         {actor ? (
           <Tooltip>
