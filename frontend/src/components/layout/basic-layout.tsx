@@ -109,7 +109,6 @@ function Shell({
       </a>
       <ProductNavigation
         screen={screen}
-        onLogin={() => setAuth(true)}
         onMobileCloseAutoFocus={(event) => {
           event.preventDefault();
           if (!auth) mobileNavigationTrigger.current?.focus();

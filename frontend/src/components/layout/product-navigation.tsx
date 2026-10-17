@@ -8,7 +8,6 @@ import {
   Contact,
   Folder,
   LayoutDashboard,
-  LogIn,
   MessageSquarePlus,
   PanelLeftClose,
   PanelLeftOpen,
@@ -17,7 +16,6 @@ import {
   X,
 } from "lucide-react";
 import { BrandMark } from "@/components/brand/brand";
-import { useOptionalSession } from "@/components/auth/session";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription } from "@/components/ui/empty";
 import {
@@ -28,7 +26,6 @@ import {
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupAction,
   SidebarGroupContent,
@@ -89,16 +86,13 @@ export function Navigation({
 
 export function ProductNavigation({
   screen,
-  onLogin,
   onMobileCloseAutoFocus,
 }: {
   screen: string;
-  onLogin: () => void;
   onMobileCloseAutoFocus: ComponentProps<
     typeof Sidebar
   >["onMobileCloseAutoFocus"];
 }) {
-  const session = useOptionalSession();
   const { open, isMobile, toggleSidebar, setOpenMobile } = useSidebar();
   const compact = !open && !isMobile;
   const toggleLabel = isMobile ? "关闭导航" : open ? "收起导航" : "展开导航";
@@ -226,33 +220,6 @@ export function ProductNavigation({
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="sidebar-footer">
-        {!session && (
-          <>
-            {!compact && (
-              <Empty className="sidebar-guest">
-                <EmptyDescription>登录后保存你的创作</EmptyDescription>
-              </Empty>
-            )}
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  className="group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:p-0!"
-                  tooltip="登录 / 注册"
-                  aria-label="登录 / 注册"
-                  onClick={() => {
-                    closeMobile();
-                    onLogin();
-                  }}
-                >
-                  <LogIn />
-                  <span>登录 / 注册</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </>
-        )}
-      </SidebarFooter>
     </Sidebar>
   );
 }

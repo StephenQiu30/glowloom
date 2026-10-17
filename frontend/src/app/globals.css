@@ -140,6 +140,14 @@ html {
 body {
   margin: 0;
 }
+/* The root gutter already reserves space while Radix locks body scrolling.
+   Avoid reserving that same scrollbar a second time in react-remove-scroll. */
+@supports (scrollbar-gutter: stable) {
+  html body[data-scroll-locked] {
+    margin-right: 0 !important;
+    --removed-body-scroll-bar-size: 0px;
+  }
+}
 button,
 a,
 input,
@@ -321,24 +329,6 @@ button:not(:disabled),
   font-size: 13px;
   color: var(--muted-foreground);
 }
-.sidebar-footer {
-  flex-shrink: 0;
-  padding: 16px 12px;
-  gap: 8px;
-}
-.sidebar-guest {
-  padding: 0 8px;
-  align-items: flex-start;
-  text-align: left;
-}
-.sidebar-footer [data-slot="sidebar-menu-button"] {
-  height: 36px;
-  gap: 12px;
-  padding-inline: 12px;
-}
-.sidebar-footer [data-size="sm"] {
-  color: var(--muted-foreground);
-}
 .sidebar-brand-compact {
   height: 80px;
   flex-direction: column;
@@ -354,8 +344,7 @@ button:not(:disabled),
   height: 36px;
   margin: 0;
 }
-[data-collapsible="icon"] .sidebar-history,
-[data-collapsible="icon"] .sidebar-footer {
+[data-collapsible="icon"] .sidebar-history {
   padding-inline: 12px;
 }
 [data-collapsible="icon"] .sidebar-history [data-slot="sidebar-group-content"] {
@@ -797,9 +786,6 @@ button:not(:disabled),
     height: 40px;
     top: 3px;
     right: 8px;
-  }
-  [data-mobile="true"] .sidebar-footer {
-    padding-bottom: max(16px, env(safe-area-inset-bottom));
   }
   .mobile-navigation {
     padding: 8px 16px;

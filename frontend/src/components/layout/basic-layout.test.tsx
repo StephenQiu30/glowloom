@@ -205,7 +205,7 @@ it("手机抽屉保持完整导航，同路由点击关闭抽屉且保留桌面�
   expect(document.cookie).toContain("sidebar_state=false");
 });
 
-it("游客从抽屉打开登录弹窗，关闭后返回移动导航入口", async () => {
+it("游客仅从顶栏登录，手机抽屉只展示导航，关闭认证后恢复登录按钮焦点", async () => {
   vi.stubGlobal(
     "matchMedia",
     vi.fn().mockImplementation(() => ({
@@ -224,20 +224,25 @@ it("游客从抽屉打开登录弹窗，关闭后返回移动导航入口", asyn
   );
   expect(await screen.findByRole("button", { name: "切换主题" })).toBeTruthy();
   fireEvent.click(await screen.findByRole("button", { name: "打开导航" }));
-  fireEvent.click(
-    within(screen.getByRole("dialog", { name: "导航" })).getByRole("button", {
-      name: "登录 / 注册",
-    }),
+  const navigation = screen.getByRole("dialog", { name: "导航" });
+  expect(
+    within(navigation).queryByRole("button", { name: "登录 / 注册" }),
+  ).toBeNull();
+  expect(within(navigation).queryByText("登录后保存你的创作")).toBeNull();
+  fireEvent.click(within(navigation).getByRole("button", { name: "关闭导航" }));
+  const login = within(
+    screen.getByRole("banner", { name: "页面顶栏" }),
+  ).getByRole("button", { name: "登录 / 注册" });
+  expect(screen.getAllByRole("button", { name: "登录 / 注册" })).toHaveLength(
+    1,
   );
+  login.focus();
+  fireEvent.click(login);
   expect(await screen.findByRole("dialog", { name: "登录织光" })).toBeTruthy();
   expect(screen.queryByRole("dialog", { name: "导航" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "关闭登录注册弹窗" }));
   const { waitFor } = await import("@testing-library/react");
-  await waitFor(() =>
-    expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "打开导航" }),
-    ),
-  );
+  await waitFor(() => expect(document.activeElement).toBe(login));
 });
 
 it("手机顶栏提供独立主题入口，移除积分会员并保留通知反馈", async () => {
@@ -305,4 +310,29 @@ it("空间读取期间保留顶栏和侧栏，只阻止正文私有内容", asyn
   );
   await screen.findByText("private subject content");
   expect(screen.getByRole("banner", { name: "页面顶栏" })).toBe(header);
+});
+
+it("游客侧栏展开和收起均只保留顶栏登录入口", async () => {
+  vi.mocked(request).mockRejectedValue(
+    new RequestError("unauthenticated", 401),
+  );
+  render(
+    <BasicLayout screen="explore" allowGuest>
+      <p>公共探索</p>
+    </BasicLayout>,
+  );
+  await screen.findByText("公共探索");
+  const header = screen.getByRole("banner", { name: "页面顶栏" });
+  expect(
+    within(header).getByRole("button", { name: "登录 / 注册" }),
+  ).toBeTruthy();
+  expect(screen.getAllByRole("button", { name: "登录 / 注册" })).toHaveLength(
+    1,
+  );
+  expect(screen.queryByText("登录后保存你的创作")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "收起导航" }));
+  expect(screen.getAllByRole("button", { name: "登录 / 注册" })).toHaveLength(
+    1,
+  );
+  expect(screen.getByRole("link", { name: "素材库" })).toBeTruthy();
 });
