@@ -1,7 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/noto-sans-sc/wght.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -9,9 +8,7 @@
   --color-background: var(--background);
   --color-cover-overlay: var(--cover-overlay);
   --color-foreground: var(--foreground);
-  --font-sans:
-    var(--font-geist-sans), var(--font-noto-sans), "PingFang SC",
-    "Microsoft YaHei", system-ui, sans-serif;
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -53,7 +50,6 @@
 }
 
 :root {
-  --font-noto-sans: "Noto Sans SC Variable";
   --brand-mark: #52a8ff;
   --cover-foreground: #ededed;
   --cover-overlay: rgb(0 0 0 / 72%);
@@ -1279,21 +1275,6 @@ button:not(:disabled),
   top: 12px;
   left: 12px;
 }
-.upload-dropzone {
-  border: 1px dashed var(--border);
-  border-radius: 16px;
-  min-height: 170px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 20px;
-  overflow-wrap: anywhere;
-}
-.upload-dropzone:hover {
-  background: var(--accent);
-}
 @media (max-width: 1200px) {
   .asset-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1572,11 +1553,6 @@ button:not(:disabled),
   margin-top: 10px;
   font-size: 13px;
   line-height: 20px;
-}
-/* Align Noto Sans SC's browser glyph baseline with the Figma A28 export. */
-.subject-control-copy {
-  position: relative;
-  top: -1px;
 }
 .subject-control [data-slot="dialog-close"] {
   top: 20px;
@@ -2082,11 +2058,6 @@ button:not(:disabled),
   gap: 24px;
   padding-top: 132px;
 }
-.library-empty-icon > svg {
-  width: 40px;
-  height: 40px;
-  stroke-width: 1.5;
-}
 .library-folders {
   display: flex;
   flex-direction: column;
@@ -2094,24 +2065,13 @@ button:not(:disabled),
 }
 .library-section-heading {
   min-height: 24px;
-  font-size: 13px;
-  color: var(--muted-foreground);
-}
-.library-section-heading > span {
-  margin-left: auto;
-  flex-shrink: 0;
-}
-.library-section-heading h2 {
-  min-width: 0;
-  font-size: inherit;
-  font-weight: inherit;
 }
 .library-folder-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
-.library-folder-card[data-slot="button"] {
+.library-folder-card {
   width: 100%;
   height: 76px;
   min-width: 0;
@@ -2128,16 +2088,6 @@ button:not(:disabled),
   aspect-ratio: 1.51;
   border-radius: 8px;
   margin-bottom: 0;
-}
-.media-library .asset-card [data-slot="card-header"] {
-  gap: 8px;
-}
-.media-library .asset-card [data-slot="card-title"] {
-  font-size: 14px;
-  font-weight: 400;
-}
-.media-library .asset-card [data-slot="card-description"] {
-  font-size: 12px;
 }
 @media (min-width: 1800px) {
   .media-library .asset-grid {
@@ -2216,12 +2166,6 @@ button:not(:disabled),
   .media-library .asset-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 24px 12px;
-  }
-  .media-library .asset-card [data-slot="card-title"] {
-    font-size: 13px;
-  }
-  .media-library .asset-card [data-slot="card-description"] {
-    font-size: 11px;
   }
 }
 @media (max-width: 359px) {

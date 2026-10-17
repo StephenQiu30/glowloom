@@ -13,7 +13,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
-  Scale,
   Sparkles,
   X,
 } from "lucide-react";
@@ -253,25 +252,6 @@ export function ProductNavigation({
             </SidebarMenu>
           </>
         )}
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              tooltip="第三方许可"
-              size="sm"
-              className="group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:p-0!"
-            >
-              <Link
-                href="/licenses"
-                aria-label="第三方许可"
-                onClick={closeMobile}
-              >
-                <Scale />
-                <span>第三方许可</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
   );

@@ -22,6 +22,20 @@ import { BasicLayout, useLoginDialog } from "@/components/layout/basic-layout";
 import { useOptionalSession } from "@/components/auth/session";
 import { RequestError } from "@/lib/request";
 import { Button } from "@/components/ui/button";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+} from "@/components/ui/pagination";
 import { Input } from "@/components/ui/input";
 import {
   Card,
@@ -235,7 +249,7 @@ function Library({
       {!authenticated ? (
         <Empty className="library-login-state">
           <EmptyHeader>
-            <EmptyMedia className="library-empty-icon">
+            <EmptyMedia variant="icon">
               <Folder aria-hidden="true" />
             </EmptyMedia>
             <EmptyTitle>登录查看你的素材</EmptyTitle>
@@ -288,32 +302,46 @@ function Library({
             />
           )}
           {batch && (
-            <div className="mb-5 flex flex-wrap items-center gap-4 rounded-lg border p-3">
-              <Checkbox
-                aria-label="选择本页全部素材"
-                checked={
-                  !!page?.items.length && selection.length === page.items.length
-                }
-                disabled={saving}
-                onCheckedChange={(v) =>
-                  setSelected(
-                    v === true ? (page?.items.map((i) => i.id) ?? []) : [],
-                  )
-                }
-              />
-              <span className="text-sm">已选择 {selection.length} 项</span>
-              <Button
-                className="max-md:min-h-11"
-                disabled={!selection.length || saving || !!pendingOperation}
-                variant={filter.trash ? "outline" : "destructive"}
-                onClick={() =>
-                  setConfirm(filter.trash ? "restore_items" : "recycle_items")
-                }
-              >
-                {filter.trash ? <RotateCw /> : <Trash2 />}
-                {filter.trash ? "恢复" : "移入回收站"}
-              </Button>
-            </div>
+            <Item variant="outline" size="sm">
+              <ItemContent>
+                <FieldGroup>
+                  <Field orientation="horizontal">
+                    <Checkbox
+                      id="library-select-page"
+                      aria-label="选择本页全部素材"
+                      checked={
+                        !!page?.items.length &&
+                        selection.length === page.items.length
+                      }
+                      disabled={saving}
+                      onCheckedChange={(v) =>
+                        setSelected(
+                          v === true
+                            ? (page?.items.map((i) => i.id) ?? [])
+                            : [],
+                        )
+                      }
+                    />
+                    <FieldLabel htmlFor="library-select-page">
+                      已选择 {selection.length} 项
+                    </FieldLabel>
+                  </Field>
+                </FieldGroup>
+              </ItemContent>
+              <ItemActions>
+                <Button
+                  className="max-md:min-h-11"
+                  disabled={!selection.length || saving || !!pendingOperation}
+                  variant={filter.trash ? "outline" : "destructive"}
+                  onClick={() =>
+                    setConfirm(filter.trash ? "restore_items" : "recycle_items")
+                  }
+                >
+                  {filter.trash ? <RotateCw /> : <Trash2 />}
+                  {filter.trash ? "恢复" : "移入回收站"}
+                </Button>
+              </ItemActions>
+            </Item>
           )}
           {page &&
             !loading &&
@@ -322,74 +350,101 @@ function Library({
             !filter.folder &&
             page.folders.length > 0 && (
               <section className="library-folders" aria-label="我的文件夹">
-                <div className="library-section-heading">
-                  <h2>我的文件夹</h2>
-                  <span>{page.folders.length} 个文件夹</span>
-                </div>
-                <div className="library-folder-grid">
+                <Item className="library-section-heading p-0">
+                  <ItemContent>
+                    <ItemTitle role="heading" aria-level={2}>
+                      我的文件夹
+                    </ItemTitle>
+                  </ItemContent>
+                  <ItemActions>
+                    <ItemDescription>
+                      {page.folders.length} 个文件夹
+                    </ItemDescription>
+                  </ItemActions>
+                </Item>
+                <ItemGroup
+                  className="library-folder-grid"
+                  role="group"
+                  aria-label="文件夹"
+                >
                   {page.folders.map((f) => (
-                    <Button
-                      variant="tile"
-                      className="library-folder-card"
-                      key={f.id}
-                      disabled={saving || !!pendingOperation}
-                      onClick={() => onFilter({ ...filter, folder: f.id! })}
-                    >
-                      <Folder data-icon="inline-start" />
-                      <span className="flex min-w-0 flex-col items-start gap-1">
-                        <span className="max-w-full truncate">{f.name}</span>
-                        {typeof page.folder_counts?.[f.id!] === "number" && (
-                          <span className="text-xs text-muted-foreground">
-                            {page.folder_counts[f.id!]} 个素材
-                          </span>
-                        )}
-                      </span>
-                    </Button>
+                    <Item asChild variant="muted" key={f.id}>
+                      <Button
+                        variant="ghost"
+                        className="library-folder-card"
+                        disabled={saving || !!pendingOperation}
+                        onClick={() => onFilter({ ...filter, folder: f.id! })}
+                      >
+                        <ItemMedia variant="icon">
+                          <Folder data-icon="inline-start" />
+                        </ItemMedia>
+                        <ItemContent className="min-w-0 items-start">
+                          <ItemTitle className="max-w-full truncate">
+                            {f.name}
+                          </ItemTitle>
+                          {typeof page.folder_counts?.[f.id!] === "number" && (
+                            <ItemDescription>
+                              {page.folder_counts[f.id!]} 个素材
+                            </ItemDescription>
+                          )}
+                        </ItemContent>
+                      </Button>
+                    </Item>
                   ))}
-                </div>
+                </ItemGroup>
               </section>
             )}
           {page && !loading && !error && (
-            <div className="library-section-heading">
-              <div className="flex min-w-0 items-center gap-2">
-                {filter.folder && (
-                  <Button
-                    variant="ghost"
-                    size="icon-lg"
-                    aria-label="返回全部素材"
-                    disabled={locked}
-                    onClick={() => onFilter({ ...filter, folder: "" })}
-                  >
-                    <ArrowLeft />
-                  </Button>
-                )}
-                <h2 className="truncate">
+            <Item className="library-section-heading flex-nowrap p-0">
+              {filter.folder && (
+                <Button
+                  variant="ghost"
+                  size="icon-lg"
+                  aria-label="返回全部素材"
+                  disabled={locked}
+                  onClick={() => onFilter({ ...filter, folder: "" })}
+                >
+                  <ArrowLeft />
+                </Button>
+              )}
+              <ItemContent className="min-w-0">
+                <ItemTitle
+                  role="heading"
+                  aria-level={2}
+                  className="max-w-full truncate"
+                >
                   {filter.trash
                     ? "回收站"
                     : activeFolder?.name ||
                       (filter.favorite
                         ? "收藏"
                         : `全部${kinds.find((k) => k.id === filter.kind)?.label ?? "素材"}`)}
-                </h2>
-              </div>
-              <span>共 {page.total} 个素材</span>
-              <Button
-                variant="ghost"
-                size="icon-lg"
-                aria-label="刷新素材"
-                disabled={locked}
-                onClick={reload}
-              >
-                <RotateCw />
-              </Button>
-            </div>
+                </ItemTitle>
+              </ItemContent>
+              <ItemActions>
+                <ItemDescription>共 {page.total} 个素材</ItemDescription>
+                <Button
+                  variant="ghost"
+                  size="icon-lg"
+                  aria-label="刷新素材"
+                  disabled={locked}
+                  onClick={reload}
+                >
+                  <RotateCw />
+                </Button>
+              </ItemActions>
+            </Item>
           )}
           {loading ? (
-            <div className="asset-grid" role="status" aria-label="正在读取素材">
+            <ItemGroup
+              className="asset-grid"
+              role="status"
+              aria-label="正在读取素材"
+            >
               {[0, 1, 2, 3].map((n) => (
                 <Skeleton key={n} className="aspect-video rounded-xl" />
               ))}
-            </div>
+            </ItemGroup>
           ) : error ? (
             <Empty className="library-login-state">
               <FeedbackToast message={error} />
@@ -424,9 +479,14 @@ function Library({
               </EmptyHeader>
             </Empty>
           ) : (
-            <div className="asset-grid">
+            <ItemGroup className="asset-grid">
               {page?.items.map((item) => (
-                <Card key={item.id} variant="media" className="asset-card">
+                <Card
+                  key={item.id}
+                  variant="media"
+                  className="asset-card"
+                  role="listitem"
+                >
                   <CardContent className="p-0">
                     <Button
                       variant="ghost"
@@ -484,36 +544,46 @@ function Library({
                   </CardHeader>
                 </Card>
               ))}
-            </div>
+            </ItemGroup>
           )}
           {page && page.total > page.page_size && (
-            <div className="mt-8 flex justify-center gap-5">
-              <Button
-                variant="outline"
-                disabled={pageIndex === 1 || loading}
-                onClick={() => {
-                  setPageIndex((n) => n - 1);
-                  setSelected([]);
-                  setLoading(true);
-                }}
-              >
-                上一页
-              </Button>
-              <span className="self-center text-sm">
-                {pageIndex} / {Math.ceil(page.total / page.page_size)}
-              </span>
-              <Button
-                variant="outline"
-                disabled={pageIndex * page.page_size >= page.total || loading}
-                onClick={() => {
-                  setPageIndex((n) => n + 1);
-                  setSelected([]);
-                  setLoading(true);
-                }}
-              >
-                下一页
-              </Button>
-            </div>
+            <Pagination aria-label="素材分页" className="mt-8">
+              <PaginationContent className="gap-5">
+                <PaginationItem>
+                  <Button
+                    variant="outline"
+                    disabled={pageIndex === 1 || loading}
+                    onClick={() => {
+                      setPageIndex((n) => n - 1);
+                      setSelected([]);
+                      setLoading(true);
+                    }}
+                  >
+                    上一页
+                  </Button>
+                </PaginationItem>
+                <PaginationItem>
+                  <ItemDescription aria-live="polite">
+                    {pageIndex} / {Math.ceil(page.total / page.page_size)}
+                  </ItemDescription>
+                </PaginationItem>
+                <PaginationItem>
+                  <Button
+                    variant="outline"
+                    disabled={
+                      pageIndex * page.page_size >= page.total || loading
+                    }
+                    onClick={() => {
+                      setPageIndex((n) => n + 1);
+                      setSelected([]);
+                      setLoading(true);
+                    }}
+                  >
+                    下一页
+                  </Button>
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           )}
           <Dialog
             open={!!detail}
@@ -531,35 +601,39 @@ function Library({
                   <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-xl bg-background">
                     <AssetPreview key={detail.id} item={detail} large />
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="mr-auto text-xs text-muted-foreground">
-                      {detail.media
-                        ? `${(detail.media.byte_size ?? 0) / 1024 / 1024 < 0.01 ? "< 0.01" : ((detail.media.byte_size ?? 0) / 1024 / 1024).toFixed(2)} MB`
-                        : ""}
-                    </span>
-                    <Button
-                      variant="outline"
-                      disabled={saving || !!pendingOperation || filter.trash}
-                      onClick={() => favorite(detail)}
-                    >
-                      <Heart data-icon="inline-start" />
-                      {detail.favorite ? "取消收藏" : "收藏"}
-                    </Button>
-                    {!filter.trash && (
-                      <DownloadButton
-                        filename={detail.media?.file_name || detail.title}
-                        load={() =>
-                          downloadLibraryMediaAsset({
-                            item_id: detail.id,
-                            scope: "personal",
-                          })
-                        }
+                  <Item className="p-0">
+                    <ItemContent>
+                      <ItemDescription>
+                        {detail.media
+                          ? `${(detail.media.byte_size ?? 0) / 1024 / 1024 < 0.01 ? "< 0.01" : ((detail.media.byte_size ?? 0) / 1024 / 1024).toFixed(2)} MB`
+                          : ""}
+                      </ItemDescription>
+                    </ItemContent>
+                    <ItemActions>
+                      <Button
+                        variant="outline"
+                        disabled={saving || !!pendingOperation || filter.trash}
+                        onClick={() => favorite(detail)}
                       >
-                        <Download data-icon="inline-start" />
-                        下载原件
-                      </DownloadButton>
-                    )}
-                  </div>
+                        <Heart data-icon="inline-start" />
+                        {detail.favorite ? "取消收藏" : "收藏"}
+                      </Button>
+                      {!filter.trash && (
+                        <DownloadButton
+                          filename={detail.media?.file_name || detail.title}
+                          load={() =>
+                            downloadLibraryMediaAsset({
+                              item_id: detail.id,
+                              scope: "personal",
+                            })
+                          }
+                        >
+                          <Download data-icon="inline-start" />
+                          下载原件
+                        </DownloadButton>
+                      )}
+                    </ItemActions>
+                  </Item>
                 </>
               )}
             </DialogContent>

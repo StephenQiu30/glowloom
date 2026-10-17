@@ -2,9 +2,9 @@
 
 ## 1. 当前视觉方向
 
-产品功能、页面布局与主要交互参考即梦；视觉使用 Vercel/Geist 方向的中性色体系。组件采用官方 shadcn/ui Radix Nova，功能图标为 Lucide，品牌为 React SVG icon，英文 Geist、中文 Noto Sans SC。默认深色（dark），支持浅色、深色与跟随系统，保留用户已保存的选择，颜色通过语义 token 表达。
+产品功能、页面布局与主要交互参考即梦；视觉使用 Vercel/Geist 方向的中性色体系。组件采用官方 shadcn/ui Radix Nova，功能图标为 Lucide，品牌为 React SVG icon，界面使用 Vercel 官方 Geist Sans、代码使用 Geist Mono，缺少的中文字形由系统字体回退。默认深色（dark），支持浅色、深色与跟随系统，保留用户已保存的选择，颜色通过语义 token 表达。
 
-字体通过固定版本的 Fontsource 依赖本地托管，不在构建时请求 Google Fonts。Geist 与 Geist Mono 使用 `next/font/local` 优化和预加载；Noto Sans SC 使用变量字体及 Unicode 分片，浏览器仅请求当前文字需要的同站字体文件，保留 400/500/600 等字重和 `swap` 行为。此路径避开 Next.js 16.3.6 对 Google Fonts 无扩展名 URL 的解析问题，不切换默认 Turbopack 构建器。
+字体直接使用 Vercel 官方 `geist` 包的 `geist/font/sans` 与 `geist/font/mono` 导出，由其内置 `next/font/local` 本地托管，不在构建时请求 Google Fonts，不叠加其他网页字体。主题沿用现有 shadcn neutral 语义颜色及字号、圆角体系，不新增装饰配色或页面专属主题。产品不展示第三方许可入口和页面；依赖附带的版权文件保留在源码中。
 
 现有设计参照为 Figma 文件 `uLqmeRWuQuzfrp9xOYg6FT`；首页、探索、资产、主体和画布节点分别为 `271:3620`、`435:17516`、`436:17767`、`437:18259`、`438:18566`，移动首页为 `407:17422`。上述为原有页面基线，头像与账号菜单的设计更新见下文。新用户系统字段以[用户需求](docs/requirement/01-用户系统需求.md)为准，设计稿需在实现批次同步。
 

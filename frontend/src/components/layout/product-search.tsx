@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
+import { cn } from "cn";
 import { Search, X, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -112,7 +113,7 @@ export function ProductSearch({
             <Button
               variant="ghost"
               size="icon-lg"
-              className={isMobile ? "size-11" : undefined}
+              className={cn(isMobile && "size-11")}
               aria-label={current.label}
               aria-haspopup="dialog"
               aria-expanded={open}
