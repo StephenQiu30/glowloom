@@ -77,3 +77,55 @@ it("撤销草稿编辑保留已保存引用编号的高水位，避免重新分�
       .ordinal,
   ).toBe(2);
 });
+it("未保存的引用分配也不随画布撤销回退，重复撤销保留高水位", () => {
+  const a = emptyPromptDraft(),
+    b = emptyPromptDraft(),
+    c = emptyPromptDraft();
+  b.labelState.highWater.image = 1;
+  b.labelState.allocations.first = { labelKind: "image", ordinal: 1 };
+  c.labelState.highWater.image = 2;
+  c.labelState.allocations = {
+    ...b.labelState.allocations,
+    second: { labelKind: "image", ordinal: 2 },
+  };
+  const n = {
+    ...createDraftNode("image_generation", "1:1", 0),
+    config: { draft: richCanvasDraft(a) },
+    input_revision: 1,
+  };
+  const h = createHistory();
+  h.record(
+    { nodes: [n], edges: [] },
+    { nodes: [{ ...n, config: { draft: richCanvasDraft(b) } }], edges: [] },
+    undefined,
+    0,
+  );
+  h.record(
+    { nodes: [{ ...n, config: { draft: richCanvasDraft(b) } }], edges: [] },
+    { nodes: [{ ...n, config: { draft: richCanvasDraft(c) } }], edges: [] },
+    undefined,
+    1000,
+  );
+  const saved = { ...base, nodes: [n] };
+  expect(
+    h.undo(saved)?.nodes[0].config.draft?.composer?.labelState.highWater.image,
+  ).toBe(2);
+  expect(
+    h.undo(saved)?.nodes[0].config.draft?.composer?.labelState.allocations
+      .second.ordinal,
+  ).toBe(2);
+});
+it("composer转化不允许被画布历史撤回旧格式，使用正文自己的历史", () => {
+  const legacy = {
+    ...createDraftNode("image_generation", "1:1", 0),
+    input_revision: 1,
+  };
+  const rich = {
+    ...legacy,
+    config: { draft: richCanvasDraft(emptyPromptDraft()) },
+  };
+  const h = createHistory();
+  h.record({ nodes: [legacy], edges: [] }, { nodes: [rich], edges: [] });
+  expect(h.canUndo({ ...base, nodes: [legacy] })).toBe(false);
+  expect(h.canUndo({ ...base, nodes: [rich] })).toBe(false);
+});

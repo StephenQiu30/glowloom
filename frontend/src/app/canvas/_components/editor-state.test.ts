@@ -336,3 +336,57 @@ it("保护业务关系、生成草稿和锁定节点，不把标注连接当生�
     commandBatch({ ...empty, nodes: [locked] }, [{ ...locked, x: 20 }]),
   ).toThrow();
 });
+it("已有composer不能被旧草稿格式覆盖", () => {
+  const legacy = {
+    ...createDraftNode("image_generation", "1:1", 0),
+    input_revision: 1,
+  };
+  const rich = {
+    ...legacy,
+    config: {
+      draft: {
+        composer: {
+          schemaVersion: 1 as const,
+          document: {
+            type: "doc" as const,
+            content: [{ type: "paragraph" as const }],
+          },
+          references: [],
+          modelVersion: null,
+          mode: null,
+          params: {},
+          labelState: {
+            highWater: { image: 0, video: 0, audio: 0, subject: 0 },
+            allocations: {},
+          },
+        },
+        prompt: "",
+        negative_prompt: "",
+        aspect_ratio: "",
+        candidate_count: 0,
+      },
+    },
+  };
+  expect(() => commandBatch({ ...empty, nodes: [rich] }, [legacy])).toThrow();
+});
+it("4000条合法标注增删按单命令2000项拆分", () => {
+  const a = createResourceNode("text", { x: 0, y: 0 }),
+    b = createResourceNode("text", { x: 500, y: 0 });
+  const edges = Array.from({ length: 4000 }, (_, i) => ({
+    id: `00000000-0000-4000-8000-${String(i + 100).padStart(12, "0")}`,
+    edge_type: "annotation",
+    source_node_id: a.id,
+    target_node_id: b.id,
+  }));
+  const base = { ...empty, nodes: [a, b] };
+  const add = commandBatch(base, base.nodes, { edges });
+  expect(add.commands?.map((c) => [c.type, c.edges?.length])).toEqual([
+    ["Connect", 2000],
+    ["Connect", 2000],
+  ]);
+  const remove = commandBatch({ ...base, edges }, base.nodes, { edges: [] });
+  expect(remove.commands?.map((c) => [c.type, c.ids?.length])).toEqual([
+    ["Disconnect", 2000],
+    ["Disconnect", 2000],
+  ]);
+});

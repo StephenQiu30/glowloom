@@ -375,6 +375,12 @@ export function commandBatch(
       n.last_operation_id !== prior.last_operation_id
     )
       throw new RequestError("invalid_request");
+    if (
+      isDraft(prior) &&
+      prior.config.draft.composer &&
+      (!isDraft(n) || !n.config.draft.composer)
+    )
+      throw new RequestError("invalid_request");
     if (n.x !== prior.x || n.y !== prior.y)
       moves.push({ id: n.id, x: n.x, y: n.y });
     if (n.title !== prior.title) names.push({ id: n.id, title: n.title });
@@ -434,9 +440,10 @@ export function commandBatch(
       throw new RequestError("invalid_request");
     connected.push(edge);
   }
-  if (disconnected.length)
-    commands.push({ type: "Disconnect", ids: disconnected });
-  if (connected.length) commands.push({ type: "Connect", edges: connected });
+  for (let i = 0; i < disconnected.length; i += 2000)
+    commands.push({ type: "Disconnect", ids: disconnected.slice(i, i + 2000) });
+  for (let i = 0; i < connected.length; i += 2000)
+    commands.push({ type: "Connect", edges: connected.slice(i, i + 2000) });
   if (
     options.viewport &&
     canonical(options.viewport) !== canonical(base.viewport ?? defaultViewport)

@@ -480,3 +480,38 @@ it("读取服务端相机，并保存改变后的视角，不改写节点", asyn
     { type: "SetViewport", viewport: { x: 120, y: -80, zoom: 0.625 } },
   ]);
 });
+it("含只读直接成员的分组不能解组，不污染其他合法编辑", async () => {
+  const group = {
+    id: "00000000-0000-4000-8000-000000000030",
+    title: "受限分组",
+    node_type: "group",
+    node_action: "resource",
+    config: { collapsed: false },
+    x: 80,
+    y: 120,
+    width: 500,
+    height: 400,
+    z_index: 0,
+  };
+  const child = {
+    id: "00000000-0000-4000-8000-000000000031",
+    title: "业务投影",
+    node_type: "text",
+    node_action: "resource",
+    config: { text: "受保护内容" },
+    last_operation_id: "00000000-0000-4000-8000-000000000032",
+    parent_id: group.id,
+    x: 100,
+    y: 140,
+    z_index: 0,
+  };
+  api.project.mockResolvedValue(project);
+  api.canvas.mockResolvedValue({ ...canvas, nodes: [group, child] });
+  render(<CanvasPage projectID={projectID} canvasID={canvasID} />);
+  fireEvent.click(await screen.findByRole("button", { name: "选择 受限分组" }));
+  fireEvent.click(screen.getByRole("button", { name: "解除分组关系" }));
+  await findFeedback("分组包含只读成员，不能解除关系。");
+  expect(
+    screen.getByRole("button", { name: "保存画布" }).hasAttribute("disabled"),
+  ).toBe(true);
+});

@@ -1,5 +1,6 @@
 // Operation boundaries inspired by BeefTV ddaf5f9 use-canvas-history.ts (MIT).
 // Immutable graph references only; persistence and Tiptap history stay with their owners.
+import type { LabelState } from "@/components/generation/prompt-document";
 import { canonical } from "@/components/generation/draft-save";
 import { commandBatch, isDraft, type Canvas, type Node } from "./editor-state";
 export type EditableGraph = { nodes: Node[]; edges: API.Edge[] };
@@ -9,52 +10,53 @@ type Entry = {
   key?: string;
   at: number;
 };
+function mergeLabels(a: LabelState, b: LabelState): LabelState {
+  return {
+    highWater: {
+      image: Math.max(a.highWater.image, b.highWater.image),
+      video: Math.max(a.highWater.video, b.highWater.video),
+      audio: Math.max(a.highWater.audio, b.highWater.audio),
+      subject: Math.max(a.highWater.subject, b.highWater.subject),
+    },
+    allocations: { ...a.allocations, ...b.allocations },
+  };
+}
 export function createHistory() {
   const past: Entry[] = [],
     future: Entry[] = [];
+  // Allocation tombstones outlive graph snapshots, including edits not yet saved.
+  const labels = new Map<string, LabelState>();
+  const remember = (graph: EditableGraph) => {
+    for (const node of graph.nodes) {
+      if (!isDraft(node) || !node.config.draft.composer) continue;
+      const state = node.config.draft.composer.labelState;
+      const known = labels.get(node.id);
+      labels.set(node.id, known ? mergeLabels(state, known) : state);
+    }
+  };
   const prepare = (graph: EditableGraph, base: Canvas): EditableGraph => ({
     ...graph,
     nodes: graph.nodes.map((node) => {
+      if (!isDraft(node)) return node;
       const saved = base.nodes.find((n) => n.id === node.id);
-      if (!saved || !isDraft(node) || !isDraft(saved)) return node;
-      const composer = node.config.draft.composer,
-        known = saved.config.draft.composer;
+      const composer = node.config.draft.composer;
+      let state = composer?.labelState;
+      const remembered = labels.get(node.id);
+      const persisted =
+        saved && isDraft(saved)
+          ? saved.config.draft.composer?.labelState
+          : undefined;
+      if (state && remembered) state = mergeLabels(state, remembered);
+      if (state && persisted) state = mergeLabels(state, persisted);
       return {
         ...node,
-        input_revision: saved.input_revision,
-        ...(composer && known
+        ...(saved ? { input_revision: saved.input_revision } : {}),
+        ...(composer && state
           ? {
               config: {
                 draft: {
                   ...node.config.draft,
-                  composer: {
-                    ...composer,
-                    labelState: {
-                      ...composer.labelState,
-                      highWater: {
-                        image: Math.max(
-                          composer.labelState.highWater.image,
-                          known.labelState.highWater.image,
-                        ),
-                        video: Math.max(
-                          composer.labelState.highWater.video,
-                          known.labelState.highWater.video,
-                        ),
-                        audio: Math.max(
-                          composer.labelState.highWater.audio,
-                          known.labelState.highWater.audio,
-                        ),
-                        subject: Math.max(
-                          composer.labelState.highWater.subject,
-                          known.labelState.highWater.subject,
-                        ),
-                      },
-                      allocations: {
-                        ...composer.labelState.allocations,
-                        ...known.labelState.allocations,
-                      },
-                    },
-                  },
+                  composer: { ...composer, labelState: state },
                 },
               },
             }
@@ -70,6 +72,13 @@ export function createHistory() {
     if (!entry) return false;
     try {
       const graph = prepare(entry[direction], base);
+      if (
+        graph.nodes.some(
+          (node) =>
+            isDraft(node) && labels.has(node.id) && !node.config.draft.composer,
+        )
+      )
+        return false;
       commandBatch(base, graph.nodes, { edges: graph.edges });
       return true;
     } catch {
@@ -83,6 +92,8 @@ export function createHistory() {
       key?: string,
       at = Date.now(),
     ) {
+      remember(before);
+      remember(after);
       if (canonical(before) === canonical(after)) return;
       const last = past.at(-1);
       if (
@@ -120,6 +131,7 @@ export function createHistory() {
     reset() {
       past.length = 0;
       future.length = 0;
+      labels.clear();
     },
   };
 }

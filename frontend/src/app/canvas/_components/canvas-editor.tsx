@@ -508,6 +508,14 @@ export function CanvasEditor({
   }
   function ungroup() {
     if (!current || current.node_type !== "group") return;
+    if (
+      local.current.some(
+        (n) => n.parent_id === current.id && !isEditableNode(n),
+      )
+    ) {
+      setMessage("分组包含只读成员，不能解除关系。");
+      return;
+    }
     edit(
       local.current.map((n) =>
         n.parent_id === current.id ? { ...n, parent_id: undefined } : n,
