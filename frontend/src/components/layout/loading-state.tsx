@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "cn";
 import { Spinner } from "@/components/ui/spinner";
+import { Skeleton } from "@/components/ui/skeleton";
 
 /** Announce the real pending operation once; the spinner is decorative. */
 export function LoadingState({
@@ -18,8 +19,21 @@ export function LoadingState({
         className,
       )}
     >
-      <Spinner aria-hidden="true" />
+      <Spinner role="presentation" aria-hidden="true" />
       <span className="min-w-0 break-words">{children}</span>
     </div>
+  );
+}
+
+/** Neutral content placeholder; navigation stays available outside this boundary. */
+export function PageLoading({ message = "正在加载…" }: { message?: string }) {
+  return (
+    <section aria-busy="true" className="flex flex-col gap-6">
+      <LoadingState>{message}</LoadingState>
+      <div aria-hidden="true" className="flex flex-col gap-4">
+        <Skeleton className="h-8 w-1/4" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    </section>
   );
 }

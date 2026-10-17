@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { SessionProvider } from "@/components/auth/session";
+import {
+  cleanup,
+  fireEvent,
+  render as renderUI,
+  screen,
+} from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { HomePage } from "./home-page";
 import { request, RequestError } from "@/lib/request";
@@ -9,7 +15,10 @@ vi.mock("@/lib/request", async (importOriginal) => {
 import { AssetsPage } from "@/app/assets/_components/assets-page";
 import { TooltipProvider } from "@/components/ui/tooltip";
 const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => router }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/",
+  useRouter: () => router,
+}));
 beforeEach(() => {
   vi.stubGlobal(
     "ResizeObserver",
@@ -87,3 +96,7 @@ it("会话服务不可用时仍可浏览公共灵感，未登录的素材库只�
       .mock.calls.every(([path]) => String(path) === "/api/session"),
   ).toBe(true);
 });
+
+function render(ui: React.ReactNode) {
+  return renderUI(ui, { wrapper: SessionProvider });
+}

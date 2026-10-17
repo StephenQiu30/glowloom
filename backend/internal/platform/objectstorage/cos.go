@@ -2,6 +2,7 @@ package objectstorage
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -43,6 +44,17 @@ func (b cosBackend) put(ctx context.Context, key string, reader io.Reader, size 
 func (b cosBackend) stat(ctx context.Context, key string) (ObjectInfo, error) {
 	resp, err := b.sdk.Object.Head(ctx, key, nil)
 	if err != nil {
+		// COS HEAD omits the XML error body. An empty-code 404 cannot
+		// distinguish a missing key from a missing bucket, so confirm through
+		// GET's authoritative error code. Never reinterpret a denied request.
+		var response *cos.ErrorResponse
+		if errors.As(err, &response) && response.Response != nil && response.Response.StatusCode == http.StatusNotFound && response.Code == "" {
+			proof, proofErr := b.sdk.Object.Get(ctx, key, nil)
+			closeCOS(proof)
+			if proofErr != nil {
+				return ObjectInfo{}, proofErr
+			}
+		}
 		return ObjectInfo{}, err
 	}
 	defer closeCOS(resp)

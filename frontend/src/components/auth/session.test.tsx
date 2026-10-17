@@ -9,37 +9,41 @@ import {
 import { StrictMode } from "react";
 import { ThemeProvider, useTheme } from "next-themes";
 import { afterEach, expect, it, vi } from "vitest";
-import { SessionGate } from "./session";
+import { SessionGate, SessionProvider } from "./session";
 import { request, RequestError } from "@/lib/request";
 vi.mock("@/lib/request", async (original) => ({
   ...(await original<typeof import("@/lib/request")>()),
   request: vi.fn(),
 }));
-vi.mock("next/navigation", () => ({ useRouter: () => router }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => navigation.pathname,
+  useRouter: () => router,
+}));
 const router = { replace: vi.fn() };
+const navigation = { pathname: "/" };
 const notifications = vi.hoisted(() => ({ show: vi.fn(), dismiss: vi.fn() }));
 vi.mock("sonner", () => ({
   toast: Object.assign(notifications.show, { dismiss: notifications.dismiss }),
 }));
 afterEach(() => {
+  navigation.pathname = "/";
   cleanup();
   vi.resetAllMocks();
 });
 it("startup announces one pending state without rendering private children", () => {
   vi.mocked(request).mockReturnValue(new Promise(() => {}));
   const { container } = render(
-    <SessionGate>
-      <p>private content</p>
-    </SessionGate>,
+    <SessionProvider>
+      <SessionGate>
+        <p>private content</p>
+      </SessionGate>
+    </SessionProvider>,
   );
   expect(screen.getByRole("status").textContent).toBe("正在验证登录状态…");
   expect(screen.getAllByRole("status")).toHaveLength(1);
   expect(screen.queryByText("private content")).toBeNull();
-  expect(
-    container
-      .querySelector('[data-slot="skeleton"]')
-      ?.closest('[aria-hidden="true"]'),
-  ).toBeTruthy();
+  expect(container.querySelector('[aria-busy="true"]')).toBeTruthy();
+  expect(screen.queryByText("正在准备创作空间")).toBeNull();
   expect(screen.queryByRole("progressbar")).toBeNull();
 });
 
@@ -48,9 +52,11 @@ it("protected failure stops loading and retry returns to the pending boundary", 
     .mockRejectedValueOnce(new RequestError("temporarily_unavailable", 503))
     .mockReturnValueOnce(new Promise(() => {}));
   render(
-    <SessionGate>
-      <p>private content</p>
-    </SessionGate>,
+    <SessionProvider>
+      <SessionGate>
+        <p>private content</p>
+      </SessionGate>
+    </SessionProvider>,
   );
   await screen.findByRole("heading", { name: "暂时无法确认登录状态" });
   expect(screen.queryByRole("status")).toBeNull();
@@ -64,9 +70,11 @@ it("public session failure uses one short toast and keeps the page free of a ban
     .mockRejectedValueOnce(new RequestError("invalid_receipt"))
     .mockRejectedValueOnce(new RequestError("unauthenticated", 401));
   render(
-    <SessionGate allowGuest>
-      <p>public content</p>
-    </SessionGate>,
+    <SessionProvider>
+      <SessionGate allowGuest>
+        <p>public content</p>
+      </SessionGate>
+    </SessionProvider>,
   );
   await screen.findByText("public content");
   expect(screen.queryByRole("alert")).toBeNull();
@@ -91,9 +99,11 @@ it("normal anonymous browsing does not show any session notification", async () 
     new RequestError("unauthenticated", 401),
   );
   render(
-    <SessionGate allowGuest>
-      <p>public content</p>
-    </SessionGate>,
+    <SessionProvider>
+      <SessionGate allowGuest>
+        <p>public content</p>
+      </SessionGate>
+    </SessionProvider>,
   );
   await screen.findByText("public content");
   expect(notifications.show).not.toHaveBeenCalled();
@@ -108,9 +118,11 @@ it("unmounting a public page ignores a late failure", async () => {
     }),
   );
   const view = render(
-    <SessionGate allowGuest>
-      <p>public content</p>
-    </SessionGate>,
+    <SessionProvider>
+      <SessionGate allowGuest>
+        <p>public content</p>
+      </SessionGate>
+    </SessionProvider>,
   );
   view.unmount();
   await act(async () => reject(new RequestError("invalid_receipt")));
@@ -123,9 +135,11 @@ it("StrictMode emits only one toast for a current failed session check", async (
   );
   const view = render(
     <StrictMode>
-      <SessionGate allowGuest>
-        <p>public content</p>
-      </SessionGate>
+      <SessionProvider>
+        <SessionGate allowGuest>
+          <p>public content</p>
+        </SessionGate>
+      </SessionProvider>
     </StrictMode>,
   );
   await screen.findByText("public content");
@@ -178,9 +192,11 @@ it.each(["light", "dark", "system"])(
     );
     const view = render(
       <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-        <SessionGate>
-          <SavedThemeState />
-        </SessionGate>
+        <SessionProvider>
+          <SessionGate>
+            <SavedThemeState />
+          </SessionGate>
+        </SessionProvider>
       </ThemeProvider>,
     );
     await screen.findByText(`主题偏好：${theme}`);
@@ -216,9 +232,11 @@ it("账号偏好读取失败时保持默认深色，不被浅色系统外观覆�
   });
   const view = render(
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-      <SessionGate>
-        <p>深色默认内容</p>
-      </SessionGate>
+      <SessionProvider>
+        <SessionGate>
+          <p>深色默认内容</p>
+        </SessionGate>
+      </SessionProvider>
     </ThemeProvider>,
   );
   await screen.findByText("深色默认内容");
@@ -249,9 +267,11 @@ it("主题 setter 随选择变化时不重新读取并覆盖账号默认主题",
   );
   const view = render(
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-      <SessionGate>
-        <LocalThemeChange />
-      </SessionGate>
+      <SessionProvider>
+        <SessionGate>
+          <LocalThemeChange />
+        </SessionGate>
+      </SessionProvider>
     </ThemeProvider>,
   );
   fireEvent.click(await screen.findByRole("button", { name: "切换测试主题" }));
@@ -283,9 +303,11 @@ it.each(["authenticated", "guest"])(
       .mockReturnValueOnce(pending)
       .mockResolvedValue(validSession);
     render(
-      <SessionGate allowGuest>
-        <input aria-label="public draft" defaultValue="existing idea" />
-      </SessionGate>,
+      <SessionProvider>
+        <SessionGate allowGuest>
+          <input aria-label="public draft" defaultValue="existing idea" />
+        </SessionGate>
+      </SessionProvider>,
     );
     const draft = await screen.findByLabelText("public draft");
     fireEvent.change(draft, { target: { value: "keep this idea" } });
@@ -313,10 +335,118 @@ it("旧服务端改密标记为true也正常渲染已登录内容，不强制跳
     must_change_password: true,
   });
   render(
-    <SessionGate>
-      <p>正常账号页面</p>
-    </SessionGate>,
+    <SessionProvider>
+      <SessionGate>
+        <p>正常账号页面</p>
+      </SessionGate>
+    </SessionProvider>,
   );
   expect(await screen.findByText("正常账号页面")).toBeTruthy();
   expect(router.replace).not.toHaveBeenCalledWith("/reset-password");
+});
+
+it("persistent session survives page gate remount without another startup or theme reset", async () => {
+  vi.mocked(request).mockImplementation(async (url) =>
+    url === "/api/session" ? validSession : { theme: "light" },
+  );
+  const view = render(
+    <SessionProvider>
+      <SessionGate key="home">
+        <p>first page</p>
+      </SessionGate>
+    </SessionProvider>,
+  );
+  await screen.findByText("first page");
+  view.rerender(
+    <SessionProvider>
+      <SessionGate key="explore">
+        <p>next page</p>
+      </SessionGate>
+    </SessionProvider>,
+  );
+  expect(screen.getByText("next page")).toBeTruthy();
+  expect(screen.queryByRole("status")).toBeNull();
+  expect(
+    vi.mocked(request).mock.calls.filter(([url]) => url === "/api/session"),
+  ).toHaveLength(1);
+  expect(
+    vi
+      .mocked(request)
+      .mock.calls.filter(([url]) => url === "/api/me/preferences"),
+  ).toHaveLength(1);
+});
+
+it("background route check keeps confirmed content until a current 401 revokes it", async () => {
+  let reject!: (error: unknown) => void;
+  const pending = new Promise((_, fail) => {
+    reject = fail;
+  });
+  vi.mocked(request).mockImplementation(async (url) => {
+    if (url !== "/api/session") return { theme: "light" };
+    return navigation.pathname === "/" ? validSession : pending;
+  });
+  const view = render(
+    <SessionProvider>
+      <SessionGate>
+        <p>first private page</p>
+      </SessionGate>
+    </SessionProvider>,
+  );
+  await screen.findByText("first private page");
+  navigation.pathname = "/subjects";
+  view.rerender(
+    <SessionProvider>
+      <SessionGate key="subjects">
+        <p>next private page</p>
+      </SessionGate>
+    </SessionProvider>,
+  );
+  expect(screen.getByText("next private page")).toBeTruthy();
+  expect(screen.queryByRole("status")).toBeNull();
+  await act(async () => reject(new RequestError("unauthenticated", 401)));
+  await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/login"));
+  expect(screen.queryByText("next private page")).toBeNull();
+  expect(
+    vi.mocked(request).mock.calls.filter(([url]) => url === "/api/session"),
+  ).toHaveLength(2);
+  expect(
+    vi
+      .mocked(request)
+      .mock.calls.filter(([url]) => url === "/api/me/preferences"),
+  ).toHaveLength(1);
+});
+
+it("a saved local light theme remains visible while account preferences are pending", async () => {
+  localStorage.setItem("theme", "light");
+  vi.stubGlobal("matchMedia", (media: string) => ({
+    matches: false,
+    media,
+    addListener() {},
+    removeListener() {},
+  }));
+  let resolvePreferences!: (value: unknown) => void;
+  const pending = new Promise((resolve) => {
+    resolvePreferences = resolve;
+  });
+  vi.mocked(request).mockImplementation(async (url) =>
+    url === "/api/session" ? validSession : pending,
+  );
+  const view = render(
+    <ThemeProvider attribute="class" defaultTheme="dark">
+      <SessionProvider>
+        <SessionGate>
+          <SavedThemeState />
+        </SessionGate>
+      </SessionProvider>
+    </ThemeProvider>,
+  );
+  await screen.findByText("主题偏好：light");
+  expect(document.documentElement.classList.contains("light")).toBe(true);
+  await act(async () => resolvePreferences({ theme: "light" }));
+  expect(screen.getByText("主题偏好：light")).toBeTruthy();
+  view.unmount();
+  vi.unstubAllGlobals();
+  localStorage.clear();
+  document.documentElement.removeAttribute("class");
+  document.documentElement.removeAttribute("style");
 });

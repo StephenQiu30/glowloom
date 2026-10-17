@@ -132,7 +132,7 @@ function Shell({
           <Navigation screen={screen} mobile />
         )}
         <div id="main-content" className={cn(!fullBleed && "workspace-page")}>
-          {children}
+          <SpaceProvider>{children}</SpaceProvider>
         </div>
       </SidebarInset>
       <UnavailableDialog feature={feature} onClose={() => setFeature(null)} />
@@ -211,28 +211,26 @@ export function BasicLayout({
           screen === "assets")
       }
     >
-      <SpaceProvider>
-        <SidebarProvider
-          className="product-shell"
-          open={sidebarOpen}
-          onOpenChange={setSidebarPreference}
-          style={
-            {
-              "--sidebar-width": "240px",
-              "--sidebar-width-icon": "64px",
-            } as CSSProperties
-          }
+      <SidebarProvider
+        className="product-shell"
+        open={sidebarOpen}
+        onOpenChange={setSidebarPreference}
+        style={
+          {
+            "--sidebar-width": "240px",
+            "--sidebar-width-icon": "64px",
+          } as CSSProperties
+        }
+      >
+        <Shell
+          screen={screen}
+          fullBleed={fullBleed}
+          initialAuthMode={initialAuthMode}
+          search={search}
         >
-          <Shell
-            screen={screen}
-            fullBleed={fullBleed}
-            initialAuthMode={initialAuthMode}
-            search={search}
-          >
-            {children}
-          </Shell>
-        </SidebarProvider>
-      </SpaceProvider>
+          {children}
+        </Shell>
+      </SidebarProvider>
     </SessionGate>
   );
 }

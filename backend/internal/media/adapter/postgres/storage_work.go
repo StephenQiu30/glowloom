@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -114,6 +115,36 @@ func (s *StorageRoutes) ReserveWorkLocation(ctx context.Context, id uuid.UUID, k
 	return location, err
 }
 
+// BeginWorkWrite records the existing bounded execution deadline before SDK I/O.
+// A paused worker cannot restart its clock after cancellation or reconciliation.
+func (s *StorageRoutes) BeginWorkWrite(ctx context.Context, id uuid.UUID, location domain.ObjectLocation) error {
+	if s == nil || s.db == nil {
+		return application.ErrUnavailable
+	}
+	deadline, bounded := ctx.Deadline()
+	if !bounded || ctx.Err() != nil || time.Until(deadline) <= 0 || time.Until(deadline) > 5*time.Minute || location.ID == uuid.Nil || location.Ref.Validate() != nil {
+		return application.ErrStorageRouteConflict
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var intent storageWorkRow
+		read := tx.Raw(`SELECT * FROM media.storage_work_intent WHERE id=? FOR SHARE`, id).Scan(&intent)
+		if read.Error != nil {
+			return read.Error
+		}
+		if read.RowsAffected != 1 || intent.State != "open" {
+			return application.ErrStorageRouteConflict
+		}
+		update := tx.Exec(`UPDATE media.object_location SET write_until=GREATEST(write_until,?::timestamptz) WHERE id=? AND owner_intent_id=? AND profile_id=? AND bucket=? AND object_key=? AND state IN ('reserved','present','unknown')`, deadline.UTC(), location.ID, id, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key)
+		if update.Error != nil {
+			return update.Error
+		}
+		if update.RowsAffected != 1 {
+			return application.ErrStorageRouteConflict
+		}
+		return nil
+	})
+}
+
 // ConfirmWorkLocation CAS-records verified metadata while the task remains open.
 func (s *StorageRoutes) ConfirmWorkLocation(ctx context.Context, id uuid.UUID, location domain.ObjectLocation, info application.ObjectInfo) error {
 	if s == nil || s.db == nil {
@@ -217,7 +248,16 @@ func (s *StorageRoutes) BeginWorkRemoval(ctx context.Context, id uuid.UUID, loca
 		if read.RowsAffected != 1 {
 			return nil
 		}
-		update := tx.Exec(`UPDATE media.object_location l SET state='delete_pending' WHERE l.id=? AND l.owner_intent_id=? AND l.profile_id=? AND l.bucket=? AND l.object_key=? AND l.state IN ('reserved','present','unknown','delete_pending') AND NOT EXISTS(SELECT 1 FROM media.media_asset a WHERE a.object_location_id=l.id) AND NOT EXISTS(SELECT 1 FROM media.rendition r WHERE r.object_location_id=l.id)`, location.ID, id, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key)
+		for _, column := range legacyObjectColumns {
+			var live bool
+			if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM `+column.table+` t WHERE `+column.location+`=? AND NOT(`+legacyRetired(column)+`))`, location.ID).Scan(&live).Error; err != nil {
+				return err
+			}
+			if live {
+				return nil
+			}
+		}
+		update := tx.Exec(`UPDATE media.object_location l SET state='delete_pending' WHERE l.id=? AND l.owner_intent_id=? AND l.profile_id=? AND l.bucket=? AND l.object_key=? AND l.state IN ('reserved','present','unknown','delete_pending') AND (l.write_until IS NULL OR l.write_until<clock_timestamp()) AND NOT EXISTS(SELECT 1 FROM media.media_asset a WHERE a.object_location_id=l.id) AND NOT EXISTS(SELECT 1 FROM media.rendition r WHERE r.object_location_id=l.id)`, location.ID, id, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key)
 		remove = update.RowsAffected == 1
 		return update.Error
 	})

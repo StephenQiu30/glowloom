@@ -7,7 +7,6 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { Skeleton } from "@/components/ui/skeleton";
 import { LoadingState } from "./loading-state";
 
 /** Shared full-page boundary for session, route and editor startup states. */
@@ -44,15 +43,11 @@ export function ApplicationLoading({
   message?: string;
 }) {
   return (
-    <ApplicationState
-      title="正在准备创作空间"
-      description={<LoadingState>{message}</LoadingState>}
-    >
-      <div className="application-loading-preview" aria-hidden="true">
-        <Skeleton className="h-3 w-2/3" />
-        <Skeleton className="h-3 w-1/2" />
-        <Skeleton className="mt-3 h-16 w-full" />
+    <main className="application-state" aria-busy="true">
+      <div className="application-state-content">
+        <Brand wordmark />
+        <LoadingState>{message}</LoadingState>
       </div>
-    </ApplicationState>
+    </main>
   );
 }

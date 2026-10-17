@@ -196,3 +196,78 @@ func TestStorageLegacyMissingObjectNeedsRetiredOwnerProof(t *testing.T) {
 		}
 	}
 }
+
+func TestStorageLegacyBatchStartsAboveFiftyThousandReferences(t *testing.T) {
+	database := storageRouteDB(t).Begin()
+	t.Cleanup(func() { _ = database.Rollback().Error })
+	routes := pgmedia.NewStorageRoutes(database)
+	profiles := storageProfiles(t, routes)
+	if err := routes.BindLegacyStorage(t.Context(), profiles[0], strings.Repeat("a", 64)); err != nil {
+		t.Fatal(err)
+	}
+	actor, project := mediaStoreProject(t, database)
+	request := uuid.New()
+	sha := strings.Repeat("a", 64)
+	if err := database.Exec(`INSERT INTO script.request(actor_id,request_id,org_id,project_id,action,request_hash,created_at) VALUES(?,?,?,?,'create',?,now())`, actor.ID, request, actor.OrgID, project, sha).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Exec(`INSERT INTO script.command(actor_id,request_id,org_id,project_id,action,request_hash,plan,created_at) VALUES(?,?,?,?,'create',?,'{}'::jsonb,now())`, actor.ID, request, actor.OrgID, project, sha).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Exec(`INSERT INTO script.object_intent(actor_id,request_id,org_id,project_id,object_key,sha256,byte_size,mime) SELECT ?,?,?,?,'projects/'||?||'/script/'||lpad(n::text,6,'0')||'.json',?,1,'application/json' FROM generate_series(1,50001) n`, actor.ID, request, actor.OrgID, project, project.String(), sha).Error; err != nil {
+		t.Fatal(err)
+	}
+	candidates, err := routes.LegacyCandidates(t.Context(), 1)
+	if err != nil || len(candidates) != 1 {
+		t.Fatal("large inventory cannot start a bounded batch", err)
+	}
+	count, err := routes.LegacyCandidateCount(t.Context())
+	if err != nil || count < 50001 {
+		t.Fatal("remaining key count truncated", err)
+	}
+}
+
+func TestStorageLegacyOperationWorkNeedsDrainProofAndFreezesOriginalTarget(t *testing.T) {
+	database := storageRouteDB(t).Begin()
+	t.Cleanup(func() { _ = database.Rollback().Error })
+	routes := pgmedia.NewStorageRoutes(database)
+	profiles := storageProfiles(t, routes)
+	if err := routes.BindLegacyStorage(t.Context(), profiles[0], strings.Repeat("a", 64)); err != nil {
+		t.Fatal(err)
+	}
+	_, project := mediaStoreProject(t, database)
+	id := uuid.New()
+	if err := database.Exec(`INSERT INTO operation.operation(id,project_id,capability,mode,input_hash,origin,status,create_time) VALUES(?,?,'image.generate','single','legacy-proof','upload','submitted',clock_timestamp()-interval '1 hour')`, id, project).Error; err != nil {
+		t.Fatal(err)
+	}
+	configSHA := strings.Repeat("e", 64)
+	if _, err := routes.BackfillLegacyOperationWork(t.Context(), configSHA, 1000); !errors.Is(err, mediaapp.ErrStorageNotReady) {
+		t.Fatal("legacy work imported without old-binary drain proof", err)
+	}
+	if err := routes.RecordStorageDeployment(t.Context(), configSHA, strings.Repeat("d", 64)); err != nil {
+		t.Fatal(err)
+	}
+	count, err := routes.BackfillLegacyOperationWork(t.Context(), configSHA, 1000)
+	if err != nil || count < 1 {
+		t.Fatal("legacy work import failed", err)
+	}
+	owner := mediaapp.StorageWorkOwner{Kind: "operation", OwnerID: project, WorkID: id}
+	before, err := routes.ReadStorageWork(t.Context(), owner)
+	if err != nil || before.ProfileID != "minio-main" {
+		t.Fatal("legacy operation used current default", err)
+	}
+	current, err := routes.ReadActive(t.Context())
+	if err != nil && !errors.Is(err, mediaapp.ErrStorageNotReady) {
+		t.Fatal(err)
+	}
+	if _, err := routes.Activate(t.Context(), current.Revision, "legacy-job-cos-"+uuid.NewString(), "cos-main"); err != nil {
+		t.Fatal(err)
+	}
+	after, err := pgmedia.NewStorageRoutes(database).ReadStorageWork(t.Context(), owner)
+	if err != nil || before != after {
+		t.Fatal("legacy job changed after restart/cutover", err)
+	}
+	if count, err := routes.BackfillLegacyOperationWork(t.Context(), configSHA, 1000); err != nil || count != 0 {
+		t.Fatal("legacy work replay duplicated imports", err)
+	}
+}

@@ -69,7 +69,7 @@ func TestStorageRouteActivationCASAndLostReply(t *testing.T) {
 	database := storageRouteDB(t)
 	store := pgmedia.NewStorageRoutes(database)
 	storageProfiles(t, store)
-	if err := database.Exec(`TRUNCATE media.storage_route,media.storage_activation`).Error; err != nil {
+	if err := database.Exec(`TRUNCATE media.storage_route,media.storage_activation,media.storage_activation_guard`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.ReadActive(t.Context()); !errors.Is(err, application.ErrStorageNotReady) {

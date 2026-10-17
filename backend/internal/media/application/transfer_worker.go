@@ -146,7 +146,7 @@ func transferFailure(err error) (string, bool) {
 // Execute waits for every physical call and owned heartbeat before recording
 // cessation. Unknown remote object outcomes remain durable reconciliation work.
 func (w *TransferWorker) Execute(ctx context.Context, id TransferWorkID) (domain.TransferJob, error) {
-	if w == nil || w.repo == nil || w.objects == nil {
+	if w == nil || w.repo == nil || w.objects == nil && w.physical == nil {
 		return domain.TransferJob{}, ErrUnavailable
 	}
 	lease, err := w.repo.ClaimTransfer(ctx, id)

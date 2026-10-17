@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sort"
 	"time"
 
@@ -115,6 +116,13 @@ func storageActivationReady(tx *gorm.DB, in application.StorageActivation) (stri
 			return "", application.ErrStorageNotReady
 		}
 	}
+	var unresolvedWork bool
+	if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM operation.operation o WHERE NOT EXISTS(SELECT 1 FROM media.storage_work_intent w WHERE w.kind='operation' AND w.owner_id=o.project_id AND w.work_id=o.id))`).Scan(&unresolvedWork).Error; err != nil {
+		return "", err
+	}
+	if unresolvedWork {
+		return "", application.ErrStorageNotReady
+	}
 	var evidence string
 	read := tx.Raw(`SELECT evidence_sha256 FROM media.storage_deployment_evidence WHERE config_sha256=? FOR SHARE`, in.ConfigSHA256).Scan(&evidence)
 	if read.Error != nil {
@@ -165,7 +173,7 @@ func storageActivationReady(tx *gorm.DB, in application.StorageActivation) (stri
 		}
 		if mode != "" && mode != "disabled" {
 			var proved bool
-			if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM media.storage_probe_evidence WHERE profile_id=? AND resource_identity=? AND config_sha256=? AND expires_at>clock_timestamp())`, p.ID, p.ResourceIdentity, in.ConfigSHA256).Scan(&proved).Error; err != nil {
+			if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM media.storage_probe_evidence WHERE profile_id=? AND resource_identity=? AND config_sha256=? AND expires_at>clock_timestamp()) AND EXISTS(SELECT 1 FROM media.storage_bucket_evidence WHERE profile_id=? AND resource_identity=? AND config_sha256=? AND contract='private-flat-never-versioned-standard-v1' AND expires_at>clock_timestamp())`, p.ID, p.ResourceIdentity, in.ConfigSHA256, p.ID, p.ResourceIdentity, in.ConfigSHA256).Scan(&proved).Error; err != nil {
 				return "", err
 			}
 			if !proved {
@@ -212,6 +220,12 @@ func (s *StorageRoutes) ActivateStorage(ctx context.Context, in application.Stor
 			profiles = append(profiles, p.StorageProfile)
 		}
 		if err := NewStorageRoutes(tx).RegisterProfiles(ctx, profiles); err != nil {
+			return err
+		}
+		// Admissions take SHARE/UPDATE on this row before saving their target.
+		// Acquire it before checking old-profile needs: a request admitted
+		// during the gate check must not lose write access in the same cutover.
+		if _, err := readStorageRoute(tx, true); err != nil && !errors.Is(err, application.ErrStorageNotReady) {
 			return err
 		}
 		evidence, err := storageActivationReady(tx, in)

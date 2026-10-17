@@ -134,6 +134,9 @@
 }
 
 /* R6 — shared composition and responsive layout. */
+html {
+  scrollbar-gutter: stable;
+}
 body {
   margin: 0;
 }
@@ -185,15 +188,6 @@ button:not(:disabled),
   min-inline-size: 0;
   gap: 1rem;
   overflow-wrap: anywhere;
-}
-.application-loading-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  inline-size: 100%;
-  padding: 1.25rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
 }
 .product-shell {
   min-height: 100dvh;

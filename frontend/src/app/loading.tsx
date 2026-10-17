@@ -1,5 +1,5 @@
-import { ApplicationLoading } from "@/components/layout/application-state";
+import { RouteLoading } from "@/components/layout/route-loading";
 
 export default function Loading() {
-  return <ApplicationLoading />;
+  return <RouteLoading />;
 }

@@ -16,6 +16,23 @@ import (
 
 type locatedTransferMemory struct{ data map[domain.ObjectRef][]byte }
 
+type routedWorkerAdmission struct {
+	mediaapp.TransferWorkerRepository
+	failure error
+}
+
+func (r routedWorkerAdmission) ClaimTransfer(context.Context, mediaapp.TransferWorkID) (mediaapp.TransferLease, error) {
+	return mediaapp.TransferLease{}, r.failure
+}
+
+func TestRoutedTransferWorkerReachesPersistentAdmission(t *testing.T) {
+	failure := errors.New("fixture admission unavailable")
+	worker := mediaapp.NewRoutedTransferWorker(routedWorkerAdmission{failure: failure}, &locatedTransferMemory{}, t.TempDir())
+	if _, err := worker.Execute(t.Context(), mediaapp.TransferWorkID{}); !errors.Is(err, failure) {
+		t.Fatal("native physical port rejected before persistent admission", err)
+	}
+}
+
 func (o *locatedTransferMemory) Get(_ context.Context, ref domain.ObjectRef) (io.ReadCloser, error) {
 	b, ok := o.data[ref]
 	if !ok {

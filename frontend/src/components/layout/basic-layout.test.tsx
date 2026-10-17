@@ -1,5 +1,7 @@
+import { SessionProvider } from "@/components/auth/session";
 import {
   cleanup,
+  act,
   fireEvent,
   render as renderUI,
   screen,
@@ -15,7 +17,11 @@ vi.mock("@/lib/request", async (importOriginal) => {
   return { ...actual, request: vi.fn() };
 });
 function render(children: ReactNode) {
-  return renderUI(<TooltipProvider>{children}</TooltipProvider>);
+  return renderUI(
+    <SessionProvider>
+      <TooltipProvider>{children}</TooltipProvider>
+    </SessionProvider>,
+  );
 }
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
@@ -23,7 +29,10 @@ const mocks = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
 }));
-vi.mock("next/navigation", () => ({ useRouter: () => mocks }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/",
+  useRouter: () => mocks,
+}));
 vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), {
     success: mocks.success,
@@ -164,7 +173,7 @@ it("快捷键切换导航，编辑输入时不抢占快捷键", async () => {
     </BasicLayout>,
   );
   await screen.findByRole("button", { name: "收起导航" });
-  fireEvent.keyDown(screen.getByRole("textbox", { name: "提示词" }), {
+  fireEvent.keyDown(await screen.findByRole("textbox", { name: "提示词" }), {
     key: "b",
     ctrlKey: true,
   });
@@ -257,4 +266,43 @@ it("手机顶栏提供独立主题入口，移除积分会员并保留通知反�
   expect(
     await screen.findByRole("dialog", { name: "消息中心暂未开放" }),
   ).toBeTruthy();
+});
+
+it("空间读取期间保留顶栏和侧栏，只阻止正文私有内容", async () => {
+  let finish!: (value: unknown) => void;
+  const pending = new Promise((resolve) => {
+    finish = resolve;
+  });
+  const original = vi.mocked(request).getMockImplementation()!;
+  vi.mocked(request).mockImplementation((url, options) =>
+    url === "/api/me/spaces" ? pending : original(url, options),
+  );
+  render(
+    <BasicLayout screen="subjects">
+      <p>private subject content</p>
+    </BasicLayout>,
+  );
+  const header = await screen.findByRole("banner", { name: "页面顶栏" });
+  expect(screen.getByRole("link", { name: "素材库" })).toBeTruthy();
+  expect(await screen.findByRole("status")).toHaveProperty(
+    "textContent",
+    "正在加载…",
+  );
+  expect(screen.queryByText("private subject content")).toBeNull();
+  await act(async () =>
+    finish({
+      items: [
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          kind: "personal",
+          name: "个人空间",
+          role: "creator",
+          writable: true,
+          team_id: "",
+        },
+      ],
+    }),
+  );
+  await screen.findByText("private subject content");
+  expect(screen.getByRole("banner", { name: "页面顶栏" })).toBe(header);
 });

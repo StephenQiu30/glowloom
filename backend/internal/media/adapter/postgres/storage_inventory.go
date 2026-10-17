@@ -113,8 +113,7 @@ func legacyRows(tx *gorm.DB, key string, lock bool) ([]legacyObjectRow, error) {
 			query += fmt.Sprintf(` AND %s=?`, column.key)
 			args = append(args, key)
 		}
-		query += fmt.Sprintf(` ORDER BY %s LIMIT ?`, column.key)
-		args = append(args, application.MaxStorageUsageObjects+1-len(rows))
+		query += fmt.Sprintf(` ORDER BY %s`, column.key)
 		if lock {
 			query += ` FOR UPDATE`
 		}
@@ -123,9 +122,6 @@ func legacyRows(tx *gorm.DB, key string, lock bool) ([]legacyObjectRow, error) {
 			return nil, fmt.Errorf("inventory legacy storage column: %w", err)
 		}
 		rows = append(rows, found...)
-		if len(rows) > application.MaxStorageUsageObjects {
-			return nil, application.ErrUnavailable
-		}
 	}
 	return rows, nil
 }
@@ -164,10 +160,20 @@ func legacyCandidate(ref domain.ObjectRef, rows []legacyObjectRow) (application.
 	return c, nil
 }
 
-// LegacyCandidates returns a complete bounded inventory; conflicting owner
-// facts or an unknown original identity block the inventory instead of guessing.
-func (s *StorageRoutes) LegacyCandidates(ctx context.Context) ([]application.LegacyObjectCandidate, error) {
+// LegacyCandidates selects a bounded set of keys first, then gathers every
+// unresolved owning row for each key. Total inventory size never blocks a batch.
+func (s *StorageRoutes) LegacyCandidates(ctx context.Context, limits ...int) ([]application.LegacyObjectCandidate, error) {
 	if s == nil || s.db == nil {
+		return nil, application.ErrUnavailable
+	}
+	limit := 1000
+	if len(limits) > 1 {
+		return nil, application.ErrUnavailable
+	}
+	if len(limits) == 1 {
+		limit = limits[0]
+	}
+	if limit < 1 || limit > 1000 {
 		return nil, application.ErrUnavailable
 	}
 	var result []application.LegacyObjectCandidate
@@ -176,25 +182,30 @@ func (s *StorageRoutes) LegacyCandidates(ctx context.Context) ([]application.Leg
 		if err != nil {
 			return err
 		}
-		rows, err := legacyRows(tx, "", false)
-		if err != nil {
+		parts := make([]string, 0, len(legacyObjectColumns))
+		args := make([]any, 0, len(legacyObjectColumns)+1)
+		for _, column := range legacyObjectColumns {
+			parts = append(parts, fmt.Sprintf(`(SELECT DISTINCT %s AS object_key FROM %s WHERE %s IS NULL ORDER BY %s LIMIT ?)`, column.key, column.table, column.location, column.key))
+			args = append(args, limit)
+		}
+		args = append(args, limit)
+		var keys []string
+		if err := tx.Raw(`SELECT DISTINCT object_key FROM (`+strings.Join(parts, ` UNION ALL `)+`) keys ORDER BY object_key LIMIT ?`, args...).Scan(&keys).Error; err != nil {
 			return err
 		}
-		grouped := make(map[string][]legacyObjectRow)
-		for _, row := range rows {
-			grouped[row.Key] = append(grouped[row.Key], row)
-		}
-		keys := make([]string, 0, len(grouped))
-		for key := range grouped {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
 		for _, key := range keys {
 			ref := domain.ObjectRef{ProfileID: binding.ProfileID, Bucket: binding.Bucket, Key: key}
 			if ref.Validate() != nil {
 				return application.ErrStorageNotReady
 			}
-			candidate, err := legacyCandidate(ref, grouped[key])
+			rows, err := legacyRows(tx, key, false)
+			if err != nil {
+				return err
+			}
+			if len(rows) == 0 {
+				continue
+			}
+			candidate, err := legacyCandidate(ref, rows)
 			if err != nil {
 				return err
 			}
@@ -203,6 +214,21 @@ func (s *StorageRoutes) LegacyCandidates(ctx context.Context) ([]application.Leg
 		return nil
 	})
 	return result, err
+}
+
+// LegacyCandidateCount counts remaining physical keys without materializing all
+// reference rows. It is progress only; the per-key CAS decides acceptance.
+func (s *StorageRoutes) LegacyCandidateCount(ctx context.Context) (int, error) {
+	if s == nil || s.db == nil {
+		return 0, application.ErrUnavailable
+	}
+	parts := make([]string, 0, len(legacyObjectColumns))
+	for _, column := range legacyObjectColumns {
+		parts = append(parts, fmt.Sprintf(`SELECT %s AS object_key FROM %s WHERE %s IS NULL`, column.key, column.table, column.location))
+	}
+	var count int
+	err := s.db.WithContext(ctx).Raw(`SELECT count(DISTINCT object_key) FROM (` + strings.Join(parts, ` UNION ALL `) + `) keys`).Scan(&count).Error
+	return count, err
 }
 
 func storageDigest(value string) bool {

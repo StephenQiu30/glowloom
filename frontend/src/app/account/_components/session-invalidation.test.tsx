@@ -1,7 +1,8 @@
+import { SessionProvider } from "@/components/auth/session";
 import {
   cleanup,
   fireEvent,
-  render,
+  render as renderUI,
   screen,
   waitFor,
 } from "@testing-library/react";
@@ -19,7 +20,10 @@ const mocks = vi.hoisted(() => ({
   clear: vi.fn().mockResolvedValue(undefined),
   theme: vi.fn(),
 }));
-vi.mock("next/navigation", () => ({ useRouter: () => mocks }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/",
+  useRouter: () => mocks,
+}));
 vi.mock("next-themes", () => ({ useTheme: () => ({ setTheme: mocks.theme }) }));
 vi.mock("@/components/generation/draft-save", async (original) => ({
   ...(await original<typeof import("@/components/generation/draft-save")>()),
@@ -111,3 +115,7 @@ it("a loaded account mutation 401 clears identity and unmounts private fields", 
   );
   expect(state).toEqual({ proof: false, scope: false });
 });
+
+function render(ui: React.ReactNode) {
+  return renderUI(ui, { wrapper: SessionProvider });
+}

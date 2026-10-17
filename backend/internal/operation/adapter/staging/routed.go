@@ -75,6 +75,10 @@ func (o *routedObjects) ref(key string) (platform.Ref, error) {
 }
 
 func (o *routedObjects) PutIfAbsent(ctx context.Context, key string, reader io.Reader, size int64, mime, sha string) error {
+	// The timeout covers reservation and any scheduler pause before SDK I/O.
+	// Cancellation's drain cannot be bypassed by starting a fresh timeout later.
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
 	ref, err := o.ref(key)
 	if err != nil {
 		return err
@@ -86,8 +90,9 @@ func (o *routedObjects) PutIfAbsent(ctx context.Context, key string, reader io.R
 	if location.Ref != (mediadomain.ObjectRef{ProfileID: ref.ProfileID, Bucket: ref.Bucket, Key: ref.Key}) {
 		return mediaapp.ErrStorageIdentityConflict
 	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	defer cancel()
+	if err := o.store.BeginWorkWrite(ctx, o.intent.ID, location); err != nil {
+		return err
+	}
 	err = o.registry.PutIfAbsent(ctx, ref, reader, size, mime, sha)
 	if err != nil && !errors.Is(err, platform.ErrObjectExists) {
 		return err

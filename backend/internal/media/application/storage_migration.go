@@ -22,7 +22,8 @@ type LegacyObjectCandidate struct {
 
 // LegacyMigrationRepository fences facts checked outside the SQL transaction.
 type LegacyMigrationRepository interface {
-	LegacyCandidates(context.Context) ([]LegacyObjectCandidate, error)
+	LegacyCandidates(context.Context, ...int) ([]LegacyObjectCandidate, error)
+	LegacyCandidateCount(context.Context) (int, error)
 	BackfillLegacyObject(context.Context, LegacyObjectCandidate, ObjectInfo) (domain.ObjectLocation, error)
 	BackfillMissingLegacyObject(context.Context, LegacyObjectCandidate) (domain.ObjectLocation, error)
 }
@@ -54,11 +55,14 @@ func (s *LegacyMigration) BackfillBatch(ctx context.Context, limit int) (LegacyM
 	if s == nil || s.repo == nil || s.objects == nil || limit < 1 || limit > 1000 {
 		return result, ErrUnavailable
 	}
-	candidates, err := s.repo.LegacyCandidates(ctx)
+	candidates, err := s.repo.LegacyCandidates(ctx, limit)
 	if err != nil {
 		return result, err
 	}
-	result.Remaining = len(candidates)
+	result.Remaining, err = s.repo.LegacyCandidateCount(ctx)
+	if err != nil {
+		return result, err
+	}
 	for _, candidate := range candidates[:min(limit, len(candidates))] {
 		if err := ctx.Err(); err != nil {
 			return result, err

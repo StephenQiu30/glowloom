@@ -3,6 +3,7 @@ import { branchJournal } from "@/components/generation/draft-save";
 import {
   createContext,
   useContext,
+  useCallback,
   useId,
   useEffect,
   useEffectEvent,
@@ -10,7 +11,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { getSession, deleteSession, getMyPreferences } from "@/api/identity";
 import {
@@ -47,17 +48,16 @@ export function useSession() {
   if (!session) throw new Error("会话尚未就绪");
   return session;
 }
-export function SessionGate({
-  children,
-  admin = false,
-  allowGuest = false,
-}: {
-  children: ReactNode;
-  admin?: boolean;
-  allowGuest?: boolean;
-}) {
-  const router = useRouter();
-  const noticeID = useId();
+const SessionStatusContext = createContext<{
+  guest: boolean;
+  publicUnavailable: boolean;
+  error: string;
+  retry: () => void;
+} | null>(null);
+
+/** Root-owned identity; route checks never discard an already confirmed session. */
+export function SessionProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const { setTheme } = useTheme();
   const [session, setSession] = useState<API.EmailSessionView | null>(null);
   const [error, setError] = useState("");
@@ -74,7 +74,6 @@ export function SessionGate({
         await privateCleanup;
         if (controller.signal.aborted || updateVersion.current !== version)
           return;
-        toast.dismiss(noticeID);
         setError("");
         setPublicUnavailable(false);
         setGuest(false);
@@ -85,54 +84,37 @@ export function SessionGate({
         if (controller.signal.aborted || updateVersion.current !== version)
           return;
         if (e instanceof RequestError && e.status === 401) {
-          toast.dismiss(noticeID);
           setSession(null);
           setError("");
           setPublicUnavailable(false);
           void clearPrivateSession();
-          if (allowGuest) setGuest(true);
-          else router.replace("/login");
+          setGuest(true);
         } else {
           setError("暂时无法确认登录状态");
-          if (allowGuest) {
-            setPublicUnavailable(true);
-            toast("暂时无法确认登录状态", {
-              id: noticeID,
-              action: {
-                label: "重试",
-                onClick: () => {
-                  setError("");
-                  setRetry((n) => n + 1);
-                },
-              },
-            });
-          }
+          setGuest(false);
+          setPublicUnavailable(true);
         }
       });
     return () => {
       controller.abort();
-      toast.dismiss(noticeID);
     };
-  }, [router, retry, allowGuest, noticeID]);
+  }, [pathname, retry]);
   useEffect(
     () =>
       subscribeSessionInvalidation(() => {
-        toast.dismiss(noticeID);
         ++updateVersion.current;
         setSession(null);
         setPublicUnavailable(false);
         setError("");
-        setGuest(allowGuest);
+        setGuest(true);
         void clearPrivateSession();
-        if (!allowGuest) router.replace("/login");
       }),
-    [allowGuest, router, noticeID],
+    [],
   );
   const accountID = session?.actor.id;
   const restoreTheme = useEffectEvent((value: string) => setTheme(value));
   useEffect(() => {
     if (!accountID) return;
-    restoreTheme("dark");
     const controller = new AbortController();
     getMyPreferences({ signal: controller.signal })
       .then((value) => {
@@ -145,33 +127,15 @@ export function SessionGate({
       .catch(() => {});
     return () => controller.abort();
   }, [accountID]);
-  if (!allowGuest && error)
-    return (
-      <ApplicationState title={error} description="请稍后重试。">
-        <Button
-          onClick={() => {
-            setError("");
-            setRetry((n) => n + 1);
-          }}
-        >
-          重试
-        </Button>
-      </ApplicationState>
-    );
-  if (!session && !guest && !publicUnavailable)
-    return <ApplicationLoading message="正在验证登录状态…" />;
-  if (admin && session?.actor.platform_role !== "platform_admin")
-    return (
-      <ApplicationState title="无权访问" description="此页面仅向管理员开放。">
-        <Button onClick={() => router.replace("/")}>返回创作</Button>
-      </ApplicationState>
-    );
+  const retrySession = useCallback(() => {
+    setError("");
+    setRetry((n) => n + 1);
+  }, []);
   return (
     <SessionContext.Provider value={session}>
       <SessionUpdateContext.Provider
         value={(next) => {
           const version = ++updateVersion.current;
-          toast.dismiss(noticeID);
           setError("");
           setPublicUnavailable(false);
           if (session?.actor.id !== next.actor.id) {
@@ -187,12 +151,61 @@ export function SessionGate({
           });
         }}
       >
-        <div key={session?.actor.id ?? "guest"} className="contents">
-          {children}
-        </div>
+        <SessionStatusContext.Provider
+          value={{ guest, publicUnavailable, error, retry: retrySession }}
+        >
+          <div key={session?.actor.id ?? "guest"} className="contents">
+            {children}
+          </div>
+        </SessionStatusContext.Provider>
       </SessionUpdateContext.Provider>
     </SessionContext.Provider>
   );
+}
+/** Route policy stays local; identity and theme survive a page remount. */
+export function SessionGate({
+  children,
+  admin = false,
+  allowGuest = false,
+}: {
+  children: ReactNode;
+  admin?: boolean;
+  allowGuest?: boolean;
+}) {
+  const session = useOptionalSession();
+  const status = useContext(SessionStatusContext);
+  const router = useRouter();
+  const noticeID = useId();
+  if (!status) throw new Error("SessionGate requires SessionProvider");
+  const { guest, publicUnavailable, error, retry } = status;
+  useEffect(() => {
+    if (guest && !allowGuest) router.replace("/login");
+  }, [guest, allowGuest, router]);
+  useEffect(() => {
+    if (error && allowGuest)
+      toast("暂时无法确认登录状态", {
+        id: noticeID,
+        action: { label: "重试", onClick: retry },
+      });
+    return () => {
+      toast.dismiss(noticeID);
+    };
+  }, [error, allowGuest, retry, noticeID]);
+  if (!allowGuest && error)
+    return (
+      <ApplicationState title={error} description="请稍后重试。">
+        <Button onClick={retry}>重试</Button>
+      </ApplicationState>
+    );
+  if (!session && (!allowGuest || (!guest && !publicUnavailable)))
+    return <ApplicationLoading message="正在验证登录状态…" />;
+  if (admin && session?.actor.platform_role !== "platform_admin")
+    return (
+      <ApplicationState title="无权访问" description="此页面仅向管理员开放。">
+        <Button onClick={() => router.replace("/")}>返回创作</Button>
+      </ApplicationState>
+    );
+  return children;
 }
 export function clearPrivateResources() {
   return queuePrivateCleanup();

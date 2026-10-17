@@ -1,8 +1,9 @@
+import { SessionProvider } from "./session";
 import {
   act,
   cleanup,
   fireEvent,
-  render,
+  render as renderUI,
   screen,
   waitFor,
 } from "@testing-library/react";
@@ -26,7 +27,10 @@ const mocks = vi.hoisted(() => ({
   clear: vi.fn().mockResolvedValue(undefined),
   theme: vi.fn(),
 }));
-vi.mock("next/navigation", () => ({ useRouter: () => mocks }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/",
+  useRouter: () => mocks,
+}));
 vi.mock("next-themes", () => ({ useTheme: () => ({ setTheme: mocks.theme }) }));
 vi.mock("@/components/generation/draft-save", () => ({
   branchJournal: { clear: mocks.clear },
@@ -162,3 +166,7 @@ it("guest login after 401 waits for journal cleanup and activates only the lates
   expect(screen.getByText("private latest")).toBeTruthy();
   expect(mocks.clear).toHaveBeenCalledTimes(1);
 });
+
+function render(ui: React.ReactNode) {
+  return renderUI(ui, { wrapper: SessionProvider });
+}

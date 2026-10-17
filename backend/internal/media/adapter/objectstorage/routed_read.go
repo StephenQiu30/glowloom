@@ -98,5 +98,9 @@ func (s *RoutedReadObjects) Remove(ctx context.Context, ref domain.ObjectRef) er
 	if err := ref.Validate(); err != nil {
 		return err
 	}
-	return s.registry.Remove(ctx, transportRef(ref))
+	err := s.registry.Remove(ctx, transportRef(ref))
+	if errors.Is(err, platform.ErrObjectMissing) {
+		return errors.Join(application.ErrObjectMissing, err)
+	}
+	return err
 }

@@ -45,6 +45,7 @@ type StorageWorkAdmission interface {
 // against compensating removal. Callers still enforce their business worker lease.
 type WorkObjectLocations interface {
 	ReserveWorkLocation(context.Context, uuid.UUID, string) (domain.ObjectLocation, error)
+	BeginWorkWrite(context.Context, uuid.UUID, domain.ObjectLocation) error
 	ConfirmWorkLocation(context.Context, uuid.UUID, domain.ObjectLocation, ObjectInfo) error
 	BeginWorkRemoval(context.Context, uuid.UUID, domain.ObjectLocation) (bool, error)
 	ConfirmWorkRemoval(context.Context, uuid.UUID, domain.ObjectLocation) error

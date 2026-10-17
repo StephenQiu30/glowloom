@@ -1,5 +1,6 @@
 "use client";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import { PageLoading } from "@/components/layout/loading-state";
 import {
   Empty,
   EmptyHeader,
@@ -163,9 +164,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
               </EmptyContent>
             </Empty>
           ) : (
-            <p role="status" className="p-6">
-              正在读取空间…
-            </p>
+            <PageLoading message="正在加载…" />
           )
         ) : (
           children
