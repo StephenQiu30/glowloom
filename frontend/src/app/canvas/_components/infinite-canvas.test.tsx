@@ -144,3 +144,15 @@ it("双指缩放保持世界锚点，取消手势提交最终视口并清理捕�
   fireEvent.pointerUp(window, { pointerType: "touch", pointerId: 1 });
   expect(change).toHaveBeenCalledTimes(1);
 });
+it("窗口失焦结束平移并释放状态，后续指针移动不继续拖画布", () => {
+  const { el, change } = canvas();
+  fireEvent.pointerDown(el, { button: 1, clientX: 10, clientY: 10 });
+  fireEvent.pointerMove(window, { clientX: 60, clientY: 30 });
+  act(() => vi.advanceTimersByTime(20));
+  fireEvent.blur(window);
+  expect(el.dataset.canvasPanState).not.toBe("grabbing");
+  expect(change).toHaveBeenCalledExactlyOnceWith({ x: 50, y: 20, k: 1 });
+  fireEvent.pointerMove(window, { clientX: 90, clientY: 50 });
+  fireEvent.pointerUp(window);
+  expect(change).toHaveBeenCalledTimes(1);
+});

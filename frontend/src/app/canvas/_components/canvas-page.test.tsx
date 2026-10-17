@@ -388,3 +388,95 @@ it("恢复画布的迟到结果不覆盖等待期间的新编辑", async () => {
     await screen.findByText("恢复期间有新编辑，未覆盖；原分支仍保留。"),
   ).toBeTruthy();
 });
+
+it("文字节点可编辑、撤销重做并通过原命令保存", async () => {
+  api.project.mockResolvedValue(project);
+  api.canvas.mockResolvedValue(canvas);
+  api.save.mockImplementation(async (_path, body: API.CommandsInput) => ({
+    ...canvas,
+    revision: 2,
+    nodes: body.commands?.find((c) => c.type === "AddNodes")?.nodes ?? [],
+    results: body.commands?.map(() => ({ ok: true })),
+  }));
+  render(<CanvasPage projectID={projectID} canvasID={canvasID} />);
+  await screen.findByText("画布暂无节点");
+  fireEvent.click(screen.getByRole("button", { name: "添加文本" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "文本内容" }), {
+    target: { value: "一段真实文字" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "撤销编辑" }));
+  expect(
+    (screen.getByRole("textbox", { name: "文本内容" }) as HTMLTextAreaElement)
+      .value,
+  ).toBe("");
+  fireEvent.click(screen.getByRole("button", { name: "重做编辑" }));
+  expect(
+    (screen.getByRole("textbox", { name: "文本内容" }) as HTMLTextAreaElement)
+      .value,
+  ).toBe("一段真实文字");
+  fireEvent.click(screen.getByRole("button", { name: "保存画布" }));
+  await waitFor(() => expect(api.save).toHaveBeenCalledOnce());
+  expect(api.save.mock.calls[0][1].commands[0].nodes[0]).toMatchObject({
+    node_type: "text",
+    node_action: "resource",
+    config: { text: "一段真实文字" },
+  });
+  await screen.findByText("已保存 · 版本 2");
+});
+
+it("分组和标注线沿服务端合同保存，标注不进入生成流程", async () => {
+  const a = {
+    id: "00000000-0000-4000-8000-000000000003",
+    title: "素材A",
+    node_type: "image",
+    node_action: "resource",
+    ref_type: "media_asset",
+    ref_id: "00000000-0000-4000-8000-000000000013",
+    config: {},
+    x: 80,
+    y: 80,
+    z_index: 0,
+  };
+  const b = {
+    ...a,
+    id: "00000000-0000-4000-8000-000000000004",
+    ref_id: "00000000-0000-4000-8000-000000000014",
+    title: "素材B",
+    x: 420,
+  };
+  api.project.mockResolvedValue(project);
+  api.canvas.mockResolvedValue({ ...canvas, nodes: [a, b] });
+  render(<CanvasPage projectID={projectID} canvasID={canvasID} />);
+  fireEvent.click(await screen.findByRole("button", { name: "选择 素材A" }));
+  fireEvent.click(screen.getByRole("button", { name: "选择 素材B" }), {
+    shiftKey: true,
+  });
+  fireEvent.click(screen.getByRole("button", { name: "连接所选节点" }));
+  expect(document.querySelectorAll("[data-connection-id]")).toHaveLength(1);
+  fireEvent.click(screen.getByRole("button", { name: "组合所选节点" }));
+  expect(screen.getByRole("button", { name: "选择 分组" })).toBeTruthy();
+  expect(api.save).not.toHaveBeenCalled();
+});
+
+it("读取服务端相机，并保存改变后的视角，不改写节点", async () => {
+  api.project.mockResolvedValue(project);
+  api.canvas.mockResolvedValue({
+    ...canvas,
+    viewport: { x: 120, y: -80, zoom: 0.5 },
+  });
+  api.save.mockImplementation(async (_path, body: API.CommandsInput) => ({
+    ...canvas,
+    viewport: body.commands?.find((c) => c.type === "SetViewport")?.viewport,
+    revision: 2,
+    results: body.commands?.map(() => ({ ok: true })),
+  }));
+  render(<CanvasPage projectID={projectID} canvasID={canvasID} />);
+  await screen.findByText("画布暂无节点");
+  expect(screen.getByText("50%")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "放大" }));
+  fireEvent.click(screen.getByRole("button", { name: "保存画布" }));
+  await waitFor(() => expect(api.save).toHaveBeenCalledOnce());
+  expect(api.save.mock.calls[0][1].commands).toEqual([
+    { type: "SetViewport", viewport: { x: 120, y: -80, zoom: 0.625 } },
+  ]);
+});

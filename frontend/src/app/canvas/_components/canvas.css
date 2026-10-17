@@ -567,3 +567,35 @@
     margin-left: 40px;
   }
 }
+
+.creation-canvas .canvas-edit-actions {
+  position: absolute;
+  top: 72px;
+  left: 80px;
+  right: 16px;
+  z-index: 25;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  pointer-events: none;
+}
+.creation-canvas .canvas-edit-actions button {
+  pointer-events: auto;
+}
+.creation-canvas [data-node-kind="group"] .canvas-node-shell {
+  background: var(--canvas-selection);
+  border-style: dashed;
+}
+.creation-canvas [data-node-kind="text"] .canvas-node-shell span {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: hidden;
+}
+@media (max-width: 767px) {
+  .creation-canvas .canvas-edit-actions {
+    left: 64px;
+  }
+  .creation-canvas .canvas-edit-actions button {
+    min-height: 44px;
+  }
+}

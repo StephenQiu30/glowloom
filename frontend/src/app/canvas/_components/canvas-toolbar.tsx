@@ -48,6 +48,7 @@ export function CanvasToolbar({
   tool,
   onToolChange,
   onAdd,
+  onAddText,
   onMaterials,
   onUpload,
   zoom,
@@ -58,6 +59,7 @@ export function CanvasToolbar({
 }: {
   tool: "select" | "pan";
   onToolChange: (tool: "select" | "pan") => void;
+  onAddText: () => void;
   onAdd: (kind: "image_generation" | "video_generation") => void;
   onMaterials: (tab?: "assets" | "subjects", kind?: string) => void;
   onUpload: () => void;
@@ -81,7 +83,7 @@ export function CanvasToolbar({
           size="icon"
           aria-label="添加文本"
           title="文本"
-          onClick={() => setFeature("文本节点")}
+          onClick={onAddText}
         >
           <Type data-icon="inline-start" />
         </ToolButton>
@@ -231,7 +233,7 @@ export function CanvasToolbar({
           <DialogContent>
             <DialogTitle>画布快捷键</DialogTitle>
             <DialogDescription>
-              编辑文字时，画布快捷键不会触发。
+              编辑文字时，画布快捷键不会触发。已保存节点不能通过撤销移除。
             </DialogDescription>
             <dl className="grid grid-cols-2 gap-4 text-sm">
               <dt>选择 / 抓手</dt>
@@ -242,6 +244,8 @@ export function CanvasToolbar({
               <dd>滚轮 / 双指捏合</dd>
               <dt>移动节点</dt>
               <dd>方向键，Shift 加速</dd>
+              <dt>撤销 / 重做编辑</dt>
+              <dd>⌘ / Ctrl + Z、Shift + Z / Y</dd>
               <dt>保存</dt>
               <dd>⌘ / Ctrl + S</dd>
             </dl>

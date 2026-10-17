@@ -33,7 +33,11 @@ export type Canvas = {
   revision: number;
   nodes: Node[];
   edges: API.Edge[];
+  viewport?: CanvasViewport;
 };
+export type CanvasViewport = { x: number; y: number; zoom: number };
+export const defaultViewport: CanvasViewport = { x: 0, y: 0, zoom: 1 };
+export type GraphOptions = { edges?: API.Edge[]; viewport?: CanvasViewport };
 export function isDraft(node: Node): node is DraftNode {
   return (
     node.node_type === "image_generation" ||
@@ -135,6 +139,30 @@ export function requireCanvas(
       throw new RequestError("invalid_receipt");
     ids.add(n.id);
   }
+  if (
+    c.viewport &&
+    (!position(c.viewport.x) ||
+      !position(c.viewport.y) ||
+      !Number.isFinite(c.viewport.zoom) ||
+      c.viewport.zoom < 0.05 ||
+      c.viewport.zoom > 4)
+  )
+    throw new RequestError("invalid_receipt");
+  const edgeIDs = new Set<string>();
+  for (const edge of c.edges) {
+    if (
+      !edge ||
+      !isProjectID(edge.id) ||
+      edgeIDs.has(edge.id) ||
+      !edge.source_node_id ||
+      !ids.has(edge.source_node_id) ||
+      !edge.target_node_id ||
+      !ids.has(edge.target_node_id) ||
+      typeof edge.edge_type !== "string"
+    )
+      throw new RequestError("invalid_receipt");
+    edgeIDs.add(edge.id);
+  }
   return c as Canvas;
 }
 export function createDraftNode(
@@ -179,8 +207,46 @@ export function isMediaNode(n: Node): boolean {
     Object.keys(n.config).length === 0
   );
 }
+export function isResourceNode(n: Node): boolean {
+  if (isMediaNode(n)) return true;
+  if (n.node_action !== "resource" || n.ref_type || n.ref_id) return false;
+  const keys = Object.keys(n.config).filter(
+    (key) => n.config[key as keyof Node["config"]] !== undefined,
+  );
+  return n.node_type === "text"
+    ? keys.length === 1 &&
+        keys[0] === "text" &&
+        typeof n.config.text === "string" &&
+        Array.from(n.config.text).length <= 10000
+    : n.node_type === "group" &&
+        keys.length === 1 &&
+        keys[0] === "collapsed" &&
+        typeof n.config.collapsed === "boolean";
+}
 export function isEditableNode(n: Node): boolean {
-  return !n.last_operation_id && (isDraft(n) || isMediaNode(n));
+  return !n.last_operation_id && (isDraft(n) || isResourceNode(n));
+}
+export function createResourceNode(
+  kind: "text" | "group",
+  point: { x: number; y: number },
+): Node {
+  return {
+    id: crypto.randomUUID(),
+    title: kind === "text" ? "文本" : "分组",
+    node_type: kind,
+    node_action: "resource",
+    config: kind === "text" ? { text: "" } : { collapsed: false },
+    x: point.x,
+    y: point.y,
+    width: kind === "group" ? 640 : 288,
+    height: kind === "group" ? 400 : 200,
+    z_index: kind === "group" ? -1 : 0,
+  };
+}
+export function isAnnotation(edge: API.Edge): boolean {
+  return (
+    edge.edge_type === "annotation" && !edge.role && edge.binding === undefined
+  );
 }
 export function createMediaNode(
   asset: API.AssetSummary,
@@ -237,122 +303,88 @@ export function duplicateNode(n: Node): Node {
   return copy;
 }
 export function sameEditable(a: Node, b: Node): boolean {
-  if (isMediaNode(a) && isMediaNode(b))
-    return (
-      a.id === b.id &&
-      a.node_type === b.node_type &&
-      a.ref_id === b.ref_id &&
-      a.title === b.title &&
-      a.x === b.x &&
-      a.y === b.y &&
-      a.z_index === b.z_index &&
-      a.width === b.width &&
-      a.height === b.height &&
-      a.parent_id === b.parent_id
-    );
-  if (!isDraft(a) || !isDraft(b))
-    return JSON.stringify(a) === JSON.stringify(b);
-  return (
-    a.id === b.id &&
-    a.node_type === b.node_type &&
-    a.title === b.title &&
-    a.x === b.x &&
-    a.y === b.y &&
-    a.width === b.width &&
-    a.height === b.height &&
-    sameDraft(a.config.draft, b.config.draft)
-  );
+  const { input_revision: aRevision, ...left } = a;
+  const { input_revision: bRevision, ...right } = b;
+  void aRevision;
+  void bRevision;
+  return canonical(left) === canonical(right);
 }
-export function commandBatch(base: Canvas, nodes: Node[]): API.CommandsInput {
+export function commandBatch(
+  base: Canvas,
+  nodes: Node[],
+  options: GraphOptions = {},
+): API.CommandsInput {
+  if (nodes.length > 2000) throw new RequestError("batch_too_large");
   const byID = new Map(base.nodes.map((n) => [n.id, n]));
   const commands: API.Command[] = [];
   const added: API.Node[] = [],
     moves: API.Move[] = [],
     names: API.Name[] = [],
-    sizes: API.Size[] = [];
+    sizes: API.Size[] = [],
+    parents: API.Parent[] = [],
+    indices: API.ZIndex[] = [];
   const ids = new Set<string>();
+  const target = new Map(nodes.map((n) => [n.id, n]));
   for (const n of nodes) {
     if (ids.has(n.id)) throw new RequestError("invalid_request");
     ids.add(n.id);
     const prior = byID.get(n.id);
-    if (
-      prior &&
-      isMediaNode(n) &&
-      isMediaNode(prior) &&
-      isEditableNode(prior)
-    ) {
-      if (
-        n.ref_id !== prior.ref_id ||
-        n.node_type !== prior.node_type ||
-        n.parent_id !== prior.parent_id ||
-        n.z_index !== prior.z_index ||
-        n.last_operation_id !== prior.last_operation_id ||
-        !n.title.trim() ||
-        Array.from(n.title).length > 128 ||
-        !position(n.x) ||
-        !position(n.y) ||
-        !dimension(n.width) ||
-        !dimension(n.height)
-      )
-        throw new RequestError("invalid_request");
-      if (prior.x !== n.x || prior.y !== n.y)
-        moves.push({ id: n.id, x: n.x, y: n.y });
-      if (prior.width !== n.width || prior.height !== n.height)
-        sizes.push({
-          id: n.id,
-          width: n.width ?? 288,
-          height: n.height ?? 200,
-        });
-      if (prior.title !== n.title) names.push({ id: n.id, title: n.title });
-      continue;
-    }
-    if (!isDraft(n)) {
-      if (
-        !prior &&
-        isMediaNode(n) &&
-        isEditableNode(n) &&
-        isProjectID(n.id) &&
-        n.title.trim() &&
-        Array.from(n.title).length <= 128 &&
-        position(n.x) &&
-        position(n.y) &&
-        dimension(n.width) &&
-        dimension(n.height) &&
-        Number.isInteger(n.z_index)
-      ) {
-        const write = { ...n };
-        delete write.input_revision;
-        added.push({ ...write, config: apiConfig(write.config) });
-        continue;
-      }
-      if (!prior || !sameEditable(prior, n))
-        throw new RequestError("invalid_request");
+    if (prior && !isEditableNode(prior)) {
+      if (!sameEditable(prior, n)) throw new RequestError("invalid_request");
       continue;
     }
     if (
-      !validDraft(n.config.draft) ||
+      !isEditableNode(n) ||
+      !isProjectID(n.id) ||
+      !n.title.trim() ||
+      Array.from(n.title).length > 128 ||
       !position(n.x) ||
       !position(n.y) ||
-      !dimension(n.width) ||
-      !dimension(n.height) ||
-      !n.title.trim() ||
-      Array.from(n.title).length > 128
+      !dimension(n.width, n.node_type === "group" ? 100000 : 2000) ||
+      !dimension(n.height, n.node_type === "group" ? 100000 : 2000) ||
+      !Number.isInteger(n.z_index) ||
+      (isDraft(n) && !validDraft(n.config.draft))
     )
       throw new RequestError("invalid_request");
+    if (n.parent_id) {
+      const seen = new Set([n.id]);
+      let parent = target.get(n.parent_id);
+      while (parent) {
+        if (
+          seen.has(parent.id) ||
+          parent.node_type !== "group" ||
+          parent.node_action !== "resource"
+        )
+          throw new RequestError("invalid_request");
+        seen.add(parent.id);
+        parent = parent.parent_id ? target.get(parent.parent_id) : undefined;
+      }
+      if (!target.has(n.parent_id)) throw new RequestError("invalid_request");
+    }
     if (!prior) {
       const write = { ...n };
       delete write.input_revision;
       added.push({ ...write, config: apiConfig(write.config) });
       continue;
     }
-    if (!isDraft(prior) || prior.node_type !== n.node_type)
+    if (
+      n.node_type !== prior.node_type ||
+      n.node_action !== prior.node_action ||
+      n.ref_id !== prior.ref_id ||
+      n.ref_type !== prior.ref_type ||
+      n.last_operation_id !== prior.last_operation_id
+    )
       throw new RequestError("invalid_request");
-    if (prior.x !== n.x || prior.y !== n.y)
+    if (n.x !== prior.x || n.y !== prior.y)
       moves.push({ id: n.id, x: n.x, y: n.y });
-    if (prior.width !== n.width || prior.height !== n.height)
+    if (n.title !== prior.title) names.push({ id: n.id, title: n.title });
+    if (n.width !== prior.width || n.height !== prior.height)
       sizes.push({ id: n.id, width: n.width ?? 288, height: n.height ?? 200 });
-    if (prior.title !== n.title) names.push({ id: n.id, title: n.title });
-    if (!sameDraft(prior.config.draft, n.config.draft))
+    if (n.parent_id !== prior.parent_id)
+      parents.push({ id: n.id, parent_id: n.parent_id ?? undefined });
+    if (n.z_index !== prior.z_index)
+      indices.push({ id: n.id, z_index: n.z_index });
+    if (canonical(n.config) !== canonical(prior.config))
       commands.push({
         type: "UpdateNodeConfig",
         id: n.id,
@@ -365,6 +397,61 @@ export function commandBatch(base: Canvas, nodes: Node[]): API.CommandsInput {
   if (names.length) commands.unshift({ type: "RenameNodes", names });
   if (moves.length) commands.unshift({ type: "MoveNodes", moves });
   if (added.length) commands.unshift({ type: "AddNodes", nodes: added });
+  if (parents.length) commands.push({ type: "SetNodeParents", parents });
+  if (indices.length)
+    commands.push({ type: "SetNodeZIndex", z_indices: indices });
+  const edges = options.edges ?? base.edges;
+  if (edges.length > 4000) throw new RequestError("batch_too_large");
+  const oldEdges = new Map(base.edges.map((e) => [e.id, e]));
+  const newEdges = new Map(edges.map((e) => [e.id, e]));
+  if (newEdges.size !== edges.length) throw new RequestError("invalid_request");
+  const disconnected: string[] = [],
+    connected: API.Edge[] = [];
+  for (const edge of base.edges) {
+    if (newEdges.has(edge.id)) {
+      if (canonical(newEdges.get(edge.id)) !== canonical(edge))
+        throw new RequestError("invalid_request");
+    } else {
+      if (!isAnnotation(edge)) throw new RequestError("invalid_request");
+      disconnected.push(edge.id!);
+    }
+  }
+  for (const edge of edges) {
+    if (oldEdges.has(edge.id)) continue;
+    const source = target.get(edge.source_node_id ?? ""),
+      dest = target.get(edge.target_node_id ?? "");
+    if (
+      !isProjectID(edge.id) ||
+      !isAnnotation(edge) ||
+      !source ||
+      !dest ||
+      source === dest ||
+      !isEditableNode(source) ||
+      !isEditableNode(dest) ||
+      isDraft(source) ||
+      isDraft(dest)
+    )
+      throw new RequestError("invalid_request");
+    connected.push(edge);
+  }
+  if (disconnected.length)
+    commands.push({ type: "Disconnect", ids: disconnected });
+  if (connected.length) commands.push({ type: "Connect", edges: connected });
+  if (
+    options.viewport &&
+    canonical(options.viewport) !== canonical(base.viewport ?? defaultViewport)
+  ) {
+    const v = options.viewport;
+    if (
+      !position(v.x) ||
+      !position(v.y) ||
+      !Number.isFinite(v.zoom) ||
+      v.zoom < 0.05 ||
+      v.zoom > 4
+    )
+      throw new RequestError("invalid_request");
+    commands.push({ type: "SetViewport", viewport: v });
+  }
   if (commands.length > 100) throw new RequestError("batch_too_large");
   return { expected_revision: base.revision, commands };
 }
@@ -401,6 +488,25 @@ export function requireSaveResult(
         throw new RequestError("invalid_receipt");
     }
   }
+  let expectedEdges = base.edges;
+  let expectedViewport = base.viewport ?? defaultViewport;
+  for (const command of body.commands ?? []) {
+    if (command.type === "Disconnect")
+      expectedEdges = expectedEdges.filter(
+        (edge) => !command.ids?.includes(edge.id!),
+      );
+    if (command.type === "Connect")
+      expectedEdges = [...expectedEdges, ...(command.edges ?? [])];
+    if (command.type === "SetViewport")
+      expectedViewport = command.viewport as CanvasViewport;
+  }
+  const sorted = (edges: API.Edge[]) =>
+    [...edges].sort((a, b) => a.id!.localeCompare(b.id!));
+  if (
+    canonical(sorted(c.edges)) !== canonical(sorted(expectedEdges)) ||
+    canonical(c.viewport ?? defaultViewport) !== canonical(expectedViewport)
+  )
+    throw new RequestError("invalid_receipt");
   return c;
 }
 

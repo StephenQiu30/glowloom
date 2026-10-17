@@ -129,3 +129,15 @@ Go 时间轴渲染器使用原字节的 `NotoSansCJKsc-Regular.otf` 绘制中英
 这些参考作品来自即梦公开展示，权利属于原作者及相关权利人；本记录不授予商业使用权。当前用于设计还原与本地审阅，发布前需要核对素材使用权或换成自有素材。浮光不将其声明为用户实际生成的私人资产。
 
 R6 画布重建保留上节登记的指针、坐标与节点交互算法，改为左侧竖向工具栏、底部视口控制与 R6 颜色/圆角；历史来源和许可仍保留。
+
+## Glowloom 无限画布核心增量
+
+固定参考：[BeefTV `ddaf5f9abc64b16567c28ea5399d8f2069c47832`](https://github.com/glanderness/BeefTV/tree/ddaf5f9abc64b16567c28ea5399d8f2069c47832)，MIT；完整许可及传递来源继续随应用分发于 `/licenses/beeftv.txt` 和 `/licenses/beeftv-notice.txt`。目标均位于 `frontend/src/app/canvas/_components/`。
+
+| 目标                     | 固定来源（相对上游 `web/src/`）                                                                    | 改写                                                                          |
+| ------------------------ | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `canvas-render-model.ts` | `lib/canvas/canvas-spatial-index.ts`、`canvas-frame.ts`，`pages/canvas/use-canvas-render-model.ts` | 世界坐标索引、超大元素独立查询、组后代与可见边；不截断节点数量                |
+| `canvas-node-layer.tsx`  | `pages/canvas/use-canvas-render-model.ts` 的进入/保留机制                                          | 独立订阅现有视口/拖动预览、焦点保留及SVG标注线；沿项目媒体和节点组件          |
+| `canvas-history.ts`      | `pages/canvas/use-canvas-history.ts` 的操作边界与有界历史机制                                      | 本地不可变图引用、合法命令检查、保存后限制及引用编号保护；不迁入上游持久store |
+
+编辑器新增文字、分组、标注线及相机保存沿现有生成API和Go合同实现；未引入上游Wails、SQLite、供应商调用或远程插件运行时。来源说明不代表上游全部功能、容量性能或真实业务验收完成。

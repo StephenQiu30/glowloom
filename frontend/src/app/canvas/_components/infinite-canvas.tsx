@@ -502,10 +502,37 @@ export function InfiniteCanvas({
       setIsPanning(false);
     };
 
+    const handleWindowBlur = () => {
+      const wasMoving =
+        panState.current.isPanning || pinchStateRef.current.active;
+      const container = containerRef.current;
+      const captured = [
+        panState.current.pointerId,
+        selection.current?.id ?? -1,
+        ...touchPointsRef.current.keys(),
+      ];
+      panState.current.isPanning = false;
+      panState.current.pointerId = -1;
+      pinchStateRef.current.active = false;
+      selection.current = null;
+      touchPointsRef.current.clear();
+      interactingRef.current = false;
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = null;
+      delete container?.dataset.canvasViewportInteracting;
+      for (const id of captured)
+        if (id >= 0 && container?.hasPointerCapture(id))
+          container.releasePointerCapture(id);
+      setSelecting(false);
+      setIsPanning(false);
+      if (wasMoving) syncViewport();
+    };
+    window.addEventListener("blur", handleWindowBlur);
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerEnd);
     window.addEventListener("pointercancel", handlePointerEnd);
     return () => {
+      window.removeEventListener("blur", handleWindowBlur);
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerEnd);
       window.removeEventListener("pointercancel", handlePointerEnd);

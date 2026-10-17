@@ -10,6 +10,8 @@ import {
   Pencil,
   Trash2,
   VideoIcon,
+  Type,
+  Group,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -52,7 +54,7 @@ export function CanvasNode({
     height: number;
   }) => void;
   onResizePreview: () => void;
-  onSelect: () => void;
+  onSelect: (additive?: boolean) => void;
   onEditTitle: () => void;
   onMove: (x: number, y: number) => void;
   onDragStart: (event: PointerEvent<HTMLButtonElement>) => void;
@@ -74,6 +76,7 @@ export function CanvasNode({
     original: { x: number; y: number; width: number; height: number };
     next: { x: number; y: number; width: number; height: number };
   } | null>(null);
+  const maximumDimension = node.node_type === "group" ? 100000 : 2000;
   function beginResize(event: PointerEvent<HTMLButtonElement>) {
     if (event.button !== 0) return;
     event.stopPropagation();
@@ -104,7 +107,8 @@ export function CanvasNode({
     const d = resize.current;
     if (!d || d.pointerID !== event.pointerId) return;
     event.stopPropagation();
-    const clamp = (value: number) => Math.max(40, Math.min(2000, value));
+    const clamp = (value: number) =>
+      Math.max(40, Math.min(maximumDimension, value));
     const dx = (event.clientX - d.startX) / d.zoom,
       dy = (event.clientY - d.startY) / d.zoom;
     let width = clamp(Math.round(d.original.width + (d.left ? -dx : dx))),
@@ -113,7 +117,11 @@ export function CanvasNode({
       const ratio = d.original.width / d.original.height;
       width = Math.max(
         40,
-        Math.min(2000, 2000 * ratio, Math.max(40, 40 * ratio, width)),
+        Math.min(
+          maximumDimension,
+          maximumDimension * ratio,
+          Math.max(40, 40 * ratio, width),
+        ),
       );
       height = width / ratio;
     }
@@ -153,14 +161,23 @@ export function CanvasNode({
       ? AudioLines
       : node.node_type === "model"
         ? Box
-        : ImageIcon;
+        : node.node_type === "text"
+          ? Type
+          : node.node_type === "group"
+            ? Group
+            : ImageIcon;
   return (
     <article
       data-node-id={node.id}
       className="canvas-media-node"
       data-selected={selected}
+      data-node-kind={node.node_type}
       style={
         {
+          zIndex:
+            node.node_type === "group"
+              ? 0
+              : Math.max(selected ? 5 : 1, node.z_index + 1),
           left: node.x,
           top: node.y,
           width: node.width ?? 288,
@@ -173,7 +190,9 @@ export function CanvasNode({
         type="button"
         className="canvas-node-external-header h-auto p-0"
         aria-label={editable ? `移动 ${node.title}` : `查看 ${node.title}`}
-        onClick={onSelect}
+        onClick={(event) =>
+          onSelect(event.shiftKey || event.metaKey || event.ctrlKey)
+        }
         onPointerDown={onDragStart}
         onPointerMove={onDragMove}
         onPointerUp={() => onDragEnd()}
@@ -257,7 +276,9 @@ export function CanvasNode({
         variant="ghost"
         type="button"
         className="canvas-node-shell h-auto p-0"
-        onClick={onSelect}
+        onClick={(event) =>
+          onSelect(event.shiftKey || event.metaKey || event.ctrlKey)
+        }
         onPointerDown={onDragStart}
         onPointerMove={onDragMove}
         onPointerUp={() => onDragEnd()}
@@ -267,7 +288,8 @@ export function CanvasNode({
         style={{ height: "var(--canvas-node-height)" }}
       >
         {projectID &&
-        ["image", "video"].includes(node.node_type) &&
+        (node.node_type === "image" ||
+          (["video", "audio"].includes(node.node_type) && selected)) &&
         node.ref_type === "media_asset" &&
         node.ref_id ? (
           <ProjectMediaPreview
@@ -281,9 +303,15 @@ export function CanvasNode({
         <span>
           {isDraft(node)
             ? "准备好，开始生成"
-            : node.ref_type === "media_asset"
-              ? ""
-              : node.title}
+            : node.node_type === "text"
+              ? node.config.text || "编辑文本内容"
+              : node.node_type === "group"
+                ? node.config.collapsed
+                  ? "已收起分组"
+                  : "分组"
+                : node.ref_type === "media_asset"
+                  ? ""
+                  : node.title}
         </span>
       </Button>
       {editable &&
@@ -320,14 +348,14 @@ export function CanvasNode({
               const w = Math.max(
                   40,
                   Math.min(
-                    2000,
+                    maximumDimension,
                     width + (corner.includes("w") ? -delta[0] : delta[0]),
                   ),
                 ),
                 h = Math.max(
                   40,
                   Math.min(
-                    2000,
+                    maximumDimension,
                     height + (corner.includes("n") ? -delta[1] : delta[1]),
                   ),
                 );

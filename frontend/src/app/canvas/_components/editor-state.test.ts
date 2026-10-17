@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import {
+  createResourceNode,
   commandBatch,
   createDraftNode,
   requireCanvas,
@@ -54,6 +55,7 @@ it("无效回执、错误revision和只读节点改写不能确认保存", () =>
   const readonly = {
     id: crypto.randomUUID(),
     title: "Legacy",
+    last_operation_id: canvasID,
     node_type: "text",
     node_action: "resource",
     config: { text: "Original" },
@@ -238,5 +240,99 @@ it("复制保留素材身份和草稿内容，但生成新的节点身份及输�
   expect(duplicateNode(media).ref_id).toBe(media.ref_id);
   expect(() =>
     duplicateNode({ ...media, last_operation_id: canvasID }),
+  ).toThrow();
+});
+
+it("文字分组及父子关系通过已有命令原子保存，坐标保持世界坐标", () => {
+  const text = createResourceNode("text", { x: -120, y: 80 });
+  const group = createResourceNode("group", { x: -160, y: 40 });
+  const base = { ...empty, nodes: [text] };
+  const target = [{ ...text, parent_id: group.id }, group];
+  const body = commandBatch(base, target);
+  expect(body.commands?.map((c) => c.type)).toEqual([
+    "AddNodes",
+    "SetNodeParents",
+  ]);
+  expect(body.commands?.[1].parents).toEqual([
+    { id: text.id, parent_id: group.id },
+  ]);
+  const receipt = {
+    ...base,
+    revision: 2,
+    nodes: target,
+    results: [{ ok: true }, { ok: true }],
+  };
+  expect(requireSaveResult(receipt, base, target, body).nodes[0].x).toBe(-120);
+  expect(() => commandBatch(base, [])).toThrow();
+});
+it("标注连线及相机生成差量，回执不得丢边或返回错误视角", () => {
+  const a = createMediaNode(
+    {
+      id: "00000000-0000-4000-8000-000000000003",
+      project_id: projectID,
+      kind: "image",
+    },
+    projectID,
+    0,
+  );
+  const b = { ...a, id: "00000000-0000-4000-8000-000000000004", x: 600 };
+  const base = { ...empty, nodes: [a, b] };
+  const edge = {
+    id: "00000000-0000-4000-8000-000000000005",
+    edge_type: "annotation",
+    source_node_id: a.id,
+    target_node_id: b.id,
+  };
+  const options = { edges: [edge], viewport: { x: -50, y: 100, zoom: 0.5 } };
+  const body = commandBatch(base, base.nodes, options);
+  expect(body.commands?.map((c) => c.type)).toEqual(["Connect", "SetViewport"]);
+  const receipt = {
+    ...base,
+    ...options,
+    revision: 2,
+    results: [{ ok: true }, { ok: true }],
+  };
+  expect(requireSaveResult(receipt, base, base.nodes, body).edges).toEqual([
+    edge,
+  ]);
+  expect(() =>
+    requireSaveResult({ ...receipt, edges: [] }, base, base.nodes, body),
+  ).toThrow();
+  expect(() =>
+    requireSaveResult(
+      { ...receipt, viewport: { x: 0, y: 0, zoom: 1 } },
+      base,
+      base.nodes,
+      body,
+    ),
+  ).toThrow();
+  const connected = { ...base, edges: [edge] };
+  expect(
+    commandBatch(connected, connected.nodes, { edges: [] }).commands,
+  ).toEqual([{ type: "Disconnect", ids: [edge.id] }]);
+});
+it("保护业务关系、生成草稿和锁定节点，不把标注连接当生成引用", () => {
+  const a = createResourceNode("text", { x: 0, y: 0 });
+  const draft = {
+    ...createDraftNode("image_generation", "1:1", 0),
+    input_revision: 1,
+  };
+  const edge = {
+    id: crypto.randomUUID(),
+    edge_type: "annotation",
+    source_node_id: a.id,
+    target_node_id: draft.id,
+  };
+  expect(() =>
+    commandBatch({ ...empty, nodes: [a, draft] }, [a, draft], {
+      edges: [edge],
+    }),
+  ).toThrow();
+  const protectedEdge = { ...edge, edge_type: "business", role: "reference" };
+  const base = { ...empty, nodes: [a, draft], edges: [protectedEdge] };
+  expect(() => commandBatch(base, base.nodes, { edges: [] })).toThrow();
+  const locked = { ...a, last_operation_id: crypto.randomUUID() };
+  expect(() =>
+    commandBatch({ ...empty, nodes: [locked] }, [{ ...locked, x: 20 }]),
   ).toThrow();
 });

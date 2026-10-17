@@ -62,11 +62,21 @@ import {
   requireCanvas,
   requireSaveResult,
   sameEditable,
+  createResourceNode,
+  defaultViewport,
+  isAnnotation,
+  type CanvasViewport,
   type Canvas,
   type Draft,
   type Node,
 } from "./editor-state";
 
+import { CanvasNodeLayer } from "./canvas-node-layer";
+import { createHistory } from "./canvas-history";
+import { descendants, moveSelection } from "./canvas-render-model";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { InfiniteCanvas } from "./infinite-canvas";
 import { CanvasNode } from "./canvas-node";
 import { CanvasToolbar } from "./canvas-toolbar";
@@ -85,6 +95,8 @@ type Pending = {
   base: Canvas;
   nodes: Node[];
   body: API.CommandsInput;
+  edges?: API.Edge[];
+  viewport?: CanvasViewport;
 };
 const limit = (value: number) => Math.max(-1e6, Math.min(1e6, value));
 const CanvasMaterialDialog = dynamic(() =>
@@ -117,6 +129,9 @@ export function CanvasEditor({
   const [identityInvalid, setIdentityInvalid] = useState(false);
   const [nodes, setNodes] = useState(initial.nodes);
   const local = useRef(initial.nodes);
+  const [edges, setEdges] = useState(initial.edges);
+  const localEdges = useRef(initial.edges);
+  const [history] = useState(createHistory);
   const [selected, setSelected] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [unconfirmed, setUnconfirmed] = useState(false);
@@ -136,7 +151,7 @@ export function CanvasEditor({
   const [details, setDetails] = useState(false);
   const [miniMap, setMiniMap] = useState(false);
   const [size, setSize] = useState({ width: 1024, height: 768 });
-  const [camera, setCamera] = useState({ x: 0, y: 0, zoom: 1 });
+  const [camera, setCamera] = useState(initial.viewport ?? defaultViewport);
   const view = useRef(camera);
   const drag = useRef<{
     id: string;
@@ -158,6 +173,8 @@ export function CanvasEditor({
   } | null>(null);
   const baseline = new Map(base.nodes.map((n) => [n.id, n]));
   const dirty =
+    canonical(edges) !== canonical(base.edges) ||
+    canonical(camera) !== canonical(base.viewport ?? defaultViewport) ||
     nodes.length !== base.nodes.length ||
     nodes.some(
       (n) => !baseline.has(n.id) || !sameEditable(n, baseline.get(n.id)!),
@@ -244,6 +261,8 @@ export function CanvasEditor({
       ownerState: {
         base: savedBase.current,
         nodes: structuredClone(local.current),
+        edges: structuredClone(localEdges.current),
+        viewport: { ...view.current },
         pending: structuredClone(pending.current),
       },
     };
@@ -261,7 +280,16 @@ export function CanvasEditor({
   }, [recoveryContext, replicaId, dirty]);
   useEffect(() => {
     void persistCanvas();
-  }, [nodes, base, recoveryContext, saving, unconfirmed, persistCanvas]);
+  }, [
+    nodes,
+    edges,
+    camera,
+    base,
+    recoveryContext,
+    saving,
+    unconfirmed,
+    persistCanvas,
+  ]);
 
   useEffect(() => {
     alive.current = true;
@@ -327,10 +355,38 @@ export function CanvasEditor({
   const viewportPreview = useCallback((next: ViewportTransform) => {
     view.current = { x: next.x, y: next.y, zoom: next.k };
   }, []);
-  function selectNode(id?: string) {
+  function changeCamera(next: typeof camera) {
+    view.current = next;
+    setCamera(next);
+  }
+  function selectNode(id?: string, additive = false) {
+    const target = local.current.find((n) => n.id === id);
+    if (target && !additive) {
+      const v = view.current;
+      if (
+        (target.x + (target.width ?? 288)) * v.zoom + v.x < 0 ||
+        target.x * v.zoom + v.x > size.width ||
+        (target.y + (target.height ?? 200)) * v.zoom + v.y < 64 ||
+        target.y * v.zoom + v.y > size.height
+      ) {
+        changeCamera({
+          ...v,
+          x: size.width / 2 - (target.x + (target.width ?? 288) / 2) * v.zoom,
+          y: size.height / 2 - (target.y + (target.height ?? 200) / 2) * v.zoom,
+        });
+      }
+    }
     if (id !== selected) setDetails(false);
     setSelected(id);
-    setSelectedIDs(id ? [id] : []);
+    setSelectedIDs((ids) =>
+      additive && id
+        ? ids.includes(id)
+          ? ids.filter((value) => value !== id)
+          : [...ids, id]
+        : id
+          ? [id]
+          : [],
+    );
   }
   function selectArea(area: SelectionArea) {
     const ids = local.current
@@ -345,12 +401,162 @@ export function CanvasEditor({
     setSelectedIDs(ids);
     setSelected(ids.at(-1));
   }
-  function edit(next: Node[]) {
+  function edit(
+    next: Node[],
+    key?: string,
+    nextEdges = localEdges.current,
+    record = true,
+  ) {
+    if (privateInvalid.current) return;
+    if (record)
+      history.record(
+        { nodes: local.current, edges: localEdges.current },
+        { nodes: next, edges: nextEdges },
+        key,
+      );
     local.current = next;
+    localEdges.current = nextEdges;
     setNodes(next);
+    setEdges(nextEdges);
   }
   function update(id: string, patch: Partial<Node>) {
-    edit(local.current.map((n) => (n.id === id ? { ...n, ...patch } : n)));
+    edit(
+      local.current.map((n) => (n.id === id ? { ...n, ...patch } : n)),
+      `${id}/${Object.keys(patch).join()}`,
+    );
+  }
+  function stepHistory(direction: "undo" | "redo") {
+    if (busy.current || pending.current || conflict || privateInvalid.current)
+      return;
+    const graph = history[direction](savedBase.current);
+    if (graph) {
+      edit(graph.nodes, undefined, graph.edges, false);
+      if (!graph.nodes.some((n) => n.id === selected)) selectNode(undefined);
+    }
+  }
+  const historyShortcut = useEffectEvent((direction: "undo" | "redo") =>
+    stepHistory(direction),
+  );
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent) => {
+      if (
+        !(event.metaKey || event.ctrlKey) ||
+        event.altKey ||
+        event.defaultPrevented
+      )
+        return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (
+        target?.closest(
+          "input,textarea,select,[contenteditable=true],[role=dialog],[role=alertdialog],[role=menu],[role=listbox]",
+        )
+      )
+        return;
+      if (!["z", "y"].includes(event.key.toLowerCase())) return;
+      event.preventDefault();
+      historyShortcut(
+        event.shiftKey || event.key.toLowerCase() === "y" ? "redo" : "undo",
+      );
+    };
+    window.addEventListener("keydown", shortcut);
+    return () => window.removeEventListener("keydown", shortcut);
+  }, []);
+  function addText() {
+    if (local.current.length >= 2000) {
+      setMessage("画布已达到 2000 个节点上限。");
+      return;
+    }
+    const n = createResourceNode("text", {
+      x: (size.width / 2 - view.current.x) / view.current.zoom,
+      y: (size.height / 2 - view.current.y) / view.current.zoom,
+    });
+    edit([...local.current, n]);
+    selectNode(n.id);
+  }
+  function groupSelection() {
+    const selected = local.current.filter((n) => selectedIDs.includes(n.id));
+    if (
+      selected.length < 2 ||
+      selected.some((n) => !isEditableNode(n)) ||
+      local.current.length >= 2000
+    )
+      return;
+    const left = Math.min(...selected.map((n) => n.x)) - 24,
+      top = Math.min(...selected.map((n) => n.y)) - 48;
+    const width =
+      Math.max(...selected.map((n) => n.x + (n.width ?? 288))) - left + 24;
+    const height =
+      Math.max(...selected.map((n) => n.y + (n.height ?? 200))) - top + 24;
+    if (width > 100000 || height > 100000) {
+      setMessage("所选节点距离过远，请缩小分组范围。");
+      return;
+    }
+    const group = {
+      ...createResourceNode("group", { x: limit(left), y: limit(top) }),
+      width,
+      height,
+    };
+    const chosen = new Set(selectedIDs);
+    // When a selected ancestor already owns a selected child, retain that internal relation.
+    const next = local.current.map((n) =>
+      chosen.has(n.id) && (!n.parent_id || !chosen.has(n.parent_id))
+        ? { ...n, parent_id: group.id }
+        : n,
+    );
+    edit([...next, group]);
+    selectNode(group.id);
+  }
+  function ungroup() {
+    if (!current || current.node_type !== "group") return;
+    edit(
+      local.current.map((n) =>
+        n.parent_id === current.id ? { ...n, parent_id: undefined } : n,
+      ),
+    );
+  }
+  function connectSelection() {
+    const selected = local.current.filter((n) => selectedIDs.includes(n.id));
+    if (
+      selected.length !== 2 ||
+      selected.some((n) => !isEditableNode(n) || isDraft(n))
+    )
+      return;
+    if (localEdges.current.length >= 4000) {
+      setMessage("画布已达到 4000 条连线上限。");
+      return;
+    }
+    const [source, target] = selected;
+    if (
+      localEdges.current.some(
+        (e) =>
+          isAnnotation(e) &&
+          e.source_node_id === source.id &&
+          e.target_node_id === target.id,
+      )
+    )
+      return;
+    edit(local.current, undefined, [
+      ...localEdges.current,
+      {
+        id: crypto.randomUUID(),
+        edge_type: "annotation",
+        source_node_id: source.id,
+        target_node_id: target.id,
+      },
+    ]);
+  }
+  function disconnectSelection() {
+    const chosen = new Set(selectedIDs);
+    edit(
+      local.current,
+      undefined,
+      localEdges.current.filter(
+        (e) =>
+          !isAnnotation(e) ||
+          !chosen.has(e.source_node_id ?? "") ||
+          !chosen.has(e.target_node_id ?? ""),
+      ),
+    );
   }
   function draft(patch: Partial<Draft>) {
     const n = local.current.find((n) => n.id === selected);
@@ -413,9 +619,43 @@ export function CanvasEditor({
       setMessage("画布已达到 2000 个节点上限。");
       return;
     }
-    const copy = duplicateNode(node);
-    edit([...local.current, copy]);
-    selectNode(copy.id);
+    const ids = descendants(local.current, new Set([node.id]));
+    const originals = local.current.filter((n) => ids.has(n.id));
+    if (
+      originals.some((n) => !isEditableNode(n)) ||
+      originals.length + local.current.length > 2000
+    ) {
+      setMessage("所选分组包含只读节点或超出节点上限，不能复制。");
+      return;
+    }
+    const copies = originals.map(duplicateNode);
+    const identity = new Map(originals.map((n, i) => [n.id, copies[i].id]));
+    copies.forEach((copy) => {
+      if (copy.parent_id && identity.has(copy.parent_id))
+        copy.parent_id = identity.get(copy.parent_id);
+    });
+    const copiedEdges = localEdges.current
+      .filter(
+        (e) =>
+          isAnnotation(e) &&
+          ids.has(e.source_node_id ?? "") &&
+          ids.has(e.target_node_id ?? ""),
+      )
+      .map((e) => ({
+        ...e,
+        id: crypto.randomUUID(),
+        source_node_id: identity.get(e.source_node_id!),
+        target_node_id: identity.get(e.target_node_id!),
+      }));
+    if (localEdges.current.length + copiedEdges.length > 4000) {
+      setMessage("复制将超出 4000 条连线上限。");
+      return;
+    }
+    edit([...local.current, ...copies], undefined, [
+      ...localEdges.current,
+      ...copiedEdges,
+    ]);
+    selectNode(identity.get(node.id));
   }
   function removeLocal(node: Node) {
     if (
@@ -426,7 +666,17 @@ export function CanvasEditor({
       !isEditableNode(node)
     )
       return;
-    edit(local.current.filter((n) => n.id !== node.id));
+    edit(
+      local.current
+        .filter((n) => n.id !== node.id)
+        .map((n) =>
+          n.parent_id === node.id ? { ...n, parent_id: undefined } : n,
+        ),
+      undefined,
+      localEdges.current.filter(
+        (e) => e.source_node_id !== node.id && e.target_node_id !== node.id,
+      ),
+    );
     selectNode(undefined);
   }
   function useSubject(subject: Subject) {
@@ -437,10 +687,6 @@ export function CanvasEditor({
       capability: "image",
       subject,
     });
-  }
-  function changeCamera(next: typeof camera) {
-    view.current = next;
-    setCamera(next);
   }
   function fit() {
     if (!board.current || !nodes.length) {
@@ -459,7 +705,23 @@ export function CanvasEditor({
     changeCamera({ x: 48 - minX * zoom, y: 96 - minY * zoom, zoom });
   }
   function beginDrag(e: PointerEvent<HTMLButtonElement>, node: Node) {
-    if (!isEditableNode(node) || e.button !== 0 || tool === "pan") return;
+    if (
+      !isEditableNode(node) ||
+      e.button !== 0 ||
+      tool === "pan" ||
+      e.shiftKey ||
+      e.metaKey ||
+      e.ctrlKey
+    )
+      return;
+    const members = descendants(
+      local.current,
+      new Set(selectedIDs.includes(node.id) ? selectedIDs : [node.id]),
+    );
+    if (local.current.some((n) => members.has(n.id) && !isEditableNode(n))) {
+      setMessage("所选分组包含只读节点，不能整体移动。");
+      return;
+    }
     e.stopPropagation();
     if (!selectedIDs.includes(node.id)) selectNode(node.id);
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -476,13 +738,7 @@ export function CanvasEditor({
       button: e.currentTarget,
       pointerId: e.pointerId,
       members: local.current
-        .filter(
-          (n) =>
-            isEditableNode(n) &&
-            (selectedIDs.includes(node.id)
-              ? selectedIDs.includes(n.id)
-              : n.id === node.id),
-        )
+        .filter((n) => members.has(n.id))
         .map((n) => ({
           id: n.id,
           x: n.x,
@@ -568,7 +824,10 @@ export function CanvasEditor({
         result &&
         alive.current &&
         !privateInvalid.current &&
-        commandBatch(result, local.current).commands?.length
+        commandBatch(result, local.current, {
+          edges: localEdges.current,
+          viewport: view.current,
+        }).commands?.length
       ) {
         result = await saveOnce();
       }
@@ -588,9 +847,21 @@ export function CanvasEditor({
     if (!operation) {
       try {
         const frozen = structuredClone(local.current);
-        const body = commandBatch(base, frozen);
+        const frozenEdges = structuredClone(localEdges.current);
+        const frozenViewport = { ...view.current };
+        const body = commandBatch(base, frozen, {
+          edges: frozenEdges,
+          viewport: frozenViewport,
+        });
         if (!body.commands?.length) return base;
-        operation = { key: crypto.randomUUID(), base, nodes: frozen, body };
+        operation = {
+          key: crypto.randomUUID(),
+          base,
+          nodes: frozen,
+          body,
+          edges: frozenEdges,
+          viewport: frozenViewport,
+        };
         pending.current = operation;
       } catch {
         setMessage(
@@ -628,7 +899,20 @@ export function CanvasEditor({
             ? receipt
             : { ...n, input_revision: receipt.input_revision };
         }),
+        undefined,
+        canonical(localEdges.current) ===
+          canonical(operation.edges ?? operation.base.edges)
+          ? committed.edges
+          : localEdges.current,
+        false,
       );
+      if (
+        canonical(view.current) ===
+        canonical(
+          operation.viewport ?? operation.base.viewport ?? defaultViewport,
+        )
+      )
+        changeCamera(committed.viewport ?? defaultViewport);
       setBase(committed);
       pending.current = null;
       setUnconfirmed(false);
@@ -674,7 +958,16 @@ export function CanvasEditor({
       void saveLatest.current();
     }, 900);
     return () => clearTimeout(timer);
-  }, [nodes, dirty, saving, unconfirmed, conflict, identityInvalid]);
+  }, [
+    nodes,
+    edges,
+    camera,
+    dirty,
+    saving,
+    unconfirmed,
+    conflict,
+    identityInvalid,
+  ]);
   async function recoverCanvas(branch: LocalBranch) {
     if (busy.current || privateInvalid.current) return;
     if (pending.current) {
@@ -682,6 +975,8 @@ export function CanvasEditor({
       return;
     }
     const expectedNodes = local.current;
+    const expectedEdges = localEdges.current;
+    const expectedCamera = view.current;
     busy.current = true;
     setSaving(true);
     try {
@@ -689,13 +984,23 @@ export function CanvasEditor({
         base: Canvas;
         nodes: Node[];
         pending: Pending | null;
+        edges?: API.Edge[];
+        viewport?: CanvasViewport;
       };
       let baseline = requireCanvas(value.base, project.id, initial.id);
-      commandBatch(baseline, value.nodes);
+      commandBatch(baseline, value.nodes, {
+        edges: value.edges ?? baseline.edges,
+        viewport: value.viewport ?? baseline.viewport,
+      });
       if (value.pending) {
         if (
           canonical(value.pending.body) !==
-          canonical(commandBatch(value.pending.base, value.pending.nodes))
+          canonical(
+            commandBatch(value.pending.base, value.pending.nodes, {
+              edges: value.pending.edges,
+              viewport: value.pending.viewport,
+            }),
+          )
         )
           throw new Error("恢复请求不完整");
         const replay = await applyCanvasCommands(
@@ -716,9 +1021,15 @@ export function CanvasEditor({
         initial.id,
       );
       if (!alive.current || privateInvalid.current) return;
-      if (local.current !== expectedNodes)
+      if (
+        local.current !== expectedNodes ||
+        localEdges.current !== expectedEdges ||
+        view.current !== expectedCamera
+      )
         throw new Error("恢复期间有新编辑，未覆盖；原分支仍保留。");
-      edit(value.nodes);
+      history.reset();
+      edit(value.nodes, undefined, value.edges ?? baseline.edges, false);
+      changeCamera(value.viewport ?? baseline.viewport ?? defaultViewport);
       if (server.revision !== baseline.revision) {
         setConflict({ server });
         setMessage("已恢复所选本地分支，请处理服务端冲突。");
@@ -848,7 +1159,9 @@ export function CanvasEditor({
     const server = conflict?.server;
     if (!server) return;
     if (discard) {
-      edit(server.nodes);
+      history.reset();
+      edit(server.nodes, undefined, server.edges, false);
+      changeCamera(server.viewport ?? defaultViewport);
       selectNode(undefined);
     } else {
       const own = new Map(local.current.map((n) => [n.id, n]));
@@ -862,7 +1175,22 @@ export function CanvasEditor({
       });
       const remoteIDs = new Set(server.nodes.map((n) => n.id));
       for (const n of local.current) if (!remoteIDs.has(n.id)) merged.push(n);
-      edit(merged);
+      history.reset();
+      const oldEdges = new Map(base.edges.map((edge) => [edge.id, edge]));
+      const localIDs = new Set(localEdges.current.map((edge) => edge.id));
+      const combined = server.edges.filter(
+        (edge) =>
+          !isAnnotation(edge) ||
+          !oldEdges.has(edge.id) ||
+          localIDs.has(edge.id),
+      );
+      const serverIDs = new Set(server.edges.map((edge) => edge.id));
+      combined.push(
+        ...localEdges.current.filter(
+          (edge) => !oldEdges.has(edge.id) && !serverIDs.has(edge.id),
+        ),
+      );
+      edit(merged, undefined, combined, false);
     }
     setBase(server);
     setConflict(null);
@@ -1042,38 +1370,60 @@ export function CanvasEditor({
         onSelectArea={selectArea}
         onCanvasDeselect={() => selectNode(undefined)}
       >
-        {nodes.map((node) => (
-          <CanvasNode
-            key={node.id}
-            node={node}
-            projectID={project.id}
-            selected={selectedIDs.includes(node.id)}
-            zoom={camera.zoom}
-            onResize={(size) =>
-              update(node.id, { ...size, x: limit(size.x), y: limit(size.y) })
-            }
-            onResizePreview={() =>
-              board.current?.dispatchEvent(new Event(CANVAS_NODE_DRAG_EVENT))
-            }
-            onSelect={() => {
-              if (selectedIDs.includes(node.id)) setSelected(node.id);
-              else selectNode(node.id);
-            }}
-            onEditTitle={() => {
-              selectNode(node.id);
-              setDetails(true);
-            }}
-            onMove={(x, y) => update(node.id, { x: limit(x), y: limit(y) })}
-            onDragStart={(event) => beginDrag(event, node)}
-            onDragMove={moveDrag}
-            onDragEnd={endDrag}
-            onDuplicate={() => copyNode(node)}
-            canRemove={
-              !baseline.has(node.id) && !saving && !unconfirmed && !conflict
-            }
-            onRemove={() => removeLocal(node)}
-          />
-        ))}
+        <CanvasNodeLayer
+          containerRef={board}
+          nodes={nodes}
+          edges={edges}
+          viewport={{ x: camera.x, y: camera.y, k: camera.zoom }}
+          size={size}
+          selectedIDs={selectedIDs}
+          renderNode={(node, liveZoom) => (
+            <CanvasNode
+              key={node.id}
+              node={node}
+              projectID={project.id}
+              selected={selectedIDs.includes(node.id)}
+              zoom={liveZoom}
+              onResize={(size) =>
+                update(node.id, { ...size, x: limit(size.x), y: limit(size.y) })
+              }
+              onResizePreview={() =>
+                board.current?.dispatchEvent(new Event(CANVAS_NODE_DRAG_EVENT))
+              }
+              onSelect={(additive) => {
+                if (!additive && selectedIDs.includes(node.id))
+                  setSelected(node.id);
+                else selectNode(node.id, additive);
+              }}
+              onEditTitle={() => {
+                selectNode(node.id);
+                setDetails(true);
+              }}
+              onMove={(x, y) => {
+                try {
+                  edit(
+                    moveSelection(
+                      local.current,
+                      new Set([node.id]),
+                      x - node.x,
+                      y - node.y,
+                    ),
+                  );
+                } catch (error) {
+                  setMessage((error as Error).message);
+                }
+              }}
+              onDragStart={(event) => beginDrag(event, node)}
+              onDragMove={moveDrag}
+              onDragEnd={endDrag}
+              onDuplicate={() => copyNode(node)}
+              canRemove={
+                !baseline.has(node.id) && !saving && !unconfirmed && !conflict
+              }
+              onRemove={() => removeLocal(node)}
+            />
+          )}
+        />
       </InfiniteCanvas>
       {!nodes.length && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center">
@@ -1090,15 +1440,72 @@ export function CanvasEditor({
           </Empty>
         </div>
       )}
-      {selectedIDs.length > 1 && (
-        <p className="pointer-events-none absolute top-20 left-4 rounded-lg bg-card px-3 py-2 text-xs">
-          已选择 {selectedIDs.length} 个节点；拖动标题可移动可编辑节点
-        </p>
-      )}
+      <div
+        className="canvas-edit-actions"
+        role="toolbar"
+        aria-label="画布编辑操作"
+        data-canvas-no-zoom
+      >
+        <Button
+          size="sm"
+          variant="outline"
+          aria-label="撤销编辑"
+          disabled={
+            saving || unconfirmed || !!conflict || !history.canUndo(base)
+          }
+          onClick={() => stepHistory("undo")}
+        >
+          撤销
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          aria-label="重做编辑"
+          disabled={
+            saving || unconfirmed || !!conflict || !history.canRedo(base)
+          }
+          onClick={() => stepHistory("redo")}
+        >
+          重做
+        </Button>
+        {selectedIDs.length > 1 && (
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={groupSelection}
+              disabled={selectedIDs.some(
+                (id) => !nodes.some((n) => n.id === id && isEditableNode(n)),
+              )}
+            >
+              组合所选节点
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={connectSelection}
+              disabled={
+                selectedIDs.length !== 2 ||
+                nodes.some(
+                  (n) =>
+                    selectedIDs.includes(n.id) &&
+                    (!isEditableNode(n) || isDraft(n)),
+                )
+              }
+            >
+              连接所选节点
+            </Button>
+            <Button size="sm" variant="outline" onClick={disconnectSelection}>
+              移除所选标注
+            </Button>
+          </>
+        )}
+      </div>
       <CanvasToolbar
         tool={tool}
         onToolChange={setTool}
         onAdd={add}
+        onAddText={addText}
         onMaterials={(tab = "assets", kind) => setMaterials({ tab, kind })}
         onUpload={() => setUpload(true)}
         zoom={camera.zoom}
@@ -1128,35 +1535,96 @@ export function CanvasEditor({
           viewport={{ x: camera.x, y: camera.y, k: camera.zoom }}
           containerRef={board}
         >
-          <CanvasComposer
-            node={current}
-            nodes={nodes}
-            details={details}
-            onDetails={setDetails}
-            onSelect={selectNode}
-            onUpdate={(patch) => update(current.id, patch)}
-            onDraft={draft}
-            onGenerate={() => void generateCurrent()}
-            onSubject={() => void generateCurrent(true)}
-            onPreview={() => setPreview(current)}
-            onContinue={() => {
-              if (
-                current.ref_id &&
-                ["image", "video", "audio"].includes(current.node_type)
-              )
-                setGeneration({
-                  project,
-                  prompt: "",
-                  capability: current.node_type === "image" ? "image" : "video",
-                  reference: {
-                    assetID: current.ref_id,
-                    kind: current.node_type as "image" | "video" | "audio",
-                  },
-                });
-            }}
-            generating={saving}
-            blocked={!!conflict || unconfirmed}
-          />
+          {current.node_type === "text" || current.node_type === "group" ? (
+            <aside
+              className="canvas-node-composer"
+              aria-label="节点编辑"
+              data-canvas-no-zoom
+            >
+              <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="canvas-resource-title">
+                    节点名称
+                  </FieldLabel>
+                  <Input
+                    id="canvas-resource-title"
+                    aria-label="节点名称"
+                    value={current.title}
+                    maxLength={128}
+                    disabled={!isEditableNode(current)}
+                    onChange={(event) =>
+                      update(current.id, { title: event.target.value })
+                    }
+                  />
+                </Field>
+              </FieldGroup>
+              {current.node_type === "text" ? (
+                <Textarea
+                  aria-label="文本内容"
+                  value={current.config.text ?? ""}
+                  maxLength={10000}
+                  disabled={!isEditableNode(current)}
+                  onChange={(event) =>
+                    update(current.id, { config: { text: event.target.value } })
+                  }
+                />
+              ) : (
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!isEditableNode(current)}
+                    onClick={() =>
+                      update(current.id, {
+                        config: { collapsed: !current.config.collapsed },
+                      })
+                    }
+                  >
+                    {current.config.collapsed ? "展开分组" : "收起分组"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!isEditableNode(current)}
+                    onClick={ungroup}
+                  >
+                    解除分组关系
+                  </Button>
+                </div>
+              )}
+            </aside>
+          ) : (
+            <CanvasComposer
+              node={current}
+              nodes={nodes}
+              details={details}
+              onDetails={setDetails}
+              onSelect={selectNode}
+              onUpdate={(patch) => update(current.id, patch)}
+              onDraft={draft}
+              onGenerate={() => void generateCurrent()}
+              onSubject={() => void generateCurrent(true)}
+              onPreview={() => setPreview(current)}
+              onContinue={() => {
+                if (
+                  current.ref_id &&
+                  ["image", "video", "audio"].includes(current.node_type)
+                )
+                  setGeneration({
+                    project,
+                    prompt: "",
+                    capability:
+                      current.node_type === "image" ? "image" : "video",
+                    reference: {
+                      assetID: current.ref_id,
+                      kind: current.node_type as "image" | "video" | "audio",
+                    },
+                  });
+              }}
+              generating={saving}
+              blocked={!!conflict || unconfirmed}
+            />
+          )}
         </CanvasNodePanel>
       )}
       {recoveryBranches.length > 0 && (
