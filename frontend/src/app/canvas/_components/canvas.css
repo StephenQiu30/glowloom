@@ -16,53 +16,44 @@
 }
 .creation-canvas .canvas-header {
   position: absolute;
-  inset-inline: 0;
-  top: 0;
-  height: 64px;
-  padding: 0 16px;
+  inset-inline: 12px;
+  top: 10px;
+  height: 40px;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   z-index: 30;
-  background: var(--background);
-  border-bottom: 1px solid var(--border);
+  background: transparent;
+  border: 0;
 }
 .creation-canvas .product-brand small {
   display: none;
 }
-.creation-canvas .canvas-topbar-cluster {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-radius: 8px;
-  background: transparent;
-  padding: 6px 10px;
-  pointer-events: auto;
-}
 .creation-canvas .canvas-main-dock {
   position: absolute;
   z-index: 30;
-  left: 16px;
-  top: 50%;
+  left: 12px;
+  top: calc(50% + 28px);
   transform: translateY(-50%);
   display: flex;
   align-items: center;
   flex-direction: column;
   width: 48px;
-  max-height: calc(100% - 180px);
+  max-height: calc(100% - 152px);
   overflow-y: auto;
   gap: 2px;
-  padding: 3px;
-  border: 1px solid var(--canvas-toolbar-border);
-  border-radius: 8px;
+  padding: 4px;
+  border: 0;
+  border-radius: 12px;
   background: var(--canvas-toolbar);
   box-shadow: none;
 }
 .creation-canvas .canvas-main-dock button {
   width: 40px;
   height: 40px;
-  border-radius: 6px;
+  border-radius: 8px;
   flex-shrink: 0;
 }
 .creation-canvas .canvas-main-dock .canvas-add-command {
@@ -95,14 +86,16 @@
 .creation-canvas .canvas-zoom-controls {
   position: absolute;
   left: 16px;
-  bottom: 26px;
+  bottom: 20px;
   z-index: 25;
   display: flex;
   align-items: center;
-  gap: 2px;
-  border-radius: 12px;
-  background: var(--canvas-toolbar);
-  padding: 4px;
+  gap: 4px;
+  width: 156px;
+  height: 28px;
+  border-radius: 8px;
+  background: transparent;
+  padding: 0;
   box-shadow: var(--canvas-node-shadow);
 }
 .creation-canvas .canvas-media-node {
@@ -148,14 +141,11 @@
   flex-direction: column;
   gap: 16px;
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--canvas-node-fill);
   color: var(--canvas-node-muted);
   font-size: 12px;
   box-shadow: var(--canvas-node-shadow);
-}
-.creation-canvas .canvas-media-node[data-selected="true"] .canvas-node-shell {
-  border-color: var(--ring);
 }
 .creation-canvas .canvas-node-caption {
   display: flex;
@@ -167,8 +157,8 @@
 .creation-canvas .canvas-node-composer {
   position: relative;
   width: 100%;
-  border-radius: 12px;
-  padding: 10px 12px 8px;
+  border-radius: 20px;
+  padding: 16px;
   background: var(--canvas-node-panel);
   color: var(--canvas-node-text);
   box-shadow: var(--canvas-node-shadow);
@@ -196,10 +186,10 @@
 .creation-canvas .canvas-mini-map {
   position: absolute;
   z-index: 20;
-  right: 16px;
-  bottom: 24px;
-  width: 200px;
-  height: 128px;
+  left: 16px;
+  bottom: 52px;
+  width: 156px;
+  height: 114px;
   overflow: hidden;
   border-radius: 12px;
   background: var(--canvas-node-panel);
@@ -218,11 +208,6 @@
   padding: 16px;
   box-shadow: var(--canvas-node-shadow);
 }
-.creation-canvas button:focus-visible,
-.creation-canvas select:focus-visible {
-  outline: 2px solid var(--canvas-node-text);
-  outline-offset: 3px;
-}
 .creation-canvas .canvas-cursor-select {
   cursor: crosshair;
 }
@@ -237,10 +222,8 @@
     transform: none;
   }
   .creation-canvas .canvas-mini-map {
-    right: 12px;
-    bottom: 16px;
-    width: 120px;
-    height: 77px;
+    left: 12px;
+    bottom: 52px;
   }
 }
 
@@ -252,6 +235,10 @@
   overflow: auto;
 }
 
+.creation-canvas .canvas-node-panel:has([data-expanded="true"]) {
+  z-index: 50;
+}
+
 .creation-canvas .canvas-resize-handle {
   position: absolute;
   width: 24px;
@@ -260,10 +247,6 @@
   border: 0;
   z-index: 6;
   transform: translate(-50%, -50%) scale(var(--canvas-live-inverse-scale, 1));
-}
-.creation-canvas .canvas-resize-handle:focus-visible {
-  outline: 2px solid var(--canvas-node-text);
-  outline-offset: 3px;
 }
 .creation-canvas .canvas-resize-nw {
   left: 0;
@@ -298,39 +281,13 @@
   border: 1px solid var(--canvas-node-fill);
 }
 
-.creation-canvas .canvas-topbar-cluster h1 {
-  font-size: 13px;
-}
 .creation-canvas .canvas-prompt-input {
   height: 94px;
 }
-.creation-canvas .canvas-node-shell {
-  background-image: radial-gradient(
-    var(--canvas-toolbar-border) 1px,
-    transparent 1px
-  );
-  background-size: 20px 20px;
-}
 .creation-canvas .canvas-node-composer {
-  padding: 16px;
-  border: 1px solid var(--canvas-toolbar-border);
+  border: 0;
 }
 @media (max-width: 700px) {
-  .creation-canvas .canvas-topbar-cluster p {
-    display: none;
-  }
-  .creation-canvas .canvas-topbar-cluster [role="status"] {
-    max-width: 90px;
-    font-size: 10px;
-  }
-  .creation-canvas .canvas-topbar-cluster {
-    padding: 4px;
-    gap: 4px;
-  }
-  .creation-canvas .canvas-main-dock {
-    width: 40px;
-    left: 8px;
-  }
   .creation-canvas .canvas-zoom-controls {
     left: 8px;
   }
@@ -339,7 +296,7 @@
 .creation-canvas .canvas-zoom-controls {
   background: transparent;
   border-radius: 8px;
-  bottom: 18px;
+  bottom: 20px;
 }
 .creation-canvas .canvas-header .canvas-topbar-cluster {
   padding: 0;
@@ -444,7 +401,6 @@
 }
 .canvas-material-card[aria-pressed="true"] {
   border-color: var(--ring);
-  box-shadow: 0 0 0 1px var(--ring);
 }
 .canvas-material-card:disabled {
   opacity: 0.5;
@@ -546,26 +502,14 @@
   width: min(560px, calc(100% - 32px));
   padding: 12px 16px;
 }
-.creation-canvas .canvas-media-node[data-selected="true"] .canvas-node-shell {
-  border-color: var(--foreground);
-}
 .canvas-material-check {
   color: var(--background);
 }
 .canvas-material-dialog .subject-card[aria-pressed="true"] {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
+  border-color: var(--ring);
   border-radius: 8px;
 }
 @media (max-width: 700px) {
-  .creation-canvas .canvas-main-dock button {
-    width: 32px;
-    height: 32px;
-  }
-  .creation-canvas .canvas-node-composer {
-    width: calc(100% - 40px);
-    margin-left: 40px;
-  }
 }
 
 .creation-canvas .canvas-edit-actions {
@@ -598,4 +542,277 @@
   .creation-canvas .canvas-edit-actions button {
     min-height: 44px;
   }
+}
+
+/* Canvas geometry follows the reference; surfaces use the shared shadcn tokens. */
+.creation-canvas .canvas-project-cluster,
+.creation-canvas .canvas-header-actions,
+.creation-canvas .canvas-topbar-action-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.creation-canvas .canvas-project-cluster {
+  flex: 1;
+}
+.creation-canvas .canvas-header .product-brand {
+  flex-shrink: 0;
+  padding: 0;
+  width: 32px;
+  height: 40px;
+}
+.creation-canvas .canvas-header .brand-mark {
+  width: 24px;
+  height: 24px;
+}
+.creation-canvas .canvas-project-title {
+  min-width: 0;
+  max-width: 240px;
+  height: 28px;
+  padding: 0 8px;
+}
+.creation-canvas .canvas-project-title h1 {
+  font-size: 13px;
+  font-weight: 500;
+}
+.creation-canvas .canvas-save-status {
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--canvas-node-muted);
+}
+.creation-canvas .canvas-header-actions {
+  flex-shrink: 0;
+}
+.creation-canvas .canvas-topbar-action-group {
+  height: 36px;
+  padding: 4px;
+  gap: 4px;
+  background: var(--canvas-toolbar);
+  border-radius: 8px;
+}
+.creation-canvas .canvas-header-actions button {
+  height: 28px;
+  border-radius: 6px;
+}
+.creation-canvas .canvas-share-trigger {
+  height: 36px;
+  background: var(--canvas-toolbar);
+}
+.creation-canvas
+  .canvas-save-button:not([data-error="true"]):not(:focus-visible),
+.creation-canvas
+  .canvas-edit-actions:not([data-multi="true"]):not(:focus-within) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.creation-canvas .canvas-zoom-controls > button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
+}
+.creation-canvas .canvas-zoom-controls > button[aria-pressed="true"] {
+  background: var(--canvas-selection);
+}
+.creation-canvas .canvas-zoom-controls .canvas-zoom-trigger {
+  width: 48px;
+  height: 28px;
+  padding: 0;
+  margin-left: 12px;
+  font-size: 12px;
+}
+.creation-canvas .canvas-main-dock button svg {
+  width: 20px;
+  height: 20px;
+}
+.creation-canvas .canvas-dock-divider {
+  position: relative;
+  width: 40px;
+  height: 12px;
+  margin: 0;
+  background: transparent;
+  flex-shrink: 0;
+}
+.creation-canvas .canvas-dock-divider::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  right: 8px;
+  height: 1px;
+  background: var(--canvas-toolbar-border);
+}
+.creation-canvas .canvas-empty-hint {
+  color: var(--canvas-node-muted);
+  font-size: 14px;
+  font-weight: 400;
+}
+.canvas-view-menu {
+  min-width: 200px;
+  padding: 8px;
+  border-radius: 12px;
+}
+.canvas-view-menu [role="menuitem"] {
+  min-height: 40px;
+  padding-inline: 8px;
+}
+.creation-canvas .canvas-ai-trigger {
+  position: absolute;
+  right: 12px;
+  bottom: 13px;
+  width: 118px;
+  height: 34px;
+  border-radius: 20px;
+  background: var(--canvas-toolbar);
+  font-size: 12px;
+}
+@media (max-width: 600px) {
+  .creation-canvas .canvas-save-status,
+  .creation-canvas .canvas-share-trigger {
+    display: none;
+  }
+  .creation-canvas .canvas-project-title {
+    max-width: 120px;
+  }
+  .creation-canvas .canvas-header-actions {
+    gap: 4px;
+  }
+}
+
+.creation-canvas .canvas-node-composer[data-generation="true"] {
+  padding: 0;
+  background: transparent;
+}
+.creation-canvas
+  [data-presentation="canvas"]
+  .tiptap[data-placeholder]:has(
+    > p:only-child > br.ProseMirror-trailingBreak:only-child
+  )::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+.creation-canvas .canvas-composer-parameters {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1;
+}
+
+html:has(.creation-canvas) {
+  scrollbar-gutter: auto;
+}
+
+.creation-canvas .canvas-ai-panel {
+  position: absolute;
+  top: 60px;
+  right: 12px;
+  bottom: 56px;
+  width: min(400px, calc(100vw - 84px));
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--canvas-toolbar-border);
+  border-radius: 16px;
+  background: var(--canvas-toolbar);
+  color: var(--canvas-node-text);
+}
+.creation-canvas .canvas-ai-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+}
+.creation-canvas .canvas-ai-intro,
+.creation-canvas .canvas-ai-mode-note {
+  padding: 8px 16px;
+}
+.creation-canvas .canvas-ai-modes {
+  padding: 8px 16px;
+  gap: 8px;
+  height: auto;
+}
+.creation-canvas .canvas-ai-modes button {
+  height: auto;
+  min-height: 36px;
+  white-space: normal;
+}
+.creation-canvas .canvas-ai-history {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 16px;
+  min-height: 0;
+}
+.creation-canvas .canvas-ai-task {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--canvas-toolbar-border);
+}
+.creation-canvas .canvas-ai-result {
+  max-height: 320px;
+  overflow: auto;
+}
+.creation-canvas .canvas-ai-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--canvas-toolbar-border);
+}
+
+.creation-canvas .canvas-ai-shell {
+  position: absolute;
+  top: 60px;
+  right: 12px;
+  bottom: 56px;
+  z-index: 30;
+  max-width: calc(100vw - 84px);
+}
+.creation-canvas .canvas-ai-shell .canvas-ai-panel {
+  position: relative;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.creation-canvas .canvas-ai-resize {
+  position: absolute;
+  z-index: 1;
+  left: -4px;
+  top: 12px;
+  bottom: 12px;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.creation-canvas .canvas-ai-resize:focus-visible {
+  outline: 1px solid var(--ring);
+}
+
+.creation-canvas .canvas-node-shell {
+  border-radius: 14px;
+  border-color: var(--border);
+}
+.creation-canvas .canvas-media-node[data-selected="true"] .canvas-node-shell {
+  border-color: var(--ring);
+}
+.creation-canvas .canvas-node-port {
+  position: absolute;
+  top: calc(var(--canvas-node-height) / 2);
+  border-radius: 50%;
+  transform: translateY(-50%) scale(var(--canvas-live-inverse-scale, 1));
+  z-index: 6;
+}
+.creation-canvas .canvas-node-port-left {
+  left: -32px;
+  transform-origin: right center;
+}
+.creation-canvas .canvas-node-port-right {
+  right: -32px;
+  transform-origin: left center;
 }

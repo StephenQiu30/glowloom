@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import {
   ComposerSession,
@@ -18,6 +18,9 @@ export function PromptEditor({
   onRequestSave,
   onRequestSubmit,
   onChange,
+  placeholder,
+  className,
+  inputGroup = false,
   ...options
 }: ComposerOptions & {
   onReady: (session: ComposerSession) => void;
@@ -25,10 +28,29 @@ export function PromptEditor({
   onDispose?: () => void;
   onRequestSave?: (snapshot: ComposerSnapshot) => void;
   onRequestSubmit?: () => void;
+  placeholder?: string;
+  className?: string;
+  inputGroup?: boolean;
 }) {
+  const editorOptions = composerEditorOptions(options);
+  const attributes = editorOptions.editorProps?.attributes;
+  const initialAttributes = useRef(attributes);
   const editor = useEditor(
     {
-      ...composerEditorOptions(options),
+      ...editorOptions,
+      editorProps: {
+        ...editorOptions.editorProps,
+        attributes: (state) => ({
+          ...(typeof attributes === "function"
+            ? attributes(state)
+            : attributes),
+          ...(placeholder === undefined
+            ? {}
+            : { "data-placeholder": placeholder }),
+          ...(className === undefined ? {} : { class: className }),
+          ...(inputGroup ? { "data-slot": "input-group-control" } : {}),
+        }),
+      },
       immediatelyRender: false,
       shouldRerenderOnTransaction: false,
       onCreate: ({ editor }) => onReady(new ComposerSession(editor)),
@@ -36,6 +58,25 @@ export function PromptEditor({
     },
     [options.contextKey, options.replicaId],
   );
+  useEffect(() => {
+    if (!editor) return;
+    const baseAttributes = initialAttributes.current;
+    editor.setOptions({
+      editorProps: {
+        ...editor.options.editorProps,
+        attributes: (state) => ({
+          ...(typeof baseAttributes === "function"
+            ? baseAttributes(state)
+            : baseAttributes),
+          ...(placeholder === undefined
+            ? {}
+            : { "data-placeholder": placeholder }),
+          ...(className === undefined ? {} : { class: className }),
+          ...(inputGroup ? { "data-slot": "input-group-control" } : {}),
+        }),
+      },
+    });
+  }, [editor, placeholder, className, inputGroup]);
   useEffect(() => {
     if (!editor) return;
     const changed = () => onChange?.(new ComposerSession(editor).snapshot());

@@ -1,5 +1,12 @@
 "use client";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import { cn } from "cn";
+import { Plus, ImageIcon, Video, AudioLines, UserRound } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -14,6 +21,7 @@ import {
 import { draftRequest } from "./draft-save";
 import { validatePromptDraft } from "./prompt-document";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -96,6 +104,7 @@ export function ReferenceControls({
   model,
   disabled = false,
   authorized = false,
+  compact = false,
 }: {
   session: ComposerSession;
   draft: PromptDraft;
@@ -103,6 +112,7 @@ export function ReferenceControls({
   model?: API.ModelResponse;
   disabled?: boolean;
   authorized?: boolean;
+  compact?: boolean;
 }) {
   const formFieldId = useId();
 
@@ -125,6 +135,7 @@ export function ReferenceControls({
   } | null>(null);
   const [fileIds, setFileIds] = useState<string[]>([]);
   const [unavailablePaste, setUnavailablePaste] = useState<string | null>(null);
+  const [detailsID, setDetailsID] = useState<string | null>(null);
   const referenceUploadInput = useRef<HTMLInputElement>(null);
   const files = useRef(new Map<string, File>()),
     [uploading, setUploading] = useState<string[]>([]);
@@ -154,6 +165,10 @@ export function ReferenceControls({
   const panel = useRef<HTMLElement>(null);
   useEffect(() => {
     const reveal = ({ referenceId }: { referenceId: string }) => {
+      if (compact) {
+        setDetailsID(referenceId);
+        return;
+      }
       const card = panel.current?.querySelector<HTMLElement>(
         `[data-reference-card="${CSS.escape(referenceId)}"]`,
       );
@@ -164,7 +179,7 @@ export function ReferenceControls({
     return () => {
       session.editor.off("composerReferenceSelected", reveal);
     };
-  }, [session]);
+  }, [session, compact]);
   const roles = [
     ...new Set([
       ...(model?.input_roles?.filter((r) => r !== "prompt") ?? []),
@@ -217,6 +232,7 @@ export function ReferenceControls({
     files.current.set(pending.id, file);
     setFileIds((ids) => [...new Set([...ids, pending.id])]);
     setReview(false);
+    if (compact) setDetailsID(pending.id);
   }
   const acceptFiles = useEffectEvent((values: File[]) => {
     if (!disabled) values.forEach((file) => choose(file, undefined, true));
@@ -370,18 +386,8 @@ export function ReferenceControls({
         ) ?? [],
     ),
   );
-  return (
-    <section ref={panel} aria-label="参考素材" className="space-y-3">
-      <p className="text-xs text-muted-foreground">
-        本次参考 {draft.references.length} 项 · 正文提及{" "}
-        {draft.document.content.reduce(
-          (count, p) =>
-            count +
-            (p.content?.filter((n) => n.type === "reference").length ?? 0),
-          0,
-        )}{" "}
-        处
-      </p>
+  const referenceActions = (
+    <>
       {draft.references.some((r) => r.role === "first_frame") &&
         draft.references.some((r) => r.role === "last_frame") && (
           <Button
@@ -493,80 +499,55 @@ export function ReferenceControls({
           ))}
         </NativeSelect>
       </Field>
-      {menu && (
-        <div className="rounded border p-3" aria-label="引用候选">
-          <Input
-            placeholder="按编号查找引用"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <div className="flex flex-wrap gap-2">
-            {draft.references
-              .filter((r) =>
-                referenceLabel(draft.labelState, r.id).includes(search),
-              )
-              .map((r) => (
-                <Button key={r.id} variant="ghost" onClick={() => add(r, true)}>
-                  {referenceLabel(draft.labelState, r.id)}
-                </Button>
-              ))}
-          </div>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setLookup({
-                query: search,
-                seq: session.snapshot().localSeq,
-                range: mention?.range,
-              });
-              setMenu(false);
-            }}
-          >
-            搜索项目素材与主体
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setMenu(false);
-              session.editor.commands.focus();
-            }}
-          >
-            关闭候选
-          </Button>
-        </div>
-      )}
-      {lookup && (
-        <ReferenceSearch
-          projectID={projectID}
-          initialQuery={lookup.query}
-          onClose={() => {
-            setLookup(null);
-            session.editor.commands.focus();
-          }}
-          onSelect={(candidates) => {
-            if (session.snapshot().localSeq !== lookup.seq) {
-              setError("检索期间草稿已变化，请重新打开候选后插入。");
-              setLookup(null);
-              return;
-            }
-            try {
-              const bindings = candidates.map((candidate) =>
-                candidate.media
-                  ? mediaBinding(candidate.media, role)
-                  : subjectBinding(candidate.subject!, role),
-              );
-              session.insertReferences(bindings, lookup.range);
-              setError("");
-              setLookup(null);
-              session.editor.commands.focus();
-            } catch (e) {
-              setError(String(e));
-            }
-          }}
-        />
-      )}
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {draft.references.map((ref) => (
+    </>
+  );
+  const referenceMenu = (
+    <div className="rounded border p-3" aria-label="引用候选">
+      <Input
+        placeholder="按编号查找引用"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
+      <div className="flex flex-wrap gap-2">
+        {draft.references
+          .filter((r) =>
+            referenceLabel(draft.labelState, r.id).includes(search),
+          )
+          .map((r) => (
+            <Button key={r.id} variant="ghost" onClick={() => add(r, true)}>
+              {referenceLabel(draft.labelState, r.id)}
+            </Button>
+          ))}
+      </div>
+      <Button
+        variant="outline"
+        onClick={() => {
+          setLookup({
+            query: search,
+            seq: session.snapshot().localSeq,
+            range: mention?.range,
+          });
+          setMenu(false);
+        }}
+      >
+        搜索项目素材与主体
+      </Button>
+      <Button
+        variant="ghost"
+        onClick={() => {
+          setMenu(false);
+          session.editor.commands.focus();
+        }}
+      >
+        关闭候选
+      </Button>
+    </div>
+  );
+  const referenceCards = (
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      {draft.references
+        .filter((ref) => !compact || ref.id === detailsID)
+        .map((ref) => (
           <article
             key={ref.id}
             data-reference-card={ref.id}
@@ -735,19 +716,176 @@ export function ReferenceControls({
             </div>
           </article>
         ))}
-      </div>
-      {draft.references.some((r) => r.source.kind === "pending_upload") && (
-        <Field orientation="horizontal">
-          <Checkbox
-            id={`${formFieldId}-field-3`}
+    </div>
+  );
+  const uploadConsent = draft.references.some(
+    (ref) => ref.source.kind === "pending_upload",
+  ) ? (
+    <Field orientation="horizontal">
+      <Checkbox
+        id={`${formFieldId}-field-3`}
 
-            checked={review}
-            onCheckedChange={(e) => setReview(e === true)}
-          />
-          <FieldLabel htmlFor={`${formFieldId}-field-3`}>
-            <span>我已确认这些素材可以用于本次创作</span>
-          </FieldLabel>
-        </Field>
+        checked={review}
+        onCheckedChange={(e) => setReview(e === true)}
+      />
+      <FieldLabel htmlFor={`${formFieldId}-field-3`}>
+        <span>我已确认这些素材可以用于本次创作</span>
+      </FieldLabel>
+    </Field>
+  ) : null;
+  return (
+    <section
+      ref={panel}
+      aria-label="参考素材"
+      className={cn("flex w-full min-w-0 flex-col gap-3", compact && "gap-0")}
+    >
+      <p className={cn("text-xs text-muted-foreground", compact && "sr-only")}>
+        本次参考 {draft.references.length} 项 · 正文提及{" "}
+        {draft.document.content.reduce(
+          (count, p) =>
+            count +
+            (p.content?.filter((n) => n.type === "reference").length ?? 0),
+          0,
+        )}{" "}
+        处
+      </p>
+      {compact ? (
+        <div className="flex w-full items-center gap-2 overflow-x-auto">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                disabled={disabled}
+                aria-label="添加参考"
+                className="size-12"
+              >
+                <Plus />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              side="top"
+              align="start"
+              className="max-h-[70dvh] w-80 overflow-y-auto"
+              aria-label="添加参考素材"
+            >
+              {referenceActions}
+            </PopoverContent>
+          </Popover>
+          {draft.references.map((ref) => {
+            const Icon =
+              ref.source.kind === "subject"
+                ? UserRound
+                : ref.mediaKind === "video"
+                  ? Video
+                  : ref.mediaKind === "audio"
+                    ? AudioLines
+                    : ImageIcon;
+            return (
+              <Button
+                key={ref.id}
+                type="button"
+                variant="outline"
+                className="relative h-12 w-20 flex-col gap-1 overflow-hidden"
+                aria-label={`查看${referenceLabel(draft.labelState, ref.id)}详情`}
+                onClick={() => setDetailsID(ref.id)}
+              >
+                {authorized &&
+                ref.source.kind === "media" &&
+                ref.mediaKind !== "audio" ? (
+                  <span className="absolute inset-0">
+                    <ProjectMediaPreview
+                      projectID={projectID}
+                      id={ref.source.sourceId}
+                      kind={ref.mediaKind}
+                    />
+                  </span>
+                ) : (
+                  <Icon data-icon="inline-start" />
+                )}
+                <Badge variant="secondary" className="relative">
+                  {referenceLabel(draft.labelState, ref.id)}
+                </Badge>
+              </Button>
+            );
+          })}
+        </div>
+      ) : (
+        referenceActions
+      )}
+      {menu &&
+        (compact ? (
+          <Dialog
+            open
+            onOpenChange={(open) => {
+              if (!open) setMenu(false);
+            }}
+          >
+            <DialogContent>
+              <DialogTitle>引用候选</DialogTitle>
+              <DialogDescription>
+                提及已有参考，或搜索当前项目的素材和主体。
+              </DialogDescription>
+              {referenceMenu}
+            </DialogContent>
+          </Dialog>
+        ) : (
+          referenceMenu
+        ))}
+      {lookup && (
+        <ReferenceSearch
+          projectID={projectID}
+          initialQuery={lookup.query}
+          onClose={() => {
+            setLookup(null);
+            session.editor.commands.focus();
+          }}
+          onSelect={(candidates) => {
+            if (session.snapshot().localSeq !== lookup.seq) {
+              setError("检索期间草稿已变化，请重新打开候选后插入。");
+              setLookup(null);
+              return;
+            }
+            try {
+              const bindings = candidates.map((candidate) =>
+                candidate.media
+                  ? mediaBinding(candidate.media, role)
+                  : subjectBinding(candidate.subject!, role),
+              );
+              session.insertReferences(bindings, lookup.range);
+              setError("");
+              setLookup(null);
+              session.editor.commands.focus();
+            } catch (e) {
+              setError(String(e));
+            }
+          }}
+        />
+      )}
+      {compact ? (
+        <Dialog
+          open={
+            !!detailsID && draft.references.some((ref) => ref.id === detailsID)
+          }
+          onOpenChange={(open) => {
+            if (!open) setDetailsID(null);
+          }}
+        >
+          <DialogContent className="max-h-[80dvh] overflow-y-auto">
+            <DialogTitle>参考详情</DialogTitle>
+            <DialogDescription>
+              引用角色、排序、上传与替换沿用当前草稿。
+            </DialogDescription>
+            {referenceCards}
+            {uploadConsent}
+          </DialogContent>
+        </Dialog>
+      ) : (
+        <>
+          {referenceCards}
+          {uploadConsent}
+        </>
       )}
       {error && <FeedbackToast message={error} />}
       {unavailablePaste !== null && (

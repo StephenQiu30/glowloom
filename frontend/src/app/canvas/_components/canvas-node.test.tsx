@@ -50,13 +50,13 @@ it("四角尺寸预览使用世界坐标，取消恢复，结束只提交一次"
   });
   fireEvent.pointerDown(corner, { button: 0, clientX: 100, clientY: 100 });
   fireEvent.pointerMove(corner, { clientX: 120, clientY: 140 });
-  expect(card.style.width).toBe("278px");
+  expect(card.style.width).toBe("310px");
   expect(card.style.left).toBe("90px");
   expect(card.style.top).toBe("100px");
   expect(preview).toHaveBeenCalled();
   expect(resized).not.toHaveBeenCalled();
   fireEvent.pointerCancel(corner);
-  expect(card.style.width).toBe("288px");
+  expect(card.style.width).toBe("320px");
   expect(card.style.left).toBe("80px");
   fireEvent.pointerDown(corner, { button: 0, clientX: 100, clientY: 100 });
   fireEvent.pointerMove(corner, { clientX: 120, clientY: 140 });
@@ -65,8 +65,8 @@ it("四角尺寸预览使用世界坐标，取消恢复，结束只提交一次"
   expect(resized).toHaveBeenCalledExactlyOnceWith({
     x: 90,
     y: 100,
-    width: 278,
-    height: 180,
+    width: 310,
+    height: 300,
   });
 });
 it("手柄提供键盘等价操作，Shift指针调整保持比例", () => {
@@ -78,15 +78,15 @@ it("手柄提供键盘等价操作，Shift指针调整保持比例", () => {
   expect(resized).toHaveBeenCalledWith({
     x: 80,
     y: 80,
-    width: 298,
-    height: 200,
+    width: 330,
+    height: 320,
   });
   fireEvent.pointerDown(corner, { button: 0, clientX: 0, clientY: 0 });
   fireEvent.pointerMove(corner, { clientX: 100, clientY: 0, shiftKey: true });
   expect(
     parseFloat(card.style.width) /
       parseFloat(card.style.getPropertyValue("--canvas-node-height")),
-  ).toBeCloseTo(288 / 200);
+  ).toBeCloseTo(1);
 });
 
 it("节点媒体区域与标题一样支持拖动和取消", () => {

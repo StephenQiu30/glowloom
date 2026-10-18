@@ -58,6 +58,7 @@ type TaskInput struct {
 
 // TaskOutput describes a candidate; preview authorization remains with media.
 type TaskOutput struct {
+	Text             *string    `json:"text,omitempty"`
 	ID               uuid.UUID  `json:"id"`
 	Sequence         int32      `json:"sequence"`
 	Kind             string     `json:"kind"`

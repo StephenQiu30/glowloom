@@ -8,6 +8,7 @@ import {
   sameEditable,
   createMediaNode,
   duplicateNode,
+  removeCanvasNode,
 } from "./editor-state";
 const projectID = "00000000-0000-4000-8000-000000000001";
 const canvasID = "00000000-0000-4000-8000-000000000002";
@@ -263,7 +264,7 @@ it("文字分组及父子关系通过已有命令原子保存，坐标保持世�
     results: [{ ok: true }, { ok: true }],
   };
   expect(requireSaveResult(receipt, base, target, body).nodes[0].x).toBe(-120);
-  expect(() => commandBatch(base, [])).toThrow();
+  expect(commandBatch(base, []).commands?.at(-1)?.type).toBe("DeleteNodes");
 });
 it("标注连线及相机生成差量，回执不得丢边或返回错误视角", () => {
   const a = createMediaNode(
@@ -389,4 +390,95 @@ it("4000条合法标注增删按单命令2000项拆分", () => {
     ["Disconnect", 2000],
     ["Disconnect", 2000],
   ]);
+});
+
+it("已保存资源删除先断标注并保留时间线的真实资产引用，生成草稿继续受保护", () => {
+  const assetID = crypto.randomUUID();
+  const media = createMediaNode(
+    { id: assetID, project_id: projectID, kind: "image", file_name: "图" },
+    projectID,
+    0,
+  );
+  const text = createResourceNode("text", { x: 0, y: 0 });
+  const edge = {
+    id: crypto.randomUUID(),
+    edge_type: "annotation",
+    source_node_id: media.id,
+    target_node_id: text.id,
+  };
+  const next = removeCanvasNode([media, text], media.id);
+  const batch = commandBatch(
+    { ...empty, nodes: [media, text], edges: [edge] },
+    next,
+    { edges: [] },
+  );
+  expect(batch.commands?.map((c) => c.type)).toEqual([
+    "Disconnect",
+    "DeleteNodes",
+  ]);
+  const draft = {
+    ...createDraftNode("image_generation", "1:1", 0),
+    input_revision: 1,
+  };
+  expect(() => commandBatch({ ...empty, nodes: [draft] }, [])).toThrow();
+});
+it("时间线与导演台为可保存工具，未知工具仍只读", () => {
+  const n = {
+    ...createResourceNode("text", { x: 0, y: 0 }),
+    node_type: "timeline",
+    node_action: "tool",
+    config: { timeline: { version: 1 } },
+  };
+  expect(commandBatch(empty, [n]).commands?.[0].type).toBe("AddNodes");
+  expect(() => commandBatch(empty, [{ ...n, node_type: "unknown" }])).toThrow();
+});
+
+it("旧时间线的null引用在读取和幂等回执确认时规范化为缺省，不丢弃字幕", () => {
+  const text = createResourceNode("text", { x: 0, y: 0 });
+  const clip = {
+    id: crypto.randomUUID(),
+    track_id: crypto.randomUUID(),
+    kind: "subtitle",
+    title: "字幕",
+    text: "验收",
+    start_ms: 0,
+    duration_ms: 3000,
+  };
+  const timeline = {
+    ...text,
+    node_type: "timeline",
+    node_action: "tool",
+    config: { timeline: { version: 1, clips: [clip] } },
+  };
+  const body = commandBatch(empty, [timeline]);
+  const saved = JSON.parse(
+    JSON.stringify({
+      ...timeline,
+      config: {
+        timeline: {
+          version: 1,
+          clips: [
+            {
+              ...clip,
+              node_id: null,
+              asset_id: null,
+              source_duration_ms: null,
+            },
+          ],
+        },
+      },
+    }),
+  );
+  const receipt = {
+    ...empty,
+    nodes: [saved],
+    revision: 2,
+    results: [{ ok: true }],
+  };
+  const confirmed = requireSaveResult(receipt, empty, [timeline], body);
+  expect(confirmed.nodes[0].config.timeline?.clips?.[0]).not.toHaveProperty(
+    "node_id",
+  );
+  expect(sameEditable(timeline, saved)).toBe(true);
+  expect(confirmed.nodes[0].config.timeline?.clips?.[0].text).toBe("验收");
 });

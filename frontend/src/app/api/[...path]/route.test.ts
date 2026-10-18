@@ -471,6 +471,107 @@ it("统计查询不能携带分页或越范围字段，CSV下载保留授权与�
   expect(await response.text()).toContain("safe");
 });
 
+it.each([
+  [
+    "projects/11111111-1111-4111-8111-111111111111/prompt-submissions/current",
+    "owner_kind=canvas_input&canvas_id=c&node_id=n",
+  ],
+  [
+    "projects/11111111-1111-4111-8111-111111111111/prompt-submissions/current",
+    "owner_kind=prompt_draft&draft_id=d",
+  ],
+  [
+    "projects/11111111-1111-4111-8111-111111111111/prompt-drafts",
+    "cursor=next%2Bpage",
+  ],
+])("%s 保留合同查询并拒绝重复及未知参数", async (path, query) => {
+  const fetcher = vi.fn().mockImplementation(async () => new Response("{}"));
+  vi.stubGlobal("fetch", fetcher);
+  expect(
+    (
+      await GET(
+        new Request(`http://localhost/api/${path}?${query}`),
+        context(path),
+      )
+    ).status,
+  ).toBe(200);
+  expect(fetcher.mock.calls[0][0].searchParams.toString()).toBe(
+    new URLSearchParams(query).toString(),
+  );
+  fetcher.mockClear();
+  for (const invalid of [`${query}&host=other`, `${query}&${query}`]) {
+    expect(
+      (
+        await GET(
+          new Request(`http://localhost/api/${path}?${invalid}`),
+          context(path),
+        )
+      ).status,
+    ).toBe(422);
+  }
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("草稿写入保留身份、空间、CSRF、冻结正文和幂等标识，错误回执原样返回", async () => {
+  const path =
+    "projects/11111111-1111-4111-8111-111111111111/prompt-drafts/22222222-2222-4222-8222-222222222222";
+  const body = JSON.stringify({
+    expected_revision: 3,
+    draft: { text: "保留本地输入" },
+  });
+  const fetcher = vi.fn().mockResolvedValue(
+    new Response('{"code":"revision_conflict"}', {
+      status: 409,
+      headers: { "Content-Type": "application/json" },
+    }),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  const headers = {
+    Cookie: "session=fixture",
+    Origin: "http://localhost",
+    "X-CSRF-Token": "csrf-fixture",
+    "X-Creation-Scope": "scope-fixture",
+    "Idempotency-Key": "same-write",
+    "Content-Type": "application/json",
+  };
+  const result = await PUT(
+    new Request(`http://localhost/api/${path}`, {
+      method: "PUT",
+      headers,
+      body,
+    }),
+    context(path),
+  );
+  expect(result.status).toBe(409);
+  expect(await result.json()).toEqual({ code: "revision_conflict" });
+  const [url, init] = fetcher.mock.calls[0];
+  expect(url.pathname).toBe(`/api/${path}`);
+  expect(new TextDecoder().decode(init.body)).toBe(body);
+  for (const [name, value] of Object.entries(headers))
+    expect(init.headers.get(name)).toBe(value);
+  fetcher.mockClear();
+  expect(
+    (
+      await POST(
+        new Request(`http://localhost/api/${path}`, { method: "POST" }),
+        context(path),
+      )
+    ).status,
+  ).toBe(405);
+  expect(
+    (
+      await PUT(
+        new Request(`http://localhost/api/${path}?cursor=forbidden`, {
+          method: "PUT",
+          body,
+        }),
+        context(path),
+      )
+    ).status,
+  ).toBe(422);
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
 it.each(["refresh", "upgrade"])(
   "session %s preserves protocol status, cookies and Origin",
   async (action) => {
@@ -615,21 +716,6 @@ it.each([
     context(path),
   );
   expect(result.status).toBe(404);
-  expect(result.headers.get("Cache-Control")).toBe("no-store");
-  expect(fetcher).not.toHaveBeenCalled();
-});
-
-it("recovery-only candidate rejects draft PUT without forwarding", async () => {
-  const path =
-    "projects/11111111-1111-1111-1111-111111111111/prompt-drafts/22222222-2222-2222-2222-222222222222";
-  const fetcher = vi.fn();
-  vi.stubGlobal("fetch", fetcher);
-  const result = await PUT(
-    new Request(`http://127.0.0.1:3200/api/${path}`, { method: "PUT" }),
-    context(path),
-  );
-  expect(result.status).toBe(405);
-  expect(result.headers.get("Allow")).toBe("GET");
   expect(result.headers.get("Cache-Control")).toBe("no-store");
   expect(fetcher).not.toHaveBeenCalled();
 });

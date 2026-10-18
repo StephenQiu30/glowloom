@@ -5,7 +5,7 @@ import { isEditableNode, type Node } from "./editor-state";
 import type { ViewportTransform } from "./canvas-viewport";
 type Bounds = { left: number; top: number; right: number; bottom: number };
 export type ViewSize = { width: number; height: number };
-const cellSize = 1024;
+import { buildCanvasSpatialIndex } from "./canvas-spatial-index";
 const intersects = (a: Bounds, b: Bounds) =>
   a.right >= b.left &&
   a.left <= b.right &&
@@ -69,6 +69,8 @@ export function moveSelection(
   );
 }
 export function buildRenderIndex(nodes: Node[]) {
+  // Preserve legacy documents on save, but retired tools have no canvas UI.
+  nodes = nodes.filter((node) => node.node_type !== "timeline");
   const byID = new Map(nodes.map((node) => [node.id, node]));
   const hidden = descendants(
     nodes,
@@ -94,48 +96,25 @@ export function buildRenderIndex(nodes: Node[]) {
       }
       if (!collapsedAncestor) hidden.delete(node.id);
     }
-  const buckets = new Map<string, number[]>(),
-    large: number[] = [];
-  const entries = nodes.map((node) => ({ node, bounds: nodeBounds(node) }));
-  for (let i = 0; i < entries.length; i++) {
-    const b = entries[i].bounds;
-    const x0 = Math.floor(b.left / cellSize),
-      x1 = Math.floor(b.right / cellSize),
-      y0 = Math.floor(b.top / cellSize),
-      y1 = Math.floor(b.bottom / cellSize);
-    if ((x1 - x0 + 1) * (y1 - y0 + 1) > 256) {
-      large.push(i);
-      continue;
-    }
-    for (let y = y0; y <= y1; y++)
-      for (let x = x0; x <= x1; x++) {
-        const key = `${x}:${y}`,
-          list = buckets.get(key) ?? [];
-        list.push(i);
-        buckets.set(key, list);
-      }
-  }
+  const entries = nodes.map((node) => ({
+    id: node.id,
+    value: node,
+    bounds: nodeBounds(node),
+  }));
+  const spatial = buildCanvasSpatialIndex(entries);
   return {
     nodes,
     byID,
     hidden,
     query(bounds: Bounds) {
-      const x0 = Math.floor(bounds.left / cellSize),
-        x1 = Math.floor(bounds.right / cellSize),
-        y0 = Math.floor(bounds.top / cellSize),
-        y1 = Math.floor(bounds.bottom / cellSize);
-      if ((x1 - x0 + 1) * (y1 - y0 + 1) > 4096)
+      // Keep huge legal cameras bounded; the original grid query has no coverage guard.
+      const columns = Math.ceil((bounds.right - bounds.left) / 1024) + 1;
+      const rows = Math.ceil((bounds.bottom - bounds.top) / 1024) + 1;
+      if (columns * rows > 4096)
         return entries
-          .filter((e) => intersects(e.bounds, bounds))
-          .map((e) => e.node);
-      const found = new Set(large);
-      for (let y = y0; y <= y1; y++)
-        for (let x = x0; x <= x1; x++)
-          for (const i of buckets.get(`${x}:${y}`) ?? []) found.add(i);
-      return [...found]
-        .sort((a, b) => a - b)
-        .filter((i) => intersects(entries[i].bounds, bounds))
-        .map((i) => entries[i].node);
+          .filter((entry) => intersects(entry.bounds, bounds))
+          .map((entry) => entry.value);
+      return spatial.query(bounds);
     },
   };
 }

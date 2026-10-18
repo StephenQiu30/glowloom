@@ -50,3 +50,18 @@ func TestCanvasAnnotationAndViewport(t *testing.T) {
 		t.Fatalf("delete: %+v %v", deleted, err)
 	}
 }
+
+func TestCanvasViewportSupportsJimengZoomRange(t *testing.T) {
+	doc := domain.Document{ID: uuid.New(), Nodes: []domain.Node{}, Edges: []domain.Edge{}}
+	for _, zoom := range []float64{0.08, 5, 8} {
+		result, err := domain.Apply(doc, []domain.Command{{Type: "SetViewport", Viewport: &domain.Viewport{Zoom: zoom}}})
+		if err != nil || result.Viewport.Zoom != zoom {
+			t.Fatalf("zoom %v: got %v, %v", zoom, result.Viewport.Zoom, err)
+		}
+	}
+	for _, zoom := range []float64{8.01, math.Inf(1), math.NaN()} {
+		if _, err := domain.Apply(doc, []domain.Command{{Type: "SetViewport", Viewport: &domain.Viewport{Zoom: zoom}}}); !errors.Is(err, domain.ErrInvalidCommand) {
+			t.Fatalf("invalid zoom %v accepted: %v", zoom, err)
+		}
+	}
+}

@@ -84,3 +84,37 @@ it("business UI uses shared colors instead of separate palettes or rich toast co
   }
   expect(violations).toEqual([]);
 });
+
+it("all interactive states use thin rings without a second visible outline", async () => {
+  const violations: string[] = [];
+  for (const file of await readdir("src", { recursive: true })) {
+    if (!/\.(tsx|css)$/.test(file) || /\.test\./.test(file)) continue;
+    const source = await readFile(path.join("src", file), "utf8");
+    // Include arbitrary pixel utilities and invalid/selected states; avatar
+    // separation rings are decoration, not interactive focus indicators.
+    for (const token of source.split(/[\s"'`]+/)) {
+      if (!/(?:focus|invalid|selected|checked|pressed)/.test(token)) continue;
+      if (
+        /(?:ring|outline)-(?:[2-9]\d*|\[(?:[2-9]\d*|1\d+)px\])(?:$|[!\s])/.test(
+          token,
+        )
+      )
+        violations.push(`${file}: thick interaction ring`);
+    }
+    if (file.endsWith(".tsx")) {
+      for (const literal of source.matchAll(/"([^"\n]+)"/g)) {
+        if (
+          /focus-visible:ring-(?:1|\[1px\])\b/.test(literal[1]) &&
+          /focus-visible:outline-(?:1|solid)\b/.test(literal[1])
+        )
+          violations.push(`${file}: duplicate focus outline`);
+      }
+    } else {
+      if (/outline\s*:\s*(?:[2-9]\d*|1\d+)px/.test(source))
+        violations.push(`${file}: thick outline`);
+      if (/outline-offset\s*:\s*(?:[3-9]\d*|[12]\d+)px/.test(source))
+        violations.push(`${file}: detached outline`);
+    }
+  }
+  expect(violations).toEqual([]);
+});

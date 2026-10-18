@@ -9,11 +9,6 @@ const identityRoutes: {
   { pattern: `sessions`, methods: ["POST"], query: [] },
   { pattern: `session/(refresh|upgrade)`, methods: ["POST"], query: [] },
   { pattern: `session`, methods: ["GET"], query: [] },
-  {
-    pattern: `projects/${identityUUID}/prompt-drafts/${identityUUID}`,
-    methods: ["GET"],
-    query: [],
-  },
   { pattern: `auth-policy`, methods: ["GET"], query: [] },
   { pattern: `registrations`, methods: ["POST"], query: [] },
   {
@@ -266,6 +261,58 @@ const identityRoutes: {
   },
 ];
 
+// Explicit prompt-editor contracts; authorization remains with the backend.
+const editorRoutes: typeof identityRoutes = [
+  {
+    pattern: `projects/${identityUUID}/prompt-drafts`,
+    methods: ["GET", "POST"],
+    query: ["cursor"],
+  },
+  {
+    pattern: `projects/${identityUUID}/prompt-drafts/${identityUUID}`,
+    methods: ["GET", "PUT"],
+    query: [],
+  },
+  {
+    pattern: `projects/${identityUUID}/prompt-references/validate`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `projects/${identityUUID}/prompt-uploads/${identityUUID}`,
+    methods: ["GET"],
+    query: [],
+  },
+  {
+    pattern: `projects/${identityUUID}/prompt-submissions/current`,
+    methods: ["GET"],
+    query: ["owner_kind", "draft_id", "canvas_id", "node_id"],
+  },
+  {
+    pattern: `projects/${identityUUID}/prompt-submissions/${identityUUID}/resolve`,
+    methods: ["POST"],
+    query: [],
+  },
+  { pattern: `projects/${identityUUID}/quotes`, methods: ["POST"], query: [] },
+  { pattern: `batches/${identityUUID}`, methods: ["GET"], query: [] },
+  {
+    pattern: `batches/${identityUUID}/(confirm|cancel|resume)`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `projects/${identityUUID}/model-defaults`,
+    methods: ["GET", "PATCH"],
+    query: [],
+  },
+  { pattern: `settings/prompt-preferences`, methods: ["GET"], query: [] },
+  {
+    pattern: `settings/prompt-preferences/[a-z][a-z0-9_.-]{0,127}`,
+    methods: ["PUT"],
+    query: [],
+  },
+];
+
 // The browser cannot choose an upstream host or use this slice as a general proxy.
 const resources: Record<string, readonly string[]> = {
   projects: ["GET", "POST"],
@@ -315,11 +362,11 @@ async function proxy(
                             )
                           ? ["GET"]
                           : undefined;
-  const identity = identityRoutes.find((rule) =>
+  const boundedRoute = [...identityRoutes, ...editorRoutes].find((rule) =>
     new RegExp(`^${rule.pattern}$`, "i").test(resource),
   );
   const methods =
-    identity?.methods ??
+    boundedRoute?.methods ??
     flowMethods ??
     resources[resource] ??
     (matches(`projects/${uuid}/canvases`) ? ["GET", "POST"] : undefined) ??
@@ -350,11 +397,11 @@ async function proxy(
       { status: 405, headers: { ...noStore, Allow: methods.join(", ") } },
     );
   const incoming = new URL(request.url);
-  if (identity) {
+  if (boundedRoute) {
     for (const key of incoming.searchParams.keys()) {
       if (
         request.method !== "GET" ||
-        !identity.query.includes(key) ||
+        !boundedRoute.query.includes(key) ||
         incoming.searchParams.getAll(key).length !== 1
       )
         return Response.json(
@@ -369,7 +416,7 @@ async function proxy(
       `/api/${resource}`,
       process.env.LV_BACKEND_ORIGIN ?? "http://127.0.0.1:8080",
     );
-    if (identity)
+    if (boundedRoute)
       for (const [key, value] of incoming.searchParams)
         upstream.searchParams.set(key, value);
     if (resource === "projects")

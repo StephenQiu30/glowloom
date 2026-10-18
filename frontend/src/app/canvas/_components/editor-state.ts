@@ -145,7 +145,7 @@ export function requireCanvas(
       !position(c.viewport.y) ||
       !Number.isFinite(c.viewport.zoom) ||
       c.viewport.zoom < 0.05 ||
-      c.viewport.zoom > 4)
+      c.viewport.zoom > 8)
   )
     throw new RequestError("invalid_receipt");
   const edgeIDs = new Set<string>();
@@ -163,7 +163,7 @@ export function requireCanvas(
       throw new RequestError("invalid_receipt");
     edgeIDs.add(edge.id);
   }
-  return c as Canvas;
+  return { ...c, nodes: c.nodes.map(normalizeNode) } as Canvas;
 }
 export function createDraftNode(
   kind: DraftNode["node_type"],
@@ -186,6 +186,8 @@ export function createDraftNode(
     x: 80 + (index % 3) * 340,
     y: 80 + Math.floor(index / 3) * 240,
     z_index: 0,
+    width: 320,
+    height: 320,
   };
 }
 function sameDraft(a: Draft, b: Draft) {
@@ -223,8 +225,26 @@ export function isResourceNode(n: Node): boolean {
         keys[0] === "collapsed" &&
         typeof n.config.collapsed === "boolean";
 }
+export function isToolNode(n: Node): boolean {
+  if (n.node_action !== "tool" || n.ref_id || n.ref_type) return false;
+  const key =
+    n.node_type === "timeline"
+      ? "timeline"
+      : n.node_type === "director"
+        ? "director"
+        : undefined;
+  return (
+    !!key &&
+    Object.keys(n.config).filter(
+      (k) => n.config[k as keyof API.NodeConfig] !== undefined,
+    ).length === 1 &&
+    n.config[key]?.version === 1
+  );
+}
 export function isEditableNode(n: Node): boolean {
-  return !n.last_operation_id && (isDraft(n) || isResourceNode(n));
+  return (
+    !n.last_operation_id && (isDraft(n) || isResourceNode(n) || isToolNode(n))
+  );
 }
 export function createResourceNode(
   kind: "text" | "group",
@@ -238,8 +258,8 @@ export function createResourceNode(
     config: kind === "text" ? { text: "" } : { collapsed: false },
     x: point.x,
     y: point.y,
-    width: kind === "group" ? 640 : 288,
-    height: kind === "group" ? 400 : 200,
+    width: kind === "group" ? 640 : 320,
+    height: kind === "group" ? 400 : 320,
     z_index: kind === "group" ? -1 : 0,
   };
 }
@@ -303,8 +323,8 @@ export function duplicateNode(n: Node): Node {
   return copy;
 }
 export function sameEditable(a: Node, b: Node): boolean {
-  const { input_revision: aRevision, ...left } = a;
-  const { input_revision: bRevision, ...right } = b;
+  const { input_revision: aRevision, ...left } = normalizeNode(a);
+  const { input_revision: bRevision, ...right } = normalizeNode(b);
   void aRevision;
   void bRevision;
   return canonical(left) === canonical(right);
@@ -397,7 +417,8 @@ export function commandBatch(
         config: apiConfig(n.config),
       });
   }
-  if (base.nodes.some((n) => !ids.has(n.id)))
+  const removed = base.nodes.filter((n) => !ids.has(n.id));
+  if (removed.some((n) => !isEditableNode(n) || isDraft(n)))
     throw new RequestError("invalid_request");
   if (sizes.length) commands.unshift({ type: "ResizeNodes", sizes });
   if (names.length) commands.unshift({ type: "RenameNodes", names });
@@ -444,6 +465,11 @@ export function commandBatch(
     commands.push({ type: "Disconnect", ids: disconnected.slice(i, i + 2000) });
   for (let i = 0; i < connected.length; i += 2000)
     commands.push({ type: "Connect", edges: connected.slice(i, i + 2000) });
+  for (let i = 0; i < removed.length; i += 2000)
+    commands.push({
+      type: "DeleteNodes",
+      ids: removed.slice(i, i + 2000).map((n) => n.id),
+    });
   if (
     options.viewport &&
     canonical(options.viewport) !== canonical(base.viewport ?? defaultViewport)
@@ -454,7 +480,7 @@ export function commandBatch(
       !position(v.y) ||
       !Number.isFinite(v.zoom) ||
       v.zoom < 0.05 ||
-      v.zoom > 4
+      v.zoom > 8
     )
       throw new RequestError("invalid_request");
     commands.push({ type: "SetViewport", viewport: v });
@@ -550,5 +576,68 @@ function apiConfig(config: Node["config"]): API.NodeConfig {
             : undefined,
         }
       : undefined,
+  };
+}
+
+export function removeCanvasNode(nodes: Node[], id: string): Node[] {
+  const removed = nodes.find((n) => n.id === id);
+  if (!removed || !isEditableNode(removed))
+    throw new RequestError("invalid_request");
+  if (
+    nodes.some((n) =>
+      n.config.batch_table?.rows?.some((r) => r.input_node_ids?.includes(id)),
+    )
+  )
+    throw new Error("请先移除批处理表中对此节点的引用。");
+  return nodes
+    .filter((n) => n.id !== id)
+    .map((n) => {
+      const config = { ...n.config };
+      if (config.timeline)
+        config.timeline = {
+          ...config.timeline,
+          clips: config.timeline.clips?.map((c) =>
+            c.node_id === id
+              ? { ...c, node_id: undefined, asset_id: removed.ref_id }
+              : c,
+          ),
+        };
+      if (config.director)
+        config.director = {
+          ...config.director,
+          objects: config.director.objects?.map((o) =>
+            o.source_node_id === id
+              ? { ...o, source_node_id: undefined, asset_id: removed.ref_id }
+              : o,
+          ),
+        };
+      return {
+        ...n,
+        config,
+        parent_id: n.parent_id === id ? undefined : n.parent_id,
+      };
+    });
+}
+
+// Older stored documents and idempotent receipts encode absent timeline references as null.
+function normalizeNode(node: Node): Node {
+  if (!node.config.timeline) return node;
+  return {
+    ...node,
+    config: {
+      ...node.config,
+      timeline: {
+        ...node.config.timeline,
+        clips: node.config.timeline.clips?.map((clip) => {
+          const clean = { ...clip };
+          if (clean.node_id === null) delete clean.node_id;
+          if (clean.asset_id === null) delete clean.asset_id;
+          if (clean.source_duration_ms === null)
+            delete clean.source_duration_ms;
+          if (clean.crop === null) delete clean.crop;
+          return clean;
+        }),
+      },
+    },
   };
 }

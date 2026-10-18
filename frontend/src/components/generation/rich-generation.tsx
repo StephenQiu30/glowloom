@@ -17,7 +17,35 @@ import {
   TableBody,
   TableCell,
 } from "@/components/ui/table";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { cn } from "cn";
+import {
+  AtSign,
+  SlidersHorizontal,
+  Maximize2,
+  Minimize2,
+  Undo2,
+  Redo2,
+  Save,
+} from "lucide-react";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+} from "@/components/ui/input-group";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -26,6 +54,7 @@ import {
 } from "@/components/ui/native-select";
 import { useCallback, useEffect, useRef, useState, useId } from "react";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
   Dialog,
   DialogContent,
@@ -89,6 +118,7 @@ type Props = {
   onAdopt?: (id: string, kind: string) => Promise<void> | void;
   canvas?: CanvasComposerOwner;
   draftID?: string;
+  presentation?: "canvas";
 };
 function plainSeed(seed: GenerationSeed) {
   const draft = emptyPromptDraft();
@@ -132,6 +162,33 @@ function errorText(error: unknown) {
     );
   return error instanceof Error ? error.message : "请求失败，请重试。";
 }
+async function readModelCatalog(
+  projectID: string,
+  capability: GenerationSeed["capability"],
+  signal?: AbortSignal,
+) {
+  const models: API.ModelResponse[] = [];
+  const cursors = new Set<string>();
+  let cursor: string | undefined;
+  do {
+    const page = await listProjectModels(
+      {
+        project_id: projectID,
+        capability: capability + ".generate",
+        limit: 100,
+        ...(cursor ? { cursor } : {}),
+      },
+      { signal },
+    );
+    models.push(...(page.items ?? []));
+    cursor = page.next_cursor;
+    if (cursor) {
+      if (cursors.has(cursor)) throw new RequestError("invalid_receipt");
+      cursors.add(cursor);
+    }
+  } while (cursor);
+  return models;
+}
 export function RichGeneration(props: Props) {
   const [bootKey] = useState(() => crypto.randomUUID()),
     [retry, setRetry] = useState(0),
@@ -140,6 +197,7 @@ export function RichGeneration(props: Props) {
       snapshot: SavedDraft;
       actor: string;
       models: API.ModelResponse[];
+      initialModelError: string;
       current: API.SubmissionCurrent;
     } | null>(null),
     [error, setError] = useState("");
@@ -149,39 +207,24 @@ export function RichGeneration(props: Props) {
     let active = true;
     async function boot() {
       try {
-        const [identity, modelsPage, preferences] = await Promise.all([
+        const [identity, catalog, preferences] = await Promise.all([
           getSession({ signal: controller.signal }),
-          listProjectModels(
-            {
-              project_id: props.projectID,
-              capability: props.seed.capability + ".generate",
-              limit: 100,
-            },
-            { signal: controller.signal },
-          ),
+          readModelCatalog(
+            props.projectID,
+            props.seed.capability,
+            controller.signal,
+          )
+            .then((models) => ({ models, error: "" }))
+            .catch((error) => ({
+              models: [] as API.ModelResponse[],
+              error: errorText(error),
+            })),
           getMyPreferences({ signal: controller.signal }),
         ]);
         if (!identity.actor?.id) throw new RequestError("session_invalid");
-        const models = [...(modelsPage.items ?? [])];
-        let cursor = modelsPage.next_cursor;
-        const cursors = new Set<string>();
-        while (cursor) {
-          if (cursors.has(cursor)) throw new RequestError("invalid_receipt");
-          cursors.add(cursor);
-          const page = await listProjectModels(
-            {
-              project_id: props.projectID,
-              capability: props.seed.capability + ".generate",
-              limit: 100,
-              cursor,
-            },
-            { signal: controller.signal },
-          );
-          models.push(...(page.items ?? []));
-          cursor = page.next_cursor;
-        }
         let snapshot: SavedDraft;
         if (props.canvas) {
+          if (props.presentation === "canvas") await props.canvas.flush();
           snapshot = {
             draft_id: props.canvas.contextKey,
             revision: 1,
@@ -274,7 +317,13 @@ export function RichGeneration(props: Props) {
         if (!Number.isSafeInteger(current.epoch))
           throw new RequestError("invalid_receipt");
         if (active) {
-          setReady({ snapshot, actor: identity.actor.id, models, current });
+          setReady({
+            snapshot,
+            actor: identity.actor.id,
+            models: catalog.models,
+            initialModelError: catalog.error,
+            current,
+          });
           setError("");
         }
       } catch (error) {
@@ -316,21 +365,55 @@ function EditorWorkspace({
   onCloseGuard,
   onAdopt,
   canvas,
+  presentation,
   snapshot,
   actor,
   models: initialModels,
+  initialModelError,
   current: initialCurrent,
   onOpen,
 }: Props & {
   snapshot: SavedDraft;
   actor: string;
   models: API.ModelResponse[];
+  initialModelError: string;
   current: API.SubmissionCurrent;
   onOpen: (id: string) => void;
 }) {
   const formFieldId = useId();
+  const compact = presentation === "canvas";
+  const [quoteReviewOpen, setQuoteReviewOpen] = useState(true);
 
   const [models, setModels] = useState(initialModels);
+  const [modelError, setModelError] = useState(initialModelError);
+  const [reloadingModels, setReloadingModels] = useState(false);
+  const modelRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => modelRequest.current?.abort(), []);
+  async function retryModels() {
+    if (modelRequest.current) return;
+    const controller = new AbortController();
+    modelRequest.current = controller;
+    setReloadingModels(true);
+    try {
+      const result = await readModelCatalog(
+        projectID,
+        seed.capability,
+        controller.signal,
+      );
+      if (!controller.signal.aborted) {
+        setModels(result);
+        setModelError("");
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setModels([]);
+        setModelError(errorText(error));
+      }
+    } finally {
+      if (!controller.signal.aborted) setReloadingModels(false);
+      modelRequest.current = null;
+    }
+  }
   const [replicaId] = useState(() => crypto.randomUUID()),
     [session, setSession] = useState<ComposerSession | null>(null),
     [draft, setDraft] = useState(snapshot.draft),
@@ -645,6 +728,7 @@ function EditorWorkspace({
     }
   }
   async function getQuote() {
+    if (compact) setQuoteReviewOpen(true);
     await run(async () => {
       if (issues.length || pendingMode || !sourceReady)
         throw new Error("请先修复当前输入。");
@@ -906,6 +990,273 @@ function EditorWorkspace({
     );
     onOpen(serverConflict.draft_id);
   }
+  const promptControl = (
+    <PromptEditor
+      inputGroup={compact}
+      className={
+        compact ? "max-h-80 min-h-16 overflow-y-auto outline-none" : undefined
+      }
+      placeholder={
+        compact
+          ? seed.capability === "video"
+            ? "上传参考视频、输入文字或 @ 主体，描述你想生成的视频"
+            : seed.capability === "image"
+              ? "上传参考图、输入文字或 @ 主体，描述你想生成的图片"
+              : "输入文字或 @ 主体，描述你的创作需求"
+          : undefined
+      }
+      contextKey={contextKey}
+      replicaId={replicaId}
+      draft={snapshot.draft}
+      onReady={(value) => {
+        sessionRef.current = value;
+        setSession(value);
+        canvas?.onChange(value.snapshot().draft);
+      }}
+      onChange={changed}
+      onRequestSave={() =>
+        void run(async () => {
+          await flush();
+        })
+      }
+      onRequestSubmit={() => void getQuote()}
+    />
+  );
+  const referenceControls = session ? (
+    <ReferenceControls
+      session={session}
+      draft={draft}
+      projectID={projectID}
+      model={model}
+      disabled={frozen}
+      authorized={sourceReady}
+      compact={compact}
+    />
+  ) : null;
+  const parameterControls = model ? (
+    <FieldGroup className="grid gap-3 sm:grid-cols-2">
+      {(() => {
+        try {
+          return fieldsForMode(
+            model.current_version?.param_schema,
+            draft.mode ?? "",
+          );
+        } catch {
+          return [];
+        }
+      })().map((f, fieldIndex0) => (
+        <Field key={f.field} data-disabled={frozen}>
+          <FieldLabel htmlFor={`${formFieldId}-field-3-${fieldIndex0}`}>
+            <span>{f.label}</span>
+          </FieldLabel>
+          {f.enum ? (
+            <NativeSelect
+              id={`${formFieldId}-field-3-${fieldIndex0}`}
+
+              disabled={frozen}
+              value={String(draft.params[f.field] ?? "")}
+              onChange={(e) =>
+                session?.updateParams({
+                  ...draft.params,
+                  [f.field]:
+                    f.type === "number" || f.type === "integer"
+                      ? Number(e.target.value)
+                      : e.target.value,
+                })
+              }
+            >
+              <NativeSelectOption value="">请选择</NativeSelectOption>
+              {f.enum.map((v) => (
+                <NativeSelectOption key={String(v)} value={v}>
+                  {v}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          ) : f.type === "boolean" ? (
+            <Checkbox
+              id={`${formFieldId}-field-3-${fieldIndex0}`}
+
+              disabled={frozen}
+              checked={!!draft.params[f.field]}
+              onCheckedChange={(e) =>
+                session?.updateParams({
+                  ...draft.params,
+                  [f.field]: e === true,
+                })
+              }
+            />
+          ) : (
+            <Input
+              id={`${formFieldId}-field-3-${fieldIndex0}`}
+
+              disabled={frozen}
+              type={f.type === "string" ? "text" : "number"}
+              value={String(draft.params[f.field] ?? "")}
+              min={f.min}
+              max={f.max}
+              onChange={(e) =>
+                session?.updateParams({
+                  ...draft.params,
+                  [f.field]:
+                    f.type === "string"
+                      ? e.target.value
+                      : e.target.value === ""
+                        ? null
+                        : Number(e.target.value),
+                })
+              }
+            />
+          )}
+        </Field>
+      ))}
+      <Field data-disabled={frozen}>
+        <FieldLabel htmlFor={`${formFieldId}-field-4`}>
+          <span>候选数量</span>
+        </FieldLabel>
+        <Input
+          id={`${formFieldId}-field-4`}
+
+          type="number"
+          min={1}
+          max={Math.min(
+            8,
+            Number(model.current_version?.limits?.max_outputs ?? 1),
+          )}
+          disabled={frozen}
+          value={Number(draft.params.output_count ?? 1)}
+          onChange={(e) =>
+            session?.updateParams({
+              ...draft.params,
+              output_count: Number(e.target.value),
+            })
+          }
+        />
+      </Field>
+    </FieldGroup>
+  ) : null;
+  const issuesPanel =
+    issues.length > 0 ? (
+      <div className="rounded border p-3 text-sm">
+        <p>输入保留在草稿中，以下问题会阻止生成：</p>
+        <ul className="list-inside list-disc">
+          {issues.map((issue, i) => (
+            <li key={i}>{issue}</li>
+          ))}
+        </ul>
+        {model && (
+          <Button
+            variant="outline"
+            disabled={frozen}
+            onClick={() =>
+              setConversion({ seq, params: compatibleParams(draft, model) })
+            }
+          >
+            检查参数转换
+          </Button>
+        )}
+      </div>
+    ) : null;
+  const submissionPanel = current.submission ? (
+    <div className="space-y-2 rounded border p-3" aria-label="未决提交">
+      <p>
+        {current.submission.state === "accepted"
+          ? "这次生成已接受，可查看任务并确认已知晓结果。"
+          : "发现未处理的报价；关闭页面不会自动取消。"}
+      </p>
+      <p className="text-sm">
+        提交 {current.submission.id?.slice(0, 8)} · 代次 {current.epoch}
+      </p>
+      {quote && (
+        <p>
+          预计费用：{money(quote.quote_micros)}；余额：
+          {money(quote.available_micros)}
+        </p>
+      )}
+      {!quote && current.submission.quote && (
+        <p>原报价：{money(current.submission.quote.quote_micros ?? 0)}</p>
+      )}
+      {current.submission.state !== "accepted" &&
+        !confirmUnknown &&
+        quoteExpired && (
+          <FeedbackToast message="报价已过期，请重新检查费用。" />
+        )}
+      <pre className="max-h-36 overflow-auto text-xs whitespace-pre-wrap">
+        {quote?.final_prompt ?? current.submission.quote?.final_prompt}
+      </pre>
+      <p className="text-sm">
+        冻结模式：{current.submission.draft?.mode} · 编译：
+        {activeQuote?.compiler_version}
+      </p>
+      {activeQuote?.reference_mapping?.length ? (
+        <Table className="w-full text-left text-xs">
+          <TableCaption>显示标签与实际媒体输入顺序</TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead>引用</TableHead>
+              <TableHead>角色</TableHead>
+              <TableHead>媒体位置</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {activeQuote.reference_mapping.map((m) => (
+              <TableRow key={m.reference_id}>
+                <TableCell>{m.label}</TableCell>
+                <TableCell>{m.role}</TableCell>
+                <TableCell>{m.media_seq_nos?.join("、") || "仅描述"}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      ) : null}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="outline"
+          disabled={pending}
+          onClick={() =>
+            void run(async () => {
+              await discover();
+            })
+          }
+        >
+          核对提交状态
+        </Button>
+        {current.submission.state === "accepted" ? (
+          <Button
+            disabled={pending}
+            onClick={() => void resolve("acknowledge_result")}
+          >
+            已知晓，继续编辑
+          </Button>
+        ) : (
+          <>
+            <Button
+              disabled={
+                pending ||
+                (!confirmUnknown &&
+                  (quoteExpired ||
+                    recoveredChanged ||
+                    !!pendingMode ||
+                    activeQuote?.confirmable !== true ||
+                    issues.length > 0 ||
+                    !sourceReady ||
+                    (quote !== null && quoteSeq !== seq)))
+              }
+              onClick={() => void confirm()}
+            >
+              {confirmUnknown ? "重试原确认" : "确认费用并生成"}
+            </Button>
+            <Button
+              variant="outline"
+              disabled={pending || confirmUnknown}
+              onClick={() => void resolve("discard_quote")}
+            >
+              放弃旧报价并重新检查
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
+  ) : null;
   if (suspended)
     return (
       <Empty>
@@ -922,47 +1273,62 @@ function EditorWorkspace({
     );
   return (
     <section
-      className={
-        full
-          ? "fixed inset-0 z-50 overflow-y-auto bg-background p-4 sm:p-8"
-          : "space-y-4"
-      }
+      className={cn(
+        "flex min-w-0 flex-col gap-4",
+        full && "fixed inset-0 z-50 overflow-y-auto bg-background p-4 sm:p-8",
+      )}
+      onKeyDownCapture={(event) => {
+        if (full && event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          setFull(false);
+        }
+      }}
+      data-expanded={full || undefined}
+      data-presentation={presentation}
       aria-label="多参考创作编辑器"
     >
-      <div className="mx-auto max-w-5xl space-y-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <span role="status" className="text-sm text-muted-foreground">
-            {canvas ? "随画布保存" : saveState} · r{revision}
-          </span>
-          <Button variant="ghost" onClick={() => setFull((v) => !v)}>
-            {full ? "退出全屏" : "展开编辑器"}
-          </Button>
-          <Button
-            variant="outline"
-            disabled={pending}
-            onClick={() =>
-              void run(async () => {
-                await flush();
-              })
-            }
-          >
-            保存草稿
-          </Button>
-          {!canvas && (
+      <div
+        className={cn(
+          "mx-auto flex w-full max-w-5xl flex-col gap-4",
+          compact && "gap-2",
+        )}
+      >
+        {!compact && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span role="status" className="text-sm text-muted-foreground">
+              {canvas ? "随画布保存" : saveState} · r{revision}
+            </span>
+            <Button variant="ghost" onClick={() => setFull((v) => !v)}>
+              {full ? "退出全屏" : "展开编辑器"}
+            </Button>
             <Button
-              variant="ghost"
+              variant="outline"
+              disabled={pending}
               onClick={() =>
                 void run(async () => {
-                  const page = await listPromptDrafts({ pid: projectID });
-                  setDrafts(page.items ?? []);
-                  setDraftCursor(page.next_cursor);
+                  await flush();
                 })
               }
             >
-              找回草稿
+              保存草稿
             </Button>
-          )}
-        </div>
+            {!canvas && (
+              <Button
+                variant="ghost"
+                onClick={() =>
+                  void run(async () => {
+                    const page = await listPromptDrafts({ pid: projectID });
+                    setDrafts(page.items ?? []);
+                    setDraftCursor(page.next_cursor);
+                  })
+                }
+              >
+                找回草稿
+              </Button>
+            )}
+          </div>
+        )}
         {drafts.length > 0 && (
           <div className="rounded border p-3" aria-label="服务端草稿">
             {draftCursor && (
@@ -1038,232 +1404,327 @@ function EditorWorkspace({
             ))}
           </div>
         )}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field data-disabled={frozen || !session}>
-            <FieldLabel htmlFor={`${formFieldId}-field-1`}>
-              <span>生成模型</span>
-            </FieldLabel>
-            <NativeSelect
-              id={`${formFieldId}-field-1`}
-              aria-label="生成模型"
-
-              disabled={frozen || !session}
-              value={draft.modelVersion ?? ""}
-              onChange={(e) => {
-                const m = models.find(
-                  (m) => m.current_version?.id === e.target.value,
-                );
-                if (m?.current_version?.id)
-                  selectMode(
-                    m.current_version.id,
-                    m.current_version.modes?.[0] ?? "",
-                  );
-              }}
+        {compact ? (
+          <InputGroup
+            variant="composer"
+            className="min-h-[208px] flex-col items-stretch gap-1"
+          >
+            <InputGroupAddon
+              align="block-start"
+              className="items-start px-4 pt-4"
             >
-              <NativeSelectOption value="">请选择模型</NativeSelectOption>
-              {models.map((m) => (
-                <NativeSelectOption
-                  key={m.id}
-                  value={m.current_version?.id}
+              {referenceControls}
+              <InputGroupButton
+                aria-label={full ? "退出全屏" : "展开编辑器"}
+                size="icon-sm"
+                className="ml-auto"
+                onClick={() => setFull((value) => !value)}
+              >
+                {full ? <Minimize2 /> : <Maximize2 />}
+              </InputGroupButton>
+            </InputGroupAddon>
+            <div
+              data-slot="input-group-control"
+              className={cn(
+                "min-h-20 w-full flex-1 px-4 py-2 [&_.tiptap]:min-h-16 [&_.tiptap]:outline-none",
+                full && "[&_.tiptap]:min-h-64",
+              )}
+            >
+              {promptControl}
+            </div>
+            <InputGroupAddon
+              align="block-end"
+              className="flex-wrap gap-1 px-4 pb-4"
+            >
+              <Select
+                value={draft.modelVersion ?? ""}
+                disabled={frozen || !session}
+                onValueChange={(version) => {
+                  const target = models.find(
+                    (value) => value.current_version?.id === version,
+                  );
+                  if (target?.current_version?.id)
+                    void selectMode(
+                      target.current_version.id,
+                      target.current_version.modes?.[0] ?? "",
+                    );
+                }}
+              >
+                <SelectTrigger
+                  aria-label="生成模型"
+                  size="sm"
+                  variant="quiet"
+                  className="max-w-44"
+                >
+                  <SelectValue placeholder="选择模型" />
+                </SelectTrigger>
+                <SelectContent>
+                  {!models.some((value) => value.current_version?.id) && (
+                    <Empty className="max-w-64 p-4">
+                      <EmptyHeader>
+                        <EmptyTitle>暂无可用模型</EmptyTitle>
+                        <EmptyDescription>
+                          请联系管理员配置项目模型。
+                        </EmptyDescription>
+                      </EmptyHeader>
+                    </Empty>
+                  )}
+                  <SelectGroup>
+                    {models
+                      .filter((value) => value.current_version?.id)
+                      .map((value) => (
+                        <SelectItem
+                          key={value.id}
+                          value={value.current_version!.id!}
+                          disabled={
+                            value.status !== "active" ||
+                            value.provider_status !== "active" ||
+                            !value.credential_present
+                          }
+                        >
+                          {value.display_name}
+                        </SelectItem>
+                      ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <InputGroupButton
+                    aria-label="生成参数"
+                    disabled={!model || !session || frozen}
+                  >
+                    <SlidersHorizontal data-icon="inline-start" />
+                    {[draft.params.aspect_ratio, draft.params.resolution]
+                      .filter((value) => typeof value === "string" && value)
+                      .join(" · ") || "参数"}{" "}
+                    · {Number(draft.params.output_count ?? 1)}个
+                  </InputGroupButton>
+                </PopoverTrigger>
+                <PopoverContent
+                  side="top"
+                  align="start"
+                  className="max-h-[70dvh] w-80 overflow-y-auto"
+                  aria-label="生成参数"
+                >
+                  {parameterControls}
+                  <div className="flex flex-wrap gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="撤销"
+                      disabled={frozen || !session}
+                      onClick={() => session?.undo()}
+                    >
+                      <Undo2 />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="重做"
+                      disabled={frozen || !session}
+                      onClick={() => session?.redo()}
+                    >
+                      <Redo2 />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={pending}
+                      onClick={() =>
+                        void run(async () => {
+                          await flush();
+                        })
+                      }
+                    >
+                      <Save data-icon="inline-start" />
+                      保存草稿
+                    </Button>
+                  </div>
+                  <p role="status" className="text-xs text-muted-foreground">
+                    {canvas ? "随画布保存" : saveState} · r{revision}
+                  </p>
+                </PopoverContent>
+              </Popover>
+              <Select
+                value={draft.mode ?? ""}
+                disabled={frozen || !model || !session}
+                onValueChange={(mode) =>
+                  void selectMode(draft.modelVersion!, mode)
+                }
+              >
+                <SelectTrigger aria-label="生成模式" size="sm" variant="quiet">
+                  <SelectValue placeholder="选择模式" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {model?.current_version?.modes?.map((mode) => (
+                      <SelectItem key={mode} value={mode}>
+                        {generationModeLabel(mode)}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <InputGroupButton
+                aria-label="提及素材或主体"
+                size="icon-sm"
+                disabled={frozen || !session}
+                onClick={() =>
+                  session?.editor.chain().focus().insertContent("@").run()
+                }
+              >
+                <AtSign />
+              </InputGroupButton>
+              {issues.length > 0 ? (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <InputGroupButton>需要调整</InputGroupButton>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    side="top"
+                    className="max-h-[70dvh] w-80 overflow-y-auto"
+                  >
+                    {issuesPanel}
+                  </PopoverContent>
+                </Popover>
+              ) : null}
+              {current.submission ? (
+                <InputGroupButton
+                  className="ml-auto"
+                  variant="default"
+                  onClick={() => setQuoteReviewOpen(true)}
+                >
+                  {current.submission.state === "accepted"
+                    ? "查看任务"
+                    : "查看报价"}
+                </InputGroupButton>
+              ) : (
+                <InputGroupButton
+                  className="ml-auto"
+                  variant="default"
                   disabled={
-                    m.status !== "active" ||
-                    m.provider_status !== "active" ||
-                    !m.credential_present
+                    pending ||
+                    issues.length > 0 ||
+                    !!pendingMode ||
+                    confirmUnknown ||
+                    !sourceReady
+                  }
+                  onClick={() => void getQuote()}
+                >
+                  {pending ? "正在保存并检查…" : "检查费用"}
+                </InputGroupButton>
+              )}
+            </InputGroupAddon>
+          </InputGroup>
+        ) : (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field data-disabled={frozen || !session}>
+                <FieldLabel htmlFor={`${formFieldId}-field-1`}>
+                  <span>生成模型</span>
+                </FieldLabel>
+                <NativeSelect
+                  id={`${formFieldId}-field-1`}
+                  aria-label="生成模型"
+
+                  disabled={frozen || !session}
+                  value={draft.modelVersion ?? ""}
+                  onChange={(e) => {
+                    const m = models.find(
+                      (m) => m.current_version?.id === e.target.value,
+                    );
+                    if (m?.current_version?.id)
+                      selectMode(
+                        m.current_version.id,
+                        m.current_version.modes?.[0] ?? "",
+                      );
+                  }}
+                >
+                  <NativeSelectOption value="">请选择模型</NativeSelectOption>
+                  {models.map((m) => (
+                    <NativeSelectOption
+                      key={m.id}
+                      value={m.current_version?.id}
+                      disabled={
+                        m.status !== "active" ||
+                        m.provider_status !== "active" ||
+                        !m.credential_present
+                      }
+                    >
+                      {m.display_name}
+                      {m.status !== "active" || !m.credential_present
+                        ? " · 当前不可用"
+                        : ""}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              </Field>
+              <Field data-disabled={frozen || !model || !session}>
+                <FieldLabel htmlFor={`${formFieldId}-field-2`}>
+                  <span>生成模式</span>
+                </FieldLabel>
+                <NativeSelect
+                  id={`${formFieldId}-field-2`}
+                  aria-label="生成模式"
+
+                  disabled={frozen || !model || !session}
+                  value={draft.mode ?? ""}
+                  onChange={(e) =>
+                    selectMode(draft.modelVersion!, e.target.value)
                   }
                 >
-                  {m.display_name}
-                  {m.status !== "active" || !m.credential_present
-                    ? " · 当前不可用"
-                    : ""}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </Field>
-          <Field data-disabled={frozen || !model || !session}>
-            <FieldLabel htmlFor={`${formFieldId}-field-2`}>
-              <span>生成模式</span>
-            </FieldLabel>
-            <NativeSelect
-              id={`${formFieldId}-field-2`}
-              aria-label="生成模式"
-
-              disabled={frozen || !model || !session}
-              value={draft.mode ?? ""}
-              onChange={(e) => selectMode(draft.modelVersion!, e.target.value)}
-            >
-              <NativeSelectOption value="">请选择模式</NativeSelectOption>
-              {model?.current_version?.modes?.map((m) => (
-                <NativeSelectOption key={m}>{m}</NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </Field>
-        </div>
-        <div className="min-h-32 rounded-lg border p-3 text-base [&_.tiptap]:min-h-24 [&_.tiptap]:outline-none">
-          <PromptEditor
-            contextKey={contextKey}
-            replicaId={replicaId}
-            draft={snapshot.draft}
-            onReady={(value) => {
-              sessionRef.current = value;
-              setSession(value);
-              canvas?.onChange(value.snapshot().draft);
-            }}
-            onChange={changed}
-            onRequestSave={() =>
-              void run(async () => {
-                await flush();
-              })
-            }
-            onRequestSubmit={() => void getQuote()}
-          />
-        </div>
-        {session && (
-          <>
-            <div className="flex gap-2">
-              <Button
-                variant="ghost"
-                disabled={frozen}
-                onClick={() => session.undo()}
-              >
-                撤销
-              </Button>
-              <Button
-                variant="ghost"
-                disabled={frozen}
-                onClick={() => session.redo()}
-              >
-                重做
-              </Button>
+                  <NativeSelectOption value="">请选择模式</NativeSelectOption>
+                  {model?.current_version?.modes?.map((m) => (
+                    <NativeSelectOption key={m}>{m}</NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              </Field>
             </div>
-            <ReferenceControls
-              session={session}
-              draft={draft}
-              projectID={projectID}
-              model={model}
-              disabled={frozen}
-              authorized={sourceReady}
-            />
+            <div className="min-h-32 rounded-lg border p-3 text-base [&_.tiptap]:min-h-24 [&_.tiptap]:outline-none">
+              {promptControl}
+            </div>
+            {session && (
+              <>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    disabled={frozen}
+                    onClick={() => session.undo()}
+                  >
+                    撤销
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    disabled={frozen}
+                    onClick={() => session.redo()}
+                  >
+                    重做
+                  </Button>
+                </div>
+                {referenceControls}
+              </>
+            )}
+            {parameterControls}
           </>
         )}
-        {model && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {(() => {
-              try {
-                return fieldsForMode(
-                  model.current_version?.param_schema,
-                  draft.mode ?? "",
-                );
-              } catch {
-                return [];
-              }
-            })().map((f, fieldIndex0) => (
-              <Field key={f.field} data-disabled={frozen}>
-                <FieldLabel htmlFor={`${formFieldId}-field-3-${fieldIndex0}`}>
-                  <span>{f.label}</span>
-                </FieldLabel>
-                {f.enum ? (
-                  <NativeSelect
-                    id={`${formFieldId}-field-3-${fieldIndex0}`}
-
-                    disabled={frozen}
-                    value={String(draft.params[f.field] ?? "")}
-                    onChange={(e) =>
-                      session?.updateParams({
-                        ...draft.params,
-                        [f.field]:
-                          f.type === "number" || f.type === "integer"
-                            ? Number(e.target.value)
-                            : e.target.value,
-                      })
-                    }
-                  >
-                    <NativeSelectOption value="">请选择</NativeSelectOption>
-                    {f.enum.map((v) => (
-                      <NativeSelectOption key={String(v)} value={v}>
-                        {v}
-                      </NativeSelectOption>
-                    ))}
-                  </NativeSelect>
-                ) : f.type === "boolean" ? (
-                  <Checkbox
-                    id={`${formFieldId}-field-3-${fieldIndex0}`}
-
-                    disabled={frozen}
-                    checked={!!draft.params[f.field]}
-                    onCheckedChange={(e) =>
-                      session?.updateParams({
-                        ...draft.params,
-                        [f.field]: e === true,
-                      })
-                    }
-                  />
-                ) : (
-                  <Input
-                    id={`${formFieldId}-field-3-${fieldIndex0}`}
-
-                    disabled={frozen}
-                    type={f.type === "string" ? "text" : "number"}
-                    value={String(draft.params[f.field] ?? "")}
-                    min={f.min}
-                    max={f.max}
-                    onChange={(e) =>
-                      session?.updateParams({
-                        ...draft.params,
-                        [f.field]:
-                          f.type === "string"
-                            ? e.target.value
-                            : e.target.value === ""
-                              ? null
-                              : Number(e.target.value),
-                      })
-                    }
-                  />
-                )}
-              </Field>
-            ))}
-            <Field data-disabled={frozen}>
-              <FieldLabel htmlFor={`${formFieldId}-field-4`}>
-                <span>候选数量</span>
-              </FieldLabel>
-              <Input
-                id={`${formFieldId}-field-4`}
-
-                type="number"
-                min={1}
-                max={8}
-                disabled={frozen}
-                value={Number(draft.params.output_count ?? 1)}
-                onChange={(e) =>
-                  session?.updateParams({
-                    ...draft.params,
-                    output_count: Number(e.target.value),
-                  })
-                }
-              />
-            </Field>
-          </div>
+        {modelError && (
+          <Alert>
+            <AlertTitle>模型目录暂不可用</AlertTitle>
+            <AlertDescription>
+              {modelError}。正文和参考仍可编辑、保存；恢复模型目录前不能生成。
+            </AlertDescription>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={reloadingModels}
+              onClick={() => void retryModels()}
+            >
+              {reloadingModels ? "正在读取模型…" : "重试模型目录"}
+            </Button>
+          </Alert>
         )}
-        {issues.length > 0 && (
-          <div className="rounded border p-3 text-sm">
-            <p>输入保留在草稿中，以下问题会阻止生成：</p>
-            <ul className="list-inside list-disc">
-              {issues.map((issue, i) => (
-                <li key={i}>{issue}</li>
-              ))}
-            </ul>
-            {model && (
-              <Button
-                variant="outline"
-                disabled={frozen}
-                onClick={() =>
-                  setConversion({ seq, params: compatibleParams(draft, model) })
-                }
-              >
-                检查参数转换
-              </Button>
-            )}
-          </div>
-        )}
+        {!compact && issuesPanel}
         {error && <FeedbackToast message={error} />}
         {saveState === "保存冲突" && !canvas && (
           <div className="flex gap-2">
@@ -1367,108 +1828,29 @@ function EditorWorkspace({
             </DialogContent>
           </Dialog>
         )}
-        {current.submission && (
-          <div className="space-y-2 rounded border p-3" aria-label="未决提交">
-            <p>
-              {current.submission.state === "accepted"
-                ? "这次生成已接受，可查看任务并确认已知晓结果。"
-                : "发现未处理的报价；关闭页面不会自动取消。"}
-            </p>
-            <p className="text-sm">
-              提交 {current.submission.id?.slice(0, 8)} · 代次 {current.epoch}
-            </p>
-            {quote && (
-              <p>
-                预计费用：{money(quote.quote_micros)}；余额：
-                {money(quote.available_micros)}
-              </p>
-            )}
-            {!quote && current.submission.quote && (
-              <p>原报价：{money(current.submission.quote.quote_micros ?? 0)}</p>
-            )}
-            {current.submission.state !== "accepted" &&
-              !confirmUnknown &&
-              quoteExpired && (
-                <FeedbackToast message="报价已过期，请重新检查费用。" />
+        {compact ? (
+          <Dialog
+            open={quoteReviewOpen && !!current.submission}
+            onOpenChange={(open) => {
+              if (!pending && !confirmUnknown) setQuoteReviewOpen(open);
+            }}
+          >
+            <DialogContent
+              showCloseButton={!pending && !confirmUnknown}
+              className="max-h-[85dvh] overflow-y-auto sm:max-w-3xl"
+            >
+              <DialogTitle>报价与生成任务</DialogTitle>
+              <DialogDescription>
+                确认当前冻结输入与费用后开始生成。
+              </DialogDescription>
+              {submissionPanel}
+              {task && (
+                <TaskDetail projectID={projectID} id={task} onAdopt={onAdopt} />
               )}
-            <pre className="max-h-36 overflow-auto text-xs whitespace-pre-wrap">
-              {quote?.final_prompt ?? current.submission.quote?.final_prompt}
-            </pre>
-            <p className="text-sm">
-              冻结模式：{current.submission.draft?.mode} · 编译：
-              {activeQuote?.compiler_version}
-            </p>
-            {activeQuote?.reference_mapping?.length ? (
-              <Table className="w-full text-left text-xs">
-                <TableCaption>显示标签与实际媒体输入顺序</TableCaption>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>引用</TableHead>
-                    <TableHead>角色</TableHead>
-                    <TableHead>媒体位置</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {activeQuote.reference_mapping.map((m) => (
-                    <TableRow key={m.reference_id}>
-                      <TableCell>{m.label}</TableCell>
-                      <TableCell>{m.role}</TableCell>
-                      <TableCell>
-                        {m.media_seq_nos?.join("、") || "仅描述"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : null}
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                disabled={pending}
-                onClick={() =>
-                  void run(async () => {
-                    await discover();
-                  })
-                }
-              >
-                核对提交状态
-              </Button>
-              {current.submission.state === "accepted" ? (
-                <Button
-                  disabled={pending}
-                  onClick={() => void resolve("acknowledge_result")}
-                >
-                  已知晓，继续编辑
-                </Button>
-              ) : (
-                <>
-                  <Button
-                    disabled={
-                      pending ||
-                      (!confirmUnknown &&
-                        (quoteExpired ||
-                          recoveredChanged ||
-                          !!pendingMode ||
-                          activeQuote?.confirmable !== true ||
-                          issues.length > 0 ||
-                          !sourceReady ||
-                          (quote !== null && quoteSeq !== seq)))
-                    }
-                    onClick={() => void confirm()}
-                  >
-                    {confirmUnknown ? "重试原确认" : "确认费用并生成"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    disabled={pending || confirmUnknown}
-                    onClick={() => void resolve("discard_quote")}
-                  >
-                    放弃旧报价并重新检查
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
+            </DialogContent>
+          </Dialog>
+        ) : (
+          submissionPanel
         )}
         {!sourceReady && (
           <div>
@@ -1487,7 +1869,7 @@ function EditorWorkspace({
             )}
           </div>
         )}
-        {!current.submission && (
+        {!compact && !current.submission && (
           <Button
             disabled={
               pending ||
@@ -1501,7 +1883,7 @@ function EditorWorkspace({
             {pending ? "正在保存并检查…" : "检查费用"}
           </Button>
         )}
-        {task && (
+        {!compact && task && (
           <TaskDetail projectID={projectID} id={task} onAdopt={onAdopt} />
         )}
       </div>
@@ -1518,5 +1900,24 @@ function sameSource(a: API.InputSource, b?: API.InputSource) {
       : a.canvas_id === b.canvas_id &&
         a.node_id === b.node_id &&
         a.input_revision === b.input_revision)
+  );
+}
+
+function generationModeLabel(mode: string) {
+  return (
+    (
+      {
+        text_to_image: "文生图",
+        text2image: "文生图",
+        image_to_image: "图生图",
+        image2image: "图生图",
+        text_to_video: "文生视频",
+        text2video: "文生视频",
+        image_to_video: "图生视频",
+        image2video: "图生视频",
+        omni_reference: "全能参考",
+        text_to_text: "文字创作",
+      } as Record<string, string>
+    )[mode] ?? mode
   );
 }

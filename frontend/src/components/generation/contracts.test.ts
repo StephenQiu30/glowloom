@@ -85,3 +85,34 @@ it("任务结果拒绝畸形媒体和跨任务回执", () => {
     ),
   ).toThrow();
 });
+
+it("仅接受已完成文本任务的已审核有限文本输出", () => {
+  const project = "00000000-0000-4000-8000-000000000001";
+  const id = "00000000-0000-4000-8000-000000000002";
+  const output = {
+    id: "00000000-0000-4000-8000-000000000003",
+    kind: "json",
+    moderation_status: "passed",
+    text: "真实结果",
+  };
+  const task: API.TaskDetail = {
+    id,
+    project_id: project,
+    capability: "text.generate",
+    status: "completed",
+    outputs: [output],
+  };
+  expect(requireTask(task, project).outputs?.[0].text).toBe("真实结果");
+  expect(() =>
+    requireTask({ ...task, status: "submitted" }, project),
+  ).toThrow();
+  expect(() =>
+    requireTask({ ...task, capability: "video.generate" }, project),
+  ).toThrow();
+  expect(() =>
+    requireTask(
+      { ...task, outputs: [{ ...output, text: "x".repeat(65537) }] },
+      project,
+    ),
+  ).toThrow();
+});

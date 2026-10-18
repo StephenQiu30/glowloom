@@ -23,9 +23,9 @@ export function CanvasMiniMap({
     Math.max(500, ...nodes.map((n) => n.x + (n.width ?? 288))) + 500;
   const bottom =
     Math.max(500, ...nodes.map((n) => n.y + (n.height ?? 200))) + 500;
-  const scale = Math.min(200 / (right - left), 128 / (bottom - top));
-  const offsetX = (200 - (right - left) * scale) / 2,
-    offsetY = (128 - (bottom - top) * scale) / 2;
+  const scale = Math.min(156 / (right - left), 114 / (bottom - top));
+  const offsetX = (156 - (right - left) * scale) / 2,
+    offsetY = (114 - (bottom - top) * scale) / 2;
   return (
     <Button
       variant="outline"
@@ -41,17 +41,17 @@ export function CanvasMiniMap({
         }
         onNavigate(
           left +
-            (((event.clientX - rect.left) * 200) / rect.width - offsetX) /
+            (((event.clientX - rect.left) * 156) / rect.width - offsetX) /
               scale,
           top +
-            (((event.clientY - rect.top) * 128) / rect.height - offsetY) /
+            (((event.clientY - rect.top) * 114) / rect.height - offsetY) /
               scale,
         );
       }}
     >
       <svg
         className="size-full"
-        viewBox="0 0 200 128"
+        viewBox="0 0 156 114"
         role="img"
         aria-label="节点位置与当前视口"
       >

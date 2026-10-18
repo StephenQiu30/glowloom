@@ -128,3 +128,19 @@ it("组及嵌套后代按世界坐标移动一次，锁定成员阻止整组移�
     ),
   ).toThrow();
 });
+
+it("历史时间线保留在文档中但不进入画布渲染或固定节点", () => {
+  const text = createResourceNode("text", { x: 0, y: 0 });
+  const legacy = { ...text, id: "legacy-timeline", node_type: "timeline" };
+  const original = [text, legacy];
+  const index = buildRenderIndex(original);
+  expect(
+    visibleNodes(
+      index,
+      { x: 0, y: 0, k: 1 },
+      { width: 800, height: 600 },
+      new Set([legacy.id]),
+    ).map((node) => node.id),
+  ).toEqual([text.id]);
+  expect(original).toHaveLength(2);
+});

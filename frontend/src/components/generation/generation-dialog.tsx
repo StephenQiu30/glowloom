@@ -38,7 +38,7 @@ export type GenerationSeed = {
   draftID?: string;
   canvasOwner?: CanvasComposerOwner;
   prompt: string;
-  capability: "image" | "video";
+  capability: "image" | "video" | "text";
   source?: API.CanvasSource;
   project?: Project;
   reuse?: Task;
@@ -93,7 +93,11 @@ export function GenerationDialog({
         onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogTitle>
-          {seed.capability === "video" ? "视频生成" : "图片生成"}
+          {seed.capability === "video"
+            ? "视频生成"
+            : seed.capability === "text"
+              ? "文本创作"
+              : "图片生成"}
         </DialogTitle>
         <DialogDescription>
           选择模型与参考素材，确认报价后开始生成。任务保留在所选项目中。
@@ -448,7 +452,9 @@ export function TaskDetail({
       )}
       {task?.status === "completed" &&
         !task.outputs?.some(
-          (o) => o.moderation_status === "passed" && o.media_asset_id,
+          (o) =>
+            o.moderation_status === "passed" &&
+            (o.media_asset_id || (o.kind === "json" && o.text)),
         ) && (
           <p>任务已结束，当前没有通过审核的可用结果。请调整描述后重新生成。</p>
         )}
@@ -458,6 +464,21 @@ export function TaskDetail({
       {task?.status === "cancelled" && (
         <p>任务已取消，你可以调整输入重新生成。</p>
       )}
+      {task?.status === "completed" &&
+        task.capability === "text.generate" &&
+        task.outputs
+          ?.filter(
+            (o) =>
+              o.kind === "json" && o.moderation_status === "passed" && o.text,
+          )
+          .map((o) => (
+            <pre
+              className="max-h-96 overflow-auto rounded-lg border p-4 text-sm break-words whitespace-pre-wrap"
+              key={o.id}
+            >
+              {o.text}
+            </pre>
+          ))}
       {task?.outputs && (
         <div className="generation-results">
           {task.outputs

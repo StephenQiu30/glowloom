@@ -27,11 +27,12 @@ it("一次操作一条记录，连续同字段合并，撤销后新操作清空�
   h.record(moved, graph, "move", 400);
   expect(h.redo(base)).toBeUndefined();
 });
-it("保存后不能通过撤销移除节点，但布局可形成新命令", () => {
+it("已保存资源可以撤销新增，并形成合法删除命令", () => {
   const h = createHistory();
   h.record({ nodes: [], edges: [] }, graph);
-  expect(h.canUndo(base)).toBe(false);
-  expect(h.undo(base)).toBeUndefined();
+  expect(h.canUndo(base)).toBe(true);
+  expect(h.undo(base)?.nodes).toEqual([]);
+  expect(h.redo(base)?.nodes).toEqual(graph.nodes);
   const empty = { ...base, nodes: [] };
   expect(h.undo(empty)?.nodes).toEqual([]);
 });

@@ -133,3 +133,17 @@ it("真实空列表和已加载素材搜索无结果具有不同提示", async (
     screen.getByRole("button", { name: "添加到画布" }).hasAttribute("disabled"),
   ).toBe(true);
 });
+
+it("真实空分页的 null 游标显示空态而非回执错误", async () => {
+  api.list.mockResolvedValue({ items: [], next_cursor: null });
+  render(
+    <CanvasMaterialDialog
+      projectID={pid}
+      onClose={vi.fn()}
+      onAdd={vi.fn()}
+      onSubject={vi.fn()}
+    />,
+  );
+  expect(await screen.findByText("当前项目暂无此类素材")).toBeTruthy();
+  expect(screen.queryByText(/连接中断|结果未确认/)).toBeNull();
+});

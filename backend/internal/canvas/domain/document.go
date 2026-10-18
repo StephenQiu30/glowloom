@@ -347,7 +347,7 @@ func applyOne(doc *Document, c Command) error {
 		}
 		doc.Edges = slices.DeleteFunc(doc.Edges, func(e Edge) bool { return seen[e.ID] })
 	case "SetViewport":
-		if c.Viewport == nil || !coordinate(c.Viewport.X) || !coordinate(c.Viewport.Y) || math.IsNaN(c.Viewport.Zoom) || c.Viewport.Zoom < 0.05 || c.Viewport.Zoom > 4 {
+		if c.Viewport == nil || !coordinate(c.Viewport.X) || !coordinate(c.Viewport.Y) || math.IsNaN(c.Viewport.Zoom) || c.Viewport.Zoom < 0.05 || c.Viewport.Zoom > 8 {
 			return ErrInvalidCommand
 		}
 		doc.Viewport = *c.Viewport

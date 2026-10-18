@@ -1,24 +1,18 @@
 "use client";
 // BeefTV a2196d3: canvas-node-prompt-panel.tsx compact composer (MIT).
+import type { ReactNode } from "react";
 import {
   ArrowUp,
   AudioLines,
   Box,
-  Contact,
   ImageIcon,
   SlidersHorizontal,
   VideoIcon,
-  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupTextarea,
-} from "@/components/ui/input-group";
 import {
   Select,
   SelectTrigger,
@@ -36,7 +30,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Spinner } from "@/components/ui/spinner";
 import {
   isDraft,
   isEditableNode,
@@ -47,28 +40,22 @@ import {
 
 export function CanvasComposer({
   node,
-  nodes,
   details,
   onDetails,
-  onSelect,
   onUpdate,
   onDraft,
-  onGenerate,
-  onSubject,
+  richComposer,
   onPreview,
   onContinue,
   generating = false,
   blocked = false,
 }: {
   node: Node;
-  nodes: Node[];
   details: boolean;
   onDetails: (open: boolean) => void;
-  onSelect: (id?: string) => void;
   onUpdate: (patch: Partial<Node>) => void;
   onDraft: (patch: Partial<Draft>) => void;
-  onGenerate?: () => void;
-  onSubject?: () => void;
+  richComposer?: ReactNode;
   onPreview?: () => void;
   onContinue?: () => void;
   generating?: boolean;
@@ -87,35 +74,11 @@ export function CanvasComposer({
     <aside
       aria-label="节点编辑"
       className="canvas-node-composer"
+      data-generation={isDraft(node)}
       data-canvas-no-zoom
       data-canvas-wheel-scroll
     >
-      <div className="flex items-center gap-2">
-        <Icon className="size-3.5 shrink-0" />
-        <Select
-          value={node.id}
-          onValueChange={(id) => {
-            onDetails(false);
-            onSelect(id);
-          }}
-        >
-          <SelectTrigger
-            variant="quiet"
-            className="min-w-0 flex-1"
-            aria-label="选择节点"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              {nodes.map((n) => (
-                <SelectItem key={n.id} value={n.id}>
-                  {n.title}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
+      <div className="canvas-composer-parameters">
         {editable && (
           <Popover open={details} onOpenChange={onDetails}>
             <PopoverTrigger asChild>
@@ -262,103 +225,9 @@ export function CanvasComposer({
             </PopoverContent>
           </Popover>
         )}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="关闭节点编辑"
-          onClick={() => {
-            onDetails(false);
-            onSelect(undefined);
-          }}
-        >
-          <X data-icon="inline-start" />
-        </Button>
       </div>
       {isDraft(node) ? (
-        <>
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="node-prompt" className="sr-only">
-                提示词
-              </FieldLabel>
-              <InputGroup variant="quiet">
-                <InputGroupAddon align="block-start">
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    onClick={onSubject}
-                    disabled={generationBlocked}
-                  >
-                    <Contact data-icon="inline-start" />
-                    引用主体
-                  </Button>
-                </InputGroupAddon>
-                <InputGroupTextarea
-                  id="node-prompt"
-                  placeholder="描述主体、环境、光线与镜头，开始你的创作…"
-                  className="canvas-prompt-input"
-                  value={
-                    node.config.draft.composer
-                      ? "该节点使用多参考编辑器，请展开编辑"
-                      : node.config.draft.prompt
-                  }
-                  readOnly={!!node.config.draft.composer}
-                  maxLength={10000}
-                  onChange={(e) => onDraft({ prompt: e.target.value })}
-                />
-                <InputGroupAddon
-                  align="block-end"
-                  className="canvas-composer-footer"
-                >
-                  <span className="canvas-generation-kind">
-                    <Icon />
-                    {node.node_type === "video_generation"
-                      ? "视频生成"
-                      : "图片生成"}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    disabled={generationBlocked}
-                    onClick={onGenerate}
-                  >
-                    选择模型
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    aria-label="设置画幅和数量"
-                    onClick={() => onDetails(true)}
-                  >
-                    {node.config.draft.aspect_ratio} ·{" "}
-                    {node.config.draft.candidate_count} 张
-                  </Button>
-                  <Button
-                    className="ml-auto"
-                    size="icon-sm"
-                    disabled={
-                      generationBlocked ||
-                      (!node.config.draft.composer &&
-                        !node.config.draft.prompt.trim())
-                    }
-                    onClick={onGenerate}
-                    aria-label="生成当前节点"
-                    title="选择模型并确认报价"
-                  >
-                    {generating ? (
-                      <Spinner data-icon="inline-start" />
-                    ) : (
-                      <ArrowUp data-icon="inline-start" />
-                    )}
-                  </Button>
-                </InputGroupAddon>
-              </InputGroup>
-            </Field>
-          </FieldGroup>
-          <p className="canvas-composer-hint">
-            生成前先保存画布，再选择模型并确认报价。
-          </p>
-        </>
+        richComposer
       ) : isMediaNode(node) ? (
         <div className="canvas-resource-actions">
           <p className="text-sm text-muted-foreground">

@@ -256,10 +256,10 @@ function MaterialList({
         (a) =>
           !isProjectID(a.id) || a.project_id !== projectID || a.kind !== kind,
       ) ||
-      (page.next_cursor !== undefined && typeof page.next_cursor !== "string")
+      (page.next_cursor != null && typeof page.next_cursor !== "string")
     )
       throw new RequestError("invalid_receipt");
-    return page;
+    return { ...page, next_cursor: page.next_cursor ?? undefined };
   }
   useEffect(() => {
     const controller = new AbortController();

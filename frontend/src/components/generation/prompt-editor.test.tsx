@@ -5,6 +5,48 @@ import { emptyPromptDraft } from "./prompt-document";
 import { ComposerSession } from "./composer-session";
 
 afterEach(cleanup);
+it("呈现属性更新保留同一编辑会话、正文与可访问名称", async () => {
+  const onReady = vi.fn<(s: ComposerSession) => void>();
+  const props = {
+    contextKey: "u/p/presentation",
+    replicaId: "presentation",
+    draft: emptyPromptDraft(),
+    onReady,
+  };
+  const { rerender } = render(
+    <PromptEditor
+      {...props}
+      placeholder="输入图片需求"
+      className="min-h-16 outline-none"
+      inputGroup
+    />,
+  );
+  await waitFor(() => expect(onReady).toHaveBeenCalledOnce());
+  const session = onReady.mock.calls[0][0];
+  expect(session.editor.view.dom.getAttribute("data-placeholder")).toBe(
+    "输入图片需求",
+  );
+  expect(session.editor.view.dom.getAttribute("data-slot")).toBe(
+    "input-group-control",
+  );
+  expect(session.editor.view.dom.getAttribute("aria-label")).toBe("创作提示词");
+  session.editor.commands.insertContent("已输入正文");
+  rerender(
+    <PromptEditor
+      {...props}
+      placeholder="输入视频需求"
+      className="min-h-24 outline-none"
+      inputGroup
+    />,
+  );
+  await waitFor(() =>
+    expect(session.editor.view.dom.getAttribute("data-placeholder")).toBe(
+      "输入视频需求",
+    ),
+  );
+  expect(onReady).toHaveBeenCalledOnce();
+  expect(session.editor.getText()).toBe("已输入正文");
+});
 it("同对象重渲染不以 seed 重置正文、模式或历史；换对象销毁旧会话", async () => {
   const onReady = vi.fn<(s: ComposerSession) => void>();
   const onDispose = vi.fn();

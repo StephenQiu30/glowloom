@@ -211,9 +211,18 @@ func (s *Store) ReadPublicTask(ctx context.Context, actor identityapp.Principal,
 				return fmt.Errorf("frozen prepared prompt digest mismatch")
 			}
 		}
-		if err := tx.Raw(`SELECT id,seq_no AS sequence,kind,media_asset_id,moderation_status,create_time
- FROM operation.operation_output WHERE operation_id=?::uuid AND project_id=?::uuid AND NOT is_delete ORDER BY seq_no`, operationID, projectID).Scan(&result.Outputs).Error; err != nil {
+		var outputs []struct {
+			application.TaskOutput `gorm:"embedded"`
+			Payload                json.RawMessage
+		}
+		if err := tx.Raw(`SELECT id,seq_no AS sequence,kind,media_asset_id,moderation_status,create_time,
+ CASE WHEN kind='json' AND moderation_status='passed' THEN json_payload ELSE NULL END AS payload
+ FROM operation.operation_output WHERE operation_id=?::uuid AND project_id=?::uuid AND NOT is_delete ORDER BY seq_no`, operationID, projectID).Scan(&outputs).Error; err != nil {
 			return fmt.Errorf("read public task candidates: %w", err)
+		}
+		for _, output := range outputs {
+			output.IncludeReviewedText(result.Capability, result.Status, output.Payload)
+			result.Outputs = append(result.Outputs, output.TaskOutput)
 		}
 		if err := tx.Raw(`SELECT id,from_status,to_status,reason,create_time FROM operation.operation_event
  WHERE operation_id=?::uuid AND NOT is_delete ORDER BY create_time,id LIMIT 1000`, operationID).Scan(&result.Events).Error; err != nil {

@@ -4588,6 +4588,7 @@ declare namespace API {
     media_asset_id?: string;
     moderation_status?: string;
     sequence?: number;
+    text?: string;
   };
 
   type TaskPageResponse = {

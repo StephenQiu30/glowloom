@@ -12,18 +12,14 @@ import {
 } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { ArrowLeft, Check, CircleAlert, Plus, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Brand } from "@/components/brand/brand";
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
-  EmptyMedia,
   EmptyContent,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { Spinner } from "@/components/ui/spinner";
 import { UploadDialog } from "@/components/media/upload-dialog";
 import { ProjectMediaPreview } from "@/components/media/project-media";
 import { subjectText, type Subject } from "@/components/subjects/contracts";
@@ -63,22 +59,34 @@ import {
   requireSaveResult,
   sameEditable,
   createResourceNode,
+  removeCanvasNode,
   defaultViewport,
   isAnnotation,
   type CanvasViewport,
   type Canvas,
   type Draft,
+  type DraftNode,
   type Node,
 } from "./editor-state";
 
+import { RichGeneration } from "@/components/generation/rich-generation";
 import { CanvasNodeLayer } from "./canvas-node-layer";
 import { createHistory } from "./canvas-history";
 import { descendants, moveSelection } from "./canvas-render-model";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { InfiniteCanvas } from "./infinite-canvas";
+import { BeefCanvas } from "./beeftv-canvas";
 import { CanvasNode } from "./canvas-node";
+import { CanvasHeader } from "./canvas-header";
+import { CanvasContextMenu } from "./canvas-context-menu";
+import {
+  encodeCanvasClipboard,
+  pasteCanvasClipboard,
+  remapCopiedNodeReferences,
+} from "./canvas-clipboard";
+import { createDirectorConfig } from "./canvas-director-model";
+import { canvasWorkspaceRect } from "./canvas-workspace-rect";
 import { CanvasToolbar } from "./canvas-toolbar";
 import { CanvasComposer } from "./canvas-composer";
 import { CanvasMiniMap } from "./canvas-mini-map";
@@ -105,6 +113,14 @@ const CanvasMaterialDialog = dynamic(() =>
   ),
 );
 
+const CanvasDirector = dynamic(
+  () => import("./canvas-director").then((m) => m.CanvasDirector),
+  { ssr: false },
+);
+const CanvasAIPanel = dynamic(() =>
+  import("./canvas-ai-panel").then((m) => m.CanvasAIPanel),
+);
+
 export function CanvasEditor({
   project,
   initial,
@@ -112,6 +128,10 @@ export function CanvasEditor({
   project: Project;
   initial: Canvas;
 }) {
+  const [aiOpen, setAIOpen] = useState(false);
+  const [aiWidth, setAIWidth] = useState(400);
+  const aiResize = useRef<{ x: number; width: number } | null>(null);
+  const [openToolID, setOpenToolID] = useState<string>();
   const [generation, setGeneration] = useState<GenerationSeed | null>(null);
   const [materials, setMaterials] = useState<{
     tab: "assets" | "subjects";
@@ -146,6 +166,9 @@ export function CanvasEditor({
   const alive = useRef(false);
   const request = useRef<AbortController | null>(null);
   const board = useRef<HTMLDivElement>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [showEdges, setShowEdges] = useState(true);
+  const contextPoint = useRef<{ x: number; y: number } | null>(null);
   const [tool, setTool] = useState<"select" | "pan">("select");
   const [selectedIDs, setSelectedIDs] = useState<string[]>([]);
   const [details, setDetails] = useState(false);
@@ -180,6 +203,12 @@ export function CanvasEditor({
       (n) => !baseline.has(n.id) || !sameEditable(n, baseline.get(n.id)!),
     );
   const current = nodes.find((n) => n.id === selected);
+  const effectiveAIWidth = Math.min(aiWidth, Math.max(240, size.width - 84));
+  const workspace = canvasWorkspaceRect(
+    size.width,
+    size.height,
+    aiOpen ? effectiveAIWidth : 0,
+  );
   const [replicaId] = useState(() => crypto.randomUUID());
   const [recoveryContext, setRecoveryContext] = useState("");
   const [recoveryBranches, setRecoveryBranches] = useState<LocalBranch[]>([]);
@@ -329,25 +358,6 @@ export function CanvasEditor({
       window.removeEventListener("resize", measure);
     };
   }, []);
-  useEffect(() => {
-    const shortcut = (event: KeyboardEvent) => {
-      if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)
-        return;
-      if (
-        event.target instanceof Element &&
-        event.target.closest(
-          "input,textarea,select,button,[contenteditable=true],[role=dialog],[role=alertdialog],[role=menu],[role=listbox]",
-        )
-      )
-        return;
-      if (event.key.toLowerCase() === "v" || event.key.toLowerCase() === "h") {
-        event.preventDefault();
-        setTool(event.key.toLowerCase() === "h" ? "pan" : "select");
-      }
-    };
-    window.addEventListener("keydown", shortcut);
-    return () => window.removeEventListener("keydown", shortcut);
-  }, []);
   const viewportChange = useCallback((next: ViewportTransform) => {
     view.current = { x: next.x, y: next.y, zoom: next.k };
     setCamera(view.current);
@@ -371,8 +381,11 @@ export function CanvasEditor({
       ) {
         changeCamera({
           ...v,
-          x: size.width / 2 - (target.x + (target.width ?? 288) / 2) * v.zoom,
-          y: size.height / 2 - (target.y + (target.height ?? 200) / 2) * v.zoom,
+          x:
+            workspace.centerX - (target.x + (target.width ?? 288) / 2) * v.zoom,
+          y:
+            workspace.centerY -
+            (target.y + (target.height ?? 200) / 2) * v.zoom,
         });
       }
     }
@@ -448,7 +461,7 @@ export function CanvasEditor({
       const target = event.target instanceof Element ? event.target : null;
       if (
         target?.closest(
-          "input,textarea,select,[contenteditable=true],[role=dialog],[role=alertdialog],[role=menu],[role=listbox]",
+          "input,textarea,select,[contenteditable=true],[role=dialog],[role=alertdialog],[role=menu],[role=listbox],[data-canvas-ai-panel]",
         )
       )
         return;
@@ -461,14 +474,18 @@ export function CanvasEditor({
     window.addEventListener("keydown", shortcut);
     return () => window.removeEventListener("keydown", shortcut);
   }, []);
-  function addText() {
+  function addText(point?: { x: number; y: number }) {
     if (local.current.length >= 2000) {
       setMessage("画布已达到 2000 个节点上限。");
       return;
     }
     const n = createResourceNode("text", {
-      x: (size.width / 2 - view.current.x) / view.current.zoom,
-      y: (size.height / 2 - view.current.y) / view.current.zoom,
+      x:
+        point?.x ??
+        (workspace.centerX - view.current.x) / view.current.zoom - 160,
+      y:
+        point?.y ??
+        (workspace.centerY - 260 - view.current.y) / view.current.zoom,
     });
     edit([...local.current, n]);
     selectNode(n.id);
@@ -571,7 +588,10 @@ export function CanvasEditor({
     if (n && isDraft(n))
       update(n.id, { config: { draft: { ...n.config.draft, ...patch } } });
   }
-  function add(kind: "image_generation" | "video_generation") {
+  function add(
+    kind: "image_generation" | "video_generation",
+    point?: { x: number; y: number },
+  ) {
     if (local.current.length >= 2000) {
       setMessage("画布已达到 2000 个节点上限。");
       return;
@@ -581,18 +601,73 @@ export function CanvasEditor({
     if (bounds?.width && bounds.height) {
       n.x = limit(
         Math.round(
-          (bounds.width / 2 - view.current.x) / view.current.zoom - 144,
+          (workspace.centerX - view.current.x) / view.current.zoom - 160,
         ),
       );
       n.y = limit(
         Math.round(
-          (Math.max(96, (bounds.height - 450) / 2) - view.current.y) /
+          (Math.max(80, workspace.centerY - 260) - view.current.y) /
             view.current.zoom,
         ),
       );
     }
+    if (point) {
+      n.x = limit(point.x);
+      n.y = limit(point.y);
+    }
     edit([...local.current, n]);
     selectNode(n.id);
+  }
+  function addTool(kind: "director") {
+    if (local.current.length >= 2000) {
+      setMessage("画布已达到 2000 个节点上限。");
+      return;
+    }
+    const n: Node = {
+      id: crypto.randomUUID(),
+      title: "导演台",
+      node_type: kind,
+      node_action: "tool",
+      config: { director: createDirectorConfig() },
+      x: limit((workspace.centerX - view.current.x) / view.current.zoom - 160),
+      y: limit((workspace.centerY - 260 - view.current.y) / view.current.zoom),
+      width: 320,
+      height: 320,
+      z_index: 0,
+    };
+    edit([...local.current, n]);
+    selectNode(n.id);
+    setOpenToolID(n.id);
+  }
+  const pendingAIText = useRef(new Map<string, string>());
+  async function insertAIText(text: string) {
+    if (privateInvalid.current || busy.current || conflict)
+      throw new Error("请先解决当前画布保存状态。");
+    if (Array.from(text).length > 10000)
+      throw new Error("文本超过单节点10000字上限，请先缩短结果。");
+    if (
+      pendingAIText.current.has(text) &&
+      local.current.some((n) => n.id === pendingAIText.current.get(text))
+    ) {
+      if (!(await save())) throw new Error("采用结果尚未确认保存，请重试。");
+      pendingAIText.current.delete(text);
+      return;
+    }
+    if (pending.current || unconfirmed)
+      throw new Error("请先确认当前画布保存结果。");
+    if (local.current.length >= 2000) {
+      throw new Error("画布已达到 2000 个节点上限。");
+    }
+    const n = createResourceNode("text", {
+      x: limit((workspace.centerX - view.current.x) / view.current.zoom - 160),
+      y: limit((workspace.centerY - view.current.y) / view.current.zoom - 160),
+    });
+    n.config.text = text;
+    pendingAIText.current.set(text, n.id);
+    edit([...local.current, n]);
+    selectNode(n.id);
+    if (!(await save())) throw new Error("采用结果尚未确认保存，请重试。");
+    pendingAIText.current.delete(text);
   }
   function addMaterials(assets: API.AssetSummary[]) {
     if (local.current.length + assets.length > 2000) {
@@ -605,7 +680,8 @@ export function CanvasEditor({
       );
       const bounds = board.current?.getBoundingClientRect();
       if (bounds?.width && bounds.height) {
-        const x = (bounds.width / 2 - view.current.x) / view.current.zoom - 144;
+        const x =
+          (workspace.centerX - view.current.x) / view.current.zoom - 144;
         const y =
           (Math.max(96, (bounds.height - 450) / 2) - view.current.y) /
           view.current.zoom;
@@ -636,7 +712,17 @@ export function CanvasEditor({
       setMessage("所选分组包含只读节点或超出节点上限，不能复制。");
       return;
     }
-    const copies = originals.map(duplicateNode);
+    let copies: Node[];
+    try {
+      copies = remapCopiedNodeReferences(
+        originals,
+        originals.map(duplicateNode),
+        local.current,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "无法复制引用关系。");
+      return;
+    }
     const identity = new Map(originals.map((n, i) => [n.id, copies[i].id]));
     copies.forEach((copy) => {
       if (copy.parent_id && identity.has(copy.parent_id))
@@ -665,21 +751,114 @@ export function CanvasEditor({
     ]);
     selectNode(identity.get(node.id));
   }
+  function selectedClipboard() {
+    return encodeCanvasClipboard(
+      project.id,
+      local.current,
+      localEdges.current,
+      new Set(selectedIDs),
+    );
+  }
+  function insertClipboard(text: string, atContext = false) {
+    if (busy.current || unconfirmed || conflict) {
+      setMessage("请先确认画布保存状态，再粘贴节点。");
+      return;
+    }
+    const pasted = pasteCanvasClipboard(
+      text,
+      project.id,
+      atContext ? (contextPoint.current ?? undefined) : undefined,
+    );
+    if (
+      local.current.length + pasted.nodes.length > 2000 ||
+      localEdges.current.length + pasted.edges.length > 4000
+    )
+      throw new Error("粘贴将超过画布容量，请分批操作。");
+    edit([...local.current, ...pasted.nodes], undefined, [
+      ...localEdges.current,
+      ...pasted.edges,
+    ]);
+    setSelected(pasted.nodes.at(-1)?.id);
+    setSelectedIDs(pasted.nodes.map((node) => node.id));
+  }
+  async function copyClipboard() {
+    try {
+      await navigator.clipboard.writeText(selectedClipboard());
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "无法复制，请使用键盘复制。",
+      );
+    }
+  }
+  async function pasteClipboard() {
+    try {
+      insertClipboard(await navigator.clipboard.readText(), true);
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "无法读取剪贴板，请使用键盘粘贴。",
+      );
+    }
+  }
+  const clipboardCopy = useEffectEvent((event: ClipboardEvent) => {
+    try {
+      const text = selectedClipboard();
+      if (!event.clipboardData) return;
+      event.clipboardData.setData("text/plain", text);
+      event.preventDefault();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "无法复制所选节点。");
+    }
+  });
+  const clipboardPaste = useEffectEvent((event: ClipboardEvent) => {
+    const text = event.clipboardData?.getData("text/plain");
+    if (!text || !text.includes('"glowloom.canvas"')) return;
+    event.preventDefault();
+    try {
+      insertClipboard(text);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "无法粘贴节点。");
+    }
+  });
+  useEffect(() => {
+    const ignored = (event: ClipboardEvent) =>
+      event.defaultPrevented ||
+      (event.target instanceof Element &&
+        !!event.target.closest(
+          "input,textarea,select,[contenteditable=true],[role=dialog],[role=alertdialog],[role=menu],[data-canvas-ai-panel]",
+        ));
+    const copy = (event: ClipboardEvent) => {
+      if (!ignored(event)) clipboardCopy(event);
+    };
+    const paste = (event: ClipboardEvent) => {
+      if (!ignored(event)) clipboardPaste(event);
+    };
+    window.addEventListener("copy", copy);
+    window.addEventListener("paste", paste);
+    return () => {
+      window.removeEventListener("copy", copy);
+      window.removeEventListener("paste", paste);
+    };
+  }, []);
   function removeLocal(node: Node) {
     if (
       busy.current ||
       unconfirmed ||
       conflict ||
-      baseline.has(node.id) ||
+      (baseline.has(node.id) && isDraft(node)) ||
       !isEditableNode(node)
     )
       return;
+    let remaining: Node[];
+    try {
+      remaining = removeCanvasNode(local.current, node.id);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "无法删除节点。");
+      return;
+    }
     edit(
-      local.current
-        .filter((n) => n.id !== node.id)
-        .map((n) =>
-          n.parent_id === node.id ? { ...n, parent_id: undefined } : n,
-        ),
+      remaining,
       undefined,
       localEdges.current.filter(
         (e) => e.source_node_id !== node.id && e.target_node_id !== node.id,
@@ -696,21 +875,32 @@ export function CanvasEditor({
       subject,
     });
   }
-  function fit() {
-    if (!board.current || !nodes.length) {
+  function fit(selectionOnly = false) {
+    const visible = selectionOnly
+      ? nodes.filter((n) => selectedIDs.includes(n.id))
+      : nodes;
+    if (!board.current || !visible.length) {
       changeCamera({ x: 0, y: 0, zoom: 1 });
       return;
     }
-    const minX = Math.min(...nodes.map((n) => n.x)),
-      minY = Math.min(...nodes.map((n) => n.y));
-    const maxX = Math.max(...nodes.map((n) => n.x + (n.width ?? 288))),
-      maxY = Math.max(...nodes.map((n) => n.y + (n.height ?? 200)));
-    const { width, height } = board.current.getBoundingClientRect();
+    const minX = Math.min(...visible.map((n) => n.x)),
+      minY = Math.min(...visible.map((n) => n.y));
+    const maxX = Math.max(...visible.map((n) => n.x + (n.width ?? 288))),
+      maxY = Math.max(...visible.map((n) => n.y + (n.height ?? 200)));
+    const { width, height, left, top } = workspace;
     const zoom = Math.max(
-      0.05,
-      Math.min(2, (width - 96) / (maxX - minX), (height - 192) / (maxY - minY)),
+      0.08,
+      Math.min(
+        selectionOnly ? 1 : 0.5,
+        (width - 96) / (maxX - minX),
+        (height - 192) / (maxY - minY),
+      ),
     );
-    changeCamera({ x: 48 - minX * zoom, y: 96 - minY * zoom, zoom });
+    changeCamera({
+      x: left + width / 2 - ((minX + maxX) / 2) * zoom,
+      y: top + height / 2 - ((minY + maxY) / 2) * zoom,
+      zoom,
+    });
   }
   function beginDrag(e: PointerEvent<HTMLButtonElement>, node: Node) {
     if (
@@ -1052,12 +1242,7 @@ export function CanvasEditor({
       if (alive.current) setSaving(false);
     }
   }
-  async function generateCurrent(pickSubject = false) {
-    if (!current || !isDraft(current) || busy.current) return;
-    const saved = await save();
-    if (!saved) return;
-    const node = saved.nodes.find((n) => n.id === current.id);
-    if (!node || !isDraft(node)) return;
+  function seedForNode(node: DraftNode): GenerationSeed {
     let composer = node.config.draft.composer;
     if (!composer) {
       composer = emptyPromptDraft();
@@ -1077,19 +1262,18 @@ export function CanvasEditor({
       };
     }
     const ownerNode = node.id;
-    setGeneration({
+    return {
       project,
       prompt: "",
       composer,
       capability: node.node_type === "video_generation" ? "video" : "image",
-      pickSubject,
       source: {
-        canvas_id: saved.id,
+        canvas_id: initial.id,
         node_id: ownerNode,
-        revision: saved.revision,
+        revision: base.revision,
       },
       canvasOwner: {
-        contextKey: `canvas/${saved.id}/${ownerNode}`,
+        contextKey: `canvas/${initial.id}/${ownerNode}`,
         draft: composer,
         onChange: (value: PromptDraft) => {
           const n = local.current.find((n) => n.id === ownerNode);
@@ -1097,6 +1281,11 @@ export function CanvasEditor({
             update(ownerNode, { config: { draft: richCanvasDraft(value) } });
         },
         flush: async () => {
+          const existing = local.current.find((n) => n.id === ownerNode);
+          if (!existing || !isDraft(existing))
+            throw new Error("画布节点已不可编辑。");
+          if (!existing.config.draft.composer)
+            update(ownerNode, { config: { draft: richCanvasDraft(composer) } });
           const committed = await saveLatest.current();
           if (!committed)
             throw new Error("画布保存尚未确认，请先处理冲突或重试原保存。");
@@ -1115,7 +1304,7 @@ export function CanvasEditor({
           };
         },
       },
-    });
+    };
   }
 
   async function adoptResult(id: string, kind: string) {
@@ -1150,6 +1339,75 @@ export function CanvasEditor({
     setGeneration(null);
     setMessage("生成结果已添加并保存到画布。");
   }
+  function zoomAtCenter(zoom: number) {
+    const v = view.current,
+      next = Math.max(0.08, Math.min(8, zoom));
+    const x = workspace.centerX,
+      y = workspace.centerY;
+    changeCamera({
+      x: x - ((x - v.x) * next) / v.zoom,
+      y: y - ((y - v.y) * next) / v.zoom,
+      zoom: next,
+    });
+  }
+  const viewShortcut = useEffectEvent((event: KeyboardEvent) => {
+    const modified = event.metaKey || event.ctrlKey;
+    const key = event.key.toLowerCase();
+    if (!modified && !event.shiftKey && key === "v") {
+      event.preventDefault();
+      setTool("select");
+    } else if (modified && (key === "+" || key === "=" || key === "-")) {
+      event.preventDefault();
+      zoomAtCenter(
+        key === "-" ? view.current.zoom / 1.2 : view.current.zoom * 1.2,
+      );
+    } else if (key === "1" && modified) {
+      event.preventDefault();
+      zoomAtCenter(1);
+    } else if (
+      (event.code === "Digit1" || key === "1" || key === "!") &&
+      event.shiftKey &&
+      !modified
+    ) {
+      event.preventDefault();
+      fit();
+    } else if (
+      (event.code === "Digit2" || key === "2" || key === "@") &&
+      event.shiftKey &&
+      !modified
+    ) {
+      event.preventDefault();
+      fit(true);
+    } else if (modified && key === "d" && current) {
+      event.preventDefault();
+      copyNode(current);
+    } else if (
+      !modified &&
+      (key === "delete" || key === "backspace") &&
+      current
+    ) {
+      event.preventDefault();
+      if (baseline.has(current.id) && isDraft(current))
+        setMessage("生成草稿已关联服务端版本，不能直接删除。");
+      else removeLocal(current);
+    }
+  });
+
+  useEffect(() => {
+    const keydown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || event.altKey) return;
+      if (
+        event.target instanceof Element &&
+        event.target.closest(
+          "input,textarea,select,[contenteditable=true],[role=dialog],[role=alertdialog],[role=menu],[role=listbox],[data-canvas-ai-panel]",
+        )
+      )
+        return;
+      viewShortcut(event);
+    };
+    window.addEventListener("keydown", keydown);
+    return () => window.removeEventListener("keydown", keydown);
+  }, []);
   const saveShortcut = useEffectEvent(() => {
     void save();
   });
@@ -1174,7 +1432,7 @@ export function CanvasEditor({
     } else {
       const own = new Map(local.current.map((n) => [n.id, n]));
       const previous = new Map(base.nodes.map((n) => [n.id, n]));
-      const merged = server.nodes.map((n) => {
+      let merged = server.nodes.map((n) => {
         const ours = own.get(n.id),
           old = previous.get(n.id);
         return ours && old && !sameEditable(ours, old)
@@ -1183,7 +1441,19 @@ export function CanvasEditor({
       });
       const remoteIDs = new Set(server.nodes.map((n) => n.id));
       for (const n of local.current) if (!remoteIDs.has(n.id)) merged.push(n);
-      history.reset();
+      const removed = base.nodes.filter((n) => !own.has(n.id));
+      try {
+        for (const n of removed)
+          if (merged.some((remote) => remote.id === n.id))
+            merged = removeCanvasNode(merged, n.id);
+      } catch (error) {
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : "无法保留本地删除，请核对引用。",
+        );
+        return;
+      }
       const oldEdges = new Map(base.edges.map((edge) => [edge.id, edge]));
       const localIDs = new Set(localEdges.current.map((edge) => edge.id));
       const combined = server.edges.filter(
@@ -1198,7 +1468,20 @@ export function CanvasEditor({
           (edge) => !oldEdges.has(edge.id) && !serverIDs.has(edge.id),
         ),
       );
-      edit(merged, undefined, combined, false);
+      const ids = new Set(merged.map((n) => n.id));
+      const finalEdges = combined.filter(
+        (e) =>
+          !isAnnotation(e) ||
+          (ids.has(e.source_node_id ?? "") && ids.has(e.target_node_id ?? "")),
+      );
+      try {
+        commandBatch(server, merged, { edges: finalEdges });
+      } catch {
+        setMessage("本地改动与服务端受保护节点或引用冲突，请核对后再选择。");
+        return;
+      }
+      history.reset();
+      edit(merged, undefined, finalEdges, false);
     }
     setBase(server);
     setConflict(null);
@@ -1242,56 +1525,20 @@ export function CanvasEditor({
           }
         }}
       >
-        <div className="canvas-topbar-cluster max-w-[65%] min-w-0">
-          <Button asChild variant="ghost" size="icon-sm">
-            <Link
-              href="/projects"
-              onClick={(e) => {
-                if (dirty || saving || unconfirmed) {
-                  e.preventDefault();
-                  setLeave(true);
-                }
-              }}
-            >
-              <ArrowLeft data-icon="inline-start" />
-              <span className="sr-only">返回项目</span>
-            </Link>
-          </Button>
-          <Brand wordmark />
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate font-medium">{project.name}</h1>
-            <p className="truncate text-xs text-muted-foreground">
-              {project.aspect_ratio} · {project.style_key ?? "未设风格"}
-            </p>
-          </div>
-        </div>
-        <div className="canvas-topbar-cluster shrink-0">
-          <span
-            role="status"
-            aria-live="polite"
-            className="text-xs text-muted-foreground"
-          >
-            {saving ? (
-              <Spinner aria-hidden="true" />
-            ) : dirty || unconfirmed || conflict ? (
-              <CircleAlert />
-            ) : (
-              <Check />
-            )}
-            {status}
-          </span>
-          <Button
-            onClick={() => void save()}
-            disabled={saving || !!conflict || (!dirty && !unconfirmed)}
-          >
-            {saving ? (
-              <Spinner data-icon="inline-start" aria-hidden="true" />
-            ) : (
-              <Save data-icon="inline-start" />
-            )}
-            {saving ? "正在保存…" : unconfirmed ? "重试原保存" : "保存画布"}
-          </Button>
-        </div>
+        <CanvasHeader
+          project={project}
+          nodes={nodes}
+          status={status}
+          saveLabel={
+            saving ? "正在保存…" : unconfirmed ? "重试原保存" : "保存画布"
+          }
+          saving={saving}
+          canSave={!conflict && (dirty || unconfirmed)}
+          onSave={() => void save()}
+          onSelect={(id) => selectNode(id)}
+          onMessage={setMessage}
+          onShortcuts={() => setShortcutsOpen(true)}
+        />
       </header>
       {message && <FeedbackToast message={message} tone="info" />}
       <Dialog open={leave} onOpenChange={setLeave}>
@@ -1368,88 +1615,167 @@ export function CanvasEditor({
           </div>
         </section>
       )}
-      <InfiniteCanvas
-        containerRef={board}
-        viewport={{ x: camera.x, y: camera.y, k: camera.zoom }}
-        onViewportChange={viewportChange}
-        onViewportPreviewChange={viewportPreview}
-        backgroundMode="dots"
-        boxSelectEnabled={tool === "select"}
-        onSelectArea={selectArea}
-        onCanvasDeselect={() => selectNode(undefined)}
+      <CanvasContextMenu
+        onCopy={() => void copyClipboard()}
+        onPaste={() => void pasteClipboard()}
+        onAdd={(kind) => {
+          const point = contextPoint.current ?? undefined;
+          if (kind === "text") addText(point);
+          else add(kind, point);
+        }}
+        onMaterials={() => setMaterials({ tab: "assets" })}
+        onUpload={() => setUpload(true)}
+        onDuplicate={() => {
+          if (current) copyNode(current);
+        }}
+        onRemove={() => {
+          if (current) removeLocal(current);
+        }}
+        onUndo={() => stepHistory("undo")}
+        onRedo={() => stepHistory("redo")}
+        canUndo={!saving && !unconfirmed && !conflict && history.canUndo(base)}
+        canRedo={!saving && !unconfirmed && !conflict && history.canRedo(base)}
+        canDuplicate={!!current && isEditableNode(current)}
+        canRemove={
+          !!current &&
+          (!baseline.has(current.id) || !isDraft(current)) &&
+          !saving &&
+          !unconfirmed &&
+          !conflict
+        }
       >
-        <CanvasNodeLayer
+        <BeefCanvas
+          onContextMenu={(event) => {
+            const bounds = board.current?.getBoundingClientRect();
+            contextPoint.current = {
+              x: limit(
+                (event.clientX - (bounds?.left ?? 0) - view.current.x) /
+                  view.current.zoom,
+              ),
+              y: limit(
+                (event.clientY - (bounds?.top ?? 0) - view.current.y) /
+                  view.current.zoom,
+              ),
+            };
+            const id =
+              event.target instanceof Element
+                ? event.target.closest<HTMLElement>("[data-node-id]")?.dataset
+                    .nodeId
+                : undefined;
+            if (id) selectNode(id);
+            else selectNode(undefined);
+          }}
+          onCanvasDoubleClick={(event) =>
+            event.currentTarget.dispatchEvent(
+              new MouseEvent("contextmenu", {
+                bubbles: true,
+                cancelable: true,
+                button: 2,
+                clientX: event.clientX,
+                clientY: event.clientY,
+              }),
+            )
+          }
           containerRef={board}
-          nodes={nodes}
-          edges={edges}
           viewport={{ x: camera.x, y: camera.y, k: camera.zoom }}
-          size={size}
-          selectedIDs={selectedIDs}
-          renderNode={(node, liveZoom) => (
-            <CanvasNode
-              key={node.id}
-              node={node}
-              projectID={project.id}
-              selected={selectedIDs.includes(node.id)}
-              zoom={liveZoom}
-              onResize={(size) =>
-                update(node.id, { ...size, x: limit(size.x), y: limit(size.y) })
-              }
-              onResizePreview={() =>
-                board.current?.dispatchEvent(new Event(CANVAS_NODE_DRAG_EVENT))
-              }
-              onSelect={(additive) => {
-                if (!additive && selectedIDs.includes(node.id))
-                  setSelected(node.id);
-                else selectNode(node.id, additive);
-              }}
-              onEditTitle={() => {
-                selectNode(node.id);
-                setDetails(true);
-              }}
-              onMove={(x, y) => {
-                try {
-                  edit(
-                    moveSelection(
-                      local.current,
-                      new Set([node.id]),
-                      x - node.x,
-                      y - node.y,
-                    ),
-                  );
-                } catch (error) {
-                  setMessage((error as Error).message);
+          onViewportChange={viewportChange}
+          onViewportPreviewChange={viewportPreview}
+          backgroundMode="dots"
+          boxSelectEnabled={tool === "select"}
+          onSelectArea={selectArea}
+          onCanvasDeselect={() => selectNode(undefined)}
+        >
+          <CanvasNodeLayer
+            containerRef={board}
+            nodes={nodes}
+            edges={showEdges ? edges : []}
+            viewport={{ x: camera.x, y: camera.y, k: camera.zoom }}
+            size={size}
+            selectedIDs={selectedIDs}
+            renderNode={(node, liveZoom) => (
+              <CanvasNode
+                key={node.id}
+                node={node}
+                projectID={project.id}
+                selected={selectedIDs.includes(node.id)}
+                zoom={liveZoom}
+                onResize={(size) =>
+                  update(node.id, {
+                    ...size,
+                    x: limit(size.x),
+                    y: limit(size.y),
+                  })
                 }
-              }}
-              onDragStart={(event) => beginDrag(event, node)}
-              onDragMove={moveDrag}
-              onDragEnd={endDrag}
-              onDuplicate={() => copyNode(node)}
-              canRemove={
-                !baseline.has(node.id) && !saving && !unconfirmed && !conflict
-              }
-              onRemove={() => removeLocal(node)}
-            />
-          )}
-        />
-      </InfiniteCanvas>
+                onResizePreview={() =>
+                  board.current?.dispatchEvent(
+                    new Event(CANVAS_NODE_DRAG_EVENT),
+                  )
+                }
+                onSelect={(additive) => {
+                  if (!additive && selectedIDs.includes(node.id))
+                    setSelected(node.id);
+                  else selectNode(node.id, additive);
+                }}
+                onAddAdjacent={(kind, side) => {
+                  const point = {
+                    x: limit(
+                      node.x +
+                        (side === "left" ? -400 : (node.width ?? 320) + 80),
+                    ),
+                    y: node.y,
+                  };
+                  if (kind === "text") addText(point);
+                  else add(kind, point);
+                }}
+                onEditTitle={() => {
+                  selectNode(node.id);
+                  if (node.node_type === "director") setOpenToolID(node.id);
+                  else setDetails(true);
+                }}
+                onMove={(x, y) => {
+                  try {
+                    edit(
+                      moveSelection(
+                        local.current,
+                        new Set([node.id]),
+                        x - node.x,
+                        y - node.y,
+                      ),
+                    );
+                  } catch (error) {
+                    setMessage((error as Error).message);
+                  }
+                }}
+                onDragStart={(event) => beginDrag(event, node)}
+                onDragMove={moveDrag}
+                onDragEnd={endDrag}
+                onDuplicate={() => copyNode(node)}
+                canRemove={
+                  (!baseline.has(node.id) || !isDraft(node)) &&
+                  !saving &&
+                  !unconfirmed &&
+                  !conflict
+                }
+                onRemove={() => removeLocal(node)}
+              />
+            )}
+          />
+        </BeefCanvas>
+      </CanvasContextMenu>
       {!nodes.length && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center">
           <Empty>
             <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <Plus />
-              </EmptyMedia>
-              <EmptyTitle>画布暂无节点</EmptyTitle>
-              <EmptyDescription>
-                从左侧添加图片、视频节点或项目素材，开始你的创作。
-              </EmptyDescription>
+              <EmptyTitle className="canvas-empty-hint">
+                双击画布，创建节点
+              </EmptyTitle>
             </EmptyHeader>
           </Empty>
         </div>
       )}
       <div
         className="canvas-edit-actions"
+        data-multi={selectedIDs.length > 1}
         role="toolbar"
         aria-label="画布编辑操作"
         data-canvas-no-zoom
@@ -1512,13 +1838,21 @@ export function CanvasEditor({
       <CanvasToolbar
         tool={tool}
         onToolChange={setTool}
-        onAdd={add}
-        onAddText={addText}
+        onAddTool={addTool}
+        onAI={() => setAIOpen((value) => !value)}
+        onAdd={(kind) => add(kind)}
+        onAddText={() => addText()}
         onMaterials={(tab = "assets", kind) => setMaterials({ tab, kind })}
         onUpload={() => setUpload(true)}
         zoom={camera.zoom}
-        onZoom={(zoom) => changeCamera({ ...view.current, zoom })}
-        onFit={fit}
+        onZoom={zoomAtCenter}
+        onFit={() => fit()}
+        onFitSelection={() => fit(true)}
+        shortcutsOpen={shortcutsOpen}
+        onShortcutsOpenChange={setShortcutsOpen}
+        hasSelection={selectedIDs.length > 0}
+        showEdges={showEdges}
+        onShowEdges={() => setShowEdges((value) => !value)}
         miniMap={miniMap}
         onMiniMap={() => setMiniMap(!miniMap)}
       />
@@ -1530,111 +1864,136 @@ export function CanvasEditor({
           height={size.height}
           onNavigate={(x, y) =>
             changeCamera({
-              x: size.width / 2 - x * view.current.zoom,
-              y: size.height / 2 - y * view.current.zoom,
+              x: workspace.centerX - x * view.current.zoom,
+              y: workspace.centerY - y * view.current.zoom,
               zoom: view.current.zoom,
             })
           }
         />
       )}
-      {current && (
-        <CanvasNodePanel
-          node={current}
-          viewport={{ x: camera.x, y: camera.y, k: camera.zoom }}
-          containerRef={board}
-        >
-          {current.node_type === "text" || current.node_type === "group" ? (
-            <aside
-              className="canvas-node-composer"
-              aria-label="节点编辑"
-              data-canvas-no-zoom
-            >
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor="canvas-resource-title">
-                    节点名称
-                  </FieldLabel>
-                  <Input
-                    id="canvas-resource-title"
-                    aria-label="节点名称"
-                    value={current.title}
-                    maxLength={128}
+      {current &&
+        current.node_type !== "timeline" &&
+        current.id !== openToolID && (
+          <CanvasNodePanel
+            rightInset={aiOpen ? effectiveAIWidth + 24 : 0}
+            node={current}
+            viewport={{ x: camera.x, y: camera.y, k: camera.zoom }}
+            containerRef={board}
+          >
+            {current.node_type === "director" ? (
+              <aside className="canvas-node-composer" data-canvas-no-zoom>
+                <Button onClick={() => setOpenToolID(current.id)}>
+                  打开导演台
+                </Button>
+              </aside>
+            ) : current.node_type === "text" ||
+              current.node_type === "group" ? (
+              <aside
+                className="canvas-node-composer"
+                aria-label="节点编辑"
+                data-canvas-no-zoom
+              >
+                <FieldGroup>
+                  <Field>
+                    <FieldLabel htmlFor="canvas-resource-title">
+                      节点名称
+                    </FieldLabel>
+                    <Input
+                      id="canvas-resource-title"
+                      aria-label="节点名称"
+                      value={current.title}
+                      maxLength={128}
+                      disabled={!isEditableNode(current)}
+                      onChange={(event) =>
+                        update(current.id, { title: event.target.value })
+                      }
+                    />
+                  </Field>
+                </FieldGroup>
+                {current.node_type === "text" ? (
+                  <Textarea
+                    aria-label="文本内容"
+                    value={current.config.text ?? ""}
+                    maxLength={10000}
                     disabled={!isEditableNode(current)}
                     onChange={(event) =>
-                      update(current.id, { title: event.target.value })
-                    }
-                  />
-                </Field>
-              </FieldGroup>
-              {current.node_type === "text" ? (
-                <Textarea
-                  aria-label="文本内容"
-                  value={current.config.text ?? ""}
-                  maxLength={10000}
-                  disabled={!isEditableNode(current)}
-                  onChange={(event) =>
-                    update(current.id, { config: { text: event.target.value } })
-                  }
-                />
-              ) : (
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!isEditableNode(current)}
-                    onClick={() =>
                       update(current.id, {
-                        config: { collapsed: !current.config.collapsed },
+                        config: { text: event.target.value },
                       })
                     }
-                  >
-                    {current.config.collapsed ? "展开分组" : "收起分组"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!isEditableNode(current)}
-                    onClick={ungroup}
-                  >
-                    解除分组关系
-                  </Button>
-                </div>
-              )}
-            </aside>
-          ) : (
-            <CanvasComposer
-              node={current}
-              nodes={nodes}
-              details={details}
-              onDetails={setDetails}
-              onSelect={selectNode}
-              onUpdate={(patch) => update(current.id, patch)}
-              onDraft={draft}
-              onGenerate={() => void generateCurrent()}
-              onSubject={() => void generateCurrent(true)}
-              onPreview={() => setPreview(current)}
-              onContinue={() => {
-                if (
-                  current.ref_id &&
-                  ["image", "video", "audio"].includes(current.node_type)
-                )
-                  setGeneration({
-                    project,
-                    prompt: "",
-                    capability:
-                      current.node_type === "image" ? "image" : "video",
-                    reference: {
-                      assetID: current.ref_id,
-                      kind: current.node_type as "image" | "video" | "audio",
-                    },
-                  });
-              }}
-              generating={saving}
-              blocked={!!conflict || unconfirmed}
-            />
-          )}
-        </CanvasNodePanel>
-      )}
+                  />
+                ) : (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!isEditableNode(current)}
+                      onClick={() =>
+                        update(current.id, {
+                          config: { collapsed: !current.config.collapsed },
+                        })
+                      }
+                    >
+                      {current.config.collapsed ? "展开分组" : "收起分组"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!isEditableNode(current)}
+                      onClick={ungroup}
+                    >
+                      解除分组关系
+                    </Button>
+                  </div>
+                )}
+              </aside>
+            ) : (
+              <CanvasComposer
+                node={current}
+                details={details}
+                onDetails={setDetails}
+                onUpdate={(patch) => update(current.id, patch)}
+                onDraft={draft}
+                richComposer={
+                  isDraft(current)
+                    ? (() => {
+                        const seed = seedForNode(current);
+                        return (
+                          <RichGeneration
+                            key={current.id}
+                            projectID={project.id}
+                            seed={seed}
+                            canvas={seed.canvasOwner}
+                            presentation="canvas"
+                            onAdopt={adoptResult}
+                          />
+                        );
+                      })()
+                    : undefined
+                }
+                onPreview={() => setPreview(current)}
+                onContinue={() => {
+                  if (
+                    current.ref_id &&
+                    ["image", "video", "audio"].includes(current.node_type)
+                  )
+                    setGeneration({
+                      project,
+                      prompt: "",
+                      capability:
+                        current.node_type === "image" ? "image" : "video",
+                      reference: {
+                        assetID: current.ref_id,
+                        kind: current.node_type as "image" | "video" | "audio",
+                      },
+                    });
+                }}
+                generating={saving}
+                blocked={!!conflict || unconfirmed}
+              />
+            )}
+          </CanvasNodePanel>
+        )}
       {recoveryBranches.length > 0 && (
         <div
           className="fixed bottom-4 left-4 z-40 max-w-lg space-y-2 rounded-lg border bg-background p-4"
@@ -1667,6 +2026,100 @@ export function CanvasEditor({
             </div>
           ))}
         </div>
+      )}
+      {aiOpen && (
+        <div
+          className="canvas-ai-shell"
+          style={{ width: effectiveAIWidth }}
+          data-canvas-no-zoom
+        >
+          <div
+            role="separator"
+            aria-label="调整 AI 对话宽度"
+            aria-orientation="vertical"
+            aria-valuemin={240}
+            aria-valuemax={Math.max(240, size.width - 84)}
+            aria-valuenow={effectiveAIWidth}
+            tabIndex={0}
+            className="canvas-ai-resize"
+            onKeyDown={(event) => {
+              if (["ArrowLeft", "ArrowRight"].includes(event.key)) {
+                event.preventDefault();
+                setAIWidth((value) =>
+                  Math.max(
+                    240,
+                    Math.min(
+                      size.width - 84,
+                      value + (event.key === "ArrowLeft" ? 32 : -32),
+                    ),
+                  ),
+                );
+              }
+            }}
+            onPointerDown={(event) => {
+              if (event.button !== 0) return;
+              aiResize.current = { x: event.clientX, width: effectiveAIWidth };
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={(event) => {
+              const d = aiResize.current;
+              if (d)
+                setAIWidth(
+                  Math.max(
+                    240,
+                    Math.min(size.width - 84, d.width + d.x - event.clientX),
+                  ),
+                );
+            }}
+            onPointerUp={() => {
+              aiResize.current = null;
+            }}
+            onPointerCancel={() => {
+              if (aiResize.current) setAIWidth(aiResize.current.width);
+              aiResize.current = null;
+            }}
+            onLostPointerCapture={() => {
+              aiResize.current = null;
+            }}
+          />
+          <CanvasAIPanel
+            project={project}
+            nodes={nodes}
+            selectedNode={current}
+            onGenerate={setGeneration}
+            onInsertText={insertAIText}
+            onClose={() => setAIOpen(false)}
+          />
+        </div>
+      )}
+      {nodes.find((n) => n.id === openToolID)?.node_type === "director" && (
+        <CanvasDirector
+          onSave={async () => !!(await save())}
+          saveMessage={
+            message ||
+            (unconfirmed
+              ? "保存结果待确认"
+              : conflict
+                ? "画布版本冲突，请关闭导演台处理"
+                : dirty
+                  ? "有未保存的编辑"
+                  : "已保存")
+          }
+          saving={saving}
+          key={openToolID}
+          node={nodes.find((n) => n.id === openToolID)!}
+          nodes={nodes}
+          projectID={project.id}
+          onUpdate={(config) =>
+            update(openToolID!, {
+              config: {
+                ...local.current.find((n) => n.id === openToolID)?.config,
+                director: config,
+              },
+            })
+          }
+          onClose={() => setOpenToolID(undefined)}
+        />
       )}
       {generation && (
         <GenerationDialog

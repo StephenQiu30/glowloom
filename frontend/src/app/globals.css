@@ -161,8 +161,8 @@ button:not(:disabled),
 }
 @layer base {
   :focus-visible {
-    outline: 2px solid var(--ring);
-    outline-offset: 3px;
+    outline: 1px solid var(--ring);
+    outline-offset: 2px;
   }
 }
 .session-state {
@@ -1342,7 +1342,7 @@ button:not(:disabled),
 }
 .project-picker select:focus-visible,
 .form-label select:focus-visible {
-  outline: 2px solid var(--ring);
+  outline: 1px solid var(--ring);
   outline-offset: 2px;
 }
 .form-label {
@@ -1438,8 +1438,8 @@ button:not(:disabled),
   transform: translateY(-2px);
 }
 .subject-card:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 4px;
+  outline: 1px solid var(--ring);
+  outline-offset: 2px;
 }
 .subject-card-image {
   position: relative;

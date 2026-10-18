@@ -8,6 +8,7 @@ import {
   ImageIcon,
   MoreHorizontal,
   Pencil,
+  Plus,
   Trash2,
   VideoIcon,
   Type,
@@ -42,6 +43,7 @@ export function CanvasNode({
   onDuplicate,
   onRemove,
   canRemove = false,
+  onAddAdjacent,
 }: {
   node: Node;
   projectID?: string;
@@ -63,6 +65,10 @@ export function CanvasNode({
   onDuplicate?: () => void;
   onRemove?: () => void;
   canRemove?: boolean;
+  onAddAdjacent?: (
+    kind: "text" | "image_generation" | "video_generation",
+    side: "left" | "right",
+  ) => void;
 }) {
   const resize = useRef<{
     pointerID: number;
@@ -252,10 +258,12 @@ export function CanvasNode({
                   onSelect={onRemove}
                 >
                   <Trash2 data-icon="inline-start" />
-                  移除未保存节点
+                  移除节点
                 </DropdownMenuItem>
                 {!canRemove && (
-                  <DropdownMenuLabel>已保存节点暂不支持移除</DropdownMenuLabel>
+                  <DropdownMenuLabel>
+                    此节点受服务端生成版本保护
+                  </DropdownMenuLabel>
                 )}
               </DropdownMenuGroup>
             </DropdownMenuContent>
@@ -272,8 +280,46 @@ export function CanvasNode({
             <Pencil data-icon="inline-start" />
           </Button>
         ))}
+      {selected &&
+        onAddAdjacent &&
+        (["left", "right"] as const).map((side) => (
+          <DropdownMenu key={side}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon-xs"
+                className={`canvas-node-port canvas-node-port-${side}`}
+                aria-label={`在${side === "left" ? "左" : "右"}侧添加节点`}
+                data-canvas-no-zoom
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                <Plus data-icon="inline-start" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuGroup>
+                <DropdownMenuItem onSelect={() => onAddAdjacent("text", side)}>
+                  <Type data-icon="inline-start" />
+                  文本
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => onAddAdjacent("image_generation", side)}
+                >
+                  <ImageIcon data-icon="inline-start" />
+                  图片
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => onAddAdjacent("video_generation", side)}
+                >
+                  <VideoIcon data-icon="inline-start" />
+                  视频
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ))}
       <Button
-        variant="ghost"
+        variant="secondary"
         type="button"
         className="canvas-node-shell h-auto p-0"
         onClick={(event) =>
@@ -298,11 +344,11 @@ export function CanvasNode({
             kind={node.node_type}
           />
         ) : (
-          <Icon className="size-10 opacity-30" strokeWidth={1} />
+          <Icon className="size-5 opacity-50" strokeWidth={1.5} />
         )}
         <span>
           {isDraft(node)
-            ? "准备好，开始生成"
+            ? ""
             : node.node_type === "text"
               ? node.config.text || "编辑文本内容"
               : node.node_type === "group"
@@ -368,12 +414,6 @@ export function CanvasNode({
             }}
           />
         ))}
-      {isDraft(node) && (
-        <div className="canvas-node-caption">
-          <span>{node.config.draft.aspect_ratio}</span>
-          <span>输入版本 {node.input_revision ?? "待保存"}</span>
-        </div>
-      )}
     </article>
   );
 }

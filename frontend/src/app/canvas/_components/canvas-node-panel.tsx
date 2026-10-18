@@ -15,11 +15,15 @@ export function CanvasNodePanel({
   viewport,
   containerRef,
   children,
+  rightInset = 0,
+  bottomInset = 0,
 }: {
   node: Node;
   viewport: ViewportTransform;
   containerRef: RefObject<HTMLDivElement | null>;
   children: ReactNode;
+  rightInset?: number;
+  bottomInset?: number;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -50,15 +54,19 @@ export function CanvasNodePanel({
       const position = nodePanelPosition(
         screenNode,
         rect && container.clientWidth ? { x: 0, y: 0, k: 1 } : liveViewport,
-        container.clientWidth || 1024,
-        container.clientHeight || Number.POSITIVE_INFINITY,
+        Math.max(80, (container.clientWidth || 1024) - rightInset),
+        container.clientHeight
+          ? Math.max(160, container.clientHeight - bottomInset)
+          : Number.POSITIVE_INFINITY,
         panel.offsetHeight || 216,
       );
       panel.style.maxHeight = container.clientHeight
         ? `${Math.max(80, container.clientHeight - 96)}px`
         : "";
       panel.style.width = `${position.width}px`;
-      panel.style.transform = `translate3d(${position.left}px, ${position.top}px, 0)`;
+      // Avoid a transformed containing block: the shared editor expands in place.
+      panel.style.left = `${position.left}px`;
+      panel.style.top = `${position.top}px`;
     };
     const preview = (event: Event) => {
       liveViewport = (event as CustomEvent<ViewportTransform>).detail;
@@ -86,6 +94,8 @@ export function CanvasNodePanel({
     node.width,
     node.height,
     viewport,
+    rightInset,
+    bottomInset,
   ]);
   return (
     <div

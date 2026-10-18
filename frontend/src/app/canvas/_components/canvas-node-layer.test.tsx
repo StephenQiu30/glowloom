@@ -97,6 +97,6 @@ it("拖动预览同步标注线的世界端点，不等待图保存", () => {
     board.current!.dispatchEvent(new Event("canvas:node-drag-preview")),
   );
   expect(board.current!.querySelector("path")?.getAttribute("d")).toMatch(
-    /^M 388 100 /,
+    /^M 388 160 /,
   );
 });

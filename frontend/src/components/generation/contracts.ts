@@ -47,8 +47,17 @@ export function requireTask(value: API.TaskDetail, project: string): Task {
             !o ||
             !isProjectID(o.id) ||
             (o.moderation_status === "passed" &&
-              (!isProjectID(o.media_asset_id) ||
-                !["image", "video", "audio", "model"].includes(o.kind ?? ""))),
+              (o.kind === "json"
+                ? value.capability !== "text.generate" ||
+                  value.status !== "completed" ||
+                  typeof o.text !== "string" ||
+                  !o.text.trim() ||
+                  o.text.length > 65536 ||
+                  !!o.media_asset_id
+                : !isProjectID(o.media_asset_id) ||
+                  !["image", "video", "audio", "model"].includes(
+                    o.kind ?? "",
+                  ))),
         )))
   )
     throw new RequestError("invalid_receipt");
