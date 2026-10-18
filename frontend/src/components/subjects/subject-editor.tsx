@@ -167,7 +167,7 @@ export function SubjectEditor({
         s.head.revision! < t.revision! ||
         (kind === "character" && image !== subjectImage(s)) ||
         subjectText(s).name !== name.trim() ||
-        subjectText(s).description !== description.trim()
+        (subjectText(s).description ?? "") !== description.trim()
       )
         throw new RequestError("invalid_receipt");
       onSaved(s);

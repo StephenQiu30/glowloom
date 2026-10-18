@@ -9,18 +9,21 @@ export function nodePanelPosition(
 ) {
   const width = Math.min(Math.max(0, containerWidth - 32), 680);
   const safeLeft = containerWidth >= 768 ? 76 : 16;
+  const safeTop = containerWidth >= 768 ? 80 : 132;
   const nodeTop = viewport.y + node.y * viewport.k;
   const below = viewport.y + (node.y + node.height) * viewport.k + 20;
-  const height = Math.min(panelHeight, Math.max(0, containerHeight - 96));
+  const maxHeight = Math.max(0, containerHeight - safeTop - 16);
+  const height = Math.min(panelHeight, maxHeight);
   const above = nodeTop - height - 20;
   const top =
     below + height <= containerHeight - 16
       ? below
-      : above >= 80
+      : above >= safeTop
         ? above
-        : Math.max(80, containerHeight - height - 16);
+        : Math.max(safeTop, containerHeight - height - 16);
   return {
     width,
+    maxHeight,
     left: Math.max(
       Math.min(safeLeft, Math.max(16, containerWidth - width - 16)),
       Math.min(

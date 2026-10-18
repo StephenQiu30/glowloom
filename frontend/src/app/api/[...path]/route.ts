@@ -261,8 +261,8 @@ const identityRoutes: {
   },
 ];
 
-// Explicit prompt-editor contracts; authorization remains with the backend.
-const editorRoutes: typeof identityRoutes = [
+// Explicit editor and catalog contracts; authorization remains with the backend.
+const editorCatalogRoutes: typeof identityRoutes = [
   {
     pattern: `projects/${identityUUID}/prompt-drafts`,
     methods: ["GET", "POST"],
@@ -309,6 +309,93 @@ const editorRoutes: typeof identityRoutes = [
   {
     pattern: `settings/prompt-preferences/[a-z][a-z0-9_.-]{0,127}`,
     methods: ["PUT"],
+    query: [],
+  },
+  {
+    pattern: `admin/(providers|models)`,
+    methods: ["GET", "POST"],
+    query: ["limit", "cursor"],
+  },
+  {
+    pattern: `admin/providers/${identityUUID}`,
+    methods: ["GET", "PATCH"],
+    query: [],
+  },
+  {
+    pattern: `admin/providers/${identityUUID}/credentials`,
+    methods: ["GET", "PUT"],
+    query: [],
+  },
+  {
+    pattern: `admin/providers/${identityUUID}/credentials/${identityUUID}/(disable|test)`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `admin/providers/${identityUUID}/config`,
+    methods: ["GET"],
+    query: [],
+  },
+  {
+    pattern: `admin/providers/${identityUUID}/(upgrade-preview|apply-preset)`,
+    methods: ["POST"],
+    query: [],
+  },
+  { pattern: `admin/models/${identityUUID}`, methods: ["GET"], query: [] },
+  {
+    pattern: `admin/models/${identityUUID}/(versions|prices)`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `admin/models/${identityUUID}/status`,
+    methods: ["PATCH"],
+    query: [],
+  },
+  {
+    pattern: `admin/models/${identityUUID}/releases`,
+    methods: ["GET", "POST"],
+    query: [],
+  },
+  {
+    pattern: `admin/model-releases/${identityUUID}/(activate|trial-quotes)`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `admin/(capabilities|capability-defaults)`,
+    methods: ["GET"],
+    query: [],
+  },
+  {
+    pattern: `admin/provider-checks/${identityUUID}`,
+    methods: ["GET"],
+    query: [],
+  },
+  {
+    pattern: `admin/config-requests/${identityUUID}`,
+    methods: ["GET"],
+    query: ["action", "target_id"],
+  },
+  { pattern: `admin/provider-presets`, methods: ["GET", "POST"], query: [] },
+  {
+    pattern: `admin/provider-presets/import-preview`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `admin/provider-presets/${identityUUID}/(versions|connections)`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `admin/provider-presets/${identityUUID}/state`,
+    methods: ["PATCH"],
+    query: [],
+  },
+  {
+    pattern: `admin/provider-presets/${identityUUID}/export`,
+    methods: ["GET"],
     query: [],
   },
 ];
@@ -362,8 +449,8 @@ async function proxy(
                             )
                           ? ["GET"]
                           : undefined;
-  const boundedRoute = [...identityRoutes, ...editorRoutes].find((rule) =>
-    new RegExp(`^${rule.pattern}$`, "i").test(resource),
+  const boundedRoute = [...identityRoutes, ...editorCatalogRoutes].find(
+    (rule) => new RegExp(`^${rule.pattern}$`, "i").test(resource),
   );
   const methods =
     boundedRoute?.methods ??

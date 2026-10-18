@@ -6,6 +6,7 @@ import {
   visibleEdges,
   descendants,
   moveSelection,
+  connectionPath,
 } from "./canvas-render-model";
 
 it("2000个密集节点没有渲染截断，离屏查询仍返回全图成员", () => {
@@ -96,6 +97,25 @@ it("双端离屏但跨越视口的标注线仍渲染", () => {
   );
   expect(result).toHaveLength(1);
   expect(result[0].path).toMatch(/^M/);
+});
+
+it("反向引用从相邻侧连接，曲线裁剪与实际锚点一致", () => {
+  const source = createResourceNode("text", { x: 2000, y: 100 });
+  const target = createResourceNode("text", { x: -1000, y: 100 });
+  expect(connectionPath(source, target)).toBe(
+    "M 2000 260 C 660 260, 660 260, -680 260",
+  );
+  const result = visibleEdges(
+    [{ id: "backward", source_node_id: source.id, target_node_id: target.id }],
+    new Map([
+      [source.id, source],
+      [target.id, target],
+    ]),
+    { x: 0, y: 0, k: 1 },
+    { width: 500, height: 500 },
+  );
+  expect(result).toHaveLength(1);
+  expect(result[0].path).toBe(connectionPath(source, target));
 });
 it("组及嵌套后代按世界坐标移动一次，锁定成员阻止整组移动", () => {
   const group = createResourceNode("group", { x: 0, y: 0 });

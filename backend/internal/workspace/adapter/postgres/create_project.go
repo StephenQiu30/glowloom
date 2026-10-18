@@ -37,13 +37,16 @@ func createProjectRowsInTx(tx *gorm.DB, project domain.Project, ownerScope uuid.
 		return fmt.Errorf("insert project: inserted %d rows", inserted.RowsAffected)
 	}
 	if project.CanvasID != uuid.Nil {
-		result := tx.Exec(`INSERT INTO canvas.document(id,project_id,name,viewport) VALUES(?,?, 'Canvas', '{"x":0,"y":0,"zoom":1}'::jsonb)`, project.CanvasID, project.ID)
+		result := tx.Exec(`INSERT INTO canvas.document(id,project_id,name,viewport) VALUES(?,?,?, '{"x":0,"y":0,"zoom":1}'::jsonb)`, project.CanvasID, project.ID, project.Name)
 		if result.Error != nil {
 			return fmt.Errorf("insert initial canvas: %w", result.Error)
 		}
 		if result.RowsAffected != 1 {
 			return fmt.Errorf("insert initial canvas: inserted %d rows", result.RowsAffected)
 		}
+	}
+	if err := tx.Exec(`INSERT INTO workspace.project_activity(project_id,modified_at,basis) SELECT id,create_time,'created' FROM workspace.project WHERE id=?`, project.ID).Error; err != nil {
+		return fmt.Errorf("insert initial project activity: %w", err)
 	}
 	budget := tx.Exec(`
 			INSERT INTO billing.budget (id, project_id, limit_micros)

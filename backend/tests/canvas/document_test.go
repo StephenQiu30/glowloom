@@ -65,3 +65,26 @@ func TestCanvasViewportSupportsJimengZoomRange(t *testing.T) {
 		}
 	}
 }
+
+func TestCanvasDraftLayoutConnectionsDoNotGrantBusinessBindings(t *testing.T) {
+	a, b := uuid.New(), uuid.New()
+	doc := domain.Document{ID: uuid.New(), Nodes: []domain.Node{
+		{ID: a, Title: "图片草稿", NodeType: "image_generation", NodeAction: "generate"},
+		{ID: b, Title: "视频草稿", NodeType: "video_generation", NodeAction: "generate"},
+	}, Edges: []domain.Edge{}}
+	edge := domain.Edge{ID: uuid.New(), EdgeType: "annotation", SourceNodeID: a, TargetNodeID: b}
+	result, err := domain.Apply(doc, []domain.Command{{Type: "Connect", Edges: []domain.Edge{edge}}})
+	if err != nil || len(result.Edges) != 1 || len(doc.Edges) != 0 {
+		t.Fatalf("draft layout connection: %+v %v", result, err)
+	}
+	edge.Role = "reference_image"
+	if _, err := domain.Apply(doc, []domain.Command{{Type: "Connect", Edges: []domain.Edge{edge}}}); !errors.Is(err, domain.ErrUnsupportedCommand) {
+		t.Fatalf("layout connection accepted generation role: %v", err)
+	}
+	edge.Role = ""
+	op := uuid.New()
+	doc.Nodes[0].LastOperationID = &op
+	if _, err := domain.Apply(doc, []domain.Command{{Type: "Connect", Edges: []domain.Edge{edge}}}); !errors.Is(err, domain.ErrUnsupportedCommand) {
+		t.Fatalf("layout connection accepted protected source: %v", err)
+	}
+}

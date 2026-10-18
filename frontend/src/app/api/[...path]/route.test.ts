@@ -471,6 +471,40 @@ it("统计查询不能携带分页或越范围字段，CSV下载保留授权与�
   expect(await response.text()).toContain("safe");
 });
 
+it("编辑器和目录管理已注册合同均经过同站代理", async () => {
+  const { readFile, readdir } = await import("node:fs/promises");
+  const handlers = await import("./route");
+  const files = (await readdir("../backend/internal/catalog/adapter/http")).map(
+    (f) => `catalog/adapter/http/${f}`,
+  );
+  files.push(
+    "prompt/adapter/http/drafts.go",
+    "prompt/adapter/http/preferences.go",
+    "operation/adapter/http/editor_submission.go",
+    "operation/adapter/http/provider_trials.go",
+    "operation/adapter/http/handler.go",
+    "workspace/adapter/http/model_defaults.go",
+  );
+  const fetcher = vi.fn().mockImplementation(async () => new Response("{}"));
+  vi.stubGlobal("fetch", fetcher);
+  for (const file of files) {
+    const source = await readFile(`../backend/internal/${file}`, "utf8");
+    for (const match of source.matchAll(
+      /@Router (\/api\/\S+) \[(get|post|patch|put|delete)\]/g,
+    )) {
+      const path = match[1]
+        .slice(5)
+        .replace(/\{operation\}/g, "image.generate")
+        .replace(/\{[^}]+\}/g, "11111111-1111-4111-8111-111111111111");
+      const method = match[2].toUpperCase() as keyof typeof handlers;
+      const response = await handlers[method](
+        new Request(`http://localhost/api/${path}`, { method }),
+        context(path),
+      );
+      expect(response.status, `${method} ${path}`).toBe(200);
+    }
+  }
+});
 it.each([
   [
     "projects/11111111-1111-4111-8111-111111111111/prompt-submissions/current",
@@ -483,6 +517,11 @@ it.each([
   [
     "projects/11111111-1111-4111-8111-111111111111/prompt-drafts",
     "cursor=next%2Bpage",
+  ],
+  ["admin/providers", "limit=10&cursor=next%2Bpage"],
+  [
+    "admin/config-requests/11111111-1111-4111-8111-111111111111",
+    "action=provider.create&target_id=zero",
   ],
 ])("%s 保留合同查询并拒绝重复及未知参数", async (path, query) => {
   const fetcher = vi.fn().mockImplementation(async () => new Response("{}"));

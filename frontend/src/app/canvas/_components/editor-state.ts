@@ -454,9 +454,7 @@ export function commandBatch(
       !dest ||
       source === dest ||
       !isEditableNode(source) ||
-      !isEditableNode(dest) ||
-      isDraft(source) ||
-      isDraft(dest)
+      !isEditableNode(dest)
     )
       throw new RequestError("invalid_request");
     connected.push(edge);

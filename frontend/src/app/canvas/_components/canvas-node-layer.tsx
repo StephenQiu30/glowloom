@@ -153,17 +153,26 @@ export function CanvasNodeLayer({
     <div ref={host} className="contents">
       <svg
         className="absolute top-0 left-0 size-px overflow-visible"
-        aria-label="画布标注关系"
+        aria-label="画布连线与参考关系"
         style={{ pointerEvents: "none" }}
       >
         {lines.map(({ edge, path }) => (
           <path
             key={edge.id}
             data-connection-id={edge.id}
+            data-connection-kind={edge.edge_type}
             d={path}
             fill="none"
-            stroke="var(--canvas-node-muted)"
-            strokeWidth={1.5}
+            stroke={
+              selectedIDs.includes(edge.source_node_id ?? "") ||
+              selectedIDs.includes(edge.target_node_id ?? "")
+                ? "var(--foreground)"
+                : "var(--muted-foreground)"
+            }
+            strokeWidth={1}
+            strokeDasharray={
+              edge.edge_type === "annotation" ? "4 4" : undefined
+            }
             vectorEffect="non-scaling-stroke"
           />
         ))}

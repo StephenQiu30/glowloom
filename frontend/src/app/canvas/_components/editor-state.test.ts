@@ -312,7 +312,7 @@ it("标注连线及相机生成差量，回执不得丢边或返回错误视角"
     commandBatch(connected, connected.nodes, { edges: [] }).commands,
   ).toEqual([{ type: "Disconnect", ids: [edge.id] }]);
 });
-it("保护业务关系、生成草稿和锁定节点，不把标注连接当生成引用", () => {
+it("允许草稿布局线但保护业务关系和锁定节点，不把线当生成引用", () => {
   const a = createResourceNode("text", { x: 0, y: 0 });
   const draft = {
     ...createDraftNode("image_generation", "1:1", 0),
@@ -324,11 +324,11 @@ it("保护业务关系、生成草稿和锁定节点，不把标注连接当生�
     source_node_id: a.id,
     target_node_id: draft.id,
   };
-  expect(() =>
+  expect(
     commandBatch({ ...empty, nodes: [a, draft] }, [a, draft], {
       edges: [edge],
-    }),
-  ).toThrow();
+    }).commands,
+  ).toEqual([{ type: "Connect", edges: [edge] }]);
   const protectedEdge = { ...edge, edge_type: "business", role: "reference" };
   const base = { ...empty, nodes: [a, draft], edges: [protectedEdge] };
   expect(() => commandBatch(base, base.nodes, { edges: [] })).toThrow();

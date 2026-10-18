@@ -16,6 +16,7 @@ const api = vi.hoisted(() => ({
   save: vi.fn(),
   branches: vi.fn(),
   rich: vi.fn(),
+  preview: vi.fn(),
   flushResolved: vi.fn(),
   flushRejected: vi.fn(),
 }));
@@ -49,6 +50,7 @@ vi.mock("@/components/generation/rich-generation", () => ({
         data-testid="controlled-shared-composer"
         data-presentation={props.presentation}
       >
+        {props.headerActions}
         <input
           aria-label="测试共享富文本"
           value={text}
@@ -94,6 +96,7 @@ vi.mock("@/api/canvases", () => ({
 vi.mock("@/api/projects", () => ({
   getProject: api.project,
 }));
+vi.mock("@/api/media", () => ({ getMediaPreview: api.preview }));
 vi.mock("@/components/media/project-media", () => ({
   ProjectMediaPreview: () => null,
   ProjectMediaPicker: () => null,
@@ -541,6 +544,72 @@ it("分组和标注线沿服务端合同保存，标注不进入生成流程", a
   expect(api.save).not.toHaveBeenCalled();
 });
 
+it("素材侧边创建视频带入授权版本，连线与引用一次撤销重做并按原接口保存", async () => {
+  const asset = {
+    id: "00000000-0000-4000-8000-000000000013",
+    project_id: projectID,
+    kind: "image",
+    revision: 4,
+  };
+  const source = {
+    id: "00000000-0000-4000-8000-000000000003",
+    title: "参考图片",
+    node_type: "image",
+    node_action: "resource",
+    ref_type: "media_asset",
+    ref_id: asset.id,
+    config: {},
+    x: 80,
+    y: 80,
+    z_index: 0,
+  };
+  api.project.mockResolvedValue(project);
+  api.canvas.mockResolvedValue({ ...canvas, nodes: [source] });
+  api.preview.mockResolvedValue({ asset });
+  api.save.mockImplementation(async (_path, body: API.CommandsInput) => ({
+    ...canvas,
+    revision: 2,
+    nodes: [
+      source,
+      ...(body.commands?.find((c) => c.type === "AddNodes")?.nodes ?? []).map(
+        (n) => receiptNode(n),
+      ),
+    ],
+    edges: body.commands?.find((c) => c.type === "Connect")?.edges ?? [],
+    results: body.commands?.map(() => ({ ok: true })),
+  }));
+  render(<CanvasPage projectID={projectID} canvasID={canvasID} />);
+  fireEvent.click(await screen.findByRole("button", { name: "选择 参考图片" }));
+  fireEvent.keyDown(screen.getByRole("button", { name: "在右侧添加节点" }), {
+    key: "Enter",
+  });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "视频" }));
+  await screen.findByRole("button", { name: "选择 视频草稿" });
+  expect(api.preview).toHaveBeenCalledWith(
+    { pid: projectID, asset_id: asset.id },
+    expect.objectContaining({ signal: expect.any(AbortSignal) }),
+  );
+  expect(
+    api.rich.mock.calls.at(-1)?.[0].canvas.draft.references[0].source,
+  ).toEqual({ kind: "media", sourceId: asset.id, sourceVersion: "4" });
+  expect(
+    document.querySelectorAll('[data-connection-kind="prompt_reference"]'),
+  ).toHaveLength(1);
+  fireEvent.click(screen.getByRole("button", { name: "撤销编辑" }));
+  expect(screen.queryByRole("button", { name: "选择 视频草稿" })).toBeNull();
+  expect(document.querySelectorAll("[data-connection-id]")).toHaveLength(0);
+  fireEvent.click(screen.getByRole("button", { name: "重做编辑" }));
+  expect(screen.getByRole("button", { name: "选择 视频草稿" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "保存画布" }));
+  await screen.findByText("已保存");
+  const commands = api.save.mock.calls[0][1].commands as API.Command[];
+  expect(commands.map((c) => c.type)).toEqual(["AddNodes", "Connect"]);
+  expect(commands[1].edges?.[0]).toMatchObject({
+    edge_type: "annotation",
+    source_node_id: source.id,
+  });
+});
+
 it("读取服务端相机，并保存改变后的视角，不改写节点", async () => {
   api.project.mockResolvedValue(project);
   api.canvas.mockResolvedValue({
@@ -603,6 +672,46 @@ it("含只读直接成员的分组不能解组，不污染其他合法编辑", a
   expect(
     screen.getByRole("button", { name: "保存画布" }).hasAttribute("disabled"),
   ).toBe(true);
+});
+
+it.each([403, 422])(
+  "确定性 %i 拒绝后暂停自动重发，修改后可继续保存",
+  async (status) => {
+    await openDraft();
+    vi.useFakeTimers();
+    api.save.mockRejectedValue(new RequestError("invalid_request", status));
+    fireEvent.click(screen.getByRole("button", { name: "保存画布" }));
+    await act(async () => {});
+    expect(api.save).toHaveBeenCalledOnce();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4000);
+    });
+    expect(api.save).toHaveBeenCalledOnce();
+    fireEvent.change(screen.getByLabelText("测试共享富文本"), {
+      target: { value: "已修正的输入" },
+    });
+    api.save.mockImplementation(async (_path, body) => addReceipt(body));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(900);
+    });
+    expect(api.save).toHaveBeenCalledTimes(2);
+    expect(api.save.mock.calls[1][2].headers["Idempotency-Key"]).not.toBe(
+      api.save.mock.calls[0][2].headers["Idempotency-Key"],
+    );
+    expect(screen.getByRole("status").textContent).toContain("已保存");
+  },
+);
+it("确定性拒绝保留手动保存入口，不自动重发", async () => {
+  await openDraft();
+  api.save.mockRejectedValueOnce(new RequestError("invalid_request", 422));
+  fireEvent.click(screen.getByRole("button", { name: "保存画布" }));
+  await findFeedback();
+  api.save.mockImplementation(async (_path, body) => addReceipt(body));
+  fireEvent.click(screen.getByRole("button", { name: "保存画布" }));
+  await waitFor(() =>
+    expect(screen.getByRole("status").textContent).toContain("已保存"),
+  );
+  expect(api.save).toHaveBeenCalledTimes(2);
 });
 
 it("即梦缩放菜单和快捷键不抢输入，副本保留独立身份", async () => {

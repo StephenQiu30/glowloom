@@ -60,8 +60,8 @@ export function CanvasNodePanel({
           : Number.POSITIVE_INFINITY,
         panel.offsetHeight || 216,
       );
-      panel.style.maxHeight = container.clientHeight
-        ? `${Math.max(80, container.clientHeight - 96)}px`
+      panel.style.maxHeight = Number.isFinite(position.maxHeight)
+        ? `${position.maxHeight}px`
         : "";
       panel.style.width = `${position.width}px`;
       // Avoid a transformed containing block: the shared editor expands in place.

@@ -71,7 +71,7 @@ it("参考图保存断网后继续原主体，不再创建新身份或换请求�
         ...detail.current,
         character: {
           ...detail.current.character,
-          description: "",
+          description: undefined,
           looks: [
             {
               id: look,
@@ -116,4 +116,73 @@ it("参考图保存断网后继续原主体，不再创建新身份或换请求�
   expect(api.create).toHaveBeenCalledOnce();
   expect(api.refs).toHaveBeenCalledTimes(2);
   expect(api.refs.mock.calls[0][2]).toEqual(api.refs.mock.calls[1][2]);
+});
+
+it.each(["location", "prop"] as const)(
+  "%s 创建时兼容服务端省略空描述",
+  async (kind) => {
+    const result = {
+      ...detail,
+      head: { ...detail.head, kind },
+      current: { ...detail.current, [kind]: { name: "主体" } },
+    };
+    api.create.mockResolvedValue({
+      entry_id: id,
+      kind,
+      revision: 1,
+      version_id: version,
+    });
+    api.get.mockResolvedValue(result);
+    const saved = vi.fn();
+    render(
+      <SubjectEditor
+        projectID={project}
+        kind={kind}
+        onClose={() => {}}
+        onSaved={saved}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("主体名称"), {
+      target: { value: "主体" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存主体" }));
+    await waitFor(() => expect(saved).toHaveBeenCalledOnce());
+    expect(api.create).toHaveBeenCalledOnce();
+  },
+);
+it("清空已有描述后按真实 omitempty 回执完成保存", async () => {
+  const saved = vi.fn();
+  const initial = {
+    ...detail,
+    head: { ...detail.head, kind: "prop" as const },
+    current: {
+      ...detail.current,
+      prop: { name: "物品", description: "原描述" },
+    },
+  };
+  api.update.mockResolvedValue({
+    entry_id: id,
+    kind: "prop",
+    revision: 2,
+    version_id: version,
+  });
+  api.get.mockResolvedValue({
+    ...initial,
+    head: { ...initial.head, revision: 2 },
+    current: { ...initial.current, prop: { name: "物品" } },
+  });
+  render(
+    <SubjectEditor
+      projectID={project}
+      kind="prop"
+      initial={initial}
+      onClose={() => {}}
+      onSaved={saved}
+    />,
+  );
+  fireEvent.change(screen.getByLabelText("主体描述"), {
+    target: { value: "" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存主体" }));
+  await waitFor(() => expect(saved).toHaveBeenCalledOnce());
 });

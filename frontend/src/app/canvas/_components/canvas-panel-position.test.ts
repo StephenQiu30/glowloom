@@ -29,6 +29,6 @@ it("下方空间不足时翻转到节点上方，矮视口内保持可访问", (
   expect(above.top).toBe(384);
   expect(above.left).toBeGreaterThanOrEqual(76);
   const short = nodePanelPosition(node, { x: 0, y: -580, k: 1 }, 390, 300, 216);
-  expect(short.top).toBeGreaterThanOrEqual(80);
-  expect(short.top).toBeLessThanOrEqual(84);
+  expect(short.top).toBe(132);
+  expect(short.top + short.maxHeight).toBe(284);
 });

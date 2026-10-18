@@ -325,7 +325,7 @@ func applyOne(doc *Document, c Command) error {
 			if e.ID == uuid.Nil || e.SourceNodeID == e.TargetNodeID || nodeIndex(doc, e.SourceNodeID) < 0 || nodeIndex(doc, e.TargetNodeID) < 0 || slices.ContainsFunc(doc.Edges, func(a Edge) bool { return a.ID == e.ID }) {
 				return ErrInvalidCommand
 			}
-			if IsDraft(doc.Nodes[nodeIndex(doc, e.SourceNodeID)]) || IsDraft(doc.Nodes[nodeIndex(doc, e.TargetNodeID)]) || !editable(doc.Nodes[nodeIndex(doc, e.SourceNodeID)]) || !editable(doc.Nodes[nodeIndex(doc, e.TargetNodeID)]) {
+			if !editable(doc.Nodes[nodeIndex(doc, e.SourceNodeID)]) || !editable(doc.Nodes[nodeIndex(doc, e.TargetNodeID)]) {
 				return ErrUnsupportedCommand
 			}
 			doc.Edges = append(doc.Edges, e)

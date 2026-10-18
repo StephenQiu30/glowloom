@@ -1,12 +1,50 @@
 "use client";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { cn } from "cn";
-import { Plus, ImageIcon, Video, AudioLines, UserRound } from "lucide-react";
+import {
+  Plus,
+  ImageIcon,
+  Video,
+  AudioLines,
+  UserRound,
+  Upload,
+  FolderOpen,
+  Scan,
+  Link2,
+  ArrowLeft,
+  Search,
+  Copy,
+  ClipboardPaste,
+} from "lucide-react";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  PopoverAnchor,
+  PopoverHeader,
+  PopoverTitle,
 } from "@/components/ui/popover";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandGroup,
+  CommandItem,
+  CommandEmpty,
+  CommandSeparator,
+} from "@/components/ui/command";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
+import { getMediaPreview } from "@/api/media";
+import { getScopeGeneration, getSessionGeneration } from "@/lib/request";
+import {
+  referenceRoleLabel,
+  type CanvasReferenceSource,
+} from "./reference-source";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -105,6 +143,8 @@ export function ReferenceControls({
   disabled = false,
   authorized = false,
   compact = false,
+  canvasSources,
+  incomingSources,
 }: {
   session: ComposerSession;
   draft: PromptDraft;
@@ -113,12 +153,15 @@ export function ReferenceControls({
   disabled?: boolean;
   authorized?: boolean;
   compact?: boolean;
+  canvasSources?: CanvasReferenceSource[];
+  incomingSources?: (CanvasReferenceSource & { edgeID: string })[];
 }) {
   const formFieldId = useId();
 
   const [picker, setPicker] = useState<{
       kind: MediaKind;
       replace?: string;
+      inline?: boolean;
     } | null>(null),
     [subjects, setSubjects] = useState(false),
     [subjectReplace, setSubjectReplace] = useState<string | null>(null),
@@ -136,7 +179,16 @@ export function ReferenceControls({
   const [fileIds, setFileIds] = useState<string[]>([]);
   const [unavailablePaste, setUnavailablePaste] = useState<string | null>(null);
   const [detailsID, setDetailsID] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [sourceKind, setSourceKind] = useState<"canvas" | "library" | null>(
+    null,
+  );
+  const [sourceQuery, setSourceQuery] = useState("");
+  const [readingSource, setReadingSource] = useState<string | null>(null);
+  const sourceRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => sourceRequest.current?.abort(), []);
   const referenceUploadInput = useRef<HTMLInputElement>(null);
+  const inlineSource = useRef(false);
   const files = useRef(new Map<string, File>()),
     [uploading, setUploading] = useState<string[]>([]);
   const [mention, setMention] = useState<{
@@ -200,6 +252,51 @@ export function ReferenceControls({
       setError(String(e));
     }
   }
+  async function addCanvasSource(
+    source: CanvasReferenceSource,
+    inline: boolean,
+  ) {
+    if (!source.assetID || disabled || sourceRequest.current) return;
+    const controller = new AbortController();
+    const seq = session.snapshot().localSeq;
+    const sessionGeneration = getSessionGeneration(),
+      scopeGeneration = getScopeGeneration();
+    sourceRequest.current = controller;
+    setReadingSource(source.nodeID);
+    try {
+      const preview = await getMediaPreview(
+        { pid: projectID, asset_id: source.assetID },
+        { signal: controller.signal },
+      );
+      if (
+        controller.signal.aborted ||
+        session.editor.isDestroyed ||
+        getSessionGeneration() !== sessionGeneration ||
+        getScopeGeneration() !== scopeGeneration
+      )
+        return;
+      if (
+        preview.asset?.project_id !== projectID ||
+        preview.asset.id !== source.assetID ||
+        preview.asset.kind !== source.kind
+      )
+        throw new Error("参考素材范围不匹配，请重新选择。");
+      if (session.snapshot().localSeq !== seq)
+        throw new Error("正文已变化，请重新选择参考。");
+      const binding = mediaBinding(preview.asset, `reference_${source.kind}`);
+      add(binding, inline);
+      setAddOpen(false);
+      setSourceKind(null);
+    } catch (error) {
+      if (!controller.signal.aborted)
+        setError(
+          error instanceof Error ? error.message : "参考来源暂时无法核验。",
+        );
+    } finally {
+      sourceRequest.current = null;
+      if (!controller.signal.aborted) setReadingSource(null);
+    }
+  }
   function choose(file: File, replace?: ReferenceBinding, inline = false) {
     const error = validateUpload(file);
     if (error) {
@@ -216,7 +313,7 @@ export function ReferenceControls({
       order: 0,
       bindingGeneration: 1,
       mediaKind: kind,
-      role: replace?.role ?? role,
+      role: replace?.role ?? (compact ? `reference_${kind}` : role),
       source: {
         kind: "pending_upload",
         clientUploadId: crypto.randomUUID(),
@@ -469,19 +566,6 @@ export function ReferenceControls({
           >
             上传参考
           </Button>
-          <Input
-            ref={referenceUploadInput}
-            aria-label="上传参考文件"
-            type="file"
-            accept="image/*,video/*,audio/*"
-            className="sr-only"
-            disabled={disabled}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) choose(file);
-              e.target.value = "";
-            }}
-          />
         </div>
       </div>
       <Field>
@@ -544,7 +628,7 @@ export function ReferenceControls({
     </div>
   );
   const referenceCards = (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+    <div className={cn("grid grid-cols-1 gap-2", !compact && "sm:grid-cols-2")}>
       {draft.references
         .filter((ref) => !compact || ref.id === detailsID)
         .map((ref) => (
@@ -552,12 +636,14 @@ export function ReferenceControls({
             key={ref.id}
             data-reference-card={ref.id}
             tabIndex={-1}
-            className="min-w-0 space-y-2 rounded-lg border p-3"
+            className="flex min-w-0 flex-col gap-3"
           >
             <div className="flex items-center justify-between">
-              <strong>{referenceLabel(draft.labelState, ref.id)}</strong>
+              {!compact ? (
+                <strong>{referenceLabel(draft.labelState, ref.id)}</strong>
+              ) : null}
               <span className="text-xs text-muted-foreground">
-                {mentioned.has(ref.id) ? "已提及" : "作为全局参考发送"}
+                {mentioned.has(ref.id) ? "已提及" : "全局参考"}
               </span>
             </div>
             {authorized && ref.source.kind === "media" && (
@@ -590,7 +676,9 @@ export function ReferenceControls({
               }
             >
               {roles.map((r) => (
-                <NativeSelectOption key={r}>{r}</NativeSelectOption>
+                <NativeSelectOption key={r} value={r}>
+                  {referenceRoleLabel(r)}
+                </NativeSelectOption>
               ))}
             </NativeSelect>
             {ref.source.kind === "pending_upload" && (
@@ -733,255 +821,621 @@ export function ReferenceControls({
       </FieldLabel>
     </Field>
   ) : null;
-  return (
-    <section
-      ref={panel}
-      aria-label="参考素材"
-      className={cn("flex w-full min-w-0 flex-col gap-3", compact && "gap-0")}
+  const kinds = [
+    { kind: "image" as const, label: "图片", icon: ImageIcon },
+    { kind: "video" as const, label: "视频", icon: Video },
+    { kind: "audio" as const, label: "音频", icon: AudioLines },
+  ];
+  const matchingReferences = draft.references.filter((ref) =>
+    referenceLabel(draft.labelState, ref.id).includes(search),
+  );
+  const compactMenu = (inline: boolean) => (
+    <Command
+      className="h-auto"
+      shouldFilter={false}
+      value={
+        inline && mention ? matchingReferences[mention.index]?.id : undefined
+      }
     >
-      <p className={cn("text-xs text-muted-foreground", compact && "sr-only")}>
-        本次参考 {draft.references.length} 项 · 正文提及{" "}
-        {draft.document.content.reduce(
-          (count, p) =>
-            count +
-            (p.content?.filter((n) => n.type === "reference").length ?? 0),
-          0,
-        )}{" "}
-        处
-      </p>
-      {compact ? (
-        <div className="flex w-full items-center gap-2 overflow-x-auto">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                disabled={disabled}
-                aria-label="添加参考"
-                className="size-12"
-              >
-                <Plus />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              side="top"
-              align="start"
-              className="max-h-[70dvh] w-80 overflow-y-auto"
-              aria-label="添加参考素材"
-            >
-              {referenceActions}
-            </PopoverContent>
-          </Popover>
-          {draft.references.map((ref) => {
-            const Icon =
-              ref.source.kind === "subject"
-                ? UserRound
-                : ref.mediaKind === "video"
-                  ? Video
-                  : ref.mediaKind === "audio"
-                    ? AudioLines
-                    : ImageIcon;
-            return (
-              <Button
-                key={ref.id}
-                type="button"
-                variant="outline"
-                className="relative h-12 w-20 flex-col gap-1 overflow-hidden"
-                aria-label={`查看${referenceLabel(draft.labelState, ref.id)}详情`}
-                onClick={() => setDetailsID(ref.id)}
-              >
-                {authorized &&
-                ref.source.kind === "media" &&
-                ref.mediaKind !== "audio" ? (
-                  <span className="absolute inset-0">
-                    <ProjectMediaPreview
-                      projectID={projectID}
-                      id={ref.source.sourceId}
-                      kind={ref.mediaKind}
-                    />
-                  </span>
-                ) : (
-                  <Icon data-icon="inline-start" />
-                )}
-                <Badge variant="secondary" className="relative">
+      {inline && mention ? (
+        <p className="px-2 py-1 text-xs text-muted-foreground">
+          @{search || "引用参考"}
+        </p>
+      ) : (
+        <CommandInput
+          aria-label="搜索参考"
+          placeholder="搜索参考…"
+          value={sourceQuery}
+          onValueChange={setSourceQuery}
+        />
+      )}
+      <CommandList className="max-h-[min(20rem,calc(var(--radix-popover-content-available-height)_-_3rem))] min-h-0">
+        <CommandEmpty>暂无可用参考</CommandEmpty>
+        {sourceKind ? (
+          <CommandGroup>
+            <CommandItem value="back" onSelect={() => setSourceKind(null)}>
+              <ArrowLeft />
+              返回
+            </CommandItem>
+          </CommandGroup>
+        ) : null}
+        {!sourceKind && draft.references.length ? (
+          <CommandGroup heading="本次参考">
+            {draft.references
+              .filter((ref) =>
+                referenceLabel(draft.labelState, ref.id).includes(
+                  inline ? search : sourceQuery,
+                ),
+              )
+              .map((ref) => (
+                <CommandItem
+                  key={ref.id}
+                  value={ref.id}
+                  onSelect={() => {
+                    add(ref, true);
+                    setAddOpen(false);
+                  }}
+                >
+                  {ref.mediaKind === "video" ? (
+                    <Video />
+                  ) : ref.mediaKind === "audio" ? (
+                    <AudioLines />
+                  ) : (
+                    <ImageIcon />
+                  )}
                   {referenceLabel(draft.labelState, ref.id)}
-                </Badge>
-              </Button>
-            );
-          })}
-        </div>
-      ) : (
-        referenceActions
-      )}
-      {menu &&
-        (compact ? (
-          <Dialog
-            open
-            onOpenChange={(open) => {
-              if (!open) setMenu(false);
-            }}
-          >
-            <DialogContent>
-              <DialogTitle>引用候选</DialogTitle>
-              <DialogDescription>
-                提及已有参考，或搜索当前项目的素材和主体。
-              </DialogDescription>
-              {referenceMenu}
-            </DialogContent>
-          </Dialog>
+                </CommandItem>
+              ))}
+          </CommandGroup>
+        ) : null}
+        {sourceKind === "canvas" ? (
+          <CommandGroup heading="当前画布">
+            {canvasSources
+              ?.filter((source) => source.title.includes(sourceQuery))
+              .map((source) => (
+                <CommandItem
+                  key={source.nodeID}
+                  value={source.nodeID}
+                  disabled={!source.assetID || !!readingSource}
+                  onSelect={() => void addCanvasSource(source, inline)}
+                >
+                  {source.kind === "video" ? (
+                    <Video />
+                  ) : source.kind === "audio" ? (
+                    <AudioLines />
+                  ) : (
+                    <ImageIcon />
+                  )}
+                  <span className="truncate">{source.title}</span>
+                  {!source.assetID ? (
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      内容为空
+                    </span>
+                  ) : readingSource === source.nodeID ? (
+                    <span className="ml-auto">正在核验…</span>
+                  ) : null}
+                </CommandItem>
+              ))}
+          </CommandGroup>
+        ) : sourceKind === "library" ? (
+          <CommandGroup heading="素材类型">
+            {kinds.map(({ kind, label, icon: Icon }) => (
+              <CommandItem
+                key={kind}
+                value={kind}
+                onSelect={() => {
+                  setPicker({ kind, inline });
+                  setAddOpen(false);
+                  setMenu(false);
+                }}
+              >
+                <Icon />
+                {label}
+              </CommandItem>
+            ))}
+          </CommandGroup>
         ) : (
-          referenceMenu
-        ))}
-      {lookup && (
-        <ReferenceSearch
-          projectID={projectID}
-          initialQuery={lookup.query}
-          onClose={() => {
-            setLookup(null);
-            session.editor.commands.focus();
-          }}
-          onSelect={(candidates) => {
-            if (session.snapshot().localSeq !== lookup.seq) {
-              setError("检索期间草稿已变化，请重新打开候选后插入。");
-              setLookup(null);
-              return;
-            }
-            try {
-              const bindings = candidates.map((candidate) =>
-                candidate.media
-                  ? mediaBinding(candidate.media, role)
-                  : subjectBinding(candidate.subject!, role),
-              );
-              session.insertReferences(bindings, lookup.range);
-              setError("");
-              setLookup(null);
-              session.editor.commands.focus();
-            } catch (e) {
-              setError(String(e));
-            }
-          }}
-        />
-      )}
-      {compact ? (
-        <Dialog
-          open={
-            !!detailsID && draft.references.some((ref) => ref.id === detailsID)
-          }
-          onOpenChange={(open) => {
-            if (!open) setDetailsID(null);
-          }}
+          <>
+            <CommandSeparator />
+            <CommandGroup heading="添加参考">
+              {canvasSources ? (
+                <CommandItem
+                  value="canvas"
+                  onSelect={() => setSourceKind("canvas")}
+                >
+                  <Scan />
+                  从画布选择
+                </CommandItem>
+              ) : null}
+              <CommandItem
+                value="library"
+                onSelect={() => setSourceKind("library")}
+              >
+                <FolderOpen />
+                从素材库添加
+              </CommandItem>
+              <CommandItem
+                value="upload"
+                onSelect={() => {
+                  setAddOpen(false);
+                  setMenu(false);
+                  inlineSource.current = inline;
+                  referenceUploadInput.current?.click();
+                }}
+              >
+                <Upload />
+                上传参考内容
+              </CommandItem>
+              <CommandItem
+                value="subject"
+                onSelect={() => {
+                  setSubjectReplace(null);
+                  inlineSource.current = inline;
+                  setSubjects(true);
+                  setAddOpen(false);
+                  setMenu(false);
+                }}
+              >
+                <UserRound />
+                添加主体
+              </CommandItem>
+              <CommandItem
+                value="search"
+                onSelect={() => {
+                  setLookup({
+                    query: inline ? search : sourceQuery,
+                    seq: session.snapshot().localSeq,
+                    range: inline ? mention?.range : undefined,
+                  });
+                  setMenu(false);
+                  setAddOpen(false);
+                }}
+              >
+                <Search />
+                搜索项目素材与主体
+              </CommandItem>
+            </CommandGroup>
+            {!inline ? (
+              <CommandGroup heading="更多操作">
+                <CommandItem
+                  value="copy"
+                  disabled={!authorized}
+                  onSelect={() => {
+                    void copy();
+                    setAddOpen(false);
+                  }}
+                >
+                  <Copy />
+                  复制正文与引用
+                </CommandItem>
+                <CommandItem
+                  value="paste"
+                  onSelect={() => {
+                    void paste();
+                    setAddOpen(false);
+                  }}
+                >
+                  <ClipboardPaste />
+                  粘贴站内引用
+                </CommandItem>
+              </CommandGroup>
+            ) : null}
+          </>
+        )}
+      </CommandList>
+    </Command>
+  );
+  return (
+    <TooltipProvider>
+      <Popover
+        open={compact && menu}
+        onOpenChange={(open) => {
+          setMenu(open);
+        }}
+      >
+        <section
+          ref={panel}
+          aria-label="参考素材"
+          className={cn(
+            "flex w-full min-w-0 flex-col gap-3",
+            compact && "gap-0",
+          )}
         >
-          <DialogContent className="max-h-[80dvh] overflow-y-auto">
-            <DialogTitle>参考详情</DialogTitle>
-            <DialogDescription>
-              引用角色、排序、上传与替换沿用当前草稿。
-            </DialogDescription>
-            {referenceCards}
-            {uploadConsent}
-          </DialogContent>
-        </Dialog>
-      ) : (
-        <>
-          {referenceCards}
-          {uploadConsent}
-        </>
-      )}
-      {error && <FeedbackToast message={error} />}
-      {unavailablePaste !== null && (
-        <div className="rounded border p-3">
-          <p>
-            无法访问的引用将转为“[不可用引用]”文字，不携带素材身份、地址或主体描述。
-          </p>
-          <Button
-            disabled={disabled}
-            onClick={() => {
-              session.editor.commands.insertContent(
-                unavailablePaste.split("\n").map((text) => ({
-                  type: "paragraph",
-                  content: text ? [{ type: "text", text }] : [],
-                })),
-              );
-              setUnavailablePaste(null);
-            }}
+          <p
+            className={cn(
+              "text-xs text-muted-foreground",
+              compact && "sr-only",
+            )}
           >
-            仅粘贴文字与不可用占位
-          </Button>
-          <Button variant="ghost" onClick={() => setUnavailablePaste(null)}>
-            取消粘贴
-          </Button>
-        </div>
-      )}
-      {picker && (
-        <ProjectMediaPicker
-          projectID={projectID}
-          kind={picker.kind}
-          onClose={() => setPicker(null)}
-          onSelect={(asset) => {
-            try {
-              const binding = mediaBinding(asset, role);
-              if (picker.replace) {
-                const original = draft.references.find(
-                  (r) => r.id === picker.replace,
-                )!;
-                session.replaceReference(original.id, {
-                  ...binding,
-                  role: original.role,
-                });
-              } else add(binding);
-              setPicker(null);
-            } catch (e) {
-              setError(String(e));
-            }
-          }}
-        />
-      )}
-      {subjects && (
-        <Dialog open onOpenChange={setSubjects}>
-          <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-4xl">
-            <DialogTitle>选择主体版本</DialogTitle>
-            <DialogDescription>
-              保存当前描述和默认造型参考；后续主体更新不会悄悄改变这份草稿。
-            </DialogDescription>
-            <SubjectList
-              projectID={projectID}
-              onSelect={(subject) => {
-                const original = draft.references.find(
-                  (r) => r.id === subjectReplace,
-                );
-                if (original)
-                  session.replaceReference(
-                    original.id,
-                    subjectBinding(subject, original.role),
+            本次参考 {draft.references.length} 项 · 正文提及{" "}
+            {draft.document.content.reduce(
+              (count, p) =>
+                count +
+                (p.content?.filter((n) => n.type === "reference").length ?? 0),
+              0,
+            )}{" "}
+            处
+          </p>
+          {compact ? (
+            <PopoverAnchor asChild>
+              <div
+                className="flex w-full min-w-0 items-start gap-2 overflow-x-auto pb-1"
+                aria-label="参考内容"
+              >
+                {draft.references.map((ref) => {
+                  const Icon =
+                    ref.source.kind === "subject"
+                      ? UserRound
+                      : ref.mediaKind === "video"
+                        ? Video
+                        : ref.mediaKind === "audio"
+                          ? AudioLines
+                          : ImageIcon;
+                  const automatic = incomingSources?.some(
+                    (source) => source.edgeID === ref.id,
                   );
-                else add(subjectBinding(subject, role));
-                setSubjects(false);
+                  return (
+                    <Popover
+                      key={ref.id}
+                      open={detailsID === ref.id}
+                      onOpenChange={(open) =>
+                        setDetailsID(open ? ref.id : null)
+                      }
+                    >
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="relative h-14 w-16 shrink-0 flex-col gap-1 overflow-hidden"
+                          aria-label={`查看${referenceLabel(draft.labelState, ref.id)}详情`}
+                        >
+                          {authorized &&
+                          ref.source.kind === "media" &&
+                          ref.mediaKind === "image" ? (
+                            <span className="absolute inset-0">
+                              <ProjectMediaPreview
+                                projectID={projectID}
+                                id={ref.source.sourceId}
+                                kind={ref.mediaKind}
+                              />
+                            </span>
+                          ) : (
+                            <Icon data-icon="inline-start" />
+                          )}
+                          <Badge variant="secondary" className="relative">
+                            {referenceLabel(draft.labelState, ref.id)}
+                          </Badge>
+                          {automatic ? (
+                            <Badge
+                              variant="secondary"
+                              className="absolute top-0 right-0 p-0.5"
+                              aria-label="自动引用"
+                            >
+                              <Link2 data-icon="inline-start" />
+                            </Badge>
+                          ) : null}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        side="top"
+                        align="start"
+                        collisionPadding={16}
+                        className="max-h-[min(32rem,var(--radix-popover-content-available-height))] w-80 overflow-y-auto"
+                        aria-label="参考详情"
+                        onClick={(event) => event.stopPropagation()}
+                        onCloseAutoFocus={(event) => {
+                          if (
+                            !session
+                              .snapshot()
+                              .draft.references.some(
+                                (item) => item.id === ref.id,
+                              )
+                          ) {
+                            event.preventDefault();
+                            session.editor.commands.focus();
+                          }
+                        }}
+                      >
+                        <PopoverHeader>
+                          <PopoverTitle>
+                            {referenceLabel(draft.labelState, ref.id)}
+                            {automatic ? (
+                              <Badge variant="secondary" className="ml-2">
+                                <Link2 data-icon="inline-start" />
+                                自动引用
+                              </Badge>
+                            ) : null}
+                          </PopoverTitle>
+                        </PopoverHeader>
+                        {referenceCards}
+                        {uploadConsent}
+                      </PopoverContent>
+                    </Popover>
+                  );
+                })}
+                {incomingSources
+                  ?.filter(
+                    (source) =>
+                      !draft.references.some(
+                        (ref) =>
+                          ref.source.kind === "media" &&
+                          ref.source.sourceId === source.assetID &&
+                          ref.mediaKind === source.kind,
+                      ),
+                  )
+                  .map((source) => (
+                    <Tooltip key={source.edgeID}>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="h-14 w-16 shrink-0 flex-col gap-1"
+                          aria-label={`${source.title}：${source.assetID ? "未引用" : "内容为空"}`}
+                          disabled={
+                            disabled || !source.assetID || !!readingSource
+                          }
+                          onClick={() => void addCanvasSource(source, false)}
+                        >
+                          {source.kind === "video" ? (
+                            <Video />
+                          ) : source.kind === "audio" ? (
+                            <AudioLines />
+                          ) : (
+                            <ImageIcon />
+                          )}
+                          <span className="text-xs">
+                            {source.assetID ? "未引用" : "内容为空"}
+                          </span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {source.title} ·{" "}
+                        {source.assetID ? "点击加入参考" : "节点内容为空"}
+                      </TooltipContent>
+                    </Tooltip>
+                  ))}
+                <Popover
+                  open={addOpen}
+                  onOpenChange={(open) => {
+                    setAddOpen(open);
+                    setSourceKind(null);
+                    setSourceQuery("");
+                  }}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      disabled={disabled}
+                      aria-label="添加参考"
+                      className="size-14 shrink-0"
+                    >
+                      <Plus />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    side="top"
+                    align="start"
+                    collisionPadding={16}
+                    className="max-h-(--radix-popover-content-available-height) w-72 overflow-hidden p-0"
+                    aria-label="添加参考素材"
+                    onClick={(event) => event.stopPropagation()}
+                    onCloseAutoFocus={(event) => {
+                      if (menu || session.editor.isFocused)
+                        event.preventDefault();
+                    }}
+                  >
+                    {compactMenu(false)}
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </PopoverAnchor>
+          ) : (
+            referenceActions
+          )}
+          {menu &&
+            (compact ? (
+              <PopoverContent
+                side="top"
+                align="start"
+                collisionPadding={16}
+                className="max-h-(--radix-popover-content-available-height) w-72 overflow-hidden p-0"
+                aria-label="引用候选"
+                onClick={(event) => event.stopPropagation()}
+                onOpenAutoFocus={(event) => {
+                  event.preventDefault();
+                  session.editor.view.focus();
+                }}
+                onCloseAutoFocus={(event) => event.preventDefault()}
+                onInteractOutside={(event) => {
+                  if (session.editor.view.dom.contains(event.target as Node))
+                    event.preventDefault();
+                }}
+              >
+                {compactMenu(true)}
+              </PopoverContent>
+            ) : (
+              referenceMenu
+            ))}
+          {lookup && (
+            <Dialog
+              open
+              onOpenChange={(open) => {
+                if (!open) {
+                  setLookup(null);
+                  session.editor.commands.focus(undefined, {
+                    scrollIntoView: false,
+                  });
+                }
+              }}
+            >
+              <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-3xl">
+                <DialogTitle>选择项目参考</DialogTitle>
+                <DialogDescription>
+                  选择当前项目的素材或主体。
+                </DialogDescription>
+                <ReferenceSearch
+                  projectID={projectID}
+                  initialQuery={lookup.query}
+                  onClose={() => {
+                    setLookup(null);
+                    session.editor.commands.focus();
+                  }}
+                  onSelect={(candidates) => {
+                    if (session.snapshot().localSeq !== lookup.seq) {
+                      setError("检索期间草稿已变化，请重新打开候选后插入。");
+                      setLookup(null);
+                      return;
+                    }
+                    try {
+                      const bindings = candidates.map((candidate) =>
+                        candidate.media
+                          ? mediaBinding(
+                              candidate.media,
+                              compact
+                                ? `reference_${candidate.media.kind}`
+                                : role,
+                            )
+                          : subjectBinding(
+                              candidate.subject!,
+                              compact ? "subject" : role,
+                            ),
+                      );
+                      session.insertReferences(bindings, lookup.range);
+                      setError("");
+                      setLookup(null);
+                      session.editor.commands.focus();
+                    } catch (e) {
+                      setError(String(e));
+                    }
+                  }}
+                />
+              </DialogContent>
+            </Dialog>
+          )}
+          {!compact ? (
+            <>
+              {referenceCards}
+              {uploadConsent}
+            </>
+          ) : null}
+          <Input
+            ref={referenceUploadInput}
+            aria-label="上传参考文件"
+            type="file"
+            accept="image/*,video/*,audio/*"
+            className="hidden"
+            disabled={disabled}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) choose(file, undefined, inlineSource.current);
+              e.target.value = "";
+            }}
+          />
+          {error && <FeedbackToast message={error} />}
+          {unavailablePaste !== null && (
+            <div className="rounded border p-3">
+              <p>
+                无法访问的引用将转为“[不可用引用]”文字，不携带素材身份、地址或主体描述。
+              </p>
+              <Button
+                disabled={disabled}
+                onClick={() => {
+                  session.editor.commands.insertContent(
+                    unavailablePaste.split("\n").map((text) => ({
+                      type: "paragraph",
+                      content: text ? [{ type: "text", text }] : [],
+                    })),
+                  );
+                  setUnavailablePaste(null);
+                }}
+              >
+                仅粘贴文字与不可用占位
+              </Button>
+              <Button variant="ghost" onClick={() => setUnavailablePaste(null)}>
+                取消粘贴
+              </Button>
+            </div>
+          )}
+          {picker && (
+            <ProjectMediaPicker
+              projectID={projectID}
+              kind={picker.kind}
+              onClose={() => setPicker(null)}
+              onSelect={(asset) => {
+                try {
+                  const binding = mediaBinding(
+                    asset,
+                    compact ? `reference_${asset.kind}` : role,
+                  );
+                  if (picker.replace) {
+                    const original = draft.references.find(
+                      (r) => r.id === picker.replace,
+                    )!;
+                    session.replaceReference(original.id, {
+                      ...binding,
+                      role: original.role,
+                    });
+                  } else add(binding, picker.inline);
+                  setPicker(null);
+                } catch (e) {
+                  setError(String(e));
+                }
               }}
             />
-          </DialogContent>
-        </Dialog>
-      )}
-      {remove && (
-        <Dialog open onOpenChange={() => setRemove(null)}>
-          <DialogContent>
-            <DialogTitle>移除这份参考？</DialogTitle>
-            <DialogDescription>
-              正文中的所有对应标签会一起移除，可以一次撤销恢复。
-            </DialogDescription>
-            <Button
-              onClick={() => {
-                session.removeReference(remove);
-                setRemove(null);
-              }}
-            >
-              移除参考及标签
-            </Button>
-            <Button variant="outline" onClick={() => setRemove(null)}>
-              取消
-            </Button>
-          </DialogContent>
-        </Dialog>
-      )}
-    </section>
+          )}
+          {subjects && (
+            <Dialog open onOpenChange={setSubjects}>
+              <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-4xl">
+                <DialogTitle>选择主体版本</DialogTitle>
+                <DialogDescription>
+                  保存当前描述和默认造型参考；后续主体更新不会悄悄改变这份草稿。
+                </DialogDescription>
+                <SubjectList
+                  projectID={projectID}
+                  onSelect={(subject) => {
+                    const original = draft.references.find(
+                      (r) => r.id === subjectReplace,
+                    );
+                    if (original)
+                      session.replaceReference(
+                        original.id,
+                        subjectBinding(subject, original.role),
+                      );
+                    else
+                      add(
+                        subjectBinding(subject, compact ? "subject" : role),
+                        compact && inlineSource.current,
+                      );
+                    setSubjects(false);
+                  }}
+                />
+              </DialogContent>
+            </Dialog>
+          )}
+          {remove && (
+            <Dialog open onOpenChange={() => setRemove(null)}>
+              <DialogContent>
+                <DialogTitle>移除这份参考？</DialogTitle>
+                <DialogDescription>
+                  正文中的所有对应标签会一起移除，可以一次撤销恢复。
+                </DialogDescription>
+                <Button
+                  onClick={() => {
+                    session.removeReference(remove);
+                    setRemove(null);
+                  }}
+                >
+                  移除参考及标签
+                </Button>
+                <Button variant="outline" onClick={() => setRemove(null)}>
+                  取消
+                </Button>
+              </DialogContent>
+            </Dialog>
+          )}
+        </section>
+      </Popover>
+    </TooltipProvider>
   );
 }

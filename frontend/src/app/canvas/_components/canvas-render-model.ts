@@ -152,16 +152,12 @@ export function visibleEdges(
     const a = nodes.get(edge.source_node_id ?? ""),
       b = nodes.get(edge.target_node_id ?? "");
     if (!a || !b || hidden.has(a.id) || hidden.has(b.id)) return [];
-    const x1 = a.x + (a.width ?? 288),
-      y1 = a.y + (a.height ?? 200) / 2,
-      x2 = b.x,
-      y2 = b.y + (b.height ?? 200) / 2;
-    const bend = Math.max(50, Math.abs(x2 - x1) / 2);
+    const { x1, y1, x2, y2, c1, c2 } = connectionGeometry(a, b);
     if (
       !intersects(
         {
-          left: Math.min(x1, x2 - bend),
-          right: Math.max(x1 + bend, x2),
+          left: Math.min(x1, x2, c1, c2),
+          right: Math.max(x1, x2, c1, c2),
           top: Math.min(y1, y2),
           bottom: Math.max(y1, y2),
         },
@@ -179,10 +175,24 @@ export function visibleEdges(
 }
 
 export function connectionPath(a: Node, b: Node): string {
-  const x1 = a.x + (a.width ?? 288),
+  const { x1, y1, x2, y2, c1, c2 } = connectionGeometry(a, b);
+  return `M ${x1} ${y1} C ${c1} ${y1}, ${c2} ${y2}, ${x2} ${y2}`;
+}
+
+function connectionGeometry(a: Node, b: Node) {
+  const rightward = a.x + (a.width ?? 288) / 2 <= b.x + (b.width ?? 288) / 2;
+  const direction = rightward ? 1 : -1;
+  const x1 = rightward ? a.x + (a.width ?? 288) : a.x,
     y1 = a.y + (a.height ?? 200) / 2,
-    x2 = b.x,
+    x2 = rightward ? b.x : b.x + (b.width ?? 288),
     y2 = b.y + (b.height ?? 200) / 2;
   const bend = Math.max(50, Math.abs(x2 - x1) / 2);
-  return `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`;
+  return {
+    x1,
+    y1,
+    x2,
+    y2,
+    c1: x1 + direction * bend,
+    c2: x2 - direction * bend,
+  };
 }

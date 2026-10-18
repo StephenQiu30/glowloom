@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ProjectMediaPreview } from "@/components/media/project-media";
 import { isDraft, isEditableNode, type Node } from "./editor-state";
+import { cn } from "cn";
 
 export function CanvasNode({
   node,
@@ -44,6 +45,7 @@ export function CanvasNode({
   onRemove,
   canRemove = false,
   onAddAdjacent,
+  addingAdjacent = false,
 }: {
   node: Node;
   projectID?: string;
@@ -65,6 +67,7 @@ export function CanvasNode({
   onDuplicate?: () => void;
   onRemove?: () => void;
   canRemove?: boolean;
+  addingAdjacent?: boolean;
   onAddAdjacent?: (
     kind: "text" | "image_generation" | "video_generation",
     side: "left" | "right",
@@ -288,7 +291,13 @@ export function CanvasNode({
               <Button
                 variant="outline"
                 size="icon-xs"
-                className={`canvas-node-port canvas-node-port-${side}`}
+                className={cn(
+                  "canvas-node-port",
+                  side === "left"
+                    ? "canvas-node-port-left"
+                    : "canvas-node-port-right",
+                )}
+                disabled={addingAdjacent}
                 aria-label={`在${side === "left" ? "左" : "右"}侧添加节点`}
                 data-canvas-no-zoom
                 onPointerDown={(event) => event.stopPropagation()}
@@ -296,7 +305,13 @@ export function CanvasNode({
                 <Plus data-icon="inline-start" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent>
+            <DropdownMenuContent
+              side={side}
+              align="start"
+              sideOffset={8}
+              collisionPadding={16}
+            >
+              <DropdownMenuLabel>添加节点</DropdownMenuLabel>
               <DropdownMenuGroup>
                 <DropdownMenuItem onSelect={() => onAddAdjacent("text", side)}>
                   <Type data-icon="inline-start" />
@@ -344,7 +359,7 @@ export function CanvasNode({
             kind={node.node_type}
           />
         ) : (
-          <Icon className="size-5 opacity-50" strokeWidth={1.5} />
+          <Icon data-icon="inline-start" strokeWidth={1.5} />
         )}
         <span>
           {isDraft(node)

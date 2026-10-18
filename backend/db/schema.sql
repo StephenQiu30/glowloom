@@ -5319,3 +5319,12 @@ CREATE UNIQUE INDEX session_refresh_one_active_idx ON identity.session_refresh_t
 CREATE INDEX session_refresh_replay_cleanup_idx ON identity.session_refresh_token(replay_until,id) WHERE receipt_ciphertext IS NOT NULL;
 GRANT SELECT,INSERT,DELETE ON identity.session_refresh_token TO lanverse_app;
 GRANT UPDATE (consumed_at,revoked_at,rotation_request_id,replay_until,receipt_ciphertext) ON identity.session_refresh_token TO lanverse_app;
+
+-- Project activity is a read model; it does not change project CAS revisions.
+CREATE TABLE workspace.project_activity (
+    project_id uuid PRIMARY KEY REFERENCES workspace.project(id) ON DELETE CASCADE,
+    modified_at timestamptz NOT NULL,
+    basis text NOT NULL CHECK (basis IN ('created','metadata','content','legacy_metadata'))
+);
+CREATE INDEX project_activity_recent_idx ON workspace.project_activity (modified_at DESC,project_id DESC);
+GRANT SELECT,INSERT,UPDATE ON workspace.project_activity TO lanverse_app;

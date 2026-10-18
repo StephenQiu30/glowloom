@@ -157,7 +157,7 @@
 .creation-canvas .canvas-node-composer {
   position: relative;
   width: 100%;
-  border-radius: 20px;
+  border-radius: var(--radius-xl);
   padding: 16px;
   background: var(--canvas-node-panel);
   color: var(--canvas-node-text);
@@ -703,8 +703,8 @@
 }
 .creation-canvas .canvas-composer-parameters {
   position: absolute;
-  right: 16px;
-  bottom: 16px;
+  right: 56px;
+  top: 16px;
   z-index: 1;
 }
 
@@ -795,7 +795,7 @@ html:has(.creation-canvas) {
 }
 
 .creation-canvas .canvas-node-shell {
-  border-radius: 14px;
+  border-radius: var(--radius-xl);
   border-color: var(--border);
 }
 .creation-canvas .canvas-media-node[data-selected="true"] .canvas-node-shell {
@@ -815,4 +815,23 @@ html:has(.creation-canvas) {
 .creation-canvas .canvas-node-port-right {
   right: -32px;
   transform-origin: left center;
+}
+
+@media (max-width: 767px) {
+  .creation-canvas .canvas-main-dock {
+    top: 68px;
+    right: 12px;
+    width: auto;
+    height: 48px;
+    max-height: none;
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    transform: none;
+  }
+  .creation-canvas .canvas-dock-divider {
+    width: 1px;
+    min-width: 1px;
+    height: 24px;
+  }
 }

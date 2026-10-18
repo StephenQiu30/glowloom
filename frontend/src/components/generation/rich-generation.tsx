@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/empty";
 
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableCaption,
@@ -52,7 +53,14 @@ import {
   NativeSelect,
   NativeSelectOption,
 } from "@/components/ui/native-select";
-import { useCallback, useEffect, useRef, useState, useId } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useId,
+  type ReactNode,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
@@ -104,11 +112,14 @@ import {
 import { editorIssues, compatibleParams } from "./editor-capabilities";
 import { fieldsForMode, requireQuote, money, type Quote } from "./contracts";
 import { TaskDetail, type GenerationSeed } from "./generation-dialog";
+import type { CanvasReferenceSource } from "./reference-source";
 export type CanvasComposerOwner = {
   contextKey: string;
   draft: PromptDraft;
   onChange: (draft: PromptDraft) => void;
   flush: () => Promise<API.InputSource>;
+  referenceSources?: CanvasReferenceSource[];
+  incomingSources?: (CanvasReferenceSource & { edgeID: string })[];
 };
 type Props = {
   projectID: string;
@@ -119,6 +130,7 @@ type Props = {
   canvas?: CanvasComposerOwner;
   draftID?: string;
   presentation?: "canvas";
+  headerActions?: ReactNode;
 };
 function plainSeed(seed: GenerationSeed) {
   const draft = emptyPromptDraft();
@@ -339,10 +351,28 @@ export function RichGeneration(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.projectID, opened, retry, bootKey]);
   if (!ready)
-    return (
-      <div role={error ? "alert" : "status"}>
-        {error || "正在核验身份、草稿和未决提交…"}
-        {error && <Button onClick={() => setRetry((n) => n + 1)}>重试</Button>}
+    return error ? (
+      <Empty className="min-h-52">
+        <EmptyHeader>
+          <EmptyTitle>编辑器暂时无法加载</EmptyTitle>
+          <EmptyDescription>{error}</EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button variant="outline" onClick={() => setRetry((n) => n + 1)}>
+            重试
+          </Button>
+        </EmptyContent>
+      </Empty>
+    ) : (
+      <div
+        role="status"
+        aria-label="正在加载编辑器"
+        className="flex min-h-52 flex-col gap-4 p-4"
+      >
+        <span className="sr-only">正在核验身份、草稿和未决提交…</span>
+        <Skeleton className="size-14" />
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-7 w-2/3" />
       </div>
     );
   return (
@@ -366,6 +396,7 @@ function EditorWorkspace({
   onAdopt,
   canvas,
   presentation,
+  headerActions,
   snapshot,
   actor,
   models: initialModels,
@@ -1031,6 +1062,8 @@ function EditorWorkspace({
       disabled={frozen}
       authorized={sourceReady}
       compact={compact}
+      canvasSources={canvas?.referenceSources}
+      incomingSources={canvas?.incomingSources}
     />
   ) : null;
   const parameterControls = model ? (
@@ -1414,6 +1447,7 @@ function EditorWorkspace({
               className="items-start px-4 pt-4"
             >
               {referenceControls}
+              {headerActions}
               <InputGroupButton
                 aria-label={full ? "退出全屏" : "展开编辑器"}
                 size="icon-sm"
@@ -1458,7 +1492,13 @@ function EditorWorkspace({
                 >
                   <SelectValue placeholder="选择模型" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent
+                  position="popper"
+                  side="top"
+                  align="start"
+                  sideOffset={8}
+                  collisionPadding={16}
+                >
                   {!models.some((value) => value.current_version?.id) && (
                     <Empty className="max-w-64 p-4">
                       <EmptyHeader>
@@ -1556,7 +1596,13 @@ function EditorWorkspace({
                 <SelectTrigger aria-label="生成模式" size="sm" variant="quiet">
                   <SelectValue placeholder="选择模式" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent
+                  position="popper"
+                  side="top"
+                  align="start"
+                  sideOffset={8}
+                  collisionPadding={16}
+                >
                   <SelectGroup>
                     {model?.current_version?.modes?.map((mode) => (
                       <SelectItem key={mode} value={mode}>
@@ -1571,7 +1617,11 @@ function EditorWorkspace({
                 size="icon-sm"
                 disabled={frozen || !session}
                 onClick={() =>
-                  session?.editor.chain().focus().insertContent("@").run()
+                  session?.editor
+                    .chain()
+                    .focus(undefined, { scrollIntoView: false })
+                    .insertContent("@")
+                    .run()
                 }
               >
                 <AtSign />

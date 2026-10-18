@@ -1,6 +1,12 @@
 "use client";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { toast } from "sonner";
 import { Plus, Search, UserRound, MapPin, Box } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -66,6 +72,7 @@ export function SubjectList({
     [create, setCreate] = useState(false),
     [selected, setSelected] = useState<Subject | null>(null),
     [deleted, setDeleted] = useState(false);
+  const pageRequest = useRef<AbortController | null>(null);
   const query = searchQuery ?? localQuery;
   const read = useCallback(
     async (next?: string, signal?: AbortSignal) => {
@@ -73,6 +80,7 @@ export function SubjectList({
         { pid: projectID, kind, deleted, limit: 24, cursor: next },
         { signal },
       );
+      signal?.throwIfAborted();
       if (
         !Array.isArray(p.entries) ||
         p.entries.some(
@@ -102,6 +110,7 @@ export function SubjectList({
   );
   useEffect(() => {
     const c = new AbortController();
+    pageRequest.current = c;
     void read(undefined, c.signal)
       .then((p) => {
         if (!c.signal.aborted) {
@@ -116,13 +125,20 @@ export function SubjectList({
       .finally(() => {
         if (!c.signal.aborted) setLoading(false);
       });
-    return () => c.abort();
+    return () => {
+      c.abort();
+      pageRequest.current?.abort();
+    };
   }, [read, retry]);
   async function more() {
     if (loading) return;
+    const c = new AbortController();
+    pageRequest.current?.abort();
+    pageRequest.current = c;
     setLoading(true);
     try {
-      const p = await read(cursor);
+      const p = await read(cursor, c.signal);
+      if (c.signal.aborted) return;
       setItems((v) => [
         ...v,
         ...p.items.filter((s) => !v.some((old) => old.head.id === s.head.id)),
@@ -130,9 +146,9 @@ export function SubjectList({
       setCursor(p.cursor);
       setError("");
     } catch (e) {
-      setError(flowError(e));
+      if (!c.signal.aborted) setError(flowError(e));
     } finally {
-      setLoading(false);
+      if (!c.signal.aborted) setLoading(false);
     }
   }
   function change(s: Subject) {
@@ -167,6 +183,7 @@ export function SubjectList({
           variant={deleted ? "outline" : "secondary"}
           disabled={!deleted}
           onClick={() => {
+            pageRequest.current?.abort();
             setLoading(true);
             setItems([]);
             setCursor(undefined);
@@ -180,6 +197,7 @@ export function SubjectList({
             variant={deleted ? "secondary" : "outline"}
             disabled={deleted}
             onClick={() => {
+              pageRequest.current?.abort();
               setLoading(true);
               setItems([]);
               setCursor(undefined);

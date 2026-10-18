@@ -44,7 +44,12 @@ import {
   canonical,
   type LocalBranch,
 } from "@/components/generation/draft-save";
-import { RequestError } from "@/lib/request";
+import {
+  RequestError,
+  getSessionGeneration,
+  getScopeGeneration,
+} from "@/lib/request";
+import { getMediaPreview } from "@/api/media";
 import { applyCanvasCommands, getCanvas } from "@/api/canvases";
 import type { Project } from "@/components/projects/project";
 import {
@@ -96,6 +101,12 @@ import {
   type ViewportTransform,
 } from "./canvas-viewport";
 import { CanvasNodePanel } from "./canvas-node-panel";
+import {
+  adjacentGraph,
+  nodePromptDraft,
+  referenceEdges,
+  referenceSources,
+} from "./canvas-references";
 import "./canvas.css";
 
 type Pending = {
@@ -154,6 +165,7 @@ export function CanvasEditor({
   const [history] = useState(createHistory);
   const [selected, setSelected] = useState<string>();
   const [saving, setSaving] = useState(false);
+  const [autoSavePaused, setAutoSavePaused] = useState(false);
   const [unconfirmed, setUnconfirmed] = useState(false);
   const [message, setMessage] = useState("");
   const [conflict, setConflict] = useState<{ server: Canvas | null } | null>(
@@ -359,6 +371,7 @@ export function CanvasEditor({
     };
   }, []);
   const viewportChange = useCallback((next: ViewportTransform) => {
+    setAutoSavePaused(false);
     view.current = { x: next.x, y: next.y, zoom: next.k };
     setCamera(view.current);
   }, []);
@@ -421,6 +434,7 @@ export function CanvasEditor({
     record = true,
   ) {
     if (privateInvalid.current) return;
+    if (record) setAutoSavePaused(false);
     if (record)
       history.record(
         { nodes: local.current, edges: localEdges.current },
@@ -541,10 +555,7 @@ export function CanvasEditor({
   }
   function connectSelection() {
     const selected = local.current.filter((n) => selectedIDs.includes(n.id));
-    if (
-      selected.length !== 2 ||
-      selected.some((n) => !isEditableNode(n) || isDraft(n))
-    )
+    if (selected.length !== 2 || selected.some((n) => !isEditableNode(n)))
       return;
     if (localEdges.current.length >= 4000) {
       setMessage("画布已达到 4000 条连线上限。");
@@ -587,6 +598,89 @@ export function CanvasEditor({
     const n = local.current.find((n) => n.id === selected);
     if (n && isDraft(n))
       update(n.id, { config: { draft: { ...n.config.draft, ...patch } } });
+  }
+  const adjacentRequest = useRef<AbortController | null>(null);
+  const [addingAdjacent, setAddingAdjacent] = useState(false);
+  useEffect(() => () => adjacentRequest.current?.abort(), []);
+  async function addAdjacent(
+    source: Node,
+    kind: "text" | "image_generation" | "video_generation",
+    side: "left" | "right",
+  ) {
+    if (
+      adjacentRequest.current ||
+      privateInvalid.current ||
+      pending.current ||
+      conflict ||
+      busy.current
+    )
+      return;
+    if (local.current.length >= 2000 || localEdges.current.length >= 4000) {
+      setMessage("画布节点或连线已达到上限。");
+      return;
+    }
+    const original = local.current;
+    const sessionGeneration = getSessionGeneration(),
+      scopeGeneration = getScopeGeneration();
+    const controller = new AbortController();
+    adjacentRequest.current = controller;
+    setAddingAdjacent(true);
+    try {
+      let asset: API.AssetSummary | undefined;
+      if (
+        side === "right" &&
+        kind !== "text" &&
+        source.ref_type === "media_asset" &&
+        source.ref_id &&
+        ["image", "video", "audio"].includes(source.node_type)
+      ) {
+        const preview = await getMediaPreview(
+          { pid: project.id, asset_id: source.ref_id },
+          { signal: controller.signal },
+        );
+        if (preview.asset?.project_id !== project.id)
+          throw new RequestError("invalid_receipt");
+        asset = preview.asset;
+      }
+      if (
+        controller.signal.aborted ||
+        !alive.current ||
+        privateInvalid.current ||
+        getSessionGeneration() !== sessionGeneration ||
+        getScopeGeneration() !== scopeGeneration
+      )
+        return;
+      if (
+        local.current !== original ||
+        busy.current ||
+        pending.current ||
+        conflict
+      )
+        throw new Error("画布已变化，请重新选择连接来源。");
+      const result = adjacentGraph(
+        source,
+        kind,
+        side,
+        project.aspect_ratio,
+        asset,
+        original,
+      );
+      edit([...local.current, result.node], undefined, [
+        ...localEdges.current,
+        result.edge,
+      ]);
+      selectNode(result.node.id);
+    } catch (error) {
+      if (!controller.signal.aborted && alive.current)
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : "参考来源暂时无法核验，请重试。",
+        );
+    } finally {
+      adjacentRequest.current = null;
+      if (alive.current) setAddingAdjacent(false);
+    }
   }
   function add(
     kind: "image_generation" | "video_generation",
@@ -1017,19 +1111,24 @@ export function CanvasEditor({
   async function save() {
     if (saveFlight.current) return saveFlight.current;
     const flight = (async () => {
-      let result = await saveOnce();
-      while (
-        result &&
-        alive.current &&
-        !privateInvalid.current &&
-        commandBatch(result, local.current, {
-          edges: localEdges.current,
-          viewport: view.current,
-        }).commands?.length
-      ) {
-        result = await saveOnce();
+      try {
+        let result = await saveOnce();
+        while (
+          result &&
+          alive.current &&
+          !privateInvalid.current &&
+          commandBatch(result, local.current, {
+            edges: localEdges.current,
+            viewport: view.current,
+          }).commands?.length
+        )
+          result = await saveOnce();
+        return result;
+      } catch {
+        setAutoSavePaused(true);
+        setMessage("请检查节点名称、提示词和参数；本地编辑仍保留。");
+        return undefined;
       }
-      return result;
     })();
     saveFlight.current = flight;
     try {
@@ -1112,6 +1211,7 @@ export function CanvasEditor({
       )
         changeCamera(committed.viewport ?? defaultViewport);
       setBase(committed);
+      setAutoSavePaused(false);
       pending.current = null;
       setUnconfirmed(false);
       return committed;
@@ -1131,6 +1231,7 @@ export function CanvasEditor({
       ) {
         pending.current = null;
         setUnconfirmed(false);
+        setAutoSavePaused(true);
         setMessage(
           error.status === 401
             ? "登录已失效，本地编辑仍保留，请重新登录后重开画布。"
@@ -1151,7 +1252,15 @@ export function CanvasEditor({
     saveLatest.current = save;
   });
   useEffect(() => {
-    if (!dirty || saving || unconfirmed || conflict || identityInvalid) return;
+    if (
+      !dirty ||
+      saving ||
+      autoSavePaused ||
+      unconfirmed ||
+      conflict ||
+      identityInvalid
+    )
+      return;
     const timer = setTimeout(() => {
       void saveLatest.current();
     }, 900);
@@ -1162,6 +1271,7 @@ export function CanvasEditor({
     camera,
     dirty,
     saving,
+    autoSavePaused,
     unconfirmed,
     conflict,
     identityInvalid,
@@ -1243,24 +1353,11 @@ export function CanvasEditor({
     }
   }
   function seedForNode(node: DraftNode): GenerationSeed {
-    let composer = node.config.draft.composer;
-    if (!composer) {
-      composer = emptyPromptDraft();
-      composer.document = {
-        type: "doc",
-        content: node.config.draft.prompt.split("\n").map((text) => ({
-          type: "paragraph",
-          ...(text ? { content: [{ type: "text" as const, text }] } : {}),
-        })),
-      };
-      composer.params = {
-        aspect_ratio: node.config.draft.aspect_ratio,
-        output_count: node.config.draft.candidate_count,
-        ...(node.config.draft.negative_prompt
-          ? { negative_prompt: node.config.draft.negative_prompt }
-          : {}),
-      };
-    }
+    const composer = nodePromptDraft(node);
+    const sources = referenceSources(nodes);
+    const sourceByID = new Map(
+      sources.map((source) => [source.nodeID, source]),
+    );
     const ownerNode = node.id;
     return {
       project,
@@ -1275,6 +1372,15 @@ export function CanvasEditor({
       canvasOwner: {
         contextKey: `canvas/${initial.id}/${ownerNode}`,
         draft: composer,
+        referenceSources: sources.filter(
+          (source) => source.nodeID !== ownerNode,
+        ),
+        incomingSources: edges
+          .filter((e) => isAnnotation(e) && e.target_node_id === ownerNode)
+          .flatMap((e) => {
+            const source = sourceByID.get(e.source_node_id ?? "");
+            return source ? [{ ...source, edgeID: e.id! }] : [];
+          }),
         onChange: (value: PromptDraft) => {
           const n = local.current.find((n) => n.id === ownerNode);
           if (n && isDraft(n))
@@ -1688,7 +1794,7 @@ export function CanvasEditor({
           <CanvasNodeLayer
             containerRef={board}
             nodes={nodes}
-            edges={showEdges ? edges : []}
+            edges={showEdges ? referenceEdges(nodes, edges) : []}
             viewport={{ x: camera.x, y: camera.y, k: camera.zoom }}
             size={size}
             selectedIDs={selectedIDs}
@@ -1716,17 +1822,12 @@ export function CanvasEditor({
                     setSelected(node.id);
                   else selectNode(node.id, additive);
                 }}
-                onAddAdjacent={(kind, side) => {
-                  const point = {
-                    x: limit(
-                      node.x +
-                        (side === "left" ? -400 : (node.width ?? 320) + 80),
-                    ),
-                    y: node.y,
-                  };
-                  if (kind === "text") addText(point);
-                  else add(kind, point);
-                }}
+                addingAdjacent={addingAdjacent}
+                onAddAdjacent={
+                  isEditableNode(node)
+                    ? (kind, side) => void addAdjacent(node, kind, side)
+                    : undefined
+                }
                 onEditTitle={() => {
                   selectNode(node.id);
                   if (node.node_type === "director") setOpenToolID(node.id);
@@ -1821,9 +1922,7 @@ export function CanvasEditor({
               disabled={
                 selectedIDs.length !== 2 ||
                 nodes.some(
-                  (n) =>
-                    selectedIDs.includes(n.id) &&
-                    (!isEditableNode(n) || isDraft(n)),
+                  (n) => selectedIDs.includes(n.id) && !isEditableNode(n),
                 )
               }
             >
@@ -1956,7 +2055,7 @@ export function CanvasEditor({
                 onDraft={draft}
                 richComposer={
                   isDraft(current)
-                    ? (() => {
+                    ? (actions) => {
                         const seed = seedForNode(current);
                         return (
                           <RichGeneration
@@ -1965,10 +2064,11 @@ export function CanvasEditor({
                             seed={seed}
                             canvas={seed.canvasOwner}
                             presentation="canvas"
+                            headerActions={actions}
                             onAdopt={adoptResult}
                           />
                         );
-                      })()
+                      }
                     : undefined
                 }
                 onPreview={() => setPreview(current)}

@@ -6,6 +6,7 @@ import { RequestError } from "@/lib/request";
 import { RichGeneration } from "./rich-generation";
 import { emptyPromptDraft } from "./prompt-document";
 import { mediaBinding } from "./reference-controls";
+import type { CanvasReferenceSource } from "./reference-source";
 
 const api = vi.hoisted(() => ({
   models: vi.fn(),
@@ -201,7 +202,10 @@ async function open(reference = false) {
   );
 }
 
-async function compactWorkspace(withReference = false) {
+async function compactWorkspace(
+  withReference = false,
+  sources: CanvasReferenceSource[] = [],
+) {
   const draft = emptyPromptDraft();
   draft.document.content[0].content = [
     { type: "text", text: "保留同一富文本会话" },
@@ -247,6 +251,7 @@ async function compactWorkspace(withReference = false) {
     contextKey: `canvas/${id}`,
     draft,
     onChange: vi.fn(),
+    referenceSources: sources,
     flush: vi.fn(async () => pointer),
   };
   const props = {
@@ -350,15 +355,124 @@ it("全能参考模式来自真实目录合同，切换不重建正文或触发�
 it("紧凑加号与提及入口仍调用已有引用控制器", async () => {
   await compactWorkspace();
   fireEvent.click(screen.getByRole("button", { name: "添加参考" }));
-  expect(await screen.findByRole("button", { name: "添加主体" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "上传参考" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "粘贴站内引用" })).toBeTruthy();
+  expect(await screen.findByRole("option", { name: "添加主体" })).toBeTruthy();
+  expect(screen.getByRole("option", { name: "上传参考内容" })).toBeTruthy();
+  expect(screen.getByRole("option", { name: "粘贴站内引用" })).toBeTruthy();
   fireEvent.keyDown(document, { key: "Escape" });
   fireEvent.click(screen.getByRole("button", { name: "提及素材或主体" }));
   expect(await screen.findByRole("dialog", { name: "引用候选" })).toBeTruthy();
+  expect(document.querySelector('[data-slot="dialog-overlay"]')).toBeNull();
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      screen.getByRole("textbox", { name: "创作提示词" }),
+    ),
+  );
   expect(
-    screen.getByRole("button", { name: "搜索项目素材与主体" }),
+    screen.getByRole("option", { name: "搜索项目素材与主体" }),
   ).toBeTruthy();
+});
+
+it("从画布添加先核验真实素材版本，同一来源不重复且不触发生成", async () => {
+  const source = {
+    nodeID: crypto.randomUUID(),
+    title: "画布图片",
+    kind: "image" as const,
+    assetID: id,
+  };
+  const { canvas } = await compactWorkspace(false, [
+    source,
+    { nodeID: crypto.randomUUID(), title: "空图片", kind: "image" },
+  ]);
+  api.preview.mockResolvedValue({
+    asset: { id, project_id: project.id, kind: "image", revision: 3 },
+  });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    fireEvent.click(screen.getByRole("button", { name: "添加参考" }));
+    fireEvent.click(await screen.findByRole("option", { name: "从画布选择" }));
+    expect(
+      screen
+        .getByRole("option", { name: /空图片/ })
+        .getAttribute("aria-disabled"),
+    ).toBe("true");
+    fireEvent.click(screen.getByRole("option", { name: "画布图片" }));
+    await waitFor(() => expect(api.preview).toHaveBeenCalledTimes(attempt + 1));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "添加参考素材" })).toBeNull(),
+    );
+  }
+  expect(canvas.onChange.mock.calls.at(-1)?.[0].references).toEqual([
+    expect.objectContaining({
+      source: { kind: "media", sourceId: id, sourceVersion: "3" },
+    }),
+  ]);
+  expect(api.preview).toHaveBeenCalledWith(
+    { pid: project.id, asset_id: id },
+    expect.objectContaining({ signal: expect.any(AbortSignal) }),
+  );
+  expect(api.quote).not.toHaveBeenCalled();
+  expect(api.confirm).not.toHaveBeenCalled();
+});
+
+it("画布素材回执跨项目时拒绝添加，保留原正文与输入", async () => {
+  const { canvas } = await compactWorkspace(false, [
+    {
+      nodeID: crypto.randomUUID(),
+      title: "画布图片",
+      kind: "image",
+      assetID: id,
+    },
+  ]);
+  api.preview.mockResolvedValue({
+    asset: { id, project_id: crypto.randomUUID(), kind: "image", revision: 3 },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "添加参考" }));
+  fireEvent.click(await screen.findByRole("option", { name: "从画布选择" }));
+  fireEvent.click(screen.getByRole("option", { name: "画布图片" }));
+  await findFeedback("参考素材范围不匹配");
+  expect(canvas.onChange.mock.calls.at(-1)?.[0].references ?? []).toEqual([]);
+  expect(
+    screen.getByRole("textbox", { name: "创作提示词" }).textContent,
+  ).toContain("保留同一富文本会话");
+});
+
+it("空上游只显示禁用占位，移除真实参考同时清除正文标签", async () => {
+  const { canvas, props, rerender } = await compactWorkspace(true);
+  rerender(
+    <RichGeneration
+      {...props}
+      canvas={{
+        ...canvas,
+        incomingSources: [
+          {
+            nodeID: crypto.randomUUID(),
+            edgeID: crypto.randomUUID(),
+            title: "空上游",
+            kind: "image",
+          },
+        ],
+      }}
+    />,
+  );
+  expect(
+    screen
+      .getByRole("button", { name: "空上游：内容为空" })
+      .hasAttribute("disabled"),
+  ).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "查看图片1详情" }));
+  fireEvent.click(await screen.findByRole("button", { name: "移除" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "移除参考及标签" }),
+  );
+  await waitFor(() =>
+    expect(canvas.onChange.mock.calls.at(-1)?.[0].references).toHaveLength(0),
+  );
+  expect(
+    JSON.stringify(canvas.onChange.mock.calls.at(-1)?.[0].document),
+  ).not.toContain('"type":"reference"');
+  expect(
+    canvas.onChange.mock.calls.at(-1)?.[0].labelState.highWater.image,
+  ).toBe(1);
+  expect(api.confirm).not.toHaveBeenCalled();
 });
 
 it("紧凑引用默认缩略，详情内提及写入同一富文本会话且展开不重建", async () => {
@@ -374,7 +488,9 @@ it("紧凑引用默认缩略，详情内提及写入同一富文本会话且展�
       JSON.stringify(canvas.onChange.mock.calls.at(-1)?.[0].document),
     ).toContain('"type":"reference"'),
   );
-  fireEvent.click(screen.getByRole("button", { name: "关闭对话框" }));
+  fireEvent.keyDown(screen.getByRole("dialog", { name: "参考详情" }), {
+    key: "Escape",
+  });
   fireEvent.click(screen.getByRole("button", { name: "展开编辑器" }));
   expect(screen.getByRole("textbox", { name: "创作提示词" })).toBe(editor);
   expect(editor.textContent).toContain("保留同一富文本会话");
