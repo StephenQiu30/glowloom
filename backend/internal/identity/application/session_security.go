@@ -13,6 +13,16 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
+// SessionActivity classifies server-recognized request activity, never client time.
+type SessionActivity uint8
+
+const (
+	// NoActivity validates authorization without sliding the idle deadline.
+	NoActivity SessionActivity = iota
+	// UserActivity is a successful business request or foreground restoration.
+	UserActivity
+)
+
 func (a *Auth) sessionTransaction(ctx context.Context, run func(AuthTx) error) error {
 	return a.email.store.EmailTransaction(ctx, func(tx EmailTx) error {
 		if _, err := tx.RegistrationEnabled(); err != nil {
@@ -32,6 +42,12 @@ func (a *Auth) sessionProofValid(token string, s domain.AuthSession) bool {
 }
 
 func (a *Auth) newSession(tx AuthTx, u domain.User, persistent bool, now time.Time) (AuthResult, error) {
+	if a.sessionIssuanceEnabled() {
+		return a.newV2Session(tx, u, persistent, now)
+	}
+	if !a.legacyWindowOpen(now) {
+		return AuthResult{}, ErrRefreshDependency
+	}
 	result, err := newAuthSession(tx, u, persistent, now)
 	if err != nil || a.email == nil {
 		return result, err

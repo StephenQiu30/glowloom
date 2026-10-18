@@ -32,6 +32,7 @@ import {
   MAX_PASSWORD_LENGTH,
   PASSWORD_LENGTH_HINT,
   requireSession,
+  canonicalAuthLink,
   authErrorMessage,
   requireAccepted,
 } from "./contracts";
@@ -187,6 +188,7 @@ export function AuthView({
   const [session, setSession] = useState<API.EmailSessionView | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [canonicalLink, setCanonicalLink] = useState<string | null>(null);
   const [feedbackAttempt, setFeedbackAttempt] = useState(0);
   const [notice, setNotice] = useState("");
   const [retryAt, setRetryAt] = useState(0);
@@ -312,7 +314,15 @@ export function AuthView({
       await revokeSession(session);
       if (!controller.signal.aborted) router.replace("/login");
     } catch (reason) {
-      if (!controller.signal.aborted) setError(authErrorMessage(reason));
+      if (!controller.signal.aborted) {
+        setCanonicalLink(
+          reason instanceof RequestError &&
+            ["origin_forbidden", "origin_mismatch"].includes(reason.code)
+            ? canonicalAuthLink(reason.meta, window.location.href)
+            : null,
+        );
+        setError(authErrorMessage(reason));
+      }
     } finally {
       lock.current = false;
       if (!controller.signal.aborted) {
@@ -495,7 +505,15 @@ export function AuthView({
         if (onAuthenticated && pendingInvitation()) router.push("/invitations");
       }
     } catch (reason) {
-      if (!controller.signal.aborted) setError(authErrorMessage(reason));
+      if (!controller.signal.aborted) {
+        setCanonicalLink(
+          reason instanceof RequestError &&
+            ["origin_forbidden", "origin_mismatch"].includes(reason.code)
+            ? canonicalAuthLink(reason.meta, window.location.href)
+            : null,
+        );
+        setError(authErrorMessage(reason));
+      }
     } finally {
       lock.current = false;
       if (!controller.signal.aborted) {
@@ -779,6 +797,9 @@ export function AuthView({
       {error ? (
         <>
           <FeedbackToast message={error} attempt={feedbackAttempt} />
+          {canonicalLink ? (
+            <a href={canonicalLink}>使用可信网站地址打开</a>
+          ) : null}
           <span id={errorID} className="sr-only">
             {error}
           </span>

@@ -27,7 +27,11 @@ vi.mock("next/navigation", () => ({
 vi.mock("next-themes", () => ({ useTheme: () => ({ setTheme: mocks.theme }) }));
 vi.mock("@/components/generation/draft-save", async (original) => ({
   ...(await original<typeof import("@/components/generation/draft-save")>()),
-  branchJournal: { clear: mocks.clear },
+  branchJournal: {
+    clear: mocks.clear,
+    checkpoint: async () => null,
+    activateAccount: async () => {},
+  },
 }));
 const profile = {
   id: "11111111-1111-4111-8111-111111111111",

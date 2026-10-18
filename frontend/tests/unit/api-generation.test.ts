@@ -62,6 +62,39 @@ it("所有 API 都可从 Swagger 重现，禁止手改、遗漏或额外接口�
     );
     expect(actualOperations.sort()).toEqual(expectedOperations.sort());
     expect(new Set(actualOperations).size).toBe(actualOperations.length);
+    expect(actualOperations).toEqual(
+      expect.arrayContaining(["refreshSession", "upgradeSession"]),
+    );
+    const schema = JSON.parse(
+      readFileSync(
+        path.join(frontend, "node_modules/.cache/openapi/swagger.json"),
+        "utf8",
+      ),
+    );
+    for (const action of ["refresh", "upgrade"]) {
+      const operation = schema.paths[`/api/session/${action}`].post;
+      expect(operation.operationId).toBe(`${action}Session`);
+      expect(operation.parameters ?? []).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ in: "body" })]),
+      );
+    }
+    const sessionProperties =
+      schema.definitions["internal_identity_adapter_http.EmailSessionView"]
+        .properties;
+    expect(Object.keys(sessionProperties)).toEqual(
+      expect.arrayContaining([
+        "access_expires_at",
+        "refresh_after_at",
+        "server_time",
+        "session_protocol",
+        "upgrade_available",
+        "idle_expires_at",
+        "absolute_expires_at",
+      ]),
+    );
+    expect(sessionProperties).not.toHaveProperty("access_token");
+    expect(sessionProperties).not.toHaveProperty("refresh_token");
+
     const sourceFiles = readdirSync(path.join(frontend, "src/components"), {
       recursive: true,
     });

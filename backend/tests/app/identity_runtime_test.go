@@ -2,11 +2,13 @@ package app_test
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
@@ -78,4 +80,40 @@ func TestExportLoopDisabledStorageDoesNotRequireSMTPOrKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	stop()
+}
+
+func TestSessionV2VerifierOnly(t *testing.T) {
+	codec := &wiringTokens{signingDisabled: true}
+	coordinator := &wiringCoordinator{}
+	auth := identity.NewEmailAuth(wiringStore{}, proofFixture{}, identity.EmailPolicy{}, time.Now)
+	if err := identityruntime.ConfigureSessionSecurity(auth, config.Config{}, identityruntime.SessionDependencies{Tokens: codec, Coordinator: coordinator}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := auth.CurrentAccess(t.Context(), "access", "csrf", identity.NoActivity)
+	if !errors.Is(err, identity.ErrSessionInvalid) || !codec.verified || !coordinator.checked {
+		t.Fatalf("verifier-only access not consumed: %v", err)
+	}
+	if err := auth.LogoutCurrentWithRefresh(t.Context(), "invalid", "csrf", uuid.New()); err != nil {
+		t.Fatalf("verifier-only logout: %v", err)
+	}
+	storeErr := errors.New("observable transaction boundary")
+	logoutAuth := identity.NewEmailAuth(sessionWiringErrorStore{err: storeErr}, proofFixture{}, identity.EmailPolicy{}, time.Now)
+	if err := identityruntime.ConfigureSessionSecurity(logoutAuth, config.Config{}, identityruntime.SessionDependencies{Tokens: codec, Coordinator: coordinator}); err != nil {
+		t.Fatal(err)
+	}
+	if err := logoutAuth.LogoutCurrentWithRefresh(t.Context(), base64.RawURLEncoding.EncodeToString(make([]byte, 32)), "csrf", uuid.New()); !errors.Is(err, storeErr) {
+		t.Fatalf("verifier-only logout did not reach authority store: %v", err)
+	}
+	if _, err := auth.Refresh(t.Context(), "refresh", "csrf", "peer", uuid.New()); !errors.Is(err, identity.ErrRefreshDependency) {
+		t.Fatalf("verifier-only refresh: %v", err)
+	}
+}
+
+type sessionWiringErrorStore struct {
+	identity.EmailStore
+	err error
+}
+
+func (f sessionWiringErrorStore) EmailTransaction(context.Context, func(identity.EmailTx) error) error {
+	return f.err
 }

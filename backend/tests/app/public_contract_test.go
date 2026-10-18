@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
+
 	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
 
 	"github.com/swaggo/swag"
@@ -41,7 +43,7 @@ func TestPublicRouterGeneratedSwaggerContract(t *testing.T) {
 	}
 	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
 		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKeyFile: publicTestKey(t),
-	}, &gorm.DB{}, nil)
+	}, &gorm.DB{}, nil, identityruntime.SessionDependencies{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +59,7 @@ func TestPublicRouterGeneratedSwaggerContract(t *testing.T) {
 func TestPublicRouterRemovedAuthenticationRoutes(t *testing.T) {
 	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
 		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKeyFile: publicTestKey(t),
-	}, &gorm.DB{}, nil)
+	}, &gorm.DB{}, nil, identityruntime.SessionDependencies{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +82,7 @@ func TestPublicRouterRemovedAuthenticationRoutes(t *testing.T) {
 func TestPublicBusinessRoutesRequireSession(t *testing.T) {
 	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
 		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKeyFile: publicTestKey(t),
-	}, &gorm.DB{}, nil)
+	}, &gorm.DB{}, nil, identityruntime.SessionDependencies{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,13 +98,38 @@ func TestPublicBusinessRoutesRequireSession(t *testing.T) {
 			continue
 		}
 		t.Run(route.Method+" "+route.Path, func(t *testing.T) {
-			request := httptest.NewRequestWithContext(t.Context(), route.Method, route.Path, nil)
+			path := route.Path
+			wantStatus, wantCode := http.StatusUnauthorized, "session_invalid"
+			switch route.Method + " " + route.Path {
+			case "POST /api/session/refresh":
+				wantStatus, wantCode = http.StatusForbidden, "csrf_invalid"
+			case "POST /api/session/upgrade":
+				wantStatus, wantCode = http.StatusServiceUnavailable, "temporarily_unavailable"
+			case "DELETE /api/sessions/:id":
+				path = "/api/sessions/2536a054-cc56-4cce-ac77-d76c5d173e7c"
+				wantStatus, wantCode = http.StatusForbidden, "csrf_invalid"
+			}
+			request := httptest.NewRequestWithContext(t.Context(), route.Method, path, nil)
 			request.Header.Set("Origin", "http://localhost:3000")
 			request.Header.Set("Idempotency-Key", "2536a054-cc56-4cce-ac77-d76c5d173e7c")
 			response := httptest.NewRecorder()
 			router.ServeHTTP(response, request)
-			if response.Code != http.StatusUnauthorized {
-				t.Fatalf("anonymous request status = %d, want 401", response.Code)
+			if response.Code != wantStatus {
+				t.Fatalf("anonymous request status = %d, want %d", response.Code, wantStatus)
+			}
+			var problem struct {
+				Code string `json:"code"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil {
+				t.Fatal(err)
+			}
+			if problem.Code != wantCode {
+				t.Fatalf("anonymous problem = %q, want %q", problem.Code, wantCode)
+			}
+			for _, cookie := range response.Result().Cookies() {
+				if cookie.Value != "" && (strings.Contains(cookie.Name, "access") || strings.Contains(cookie.Name, "refresh") || strings.Contains(cookie.Name, "csrf") || cookie.Name == "lanverse_session") {
+					t.Fatalf("anonymous route issued credential cookie %q", cookie.Name)
+				}
 			}
 		})
 	}
@@ -111,7 +138,7 @@ func TestPublicBusinessRoutesRequireSession(t *testing.T) {
 func TestPublicRouterRemovedSwaggerRoutes(t *testing.T) {
 	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
 		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKeyFile: publicTestKey(t),
-	}, &gorm.DB{}, nil)
+	}, &gorm.DB{}, nil, identityruntime.SessionDependencies{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +168,7 @@ func TestWorkspaceAPIDoesNotExposeAnonymousAccessOutsideThisHost(t *testing.T) {
 		{"external browser", "local", "127.0.0.1:8080", "https://lanverse.example"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{Env: tc.env, HTTPAddr: tc.address, PublicOrigin: tc.origin}, &gorm.DB{}, nil)
+			_, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{Env: tc.env, HTTPAddr: tc.address, PublicOrigin: tc.origin}, &gorm.DB{}, nil, identityruntime.SessionDependencies{})
 			if err == nil {
 				t.Fatal("nonlocal workspace configuration was accepted")
 			}

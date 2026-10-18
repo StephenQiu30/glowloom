@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
+
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
@@ -46,7 +48,7 @@ func TestPublicCanvasAPIWithLocalPostgres(t *testing.T) {
 	}
 	const origin = "http://127.0.0.1:3140"
 	cfg := identityfixture.Configure(t, config.Config{Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: origin})
-	router, err := app.NewBusinessRouter(zap.NewNop(), func(_ context.Context) error { return nil }, noop.NewTracerProvider(), cfg, database, storage)
+	router, err := app.NewBusinessRouter(zap.NewNop(), func(_ context.Context) error { return nil }, noop.NewTracerProvider(), cfg, database, storage, identityruntime.SessionDependencies{})
 	if err != nil {
 		t.Fatal(err)
 	}

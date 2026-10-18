@@ -18,6 +18,7 @@ import { BasicLayout } from "@/components/layout/basic-layout";
 import {
   useSession,
   useSessionUpdate,
+  revokeSession,
   clearPrivateSession,
 } from "@/components/auth/session";
 import { authErrorMessage, requireAccepted } from "@/components/auth/contracts";
@@ -421,12 +422,12 @@ export function Settings() {
                     disabled={pending}
                     onClick={() =>
                       void run(async (signal) => {
+                        if (item.id === session.session_id) {
+                          await revokeSession(session);
+                          return;
+                        }
                         await deleteSession({ id: item.id }, { signal });
-                        if (signal.aborted) return;
-                        if (item.current) {
-                          await clearPrivateSession();
-                          router.replace("/login");
-                        } else refresh();
+                        if (!signal.aborted) refresh();
                       })
                     }
                   >

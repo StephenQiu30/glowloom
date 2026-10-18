@@ -85,7 +85,7 @@ it("public session failure uses one short toast and keeps the page free of a ban
   await screen.findByText("public content");
   expect(screen.queryByRole("alert")).toBeNull();
   expect(screen.queryByLabelText("会话状态")).toBeNull();
-  expect(notifications.show).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(notifications.show).toHaveBeenCalledTimes(1));
   expect(notifications.show).toHaveBeenCalledWith(
     "暂时无法确认登录状态",
     expect.objectContaining({
@@ -317,6 +317,7 @@ it.each(["authenticated", "guest"])(
     );
     const draft = await screen.findByLabelText("public draft");
     fireEvent.change(draft, { target: { value: "keep this idea" } });
+    await waitFor(() => expect(notifications.show).toHaveBeenCalled());
     const options = notifications.show.mock.lastCall![1];
     act(() => options.action.onClick());
     expect(screen.getByLabelText("public draft")).toBe(draft);
@@ -539,4 +540,563 @@ it("a different identity returned by a route check waits for private draft clean
     clear.mockRestore();
   }
   await screen.findByText("Next creator");
+});
+
+it("background preemptive renewal never sends foreground activity GET and hides stop timers", async () => {
+  vi.useFakeTimers();
+  document.cookie = "glowloom_csrf=proof; path=/";
+  const now = Date.now();
+  const renewed = {
+    ...validSession,
+    session_protocol: "v2",
+    refresh_generation: "0",
+    upgrade_available: false,
+    server_time: new Date(now).toISOString(),
+    idle_expires_at: new Date(now + 43200000).toISOString(),
+    access_expires_at: new Date(now + 120000).toISOString(),
+    refresh_after_at: new Date(now + 60000).toISOString(),
+  };
+  vi.mocked(request).mockImplementation(async (url) =>
+    url === "/api/session" || url === "/api/session/refresh"
+      ? renewed
+      : { theme: "light" },
+  );
+  const view = render(
+    <SessionProvider>
+      <SessionGate>
+        <input aria-label="private draft" defaultValue="keep" />
+      </SessionGate>
+    </SessionProvider>,
+  );
+  try {
+    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60001);
+    });
+    expect(
+      vi
+        .mocked(request)
+        .mock.calls.filter(([url]) => url === "/api/session/refresh"),
+    ).toHaveLength(1);
+    expect(
+      vi.mocked(request).mock.calls.filter(([url]) => url === "/api/session"),
+    ).toHaveLength(1);
+    expect(screen.getByLabelText("private draft")).toHaveProperty(
+      "value",
+      "keep",
+    );
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120000);
+    });
+    expect(
+      vi
+        .mocked(request)
+        .mock.calls.filter(([url]) => url === "/api/session/refresh"),
+    ).toHaveLength(1);
+  } finally {
+    view.unmount();
+    document.cookie = "glowloom_csrf=; Max-Age=0; path=/";
+    vi.useRealTimers();
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+  }
+});
+
+it("offline then online foreground restoration preserves the mounted draft", async () => {
+  let fail = false;
+  vi.mocked(request).mockImplementation(async (url) => {
+    if (url !== "/api/session") return { theme: "light" };
+    if (fail) throw new RequestError("request_unconfirmed");
+    return validSession;
+  });
+  render(
+    <SessionProvider>
+      <SessionGate>
+        <input aria-label="offline draft" defaultValue="keep" />
+      </SessionGate>
+    </SessionProvider>,
+  );
+  const draft = await screen.findByLabelText("offline draft");
+  fail = true;
+  await act(async () => window.dispatchEvent(new Event("online")));
+  expect(screen.getByLabelText("offline draft")).toBe(draft);
+  expect(draft).toHaveProperty("value", "keep");
+  fail = false;
+  await act(async () => window.dispatchEvent(new Event("online")));
+  expect(screen.getByLabelText("offline draft")).toBe(draft);
+});
+
+it("expired startup refresh is followed by one actual foreground GET", async () => {
+  document.cookie = "glowloom_csrf=proof; path=/";
+  let reads = 0;
+  const now = Date.now();
+  const active = {
+    ...validSession,
+    session_protocol: "v2",
+    refresh_generation: "0",
+    upgrade_available: false,
+    server_time: new Date(now).toISOString(),
+    idle_expires_at: new Date(now + 43200000).toISOString(),
+    access_expires_at: new Date(now + 900000).toISOString(),
+    refresh_after_at: new Date(now + 840000).toISOString(),
+  };
+  vi.mocked(request).mockImplementation(async (url) => {
+    if (url === "/api/session" && ++reads === 1)
+      throw new RequestError("access_expired", 401);
+    return url === "/api/session" || url === "/api/session/refresh"
+      ? active
+      : { theme: "light" };
+  });
+  try {
+    render(
+      <SessionProvider>
+        <SessionGate>
+          <p>restored private content</p>
+        </SessionGate>
+      </SessionProvider>,
+    );
+    await screen.findByText("restored private content");
+    await waitFor(() =>
+      expect(
+        vi.mocked(request).mock.calls.filter(([url]) => url === "/api/session"),
+      ).toHaveLength(2),
+    );
+    expect(
+      vi
+        .mocked(request)
+        .mock.calls.filter(([url]) => url === "/api/session/refresh"),
+    ).toHaveLength(1);
+  } finally {
+    document.cookie = "glowloom_csrf=; Max-Age=0; path=/";
+  }
+});
+it("missing readable proof at the visible renewal boundary stops without blind refresh and clears identity", async () => {
+  vi.useFakeTimers();
+  const now = Date.now();
+  const active = {
+    ...validSession,
+    session_protocol: "v2",
+    refresh_generation: "0",
+    upgrade_available: false,
+    server_time: new Date(now).toISOString(),
+    idle_expires_at: new Date(now + 43200000).toISOString(),
+    access_expires_at: new Date(now + 120000).toISOString(),
+    refresh_after_at: new Date(now + 60000).toISOString(),
+  };
+  vi.mocked(request).mockImplementation(async (url) =>
+    url === "/api/session" ? active : { theme: "light" },
+  );
+  const view = render(
+    <SessionProvider>
+      <SessionGate allowGuest>
+        <SessionIdentity />
+      </SessionGate>
+    </SessionProvider>,
+  );
+  try {
+    await act(async () => {});
+    expect(screen.getByText("Creator")).toBeTruthy();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60001);
+    });
+    expect(screen.getByText("guest identity")).toBeTruthy();
+    expect(
+      vi
+        .mocked(request)
+        .mock.calls.filter(([url]) => url === "/api/session/refresh"),
+    ).toHaveLength(0);
+  } finally {
+    view.unmount();
+    vi.useRealTimers();
+  }
+});
+
+it("idle boundary checks authoritative refresh without clipping access or locally expiring another tab's active session", async () => {
+  vi.useFakeTimers();
+  document.cookie = "glowloom_csrf=proof; path=/";
+  const now = Date.now();
+  const active = {
+    ...validSession,
+    session_protocol: "v2",
+    refresh_generation: "0",
+    upgrade_available: false,
+    server_time: new Date(now).toISOString(),
+    idle_expires_at: new Date(now + 30000).toISOString(),
+    access_expires_at: new Date(now + 900000).toISOString(),
+    refresh_after_at: new Date(now + 840000).toISOString(),
+  };
+  vi.mocked(request).mockImplementation(async (url) =>
+    url === "/api/session"
+      ? active
+      : url === "/api/session/refresh"
+        ? {
+            ...active,
+            server_time: new Date(now + 30000).toISOString(),
+            idle_expires_at: new Date(now + 43200000).toISOString(),
+          }
+        : { theme: "light" },
+  );
+  const view = render(
+    <SessionProvider>
+      <SessionGate>
+        <p>other tab kept session active</p>
+      </SessionGate>
+    </SessionProvider>,
+  );
+  try {
+    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30001);
+    });
+    expect(screen.getByText("other tab kept session active")).toBeTruthy();
+    expect(
+      vi
+        .mocked(request)
+        .mock.calls.filter(([url]) => url === "/api/session/refresh"),
+    ).toHaveLength(1);
+    expect(
+      vi.mocked(request).mock.calls.filter(([url]) => url === "/api/session"),
+    ).toHaveLength(1);
+  } finally {
+    view.unmount();
+    document.cookie = "glowloom_csrf=; Max-Age=0; path=/";
+    vi.useRealTimers();
+  }
+});
+
+it("two guest tabs converge on remote identity loss without broadcast echoes or repeated cleanup", async () => {
+  const { setCSRFToken } = await import("@/lib/request");
+  setCSRFToken(null);
+  const peers = new Set<{
+    onmessage: ((event: { data: unknown }) => void) | null;
+  }>();
+  let posts = 0;
+  class Channel {
+    onmessage: ((event: { data: unknown }) => void) | null = null;
+    constructor() {
+      peers.add(this);
+    }
+    postMessage() {
+      posts++;
+      if (posts < 8)
+        queueMicrotask(() => {
+          for (const peer of peers)
+            peer.onmessage?.({
+              data: { type: "identity-changed", source: "other-tab" },
+            });
+        });
+    }
+    close() {
+      peers.delete(this);
+    }
+  }
+  vi.stubGlobal("BroadcastChannel", Channel);
+  vi.mocked(request).mockRejectedValue(
+    new RequestError("unauthenticated", 401),
+  );
+  const clear = vi.spyOn(branchJournal, "clear").mockResolvedValue(undefined);
+  try {
+    render(
+      <>
+        <SessionProvider>
+          <SessionGate allowGuest>
+            <p>tab A guest</p>
+          </SessionGate>
+        </SessionProvider>
+        <SessionProvider>
+          <SessionGate allowGuest>
+            <p>tab B guest</p>
+          </SessionGate>
+        </SessionProvider>
+      </>,
+    );
+    await screen.findByText("tab A guest");
+    await screen.findByText("tab B guest");
+    await act(async () => {
+      for (const peer of peers)
+        peer.onmessage?.({
+          data: { type: "identity-changed", source: "other-tab" },
+        });
+    });
+    expect(posts).toBe(0);
+    expect(
+      vi.mocked(request).mock.calls.filter(([url]) => url === "/api/session"),
+    ).toHaveLength(4);
+    expect(clear).toHaveBeenCalledTimes(2);
+  } finally {
+    cleanup();
+    clear.mockRestore();
+    vi.unstubAllGlobals();
+  }
+});
+
+it("temporary timer failure is visible and retries pure refresh with bounded backoff while keeping draft", async () => {
+  vi.useFakeTimers();
+  document.cookie = "glowloom_csrf=proof; path=/";
+  const now = Date.now();
+  let refreshes = 0;
+  const active = {
+    ...validSession,
+    session_protocol: "v2",
+    refresh_generation: "0",
+    upgrade_available: false,
+    server_time: new Date(now).toISOString(),
+    idle_expires_at: new Date(now + 43200000).toISOString(),
+    access_expires_at: new Date(now + 120000).toISOString(),
+    refresh_after_at: new Date(now + 60000).toISOString(),
+  };
+  vi.mocked(request).mockImplementation(async (url) => {
+    if (url === "/api/session/refresh") {
+      refreshes++;
+      if (refreshes === 1)
+        throw new RequestError("temporarily_unavailable", 503);
+      return active;
+    }
+    return url === "/api/session" ? active : { theme: "light" };
+  });
+  const view = render(
+    <SessionProvider>
+      <SessionGate>
+        <input aria-label="retry draft" defaultValue="keep this" />
+      </SessionGate>
+    </SessionProvider>,
+  );
+  try {
+    await act(async () => {});
+    const draft = screen.getByLabelText("retry draft");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60001);
+    });
+    expect(refreshes).toBe(1);
+    expect(notifications.show).toHaveBeenCalledWith(
+      "登录续期暂不可用，正在自动重试。",
+      expect.anything(),
+    );
+    expect(screen.getByLabelText("retry draft")).toBe(draft);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4999);
+    });
+    expect(refreshes).toBe(2);
+    expect(screen.getByLabelText("retry draft")).toBe(draft);
+    expect(draft).toHaveProperty("value", "keep this");
+    expect(
+      vi.mocked(request).mock.calls.filter(([url]) => url === "/api/session"),
+    ).toHaveLength(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(refreshes).toBe(2);
+  } finally {
+    view.unmount();
+    document.cookie = "glowloom_csrf=; Max-Age=0; path=/";
+    vi.useRealTimers();
+  }
+});
+it.each(["hidden", "offline", "unmount"])(
+  "temporary failure backoff stops on %s",
+  async (boundary) => {
+    vi.useFakeTimers();
+    document.cookie = "glowloom_csrf=proof; path=/";
+    const now = Date.now();
+    let refreshes = 0;
+    const active = {
+      ...validSession,
+      session_protocol: "v2",
+      refresh_generation: "0",
+      upgrade_available: false,
+      server_time: new Date(now).toISOString(),
+      idle_expires_at: new Date(now + 43200000).toISOString(),
+      access_expires_at: new Date(now + 120000).toISOString(),
+      refresh_after_at: new Date(now + 60000).toISOString(),
+    };
+    vi.mocked(request).mockImplementation(async (url) => {
+      if (url === "/api/session/refresh") {
+        refreshes++;
+        throw new RequestError("temporarily_unavailable", 503);
+      }
+      return url === "/api/session" ? active : { theme: "light" };
+    });
+    const view = render(
+      <SessionProvider>
+        <SessionGate>
+          <input aria-label="stopped draft" defaultValue="keep" />
+        </SessionGate>
+      </SessionProvider>,
+    );
+    try {
+      await act(async () => {});
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60001);
+      });
+      expect(refreshes).toBe(1);
+      act(() => {
+        if (boundary === "hidden") {
+          Object.defineProperty(document, "visibilityState", {
+            configurable: true,
+            value: "hidden",
+          });
+          document.dispatchEvent(new Event("visibilitychange"));
+        } else if (boundary === "offline") {
+          Object.defineProperty(navigator, "onLine", {
+            configurable: true,
+            value: false,
+          });
+          window.dispatchEvent(new Event("offline"));
+        } else view.unmount();
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60000);
+      });
+      expect(refreshes).toBe(1);
+    } finally {
+      view.unmount();
+      document.cookie = "glowloom_csrf=; Max-Age=0; path=/";
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        value: "visible",
+      });
+      Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: true,
+      });
+      vi.useRealTimers();
+    }
+  },
+);
+
+it.each(["origin_forbidden", "origin_mismatch"])(
+  "proxy %s renders trusted canonical link and preserves confirmed draft",
+  async (code) => {
+    vi.stubGlobal("location", new URL("http://localhost:3200/account"));
+    let mismatch = false;
+    vi.mocked(request).mockImplementation(async (url) => {
+      if (url !== "/api/session") return { theme: "light" };
+      if (mismatch)
+        throw new RequestError(code, 403, {
+          canonical_origin: "http://127.0.0.1:3200",
+        });
+      return validSession;
+    });
+    try {
+      render(
+        <SessionProvider>
+          <SessionGate>
+            <input aria-label="origin draft" defaultValue="keep" />
+          </SessionGate>
+        </SessionProvider>,
+      );
+      const draft = await screen.findByLabelText("origin draft");
+      mismatch = true;
+      await act(async () => window.dispatchEvent(new Event("focus")));
+      expect(
+        (
+          await screen.findByRole("link", { name: "使用可信网站地址打开" })
+        ).getAttribute("href"),
+      ).toBe("http://127.0.0.1:3200/account");
+      expect(screen.getByLabelText("origin draft")).toBe(draft);
+      expect(draft).toHaveProperty("value", "keep");
+    } finally {
+      cleanup();
+      vi.unstubAllGlobals();
+    }
+  },
+);
+
+it("429 renewal honors a valid server retry budget instead of retrying at five seconds", async () => {
+  vi.useFakeTimers();
+  document.cookie = "glowloom_csrf=proof; path=/";
+  const now = Date.now();
+  let refreshes = 0;
+  const active = {
+    ...validSession,
+    session_protocol: "v2",
+    refresh_generation: "0",
+    upgrade_available: false,
+    server_time: new Date(now).toISOString(),
+    idle_expires_at: new Date(now + 43200000).toISOString(),
+    access_expires_at: new Date(now + 120000).toISOString(),
+    refresh_after_at: new Date(now + 60000).toISOString(),
+  };
+  vi.mocked(request).mockImplementation(async (url) => {
+    if (url === "/api/session/refresh") {
+      refreshes++;
+      if (refreshes === 1)
+        throw new RequestError("rate_limited", 429, {
+          retry_after_seconds: 20,
+        });
+      return active;
+    }
+    return url === "/api/session" ? active : { theme: "light" };
+  });
+  const view = render(
+    <SessionProvider>
+      <SessionGate>
+        <input aria-label="budget draft" defaultValue="keep" />
+      </SessionGate>
+    </SessionProvider>,
+  );
+  try {
+    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(65000);
+    });
+    expect(refreshes).toBe(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15000);
+    });
+    expect(refreshes).toBe(2);
+    expect(
+      vi.mocked(request).mock.calls.filter(([url]) => url === "/api/session"),
+    ).toHaveLength(1);
+  } finally {
+    view.unmount();
+    document.cookie = "glowloom_csrf=; Max-Age=0; path=/";
+    vi.useRealTimers();
+  }
+});
+
+it("coalesced successful v1 upgrade receipt cannot create a zero-delay retry loop", async () => {
+  vi.useFakeTimers();
+  let upgrades = 0;
+  const now = Date.now();
+  const active = {
+    ...validSession,
+    session_protocol: "v1",
+    upgrade_available: true,
+    server_time: new Date(now).toISOString(),
+    idle_expires_at: new Date(now + 43200000).toISOString(),
+  };
+  vi.mocked(request).mockImplementation(async (url) => {
+    if (url === "/api/session/upgrade") {
+      upgrades++;
+      if (upgrades > 1) throw new RequestError("temporarily_unavailable", 503);
+      return active;
+    }
+    return url === "/api/session" ? active : { theme: "light" };
+  });
+  const view = render(
+    <SessionProvider>
+      <SessionGate>
+        <p>coalesced legacy identity</p>
+      </SessionGate>
+    </SessionProvider>,
+  );
+  try {
+    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(upgrades).toBe(1);
+    expect(screen.getByText("coalesced legacy identity")).toBeTruthy();
+  } finally {
+    view.unmount();
+    vi.useRealTimers();
+  }
 });

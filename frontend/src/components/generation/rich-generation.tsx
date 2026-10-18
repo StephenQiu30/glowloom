@@ -45,7 +45,11 @@ import {
   validatePromptFragment,
 } from "@/api/promptEditor";
 import { createFreeQuote, confirmOperationQuote } from "@/api/operations";
-import { RequestError } from "@/lib/request";
+import {
+  RequestError,
+  getSessionGeneration,
+  getScopeGeneration,
+} from "@/lib/request";
 import { reconcileLabels } from "./draft-resolution";
 import { canonical } from "./draft-save";
 import { PromptEditor } from "./prompt-editor";
@@ -799,6 +803,29 @@ function EditorWorkspace({
   }
   async function recover(branch: LocalBranch) {
     await run(async () => {
+      if (branch.inputRecovery) {
+        const editor = sessionRef.current;
+        const generation = getSessionGeneration();
+        const scope = getScopeGeneration();
+        const sequence = latest.current.localSeq;
+        const fresh = (await branchJournal.list(contextKey)).find(
+          (value) =>
+            value.replicaId === branch.replicaId && value.inputRecovery,
+        );
+        if (
+          !fresh ||
+          !editor ||
+          !alive.current ||
+          editor !== sessionRef.current ||
+          generation !== getSessionGeneration() ||
+          scope !== getScopeGeneration() ||
+          sequence !== latest.current.localSeq
+        )
+          throw new Error("恢复文字已变化或无权访问，请重新核验。");
+        // No await between the final authorization/fence check and adoption.
+        editor.adoptDraft(fresh.snapshot.draft);
+        return;
+      }
       let expectedRevision = branch.serverRevision;
       if (branch.pendingSave) {
         const r = branch.pendingSave;
@@ -977,13 +1004,15 @@ function EditorWorkspace({
             {branches.map((b) => (
               <div key={b.replicaId} className="flex flex-wrap gap-2">
                 <span>
-                  分支 {b.replicaId.slice(0, 8)} · 基线 r{b.serverRevision}
+                  {b.inputRecovery
+                    ? "登录过期前的文字（参考素材与生成设置需重新选择）"
+                    : `分支 ${b.replicaId.slice(0, 8)} · 基线 r${b.serverRevision}`}
                 </span>
                 <Button disabled={frozen} onClick={() => void recover(b)}>
                   恢复此分支
                 </Button>
                 <Button
-                  disabled={frozen || !!canvas}
+                  disabled={frozen || !!canvas || b.inputRecovery}
                   onClick={() => void run(() => copyDraft(b.snapshot.draft))}
                 >
                   保留为副本

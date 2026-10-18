@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/viper"
 )
@@ -55,6 +56,12 @@ type Config struct {
 	SMTPPassword                  string
 	SMTPFromEmail                 string
 	SMTPFromName                  string
+	IdentitySessionV2Enabled      bool
+	IdentityLegacyUpgradeUntil    time.Time
+	IdentityJWTKeyFile            string
+	IdentityJWTVerifyKeysFile     string
+	IdentityJWTActiveKID          string
+	IdentityRefreshReceiptKeyFile string
 	IdentityKeyFile               string
 	IdentityTermsVersion          string
 	IdentityMailSourceHourlyLimit int
@@ -122,10 +129,23 @@ func Load() (Config, error) {
 		SMTPPassword:                  v.GetString("SMTP_PASSWORD"),
 		SMTPFromEmail:                 strings.TrimSpace(v.GetString("SMTP_FROM_EMAIL")),
 		SMTPFromName:                  strings.TrimSpace(v.GetString("SMTP_FROM_NAME")),
+		IdentitySessionV2Enabled:      v.GetBool("LV_IDENTITY_SESSION_V2_ENABLED"),
+		IdentityLegacyUpgradeUntil:    v.GetTime("LV_IDENTITY_LEGACY_UPGRADE_UNTIL"),
+		IdentityJWTKeyFile:            strings.TrimSpace(v.GetString("LV_IDENTITY_JWT_KEY_FILE")),
+		IdentityJWTVerifyKeysFile:     strings.TrimSpace(v.GetString("LV_IDENTITY_JWT_VERIFY_KEYS_FILE")),
+		IdentityJWTActiveKID:          strings.TrimSpace(v.GetString("LV_IDENTITY_JWT_ACTIVE_KID")),
+		IdentityRefreshReceiptKeyFile: strings.TrimSpace(v.GetString("LV_IDENTITY_REFRESH_RECEIPT_KEY_FILE")),
 		IdentityKeyFile:               strings.TrimSpace(v.GetString("LV_IDENTITY_KEY_FILE")),
 		IdentityTermsVersion:          strings.TrimSpace(v.GetString("LV_IDENTITY_TERMS_VERSION")),
 		IdentityMailSourceHourlyLimit: v.GetInt("LV_IDENTITY_MAIL_SOURCE_HOURLY_LIMIT"),
 		IdentityMailGlobalHourlyLimit: v.GetInt("LV_IDENTITY_MAIL_GLOBAL_HOURLY_LIMIT"),
+	}
+	if raw := strings.TrimSpace(v.GetString("LV_IDENTITY_LEGACY_UPGRADE_UNTIL")); raw != "" {
+		deadline, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("%w: legacy upgrade deadline must be RFC3339", ErrInvalid)
+		}
+		cfg.IdentityLegacyUpgradeUntil = deadline
 	}
 	if path := strings.TrimSpace(v.GetString("LV_OBJECT_STORAGE_CONFIG")); path != "" {
 		if cfg.ObjectStorageEndpoint != "" || cfg.ObjectStorageBucket != "" || cfg.ObjectStorageAccessKey != "" || cfg.ObjectStorageSecretKey != "" || cfg.ObjectStorageRegion != "" {
@@ -144,6 +164,10 @@ func Load() (Config, error) {
 }
 
 func (c Config) validate() error {
+	if err := c.ValidateIdentitySessionV2(); err != nil {
+		return err
+	}
+
 	if c.IdentityKeyFile != "" && !filepath.IsAbs(c.IdentityKeyFile) {
 		return fmt.Errorf("%w: identity key file must be absolute", ErrInvalid)
 	}

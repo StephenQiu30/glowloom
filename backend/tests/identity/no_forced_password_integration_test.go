@@ -26,7 +26,7 @@ func TestHistoricalPasswordFlagNeverRestrictsAuthenticatedAccount(t *testing.T) 
 		{"short-legacy-marked", "old", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			tx := existingIdentityTransaction(t)
+			tx := sessionV2RollbackTransaction(t)
 			now := time.Now().UTC()
 			email := tc.name + "@no-force.example.invalid"
 			auth, actor := verifiedTestActor(t, tx, email, now)

@@ -7,7 +7,13 @@ const identityRoutes: {
   query: string[];
 }[] = [
   { pattern: `sessions`, methods: ["POST"], query: [] },
+  { pattern: `session/(refresh|upgrade)`, methods: ["POST"], query: [] },
   { pattern: `session`, methods: ["GET"], query: [] },
+  {
+    pattern: `projects/${identityUUID}/prompt-drafts/${identityUUID}`,
+    methods: ["GET"],
+    query: [],
+  },
   { pattern: `auth-policy`, methods: ["GET"], query: [] },
   { pattern: `registrations`, methods: ["POST"], query: [] },
   {

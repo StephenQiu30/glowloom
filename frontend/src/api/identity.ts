@@ -989,6 +989,22 @@ export async function getSession(options?: RequestOptions) {
   });
 }
 
+/** 此处后端没有提供注释 POST /api/session/refresh */
+export async function refreshSession(options?: RequestOptions) {
+  return request<API.EmailSessionView>("/api/session/refresh", {
+    method: "POST",
+    ...(options || {}),
+  });
+}
+
+/** 此处后端没有提供注释 POST /api/session/upgrade */
+export async function upgradeSession(options?: RequestOptions) {
+  return request<API.EmailSessionView>("/api/session/upgrade", {
+    method: "POST",
+    ...(options || {}),
+  });
+}
+
 /** 此处后端没有提供注释 POST /api/sessions */
 export async function createSession(
   body: API.EmailLoginRequest,

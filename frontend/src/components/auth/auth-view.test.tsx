@@ -2,6 +2,11 @@ import { render, findFeedback } from "../../../tests/feedback";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AuthView } from "./auth-view";
+import { requireSession } from "./contracts";
+import {
+  configureSessionRenewal,
+  disposeSessionRenewal,
+} from "./session-renewal";
 import { request, RequestError } from "@/lib/request";
 vi.mock("@/lib/request", async (original) => ({
   ...(await original<typeof import("@/lib/request")>()),
@@ -23,6 +28,10 @@ const session = {
   credential_epoch: "1",
   csrf_token: "session-bound-proof",
   must_change_password: false,
+  session_protocol: "v1",
+  upgrade_available: false,
+  server_time: new Date().toISOString(),
+  idle_expires_at: new Date(Date.now() + 43200000).toISOString(),
   persistent: false,
   last_active_at: new Date().toISOString(),
   absolute_expires_at: new Date(Date.now() + 86400000).toISOString(),
@@ -35,7 +44,10 @@ const policy = {
   terms_url: "/terms",
   privacy_url: "/privacy",
 };
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  disposeSessionRenewal();
+});
 beforeEach(() => {
   vi.stubGlobal(
     "ResizeObserver",
@@ -425,6 +437,7 @@ it("recovery keeps an invalid email error visible", async () => {
 });
 
 it("optional password page can switch accounts only after revoking the current session", async () => {
+  configureSessionRenewal(requireSession(session), () => {});
   vi.mocked(request).mockImplementation(async (url) =>
     url === "/api/session"
       ? { ...session, must_change_password: true }
@@ -445,6 +458,7 @@ it("optional password page can switch accounts only after revoking the current s
 });
 
 it("failed account switching stays on the form and preserves input", async () => {
+  configureSessionRenewal(requireSession(session), () => {});
   vi.mocked(request).mockImplementation(async (url) => {
     if (url === "/api/session")
       return { ...session, must_change_password: true };
@@ -507,3 +521,34 @@ it("受邀注册在已生效条款下保留邀请连续性，初次验证码请�
   );
   clearInvitation();
 });
+
+it.each(["origin_forbidden", "origin_mismatch"])(
+  "origin error %s renders a trusted canonical link and preserves login input",
+  async (code) => {
+    vi.stubGlobal("location", new URL("http://localhost:3200/login"));
+    vi.mocked(request).mockRejectedValue(
+      new RequestError(code, 403, {
+        canonical_origin: "http://127.0.0.1:3200",
+      }),
+    );
+    try {
+      render(<AuthView mode="login" embedded />);
+      login();
+      expect(
+        (
+          await screen.findByRole("link", { name: "使用可信网站地址打开" })
+        ).getAttribute("href"),
+      ).toBe("http://127.0.0.1:3200/login");
+      expect(screen.getByLabelText("邮箱")).toHaveProperty(
+        "value",
+        "alice@example.com",
+      );
+      expect(screen.getByLabelText("密码", { exact: true })).toHaveProperty(
+        "value",
+        "LongPassword12345",
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  },
+);

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
+
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
@@ -25,7 +27,7 @@ func TestFinalUserRouterSeparatesIdentityAndContentScopes(t *testing.T) {
 	if err := tx.Exec(`UPDATE identity."user" SET must_change_password=true WHERE id=?`, login.User.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, tx, nil)
+	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, tx, nil, identityruntime.SessionDependencies{})
 	if err != nil {
 		t.Fatal(err)
 	}

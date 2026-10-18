@@ -127,3 +127,49 @@ it("同一空间失去管理员角色也清除旧私有视图", async () => {
     expect(screen.getByLabelText("私有草稿")).toHaveProperty("value", ""),
   );
 });
+
+it("同账号首次建立空间及重新挂载不清除本地恢复分支", async () => {
+  vi.mocked(request).mockResolvedValue({ items: [personal] });
+  const view = render(
+    <SpaceProvider>
+      <Child />
+    </SpaceProvider>,
+  );
+  await screen.findByText("personal");
+  expect(mocks.clear).not.toHaveBeenCalled();
+  view.unmount();
+  render(
+    <SpaceProvider>
+      <Child />
+    </SpaceProvider>,
+  );
+  await screen.findByText("personal");
+  expect(mocks.clear).not.toHaveBeenCalled();
+});
+
+it("business viewer403 revalidates once and retains readable team and draft", async () => {
+  vi.mocked(request).mockResolvedValue({
+    items: [personal, { ...team, role: "viewer", writable: false }],
+  });
+  render(
+    <SpaceProvider>
+      <Child />
+    </SpaceProvider>,
+  );
+  await screen.findByLabelText("私有草稿");
+  fireEvent.change(screen.getByLabelText("当前创作空间"), {
+    target: { value: "team" },
+  });
+  await screen.findByText("team");
+  const draft = screen.getByLabelText("私有草稿");
+  fireEvent.change(draft, { target: { value: "viewer idea" } });
+  const count = vi.mocked(request).mock.calls.length;
+  const clears = mocks.clear.mock.calls.length;
+  mocks.denied();
+  mocks.denied();
+  await waitFor(() => expect(request).toHaveBeenCalledTimes(count + 1));
+  expect(screen.getByText("team")).toBeTruthy();
+  expect(screen.getByLabelText("私有草稿")).toBe(draft);
+  expect(draft).toHaveProperty("value", "viewer idea");
+  expect(mocks.clear).toHaveBeenCalledTimes(clears);
+});

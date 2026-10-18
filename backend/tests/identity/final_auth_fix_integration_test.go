@@ -28,7 +28,11 @@ import (
 // transactions. No sender, external object store, or new database is used.
 func finalAuthFixture(t *testing.T) (*gorm.DB, *identity.Auth, *credentialproof.Protector, identity.AuthResult, *time.Time) {
 	t.Helper()
-	tx := existingIdentityTransaction(t)
+	return finalAuthFixtureWithTransaction(t, existingIdentityTransaction(t))
+}
+
+func finalAuthFixtureWithTransaction(t *testing.T, tx *gorm.DB) (*gorm.DB, *identity.Auth, *credentialproof.Protector, identity.AuthResult, *time.Time) {
+	t.Helper()
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	_, actor := verifiedTestActor(t, tx, "final-auth@example.invalid", now)
 	protector, err := credentialproof.New("test-only", []byte(strings.Repeat("h", 32)), []byte(strings.Repeat("e", 32)))

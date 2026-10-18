@@ -1,7 +1,6 @@
 package http
 
 import (
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -45,6 +44,8 @@ func (h *SessionDirectoryHandler) Register(group *gin.RouterGroup) {
 // @Success 204
 // @Failure 401 {object} httpapi.Problem
 // @Failure 409 {object} httpapi.Problem
+// @Failure 403 {object} httpapi.Problem
+// @Failure 503 {object} httpapi.Problem
 // @Router /api/sessions/{id} [delete]
 func (h *SessionDirectoryHandler) Revoke(c *gin.Context) {
 	id, ok := httpapi.PathUUID(c, "id")
@@ -57,7 +58,7 @@ func (h *SessionDirectoryHandler) Revoke(c *gin.Context) {
 		return
 	}
 	if id == actor.SessionID {
-		http.SetCookie(c.Writer, &http.Cookie{Name: sessionCookie, Path: "/", HttpOnly: true, Secure: h.secure, SameSite: http.SameSiteLaxMode, MaxAge: -1})
+		clearSessionCookies(c, h.secure)
 	}
 	c.Status(204)
 }

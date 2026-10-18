@@ -1,8 +1,8 @@
 package http
 
 import (
-	"crypto/subtle"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"strconv"
@@ -99,13 +99,20 @@ type MeView struct {
 
 // EmailSessionView returns the session metadata and session-bound CSRF token.
 type EmailSessionView struct {
-	Actor             MeView    `json:"actor" binding:"required"`
-	SessionID         uuid.UUID `json:"session_id" binding:"required"`
-	LastActiveAt      time.Time `json:"last_active_at" binding:"required"`
-	AbsoluteExpiresAt time.Time `json:"absolute_expires_at" binding:"required"`
-	Persistent        bool      `json:"persistent" binding:"required"`
-	CredentialEpoch   string    `json:"credential_epoch" binding:"required"`
-	CSRFToken         string    `json:"csrf_token" binding:"required"`
+	RefreshGeneration string     `json:"refresh_generation,omitempty"`
+	Actor             MeView     `json:"actor" binding:"required"`
+	SessionID         uuid.UUID  `json:"session_id" binding:"required"`
+	LastActiveAt      time.Time  `json:"last_active_at" binding:"required"`
+	AbsoluteExpiresAt time.Time  `json:"absolute_expires_at" binding:"required"`
+	Persistent        bool       `json:"persistent" binding:"required"`
+	CredentialEpoch   string     `json:"credential_epoch" binding:"required"`
+	CSRFToken         string     `json:"csrf_token" binding:"required"`
+	AccessExpiresAt   *time.Time `json:"access_expires_at,omitempty"`
+	IdleExpiresAt     time.Time  `json:"idle_expires_at" binding:"required"`
+	RefreshAfterAt    *time.Time `json:"refresh_after_at,omitempty"`
+	ServerTime        time.Time  `json:"server_time" binding:"required"`
+	SessionProtocol   string     `json:"session_protocol" binding:"required"`
+	UpgradeAvailable  bool       `json:"upgrade_available" binding:"required"`
 }
 
 // AcceptedView acknowledges a queued operation without claiming mail delivery.
@@ -121,6 +128,7 @@ type EmailAuthHandler struct {
 	origin string
 	secure bool
 	revoke gin.HandlerFunc
+	policy SessionHTTPPolicy
 }
 
 // NewEmailAuthHandler constructs EmailAuthHandler with explicit caller-supplied dependencies.
@@ -130,18 +138,20 @@ func NewEmailAuthHandler(auth *application.Auth, origin string, secure bool) *Em
 
 // Register installs email authentication and recovery endpoints.
 func (h *EmailAuthHandler) Register(api *gin.RouterGroup) {
-	routes := api.Group("", httpapi.Middleware(h.origin), func(c *gin.Context) { c.Header("Cache-Control", "no-store"); c.Next() })
+	routes := api.Group("", func(c *gin.Context) { c.Header("Cache-Control", "no-store"); c.Next() }, httpapi.Middleware(h.origin))
 	routes.POST("/registrations", h.start)
 	routes.POST("/registrations/:id/resend", h.resend)
 	routes.POST("/registrations/:id/verify", h.verify)
 	routes.POST("/registrations/:id/complete", h.complete)
 	routes.POST("/sessions", h.login)
 	routes.GET("/session", h.current)
+	routes.POST("/session/refresh", h.refresh)
+	routes.POST("/session/upgrade", h.upgrade)
 	routes.POST("/password-resets", h.resetStart)
 	routes.POST("/password-resets/complete", h.resetComplete)
 	routes.POST("/me/reauthentication", h.authenticated(), h.reauthenticate)
 	routes.POST("/me/password", h.authenticated(), h.password)
-	routes.DELETE("/sessions/:id", h.authenticated(), h.revokeSession)
+	routes.DELETE("/sessions/:id", h.revokeSession)
 }
 
 // WithSessionRevocation installs the self-owned session directory revocation adapter.
@@ -150,6 +160,33 @@ func (h *EmailAuthHandler) WithSessionRevocation(revoke gin.HandlerFunc) *EmailA
 	return h
 }
 func (h *EmailAuthHandler) revokeSession(c *gin.Context) {
+	result, err := h.authenticateRequest(c, application.NoActivity)
+	if err != nil {
+		// A refresh is authority only for its own bound target, never the device directory.
+		if !errors.Is(err, application.ErrAccessExpired) && !errors.Is(err, application.ErrSessionInvalid) {
+			emailAuthProblem(c, err)
+			return
+		}
+		id, ok := httpapi.PathUUID(c, "id")
+		if !ok {
+			return
+		}
+		if !h.refreshCSRF(c) {
+			return
+		}
+		refresh, _ := c.Cookie(sessionCookieName(h.secure, "refresh"))
+		if err := h.auth.LogoutCurrentWithRefresh(c.Request.Context(), refresh, c.GetHeader("X-CSRF-Token"), id); err != nil {
+			emailAuthProblem(c, err)
+			return
+		}
+		clearSessionCookies(c, h.secure)
+		c.Status(204)
+		return
+	}
+	if !h.authorizeWrite(c, result) {
+		return
+	}
+	h.setPrincipal(c, result)
 	if h.revoke != nil {
 		h.revoke(c)
 		return
@@ -163,27 +200,28 @@ func (h *EmailAuthHandler) RequireSession() gin.HandlerFunc { return h.authentic
 func (h *EmailAuthHandler) authenticated() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Cache-Control", "no-store")
-		result, err := h.auth.Current(c.Request.Context(), cookieToken(c))
+		result, err := h.authenticateRequest(c, application.NoActivity)
 		if err != nil {
 			emailAuthProblem(c, err)
 			return
 		}
-		if c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead && c.Request.Method != http.MethodOptions {
-			if h.origin == "" || c.GetHeader("Origin") != h.origin || result.CSRFToken == "" || subtle.ConstantTimeCompare([]byte(c.GetHeader("X-CSRF-Token")), []byte(result.CSRFToken)) != 1 {
-				httpapi.WriteProblem(c, 403, "forbidden", nil)
-				return
-			}
+		if !h.authorizeWrite(c, result) {
+			return
 		}
 		u := result.User
 		if strings.HasPrefix(c.FullPath(), "/api/platform/") && u.PlatformRole != "platform_admin" {
 			httpapi.WriteProblem(c, 403, "forbidden", nil)
 			return
 		}
-		// OrgID is the server-resolved personal storage coordinate, never authority.
-		// Content middleware replaces it with the explicitly authorized creation scope.
-		c.Set("principal", application.Principal{ID: u.ID, OrgID: u.OrgID, SessionID: result.Session.ID, CredentialEpoch: u.SessionEpoch, PlatformEpoch: u.PlatformEpoch, PlatformRole: u.PlatformRole, LoginName: u.LoginName, DisplayName: u.DisplayName})
-		c.Set("email_session", result)
+		h.setPrincipal(c, result)
 		c.Next()
+		if c.Writer.Status() >= 200 && c.Writer.Status() < 300 && sessionBusinessActivity(c) {
+			if _, err := h.authenticateRequest(c, application.UserActivity); err != nil {
+				// Mutation already committed: report activity failure without asking clients to retry it.
+				slog.WarnContext(c.Request.Context(), "session activity update failed", "request_id", c.GetString("request_id"))
+				_ = c.Error(errors.New("session activity update failed"))
+			}
+		}
 	}
 }
 func requestSource(c *gin.Context) string {
@@ -323,6 +361,8 @@ func (h *EmailAuthHandler) complete(c *gin.Context) {
 // @Failure 401 {object} httpapi.Problem
 // @Failure 429 {object} httpapi.Problem
 // @Failure 422 {object} httpapi.Problem
+// @Failure 403 {object} httpapi.Problem
+// @Failure 503 {object} httpapi.Problem
 // @Router /api/sessions [post]
 func (h *EmailAuthHandler) login(c *gin.Context) {
 	var input EmailLoginRequest
@@ -340,9 +380,11 @@ func (h *EmailAuthHandler) login(c *gin.Context) {
 // @Produce json
 // @Success 200 {object} EmailSessionView
 // @Failure 422 {object} httpapi.Problem
+// @Failure 401 {object} httpapi.Problem
+// @Failure 503 {object} httpapi.Problem
 // @Router /api/session [get]
 func (h *EmailAuthHandler) current(c *gin.Context) {
-	r, err := h.auth.Current(c.Request.Context(), cookieToken(c))
+	r, err := h.authenticateRequest(c, application.UserActivity)
 	h.respond(c, r, err, 200)
 }
 
@@ -393,13 +435,22 @@ func (h *EmailAuthHandler) resetComplete(c *gin.Context) {
 // @Param body body ReauthenticationRequest true "Request"
 // @Success 204
 // @Failure 422 {object} httpapi.Problem
+// @Failure 401 {object} httpapi.Problem
+// @Failure 403 {object} httpapi.Problem
+// @Failure 503 {object} httpapi.Problem
 // @Router /api/me/reauthentication [post]
 func (h *EmailAuthHandler) reauthenticate(c *gin.Context) {
 	var input ReauthenticationRequest
 	if !httpapi.Decode(c, &input) {
 		return
 	}
-	if err := h.auth.Reauthenticate(c.Request.Context(), cookieToken(c), input.Password); err != nil {
+	var err error
+	if result, ok := c.MustGet("email_session").(application.AuthResult); ok && result.Session.ProtocolVersion == 2 {
+		err = h.auth.ReauthenticateCurrent(c.Request.Context(), Principal(c), input.Password)
+	} else {
+		err = h.auth.Reauthenticate(c.Request.Context(), cookieToken(c), input.Password)
+	}
+	if err != nil {
 		emailAuthProblem(c, err)
 		return
 	}
@@ -414,6 +465,10 @@ func (h *EmailAuthHandler) reauthenticate(c *gin.Context) {
 // @Param body body EmailPasswordChangeRequest true "Request"
 // @Success 200 {object} EmailSessionView
 // @Failure 422 {object} httpapi.Problem
+// @Failure 401 {object} httpapi.Problem
+// @Failure 403 {object} httpapi.Problem
+// @Failure 409 {object} httpapi.Problem
+// @Failure 503 {object} httpapi.Problem
 // @Router /api/me/password [post]
 func (h *EmailAuthHandler) password(c *gin.Context) {
 	var input EmailPasswordChangeRequest
@@ -425,7 +480,12 @@ func (h *EmailAuthHandler) password(c *gin.Context) {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		return
 	}
-	r, err := h.auth.ChangePassword(c.Request.Context(), cookieToken(c), epoch, input.Current, input.New, input.Confirmation)
+	var r application.AuthResult
+	if result, ok := c.MustGet("email_session").(application.AuthResult); ok && result.Session.ProtocolVersion == 2 {
+		r, err = h.auth.ChangePasswordCurrent(c.Request.Context(), Principal(c), epoch, input.Current, input.New, input.Confirmation)
+	} else {
+		r, err = h.auth.ChangePassword(c.Request.Context(), cookieToken(c), epoch, input.Current, input.New, input.Confirmation)
+	}
 	h.respond(c, r, err, 200)
 }
 func (h *EmailAuthHandler) logout(c *gin.Context) {
@@ -433,11 +493,18 @@ func (h *EmailAuthHandler) logout(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := h.auth.Logout(c.Request.Context(), cookieToken(c), id); err != nil {
+	var err error
+	if r, ok := c.Get("email_session"); ok && r.(application.AuthResult).Session.ProtocolVersion == 2 {
+		token, _ := c.Cookie(sessionCookieName(h.secure, "refresh"))
+		err = h.auth.LogoutCurrentWithRefresh(c.Request.Context(), token, c.GetHeader("X-CSRF-Token"), id)
+	} else {
+		err = h.auth.Logout(c.Request.Context(), cookieToken(c), id)
+	}
+	if err != nil {
 		emailAuthProblem(c, err)
 		return
 	}
-	http.SetCookie(c.Writer, &http.Cookie{Name: sessionCookie, Path: "/", HttpOnly: true, Secure: h.secure, SameSite: http.SameSiteLaxMode, MaxAge: -1})
+	clearSessionCookies(c, h.secure)
 	c.Status(204)
 }
 func (h *EmailAuthHandler) respond(c *gin.Context, r application.AuthResult, err error, status int) {
@@ -445,7 +512,12 @@ func (h *EmailAuthHandler) respond(c *gin.Context, r application.AuthResult, err
 		emailAuthProblem(c, err)
 		return
 	}
+	if r.AccessToken != "" {
+		h.clearReplacedSessionCookies(c, true)
+		h.writeSessionCookies(c, r)
+	}
 	if r.Token != "" {
+		h.clearReplacedSessionCookies(c, false)
 		cookie := &http.Cookie{Name: sessionCookie, Value: r.Token, Path: "/", HttpOnly: true, Secure: h.secure, SameSite: http.SameSiteLaxMode}
 		if r.Session.Persistent {
 			cookie.Expires = r.Session.AbsoluteExpiresAt
@@ -457,7 +529,11 @@ func (h *EmailAuthHandler) respond(c *gin.Context, r application.AuthResult, err
 	if u.PlatformRole == "platform_admin" {
 		capabilities = append(capabilities, "platform:manage")
 	}
-	c.JSON(status, EmailSessionView{Actor: MeView{ID: u.ID, Email: u.Email, EmailVerifiedAt: u.EmailVerifiedAt, DisplayName: u.DisplayName, AvatarAssetID: u.AvatarAssetID, PlatformRole: u.PlatformRole, Status: string(u.Status), Revision: strconv.FormatInt(u.Revision, 10), Capabilities: capabilities}, SessionID: r.Session.ID, LastActiveAt: r.Session.LastActiveAt, AbsoluteExpiresAt: r.Session.AbsoluteExpiresAt, Persistent: r.Session.Persistent, CredentialEpoch: strconv.FormatInt(u.SessionEpoch, 10), CSRFToken: r.CSRFToken})
+	refreshGeneration := ""
+	if r.Session.ProtocolVersion == 2 {
+		refreshGeneration = strconv.FormatInt(r.Session.RefreshGeneration, 10)
+	}
+	c.JSON(status, EmailSessionView{RefreshGeneration: refreshGeneration, Actor: MeView{ID: u.ID, Email: u.Email, EmailVerifiedAt: u.EmailVerifiedAt, DisplayName: u.DisplayName, AvatarAssetID: u.AvatarAssetID, PlatformRole: u.PlatformRole, Status: string(u.Status), Revision: strconv.FormatInt(u.Revision, 10), Capabilities: capabilities}, SessionID: r.Session.ID, LastActiveAt: r.Session.LastActiveAt, AbsoluteExpiresAt: r.Session.AbsoluteExpiresAt, Persistent: r.Session.Persistent, CredentialEpoch: strconv.FormatInt(u.SessionEpoch, 10), CSRFToken: r.CSRFToken, AccessExpiresAt: optionalTime(r.AccessExpiresAt), IdleExpiresAt: sessionIdleDeadline(r.Session), RefreshAfterAt: optionalTime(r.RefreshAfterAt), ServerTime: r.ServerTime, SessionProtocol: sessionProtocol(r.Session), UpgradeAvailable: r.Session.ProtocolVersion != 2 && h.policy.V2Enabled && !h.policy.LegacyUpgradeUntil.IsZero() && r.ServerTime.Before(h.policy.LegacyUpgradeUntil) && h.auth.LegacyUpgradeAvailable(r.ServerTime)})
 }
 func emailAuthProblem(c *gin.Context, err error) {
 	c.Header("Cache-Control", "no-store")
@@ -467,10 +543,23 @@ func emailAuthProblem(c *gin.Context, err error) {
 	case errors.As(err, &limited):
 		status, code = 429, "rate_limited"
 		c.Header("Retry-After", strconv.FormatInt(max(1, int64((limited.RetryAfter+time.Second-1)/time.Second)), 10))
+	case errors.Is(err, application.ErrSessionCSRFInvalid):
+		status, code = 403, "csrf_invalid"
+	case errors.Is(err, application.ErrAccessExpired):
+		status, code = 401, "access_expired"
+	case errors.Is(err, application.ErrAccessInvalid):
+		status, code = 401, "session_invalid"
+	case errors.Is(err, application.ErrRefreshRaced):
+		status, code = 409, "refresh_raced"
+	case errors.Is(err, application.ErrRefreshBusy):
+		status, code = 409, "refresh_busy"
+	case errors.Is(err, application.ErrRefreshRateLimited):
+		status, code = 429, "rate_limited"
+		c.Header("Retry-After", "1")
 	case errors.Is(err, application.ErrInvalidCredentials):
 		status, code = 401, "invalid_credentials"
-	case errors.Is(err, application.ErrSessionInvalid):
-		status, code = 401, "unauthenticated"
+	case errors.Is(err, errSessionCookieConflict), errors.Is(err, application.ErrSessionInvalid):
+		status, code = 401, "session_invalid"
 	case errors.Is(err, application.ErrProofInvalid):
 		status, code = 422, "proof_invalid"
 	case errors.Is(err, application.ErrReauthenticationRequired):

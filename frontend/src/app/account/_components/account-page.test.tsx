@@ -19,6 +19,7 @@ vi.mock("@/components/auth/session", () => ({
   useSession: () => session,
   useSessionUpdate: () => mocks.update,
   clearPrivateSession: mocks.clear,
+  revokeSession: vi.fn(),
 }));
 const profile = {
   id: "11111111-1111-4111-8111-111111111111",

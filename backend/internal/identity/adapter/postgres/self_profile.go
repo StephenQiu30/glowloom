@@ -57,7 +57,7 @@ func lockSelfActor(tx *gorm.DB, actor application.Principal, clock func() time.T
 		return domain.User{}, err
 	}
 	var session domain.AuthSession
-	r := tx.Raw(`SELECT id,account_id,credential_revision,created_at,last_active_at,absolute_expires_at,revoked_at,reauth_at,reauth_epoch FROM identity.user_session WHERE id=? AND account_id=? FOR UPDATE`, actor.SessionID, actor.ID).Scan(&session)
+	r := tx.Raw(`SELECT id,account_id,credential_revision,created_at,last_active_at,absolute_expires_at,persistent,protocol_version,idle_timeout_seconds,refresh_generation,revoked_at,reauth_at,reauth_epoch FROM identity.user_session WHERE id=? AND account_id=? FOR UPDATE`, actor.SessionID, actor.ID).Scan(&session)
 	if r.Error != nil {
 		return domain.User{}, fmt.Errorf("lock self session: %w", r.Error)
 	}

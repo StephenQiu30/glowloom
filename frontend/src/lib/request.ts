@@ -3,6 +3,7 @@ import axios, { type AxiosRequestConfig } from "axios";
 export type RequestOptions = Omit<AxiosRequestConfig, "url"> & {
   /** Emitted by @umijs/openapi for multipart uploads. */
   requestType?: "form";
+  sessionRecovery?: "auto" | "never";
 };
 
 export class RequestError extends Error {
@@ -17,6 +18,60 @@ export class RequestError extends Error {
 }
 
 let csrfToken: string | null = null;
+export function getCSRFToken() {
+  return csrfToken;
+}
+let recoveryHandler: ((signal: AbortSignal) => Promise<void>) | null = null;
+let recoveryFlight: Promise<void> | null = null;
+let recoveryRevision = 0;
+let pendingRenewal: Promise<unknown> | null = null;
+/** Consumer port: every renewal source publishes its pending work before writes. */
+export function trackSessionRenewal(pending: Promise<unknown> | null) {
+  pendingRenewal = pending;
+  if (!pending) return;
+  void pending
+    .then(
+      () => {
+        ++recoveryRevision;
+      },
+      () => {},
+    )
+    .finally(() => {
+      if (pendingRenewal === pending) pendingRenewal = null;
+    });
+}
+export function setSessionRecovery(handler: typeof recoveryHandler) {
+  recoveryHandler = handler;
+  recoveryFlight = null;
+}
+function recoverSession() {
+  if (!recoveryFlight && recoveryHandler) {
+    const pending = recoveryHandler(new AbortController().signal).then(() => {
+      ++recoveryRevision;
+    });
+    recoveryFlight = pending;
+    void pending
+      .finally(() => {
+        if (recoveryFlight === pending) recoveryFlight = null;
+      })
+      .catch(() => {});
+  }
+  return recoveryFlight;
+}
+export function waitForSession<T>(
+  pending: Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  if (!signal) return pending;
+  if (signal.aborted) return Promise.reject(new axios.CanceledError());
+  return new Promise((resolve, reject) => {
+    const cancel = () => reject(new axios.CanceledError());
+    signal.addEventListener("abort", cancel, { once: true });
+    pending
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener("abort", cancel));
+  });
+}
 let sessionGeneration = 0;
 const sessionInvalidationListeners = new Set<(generation: number) => void>();
 export function getSessionGeneration() {
@@ -38,6 +93,13 @@ export function notifySessionInvalidation(generation: number) {
 }
 
 let creationScope: string | null = null;
+let scopeGeneration = 0;
+export function getScopeGeneration() {
+  return scopeGeneration;
+}
+export function sessionCancellation() {
+  return new axios.CanceledError("identity_or_scope_changed");
+}
 let scopeController = new AbortController();
 let scopeSwitching = false;
 const scopeDeniedListeners = new Set<() => void>();
@@ -55,6 +117,7 @@ export function getCreationScope() {
 }
 export function setCreationScope(scope: string | null) {
   if (creationScope !== scope) {
+    ++scopeGeneration;
     scopeController.abort();
     scopeController = new AbortController();
   }
@@ -126,20 +189,33 @@ export async function request<T>(
   url: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { requestType, ...config } = options;
+  const { requestType, sessionRecovery = "auto", ...config } = options;
   if (requestType === "form") {
     config.timeout ??= 120_000;
   }
   const method = config.method?.toUpperCase() ?? "GET";
   if (scopeSwitching && !["GET", "HEAD", "OPTIONS"].includes(method))
     throw new RequestError("scope_switch_pending", 409);
+  const publicAuth =
+    /^\/api\/(auth-policy|invitations\/preview|registrations(?:\/|$)|password-resets(?:\/|$)|session\/(refresh|upgrade)(?:\/|$))/.test(
+      url,
+    ) ||
+    (url === "/api/sessions" && method === "POST");
+  const canRecover = sessionRecovery === "auto" && !publicAuth;
   const scopeSignal = scopeController.signal;
   const signal = config.signal
     ? AbortSignal.any([config.signal as AbortSignal, scopeSignal])
     : scopeSignal;
   const generation = sessionGeneration;
   const proof = csrfToken;
+  const observedRecovery = recoveryRevision;
   try {
+    const waiting = pendingRenewal ?? recoveryFlight;
+    if (canRecover && waiting) {
+      await waitForSession(waiting, signal);
+      if (signal.aborted || generation !== sessionGeneration)
+        throw new axios.CanceledError("identity_or_scope_changed");
+    }
     const outgoing = {
       ...config,
       url,
@@ -167,24 +243,47 @@ export async function request<T>(
       generation === sessionGeneration &&
       url !== "/api/me/spaces" &&
       error instanceof RequestError &&
-      error.status === 403
+      error.status === 403 &&
+      ![
+        "origin_forbidden",
+        "origin_mismatch",
+        "csrf_invalid",
+        "csrf_required",
+        "session_invalid",
+        "session_cookie_conflict",
+      ].includes(error.code)
     )
       for (const listener of [...scopeDeniedListeners]) listener();
-    const publicAuth =
-      /^\/api\/(auth-policy|invitations\/preview|registrations(?:\/|$)|password-resets(?:\/|$))/.test(
-        url,
-      ) ||
-      (url === "/api/sessions" && config.method?.toUpperCase() === "POST");
-    const rejectedPasswordProof =
-      url === "/api/me/reauthentication" &&
+    if (
+      canRecover &&
       error instanceof RequestError &&
-      error.code === "invalid_credentials";
+      error.status === 401 &&
+      error.code === "access_expired" &&
+      recoveryHandler
+    ) {
+      if (observedRecovery === recoveryRevision)
+        await waitForSession(recoverSession()!, signal);
+      if (
+        signal.aborted ||
+        scopeSignal.aborted ||
+        generation !== sessionGeneration
+      )
+        throw new axios.CanceledError("identity_or_scope_changed");
+      if (["GET", "HEAD"].includes(method))
+        return request<T>(url, { ...options, sessionRecovery: "never" });
+      throw error;
+    }
+    const rejectedPasswordProof =
+      ["/api/me/reauthentication", "/api/me/password"].includes(url) &&
+      error instanceof RequestError &&
+      ["invalid_credentials", "current_password_invalid"].includes(error.code);
     if (
       proof &&
       !publicAuth &&
       !rejectedPasswordProof &&
       error instanceof RequestError &&
-      error.status === 401
+      error.status === 401 &&
+      error.code !== "access_expired"
     )
       notifySessionInvalidation(generation);
     throw error;

@@ -120,7 +120,7 @@ func (t *authTx) ReauthenticateSession(id uuid.UUID, epoch int64, now time.Time)
 	return t.updateSession(`UPDATE identity.user_session SET reauth_at=?,reauth_epoch=? WHERE id=? AND revoked_at IS NULL`, now, epoch, id)
 }
 func (t *authTx) InsertSession(s domain.AuthSession) error {
-	if err := t.db.Exec(`INSERT INTO identity.user_session(id,account_id,token_hash,credential_revision,created_at,last_active_at,absolute_expires_at,persistent) VALUES(?::uuid,?::uuid,?,?,?,?,?,?)`, s.ID.String(), s.AccountID.String(), s.TokenHash, s.CredentialRevision, s.CreatedAt, s.LastActiveAt, s.AbsoluteExpiresAt, s.Persistent).Error; err != nil {
+	if err := t.db.Exec(`INSERT INTO identity.user_session(id,account_id,token_hash,credential_revision,created_at,last_active_at,absolute_expires_at,persistent,protocol_version,idle_timeout_seconds,refresh_generation) VALUES(?::uuid,?::uuid,?,?,?,?,?,?,?,?,?)`, s.ID.String(), s.AccountID.String(), s.TokenHash, s.CredentialRevision, s.CreatedAt, s.LastActiveAt, s.AbsoluteExpiresAt, s.Persistent, s.ProtocolVersion, s.IdleTimeoutSeconds, s.RefreshGeneration).Error; err != nil {
 		return fmt.Errorf("insert authentication session: %w", err)
 	}
 	return nil
@@ -129,10 +129,10 @@ func (t *authTx) TouchSession(id uuid.UUID, now time.Time) error {
 	return t.updateSession(`UPDATE identity.user_session SET last_active_at=? WHERE id=?::uuid`, now, id.String())
 }
 func (t *authTx) RevokeSession(account, id uuid.UUID, now time.Time) error {
-	return t.updateSession(`UPDATE identity.user_session SET revoked_at=? WHERE account_id=?::uuid AND id=?::uuid AND revoked_at IS NULL`, now, account.String(), id.String())
+	return revokeSessions(t.db, account, &id, nil, now)
 }
 func (t *authTx) RevokeAccountSessions(account uuid.UUID, now time.Time) error {
-	return t.updateSession(`UPDATE identity.user_session SET revoked_at=? WHERE account_id=?::uuid AND revoked_at IS NULL`, now, account.String())
+	return revokeSessions(t.db, account, nil, nil, now)
 }
 func (t *authTx) updateSession(query string, args ...any) error {
 	if err := t.db.Exec(query, args...).Error; err != nil {

@@ -56,7 +56,7 @@ import (
 // @version 0.1
 // @description Lanverse local workspace API for projects, canvases, media, scripts, bible, model catalog and operations.
 // @BasePath /
-func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProvider, cfg config.Config, database *gorm.DB, storage *objectstorage.Client) (*gin.Engine, error) {
+func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProvider, cfg config.Config, database *gorm.DB, storage *objectstorage.Client, sessions identityruntime.SessionDependencies) (*gin.Engine, error) {
 	if database == nil {
 		return nil, fmt.Errorf("public API requires database")
 	}
@@ -90,6 +90,9 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	emailAuth, err := identityruntime.NewAuth(database, cfg, time.Now)
 	if err != nil {
 		return nil, fmt.Errorf("configure email authentication: %w", err)
+	}
+	if err := identityruntime.ConfigureSessionSecurity(emailAuth, cfg, sessions); err != nil {
+		return nil, fmt.Errorf("configure session security: %w", err)
 	}
 	auth, registerSelf, err := identityruntime.RegisterSelf(database, emailAuth, cfg, storage, api, time.Now)
 	if err != nil {

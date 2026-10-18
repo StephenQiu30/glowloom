@@ -470,3 +470,166 @@ it("统计查询不能携带分页或越范围字段，CSV下载保留授权与�
   expect(response.headers.get("Cache-Control")).toBe("no-store");
   expect(await response.text()).toContain("safe");
 });
+
+it.each(["refresh", "upgrade"])(
+  "session %s preserves protocol status, cookies and Origin",
+  async (action) => {
+    for (const status of [200, 401, 403, 409, 429, 503]) {
+      const cookies = [
+        "access=a; HttpOnly; Path=/",
+        "refresh=r; HttpOnly; Path=/api/sessions",
+        "csrf=c; Path=/",
+      ];
+      const headers = new Headers({
+        "Content-Type": "application/json",
+        "Retry-After": "3",
+      });
+      cookies.forEach((cookie) => headers.append("Set-Cookie", cookie));
+      const payload = JSON.stringify({
+        code: "session_result",
+        meta: { retryable: false },
+      });
+      const fetcher = vi
+        .fn()
+        .mockResolvedValue(new Response(payload, { status, headers }));
+      vi.stubGlobal("fetch", fetcher);
+      const path = `session/${action}`;
+      const result = await POST(
+        new Request(`http://127.0.0.1:3200/api/${path}`, {
+          method: "POST",
+          headers: {
+            Origin: "http://localhost:3200",
+            Cookie: "refresh=r",
+            "X-CSRF-Token": "c",
+            "Idempotency-Key": "request-1",
+          },
+        }),
+        context(path),
+      );
+      expect(result.status).toBe(status);
+      expect(await result.text()).toBe(payload);
+      expect(result.headers.getSetCookie()).toEqual(cookies);
+      expect(result.headers.get("Cache-Control")).toBe("no-store");
+      expect(result.headers.get("Retry-After")).toBe("3");
+      const init = fetcher.mock.calls[0][1];
+      expect(init.cache).toBe("no-store");
+      expect(init.redirect).toBe("manual");
+      expect(init.headers.get("Origin")).toBe("http://localhost:3200");
+      expect(init.headers.get("Cookie")).toBe("refresh=r");
+      expect(init.headers.get("X-CSRF-Token")).toBe("c");
+      expect(init.headers.get("Idempotency-Key")).toBe("request-1");
+      fetcher.mockClear();
+      expect(
+        (
+          await GET(
+            new Request(`http://127.0.0.1:3200/api/${path}`),
+            context(path),
+          )
+        ).status,
+      ).toBe(405);
+      expect(fetcher).not.toHaveBeenCalled();
+    }
+  },
+);
+
+it.each([200, 401, 403, 404])(
+  "recovery draft GET preserves authority headers, status %s and no-store",
+  async (status) => {
+    const path =
+      "projects/11111111-1111-1111-1111-111111111111/prompt-drafts/22222222-2222-2222-2222-222222222222";
+    const payload = JSON.stringify({ code: "recovery_permission_result" });
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(payload, {
+        status,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const headers = {
+      Cookie: "access=recovery-test; refresh=recovery-test",
+      Origin: "http://127.0.0.1:3200",
+      "X-CSRF-Token": "recovery-test",
+      "X-Creation-Scope": "personal",
+    };
+    const result = await GET(
+      new Request(`http://127.0.0.1:3200/api/${path}`, { headers }),
+      context(path),
+    );
+    expect(result.status).toBe(status);
+    expect(await result.text()).toBe(payload);
+    expect(result.headers.get("Cache-Control")).toBe("no-store");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const [url, init] = fetcher.mock.calls[0];
+    expect(url.pathname).toBe(`/api/${path}`);
+    expect(url.search).toBe("");
+    expect(init.method).toBe("GET");
+    expect(init.cache).toBe("no-store");
+    expect(init.redirect).toBe("manual");
+    for (const [name, value] of Object.entries(headers))
+      expect(init.headers.get(name)).toBe(value);
+  },
+);
+
+it.each(["POST", "DELETE"])(
+  "recovery draft detail rejects %s without forwarding",
+  async (method) => {
+    const path =
+      "projects/11111111-1111-1111-1111-111111111111/prompt-drafts/22222222-2222-2222-2222-222222222222";
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    const handlers = await import("./route");
+    const handler = method === "POST" ? handlers.POST : handlers.DELETE;
+    const result = await handler(
+      new Request(`http://127.0.0.1:3200/api/${path}`, { method }),
+      context(path),
+    );
+    expect(result.status).toBe(405);
+    expect(result.headers.get("Cache-Control")).toBe("no-store");
+    expect(fetcher).not.toHaveBeenCalled();
+  },
+);
+
+it("recovery draft GET rejects unknown query without forwarding", async () => {
+  const path =
+    "projects/11111111-1111-1111-1111-111111111111/prompt-drafts/22222222-2222-2222-2222-222222222222";
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  const result = await GET(
+    new Request(`http://127.0.0.1:3200/api/${path}?cursor=forbidden`),
+    context(path),
+  );
+  expect(result.status).toBe(422);
+  expect(result.headers.get("Cache-Control")).toBe("no-store");
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it.each([
+  "projects/not-a-uuid/prompt-drafts/22222222-2222-2222-2222-222222222222",
+  "projects/11111111-1111-1111-1111-111111111111/prompt-drafts/not-a-uuid",
+  "projects/11111111-1111-1111-1111-111111111111/prompt-drafts/22222222-2222-2222-2222-222222222222/extra",
+])("recovery draft GET rejects unbounded path %s", async (path) => {
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  const result = await GET(
+    new Request(`http://127.0.0.1:3200/api/${path}`),
+    context(path),
+  );
+  expect(result.status).toBe(404);
+  expect(result.headers.get("Cache-Control")).toBe("no-store");
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("recovery-only candidate rejects draft PUT without forwarding", async () => {
+  const path =
+    "projects/11111111-1111-1111-1111-111111111111/prompt-drafts/22222222-2222-2222-2222-222222222222";
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  const result = await PUT(
+    new Request(`http://127.0.0.1:3200/api/${path}`, { method: "PUT" }),
+    context(path),
+  );
+  expect(result.status).toBe(405);
+  expect(result.headers.get("Allow")).toBe("GET");
+  expect(result.headers.get("Cache-Control")).toBe("no-store");
+  expect(fetcher).not.toHaveBeenCalled();
+});

@@ -3,6 +3,7 @@ package config_test
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 )
@@ -44,5 +45,35 @@ func TestIdentityConfigurationIsExplicit(t *testing.T) {
 	t.Setenv("LV_IDENTITY_KEY_FILE", "relative.key")
 	if _, err := config.Load(); !errors.Is(err, config.ErrInvalid) {
 		t.Fatal("relative identity key path accepted")
+	}
+}
+
+func TestLegacyUpgradeDeadline(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		until time.Time
+		bad   bool
+	}{
+		{"baseline", time.Time{}, false}, {"past", time.Now().UTC().Add(-time.Hour), false},
+		{"bounded", time.Now().UTC().Add(24 * time.Hour), false}, {"too far", time.Now().UTC().Add(8 * 24 * time.Hour), true},
+		{"non UTC", time.Now().In(time.FixedZone("offset", 3600)), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := (config.Config{IdentityLegacyUpgradeUntil: tc.until}).ValidateIdentitySessionV2()
+			if (err != nil) != tc.bad {
+				t.Fatal("deadline validation", err)
+			}
+		})
+	}
+}
+
+func TestSessionV2RequiresFixedLegacyDeadline(t *testing.T) {
+	cfg := config.Config{IdentitySessionV2Enabled: true, IdentityJWTKeyFile: "/controlled/private", IdentityJWTVerifyKeysFile: "/controlled/verify", IdentityJWTActiveKID: "current", IdentityRefreshReceiptKeyFile: "/controlled/receipt"}
+	if err := cfg.ValidateIdentitySessionV2(); err == nil {
+		t.Fatal("v2 issuance enabled without fixed deadline")
+	}
+	cfg.IdentityLegacyUpgradeUntil = time.Now().UTC().Add(-time.Hour)
+	if err := cfg.ValidateIdentitySessionV2(); err != nil {
+		t.Fatal("past cutoff prevented restart", err)
 	}
 }

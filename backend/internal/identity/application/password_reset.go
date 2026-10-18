@@ -20,6 +20,16 @@ func (a *Auth) loginEmail(ctx context.Context, email, password string, persisten
 	if !a.emailReady() {
 		return AuthResult{}, ErrRegistrationUnavailable
 	}
+	if a.sessionIssuanceEnabled() {
+		if !a.sessionSecurityReady() {
+			return AuthResult{}, ErrRefreshDependency
+		}
+		release, err := a.security.coordinator.Admit(ctx, uuid.New(), source)
+		if err != nil {
+			return AuthResult{}, err
+		}
+		defer func() { _ = release(ctx) }()
+	}
 	var result AuthResult
 	var rejected error
 	err := a.email.store.EmailTransaction(ctx, func(tx EmailTx) error {

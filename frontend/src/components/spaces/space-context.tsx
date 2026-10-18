@@ -82,16 +82,16 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       if (desired && next.id !== desired)
         setNotice("您已无法访问原空间，已返回个人空间。未重新提交任何创作。");
       if (
-        next.id !== getCreationScope() ||
+        (getCreationScope() !== null && next.id !== getCreationScope()) ||
         (selected &&
           (selected.role !== next.role || selected.writable !== next.writable))
       ) {
         setCreationScope(null);
         await clearPrivateResources();
         if (controller.signal.aborted) return;
-        setCreationScope(next.id);
         setGeneration((n) => n + 1);
       }
+      setCreationScope(next.id);
       remembered = { actor: session.actor.id, id: next.id };
       setSpaces(result.items);
       setSelected(next);

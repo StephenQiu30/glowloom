@@ -1,3 +1,4 @@
+import { canonicalNavigation } from "@/lib/canonical-origin";
 import { RequestError } from "@/lib/request";
 
 export const MIN_PASSWORD_LENGTH = 8;
@@ -46,6 +47,7 @@ export function authErrorMessage(error: unknown) {
     forbidden: "当前账号无权执行此操作。",
     origin_forbidden:
       "当前访问地址不受信任，请使用系统配置的网站地址重新打开。",
+    origin_mismatch: "当前访问地址不受信任，请使用系统配置的网站地址重新打开。",
     invalid_receipt: "暂时无法确认结果，请重试。",
     dependency_unavailable: "登录服务暂不可用，请稍后重试。",
     request_unconfirmed: "连接异常，请稍后重试。",
@@ -81,6 +83,36 @@ export function requireSession(value: unknown): API.EmailSessionView {
     !Number.isFinite(Date.parse(session.absolute_expires_at ?? ""))
   )
     throw new RequestError("invalid_receipt");
+  const metadata = [
+    session.session_protocol,
+    session.server_time,
+    session.idle_expires_at,
+    session.upgrade_available,
+  ];
+  if (metadata.every((v) => v === undefined))
+    return {
+      ...session,
+      session_protocol: "v1",
+      upgrade_available: false,
+    } as API.EmailSessionView;
+  const time = (v: unknown) =>
+    typeof v === "string" && Number.isFinite(Date.parse(v));
+  if (
+    !["v1", "v2"].includes(session.session_protocol ?? "") ||
+    typeof session.upgrade_available !== "boolean" ||
+    !time(session.server_time) ||
+    !time(session.idle_expires_at) ||
+    (session.session_protocol === "v2" &&
+      (!time(session.access_expires_at) ||
+        !time(session.refresh_after_at) ||
+        typeof session.refresh_generation !== "string" ||
+        !/^(0|[1-9][0-9]{0,18})$/.test(session.refresh_generation) ||
+        BigInt(session.refresh_generation) > BigInt("9223372036854775807"))) ||
+    (session.access_expires_at !== undefined &&
+      !time(session.access_expires_at)) ||
+    (session.refresh_after_at !== undefined && !time(session.refresh_after_at))
+  )
+    throw new RequestError("invalid_receipt");
   return session as API.EmailSessionView;
 }
 
@@ -101,4 +133,40 @@ export function requireAccepted(value: unknown): API.AcceptedView {
   )
     throw new RequestError("invalid_receipt");
   return result as API.AcceptedView;
+}
+
+export function canonicalAuthLink(
+  meta: Record<string, unknown> | undefined,
+  href: string,
+): string | null {
+  if (typeof meta?.canonical_origin !== "string") return null;
+  try {
+    return (
+      canonicalNavigation(
+        new URL(href),
+        "GET",
+        meta.canonical_origin,
+      )?.toString() ?? null
+    );
+  } catch {
+    return null;
+  }
+}
+
+/** Durable generations compare losslessly; a v1 result cannot downgrade v2. */
+export function isOlderSession(
+  next: API.EmailSessionView,
+  current: API.EmailSessionView | null,
+) {
+  if (
+    !current ||
+    current.actor.id !== next.actor.id ||
+    current.session_id !== next.session_id ||
+    current.session_protocol !== "v2"
+  )
+    return false;
+  return (
+    next.session_protocol !== "v2" ||
+    BigInt(next.refresh_generation!) < BigInt(current.refresh_generation!)
+  );
 }

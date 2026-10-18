@@ -1,7 +1,6 @@
 package http
 
 import (
-	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -112,6 +111,6 @@ func (h *AccountDeletionHandler) confirm(c *gin.Context) {
 		emailAuthProblem(c, err)
 		return
 	}
-	http.SetCookie(c.Writer, &http.Cookie{Name: sessionCookie, Path: "/", HttpOnly: true, Secure: h.secure, SameSite: http.SameSiteLaxMode, MaxAge: -1})
+	clearSessionCookies(c, h.secure)
 	c.Status(204)
 }

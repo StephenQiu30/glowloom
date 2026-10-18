@@ -62,7 +62,7 @@ func RegisterSelf(database *gorm.DB, auth *identityapp.Auth, cfg config.Config, 
 		return nil, nil, err
 	}
 	sessions := http.NewSessionDirectoryHandler(identityapp.NewSessionDirectory(pgidentity.NewSessionDirectoryStore(database), now), strings.HasPrefix(cfg.PublicOrigin, "https://"))
-	handler := http.NewEmailAuthHandler(auth, cfg.PublicOrigin, strings.HasPrefix(cfg.PublicOrigin, "https://")).WithSessionRevocation(sessions.Revoke)
+	handler := http.NewEmailAuthHandler(auth, cfg.PublicOrigin, strings.HasPrefix(cfg.PublicOrigin, "https://")).WithSessionRevocation(sessions.Revoke).WithSessionPolicy(http.SessionHTTPPolicy{V2Enabled: cfg.IdentitySessionV2Enabled, LegacyUpgradeUntil: cfg.IdentityLegacyUpgradeUntil})
 	governanceStore := pgidentity.NewGovernanceStore(database, func(tx *gorm.DB) identityapp.TeamGovernance { return pgworkspace.NewTeamGovernance(tx) })
 	governance := identityapp.NewGovernance(governanceStore, protector, now)
 	invitations := http.NewInvitationHandler(governance)

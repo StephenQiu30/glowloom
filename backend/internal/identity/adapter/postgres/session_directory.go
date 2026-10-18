@@ -27,7 +27,7 @@ func (s *SessionDirectoryStore) ListSelfSessions(ctx context.Context, actor appl
 			return err
 		}
 		now := clock().UTC()
-		return tx.Raw(`SELECT id,id=? AS current,device_summary,created_at,last_active_at,absolute_expires_at FROM identity.user_session WHERE account_id=? AND credential_revision=? AND revoked_at IS NULL AND last_active_at<=? AND last_active_at>? AND absolute_expires_at>? ORDER BY last_active_at DESC,id DESC`, actor.SessionID, actor.ID, actor.CredentialEpoch, now, now.Add(-12*time.Hour), now).Scan(&out).Error
+		return tx.Raw(`SELECT id,id=? AS current,device_summary,created_at,last_active_at,absolute_expires_at FROM identity.user_session WHERE account_id=? AND credential_revision=? AND revoked_at IS NULL AND created_at<=? AND last_active_at<=? AND ((protocol_version=1 AND last_active_at + interval '12 hours'>?) OR (protocol_version=2 AND idle_timeout_seconds>0 AND last_active_at + idle_timeout_seconds * interval '1 second'>?)) AND absolute_expires_at>? ORDER BY last_active_at DESC,id DESC`, actor.SessionID, actor.ID, actor.CredentialEpoch, now, now, now, now, now).Scan(&out).Error
 	})
 	return out, err
 }
@@ -50,10 +50,8 @@ func (s *SessionDirectoryStore) RevokeSelfSession(ctx context.Context, actor app
 		if read.RowsAffected != 1 {
 			return application.ErrSessionInvalid
 		}
-		if row.RevokedAt != nil {
-			return nil
-		}
-		if err := tx.Exec(`UPDATE identity.user_session SET revoked_at=? WHERE id=? AND account_id=?`, now, id, actor.ID).Error; err != nil {
+
+		if err := revokeSessions(tx, actor.ID, &id, nil, now); err != nil {
 			return err
 		}
 		return appendSelfEvent(tx, actor.ID, "session.revoked", now)
@@ -67,12 +65,8 @@ func (s *SessionDirectoryStore) RevokeOtherSessions(ctx context.Context, actor a
 			return err
 		}
 		now := clock().UTC()
-		result := tx.Exec(`UPDATE identity.user_session SET revoked_at=? WHERE account_id=? AND id<>? AND revoked_at IS NULL`, now, actor.ID, actor.SessionID)
-		if result.Error != nil {
-			return fmt.Errorf("revoke other devices: %w", result.Error)
-		}
-		if result.RowsAffected == 0 {
-			return nil
+		if err := revokeSessions(tx, actor.ID, nil, &actor.SessionID, now); err != nil {
+			return err
 		}
 		return appendSelfEvent(tx, actor.ID, "session.others_revoked", now)
 	})

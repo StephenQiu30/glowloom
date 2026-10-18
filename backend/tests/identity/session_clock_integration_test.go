@@ -114,7 +114,7 @@ func TestSessionClockSamplesAfterSessionRowLock(t *testing.T) {
 		{name: "recent_proof_boundary", delay: 5 * time.Minute, recent: true, want: identity.ErrReauthenticationRequired},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
-			tx, _, _, login, start := finalAuthFixture(t)
+			tx, _, _, login, start := finalAuthFixtureWithTransaction(t, sessionV2RollbackTransaction(t))
 			actor := identity.Principal{ID: login.User.ID, SessionID: login.Session.ID, CredentialEpoch: login.User.SessionEpoch, PlatformEpoch: login.User.PlatformEpoch}
 			if scenario.absolute {
 				if err := tx.Exec(`UPDATE identity.user_session SET absolute_expires_at=? WHERE id=?`, start.Add(time.Second), login.Session.ID).Error; err != nil {

@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
+
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
@@ -57,7 +59,7 @@ func TestSubjectRecoveryPublicRouter(t *testing.T) {
 		}
 	})
 	cfg := identityfixture.Configure(t, config.Config{Env: "local", HTTPAddr: "127.0.0.1:18089", PublicOrigin: "http://127.0.0.1:3000"})
-	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, db.DB, nil)
+	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, db.DB, nil, identityruntime.SessionDependencies{})
 	if err != nil {
 		t.Fatal(err)
 	}

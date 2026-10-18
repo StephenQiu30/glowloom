@@ -17,6 +17,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
+
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
@@ -105,7 +107,7 @@ func newMediaCompositionFixture(t *testing.T) mediaCompositionFixture {
 		t.Fatal("open synthetic private storage")
 	}
 	cfg := identityfixture.Configure(t, config.Config{Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000"})
-	fixture.router, err = app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, fixture.runtime, fixture.objects)
+	fixture.router, err = app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, fixture.runtime, fixture.objects, identityruntime.SessionDependencies{})
 	if err != nil {
 		t.Fatal(err)
 	}

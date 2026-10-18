@@ -52,7 +52,7 @@ func initializeAPI(ctx context.Context, cfg config.Config, logger *zap.Logger) (
 		return nil, nil, err
 	}
 	readyCheck := provideReadyCheck(connection, redisconnConnection, temporalconnConnection, client)
-	server, cleanup5, err := provideAPIServer(ctx, cfg, logger, readyCheck, tracerProvider, connection, client)
+	server, cleanup5, err := provideAPIServer(ctx, cfg, logger, readyCheck, tracerProvider, connection, client, redisconnConnection)
 	if err != nil {
 		cleanup4()
 		cleanup3()

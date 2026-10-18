@@ -33,7 +33,11 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("next-themes", () => ({ useTheme: () => ({ setTheme: mocks.theme }) }));
 vi.mock("@/components/generation/draft-save", () => ({
-  branchJournal: { clear: mocks.clear },
+  branchJournal: {
+    clear: mocks.clear,
+    checkpoint: async () => null,
+    activateAccount: async () => {},
+  },
 }));
 
 function session(name: string): API.EmailSessionView {
@@ -55,6 +59,10 @@ function session(name: string): API.EmailSessionView {
     credential_epoch: "1",
     persistent: false,
     last_active_at: new Date().toISOString(),
+    server_time: new Date().toISOString(),
+    idle_expires_at: new Date(Date.now() + 12 * 3600000).toISOString(),
+    session_protocol: "v1",
+    upgrade_available: false,
     absolute_expires_at: new Date(Date.now() + 86400000).toISOString(),
   };
 }

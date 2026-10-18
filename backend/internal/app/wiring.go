@@ -10,6 +10,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
@@ -94,8 +96,12 @@ func provideReadyCheck(dbConn *db.Connection, redisConn *redisconn.Connection, t
 	}
 }
 
-func provideAPIServer(ctx context.Context, cfg config.Config, logger *zap.Logger, ready ReadyCheck, tracerProvider trace.TracerProvider, dbConn *db.Connection, storage *objectstorage.Client) (*http.Server, func(), error) {
-	router, err := NewBusinessRouter(logger, ready, tracerProvider, cfg, dbConn.DB, storage)
+func provideAPIServer(ctx context.Context, cfg config.Config, logger *zap.Logger, ready ReadyCheck, tracerProvider trace.TracerProvider, dbConn *db.Connection, storage *objectstorage.Client, redisConn *redisconn.Connection) (*http.Server, func(), error) {
+	sessions, err := identityruntime.NewSessionDependencies(cfg, redisConn.Client)
+	if err != nil {
+		return nil, nil, err
+	}
+	router, err := NewBusinessRouter(logger, ready, tracerProvider, cfg, dbConn.DB, storage, sessions)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -108,7 +114,13 @@ func provideAPIServer(ctx context.Context, cfg config.Config, logger *zap.Logger
 		cleanup()
 		return nil, nil, err
 	}
-	stopIdentity := func() { stopExports(); cleanup() }
+	stopReceipts, err := identityruntime.StartSessionReceiptCleanupLoop(ctx, identityapp.NewSessionReceiptCleanup(pgidentity.NewStore(dbConn.DB), time.Now), logger, 30*time.Second)
+	if err != nil {
+		stopExports()
+		cleanup()
+		return nil, nil, err
+	}
+	stopIdentity := func() { stopReceipts(); stopExports(); cleanup() }
 	return &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           router,

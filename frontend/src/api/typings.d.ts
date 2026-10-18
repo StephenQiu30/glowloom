@@ -1306,12 +1306,19 @@ declare namespace API {
 
   type EmailSessionView = {
     absolute_expires_at: string;
+    access_expires_at?: string;
     actor: MeView;
     credential_epoch: string;
     csrf_token: string;
+    idle_expires_at: string;
     last_active_at: string;
     persistent: boolean;
+    refresh_after_at?: string;
+    refresh_generation?: string;
+    server_time: string;
     session_id: string;
+    session_protocol: string;
+    upgrade_available: boolean;
   };
 
   type Episode = {

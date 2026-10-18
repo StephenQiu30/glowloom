@@ -32,8 +32,17 @@ type AuthTx interface {
 	Guard(string) (domain.LoginGuard, error)
 	SaveGuard(string, domain.LoginGuard) error
 	SessionByHash([]byte, bool) (domain.AuthSession, error)
+	SessionByID(uuid.UUID, bool) (domain.AuthSession, error)
+	FindRefresh([]byte, bool) (domain.RefreshToken, error)
+	RefreshByGeneration(uuid.UUID, int64, bool) (domain.RefreshToken, error)
+	InsertRefresh(domain.RefreshToken) error
+	RotateRefresh(domain.RefreshToken, domain.RefreshToken, uuid.UUID, time.Time, []byte) error
+	RevokeRefreshChain(uuid.UUID, time.Time) error
+	AppendSessionSecurityEvent(uuid.UUID, uuid.UUID, uuid.UUID, string, string, time.Time) error
+	CleanupExpiredRefresh(time.Time, int) (int, error)
 	InsertSession(domain.AuthSession) error
 	SetSessionSecurity(uuid.UUID, []byte) error
+	UpgradeLegacySession(uuid.UUID, uuid.UUID, []byte) error
 	ReauthenticateSession(uuid.UUID, int64, time.Time) error
 	TouchSession(uuid.UUID, time.Time) error
 	RevokeSession(uuid.UUID, uuid.UUID, time.Time) error
@@ -44,16 +53,21 @@ type AuthTx interface {
 
 // Auth coordinates registration and server-authoritative authentication.
 type Auth struct {
-	now   func() time.Time
-	email *emailRuntime
+	now                func() time.Time
+	email              *emailRuntime
+	security           *sessionSecurity
+	legacyUpgradeUntil time.Time
 }
 
 // AuthResult keeps transport credentials separate from public DTOs.
 type AuthResult struct {
-	User      domain.User
-	Session   domain.AuthSession
-	Token     string
-	CSRFToken string
+	User                                        domain.User
+	Session                                     domain.AuthSession
+	Token                                       string `json:"-"`
+	CSRFToken                                   string `json:"-"`
+	AccessToken                                 string `json:"-"`
+	RefreshToken                                string `json:"-"`
+	AccessExpiresAt, RefreshAfterAt, ServerTime time.Time
 }
 
 // Login verifies the existing email credential and creates an ordinary session.
@@ -70,15 +84,23 @@ func (a *Auth) LoginFrom(ctx context.Context, email, password string, persistent
 	return a.loginEmail(ctx, email, password, persistent, source)
 }
 
-// Current validates durable state and advances last activity under account/session locks.
+// Current preserves the existing user-activity behavior for legacy callers.
 func (a *Auth) Current(ctx context.Context, token string) (AuthResult, error) {
+	return a.CurrentWithActivity(ctx, token, UserActivity)
+}
+
+// CurrentWithActivity validates durable state using a transport-selected activity.
+// The transport must explicitly classify background traffic as NoActivity.
+func (a *Auth) CurrentWithActivity(ctx context.Context, token string, activity SessionActivity) (AuthResult, error) {
 	var result AuthResult
 	err := a.withSession(ctx, token, func(tx AuthTx, user domain.User, session domain.AuthSession, now time.Time) error {
-		if err := tx.TouchSession(session.ID, now); err != nil {
-			return err
+		if activity == UserActivity {
+			if err := tx.TouchSession(session.ID, now); err != nil {
+				return err
+			}
+			session.LastActiveAt = now
 		}
-		session.LastActiveAt = now
-		result = AuthResult{User: user, Session: session}
+		result = AuthResult{User: user, Session: session, ServerTime: now}
 		if a.email != nil {
 			result.CSRFToken = a.csrfToken(token, session.ID)
 		}
@@ -187,7 +209,7 @@ func (a *Auth) withSession(ctx context.Context, token string, execute func(AuthT
 			return err
 		}
 		now := a.now().UTC()
-		if !session.Valid(user, now) {
+		if !a.legacyWindowOpen(now) || session.ProtocolVersion == 2 || !session.Valid(user, now) {
 			return ErrSessionInvalid
 		}
 		if a.email != nil && (user.EmailVerifiedAt.IsZero() || !a.sessionProofValid(token, session)) {
@@ -203,9 +225,9 @@ func newAuthSession(tx AuthTx, user domain.User, persistent bool, now time.Time)
 		return AuthResult{}, fmt.Errorf("generate session: %w", err)
 	}
 	digest := sha256.Sum256(raw)
-	session := domain.AuthSession{ID: uuid.New(), AccountID: user.ID, TokenHash: digest[:], CredentialRevision: user.SessionEpoch, CreatedAt: now, LastActiveAt: now, AbsoluteExpiresAt: now.Add(7 * 24 * time.Hour), Persistent: persistent}
+	session := domain.AuthSession{ID: uuid.New(), AccountID: user.ID, TokenHash: digest[:], CredentialRevision: user.SessionEpoch, CreatedAt: now, LastActiveAt: now, AbsoluteExpiresAt: now.Add(7 * 24 * time.Hour), Persistent: persistent, ProtocolVersion: 1, IdleTimeoutSeconds: 43200}
 	if err := tx.InsertSession(session); err != nil {
 		return AuthResult{}, err
 	}
-	return AuthResult{User: user, Session: session, Token: base64.RawURLEncoding.EncodeToString(raw)}, nil
+	return AuthResult{User: user, Session: session, Token: base64.RawURLEncoding.EncodeToString(raw), ServerTime: now}, nil
 }

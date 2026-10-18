@@ -354,3 +354,269 @@ it.each([
     setCSRFToken(null);
   },
 );
+
+it("refreshIsSingleFlightAcrossTwentyReads", async () => {
+  const { setCSRFToken, setSessionRecovery } = await import("./request");
+  setCSRFToken("stable");
+  let recovered = false;
+  let refreshes = 0;
+  setSessionRecovery(async () => {
+    refreshes++;
+    await new Promise((r) => setTimeout(r, 5));
+    recovered = true;
+  });
+  const adapter: import("axios").AxiosAdapter = async (config) => {
+    expect(config).not.toHaveProperty("sessionRecovery");
+    if (!recovered)
+      throw new axios.AxiosError("expired", undefined, config, undefined, {
+        status: 401,
+        statusText: "Unauthorized",
+        headers: {},
+        config,
+        data: { code: "access_expired" },
+      });
+    return { status: 200, statusText: "OK", headers: {}, config, data: "kept" };
+  };
+  try {
+    expect(
+      await Promise.all(
+        Array.from({ length: 20 }, () => request("/api/me", { adapter })),
+      ),
+    ).toEqual(Array(20).fill("kept"));
+    expect(refreshes).toBe(1);
+  } finally {
+    setSessionRecovery(null);
+    setCSRFToken(null);
+  }
+});
+
+it("alreadySentMutationIsNeverReplayed", async () => {
+  const { setCSRFToken, setSessionRecovery, subscribeSessionInvalidation } =
+    await import("./request");
+  setCSRFToken("stable");
+  let sends = 0;
+  let invalidations = 0;
+  const stop = subscribeSessionInvalidation(() => invalidations++);
+  setSessionRecovery(async () => {});
+  try {
+    await expect(
+      request("/api/generate", {
+        method: "POST",
+        adapter: async (config) => {
+          sends++;
+          throw new axios.AxiosError("expired", undefined, config, undefined, {
+            status: 401,
+            statusText: "Unauthorized",
+            headers: {},
+            config,
+            data: { code: "access_expired" },
+          });
+        },
+      }),
+    ).rejects.toMatchObject({ code: "access_expired" });
+    expect(sends).toBe(1);
+    expect(invalidations).toBe(0);
+  } finally {
+    stop();
+    setSessionRecovery(null);
+    setCSRFToken(null);
+  }
+});
+
+it.each(["invalid_credentials", "current_password_invalid"])(
+  "wrong current password %s preserves identity",
+  async (code) => {
+    const { setCSRFToken, subscribeSessionInvalidation } =
+      await import("./request");
+    setCSRFToken("stable");
+    let invalidations = 0;
+    const stop = subscribeSessionInvalidation(() => invalidations++);
+    try {
+      await expect(
+        request("/api/me/password", {
+          method: "POST",
+          adapter: async (config) => {
+            throw new axios.AxiosError(code, undefined, config, undefined, {
+              status: 401,
+              statusText: "Unauthorized",
+              headers: {},
+              config,
+              data: { code },
+            });
+          },
+        }),
+      ).rejects.toMatchObject({ code });
+      expect(invalidations).toBe(0);
+    } finally {
+      stop();
+      setCSRFToken(null);
+    }
+  },
+);
+it("late expired reads share the completed recovery without a second rotation", async () => {
+  const { setCSRFToken, setSessionRecovery } = await import("./request");
+  setCSRFToken("stable");
+  let refreshes = 0;
+  let recovered = false;
+  let release!: () => void;
+  setSessionRecovery(async () => {
+    refreshes++;
+    recovered = true;
+  });
+  const adapter: import("axios").AxiosAdapter = async (config) => {
+    const expired = !recovered;
+    if (config.url === "/api/slow" && expired)
+      await new Promise<void>((r) => (release = r));
+    if (expired)
+      throw new axios.AxiosError("expired", undefined, config, undefined, {
+        status: 401,
+        statusText: "Unauthorized",
+        headers: {},
+        config,
+        data: { code: "access_expired" },
+      });
+    return { status: 200, statusText: "OK", headers: {}, config, data: "kept" };
+  };
+  try {
+    const slow = request("/api/slow", { adapter });
+    await request("/api/fast", { adapter });
+    release();
+    await slow;
+    expect(refreshes).toBe(1);
+  } finally {
+    setSessionRecovery(null);
+    setCSRFToken(null);
+  }
+});
+it("a write waits for pending recovery and canceled waiters preserve Axios semantics", async () => {
+  const { setCSRFToken, setSessionRecovery } = await import("./request");
+  setCSRFToken("stable");
+  let recovered = false;
+  let finish!: () => void;
+  setSessionRecovery(
+    () =>
+      new Promise<void>(
+        (r) =>
+          (finish = () => {
+            recovered = true;
+            r();
+          }),
+      ),
+  );
+  const adapter: import("axios").AxiosAdapter = async (config) => {
+    if (!recovered)
+      throw new axios.AxiosError("expired", undefined, config, undefined, {
+        status: 401,
+        statusText: "Unauthorized",
+        headers: {},
+        config,
+        data: { code: "access_expired" },
+      });
+    return {
+      status: 200,
+      statusText: "OK",
+      headers: {},
+      config,
+      data: config.method,
+    };
+  };
+  try {
+    const read = request("/api/me", { adapter });
+    await new Promise((r) => setTimeout(r, 0));
+    let sends = 0;
+    const write = request("/api/write", {
+      method: "POST",
+      adapter: async (config) => {
+        sends++;
+        return adapter(config);
+      },
+    });
+    const controller = new AbortController();
+    const canceled = request("/api/read", {
+      signal: controller.signal,
+      adapter,
+    }).catch((e) => e);
+    controller.abort();
+    expect(axios.isCancel(await canceled)).toBe(true);
+    expect(sends).toBe(0);
+    finish();
+    expect(await write).toBe("post");
+    await read;
+    expect(sends).toBe(1);
+  } finally {
+    setSessionRecovery(null);
+    setCSRFToken(null);
+  }
+});
+
+it.each([
+  "origin_forbidden",
+  "origin_mismatch",
+  "csrf_invalid",
+  "session_invalid",
+  "session_cookie_conflict",
+])("%s never revalidates business spaces", async (code) => {
+  const { setCSRFToken, setCreationScope, subscribeScopeDenied } =
+    await import("./request");
+  setCSRFToken("stable");
+  setCreationScope("team");
+  let denials = 0;
+  const stop = subscribeScopeDenied(() => denials++);
+  try {
+    await expect(
+      request("/api/write", {
+        method: "POST",
+        adapter: async (config) => {
+          throw new axios.AxiosError(code, undefined, config, undefined, {
+            status: 403,
+            statusText: "Forbidden",
+            headers: {},
+            config,
+            data: { code },
+          });
+        },
+      }),
+    ).rejects.toMatchObject({ code });
+    expect(denials).toBe(0);
+  } finally {
+    stop();
+    setCSRFToken(null);
+  }
+});
+it("scope changes while recovery waits cancel reads and prevent queued writes", async () => {
+  const { setCSRFToken, setCreationScope, setSessionRecovery } =
+    await import("./request");
+  setCSRFToken("stable");
+  setCreationScope("old");
+  let finish!: () => void;
+  setSessionRecovery(() => new Promise<void>((r) => (finish = r)));
+  const adapter: import("axios").AxiosAdapter = async (config) => {
+    throw new axios.AxiosError("expired", undefined, config, undefined, {
+      status: 401,
+      statusText: "Unauthorized",
+      headers: {},
+      config,
+      data: { code: "access_expired" },
+    });
+  };
+  try {
+    const read = request("/api/me", { adapter }).catch((e) => e);
+    await new Promise((r) => setTimeout(r, 0));
+    let sends = 0;
+    const write = request("/api/write", {
+      method: "POST",
+      adapter: async (config) => {
+        sends++;
+        return adapter(config);
+      },
+    }).catch((e) => e);
+    setCreationScope("new");
+    finish();
+    expect(axios.isCancel(await read)).toBe(true);
+    expect(axios.isCancel(await write)).toBe(true);
+    expect(sends).toBe(0);
+  } finally {
+    setSessionRecovery(null);
+    setCSRFToken(null);
+  }
+});

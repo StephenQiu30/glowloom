@@ -63,6 +63,9 @@ type AuthSession struct {
 	LastActiveAt       time.Time
 	AbsoluteExpiresAt  time.Time
 	Persistent         bool
+	ProtocolVersion    int16
+	IdleTimeoutSeconds int32
+	RefreshGeneration  int64
 	RevokedAt          *time.Time
 	CSRFHash           []byte
 	DeviceSummary      string
@@ -75,8 +78,24 @@ func (s AuthSession) RecentlyAuthenticated(user User, now time.Time) bool {
 	return s.Valid(user, now) && s.ReauthAt != nil && s.ReauthEpoch != nil && *s.ReauthEpoch == user.SessionEpoch && !now.Before(*s.ReauthAt) && now.Before(s.ReauthAt.Add(5*time.Minute))
 }
 
+// IdleExpiresAt returns the canonical stored-protocol idle deadline.
+func (s AuthSession) IdleExpiresAt() time.Time {
+	idleTTL := 12 * time.Hour
+	if s.ProtocolVersion == 2 {
+		idleTTL = time.Duration(s.IdleTimeoutSeconds) * time.Second
+	}
+	return s.LastActiveAt.Add(idleTTL)
+}
+
 // Valid enforces account revocation and both session deadlines at the exact boundary.
 func (s AuthSession) Valid(user User, now time.Time) bool {
+	if s.ProtocolVersion == 2 {
+		if s.IdleTimeoutSeconds <= 0 {
+			return false
+		}
+	} else if s.ProtocolVersion != 0 && s.ProtocolVersion != 1 {
+		return false
+	}
 	return s.RevokedAt == nil && user.SessionMatches(s.CredentialRevision) &&
-		!now.Before(s.LastActiveAt) && now.Before(s.LastActiveAt.Add(12*time.Hour)) && now.Before(s.AbsoluteExpiresAt)
+		!now.Before(s.CreatedAt) && !now.Before(s.LastActiveAt) && now.Before(s.IdleExpiresAt()) && now.Before(s.AbsoluteExpiresAt)
 }
