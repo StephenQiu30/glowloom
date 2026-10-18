@@ -57,6 +57,8 @@ it("展示当前账号摘要和真实入口，普通创作者不见管理入口"
     ["账号设置", "/account"],
     ["我的资产", "/assets"],
     ["我的画布", "/projects"],
+    ["我的团队", "/teams"],
+    ["邀请与授权", "/invitations"],
     ["修改密码", "/reset-password"],
   ]) {
     expect(screen.getByRole("menuitem", { name }).getAttribute("href")).toBe(
@@ -66,6 +68,8 @@ it("展示当前账号摘要和真实入口，普通创作者不见管理入口"
   expect(screen.queryByRole("menuitem", { name: "用户管理" })).toBeNull();
   expect(screen.queryByRole("menuitem", { name: "AI 平台接入" })).toBeNull();
   expect(screen.queryByRole("menuitem", { name: "模型管理" })).toBeNull();
+  expect(screen.queryByRole("menuitem", { name: "平台团队" })).toBeNull();
+  expect(screen.queryByRole("menuitem", { name: "平台设置" })).toBeNull();
   expect(onLogout).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("menuitem", { name: "退出登录" }));
   expect(onLogout).toHaveBeenCalledOnce();
@@ -76,6 +80,14 @@ it("仅向平台管理员提供管理入口", async () => {
   expect(
     screen.getByRole("menuitem", { name: "用户管理" }).getAttribute("href"),
   ).toBe("/users");
+  for (const [name, href] of [
+    ["平台团队", "/platform/teams"],
+    ["平台设置", "/platform/settings"],
+  ]) {
+    expect(screen.getByRole("menuitem", { name }).getAttribute("href")).toBe(
+      href,
+    );
+  }
 });
 it("平台管理员可以从账号菜单进入AI接入和模型管理", async () => {
   await openMenu({ ...actor, platform_role: "platform_admin" });

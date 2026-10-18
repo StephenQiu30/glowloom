@@ -1904,21 +1904,6 @@ button:not(:disabled),
 .asset-search-form {
   width: 280px;
 }
-.asset-composer {
-  position: sticky;
-  bottom: 16px;
-  margin-top: 24px;
-}
-.generation-composer {
-  min-height: 216px;
-}
-.generation-composer textarea {
-  min-height: 108px;
-}
-.generation-composer [data-align="block-start"],
-.generation-composer [data-align="block-end"] {
-  padding: 12px 16px;
-}
 .subject-card-image {
   border-radius: 12px;
   background: var(--card);

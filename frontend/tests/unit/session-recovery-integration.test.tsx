@@ -776,6 +776,8 @@ it("authorized scope cache clearing keeps the current identity able to save new 
 
 it("the actual home with retained input sends no activity GET when its Provider timer rotates credentials", async () => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+  // Keep the server timestamp and refresh deadline on the same frozen clock.
+  current = identity();
   current!.refresh_after_at = new Date(Date.now() + 60000).toISOString();
   refresh = async (config) => {
     current = {

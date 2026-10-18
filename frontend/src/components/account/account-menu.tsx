@@ -8,7 +8,10 @@ import {
   LayoutDashboard,
   LogOut,
   Monitor,
+  Mail,
+  Settings,
   Shield,
+  Users,
 } from "lucide-react";
 import { AccountAvatar } from "./account-avatar";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -101,6 +104,18 @@ export function AccountMenu({
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild className={itemClassName}>
+            <Link href="/teams">
+              <Users />
+              我的团队
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild className={itemClassName}>
+            <Link href="/invitations">
+              <Mail />
+              邀请与授权
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild className={itemClassName}>
             <Link href="/reset-password">
               <KeyRound />
               修改密码
@@ -124,6 +139,18 @@ export function AccountMenu({
                 <Link href="/users">
                   <Shield />
                   用户管理
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild className={itemClassName}>
+                <Link href="/platform/teams">
+                  <Users />
+                  平台团队
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild className={itemClassName}>
+                <Link href="/platform/settings">
+                  <Settings />
+                  平台设置
                 </Link>
               </DropdownMenuItem>
             </>
