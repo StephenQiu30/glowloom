@@ -155,13 +155,11 @@ export function AuthView({
   mode,
   embedded = false,
   onAuthenticated,
-  onContinueGuest,
   onPendingChange,
 }: {
   mode: "login" | "register" | "reset-password" | "recover";
   embedded?: boolean;
   onAuthenticated?: (session: API.EmailSessionView) => void;
-  onContinueGuest?: () => void;
   onPendingChange?: (pending: boolean) => void;
 }) {
   const router = useRouter();
@@ -806,66 +804,63 @@ export function AuthView({
         </>
       ) : null}
       {notice ? <FeedbackToast message={notice} tone="info" /> : null}
-      <Button
-        type="submit"
-        className={securityPage ? "h-10 max-md:h-11" : undefined}
-        disabled={
-          pending ||
-          (change && !session) ||
-          (recover && !recoveryToken && remaining > 0) ||
-          (register && (policyStatus !== "ready" || !registrationAllowed))
-        }
-      >
-        {pending ? (
-          <Spinner data-icon="inline-start" aria-hidden="true" />
-        ) : null}
-        {pending
-          ? "正在提交…"
-          : register
-            ? grant
-              ? "创建账号"
-              : operation
-                ? "验证邮箱"
-                : "发送验证码"
-            : recover
-              ? recoveryToken
-                ? "保存新密码"
-                : remaining
-                  ? `${remaining} 秒后可重试`
-                  : "发送恢复链接"
-              : change
-                ? "保存新密码"
-                : "登录"}
-      </Button>
-      {change && session ? (
+      <Field>
         <Button
-          type="button"
-          variant="link"
-          className="h-10 max-md:h-11"
-          disabled={pending}
-          onClick={() => void switchAccount()}
+          type="submit"
+          className={securityPage ? "h-10 max-md:h-11" : undefined}
+          disabled={
+            pending ||
+            (change && !session) ||
+            (recover && !recoveryToken && remaining > 0) ||
+            (register && (policyStatus !== "ready" || !registrationAllowed))
+          }
         >
-          使用其他账号登录
+          {pending ? (
+            <Spinner data-icon="inline-start" aria-hidden="true" />
+          ) : null}
+          {pending
+            ? "正在提交…"
+            : register
+              ? grant
+                ? "创建账号"
+                : operation
+                  ? "验证邮箱"
+                  : "发送验证码"
+              : recover
+                ? recoveryToken
+                  ? "保存新密码"
+                  : remaining
+                    ? `${remaining} 秒后可重试`
+                    : "发送恢复链接"
+                : change
+                  ? "保存新密码"
+                  : "登录"}
         </Button>
-      ) : null}
-      <Button
-        asChild
-        variant="link"
-        className={securityPage ? "h-10 max-md:h-11" : undefined}
-      >
-        {mode === "login" ? (
-          <Link href="/recover">忘记密码</Link>
-        ) : (
-          <Link href={change && session ? "/account" : "/login"}>
-            {change && session ? "返回账号设置" : "返回登录"}
-          </Link>
-        )}
-      </Button>
-      {embedded && onContinueGuest ? (
-        <Button type="button" variant="ghost" onClick={onContinueGuest}>
-          暂不登录，继续浏览
+        {change && session ? (
+          <Button
+            type="button"
+            variant="link"
+            className="h-10 max-md:h-11"
+            disabled={pending}
+            onClick={() => void switchAccount()}
+          >
+            使用其他账号登录
+          </Button>
+        ) : null}
+        <Button
+          asChild
+          variant={embedded ? "ghost" : "link"}
+          className={securityPage ? "h-10 max-md:h-11" : undefined}
+        >
+          {mode === "login" ? (
+            <Link href="/recover">忘记密码</Link>
+          ) : (
+            <Link href={change && session ? "/account" : "/login"}>
+              {change && session ? "返回账号设置" : "返回登录"}
+            </Link>
+          )}
         </Button>
-      ) : null}
+      </Field>
     </form>
   );
   if (securityPage)

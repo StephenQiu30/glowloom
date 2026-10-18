@@ -5,18 +5,15 @@ import { AuthDialog } from "./auth-dialog";
 vi.mock("./auth-view", () => ({
   AuthView: ({
     mode,
-    onContinueGuest,
     onPendingChange,
   }: {
     mode: string;
-    onContinueGuest: () => void;
     onPendingChange: (value: boolean) => void;
   }) => {
     return (
       <div>
         <label htmlFor="name">邮箱</label>
         <input id="name" />
-        <button onClick={onContinueGuest}>暂不登录，继续浏览</button>
         <button onClick={() => onPendingChange(true)}>提交{mode}</button>
       </div>
     );
@@ -24,7 +21,7 @@ vi.mock("./auth-view", () => ({
 }));
 afterEach(cleanup);
 
-it("弹窗有可访问标题和关联面板，默认聚焦邮箱，提交期间锁定切换但允许继续浏览", () => {
+it("弹窗有可访问标题和关联面板，默认聚焦邮箱，提交期间锁定切换但允许关闭", () => {
   const close = vi.fn();
   render(<AuthDialog open onOpenChange={close} onAuthenticated={vi.fn()} />);
   expect(screen.getByRole("dialog", { name: "登录织光" })).toBeTruthy();
@@ -42,7 +39,7 @@ it("弹窗有可访问标题和关联面板，默认聚焦邮箱，提交期间�
     "disabled",
     true,
   );
-  fireEvent.click(screen.getByRole("button", { name: "暂不登录，继续浏览" }));
+  fireEvent.click(screen.getByRole("button", { name: "关闭登录注册弹窗" }));
   expect(close).toHaveBeenCalledWith(false);
 });
 

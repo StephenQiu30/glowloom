@@ -102,7 +102,6 @@ export function AuthDialog({
                 mode={value}
                 onPendingChange={setPending}
                 onAuthenticated={onAuthenticated}
-                onContinueGuest={() => onOpenChange(false)}
               />
             </TabsContent>
           ))}

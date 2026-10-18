@@ -51,7 +51,10 @@ it("游客可浏览首页，提交时打开登录弹窗，关闭和切换模式�
   fireEvent.change(prompt, { target: { value: "保留这份创作想法" } });
   fireEvent.click(screen.getByRole("button", { name: "开始生成" }));
   expect(screen.getByRole("dialog", { name: "登录织光" })).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "暂不登录，继续浏览" }));
+  expect(
+    screen.queryByRole("button", { name: "暂不登录，继续浏览" }),
+  ).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "关闭登录注册弹窗" }));
   expect(
     (screen.getByLabelText("创作提示词") as HTMLTextAreaElement).value,
   ).toBe("保留这份创作想法");
