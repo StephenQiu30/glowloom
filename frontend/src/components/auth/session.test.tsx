@@ -246,6 +246,12 @@ it("账号偏好读取失败时保持默认深色，不被浅色系统外观覆�
     </ThemeProvider>,
   );
   await screen.findByText("深色默认内容");
+  await waitFor(() =>
+    expect(request).toHaveBeenCalledWith(
+      "/api/me/preferences",
+      expect.objectContaining({ method: "GET" }),
+    ),
+  );
   await act(async () =>
     rejectPreferences(new Error("preferences unavailable")),
   );
