@@ -2981,17 +2981,46 @@ declare namespace API {
 
   type PresetConnection = {
     config?: ConnectionConfig;
+    model_ids?: string[];
     provider_id?: string;
   };
 
   type PresetDocument = {
     config?: ProviderConfig;
+    model_templates?: PresetModelTemplate[];
     name?: string;
     schema_version?: number;
   };
 
   type PresetImportRequest = {
     document_json?: string;
+  };
+
+  type PresetModelCost = {
+    currency?: string;
+    max_micros?: number;
+    reviewed_at?: string;
+    source?: string;
+  };
+
+  type PresetModelPrice = {
+    currency?: string;
+    fx_rate_to_cny?: string;
+    rule?: Record<string, any>;
+    unit?: PriceUnit;
+  };
+
+  type PresetModelTemplate = {
+    capability?: string;
+    expected_max_ms?: number;
+    key?: string;
+    limits?: Record<string, any>;
+    modes?: string[];
+    name?: string;
+    param_schema?: Record<string, any>[];
+    price?: PresetModelPrice;
+    provider_model_id?: string;
+    upstream_cost?: PresetModelCost;
   };
 
   type PresetPage = {

@@ -93,3 +93,29 @@ it("旧 Key 可单独停用，当前 Key 不受影响", async () => {
     credential_id: "old-key",
   });
 });
+
+it("向导的 Key 写入未确认时，详情禁止绕过并使用原回执恢复", async () => {
+  localStorage.setItem(
+    "glowloom.catalog.pending.v1.admin-fixture.preset.onboarding.credential",
+    JSON.stringify({
+      id: "original-key-request",
+      action: "credential.set",
+      target: "connection",
+    }),
+  );
+  api.receipt.mockResolvedValue({
+    result: {
+      id: "credential",
+      provider_id: "connection",
+      last4: "test",
+      status: "active",
+    },
+  });
+  const onSaved = vi.fn();
+  render(<ConnectionDetail id="connection" presets={[]} onSaved={onSaved} />);
+  const input = await screen.findByLabelText("平台 API Key");
+  expect((input as HTMLInputElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "查询回执" }));
+  await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+  expect(api.save).not.toHaveBeenCalled();
+});

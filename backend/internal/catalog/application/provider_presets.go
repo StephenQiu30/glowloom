@@ -65,6 +65,7 @@ type ConnectionConfig struct {
 type PresetConnection struct {
 	ProviderID uuid.UUID        `json:"provider_id"`
 	Config     ConnectionConfig `json:"config"`
+	ModelIDs   []uuid.UUID      `json:"model_ids,omitempty"`
 }
 
 // PresetStore checks live platform rights inside every read/write transaction.
@@ -116,8 +117,11 @@ func (s *ProviderPresets) Connect(ctx context.Context, actor identityapp.Princip
 	if !IsPlatformAdmin(actor) {
 		return PresetConnection{}, identityapp.ErrForbidden
 	}
-	if id == uuid.Nil || input.VersionID == uuid.Nil || input.RequestID == uuid.Nil || !validProviderKey(input.Key) || strings.TrimSpace(input.Name) == "" || len(input.Name) > 200 {
+	if id == uuid.Nil || input.VersionID == uuid.Nil || input.RequestID == uuid.Nil || (input.Key != "" && !validProviderKey(input.Key)) || (input.Name != "" && strings.TrimSpace(input.Name) == "") || len(input.Name) > 200 {
 		return PresetConnection{}, domain.ErrInvalidPreset
+	}
+	if input.Key == "" {
+		input.Key = "connection-" + input.RequestID.String()
 	}
 	return s.store.ConnectPreset(ctx, actor, id, input)
 }

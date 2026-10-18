@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/native-select";
 import { useEffect, useState, useId } from "react";
 import { Button } from "@/components/ui/button";
+import { isCredentialReceipt } from "@/components/catalog/credential-receipt";
 import { RequestError } from "@/lib/request";
 import { Input } from "@/components/ui/input";
 import {
@@ -60,6 +61,14 @@ export function ConnectionDetail({
   const [preview, setPreview] = useState<API.ConfigUpgradePreview | null>(null);
   const [resolution, setResolution] = useState("");
   const mutation = useCatalogMutation(onSaved, `connection.${id}`);
+  const onboarding = useCatalogMutation(
+    onSaved,
+    "preset.onboarding.credential",
+    isCredentialReceipt,
+  );
+  const onboardingPending =
+    onboarding.pending?.action === "credential.set" &&
+    onboarding.pending.target === id;
   useEffect(() => {
     const abort = new AbortController();
     Promise.all([
@@ -130,6 +139,7 @@ export function ConnectionDetail({
           <form
             onSubmit={async (event) => {
               event.preventDefault();
+              if (onboardingPending) return;
               const key = apiKey;
               setAPIKey("");
               await mutation.run("credential.set", id, (requestID) =>
@@ -159,6 +169,7 @@ export function ConnectionDetail({
                 <Input
                   id={`${formFieldId}-field-1`}
                   type="password"
+                  disabled={onboardingPending}
                   value={apiKey}
                   onChange={(event) => setAPIKey(event.target.value)}
                   autoComplete="off"
@@ -175,11 +186,20 @@ export function ConnectionDetail({
                 Key 仅用于本次保存，不会保存在浏览器。轮换后旧 Key
                 只用于已有任务恢复。
               </p>
-              <Button disabled={mutation.busy || !apiKey}>
+              <Button disabled={mutation.busy || onboardingPending || !apiKey}>
                 {detail.credential ? "轮换 Key" : "保存 Key"}
               </Button>
             </FieldGroup>
           </form>
+          {onboardingPending ? (
+            <>
+              <p className="text-sm">
+                添加连接时的 Key
+                写入尚未确认，请先查询原回执，再进行新的保存或轮换。
+              </p>
+              <MutationStatus mutation={onboarding} />
+            </>
+          ) : null}
           <MutationStatus mutation={mutation} />
           <section className="space-y-2" aria-label="Key 轮换记录">
             <h3 className="font-medium">Key 记录</h3>
@@ -354,6 +374,9 @@ export function ConnectionDetail({
           {config ? (
             <div className="space-y-3 border-t pt-4">
               <h3 className="font-medium">配置升级</h3>
+              <p className="text-xs text-muted-foreground">
+                仅升级连接配置。模型模板用于新建连接，已有模型的参数和价格需单独发布。
+              </p>
               <p className="text-xs text-muted-foreground">
                 保存配置只更新候选快照。现有模型发布和任务继续使用原快照。
               </p>

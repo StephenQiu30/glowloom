@@ -50,6 +50,7 @@ export function ModelsPage() {
   const saved = () => setRefresh((v) => v + 1);
   const mutation = useCatalogMutation(saved, "models");
   useEffect(() => {
+    if (session.actor.platform_role !== "platform_admin") return;
     const abort = new AbortController();
     Promise.all([
       listAdminModels(
@@ -76,7 +77,7 @@ export function ModelsPage() {
         }
       });
     return () => abort.abort();
-  }, [refresh, cursor]);
+  }, [refresh, cursor, session.actor.platform_role]);
   const provider = providers.find(
     (p) => p.provider?.id === providerID,
   )?.provider;

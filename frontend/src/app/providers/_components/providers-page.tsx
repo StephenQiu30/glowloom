@@ -8,20 +8,14 @@ import {
 
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { LoadingState } from "@/components/layout/loading-state";
-import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
 
-import { useEffect, useState, useId } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "@/components/auth/session";
 import { Button } from "@/components/ui/button";
 import { DownloadButton } from "@/components/media/download-button";
 import { Input } from "@/components/ui/input";
 import {
-  connectProviderPreset,
   exportProviderPreset,
   listAdminProviders,
   listProviderPresets,
@@ -34,22 +28,26 @@ import {
 } from "@/components/catalog/mutation";
 import { PresetEditor } from "./preset-editor";
 import { ConnectionDetail } from "./connection-detail";
+import { PresetConnect } from "./preset-connect";
 
-export function ProvidersPage() {
-  const formFieldId = useId();
-
+export function ProvidersPage({
+  initialConnection = "",
+}: {
+  initialConnection?: string;
+}) {
   const session = useSession();
   const [tab, setTab] = useState<"connections" | "presets">("connections");
   const [providers, setProviders] = useState<API.ProviderListItem[]>([]);
   const [presets, setPresets] = useState<API.Preset[]>([]);
-  const [selected, setSelected] = useState("");
+  const [selected, setSelected] = useState(initialConnection);
   const [refresh, setRefresh] = useState(0);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [editor, setEditor] = useState<API.Preset | "new" | null>(null);
-  const [presetID, setPresetID] = useState("");
+  const [search, setSearch] = useState("");
   const mutation = useCatalogMutation(() => setRefresh((value) => value + 1));
   useEffect(() => {
+    if (session.actor.platform_role !== "platform_admin") return;
     const controller = new AbortController();
     Promise.all([
       listAdminProviders({ limit: 200 }, { signal: controller.signal }),
@@ -70,7 +68,7 @@ export function ProvidersPage() {
         }
       });
     return () => controller.abort();
-  }, [refresh]);
+  }, [refresh, session.actor.platform_role]);
   if (session.actor.platform_role !== "platform_admin")
     return (
       <Empty>
@@ -80,7 +78,19 @@ export function ProvidersPage() {
         </EmptyHeader>
       </Empty>
     );
-  const preset = presets.find((item) => item.id === presetID);
+  const query = search.trim().toLocaleLowerCase();
+  const filteredPresets = presets.filter((p) =>
+    `${p.document?.name} ${p.slug} ${p.document?.config?.adapter_key} ${p.document?.config?.adapter_key === "volcengine_ark" ? "火山 方舟 volcengine seedance" : ""}`
+      .toLocaleLowerCase()
+      .includes(query),
+  );
+  function selectConnection(id: string) {
+    setSelected(id);
+    const url = new URL(window.location.href);
+    url.searchParams.set("connection", id);
+    window.history.replaceState(null, "", url);
+  }
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
@@ -127,86 +137,12 @@ export function ProvidersPage() {
       {loading ? <LoadingState>正在加载平台配置…</LoadingState> : null}
       {tab === "connections" ? (
         <>
-          <form
-            onSubmit={async (event) => {
-              event.preventDefault();
-              const form = new FormData(event.currentTarget);
-              if (!preset?.id || !preset.version_id) return;
-              const result = await mutation.run(
-                "preset.connect",
-                preset.id,
-                (id) =>
-                  connectProviderPreset(
-                    { id: preset.id! },
-                    {
-                      request_id: id,
-                      version_id: preset.version_id,
-                      key: String(form.get("key")),
-                      name: String(form.get("name")),
-                    },
-                  ),
-              );
-              if (result?.provider_id) setSelected(result.provider_id);
-            }}
-          >
-            <FieldGroup className="grid gap-3 rounded-xl border p-4 sm:grid-cols-2">
-              <h2 className="font-medium sm:col-span-2">添加连接</h2>
-              <Field>
-                <FieldLabel htmlFor={`${formFieldId}-field-1`}>
-                  <span>平台预设</span>
-                </FieldLabel>
-                <NativeSelect
-                  id={`${formFieldId}-field-1`}
-                  required
-                  value={presetID}
-                  onChange={(e) => setPresetID(e.target.value)}
-                  className="h-10 w-full"
-                >
-                  <NativeSelectOption value="">选择平台</NativeSelectOption>
-                  {presets
-                    .filter((p) => !p.archived && !p.emergency_disabled)
-                    .map((p) => (
-                      <NativeSelectOption key={p.id} value={p.id}>
-                        {p.document?.name} · v{p.version}
-                      </NativeSelectOption>
-                    ))}
-                </NativeSelect>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor={`${formFieldId}-field-2`}>
-                  <span>连接名称</span>
-                </FieldLabel>
-                <Input
-                  id={`${formFieldId}-field-2`}
-                  name="name"
-                  required
-                  maxLength={100}
-                  placeholder="例如：主生产连接"
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor={`${formFieldId}-field-3`}>
-                  <span>连接标识</span>
-                </FieldLabel>
-                <Input
-                  id={`${formFieldId}-field-3`}
-                  name="key"
-                  required
-                  pattern="[a-z][a-z0-9_-]{0,63}"
-                  placeholder="例如：ark-primary"
-                />
-              </Field>
-              <div className="flex items-end">
-                <Button disabled={mutation.busy || !preset}>创建连接</Button>
-              </div>
-              {preset ? (
-                <p className="text-xs break-all text-muted-foreground sm:col-span-2">
-                  {preset.document?.config?.base_url} ·
-                  创建后处于禁用状态，验证发布后才接受新任务。
-                </p>
-              ) : null}
-            </FieldGroup>
-          </form>
+          <PresetConnect
+            presets={presets}
+            providers={providers}
+            onCreated={selectConnection}
+            onSaved={() => setRefresh((v) => v + 1)}
+          />
           <div className="grid gap-4 lg:grid-cols-[minmax(220px,1fr)_minmax(0,2fr)]">
             <div className="space-y-2" role="region" aria-label="连接列表">
               {providers.length === 0 && !loading ? (
@@ -219,7 +155,7 @@ export function ProvidersPage() {
                   variant={selected === provider?.id ? "secondary" : "outline"}
                   type="button"
                   key={provider?.id}
-                  onClick={() => setSelected(provider?.id ?? "")}
+                  onClick={() => selectConnection(provider?.id ?? "")}
                   aria-pressed={selected === provider?.id}
                   className="h-auto w-full flex-col items-start gap-1 p-4 text-left whitespace-normal"
                 >
@@ -253,11 +189,18 @@ export function ProvidersPage() {
         </>
       ) : (
         <>
-          <div className="flex justify-end">
-            <Button onClick={() => setEditor("new")}>导入自定义预设</Button>
+          <div className="flex flex-wrap justify-between gap-3">
+            <Input
+              aria-label="搜索平台预设"
+              placeholder="搜索火山、方舟、OpenRouter 或自定义预设"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-md"
+            />
+            <Button onClick={() => setEditor("new")}>新建或导入预设</Button>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
-            {presets.map((p) => (
+            {filteredPresets.map((p) => (
               <article key={p.id} className="space-y-3 rounded-xl border p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h2 className="font-medium">{p.document?.name}</h2>
@@ -267,6 +210,11 @@ export function ProvidersPage() {
                 </div>
                 <p className="text-xs break-all text-muted-foreground">
                   {p.document?.config?.base_url}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {p.document?.model_templates?.length
+                    ? `${p.document.model_templates.length} 个模型模板`
+                    : "仅连接配置 · 模型待维护"}
                 </p>
                 <p className="text-sm">
                   {p.emergency_disabled
@@ -347,10 +295,16 @@ export function ProvidersPage() {
               </article>
             ))}
           </div>
+          {!filteredPresets.length ? (
+            <p role="status" className="text-sm text-muted-foreground">
+              没有匹配的预设。
+            </p>
+          ) : null}
           {editor ? (
             <PresetEditor
               key={editor === "new" ? "new" : editor.id}
               preset={editor === "new" ? undefined : editor}
+              presets={presets}
               onClose={() => setEditor(null)}
               onSaved={() => {
                 setEditor(null);

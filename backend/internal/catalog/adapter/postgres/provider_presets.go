@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/presetvalidation"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
@@ -158,6 +159,9 @@ func (s *Store) ListPresets(ctx context.Context, actor identityapp.Principal) ([
 // SavePreset appends a custom version; builtins can only be copied.
 func (s *Store) SavePreset(ctx context.Context, actor identityapp.Principal, input application.SavePresetInput) (domain.Preset, error) {
 	return catalogMutation(ctx, s.db, s.actors, actor, "preset.save", input.ID, input.RequestID, input, func(tx *gorm.DB) (domain.Preset, error) {
+		if err := presetvalidation.Validate(input.Document); err != nil {
+			return domain.Preset{}, err
+		}
 		id := input.ID
 		version := 1
 		if id == uuid.Nil {
@@ -230,6 +234,12 @@ func (s *Store) ConnectPreset(ctx context.Context, actor identityapp.Principal, 
 		if err := document.Validate(); err != nil {
 			return application.PresetConnection{}, err
 		}
+		if err := presetvalidation.Validate(document); err != nil {
+			return application.PresetConnection{}, err
+		}
+		if input.Name == "" {
+			input.Name = document.Name + " · " + input.RequestID.String()[:8]
+		}
 		providerID, configID := uuid.New(), uuid.New()
 		config := document.Config
 		if err := tx.Exec(`INSERT INTO catalog.provider(id,key,name,adapter_key,region,status,concurrency_limit,rate_limit_per_min) VALUES(?,?,?,?,?,'disabled',?,?)`, providerID, input.Key, input.Name, config.AdapterKey, config.Region, config.ConcurrencyLimit, config.RateLimitPerMin).Error; err != nil {
@@ -246,6 +256,10 @@ func (s *Store) ConnectPreset(ctx context.Context, actor identityapp.Principal, 
 		if err := tx.Exec(`UPDATE catalog.provider SET current_config_version_id=? WHERE id=?`, configID, providerID).Error; err != nil {
 			return application.PresetConnection{}, err
 		}
-		return application.PresetConnection{ProviderID: providerID, Config: application.ConnectionConfig{ID: configID, ProviderID: providerID, PresetVersionID: input.VersionID, Version: 1, Config: config}}, nil
+		modelIDs, err := s.instantiatePresetModels(ctx, tx, actor, providerID, configID, document)
+		if err != nil {
+			return application.PresetConnection{}, err
+		}
+		return application.PresetConnection{ProviderID: providerID, ModelIDs: modelIDs, Config: application.ConnectionConfig{ID: configID, ProviderID: providerID, PresetVersionID: input.VersionID, Version: 1, Config: config}}, nil
 	})
 }

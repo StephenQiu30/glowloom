@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/presetvalidation"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
@@ -107,6 +108,10 @@ func (h *PresetHandler) Preview(c *gin.Context) {
 	data := []byte(input.DocumentJSON)
 	doc, err := domain.ParsePreset(data)
 	if err != nil {
+		presetError(c, err)
+		return
+	}
+	if err := presetvalidation.Validate(doc); err != nil {
 		presetError(c, err)
 		return
 	}

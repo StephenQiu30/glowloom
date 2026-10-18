@@ -15,7 +15,6 @@ func submission(input application.GenerationRequest) (string, map[string]any, bo
 	}
 	payload := map[string]any{"model": input.ModelID, "prompt": input.Prompt}
 	path := ""
-	var allowed []string
 	switch input.Capability {
 	case "text.generate":
 		if input.Config.AdapterKey != "openrouter" || input.OutputCount != 1 || len(input.References) != 0 {
@@ -25,23 +24,19 @@ func submission(input application.GenerationRequest) (string, map[string]any, bo
 		delete(payload, "prompt")
 		payload["messages"] = []map[string]string{{"role": "user", "content": input.Prompt}}
 		payload["stream"] = false
-		allowed = []string{"temperature", "top_p", "max_tokens", "seed", "response_format"}
 	case "image.generate":
 		if input.Config.AdapterKey != "openrouter" {
 			return "", nil, false
 		}
 		path = "/images"
 		payload["n"] = input.OutputCount
-		allowed = []string{"resolution", "aspect_ratio", "quality", "output_format", "background", "seed", "output_compression"}
 	case "video.generate":
 		if input.OutputCount != 1 {
 			return "", nil, false
 		}
 		path = "/videos"
-		allowed = []string{"duration", "duration_ms", "resolution", "aspect_ratio", "generate_audio", "seed"}
 		if input.Config.AdapterKey == "volcengine_ark" {
 			path = "/contents/generations/tasks"
-			allowed = []string{"duration", "duration_ms", "resolution", "ratio", "aspect_ratio", "generate_audio", "seed", "watermark", "camera_fixed"}
 		}
 	default:
 		return "", nil, false
@@ -55,6 +50,10 @@ func submission(input application.GenerationRequest) (string, map[string]any, bo
 		if _, aspect := input.Params["aspect_ratio"]; aspect {
 			return "", nil, false
 		}
+	}
+	allowed := input.Config.ParameterFields(input.Capability)
+	if len(allowed) == 0 {
+		return "", nil, false
 	}
 	for key, value := range input.Params {
 		if !slices.Contains(allowed, key) {

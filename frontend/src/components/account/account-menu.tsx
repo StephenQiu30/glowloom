@@ -107,12 +107,26 @@ export function AccountMenu({
             </Link>
           </DropdownMenuItem>
           {isAdmin && (
-            <DropdownMenuItem asChild className={itemClassName}>
-              <Link href="/users">
-                <Shield />
-                用户管理
-              </Link>
-            </DropdownMenuItem>
+            <>
+              <DropdownMenuItem asChild className={itemClassName}>
+                <Link href="/providers">
+                  <KeyRound />
+                  AI 平台接入
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild className={itemClassName}>
+                <Link href="/models">
+                  <LayoutDashboard />
+                  模型管理
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild className={itemClassName}>
+                <Link href="/users">
+                  <Shield />
+                  用户管理
+                </Link>
+              </DropdownMenuItem>
+            </>
           )}
           {isMobile ? (
             <DropdownMenuGroup className="*:data-[slot=dropdown-menu-radio-group]:*:min-h-11">

@@ -64,6 +64,8 @@ it("展示当前账号摘要和真实入口，普通创作者不见管理入口"
     );
   }
   expect(screen.queryByRole("menuitem", { name: "用户管理" })).toBeNull();
+  expect(screen.queryByRole("menuitem", { name: "AI 平台接入" })).toBeNull();
+  expect(screen.queryByRole("menuitem", { name: "模型管理" })).toBeNull();
   expect(onLogout).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("menuitem", { name: "退出登录" }));
   expect(onLogout).toHaveBeenCalledOnce();
@@ -74,6 +76,15 @@ it("仅向平台管理员提供管理入口", async () => {
   expect(
     screen.getByRole("menuitem", { name: "用户管理" }).getAttribute("href"),
   ).toBe("/users");
+});
+it("平台管理员可以从账号菜单进入AI接入和模型管理", async () => {
+  await openMenu({ ...actor, platform_role: "platform_admin" });
+  expect(
+    screen.getByRole("menuitem", { name: "AI 平台接入" }).getAttribute("href"),
+  ).toBe("/providers");
+  expect(
+    screen.getByRole("menuitem", { name: "模型管理" }).getAttribute("href"),
+  ).toBe("/models");
 });
 it("历史 admin role 不授予平台管理入口", async () => {
   const legacy = { ...actor, role: "admin", login_name: "legacy-admin" };

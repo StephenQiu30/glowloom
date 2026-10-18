@@ -29,7 +29,11 @@ export function catalogMessage(error: unknown) {
 
 // Storage contains request identities only. Keys, fingerprints and form bodies
 // never enter persistent browser storage.
-export function useCatalogMutation(onSaved: () => void, scope = "registry") {
+export function useCatalogMutation(
+  onSaved: (result?: unknown) => void,
+  scope = "registry",
+  validateResult?: (result: unknown, target: string) => boolean,
+) {
   const session = useSession();
   const storageKey = `glowloom.catalog.pending.v1.${session.actor.id}.${scope}`;
   const snapshot = useSyncExternalStore(
@@ -63,10 +67,30 @@ export function useCatalogMutation(onSaved: () => void, scope = "registry") {
     try {
       localStorage.setItem(storageKey, JSON.stringify(request));
       window.dispatchEvent(new Event(pendingEvent));
+      if (pending) {
+        try {
+          const receipt = await getConfigReceipt({
+            id: request.id,
+            action: request.action,
+            target_id: request.target,
+          });
+          if (validateResult && !validateResult(receipt.result, target))
+            throw new RequestError("request_unconfirmed");
+          clear();
+          setMessage("原请求已保存，已恢复当前配置。");
+          onSaved(receipt.result);
+          return;
+        } catch (error) {
+          if (!(error instanceof RequestError && error.status === 404))
+            throw error;
+        }
+      }
       const result = await execute(request.id);
+      if (validateResult && !validateResult(result, target))
+        throw new RequestError("request_unconfirmed");
       clear();
       setMessage("已保存。");
-      onSaved();
+      onSaved(result);
       return result;
     } catch (error) {
       if (
@@ -79,14 +103,16 @@ export function useCatalogMutation(onSaved: () => void, scope = "registry") {
       setMessage(catalogMessage(error));
       if (error instanceof RequestError && error.status === 409) {
         try {
-          await getConfigReceipt({
+          const receipt = await getConfigReceipt({
             id: request.id,
             action: request.action,
             target_id: request.target,
           });
+          if (validateResult && !validateResult(receipt.result, request.target))
+            throw new RequestError("request_unconfirmed");
           clear();
           setMessage("请求已有成功回执，已刷新当前配置。");
-          onSaved();
+          onSaved(receipt.result);
         } catch (receiptError) {
           if (
             receiptError instanceof RequestError &&
@@ -107,14 +133,16 @@ export function useCatalogMutation(onSaved: () => void, scope = "registry") {
     writeLock.current = true;
     setBusy(true);
     try {
-      await getConfigReceipt({
+      const receipt = await getConfigReceipt({
         id: pending.id,
         action: pending.action,
         target_id: pending.target,
       });
+      if (validateResult && !validateResult(receipt.result, pending.target))
+        throw new RequestError("request_unconfirmed");
       clear();
       setMessage("已找到成功回执，列表已刷新。");
-      onSaved();
+      onSaved(receipt.result);
     } catch (error) {
       setMessage(
         error instanceof RequestError && error.status === 404

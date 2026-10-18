@@ -59,12 +59,13 @@ func (c ProviderConfig) Validate() error {
 	return nil
 }
 
-// PresetDocument is the complete portable format. Account-specific identifiers,
-// credentials, headers and executable templates are intentionally unrepresentable.
+// PresetDocument is the complete portable format. Connection and credential identities,
+// headers, validation evidence and executable scripts are unrepresentable.
 type PresetDocument struct {
-	SchemaVersion int            `json:"schema_version"`
-	Name          string         `json:"name"`
-	Config        ProviderConfig `json:"config"`
+	SchemaVersion  int                   `json:"schema_version"`
+	Name           string                `json:"name"`
+	Config         ProviderConfig        `json:"config"`
+	ModelTemplates []PresetModelTemplate `json:"model_templates,omitempty"`
 }
 
 // Validate checks the versioned import/export contract.
@@ -72,7 +73,21 @@ func (p PresetDocument) Validate() error {
 	if p.SchemaVersion != 1 || strings.TrimSpace(p.Name) != p.Name || len(p.Name) == 0 || len(p.Name) > 200 {
 		return ErrInvalidPreset
 	}
-	return p.Config.Validate()
+	if p.Config.Validate() != nil || len(p.ModelTemplates) > 16 {
+		return ErrInvalidPreset
+	}
+	seen := map[string]bool{}
+	for _, template := range p.ModelTemplates {
+		if seen[template.Key] || template.validate(p.Config) != nil {
+			return ErrInvalidPreset
+		}
+		seen[template.Key] = true
+	}
+	encoded, err := json.Marshal(p)
+	if err != nil || len(encoded) > 262144 {
+		return ErrInvalidPreset
+	}
+	return nil
 }
 
 // Digest binds an import preview to its normalized content.
@@ -86,7 +101,7 @@ func (p PresetDocument) Digest() string {
 // credentials or resolving ambiguous security-relevant values.
 func ParsePreset(data []byte) (PresetDocument, error) {
 	var p PresetDocument
-	if len(data) > 16384 || rejectDuplicateFields(json.NewDecoder(bytes.NewReader(data))) != nil {
+	if len(data) > 262144 || rejectDuplicateFields(json.NewDecoder(bytes.NewReader(data))) != nil {
 		return p, ErrInvalidPreset
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
