@@ -1,6 +1,5 @@
-import { BasicLayout } from "@/components/layout/basic-layout";
-import { ProvidersPage } from "./_components/providers-page";
-export const metadata = { title: "AI 平台接入 · 织光" };
+import { ProvidersWorkspace } from "./_components/providers-workspace";
+export const metadata = { title: "AI 服务接入 · 织光" };
 export default async function Page({
   searchParams,
 }: {
@@ -9,9 +8,5 @@ export default async function Page({
   const query = await searchParams;
   const connection =
     typeof query.connection === "string" ? query.connection : "";
-  return (
-    <BasicLayout screen="providers">
-      <ProvidersPage initialConnection={connection} />
-    </BasicLayout>
-  );
+  return <ProvidersWorkspace initialConnection={connection} />;
 }

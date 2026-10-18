@@ -8,7 +8,20 @@ import {
   listModelReleases,
 } from "@/api/settings";
 import { Button } from "@/components/ui/button";
-import { Field, FieldLabel } from "@/components/ui/field";
+import {
+  Field,
+  FieldLabel,
+  FieldSet,
+  FieldLegend,
+  FieldDescription,
+} from "@/components/ui/field";
+import {
+  Item,
+  ItemGroup,
+  ItemContent,
+  ItemDescription,
+  ItemActions,
+} from "@/components/ui/item";
 import {
   NativeSelect,
   NativeSelectOption,
@@ -81,35 +94,34 @@ export function PresetModels({
     return () => controller.abort();
   }, [source]);
   return (
-    <section
-      aria-label="预设模型模板"
-      className="flex flex-col gap-3 rounded-lg border p-3"
-    >
-      <h3 className="font-medium">可复用模型模板（可选）</h3>
-      <p className="text-sm text-muted-foreground">
-        从管理员已配置的发布组合复制模型、参数、平台价格和上游成本记录。新连接会生成独立的待验证模型，验证结果和
-        Key 不复制。
-      </p>
-      {templates.map((t, i) => (
-        <div
-          key={t.key}
-          className="flex items-center justify-between gap-3 rounded border p-2 text-sm"
-        >
-          <span>
-            {t.name} · {t.capability} · {t.provider_model_id}
-          </span>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={() =>
-              onChange(templates.filter((_, index) => index !== i))
-            }
-          >
-            移除 {t.name}
-          </Button>
-        </div>
-      ))}
+    <FieldSet aria-label="预设模型模板">
+      <FieldLegend variant="label">模型模板（可选）</FieldLegend>
+      <FieldDescription>
+        复制已有发布的参数、价格和成本，不复制 Key 或验证结果。
+      </FieldDescription>
+      <ItemGroup>
+        {templates.map((t, i) => (
+          <Item key={t.key} variant="outline">
+            <ItemContent>
+              <ItemDescription className="break-all">
+                {t.name} · {t.capability} · {t.provider_model_id}
+              </ItemDescription>
+            </ItemContent>
+            <ItemActions>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  onChange(templates.filter((_, index) => index !== i))
+                }
+              >
+                移除 {t.name}
+              </Button>
+            </ItemActions>
+          </Item>
+        ))}
+      </ItemGroup>
       <Field>
         <FieldLabel htmlFor={`${fieldID}-source`}>来源模型</FieldLabel>
         <NativeSelect
@@ -180,9 +192,9 @@ export function PresetModels({
       </Button>
       {!templates.length ? (
         <p className="text-xs text-muted-foreground">
-          没有模型模板时只提供连接配置，接入后仍需由管理员配置模型。
+          无模板时仅保存连接配置。
         </p>
       ) : null}
-    </section>
+    </FieldSet>
   );
 }

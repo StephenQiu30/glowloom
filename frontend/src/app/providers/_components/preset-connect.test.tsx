@@ -46,13 +46,11 @@ function setup() {
   render(
     <PresetConnect presets={presets} onCreated={created} onSaved={saved} />,
   );
-  fireEvent.change(screen.getByLabelText("平台预设"), {
-    target: { value: "preset" },
-  });
+  fireEvent.click(screen.getByRole("radio", { name: /OpenRouter/ }));
   fireEvent.change(screen.getByLabelText("API Key"), {
     target: { value: "fixture-api-key-test" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "保存连接与 API Key" }));
+  fireEvent.click(screen.getByRole("button", { name: "保存连接" }));
 }
 it("选预设和 Key 即可保存，不要求名称、技术标识或 JSON", async () => {
   setup();
@@ -101,6 +99,11 @@ it("创建回执丢失后查询原结果，不自动再次创建或补发 Key", 
   await screen.findByRole("button", { name: "查询回执" });
   fireEvent.click(screen.getByRole("button", { name: "查询回执" }));
   await waitFor(() => expect(created).toHaveBeenCalledWith("connection"));
+  expect(
+    screen
+      .getByRole("radio", { name: /OpenRouter/ })
+      .getAttribute("aria-checked"),
+  ).toBe("true");
   expect(api.connect).toHaveBeenCalledOnce();
   expect(api.key).not.toHaveBeenCalled();
   expect(JSON.stringify(localStorage)).not.toContain("fixture-api-key-test");
@@ -171,12 +174,12 @@ it("创建结果未知时先查回执，仅在未找到时重放原请求标识"
     expect(
       (
         screen.getByRole("button", {
-          name: "保存连接与 API Key",
+          name: "保存连接",
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(false),
   );
-  fireEvent.click(screen.getByRole("button", { name: "保存连接与 API Key" }));
+  fireEvent.click(screen.getByRole("button", { name: "保存连接" }));
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());
   expect(api.receipt).toHaveBeenCalledOnce();
   expect(api.connect).toHaveBeenCalledTimes(2);
@@ -216,4 +219,45 @@ it("刷新后沿用待确认凭据的连接和请求，不要求再次新建", a
   expect(api.key.mock.calls[0][2].headers["Idempotency-Key"]).toBe(
     "original-key-request",
   );
+});
+
+it("Key 输入先选预设，支持显隐，提交后清空并恢复隐藏", async () => {
+  render(
+    <PresetConnect presets={presets} onCreated={created} onSaved={saved} />,
+  );
+  expect(screen.getByLabelText("API Key")).toHaveProperty("disabled", true);
+  fireEvent.click(screen.getByRole("radio", { name: /OpenRouter/ }));
+  fireEvent.change(screen.getByLabelText("API Key"), {
+    target: { value: "fixture-api-key-test" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "显示 API Key" }));
+  expect(screen.getByLabelText("API Key")).toHaveProperty("type", "text");
+  fireEvent.click(screen.getByRole("button", { name: "保存连接" }));
+  await waitFor(() => expect(saved).toHaveBeenCalledOnce());
+  expect(screen.getByLabelText("API Key")).toHaveProperty("value", "");
+  expect(screen.getByLabelText("API Key")).toHaveProperty("type", "password");
+});
+it("从其他预设打开时仍恢复原创建请求，不替换其平台", () => {
+  localStorage.setItem(
+    "glowloom.catalog.pending.v1.admin-fixture.preset.onboarding.create",
+    JSON.stringify({
+      id: "original",
+      action: "preset.connect",
+      target: "preset",
+    }),
+  );
+  render(
+    <PresetConnect
+      presets={[...presets, { id: "other", document: { name: "其他预设" } }]}
+      initialPreset="other"
+      onCreated={created}
+      onSaved={saved}
+    />,
+  );
+  expect(
+    screen
+      .getByRole("radio", { name: /OpenRouter/ })
+      .getAttribute("aria-checked"),
+  ).toBe("true");
+  expect(api.connect).not.toHaveBeenCalled();
 });

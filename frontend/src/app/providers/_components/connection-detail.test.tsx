@@ -52,6 +52,10 @@ it("Key 只进入提交请求，刷新恢复只查询安全回执", async () => 
   const view = render(
     <ConnectionDetail id="connection" presets={[]} onSaved={onSaved} />,
   );
+  fireEvent.mouseDown(await screen.findByRole("tab", { name: "Key" }), {
+    button: 0,
+    ctrlKey: false,
+  });
   const input = await screen.findByLabelText("平台 API Key");
   fireEvent.change(input, {
     target: { value: "fixture-secret-do-not-persist" },
@@ -82,11 +86,14 @@ it("旧 Key 可单独停用，当前 Key 不受影响", async () => {
   ]);
   api.disable.mockResolvedValue({ id: "old-key", status: "disabled" });
   render(<ConnectionDetail id="connection" presets={[]} onSaved={() => {}} />);
-  const buttons = await screen.findAllByRole("button", {
-    name: "确认停用此 Key",
-    hidden: true,
+  fireEvent.mouseDown(await screen.findByRole("tab", { name: "Key" }), {
+    button: 0,
+    ctrlKey: false,
   });
-  fireEvent.click(buttons[0]);
+  fireEvent.click(
+    (await screen.findAllByRole("button", { name: "紧急停用" }))[0],
+  );
+  fireEvent.click(screen.getByRole("button", { name: "确认停用此 Key" }));
   await waitFor(() => expect(api.disable).toHaveBeenCalledOnce());
   expect(api.disable.mock.calls[0][0]).toEqual({
     id: "connection",
@@ -113,6 +120,10 @@ it("向导的 Key 写入未确认时，详情禁止绕过并使用原回执恢�
   });
   const onSaved = vi.fn();
   render(<ConnectionDetail id="connection" presets={[]} onSaved={onSaved} />);
+  fireEvent.mouseDown(await screen.findByRole("tab", { name: "Key" }), {
+    button: 0,
+    ctrlKey: false,
+  });
   const input = await screen.findByLabelText("平台 API Key");
   expect((input as HTMLInputElement).disabled).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "查询回执" }));

@@ -33,14 +33,18 @@ import {
 } from "@/components/catalog/mutation";
 import { ModelDetail } from "./model-detail";
 
-export function ModelsPage() {
+export function ModelsPage({
+  initialProvider = "",
+}: {
+  initialProvider?: string;
+}) {
   const formFieldId = useId();
 
   const session = useSession();
   const [models, setModels] = useState<API.CreatedModel[]>([]);
   const [providers, setProviders] = useState<API.ProviderListItem[]>([]);
   const [capabilities, setCapabilities] = useState<API.CapabilitySummary[]>([]);
-  const [providerID, setProviderID] = useState("");
+  const [providerID, setProviderID] = useState(initialProvider);
   const [selected, setSelected] = useState("");
   const [cursor, setCursor] = useState("");
   const [next, setNext] = useState("");
@@ -215,25 +219,39 @@ export function ModelsPage() {
       {loading ? <LoadingState>正在加载模型…</LoadingState> : null}
       <div className="grid items-start gap-4 lg:grid-cols-[16rem_1fr]">
         <section className="min-w-0 space-y-2" aria-label="模型列表">
-          {!loading && !models.length ? (
-            <p className="text-sm text-muted-foreground">
-              还没有模型，请先添加一个。
+          {initialProvider ? (
+            <p className="text-xs text-muted-foreground">
+              当前连接的已加载模型。<Link href="/models">查看全部模型</Link>
             </p>
           ) : null}
-          {models.map((m) => (
-            <Button
-              key={m.id}
-              variant={selected === m.id ? "secondary" : "outline"}
-              className="h-auto w-full flex-col items-start gap-1 p-3 text-left whitespace-normal"
-              onClick={() => setSelected(m.id ?? "")}
-            >
-              <span className="break-all">{m.display_name}</span>
-              <span className="text-xs text-muted-foreground">
-                {m.capability} ·{" "}
-                {m.status === "active" ? "已启用" : "草稿 / 已停用"}
-              </span>
-            </Button>
-          ))}
+          {!loading &&
+          !models.filter(
+            (m) => !initialProvider || m.provider_id === initialProvider,
+          ).length ? (
+            <p className="text-sm text-muted-foreground">
+              {initialProvider
+                ? "本页没有此连接的模型，可继续翻页或查看全部。"
+                : "还没有模型，请先添加一个。"}
+            </p>
+          ) : null}
+          {models
+            .filter(
+              (m) => !initialProvider || m.provider_id === initialProvider,
+            )
+            .map((m) => (
+              <Button
+                key={m.id}
+                variant={selected === m.id ? "secondary" : "outline"}
+                className="h-auto w-full flex-col items-start gap-1 p-3 text-left whitespace-normal"
+                onClick={() => setSelected(m.id ?? "")}
+              >
+                <span className="break-all">{m.display_name}</span>
+                <span className="text-xs text-muted-foreground">
+                  {m.capability} ·{" "}
+                  {m.status === "active" ? "已启用" : "草稿 / 已停用"}
+                </span>
+              </Button>
+            ))}
           <div className="flex flex-wrap gap-2">
             {cursor ? (
               <Button variant="outline" onClick={() => setCursor("")}>

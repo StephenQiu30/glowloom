@@ -205,7 +205,10 @@ const actor: API.EmailSessionView["actor"] = {
   capabilities: [],
 };
 createRoot(document.getElementById("root")!).render(
-  <ThemeProvider attribute="class" defaultTheme="light">
+  <ThemeProvider
+    attribute="class"
+    forcedTheme={new URLSearchParams(location.search).get("theme") ?? "dark"}
+  >
     <div className="flex items-center justify-between gap-3 border-b p-4">
       <p>受控浏览器验证 · 模拟 API · 无真实供应商调用</p>
       <AccountMenu actor={actor} onLogout={() => {}} />

@@ -126,7 +126,7 @@ export function AccountMenu({
               <DropdownMenuItem asChild className={itemClassName}>
                 <Link href="/providers">
                   <KeyRound />
-                  AI 平台接入
+                  AI 服务接入
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild className={itemClassName}>

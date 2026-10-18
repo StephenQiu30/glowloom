@@ -56,6 +56,7 @@ it("管理员通过表单维护预设，无需手写 JSON 或标识；修改使�
   fireEvent.change(screen.getByLabelText("预设名称"), {
     target: { value: "工作室 OpenRouter" },
   });
+  fireEvent.click(screen.getByRole("button", { name: "高级设置" }));
   fireEvent.change(screen.getByLabelText("最大并发"), {
     target: { value: "4" },
   });
