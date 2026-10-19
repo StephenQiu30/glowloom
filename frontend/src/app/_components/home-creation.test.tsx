@@ -87,8 +87,8 @@ function tab(name: string) {
 it("保留七类Tab，游客切换输入不丢失且没有推荐技能行", async () => {
   render(<Page />);
   expect(screen.getAllByRole("tab")).toHaveLength(7);
-  fireEvent.change(screen.getByLabelText("创作提示词"), {
-    target: { value: "保留这段想法" },
+  fireEvent.paste(await screen.findByLabelText("创作提示词"), {
+    clipboardData: { files: [], getData: () => "保留这段想法" },
   });
   tab("视频生成");
   await waitFor(() =>
@@ -99,7 +99,7 @@ it("保留七类Tab，游客切换输入不丢失且没有推荐技能行", asyn
     ).toBe("true"),
   );
   expect(screen.getByLabelText("创作提示词")).toHaveProperty(
-    "value",
+    "textContent",
     "保留这段想法",
   );
   fireEvent.click(screen.getByRole("button", { name: "开始生成" }));

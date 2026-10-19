@@ -2100,10 +2100,16 @@ button:not(:disabled),
 .creation-reference-tools[data-slot="input-group-addon"] {
   padding: 0;
 }
-.creation-composer > textarea {
+.creation-composer > .home-prompt {
   min-height: 96px;
   flex: 1;
-  padding: 0;
+}
+.home-prompt .tiptap:has(> p:only-child > br:only-child)::before {
+  content: attr(data-placeholder);
+  color: var(--muted-foreground);
+  pointer-events: none;
+  float: left;
+  height: 0;
 }
 .creation-credit-hint {
   margin-left: auto;

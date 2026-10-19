@@ -106,6 +106,10 @@ it("R6 主导航与画布入口指向真实路由，支持收起和展开", asyn
   expect(
     (await screen.findByRole("link", { name: "创作" })).getAttribute("href"),
   ).toBe("/");
+  expect(screen.getByRole("main").id).toBe("main-content");
+  expect(
+    screen.getByRole("banner", { name: "页面顶栏" }).closest("main"),
+  ).toBeNull();
   expect(
     screen.getByRole("link", { name: "素材库" }).getAttribute("href"),
   ).toBe("/assets");

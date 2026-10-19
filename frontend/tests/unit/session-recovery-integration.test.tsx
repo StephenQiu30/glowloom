@@ -749,17 +749,19 @@ it("the actual home prompt restores text only after same-account new-sid and wri
     </SessionProvider>,
   );
   const prompt = await screen.findByLabelText("创作提示词");
-  fireEvent.change(prompt, { target: { value: "home unfinished idea" } });
+  fireEvent.paste(prompt, {
+    clipboardData: { files: [], getData: () => "home unfinished idea" },
+  });
   await act(async () => {});
   await expire();
-  expect(screen.getByLabelText("创作提示词")).toHaveProperty("value", "");
+  expect(screen.getByLabelText("创作提示词")).toHaveProperty("textContent", "");
   await login();
   const restore = await screen.findByRole("button", { name: "恢复上次文字" });
-  expect(screen.getByLabelText("创作提示词")).toHaveProperty("value", "");
+  expect(screen.getByLabelText("创作提示词")).toHaveProperty("textContent", "");
   fireEvent.click(restore);
   await waitFor(() =>
     expect(screen.getByLabelText("创作提示词")).toHaveProperty(
-      "value",
+      "textContent",
       "home unfinished idea",
     ),
   );
@@ -809,8 +811,11 @@ it("the actual home with retained input sends no activity GET when its Provider 
       </SessionProvider>,
     );
     await act(async () => {});
-    fireEvent.change(screen.getByLabelText("创作提示词"), {
-      target: { value: "keep while credentials rotate" },
+    fireEvent.paste(screen.getByLabelText("创作提示词"), {
+      clipboardData: {
+        files: [],
+        getData: () => "keep while credentials rotate",
+      },
     });
     await act(async () => {});
     expect(JSON.stringify([...records.values()])).toContain(
@@ -826,7 +831,7 @@ it("the actual home with retained input sends no activity GET when its Provider 
     ).toHaveLength(1);
     expect(calls.filter((call) => call.method === "get")).toHaveLength(reads);
     expect(screen.getByLabelText("创作提示词")).toHaveProperty(
-      "value",
+      "textContent",
       "keep while credentials rotate",
     );
   } finally {
@@ -850,8 +855,8 @@ it.each(["different account", "different scope", "explicit logout"])(
         </TooltipProvider>
       </SessionProvider>,
     );
-    fireEvent.change(await screen.findByLabelText("创作提示词"), {
-      target: { value: "scoped home input" },
+    fireEvent.paste(await screen.findByLabelText("创作提示词"), {
+      clipboardData: { files: [], getData: () => "scoped home input" },
     });
     await waitFor(() =>
       expect(JSON.stringify([...records.values()])).toContain(
@@ -869,7 +874,10 @@ it.each(["different account", "different scope", "explicit logout"])(
     await screen.findByLabelText("创作提示词");
     await act(async () => {});
     expect(screen.queryByRole("button", { name: "恢复上次文字" })).toBeNull();
-    expect(screen.getByLabelText("创作提示词")).toHaveProperty("value", "");
+    expect(screen.getByLabelText("创作提示词")).toHaveProperty(
+      "textContent",
+      "",
+    );
     expect(
       calls.filter((c) => ["post", "put", "patch"].includes(c.method)),
     ).toEqual([]);
@@ -891,8 +899,8 @@ it.each(["revoked", "read-only"])(
         </TooltipProvider>
       </SessionProvider>,
     );
-    fireEvent.change(await screen.findByLabelText("创作提示词"), {
-      target: { value: "sensitive home input" },
+    fireEvent.paste(await screen.findByLabelText("创作提示词"), {
+      clipboardData: { files: [], getData: () => "sensitive home input" },
     });
     await waitFor(() =>
       expect(JSON.stringify([...records.values()])).toContain(
@@ -908,7 +916,10 @@ it.each(["revoked", "read-only"])(
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: "恢复上次文字" })).toBeNull(),
     );
-    expect(screen.getByLabelText("创作提示词")).toHaveProperty("value", "");
+    expect(screen.getByLabelText("创作提示词")).toHaveProperty(
+      "textContent",
+      "",
+    );
     expect(JSON.stringify([...records.values()])).not.toContain(
       "sensitive home input",
     );

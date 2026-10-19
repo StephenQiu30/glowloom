@@ -20,10 +20,10 @@ import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
-  InputGroupTextarea,
 } from "@/components/ui/input-group";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { HomePrompt } from "./home-prompt";
 
 const RichGeneration = dynamic(
   () =>
@@ -255,12 +255,13 @@ export function HomeCreation({
                           </Button>
                         </div>
                       </InputGroupAddon>
-                      <InputGroupTextarea
+                      <HomePrompt
                         value={prompt}
-                        maxLength={10000}
-                        onChange={(event) => onPromptChange(event.target.value)}
-                        aria-label="创作提示词"
+                        onChange={onPromptChange}
                         placeholder={activeType.placeholder}
+                        onSubmit={() => {
+                          if (prompt.trim() || !supported) prepare();
+                        }}
                       />
                       <InputGroupAddon
                         align="block-end"

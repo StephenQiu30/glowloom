@@ -58,3 +58,11 @@ DataPagination 组合官方 Pagination、Select、Field 与 Button，默认 12�
 验收发现并修复首页/探索分类 Tab、素材库来源 Tab 缺少关联面板的问题；来源页签和实际正文统一于官方 Tabs/TabsContent，素材类型筛选使用 ToggleGroup。修复后首页、探索、素材库的 WCAG 2A/2AA 自动审计无已确认 violation；图片背景文字对比度与布局内 header 标签仍有 incomplete，不等同于全量无障碍接受。短暂 Sonner 入场/退出时审计曾报告颜色对比，稳定复查不再出现，保留原始输出。工程检查 ESLint、Prettier、typegen、TypeScript、93文件620测试与生产构建通过。
 
 当前批次涵盖首页、共享模型/参数、分页、计费未开放页和验收修复；只提交任务路径，保留用户已有许可证删除。后续继续修正布局语义、统一未绑定项目的富文本与旧生成入口，不把缺失生成服务或支付接口标记为接入完成。
+
+### 提交后继续：项目选择前的富文本与布局语义
+
+上一批已提交并推送 `8ac7b9643b507aa31322733e80fbea33ce7cc61a`；当前继续的改动统一首页未选项目/游客输入为现有 PromptEditor + ComposerSession，HomePrompt 只负责将项目选择前的文字交给原恢复机制，私人引用仍须绑定真实项目。通过原会话集成回归验证同账号恢复、其他账号/空间拒绝恢复、凭据轮换不触发多余活动请求；项目选择后仍使用同一 RichGeneration 服务合同。普通文字与富文本切换的重复入口已移除；画布想法输入继续是已有单行用途。
+
+SidebarInset 增加沿用现有 Slot 的 asChild 组合能力，BasicLayout 以布局 div 包含独立 header 与 main，只有正文为 main，跳过导航目标和滚动边界保持不变。agent-browser 复查 DOM 只有一个 main，header 不在 main 内；原 header 的 ARIA incomplete 消失。首页完整 WCAG 2A/2AA 自动审计无已确认 violation，仅图片背景文字对比度仍需人工核验。
+
+桌面1460px及手机320px重新检查：首页是真实 contenteditable，图片/视频 Tab 切换保留文字，320px 无横向溢出，空编辑器占位可见；未收费生成。工程检查完整93文件620测试、ESLint、typegen、TypeScript与生产构建通过。截图：父工作区 `output/agent-browser-acceptance/screenshots/home-rich-desktop.png` 与 `home-rich-empty-mobile.png`。真实登录后引用、五类未接入生成、积分钱包与支付依旧未完成，不能作为完整产品验收通过。

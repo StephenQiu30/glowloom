@@ -125,28 +125,30 @@ function Shell({
           if (!auth) mobileNavigationTrigger.current?.focus();
         }}
       />
-      <SidebarInset className="product-content">
-        <ProductHeader
-          screen={screen}
-          search={pageSearch}
-          actor={session?.actor}
-          isMobile={isMobile}
-          navigationOpen={openMobile}
-          navigationTriggerRef={mobileNavigationTrigger}
-          onOpenNavigation={() => setOpenMobile(true)}
-          onLogin={() => setAuth(true)}
-          onLogout={() => setLogout(true)}
-          onFeature={setFeature}
-        />
-        <div
-          id="main-content"
-          ref={scrollRef}
-          tabIndex={-1}
-          className="product-main"
-        >
-          <PageOptionsContext.Provider value={setPageOptions}>
-            <SpaceGate>{children}</SpaceGate>
-          </PageOptionsContext.Provider>
+      <SidebarInset asChild>
+        <div className="product-content">
+          <ProductHeader
+            screen={screen}
+            search={pageSearch}
+            actor={session?.actor}
+            isMobile={isMobile}
+            navigationOpen={openMobile}
+            navigationTriggerRef={mobileNavigationTrigger}
+            onOpenNavigation={() => setOpenMobile(true)}
+            onLogin={() => setAuth(true)}
+            onLogout={() => setLogout(true)}
+            onFeature={setFeature}
+          />
+          <main
+            id="main-content"
+            ref={scrollRef}
+            tabIndex={-1}
+            className="product-main"
+          >
+            <PageOptionsContext.Provider value={setPageOptions}>
+              <SpaceGate>{children}</SpaceGate>
+            </PageOptionsContext.Provider>
+          </main>
         </div>
       </SidebarInset>
       <UnavailableDialog feature={feature} onClose={() => setFeature(null)} />
