@@ -82,7 +82,7 @@ it("会话服务不可用时仍可浏览公共灵感，未登录的素材库只�
     </TooltipProvider>,
   );
   await screen.findByLabelText("创作提示词");
-  expect(screen.getByRole("heading", { name: "最近上新" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "创作精选" })).toBeTruthy();
   home.unmount();
   vi.mocked(request).mockRejectedValue(
     new RequestError("session_invalid", 401),

@@ -1,6 +1,7 @@
 import { SpaceProvider } from "@/components/spaces/space-context";
 import { SessionProvider } from "@/components/auth/session";
 import {
+  waitFor,
   cleanup,
   act,
   fireEvent,
@@ -255,7 +256,7 @@ it("游客仅从顶栏登录，手机抽屉只展示导航，关闭认证后恢�
   await waitFor(() => expect(document.activeElement).toBe(login));
 });
 
-it("手机顶栏提供独立主题入口，移除积分会员并保留通知反馈", async () => {
+it("手机顶栏保留主题与通知，积分入口不显示虚构会员促销", async () => {
   vi.stubGlobal(
     "matchMedia",
     vi.fn().mockImplementation(() => ({
@@ -277,6 +278,12 @@ it("手机顶栏提供独立主题入口，移除积分会员并保留通知反�
   expect(within(header).getByRole("button", { name: "切换主题" })).toBeTruthy();
   expect(within(header).queryByRole("button", { name: "更多操作" })).toBeNull();
   expect(within(header).queryByText("开通会员")).toBeNull();
+  fireEvent.click(within(header).getByRole("button", { name: "积分余额" }));
+  expect(await screen.findByText("积分服务暂未开放")).toBeTruthy();
+  fireEvent.click(screen.getByRole("link", { name: "积分总览" }));
+  await waitFor(() =>
+    expect(screen.queryByText("积分服务暂未开放")).toBeNull(),
+  );
   fireEvent.click(within(header).getByRole("button", { name: "消息中心" }));
   expect(
     await screen.findByRole("dialog", { name: "消息中心暂未开放" }),

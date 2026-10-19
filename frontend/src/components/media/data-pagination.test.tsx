@@ -4,6 +4,24 @@ import { DataPagination } from "./data-pagination";
 
 afterEach(cleanup);
 
+it("游标接口只播报当前页，不虚构总页数", () => {
+  const next = vi.fn();
+  render(
+    <DataPagination
+      label="画布分页"
+      page={2}
+      pageSize={12}
+      hasNext
+      onPageChange={next}
+      onPageSizeChange={vi.fn()}
+    />,
+  );
+  expect(screen.getByRole("status").textContent).toContain("第 2 页");
+  expect(screen.getByRole("status").textContent).not.toContain("共");
+  fireEvent.click(screen.getByRole("button", { name: "下一页" }));
+  expect(next).toHaveBeenCalledWith(3);
+});
+
 it("空列表保留数量选择器，同时禁止前后翻页", () => {
   render(
     <DataPagination

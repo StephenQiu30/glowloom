@@ -9,7 +9,8 @@ import {
   Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -48,7 +49,6 @@ export function LibraryToolbar({
   filter,
   onFilter,
   section,
-  onSection,
   disabled,
   locked,
   batch,
@@ -60,7 +60,6 @@ export function LibraryToolbar({
   filter: LibraryFilter;
   onFilter: (filter: LibraryFilter) => void;
   section: string;
-  onSection: (section: string) => void;
   disabled: boolean;
   locked: boolean;
   batch: boolean;
@@ -73,16 +72,14 @@ export function LibraryToolbar({
   return (
     <>
       <div className="library-primary-row">
-        <Tabs value={section} onValueChange={onSection}>
-          <TabsList variant="navigation" aria-label="素材来源">
-            <TabsTrigger value="library" disabled={locked}>
-              素材库
-            </TabsTrigger>
-            <TabsTrigger value="history" disabled={locked}>
-              生成历史
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <TabsList variant="navigation" aria-label="素材来源">
+          <TabsTrigger value="library" disabled={locked}>
+            素材库
+          </TabsTrigger>
+          <TabsTrigger value="history" disabled={locked}>
+            生成历史
+          </TabsTrigger>
+        </TabsList>
         <div className="library-primary-actions">
           <Button
             variant="ghost"
@@ -113,18 +110,20 @@ export function LibraryToolbar({
         </div>
       </div>
       <div className="library-filter-row">
-        <Tabs
+        <ToggleGroup
+          type="single"
           value={filter.kind}
-          onValueChange={(kind) => onFilter({ ...filter, kind })}
+          onValueChange={(kind) => {
+            if (kind) onFilter({ ...filter, kind });
+          }}
+          aria-label="素材类型"
         >
-          <TabsList variant="navigation" aria-label="素材类型">
-            {mediaKinds.map((kind) => (
-              <TabsTrigger key={kind.id} value={kind.id} disabled={inactive}>
-                {kind.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+          {mediaKinds.map((kind) => (
+            <ToggleGroupItem key={kind.id} value={kind.id} disabled={inactive}>
+              {kind.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button

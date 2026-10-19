@@ -21,12 +21,13 @@ import {
 export const pageSizes = [12, 24, 48] as const;
 export type PageSize = (typeof pageSizes)[number];
 
-/** Controlled pagination for collections whose API supplies a total. */
+/** Offset APIs show totals; cursor APIs expose only the known page and next-page availability. */
 export function DataPagination({
   label,
   page,
   pageSize,
   total,
+  hasNext = false,
   disabled = false,
   onPageChange,
   onPageSizeChange,
@@ -34,14 +35,16 @@ export function DataPagination({
   label: string;
   page: number;
   pageSize: PageSize;
-  total: number;
+  total?: number;
+  hasNext?: boolean;
   disabled?: boolean;
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: PageSize) => void;
 }) {
   const id = useId();
-  const pages = Math.ceil(total / pageSize);
-  const current = pages === 0 ? 0 : Math.min(page, pages);
+  const pages = total === undefined ? undefined : Math.ceil(total / pageSize);
+  const current =
+    pages === 0 ? 0 : pages === undefined ? page : Math.min(page, pages);
   return (
     <Pagination aria-label={label} className="data-pagination">
       <Field orientation="horizontal" className="w-auto gap-2">
@@ -76,10 +79,12 @@ export function DataPagination({
       </Field>
       <span className="data-pagination-status" role="status">
         <span aria-hidden="true">
-          {current} / {pages}
+          {pages === undefined ? `第 ${current} 页` : `${current} / ${pages}`}
         </span>
         <span className="sr-only">
-          共 {total} 项，第 {current} 页，共 {pages} 页
+          {pages === undefined
+            ? `第 ${current} 页`
+            : `共 ${total} 项，第 ${current} 页，共 ${pages} 页`}
         </span>
       </span>
       <PaginationContent className="gap-2">
@@ -103,7 +108,9 @@ export function DataPagination({
             size="icon"
             className="max-md:size-11"
             aria-label="下一页"
-            disabled={disabled || current >= pages}
+            disabled={
+              disabled || (pages === undefined ? !hasNext : current >= pages)
+            }
             onClick={() => onPageChange(current + 1)}
           >
             <ChevronRight />

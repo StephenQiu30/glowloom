@@ -14,6 +14,7 @@ export const screens = [
   { id: "platform/teams", name: "平台团队", node: "13:2", group: "管理" },
   { id: "platform/settings", name: "平台设置", node: "13:2", group: "管理" },
   { id: "account", name: "账号设置", node: "13:2", group: "账号" },
+  { id: "billing", name: "积分与会员", node: "1016:81935", group: "账号" },
   { id: "users", name: "用户管理", node: "363:16818", group: "管理" },
   { id: "providers", name: "AI 服务接入", node: "16:2", group: "管理" },
   { id: "models", name: "模型管理", node: "17:2", group: "管理" },

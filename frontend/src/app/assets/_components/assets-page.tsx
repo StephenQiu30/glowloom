@@ -23,6 +23,7 @@ import { useLoginDialog } from "@/components/layout/basic-layout";
 import { useOptionalSession } from "@/components/auth/session";
 import { RequestError } from "@/lib/request";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import {
   Item,
   ItemActions,
@@ -235,519 +236,543 @@ function Library({
   const locked = saving || !!pendingOperation;
   const activeFolder = page?.folders.find((f) => f.id === filter.folder);
   return (
-    <section className="media-library" aria-label="素材库">
-      <h1 className="sr-only">素材库</h1>
-      <LibraryToolbar
-        filter={filter}
-        onFilter={onFilter}
-        section={section}
-        onSection={(value) => {
-          setSection(value);
-          setBatch(false);
-          setSelected([]);
-          if (value === "library" && authenticated) setLoading(true);
-        }}
-        disabled={!authenticated}
-        locked={locked}
-        batch={batch}
-        canCreateFolder={!!page && !loading}
-        onBatch={() => {
-          setBatch(!batch);
-          setSelected([]);
-        }}
-        onFolder={() => setFolderOpen(true)}
-        onUpload={() => setUpload(true)}
-      />
-      {!authenticated ? (
-        <Empty className="library-login-state">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Folder aria-hidden="true" />
-            </EmptyMedia>
-            <EmptyTitle>登录查看你的素材</EmptyTitle>
-          </EmptyHeader>
-          <EmptyDescription>
-            登录后，上传、收藏和整理你的创作素材。
-          </EmptyDescription>
-          <EmptyContent>
-            <Button size="lg" className="min-h-11 px-6" onClick={login}>
-              登录 / 注册
-            </Button>
-          </EmptyContent>
-        </Empty>
-      ) : section === "history" ? (
-        <Empty className="library-login-state">
-          <EmptyHeader>
-            <EmptyMedia>
-              <History aria-hidden="true" />
-            </EmptyMedia>
-            <EmptyTitle>在画布中查看生成记录</EmptyTitle>
-            <EmptyDescription>
-              生成记录随所属画布保存，打开画布即可继续查看和创作。
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button asChild variant="outline" size="lg">
-              <Link href="/projects">查看我的画布</Link>
-            </Button>
-          </EmptyContent>
-        </Empty>
-      ) : (
-        <>
-          {writeError && (
-            <FeedbackToast
-              message={writeError}
-              action={
-                saving
-                  ? undefined
-                  : {
-                      label: pendingOperation ? "重试原操作" : "刷新素材版本",
-                      onClick: () => {
-                        if (pendingOperation) void command();
-                        else {
-                          setWriteError("");
-                          reload();
-                        }
-                      },
-                    }
-              }
-            />
-          )}
-          {batch && (
-            <Item variant="outline" size="sm">
-              <ItemContent>
-                <FieldGroup>
-                  <Field orientation="horizontal">
-                    <Checkbox
-                      id="library-select-page"
-                      aria-label="选择本页全部素材"
-                      checked={
-                        selection.length > 0 &&
-                        selection.length < (page?.items.length ?? 0)
-                          ? "indeterminate"
-                          : !!page?.items.length &&
-                            selection.length === page.items.length
-                      }
-                      disabled={locked || loading}
-                      onCheckedChange={(v) =>
-                        setSelected(
-                          v === true
-                            ? (page?.items.map((i) => i.id) ?? [])
-                            : [],
-                        )
-                      }
-                    />
-                    <FieldLabel htmlFor="library-select-page">
-                      已选择 {selection.length} 项
-                    </FieldLabel>
-                  </Field>
-                </FieldGroup>
-              </ItemContent>
-              <ItemActions>
-                <Button
-                  className="max-md:min-h-11"
-                  disabled={!selection.length || saving || !!pendingOperation}
-                  variant={filter.trash ? "outline" : "destructive"}
-                  onClick={() =>
-                    setConfirm(filter.trash ? "restore_items" : "recycle_items")
-                  }
-                >
-                  {filter.trash ? <RotateCw /> : <Trash2 />}
-                  {filter.trash ? "恢复" : "移入回收站"}
-                </Button>
-              </ItemActions>
-            </Item>
-          )}
-          {page &&
-            !loading &&
-            !error &&
-            !filter.trash &&
-            !filter.folder &&
-            page.folders.length > 0 && (
-              <section className="library-folders" aria-label="我的文件夹">
-                <Item className="library-section-heading p-0">
-                  <ItemContent>
-                    <ItemTitle role="heading" aria-level={2}>
-                      我的文件夹
-                    </ItemTitle>
-                  </ItemContent>
-                  <ItemActions>
-                    <ItemDescription>
-                      {page.folders.length} 个文件夹
-                    </ItemDescription>
-                  </ItemActions>
-                </Item>
-                <ItemGroup
-                  className="library-folder-grid"
-                  role="group"
-                  aria-label="文件夹"
-                >
-                  {page.folders.map((f) => (
-                    <Item asChild variant="muted" key={f.id}>
-                      <Button
-                        variant="ghost"
-                        className="library-folder-card"
-                        disabled={saving || !!pendingOperation}
-                        onClick={() => onFilter({ ...filter, folder: f.id! })}
-                      >
-                        <ItemMedia variant="icon">
-                          <Folder data-icon="inline-start" />
-                        </ItemMedia>
-                        <ItemContent className="min-w-0 items-start">
-                          <ItemTitle className="max-w-full truncate">
-                            {f.name}
-                          </ItemTitle>
-                          {typeof page.folder_counts?.[f.id!] === "number" && (
-                            <ItemDescription>
-                              {page.folder_counts[f.id!]} 个素材
-                            </ItemDescription>
-                          )}
-                        </ItemContent>
-                      </Button>
-                    </Item>
-                  ))}
-                </ItemGroup>
-              </section>
-            )}
-          {page && !loading && !error && (
-            <Item className="library-section-heading flex-nowrap p-0">
-              {filter.folder && (
-                <Button
-                  variant="ghost"
-                  size="icon-lg"
-                  aria-label="返回全部素材"
-                  disabled={locked}
-                  onClick={() => onFilter({ ...filter, folder: "" })}
-                >
-                  <ArrowLeft />
-                </Button>
-              )}
-              <ItemContent className="min-w-0">
-                <ItemTitle
-                  role="heading"
-                  aria-level={2}
-                  className="max-w-full truncate"
-                >
-                  {filter.trash
-                    ? "回收站"
-                    : activeFolder?.name ||
-                      (filter.favorite
-                        ? "收藏"
-                        : `全部${kinds.find((k) => k.id === filter.kind)?.label ?? "素材"}`)}
-                </ItemTitle>
-              </ItemContent>
-              <ItemActions>
-                <ItemDescription>共 {page.total} 个素材</ItemDescription>
-                <Button
-                  variant="ghost"
-                  size="icon-lg"
-                  aria-label="刷新素材"
-                  disabled={locked}
-                  onClick={reload}
-                >
-                  <RotateCw />
-                </Button>
-              </ItemActions>
-            </Item>
-          )}
-          {loading ? (
-            <ItemGroup
-              className="asset-grid"
-              role="status"
-              aria-label="正在读取素材"
-            >
-              {[0, 1, 2, 3].map((n) => (
-                <Skeleton key={n} className="aspect-video rounded-xl" />
-              ))}
-            </ItemGroup>
-          ) : error ? (
-            <Empty className="library-login-state">
-              <FeedbackToast message={error} />
-              <EmptyHeader>
-                <EmptyTitle>无法读取素材</EmptyTitle>
-                <EmptyDescription>请重试读取。</EmptyDescription>
-              </EmptyHeader>
-              <Button variant="outline" onClick={reload}>
-                重试读取素材
-              </Button>
-            </Empty>
-          ) : page?.items.length === 0 ? (
+    <Tabs
+      value={section}
+      onValueChange={(value) => {
+        setSection(value);
+        setBatch(false);
+        setSelected([]);
+        if (value === "library" && authenticated) setLoading(true);
+      }}
+      asChild
+    >
+      <section className="media-library" aria-label="素材库">
+        <h1 className="sr-only">素材库</h1>
+        <LibraryToolbar
+          filter={filter}
+          onFilter={onFilter}
+          section={section}
+          disabled={!authenticated}
+          locked={locked}
+          batch={batch}
+          canCreateFolder={!!page && !loading}
+          onBatch={() => {
+            setBatch(!batch);
+            setSelected([]);
+          }}
+          onFolder={() => setFolderOpen(true)}
+          onUpload={() => setUpload(true)}
+        />
+        <TabsContent
+          value={section}
+          className="flex min-h-0 flex-1 flex-col gap-6"
+        >
+          {!authenticated ? (
             <Empty className="library-login-state">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
-                  <Folder />
+                  <Folder aria-hidden="true" />
                 </EmptyMedia>
-                <EmptyTitle>
-                  {filter.search
-                    ? "没有匹配的素材"
-                    : filter.trash
-                      ? "回收站为空"
-                      : "这里还没有素材"}
-                </EmptyTitle>
+                <EmptyTitle>登录查看你的素材</EmptyTitle>
+              </EmptyHeader>
+              <EmptyDescription>
+                登录后，上传、收藏和整理你的创作素材。
+              </EmptyDescription>
+              <EmptyContent>
+                <Button size="lg" className="min-h-11 px-6" onClick={login}>
+                  登录 / 注册
+                </Button>
+              </EmptyContent>
+            </Empty>
+          ) : section === "history" ? (
+            <Empty className="library-login-state">
+              <EmptyHeader>
+                <EmptyMedia>
+                  <History aria-hidden="true" />
+                </EmptyMedia>
+                <EmptyTitle>在画布中查看生成记录</EmptyTitle>
                 <EmptyDescription>
-                  {filter.search
-                    ? "试试其他关键词，或调整筛选条件。"
-                    : filter.trash
-                      ? "移入回收站的素材会显示在这里。"
-                      : "上传素材，开始积累你的创作灵感。"}
+                  生成记录随所属画布保存，打开画布即可继续查看和创作。
                 </EmptyDescription>
               </EmptyHeader>
+              <EmptyContent>
+                <Button asChild variant="outline" size="lg">
+                  <Link href="/projects">查看我的画布</Link>
+                </Button>
+              </EmptyContent>
             </Empty>
           ) : (
-            <ItemGroup className="asset-grid">
-              {page?.items.map((item) => (
-                <Card
-                  key={item.id}
-                  variant="media"
-                  className="asset-card"
-                  role="listitem"
-                >
-                  <CardContent className="p-0">
+            <>
+              {writeError && (
+                <FeedbackToast
+                  message={writeError}
+                  action={
+                    saving
+                      ? undefined
+                      : {
+                          label: pendingOperation
+                            ? "重试原操作"
+                            : "刷新素材版本",
+                          onClick: () => {
+                            if (pendingOperation) void command();
+                            else {
+                              setWriteError("");
+                              reload();
+                            }
+                          },
+                        }
+                  }
+                />
+              )}
+              {batch && (
+                <Item variant="outline" size="sm">
+                  <ItemContent>
+                    <FieldGroup>
+                      <Field orientation="horizontal">
+                        <Checkbox
+                          id="library-select-page"
+                          aria-label="选择本页全部素材"
+                          checked={
+                            selection.length > 0 &&
+                            selection.length < (page?.items.length ?? 0)
+                              ? "indeterminate"
+                              : !!page?.items.length &&
+                                selection.length === page.items.length
+                          }
+                          disabled={locked || loading}
+                          onCheckedChange={(v) =>
+                            setSelected(
+                              v === true
+                                ? (page?.items.map((i) => i.id) ?? [])
+                                : [],
+                            )
+                          }
+                        />
+                        <FieldLabel htmlFor="library-select-page">
+                          已选择 {selection.length} 项
+                        </FieldLabel>
+                      </Field>
+                    </FieldGroup>
+                  </ItemContent>
+                  <ItemActions>
                     <Button
-                      variant="ghost"
-                      className="asset-cover h-auto w-full p-0"
-                      aria-label={`查看 ${item.title}`}
-                      onClick={() => setDetail(item)}
-                    >
-                      <AssetPreview item={item} />
-                    </Button>
-                  </CardContent>
-                  {batch && (
-                    <Checkbox
-                      aria-label={`选择 ${item.title}`}
-                      className="asset-selection"
-                      checked={selected.includes(item.id)}
-                      disabled={locked || loading}
-                      onCheckedChange={(v) =>
-                        setSelected((ids) =>
-                          v === true
-                            ? [...ids, item.id]
-                            : ids.filter((id) => id !== item.id),
+                      className="max-md:min-h-11"
+                      disabled={
+                        !selection.length || saving || !!pendingOperation
+                      }
+                      variant={filter.trash ? "outline" : "destructive"}
+                      onClick={() =>
+                        setConfirm(
+                          filter.trash ? "restore_items" : "recycle_items",
                         )
                       }
-                    />
-                  )}
-                  <CardHeader className="px-0">
-                    <CardTitle
-                      className="min-w-0 self-center truncate"
-                      title={item.title}
                     >
-                      {item.title}
-                    </CardTitle>
-                    <CardAction className="row-span-1">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="max-md:size-11"
-                        aria-label={`${item.favorite ? "取消收藏" : "收藏"} ${item.title}`}
-                        aria-pressed={item.favorite}
-                        disabled={saving || !!pendingOperation || filter.trash}
-                        onClick={() => favorite(item)}
-                      >
-                        <Heart
-                          className={cn(item.favorite && "fill-current")}
-                        />
-                      </Button>
-                    </CardAction>
-                    <CardDescription className="col-span-2">
-                      {kinds.find((k) => k.id === item.kind)?.label ?? "素材"}
-                      {item.media?.width
-                        ? ` · ${item.media.width} × ${item.media.height}`
-                        : ""}{" "}
-                      · {item.source_label || "个人素材"}
-                    </CardDescription>
-                  </CardHeader>
-                </Card>
-              ))}
-            </ItemGroup>
-          )}
-          {page && !error && (
-            <DataPagination
-              label="素材分页"
-              page={pageIndex}
-              pageSize={pageSize}
-              total={page.total}
-              disabled={loading || locked}
-              onPageChange={(next) => {
-                setPageIndex(next);
-                setSelected([]);
-                setDetail(null);
-                setLoading(true);
-              }}
-              onPageSizeChange={onPageSizeChange}
-            />
-          )}
-          <Dialog
-            open={!!detail}
-            onOpenChange={(v) => {
-              if (!v) setDetail(null);
-            }}
-          >
-            <DialogContent className="sm:max-w-4xl">
-              <DialogTitle>{detail?.title}</DialogTitle>
-              <DialogDescription>
-                个人素材 · {detail?.media?.file_name ?? detail?.kind}
-              </DialogDescription>
-              {detail && (
-                <>
-                  <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-xl bg-background">
-                    <AssetPreview key={detail.id} item={detail} large />
-                  </div>
-                  <Item className="p-0">
-                    <ItemContent>
-                      <ItemDescription>
-                        {detail.media
-                          ? `${(detail.media.byte_size ?? 0) / 1024 / 1024 < 0.01 ? "< 0.01" : ((detail.media.byte_size ?? 0) / 1024 / 1024).toFixed(2)} MB`
-                          : ""}
-                      </ItemDescription>
-                    </ItemContent>
-                    <ItemActions>
-                      <Button
-                        variant="outline"
-                        disabled={saving || !!pendingOperation || filter.trash}
-                        onClick={() => favorite(detail)}
-                      >
-                        <Heart data-icon="inline-start" />
-                        {detail.favorite ? "取消收藏" : "收藏"}
-                      </Button>
-                      {!filter.trash && (
-                        <DownloadButton
-                          filename={detail.media?.file_name || detail.title}
-                          load={() =>
-                            downloadLibraryMediaAsset({
-                              item_id: detail.id,
-                              scope: "personal",
-                            })
-                          }
-                        >
-                          <Download data-icon="inline-start" />
-                          下载原件
-                        </DownloadButton>
-                      )}
-                    </ItemActions>
-                  </Item>
-                </>
+                      {filter.trash ? <RotateCw /> : <Trash2 />}
+                      {filter.trash ? "恢复" : "移入回收站"}
+                    </Button>
+                  </ItemActions>
+                </Item>
               )}
-            </DialogContent>
-          </Dialog>
-          <Dialog
-            open={folderOpen}
-            onOpenChange={(v) => {
-              if (!saving && !pendingOperation) setFolderOpen(v);
-            }}
-          >
-            <DialogContent>
-              <DialogTitle>新建文件夹</DialogTitle>
-              <DialogDescription>把相关素材整理到一起。</DialogDescription>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (page && folderName.trim())
-                    void command({
-                      scope: { kind: "personal" },
-                      expected_revision: page.revision,
-                      action: "create_folder",
-                      folder: {
-                        name: folderName.trim(),
-                        parent_id: undefined,
-                        style: "",
-                        theme: "",
-                      },
-                    });
+              {page &&
+                !loading &&
+                !error &&
+                !filter.trash &&
+                !filter.folder &&
+                page.folders.length > 0 && (
+                  <section className="library-folders" aria-label="我的文件夹">
+                    <Item className="library-section-heading p-0">
+                      <ItemContent>
+                        <ItemTitle role="heading" aria-level={2}>
+                          我的文件夹
+                        </ItemTitle>
+                      </ItemContent>
+                      <ItemActions>
+                        <ItemDescription>
+                          {page.folders.length} 个文件夹
+                        </ItemDescription>
+                      </ItemActions>
+                    </Item>
+                    <ItemGroup
+                      className="library-folder-grid"
+                      role="group"
+                      aria-label="文件夹"
+                    >
+                      {page.folders.map((f) => (
+                        <Item asChild variant="muted" key={f.id}>
+                          <Button
+                            variant="ghost"
+                            className="library-folder-card"
+                            disabled={saving || !!pendingOperation}
+                            onClick={() =>
+                              onFilter({ ...filter, folder: f.id! })
+                            }
+                          >
+                            <ItemMedia variant="icon">
+                              <Folder data-icon="inline-start" />
+                            </ItemMedia>
+                            <ItemContent className="min-w-0 items-start">
+                              <ItemTitle className="max-w-full truncate">
+                                {f.name}
+                              </ItemTitle>
+                              {typeof page.folder_counts?.[f.id!] ===
+                                "number" && (
+                                <ItemDescription>
+                                  {page.folder_counts[f.id!]} 个素材
+                                </ItemDescription>
+                              )}
+                            </ItemContent>
+                          </Button>
+                        </Item>
+                      ))}
+                    </ItemGroup>
+                  </section>
+                )}
+              {page && !loading && !error && (
+                <Item className="library-section-heading flex-nowrap p-0">
+                  {filter.folder && (
+                    <Button
+                      variant="ghost"
+                      size="icon-lg"
+                      aria-label="返回全部素材"
+                      disabled={locked}
+                      onClick={() => onFilter({ ...filter, folder: "" })}
+                    >
+                      <ArrowLeft />
+                    </Button>
+                  )}
+                  <ItemContent className="min-w-0">
+                    <ItemTitle
+                      role="heading"
+                      aria-level={2}
+                      className="max-w-full truncate"
+                    >
+                      {filter.trash
+                        ? "回收站"
+                        : activeFolder?.name ||
+                          (filter.favorite
+                            ? "收藏"
+                            : `全部${kinds.find((k) => k.id === filter.kind)?.label ?? "素材"}`)}
+                    </ItemTitle>
+                  </ItemContent>
+                  <ItemActions>
+                    <ItemDescription>共 {page.total} 个素材</ItemDescription>
+                    <Button
+                      variant="ghost"
+                      size="icon-lg"
+                      aria-label="刷新素材"
+                      disabled={locked}
+                      onClick={reload}
+                    >
+                      <RotateCw />
+                    </Button>
+                  </ItemActions>
+                </Item>
+              )}
+              {loading ? (
+                <ItemGroup
+                  className="asset-grid"
+                  role="status"
+                  aria-label="正在读取素材"
+                >
+                  {[0, 1, 2, 3].map((n) => (
+                    <Skeleton key={n} className="aspect-video rounded-xl" />
+                  ))}
+                </ItemGroup>
+              ) : error ? (
+                <Empty className="library-login-state">
+                  <FeedbackToast message={error} />
+                  <EmptyHeader>
+                    <EmptyTitle>无法读取素材</EmptyTitle>
+                    <EmptyDescription>请重试读取。</EmptyDescription>
+                  </EmptyHeader>
+                  <Button variant="outline" onClick={reload}>
+                    重试读取素材
+                  </Button>
+                </Empty>
+              ) : page?.items.length === 0 ? (
+                <Empty className="library-login-state">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <Folder />
+                    </EmptyMedia>
+                    <EmptyTitle>
+                      {filter.search
+                        ? "没有匹配的素材"
+                        : filter.trash
+                          ? "回收站为空"
+                          : "这里还没有素材"}
+                    </EmptyTitle>
+                    <EmptyDescription>
+                      {filter.search
+                        ? "试试其他关键词，或调整筛选条件。"
+                        : filter.trash
+                          ? "移入回收站的素材会显示在这里。"
+                          : "上传素材，开始积累你的创作灵感。"}
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              ) : (
+                <ItemGroup className="asset-grid">
+                  {page?.items.map((item) => (
+                    <Card
+                      key={item.id}
+                      variant="media"
+                      className="asset-card"
+                      role="listitem"
+                    >
+                      <CardContent className="p-0">
+                        <Button
+                          variant="ghost"
+                          className="asset-cover h-auto w-full p-0"
+                          aria-label={`查看 ${item.title}`}
+                          onClick={() => setDetail(item)}
+                        >
+                          <AssetPreview item={item} />
+                        </Button>
+                      </CardContent>
+                      {batch && (
+                        <Checkbox
+                          aria-label={`选择 ${item.title}`}
+                          className="asset-selection"
+                          checked={selected.includes(item.id)}
+                          disabled={locked || loading}
+                          onCheckedChange={(v) =>
+                            setSelected((ids) =>
+                              v === true
+                                ? [...ids, item.id]
+                                : ids.filter((id) => id !== item.id),
+                            )
+                          }
+                        />
+                      )}
+                      <CardHeader className="px-0">
+                        <CardTitle
+                          className="min-w-0 self-center truncate"
+                          title={item.title}
+                        >
+                          {item.title}
+                        </CardTitle>
+                        <CardAction className="row-span-1">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="max-md:size-11"
+                            aria-label={`${item.favorite ? "取消收藏" : "收藏"} ${item.title}`}
+                            aria-pressed={item.favorite}
+                            disabled={
+                              saving || !!pendingOperation || filter.trash
+                            }
+                            onClick={() => favorite(item)}
+                          >
+                            <Heart
+                              className={cn(item.favorite && "fill-current")}
+                            />
+                          </Button>
+                        </CardAction>
+                        <CardDescription className="col-span-2">
+                          {kinds.find((k) => k.id === item.kind)?.label ??
+                            "素材"}
+                          {item.media?.width
+                            ? ` · ${item.media.width} × ${item.media.height}`
+                            : ""}{" "}
+                          · {item.source_label || "个人素材"}
+                        </CardDescription>
+                      </CardHeader>
+                    </Card>
+                  ))}
+                </ItemGroup>
+              )}
+              {page && !error && (
+                <DataPagination
+                  label="素材分页"
+                  page={pageIndex}
+                  pageSize={pageSize}
+                  total={page.total}
+                  disabled={loading || locked}
+                  onPageChange={(next) => {
+                    setPageIndex(next);
+                    setSelected([]);
+                    setDetail(null);
+                    setLoading(true);
+                  }}
+                  onPageSizeChange={onPageSizeChange}
+                />
+              )}
+              <Dialog
+                open={!!detail}
+                onOpenChange={(v) => {
+                  if (!v) setDetail(null);
                 }}
               >
-                <FieldGroup>
-                  <Field>
-                    <FieldLabel htmlFor="library-folder-name">
-                      文件夹名称
-                    </FieldLabel>
-                    <Input
-                      id="library-folder-name"
-                      value={folderName}
-                      maxLength={40}
-                      disabled={saving || !!pendingOperation}
-                      onChange={(e) => setFolderName(e.target.value)}
-                    />
-                    <FieldDescription>最多 40 个字符</FieldDescription>
-                  </Field>
-                </FieldGroup>
-                <DialogFooter className="mt-5">
-                  <Button
-                    type="submit"
-                    disabled={
-                      saving || !!pendingOperation || !folderName.trim()
-                    }
+                <DialogContent className="sm:max-w-4xl">
+                  <DialogTitle>{detail?.title}</DialogTitle>
+                  <DialogDescription>
+                    个人素材 · {detail?.media?.file_name ?? detail?.kind}
+                  </DialogDescription>
+                  {detail && (
+                    <>
+                      <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-xl bg-background">
+                        <AssetPreview key={detail.id} item={detail} large />
+                      </div>
+                      <Item className="p-0">
+                        <ItemContent>
+                          <ItemDescription>
+                            {detail.media
+                              ? `${(detail.media.byte_size ?? 0) / 1024 / 1024 < 0.01 ? "< 0.01" : ((detail.media.byte_size ?? 0) / 1024 / 1024).toFixed(2)} MB`
+                              : ""}
+                          </ItemDescription>
+                        </ItemContent>
+                        <ItemActions>
+                          <Button
+                            variant="outline"
+                            disabled={
+                              saving || !!pendingOperation || filter.trash
+                            }
+                            onClick={() => favorite(detail)}
+                          >
+                            <Heart data-icon="inline-start" />
+                            {detail.favorite ? "取消收藏" : "收藏"}
+                          </Button>
+                          {!filter.trash && (
+                            <DownloadButton
+                              filename={detail.media?.file_name || detail.title}
+                              load={() =>
+                                downloadLibraryMediaAsset({
+                                  item_id: detail.id,
+                                  scope: "personal",
+                                })
+                              }
+                            >
+                              <Download data-icon="inline-start" />
+                              下载原件
+                            </DownloadButton>
+                          )}
+                        </ItemActions>
+                      </Item>
+                    </>
+                  )}
+                </DialogContent>
+              </Dialog>
+              <Dialog
+                open={folderOpen}
+                onOpenChange={(v) => {
+                  if (!saving && !pendingOperation) setFolderOpen(v);
+                }}
+              >
+                <DialogContent>
+                  <DialogTitle>新建文件夹</DialogTitle>
+                  <DialogDescription>把相关素材整理到一起。</DialogDescription>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (page && folderName.trim())
+                        void command({
+                          scope: { kind: "personal" },
+                          expected_revision: page.revision,
+                          action: "create_folder",
+                          folder: {
+                            name: folderName.trim(),
+                            parent_id: undefined,
+                            style: "",
+                            theme: "",
+                          },
+                        });
+                    }}
                   >
-                    创建文件夹
-                  </Button>
-                </DialogFooter>
-              </form>
-              {writeError && <></>}
-              {pendingOperation && !saving && (
-                <Button onClick={() => void command()}>重试原操作</Button>
+                    <FieldGroup>
+                      <Field>
+                        <FieldLabel htmlFor="library-folder-name">
+                          文件夹名称
+                        </FieldLabel>
+                        <Input
+                          id="library-folder-name"
+                          value={folderName}
+                          maxLength={40}
+                          disabled={saving || !!pendingOperation}
+                          onChange={(e) => setFolderName(e.target.value)}
+                        />
+                        <FieldDescription>最多 40 个字符</FieldDescription>
+                      </Field>
+                    </FieldGroup>
+                    <DialogFooter className="mt-5">
+                      <Button
+                        type="submit"
+                        disabled={
+                          saving || !!pendingOperation || !folderName.trim()
+                        }
+                      >
+                        创建文件夹
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                  {writeError && <></>}
+                  {pendingOperation && !saving && (
+                    <Button onClick={() => void command()}>重试原操作</Button>
+                  )}
+                </DialogContent>
+              </Dialog>
+              <Dialog
+                open={!!confirm}
+                onOpenChange={(v) => {
+                  if (!v && !saving && !pendingOperation) setConfirm(null);
+                }}
+              >
+                <DialogContent>
+                  <DialogTitle>
+                    {confirm === "restore_items"
+                      ? "恢复所选素材？"
+                      : "移入回收站？"}
+                  </DialogTitle>
+                  <DialogDescription>
+                    将处理已选择的 {selection.length} 项素材。
+                    {confirm === "restore_items"
+                      ? "恢复后可在素材列表中继续使用。"
+                      : "移入回收站后可以恢复。"}
+                  </DialogDescription>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      disabled={saving || !!pendingOperation}
+                      onClick={() => setConfirm(null)}
+                    >
+                      取消
+                    </Button>
+                    <Button
+                      disabled={saving}
+                      onClick={() => {
+                        if (page && confirm)
+                          void command({
+                            scope: { kind: "personal" },
+                            expected_revision: page.revision,
+                            action: confirm,
+                            items: selection.map((i) => ({
+                              id: i.id,
+                              revision: i.revision,
+                            })),
+                          });
+                      }}
+                    >
+                      {saving
+                        ? "正在处理…"
+                        : pendingOperation
+                          ? "重试原操作"
+                          : "确认"}
+                    </Button>
+                  </DialogFooter>
+                  {writeError && <></>}
+                </DialogContent>
+              </Dialog>
+              {upload && (
+                <UploadDialog
+                  onClose={() => setUpload(false)}
+                  onUploaded={reload}
+                />
               )}
-            </DialogContent>
-          </Dialog>
-          <Dialog
-            open={!!confirm}
-            onOpenChange={(v) => {
-              if (!v && !saving && !pendingOperation) setConfirm(null);
-            }}
-          >
-            <DialogContent>
-              <DialogTitle>
-                {confirm === "restore_items"
-                  ? "恢复所选素材？"
-                  : "移入回收站？"}
-              </DialogTitle>
-              <DialogDescription>
-                将处理已选择的 {selection.length} 项素材。
-                {confirm === "restore_items"
-                  ? "恢复后可在素材列表中继续使用。"
-                  : "移入回收站后可以恢复。"}
-              </DialogDescription>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  disabled={saving || !!pendingOperation}
-                  onClick={() => setConfirm(null)}
-                >
-                  取消
-                </Button>
-                <Button
-                  disabled={saving}
-                  onClick={() => {
-                    if (page && confirm)
-                      void command({
-                        scope: { kind: "personal" },
-                        expected_revision: page.revision,
-                        action: confirm,
-                        items: selection.map((i) => ({
-                          id: i.id,
-                          revision: i.revision,
-                        })),
-                      });
-                  }}
-                >
-                  {saving
-                    ? "正在处理…"
-                    : pendingOperation
-                      ? "重试原操作"
-                      : "确认"}
-                </Button>
-              </DialogFooter>
-              {writeError && <></>}
-            </DialogContent>
-          </Dialog>
-          {upload && (
-            <UploadDialog
-              onClose={() => setUpload(false)}
-              onUploaded={reload}
-            />
+            </>
           )}
-        </>
-      )}
-    </section>
+        </TabsContent>
+      </section>
+    </Tabs>
   );
 }
 export function AssetsPage() {

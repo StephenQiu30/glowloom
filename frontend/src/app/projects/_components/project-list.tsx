@@ -15,6 +15,16 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import {
+  DataPagination,
+  type PageSize,
+} from "@/components/media/data-pagination";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
 import { listProjects } from "@/api/projects";
 import {
   canvasHref,
@@ -31,8 +41,12 @@ export function ProjectList({ query, view }: { query: string; view: string }) {
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
   const active = useRef<AbortController | null>(null);
-  const paging = useRef(false);
+  const [pageSize, setPageSize] = useState<PageSize>(12);
+  const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
+  const cursor = cursors.at(-1);
   function reload() {
+    setCursors([undefined]);
+    setPage(null);
     setLoading(true);
     setError("");
     setRetry((n) => n + 1);
@@ -58,7 +72,12 @@ export function ProjectList({ query, view }: { query: string; view: string }) {
     const controller = new AbortController();
     active.current = controller;
     listProjects(
-      { q: query, limit: 50, order: "recent_content" },
+      {
+        q: query,
+        limit: pageSize,
+        order: "recent_content",
+        ...(cursor ? { cursor } : {}),
+      },
       { signal: controller.signal },
     )
       .then(requireProjectList)
@@ -74,44 +93,8 @@ export function ProjectList({ query, view }: { query: string; view: string }) {
     return () => {
       active.current?.abort();
     };
-  }, [query, retry]);
+  }, [query, retry, pageSize, cursor]);
 
-  async function loadMore() {
-    if (!page?.next_cursor || loading || paging.current) return;
-    paging.current = true;
-    const controller = new AbortController();
-    active.current = controller;
-    setLoading(true);
-    setError("");
-    try {
-      const next = requireProjectList(
-        await listProjects(
-          {
-            q: query,
-            limit: 50,
-            cursor: page.next_cursor,
-            order: "recent_content",
-          },
-          { signal: controller.signal },
-        ),
-      );
-      if (!controller.signal.aborted)
-        setPage({
-          items: [
-            ...page.items,
-            ...next.items.filter(
-              (p) => !page.items.some((previous) => previous.id === p.id),
-            ),
-          ],
-          next_cursor: next.next_cursor,
-        });
-    } catch (e) {
-      if (!controller.signal.aborted) setError(projectErrorMessage(e));
-    } finally {
-      paging.current = false;
-      if (!controller.signal.aborted) setLoading(false);
-    }
-  }
   return (
     <div aria-busy={loading}>
       {loading && !page && (
@@ -128,30 +111,25 @@ export function ProjectList({ query, view }: { query: string; view: string }) {
               : {
                   label: "重试读取",
                   onClick: () => {
-                    if (page?.next_cursor) {
-                      void loadMore();
-                    } else {
-                      setPage(null);
-                      setError("");
-                      setLoading(true);
-                      setRetry((n) => n + 1);
-                    }
+                    setError("");
+                    setLoading(true);
+                    setRetry((n) => n + 1);
                   },
                 }
           }
         />
       )}
       {page?.items.length === 0 && (
-        <div className="rounded-2xl border border-dashed p-12 text-center">
-          <h3 className="font-medium">
-            {query ? "没有匹配的画布" : "还没有画布"}
-          </h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {query ? "试试其他名称。" : "创建第一个空白画布，进入你的画布。"}
-          </p>
-        </div>
+        <Empty className="min-h-80">
+          <EmptyHeader>
+            <EmptyTitle>{query ? "没有匹配的画布" : "还没有画布"}</EmptyTitle>
+            <EmptyDescription>
+              {query ? "试试其他名称。" : "创建第一个空白画布，进入你的画布。"}
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       )}
-      <div className={view === "grid" ? "canvas-grid" : "space-y-3"}>
+      <div className={view === "grid" ? "canvas-grid" : "flex flex-col gap-3"}>
         {page?.items.map((project) => (
           <ProjectCard
             key={project.id}
@@ -160,15 +138,30 @@ export function ProjectList({ query, view }: { query: string; view: string }) {
           />
         ))}
       </div>
-      {page?.next_cursor && (
-        <Button
-          className="mt-5"
-          variant="outline"
+      {(page || error) && (
+        <DataPagination
+          label="画布分页"
+          page={cursors.length}
+          pageSize={pageSize}
+          total={
+            page?.items.length === 0 && cursors.length === 1 ? 0 : undefined
+          }
+          hasNext={!!page?.next_cursor}
           disabled={loading}
-          onClick={() => void loadMore()}
-        >
-          {loading ? "正在读取…" : "加载更多"}
-        </Button>
+          onPageChange={(target) => {
+            if (target < cursors.length)
+              setCursors((value) => value.slice(0, -1));
+            else if (page?.next_cursor)
+              setCursors((value) => [...value, page.next_cursor!]);
+            setPage(null);
+            setError("");
+            setLoading(true);
+          }}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            reload();
+          }}
+        />
       )}
     </div>
   );

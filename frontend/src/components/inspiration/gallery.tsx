@@ -31,7 +31,7 @@ import {
   DialogDescription,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { UnavailableDialog } from "@/components/availability/unavailable";
 import {
@@ -106,22 +106,26 @@ const works = [
     scene: "社媒营销",
   },
 ];
-const homeWorks = [works[0], works[2], works[1]];
+const homeWorks = [
+  { ...works[0], title: "声色之间的产品灵感" },
+  { ...works[2], title: "夏日香氛 · 光的形状" },
+  { ...works[1], title: "想象之外，自有故事" },
+];
 const updates = [
   {
     src: "amber-perfume.png",
     title: "光影之间",
-    caption: "精选创作 · 琥珀香氛",
+    caption: "精选创作 · 夏日香氛",
   },
   {
     src: "cobalt-headphones.png",
     title: "声色之间",
-    caption: "画布灵感 · 产品概念",
+    caption: "产品质感 · 色彩与材质",
   },
   {
     src: "moonlight-whale.png",
     title: "云海鲸歌",
-    caption: "动画概念 · 让想象成为镜头",
+    caption: "动画画面 · 从想象开始",
   },
 ];
 type Preview = { src: string; title: string };
@@ -194,8 +198,8 @@ export function InspirationGallery({
     <section className={cn("inspiration", !showUpdates && "explore-gallery")}>
       {showUpdates && (
         <>
-          <h2>最近上新</h2>
-          <div className="updates-strip" aria-label="最近上新">
+          <h2>创作精选</h2>
+          <section className="updates-strip" aria-label="创作精选">
             {updates.map((item) => (
               <InspirationPreview key={item.title} item={item}>
                 <Button
@@ -230,132 +234,132 @@ export function InspirationGallery({
                 </CardHeader>
               </Card>
             </Link>
-          </div>
+          </section>
         </>
       )}
-      <div className="gallery-toolbar">
-        <Tabs
-          value={category}
-          onValueChange={setCategory}
-          className="gallery-categories"
-        >
-          <TabsList variant="navigation">
-            {(showUpdates ? homeCategories : exploreCategories).map((c) => (
-              <TabsTrigger key={c} value={c}>
-                {c}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-        {showUpdates && searchQuery === undefined && (
-          <InputGroup className="gallery-search">
-            <InputGroupAddon>
-              <Search />
-            </InputGroupAddon>
-            <InputGroupInput
-              aria-label="搜索灵感"
-              placeholder="搜索灵感、作品或创作者"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </InputGroup>
-        )}
-      </div>
-      {!showUpdates && (
-        <div className="explore-toolbar">
-          <ToggleGroup
-            type="single"
-            value={scene}
-            onValueChange={(v) => {
-              if (v) setScene(v);
-            }}
-            aria-label="作品场景"
-          >
-            <ToggleGroupItem value="品牌广告">品牌广告</ToggleGroupItem>
-            <ToggleGroupItem value="社媒营销">社媒营销</ToggleGroupItem>
-          </ToggleGroup>
-          {searchQuery === undefined ? (
-            <InputGroup className="explore-search">
+      <Tabs value={category} onValueChange={setCategory} className="gap-0">
+        <div className="gallery-toolbar">
+          <div className="gallery-categories">
+            <TabsList variant="navigation">
+              {(showUpdates ? homeCategories : exploreCategories).map((c) => (
+                <TabsTrigger key={c} value={c}>
+                  {c}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
+          {showUpdates && searchQuery === undefined && (
+            <InputGroup className="gallery-search">
               <InputGroupAddon>
                 <Search />
               </InputGroupAddon>
               <InputGroupInput
-                aria-label="搜索作品"
-                placeholder="搜索作品"
+                aria-label="搜索灵感"
+                placeholder="搜索灵感、作品或创作者"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
             </InputGroup>
-          ) : null}
-          <Button
-            size="lg"
-            className={cn(searchQuery !== undefined && "ml-auto")}
-            onClick={() => setPublish(true)}
-          >
-            发布短片
-          </Button>
+          )}
         </div>
-      )}
-      {showUpdates && (
-        <h2 className="gallery-heading">
-          {category === "精选" ? "广告与视觉创意" : category}
-        </h2>
-      )}
-      <div className="inspiration-grid">
-        {visible.map((w) => (
-          <InspirationPreview key={w.title} item={w}>
-            <Button
-              variant="ghost"
-              className="work-entry h-auto p-0 whitespace-normal"
-            >
-              <Card variant="media" className="w-full">
-                <CardContent>
-                  <div className="work-cover">
-                    <Image
-                      src={`/design/reference/${w.src}`}
-                      alt={w.title}
-                      fill
-                      sizes={
-                        showUpdates
-                          ? "(max-width: 767px) 45vw, 33vw"
-                          : "(max-width: 767px) 45vw, 25vw"
-                      }
-                    />
-                  </div>
-                </CardContent>
-                <CardHeader>
-                  <CardTitle>{w.title}</CardTitle>
-                  <CardDescription>AI 生成示例</CardDescription>
-                </CardHeader>
-              </Card>
-            </Button>
-          </InspirationPreview>
-        ))}
-      </div>
-      {!matches.length && (
-        <Empty className="min-h-72">
-          <EmptyHeader>
-            <EmptyTitle>没有匹配的灵感</EmptyTitle>
-            <EmptyDescription>试试其他分类或关键词。</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      )}
-      <p className="source-caption">
-        {showUpdates
-          ? "AI 生成的创作参考"
-          : "发现好作品，把灵感带回自己的画布。"}
-      </p>
-      <DataPagination
-        label="灵感分页"
-        page={page}
-        pageSize={pageSize}
-        total={matches.length}
-        onPageChange={(page) => setPagination({ filter: filterKey, page })}
-        onPageSizeChange={(size) => {
-          setPageSize(size);
-          setPagination({ filter: filterKey, page: 1 });
-        }}
-      />
+        <TabsContent value={category}>
+          {!showUpdates && (
+            <div className="explore-toolbar">
+              <ToggleGroup
+                type="single"
+                value={scene}
+                onValueChange={(v) => {
+                  if (v) setScene(v);
+                }}
+                aria-label="作品场景"
+              >
+                <ToggleGroupItem value="品牌广告">品牌广告</ToggleGroupItem>
+                <ToggleGroupItem value="社媒营销">社媒营销</ToggleGroupItem>
+              </ToggleGroup>
+              {searchQuery === undefined ? (
+                <InputGroup className="explore-search">
+                  <InputGroupAddon>
+                    <Search />
+                  </InputGroupAddon>
+                  <InputGroupInput
+                    aria-label="搜索作品"
+                    placeholder="搜索作品"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
+                </InputGroup>
+              ) : null}
+              <Button
+                size="lg"
+                className={cn(searchQuery !== undefined && "ml-auto")}
+                onClick={() => setPublish(true)}
+              >
+                发布短片
+              </Button>
+            </div>
+          )}
+          {showUpdates && (
+            <h2 className="gallery-heading">
+              {category === "精选" ? "广告与视觉创意" : category}
+            </h2>
+          )}
+          <div className="inspiration-grid">
+            {visible.map((w) => (
+              <InspirationPreview key={w.title} item={w}>
+                <Button
+                  variant="ghost"
+                  className="work-entry h-auto p-0 whitespace-normal"
+                >
+                  <Card variant="media" className="w-full">
+                    <CardContent>
+                      <div className="work-cover">
+                        <Image
+                          src={`/design/reference/${w.src}`}
+                          alt={w.title}
+                          fill
+                          sizes={
+                            showUpdates
+                              ? "(max-width: 767px) 45vw, 33vw"
+                              : "(max-width: 767px) 45vw, 25vw"
+                          }
+                        />
+                      </div>
+                    </CardContent>
+                    <CardHeader>
+                      <CardTitle>{w.title}</CardTitle>
+                      <CardDescription>AI 生成示例</CardDescription>
+                    </CardHeader>
+                  </Card>
+                </Button>
+              </InspirationPreview>
+            ))}
+          </div>
+          {!matches.length && (
+            <Empty className="min-h-72">
+              <EmptyHeader>
+                <EmptyTitle>没有匹配的灵感</EmptyTitle>
+                <EmptyDescription>试试其他分类或关键词。</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+          <p className="source-caption">
+            {showUpdates
+              ? "AI 生成的创作参考"
+              : "发现好作品，把灵感带回自己的画布。"}
+          </p>
+          <DataPagination
+            label="灵感分页"
+            page={page}
+            pageSize={pageSize}
+            total={matches.length}
+            onPageChange={(page) => setPagination({ filter: filterKey, page })}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPagination({ filter: filterKey, page: 1 });
+            }}
+          />
+        </TabsContent>
+      </Tabs>
       <UnavailableDialog
         feature={publish ? "发布短片" : null}
         onClose={() => setPublish(false)}

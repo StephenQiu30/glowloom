@@ -31,13 +31,13 @@ export function SubjectsPage() {
         onValueChange: setSearch,
         onSearch: setQuery,
         label: "搜索主体",
-        placeholder: "搜索已加载主体",
+        placeholder: "搜索本页主体",
         disabled: !project,
       }}
     >
       <div className="flow-page-heading subjects-heading">
         <div>
-          <h1>主体</h1>
+          <h1>主体库</h1>
           <p>保持角色与商品的一致性，在生成和画布中通过 @ 引用。</p>
         </div>
         <ProjectPicker value={project} onChange={setProject} compact />

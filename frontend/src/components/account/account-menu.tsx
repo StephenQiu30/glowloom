@@ -12,6 +12,7 @@ import {
   Settings,
   Shield,
   Users,
+  Coins,
 } from "lucide-react";
 import { AccountAvatar } from "./account-avatar";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -91,6 +92,12 @@ export function AccountMenu({
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup className="flex flex-col gap-1">
+          <DropdownMenuItem asChild className={itemClassName}>
+            <Link href="/billing">
+              <Coins />
+              积分与会员
+            </Link>
+          </DropdownMenuItem>
           <DropdownMenuItem asChild className={itemClassName}>
             <Link href="/assets">
               <Folder />

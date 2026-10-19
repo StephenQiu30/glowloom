@@ -40,6 +40,48 @@ afterEach(() => {
   cleanup();
   vi.resetAllMocks();
 });
+
+it("主体页复用真实游标前后翻页，调整数量回到首屏", async () => {
+  const otherID = "44444444-4444-4444-8444-444444444444";
+  const other = {
+    head: { ...detail.head, id: otherID },
+    current: {
+      ...detail.current,
+      entry_id: otherID,
+      character: { name: "另一角色" },
+    },
+  };
+  api.get.mockImplementation(async (params) =>
+    params.id === otherID ? other : detail,
+  );
+  api.list.mockImplementation(async (params) =>
+    params.cursor
+      ? { entries: [other], next_cursor: undefined }
+      : { entries: [detail], next_cursor: "next-subject-page" },
+  );
+  render(<SubjectList projectID={project} />);
+  await screen.findByText("角色");
+  fireEvent.click(screen.getByRole("button", { name: "下一页" }));
+  await screen.findByText("另一角色");
+  expect(screen.queryByText("角色")).toBeNull();
+  expect(api.list.mock.calls.at(-1)?.[0]).toMatchObject({
+    limit: 12,
+    cursor: "next-subject-page",
+  });
+  fireEvent.click(screen.getByRole("button", { name: "上一页" }));
+  await screen.findByText("角色");
+  fireEvent.keyDown(
+    screen.getByRole("combobox", { name: "主体分页每页数量" }),
+    { key: "ArrowDown" },
+  );
+  fireEvent.click(await screen.findByRole("option", { name: "24" }));
+  await waitFor(() =>
+    expect(api.list.mock.calls.at(-1)?.[0]).toMatchObject({
+      limit: 24,
+      cursor: undefined,
+    }),
+  );
+});
 it.each(["success", "failure"])(
   "筛选切换后丢弃旧分页的 %s，不覆盖新游标或加载状态",
   async (outcome) => {
@@ -65,7 +107,7 @@ it.each(["success", "failure"])(
       .mockResolvedValue({ entries: [], next_cursor: undefined });
     render(<SubjectList projectID={project} />);
     await screen.findByText("角色");
-    fireEvent.click(screen.getByRole("button", { name: "加载更多主体" }));
+    fireEvent.click(screen.getByRole("button", { name: "下一页" }));
     await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2));
     fireEvent.click(screen.getByRole("button", { name: "已删除" }));
     await waitFor(() => expect(api.list).toHaveBeenCalledTimes(3));
@@ -75,11 +117,11 @@ it.each(["success", "failure"])(
       else reject(new Error("stale failure"));
     });
     expect(screen.getByLabelText("正在读取主体")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "加载更多主体" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "下一页" })).toBeNull();
     await act(async () =>
       deletedResolve({ entries: [], next_cursor: "deleted-page" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "加载更多主体" }));
+    fireEvent.click(screen.getByRole("button", { name: "下一页" }));
     await waitFor(() => expect(api.list).toHaveBeenCalledTimes(4));
     expect(api.list.mock.calls[3][0]).toMatchObject({
       deleted: true,

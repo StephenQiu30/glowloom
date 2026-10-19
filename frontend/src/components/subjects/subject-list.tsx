@@ -11,6 +11,10 @@ import { toast } from "sonner";
 import { Plus, Search, UserRound, MapPin, Box } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
+  DataPagination,
+  type PageSize,
+} from "@/components/media/data-pagination";
+import {
   InputGroup,
   InputGroupInput,
   InputGroupAddon,
@@ -73,11 +77,16 @@ export function SubjectList({
     [selected, setSelected] = useState<Subject | null>(null),
     [deleted, setDeleted] = useState(false);
   const pageRequest = useRef<AbortController | null>(null);
+  const [pageSize, setPageSize] = useState<PageSize>(12);
+  const [cursorHistory, setCursorHistory] = useState<(string | undefined)[]>([
+    undefined,
+  ]);
+  const pageCursor = cursorHistory.at(-1);
   const query = searchQuery ?? localQuery;
   const read = useCallback(
     async (next?: string, signal?: AbortSignal) => {
       const p = await listBibleEntries(
-        { pid: projectID, kind, deleted, limit: 24, cursor: next },
+        { pid: projectID, kind, deleted, limit: pageSize, cursor: next },
         { signal },
       );
       signal?.throwIfAborted();
@@ -106,12 +115,12 @@ export function SubjectList({
       );
       return { items: entries, cursor: p.next_cursor };
     },
-    [projectID, kind, deleted],
+    [projectID, kind, deleted, pageSize],
   );
   useEffect(() => {
     const c = new AbortController();
     pageRequest.current = c;
-    void read(undefined, c.signal)
+    void read(pageCursor, c.signal)
       .then((p) => {
         if (!c.signal.aborted) {
           setItems(p.items);
@@ -129,30 +138,14 @@ export function SubjectList({
       c.abort();
       pageRequest.current?.abort();
     };
-  }, [read, retry]);
-  async function more() {
-    if (loading) return;
-    const c = new AbortController();
-    pageRequest.current?.abort();
-    pageRequest.current = c;
-    setLoading(true);
-    try {
-      const p = await read(cursor, c.signal);
-      if (c.signal.aborted) return;
-      setItems((v) => [
-        ...v,
-        ...p.items.filter((s) => !v.some((old) => old.head.id === s.head.id)),
-      ]);
-      setCursor(p.cursor);
-      setError("");
-    } catch (e) {
-      if (!c.signal.aborted) setError(flowError(e));
-    } finally {
-      if (!c.signal.aborted) setLoading(false);
-    }
-  }
+  }, [read, retry, pageCursor]);
   function change(s: Subject) {
-    setItems((v) => [s, ...v.filter((i) => i.head.id !== s.head.id)]);
+    setItems((v) =>
+      [s, ...v.filter((i) => i.head.id !== s.head.id)].slice(0, pageSize),
+    );
+    setCursorHistory([undefined]);
+    setLoading(true);
+    setRetry((n) => n + 1);
   }
   const shown = items.filter(
     (s) =>
@@ -171,7 +164,7 @@ export function SubjectList({
             </InputGroupAddon>
             <InputGroupInput
               aria-label="搜索主体"
-              placeholder="搜索已加载主体"
+              placeholder="搜索本页主体"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               maxLength={100}
@@ -187,6 +180,7 @@ export function SubjectList({
             setLoading(true);
             setItems([]);
             setCursor(undefined);
+            setCursorHistory([undefined]);
             setDeleted(false);
           }}
         >
@@ -201,6 +195,7 @@ export function SubjectList({
               setLoading(true);
               setItems([]);
               setCursor(undefined);
+              setCursorHistory([undefined]);
               setDeleted(true);
             }}
           >
@@ -246,7 +241,7 @@ export function SubjectList({
             </EmptyTitle>
             <EmptyDescription>
               {query
-                ? "换个关键词，或加载更多主体。"
+                ? "换个关键词，或翻页查看其他主体。"
                 : "添加参考与描述，在创作中保持一致。"}
             </EmptyDescription>
           </EmptyHeader>
@@ -310,15 +305,42 @@ export function SubjectList({
           })}
         </div>
       )}
-      {cursor && (
-        <Button
-          className="mx-auto mt-5 flex"
-          variant="outline"
+      {(!loading || items.length > 0 || error) && (
+        <DataPagination
+          label="主体分页"
+          page={cursorHistory.length}
+          pageSize={pageSize}
+          total={
+            !loading &&
+            !error &&
+            items.length === 0 &&
+            cursorHistory.length === 1 &&
+            !cursor
+              ? 0
+              : undefined
+          }
+          hasNext={!!cursor}
           disabled={loading}
-          onClick={() => void more()}
-        >
-          {loading ? "正在读取…" : "加载更多主体"}
-        </Button>
+          onPageChange={(target) => {
+            pageRequest.current?.abort();
+            if (target < cursorHistory.length)
+              setCursorHistory((history) => history.slice(0, -1));
+            else if (cursor)
+              setCursorHistory((history) => [...history, cursor]);
+            setLoading(true);
+            setItems([]);
+            setError("");
+          }}
+          onPageSizeChange={(size) => {
+            pageRequest.current?.abort();
+            setPageSize(size);
+            setCursorHistory([undefined]);
+            setItems([]);
+            setCursor(undefined);
+            setError("");
+            setLoading(true);
+          }}
+        />
       )}
       {deleted && (
         <p className="flow-notice">
@@ -357,6 +379,7 @@ export function SubjectList({
                           setLoading(true);
                           setItems([]);
                           setCursor(undefined);
+                          setCursorHistory([undefined]);
                         },
                       },
                     }
@@ -367,6 +390,7 @@ export function SubjectList({
                 setLoading(true);
                 setItems([]);
                 setCursor(undefined);
+                setCursorHistory([undefined]);
               }
             }
           }}

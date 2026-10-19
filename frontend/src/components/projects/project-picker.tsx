@@ -34,14 +34,23 @@ export function ProjectPicker({
   onChange,
   disabled = false,
   compact = false,
+  open: controlledOpen,
+  onOpenChange,
 }: {
   value: Project | null;
   onChange: (p: Project) => void;
   disabled?: boolean;
   compact?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const fieldID = useId();
-  const [open, setOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = controlledOpen ?? localOpen;
+  function setOpen(value: boolean) {
+    if (controlledOpen === undefined) setLocalOpen(value);
+    onOpenChange?.(value);
+  }
   const [items, setItems] = useState<Project[]>([]),
     [search, setSearch] = useState(""),
     [query, setQuery] = useState(""),
@@ -187,6 +196,7 @@ export function ProjectPicker({
             variant="outline"
             className="max-w-64"
             aria-label="选择所属项目"
+            disabled={disabled}
           >
             <Folder data-icon="inline-start" />
             <span className="truncate">{value?.name ?? "选择项目"}</span>

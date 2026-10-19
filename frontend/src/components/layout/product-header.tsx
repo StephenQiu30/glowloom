@@ -1,6 +1,8 @@
 "use client";
 
 import type { Ref } from "react";
+import Link from "next/link";
+import { CreditPopover } from "@/components/billing/credit-popover";
 import { Bell, Menu } from "lucide-react";
 import { ThemeToggle } from "@/components/controls/theme-controls";
 import { AccountMenu } from "@/components/account/account-menu";
@@ -75,6 +77,14 @@ export function ProductHeader({
         isMobile={isMobile}
       />
       <div className="product-header-actions">
+        {actor ? (
+          <>
+            <CreditPopover />
+            <Button asChild variant="ghost" className="max-md:hidden">
+              <Link href="/billing/membership">会员</Link>
+            </Button>
+          </>
+        ) : null}
         {actor ? (
           <Tooltip>
             <TooltipTrigger asChild>

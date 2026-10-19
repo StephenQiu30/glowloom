@@ -25,6 +25,7 @@ const api = vi.hoisted(() => ({
   validate: vi.fn(),
   upload: vi.fn(),
   uploadResult: vi.fn(),
+  drafts: vi.fn(),
 }));
 vi.mock("@/api/identity", () => ({
   getSession: api.identity,
@@ -43,7 +44,7 @@ vi.mock("@/api/promptEditor", () => ({
   createPromptDraft: api.create,
   savePromptDraft: api.save,
   readPromptDraft: vi.fn(),
-  listPromptDrafts: vi.fn(),
+  listPromptDrafts: api.drafts,
   currentPromptSubmission: api.current,
   resolvePromptSubmission: api.resolve,
   resolvePromptUpload: api.uploadResult,
@@ -172,6 +173,47 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
+it("首页内联富文本保存正文并保留草稿找回入口，不触发报价", async () => {
+  const onDraftReady = vi.fn();
+  api.drafts.mockResolvedValue({ items: [] });
+  render(
+    <RichGeneration
+      projectID={project.id}
+      presentation="home"
+      seed={{ project, prompt: "首页初始正文", capability: "image" }}
+      onDraftReady={onDraftReady}
+    />,
+  );
+  const editor = await screen.findByRole("textbox", { name: "创作提示词" });
+  expect(editor.getAttribute("contenteditable")).toBe("true");
+  expect(onDraftReady).toHaveBeenCalledWith(id);
+  fireEvent.paste(editor, {
+    clipboardData: {
+      files: [],
+      getData: (type: string) => (type === "text/plain" ? "首页补充正文" : ""),
+    },
+  });
+  fireEvent.pointerDown(screen.getByRole("button", { name: "更多工具" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "保存草稿" }));
+  await waitFor(() =>
+    expect(
+      JSON.stringify(api.save.mock.calls.at(-1)?.[1].draft.document),
+    ).toContain("首页补充正文"),
+  );
+  fireEvent.pointerDown(screen.getByRole("button", { name: "更多工具" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "找回草稿" }));
+  expect(await screen.findByText("暂无保存草稿")).toBeTruthy();
+  expect(api.drafts).toHaveBeenCalledWith({ pid: project.id });
+  expect(screen.getByRole("textbox", { name: "创作提示词" })).toBe(editor);
+  expect(api.quote).not.toHaveBeenCalled();
+  expect(api.confirm).not.toHaveBeenCalled();
+});
 async function open(reference = false) {
   render(
     <GenerationDialog
@@ -288,7 +330,7 @@ it("画布紧凑呈现保持真正富文本内联，先保存新节点且重渲�
   );
   expect(editor.closest('[data-slot="input-group-control"]')).toBeTruthy();
   expect(
-    screen.getByRole("combobox", { name: "生成模型" }).textContent,
+    screen.getByRole("button", { name: "生成模型" }).textContent,
   ).toContain("真实模型");
   expect(
     screen.getByRole("combobox", { name: "生成模式" }).textContent,
@@ -629,7 +671,7 @@ it("模型目录503仍能输入和保存，局部重试恢复模型且保留正�
     expect(screen.queryByText("模型目录暂不可用")).toBeNull(),
   );
   expect(
-    screen.getByRole("combobox", { name: "生成模型" }).textContent,
+    screen.getByRole("button", { name: "生成模型" }).textContent,
   ).toContain("真实模型");
   expect(screen.getByRole("textbox", { name: "创作提示词" })).toBe(editor);
   expect(canvas.onChange.mock.calls.at(-1)?.[0]).toEqual(edited);

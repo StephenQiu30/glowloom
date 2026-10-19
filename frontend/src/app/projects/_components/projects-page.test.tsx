@@ -248,12 +248,38 @@ it("列表加载失败不显示示例项目，名称搜索与真实最近修改�
   await screen.findByText("真实项目");
   expect(api.list.mock.calls.at(-1)?.[0]).toEqual({
     q: "真实",
-    limit: 50,
+    limit: 12,
     order: "recent_content",
   });
   expect(
     screen.getByRole("link", { name: /打开画布/ }).getAttribute("href"),
   ).toBe(`/canvas?project_id=${project.id}&canvas_id=${project.canvas_id}`);
+});
+
+it("画布按12项游标翻页，返回上一页不累计旧卡片", async () => {
+  const second = {
+    ...project,
+    id: "00000000-0000-4000-8000-000000000003",
+    name: "第二页画布",
+  };
+  api.list.mockImplementation(async (params) =>
+    params.cursor
+      ? { items: [second], next_cursor: null }
+      : { items: [project], next_cursor: "next-canvas-page" },
+  );
+  page();
+  await screen.findByText("真实项目");
+  fireEvent.click(screen.getByRole("button", { name: "下一页" }));
+  await screen.findByText("第二页画布");
+  expect(screen.queryByText("真实项目")).toBeNull();
+  expect(api.list.mock.calls.at(-1)?.[0]).toMatchObject({
+    limit: 12,
+    cursor: "next-canvas-page",
+  });
+  fireEvent.click(screen.getByRole("button", { name: "上一页" }));
+  await screen.findByText("真实项目");
+  expect(api.list.mock.calls.at(-1)?.[0].cursor).toBeUndefined();
+  expect(screen.queryByText("第二页画布")).toBeNull();
 });
 it.each([
   ["transition", "created", /恢复信息保存失败/, /浏览器未能保存恢复信息/],

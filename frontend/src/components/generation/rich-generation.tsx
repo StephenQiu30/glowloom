@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   NativeSelect,
   NativeSelectOption,
@@ -62,6 +63,13 @@ import {
   type ReactNode,
 } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
   Dialog,
@@ -90,6 +98,7 @@ import {
 import { reconcileLabels } from "./draft-resolution";
 import { canonical } from "./draft-save";
 import { PromptEditor } from "./prompt-editor";
+import { ModelPicker } from "./model-picker";
 import { ComposerSession, type ComposerSnapshot } from "./composer-session";
 import {
   emptyPromptDraft,
@@ -129,7 +138,8 @@ type Props = {
   onAdopt?: (id: string, kind: string) => Promise<void> | void;
   canvas?: CanvasComposerOwner;
   draftID?: string;
-  presentation?: "canvas";
+  presentation?: "canvas" | "home";
+  onDraftReady?: (draftID: string) => void;
   headerActions?: ReactNode;
 };
 function plainSeed(seed: GenerationSeed) {
@@ -329,6 +339,7 @@ export function RichGeneration(props: Props) {
         if (!Number.isSafeInteger(current.epoch))
           throw new RequestError("invalid_receipt");
         if (active) {
+          props.onDraftReady?.(snapshot.draft_id);
           setReady({
             snapshot,
             actor: identity.actor.id,
@@ -412,7 +423,7 @@ function EditorWorkspace({
   onOpen: (id: string) => void;
 }) {
   const formFieldId = useId();
-  const compact = presentation === "canvas";
+  const compact = presentation === "canvas" || presentation === "home";
   const [quoteReviewOpen, setQuoteReviewOpen] = useState(true);
 
   const [models, setModels] = useState(initialModels);
@@ -470,6 +481,7 @@ function EditorWorkspace({
     } | null>(null),
     [branches, setBranches] = useState<LocalBranch[]>([]),
     [drafts, setDrafts] = useState<API.DraftSnapshot[]>([]),
+    [draftsLoaded, setDraftsLoaded] = useState(false),
     [draftCursor, setDraftCursor] = useState<string | undefined>(),
     [conversion, setConversion] = useState<{
       seq: number;
@@ -757,6 +769,14 @@ function EditorWorkspace({
       busy.current = false;
       if (alive.current) setPending(false);
     }
+  }
+  async function loadDrafts() {
+    await run(async () => {
+      const page = await listPromptDrafts({ pid: projectID });
+      setDrafts(page.items ?? []);
+      setDraftCursor(page.next_cursor);
+      setDraftsLoaded(true);
+    });
   }
   async function getQuote() {
     if (compact) setQuoteReviewOpen(true);
@@ -1082,7 +1102,32 @@ function EditorWorkspace({
           <FieldLabel htmlFor={`${formFieldId}-field-3-${fieldIndex0}`}>
             <span>{f.label}</span>
           </FieldLabel>
-          {f.enum ? (
+          {f.enum && compact && f.enum.length <= 7 ? (
+            <ToggleGroup
+              id={`${formFieldId}-field-3-${fieldIndex0}`}
+              aria-label={f.label}
+              type="single"
+              value={String(draft.params[f.field] ?? "")}
+              disabled={frozen}
+              className="flex-wrap justify-start"
+              onValueChange={(value) => {
+                if (value)
+                  session?.updateParams({
+                    ...draft.params,
+                    [f.field]:
+                      f.type === "number" || f.type === "integer"
+                        ? Number(value)
+                        : value,
+                  });
+              }}
+            >
+              {f.enum.map((value) => (
+                <ToggleGroupItem key={String(value)} value={String(value)}>
+                  {value}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          ) : f.enum ? (
             <NativeSelect
               id={`${formFieldId}-field-3-${fieldIndex0}`}
 
@@ -1349,21 +1394,28 @@ function EditorWorkspace({
             {!canvas && (
               <Button
                 variant="ghost"
-                onClick={() =>
-                  void run(async () => {
-                    const page = await listPromptDrafts({ pid: projectID });
-                    setDrafts(page.items ?? []);
-                    setDraftCursor(page.next_cursor);
-                  })
-                }
+                disabled={pending || frozen}
+                onClick={() => void loadDrafts()}
               >
                 找回草稿
               </Button>
             )}
           </div>
         )}
-        {drafts.length > 0 && (
+        {draftsLoaded && (
           <div className="rounded border p-3" aria-label="服务端草稿">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm text-muted-foreground">
+                {drafts.length ? "选择要恢复的草稿" : "暂无保存草稿"}
+              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDraftsLoaded(false)}
+              >
+                收起草稿
+              </Button>
+            </div>
             {draftCursor && (
               <Button
                 onClick={() =>
@@ -1384,7 +1436,7 @@ function EditorWorkspace({
               <Button
                 key={d.draft_id}
                 variant="ghost"
-                disabled={frozen}
+                disabled={frozen || pending}
                 onClick={() =>
                   void run(async () => {
                     await flush();
@@ -1440,7 +1492,10 @@ function EditorWorkspace({
         {compact ? (
           <InputGroup
             variant="composer"
-            className="min-h-[208px] flex-col items-stretch gap-1"
+            className={cn(
+              "min-h-[208px] flex-col items-stretch gap-1",
+              presentation === "home" && "min-h-[248px]",
+            )}
           >
             <InputGroupAddon
               align="block-start"
@@ -1448,10 +1503,38 @@ function EditorWorkspace({
             >
               {referenceControls}
               {headerActions}
+              {presentation === "home" && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <InputGroupButton
+                      className="ml-auto"
+                      disabled={pending || frozen}
+                    >
+                      更多工具
+                    </InputGroupButton>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" sideOffset={8}>
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          void run(async () => {
+                            await flush();
+                          })
+                        }
+                      >
+                        保存草稿
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => void loadDrafts()}>
+                        找回草稿
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
               <InputGroupButton
                 aria-label={full ? "退出全屏" : "展开编辑器"}
                 size="icon-sm"
-                className="ml-auto"
+                className={cn(presentation !== "home" && "ml-auto")}
                 onClick={() => setFull((value) => !value)}
               >
                 {full ? <Minimize2 /> : <Maximize2 />}
@@ -1470,61 +1553,41 @@ function EditorWorkspace({
               align="block-end"
               className="flex-wrap gap-1 px-4 pb-4"
             >
-              <Select
-                value={draft.modelVersion ?? ""}
+              <ModelPicker
+                models={models}
+                value={draft.modelVersion}
                 disabled={frozen || !session}
-                onValueChange={(version) => {
-                  const target = models.find(
-                    (value) => value.current_version?.id === version,
-                  );
-                  if (target?.current_version?.id)
+                onSelect={(target) => {
+                  if (target.current_version?.id)
                     void selectMode(
                       target.current_version.id,
                       target.current_version.modes?.[0] ?? "",
                     );
                 }}
+              />
+              <Select
+                value={draft.mode ?? ""}
+                disabled={frozen || !model || !session}
+                onValueChange={(mode) =>
+                  void selectMode(draft.modelVersion!, mode)
+                }
               >
-                <SelectTrigger
-                  aria-label="生成模型"
-                  size="sm"
-                  variant="quiet"
-                  className="max-w-44"
-                >
-                  <SelectValue placeholder="选择模型" />
+                <SelectTrigger aria-label="生成模式" size="sm" variant="quiet">
+                  <SelectValue placeholder="选择模式" />
                 </SelectTrigger>
                 <SelectContent
                   position="popper"
-                  side="top"
+                  side="bottom"
                   align="start"
                   sideOffset={8}
                   collisionPadding={16}
                 >
-                  {!models.some((value) => value.current_version?.id) && (
-                    <Empty className="max-w-64 p-4">
-                      <EmptyHeader>
-                        <EmptyTitle>暂无可用模型</EmptyTitle>
-                        <EmptyDescription>
-                          请联系管理员配置项目模型。
-                        </EmptyDescription>
-                      </EmptyHeader>
-                    </Empty>
-                  )}
                   <SelectGroup>
-                    {models
-                      .filter((value) => value.current_version?.id)
-                      .map((value) => (
-                        <SelectItem
-                          key={value.id}
-                          value={value.current_version!.id!}
-                          disabled={
-                            value.status !== "active" ||
-                            value.provider_status !== "active" ||
-                            !value.credential_present
-                          }
-                        >
-                          {value.display_name}
-                        </SelectItem>
-                      ))}
+                    {model?.current_version?.modes?.map((mode) => (
+                      <SelectItem key={mode} value={mode}>
+                        {generationModeLabel(mode)}
+                      </SelectItem>
+                    ))}
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -1542,9 +1605,11 @@ function EditorWorkspace({
                   </InputGroupButton>
                 </PopoverTrigger>
                 <PopoverContent
-                  side="top"
+                  side="bottom"
                   align="start"
-                  className="max-h-[70dvh] w-80 overflow-y-auto"
+                  sideOffset={8}
+                  collisionPadding={16}
+                  className="max-h-[70dvh] w-80 max-w-[calc(100vw-32px)] overflow-y-auto"
                   aria-label="生成参数"
                 >
                   {parameterControls}
@@ -1586,32 +1651,6 @@ function EditorWorkspace({
                   </p>
                 </PopoverContent>
               </Popover>
-              <Select
-                value={draft.mode ?? ""}
-                disabled={frozen || !model || !session}
-                onValueChange={(mode) =>
-                  void selectMode(draft.modelVersion!, mode)
-                }
-              >
-                <SelectTrigger aria-label="生成模式" size="sm" variant="quiet">
-                  <SelectValue placeholder="选择模式" />
-                </SelectTrigger>
-                <SelectContent
-                  position="popper"
-                  side="top"
-                  align="start"
-                  sideOffset={8}
-                  collisionPadding={16}
-                >
-                  <SelectGroup>
-                    {model?.current_version?.modes?.map((mode) => (
-                      <SelectItem key={mode} value={mode}>
-                        {generationModeLabel(mode)}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
               <InputGroupButton
                 aria-label="提及素材或主体"
                 size="icon-sm"

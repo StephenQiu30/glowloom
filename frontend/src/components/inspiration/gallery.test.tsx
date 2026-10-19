@@ -12,6 +12,9 @@ afterEach(cleanup);
 
 it("returns focus to the exact card that opened the preview", async () => {
   render(<InspirationGallery />);
+  expect(
+    screen.getByRole("tab", { name: "精选" }).getAttribute("aria-controls"),
+  ).toBe(screen.getByRole("tabpanel", { name: "精选" }).id);
   const card = screen.getByRole("button", { name: /^光影之间/ });
   card.focus();
   fireEvent.click(card);

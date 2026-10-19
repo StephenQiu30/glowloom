@@ -62,6 +62,10 @@ it("未登录保持素材库首位，不读取私人接口，登录由已有弹�
   expect(
     screen.getByRole("tab", { name: "素材库" }).getAttribute("aria-selected"),
   ).toBe("true");
+  expect(
+    screen.getByRole("tab", { name: "素材库" }).getAttribute("aria-controls"),
+  ).toBe(screen.getByRole("tabpanel", { name: "素材库" }).id);
+  expect(screen.getByRole("radiogroup", { name: "素材类型" })).toBeTruthy();
   expect(request).not.toHaveBeenCalled();
   expect(
     screen
