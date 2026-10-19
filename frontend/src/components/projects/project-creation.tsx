@@ -176,21 +176,25 @@ export function ProjectCreationProvider({ children }: { children: ReactNode }) {
     ].includes(state.phase);
   const visible = !dismissed && !["idle", "ready"].includes(state.phase);
   const heading =
-    state.phase === "submitting"
-      ? "正在创建画布"
-      : state.phase === "preflight" || state.phase === "preflight_failed"
-        ? "正在确认创建服务"
-        : state.phase === "opening"
-          ? "画布已创建，正在打开"
-          : "target" in state
-            ? "画布已创建，暂时无法完成打开"
-            : state.phase === "unrecorded"
-              ? "尚未找到创建回执"
-              : state.phase === "rejected"
-                ? "本次创建已被拒绝"
-                : state.phase === "scope_required"
-                  ? "选择待恢复的创作归属"
-                  : "确认原创建结果";
+    state.phase === "created_storage_failed"
+      ? "画布已创建，恢复信息保存失败"
+      : state.phase === "ack_failed"
+        ? "画布已创建，恢复信息待清理"
+        : state.phase === "submitting"
+          ? "正在创建画布"
+          : state.phase === "preflight" || state.phase === "preflight_failed"
+            ? "正在确认创建服务"
+            : state.phase === "opening"
+              ? "画布已创建，正在打开"
+              : "target" in state
+                ? "画布已创建，暂时无法完成打开"
+                : state.phase === "unrecorded"
+                  ? "尚未找到创建回执"
+                  : state.phase === "rejected"
+                    ? "本次创建已被拒绝"
+                    : state.phase === "scope_required"
+                      ? "选择待恢复的创作归属"
+                      : "确认原创建结果";
   return (
     <CreationContext.Provider value={{ start, state, disabled }}>
       {children}
@@ -214,13 +218,17 @@ export function ProjectCreationProvider({ children }: { children: ReactNode }) {
         <DialogContent>
           <DialogTitle>{heading}</DialogTitle>
           <DialogDescription>
-            {"message" in state && state.message
-              ? state.message
-              : state.phase === "unrecorded"
-                ? "原请求仍可能在途。只有继续原创建才会再次提交同一请求，不会更换幂等键。"
-                : state.phase === "preflight_failed"
-                  ? "尚未发送创建请求，请只读重试确认服务。"
-                  : "保留原创建状态；已创建的画布仅重新打开，不另建副本。"}
+            {state.phase === "created_storage_failed"
+              ? "画布已创建，但浏览器未能保存恢复信息。请选择重新打开重试，不会再次创建。"
+              : state.phase === "ack_failed"
+                ? "画布读取已确认，但浏览器未能清理恢复信息。请选择重新打开重试，不会再次创建。"
+                : "message" in state && state.message
+                  ? state.message
+                  : state.phase === "unrecorded"
+                    ? "原请求仍可能在途。只有继续原创建才会再次提交同一请求，不会更换幂等键。"
+                    : state.phase === "preflight_failed"
+                      ? "尚未发送创建请求，请只读重试确认服务。"
+                      : "保留原创建状态；已创建的画布仅重新打开，不另建副本。"}
           </DialogDescription>
           {space.selected && (
             <p className="text-sm text-muted-foreground">

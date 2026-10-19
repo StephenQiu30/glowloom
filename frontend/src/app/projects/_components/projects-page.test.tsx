@@ -255,3 +255,38 @@ it("列表加载失败不显示示例项目，名称搜索与真实最近修改�
     screen.getByRole("link", { name: /打开画布/ }).getAttribute("href"),
   ).toBe(`/canvas?project_id=${project.id}&canvas_id=${project.canvas_id}`);
 });
+it.each([
+  ["transition", "created", /恢复信息保存失败/, /浏览器未能保存恢复信息/],
+  ["acknowledge", null, /恢复信息待清理/, /浏览器未能清理恢复信息/],
+] as const)(
+  "创建成功后 %s 失败说明本地恢复环节并只重开原目标",
+  async (method, phase, heading, description) => {
+    api.create.mockResolvedValue(project);
+    const original = projectIntentStore[method].bind(projectIntentStore);
+    const fault = vi
+      .spyOn(projectIntentStore, method)
+      .mockImplementation(async (...args: unknown[]) => {
+        if (phase === null || args[3] === phase)
+          throw new DOMException("QA storage failure", "QuotaExceededError");
+        return Reflect.apply(original, projectIntentStore, args);
+      });
+    try {
+      page();
+      fireEvent.click(screen.getByRole("button", { name: "新建画布" }));
+      await screen.findByRole("heading", { name: heading });
+      expect(screen.getByText(description)).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "继续原创建" })).toBeNull();
+      expect(screen.queryByText(/结果尚未确认/)).toBeNull();
+      fault.mockRestore();
+      fireEvent.click(screen.getByRole("button", { name: "重新打开" }));
+      await waitFor(() =>
+        expect(router.push).toHaveBeenCalledWith(
+          `/canvas?project_id=${project.id}&canvas_id=${project.canvas_id}`,
+        ),
+      );
+      expect(api.create).toHaveBeenCalledTimes(1);
+    } finally {
+      fault.mockRestore();
+    }
+  },
+);
