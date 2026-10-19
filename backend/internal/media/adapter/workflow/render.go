@@ -91,7 +91,7 @@ type renderSpec struct {
 }
 
 func renderOne(ctx context.Context, sourcePath string, spec renderSpec) (application.RenditionFile, error) {
-	output, err := os.CreateTemp("", "lanverse-render-*-."+spec.ext)
+	output, err := os.CreateTemp("", "glowloom-render-*-."+spec.ext)
 	if err != nil {
 		return application.RenditionFile{}, fmt.Errorf("create media preview temp file: %w", err)
 	}

@@ -47,7 +47,7 @@ func (p *AudioPreprocessor) Prepare(ctx context.Context, source *mediaapp.Downlo
 	if !exists {
 		return nil, application.ErrNoAudio
 	}
-	file, err := os.CreateTemp("", "lanverse-transcription-pcm-*.wav")
+	file, err := os.CreateTemp("", "glowloom-transcription-pcm-*.wav")
 	if err != nil {
 		return nil, err
 	}

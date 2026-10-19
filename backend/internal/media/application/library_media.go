@@ -144,7 +144,7 @@ func (q *LibraryMediaQuery) Download(ctx context.Context, actor identityapp.Prin
 		return nil, LibraryAssetSummary{}, fmt.Errorf("read library original: %w", errors.Join(ErrUnavailable, err))
 	}
 	defer func() { _ = reader.Close() }()
-	file, err := os.CreateTemp("", "lanverse-library-original-*")
+	file, err := os.CreateTemp("", "glowloom-library-original-*")
 	if err != nil {
 		return nil, LibraryAssetSummary{}, err
 	}

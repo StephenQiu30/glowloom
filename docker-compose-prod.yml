@@ -1,11 +1,11 @@
 # Production application configuration; deployment acceptance remains in OPS-01.
 # Run independently; dependency services live in docker-compose-env.yml.
-name: lanverse-prod
+name: glowloom-prod
 
 services:
   backend-api:
     build: ./backend
-    image: lanverse/backend:local
+    image: glowloom/backend:local
     command: ["--role=api"]
     environment:
       LV_ENV: ${LV_ENV:-local}
@@ -29,7 +29,7 @@ services:
 
   backend-worker:
     build: ./backend
-    image: lanverse/backend:local
+    image: glowloom/backend:local
     command: ["--role=worker", "--queues=flow"]
     environment:
       LV_ENV: ${LV_ENV:-local}
@@ -44,7 +44,7 @@ services:
 
   backend-temporal-setup:
     build: ./backend
-    image: lanverse/backend:local
+    image: glowloom/backend:local
     command: ["temporal", "setup"]
     profiles: ["maintenance-setup"]
     environment:
@@ -57,7 +57,7 @@ services:
 
   backend-worker-media:
     build: ./backend
-    image: lanverse/backend:local
+    image: glowloom/backend:local
     command: ["--role=worker", "--queues=media"]
     read_only: true
     tmpfs:
@@ -82,7 +82,7 @@ services:
 
   backend-relay:
     build: ./backend
-    image: lanverse/backend:local
+    image: glowloom/backend:local
     command: ["--role=relay"]
     environment:
       LV_ENV: ${LV_ENV:-local}

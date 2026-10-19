@@ -181,7 +181,7 @@ func (a *LibraryPackageArchive) Open(ctx context.Context, filePath string) (*Dow
 		return nil, ErrInvalidPackage
 	}
 	defer func() { _ = input.Close() }()
-	file, err := os.CreateTemp("", "lanverse-package-*"+path.Ext(expected.FileName))
+	file, err := os.CreateTemp("", "glowloom-package-*"+path.Ext(expected.FileName))
 	if err != nil {
 		return nil, err
 	}

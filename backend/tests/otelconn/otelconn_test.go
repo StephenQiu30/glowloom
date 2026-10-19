@@ -17,7 +17,7 @@ import (
 
 func TestOpenRejectsInvalidEndpoint(t *testing.T) {
 	for _, endpoint := range []string{"ftp://127.0.0.1:4318", "http://user:secret@127.0.0.1:4318", "http://127.0.0.1:4318/custom", "http://127.0.0.1:4318?token=secret"} {
-		_, _, err := otelconn.Open(t.Context(), endpoint, "lanverse-backend-api")
+		_, _, err := otelconn.Open(t.Context(), endpoint, "glowloom-backend-api")
 		if !errors.Is(err, otelconn.ErrInvalidEndpoint) {
 			t.Errorf("Open(%q) error = %v, want ErrInvalidEndpoint", endpoint, err)
 		}
@@ -25,7 +25,7 @@ func TestOpenRejectsInvalidEndpoint(t *testing.T) {
 }
 
 func TestOpenWithoutEndpointPreservesTraceContext(t *testing.T) {
-	provider, shutdown, err := otelconn.Open(t.Context(), "", "lanverse-backend-api")
+	provider, shutdown, err := otelconn.Open(t.Context(), "", "glowloom-backend-api")
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
@@ -66,7 +66,7 @@ func TestOpenExportsTraceOverHTTP(t *testing.T) {
 	}))
 	t.Cleanup(receiver.Close)
 
-	provider, shutdown, err := otelconn.Open(t.Context(), receiver.URL, "lanverse-backend-api")
+	provider, shutdown, err := otelconn.Open(t.Context(), receiver.URL, "glowloom-backend-api")
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
@@ -87,12 +87,12 @@ func TestOpenExportsTraceOverHTTP(t *testing.T) {
 		}
 		foundService := false
 		for _, attr := range batch.ResourceSpans[0].Resource.Attributes {
-			if attr.Key == "service.name" && attr.Value.GetStringValue() == "lanverse-backend-api" {
+			if attr.Key == "service.name" && attr.Value.GetStringValue() == "glowloom-backend-api" {
 				foundService = true
 			}
 		}
 		if !foundService {
-			t.Error("exported span has no lanverse service.name")
+			t.Error("exported span has no glowloom service.name")
 		}
 	default:
 		t.Fatal("OTLP receiver got no trace request")

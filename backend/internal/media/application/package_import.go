@@ -23,7 +23,7 @@ func ReadPackageUpload(ctx context.Context, input io.Reader) (*Downloaded, error
 	if input == nil {
 		return nil, ErrInvalidPackage
 	}
-	f, err := os.CreateTemp("", "lanverse-package-input-*.zip")
+	f, err := os.CreateTemp("", "glowloom-package-input-*.zip")
 	if err != nil {
 		return nil, err
 	}
@@ -446,7 +446,7 @@ func (s *LibraryPackageService) readPackageObject(ctx context.Context, object Pa
 			_ = input.Close()
 		}
 	}()
-	f, err := os.CreateTemp("", "lanverse-package-object-*")
+	f, err := os.CreateTemp("", "glowloom-package-object-*")
 	if err != nil {
 		return nil, err
 	}

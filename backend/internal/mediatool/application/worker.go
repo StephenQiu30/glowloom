@@ -243,7 +243,7 @@ func (w *Worker) readChecked(ctx context.Context, key string, size int64, mime, 
 		return nil, err
 	}
 	defer func() { _ = source.Close() }()
-	file, err := os.CreateTemp("", "lanverse-export-input-*")
+	file, err := os.CreateTemp("", "glowloom-export-input-*")
 	if err != nil {
 		return nil, err
 	}

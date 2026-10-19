@@ -52,9 +52,9 @@ import (
 
 // NewBusinessRouter assembles the public workspace API.
 // Its stores are the same injected dependencies used by the API role.
-// @title Lanverse API
+// @title Glowloom API
 // @version 0.1
-// @description Lanverse local workspace API for projects, canvases, media, scripts, bible, model catalog and operations.
+// @description Glowloom local workspace API for projects, canvases, media, scripts, bible, model catalog and operations.
 // @BasePath /
 func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProvider, cfg config.Config, database *gorm.DB, storage *objectstorage.Client, sessions identityruntime.SessionDependencies) (*gin.Engine, error) {
 	if database == nil {

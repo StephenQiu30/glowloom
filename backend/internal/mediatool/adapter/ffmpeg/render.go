@@ -71,7 +71,7 @@ func (r *Renderer) Render(ctx context.Context, frozen domain.FrozenExport, paths
 	if err != nil {
 		return nil, err
 	}
-	root, err := os.MkdirTemp("", "lanverse-export-*")
+	root, err := os.MkdirTemp("", "glowloom-export-*")
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func (r *Renderer) Render(ctx context.Context, frozen domain.FrozenExport, paths
 	if err := os.WriteFile(filepath.Join(root, "concat.txt"), []byte(concat.String()), 0600); err != nil {
 		return nil, err
 	}
-	output, err := os.CreateTemp("", "lanverse-export-final-*.mp4")
+	output, err := os.CreateTemp("", "glowloom-export-final-*.mp4")
 	if err != nil {
 		return nil, err
 	}

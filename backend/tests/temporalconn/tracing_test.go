@@ -80,7 +80,7 @@ func TestWorkflowActivityKeepsParentTrace(t *testing.T) {
 	if addr == "" || namespace == "" {
 		t.Skip("set LV_TEST_TEMPORAL_ADDR and LV_TEST_TEMPORAL_NAMESPACE for local Temporal")
 	}
-	provider, shutdown, err := otelconn.Open(t.Context(), "", "lanverse-backend-worker")
+	provider, shutdown, err := otelconn.Open(t.Context(), "", "glowloom-backend-worker")
 	if err != nil {
 		t.Fatalf("Open trace provider: %v", err)
 	}

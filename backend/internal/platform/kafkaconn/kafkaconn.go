@@ -42,7 +42,7 @@ func Open(brokers string) (*Connection, error) {
 		}
 		seeds[i] = seed
 	}
-	client, err := kgo.NewClient(kgo.SeedBrokers(seeds...), kgo.ClientID("lanverse-backend"))
+	client, err := kgo.NewClient(kgo.SeedBrokers(seeds...), kgo.ClientID("glowloom-backend"))
 	if err != nil {
 		return nil, fmt.Errorf("create Kafka client: %w", err)
 	}

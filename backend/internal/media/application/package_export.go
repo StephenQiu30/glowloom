@@ -34,7 +34,7 @@ func (s *LibraryPackageService) Export(ctx context.Context, actor identityapp.Pr
 	if s == nil || s.repo == nil || s.objects == nil {
 		return nil, ErrUnavailable
 	}
-	f, err := os.CreateTemp("", "lanverse-package-export-*.zip")
+	f, err := os.CreateTemp("", "glowloom-package-export-*.zip")
 	if err != nil {
 		return nil, err
 	}

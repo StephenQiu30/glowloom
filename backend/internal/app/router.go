@@ -23,7 +23,7 @@ func NewRouter(logger *zap.Logger, ready ReadyCheck, tracerProvider trace.Tracer
 	router := gin.New()
 	router.Use(
 		gin.Recovery(),
-		otelgin.Middleware("lanverse-backend-api",
+		otelgin.Middleware("glowloom-backend-api",
 			otelgin.WithTracerProvider(tracerProvider),
 			otelgin.WithMeterProvider(metricnoop.NewMeterProvider()),
 			otelgin.WithPropagators(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{})),

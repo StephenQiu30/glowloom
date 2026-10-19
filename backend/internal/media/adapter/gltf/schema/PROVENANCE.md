@@ -9,4 +9,4 @@ See the copied `COPYING.adoc`, `LICENSE.adoc` and the repository's
 
 The Go adapter compiles these files offline. Vendor EXT schemas with unresolved
 license declarations are not copied; their supported fields and resource
-references are validated by Lanverse's own code.
+references are validated by Glowloom's own code.

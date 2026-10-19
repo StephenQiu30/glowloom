@@ -74,7 +74,7 @@ func ReadUpload(ctx context.Context, reader io.Reader, name string) (*Downloaded
 	if mimeType == "" || !extensionMatches {
 		return nil, ErrUnsupportedUpload
 	}
-	file, err := os.CreateTemp("", "lanverse-upload-*-."+extension)
+	file, err := os.CreateTemp("", "glowloom-upload-*-."+extension)
 	if err != nil {
 		return nil, err
 	}

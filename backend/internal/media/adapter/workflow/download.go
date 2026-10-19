@@ -225,7 +225,7 @@ func (d *SecureDownloader) Download(ctx context.Context, rawURL string) (*Downlo
 	if resp.ContentLength > d.maxBytes {
 		return nil, ErrResultTooLarge
 	}
-	file, err := os.CreateTemp("", "lanverse-media-result-*")
+	file, err := os.CreateTemp("", "glowloom-media-result-*")
 	if err != nil {
 		return nil, fmt.Errorf("create media result temp file: %w", err)
 	}

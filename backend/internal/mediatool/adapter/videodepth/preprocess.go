@@ -72,7 +72,7 @@ func (p *Preprocessor) Prepare(ctx context.Context, source *mediaapp.Downloaded,
 	if err := p.VerifyDecode(stage, source.File.Name()); err != nil {
 		return nil, errors.Join(application.ErrInvalidDepthInput, err)
 	}
-	file, err := os.CreateTemp("", "lanverse-depth-cfr-*.mp4")
+	file, err := os.CreateTemp("", "glowloom-depth-cfr-*.mp4")
 	if err != nil {
 		return nil, err
 	}

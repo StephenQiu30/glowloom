@@ -81,7 +81,7 @@ func runProcess(ctx context.Context, exe string, args []string, rss int64, onLin
 func runNative(ctx context.Context, exe string, args []string, rss int64, onLine func([]byte) error, stream bool) ([]byte, application.DepthExecutionFacts, error) {
 	facts := application.DepthExecutionFacts{RSSLimitBytes: rss}
 	started := time.Now()
-	dir, err := os.MkdirTemp("", "lanverse-depth-runtime-*")
+	dir, err := os.MkdirTemp("", "glowloom-depth-runtime-*")
 	if err != nil {
 		return nil, facts, errors.Join(application.ErrDepthRuntimeUnavailable, err)
 	}

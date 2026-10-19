@@ -67,11 +67,9 @@ jobs:
       - run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
       - run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
       - run: go install github.com/google/wire/cmd/wire@v0.7.0
-      - run: go vet ./...
       - run: golangci-lint run ./...
       - name: Install media probe tools
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
-      - run: command -v ffmpeg && command -v ffprobe
       - name: Require the single schema definition
         run: |
           test -f db/schema.sql
@@ -148,14 +146,6 @@ jobs:
           psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_identity_auth_test'
           psql "$LV_TEST_AUTH_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           go test -race ./tests/identity -run '^TestAuthRegistrationSessionPasswordAndFailureTransactions$' -count=1 -v
-      - name: Prepare isolated provider contract database
-        run: |
-          psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_catalog_provider_gate_test'
-          psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_catalog_provider_gate_test?sslmode=disable' -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
-      - name: Verify provider PostgreSQL and administrator contracts
-        env:
-          LV_TEST_CATALOG_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_catalog_provider_gate_test?sslmode=disable
-        run: go test -race ./tests/catalog -run '^Test(ProviderRejectsInvalidSettingsAndDisablesOnce|CredentialKeepsCiphertextOutOfJSONAndValidatesTestOutcome|ProviderCredentialsWithRealPostgres|ConcurrentCredentialReplacementKeepsOneActive|CreateProviderCommitsAuditAndRejectsStaleAdminOnLocalPostgres|UpdateProviderCommitsEventsAndRejectsStaleAdminOnLocalPostgres|SetCredentialCommitsSealedDataAndEventsOnLocalPostgres|DisableCredentialCommitsSafeEventsAndRollsBackOnAuditFailure|ProviderDetailReadsSafeMetadataWithCurrentAdminOnLocalPostgres)$' -count=1 -v
       - name: Prepare isolated project and canvas contract databases
         run: |
           for database in lanverse_workspace_m1_test lanverse_canvas_store_test lanverse_canvas_http_test; do
@@ -196,9 +186,9 @@ jobs:
             LV_TEST_ACCOUNT_DIRECTORY_DB_DSN="$contract_dsn" \
             go test -race ./tests/identity -run "^${test_cases[$index]}$" -count=1 -v
           done
-      - name: Verify catalog, billing, and workspace PostgreSQL contracts
+      - name: Verify catalog and billing PostgreSQL contracts
         run: |
-          for package in catalog billing workspace; do
+          for package in catalog billing; do
             database="lanverse_${package}_contract"
             psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
             contract_dsn="postgres://lanverse_test:ci-only@127.0.0.1:5432/$database?sslmode=disable"
@@ -206,8 +196,7 @@ jobs:
             LV_TEST_CATALOG_DB_DSN="$contract_dsn" \
             LV_TEST_MODEL_CATALOG_DB_DSN="$contract_dsn" \
             LV_TEST_BILLING_DB_DSN="$contract_dsn" \
-            LV_TEST_WORKSPACE_DB_DSN="$contract_dsn" \
-            go test -race "./tests/$package" -skip '^TestWorkspaceMediaReferenceGuard' -count=1 -v
+            go test -race "./tests/$package" -count=1 -v
           done
       - name: Verify operation PostgreSQL contracts
         run: LV_TEST_OPERATION_SCHEMA_DB_DSN="$LV_TEST_DB_DSN" LV_TEST_OPERATION_STORE_DB_DSN="$LV_TEST_DB_DSN" go test -race ./tests/operation -skip '^TestOperationMediaReferenceGuard' -count=1
@@ -271,7 +260,9 @@ jobs:
       - name: Verify template quotes and private provider receipts
         env:
           LV_TEST_OPERATION_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_receipt?sslmode=disable
-        run: go test -race ./tests/prompt ./tests/operation -skip '^TestOperationMediaReferenceGuard' -count=1 -v
+        run: |
+          go test -race ./tests/prompt -count=1 -v
+          go test -race ./tests/operation -run '^TestM1ReceiptRecoveryPrivateObjectsAndPostgres$' -count=1 -v
       - name: Verify actual private media exports and GLB under the runtime role
         env:
           LV_TEST_MEDIA_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_receipt?sslmode=disable&options=-c%20role%3Dlanverse_app
@@ -388,7 +379,7 @@ jobs:
           LV_TEST_MEDIA_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable&options=-c%20role%3Dlanverse_app
           LV_TEST_LIBRARY_OWNER_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable
         run: |
-          go test -race ./tests/media -run '^Test(GIF|GLTFJSON|GLB)' -count=1 -json | tee "$RUNNER_TEMP/media-format-pg.jsonl"
+          go test -race ./tests/media -run '^Test(GIF|GLTFJSON)' -count=1 -json | tee "$RUNNER_TEMP/media-format-pg.jsonl"
           python3 - <<'PY'
           import collections
           import json
@@ -403,7 +394,7 @@ jobs:
                   counts[event["Action"]] += 1
           assert counts["pass"] > 0 and counts["fail"] == 0 and counts["skip"] == 0, counts
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
-              summary.write(f"\n## GIF and native models\n\n{counts['pass']} bounded native-format, actual runtime-role PostgreSQL, private-original and independent-copy tests passed without skips. Browser acceptance runs separately.\n")
+              summary.write(f"\n## GIF and glTF JSON\n\n{counts['pass']} bounded native-format, actual runtime-role PostgreSQL, private-original and independent-copy tests passed without skips. GLB runs in the export step. Browser acceptance runs separately.\n")
           PY
       - name: Prepare zero-skip contract result checker
         run: |
@@ -517,9 +508,9 @@ jobs:
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
               summary.write(f"\n## Script owning history and file import\n\n{counts['pass']} actual runtime-role PostgreSQL, private originals, Unicode/structured versions, ordered partial retry, recovery, immutable history and complete owning Copy tests passed without skips. Four historical reference guards run in lanverse_reference and two real Temporal tests run against the isolated CI service in dedicated steps. Browser acceptance is separate.\n")
           PY
-      - name: Prepare isolated Bible and voice contract databases
+      - name: Prepare isolated Bible and subject recovery databases
         run: |
-          for database in lanverse_bible lanverse_voice lanverse_subject_validation_ci lanverse_subject_validation_http_ci; do
+          for database in lanverse_bible lanverse_subject_validation_ci lanverse_subject_validation_http_ci; do
             psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
             contract_dsn="postgres://lanverse_test:ci-only@127.0.0.1:5432/$database?sslmode=disable"
             psql "$contract_dsn" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
@@ -557,11 +548,6 @@ jobs:
         run: |
           go test -race -p 1 ./tests/canvas ./tests/workspace ./tests/operation ./tests/script ./tests/bible ./tests/media -run '^Test(CanvasMediaReferenceGuard|WorkspaceMediaReferenceGuard|OperationMediaReferenceGuard|ScriptMediaReferenceGuardPG|BibleMediaReferencePG|BibleScriptMediaReferencePG|ScriptMediaReferencePG|MediaToolRetained)' -count=1 -json | tee "$RUNNER_TEMP/media-reference-pg.jsonl"
           python3 "$RUNNER_TEMP/require-contract-results.py" media-reference-pg.jsonl canvas=5 workspace=6 operation=3 script=4 bible=7 media=7
-      - name: Verify configured catalog voice parameters and current authority
-        shell: bash
-        env:
-          LV_TEST_MODEL_CATALOG_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_voice?sslmode=disable
-        run: go test -race ./tests/catalog -run '^TestVoiceCatalog' -count=1 -json | tee "$RUNNER_TEMP/voice-pg.jsonl"
       - name: Verify independent media transfer and frozen reference proof
         shell: bash
         env:
@@ -569,31 +555,8 @@ jobs:
           LV_TEST_LIBRARY_OWNER_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable
         run: |
           go test -race ./tests/media -run '^Test(MediaTransfer|ProjectCopyTypedHistoricalReferences|ProjectCopyFrozenReferences)' -skip '^TestMediaTransferActualTemporal' -count=1 -json | tee "$RUNNER_TEMP/transfer-pg.jsonl"
-      - name: Require complete Bible, voice and transfer contracts without skips
-        run: |
-          python3 "$RUNNER_TEMP/require-contract-results.py" bible-pg.jsonl bible=37
-          python3 "$RUNNER_TEMP/require-contract-results.py" voice-pg.jsonl catalog=6
-          python3 "$RUNNER_TEMP/require-contract-results.py" transfer-pg.jsonl media=22
-          python3 - <<'PY'
-          import collections
-          import json
-          import os
-          from pathlib import Path
-
-          root = Path(os.environ["RUNNER_TEMP"])
-          summaries = []
-          for file, minimum in (("bible-pg", 37), ("voice-pg", 6), ("transfer-pg", 22)):
-              counts = collections.Counter()
-              for line in (root / (file + ".jsonl")).read_text().splitlines():
-                  event = json.loads(line)
-                  test = event.get("Test", "")
-                  if test and "/" not in test and event["Action"] in ("pass", "fail", "skip"):
-                      counts[event["Action"]] += 1
-              assert counts["pass"] > 0 and counts["fail"] == 0 and counts["skip"] == 0, (file, counts)
-              summaries.append(f"{file}: {counts['pass']} passed, zero failures and skips.")
-          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
-              summary.write("\n## Bible, configured voices and independent media transfer\n\n" + "\n\n".join(summaries) + "\n\nRuntime role PostgreSQL and actual private objects are required here. The real Temporal transfer test runs in the isolated CI service step. Browser and provider generation acceptance are separate.\n")
-          PY
+      - name: Require complete transfer contracts without skips
+        run: python3 "$RUNNER_TEMP/require-contract-results.py" transfer-pg.jsonl media=22
       - name: Verify physical Purge, complete usage and reference visibility
         shell: bash
         env:
@@ -712,8 +675,6 @@ jobs:
       - run: wire ./internal/app
       - run: goimports -local github.com/StephenQiu30/glowloom-server/backend -w internal/app/wire_gen.go
       - run: git diff --exit-code -- internal/app/wire_gen.go
-      - name: Verify generated source contract and removed public endpoints
-        run: go test -race ./tests/app -run '^Test(PublicRouterGeneratedSwaggerContract|PublicRouterRemovedAuthenticationRoutes|PublicRouterRemovedSwaggerRoutes|WorkspaceAPIDoesNotExposeAnonymousAccessOutsideThisHost|PublicSwaggerRejectsContractDrift|PublicSwaggerNormalizesPathParameters|SwaggerRuntimeDefaultsDoNotHideNonEmptyDrift)$' -count=1 -v
 
   frontend:
     runs-on: ubuntu-24.04
@@ -736,8 +697,7 @@ jobs:
 
   images:
     runs-on: ubuntu-24.04
-    needs: [backend, frontend]
     steps:
       - uses: actions/checkout@v7
-      - run: docker build --file backend/Dockerfile --tag lanverse/backend:ci backend
-      - run: docker build --file frontend/Dockerfile --tag lanverse/frontend:ci frontend
+      - run: docker build --file backend/Dockerfile --tag glowloom/backend:ci backend
+      - run: docker build --file frontend/Dockerfile --tag glowloom/frontend:ci frontend

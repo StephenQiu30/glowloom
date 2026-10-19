@@ -288,7 +288,7 @@ func (w *DepthWorker) read(ctx context.Context, o DepthObject) (result *mediaapp
 			result = nil
 		}
 	}()
-	file, err := os.CreateTemp("", "lanverse-depth-input-*")
+	file, err := os.CreateTemp("", "glowloom-depth-input-*")
 	if err != nil {
 		return nil, err
 	}

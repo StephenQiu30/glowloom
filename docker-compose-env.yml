@@ -1,7 +1,7 @@
 # Complete dependency environment definition for containerized deployment.
 # Local development uses host-managed services and does not start this file.
 # Supply LV_PG_PASSWORD and LV_MINIO_PASSWORD through deployment configuration.
-name: lanverse-env
+name: glowloom-env
 
 services:
   postgres:
@@ -112,7 +112,7 @@ services:
       kafka:
         condition: service_healthy
     environment:
-      KAFKA_CLUSTERS_0_NAME: lanverse-local
+      KAFKA_CLUSTERS_0_NAME: glowloom-local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
     ports:
       - "${LV_KAFKA_UI_PORT:-8088}:8080"

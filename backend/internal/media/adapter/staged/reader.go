@@ -56,7 +56,7 @@ func (r *Reader) Download(ctx context.Context, receipt operationapp.ProviderRece
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	file, err := os.CreateTemp("", "lanverse-staged-image-*.image")
+	file, err := os.CreateTemp("", "glowloom-staged-image-*.image")
 	if err != nil {
 		return nil, fmt.Errorf("create staged image file: %w", err)
 	}

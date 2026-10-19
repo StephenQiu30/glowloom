@@ -44,7 +44,7 @@ func (FFUploadNormalizer) Normalize(ctx context.Context, source *application.Dow
 	if err != nil {
 		return application.NormalizedUpload{}, err
 	}
-	output, err := os.CreateTemp("", "lanverse-normalized-*-.mp4")
+	output, err := os.CreateTemp("", "glowloom-normalized-*-.mp4")
 	if err != nil {
 		return application.NormalizedUpload{}, fmt.Errorf("create canonical recording: %w", err)
 	}

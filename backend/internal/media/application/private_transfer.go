@@ -44,7 +44,7 @@ func transferPrivateObject(ctx context.Context, objects ProjectCopyObjects, phys
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, reader.Close()) }()
-	file, err := os.CreateTemp(tempDir, "lanverse-copy-*")
+	file, err := os.CreateTemp(tempDir, "glowloom-copy-*")
 	if err != nil {
 		return err
 	}

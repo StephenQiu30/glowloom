@@ -73,7 +73,7 @@ func (c *Client) Transcribe(ctx context.Context, wav *mediaapp.Downloaded, langu
 	}
 	// A temporary multipart body bounds memory independently from the WAV budget.
 	// Its private filename is owned and removed by this call.
-	body, err := os.CreateTemp("", "lanverse-transcription-multipart-*")
+	body, err := os.CreateTemp("", "glowloom-transcription-multipart-*")
 	if err != nil {
 		return domain.Transcript{}, fmt.Errorf("create inference upload: %w", err)
 	}

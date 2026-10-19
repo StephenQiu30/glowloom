@@ -25,7 +25,7 @@ func provideTrace(ctx context.Context, cfg config.Config, logger *zap.Logger) (t
 }
 
 func provideNamedTrace(ctx context.Context, cfg config.Config, logger *zap.Logger, role string) (trace.TracerProvider, func(), error) {
-	provider, shutdown, err := otelconn.Open(ctx, cfg.OTelEndpoint, "lanverse-backend-"+role)
+	provider, shutdown, err := otelconn.Open(ctx, cfg.OTelEndpoint, "glowloom-backend-"+role)
 	if err != nil {
 		return nil, nil, fmt.Errorf("configure %s tracing: %w", role, err)
 	}

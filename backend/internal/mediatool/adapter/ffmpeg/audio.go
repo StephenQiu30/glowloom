@@ -52,7 +52,7 @@ func (r *Renderer) renderAudio(ctx context.Context, frozen domain.FrozenExport, 
 	if !audible {
 		return nil, application.ErrNoAudio
 	}
-	root, err := os.MkdirTemp("", "lanverse-export-audio-*")
+	root, err := os.MkdirTemp("", "glowloom-export-audio-*")
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func (r *Renderer) renderAudio(ctx context.Context, frozen domain.FrozenExport, 
 	if err := os.WriteFile(filepath.Join(root, "concat.txt"), []byte(concat.String()), 0600); err != nil {
 		return nil, err
 	}
-	output, err := os.CreateTemp("", "lanverse-export-final-*.m4a")
+	output, err := os.CreateTemp("", "glowloom-export-final-*.m4a")
 	if err != nil {
 		return nil, err
 	}

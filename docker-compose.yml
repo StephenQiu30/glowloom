@@ -8,7 +8,7 @@ services:
     build:
       context: ./frontend
       target: dev
-    image: lanverse/frontend:latest
+    image: glowloom/frontend:latest
     init: true
     restart: unless-stopped
     environment:
@@ -49,7 +49,7 @@ services:
     build:
       context: ./backend
       target: dev
-    image: lanverse/backend:latest
+    image: glowloom/backend:latest
     init: true
     restart: unless-stopped
     stop_grace_period: 45s

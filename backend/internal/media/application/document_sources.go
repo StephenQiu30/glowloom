@@ -144,7 +144,7 @@ func (s *DocumentSources) Open(ctx context.Context, actor identityapp.Principal,
 		return nil, ErrUnavailable
 	}
 	defer func() { _ = reader.Close() }()
-	file, err := os.CreateTemp("", "lanverse-document-original-*")
+	file, err := os.CreateTemp("", "glowloom-document-original-*")
 	if err != nil {
 		return nil, fmt.Errorf("create document staging file: %w", err)
 	}

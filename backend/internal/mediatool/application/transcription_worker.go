@@ -175,7 +175,7 @@ func (w *TranscriptionWorker) stageAudio(ctx context.Context, input domain.Froze
 		return nil, err
 	}
 	defer func() { _ = source.Close() }()
-	file, err := os.CreateTemp("", "lanverse-transcription-source-*")
+	file, err := os.CreateTemp("", "glowloom-transcription-source-*")
 	if err != nil {
 		return nil, err
 	}

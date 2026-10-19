@@ -8,12 +8,12 @@ import (
 )
 
 func TestTranscriptionDraftValidatesAndPreservesExactSRT(t *testing.T) {
-	draft := tooldomain.Transcript{Version: 1, Language: "chinese", DurationMS: 2500, Segments: []tooldomain.SubtitleSegment{{StartMS: 10, EndMS: 1200, Text: "你好，Lanverse。\n第二行"}, {StartMS: 1300, EndMS: 2500, Text: "字幕测试"}}}
+	draft := tooldomain.Transcript{Version: 1, Language: "chinese", DurationMS: 2500, Segments: []tooldomain.SubtitleSegment{{StartMS: 10, EndMS: 1200, Text: "你好，Glowloom。\n第二行"}, {StartMS: 1300, EndMS: 2500, Text: "字幕测试"}}}
 	if err := draft.Validate(); err != nil {
 		t.Fatal(err)
 	}
 	srt, err := draft.SRT()
-	if err != nil || srt != "1\n00:00:00,010 --> 00:00:01,200\n你好，Lanverse。\n第二行\n\n2\n00:00:01,300 --> 00:00:02,500\n字幕测试\n\n" {
+	if err != nil || srt != "1\n00:00:00,010 --> 00:00:01,200\n你好，Glowloom。\n第二行\n\n2\n00:00:01,300 --> 00:00:02,500\n字幕测试\n\n" {
 		t.Fatalf("exact subtitle cues: %q %v", srt, err)
 	}
 	cases := []tooldomain.Transcript{

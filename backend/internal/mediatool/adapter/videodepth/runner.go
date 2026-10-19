@@ -132,7 +132,7 @@ func (r *Runner) Process(ctx context.Context, source *mediaapp.Downloaded, sha s
 			_ = prepared.File.Close()
 		}
 	}()
-	dir, err := os.MkdirTemp("", "lanverse-depth-native-*")
+	dir, err := os.MkdirTemp("", "glowloom-depth-native-*")
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func (r *Runner) Process(ctx context.Context, source *mediaapp.Downloaded, sha s
 	if err := os.WriteFile(worker, script, 0600); err != nil {
 		return nil, err
 	}
-	file, err := os.CreateTemp("", "lanverse-depth-output-*.mp4")
+	file, err := os.CreateTemp("", "glowloom-depth-output-*.mp4")
 	if err != nil {
 		return nil, err
 	}
