@@ -2,7 +2,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import { ArrowUpRight, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { cn } from "cn";
 import { BrandMark } from "@/components/brand/brand";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,10 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { UnavailableDialog } from "@/components/availability/unavailable";
+import {
+  DataPagination,
+  type PageSize,
+} from "@/components/media/data-pagination";
 const homeCategories = [
   "精选",
   "广告营销",
@@ -54,86 +58,70 @@ const exploreCategories = [
 ];
 const works = [
   {
-    src: "butterfly.jpg",
-    title: "蓝蝶 · 微观光影",
+    src: "cobalt-headphones.png",
+    title: "声色之间 · 产品概念",
     categories: ["广告营销", "平面设计"],
     scene: "品牌广告",
-    author: "织光创作团队",
-    duration: "00:48",
   },
   {
-    src: "fantasy.jpg",
-    title: "幻想短片 · 动作概念",
+    src: "moonlight-whale.png",
+    title: "云海鲸歌 · 动画概念",
     categories: ["广告营销", "影视作品", "动画动漫"],
     scene: "品牌广告",
-    author: "视觉实验室",
-    duration: "00:32",
   },
   {
-    src: "perfume.png",
-    title: "海边香氛 · 暖金时刻",
+    src: "amber-perfume.png",
+    title: "琥珀香氛 · 暖金时刻",
     categories: ["广告营销", "电商"],
     scene: "品牌广告",
-    author: "织光创作团队",
-    duration: "00:50",
   },
   {
-    src: "sunrise.jpg",
-    title: "她让太阳升起",
+    src: "alpine-road.png",
+    title: "山野公路 · 晨光旅程",
     categories: ["广告营销", "影视作品"],
     scene: "品牌广告",
-    author: "视觉实验室",
-    duration: "01:20",
   },
   {
-    src: "butterfly.jpg",
-    title: "微观世界 · 蓝色记忆",
+    src: "cobalt-headphones.png",
+    title: "声色之间 · 耳机广告",
     categories: ["广告营销", "平面设计"],
     scene: "社媒营销",
-    author: "织光创作团队",
-    duration: "00:48",
   },
   {
-    src: "fantasy.jpg",
-    title: "光影实验 · 未来片场",
+    src: "moonlight-whale.png",
+    title: "云海鲸歌 · 色彩参考",
     categories: ["广告营销", "影视作品", "动画动漫"],
     scene: "社媒营销",
-    author: "视觉实验室",
-    duration: "00:32",
   },
   {
-    src: "perfume.png",
-    title: "香氛广告 · 日落篇",
+    src: "amber-perfume.png",
+    title: "琥珀香氛 · 日落篇",
     categories: ["广告营销", "电商"],
     scene: "社媒营销",
-    author: "织光创作团队",
-    duration: "00:50",
   },
   {
-    src: "sunrise.jpg",
-    title: "夏日 · 视觉叙事",
+    src: "citrus-still-life.png",
+    title: "夏日柑橘 · 静物广告",
     categories: ["广告营销", "影视作品"],
     scene: "社媒营销",
-    author: "视觉实验室",
-    duration: "01:20",
   },
 ];
-const homeWorks = [
-  { src: "butterfly.jpg", title: "微观世界的奇妙旅程" },
-  { src: "sunrise.jpg", title: "夏日香氛 · 光的形状" },
-  { src: "fantasy.jpg", title: "让想象成为镜头" },
-];
+const homeWorks = [works[0], works[2], works[1]];
 const updates = [
-  { src: "perfume.png", title: "光影之间", caption: "精选创作 · 夏日香氛" },
   {
-    src: "butterfly.jpg",
-    title: "微观世界",
-    caption: "画布灵感 · 探索另一种尺度",
+    src: "amber-perfume.png",
+    title: "光影之间",
+    caption: "精选创作 · 琥珀香氛",
   },
   {
-    src: "fantasy.jpg",
-    title: "让想象成为镜头",
-    caption: "叙事短片 · 从分镜开始",
+    src: "cobalt-headphones.png",
+    title: "声色之间",
+    caption: "画布灵感 · 产品概念",
+  },
+  {
+    src: "moonlight-whale.png",
+    title: "云海鲸歌",
+    caption: "动画概念 · 让想象成为镜头",
   },
 ];
 type Preview = { src: string; title: string };
@@ -150,11 +138,11 @@ function InspirationPreview({
       <DialogContent className="sm:max-w-3xl">
         <DialogTitle>{item.title}</DialogTitle>
         <DialogDescription>
-          设计稿灵感示例。封面可浏览，作品发布与创作过程尚未接入。
+          AI 生成的静态参考图，探索构图、材质与光线。
         </DialogDescription>
         <div className="relative aspect-video">
           <Image
-            src={`/design/figma/${item.src}`}
+            src={`/design/reference/${item.src}`}
             alt={item.title}
             fill
             sizes="80vw"
@@ -177,6 +165,9 @@ export function InspirationGallery({
   const [localQuery, setQuery] = useState("");
   const query = searchQuery ?? localQuery;
   const [publish, setPublish] = useState(false);
+  const [pageSize, setPageSize] = useState<PageSize>(12);
+  const [pagination, setPagination] = useState({ filter: "", page: 1 });
+  const filterKey = JSON.stringify([category, scene, query]);
   const matches = showUpdates
     ? homeWorks.filter(
         (w) =>
@@ -193,6 +184,12 @@ export function InspirationGallery({
           w.title.includes(query.trim()) &&
           (scene === "品牌广告" || w.scene === scene),
       );
+  const pages = Math.max(1, Math.ceil(matches.length / pageSize));
+  const page = Math.min(
+    pages,
+    pagination.filter === filterKey ? pagination.page : 1,
+  );
+  const visible = matches.slice((page - 1) * pageSize, page * pageSize);
   return (
     <section className={cn("inspiration", !showUpdates && "explore-gallery")}>
       {showUpdates && (
@@ -208,7 +205,7 @@ export function InspirationGallery({
                   <Card variant="feature" className="w-full">
                     <CardContent>
                       <Image
-                        src={`/design/figma/${item.src}`}
+                        src={`/design/reference/${item.src}`}
                         alt={item.title}
                         fill
                         sizes="(max-width: 767px) 308px, (min-width: 1700px) 25vw, 273px"
@@ -290,7 +287,11 @@ export function InspirationGallery({
               />
             </InputGroup>
           ) : null}
-          <Button size="lg" onClick={() => setPublish(true)}>
+          <Button
+            size="lg"
+            className={cn(searchQuery !== undefined && "ml-auto")}
+            onClick={() => setPublish(true)}
+          >
             发布短片
           </Button>
         </div>
@@ -301,7 +302,7 @@ export function InspirationGallery({
         </h2>
       )}
       <div className="inspiration-grid">
-        {matches.map((w) => (
+        {visible.map((w) => (
           <InspirationPreview key={w.title} item={w}>
             <Button
               variant="ghost"
@@ -311,7 +312,7 @@ export function InspirationGallery({
                 <CardContent>
                   <div className="work-cover">
                     <Image
-                      src={`/design/figma/${w.src}`}
+                      src={`/design/reference/${w.src}`}
                       alt={w.title}
                       fill
                       sizes={
@@ -324,19 +325,7 @@ export function InspirationGallery({
                 </CardContent>
                 <CardHeader>
                   <CardTitle>{w.title}</CardTitle>
-                  <CardDescription>
-                    {showUpdates ? (
-                      <>
-                        <span>织光精选 · 查看创作过程</span>
-                        <ArrowUpRight
-                          aria-hidden="true"
-                          data-icon="inline-end"
-                        />
-                      </>
-                    ) : (
-                      `${"author" in w ? w.author : "织光精选"} · ${"duration" in w ? w.duration : ""}`
-                    )}
-                  </CardDescription>
+                  <CardDescription>AI 生成示例</CardDescription>
                 </CardHeader>
               </Card>
             </Button>
@@ -353,9 +342,20 @@ export function InspirationGallery({
       )}
       <p className="source-caption">
         {showUpdates
-          ? "设计稿灵感示例 · 封面仅供浏览参考"
-          : "发现好作品，把灵感带回自己的画布。设计稿展示内容，发布功能尚未接入。"}
+          ? "AI 生成的创作参考"
+          : "发现好作品，把灵感带回自己的画布。"}
       </p>
+      <DataPagination
+        label="灵感分页"
+        page={page}
+        pageSize={pageSize}
+        total={matches.length}
+        onPageChange={(page) => setPagination({ filter: filterKey, page })}
+        onPageSizeChange={(size) => {
+          setPageSize(size);
+          setPagination({ filter: filterKey, page: 1 });
+        }}
+      />
       <UnavailableDialog
         feature={publish ? "发布短片" : null}
         onClose={() => setPublish(false)}

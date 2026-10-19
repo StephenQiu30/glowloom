@@ -1,5 +1,6 @@
 "use client";
 
+import { ApplicationLayout } from "@/components/layout/application-layout";
 import { ThemeProvider } from "next-themes";
 import type { ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
@@ -8,7 +9,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SpaceProvider } from "@/components/spaces/space-context";
 import { ProjectCreationProvider } from "@/components/projects/project-creation";
 
-export function Providers({ children }: { children: ReactNode }) {
+export function Providers({
+  children,
+  initialSidebarOpen = true,
+}: {
+  children: ReactNode;
+  initialSidebarOpen?: boolean;
+}) {
   return (
     <ThemeProvider
       attribute="class"
@@ -19,7 +26,11 @@ export function Providers({ children }: { children: ReactNode }) {
       <SessionProvider>
         <SpaceProvider blockUntilReady={false}>
           <ProjectCreationProvider>
-            <TooltipProvider>{children}</TooltipProvider>
+            <TooltipProvider>
+              <ApplicationLayout initialSidebarOpen={initialSidebarOpen}>
+                {children}
+              </ApplicationLayout>
+            </TooltipProvider>
           </ProjectCreationProvider>
         </SpaceProvider>
       </SessionProvider>

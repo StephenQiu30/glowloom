@@ -1,3 +1,4 @@
+import { ApplicationLayout } from "@/components/layout/application-layout";
 import { SessionProvider } from "@/components/auth/session";
 import {
   cleanup,
@@ -101,5 +102,12 @@ it("会话服务不可用时仍可浏览公共灵感，未登录的素材库只�
 });
 
 function render(ui: React.ReactNode) {
-  return renderUI(ui, { wrapper: SessionProvider });
+  return renderUI(
+    <TooltipProvider>
+      <ApplicationLayout>{ui}</ApplicationLayout>
+    </TooltipProvider>,
+    {
+      wrapper: SessionProvider,
+    },
+  );
 }

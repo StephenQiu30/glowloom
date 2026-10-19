@@ -1,4 +1,4 @@
-import { BasicLayout } from "@/components/layout/basic-layout";
+import { PageLayout } from "@/components/layout/page-layout";
 import { ModelsPage } from "./_components/models-page";
 export const metadata = { title: "模型管理 · 织光" };
 export default async function Page({
@@ -9,8 +9,8 @@ export default async function Page({
   const query = await searchParams;
   const provider = typeof query.provider === "string" ? query.provider : "";
   return (
-    <BasicLayout screen="models">
+    <PageLayout screen="models">
       <ModelsPage key={provider} initialProvider={provider} />
-    </BasicLayout>
+    </PageLayout>
   );
 }

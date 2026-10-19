@@ -1,0 +1,60 @@
+{
+  "generator": "Built-in image_gen",
+  "assets": [
+    {
+      "slug": "amber-perfume",
+      "prompt": "Use case: ads-marketing. Generate a premium original advertising reference photograph for an AI creative platform gallery. Wide landscape 16:9, one clear sculptural amber glass perfume bottle on pale travertine in shallow water, caustic light and warm peach sunset, sea horizon softly blurred. Crisp realistic glass, sophisticated restrained composition, full natural color, no people. No text, no logos, no border, no watermark. Single finished photograph, not a collage."
+    },
+    {
+      "slug": "alpine-road",
+      "prompt": "Use case: photorealistic-natural. Generate an original cinematic travel-film still for a creative inspiration gallery. Wide landscape 16:9: a small cream-colored vintage car traveling a winding road through immense emerald alpine mountains, tiny red roof cabin, layers of mist and warm dawn sunlight. Rich natural color, realistic detailed vegetation, strong visual depth, clean premium film composition. No text, no logo, no watermark, no collage."
+    },
+    {
+      "slug": "cobalt-headphones",
+      "prompt": "Use case: product-mockup. Generate an original premium electronics campaign still for a creative inspiration gallery. Wide landscape 16:9. Beautiful cobalt blue over-ear headphones with brushed aluminum details levitating above a terracotta orange plinth, pale peach architectural backdrop, soft strong studio shadows, precise realistic product materials. Artistic high-end photography, full color, spacious framing. No brands, no letters, no text, no watermark, no collage."
+    },
+    {
+      "slug": "moonlight-whale",
+      "prompt": "Use case: stylized-concept. Create an original cinematic fantasy animation reference still for an AI creative inspiration gallery, wide landscape 16:9. A luminous turquoise whale swimming through soft lavender clouds over a tiny warmly lit coastal town at blue hour; elegant painterly 3D animation style, subtle stars, gentle expansive atmosphere, beautiful detailed light, vibrant but refined full color. No text, no logo, no watermark, no collage."
+    },
+    {
+      "slug": "citrus-still-life",
+      "prompt": "Use case: ads-marketing. Original premium food editorial campaign photograph for a creative inspiration gallery, landscape 16:9. Fresh cut blood oranges and a clear sparkling citrus drink on a warm ivory stone table, bright green leaves, crisp water droplets and elegant hard midday shadows, coral orange and deep green natural color, restrained art direction, appetizing refined detailed photography. No text, no brand, no watermark, no collage."
+    }
+  ],
+  "figmaFile": "uLqmeRWuQuzfrp9xOYg6FT",
+  "figmaAssetNodes": [
+    "992:82542",
+    "992:82543",
+    "992:82544",
+    "992:82545",
+    "992:82546"
+  ],
+  "coverMappings": [
+    {
+      "old": "她让太阳升起",
+      "title": "山野公路 · 晨光旅程",
+      "hash": "378ccd1753adcb28c58aaa06fa7ab83b770b7e69"
+    },
+    {
+      "old": "微观世界 · 蓝色记忆",
+      "title": "声色之间 · 耳机广告",
+      "hash": "575735f97ea1b73709d6a08862f59b55ea402134"
+    },
+    {
+      "old": "光影实验 · 未来片场",
+      "title": "云海鲸歌 · 动画概念",
+      "hash": "9899eaddaa281645c90edf5510a759e7a3c51b3d"
+    },
+    {
+      "old": "香氛广告 · 日落篇",
+      "title": "琥珀香氛 · 日落篇",
+      "hash": "f56c26530b8b89232ad491d106bd6928fc234d8c"
+    },
+    {
+      "old": "夏日 · 视觉叙事",
+      "title": "夏日柑橘 · 静物广告",
+      "hash": "3c8efe0f91e3acf9f634983f5d991229b96d5ab8"
+    }
+  ]
+}

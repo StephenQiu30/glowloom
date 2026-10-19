@@ -42,22 +42,16 @@ const links = [
   { id: "home", label: "创作", icon: Sparkles, href: "/" },
   { id: "explore", label: "探索", icon: Compass, href: "/explore" },
   { id: "assets", label: "素材库", icon: Folder, href: "/assets" },
-  { id: "subjects", label: "主体", icon: Contact, href: "/subjects" },
+  { id: "subjects", label: "主体库", icon: Contact, href: "/subjects" },
 ];
 
-export function Navigation({
-  screen,
-  mobile = false,
-}: {
-  screen: string;
-  mobile?: boolean;
-}) {
+function PrimaryNavigation({ screen }: { screen: string }) {
   const { setOpenMobile } = useSidebar();
   return (
     <SidebarGroup
       role="navigation"
-      aria-label={mobile ? "移动主导航" : "主导航"}
-      className={cn(mobile ? "mobile-navigation" : "primary-navigation")}
+      aria-label="主导航"
+      className="primary-navigation"
     >
       <SidebarMenu>
         {links.map(({ id, label, icon: Icon, href }) => (
@@ -85,7 +79,7 @@ export function Navigation({
   );
 }
 
-export function ProductNavigation({
+export function ProductSider({
   screen,
   onMobileCloseAutoFocus,
 }: {
@@ -147,7 +141,7 @@ export function ProductNavigation({
         id="product-sidebar-navigation"
         className="product-sidebar-content"
       >
-        <Navigation screen={screen} />
+        <PrimaryNavigation screen={screen} />
         <SidebarGroup className="sidebar-history">
           {!compact && (
             <>

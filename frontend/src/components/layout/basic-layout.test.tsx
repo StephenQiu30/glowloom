@@ -12,28 +12,34 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BasicLayout } from "./basic-layout";
+import { ApplicationLayout } from "./application-layout";
+import { PageLayout } from "./page-layout";
 import { request, RequestError } from "@/lib/request";
 vi.mock("@/lib/request", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/request")>();
   return { ...actual, request: vi.fn() };
 });
-function render(children: ReactNode) {
-  return renderUI(
+function TestProviders({ children }: { children: ReactNode }) {
+  return (
     <SessionProvider>
       <SpaceProvider blockUntilReady={false}>
         <TooltipProvider>{children}</TooltipProvider>
       </SpaceProvider>
-    </SessionProvider>,
+    </SessionProvider>
   );
+}
+function render(children: ReactNode) {
+  return renderUI(children, { wrapper: TestProviders });
 }
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   replace: vi.fn(),
   success: vi.fn(),
   error: vi.fn(),
+  pathname: "/",
 }));
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/",
+  usePathname: () => mocks.pathname,
   useRouter: () => mocks,
 }));
 vi.mock("sonner", () => ({
@@ -49,6 +55,7 @@ afterEach(() => {
 });
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.pathname = "/";
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -109,7 +116,7 @@ it("R6 主导航与画布入口指向真实路由，支持收起和展开", asyn
   fireEvent.click(screen.getByRole("button", { name: "展开导航" }));
   expect(screen.queryByRole("button", { name: "展开导航" })).toBeNull();
   const header = screen.getByRole("banner", { name: "页面顶栏" });
-  expect(within(header).getByText("创作")).toBeTruthy();
+  expect(within(header).getByText("创作首页")).toBeTruthy();
   expect(within(header).getByRole("button", { name: "账号菜单" })).toBeTruthy();
   expect(screen.queryByRole("combobox", { name: "当前创作空间" })).toBeNull();
   expect(screen.queryByRole("link", { name: "团队" })).toBeNull();
@@ -263,7 +270,7 @@ it("手机顶栏提供独立主题入口，移除积分会员并保留通知反�
     </BasicLayout>,
   );
   const header = await screen.findByRole("banner", { name: "页面顶栏" });
-  expect(within(header).getByText("主体")).toBeTruthy();
+  expect(within(header).getByText("主体库")).toBeTruthy();
   expect(within(header).getByRole("button", { name: "消息中心" })).toBeTruthy();
   expect(within(header).queryByRole("button", { name: "积分商城" })).toBeNull();
   expect(within(header).getByRole("button", { name: "账号菜单" })).toBeTruthy();
@@ -338,4 +345,53 @@ it("游客侧栏展开和收起均只保留顶栏登录入口", async () => {
     1,
   );
   expect(screen.getByRole("link", { name: "素材库" })).toBeTruthy();
+});
+
+it("普通页面换页保留同一个页头与侧栏节点，并清理前一页搜索回调", async () => {
+  const oldSearch = vi.fn();
+  const nextSearch = vi.fn();
+  const view = render(
+    <ApplicationLayout>
+      <PageLayout
+        screen="home"
+        search={{
+          value: "旧内容",
+          label: "搜索首页",
+          onValueChange: vi.fn(),
+          onSearch: oldSearch,
+        }}
+      >
+        <h1>首页正文</h1>
+      </PageLayout>
+    </ApplicationLayout>,
+  );
+  const toggle = await screen.findByRole("button", { name: "收起导航" });
+  fireEvent.click(toggle);
+  const header = screen.getByRole("banner", { name: "页面顶栏" });
+  const navigation = screen.getByRole("navigation", { name: "主导航" });
+  expect(screen.getByRole("button", { name: "搜索首页" })).toBeTruthy();
+  mocks.pathname = "/explore";
+  view.rerender(
+    <ApplicationLayout>
+      <PageLayout
+        screen="explore"
+        search={{
+          value: "新内容",
+          label: "搜索探索",
+          onValueChange: vi.fn(),
+          onSearch: nextSearch,
+        }}
+      >
+        <h1>探索正文</h1>
+      </PageLayout>
+    </ApplicationLayout>,
+  );
+  expect(await screen.findByRole("heading", { name: "探索正文" })).toBeTruthy();
+  expect(screen.getByRole("banner", { name: "页面顶栏" })).toBe(header);
+  expect(screen.getByRole("navigation", { name: "主导航" })).toBe(navigation);
+  expect(screen.getByRole("button", { name: "展开导航" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "搜索探索" }));
+  fireEvent.keyDown(await screen.findByRole("combobox"), { key: "Enter" });
+  expect(nextSearch).toHaveBeenCalledWith("新内容");
+  expect(oldSearch).not.toHaveBeenCalled();
 });

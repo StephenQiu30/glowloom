@@ -1,4 +1,5 @@
 "use client";
+import { ProductFooter } from "@/components/layout/product-footer";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { pendingInvitation } from "./invitation-continuity";
 import Image from "next/image";
@@ -890,6 +891,7 @@ export function AuthView({
               </CardFooter>
             ) : null}
           </Card>
+          <ProductFooter />
         </div>
       </main>
     );

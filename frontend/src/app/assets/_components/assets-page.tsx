@@ -18,7 +18,8 @@ import {
   ArrowLeft,
   History,
 } from "lucide-react";
-import { BasicLayout, useLoginDialog } from "@/components/layout/basic-layout";
+import { PageLayout } from "@/components/layout/page-layout";
+import { useLoginDialog } from "@/components/layout/basic-layout";
 import { useOptionalSession } from "@/components/auth/session";
 import { RequestError } from "@/lib/request";
 import { Button } from "@/components/ui/button";
@@ -32,10 +33,9 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-} from "@/components/ui/pagination";
+  DataPagination,
+  type PageSize,
+} from "@/components/media/data-pagination";
 import { Input } from "@/components/ui/input";
 import {
   Card,
@@ -86,10 +86,14 @@ function Library({
   filter,
   onFilter,
   onLock,
+  pageSize,
+  onPageSizeChange,
 }: {
   filter: Filter;
   onFilter: (filter: Filter) => void;
   onLock: (locked: boolean) => void;
+  pageSize: PageSize;
+  onPageSizeChange: (size: PageSize) => void;
 }) {
   const session = useOptionalSession();
   const login = useLoginDialog();
@@ -122,6 +126,7 @@ function Library({
   useEffect(() => {
     if (!actorID || section !== "library") return;
     const controller = new AbortController();
+    let adjustingPage = false;
     listMediaLibrary(
       {
         scope: "personal",
@@ -133,13 +138,20 @@ function Library({
         folder_id: filter.folder || undefined,
         order: filter.order,
         page: pageIndex,
-        page_size: 40,
+        page_size: pageSize,
       },
       { signal: controller.signal },
     )
       .then((v) => requireLibraryPage(v, actorID))
       .then((result) => {
         if (!controller.signal.aborted) {
+          const lastPage = Math.max(1, Math.ceil(result.total / pageSize));
+          if (pageIndex > lastPage) {
+            adjustingPage = true;
+            setPageIndex(lastPage);
+            setSelected([]);
+            return;
+          }
           setPage(result);
           setError("");
         }
@@ -153,10 +165,10 @@ function Library({
         }
       })
       .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
+        if (!controller.signal.aborted && !adjustingPage) setLoading(false);
       });
     return () => controller.abort();
-  }, [filter, actorID, section, pageIndex, retry]);
+  }, [filter, actorID, section, pageIndex, pageSize, retry]);
   function reload() {
     setLoading(true);
     setError("");
@@ -310,10 +322,13 @@ function Library({
                       id="library-select-page"
                       aria-label="选择本页全部素材"
                       checked={
-                        !!page?.items.length &&
-                        selection.length === page.items.length
+                        selection.length > 0 &&
+                        selection.length < (page?.items.length ?? 0)
+                          ? "indeterminate"
+                          : !!page?.items.length &&
+                            selection.length === page.items.length
                       }
-                      disabled={saving}
+                      disabled={locked || loading}
                       onCheckedChange={(v) =>
                         setSelected(
                           v === true
@@ -502,7 +517,7 @@ function Library({
                       aria-label={`选择 ${item.title}`}
                       className="asset-selection"
                       checked={selected.includes(item.id)}
-                      disabled={saving}
+                      disabled={locked || loading}
                       onCheckedChange={(v) =>
                         setSelected((ids) =>
                           v === true
@@ -546,44 +561,21 @@ function Library({
               ))}
             </ItemGroup>
           )}
-          {page && page.total > page.page_size && (
-            <Pagination aria-label="素材分页" className="mt-8">
-              <PaginationContent className="gap-5">
-                <PaginationItem>
-                  <Button
-                    variant="outline"
-                    disabled={pageIndex === 1 || loading}
-                    onClick={() => {
-                      setPageIndex((n) => n - 1);
-                      setSelected([]);
-                      setLoading(true);
-                    }}
-                  >
-                    上一页
-                  </Button>
-                </PaginationItem>
-                <PaginationItem>
-                  <ItemDescription aria-live="polite">
-                    {pageIndex} / {Math.ceil(page.total / page.page_size)}
-                  </ItemDescription>
-                </PaginationItem>
-                <PaginationItem>
-                  <Button
-                    variant="outline"
-                    disabled={
-                      pageIndex * page.page_size >= page.total || loading
-                    }
-                    onClick={() => {
-                      setPageIndex((n) => n + 1);
-                      setSelected([]);
-                      setLoading(true);
-                    }}
-                  >
-                    下一页
-                  </Button>
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
+          {page && !error && (
+            <DataPagination
+              label="素材分页"
+              page={pageIndex}
+              pageSize={pageSize}
+              total={page.total}
+              disabled={loading || locked}
+              onPageChange={(next) => {
+                setPageIndex(next);
+                setSelected([]);
+                setDetail(null);
+                setLoading(true);
+              }}
+              onPageSizeChange={onPageSizeChange}
+            />
           )}
           <Dialog
             open={!!detail}
@@ -759,6 +751,7 @@ function Library({
   );
 }
 export function AssetsPage() {
+  const [pageSize, setPageSize] = useState<PageSize>(12);
   const [filter, setFilter] = useState<Filter>({
     kind: "image",
     search: "",
@@ -771,9 +764,9 @@ export function AssetsPage() {
   const [search, setSearch] = useState("");
   const [locked, setLocked] = useState(false);
   return (
-    <BasicLayout
+    <PageLayout
       screen="assets"
-      allowGuest
+
       fullBleed
       search={{
         value: search,
@@ -784,11 +777,13 @@ export function AssetsPage() {
       }}
     >
       <Library
-        key={JSON.stringify(filter)}
+        key={JSON.stringify([filter, pageSize])}
         filter={filter}
         onFilter={setFilter}
         onLock={setLocked}
+        pageSize={pageSize}
+        onPageSizeChange={setPageSize}
       />
-    </BasicLayout>
+    </PageLayout>
   );
 }

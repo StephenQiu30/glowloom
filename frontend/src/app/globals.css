@@ -137,6 +137,10 @@
 html {
   scrollbar-gutter: stable;
 }
+/* The workspace owns its scrollbar; reserve a gutter only in that scrollport. */
+html:has(.product-shell) {
+  scrollbar-gutter: auto;
+}
 body {
   margin: 0;
 }
@@ -198,11 +202,43 @@ button:not(:disabled),
   overflow-wrap: anywhere;
 }
 .product-shell {
-  min-height: 100dvh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
 }
 .product-content {
   min-width: 0;
+  min-height: 0;
+  height: 100dvh;
   flex: 1;
+  overflow: hidden;
+}
+.product-main {
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+.product-page {
+  min-width: 0;
+  min-height: 100%;
+}
+.product-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding-block: 16px max(16px, env(safe-area-inset-bottom));
+}
+.product-skip-link:focus {
+  position: fixed;
+  top: 8px;
+  left: 16px;
+  z-index: 50;
+  padding: 8px 12px;
+  background: var(--background);
 }
 .product-header {
   border: 0;
@@ -212,9 +248,8 @@ button:not(:disabled),
   display: flex;
   align-items: center;
   gap: 8px;
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  position: relative;
+  flex-shrink: 0;
   background: var(--background);
 }
 .product-brand {
@@ -289,7 +324,7 @@ button:not(:disabled),
   gap: 4px;
 }
 .primary-navigation [data-slot="sidebar-menu-button"] {
-  height: 36px;
+  height: 40px;
   gap: 12px;
   padding: 0 12px;
   border-radius: var(--radius);
@@ -647,6 +682,24 @@ button:not(:disabled),
   font-size: 12px;
   color: var(--subtle-foreground);
 }
+.data-pagination {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 24px;
+}
+.data-pagination-status {
+  min-width: 60px;
+  text-align: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+@media (max-width: 767px) {
+  .data-pagination {
+    gap: 8px;
+  }
+}
 .explore-gallery .gallery-toolbar {
   margin: 0 0 20px;
 }
@@ -786,22 +839,6 @@ button:not(:disabled),
     height: 40px;
     top: 3px;
     right: 8px;
-  }
-  .mobile-navigation {
-    padding: 8px 16px;
-  }
-  .mobile-navigation [data-slot="sidebar-menu"] {
-    flex-direction: row;
-    gap: 8px;
-  }
-  .mobile-navigation [data-slot="sidebar-menu-item"] {
-    flex: 1;
-  }
-  .mobile-navigation [data-slot="sidebar-menu-button"] {
-    justify-content: center;
-    height: 40px;
-    gap: 6px;
-    padding-inline: 6px;
   }
   .home-page {
     padding: 0 16px 32px;
@@ -1980,6 +2017,7 @@ button:not(:disabled),
   flex-direction: column;
   gap: 24px;
   padding: 24px 32px 40px;
+  min-height: calc(100dvh - 64px);
 }
 .library-primary-row,
 .library-filter-row,
@@ -2017,11 +2055,11 @@ button:not(:disabled),
   display: none;
 }
 .library-login-state {
-  min-height: 360px;
-  flex: none;
-  justify-content: flex-start;
+  min-height: 320px;
+  flex: 1;
+  justify-content: center;
   gap: 24px;
-  padding-top: 132px;
+  padding: 32px 0;
 }
 .library-folders {
   display: flex;
@@ -2050,14 +2088,9 @@ button:not(:disabled),
   gap: 24px 16px;
 }
 .media-library .asset-cover {
-  aspect-ratio: 1.51;
+  aspect-ratio: 16/9;
   border-radius: 8px;
   margin-bottom: 0;
-}
-@media (min-width: 1800px) {
-  .media-library .asset-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
 }
 @media (max-width: 1100px) {
   .library-primary-row [data-slot="tabs-trigger"] {
@@ -2121,8 +2154,8 @@ button:not(:disabled),
     padding-inline: 8px;
   }
   .library-login-state {
-    min-height: 360px;
-    padding: 72px 0 24px;
+    min-height: 320px;
+    padding: 24px 0;
   }
   .library-folder-grid {
     grid-template-columns: minmax(0, 1fr);

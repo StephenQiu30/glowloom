@@ -1,5 +1,5 @@
 import Link from "next/link";
-export function BrandMark({ monochrome = false }: { monochrome?: boolean }) {
+export function BrandMark({ monochrome = true }: { monochrome?: boolean }) {
   return (
     <span className="brand-mark" aria-hidden="true">
       <svg

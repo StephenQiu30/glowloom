@@ -1,11 +1,10 @@
-import { BasicLayout } from "@/components/layout/basic-layout";
+import { PageLayout } from "@/components/layout/page-layout";
 import { InspirationGallery } from "@/components/inspiration/gallery";
-import type { AuthMode } from "./auth-dialog";
 
-export function AuthEntry({ mode }: { mode: AuthMode }) {
+export function AuthEntry() {
   return (
-    <BasicLayout screen="home" allowGuest initialAuthMode={mode}>
+    <PageLayout screen="home">
       <InspirationGallery />
-    </BasicLayout>
+    </PageLayout>
   );
 }

@@ -14,7 +14,7 @@ import { useTheme } from "next-themes";
 import { AvatarEditor } from "@/components/account/avatar-editor";
 import { getMyAvatar } from "@/api/media";
 import { EmailChange } from "./email-change";
-import { BasicLayout } from "@/components/layout/basic-layout";
+import { PageLayout } from "@/components/layout/page-layout";
 import {
   useSession,
   useSessionUpdate,
@@ -632,8 +632,8 @@ export function Settings() {
 }
 export function AccountPage() {
   return (
-    <BasicLayout screen="account">
+    <PageLayout screen="account">
       <Settings />
-    </BasicLayout>
+    </PageLayout>
   );
 }

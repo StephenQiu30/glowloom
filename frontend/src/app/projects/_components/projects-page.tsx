@@ -1,14 +1,14 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { BasicLayout } from "@/components/layout/basic-layout";
+import { PageLayout } from "@/components/layout/page-layout";
 import { NewCanvasButton } from "@/components/projects/new-canvas-button";
 import { ProjectList } from "./project-list";
 export function ProjectsPage() {
   const [search, setSearch] = useState(""),
     [query, setQuery] = useState("");
   return (
-    <BasicLayout
+    <PageLayout
       screen="projects"
       search={{
         value: search,
@@ -28,6 +28,6 @@ export function ProjectsPage() {
         <NewCanvasButton className="ml-auto" />
       </div>
       <ProjectList key={query} query={query} view="grid" />
-    </BasicLayout>
+    </PageLayout>
   );
 }

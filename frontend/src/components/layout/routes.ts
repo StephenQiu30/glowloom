@@ -1,11 +1,11 @@
 /** R6 当前设计入口；业务可用性由真实服务决定。 */
 export const screens = [
-  { id: "home", name: "创作", node: "271:3620", group: "创作" },
-  { id: "explore", name: "探索", node: "271:3620", group: "创作" },
+  { id: "home", name: "创作首页", node: "271:3620", group: "创作" },
+  { id: "explore", name: "探索", node: "435:17516", group: "创作" },
   { id: "projects", name: "我的画布", node: "347:6984", group: "创作" },
   { id: "canvas", name: "画布", node: "271:3302", group: "创作" },
-  { id: "assets", name: "素材库", node: "645:24800", group: "创作" },
-  { id: "subjects", name: "主体", node: "7:2", group: "创作" },
+  { id: "assets", name: "素材库", node: "436:17767", group: "创作" },
+  { id: "subjects", name: "主体库", node: "7:2", group: "创作" },
   { id: "login", name: "登录", node: "9:2", group: "账号" },
   { id: "register", name: "注册", node: "354:13103", group: "账号" },
   { id: "reset-password", name: "修改密码", node: "339:6455", group: "账号" },
@@ -27,3 +27,15 @@ export const screens = [
 export type Screen = (typeof screens)[number]["id"];
 export const screenHref = (screen: string) =>
   screen === "home" ? "/" : `/${screen}`;
+
+/** Match exact routes before nested routes; never treat / as a prefix of every page. */
+export function resolveScreen(pathname: string) {
+  return (
+    screens.find((screen) => screenHref(screen.id) === pathname) ??
+    screens.find(
+      (screen) =>
+        screen.id !== "home" &&
+        pathname.startsWith(`${screenHref(screen.id)}/`),
+    )
+  );
+}

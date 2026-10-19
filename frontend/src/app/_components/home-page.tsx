@@ -15,7 +15,8 @@ import {
   X,
   Search,
 } from "lucide-react";
-import { BasicLayout, useLoginDialog } from "@/components/layout/basic-layout";
+import { PageLayout } from "@/components/layout/page-layout";
+import { useLoginDialog } from "@/components/layout/basic-layout";
 import { useSpace } from "@/components/spaces/space-context";
 import {
   branchJournal,
@@ -512,10 +513,10 @@ export function HomePage() {
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   return (
-    <BasicLayout
+    <PageLayout
       screen="home"
       fullBleed
-      allowGuest
+
       search={{
         value: search,
         onValueChange: setSearch,
@@ -524,6 +525,6 @@ export function HomePage() {
       }}
     >
       <HomeContent searchQuery={query} />
-    </BasicLayout>
+    </PageLayout>
   );
 }

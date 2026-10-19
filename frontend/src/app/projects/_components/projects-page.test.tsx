@@ -91,10 +91,10 @@ vi.mock("@/components/projects/project-intent-store", async (original) => {
     projectIntentStore: new actual.ProjectIntentStore(new Memory()),
   };
 });
-vi.mock("@/components/layout/basic-layout", async () => {
+vi.mock("@/components/layout/page-layout", async () => {
   const { ProductSearch } = await import("@/components/layout/product-search");
   return {
-    BasicLayout: ({
+    PageLayout: ({
       children,
       search,
     }: {

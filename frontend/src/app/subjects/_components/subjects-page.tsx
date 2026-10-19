@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { BasicLayout } from "@/components/layout/basic-layout";
+import { PageLayout } from "@/components/layout/page-layout";
 import { ProjectPicker } from "@/components/projects/project-picker";
 import { type Project } from "@/components/projects/project";
 import { SubjectList } from "@/components/subjects/subject-list";
@@ -24,7 +24,7 @@ export function SubjectsPage() {
     [kind, setKind] = useState<API.Kind>("character"),
     [generation, setGeneration] = useState<GenerationSeed | null>(null);
   return (
-    <BasicLayout
+    <PageLayout
       screen="subjects"
       search={{
         value: search,
@@ -91,6 +91,6 @@ export function SubjectsPage() {
           onClose={() => setGeneration(null)}
         />
       )}
-    </BasicLayout>
+    </PageLayout>
   );
 }

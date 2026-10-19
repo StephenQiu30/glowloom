@@ -1,6 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { canonicalNavigation } from "./lib/canonical-origin";
 
+// These are public, build-owned files. Next's internal image request has no Host
+// header; application routes and the optimizer endpoint still validate Host.
+export const config = {
+  matcher: ["/((?!_next/static/|design/reference/).*)"],
+};
+
 export function proxy(request: NextRequest) {
   const canonicalOrigin =
     process.env.LV_PUBLIC_ORIGIN ??

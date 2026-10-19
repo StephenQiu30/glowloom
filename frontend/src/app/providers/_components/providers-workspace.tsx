@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useOptionalSession } from "@/components/auth/session";
-import { BasicLayout } from "@/components/layout/basic-layout";
+import { PageLayout } from "@/components/layout/page-layout";
 import { ProvidersPage } from "./providers-page";
 export function ProvidersWorkspace({
   initialConnection,
@@ -12,7 +12,7 @@ export function ProvidersWorkspace({
   const [query, setQuery] = useState("");
   const session = useOptionalSession();
   return (
-    <BasicLayout
+    <PageLayout
       screen="providers"
       fullBleed
       search={{
@@ -25,6 +25,6 @@ export function ProvidersWorkspace({
       }}
     >
       <ProvidersPage initialConnection={initialConnection} search={query} />
-    </BasicLayout>
+    </PageLayout>
   );
 }

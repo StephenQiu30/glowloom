@@ -17,8 +17,10 @@ const state = vi.hoisted(() => ({
   session: null as { actor: { id: string } } | null,
   login: vi.fn(),
 }));
+vi.mock("@/components/layout/page-layout", () => ({
+  PageLayout: ({ children }: { children: ReactNode }) => children,
+}));
 vi.mock("@/components/layout/basic-layout", () => ({
-  BasicLayout: ({ children }: { children: ReactNode }) => children,
   useLoginDialog: () => state.login,
 }));
 vi.mock("@/components/auth/session", () => ({
@@ -35,7 +37,7 @@ const emptyPage = {
   scope: { kind: "personal" },
   revision: 1,
   page: 1,
-  page_size: 40,
+  page_size: 12,
   total: 0,
   items: [],
   folders: [],
@@ -81,7 +83,7 @@ it("请求成功后才显示真实空库，最近30天参数发送到生成的�
         scope: "personal",
         kind: "image",
         page: 1,
-        page_size: 40,
+        page_size: 12,
         order: "updated_desc",
       }),
     }),
@@ -174,4 +176,79 @@ it("创建文件夹携带库版本和幂等键，成功后重新读取列表", a
       .mocked(request)
       .mock.calls.filter(([url]) => url === "/api/media/library"),
   ).toHaveLength(2);
+});
+
+it("跨页读取清空本页批量选择，不把上一页素材带入下一次批量操作", async () => {
+  const item = (n: number) => ({
+    id: `33333333-3333-4333-8333-${String(n).padStart(12, "0")}`,
+    title: `素材 ${n}`,
+    kind: "image",
+    revision: 1,
+    favorite: false,
+    catalog_state: "active",
+    updated_at: "2026-10-19T00:00:00Z",
+  });
+  vi.mocked(request).mockImplementation(async (url, options) => {
+    if (url !== "/api/media/library") return {};
+    const index = (options?.params as { page?: number })?.page ?? 1;
+    return {
+      ...emptyPage,
+      page: index,
+      total: 13,
+      items:
+        index === 1
+          ? Array.from({ length: 12 }, (_, n) => item(n + 1))
+          : [item(13)],
+    };
+  });
+  render(<AssetsPage />);
+  await screen.findByRole("button", { name: "查看 素材 1" });
+  fireEvent.click(screen.getByRole("button", { name: "批量操作" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "选择本页全部素材" }));
+  expect(screen.getByText("已选择 12 项")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "下一页" }));
+  await screen.findByRole("button", { name: "查看 素材 13" });
+  expect(screen.queryByRole("button", { name: "查看 素材 1" })).toBeNull();
+  expect(screen.getByText("已选择 0 项")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "移入回收站" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  expect(request).toHaveBeenCalledWith(
+    "/api/media/library",
+    expect.objectContaining({
+      params: expect.objectContaining({ page: 2, page_size: 12 }),
+    }),
+  );
+});
+
+it("每页数量选择发送真实分页参数，调整筛选时保留数量", async () => {
+  render(<AssetsPage />);
+  await screen.findByText("这里还没有素材");
+  fireEvent.keyDown(
+    screen.getByRole("combobox", { name: "素材分页每页数量" }),
+    { key: "ArrowDown" },
+  );
+  fireEvent.click(await screen.findByRole("option", { name: "24" }));
+  await waitFor(() =>
+    expect(request).toHaveBeenLastCalledWith(
+      "/api/media/library",
+      expect.objectContaining({
+        params: expect.objectContaining({ page: 1, page_size: 24 }),
+      }),
+    ),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "最近30天" }));
+  await waitFor(() =>
+    expect(request).toHaveBeenLastCalledWith(
+      "/api/media/library",
+      expect.objectContaining({
+        params: expect.objectContaining({
+          page: 1,
+          page_size: 24,
+          recent_only: true,
+        }),
+      }),
+    ),
+  );
 });

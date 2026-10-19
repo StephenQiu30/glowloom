@@ -1,4 +1,4 @@
-import { BasicLayout } from "@/components/layout/basic-layout";
+import { PageLayout } from "@/components/layout/page-layout";
 import { TeamPage } from "./_components/team-page";
 export const metadata = { title: "团队管理" };
 export default async function Page({
@@ -8,8 +8,8 @@ export default async function Page({
 }) {
   const { teamId } = await params;
   return (
-    <BasicLayout screen="teams">
+    <PageLayout screen="teams">
       <TeamPage id={teamId} />
-    </BasicLayout>
+    </PageLayout>
   );
 }

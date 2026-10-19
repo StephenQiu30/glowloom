@@ -4,12 +4,12 @@ import {
   createContext,
   useContext,
   useState,
+  useEffect,
   useRef,
   useSyncExternalStore,
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { cn } from "cn";
 import { useRouter } from "next/navigation";
 import { SpaceGate } from "@/components/spaces/space-context";
 import {
@@ -33,7 +33,8 @@ import {
   SidebarProvider,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { Navigation, ProductNavigation } from "./product-navigation";
+import { ProductSider } from "./product-sider";
+import { PageOptionsContext, type PageOptions } from "./page-layout";
 import type { Screen } from "./routes";
 import { ProductHeader } from "./product-header";
 import type { PageSearch } from "./product-search";
@@ -62,23 +63,27 @@ function setSidebarPreference(open: boolean) {
   document.cookie = `sidebar_state=${open}; path=/; max-age=604800; SameSite=Lax`;
   window.dispatchEvent(new Event(sidebarPreferenceEvent));
 }
-function getServerSidebarPreference() {
-  return true;
-}
 
 function Shell({
   screen,
   children,
-  fullBleed,
+  contentKey,
   initialAuthMode,
   search,
 }: {
   screen: Screen;
   children: ReactNode;
-  fullBleed?: boolean;
+  contentKey?: string;
   initialAuthMode?: AuthMode;
   search?: PageSearch;
 }) {
+  const [pageOptions, setPageOptions] = useState<PageOptions | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const pageSearch =
+    pageOptions?.screen === screen ? pageOptions.search : search;
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [contentKey, screen]);
   const session = useOptionalSession();
   const updateSession = useSessionUpdate();
   const router = useRouter();
@@ -86,6 +91,9 @@ function Shell({
   const mobileNavigationTrigger = useRef<HTMLButtonElement>(null);
   const [feature, setFeature] = useState<string | null>(null);
   const [auth, setAuth] = useState(Boolean(initialAuthMode));
+  const [closedAuthMode, setClosedAuthMode] = useState<AuthMode | null>(null);
+  const authOpen =
+    auth || Boolean(initialAuthMode && closedAuthMode !== initialAuthMode);
   const [logout, setLogout] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -104,10 +112,13 @@ function Shell({
   }
   return (
     <LoginContext.Provider value={() => setAuth(true)}>
-      <a className="sr-only focus:not-sr-only" href="#main-content">
+      <a
+        className="product-skip-link sr-only focus:not-sr-only"
+        href="#main-content"
+      >
         跳转到主要内容
       </a>
-      <ProductNavigation
+      <ProductSider
         screen={screen}
         onMobileCloseAutoFocus={(event) => {
           event.preventDefault();
@@ -117,7 +128,7 @@ function Shell({
       <SidebarInset className="product-content">
         <ProductHeader
           screen={screen}
-          search={search}
+          search={pageSearch}
           actor={session?.actor}
           isMobile={isMobile}
           navigationOpen={openMobile}
@@ -127,29 +138,31 @@ function Shell({
           onLogout={() => setLogout(true)}
           onFeature={setFeature}
         />
-        {isMobile && screen !== "assets" && (
-          <Navigation screen={screen} mobile />
-        )}
         <div
           id="main-content"
-          data-full-bleed={fullBleed}
-          className={cn(!fullBleed && "workspace-page")}
+          ref={scrollRef}
+          tabIndex={-1}
+          className="product-main"
         >
-          <SpaceGate>{children}</SpaceGate>
+          <PageOptionsContext.Provider value={setPageOptions}>
+            <SpaceGate>{children}</SpaceGate>
+          </PageOptionsContext.Provider>
         </div>
       </SidebarInset>
       <UnavailableDialog feature={feature} onClose={() => setFeature(null)} />
       <AuthDialog
         fallbackFocusRef={mobileNavigationTrigger}
-        open={auth}
+        open={authOpen}
         initialMode={initialAuthMode}
         onOpenChange={(value) => {
           setAuth(value);
+          if (!value && initialAuthMode) setClosedAuthMode(initialAuthMode);
           if (!value && initialAuthMode) router.replace("/");
         }}
         onAuthenticated={(value) => {
           updateSession(value);
           setAuth(false);
+          if (initialAuthMode) setClosedAuthMode(initialAuthMode);
           if (initialAuthMode) router.replace("/");
         }}
       />
@@ -185,15 +198,16 @@ function Shell({
 export function BasicLayout({
   screen,
   children,
-  fullBleed = false,
+  contentKey,
+  initialSidebarOpen = true,
   allowGuest = false,
   initialAuthMode,
   search,
 }: {
   screen: Screen;
   children: ReactNode;
-  fullBleed?: boolean;
-  contextual?: boolean;
+  contentKey?: string;
+  initialSidebarOpen?: boolean;
   allowGuest?: boolean;
   initialAuthMode?: AuthMode;
   search?: PageSearch;
@@ -201,7 +215,7 @@ export function BasicLayout({
   const sidebarOpen = useSyncExternalStore(
     subscribeSidebarPreference,
     getSidebarPreference,
-    getServerSidebarPreference,
+    () => initialSidebarOpen,
   );
   return (
     <SessionGate
@@ -227,7 +241,7 @@ export function BasicLayout({
       >
         <Shell
           screen={screen}
-          fullBleed={fullBleed}
+          contentKey={contentKey}
           initialAuthMode={initialAuthMode}
           search={search}
         >
