@@ -3,8 +3,6 @@ package identity_test
 import (
 	"context"
 	"encoding/json"
-	"os"
-	"strings"
 	"testing"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
@@ -111,15 +109,6 @@ func (a operationScopeGate) AuthorizeCatalog(ctx context.Context, p identity.Pri
 }
 func TestCatalogPlatformEpochAndProjectScope(t *testing.T) {
 	tx, a, team, scope, project, factory := projectConsumerFixture(t)
-	migration, err := os.ReadFile("../../db/migrations/002_ai_catalog_expand.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	sql := strings.ReplaceAll(strings.ReplaceAll(string(migration), "BEGIN;", ""), "COMMIT;", "")
-	if err := tx.Exec(sql).Error; err != nil {
-		t.Fatal(err)
-	}
-
 	a.ScopeID = scope
 	store := pgcatalog.NewScopedStore(tx, func(db *gorm.DB) catalog.ActorAccess { return pgidentity.NewStore(db) }, func(db *gorm.DB) catalog.ProjectAccess {
 		return operationScopeGate{pgworkspace.NewScopedProjectContentAccessStore(db, factory(db))}

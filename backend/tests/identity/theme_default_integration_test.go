@@ -1,7 +1,6 @@
 package identity_test
 
 import (
-	"os"
 	"testing"
 
 	"github.com/google/uuid"
@@ -20,16 +19,6 @@ func TestDarkThemeMigrationPreservesSavedPreferences(t *testing.T) {
 			t.Fatal(err)
 		}
 		users[id] = theme
-	}
-	if err := tx.Exec(`ALTER TABLE identity."user" ALTER COLUMN theme SET DEFAULT 'system'`).Error; err != nil {
-		t.Fatal(err)
-	}
-	migration, err := os.ReadFile("../../db/migrations/015_identity_default_dark_theme.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.Exec(string(migration)).Error; err != nil {
-		t.Fatal(err)
 	}
 	for id, want := range users {
 		var got string

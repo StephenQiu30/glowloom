@@ -47,25 +47,12 @@ func existingIdentityTransaction(t *testing.T) *gorm.DB {
 	if err := tx.Exec("SET LOCAL lock_timeout='1s'; SET LOCAL statement_timeout='10s'").Error; err != nil {
 		t.Fatal(err)
 	}
-	migration, err := os.ReadFile("../../db/migrations/001_user_identity_expand.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
 	var installed bool
 	if err := tx.Raw("SELECT to_regclass('identity.auth_challenge') IS NOT NULL").Scan(&installed).Error; err != nil {
 		t.Fatal(err)
 	}
 	if !installed {
-		if err := tx.Exec(string(migration)).Error; err != nil {
-			t.Fatal(err)
-		}
-	}
-	governanceMigration, err := os.ReadFile("../../db/migrations/006_identity_governance.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.Exec(string(governanceMigration)).Error; err != nil {
-		t.Fatal(err)
+		t.Fatal("database is missing identity.auth_challenge; initialize it from db/schema.sql")
 	}
 	if err := tx.Exec("UPDATE identity.platform_settings SET registration_enabled=true").Error; err != nil {
 		t.Fatal(err)

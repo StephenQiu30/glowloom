@@ -13,10 +13,6 @@ import (
 // This test uses the existing connection, rolls back all DDL and fixtures, and
 // never creates a database, schema namespace, role, service, or environment.
 func TestUserSchemaConstraints(t *testing.T) {
-	migration, err := os.ReadFile("../../db/migrations/001_user_identity_expand.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
 	dsn := os.Getenv("LV_TEST_EXISTING_DB_DSN")
 	if dsn == "" {
 		t.Skip("existing connected database not supplied; schema verification not performed")
@@ -45,9 +41,7 @@ func TestUserSchemaConstraints(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !installed {
-		if _, err := tx.Exec(ctx, string(migration)); err != nil {
-			t.Fatal(err)
-		}
+		t.Fatal("database is missing identity.auth_challenge; initialize it from db/schema.sql")
 	}
 	var after int64
 	if err := tx.QueryRow(ctx, `SELECT count(*) FROM identity."user"`).Scan(&after); err != nil || after != before {

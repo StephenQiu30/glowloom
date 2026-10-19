@@ -22,24 +22,15 @@ import (
 )
 
 func TestDirectoryExportCanonicalSchemaAndGrantParity(t *testing.T) {
-	migration, err := os.ReadFile("../../db/migrations/011_identity_directory_export.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
 	schema, err := os.ReadFile("../../db/schema.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
-	start := strings.Index(string(migration), "CREATE TABLE identity.directory_export")
-	end := strings.LastIndex(string(migration), "COMMIT;")
-	if start < 0 || end < start {
-		t.Fatal("missing export DDL")
+	text := string(schema)
+	if !strings.Contains(text, "CREATE TABLE identity.directory_export (") {
+		t.Error("schema is missing identity.directory_export")
 	}
-	if !strings.Contains(string(schema), string(migration[start:end])) {
-		t.Error("canonical schema does not contain exact export DDL/index/grant block")
-	}
-	grant := "GRANT SELECT,INSERT,UPDATE ON identity.directory_export TO lanverse_app;"
-	if !strings.Contains(string(migration), grant) || !strings.Contains(string(schema), grant) {
+	if !strings.Contains(text, "GRANT SELECT,INSERT,UPDATE ON TABLE identity.directory_export TO lanverse_app;") {
 		t.Error("application role lacks explicit least-privilege export grant")
 	}
 }

@@ -29,13 +29,7 @@ func projectConsumerFixture(t *testing.T) (*gorm.DB, identity.Principal, uuid.UU
 		t.Fatal(err)
 	}
 	if !installed {
-		migration, err := os.ReadFile("../../db/migrations/005_project_owner_scope.sql")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := tx.Exec(string(migration)).Error; err != nil {
-			t.Fatal(err)
-		}
+		t.Fatal("database is missing workspace.project.owner_scope_id; initialize it from db/schema.sql")
 	}
 	installSecondaryScope(t, tx)
 	installUserRuntimeDependencies(t, tx)

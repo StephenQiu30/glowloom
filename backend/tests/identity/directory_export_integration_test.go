@@ -6,8 +6,6 @@ import (
 	"encoding/csv"
 	"errors"
 	"io"
-	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -44,35 +42,14 @@ func (o *directoryTestObjects) Remove(_ context.Context, key string) error {
 }
 func installDirectoryExport(t *testing.T, tx *gorm.DB) {
 	t.Helper()
-	raw, err := os.ReadFile("../../db/migrations/011_identity_directory_export.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Never allow transaction-control SQL to escape the reviewed outer rollback.
-	statements := []string{}
-	for _, line := range strings.Split(string(raw), "\n") {
-		if strings.TrimSpace(line) == "BEGIN;" || strings.TrimSpace(line) == "COMMIT;" {
-			continue
-		}
-		statements = append(statements, line)
-	}
-	sql := strings.Join(statements, "\n")
-	if strings.Contains(sql, "COMMIT") || strings.Contains(sql, "BEGIN;") {
-		t.Fatal("unsafe migration transaction control")
-	}
 	var installed bool
 	if err := tx.Raw(`SELECT to_regclass('identity.directory_export') IS NOT NULL`).Scan(&installed).Error; err != nil {
 		t.Fatal(err)
 	}
-	if installed {
-		// The reviewed migration may already be deployed. Validate its contract
-		// without applying DDL; every fixture still belongs to the outer rollback.
-		assertDirectoryExportSchema(t, tx)
-		return
+	if !installed {
+		t.Fatal("database is missing identity.directory_export; initialize it from db/schema.sql")
 	}
-	if err := tx.Exec(sql).Error; err != nil {
-		t.Fatal(err)
-	}
+	assertDirectoryExportSchema(t, tx)
 }
 func assertDirectoryExportSchema(t *testing.T, tx *gorm.DB) {
 	t.Helper()

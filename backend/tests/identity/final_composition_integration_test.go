@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 
@@ -84,24 +83,6 @@ func TestFinalUserRouterSeparatesIdentityAndContentScopes(t *testing.T) {
 func TestMinimumUserRuntimeDependencyIncrement(t *testing.T) {
 	verifyProjectConsumerRollback(t)
 	tx := existingIdentityTransaction(t)
-	var before struct{ Assets, Renditions, Copies, Transfers int64 }
-	counts := `SELECT (SELECT count(*) FROM media.media_asset) AS assets,(SELECT count(*) FROM media.rendition) AS renditions,(SELECT count(*) FROM media.project_copy_object) AS copies,(SELECT count(*) FROM media.transfer_object) AS transfers`
-	if err := tx.Raw(counts).Scan(&before).Error; err != nil {
-		t.Fatal(err)
-	}
-	migration, err := os.ReadFile("../../db/migrations/012_user_runtime_dependencies.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for range 2 {
-		if err := tx.Exec(string(migration)).Error; err != nil {
-			t.Fatal("minimum additive migration or replay failed", err)
-		}
-	}
-	var after struct{ Assets, Renditions, Copies, Transfers int64 }
-	if err := tx.Raw(counts).Scan(&after).Error; err != nil || before != after {
-		t.Fatal("minimum increment changed existing content rows", err)
-	}
 	var columns int64
 	if err := tx.Raw(`SELECT count(*) FROM information_schema.columns WHERE table_schema='media' AND ((table_name IN ('media_asset','rendition') AND column_name='object_location_id') OR (table_name IN ('project_copy_object','transfer_object') AND column_name IN ('source_location_id','target_location_id'))) AND data_type='uuid' AND is_nullable='YES'`).Scan(&columns).Error; err != nil || columns != 6 {
 		t.Fatal("runtime dependency columns incomplete", err)
@@ -116,15 +97,10 @@ func TestMinimumUserRuntimeDependencyIncrement(t *testing.T) {
 	}
 }
 
-// The installed runtime lacks these exact dependencies until the reviewed increment
-// is applied. Tests exercise the target schema only inside their outer rollback.
 func installUserRuntimeDependencies(t *testing.T, tx *gorm.DB) {
 	t.Helper()
-	migration, err := os.ReadFile("../../db/migrations/012_user_runtime_dependencies.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.Exec(string(migration)).Error; err != nil {
-		t.Fatal(err)
+	var columns int64
+	if err := tx.Raw(`SELECT count(*) FROM information_schema.columns WHERE table_schema='media' AND ((table_name IN ('media_asset','rendition') AND column_name='object_location_id') OR (table_name IN ('project_copy_object','transfer_object') AND column_name IN ('source_location_id','target_location_id'))) AND data_type='uuid' AND is_nullable='YES'`).Scan(&columns).Error; err != nil || columns != 6 {
+		t.Fatal("runtime dependency columns incomplete", err)
 	}
 }

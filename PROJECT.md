@@ -23,7 +23,7 @@
 - 按接受的设计维护 Handler/DTO 和注解，由固定版本 swag 生成规范，再由固定版本 @umijs/openapi 生成前端调用；`frontend/src/api/` 全部为生成文件，不手改，不在组件目录手写业务请求函数或维护另一套客户端。`frontend/openapi2ts.config.ts` 只声明生成配置，遵循 [@umijs/openapi 官方用法](https://github.com/chenshuai2144/openapi2typescript#usage)，不执行外部命令、切换进程目录或改写工具模板。在 `frontend/` 执行 `pnpm api:generate`：先运行 `api:schema` 将后端注解导出到忽略目录 `node_modules/.cache/openapi/swagger.json`，再运行官方 openapi2ts 和项目 Prettier。无需启动后端；生成需要 Go、Node 和已安装的前端依赖。`pnpm api:check` 独立重生成并逐文件核对、核对全部 operationId，发现手改、漏生成或额外文件即失败。
 - 通用请求层为 `frontend/src/lib/request.ts`：使用 Axios 实例、原生 Axios 配置和拦截器，统一超时、幂等键、multipart 与 HTTP 错误转换，直接返回后端 payload。取消保留 Axios 的取消语义；传输层不导入 UI/认证组件，不弹窗或跳转。认证文案和会话校验位于 `components/auth/contracts.ts`。页面导入 `@/api/<标签>`，类型使用生成的 `API` 命名空间。下载传入自定义 options 时显式指定 `responseType: "blob"`；@umijs/openapi 1.14.1 原始模板只有在 options 未提供时使用 hook 默认值，不通过改写模板改变该行为。
 - 后端不提供在线 Swagger 路由，不新增跟踪的 backend/docs 产物。生成合同检查与实际路由双向核对。
-- `backend/db/schema.sql` 是当前实现的最终态 Schema；既有数据库另行审阅增量 SQL，不重放、重建或清理业务数据。邮箱迁移与身份引用保护见[用户系统设计](docs/design/01-用户系统总体设计.md#8-d6-迁移与切换)。
+- `backend/db/schema.sql` 是唯一的数据库结构定义。它只用于空业务库；禁止对已有业务库重放、重建或清理数据。邮箱与身份引用保护见[用户系统设计](docs/design/01-用户系统总体设计.md#8-d6-迁移与切换)。
 - 浏览器请求经同站代理；服务端 `LV_BACKEND_ORIGIN` 不进入浏览器。凭据不进入文档、日志、前端包或提交。
 - 默认本地工程验证不发起真实收费生成；fixture、协议握手或页面成功不能代替真实供应商验收。模型可用性以实际配置和适配能力为准。
 - 本地 namespace 显式准备，不由应用自动创建；Go 工具链与依赖版本以 go.mod、Dockerfile 为准。开发环境直接使用 `docker compose up -d --build` 启动或更新，只更新后端时追加 `backend`，不新增启动脚本。开发后端每次启动都从只读挂载的当前源码编译，编译失败即停止，不运行旧程序；构建缓存使用独立开发卷。纯 Go 源码更新也可 `docker compose restart backend`，运行中不会自动热重载；依赖、Dockerfile、入口或 Compose 配置更新须重新构建并更新容器。生产镜像仍在构建阶段编译。不把修改文档解释为重启服务授权。

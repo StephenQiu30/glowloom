@@ -68,24 +68,15 @@ func purgeScopeFixture(t *testing.T) (*gorm.DB, identity.Principal, uuid.UUID, u
 	if err := tx.Exec(`SET LOCAL lock_timeout='1s'; SET LOCAL statement_timeout='10s'`).Error; err != nil {
 		t.Fatal(err)
 	}
-	for _, migration := range []string{"001_user_identity_expand.sql", "005_project_owner_scope.sql"} {
-		var installed bool
-		query := `SELECT to_regclass('identity.auth_challenge') IS NOT NULL`
-		if strings.HasPrefix(migration, "005") {
-			query = `SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='workspace' AND table_name='project' AND column_name='owner_scope_id')`
-		}
-		if err := tx.Raw(query).Scan(&installed).Error; err != nil {
-			t.Fatal(err)
-		}
-		if !installed {
-			body, err := os.ReadFile("../../db/migrations/" + migration)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := tx.Exec(string(body)).Error; err != nil {
-				t.Fatal(err)
-			}
-		}
+	var identityReady, scopeReady bool
+	if err := tx.Raw(`SELECT to_regclass('identity.auth_challenge') IS NOT NULL`).Scan(&identityReady).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='workspace' AND table_name='project' AND column_name='owner_scope_id')`).Scan(&scopeReady).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !identityReady || !scopeReady {
+		t.Fatal("database is missing the complete schema; initialize it from db/schema.sql")
 	}
 	// This existing database predates package support. Install only the exact
 	// canonical table declaration needed by the reference SELECT, inside the

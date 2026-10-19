@@ -72,12 +72,12 @@ jobs:
       - name: Install media probe tools
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: command -v ffmpeg && command -v ffprobe
-      - name: Require canonical schema and numbered incremental migrations
+      - name: Require the single schema definition
         run: |
           test -f db/schema.sql
           while IFS= read -r sql_path; do
-            if [ "$sql_path" != 'db/schema.sql' ] && ! [[ "$sql_path" =~ ^db/migrations/[0-9]{3}_[a-z0-9_]+\.sql$ ]]; then
-              echo "Unexpected SQL outside canonical schema or numbered migrations: $sql_path" >&2
+            if [ "$sql_path" != 'db/schema.sql' ]; then
+              echo "Unexpected SQL outside db/schema.sql: $sql_path" >&2
               exit 1
             fi
           done < <(find db -type f -name '*.sql' -print)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -212,11 +211,7 @@ func (idleMediaWork) HasInflightProjectWork(context.Context, identity.Principal,
 }
 func installMediaScopeMigration(t *testing.T, tx *gorm.DB) {
 	t.Helper()
-	b, err := os.ReadFile("../../db/migrations/007_media_scope.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	verifyOrInstallMediaScope(t, tx, string(b))
+	verifyMediaScope(t, tx)
 }
 
 func TestMediaTransferCrossPhysicalScopes(t *testing.T) {

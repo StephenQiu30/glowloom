@@ -1,10 +1,8 @@
--- Lanverse 当前数据库结构的唯一事实源。直接维护本文件，禁止另存手写 DDL 副本。
--- PostgreSQL 18；仅用于空业务库，不包含业务数据、登录账号或密码。
--- 由独立结构所有者执行，预先创建 lanverse_app NOLOGIN NOSUPERUSER 权限角色。
--- 初始化：psql "$LV_SCHEMA_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f backend/db/schema.sql
--- 既有业务库的升级须先核对实际结构并审阅增量 SQL；禁止重放本文件或自动删除数据。
+-- 空业务库的完整结构，只维护本文件。
+-- PostgreSQL 18。由结构所有者执行，并预先创建 lanverse_app NOLOGIN NOSUPERUSER。
+-- psql "$LV_SCHEMA_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f backend/db/schema.sql
+-- 禁止对已有业务库重放本文件。
 
--- 尽早拒绝错误目标与未配置的应用角色，调用方的事务保证失败不留下部分结构。
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -24,12 +22,18 @@ BEGIN
   END IF;
 END $$;
 
--- 函数中引用随后定义的行类型；函数体由完整初始化后的行为测试验证。
-SET LOCAL check_function_bodies = false;
-SET LOCAL search_path = pg_catalog, public;
-SET LOCAL timezone = 'UTC';
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
 
--- 命名空间与扩展
 CREATE SCHEMA audit;
 
 CREATE SCHEMA bible;
@@ -56,13 +60,8 @@ CREATE SCHEMA workspace;
 
 CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public;
 
-COMMENT ON EXTENSION citext IS 'data type for case-insensitive character strings';
-
 CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;
 
-COMMENT ON EXTENSION pg_trgm IS 'text similarity measurement and index searching based on trigrams';
-
--- 触发器函数
 CREATE FUNCTION audit.reject_audit_mutation() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -143,15 +142,9 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION media.protect_transfer_ownership() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
- IF ROW(NEW.actor_id,NEW.org_id,NEW.source_library_id,NEW.target_library_id,NEW.source_kind,NEW.target_kind,NEW.source_project_id,NEW.target_project_id,NEW.source_scope_id,NEW.target_scope_id,NEW.source_org_id,NEW.target_org_id)
- IS DISTINCT FROM ROW(OLD.actor_id,OLD.org_id,OLD.source_library_id,OLD.target_library_id,OLD.source_kind,OLD.target_kind,OLD.source_project_id,OLD.target_project_id,OLD.source_scope_id,OLD.target_scope_id,OLD.source_org_id,OLD.target_org_id)
- THEN RAISE EXCEPTION 'media transfer ownership is immutable' USING ERRCODE='23514'; END IF;
- RETURN NEW;
-END $$;
-
-CREATE FUNCTION media.check_transfer_scope() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION media.check_transfer_scope() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
 DECLARE source media.library%ROWTYPE; target media.library%ROWTYPE;
 BEGIN
  SELECT * INTO STRICT source FROM media.library WHERE id=NEW.source_library_id;
@@ -178,6 +171,104 @@ BEGIN
    OR (NEW.project_id IS NULL AND a.project_id IS NULL AND a.personal_org_id=NEW.personal_org_id AND a.personal_actor_id=NEW.principal_id))) THEN
   RAISE EXCEPTION 'upload receipt ownership does not match its original' USING ERRCODE='23514';
  END IF;
+ RETURN NEW;
+END $$;
+
+CREATE FUNCTION media.keep_object_binding() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE old_id text; new_id text;
+BEGIN
+ old_id=to_jsonb(OLD)->>TG_ARGV[0];
+ new_id=to_jsonb(NEW)->>TG_ARGV[0];
+ IF old_id IS NOT NULL AND new_id IS DISTINCT FROM old_id THEN
+  RAISE EXCEPTION 'physical object binding is immutable' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END $$;
+
+CREATE FUNCTION media.keep_storage_evidence() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ RAISE EXCEPTION 'storage evidence is immutable' USING ERRCODE='23514';
+END $$;
+
+CREATE FUNCTION media.keep_storage_identity() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    IF TG_TABLE_NAME='storage_profile' OR TG_TABLE_NAME='storage_activation' THEN
+        RAISE EXCEPTION 'storage identity is immutable' USING ERRCODE='23514';
+    END IF;
+    IF (NEW.id,NEW.profile_id,NEW.bucket,NEW.object_key,NEW.owner_session_id) IS DISTINCT FROM (OLD.id,OLD.profile_id,OLD.bucket,OLD.object_key,OLD.owner_session_id) THEN
+        RAISE EXCEPTION 'object location identity is immutable' USING ERRCODE='23514';
+    END IF;
+    NEW.updated_at=now();
+    RETURN NEW;
+END $$;
+
+CREATE FUNCTION media.keep_storage_probe_intent() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF (to_jsonb(OLD)-'state'-'evidence_sha256'-'updated_at') IS DISTINCT FROM (to_jsonb(NEW)-'state'-'evidence_sha256'-'updated_at')
+  OR (OLD.state='running' AND NEW.state NOT IN ('running','complete','cleaning'))
+  OR (OLD.state='complete' AND NEW.state<>'complete')
+  OR (OLD.state='cleaning' AND NEW.state NOT IN ('cleaning','cleaned'))
+  OR (OLD.state='cleaned' AND NEW.state<>'cleaned')
+  OR (OLD.evidence_sha256 IS NOT NULL AND OLD.evidence_sha256 IS DISTINCT FROM NEW.evidence_sha256) THEN
+  RAISE EXCEPTION 'probe identity/outcome cannot be rebound' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END $$;
+
+CREATE FUNCTION media.keep_storage_work() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF TG_TABLE_NAME='object_location' THEN
+  IF OLD.owner_intent_id IS DISTINCT FROM NEW.owner_intent_id THEN
+   RAISE EXCEPTION 'storage work object owner is immutable' USING ERRCODE='23514';
+  END IF;
+ ELSE
+  IF (to_jsonb(OLD)-'state'-'closed_at') IS DISTINCT FROM (to_jsonb(NEW)-'state'-'closed_at')
+   OR (OLD.state<>'open' AND NEW.state<>OLD.state)
+   OR (OLD.closed_at IS NOT NULL AND NEW.closed_at IS DISTINCT FROM OLD.closed_at) THEN
+   RAISE EXCEPTION 'storage work target is immutable' USING ERRCODE='23514';
+  END IF;
+ END IF;
+ RETURN NEW;
+END $$;
+
+CREATE FUNCTION media.keep_storage_write_deadline() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF OLD.write_until IS NOT NULL AND (NEW.write_until IS NULL OR NEW.write_until<OLD.write_until) THEN
+  RAISE EXCEPTION 'storage write deadline cannot regress' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END $$;
+
+CREATE FUNCTION media.keep_upload_admission() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF (to_jsonb(NEW)-'accepted_asset_id') IS DISTINCT FROM (to_jsonb(OLD)-'accepted_asset_id')
+   OR (OLD.accepted_asset_id IS NOT NULL AND NEW.accepted_asset_id IS DISTINCT FROM OLD.accepted_asset_id) THEN
+  RAISE EXCEPTION 'upload admission is immutable' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END $$;
+
+CREATE FUNCTION media.protect_transfer_ownership() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF ROW(NEW.actor_id,NEW.org_id,NEW.source_library_id,NEW.target_library_id,NEW.source_kind,NEW.target_kind,NEW.source_project_id,NEW.target_project_id,NEW.source_scope_id,NEW.target_scope_id,NEW.source_org_id,NEW.target_org_id)
+ IS DISTINCT FROM ROW(OLD.actor_id,OLD.org_id,OLD.source_library_id,OLD.target_library_id,OLD.source_kind,OLD.target_kind,OLD.source_project_id,OLD.target_project_id,OLD.source_scope_id,OLD.target_scope_id,OLD.source_org_id,OLD.target_org_id)
+ THEN RAISE EXCEPTION 'media transfer ownership is immutable' USING ERRCODE='23514'; END IF;
  RETURN NEW;
 END $$;
 
@@ -256,7 +347,29 @@ BEGIN
 END;
 $$;
 
--- 当前表结构（含字段、默认值与 CHECK）
+CREATE FUNCTION workspace.validate_secondary_scope() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF TG_TABLE_NAME='project_copy_job' THEN
+  IF TG_OP='UPDATE' AND (NEW.owner_scope_id,NEW.org_id,NEW.actor_id,NEW.source_project_id,NEW.target_project_id) IS DISTINCT FROM (OLD.owner_scope_id,OLD.org_id,OLD.actor_id,OLD.source_project_id,OLD.target_project_id) THEN
+   RAISE EXCEPTION 'copy scope binding is immutable';
+  END IF;
+  IF TG_OP='INSERT' AND (NEW.owner_scope_id IS NULL OR NOT EXISTS(SELECT 1 FROM workspace.project p JOIN workspace.project t ON t.id=NEW.target_project_id WHERE p.id=NEW.source_project_id AND p.org_id=NEW.org_id AND t.org_id=NEW.org_id AND p.owner_scope_id=NEW.owner_scope_id AND t.owner_scope_id=NEW.owner_scope_id)) THEN
+   RAISE EXCEPTION 'copy scope binding invalid';
+  END IF;
+ ELSE
+  IF NEW.owner_scope_id IS NULL OR NOT EXISTS(SELECT 1 FROM workspace.project p WHERE p.id=NEW.project_id AND p.org_id=NEW.org_id AND p.owner_scope_id=NEW.owner_scope_id) OR (NEW.folder_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM workspace.project_folder f WHERE f.id=NEW.folder_id AND f.org_id=NEW.org_id AND f.actor_id=NEW.actor_id AND f.owner_scope_id=NEW.owner_scope_id)) THEN
+   RAISE EXCEPTION 'folder placement scope binding invalid';
+  END IF;
+  IF TG_OP='UPDATE' AND (NEW.owner_scope_id,NEW.org_id,NEW.actor_id,NEW.project_id) IS DISTINCT FROM (OLD.owner_scope_id,OLD.org_id,OLD.actor_id,OLD.project_id) THEN
+   RAISE EXCEPTION 'folder placement scope binding is immutable';
+  END IF;
+ END IF;
+ RETURN NEW;
+END;
+$$;
+
 CREATE TABLE audit.audit_log (
     id uuid NOT NULL,
     org_id uuid NOT NULL,
@@ -278,6 +391,9 @@ CREATE TABLE audit.audit_log (
     CONSTRAINT audit_log_is_delete_check CHECK ((NOT is_delete))
 )
 PARTITION BY RANGE (create_time);
+
+
+SET default_table_access_method = heap;
 
 CREATE TABLE bible."character" (
     id uuid NOT NULL,
@@ -368,15 +484,6 @@ CREATE TABLE bible.command (
     CONSTRAINT command_response_check CHECK (((jsonb_typeof(response) = 'object'::text) AND (pg_column_size(response) <= 16384)))
 );
 
-CREATE TABLE bible.copy_transfer_receipt (
-    snapshot_id uuid NOT NULL,
-    manifest_sha256 text NOT NULL,
-    content_sha256 text NOT NULL,
-    created_at timestamp with time zone NOT NULL,
-    CONSTRAINT copy_transfer_receipt_content_sha256_check CHECK ((content_sha256 ~ '^[a-f0-9]{64}$'::text)),
-    CONSTRAINT copy_transfer_receipt_manifest_sha256_check CHECK ((manifest_sha256 ~ '^[a-f0-9]{64}$'::text))
-);
-
 CREATE TABLE bible.copy_cleanup_receipt (
     snapshot_id uuid CONSTRAINT copy_transfer_receipt_snapshot_id_not_null NOT NULL,
     manifest_sha256 text CONSTRAINT copy_transfer_receipt_manifest_sha256_not_null NOT NULL,
@@ -409,6 +516,15 @@ CREATE TABLE bible.copy_snapshot (
     CONSTRAINT copy_snapshot_content_sha256_check CHECK ((content_sha256 ~ '^[a-f0-9]{64}$'::text)),
     CONSTRAINT copy_snapshot_manifest_check CHECK ((jsonb_typeof(manifest) = 'object'::text)),
     CONSTRAINT copy_snapshot_manifest_sha256_check CHECK ((manifest_sha256 ~ '^[a-f0-9]{64}$'::text))
+);
+
+CREATE TABLE bible.copy_transfer_receipt (
+    snapshot_id uuid NOT NULL,
+    manifest_sha256 text NOT NULL,
+    content_sha256 text NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    CONSTRAINT copy_transfer_receipt_content_sha256_check CHECK ((content_sha256 ~ '^[a-f0-9]{64}$'::text)),
+    CONSTRAINT copy_transfer_receipt_manifest_sha256_check CHECK ((manifest_sha256 ~ '^[a-f0-9]{64}$'::text))
 );
 
 CREATE TABLE bible.location (
@@ -670,8 +786,20 @@ CREATE TABLE canvas.node (
     create_time timestamp with time zone DEFAULT now() NOT NULL,
     is_delete boolean DEFAULT false NOT NULL,
     title text DEFAULT '备注'::text NOT NULL,
+    input_revision bigint,
     CONSTRAINT ck_canvas_node_title CHECK (((char_length(title) >= 1) AND (char_length(title) <= 128))),
+    CONSTRAINT node_input_revision_check CHECK ((input_revision > 0)),
     CONSTRAINT node_node_action_check CHECK ((node_action = ANY (ARRAY['resource'::text, 'generate'::text, 'edit'::text, 'tool'::text])))
+);
+
+CREATE TABLE canvas.node_input (
+    node_id uuid NOT NULL,
+    input_revision bigint NOT NULL,
+    draft jsonb NOT NULL,
+    created_by uuid NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT node_input_draft_check CHECK ((jsonb_typeof(draft) = 'object'::text)),
+    CONSTRAINT node_input_input_revision_check CHECK ((input_revision > 0))
 );
 
 CREATE TABLE canvas.project_copy_receipt (
@@ -703,6 +831,19 @@ CREATE TABLE canvas.project_copy_snapshot (
     CONSTRAINT project_copy_snapshot_manifest_sha256_check CHECK ((manifest_sha256 ~ '^[0-9a-f]{64}$'::text))
 );
 
+CREATE TABLE canvas.save_receipt (
+    actor_id uuid NOT NULL,
+    idem_key uuid NOT NULL,
+    document_id uuid NOT NULL,
+    request_hash text NOT NULL,
+    result_revision bigint NOT NULL,
+    response_body jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT save_receipt_request_hash_check CHECK ((request_hash ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT save_receipt_response_body_check CHECK ((jsonb_typeof(response_body) = 'object'::text)),
+    CONSTRAINT save_receipt_result_revision_check CHECK ((result_revision > 1))
+);
+
 CREATE TABLE catalog.capability (
     id uuid NOT NULL,
     key text NOT NULL,
@@ -717,6 +858,33 @@ CREATE TABLE catalog.capability (
     CONSTRAINT capability_output_type_check CHECK ((output_type = ANY (ARRAY['json'::text, 'image'::text, 'video'::text, 'audio'::text, 'none'::text])))
 );
 
+CREATE TABLE catalog.capability_default (
+    capability text NOT NULL,
+    release_id uuid NOT NULL,
+    revision bigint DEFAULT 1 NOT NULL,
+    update_time timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT capability_default_revision_check CHECK ((revision > 0))
+);
+
+CREATE TABLE catalog.config_request (
+    actor_id uuid NOT NULL,
+    action text NOT NULL,
+    target_id uuid NOT NULL,
+    request_id uuid NOT NULL,
+    fingerprint text NOT NULL,
+    result jsonb NOT NULL,
+    create_time timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE catalog.model_candidate (
+    id uuid NOT NULL,
+    check_id uuid NOT NULL,
+    provider_model_id text NOT NULL,
+    display_name text NOT NULL,
+    capability text NOT NULL,
+    metadata jsonb NOT NULL
+);
+
 CREATE TABLE catalog.model_profile (
     id uuid NOT NULL,
     model_key text NOT NULL,
@@ -729,6 +897,7 @@ CREATE TABLE catalog.model_profile (
     create_time timestamp with time zone DEFAULT now() NOT NULL,
     update_time timestamp with time zone DEFAULT now() NOT NULL,
     is_delete boolean DEFAULT false NOT NULL,
+    active_release_id uuid,
     CONSTRAINT model_profile_display_name_check CHECK ((btrim(display_name) <> ''::text)),
     CONSTRAINT model_profile_model_key_check CHECK ((btrim(model_key) <> ''::text)),
     CONSTRAINT model_profile_revision_check CHECK ((revision > 0)),
@@ -761,6 +930,37 @@ CREATE TABLE catalog.model_profile_version (
     CONSTRAINT model_profile_version_provider_model_id_check CHECK ((btrim(provider_model_id) <> ''::text)),
     CONSTRAINT model_profile_version_queue_check CHECK ((btrim(queue) <> ''::text)),
     CONSTRAINT model_profile_version_version_no_check CHECK ((version_no > 0))
+);
+
+CREATE TABLE catalog.model_release (
+    id uuid NOT NULL,
+    model_id uuid NOT NULL,
+    model_version_id uuid NOT NULL,
+    price_version_id uuid NOT NULL,
+    config_version_id uuid NOT NULL,
+    status text DEFAULT 'draft'::text NOT NULL,
+    upstream_cost jsonb NOT NULL,
+    revision bigint DEFAULT 1 NOT NULL,
+    create_time timestamp with time zone DEFAULT now() NOT NULL,
+    activated_at timestamp with time zone,
+    CONSTRAINT model_release_revision_check CHECK ((revision > 0)),
+    CONSTRAINT model_release_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'retired'::text]))),
+    CONSTRAINT model_release_upstream_cost_check CHECK ((jsonb_typeof(upstream_cost) = 'object'::text))
+);
+
+CREATE TABLE catalog.model_validation (
+    id uuid NOT NULL,
+    release_id uuid NOT NULL,
+    credential_id uuid NOT NULL,
+    adapter_version text NOT NULL,
+    mode text NOT NULL,
+    input_digest text NOT NULL,
+    operation_id uuid NOT NULL,
+    status text NOT NULL,
+    evidence jsonb DEFAULT '{}'::jsonb NOT NULL,
+    create_time timestamp with time zone DEFAULT now() NOT NULL,
+    completed_at timestamp with time zone,
+    CONSTRAINT model_validation_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'running'::text, 'succeeded'::text, 'failed'::text, 'unknown'::text])))
 );
 
 CREATE TABLE catalog.price_rule_version (
@@ -797,6 +997,7 @@ CREATE TABLE catalog.provider (
     create_time timestamp with time zone DEFAULT now() NOT NULL,
     update_time timestamp with time zone DEFAULT now() NOT NULL,
     is_delete boolean DEFAULT false NOT NULL,
+    current_config_version_id uuid,
     CONSTRAINT provider_adapter_key_check CHECK ((btrim(adapter_key) <> ''::text)),
     CONSTRAINT provider_concurrency_limit_check CHECK ((concurrency_limit > 0)),
     CONSTRAINT provider_key_check CHECK ((btrim(key) <> ''::text)),
@@ -805,6 +1006,37 @@ CREATE TABLE catalog.provider (
     CONSTRAINT provider_region_check CHECK ((region = ANY (ARRAY['domestic'::text, 'overseas'::text]))),
     CONSTRAINT provider_revision_check CHECK ((revision > 0)),
     CONSTRAINT provider_status_check CHECK ((status = ANY (ARRAY['active'::text, 'disabled'::text])))
+);
+
+CREATE TABLE catalog.provider_check (
+    id uuid NOT NULL,
+    actor_id uuid NOT NULL,
+    provider_id uuid NOT NULL,
+    config_version_id uuid NOT NULL,
+    credential_id uuid NOT NULL,
+    kind text NOT NULL,
+    status text NOT NULL,
+    auth_result text DEFAULT 'unknown'::text NOT NULL,
+    adapter_result text DEFAULT 'unknown'::text NOT NULL,
+    discovery_result text DEFAULT 'unknown'::text NOT NULL,
+    error_code text,
+    create_time timestamp with time zone DEFAULT now() NOT NULL,
+    completed_at timestamp with time zone,
+    CONSTRAINT provider_check_kind_check CHECK ((kind = ANY (ARRAY['connectivity'::text, 'discovery'::text]))),
+    CONSTRAINT provider_check_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'running'::text, 'completed'::text, 'failed'::text])))
+);
+
+CREATE TABLE catalog.provider_config_version (
+    id uuid NOT NULL,
+    provider_id uuid NOT NULL,
+    preset_version_id uuid,
+    version_no integer NOT NULL,
+    config jsonb NOT NULL,
+    content_hash text NOT NULL,
+    create_time timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT provider_config_version_config_check CHECK ((jsonb_typeof(config) = 'object'::text)),
+    CONSTRAINT provider_config_version_content_hash_check CHECK ((length(content_hash) = 64)),
+    CONSTRAINT provider_config_version_version_no_check CHECK ((version_no > 0))
 );
 
 CREATE TABLE catalog.provider_credential (
@@ -825,7 +1057,237 @@ CREATE TABLE catalog.provider_credential (
     CONSTRAINT provider_credential_label_check CHECK ((btrim(label) <> ''::text)),
     CONSTRAINT provider_credential_last4_check CHECK ((char_length(last4) = 4)),
     CONSTRAINT provider_credential_last_test_result_check CHECK ((last_test_result = ANY (ARRAY['ok'::text, 'auth_failed'::text, 'unreachable'::text, 'timeout'::text, 'unsupported'::text]))),
-    CONSTRAINT provider_credential_status_check CHECK ((status = ANY (ARRAY['active'::text, 'disabled'::text])))
+    CONSTRAINT provider_credential_status_check CHECK ((status = ANY (ARRAY['active'::text, 'draining'::text, 'disabled'::text])))
+);
+
+CREATE TABLE catalog.provider_preset (
+    id uuid NOT NULL,
+    slug text NOT NULL,
+    origin text NOT NULL,
+    parent_id uuid,
+    archived boolean DEFAULT false NOT NULL,
+    emergency_disabled boolean DEFAULT false NOT NULL,
+    revision bigint DEFAULT 1 NOT NULL,
+    update_time timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT provider_preset_origin_check CHECK ((origin = ANY (ARRAY['builtin'::text, 'custom'::text]))),
+    CONSTRAINT provider_preset_revision_check CHECK ((revision > 0)),
+    CONSTRAINT provider_preset_slug_check CHECK ((slug ~ '^[a-z][a-z0-9_-]{0,63}$'::text))
+);
+
+CREATE TABLE catalog.provider_preset_version (
+    id uuid NOT NULL,
+    preset_id uuid NOT NULL,
+    version_no integer NOT NULL,
+    payload jsonb NOT NULL,
+    content_hash text NOT NULL,
+    create_time timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT provider_preset_version_content_hash_check CHECK ((length(content_hash) = 64)),
+    CONSTRAINT provider_preset_version_payload_check CHECK ((jsonb_typeof(payload) = 'object'::text)),
+    CONSTRAINT provider_preset_version_version_no_check CHECK ((version_no > 0))
+);
+
+CREATE TABLE identity.auth_challenge (
+    id uuid NOT NULL,
+    operation_id uuid NOT NULL,
+    purpose text NOT NULL,
+    email_key text NOT NULL,
+    user_id uuid,
+    email_version bigint,
+    credential_epoch bigint,
+    proof_digest bytea NOT NULL,
+    proof_key_id text NOT NULL,
+    flow_secret_digest bytea,
+    attempts smallint DEFAULT 0 NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    consumed_at timestamp with time zone,
+    revoked_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    invitation_id uuid,
+    invitation_revision bigint,
+    CONSTRAINT auth_challenge_attempts_check CHECK (((attempts >= 0) AND (attempts <= 5))),
+    CONSTRAINT auth_challenge_check CHECK ((expires_at > created_at)),
+    CONSTRAINT auth_challenge_credential_epoch_check CHECK ((credential_epoch > 0)),
+    CONSTRAINT auth_challenge_email_version_check CHECK ((email_version > 0)),
+    CONSTRAINT auth_challenge_flow_secret_digest_check CHECK ((octet_length(flow_secret_digest) = 32)),
+    CONSTRAINT auth_challenge_invitation_revision_check CHECK ((invitation_revision > 0)),
+    CONSTRAINT auth_challenge_proof_digest_check CHECK ((octet_length(proof_digest) = 32)),
+    CONSTRAINT auth_challenge_purpose_check CHECK ((purpose = ANY (ARRAY['registration_code'::text, 'registration_grant'::text, 'password_reset'::text, 'email_old'::text, 'email_new'::text, 'deletion_confirm'::text, 'migration_bind'::text])))
+);
+
+CREATE TABLE identity.auth_event (
+    id uuid NOT NULL,
+    account_id uuid,
+    action text NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    CONSTRAINT auth_event_action_check CHECK ((action = ANY (ARRAY['registered'::text, 'logged_in'::text, 'login_failed'::text, 'logged_out'::text, 'password_changed'::text])))
+);
+
+CREATE TABLE identity.authority_proposal (
+    id uuid NOT NULL,
+    kind text NOT NULL,
+    team_id uuid,
+    source_user_id uuid NOT NULL,
+    target_user_id uuid NOT NULL,
+    status text DEFAULT 'pending'::text NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    reason text NOT NULL,
+    source_authority_revision bigint NOT NULL,
+    target_revision bigint NOT NULL,
+    team_revision bigint,
+    revision bigint DEFAULT 1 NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    target_email_version bigint DEFAULT 1 NOT NULL,
+    target_credential_epoch bigint DEFAULT 1 NOT NULL,
+    CONSTRAINT authority_proposal_check CHECK (((kind = 'platform_grant'::text) = (team_id IS NULL))),
+    CONSTRAINT authority_proposal_check1 CHECK (((team_id IS NULL) = (team_revision IS NULL))),
+    CONSTRAINT authority_proposal_check2 CHECK ((source_user_id <> target_user_id)),
+    CONSTRAINT authority_proposal_kind_check CHECK ((kind = ANY (ARRAY['platform_grant'::text, 'team_transfer'::text, 'platform_takeover'::text]))),
+    CONSTRAINT authority_proposal_reason_check CHECK (((char_length(reason) >= 5) AND (char_length(reason) <= 500))),
+    CONSTRAINT authority_proposal_revision_check CHECK ((revision > 0)),
+    CONSTRAINT authority_proposal_source_authority_revision_check CHECK ((source_authority_revision > 0)),
+    CONSTRAINT authority_proposal_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'accepted'::text, 'declined'::text, 'cancelled'::text, 'expired'::text]))),
+    CONSTRAINT authority_proposal_target_credential_epoch_check CHECK ((target_credential_epoch > 0)),
+    CONSTRAINT authority_proposal_target_email_version_check CHECK ((target_email_version > 0)),
+    CONSTRAINT authority_proposal_target_revision_check CHECK ((target_revision > 0))
+);
+
+CREATE TABLE identity.directory_export (
+    id uuid NOT NULL,
+    actor_id uuid NOT NULL,
+    team_id uuid,
+    scope_kind text NOT NULL,
+    scope_id uuid NOT NULL,
+    request_key uuid NOT NULL,
+    actor_session_id uuid NOT NULL,
+    credential_epoch bigint NOT NULL,
+    platform_epoch bigint NOT NULL,
+    team_revision bigint DEFAULT 0 NOT NULL,
+    filter_snapshot jsonb NOT NULL,
+    snapshot_payload bytea,
+    snapshot_key_id text NOT NULL,
+    as_of timestamp with time zone NOT NULL,
+    status text NOT NULL,
+    row_count integer NOT NULL,
+    private_object_id uuid,
+    expires_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    error_category text DEFAULT ''::text NOT NULL,
+    CONSTRAINT directory_export_check CHECK ((((scope_kind = 'platform'::text) AND (team_id IS NULL) AND (scope_id = '00000000-0000-0000-0000-000000000000'::uuid)) OR ((scope_kind = 'team'::text) AND (team_id IS NOT NULL) AND (scope_id = team_id)))),
+    CONSTRAINT directory_export_row_count_check CHECK (((row_count >= 0) AND (row_count <= 10000))),
+    CONSTRAINT directory_export_scope_kind_check CHECK ((scope_kind = ANY (ARRAY['platform'::text, 'team'::text]))),
+    CONSTRAINT directory_export_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'running'::text, 'completed'::text, 'failed'::text, 'expired'::text, 'revoked'::text])))
+);
+
+CREATE TABLE identity.email_budget (
+    bucket_key text NOT NULL,
+    sent_at timestamp with time zone[] DEFAULT '{}'::timestamp with time zone[] NOT NULL,
+    failed_at timestamp with time zone[] DEFAULT '{}'::timestamp with time zone[] NOT NULL,
+    revision bigint DEFAULT 1 NOT NULL,
+    CONSTRAINT email_budget_revision_check CHECK ((revision > 0))
+);
+
+CREATE TABLE identity.invitation (
+    id uuid NOT NULL,
+    kind text NOT NULL,
+    team_id uuid,
+    email_key text NOT NULL,
+    team_role text,
+    inviter_id uuid NOT NULL,
+    status text DEFAULT 'pending'::text NOT NULL,
+    token_hash bytea NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    accepted_user_id uuid,
+    membership_revision bigint,
+    revision bigint DEFAULT 1 NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    platform_issued boolean DEFAULT false NOT NULL,
+    CONSTRAINT invitation_check CHECK ((((kind = 'account'::text) AND (team_id IS NULL) AND (team_role IS NULL)) OR ((kind = 'team'::text) AND (team_id IS NOT NULL) AND (team_role IS NOT NULL)))),
+    CONSTRAINT invitation_kind_check CHECK ((kind = ANY (ARRAY['account'::text, 'team'::text]))),
+    CONSTRAINT invitation_revision_check CHECK ((revision > 0)),
+    CONSTRAINT invitation_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'accepted'::text, 'declined'::text, 'revoked'::text, 'expired'::text]))),
+    CONSTRAINT invitation_team_role_check CHECK ((team_role = ANY (ARRAY['member'::text, 'team_admin'::text]))),
+    CONSTRAINT invitation_token_hash_check CHECK ((octet_length(token_hash) = 32))
+);
+
+CREATE TABLE identity.login_guard (
+    login_key text NOT NULL,
+    failure_times timestamp with time zone[] DEFAULT '{}'::timestamp with time zone[] NOT NULL,
+    locked_until timestamp with time zone,
+    CONSTRAINT login_guard_failure_times_check CHECK ((cardinality(failure_times) <= 5)),
+    CONSTRAINT login_guard_login_key_check CHECK ((login_key ~ '^[a-z0-9._-]{1,64}$'::text))
+);
+
+CREATE TABLE identity.mail_delivery (
+    event_id uuid NOT NULL,
+    challenge_id uuid,
+    template text NOT NULL,
+    recipient text NOT NULL,
+    encrypted_payload bytea,
+    key_id text,
+    status text DEFAULT 'pending'::text NOT NULL,
+    attempt_count integer DEFAULT 0 NOT NULL,
+    next_attempt_at timestamp with time zone NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    lease_until timestamp with time zone,
+    provider_message_id text,
+    error_category text,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    invitation_id uuid,
+    invitation_revision bigint,
+    CONSTRAINT mail_delivery_attempt_count_check CHECK ((attempt_count >= 0)),
+    CONSTRAINT mail_delivery_check CHECK (((encrypted_payload IS NULL) = (key_id IS NULL))),
+    CONSTRAINT mail_delivery_invitation_revision_check CHECK ((invitation_revision > 0)),
+    CONSTRAINT mail_delivery_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'leased'::text, 'submitted'::text, 'delivered'::text, 'bounced'::text, 'failed'::text, 'expired'::text])))
+);
+
+CREATE TABLE identity.platform_settings (
+    singleton boolean DEFAULT true NOT NULL,
+    registration_enabled boolean DEFAULT false NOT NULL,
+    team_creation_enabled boolean DEFAULT false NOT NULL,
+    revision bigint DEFAULT 1 NOT NULL,
+    updated_by uuid,
+    update_time timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT platform_settings_revision_check CHECK ((revision > 0)),
+    CONSTRAINT platform_settings_singleton_check CHECK (singleton)
+);
+
+CREATE TABLE identity.security_event (
+    id uuid NOT NULL,
+    actor_id uuid,
+    target_user_id uuid,
+    team_id uuid,
+    scope_kind text NOT NULL,
+    action text NOT NULL,
+    result text NOT NULL,
+    reason text DEFAULT ''::text NOT NULL,
+    request_id text DEFAULT ''::text NOT NULL,
+    safe_diff jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    CONSTRAINT security_event_safe_diff_check CHECK ((jsonb_typeof(safe_diff) = 'object'::text))
+);
+
+CREATE TABLE identity.session_refresh_token (
+    id uuid NOT NULL,
+    session_id uuid NOT NULL,
+    generation bigint NOT NULL,
+    token_digest bytea NOT NULL,
+    issued_at timestamp with time zone NOT NULL,
+    consumed_at timestamp with time zone,
+    revoked_at timestamp with time zone,
+    rotation_request_id uuid,
+    replay_until timestamp with time zone,
+    receipt_ciphertext bytea,
+    CONSTRAINT session_refresh_token_check CHECK (((consumed_at IS NULL) = (rotation_request_id IS NULL))),
+    CONSTRAINT session_refresh_token_check1 CHECK (((replay_until IS NULL) = (receipt_ciphertext IS NULL))),
+    CONSTRAINT session_refresh_token_check2 CHECK (((replay_until IS NULL) OR ((consumed_at IS NOT NULL) AND (replay_until > consumed_at) AND (replay_until <= (consumed_at + '00:00:10'::interval)) AND (octet_length(receipt_ciphertext) > 0)))),
+    CONSTRAINT session_refresh_token_check3 CHECK (((consumed_at IS NULL) OR (consumed_at >= issued_at))),
+    CONSTRAINT session_refresh_token_check4 CHECK (((revoked_at IS NULL) OR (revoked_at >= issued_at))),
+    CONSTRAINT session_refresh_token_generation_check CHECK ((generation >= 0)),
+    CONSTRAINT session_refresh_token_token_digest_check CHECK ((octet_length(token_digest) = 32))
 );
 
 CREATE TABLE identity."user" (
@@ -846,46 +1308,60 @@ CREATE TABLE identity."user" (
     create_time timestamp with time zone DEFAULT now() NOT NULL,
     update_time timestamp with time zone DEFAULT now() NOT NULL,
     is_delete boolean DEFAULT false NOT NULL,
+    email_key text,
+    email_verified_at timestamp with time zone,
+    email_version bigint DEFAULT 1 NOT NULL,
+    platform_role text DEFAULT 'creator'::text NOT NULL,
+    platform_epoch bigint DEFAULT 1 NOT NULL,
+    avatar_asset_id uuid,
+    terms_version text,
+    terms_accepted_at timestamp with time zone,
+    theme text DEFAULT 'dark'::text NOT NULL,
+    prompt_suffix text DEFAULT ''::text NOT NULL,
+    deleted_at timestamp with time zone,
     CONSTRAINT user_display_name_check CHECK (((char_length(display_name) >= 1) AND (char_length(display_name) <= 50))),
+    CONSTRAINT user_email_key_check CHECK (((email_key IS NULL) OR (((octet_length(email_key) >= 3) AND (octet_length(email_key) <= 254)) AND (email_key = lower(btrim(email_key))) AND (email_key !~ '[^\x21-\x7e]'::text) AND (email_key ~ '^[^@]+@[^@]+$'::text)))),
+    CONSTRAINT user_email_proof_check CHECK (((email_key IS NULL) = (email_verified_at IS NULL))),
+    CONSTRAINT user_email_version_check CHECK ((email_version > 0)),
     CONSTRAINT user_failed_login_count_check CHECK ((failed_login_count >= 0)),
+    CONSTRAINT user_platform_epoch_check CHECK ((platform_epoch > 0)),
+    CONSTRAINT user_platform_role_check CHECK ((platform_role = ANY (ARRAY['creator'::text, 'platform_admin'::text]))),
+    CONSTRAINT user_prompt_suffix_check CHECK ((char_length(prompt_suffix) <= 2000)),
     CONSTRAINT user_revision_check CHECK ((revision > 0)),
     CONSTRAINT user_role_check CHECK ((role = ANY (ARRAY['admin'::text, 'producer'::text]))),
     CONSTRAINT user_session_epoch_check CHECK ((session_epoch > 0)),
-    CONSTRAINT user_status_check CHECK ((status = ANY (ARRAY['active'::text, 'disabled'::text])))
+    CONSTRAINT user_status_check CHECK ((status = ANY (ARRAY['active'::text, 'disabled'::text]))),
+    CONSTRAINT user_terms_check CHECK (((terms_version IS NULL) = (terms_accepted_at IS NULL))),
+    CONSTRAINT user_theme_check CHECK ((theme = ANY (ARRAY['light'::text, 'dark'::text, 'system'::text])))
 );
-
--- M1 认证增量：登录名全局唯一，会话摘要、滚动失败窗口与安全事件。
-CREATE UNIQUE INDEX uq_user_login_global ON identity."user" (lower(btrim(login_name::text))) WHERE NOT is_delete;
 
 CREATE TABLE identity.user_session (
-    id uuid PRIMARY KEY,
+    id uuid NOT NULL,
     account_id uuid NOT NULL,
-    token_hash bytea NOT NULL UNIQUE CHECK (octet_length(token_hash) = 32),
-    credential_revision bigint NOT NULL CHECK (credential_revision > 0),
-    created_at timestamptz NOT NULL,
-    last_active_at timestamptz NOT NULL,
-    absolute_expires_at timestamptz NOT NULL,
+    token_hash bytea NOT NULL,
+    credential_revision bigint NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    last_active_at timestamp with time zone NOT NULL,
+    absolute_expires_at timestamp with time zone NOT NULL,
     persistent boolean NOT NULL,
-    protocol_version smallint NOT NULL DEFAULT 1 CHECK (protocol_version IN (1,2)),
-    idle_timeout_seconds integer NOT NULL DEFAULT 43200 CHECK (idle_timeout_seconds > 0),
-    refresh_generation bigint NOT NULL DEFAULT 0 CHECK (refresh_generation >= 0),
-    revoked_at timestamptz,
-    CHECK (last_active_at >= created_at AND absolute_expires_at > created_at)
-);
-CREATE INDEX user_session_account_idx ON identity.user_session (account_id);
-
-CREATE TABLE identity.login_guard (
-    login_key text PRIMARY KEY CHECK (login_key ~ '^[a-z0-9._-]{1,64}$'),
-    failure_times timestamptz[] NOT NULL DEFAULT '{}',
-    locked_until timestamptz,
-    CHECK (cardinality(failure_times) <= 5)
-);
-
-CREATE TABLE identity.auth_event (
-    id uuid PRIMARY KEY,
-    account_id uuid,
-    action text NOT NULL CHECK (action IN ('registered','logged_in','login_failed','logged_out','password_changed')),
-    created_at timestamptz NOT NULL
+    protocol_version smallint DEFAULT 1 NOT NULL,
+    idle_timeout_seconds integer DEFAULT 43200 NOT NULL,
+    refresh_generation bigint DEFAULT 0 NOT NULL,
+    revoked_at timestamp with time zone,
+    device_summary text DEFAULT ''::text NOT NULL,
+    reauth_at timestamp with time zone,
+    reauth_epoch bigint,
+    csrf_hash bytea,
+    CONSTRAINT user_session_check CHECK (((last_active_at >= created_at) AND (absolute_expires_at > created_at))),
+    CONSTRAINT user_session_credential_revision_check CHECK ((credential_revision > 0)),
+    CONSTRAINT user_session_csrf_hash_check CHECK ((octet_length(csrf_hash) = 32)),
+    CONSTRAINT user_session_device_summary_check CHECK ((char_length(device_summary) <= 256)),
+    CONSTRAINT user_session_idle_timeout_seconds_check CHECK ((idle_timeout_seconds > 0)),
+    CONSTRAINT user_session_protocol_version_check CHECK ((protocol_version = ANY (ARRAY[1, 2]))),
+    CONSTRAINT user_session_reauth_check CHECK (((reauth_at IS NULL) = (reauth_epoch IS NULL))),
+    CONSTRAINT user_session_reauth_epoch_check CHECK ((reauth_epoch > 0)),
+    CONSTRAINT user_session_refresh_generation_check CHECK ((refresh_generation >= 0)),
+    CONSTRAINT user_session_token_hash_check CHECK ((octet_length(token_hash) = 32))
 );
 
 CREATE TABLE infra.idempotency_record (
@@ -1004,7 +1480,7 @@ CREATE TABLE media.library_item (
     CONSTRAINT library_item_revision_check CHECK ((revision > 0)),
     CONSTRAINT library_item_source_label_check CHECK ((char_length(source_label) <= 240)),
     CONSTRAINT library_item_tags_check CHECK (((jsonb_typeof(tags) = 'array'::text) AND (jsonb_array_length(tags) <= 32))),
-    CONSTRAINT library_item_title_check CHECK ((((char_length(title) >= 1) AND (char_length(title) <= 240)) AND (btrim(title) <> ''::text)))
+    CONSTRAINT library_item_title_check CHECK (((char_length(title) >= 1) AND (char_length(title) <= 240) AND (btrim(title) <> ''::text)))
 );
 
 CREATE TABLE media.media_asset (
@@ -1043,6 +1519,7 @@ CREATE TABLE media.media_asset (
     is_delete boolean DEFAULT false NOT NULL,
     personal_org_id uuid,
     personal_actor_id uuid,
+    object_location_id uuid,
     CONSTRAINT media_asset_byte_size_check CHECK ((byte_size >= 0)),
     CONSTRAINT media_asset_kind_check CHECK ((kind = ANY (ARRAY['image'::text, 'video'::text, 'audio'::text, 'document'::text, 'model'::text]))),
     CONSTRAINT media_asset_model_facts_check CHECK (((kind <> 'model'::text) OR ((origin = 'upload'::text) AND (((mime_type = 'model/gltf-binary'::text) AND (codec = 'glb2'::text)) OR ((mime_type = 'model/gltf+json'::text) AND (codec = 'gltf2'::text))) AND ((byte_size >= 1) AND (byte_size <= 67108864)) AND (codec IS NOT NULL) AND (width IS NULL) AND (height IS NULL) AND (duration_ms IS NULL) AND (fps IS NULL) AND (audio_channels IS NULL)))),
@@ -1052,6 +1529,27 @@ CREATE TABLE media.media_asset (
     CONSTRAINT media_asset_region_check CHECK ((region = ANY (ARRAY['domestic'::text, 'overseas'::text]))),
     CONSTRAINT media_asset_revision_check CHECK ((revision > 0)),
     CONSTRAINT media_asset_status_check CHECK ((status = ANY (ARRAY['uploading'::text, 'processing'::text, 'ready'::text, 'rejected'::text, 'failed'::text])))
+);
+
+CREATE TABLE media.object_location (
+    id uuid NOT NULL,
+    profile_id text NOT NULL,
+    bucket text NOT NULL,
+    object_key text NOT NULL,
+    state text DEFAULT 'reserved'::text NOT NULL,
+    byte_size bigint,
+    sha256 text,
+    mime_type text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    owner_session_id uuid,
+    owner_intent_id uuid,
+    write_until timestamp with time zone,
+    CONSTRAINT object_location_byte_size_check CHECK ((byte_size >= 0)),
+    CONSTRAINT object_location_object_key_check CHECK ((((octet_length(object_key) >= 1) AND (octet_length(object_key) <= 696)) AND (object_key !~ '[[:cntrl:]\\]'::text) AND (object_key !~ '(^|/)(\.|\.\.|)(/|$)'::text))),
+    CONSTRAINT object_location_sha256_check CHECK ((sha256 ~ '^[a-f0-9]{64}$'::text)),
+    CONSTRAINT object_location_single_owner_check CHECK ((num_nonnulls(owner_session_id, owner_intent_id) <= 1)),
+    CONSTRAINT object_location_state_check CHECK ((state = ANY (ARRAY['reserved'::text, 'present'::text, 'accepted'::text, 'delete_pending'::text, 'deleted'::text, 'unknown'::text])))
 );
 
 CREATE TABLE media.package_command (
@@ -1111,6 +1609,7 @@ CREATE TABLE media.package_object (
     content_type text NOT NULL,
     sha256 text NOT NULL,
     status text DEFAULT 'pending'::text NOT NULL,
+    object_location_id uuid,
     CONSTRAINT package_object_byte_size_check CHECK (((byte_size >= 1) AND (byte_size <= '2147483648'::bigint))),
     CONSTRAINT package_object_object_index_check CHECK (((object_index >= 0) AND (object_index <= 14999))),
     CONSTRAINT package_object_sha256_check CHECK ((sha256 ~ '^[0-9a-f]{64}$'::text)),
@@ -1131,6 +1630,8 @@ CREATE TABLE media.project_copy_object (
     status text DEFAULT 'pending'::text NOT NULL,
     create_time timestamp with time zone DEFAULT now() NOT NULL,
     update_time timestamp with time zone DEFAULT now() NOT NULL,
+    source_location_id uuid,
+    target_location_id uuid,
     CONSTRAINT project_copy_object_byte_size_check CHECK ((byte_size > 0)),
     CONSTRAINT project_copy_object_check CHECK ((source_object_key <> target_object_key)),
     CONSTRAINT project_copy_object_sha256_check CHECK ((sha256 ~ '^[0-9a-f]{64}$'::text)),
@@ -1238,6 +1739,7 @@ CREATE TABLE media.purge_object (
     verified boolean DEFAULT false NOT NULL,
     removal_started boolean DEFAULT false NOT NULL,
     removed boolean DEFAULT false NOT NULL,
+    object_location_id uuid,
     CONSTRAINT purge_object_byte_size_check CHECK (((byte_size >= 1) AND (byte_size <= '2147483648'::bigint))),
     CONSTRAINT purge_object_check CHECK (((NOT removal_started) OR (verified AND (sha256 IS NOT NULL) AND (byte_size IS NOT NULL)))),
     CONSTRAINT purge_object_check1 CHECK (((NOT removed) OR removal_started)),
@@ -1256,7 +1758,185 @@ CREATE TABLE media.rendition (
     create_time timestamp with time zone DEFAULT now() NOT NULL,
     update_time timestamp with time zone DEFAULT now() NOT NULL,
     is_delete boolean DEFAULT false NOT NULL,
+    object_location_id uuid,
     CONSTRAINT rendition_kind_check CHECK ((kind = ANY (ARRAY['thumb_256'::text, 'thumb_640'::text, 'poster'::text, 'proxy_720p'::text, 'waveform'::text])))
+);
+
+CREATE TABLE media.storage_activation (
+    revision text NOT NULL,
+    expected_revision text NOT NULL,
+    profile_id text NOT NULL,
+    activated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT storage_activation_revision_check CHECK ((revision ~ '^[a-z][a-z0-9-]{0,62}$'::text))
+);
+
+CREATE TABLE media.storage_activation_guard (
+    revision text NOT NULL,
+    config_sha256 text NOT NULL,
+    deployment_evidence_sha256 text NOT NULL,
+    activated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT storage_activation_guard_config_sha256_check CHECK ((config_sha256 ~ '^[a-f0-9]{64}$'::text))
+);
+
+CREATE TABLE media.storage_bucket_evidence (
+    id uuid NOT NULL,
+    profile_id text NOT NULL,
+    resource_identity text NOT NULL,
+    config_sha256 text NOT NULL,
+    evidence_sha256 text NOT NULL,
+    contract text NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    CONSTRAINT storage_bucket_evidence_config_sha256_check CHECK ((config_sha256 ~ '^[a-f0-9]{64}$'::text)),
+    CONSTRAINT storage_bucket_evidence_contract_check CHECK ((contract = 'private-flat-never-versioned-standard-v1'::text)),
+    CONSTRAINT storage_bucket_evidence_evidence_sha256_check CHECK ((evidence_sha256 ~ '^[a-f0-9]{64}$'::text))
+);
+
+CREATE TABLE media.storage_config_revision (
+    revision text NOT NULL,
+    config_sha256 text NOT NULL,
+    profile_id text NOT NULL,
+    upload_policy jsonb NOT NULL,
+    session_ttl_seconds bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT storage_config_revision_config_sha256_check CHECK ((config_sha256 ~ '^[a-f0-9]{64}$'::text)),
+    CONSTRAINT storage_config_revision_session_ttl_seconds_check CHECK (((session_ttl_seconds >= 60) AND (session_ttl_seconds <= 604800))),
+    CONSTRAINT storage_config_revision_upload_policy_check CHECK ((jsonb_typeof(upload_policy) = 'object'::text))
+);
+
+CREATE TABLE media.storage_deployment_evidence (
+    config_sha256 text NOT NULL,
+    evidence_sha256 text NOT NULL,
+    recorded_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT storage_deployment_evidence_config_sha256_check CHECK ((config_sha256 ~ '^[a-f0-9]{64}$'::text)),
+    CONSTRAINT storage_deployment_evidence_evidence_sha256_check CHECK ((evidence_sha256 ~ '^[a-f0-9]{64}$'::text))
+);
+
+CREATE TABLE media.storage_legacy_binding (
+    singleton integer NOT NULL,
+    profile_id text NOT NULL,
+    bucket text NOT NULL,
+    resource_identity text NOT NULL,
+    evidence_sha256 text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT storage_legacy_binding_evidence_sha256_check CHECK ((evidence_sha256 ~ '^[a-f0-9]{64}$'::text)),
+    CONSTRAINT storage_legacy_binding_resource_identity_check CHECK ((resource_identity ~ '^[a-f0-9]{64}$'::text)),
+    CONSTRAINT storage_legacy_binding_singleton_check CHECK ((singleton = 1))
+);
+
+CREATE TABLE media.storage_legacy_receipt (
+    profile_id text NOT NULL,
+    bucket text NOT NULL,
+    object_key text NOT NULL,
+    snapshot_sha256 text NOT NULL,
+    location_id uuid NOT NULL,
+    byte_size bigint NOT NULL,
+    sha256 text NOT NULL,
+    mime_type text NOT NULL,
+    reference_count integer NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT storage_legacy_receipt_byte_size_check CHECK ((byte_size >= 0)),
+    CONSTRAINT storage_legacy_receipt_reference_count_check CHECK ((reference_count > 0)),
+    CONSTRAINT storage_legacy_receipt_sha256_check CHECK ((sha256 ~ '^[a-f0-9]{64}$'::text)),
+    CONSTRAINT storage_legacy_receipt_snapshot_sha256_check CHECK ((snapshot_sha256 ~ '^[a-f0-9]{64}$'::text))
+);
+
+CREATE TABLE media.storage_legacy_tombstone (
+    profile_id text NOT NULL,
+    bucket text NOT NULL,
+    object_key text NOT NULL,
+    snapshot_sha256 text NOT NULL,
+    location_id uuid NOT NULL,
+    reference_count integer NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT storage_legacy_tombstone_reference_count_check CHECK ((reference_count > 0)),
+    CONSTRAINT storage_legacy_tombstone_snapshot_sha256_check CHECK ((snapshot_sha256 ~ '^[a-f0-9]{64}$'::text))
+);
+
+CREATE TABLE media.storage_probe_evidence (
+    id uuid NOT NULL,
+    profile_id text NOT NULL,
+    resource_identity text NOT NULL,
+    config_sha256 text NOT NULL,
+    evidence_sha256 text NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    recorded_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT storage_probe_evidence_config_sha256_check CHECK ((config_sha256 ~ '^[a-f0-9]{64}$'::text)),
+    CONSTRAINT storage_probe_evidence_evidence_sha256_check CHECK ((evidence_sha256 ~ '^[a-f0-9]{64}$'::text))
+);
+
+CREATE TABLE media.storage_probe_intent (
+    id uuid NOT NULL,
+    profile_id text NOT NULL,
+    bucket text NOT NULL,
+    config_sha256 text NOT NULL,
+    sentinel_key text NOT NULL,
+    removal_key text,
+    mode text NOT NULL,
+    state text DEFAULT 'running'::text NOT NULL,
+    evidence_sha256 text,
+    created_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    updated_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    CONSTRAINT storage_probe_intent_check CHECK ((((mode = 'read_write'::text) AND (removal_key = (sentinel_key || '.remove'::text))) OR ((mode = 'read_only'::text) AND (removal_key IS NULL)))),
+    CONSTRAINT storage_probe_intent_config_sha256_check CHECK ((config_sha256 ~ '^[a-f0-9]{64}$'::text)),
+    CONSTRAINT storage_probe_intent_evidence_sha256_check CHECK ((evidence_sha256 ~ '^[a-f0-9]{64}$'::text)),
+    CONSTRAINT storage_probe_intent_mode_check CHECK ((mode = ANY (ARRAY['read_only'::text, 'read_write'::text]))),
+    CONSTRAINT storage_probe_intent_state_check CHECK ((state = ANY (ARRAY['running'::text, 'complete'::text, 'cleaning'::text, 'cleaned'::text])))
+);
+
+CREATE TABLE media.storage_profile (
+    id text NOT NULL,
+    provider text NOT NULL,
+    endpoint text NOT NULL,
+    signing_endpoint text NOT NULL,
+    region text NOT NULL,
+    bucket text NOT NULL,
+    addressing_style text NOT NULL,
+    resource_identity text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT storage_profile_id_check CHECK ((id ~ '^[a-z][a-z0-9-]{0,62}$'::text)),
+    CONSTRAINT storage_profile_provider_check CHECK ((provider = ANY (ARRAY['minio'::text, 'cos'::text, 'tos'::text]))),
+    CONSTRAINT storage_profile_resource_identity_check CHECK ((resource_identity ~ '^[a-f0-9]{64}$'::text))
+);
+
+CREATE TABLE media.storage_route (
+    singleton integer DEFAULT 1 NOT NULL,
+    revision text NOT NULL,
+    profile_id text NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT storage_route_revision_check CHECK ((revision ~ '^[a-z][a-z0-9-]{0,62}$'::text)),
+    CONSTRAINT storage_route_singleton_check CHECK ((singleton = 1))
+);
+
+CREATE TABLE media.storage_runtime (
+    instance_id uuid NOT NULL,
+    role text NOT NULL,
+    revision text NOT NULL,
+    config_sha256 text NOT NULL,
+    capabilities jsonb NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT storage_runtime_capabilities_check CHECK ((jsonb_typeof(capabilities) = 'array'::text)),
+    CONSTRAINT storage_runtime_config_sha256_check CHECK ((config_sha256 ~ '^[a-f0-9]{64}$'::text)),
+    CONSTRAINT storage_runtime_role_check CHECK ((role = ANY (ARRAY['api'::text, 'worker'::text, 'relay'::text, 'setup'::text])))
+);
+
+CREATE TABLE media.storage_work_intent (
+    id uuid NOT NULL,
+    kind text NOT NULL,
+    owner_id uuid NOT NULL,
+    work_id uuid NOT NULL,
+    profile_id text NOT NULL,
+    bucket text NOT NULL,
+    config_revision text NOT NULL,
+    state text DEFAULT 'open'::text NOT NULL,
+    closed_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT storage_work_intent_check CHECK ((((state = 'open'::text) AND (closed_at IS NULL)) OR ((state <> 'open'::text) AND (closed_at IS NOT NULL)))),
+    CONSTRAINT storage_work_intent_kind_check CHECK ((kind = ANY (ARRAY['operation'::text, 'script'::text, 'export'::text, 'depth'::text, 'transcription'::text, 'package'::text, 'transfer'::text, 'project-copy'::text]))),
+    CONSTRAINT storage_work_intent_owner_id_check CHECK ((owner_id <> '00000000-0000-0000-0000-000000000000'::uuid)),
+    CONSTRAINT storage_work_intent_state_check CHECK ((state = ANY (ARRAY['open'::text, 'accepted'::text, 'cancelled'::text]))),
+    CONSTRAINT storage_work_intent_work_id_check CHECK ((work_id <> '00000000-0000-0000-0000-000000000000'::uuid))
 );
 
 CREATE TABLE media.transfer_command (
@@ -1362,10 +2042,30 @@ CREATE TABLE media.transfer_object (
     source_verified boolean DEFAULT false NOT NULL,
     write_started boolean DEFAULT false NOT NULL,
     status text DEFAULT 'pending'::text NOT NULL,
+    source_location_id uuid,
+    target_location_id uuid,
     CONSTRAINT transfer_object_byte_size_check CHECK (((byte_size >= 1) AND (byte_size <= '2147483648'::bigint))),
     CONSTRAINT transfer_object_rendition_kind_check CHECK ((rendition_kind = ANY (ARRAY[''::text, 'thumb_256'::text, 'thumb_640'::text, 'poster'::text, 'proxy_720p'::text, 'waveform'::text]))),
     CONSTRAINT transfer_object_sha256_check CHECK ((sha256 ~ '^[0-9a-f]{64}$'::text)),
     CONSTRAINT transfer_object_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'verified'::text, 'removed'::text])))
+);
+
+CREATE TABLE media.upload_admission (
+    id uuid NOT NULL,
+    org_id uuid NOT NULL,
+    actor_id uuid NOT NULL,
+    scope_id uuid NOT NULL,
+    scope_kind text NOT NULL,
+    request_key uuid NOT NULL,
+    profile_id text NOT NULL,
+    bucket text NOT NULL,
+    config_revision text NOT NULL,
+    policy jsonb NOT NULL,
+    accepted_asset_id uuid,
+    expires_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT upload_admission_policy_check CHECK ((jsonb_typeof(policy) = 'object'::text)),
+    CONSTRAINT upload_admission_scope_kind_check CHECK ((scope_kind = ANY (ARRAY['project'::text, 'personal'::text])))
 );
 
 CREATE TABLE media.upload_request (
@@ -1461,6 +2161,7 @@ CREATE TABLE mediatool.depth_object (
     delete_started boolean DEFAULT false NOT NULL,
     status text DEFAULT 'pending'::text NOT NULL,
     updated_at timestamp with time zone NOT NULL,
+    object_location_id uuid,
     CONSTRAINT depth_object_byte_size_check CHECK (((byte_size >= 1) AND (byte_size <= 524288000))),
     CONSTRAINT depth_object_kind_check CHECK ((kind = ANY (ARRAY['original'::text, 'poster'::text, 'proxy_720p'::text]))),
     CONSTRAINT depth_object_sha256_check CHECK ((sha256 ~ '^[a-f0-9]{64}$'::text)),
@@ -1699,8 +2400,6 @@ CREATE TABLE operation.operation (
     CONSTRAINT operation_target_type_check CHECK ((target_type = ANY (ARRAY['shot_frame'::text, 'shot_take'::text, 'reference_slot'::text, 'dialogue_audio'::text, 'voice_preview'::text, 'episode_split'::text, 'episode_parse'::text, 'bible_extract'::text, 'scene_storyboard'::text, 'agent_session'::text, 'free'::text])))
 );
 
-COMMENT ON COLUMN operation.operation.prompt_preparation IS 'Immutable template policy evidence; final text lives only in operation_input.prompt. Existing column UPDATE grants deliberately exclude this column.';
-
 CREATE TABLE operation.operation_event (
     id uuid NOT NULL,
     operation_id uuid NOT NULL,
@@ -1752,6 +2451,46 @@ CREATE TABLE operation.operation_output (
     CONSTRAINT operation_output_seq_no_check CHECK ((seq_no >= 0))
 );
 
+CREATE TABLE operation.prompt_resolution_receipt (
+    actor_id uuid NOT NULL,
+    request_key uuid NOT NULL,
+    request_hash text NOT NULL,
+    response jsonb NOT NULL
+);
+
+CREATE TABLE operation.prompt_submission (
+    id uuid NOT NULL,
+    actor_id uuid NOT NULL,
+    project_id uuid NOT NULL,
+    owner_key text NOT NULL,
+    epoch bigint NOT NULL,
+    operation_id uuid NOT NULL,
+    confirm_key uuid NOT NULL,
+    input_source jsonb NOT NULL,
+    snapshot jsonb NOT NULL,
+    quote jsonb NOT NULL,
+    state text NOT NULL,
+    resolution text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT prompt_submission_epoch_check CHECK ((epoch > 0)),
+    CONSTRAINT prompt_submission_state_check CHECK ((state = ANY (ARRAY['quoted'::text, 'accepted'::text, 'closed'::text])))
+);
+
+CREATE TABLE operation.prompt_submission_slot (
+    actor_id uuid NOT NULL,
+    project_id uuid NOT NULL,
+    owner_key text NOT NULL,
+    epoch bigint DEFAULT 0 NOT NULL,
+    submission_id uuid,
+    CONSTRAINT prompt_submission_slot_epoch_check CHECK ((epoch >= 0))
+);
+
+CREATE TABLE operation.provider_binding (
+    operation_id uuid NOT NULL,
+    release_id uuid NOT NULL,
+    create_time timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE operation.provider_call (
     id uuid NOT NULL,
     project_id uuid NOT NULL,
@@ -1800,6 +2539,30 @@ END AND (jsonb_typeof((receipt #> '{outputs,0,mime_type}'::text[])) = 'string'::
     CONSTRAINT provider_call_usage_check CHECK (((usage IS NULL) OR (jsonb_typeof(usage) = 'object'::text)))
 )
 PARTITION BY RANGE (create_time);
+
+CREATE TABLE operation.provider_credential_binding (
+    operation_id uuid NOT NULL,
+    credential_id uuid NOT NULL,
+    create_time timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE operation.provider_result (
+    operation_id uuid NOT NULL,
+    result jsonb NOT NULL,
+    update_time timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT provider_result_result_check CHECK (((jsonb_typeof(result) = 'object'::text) AND (octet_length((result)::text) <= 2097152)))
+);
+
+CREATE TABLE operation.provider_trial (
+    operation_id uuid NOT NULL,
+    actor_id uuid NOT NULL,
+    max_charge_micros bigint NOT NULL,
+    supplier_max_micros bigint NOT NULL,
+    supplier_currency text NOT NULL,
+    CONSTRAINT provider_trial_max_charge_micros_check CHECK ((max_charge_micros >= 0)),
+    CONSTRAINT provider_trial_supplier_currency_check CHECK ((supplier_currency = ANY (ARRAY['CNY'::text, 'USD'::text]))),
+    CONSTRAINT provider_trial_supplier_max_micros_check CHECK (((supplier_max_micros >= 0) AND (supplier_max_micros <= 1000000000)))
+);
 
 CREATE TABLE operation.quote_request (
     org_id uuid NOT NULL,
@@ -2086,6 +2849,7 @@ CREATE TABLE script.object_intent (
     sha256 text NOT NULL,
     byte_size bigint NOT NULL,
     mime text NOT NULL,
+    object_location_id uuid,
     CONSTRAINT object_intent_byte_size_check CHECK (((byte_size >= 0) AND (byte_size <= 37748736))),
     CONSTRAINT object_intent_sha256_check CHECK ((sha256 ~ '^[a-f0-9]{64}$'::text))
 );
@@ -2095,7 +2859,8 @@ CREATE TABLE script.object_state (
     put_started boolean DEFAULT false NOT NULL,
     confirmed boolean DEFAULT false NOT NULL,
     removed boolean DEFAULT false NOT NULL,
-    updated_at timestamp with time zone NOT NULL
+    updated_at timestamp with time zone NOT NULL,
+    object_location_id uuid
 );
 
 CREATE TABLE script.project_state (
@@ -2291,6 +3056,20 @@ CREATE TABLE script.version_source (
     CONSTRAINT version_source_position_check CHECK (("position" >= 0))
 );
 
+CREATE TABLE workspace.creation_scope (
+    id uuid NOT NULL,
+    kind text NOT NULL,
+    owner_user_id uuid,
+    team_id uuid,
+    physical_scope_id uuid NOT NULL,
+    revision bigint DEFAULT 1 NOT NULL,
+    create_time timestamp with time zone DEFAULT now() NOT NULL,
+    update_time timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT creation_scope_check CHECK ((((kind = 'personal'::text) AND (owner_user_id IS NOT NULL) AND (team_id IS NULL)) OR ((kind = 'team'::text) AND (owner_user_id IS NULL) AND (team_id IS NOT NULL)))),
+    CONSTRAINT creation_scope_kind_check CHECK ((kind = ANY (ARRAY['personal'::text, 'team'::text]))),
+    CONSTRAINT creation_scope_revision_check CHECK ((revision > 0))
+);
+
 CREATE TABLE workspace.organization (
     id uuid NOT NULL,
     name text NOT NULL,
@@ -2305,7 +3084,6 @@ CREATE TABLE workspace.project (
     owner_id uuid,
     initial_canvas_id uuid,
     style_key text,
-    CONSTRAINT project_style_key_check CHECK (style_key IS NULL OR (char_length(btrim(style_key)) BETWEEN 1 AND 50)),
     id uuid NOT NULL,
     org_id uuid NOT NULL,
     name text NOT NULL,
@@ -2327,6 +3105,7 @@ CREATE TABLE workspace.project (
     update_time timestamp with time zone DEFAULT now() NOT NULL,
     is_delete boolean DEFAULT false NOT NULL,
     cover_asset_id uuid,
+    owner_scope_id uuid,
     CONSTRAINT ck_project_style CHECK (((style_type = 'stylized'::text) = (style_subtype IS NOT NULL))),
     CONSTRAINT project_aspect_ratio_check CHECK ((aspect_ratio = ANY (ARRAY['9:16'::text, '16:9'::text, '1:1'::text]))),
     CONSTRAINT project_cover_nonzero CHECK (((cover_asset_id IS NULL) OR (cover_asset_id <> '00000000-0000-0000-0000-000000000000'::uuid))),
@@ -2334,11 +3113,17 @@ CREATE TABLE workspace.project (
     CONSTRAINT project_resolution_check CHECK ((resolution = '1080p'::text)),
     CONSTRAINT project_revision_check CHECK ((revision > 0)),
     CONSTRAINT project_status_check CHECK ((status = ANY (ARRAY['active'::text, 'archived'::text, 'copying'::text]))),
+    CONSTRAINT project_style_key_check CHECK (((style_key IS NULL) OR ((char_length(btrim(style_key)) >= 1) AND (char_length(btrim(style_key)) <= 50)))),
     CONSTRAINT project_style_subtype_check CHECK ((style_subtype = ANY (ARRAY['anime_jp'::text, 'guofeng_xianxia'::text, 'cartoon_3d'::text, 'manhwa'::text]))),
     CONSTRAINT project_style_type_check CHECK ((style_type = ANY (ARRAY['realistic'::text, 'stylized'::text])))
 );
 
-COMMENT ON COLUMN workspace.project.cover_asset_id IS 'Current-project ready/passed image; eligibility and current authorization are verified by the media owner in the project transaction.';
+CREATE TABLE workspace.project_activity (
+    project_id uuid NOT NULL,
+    modified_at timestamp with time zone NOT NULL,
+    basis text NOT NULL,
+    CONSTRAINT project_activity_basis_check CHECK ((basis = ANY (ARRAY['created'::text, 'metadata'::text, 'content'::text, 'legacy_metadata'::text])))
+);
 
 CREATE TABLE workspace.project_change_command (
     id uuid NOT NULL,
@@ -2419,6 +3204,17 @@ CREATE TABLE workspace.project_copy_job (
     CONSTRAINT project_copy_job_workspace_snapshot_check CHECK ((jsonb_typeof(workspace_snapshot) = 'object'::text))
 );
 
+CREATE TABLE workspace.project_creation_receipt (
+    actor_id uuid NOT NULL,
+    idem_key uuid NOT NULL,
+    request_hash text NOT NULL,
+    project_id uuid NOT NULL,
+    response_body jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT project_creation_receipt_request_hash_check CHECK ((request_hash ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT project_creation_receipt_response_body_check CHECK ((jsonb_typeof(response_body) = 'object'::text))
+);
+
 CREATE TABLE workspace.project_folder (
     owner_scope_id uuid,
     id uuid NOT NULL,
@@ -2483,6 +3279,29 @@ CREATE TABLE workspace.prompt_customization (
     CONSTRAINT prompt_customization_revision_check CHECK ((revision > 0))
 );
 
+CREATE TABLE workspace.prompt_draft (
+    id uuid NOT NULL,
+    project_id uuid NOT NULL,
+    actor_id uuid NOT NULL,
+    revision bigint NOT NULL,
+    draft jsonb NOT NULL,
+    draft_hash text NOT NULL,
+    input_hash text NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT prompt_draft_draft_check CHECK (((jsonb_typeof(draft) = 'object'::text) AND (octet_length((draft)::text) <= 1048576))),
+    CONSTRAINT prompt_draft_draft_hash_check CHECK ((draft_hash ~ '^[a-f0-9]{64}$'::text)),
+    CONSTRAINT prompt_draft_input_hash_check CHECK ((input_hash ~ '^[a-f0-9]{64}$'::text)),
+    CONSTRAINT prompt_draft_revision_check CHECK (((revision >= 1) AND (revision <= 2147483647)))
+);
+
+CREATE TABLE workspace.prompt_draft_receipt (
+    actor_id uuid NOT NULL,
+    request_key uuid NOT NULL,
+    project_id uuid NOT NULL,
+    request_hash text NOT NULL,
+    response jsonb NOT NULL
+);
+
 CREATE TABLE workspace.style_preset (
     id uuid NOT NULL,
     org_id uuid NOT NULL,
@@ -2496,11 +3315,52 @@ CREATE TABLE workspace.style_preset (
     create_time timestamp with time zone DEFAULT now() NOT NULL,
     update_time timestamp with time zone DEFAULT now() NOT NULL,
     is_delete boolean DEFAULT false NOT NULL,
+    owner_scope_id uuid,
     CONSTRAINT style_preset_style_subtype_check CHECK ((style_subtype = ANY (ARRAY['anime_jp'::text, 'guofeng_xianxia'::text, 'cartoon_3d'::text, 'manhwa'::text]))),
     CONSTRAINT style_preset_style_type_check CHECK ((style_type = ANY (ARRAY['realistic'::text, 'stylized'::text])))
 );
 
--- 主键、唯一约束与外键
+CREATE TABLE workspace.team (
+    id uuid NOT NULL,
+    name text NOT NULL,
+    avatar_asset_id uuid,
+    created_by uuid NOT NULL,
+    status text DEFAULT 'active'::text NOT NULL,
+    resume_status text,
+    governance_blocked boolean DEFAULT false NOT NULL,
+    auth_epoch bigint DEFAULT 1 NOT NULL,
+    invitation_enabled boolean DEFAULT true NOT NULL,
+    revision bigint DEFAULT 1 NOT NULL,
+    create_time timestamp with time zone DEFAULT now() NOT NULL,
+    update_time timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT team_auth_epoch_check CHECK ((auth_epoch > 0)),
+    CONSTRAINT team_check CHECK (((status = 'suspended'::text) = (resume_status IS NOT NULL))),
+    CONSTRAINT team_name_check CHECK (((char_length(name) >= 2) AND (char_length(name) <= 50))),
+    CONSTRAINT team_resume_status_check CHECK ((resume_status = ANY (ARRAY['active'::text, 'archived'::text]))),
+    CONSTRAINT team_revision_check CHECK ((revision > 0)),
+    CONSTRAINT team_status_check CHECK ((status = ANY (ARRAY['active'::text, 'archived'::text, 'suspended'::text])))
+);
+
+CREATE TABLE workspace.team_member (
+    team_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    role text NOT NULL,
+    status text NOT NULL,
+    auth_epoch bigint DEFAULT 1 NOT NULL,
+    joined_at timestamp with time zone NOT NULL,
+    joined_by uuid,
+    source text NOT NULL,
+    last_team_activity_at timestamp with time zone,
+    revision bigint DEFAULT 1 NOT NULL,
+    create_time timestamp with time zone DEFAULT now() NOT NULL,
+    update_time timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT team_member_auth_epoch_check CHECK ((auth_epoch > 0)),
+    CONSTRAINT team_member_revision_check CHECK ((revision > 0)),
+    CONSTRAINT team_member_role_check CHECK ((role = ANY (ARRAY['team_admin'::text, 'member'::text]))),
+    CONSTRAINT team_member_source_check CHECK ((source = ANY (ARRAY['created'::text, 'invited'::text, 'migrated'::text, 'transferred'::text]))),
+    CONSTRAINT team_member_status_check CHECK ((status = ANY (ARRAY['active'::text, 'suspended'::text, 'removed'::text])))
+);
+
 ALTER TABLE ONLY audit.audit_log
     ADD CONSTRAINT audit_log_pkey PRIMARY KEY (id, create_time);
 
@@ -2673,6 +3533,9 @@ ALTER TABLE ONLY canvas.command_log
     ADD CONSTRAINT command_log_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY canvas.document
+    ADD CONSTRAINT document_id_project_unique UNIQUE (id, project_id);
+
+ALTER TABLE ONLY canvas.document
     ADD CONSTRAINT document_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY canvas.edge
@@ -2680,6 +3543,9 @@ ALTER TABLE ONLY canvas.edge
 
 ALTER TABLE ONLY canvas.node
     ADD CONSTRAINT node_document_id_id_key UNIQUE (document_id, id);
+
+ALTER TABLE ONLY canvas.node_input
+    ADD CONSTRAINT node_input_pkey PRIMARY KEY (node_id, input_revision);
 
 ALTER TABLE ONLY canvas.node
     ADD CONSTRAINT node_pkey PRIMARY KEY (id);
@@ -2693,14 +3559,29 @@ ALTER TABLE ONLY canvas.project_copy_snapshot
 ALTER TABLE ONLY canvas.project_copy_snapshot
     ADD CONSTRAINT project_copy_snapshot_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY canvas.save_receipt
+    ADD CONSTRAINT save_receipt_pkey PRIMARY KEY (actor_id, idem_key);
+
 ALTER TABLE ONLY canvas.command_log
     ADD CONSTRAINT uq_canvas_command_rev UNIQUE (document_id, revision);
+
+ALTER TABLE ONLY catalog.capability_default
+    ADD CONSTRAINT capability_default_pkey PRIMARY KEY (capability);
 
 ALTER TABLE ONLY catalog.capability
     ADD CONSTRAINT capability_key_key UNIQUE (key);
 
 ALTER TABLE ONLY catalog.capability
     ADD CONSTRAINT capability_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY catalog.config_request
+    ADD CONSTRAINT config_request_pkey PRIMARY KEY (actor_id, action, target_id, request_id);
+
+ALTER TABLE ONLY catalog.model_candidate
+    ADD CONSTRAINT model_candidate_check_id_provider_model_id_capability_key UNIQUE (check_id, provider_model_id, capability);
+
+ALTER TABLE ONLY catalog.model_candidate
+    ADD CONSTRAINT model_candidate_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY catalog.model_profile
     ADD CONSTRAINT model_profile_model_key_key UNIQUE (model_key);
@@ -2711,8 +3592,32 @@ ALTER TABLE ONLY catalog.model_profile
 ALTER TABLE ONLY catalog.model_profile_version
     ADD CONSTRAINT model_profile_version_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY catalog.model_release
+    ADD CONSTRAINT model_release_model_id_id_key UNIQUE (model_id, id);
+
+ALTER TABLE ONLY catalog.model_release
+    ADD CONSTRAINT model_release_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY catalog.model_validation
+    ADD CONSTRAINT model_validation_operation_id_key UNIQUE (operation_id);
+
+ALTER TABLE ONLY catalog.model_validation
+    ADD CONSTRAINT model_validation_pkey PRIMARY KEY (id);
+
 ALTER TABLE ONLY catalog.price_rule_version
     ADD CONSTRAINT price_rule_version_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY catalog.provider_check
+    ADD CONSTRAINT provider_check_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY catalog.provider_config_version
+    ADD CONSTRAINT provider_config_version_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY catalog.provider_config_version
+    ADD CONSTRAINT provider_config_version_provider_id_id_key UNIQUE (provider_id, id);
+
+ALTER TABLE ONLY catalog.provider_config_version
+    ADD CONSTRAINT provider_config_version_provider_id_version_no_key UNIQUE (provider_id, version_no);
 
 ALTER TABLE ONLY catalog.provider_credential
     ADD CONSTRAINT provider_credential_pkey PRIMARY KEY (id);
@@ -2723,6 +3628,18 @@ ALTER TABLE ONLY catalog.provider
 ALTER TABLE ONLY catalog.provider
     ADD CONSTRAINT provider_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY catalog.provider_preset
+    ADD CONSTRAINT provider_preset_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY catalog.provider_preset
+    ADD CONSTRAINT provider_preset_slug_key UNIQUE (slug);
+
+ALTER TABLE ONLY catalog.provider_preset_version
+    ADD CONSTRAINT provider_preset_version_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY catalog.provider_preset_version
+    ADD CONSTRAINT provider_preset_version_preset_id_version_no_key UNIQUE (preset_id, version_no);
+
 ALTER TABLE ONLY catalog.model_profile_version
     ADD CONSTRAINT uq_model_profile_version UNIQUE (model_profile_id, version_no);
 
@@ -2732,11 +3649,62 @@ ALTER TABLE ONLY catalog.model_profile_version
 ALTER TABLE ONLY catalog.price_rule_version
     ADD CONSTRAINT uq_price_rule_version UNIQUE (model_profile_id, version_no);
 
+ALTER TABLE ONLY identity.auth_challenge
+    ADD CONSTRAINT auth_challenge_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY identity.auth_event
+    ADD CONSTRAINT auth_event_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY identity.authority_proposal
+    ADD CONSTRAINT authority_proposal_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY identity.directory_export
+    ADD CONSTRAINT directory_export_actor_id_scope_id_request_key_key UNIQUE (actor_id, scope_id, request_key);
+
+ALTER TABLE ONLY identity.directory_export
+    ADD CONSTRAINT directory_export_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY identity.email_budget
+    ADD CONSTRAINT email_budget_pkey PRIMARY KEY (bucket_key);
+
+ALTER TABLE ONLY identity.invitation
+    ADD CONSTRAINT invitation_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY identity.invitation
+    ADD CONSTRAINT invitation_token_hash_key UNIQUE (token_hash);
+
+ALTER TABLE ONLY identity.login_guard
+    ADD CONSTRAINT login_guard_pkey PRIMARY KEY (login_key);
+
+ALTER TABLE ONLY identity.mail_delivery
+    ADD CONSTRAINT mail_delivery_pkey PRIMARY KEY (event_id);
+
+ALTER TABLE ONLY identity.platform_settings
+    ADD CONSTRAINT platform_settings_pkey PRIMARY KEY (singleton);
+
+ALTER TABLE ONLY identity.security_event
+    ADD CONSTRAINT security_event_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY identity.session_refresh_token
+    ADD CONSTRAINT session_refresh_token_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY identity.session_refresh_token
+    ADD CONSTRAINT session_refresh_token_session_id_generation_key UNIQUE (session_id, generation);
+
+ALTER TABLE ONLY identity.session_refresh_token
+    ADD CONSTRAINT session_refresh_token_token_digest_key UNIQUE (token_digest);
+
 ALTER TABLE ONLY identity."user"
     ADD CONSTRAINT user_org_id_id_unique UNIQUE (org_id, id);
 
 ALTER TABLE ONLY identity."user"
     ADD CONSTRAINT user_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY identity.user_session
+    ADD CONSTRAINT user_session_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY identity.user_session
+    ADD CONSTRAINT user_session_token_hash_key UNIQUE (token_hash);
 
 ALTER TABLE ONLY infra.idempotency_record
     ADD CONSTRAINT idempotency_record_pkey PRIMARY KEY (id);
@@ -2789,6 +3757,15 @@ ALTER TABLE ONLY media.media_asset
 ALTER TABLE ONLY media.media_asset
     ADD CONSTRAINT media_asset_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY media.object_location
+    ADD CONSTRAINT object_location_id_object_key_key UNIQUE (id, object_key);
+
+ALTER TABLE ONLY media.object_location
+    ADD CONSTRAINT object_location_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY media.object_location
+    ADD CONSTRAINT object_location_profile_id_bucket_object_key_key UNIQUE (profile_id, bucket, object_key);
+
 ALTER TABLE ONLY media.package_command
     ADD CONSTRAINT package_command_pkey PRIMARY KEY (actor_id, idem_key);
 
@@ -2837,6 +3814,66 @@ ALTER TABLE ONLY media.purge_object
 ALTER TABLE ONLY media.rendition
     ADD CONSTRAINT rendition_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY media.storage_activation_guard
+    ADD CONSTRAINT storage_activation_guard_pkey PRIMARY KEY (revision);
+
+ALTER TABLE ONLY media.storage_activation
+    ADD CONSTRAINT storage_activation_pkey PRIMARY KEY (revision);
+
+ALTER TABLE ONLY media.storage_bucket_evidence
+    ADD CONSTRAINT storage_bucket_evidence_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY media.storage_config_revision
+    ADD CONSTRAINT storage_config_revision_config_sha256_key UNIQUE (config_sha256);
+
+ALTER TABLE ONLY media.storage_config_revision
+    ADD CONSTRAINT storage_config_revision_pkey PRIMARY KEY (revision);
+
+ALTER TABLE ONLY media.storage_deployment_evidence
+    ADD CONSTRAINT storage_deployment_evidence_pkey PRIMARY KEY (config_sha256);
+
+ALTER TABLE ONLY media.storage_legacy_binding
+    ADD CONSTRAINT storage_legacy_binding_pkey PRIMARY KEY (singleton);
+
+ALTER TABLE ONLY media.storage_legacy_receipt
+    ADD CONSTRAINT storage_legacy_receipt_pkey PRIMARY KEY (profile_id, bucket, object_key, snapshot_sha256);
+
+ALTER TABLE ONLY media.storage_legacy_tombstone
+    ADD CONSTRAINT storage_legacy_tombstone_pkey PRIMARY KEY (profile_id, bucket, object_key, snapshot_sha256);
+
+ALTER TABLE ONLY media.storage_probe_evidence
+    ADD CONSTRAINT storage_probe_evidence_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY media.storage_probe_intent
+    ADD CONSTRAINT storage_probe_intent_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY media.storage_profile
+    ADD CONSTRAINT storage_profile_id_bucket_key UNIQUE (id, bucket);
+
+ALTER TABLE ONLY media.storage_profile
+    ADD CONSTRAINT storage_profile_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY media.storage_profile
+    ADD CONSTRAINT storage_profile_resource_identity_key UNIQUE (resource_identity);
+
+ALTER TABLE ONLY media.storage_profile
+    ADD CONSTRAINT storage_profile_resource_pair_key UNIQUE (id, resource_identity);
+
+ALTER TABLE ONLY media.storage_route
+    ADD CONSTRAINT storage_route_pkey PRIMARY KEY (singleton);
+
+ALTER TABLE ONLY media.storage_runtime
+    ADD CONSTRAINT storage_runtime_pkey PRIMARY KEY (instance_id);
+
+ALTER TABLE ONLY media.storage_work_intent
+    ADD CONSTRAINT storage_work_intent_id_profile_id_bucket_key UNIQUE (id, profile_id, bucket);
+
+ALTER TABLE ONLY media.storage_work_intent
+    ADD CONSTRAINT storage_work_intent_kind_owner_id_work_id_key UNIQUE (kind, owner_id, work_id);
+
+ALTER TABLE ONLY media.storage_work_intent
+    ADD CONSTRAINT storage_work_intent_pkey PRIMARY KEY (id);
+
 ALTER TABLE ONLY media.transfer_command
     ADD CONSTRAINT transfer_command_pkey PRIMARY KEY (actor_id, idem_key);
 
@@ -2857,6 +3894,15 @@ ALTER TABLE ONLY media.transfer_object
 
 ALTER TABLE ONLY media.transfer_object
     ADD CONSTRAINT transfer_object_target_object_key_key UNIQUE (target_object_key);
+
+ALTER TABLE ONLY media.upload_admission
+    ADD CONSTRAINT upload_admission_id_profile_id_bucket_key UNIQUE (id, profile_id, bucket);
+
+ALTER TABLE ONLY media.upload_admission
+    ADD CONSTRAINT upload_admission_org_id_actor_id_scope_id_request_key_key UNIQUE (org_id, actor_id, scope_id, request_key);
+
+ALTER TABLE ONLY media.upload_admission
+    ADD CONSTRAINT upload_admission_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY media.upload_request
     ADD CONSTRAINT upload_request_personal_unique UNIQUE (personal_org_id, principal_id, request_key);
@@ -2936,8 +3982,38 @@ ALTER TABLE ONLY operation.operation
 ALTER TABLE ONLY operation.operation
     ADD CONSTRAINT operation_workflow_id_key UNIQUE (workflow_id);
 
+ALTER TABLE ONLY operation.prompt_resolution_receipt
+    ADD CONSTRAINT prompt_resolution_receipt_pkey PRIMARY KEY (actor_id, request_key);
+
+ALTER TABLE ONLY operation.prompt_submission
+    ADD CONSTRAINT prompt_submission_actor_id_project_id_owner_key_epoch_key UNIQUE (actor_id, project_id, owner_key, epoch);
+
+ALTER TABLE ONLY operation.prompt_submission
+    ADD CONSTRAINT prompt_submission_confirm_key_key UNIQUE (confirm_key);
+
+ALTER TABLE ONLY operation.prompt_submission
+    ADD CONSTRAINT prompt_submission_operation_id_key UNIQUE (operation_id);
+
+ALTER TABLE ONLY operation.prompt_submission
+    ADD CONSTRAINT prompt_submission_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY operation.prompt_submission_slot
+    ADD CONSTRAINT prompt_submission_slot_pkey PRIMARY KEY (actor_id, project_id, owner_key);
+
+ALTER TABLE ONLY operation.provider_binding
+    ADD CONSTRAINT provider_binding_pkey PRIMARY KEY (operation_id);
+
 ALTER TABLE ONLY operation.provider_call
     ADD CONSTRAINT provider_call_pkey PRIMARY KEY (id, create_time);
+
+ALTER TABLE ONLY operation.provider_credential_binding
+    ADD CONSTRAINT provider_credential_binding_pkey PRIMARY KEY (operation_id);
+
+ALTER TABLE ONLY operation.provider_result
+    ADD CONSTRAINT provider_result_pkey PRIMARY KEY (operation_id);
+
+ALTER TABLE ONLY operation.provider_trial
+    ADD CONSTRAINT provider_trial_pkey PRIMARY KEY (operation_id);
 
 ALTER TABLE ONLY operation.quote_request
     ADD CONSTRAINT quote_request_pkey PRIMARY KEY (org_id, actor_id, request_id);
@@ -3134,8 +4210,17 @@ ALTER TABLE ONLY script.version_source
 ALTER TABLE ONLY script.version_source
     ADD CONSTRAINT version_source_version_id_source_id_key UNIQUE (version_id, source_id);
 
+ALTER TABLE ONLY workspace.creation_scope
+    ADD CONSTRAINT creation_scope_physical_unique UNIQUE (id, physical_scope_id);
+
+ALTER TABLE ONLY workspace.creation_scope
+    ADD CONSTRAINT creation_scope_pkey PRIMARY KEY (id);
+
 ALTER TABLE ONLY workspace.organization
     ADD CONSTRAINT organization_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY workspace.project_activity
+    ADD CONSTRAINT project_activity_pkey PRIMARY KEY (project_id);
 
 ALTER TABLE ONLY workspace.project_change_command
     ADD CONSTRAINT project_change_command_actor_id_idem_key_key UNIQUE (actor_id, idem_key);
@@ -3158,6 +4243,9 @@ ALTER TABLE ONLY workspace.project_copy_job
 ALTER TABLE ONLY workspace.project_copy_job
     ADD CONSTRAINT project_copy_job_target_project_id_key UNIQUE (target_project_id);
 
+ALTER TABLE ONLY workspace.project_creation_receipt
+    ADD CONSTRAINT project_creation_receipt_pkey PRIMARY KEY (actor_id, idem_key);
+
 ALTER TABLE ONLY workspace.project_folder_command
     ADD CONSTRAINT project_folder_command_actor_id_idem_key_key UNIQUE (actor_id, idem_key);
 
@@ -3179,13 +4267,24 @@ ALTER TABLE ONLY workspace.project
 ALTER TABLE ONLY workspace.prompt_customization
     ADD CONSTRAINT prompt_customization_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY workspace.prompt_draft
+    ADD CONSTRAINT prompt_draft_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY workspace.prompt_draft_receipt
+    ADD CONSTRAINT prompt_draft_receipt_pkey PRIMARY KEY (actor_id, request_key);
+
 ALTER TABLE ONLY workspace.style_preset
     ADD CONSTRAINT style_preset_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY workspace.team_member
+    ADD CONSTRAINT team_member_pkey PRIMARY KEY (team_id, user_id);
+
+ALTER TABLE ONLY workspace.team
+    ADD CONSTRAINT team_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY workspace.prompt_customization
     ADD CONSTRAINT uq_prompt_customization_owner_operation UNIQUE (org_id, owner_id, operation);
 
--- 索引
 CREATE INDEX ix_audit_action ON ONLY audit.audit_log USING btree (action, create_time DESC);
 
 CREATE INDEX ix_audit_org_time ON ONLY audit.audit_log USING btree (org_id, create_time DESC, id DESC);
@@ -3216,12 +4315,59 @@ CREATE INDEX ix_price_rule_effective ON catalog.price_rule_version USING btree (
 
 CREATE UNIQUE INDEX uq_provider_credential_active ON catalog.provider_credential USING btree (provider_id) WHERE ((status = 'active'::text) AND (NOT is_delete));
 
+CREATE INDEX auth_challenge_email_idx ON identity.auth_challenge USING btree (email_key, purpose, created_at DESC);
+
+CREATE INDEX auth_challenge_expiry_idx ON identity.auth_challenge USING btree (expires_at);
+
+CREATE INDEX auth_challenge_operation_idx ON identity.auth_challenge USING btree (operation_id, purpose);
+
+CREATE UNIQUE INDEX authority_proposal_platform_pending_idx ON identity.authority_proposal USING btree (target_user_id) WHERE ((kind = 'platform_grant'::text) AND (status = 'pending'::text));
+
+CREATE INDEX authority_proposal_target_idx ON identity.authority_proposal USING btree (target_user_id, status, expires_at);
+
+CREATE INDEX authority_proposal_team_idx ON identity.authority_proposal USING btree (team_id, status);
+
+CREATE UNIQUE INDEX authority_proposal_team_pending_idx ON identity.authority_proposal USING btree (team_id) WHERE ((kind = ANY (ARRAY['team_transfer'::text, 'platform_takeover'::text])) AND (status = 'pending'::text));
+
+CREATE INDEX directory_export_actor_idx ON identity.directory_export USING btree (actor_id, created_at DESC, id);
+
+CREATE INDEX directory_export_work_idx ON identity.directory_export USING btree (status, expires_at, created_at, id);
+
 CREATE INDEX idx_user_directory ON identity."user" USING btree (org_id, create_time DESC, id DESC) WHERE (NOT is_delete);
 
-ALTER TABLE identity.user_session ADD FOREIGN KEY (account_id) REFERENCES identity."user" (id);
-ALTER TABLE identity.auth_event ADD FOREIGN KEY (account_id) REFERENCES identity."user" (id);
+CREATE UNIQUE INDEX invitation_pending_account_idx ON identity.invitation USING btree (email_key) WHERE ((kind = 'account'::text) AND (status = 'pending'::text));
+
+CREATE UNIQUE INDEX invitation_pending_team_idx ON identity.invitation USING btree (team_id, email_key) WHERE ((kind = 'team'::text) AND (status = 'pending'::text));
+
+CREATE INDEX mail_delivery_pending_idx ON identity.mail_delivery USING btree (status, next_attempt_at, event_id);
+
+CREATE INDEX security_event_team_idx ON identity.security_event USING btree (team_id, created_at DESC, id);
+
+CREATE INDEX security_event_time_idx ON identity.security_event USING btree (created_at DESC, id);
+
+CREATE INDEX security_event_user_idx ON identity.security_event USING btree (target_user_id, created_at DESC, id);
+
+CREATE UNIQUE INDEX session_refresh_one_active_idx ON identity.session_refresh_token USING btree (session_id) WHERE ((consumed_at IS NULL) AND (revoked_at IS NULL));
+
+CREATE INDEX session_refresh_replay_cleanup_idx ON identity.session_refresh_token USING btree (replay_until, id) WHERE (receipt_ciphertext IS NOT NULL);
+
+CREATE UNIQUE INDEX uq_user_login_global ON identity."user" USING btree (lower(btrim((login_name)::text))) WHERE (NOT is_delete);
 
 CREATE UNIQUE INDEX uq_user_login_name ON identity."user" USING btree (org_id, login_name) WHERE (NOT is_delete);
+
+CREATE UNIQUE INDEX user_email_key_unique ON identity."user" USING btree (email_key) WHERE (email_key IS NOT NULL);
+
+CREATE INDEX user_platform_directory_idx ON identity."user" USING btree (create_time DESC, id DESC);
+
+CREATE INDEX user_platform_role_idx ON identity."user" USING btree (platform_role, status);
+
+CREATE INDEX user_platform_status_idx ON identity."user" USING btree (status, create_time DESC, id DESC);
+
+CREATE INDEX user_session_account_idx ON identity.user_session USING btree (account_id);
+
+CREATE INDEX user_session_activity_idx ON identity.user_session USING btree (account_id, last_active_at DESC, id);
+
+CREATE INDEX user_session_live_idx ON identity.user_session USING btree (account_id, id) WHERE (revoked_at IS NULL);
 
 CREATE INDEX ix_outbox_pending ON ONLY infra.outbox USING btree (create_time) WHERE (published_at IS NULL);
 
@@ -3247,6 +4393,8 @@ CREATE UNIQUE INDEX library_project_scope ON media.library USING btree (project_
 
 CREATE INDEX media_personal_current ON media.media_asset USING btree (personal_org_id, personal_actor_id, update_time DESC, id) WHERE ((project_id IS NULL) AND (NOT is_delete));
 
+CREATE INDEX object_location_cleanup_idx ON media.object_location USING btree (state, updated_at) WHERE (state = ANY (ARRAY['reserved'::text, 'present'::text, 'delete_pending'::text, 'unknown'::text]));
+
 CREATE INDEX package_actor_jobs ON media.package_job USING btree (org_id, actor_id, created_at DESC, id);
 
 CREATE UNIQUE INDEX package_library_active ON media.package_job USING btree (library_id) WHERE (status = 'needs_reconciliation'::text);
@@ -3258,6 +4406,8 @@ CREATE INDEX purge_actor_jobs ON media.purge_job USING btree (org_id, actor_id, 
 CREATE INDEX purge_project_work ON media.purge_job USING btree (project_id, status);
 
 CREATE UNIQUE INDEX purge_reserved_item ON media.purge_item USING btree (item_id) WHERE (status = ANY (ARRAY['queued'::text, 'running'::text, 'needs_reconciliation'::text, 'succeeded'::text]));
+
+CREATE INDEX storage_work_open_profile_idx ON media.storage_work_intent USING btree (profile_id, state);
 
 CREATE INDEX transfer_actor_jobs ON media.transfer_job USING btree (org_id, actor_id, created_at DESC, id);
 
@@ -3309,6 +4459,10 @@ CREATE INDEX script_version_content ON script.script_version USING btree (projec
 
 CREATE INDEX script_version_document ON script.script_version USING btree (project_id, document_sha256);
 
+CREATE UNIQUE INDEX creation_scope_personal_unique ON workspace.creation_scope USING btree (owner_user_id) WHERE (owner_user_id IS NOT NULL);
+
+CREATE UNIQUE INDEX creation_scope_team_unique ON workspace.creation_scope USING btree (team_id) WHERE (team_id IS NOT NULL);
+
 CREATE INDEX ix_project_copy_org_recent ON workspace.project_copy_job USING btree (org_id, create_time DESC, id DESC);
 
 CREATE INDEX ix_project_copy_source_active ON workspace.project_copy_job USING btree (source_project_id, status) WHERE (status <> ALL (ARRAY['succeeded'::text, 'cancelled'::text]));
@@ -3319,12 +4473,83 @@ CREATE INDEX ix_project_folder_members ON workspace.project_folder_placement USI
 
 CREATE INDEX ix_project_org_status ON workspace.project USING btree (org_id, status, update_time DESC) WHERE (NOT is_delete);
 
--- 触发器
+CREATE INDEX project_activity_recent_idx ON workspace.project_activity USING btree (modified_at DESC, project_id DESC);
+
+CREATE INDEX project_copy_scope_idx ON workspace.project_copy_job USING btree (owner_scope_id, source_project_id, create_time DESC, id DESC);
+
+CREATE INDEX project_folder_scope_actor_idx ON workspace.project_folder USING btree (owner_scope_id, actor_id, update_time DESC, id DESC);
+
+CREATE INDEX project_owner_scope_idx ON workspace.project USING btree (owner_scope_id, is_delete, update_time DESC, id DESC);
+
+CREATE INDEX project_owner_updated ON workspace.project USING btree (org_id, owner_id, update_time DESC, id DESC) WHERE (NOT is_delete);
+
+CREATE INDEX prompt_draft_owner ON workspace.prompt_draft USING btree (project_id, actor_id, id);
+
+CREATE INDEX style_preset_owner_scope_idx ON workspace.style_preset USING btree (owner_scope_id, is_delete);
+
+CREATE INDEX team_creator_idx ON workspace.team USING btree (created_by, status);
+
+CREATE INDEX team_member_admin_idx ON workspace.team_member USING btree (team_id, role, status);
+
+CREATE INDEX team_member_directory_idx ON workspace.team_member USING btree (team_id, status, joined_at DESC, user_id DESC);
+
+CREATE INDEX team_member_user_idx ON workspace.team_member USING btree (user_id, status, team_id);
+
+CREATE INDEX team_status_idx ON workspace.team USING btree (status, create_time DESC, id DESC);
+
 CREATE TRIGGER audit_log_append_only BEFORE DELETE OR UPDATE ON audit.audit_log FOR EACH ROW EXECUTE FUNCTION audit.reject_audit_mutation();
 
 CREATE TRIGGER trg_budget_update_time BEFORE UPDATE ON billing.budget FOR EACH ROW EXECUTE FUNCTION billing.set_budget_update_time();
 
 CREATE TRIGGER trg_ledger_entry_append_only BEFORE DELETE OR UPDATE ON billing.ledger_entry FOR EACH ROW EXECUTE FUNCTION billing.keep_ledger_entry_append_only();
+
+CREATE TRIGGER keep_object_location_id BEFORE UPDATE ON media.media_asset FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('object_location_id');
+
+CREATE TRIGGER keep_object_location_id BEFORE UPDATE ON media.package_object FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('object_location_id');
+
+CREATE TRIGGER keep_object_location_id BEFORE UPDATE ON media.purge_object FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('object_location_id');
+
+CREATE TRIGGER keep_object_location_id BEFORE UPDATE ON media.rendition FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('object_location_id');
+
+CREATE TRIGGER keep_source_location_id BEFORE UPDATE ON media.project_copy_object FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('source_location_id');
+
+CREATE TRIGGER keep_source_location_id BEFORE UPDATE ON media.transfer_object FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('source_location_id');
+
+CREATE TRIGGER keep_storage_evidence BEFORE DELETE OR UPDATE ON media.storage_activation_guard FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
+
+CREATE TRIGGER keep_storage_evidence BEFORE DELETE OR UPDATE ON media.storage_bucket_evidence FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
+
+CREATE TRIGGER keep_storage_evidence BEFORE DELETE OR UPDATE ON media.storage_config_revision FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
+
+CREATE TRIGGER keep_storage_evidence BEFORE DELETE OR UPDATE ON media.storage_deployment_evidence FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
+
+CREATE TRIGGER keep_storage_evidence BEFORE DELETE OR UPDATE ON media.storage_legacy_binding FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
+
+CREATE TRIGGER keep_storage_evidence BEFORE DELETE OR UPDATE ON media.storage_legacy_receipt FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
+
+CREATE TRIGGER keep_storage_evidence BEFORE DELETE OR UPDATE ON media.storage_legacy_tombstone FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
+
+CREATE TRIGGER keep_storage_evidence BEFORE DELETE OR UPDATE ON media.storage_probe_evidence FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
+
+CREATE TRIGGER keep_storage_identity BEFORE UPDATE ON media.object_location FOR EACH ROW EXECUTE FUNCTION media.keep_storage_identity();
+
+CREATE TRIGGER keep_storage_identity BEFORE DELETE OR UPDATE ON media.storage_activation FOR EACH ROW EXECUTE FUNCTION media.keep_storage_identity();
+
+CREATE TRIGGER keep_storage_identity BEFORE DELETE OR UPDATE ON media.storage_profile FOR EACH ROW EXECUTE FUNCTION media.keep_storage_identity();
+
+CREATE TRIGGER keep_storage_probe_intent BEFORE UPDATE ON media.storage_probe_intent FOR EACH ROW EXECUTE FUNCTION media.keep_storage_probe_intent();
+
+CREATE TRIGGER keep_storage_work BEFORE UPDATE ON media.object_location FOR EACH ROW EXECUTE FUNCTION media.keep_storage_work();
+
+CREATE TRIGGER keep_storage_work BEFORE UPDATE ON media.storage_work_intent FOR EACH ROW EXECUTE FUNCTION media.keep_storage_work();
+
+CREATE TRIGGER keep_storage_write_deadline BEFORE UPDATE ON media.object_location FOR EACH ROW EXECUTE FUNCTION media.keep_storage_write_deadline();
+
+CREATE TRIGGER keep_target_location_id BEFORE UPDATE ON media.project_copy_object FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('target_location_id');
+
+CREATE TRIGGER keep_target_location_id BEFORE UPDATE ON media.transfer_object FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('target_location_id');
+
+CREATE TRIGGER keep_upload_admission BEFORE UPDATE ON media.upload_admission FOR EACH ROW EXECUTE FUNCTION media.keep_upload_admission();
 
 CREATE TRIGGER library_command_immutable BEFORE DELETE OR UPDATE ON media.library_command FOR EACH ROW EXECUTE FUNCTION media.reject_library_command_mutation();
 
@@ -3348,9 +4573,19 @@ CREATE TRIGGER transfer_scope BEFORE INSERT ON media.transfer_job FOR EACH ROW E
 
 CREATE TRIGGER upload_request_scope_guard BEFORE INSERT ON media.upload_request FOR EACH ROW EXECUTE FUNCTION media.check_upload_receipt_scope();
 
+CREATE TRIGGER keep_object_location_id BEFORE UPDATE ON mediatool.depth_object FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('object_location_id');
+
+CREATE TRIGGER keep_object_location_id BEFORE UPDATE ON script.object_intent FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('object_location_id');
+
+CREATE TRIGGER keep_object_location_id BEFORE UPDATE ON script.object_state FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('object_location_id');
+
 CREATE TRIGGER project_change_command_immutable BEFORE DELETE OR UPDATE ON workspace.project_change_command FOR EACH ROW EXECUTE FUNCTION workspace.reject_project_change_command_mutation();
 
+CREATE TRIGGER project_copy_scope_binding BEFORE INSERT OR UPDATE ON workspace.project_copy_job FOR EACH ROW EXECUTE FUNCTION workspace.validate_secondary_scope();
+
 CREATE TRIGGER project_folder_command_immutable BEFORE DELETE OR UPDATE ON workspace.project_folder_command FOR EACH ROW EXECUTE FUNCTION workspace.reject_project_folder_command_mutation();
+
+CREATE TRIGGER project_folder_placement_scope_binding BEFORE INSERT OR UPDATE ON workspace.project_folder_placement FOR EACH ROW EXECUTE FUNCTION workspace.validate_secondary_scope();
 
 CREATE TRIGGER trg_project_protect_update BEFORE UPDATE ON workspace.project FOR EACH ROW EXECUTE FUNCTION workspace.protect_project_update();
 
@@ -3488,6 +4723,15 @@ ALTER TABLE ONLY canvas.node
 ALTER TABLE ONLY canvas.node
     ADD CONSTRAINT node_document_id_fkey FOREIGN KEY (document_id) REFERENCES canvas.document(id);
 
+ALTER TABLE ONLY canvas.node_input
+    ADD CONSTRAINT node_input_created_by_fkey FOREIGN KEY (created_by) REFERENCES identity."user"(id);
+
+ALTER TABLE ONLY canvas.node
+    ADD CONSTRAINT node_input_head_fk FOREIGN KEY (id, input_revision) REFERENCES canvas.node_input(node_id, input_revision) DEFERRABLE INITIALLY DEFERRED;
+
+ALTER TABLE ONLY canvas.node_input
+    ADD CONSTRAINT node_input_node_id_fkey FOREIGN KEY (node_id) REFERENCES canvas.node(id) ON DELETE CASCADE;
+
 ALTER TABLE ONLY canvas.project_copy_receipt
     ADD CONSTRAINT project_copy_receipt_snapshot_id_fkey FOREIGN KEY (snapshot_id) REFERENCES canvas.project_copy_snapshot(id);
 
@@ -3503,8 +4747,26 @@ ALTER TABLE ONLY canvas.project_copy_snapshot
 ALTER TABLE ONLY canvas.project_copy_snapshot
     ADD CONSTRAINT project_copy_snapshot_target_project_id_fkey FOREIGN KEY (target_project_id) REFERENCES workspace.project(id);
 
+ALTER TABLE ONLY canvas.save_receipt
+    ADD CONSTRAINT save_receipt_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
+
+ALTER TABLE ONLY canvas.save_receipt
+    ADD CONSTRAINT save_receipt_document_id_fkey FOREIGN KEY (document_id) REFERENCES canvas.document(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY catalog.capability_default
+    ADD CONSTRAINT capability_default_capability_fkey FOREIGN KEY (capability) REFERENCES catalog.capability(key);
+
+ALTER TABLE ONLY catalog.capability_default
+    ADD CONSTRAINT capability_default_release_id_fkey FOREIGN KEY (release_id) REFERENCES catalog.model_release(id);
+
 ALTER TABLE ONLY catalog.model_profile
     ADD CONSTRAINT fk_model_profile_current_version FOREIGN KEY (id, current_version_id) REFERENCES catalog.model_profile_version(model_profile_id, id);
+
+ALTER TABLE ONLY catalog.model_profile
+    ADD CONSTRAINT model_active_release_fk FOREIGN KEY (id, active_release_id) REFERENCES catalog.model_release(model_id, id);
+
+ALTER TABLE ONLY catalog.model_candidate
+    ADD CONSTRAINT model_candidate_check_id_fkey FOREIGN KEY (check_id) REFERENCES catalog.provider_check(id);
 
 ALTER TABLE ONLY catalog.model_profile
     ADD CONSTRAINT model_profile_capability_fkey FOREIGN KEY (capability) REFERENCES catalog.capability(key);
@@ -3515,21 +4777,125 @@ ALTER TABLE ONLY catalog.model_profile
 ALTER TABLE ONLY catalog.model_profile_version
     ADD CONSTRAINT model_profile_version_model_profile_id_fkey FOREIGN KEY (model_profile_id) REFERENCES catalog.model_profile(id);
 
+ALTER TABLE ONLY catalog.model_release
+    ADD CONSTRAINT model_release_config_version_id_fkey FOREIGN KEY (config_version_id) REFERENCES catalog.provider_config_version(id);
+
+ALTER TABLE ONLY catalog.model_release
+    ADD CONSTRAINT model_release_model_id_fkey FOREIGN KEY (model_id) REFERENCES catalog.model_profile(id);
+
+ALTER TABLE ONLY catalog.model_release
+    ADD CONSTRAINT model_release_model_version_id_fkey FOREIGN KEY (model_version_id) REFERENCES catalog.model_profile_version(id);
+
+ALTER TABLE ONLY catalog.model_release
+    ADD CONSTRAINT model_release_price_version_id_fkey FOREIGN KEY (price_version_id) REFERENCES catalog.price_rule_version(id);
+
+ALTER TABLE ONLY catalog.model_validation
+    ADD CONSTRAINT model_validation_credential_id_fkey FOREIGN KEY (credential_id) REFERENCES catalog.provider_credential(id);
+
+ALTER TABLE ONLY catalog.model_validation
+    ADD CONSTRAINT model_validation_release_id_fkey FOREIGN KEY (release_id) REFERENCES catalog.model_release(id);
+
 ALTER TABLE ONLY catalog.price_rule_version
     ADD CONSTRAINT price_rule_version_model_profile_id_fkey FOREIGN KEY (model_profile_id) REFERENCES catalog.model_profile(id);
 
+ALTER TABLE ONLY catalog.provider_check
+    ADD CONSTRAINT provider_check_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
+
+ALTER TABLE ONLY catalog.provider_check
+    ADD CONSTRAINT provider_check_config_version_id_fkey FOREIGN KEY (config_version_id) REFERENCES catalog.provider_config_version(id);
+
+ALTER TABLE ONLY catalog.provider_check
+    ADD CONSTRAINT provider_check_credential_id_fkey FOREIGN KEY (credential_id) REFERENCES catalog.provider_credential(id);
+
+ALTER TABLE ONLY catalog.provider_check
+    ADD CONSTRAINT provider_check_provider_id_fkey FOREIGN KEY (provider_id) REFERENCES catalog.provider(id);
+
+ALTER TABLE ONLY catalog.provider_config_version
+    ADD CONSTRAINT provider_config_version_preset_version_id_fkey FOREIGN KEY (preset_version_id) REFERENCES catalog.provider_preset_version(id);
+
+ALTER TABLE ONLY catalog.provider_config_version
+    ADD CONSTRAINT provider_config_version_provider_id_fkey FOREIGN KEY (provider_id) REFERENCES catalog.provider(id);
+
 ALTER TABLE ONLY catalog.provider_credential
     ADD CONSTRAINT provider_credential_provider_id_fkey FOREIGN KEY (provider_id) REFERENCES catalog.provider(id);
+
+ALTER TABLE ONLY catalog.provider
+    ADD CONSTRAINT provider_current_config_fk FOREIGN KEY (id, current_config_version_id) REFERENCES catalog.provider_config_version(provider_id, id);
+
+ALTER TABLE ONLY catalog.provider_preset
+    ADD CONSTRAINT provider_preset_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES catalog.provider_preset(id);
+
+ALTER TABLE ONLY catalog.provider_preset_version
+    ADD CONSTRAINT provider_preset_version_preset_id_fkey FOREIGN KEY (preset_id) REFERENCES catalog.provider_preset(id);
+
+ALTER TABLE ONLY identity.auth_challenge
+    ADD CONSTRAINT auth_challenge_user_id_fkey FOREIGN KEY (user_id) REFERENCES identity."user"(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY identity.auth_event
+    ADD CONSTRAINT auth_event_account_id_fkey FOREIGN KEY (account_id) REFERENCES identity."user"(id);
+
+ALTER TABLE ONLY identity.authority_proposal
+    ADD CONSTRAINT authority_proposal_source_user_id_fkey FOREIGN KEY (source_user_id) REFERENCES identity."user"(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY identity.authority_proposal
+    ADD CONSTRAINT authority_proposal_target_user_id_fkey FOREIGN KEY (target_user_id) REFERENCES identity."user"(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY identity.authority_proposal
+    ADD CONSTRAINT authority_proposal_team_id_fkey FOREIGN KEY (team_id) REFERENCES workspace.team(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY identity.directory_export
+    ADD CONSTRAINT directory_export_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES identity."user"(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY identity.directory_export
+    ADD CONSTRAINT directory_export_team_id_fkey FOREIGN KEY (team_id) REFERENCES workspace.team(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY identity.invitation
+    ADD CONSTRAINT invitation_accepted_user_id_fkey FOREIGN KEY (accepted_user_id) REFERENCES identity."user"(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY identity.invitation
+    ADD CONSTRAINT invitation_inviter_id_fkey FOREIGN KEY (inviter_id) REFERENCES identity."user"(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY identity.invitation
+    ADD CONSTRAINT invitation_team_id_fkey FOREIGN KEY (team_id) REFERENCES workspace.team(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY identity.mail_delivery
+    ADD CONSTRAINT mail_delivery_challenge_id_fkey FOREIGN KEY (challenge_id) REFERENCES identity.auth_challenge(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY identity.mail_delivery
+    ADD CONSTRAINT mail_delivery_invitation_id_fkey FOREIGN KEY (invitation_id) REFERENCES identity.invitation(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY identity.platform_settings
+    ADD CONSTRAINT platform_settings_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES identity."user"(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY identity.security_event
+    ADD CONSTRAINT security_event_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES identity."user"(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY identity.security_event
+    ADD CONSTRAINT security_event_target_user_id_fkey FOREIGN KEY (target_user_id) REFERENCES identity."user"(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY identity.security_event
+    ADD CONSTRAINT security_event_team_id_fkey FOREIGN KEY (team_id) REFERENCES workspace.team(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY identity.session_refresh_token
+    ADD CONSTRAINT session_refresh_token_session_id_fkey FOREIGN KEY (session_id) REFERENCES identity.user_session(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY identity."user"
+    ADD CONSTRAINT user_avatar_asset_id_fkey FOREIGN KEY (avatar_asset_id) REFERENCES media.media_asset(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY identity.user_session
+    ADD CONSTRAINT user_session_account_id_fkey FOREIGN KEY (account_id) REFERENCES identity."user"(id);
 
 ALTER TABLE ONLY media.media_asset
     ADD CONSTRAINT fk_media_source_operation_project FOREIGN KEY (project_id, source_operation_id) REFERENCES operation.operation(project_id, id);
 
 ALTER TABLE ONLY media.library_command
+    ADD CONSTRAINT library_command_actor_scope_user_fk FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
+
+ALTER TABLE ONLY media.library_command
     ADD CONSTRAINT library_command_library_id_fkey FOREIGN KEY (library_id) REFERENCES media.library(id);
 
 ALTER TABLE ONLY media.library_command
-    ADD CONSTRAINT library_command_actor_scope_user_fk FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
-ALTER TABLE media.library_command ADD CONSTRAINT library_command_physical_org_fk FOREIGN KEY(org_id) REFERENCES workspace.organization(id);
+    ADD CONSTRAINT library_command_physical_org_fk FOREIGN KEY (org_id) REFERENCES workspace.organization(id);
 
 ALTER TABLE ONLY media.library_folder
     ADD CONSTRAINT library_folder_library_id_library_kind_fkey FOREIGN KEY (library_id, library_kind) REFERENCES media.library(id, kind);
@@ -3556,24 +4922,40 @@ ALTER TABLE ONLY media.library
     ADD CONSTRAINT library_project_id_fkey FOREIGN KEY (project_id) REFERENCES workspace.project(id);
 
 ALTER TABLE ONLY media.media_asset
+    ADD CONSTRAINT media_asset_object_location_id_fkey FOREIGN KEY (object_location_id, object_key) REFERENCES media.object_location(id, object_key);
+
+ALTER TABLE ONLY media.media_asset
     ADD CONSTRAINT media_asset_personal_owner_fk FOREIGN KEY (personal_org_id, personal_actor_id) REFERENCES identity."user"(org_id, id);
 
 ALTER TABLE ONLY media.media_asset
     ADD CONSTRAINT media_asset_project_id_fkey FOREIGN KEY (project_id) REFERENCES workspace.project(id);
 
+ALTER TABLE ONLY media.object_location
+    ADD CONSTRAINT object_location_profile_id_bucket_fkey FOREIGN KEY (profile_id, bucket) REFERENCES media.storage_profile(id, bucket);
+
+ALTER TABLE ONLY media.object_location
+    ADD CONSTRAINT object_location_upload_owner_fkey FOREIGN KEY (owner_session_id, profile_id, bucket) REFERENCES media.upload_admission(id, profile_id, bucket);
+
+ALTER TABLE ONLY media.object_location
+    ADD CONSTRAINT object_location_work_owner_fkey FOREIGN KEY (owner_intent_id, profile_id, bucket) REFERENCES media.storage_work_intent(id, profile_id, bucket);
+
+ALTER TABLE ONLY media.package_command
+    ADD CONSTRAINT package_command_actor_scope_user_fk FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
+
 ALTER TABLE ONLY media.package_command
     ADD CONSTRAINT package_command_job_id_fkey FOREIGN KEY (job_id) REFERENCES media.package_job(id);
 
 ALTER TABLE ONLY media.package_command
-    ADD CONSTRAINT package_command_actor_scope_user_fk FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
-ALTER TABLE media.package_command ADD CONSTRAINT package_command_physical_org_fk FOREIGN KEY(org_id) REFERENCES workspace.organization(id);
+    ADD CONSTRAINT package_command_physical_org_fk FOREIGN KEY (org_id) REFERENCES workspace.organization(id);
+
+ALTER TABLE ONLY media.package_job
+    ADD CONSTRAINT package_job_actor_scope_user_fk FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
 
 ALTER TABLE ONLY media.package_job
     ADD CONSTRAINT package_job_library_id_fkey FOREIGN KEY (library_id) REFERENCES media.library(id);
 
 ALTER TABLE ONLY media.package_job
-    ADD CONSTRAINT package_job_actor_scope_user_fk FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
-ALTER TABLE media.package_job ADD CONSTRAINT package_job_physical_org_fk FOREIGN KEY(org_id) REFERENCES workspace.organization(id);
+    ADD CONSTRAINT package_job_physical_org_fk FOREIGN KEY (org_id) REFERENCES workspace.organization(id);
 
 ALTER TABLE ONLY media.package_job
     ADD CONSTRAINT package_job_project_id_fkey FOREIGN KEY (project_id) REFERENCES workspace.project(id);
@@ -3581,8 +4963,17 @@ ALTER TABLE ONLY media.package_job
 ALTER TABLE ONLY media.package_object
     ADD CONSTRAINT package_object_job_id_fkey FOREIGN KEY (job_id) REFERENCES media.package_job(id);
 
+ALTER TABLE ONLY media.package_object
+    ADD CONSTRAINT package_object_object_location_id_fkey FOREIGN KEY (object_location_id, object_key) REFERENCES media.object_location(id, object_key);
+
 ALTER TABLE ONLY media.project_copy_object
     ADD CONSTRAINT project_copy_object_snapshot_id_fkey FOREIGN KEY (snapshot_id) REFERENCES media.project_copy_snapshot(id);
+
+ALTER TABLE ONLY media.project_copy_object
+    ADD CONSTRAINT project_copy_object_source_location_id_fkey FOREIGN KEY (source_location_id, source_object_key) REFERENCES media.object_location(id, object_key);
+
+ALTER TABLE ONLY media.project_copy_object
+    ADD CONSTRAINT project_copy_object_target_location_id_fkey FOREIGN KEY (target_location_id, target_object_key) REFERENCES media.object_location(id, object_key);
 
 ALTER TABLE ONLY media.project_copy_receipt
     ADD CONSTRAINT project_copy_receipt_snapshot_id_fkey FOREIGN KEY (snapshot_id) REFERENCES media.project_copy_snapshot(id);
@@ -3600,11 +4991,13 @@ ALTER TABLE ONLY media.project_copy_snapshot
     ADD CONSTRAINT project_copy_snapshot_target_project_id_fkey FOREIGN KEY (target_project_id) REFERENCES workspace.project(id);
 
 ALTER TABLE ONLY media.purge_command
+    ADD CONSTRAINT purge_command_actor_scope_user_fk FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
+
+ALTER TABLE ONLY media.purge_command
     ADD CONSTRAINT purge_command_job_id_fkey FOREIGN KEY (job_id) REFERENCES media.purge_job(id);
 
 ALTER TABLE ONLY media.purge_command
-    ADD CONSTRAINT purge_command_actor_scope_user_fk FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
-ALTER TABLE media.purge_command ADD CONSTRAINT purge_command_physical_org_fk FOREIGN KEY(org_id) REFERENCES workspace.organization(id);
+    ADD CONSTRAINT purge_command_physical_org_fk FOREIGN KEY (org_id) REFERENCES workspace.organization(id);
 
 ALTER TABLE ONLY media.purge_item
     ADD CONSTRAINT purge_item_asset_id_fkey FOREIGN KEY (asset_id) REFERENCES media.media_asset(id);
@@ -3616,11 +5009,13 @@ ALTER TABLE ONLY media.purge_item
     ADD CONSTRAINT purge_item_job_id_fkey FOREIGN KEY (job_id) REFERENCES media.purge_job(id);
 
 ALTER TABLE ONLY media.purge_job
+    ADD CONSTRAINT purge_job_actor_scope_user_fk FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
+
+ALTER TABLE ONLY media.purge_job
     ADD CONSTRAINT purge_job_library_id_fkey FOREIGN KEY (library_id) REFERENCES media.library(id);
 
 ALTER TABLE ONLY media.purge_job
-    ADD CONSTRAINT purge_job_actor_scope_user_fk FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
-ALTER TABLE media.purge_job ADD CONSTRAINT purge_job_physical_org_fk FOREIGN KEY(org_id) REFERENCES workspace.organization(id);
+    ADD CONSTRAINT purge_job_physical_org_fk FOREIGN KEY (org_id) REFERENCES workspace.organization(id);
 
 ALTER TABLE ONLY media.purge_job
     ADD CONSTRAINT purge_job_project_id_fkey FOREIGN KEY (project_id) REFERENCES workspace.project(id);
@@ -3628,15 +5023,62 @@ ALTER TABLE ONLY media.purge_job
 ALTER TABLE ONLY media.purge_object
     ADD CONSTRAINT purge_object_job_id_item_index_fkey FOREIGN KEY (job_id, item_index) REFERENCES media.purge_item(job_id, item_index);
 
+ALTER TABLE ONLY media.purge_object
+    ADD CONSTRAINT purge_object_object_location_id_fkey FOREIGN KEY (object_location_id, object_key) REFERENCES media.object_location(id, object_key);
+
 ALTER TABLE ONLY media.rendition
     ADD CONSTRAINT rendition_media_asset_id_fkey FOREIGN KEY (media_asset_id) REFERENCES media.media_asset(id);
+
+ALTER TABLE ONLY media.rendition
+    ADD CONSTRAINT rendition_object_location_id_fkey FOREIGN KEY (object_location_id, object_key) REFERENCES media.object_location(id, object_key);
+
+ALTER TABLE ONLY media.storage_activation_guard
+    ADD CONSTRAINT storage_activation_guard_revision_fkey FOREIGN KEY (revision) REFERENCES media.storage_activation(revision);
+
+ALTER TABLE ONLY media.storage_activation
+    ADD CONSTRAINT storage_activation_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES media.storage_profile(id);
+
+ALTER TABLE ONLY media.storage_bucket_evidence
+    ADD CONSTRAINT storage_bucket_evidence_profile_id_resource_identity_fkey FOREIGN KEY (profile_id, resource_identity) REFERENCES media.storage_profile(id, resource_identity);
+
+ALTER TABLE ONLY media.storage_config_revision
+    ADD CONSTRAINT storage_config_revision_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES media.storage_profile(id);
+
+ALTER TABLE ONLY media.storage_legacy_binding
+    ADD CONSTRAINT storage_legacy_binding_profile_id_bucket_fkey FOREIGN KEY (profile_id, bucket) REFERENCES media.storage_profile(id, bucket);
+
+ALTER TABLE ONLY media.storage_legacy_receipt
+    ADD CONSTRAINT storage_legacy_receipt_location_id_object_key_fkey FOREIGN KEY (location_id, object_key) REFERENCES media.object_location(id, object_key);
+
+ALTER TABLE ONLY media.storage_legacy_receipt
+    ADD CONSTRAINT storage_legacy_receipt_profile_id_bucket_fkey FOREIGN KEY (profile_id, bucket) REFERENCES media.storage_profile(id, bucket);
+
+ALTER TABLE ONLY media.storage_legacy_tombstone
+    ADD CONSTRAINT storage_legacy_tombstone_location_id_object_key_fkey FOREIGN KEY (location_id, object_key) REFERENCES media.object_location(id, object_key);
+
+ALTER TABLE ONLY media.storage_legacy_tombstone
+    ADD CONSTRAINT storage_legacy_tombstone_profile_id_bucket_fkey FOREIGN KEY (profile_id, bucket) REFERENCES media.storage_profile(id, bucket);
+
+ALTER TABLE ONLY media.storage_probe_evidence
+    ADD CONSTRAINT storage_probe_evidence_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES media.storage_profile(id);
+
+ALTER TABLE ONLY media.storage_probe_intent
+    ADD CONSTRAINT storage_probe_intent_profile_id_bucket_fkey FOREIGN KEY (profile_id, bucket) REFERENCES media.storage_profile(id, bucket);
+
+ALTER TABLE ONLY media.storage_route
+    ADD CONSTRAINT storage_route_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES media.storage_profile(id);
+
+ALTER TABLE ONLY media.storage_work_intent
+    ADD CONSTRAINT storage_work_intent_profile_id_bucket_fkey FOREIGN KEY (profile_id, bucket) REFERENCES media.storage_profile(id, bucket);
+
+ALTER TABLE ONLY media.transfer_command
+    ADD CONSTRAINT transfer_command_actor_scope_user_fk FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
 
 ALTER TABLE ONLY media.transfer_command
     ADD CONSTRAINT transfer_command_job_id_fkey FOREIGN KEY (job_id) REFERENCES media.transfer_job(id);
 
 ALTER TABLE ONLY media.transfer_command
-    ADD CONSTRAINT transfer_command_actor_scope_user_fk FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
-ALTER TABLE media.transfer_command ADD CONSTRAINT transfer_command_physical_org_fk FOREIGN KEY(org_id) REFERENCES workspace.organization(id);
+    ADD CONSTRAINT transfer_command_physical_org_fk FOREIGN KEY (org_id) REFERENCES workspace.organization(id);
 
 ALTER TABLE ONLY media.transfer_item
     ADD CONSTRAINT transfer_item_job_id_fkey FOREIGN KEY (job_id) REFERENCES media.transfer_job(id);
@@ -3646,7 +5088,9 @@ ALTER TABLE ONLY media.transfer_item
 
 ALTER TABLE ONLY media.transfer_job
     ADD CONSTRAINT transfer_job_actor_scope_user_fk FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
-ALTER TABLE media.transfer_job ADD CONSTRAINT transfer_job_physical_org_fk FOREIGN KEY(org_id) REFERENCES workspace.organization(id);
+
+ALTER TABLE ONLY media.transfer_job
+    ADD CONSTRAINT transfer_job_physical_org_fk FOREIGN KEY (org_id) REFERENCES workspace.organization(id);
 
 ALTER TABLE ONLY media.transfer_job
     ADD CONSTRAINT transfer_job_source_library_id_fkey FOREIGN KEY (source_library_id) REFERENCES media.library(id);
@@ -3662,6 +5106,36 @@ ALTER TABLE ONLY media.transfer_job
 
 ALTER TABLE ONLY media.transfer_object
     ADD CONSTRAINT transfer_object_job_id_item_index_fkey FOREIGN KEY (job_id, item_index) REFERENCES media.transfer_item(job_id, item_index);
+
+ALTER TABLE ONLY media.transfer_object
+    ADD CONSTRAINT transfer_object_source_location_id_fkey FOREIGN KEY (source_location_id, source_object_key) REFERENCES media.object_location(id, object_key);
+
+ALTER TABLE ONLY media.transfer_object
+    ADD CONSTRAINT transfer_object_target_location_id_fkey FOREIGN KEY (target_location_id, target_object_key) REFERENCES media.object_location(id, object_key);
+
+ALTER TABLE ONLY media.transfer_job
+    ADD CONSTRAINT transfer_source_org_fkey FOREIGN KEY (source_org_id) REFERENCES workspace.organization(id);
+
+ALTER TABLE ONLY media.transfer_job
+    ADD CONSTRAINT transfer_source_scope_fkey FOREIGN KEY (source_scope_id) REFERENCES workspace.creation_scope(id);
+
+ALTER TABLE ONLY media.transfer_job
+    ADD CONSTRAINT transfer_target_org_fkey FOREIGN KEY (target_org_id) REFERENCES workspace.organization(id);
+
+ALTER TABLE ONLY media.transfer_job
+    ADD CONSTRAINT transfer_target_scope_fkey FOREIGN KEY (target_scope_id) REFERENCES workspace.creation_scope(id);
+
+ALTER TABLE ONLY media.upload_admission
+    ADD CONSTRAINT upload_admission_accepted_asset_id_fkey FOREIGN KEY (accepted_asset_id) REFERENCES media.media_asset(id);
+
+ALTER TABLE ONLY media.upload_admission
+    ADD CONSTRAINT upload_admission_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
+
+ALTER TABLE ONLY media.upload_admission
+    ADD CONSTRAINT upload_admission_org_id_fkey FOREIGN KEY (org_id) REFERENCES workspace.organization(id);
+
+ALTER TABLE ONLY media.upload_admission
+    ADD CONSTRAINT upload_admission_profile_id_bucket_fkey FOREIGN KEY (profile_id, bucket) REFERENCES media.storage_profile(id, bucket);
 
 ALTER TABLE ONLY media.upload_request
     ADD CONSTRAINT upload_request_asset_id_fkey FOREIGN KEY (asset_id) REFERENCES media.media_asset(id);
@@ -3683,6 +5157,9 @@ ALTER TABLE ONLY mediatool.depth_job
 
 ALTER TABLE ONLY mediatool.depth_object
     ADD CONSTRAINT depth_object_job_id_attempt_fkey FOREIGN KEY (job_id, attempt) REFERENCES mediatool.depth_result_intent(job_id, attempt);
+
+ALTER TABLE ONLY mediatool.depth_object
+    ADD CONSTRAINT depth_object_object_location_id_fkey FOREIGN KEY (object_location_id, object_key) REFERENCES media.object_location(id, object_key);
 
 ALTER TABLE ONLY mediatool.depth_result_intent
     ADD CONSTRAINT depth_result_intent_job_id_fkey FOREIGN KEY (job_id) REFERENCES mediatool.depth_job(id);
@@ -3737,6 +5214,42 @@ ALTER TABLE ONLY operation.operation_input
 
 ALTER TABLE ONLY operation.operation
     ADD CONSTRAINT operation_project_id_fkey FOREIGN KEY (project_id) REFERENCES workspace.project(id);
+
+ALTER TABLE ONLY operation.prompt_submission
+    ADD CONSTRAINT prompt_submission_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
+
+ALTER TABLE ONLY operation.prompt_submission
+    ADD CONSTRAINT prompt_submission_operation_id_fkey FOREIGN KEY (operation_id) REFERENCES operation.operation(id);
+
+ALTER TABLE ONLY operation.prompt_submission
+    ADD CONSTRAINT prompt_submission_project_id_fkey FOREIGN KEY (project_id) REFERENCES workspace.project(id);
+
+ALTER TABLE ONLY operation.prompt_submission_slot
+    ADD CONSTRAINT prompt_submission_slot_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
+
+ALTER TABLE ONLY operation.prompt_submission_slot
+    ADD CONSTRAINT prompt_submission_slot_project_id_fkey FOREIGN KEY (project_id) REFERENCES workspace.project(id);
+
+ALTER TABLE ONLY operation.provider_binding
+    ADD CONSTRAINT provider_binding_operation_id_fkey FOREIGN KEY (operation_id) REFERENCES operation.operation(id);
+
+ALTER TABLE ONLY operation.provider_binding
+    ADD CONSTRAINT provider_binding_release_id_fkey FOREIGN KEY (release_id) REFERENCES catalog.model_release(id);
+
+ALTER TABLE ONLY operation.provider_credential_binding
+    ADD CONSTRAINT provider_credential_binding_credential_id_fkey FOREIGN KEY (credential_id) REFERENCES catalog.provider_credential(id);
+
+ALTER TABLE ONLY operation.provider_credential_binding
+    ADD CONSTRAINT provider_credential_binding_operation_id_fkey FOREIGN KEY (operation_id) REFERENCES operation.provider_binding(operation_id);
+
+ALTER TABLE ONLY operation.provider_result
+    ADD CONSTRAINT provider_result_operation_id_fkey FOREIGN KEY (operation_id) REFERENCES operation.provider_credential_binding(operation_id);
+
+ALTER TABLE ONLY operation.provider_trial
+    ADD CONSTRAINT provider_trial_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
+
+ALTER TABLE ONLY operation.provider_trial
+    ADD CONSTRAINT provider_trial_operation_id_fkey FOREIGN KEY (operation_id) REFERENCES operation.provider_binding(operation_id);
 
 ALTER TABLE ONLY script.action_line
     ADD CONSTRAINT action_line_org_id_project_id_scene_id_fkey FOREIGN KEY (org_id, project_id, scene_id) REFERENCES script.scene(org_id, project_id, id);
@@ -3816,8 +5329,14 @@ ALTER TABLE ONLY script.import_state
 ALTER TABLE ONLY script.object_intent
     ADD CONSTRAINT object_intent_actor_id_request_id_fkey FOREIGN KEY (actor_id, request_id) REFERENCES script.command(actor_id, request_id);
 
+ALTER TABLE ONLY script.object_intent
+    ADD CONSTRAINT object_intent_object_location_id_fkey FOREIGN KEY (object_location_id, object_key) REFERENCES media.object_location(id, object_key);
+
 ALTER TABLE ONLY script.object_state
     ADD CONSTRAINT object_state_object_key_fkey FOREIGN KEY (object_key) REFERENCES script.object_intent(object_key);
+
+ALTER TABLE ONLY script.object_state
+    ADD CONSTRAINT object_state_object_location_id_fkey FOREIGN KEY (object_location_id, object_key) REFERENCES media.object_location(id, object_key);
 
 ALTER TABLE ONLY script.project_state
     ADD CONSTRAINT project_state_org_id_project_id_adopted_version_id_fkey FOREIGN KEY (org_id, project_id, adopted_version_id) REFERENCES script.script_version(org_id, project_id, id);
@@ -3870,8 +5389,20 @@ ALTER TABLE ONLY script.version_source
 ALTER TABLE ONLY script.version_source
     ADD CONSTRAINT version_source_org_id_project_id_version_id_fkey FOREIGN KEY (org_id, project_id, version_id) REFERENCES script.script_version(org_id, project_id, id);
 
+ALTER TABLE ONLY workspace.creation_scope
+    ADD CONSTRAINT creation_scope_owner_user_id_fkey FOREIGN KEY (owner_user_id) REFERENCES identity."user"(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY workspace.creation_scope
+    ADD CONSTRAINT creation_scope_physical_scope_id_fkey FOREIGN KEY (physical_scope_id) REFERENCES workspace.organization(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY workspace.creation_scope
+    ADD CONSTRAINT creation_scope_team_id_fkey FOREIGN KEY (team_id) REFERENCES workspace.team(id) ON DELETE RESTRICT;
+
 ALTER TABLE ONLY workspace.style_preset
     ADD CONSTRAINT fk_style_preset_project FOREIGN KEY (project_id) REFERENCES workspace.project(id);
+
+ALTER TABLE ONLY workspace.project_activity
+    ADD CONSTRAINT project_activity_project_id_fkey FOREIGN KEY (project_id) REFERENCES workspace.project(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY workspace.project_change_command
     ADD CONSTRAINT project_change_command_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
@@ -3898,6 +5429,9 @@ ALTER TABLE ONLY workspace.project_copy_job
     ADD CONSTRAINT project_copy_job_org_id_fkey FOREIGN KEY (org_id) REFERENCES workspace.organization(id);
 
 ALTER TABLE ONLY workspace.project_copy_job
+    ADD CONSTRAINT project_copy_job_scope_fk FOREIGN KEY (owner_scope_id, org_id) REFERENCES workspace.creation_scope(id, physical_scope_id);
+
+ALTER TABLE ONLY workspace.project_copy_job
     ADD CONSTRAINT project_copy_job_source_project_id_fkey FOREIGN KEY (source_project_id) REFERENCES workspace.project(id);
 
 ALTER TABLE ONLY workspace.project_copy_job
@@ -3905,6 +5439,12 @@ ALTER TABLE ONLY workspace.project_copy_job
 
 ALTER TABLE ONLY workspace.project
     ADD CONSTRAINT project_cover_asset_id_fkey FOREIGN KEY (cover_asset_id) REFERENCES media.media_asset(id);
+
+ALTER TABLE ONLY workspace.project_creation_receipt
+    ADD CONSTRAINT project_creation_receipt_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
+
+ALTER TABLE ONLY workspace.project_creation_receipt
+    ADD CONSTRAINT project_creation_receipt_project_id_fkey FOREIGN KEY (project_id) REFERENCES workspace.project(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY workspace.project_folder
     ADD CONSTRAINT project_folder_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
@@ -3914,6 +5454,9 @@ ALTER TABLE ONLY workspace.project_folder_command
 
 ALTER TABLE ONLY workspace.project_folder_command
     ADD CONSTRAINT project_folder_command_org_id_fkey FOREIGN KEY (org_id) REFERENCES workspace.organization(id);
+
+ALTER TABLE ONLY workspace.project_folder_command
+    ADD CONSTRAINT project_folder_command_scope_fk FOREIGN KEY (owner_scope_id, org_id) REFERENCES workspace.creation_scope(id, physical_scope_id);
 
 ALTER TABLE ONLY workspace.project_folder
     ADD CONSTRAINT project_folder_cover_asset_id_fkey FOREIGN KEY (cover_asset_id) REFERENCES media.media_asset(id);
@@ -3936,8 +5479,23 @@ ALTER TABLE ONLY workspace.project_folder_placement
 ALTER TABLE ONLY workspace.project_folder_placement
     ADD CONSTRAINT project_folder_placement_project_id_fkey FOREIGN KEY (project_id) REFERENCES workspace.project(id) ON DELETE CASCADE;
 
+ALTER TABLE ONLY workspace.project_folder_placement
+    ADD CONSTRAINT project_folder_placement_scope_fk FOREIGN KEY (owner_scope_id, org_id) REFERENCES workspace.creation_scope(id, physical_scope_id);
+
+ALTER TABLE ONLY workspace.project_folder
+    ADD CONSTRAINT project_folder_scope_fk FOREIGN KEY (owner_scope_id, org_id) REFERENCES workspace.creation_scope(id, physical_scope_id);
+
+ALTER TABLE ONLY workspace.project
+    ADD CONSTRAINT project_initial_canvas_fk FOREIGN KEY (initial_canvas_id, id) REFERENCES canvas.document(id, project_id) DEFERRABLE INITIALLY DEFERRED;
+
 ALTER TABLE ONLY workspace.project
     ADD CONSTRAINT project_org_id_fkey FOREIGN KEY (org_id) REFERENCES workspace.organization(id);
+
+ALTER TABLE ONLY workspace.project
+    ADD CONSTRAINT project_owner_fk FOREIGN KEY (owner_id) REFERENCES identity."user"(id);
+
+ALTER TABLE ONLY workspace.project
+    ADD CONSTRAINT project_owner_scope_fk FOREIGN KEY (owner_scope_id, org_id) REFERENCES workspace.creation_scope(id, physical_scope_id) ON DELETE RESTRICT;
 
 ALTER TABLE ONLY workspace.project
     ADD CONSTRAINT project_style_preset_id_fkey FOREIGN KEY (style_preset_id) REFERENCES workspace.style_preset(id);
@@ -3948,10 +5506,39 @@ ALTER TABLE ONLY workspace.prompt_customization
 ALTER TABLE ONLY workspace.prompt_customization
     ADD CONSTRAINT prompt_customization_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES identity."user"(id);
 
+ALTER TABLE ONLY workspace.prompt_draft
+    ADD CONSTRAINT prompt_draft_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
+
+ALTER TABLE ONLY workspace.prompt_draft
+    ADD CONSTRAINT prompt_draft_project_id_fkey FOREIGN KEY (project_id) REFERENCES workspace.project(id);
+
+ALTER TABLE ONLY workspace.prompt_draft_receipt
+    ADD CONSTRAINT prompt_draft_receipt_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
+
+ALTER TABLE ONLY workspace.prompt_draft_receipt
+    ADD CONSTRAINT prompt_draft_receipt_project_id_fkey FOREIGN KEY (project_id) REFERENCES workspace.project(id);
+
 ALTER TABLE ONLY workspace.style_preset
     ADD CONSTRAINT style_preset_org_id_fkey FOREIGN KEY (org_id) REFERENCES workspace.organization(id);
 
--- 运行时最小权限；应用登录账号不得成为表所有者
+ALTER TABLE ONLY workspace.style_preset
+    ADD CONSTRAINT style_preset_owner_scope_fk FOREIGN KEY (owner_scope_id, org_id) REFERENCES workspace.creation_scope(id, physical_scope_id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY workspace.team
+    ADD CONSTRAINT team_avatar_asset_id_fkey FOREIGN KEY (avatar_asset_id) REFERENCES media.media_asset(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY workspace.team
+    ADD CONSTRAINT team_created_by_fkey FOREIGN KEY (created_by) REFERENCES identity."user"(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY workspace.team_member
+    ADD CONSTRAINT team_member_joined_by_fkey FOREIGN KEY (joined_by) REFERENCES identity."user"(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY workspace.team_member
+    ADD CONSTRAINT team_member_team_id_fkey FOREIGN KEY (team_id) REFERENCES workspace.team(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY workspace.team_member
+    ADD CONSTRAINT team_member_user_id_fkey FOREIGN KEY (user_id) REFERENCES identity."user"(id) ON DELETE RESTRICT;
+
 GRANT USAGE ON SCHEMA audit TO lanverse_app;
 
 GRANT USAGE ON SCHEMA bible TO lanverse_app;
@@ -4012,7 +5599,15 @@ GRANT SELECT,INSERT ON TABLE bible.copy_transfer_receipt TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE bible.location TO lanverse_app;
 
-GRANT UPDATE (revision, current_version_id, confirmed_version_id, is_delete, updated_at) ON TABLE bible.location TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE bible.location TO lanverse_app;
+
+GRANT UPDATE(current_version_id) ON TABLE bible.location TO lanverse_app;
+
+GRANT UPDATE(confirmed_version_id) ON TABLE bible.location TO lanverse_app;
+
+GRANT UPDATE(is_delete) ON TABLE bible.location TO lanverse_app;
+
+GRANT UPDATE(updated_at) ON TABLE bible.location TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE bible.location_confirmation TO lanverse_app;
 
@@ -4024,7 +5619,15 @@ GRANT SELECT,INSERT ON TABLE bible.look_version TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE bible.prop TO lanverse_app;
 
-GRANT UPDATE (revision, current_version_id, confirmed_version_id, is_delete, updated_at) ON TABLE bible.prop TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE bible.prop TO lanverse_app;
+
+GRANT UPDATE(current_version_id) ON TABLE bible.prop TO lanverse_app;
+
+GRANT UPDATE(confirmed_version_id) ON TABLE bible.prop TO lanverse_app;
+
+GRANT UPDATE(is_delete) ON TABLE bible.prop TO lanverse_app;
+
+GRANT UPDATE(updated_at) ON TABLE bible.prop TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE bible.prop_confirmation TO lanverse_app;
 
@@ -4038,11 +5641,17 @@ GRANT SELECT,INSERT,UPDATE ON TABLE billing.budget TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE billing.ledger_entry TO lanverse_app;
 
-GRANT UPDATE (update_time, is_delete) ON TABLE billing.ledger_entry TO lanverse_app;
+GRANT UPDATE(update_time) ON TABLE billing.ledger_entry TO lanverse_app;
+
+GRANT UPDATE(is_delete) ON TABLE billing.ledger_entry TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE billing.reservation TO lanverse_app;
 
-GRANT UPDATE (status, closed_at, update_time) ON TABLE billing.reservation TO lanverse_app;
+GRANT UPDATE(status) ON TABLE billing.reservation TO lanverse_app;
+
+GRANT UPDATE(closed_at) ON TABLE billing.reservation TO lanverse_app;
+
+GRANT UPDATE(update_time) ON TABLE billing.reservation TO lanverse_app;
 
 GRANT SELECT,INSERT,UPDATE ON TABLE canvas.command_log TO lanverse_app;
 
@@ -4052,69 +5661,221 @@ GRANT SELECT,INSERT,UPDATE ON TABLE canvas.edge TO lanverse_app;
 
 GRANT SELECT,INSERT,UPDATE ON TABLE canvas.node TO lanverse_app;
 
+GRANT SELECT,INSERT ON TABLE canvas.node_input TO lanverse_app;
+
 GRANT SELECT,INSERT ON TABLE canvas.project_copy_receipt TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE canvas.project_copy_snapshot TO lanverse_app;
 
+GRANT SELECT,INSERT ON TABLE canvas.save_receipt TO lanverse_app;
+
 GRANT SELECT,INSERT ON TABLE catalog.capability TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE catalog.capability_default TO lanverse_app;
+
+GRANT SELECT,INSERT ON TABLE catalog.config_request TO lanverse_app;
+
+GRANT SELECT,INSERT ON TABLE catalog.model_candidate TO lanverse_app;
 
 GRANT SELECT,INSERT,UPDATE ON TABLE catalog.model_profile TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE catalog.model_profile_version TO lanverse_app;
 
+GRANT SELECT,INSERT,UPDATE ON TABLE catalog.model_release TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE catalog.model_validation TO lanverse_app;
+
 GRANT SELECT,INSERT ON TABLE catalog.price_rule_version TO lanverse_app;
 
 GRANT SELECT,INSERT,UPDATE ON TABLE catalog.provider TO lanverse_app;
 
+GRANT SELECT,INSERT,UPDATE ON TABLE catalog.provider_check TO lanverse_app;
+
+GRANT SELECT,INSERT ON TABLE catalog.provider_config_version TO lanverse_app;
+
 GRANT SELECT,INSERT,UPDATE ON TABLE catalog.provider_credential TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE catalog.provider_preset TO lanverse_app;
+
+GRANT SELECT,INSERT ON TABLE catalog.provider_preset_version TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE identity.auth_challenge TO lanverse_app;
+
+GRANT SELECT,INSERT ON TABLE identity.auth_event TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE identity.authority_proposal TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE identity.directory_export TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE identity.email_budget TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE identity.invitation TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE identity.login_guard TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE identity.mail_delivery TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE identity.platform_settings TO lanverse_app;
+
+GRANT SELECT,INSERT ON TABLE identity.security_event TO lanverse_app;
+
+GRANT SELECT,INSERT,DELETE ON TABLE identity.session_refresh_token TO lanverse_app;
+
+GRANT UPDATE(consumed_at) ON TABLE identity.session_refresh_token TO lanverse_app;
+
+GRANT UPDATE(revoked_at) ON TABLE identity.session_refresh_token TO lanverse_app;
+
+GRANT UPDATE(rotation_request_id) ON TABLE identity.session_refresh_token TO lanverse_app;
+
+GRANT UPDATE(replay_until) ON TABLE identity.session_refresh_token TO lanverse_app;
+
+GRANT UPDATE(receipt_ciphertext) ON TABLE identity.session_refresh_token TO lanverse_app;
 
 GRANT SELECT,INSERT,UPDATE ON TABLE identity."user" TO lanverse_app;
 
 GRANT SELECT,INSERT,UPDATE ON TABLE identity.user_session TO lanverse_app;
-GRANT SELECT,INSERT,UPDATE ON TABLE identity.login_guard TO lanverse_app;
-GRANT SELECT,INSERT ON TABLE identity.auth_event TO lanverse_app;
 
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE infra.idempotency_record TO lanverse_app;
 
 GRANT SELECT,INSERT,DELETE ON TABLE infra.outbox TO lanverse_app;
 
-GRANT UPDATE (published_at, update_time) ON TABLE infra.outbox TO lanverse_app;
+GRANT UPDATE(published_at) ON TABLE infra.outbox TO lanverse_app;
+
+GRANT UPDATE(update_time) ON TABLE infra.outbox TO lanverse_app;
 
 GRANT SELECT,INSERT,DELETE ON TABLE infra.processed_event TO lanverse_app;
 
-GRANT UPDATE (update_time) ON TABLE infra.processed_event TO lanverse_app;
+GRANT UPDATE(update_time) ON TABLE infra.processed_event TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE media.library TO lanverse_app;
 
-GRANT UPDATE (revision, update_time) ON TABLE media.library TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE media.library TO lanverse_app;
+
+GRANT UPDATE(update_time) ON TABLE media.library TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE media.library_command TO lanverse_app;
 
 GRANT SELECT,INSERT,DELETE ON TABLE media.library_folder TO lanverse_app;
 
-GRANT UPDATE (parent_id, name, name_key, "position", style, theme, revision, update_time) ON TABLE media.library_folder TO lanverse_app;
+GRANT UPDATE(parent_id) ON TABLE media.library_folder TO lanverse_app;
+
+GRANT UPDATE(name) ON TABLE media.library_folder TO lanverse_app;
+
+GRANT UPDATE(name_key) ON TABLE media.library_folder TO lanverse_app;
+
+GRANT UPDATE("position") ON TABLE media.library_folder TO lanverse_app;
+
+GRANT UPDATE(style) ON TABLE media.library_folder TO lanverse_app;
+
+GRANT UPDATE(theme) ON TABLE media.library_folder TO lanverse_app;
+
+GRANT UPDATE(revision) ON TABLE media.library_folder TO lanverse_app;
+
+GRANT UPDATE(update_time) ON TABLE media.library_folder TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE media.library_item TO lanverse_app;
 
-GRANT UPDATE (plain_text, folder_id, title, category, tags, source_label, note, favorite, catalog_state, trashed_at, "position", revision, update_time, purged_at) ON TABLE media.library_item TO lanverse_app;
+GRANT UPDATE(plain_text) ON TABLE media.library_item TO lanverse_app;
+
+GRANT UPDATE(folder_id) ON TABLE media.library_item TO lanverse_app;
+
+GRANT UPDATE(title) ON TABLE media.library_item TO lanverse_app;
+
+GRANT UPDATE(category) ON TABLE media.library_item TO lanverse_app;
+
+GRANT UPDATE(tags) ON TABLE media.library_item TO lanverse_app;
+
+GRANT UPDATE(source_label) ON TABLE media.library_item TO lanverse_app;
+
+GRANT UPDATE(note) ON TABLE media.library_item TO lanverse_app;
+
+GRANT UPDATE(favorite) ON TABLE media.library_item TO lanverse_app;
+
+GRANT UPDATE(catalog_state) ON TABLE media.library_item TO lanverse_app;
+
+GRANT UPDATE(trashed_at) ON TABLE media.library_item TO lanverse_app;
+
+GRANT UPDATE("position") ON TABLE media.library_item TO lanverse_app;
+
+GRANT UPDATE(revision) ON TABLE media.library_item TO lanverse_app;
+
+GRANT UPDATE(update_time) ON TABLE media.library_item TO lanverse_app;
+
+GRANT UPDATE(purged_at) ON TABLE media.library_item TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE media.media_asset TO lanverse_app;
 
-GRANT UPDATE (status, mime_type, byte_size, sha256, width, height, duration_ms, fps, audio_channels, codec, moderation_status, moderation_detail, failure_reason, delete_time, purge_after, revision, update_time, is_delete) ON TABLE media.media_asset TO lanverse_app;
+GRANT UPDATE(status) ON TABLE media.media_asset TO lanverse_app;
+
+GRANT UPDATE(mime_type) ON TABLE media.media_asset TO lanverse_app;
+
+GRANT UPDATE(byte_size) ON TABLE media.media_asset TO lanverse_app;
+
+GRANT UPDATE(sha256) ON TABLE media.media_asset TO lanverse_app;
+
+GRANT UPDATE(width) ON TABLE media.media_asset TO lanverse_app;
+
+GRANT UPDATE(height) ON TABLE media.media_asset TO lanverse_app;
+
+GRANT UPDATE(duration_ms) ON TABLE media.media_asset TO lanverse_app;
+
+GRANT UPDATE(fps) ON TABLE media.media_asset TO lanverse_app;
+
+GRANT UPDATE(audio_channels) ON TABLE media.media_asset TO lanverse_app;
+
+GRANT UPDATE(codec) ON TABLE media.media_asset TO lanverse_app;
+
+GRANT UPDATE(moderation_status) ON TABLE media.media_asset TO lanverse_app;
+
+GRANT UPDATE(moderation_detail) ON TABLE media.media_asset TO lanverse_app;
+
+GRANT UPDATE(failure_reason) ON TABLE media.media_asset TO lanverse_app;
+
+GRANT UPDATE(delete_time) ON TABLE media.media_asset TO lanverse_app;
+
+GRANT UPDATE(purge_after) ON TABLE media.media_asset TO lanverse_app;
+
+GRANT UPDATE(revision) ON TABLE media.media_asset TO lanverse_app;
+
+GRANT UPDATE(update_time) ON TABLE media.media_asset TO lanverse_app;
+
+GRANT UPDATE(is_delete) ON TABLE media.media_asset TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE media.object_location TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE media.package_command TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE media.package_job TO lanverse_app;
 
-GRANT UPDATE (status, revision, library_revision, project_revision, result, updated_at) ON TABLE media.package_job TO lanverse_app;
+GRANT UPDATE(status) ON TABLE media.package_job TO lanverse_app;
+
+GRANT UPDATE(revision) ON TABLE media.package_job TO lanverse_app;
+
+GRANT UPDATE(library_revision) ON TABLE media.package_job TO lanverse_app;
+
+GRANT UPDATE(project_revision) ON TABLE media.package_job TO lanverse_app;
+
+GRANT UPDATE(result) ON TABLE media.package_job TO lanverse_app;
+
+GRANT UPDATE(updated_at) ON TABLE media.package_job TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE media.package_object TO lanverse_app;
 
-GRANT UPDATE (status) ON TABLE media.package_object TO lanverse_app;
+GRANT UPDATE(status) ON TABLE media.package_object TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE media.project_copy_object TO lanverse_app;
 
-GRANT UPDATE (byte_size, source_verified, write_started, sha256, status, update_time) ON TABLE media.project_copy_object TO lanverse_app;
+GRANT UPDATE(byte_size) ON TABLE media.project_copy_object TO lanverse_app;
+
+GRANT UPDATE(source_verified) ON TABLE media.project_copy_object TO lanverse_app;
+
+GRANT UPDATE(write_started) ON TABLE media.project_copy_object TO lanverse_app;
+
+GRANT UPDATE(sha256) ON TABLE media.project_copy_object TO lanverse_app;
+
+GRANT UPDATE(status) ON TABLE media.project_copy_object TO lanverse_app;
+
+GRANT UPDATE(update_time) ON TABLE media.project_copy_object TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE media.project_copy_receipt TO lanverse_app;
 
@@ -4124,33 +5885,129 @@ GRANT SELECT,INSERT ON TABLE media.purge_command TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE media.purge_item TO lanverse_app;
 
-GRANT UPDATE (status, failure_code) ON TABLE media.purge_item TO lanverse_app;
+GRANT UPDATE(status) ON TABLE media.purge_item TO lanverse_app;
+
+GRANT UPDATE(failure_code) ON TABLE media.purge_item TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE media.purge_job TO lanverse_app;
 
-GRANT UPDATE (status, stage, attempt, revision, cancellation_requested, needs_reconciliation, execution_unconfirmed, execution_id, worker_fence, lease_until, process_ended, updated_at) ON TABLE media.purge_job TO lanverse_app;
+GRANT UPDATE(status) ON TABLE media.purge_job TO lanverse_app;
+
+GRANT UPDATE(stage) ON TABLE media.purge_job TO lanverse_app;
+
+GRANT UPDATE(attempt) ON TABLE media.purge_job TO lanverse_app;
+
+GRANT UPDATE(revision) ON TABLE media.purge_job TO lanverse_app;
+
+GRANT UPDATE(cancellation_requested) ON TABLE media.purge_job TO lanverse_app;
+
+GRANT UPDATE(needs_reconciliation) ON TABLE media.purge_job TO lanverse_app;
+
+GRANT UPDATE(execution_unconfirmed) ON TABLE media.purge_job TO lanverse_app;
+
+GRANT UPDATE(execution_id) ON TABLE media.purge_job TO lanverse_app;
+
+GRANT UPDATE(worker_fence) ON TABLE media.purge_job TO lanverse_app;
+
+GRANT UPDATE(lease_until) ON TABLE media.purge_job TO lanverse_app;
+
+GRANT UPDATE(process_ended) ON TABLE media.purge_job TO lanverse_app;
+
+GRANT UPDATE(updated_at) ON TABLE media.purge_job TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE media.purge_object TO lanverse_app;
 
-GRANT UPDATE (byte_size, sha256, verified, removal_started, removed) ON TABLE media.purge_object TO lanverse_app;
+GRANT UPDATE(byte_size) ON TABLE media.purge_object TO lanverse_app;
+
+GRANT UPDATE(sha256) ON TABLE media.purge_object TO lanverse_app;
+
+GRANT UPDATE(verified) ON TABLE media.purge_object TO lanverse_app;
+
+GRANT UPDATE(removal_started) ON TABLE media.purge_object TO lanverse_app;
+
+GRANT UPDATE(removed) ON TABLE media.purge_object TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE media.rendition TO lanverse_app;
 
-GRANT UPDATE (update_time, is_delete) ON TABLE media.rendition TO lanverse_app;
+GRANT UPDATE(update_time) ON TABLE media.rendition TO lanverse_app;
+
+GRANT UPDATE(is_delete) ON TABLE media.rendition TO lanverse_app;
+
+GRANT SELECT,INSERT ON TABLE media.storage_activation TO lanverse_app;
+
+GRANT SELECT,INSERT ON TABLE media.storage_activation_guard TO lanverse_app;
+
+GRANT SELECT,INSERT ON TABLE media.storage_bucket_evidence TO lanverse_app;
+
+GRANT SELECT,INSERT ON TABLE media.storage_config_revision TO lanverse_app;
+
+GRANT SELECT,INSERT ON TABLE media.storage_deployment_evidence TO lanverse_app;
+
+GRANT SELECT,INSERT ON TABLE media.storage_legacy_binding TO lanverse_app;
+
+GRANT SELECT,INSERT ON TABLE media.storage_legacy_receipt TO lanverse_app;
+
+GRANT SELECT,INSERT ON TABLE media.storage_legacy_tombstone TO lanverse_app;
+
+GRANT SELECT,INSERT ON TABLE media.storage_probe_evidence TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE media.storage_probe_intent TO lanverse_app;
+
+GRANT SELECT,INSERT ON TABLE media.storage_profile TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE media.storage_route TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE media.storage_runtime TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE media.storage_work_intent TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE media.transfer_command TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE media.transfer_item TO lanverse_app;
 
-GRANT UPDATE (status, failure_code) ON TABLE media.transfer_item TO lanverse_app;
+GRANT UPDATE(status) ON TABLE media.transfer_item TO lanverse_app;
+
+GRANT UPDATE(failure_code) ON TABLE media.transfer_item TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE media.transfer_job TO lanverse_app;
 
-GRANT UPDATE (status, stage, attempt, revision, needs_reconciliation, cancellation_requested, execution_unconfirmed, execution_id, worker_fence, lease_until, process_ended, updated_at) ON TABLE media.transfer_job TO lanverse_app;
+GRANT UPDATE(status) ON TABLE media.transfer_job TO lanverse_app;
+
+GRANT UPDATE(stage) ON TABLE media.transfer_job TO lanverse_app;
+
+GRANT UPDATE(attempt) ON TABLE media.transfer_job TO lanverse_app;
+
+GRANT UPDATE(revision) ON TABLE media.transfer_job TO lanverse_app;
+
+GRANT UPDATE(needs_reconciliation) ON TABLE media.transfer_job TO lanverse_app;
+
+GRANT UPDATE(cancellation_requested) ON TABLE media.transfer_job TO lanverse_app;
+
+GRANT UPDATE(execution_unconfirmed) ON TABLE media.transfer_job TO lanverse_app;
+
+GRANT UPDATE(execution_id) ON TABLE media.transfer_job TO lanverse_app;
+
+GRANT UPDATE(worker_fence) ON TABLE media.transfer_job TO lanverse_app;
+
+GRANT UPDATE(lease_until) ON TABLE media.transfer_job TO lanverse_app;
+
+GRANT UPDATE(process_ended) ON TABLE media.transfer_job TO lanverse_app;
+
+GRANT UPDATE(updated_at) ON TABLE media.transfer_job TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE media.transfer_object TO lanverse_app;
 
-GRANT UPDATE (byte_size, sha256, source_verified, write_started, status) ON TABLE media.transfer_object TO lanverse_app;
+GRANT UPDATE(byte_size) ON TABLE media.transfer_object TO lanverse_app;
+
+GRANT UPDATE(sha256) ON TABLE media.transfer_object TO lanverse_app;
+
+GRANT UPDATE(source_verified) ON TABLE media.transfer_object TO lanverse_app;
+
+GRANT UPDATE(write_started) ON TABLE media.transfer_object TO lanverse_app;
+
+GRANT UPDATE(status) ON TABLE media.transfer_object TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE media.upload_admission TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE media.upload_request TO lanverse_app;
 
@@ -4158,11 +6015,41 @@ GRANT SELECT,INSERT ON TABLE mediatool.depth_command TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE mediatool.depth_job TO lanverse_app;
 
-GRANT UPDATE (status, stage, attempt, revision, process_state, active_worker, failure_code, retryable, needs_reconciliation, execution_unconfirmed, cancellation_requested, reconciliation_requested, updated_at) ON TABLE mediatool.depth_job TO lanverse_app;
+GRANT UPDATE(status) ON TABLE mediatool.depth_job TO lanverse_app;
+
+GRANT UPDATE(stage) ON TABLE mediatool.depth_job TO lanverse_app;
+
+GRANT UPDATE(attempt) ON TABLE mediatool.depth_job TO lanverse_app;
+
+GRANT UPDATE(revision) ON TABLE mediatool.depth_job TO lanverse_app;
+
+GRANT UPDATE(process_state) ON TABLE mediatool.depth_job TO lanverse_app;
+
+GRANT UPDATE(active_worker) ON TABLE mediatool.depth_job TO lanverse_app;
+
+GRANT UPDATE(failure_code) ON TABLE mediatool.depth_job TO lanverse_app;
+
+GRANT UPDATE(retryable) ON TABLE mediatool.depth_job TO lanverse_app;
+
+GRANT UPDATE(needs_reconciliation) ON TABLE mediatool.depth_job TO lanverse_app;
+
+GRANT UPDATE(execution_unconfirmed) ON TABLE mediatool.depth_job TO lanverse_app;
+
+GRANT UPDATE(cancellation_requested) ON TABLE mediatool.depth_job TO lanverse_app;
+
+GRANT UPDATE(reconciliation_requested) ON TABLE mediatool.depth_job TO lanverse_app;
+
+GRANT UPDATE(updated_at) ON TABLE mediatool.depth_job TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE mediatool.depth_object TO lanverse_app;
 
-GRANT UPDATE (write_started, delete_started, status, updated_at) ON TABLE mediatool.depth_object TO lanverse_app;
+GRANT UPDATE(write_started) ON TABLE mediatool.depth_object TO lanverse_app;
+
+GRANT UPDATE(delete_started) ON TABLE mediatool.depth_object TO lanverse_app;
+
+GRANT UPDATE(status) ON TABLE mediatool.depth_object TO lanverse_app;
+
+GRANT UPDATE(updated_at) ON TABLE mediatool.depth_object TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE mediatool.depth_result_intent TO lanverse_app;
 
@@ -4170,27 +6057,119 @@ GRANT SELECT,INSERT ON TABLE mediatool.export_command TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE mediatool.export_job TO lanverse_app;
 
-GRANT UPDATE (actor_id, actor_role, status, stage, progress, attempt, revision, asset_id, sha256, failure_code, active_worker, updated_at) ON TABLE mediatool.export_job TO lanverse_app;
+GRANT UPDATE(actor_id) ON TABLE mediatool.export_job TO lanverse_app;
+
+GRANT UPDATE(actor_role) ON TABLE mediatool.export_job TO lanverse_app;
+
+GRANT UPDATE(status) ON TABLE mediatool.export_job TO lanverse_app;
+
+GRANT UPDATE(stage) ON TABLE mediatool.export_job TO lanverse_app;
+
+GRANT UPDATE(progress) ON TABLE mediatool.export_job TO lanverse_app;
+
+GRANT UPDATE(attempt) ON TABLE mediatool.export_job TO lanverse_app;
+
+GRANT UPDATE(revision) ON TABLE mediatool.export_job TO lanverse_app;
+
+GRANT UPDATE(asset_id) ON TABLE mediatool.export_job TO lanverse_app;
+
+GRANT UPDATE(sha256) ON TABLE mediatool.export_job TO lanverse_app;
+
+GRANT UPDATE(failure_code) ON TABLE mediatool.export_job TO lanverse_app;
+
+GRANT UPDATE(active_worker) ON TABLE mediatool.export_job TO lanverse_app;
+
+GRANT UPDATE(updated_at) ON TABLE mediatool.export_job TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE mediatool.transcription_command TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE mediatool.transcription_job TO lanverse_app;
 
-GRANT UPDATE (actor_id, actor_role, status, stage, progress, attempt, revision, inference_state, result, result_sha256, failure_code, active_worker, updated_at) ON TABLE mediatool.transcription_job TO lanverse_app;
+GRANT UPDATE(actor_id) ON TABLE mediatool.transcription_job TO lanverse_app;
+
+GRANT UPDATE(actor_role) ON TABLE mediatool.transcription_job TO lanverse_app;
+
+GRANT UPDATE(status) ON TABLE mediatool.transcription_job TO lanverse_app;
+
+GRANT UPDATE(stage) ON TABLE mediatool.transcription_job TO lanverse_app;
+
+GRANT UPDATE(progress) ON TABLE mediatool.transcription_job TO lanverse_app;
+
+GRANT UPDATE(attempt) ON TABLE mediatool.transcription_job TO lanverse_app;
+
+GRANT UPDATE(revision) ON TABLE mediatool.transcription_job TO lanverse_app;
+
+GRANT UPDATE(inference_state) ON TABLE mediatool.transcription_job TO lanverse_app;
+
+GRANT UPDATE(result) ON TABLE mediatool.transcription_job TO lanverse_app;
+
+GRANT UPDATE(result_sha256) ON TABLE mediatool.transcription_job TO lanverse_app;
+
+GRANT UPDATE(failure_code) ON TABLE mediatool.transcription_job TO lanverse_app;
+
+GRANT UPDATE(active_worker) ON TABLE mediatool.transcription_job TO lanverse_app;
+
+GRANT UPDATE(updated_at) ON TABLE mediatool.transcription_job TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE operation.batch TO lanverse_app;
 
-GRANT UPDATE (status, paused_reason, total_count, succeeded_count, failed_count, unknown_count, quote_total_micros, workflow_id, update_time, cancel_requested_at) ON TABLE operation.batch TO lanverse_app;
+GRANT UPDATE(status) ON TABLE operation.batch TO lanverse_app;
+
+GRANT UPDATE(paused_reason) ON TABLE operation.batch TO lanverse_app;
+
+GRANT UPDATE(total_count) ON TABLE operation.batch TO lanverse_app;
+
+GRANT UPDATE(succeeded_count) ON TABLE operation.batch TO lanverse_app;
+
+GRANT UPDATE(failed_count) ON TABLE operation.batch TO lanverse_app;
+
+GRANT UPDATE(unknown_count) ON TABLE operation.batch TO lanverse_app;
+
+GRANT UPDATE(quote_total_micros) ON TABLE operation.batch TO lanverse_app;
+
+GRANT UPDATE(workflow_id) ON TABLE operation.batch TO lanverse_app;
+
+GRANT UPDATE(update_time) ON TABLE operation.batch TO lanverse_app;
+
+GRANT UPDATE(cancel_requested_at) ON TABLE operation.batch TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE operation.batch_launch TO lanverse_app;
 
-GRANT UPDATE (state, released_at) ON TABLE operation.batch_launch TO lanverse_app;
+GRANT UPDATE(state) ON TABLE operation.batch_launch TO lanverse_app;
+
+GRANT UPDATE(released_at) ON TABLE operation.batch_launch TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE operation.confirmation_request TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE operation.operation TO lanverse_app;
 
-GRANT UPDATE (status, failure_code, failure_message, retryable, reservation_id, provider_request_key, workflow_id, confirmed_at, confirmed_by, started_at, finished_at, settled_micros, cost_estimated, update_time) ON TABLE operation.operation TO lanverse_app;
+GRANT UPDATE(status) ON TABLE operation.operation TO lanverse_app;
+
+GRANT UPDATE(failure_code) ON TABLE operation.operation TO lanverse_app;
+
+GRANT UPDATE(failure_message) ON TABLE operation.operation TO lanverse_app;
+
+GRANT UPDATE(retryable) ON TABLE operation.operation TO lanverse_app;
+
+GRANT UPDATE(reservation_id) ON TABLE operation.operation TO lanverse_app;
+
+GRANT UPDATE(provider_request_key) ON TABLE operation.operation TO lanverse_app;
+
+GRANT UPDATE(workflow_id) ON TABLE operation.operation TO lanverse_app;
+
+GRANT UPDATE(confirmed_at) ON TABLE operation.operation TO lanverse_app;
+
+GRANT UPDATE(confirmed_by) ON TABLE operation.operation TO lanverse_app;
+
+GRANT UPDATE(started_at) ON TABLE operation.operation TO lanverse_app;
+
+GRANT UPDATE(finished_at) ON TABLE operation.operation TO lanverse_app;
+
+GRANT UPDATE(settled_micros) ON TABLE operation.operation TO lanverse_app;
+
+GRANT UPDATE(cost_estimated) ON TABLE operation.operation TO lanverse_app;
+
+GRANT UPDATE(update_time) ON TABLE operation.operation TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE operation.operation_event TO lanverse_app;
 
@@ -4198,9 +6177,27 @@ GRANT SELECT,INSERT ON TABLE operation.operation_input TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE operation.operation_output TO lanverse_app;
 
-GRANT UPDATE (moderation_status, moderation_reason, update_time) ON TABLE operation.operation_output TO lanverse_app;
+GRANT UPDATE(moderation_status) ON TABLE operation.operation_output TO lanverse_app;
+
+GRANT UPDATE(moderation_reason) ON TABLE operation.operation_output TO lanverse_app;
+
+GRANT UPDATE(update_time) ON TABLE operation.operation_output TO lanverse_app;
+
+GRANT SELECT,INSERT ON TABLE operation.prompt_resolution_receipt TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE operation.prompt_submission TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE operation.prompt_submission_slot TO lanverse_app;
+
+GRANT SELECT,INSERT ON TABLE operation.provider_binding TO lanverse_app;
 
 GRANT SELECT,INSERT,UPDATE ON TABLE operation.provider_call TO lanverse_app;
+
+GRANT SELECT,INSERT ON TABLE operation.provider_credential_binding TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE operation.provider_result TO lanverse_app;
+
+GRANT SELECT,INSERT ON TABLE operation.provider_trial TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE operation.quote_request TO lanverse_app;
 
@@ -4212,13 +6209,33 @@ GRANT SELECT,INSERT ON TABLE script.command_result TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE script.command_state TO lanverse_app;
 
-GRANT UPDATE (revision, status, failure_code, cancellation_requested, needs_reconciliation, io_owner_id, io_state, updated_at) ON TABLE script.command_state TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE script.command_state TO lanverse_app;
+
+GRANT UPDATE(status) ON TABLE script.command_state TO lanverse_app;
+
+GRANT UPDATE(failure_code) ON TABLE script.command_state TO lanverse_app;
+
+GRANT UPDATE(cancellation_requested) ON TABLE script.command_state TO lanverse_app;
+
+GRANT UPDATE(needs_reconciliation) ON TABLE script.command_state TO lanverse_app;
+
+GRANT UPDATE(io_owner_id) ON TABLE script.command_state TO lanverse_app;
+
+GRANT UPDATE(io_state) ON TABLE script.command_state TO lanverse_app;
+
+GRANT UPDATE(updated_at) ON TABLE script.command_state TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE script.copy_object_intent TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE script.copy_object_state TO lanverse_app;
 
-GRANT UPDATE (put_started, confirmed, removed, updated_at) ON TABLE script.copy_object_state TO lanverse_app;
+GRANT UPDATE(put_started) ON TABLE script.copy_object_state TO lanverse_app;
+
+GRANT UPDATE(confirmed) ON TABLE script.copy_object_state TO lanverse_app;
+
+GRANT UPDATE(removed) ON TABLE script.copy_object_state TO lanverse_app;
+
+GRANT UPDATE(updated_at) ON TABLE script.copy_object_state TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE script.copy_receipt TO lanverse_app;
 
@@ -4228,7 +6245,19 @@ GRANT SELECT,INSERT ON TABLE script.dialogue_line TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE script.episode TO lanverse_app;
 
-GRANT UPDATE (title, revision, current_structure_id, confirmed_structure_id, previous_episode_id, inherit_status, is_delete) ON TABLE script.episode TO lanverse_app;
+GRANT UPDATE(title) ON TABLE script.episode TO lanverse_app;
+
+GRANT UPDATE(revision) ON TABLE script.episode TO lanverse_app;
+
+GRANT UPDATE(current_structure_id) ON TABLE script.episode TO lanverse_app;
+
+GRANT UPDATE(confirmed_structure_id) ON TABLE script.episode TO lanverse_app;
+
+GRANT UPDATE(previous_episode_id) ON TABLE script.episode TO lanverse_app;
+
+GRANT UPDATE(inherit_status) ON TABLE script.episode TO lanverse_app;
+
+GRANT UPDATE(is_delete) ON TABLE script.episode TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE script.episode_structure TO lanverse_app;
 
@@ -4246,17 +6275,53 @@ GRANT SELECT,INSERT ON TABLE script.import_publication TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE script.import_state TO lanverse_app;
 
-GRANT UPDATE (revision, attempt, status, stage, latest_script_revision, latest_version_id, cancellation_requested, reconciliation_requested, needs_reconciliation, failure_code, io_owner_id, io_state, updated_at) ON TABLE script.import_state TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE script.import_state TO lanverse_app;
+
+GRANT UPDATE(attempt) ON TABLE script.import_state TO lanverse_app;
+
+GRANT UPDATE(status) ON TABLE script.import_state TO lanverse_app;
+
+GRANT UPDATE(stage) ON TABLE script.import_state TO lanverse_app;
+
+GRANT UPDATE(latest_script_revision) ON TABLE script.import_state TO lanverse_app;
+
+GRANT UPDATE(latest_version_id) ON TABLE script.import_state TO lanverse_app;
+
+GRANT UPDATE(cancellation_requested) ON TABLE script.import_state TO lanverse_app;
+
+GRANT UPDATE(reconciliation_requested) ON TABLE script.import_state TO lanverse_app;
+
+GRANT UPDATE(needs_reconciliation) ON TABLE script.import_state TO lanverse_app;
+
+GRANT UPDATE(failure_code) ON TABLE script.import_state TO lanverse_app;
+
+GRANT UPDATE(io_owner_id) ON TABLE script.import_state TO lanverse_app;
+
+GRANT UPDATE(io_state) ON TABLE script.import_state TO lanverse_app;
+
+GRANT UPDATE(updated_at) ON TABLE script.import_state TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE script.object_intent TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE script.object_state TO lanverse_app;
 
-GRANT UPDATE (put_started, confirmed, removed, updated_at) ON TABLE script.object_state TO lanverse_app;
+GRANT UPDATE(put_started) ON TABLE script.object_state TO lanverse_app;
+
+GRANT UPDATE(confirmed) ON TABLE script.object_state TO lanverse_app;
+
+GRANT UPDATE(removed) ON TABLE script.object_state TO lanverse_app;
+
+GRANT UPDATE(updated_at) ON TABLE script.object_state TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE script.project_state TO lanverse_app;
 
-GRANT UPDATE (revision, draft_version_id, adopted_version_id, updated_at) ON TABLE script.project_state TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE script.project_state TO lanverse_app;
+
+GRANT UPDATE(draft_version_id) ON TABLE script.project_state TO lanverse_app;
+
+GRANT UPDATE(adopted_version_id) ON TABLE script.project_state TO lanverse_app;
+
+GRANT UPDATE(updated_at) ON TABLE script.project_state TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE script.request TO lanverse_app;
 
@@ -4276,15 +6341,23 @@ GRANT SELECT,INSERT ON TABLE script.split_set TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE script.version_head TO lanverse_app;
 
-GRANT UPDATE (split_revision, candidate_split_set_id, confirmed_split_set_id) ON TABLE script.version_head TO lanverse_app;
+GRANT UPDATE(split_revision) ON TABLE script.version_head TO lanverse_app;
+
+GRANT UPDATE(candidate_split_set_id) ON TABLE script.version_head TO lanverse_app;
+
+GRANT UPDATE(confirmed_split_set_id) ON TABLE script.version_head TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE script.version_source TO lanverse_app;
 
+GRANT SELECT,INSERT,UPDATE ON TABLE workspace.creation_scope TO lanverse_app;
+
 GRANT SELECT,INSERT ON TABLE workspace.organization TO lanverse_app;
 
-GRANT UPDATE (update_time) ON TABLE workspace.organization TO lanverse_app;
+GRANT UPDATE(update_time) ON TABLE workspace.organization TO lanverse_app;
 
 GRANT SELECT,INSERT,UPDATE ON TABLE workspace.project TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE workspace.project_activity TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE workspace.project_change_command TO lanverse_app;
 
@@ -4292,25 +6365,83 @@ GRANT SELECT,INSERT ON TABLE workspace.project_copy_command TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE workspace.project_copy_job TO lanverse_app;
 
-GRANT UPDATE (status, stage, revision, attempt, worker_id, started_at, media_receipt, canvas_receipt, failure_code, retryable, needs_reconciliation, cancellation_requested, reconciliation_requested, execution_unconfirmed, update_time, script_receipt, bible_receipt, execution_actor_id) ON TABLE workspace.project_copy_job TO lanverse_app;
+GRANT UPDATE(status) ON TABLE workspace.project_copy_job TO lanverse_app;
+
+GRANT UPDATE(stage) ON TABLE workspace.project_copy_job TO lanverse_app;
+
+GRANT UPDATE(revision) ON TABLE workspace.project_copy_job TO lanverse_app;
+
+GRANT UPDATE(attempt) ON TABLE workspace.project_copy_job TO lanverse_app;
+
+GRANT UPDATE(worker_id) ON TABLE workspace.project_copy_job TO lanverse_app;
+
+GRANT UPDATE(started_at) ON TABLE workspace.project_copy_job TO lanverse_app;
+
+GRANT UPDATE(media_receipt) ON TABLE workspace.project_copy_job TO lanverse_app;
+
+GRANT UPDATE(canvas_receipt) ON TABLE workspace.project_copy_job TO lanverse_app;
+
+GRANT UPDATE(failure_code) ON TABLE workspace.project_copy_job TO lanverse_app;
+
+GRANT UPDATE(retryable) ON TABLE workspace.project_copy_job TO lanverse_app;
+
+GRANT UPDATE(needs_reconciliation) ON TABLE workspace.project_copy_job TO lanverse_app;
+
+GRANT UPDATE(cancellation_requested) ON TABLE workspace.project_copy_job TO lanverse_app;
+
+GRANT UPDATE(reconciliation_requested) ON TABLE workspace.project_copy_job TO lanverse_app;
+
+GRANT UPDATE(execution_unconfirmed) ON TABLE workspace.project_copy_job TO lanverse_app;
+
+GRANT UPDATE(update_time) ON TABLE workspace.project_copy_job TO lanverse_app;
+
+GRANT UPDATE(script_receipt) ON TABLE workspace.project_copy_job TO lanverse_app;
+
+GRANT UPDATE(bible_receipt) ON TABLE workspace.project_copy_job TO lanverse_app;
+
+GRANT UPDATE(execution_actor_id) ON TABLE workspace.project_copy_job TO lanverse_app;
+
+GRANT SELECT,INSERT ON TABLE workspace.project_creation_receipt TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE workspace.project_folder TO lanverse_app;
 
-GRANT UPDATE (name, cover_project_id, cover_asset_id, revision, is_delete, delete_time, update_time) ON TABLE workspace.project_folder TO lanverse_app;
+GRANT UPDATE(name) ON TABLE workspace.project_folder TO lanverse_app;
+
+GRANT UPDATE(cover_project_id) ON TABLE workspace.project_folder TO lanverse_app;
+
+GRANT UPDATE(cover_asset_id) ON TABLE workspace.project_folder TO lanverse_app;
+
+GRANT UPDATE(revision) ON TABLE workspace.project_folder TO lanverse_app;
+
+GRANT UPDATE(is_delete) ON TABLE workspace.project_folder TO lanverse_app;
+
+GRANT UPDATE(delete_time) ON TABLE workspace.project_folder TO lanverse_app;
+
+GRANT UPDATE(update_time) ON TABLE workspace.project_folder TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE workspace.project_folder_command TO lanverse_app;
 
 GRANT SELECT,INSERT ON TABLE workspace.project_folder_placement TO lanverse_app;
 
-GRANT UPDATE (folder_id, revision, update_time) ON TABLE workspace.project_folder_placement TO lanverse_app;
+GRANT UPDATE(folder_id) ON TABLE workspace.project_folder_placement TO lanverse_app;
+
+GRANT UPDATE(revision) ON TABLE workspace.project_folder_placement TO lanverse_app;
+
+GRANT UPDATE(update_time) ON TABLE workspace.project_folder_placement TO lanverse_app;
 
 GRANT SELECT,INSERT,UPDATE ON TABLE workspace.prompt_customization TO lanverse_app;
 
+GRANT SELECT,INSERT,UPDATE ON TABLE workspace.prompt_draft TO lanverse_app;
+
+GRANT SELECT,INSERT ON TABLE workspace.prompt_draft_receipt TO lanverse_app;
+
 GRANT SELECT,INSERT ON TABLE workspace.style_preset TO lanverse_app;
 
--- 分区是按初始化时间派生的物理对象，不能把一次 dump 的年月固定为结构合同。
--- 每个父表预建当前 UTC 月及未来三个月，并保留默认分区。
--- 索引、约束与触发器由 PostgreSQL 从父表继承；应用始终经父表访问。
+GRANT SELECT,INSERT,UPDATE ON TABLE workspace.team TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE workspace.team_member TO lanverse_app;
+
+-- 分区按初始化时的当前 UTC 月及未来三个月生成，并保留默认分区。
 DO $$
 DECLARE
   first_month timestamp := date_trunc('month', now() AT TIME ZONE 'UTC');
@@ -4333,345 +6464,13 @@ BEGIN
   END LOOP;
 END $$;
 
--- M1: ownership and the initial document are committed with the project.
-ALTER TABLE canvas.document ADD CONSTRAINT document_id_project_unique UNIQUE(id,project_id);
-ALTER TABLE workspace.project ADD CONSTRAINT project_owner_fk FOREIGN KEY(owner_id) REFERENCES identity."user"(id);
-ALTER TABLE workspace.project ADD CONSTRAINT project_initial_canvas_fk FOREIGN KEY(initial_canvas_id,id) REFERENCES canvas.document(id,project_id) DEFERRABLE INITIALLY DEFERRED;
-CREATE INDEX project_owner_updated ON workspace.project(org_id,owner_id,update_time DESC,id DESC) WHERE NOT is_delete;
-CREATE TABLE workspace.project_creation_receipt (
-    actor_id uuid NOT NULL REFERENCES identity."user"(id),
-    idem_key uuid NOT NULL,
-    request_hash text NOT NULL CHECK(request_hash ~ '^[0-9a-f]{64}$'),
-    project_id uuid NOT NULL REFERENCES workspace.project(id) ON DELETE CASCADE,
-    response_body jsonb NOT NULL CHECK(jsonb_typeof(response_body)='object'),
-    created_at timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY(actor_id,idem_key)
-);
-GRANT SELECT,INSERT ON workspace.project_creation_receipt TO lanverse_app;
-
--- M1: draft input versions and save receipts are immutable under the runtime role.
-ALTER TABLE canvas.node ADD COLUMN input_revision bigint CHECK(input_revision > 0);
-CREATE TABLE canvas.node_input (
-    node_id uuid NOT NULL REFERENCES canvas.node(id) ON DELETE CASCADE,
-    input_revision bigint NOT NULL CHECK(input_revision > 0),
-    draft jsonb NOT NULL CHECK(jsonb_typeof(draft)='object'),
-    created_by uuid NOT NULL REFERENCES identity."user"(id),
-    created_at timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY(node_id,input_revision)
-);
-ALTER TABLE canvas.node ADD CONSTRAINT node_input_head_fk FOREIGN KEY(id,input_revision) REFERENCES canvas.node_input(node_id,input_revision) DEFERRABLE INITIALLY DEFERRED;
-CREATE TABLE canvas.save_receipt (
-    actor_id uuid NOT NULL REFERENCES identity."user"(id),
-    idem_key uuid NOT NULL,
-    document_id uuid NOT NULL REFERENCES canvas.document(id) ON DELETE CASCADE,
-    request_hash text NOT NULL CHECK(request_hash ~ '^[0-9a-f]{64}$'),
-    result_revision bigint NOT NULL CHECK(result_revision > 1),
-    response_body jsonb NOT NULL CHECK(jsonb_typeof(response_body)='object'),
-    created_at timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY(actor_id,idem_key)
-);
-GRANT SELECT,INSERT ON canvas.node_input,canvas.save_receipt TO lanverse_app;
-
--- Email identity expansion; final schema retains legacy columns until cutover.
--- Expand only. The caller owns the transaction and must set a bounded lock timeout.
--- This file never creates a database/role/schema, resets data, or infers identities.
--- Run once on the existing pre-email schema; rollback the transaction for rehearsal.
-ALTER TABLE identity."user"
-    ADD COLUMN email_key text,
-    ADD COLUMN email_verified_at timestamptz,
-    ADD COLUMN email_version bigint NOT NULL DEFAULT 1 CHECK (email_version > 0),
-    ADD COLUMN platform_role text NOT NULL DEFAULT 'creator' CHECK (platform_role IN ('creator','platform_admin')),
-    ADD COLUMN platform_epoch bigint NOT NULL DEFAULT 1 CHECK (platform_epoch > 0),
-    ADD COLUMN avatar_asset_id uuid REFERENCES media.media_asset(id) ON DELETE RESTRICT,
-    ADD COLUMN terms_version text,
-    ADD COLUMN terms_accepted_at timestamptz,
-    ADD COLUMN theme text NOT NULL DEFAULT 'dark' CHECK (theme IN ('light','dark','system')),
-    ADD COLUMN prompt_suffix text NOT NULL DEFAULT '' CHECK (char_length(prompt_suffix) <= 2000),
-    ADD COLUMN deleted_at timestamptz,
-    ADD CONSTRAINT user_email_key_check CHECK (email_key IS NULL OR (
-        octet_length(email_key) BETWEEN 3 AND 254 AND email_key = lower(btrim(email_key))
-        AND email_key !~ '[^\x21-\x7e]' AND email_key ~ '^[^@]+@[^@]+$')),
-    ADD CONSTRAINT user_email_proof_check CHECK ((email_key IS NULL) = (email_verified_at IS NULL)),
-    ADD CONSTRAINT user_terms_check CHECK ((terms_version IS NULL) = (terms_accepted_at IS NULL));
-
--- session_epoch is the existing durable credential epoch. Retain one source of
--- truth during expansion; the cutover will rename it after old consumers retire.
-CREATE UNIQUE INDEX user_email_key_unique ON identity."user"(email_key) WHERE email_key IS NOT NULL;
-CREATE INDEX user_platform_directory_idx ON identity."user"(create_time DESC,id DESC);
-CREATE INDEX user_platform_status_idx ON identity."user"(status,create_time DESC,id DESC);
-CREATE INDEX user_platform_role_idx ON identity."user"(platform_role,status);
-
-ALTER TABLE identity.user_session
-    ADD COLUMN device_summary text NOT NULL DEFAULT '' CHECK (char_length(device_summary) <= 256),
-    ADD COLUMN reauth_at timestamptz,
-    ADD COLUMN reauth_epoch bigint CHECK (reauth_epoch > 0),
-    ADD COLUMN csrf_hash bytea CHECK (octet_length(csrf_hash) = 32),
-    ADD CONSTRAINT user_session_reauth_check CHECK ((reauth_at IS NULL) = (reauth_epoch IS NULL));
-CREATE INDEX user_session_activity_idx ON identity.user_session(account_id,last_active_at DESC,id);
-CREATE INDEX user_session_live_idx ON identity.user_session(account_id,id) WHERE revoked_at IS NULL;
-
-CREATE TABLE identity.platform_settings (
-    singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
-    registration_enabled boolean NOT NULL DEFAULT false,
-    team_creation_enabled boolean NOT NULL DEFAULT false,
-    revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
-    updated_by uuid REFERENCES identity."user"(id) ON DELETE RESTRICT,
-    update_time timestamptz NOT NULL DEFAULT now()
-);
 INSERT INTO identity.platform_settings(singleton) VALUES(true);
 
-CREATE TABLE workspace.team (
-    id uuid PRIMARY KEY,
-    name text NOT NULL CHECK (char_length(name) BETWEEN 2 AND 50),
-    avatar_asset_id uuid REFERENCES media.media_asset(id) ON DELETE RESTRICT,
-    created_by uuid NOT NULL REFERENCES identity."user"(id) ON DELETE RESTRICT,
-    status text NOT NULL DEFAULT 'active' CHECK (status IN ('active','archived','suspended')),
-    resume_status text CHECK (resume_status IN ('active','archived')),
-    governance_blocked boolean NOT NULL DEFAULT false,
-    auth_epoch bigint NOT NULL DEFAULT 1 CHECK (auth_epoch > 0),
-    invitation_enabled boolean NOT NULL DEFAULT true,
-    revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
-    create_time timestamptz NOT NULL DEFAULT now(),
-    update_time timestamptz NOT NULL DEFAULT now(),
-    CHECK ((status = 'suspended') = (resume_status IS NOT NULL))
-);
-CREATE INDEX team_creator_idx ON workspace.team(created_by,status);
-CREATE INDEX team_status_idx ON workspace.team(status,create_time DESC,id DESC);
-
-CREATE TABLE workspace.team_member (
-    team_id uuid NOT NULL REFERENCES workspace.team(id) ON DELETE RESTRICT,
-    user_id uuid NOT NULL REFERENCES identity."user"(id) ON DELETE RESTRICT,
-    role text NOT NULL CHECK (role IN ('team_admin','member')),
-    status text NOT NULL CHECK (status IN ('active','suspended','removed')),
-    auth_epoch bigint NOT NULL DEFAULT 1 CHECK (auth_epoch > 0),
-    joined_at timestamptz NOT NULL,
-    joined_by uuid REFERENCES identity."user"(id) ON DELETE RESTRICT,
-    source text NOT NULL CHECK (source IN ('created','invited','migrated','transferred')),
-    last_team_activity_at timestamptz,
-    revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
-    create_time timestamptz NOT NULL DEFAULT now(),
-    update_time timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY(team_id,user_id)
-);
-CREATE INDEX team_member_user_idx ON workspace.team_member(user_id,status,team_id);
-CREATE INDEX team_member_directory_idx ON workspace.team_member(team_id,status,joined_at DESC,user_id DESC);
-CREATE INDEX team_member_admin_idx ON workspace.team_member(team_id,role,status);
-
-CREATE TABLE workspace.creation_scope (
-    id uuid PRIMARY KEY,
-    kind text NOT NULL CHECK (kind IN ('personal','team')),
-    owner_user_id uuid REFERENCES identity."user"(id) ON DELETE RESTRICT,
-    team_id uuid REFERENCES workspace.team(id) ON DELETE RESTRICT,
-    physical_scope_id uuid NOT NULL REFERENCES workspace.organization(id) ON DELETE RESTRICT,
-    revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
-    create_time timestamptz NOT NULL DEFAULT now(),
-    update_time timestamptz NOT NULL DEFAULT now(),
-    CHECK ((kind = 'personal' AND owner_user_id IS NOT NULL AND team_id IS NULL)
-        OR (kind = 'team' AND owner_user_id IS NULL AND team_id IS NOT NULL))
-);
-CREATE UNIQUE INDEX creation_scope_personal_unique ON workspace.creation_scope(owner_user_id) WHERE owner_user_id IS NOT NULL;
-CREATE UNIQUE INDEX creation_scope_team_unique ON workspace.creation_scope(team_id) WHERE team_id IS NOT NULL;
-
-ALTER TABLE workspace.creation_scope ADD CONSTRAINT creation_scope_physical_unique UNIQUE (id,physical_scope_id);
-ALTER TABLE workspace.project
-    ADD COLUMN owner_scope_id uuid,
-    ADD CONSTRAINT project_owner_scope_fk FOREIGN KEY (owner_scope_id,org_id)
-        REFERENCES workspace.creation_scope(id,physical_scope_id) ON DELETE RESTRICT;
-CREATE INDEX project_owner_scope_idx ON workspace.project(owner_scope_id,is_delete,update_time DESC,id DESC);
-
-ALTER TABLE workspace.style_preset
-    ADD COLUMN owner_scope_id uuid,
-    ADD CONSTRAINT style_preset_owner_scope_fk FOREIGN KEY (owner_scope_id,org_id)
-        REFERENCES workspace.creation_scope(id,physical_scope_id) ON DELETE RESTRICT;
-CREATE INDEX style_preset_owner_scope_idx ON workspace.style_preset(owner_scope_id,is_delete);
-
-
-CREATE TABLE identity.auth_challenge (
-    id uuid PRIMARY KEY,
-    operation_id uuid NOT NULL,
-    purpose text NOT NULL CHECK (purpose IN ('registration_code','registration_grant','password_reset','email_old','email_new','deletion_confirm','migration_bind')),
-    email_key text NOT NULL,
-    user_id uuid REFERENCES identity."user"(id) ON DELETE RESTRICT,
-    email_version bigint CHECK (email_version > 0),
-    credential_epoch bigint CHECK (credential_epoch > 0),
-    proof_digest bytea NOT NULL CHECK (octet_length(proof_digest) = 32),
-    proof_key_id text NOT NULL,
-    flow_secret_digest bytea CHECK (octet_length(flow_secret_digest) = 32),
-    attempts smallint NOT NULL DEFAULT 0 CHECK (attempts BETWEEN 0 AND 5),
-    expires_at timestamptz NOT NULL,
-    consumed_at timestamptz,
-    revoked_at timestamptz,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    invitation_id uuid,
-    CHECK (expires_at > created_at)
-);
-CREATE INDEX auth_challenge_operation_idx ON identity.auth_challenge(operation_id,purpose);
-CREATE INDEX auth_challenge_email_idx ON identity.auth_challenge(email_key,purpose,created_at DESC);
-CREATE INDEX auth_challenge_expiry_idx ON identity.auth_challenge(expires_at);
-
-CREATE TABLE identity.email_budget (
-    bucket_key text PRIMARY KEY,
-    sent_at timestamptz[] NOT NULL DEFAULT '{}',
-    failed_at timestamptz[] NOT NULL DEFAULT '{}',
-    revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0)
-);
-
-CREATE TABLE identity.security_event (
-    id uuid PRIMARY KEY,
-    actor_id uuid REFERENCES identity."user"(id) ON DELETE RESTRICT,
-    target_user_id uuid REFERENCES identity."user"(id) ON DELETE RESTRICT,
-    team_id uuid REFERENCES workspace.team(id) ON DELETE RESTRICT,
-    scope_kind text NOT NULL,
-    action text NOT NULL,
-    result text NOT NULL,
-    reason text NOT NULL DEFAULT '',
-    request_id text NOT NULL DEFAULT '',
-    safe_diff jsonb NOT NULL DEFAULT '{}' CHECK (jsonb_typeof(safe_diff) = 'object'),
-    created_at timestamptz NOT NULL
-);
-CREATE INDEX security_event_user_idx ON identity.security_event(target_user_id,created_at DESC,id);
-CREATE INDEX security_event_team_idx ON identity.security_event(team_id,created_at DESC,id);
-CREATE INDEX security_event_time_idx ON identity.security_event(created_at DESC,id);
-
-CREATE TABLE identity.mail_delivery (
-    event_id uuid PRIMARY KEY,
-    challenge_id uuid REFERENCES identity.auth_challenge(id) ON DELETE RESTRICT,
-    template text NOT NULL,
-    recipient text NOT NULL,
-    encrypted_payload bytea,
-    key_id text,
-    status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','leased','submitted','delivered','bounced','failed','expired')),
-    attempt_count integer NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
-    next_attempt_at timestamptz NOT NULL,
-    expires_at timestamptz NOT NULL,
-    lease_until timestamptz,
-    provider_message_id text,
-    error_category text,
-    created_at timestamptz NOT NULL,
-    updated_at timestamptz NOT NULL,
-    CHECK ((encrypted_payload IS NULL) = (key_id IS NULL))
-);
-CREATE INDEX mail_delivery_pending_idx ON identity.mail_delivery(status,next_attempt_at,event_id);
-
-GRANT SELECT,INSERT,UPDATE ON identity.platform_settings,identity.auth_challenge,identity.email_budget,identity.mail_delivery,
-    workspace.team,workspace.team_member,workspace.creation_scope TO lanverse_app;
-GRANT SELECT,INSERT ON identity.security_event TO lanverse_app;
-
--- AI catalog final-state additions (002).
-CREATE TABLE catalog.provider_preset (
-    id uuid PRIMARY KEY,
-    slug text NOT NULL UNIQUE CHECK (slug ~ '^[a-z][a-z0-9_-]{0,63}$'),
-    origin text NOT NULL CHECK (origin IN ('builtin','custom')),
-    parent_id uuid REFERENCES catalog.provider_preset(id),
-    archived boolean NOT NULL DEFAULT false,
-    emergency_disabled boolean NOT NULL DEFAULT false,
-    revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
-    update_time timestamptz NOT NULL DEFAULT now()
-);
-CREATE TABLE catalog.provider_preset_version (
-    id uuid PRIMARY KEY,
-    preset_id uuid NOT NULL REFERENCES catalog.provider_preset(id),
-    version_no integer NOT NULL CHECK (version_no > 0),
-    payload jsonb NOT NULL CHECK (jsonb_typeof(payload)='object'),
-    content_hash text NOT NULL CHECK (length(content_hash)=64),
-    create_time timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (preset_id,version_no)
-);
-CREATE TABLE catalog.provider_config_version (
-    id uuid PRIMARY KEY,
-    provider_id uuid NOT NULL REFERENCES catalog.provider(id),
-    preset_version_id uuid REFERENCES catalog.provider_preset_version(id),
-    version_no integer NOT NULL CHECK (version_no > 0),
-    config jsonb NOT NULL CHECK (jsonb_typeof(config)='object'),
-    content_hash text NOT NULL CHECK (length(content_hash)=64),
-    create_time timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (provider_id,version_no),
-    UNIQUE (provider_id,id)
-);
-ALTER TABLE catalog.provider ADD COLUMN current_config_version_id uuid;
-ALTER TABLE catalog.provider ADD CONSTRAINT provider_current_config_fk
-    FOREIGN KEY (id,current_config_version_id) REFERENCES catalog.provider_config_version(provider_id,id);
-ALTER TABLE catalog.provider_credential DROP CONSTRAINT provider_credential_status_check;
-ALTER TABLE catalog.provider_credential ADD CONSTRAINT provider_credential_status_check CHECK (status IN ('active','draining','disabled'));
-CREATE TABLE catalog.config_request (
-    actor_id uuid NOT NULL,
-    action text NOT NULL,
-    target_id uuid NOT NULL,
-    request_id uuid NOT NULL,
-    fingerprint text NOT NULL,
-    result jsonb NOT NULL,
-    create_time timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY(actor_id,action,target_id,request_id)
-);
-CREATE TABLE catalog.provider_check (
-    id uuid PRIMARY KEY,
-    actor_id uuid NOT NULL REFERENCES identity."user"(id),
-    provider_id uuid NOT NULL REFERENCES catalog.provider(id),
-    config_version_id uuid NOT NULL REFERENCES catalog.provider_config_version(id),
-    credential_id uuid NOT NULL REFERENCES catalog.provider_credential(id),
-    kind text NOT NULL CHECK(kind IN ('connectivity','discovery')),
-    status text NOT NULL CHECK(status IN ('pending','running','completed','failed')),
-    auth_result text NOT NULL DEFAULT 'unknown',
-    adapter_result text NOT NULL DEFAULT 'unknown',
-    discovery_result text NOT NULL DEFAULT 'unknown',
-    error_code text,
-    create_time timestamptz NOT NULL DEFAULT now(),
-    completed_at timestamptz
-);
-CREATE TABLE catalog.model_candidate (
-    id uuid PRIMARY KEY,
-    check_id uuid NOT NULL REFERENCES catalog.provider_check(id),
-    provider_model_id text NOT NULL,
-    display_name text NOT NULL,
-    capability text NOT NULL,
-    metadata jsonb NOT NULL,
-    UNIQUE(check_id,provider_model_id,capability)
-);
-CREATE TABLE catalog.model_release (
-    id uuid PRIMARY KEY,
-    model_id uuid NOT NULL REFERENCES catalog.model_profile(id),
-    model_version_id uuid NOT NULL REFERENCES catalog.model_profile_version(id),
-    price_version_id uuid NOT NULL REFERENCES catalog.price_rule_version(id),
-    config_version_id uuid NOT NULL REFERENCES catalog.provider_config_version(id),
-    status text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','active','retired')),
-    upstream_cost jsonb NOT NULL CHECK (jsonb_typeof(upstream_cost)='object'),
-    revision bigint NOT NULL DEFAULT 1 CHECK (revision>0),
-    create_time timestamptz NOT NULL DEFAULT now(),
-    activated_at timestamptz,
-    UNIQUE(model_id,id)
-);
-CREATE TABLE catalog.model_validation (
-    id uuid PRIMARY KEY,
-    release_id uuid NOT NULL REFERENCES catalog.model_release(id),
-    credential_id uuid NOT NULL REFERENCES catalog.provider_credential(id),
-    adapter_version text NOT NULL,
-    mode text NOT NULL,
-    input_digest text NOT NULL,
-    operation_id uuid NOT NULL,
-    status text NOT NULL CHECK (status IN ('pending','running','succeeded','failed','unknown')),
-    evidence jsonb NOT NULL DEFAULT '{}'::jsonb,
-    create_time timestamptz NOT NULL DEFAULT now(),
-    completed_at timestamptz,
-    UNIQUE(operation_id)
-);
-ALTER TABLE catalog.model_profile ADD COLUMN active_release_id uuid;
-ALTER TABLE catalog.model_profile ADD CONSTRAINT model_active_release_fk
-    FOREIGN KEY (id,active_release_id) REFERENCES catalog.model_release(model_id,id);
-CREATE TABLE catalog.capability_default (
-    capability text PRIMARY KEY REFERENCES catalog.capability(key),
-    release_id uuid NOT NULL REFERENCES catalog.model_release(id),
-    revision bigint NOT NULL DEFAULT 1 CHECK (revision>0),
-    update_time timestamptz NOT NULL DEFAULT now()
-);
-
--- Version 1 builtins: portable configuration only; no models or keys are guessed.
 INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8000-000000000001','volcengine-ark','builtin');
 INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash) VALUES('6da07a11-0000-4000-8000-000000000001','6da07a10-0000-4000-8000-000000000001',1,'{"schema_version":1,"name":"火山方舟","config":{"adapter_key":"volcengine_ark","base_url":"https://ark.cn-beijing.volces.com/api/v3","region":"domestic","capabilities":["video"],"timeout_seconds":120,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'a357018c3c198f6d58123c99cca6978fe6068a44e48b3794a0bcef2dbf9ed078');
 INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8000-000000000002','openrouter','builtin');
 INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash) VALUES('6da07a11-0000-4000-8000-000000000002','6da07a10-0000-4000-8000-000000000002',1,'{"schema_version":1,"name":"OpenRouter","config":{"adapter_key":"openrouter","base_url":"https://openrouter.ai/api/v1","region":"overseas","capabilities":["text","image","video"],"timeout_seconds":120,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'621b784416c935788a8fe5a39a9775a3eed7651307db4c2f14c646cab165b765');
 
-
--- Capability vocabulary is platform-owned; models opt into a verified subset.
 INSERT INTO catalog.capability(id,key,output_type,modes,input_roles) VALUES
  ('6da07a12-0000-4000-8000-000000000001','text.generate','json',ARRAY['text_to_text'],ARRAY['prompt']),
  ('6da07a12-0000-4000-8000-000000000002','image.generate','image',ARRAY['text2image','image2image'],ARRAY['prompt','reference_image','subject']),
@@ -4679,652 +6478,4 @@ INSERT INTO catalog.capability(id,key,output_type,modes,input_roles) VALUES
 ON CONFLICT(key) DO UPDATE SET
  modes=ARRAY(SELECT DISTINCT value FROM unnest(catalog.capability.modes || EXCLUDED.modes) AS value ORDER BY value),
  input_roles=ARRAY(SELECT DISTINCT value FROM unnest(catalog.capability.input_roles || EXCLUDED.input_roles) AS value ORDER BY value);
-GRANT SELECT,INSERT,UPDATE ON catalog.provider_preset,catalog.provider_check,catalog.model_release,catalog.model_validation,catalog.capability_default TO lanverse_app;
-GRANT SELECT,INSERT ON catalog.provider_preset_version,catalog.provider_config_version,catalog.config_request,catalog.model_candidate TO lanverse_app;
 
--- Additive editor persistence. Apply to an existing database only after review.
-CREATE TABLE workspace.prompt_draft (
- id uuid PRIMARY KEY,
- project_id uuid NOT NULL REFERENCES workspace.project(id),
- actor_id uuid NOT NULL REFERENCES identity."user"(id),
- revision bigint NOT NULL CHECK(revision BETWEEN 1 AND 2147483647),
- draft jsonb NOT NULL CHECK(jsonb_typeof(draft)='object' AND octet_length(draft::text)<=1048576),
- draft_hash text NOT NULL CHECK(draft_hash ~ '^[a-f0-9]{64}$'),
- input_hash text NOT NULL CHECK(input_hash ~ '^[a-f0-9]{64}$'),
- updated_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX prompt_draft_owner ON workspace.prompt_draft(project_id,actor_id,id);
-CREATE TABLE workspace.prompt_draft_receipt (
- actor_id uuid NOT NULL REFERENCES identity."user"(id),
- request_key uuid NOT NULL,
- project_id uuid NOT NULL REFERENCES workspace.project(id),
- request_hash text NOT NULL,
- response jsonb NOT NULL,
- PRIMARY KEY(actor_id,request_key)
-);
-CREATE TABLE operation.prompt_submission_slot (
- actor_id uuid NOT NULL REFERENCES identity."user"(id),
- project_id uuid NOT NULL REFERENCES workspace.project(id),
- owner_key text NOT NULL,
- epoch bigint NOT NULL DEFAULT 0 CHECK(epoch>=0),
- submission_id uuid,
- PRIMARY KEY(actor_id,project_id,owner_key)
-);
-CREATE TABLE operation.prompt_submission (
- id uuid PRIMARY KEY,
- actor_id uuid NOT NULL REFERENCES identity."user"(id),
- project_id uuid NOT NULL REFERENCES workspace.project(id),
- owner_key text NOT NULL,
- epoch bigint NOT NULL CHECK(epoch>0),
- operation_id uuid NOT NULL UNIQUE REFERENCES operation.operation(id),
- confirm_key uuid NOT NULL UNIQUE,
- input_source jsonb NOT NULL,
- snapshot jsonb NOT NULL,
- quote jsonb NOT NULL,
- state text NOT NULL CHECK(state IN ('quoted','accepted','closed')),
- resolution text,
- created_at timestamptz NOT NULL DEFAULT now(),
- UNIQUE(actor_id,project_id,owner_key,epoch)
-);
-CREATE TABLE operation.prompt_resolution_receipt (
- actor_id uuid NOT NULL,
- request_key uuid NOT NULL,
- request_hash text NOT NULL,
- response jsonb NOT NULL,
- PRIMARY KEY(actor_id,request_key)
-);
-GRANT SELECT,INSERT,UPDATE ON workspace.prompt_draft,operation.prompt_submission_slot,operation.prompt_submission TO lanverse_app;
-GRANT SELECT,INSERT ON workspace.prompt_draft_receipt,operation.prompt_resolution_receipt TO lanverse_app;
-
--- Managed operation final-state additions (003).
-CREATE TABLE operation.provider_binding (
-    operation_id uuid PRIMARY KEY REFERENCES operation.operation(id),
-    release_id uuid NOT NULL REFERENCES catalog.model_release(id),
-    create_time timestamptz NOT NULL DEFAULT now()
-);
-CREATE TABLE operation.provider_credential_binding (
-    operation_id uuid PRIMARY KEY REFERENCES operation.provider_binding(operation_id),
-    credential_id uuid NOT NULL REFERENCES catalog.provider_credential(id),
-    create_time timestamptz NOT NULL DEFAULT now()
-);
-GRANT SELECT,INSERT ON operation.provider_binding,operation.provider_credential_binding TO lanverse_app;
-
-CREATE TABLE operation.provider_result (
- operation_id uuid PRIMARY KEY REFERENCES operation.provider_credential_binding(operation_id),
- result jsonb NOT NULL CHECK(jsonb_typeof(result)='object' AND octet_length(result::text)<=2097152),
- update_time timestamptz NOT NULL DEFAULT now()
-);
-GRANT SELECT,INSERT,UPDATE ON operation.provider_result TO lanverse_app;
-
-CREATE TABLE operation.provider_trial (
- operation_id uuid PRIMARY KEY REFERENCES operation.provider_binding(operation_id),
- actor_id uuid NOT NULL REFERENCES identity."user"(id),
- max_charge_micros bigint NOT NULL CHECK(max_charge_micros>=0),
- supplier_max_micros bigint NOT NULL CHECK(supplier_max_micros BETWEEN 0 AND 1000000000),
- supplier_currency text NOT NULL CHECK(supplier_currency IN ('CNY','USD'))
-);
-GRANT SELECT,INSERT ON operation.provider_trial TO lanverse_app;
-
--- User governance final-state additions (006).
--- Reviewed incremental expansion only. Application is an operator action; no runner applies this file.
-CREATE TABLE IF NOT EXISTS identity.authority_proposal (
- id uuid PRIMARY KEY,
- kind text NOT NULL CHECK (kind IN ('platform_grant','team_transfer','platform_takeover')),
- team_id uuid REFERENCES workspace.team(id) ON DELETE RESTRICT,
- source_user_id uuid NOT NULL REFERENCES identity."user"(id) ON DELETE RESTRICT,
- target_user_id uuid NOT NULL REFERENCES identity."user"(id) ON DELETE RESTRICT,
- status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','declined','cancelled','expired')),
- expires_at timestamptz NOT NULL,
- reason text NOT NULL CHECK (char_length(reason) BETWEEN 5 AND 500),
- source_authority_revision bigint NOT NULL CHECK (source_authority_revision>0),
- target_revision bigint NOT NULL CHECK (target_revision>0),
- team_revision bigint,
- revision bigint NOT NULL DEFAULT 1 CHECK (revision>0),
- created_at timestamptz NOT NULL,
- updated_at timestamptz NOT NULL,
- CHECK ((kind='platform_grant')=(team_id IS NULL)),
- CHECK ((team_id IS NULL)=(team_revision IS NULL)),
- CHECK (source_user_id<>target_user_id)
-);
-CREATE INDEX IF NOT EXISTS authority_proposal_target_idx ON identity.authority_proposal(target_user_id,status,expires_at);
-CREATE INDEX IF NOT EXISTS authority_proposal_team_idx ON identity.authority_proposal(team_id,status);
-CREATE UNIQUE INDEX IF NOT EXISTS authority_proposal_platform_pending_idx ON identity.authority_proposal(target_user_id) WHERE kind='platform_grant' AND status='pending';
-CREATE UNIQUE INDEX IF NOT EXISTS authority_proposal_team_pending_idx ON identity.authority_proposal(team_id) WHERE kind IN ('team_transfer','platform_takeover') AND status='pending';
-GRANT SELECT,INSERT,UPDATE ON identity.authority_proposal TO lanverse_app;
-CREATE TABLE IF NOT EXISTS identity.invitation (
- id uuid PRIMARY KEY,
- kind text NOT NULL CHECK (kind IN ('account','team')),
- team_id uuid REFERENCES workspace.team(id) ON DELETE RESTRICT,
- email_key text NOT NULL,
- team_role text CHECK (team_role IN ('member','team_admin')),
- inviter_id uuid NOT NULL REFERENCES identity."user"(id) ON DELETE RESTRICT,
- status text NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','declined','revoked','expired')),
- token_hash bytea NOT NULL UNIQUE CHECK(octet_length(token_hash)=32),
- expires_at timestamptz NOT NULL,
- accepted_user_id uuid REFERENCES identity."user"(id) ON DELETE RESTRICT,
- membership_revision bigint,
- revision bigint NOT NULL DEFAULT 1 CHECK(revision>0),
- created_at timestamptz NOT NULL,
- updated_at timestamptz NOT NULL,
- CHECK ((kind='account' AND team_id IS NULL AND team_role IS NULL) OR (kind='team' AND team_id IS NOT NULL AND team_role IS NOT NULL))
-);
-CREATE UNIQUE INDEX IF NOT EXISTS invitation_pending_team_idx ON identity.invitation(team_id,email_key) WHERE kind='team' AND status='pending';
-CREATE UNIQUE INDEX IF NOT EXISTS invitation_pending_account_idx ON identity.invitation(email_key) WHERE kind='account' AND status='pending';
-GRANT SELECT,INSERT,UPDATE ON identity.invitation TO lanverse_app;
-
--- Transfer ownership constraints (migration 007).
-ALTER TABLE media.transfer_job ADD CONSTRAINT transfer_source_scope_fkey FOREIGN KEY(source_scope_id) REFERENCES workspace.creation_scope(id);
-ALTER TABLE media.transfer_job ADD CONSTRAINT transfer_target_scope_fkey FOREIGN KEY(target_scope_id) REFERENCES workspace.creation_scope(id);
-ALTER TABLE media.transfer_job ADD CONSTRAINT transfer_source_org_fkey FOREIGN KEY(source_org_id) REFERENCES workspace.organization(id);
-ALTER TABLE media.transfer_job ADD CONSTRAINT transfer_target_org_fkey FOREIGN KEY(target_org_id) REFERENCES workspace.organization(id);
-
--- Object storage identity and phased location expansion (migration 008).
--- 既有业务库增量：先登记物理身份与位置，禁止猜测或自动回填旧 MinIO。
--- 在独立副本审阅、核对后以单事务执行；不得重放 schema.sql。
--- 本阶段保留旧键约束；完成全部消费者迁移及回填后才可替换并收紧非空。
-CREATE TABLE IF NOT EXISTS media.storage_profile (
-    id text PRIMARY KEY CHECK (id ~ '^[a-z][a-z0-9-]{0,62}$'),
-    provider text NOT NULL CHECK (provider IN ('minio','cos','tos')),
-    endpoint text NOT NULL,
-    signing_endpoint text NOT NULL,
-    region text NOT NULL,
-    bucket text NOT NULL,
-    addressing_style text NOT NULL,
-    resource_identity text NOT NULL UNIQUE CHECK (resource_identity ~ '^[a-f0-9]{64}$'),
-    created_at timestamptz NOT NULL DEFAULT now(),
-    UNIQUE(id,bucket)
-);
-
-CREATE TABLE IF NOT EXISTS media.storage_route (
-    singleton integer PRIMARY KEY DEFAULT 1 CHECK (singleton=1),
-    revision text NOT NULL CHECK (revision ~ '^[a-z][a-z0-9-]{0,62}$'),
-    profile_id text NOT NULL REFERENCES media.storage_profile(id),
-    updated_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS media.storage_activation (
-    revision text PRIMARY KEY CHECK (revision ~ '^[a-z][a-z0-9-]{0,62}$'),
-    expected_revision text NOT NULL,
-    profile_id text NOT NULL REFERENCES media.storage_profile(id),
-    activated_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS media.object_location (
-    id uuid PRIMARY KEY,
-    profile_id text NOT NULL,
-    bucket text NOT NULL,
-    object_key text NOT NULL CHECK (octet_length(object_key) BETWEEN 1 AND 696 AND object_key !~ '[[:cntrl:]\\]' AND object_key !~ '(^|/)(\.|\.\.|)(/|$)'),
-    state text NOT NULL DEFAULT 'reserved' CHECK (state IN ('reserved','present','accepted','delete_pending','deleted','unknown')),
-    byte_size bigint CHECK (byte_size>=0),
-    sha256 text CHECK (sha256 ~ '^[a-f0-9]{64}$'),
-    mime_type text,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    updated_at timestamptz NOT NULL DEFAULT now(),
-    FOREIGN KEY(profile_id,bucket) REFERENCES media.storage_profile(id,bucket),
-    UNIQUE(profile_id,bucket,object_key),
-    UNIQUE(id,object_key)
-);
-
-CREATE OR REPLACE FUNCTION media.keep_storage_identity() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-    IF TG_TABLE_NAME='storage_profile' OR TG_TABLE_NAME='storage_activation' THEN
-        RAISE EXCEPTION 'storage identity is immutable' USING ERRCODE='23514';
-    END IF;
-    IF (NEW.id,NEW.profile_id,NEW.bucket,NEW.object_key,NEW.owner_session_id) IS DISTINCT FROM (OLD.id,OLD.profile_id,OLD.bucket,OLD.object_key,OLD.owner_session_id) THEN
-        RAISE EXCEPTION 'object location identity is immutable' USING ERRCODE='23514';
-    END IF;
-    NEW.updated_at=now();
-    RETURN NEW;
-END $$;
-
-DO $$ BEGIN
-    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.storage_profile'::regclass AND tgname='keep_storage_identity') THEN
-        CREATE TRIGGER keep_storage_identity BEFORE UPDATE OR DELETE ON media.storage_profile FOR EACH ROW EXECUTE FUNCTION media.keep_storage_identity();
-    END IF;
-    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.storage_activation'::regclass AND tgname='keep_storage_identity') THEN
-        CREATE TRIGGER keep_storage_identity BEFORE UPDATE OR DELETE ON media.storage_activation FOR EACH ROW EXECUTE FUNCTION media.keep_storage_identity();
-    END IF;
-    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.object_location'::regclass AND tgname='keep_storage_identity') THEN
-        CREATE TRIGGER keep_storage_identity BEFORE UPDATE ON media.object_location FOR EACH ROW EXECUTE FUNCTION media.keep_storage_identity();
-    END IF;
-END $$;
-
-ALTER TABLE media.media_asset ADD COLUMN IF NOT EXISTS object_location_id uuid;
-ALTER TABLE media.rendition ADD COLUMN IF NOT EXISTS object_location_id uuid;
-ALTER TABLE media.package_object ADD COLUMN IF NOT EXISTS object_location_id uuid;
-ALTER TABLE media.project_copy_object ADD COLUMN IF NOT EXISTS source_location_id uuid;
-ALTER TABLE media.project_copy_object ADD COLUMN IF NOT EXISTS target_location_id uuid;
-ALTER TABLE media.transfer_object ADD COLUMN IF NOT EXISTS source_location_id uuid;
-ALTER TABLE media.transfer_object ADD COLUMN IF NOT EXISTS target_location_id uuid;
-ALTER TABLE media.purge_object ADD COLUMN IF NOT EXISTS object_location_id uuid;
-ALTER TABLE mediatool.depth_object ADD COLUMN IF NOT EXISTS object_location_id uuid;
-ALTER TABLE script.object_intent ADD COLUMN IF NOT EXISTS object_location_id uuid;
-ALTER TABLE script.object_state ADD COLUMN IF NOT EXISTS object_location_id uuid;
-
--- 复合 FK 同时约束位置与原键，防止把某一行关联到另一对象。
-DO $$ DECLARE item record; constraint_name text; BEGIN
-    FOR item IN SELECT * FROM (VALUES
-        ('media','media_asset','object_location_id','object_key'),
-        ('media','rendition','object_location_id','object_key'),
-        ('media','package_object','object_location_id','object_key'),
-        ('media','project_copy_object','source_location_id','source_object_key'),
-        ('media','project_copy_object','target_location_id','target_object_key'),
-        ('media','transfer_object','source_location_id','source_object_key'),
-        ('media','transfer_object','target_location_id','target_object_key'),
-        ('media','purge_object','object_location_id','object_key'),
-        ('mediatool','depth_object','object_location_id','object_key'),
-        ('script','object_intent','object_location_id','object_key'),
-        ('script','object_state','object_location_id','object_key')
-    ) AS objects(schema_name,table_name,location_column,key_column) LOOP
-        constraint_name=item.table_name||'_'||item.location_column||'_fkey';
-        IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid=format('%I.%I',item.schema_name,item.table_name)::regclass AND conname=constraint_name) THEN
-            EXECUTE format('ALTER TABLE %I.%I ADD CONSTRAINT %I FOREIGN KEY(%I,%I) REFERENCES media.object_location(id,object_key)',item.schema_name,item.table_name,constraint_name,item.location_column,item.key_column);
-        END IF;
-    END LOOP;
-END $$;
-
-GRANT SELECT,INSERT ON media.storage_profile,media.storage_activation TO lanverse_app;
-GRANT SELECT,INSERT,UPDATE ON media.storage_route,media.object_location TO lanverse_app;
-
-CREATE TABLE IF NOT EXISTS media.upload_admission (
- id uuid PRIMARY KEY,
- org_id uuid NOT NULL REFERENCES workspace.organization(id),
- actor_id uuid NOT NULL REFERENCES identity."user"(id),
- scope_id uuid NOT NULL,
- scope_kind text NOT NULL CHECK(scope_kind IN ('project','personal')),
- request_key uuid NOT NULL,
- profile_id text NOT NULL,
- bucket text NOT NULL,
- config_revision text NOT NULL,
- policy jsonb NOT NULL CHECK(jsonb_typeof(policy)='object'),
- accepted_asset_id uuid REFERENCES media.media_asset(id),
- expires_at timestamptz NOT NULL,
- created_at timestamptz NOT NULL DEFAULT now(),
- UNIQUE(org_id,actor_id,scope_id,request_key),
- UNIQUE(id,profile_id,bucket),
- FOREIGN KEY(profile_id,bucket) REFERENCES media.storage_profile(id,bucket)
-);
-ALTER TABLE media.object_location ADD COLUMN IF NOT EXISTS owner_session_id uuid;
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.object_location'::regclass AND conname='object_location_upload_owner_fkey') THEN
-  ALTER TABLE media.object_location ADD CONSTRAINT object_location_upload_owner_fkey FOREIGN KEY(owner_session_id,profile_id,bucket) REFERENCES media.upload_admission(id,profile_id,bucket);
- END IF;
-END $$;
-CREATE INDEX IF NOT EXISTS object_location_cleanup_idx ON media.object_location(state,updated_at) WHERE state IN ('reserved','present','delete_pending','unknown');
-GRANT SELECT,INSERT,UPDATE ON media.upload_admission TO lanverse_app;
-
--- Bind registration proofs and outbox attempts to the exact invitation revision.
-ALTER TABLE identity.auth_challenge ADD COLUMN IF NOT EXISTS invitation_revision bigint CHECK(invitation_revision>0);
-ALTER TABLE identity.mail_delivery ADD COLUMN IF NOT EXISTS invitation_id uuid REFERENCES identity.invitation(id) ON DELETE RESTRICT;
-ALTER TABLE identity.mail_delivery ADD COLUMN IF NOT EXISTS invitation_revision bigint CHECK(invitation_revision>0);
-ALTER TABLE identity.authority_proposal ADD COLUMN IF NOT EXISTS target_email_version bigint NOT NULL DEFAULT 1 CHECK(target_email_version>0);
-ALTER TABLE identity.authority_proposal ADD COLUMN IF NOT EXISTS target_credential_epoch bigint NOT NULL DEFAULT 1 CHECK(target_credential_epoch>0);
-
-CREATE OR REPLACE FUNCTION media.keep_upload_admission() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
- IF (to_jsonb(NEW)-'accepted_asset_id') IS DISTINCT FROM (to_jsonb(OLD)-'accepted_asset_id')
-   OR (OLD.accepted_asset_id IS NOT NULL AND NEW.accepted_asset_id IS DISTINCT FROM OLD.accepted_asset_id) THEN
-  RAISE EXCEPTION 'upload admission is immutable' USING ERRCODE='23514';
- END IF;
- RETURN NEW;
-END $$;
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.upload_admission'::regclass AND tgname='keep_upload_admission') THEN
-  CREATE TRIGGER keep_upload_admission BEFORE UPDATE ON media.upload_admission FOR EACH ROW EXECUTE FUNCTION media.keep_upload_admission();
- END IF;
-END $$;
-
-ALTER TABLE identity.invitation ADD COLUMN IF NOT EXISTS platform_issued boolean NOT NULL DEFAULT false;
-
--- Workspace secondary ownership, migration 009.
-ALTER TABLE workspace.project_folder ADD CONSTRAINT project_folder_scope_fk FOREIGN KEY(owner_scope_id,org_id) REFERENCES workspace.creation_scope(id,physical_scope_id);
-ALTER TABLE workspace.project_folder_command ADD CONSTRAINT project_folder_command_scope_fk FOREIGN KEY(owner_scope_id,org_id) REFERENCES workspace.creation_scope(id,physical_scope_id);
-ALTER TABLE workspace.project_folder_placement ADD CONSTRAINT project_folder_placement_scope_fk FOREIGN KEY(owner_scope_id,org_id) REFERENCES workspace.creation_scope(id,physical_scope_id);
-ALTER TABLE workspace.project_copy_job ADD CONSTRAINT project_copy_job_scope_fk FOREIGN KEY(owner_scope_id,org_id) REFERENCES workspace.creation_scope(id,physical_scope_id);
-CREATE INDEX project_folder_scope_actor_idx ON workspace.project_folder(owner_scope_id,actor_id,update_time DESC,id DESC);
-CREATE INDEX project_copy_scope_idx ON workspace.project_copy_job(owner_scope_id,source_project_id,create_time DESC,id DESC);
-
-CREATE FUNCTION workspace.validate_secondary_scope() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
- IF TG_TABLE_NAME='project_copy_job' THEN
-  IF TG_OP='UPDATE' AND (NEW.owner_scope_id,NEW.org_id,NEW.actor_id,NEW.source_project_id,NEW.target_project_id) IS DISTINCT FROM (OLD.owner_scope_id,OLD.org_id,OLD.actor_id,OLD.source_project_id,OLD.target_project_id) THEN
-   RAISE EXCEPTION 'copy scope binding is immutable';
-  END IF;
-  IF TG_OP='INSERT' AND (NEW.owner_scope_id IS NULL OR NOT EXISTS(SELECT 1 FROM workspace.project p JOIN workspace.project t ON t.id=NEW.target_project_id WHERE p.id=NEW.source_project_id AND p.org_id=NEW.org_id AND t.org_id=NEW.org_id AND p.owner_scope_id=NEW.owner_scope_id AND t.owner_scope_id=NEW.owner_scope_id)) THEN
-   RAISE EXCEPTION 'copy scope binding invalid';
-  END IF;
- ELSE
-  IF NEW.owner_scope_id IS NULL OR NOT EXISTS(SELECT 1 FROM workspace.project p WHERE p.id=NEW.project_id AND p.org_id=NEW.org_id AND p.owner_scope_id=NEW.owner_scope_id) OR (NEW.folder_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM workspace.project_folder f WHERE f.id=NEW.folder_id AND f.org_id=NEW.org_id AND f.actor_id=NEW.actor_id AND f.owner_scope_id=NEW.owner_scope_id)) THEN
-   RAISE EXCEPTION 'folder placement scope binding invalid';
-  END IF;
-  IF TG_OP='UPDATE' AND (NEW.owner_scope_id,NEW.org_id,NEW.actor_id,NEW.project_id) IS DISTINCT FROM (OLD.owner_scope_id,OLD.org_id,OLD.actor_id,OLD.project_id) THEN
-   RAISE EXCEPTION 'folder placement scope binding is immutable';
-  END IF;
- END IF;
- RETURN NEW;
-END;
-$$;
-CREATE TRIGGER project_copy_scope_binding BEFORE INSERT OR UPDATE ON workspace.project_copy_job FOR EACH ROW EXECUTE FUNCTION workspace.validate_secondary_scope();
-CREATE TRIGGER project_folder_placement_scope_binding BEFORE INSERT OR UPDATE ON workspace.project_folder_placement FOR EACH ROW EXECUTE FUNCTION workspace.validate_secondary_scope();
-
--- Storage cutover evidence and resumable migration (migration 010).
--- 对象存储受控升级：原资源证明和逐对象回填回执，不推断默认桶。
--- 仅在隔离副本演练并审阅后执行；schema.sql 仍是空库完整结构源。
-CREATE TABLE IF NOT EXISTS media.storage_legacy_binding (
- singleton integer PRIMARY KEY CHECK(singleton=1),
- profile_id text NOT NULL,
- bucket text NOT NULL,
- resource_identity text NOT NULL CHECK(resource_identity ~ '^[a-f0-9]{64}$'),
- evidence_sha256 text NOT NULL CHECK(evidence_sha256 ~ '^[a-f0-9]{64}$'),
- created_at timestamptz NOT NULL DEFAULT now(),
- FOREIGN KEY(profile_id,bucket) REFERENCES media.storage_profile(id,bucket)
-);
-CREATE TABLE IF NOT EXISTS media.storage_legacy_receipt (
- profile_id text NOT NULL,
- bucket text NOT NULL,
- object_key text NOT NULL,
- snapshot_sha256 text NOT NULL CHECK(snapshot_sha256 ~ '^[a-f0-9]{64}$'),
- location_id uuid NOT NULL,
- byte_size bigint NOT NULL CHECK(byte_size>=0),
- sha256 text NOT NULL CHECK(sha256 ~ '^[a-f0-9]{64}$'),
- mime_type text NOT NULL,
- reference_count integer NOT NULL CHECK(reference_count>0),
- created_at timestamptz NOT NULL DEFAULT now(),
- PRIMARY KEY(profile_id,bucket,object_key,snapshot_sha256),
- FOREIGN KEY(location_id,object_key) REFERENCES media.object_location(id,object_key),
- FOREIGN KEY(profile_id,bucket) REFERENCES media.storage_profile(id,bucket)
-);
-CREATE OR REPLACE FUNCTION media.keep_storage_evidence() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
- RAISE EXCEPTION 'storage evidence is immutable' USING ERRCODE='23514';
-END $$;
-DO $$ DECLARE name text; BEGIN
- FOREACH name IN ARRAY ARRAY['storage_legacy_binding','storage_legacy_receipt'] LOOP
-  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=format('media.%I',name)::regclass AND tgname='keep_storage_evidence') THEN
-   EXECUTE format('CREATE TRIGGER keep_storage_evidence BEFORE UPDATE OR DELETE ON media.%I FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence()',name);
-  END IF;
- END LOOP;
-END $$;
-GRANT SELECT,INSERT ON media.storage_legacy_binding,media.storage_legacy_receipt TO lanverse_app;
-
-CREATE TABLE IF NOT EXISTS media.storage_work_intent (
- id uuid PRIMARY KEY,
- kind text NOT NULL CHECK(kind IN ('operation','script','export','depth','transcription','package','transfer','project-copy')),
- owner_id uuid NOT NULL CHECK(owner_id<>'00000000-0000-0000-0000-000000000000'::uuid),
- work_id uuid NOT NULL CHECK(work_id<>'00000000-0000-0000-0000-000000000000'::uuid),
- profile_id text NOT NULL,
- bucket text NOT NULL,
- config_revision text NOT NULL,
- state text NOT NULL DEFAULT 'open' CHECK(state IN ('open','accepted','cancelled')),
- closed_at timestamptz,
- created_at timestamptz NOT NULL DEFAULT now(),
- UNIQUE(kind,owner_id,work_id),
- UNIQUE(id,profile_id,bucket),
- FOREIGN KEY(profile_id,bucket) REFERENCES media.storage_profile(id,bucket),
- CHECK((state='open' AND closed_at IS NULL) OR (state<>'open' AND closed_at IS NOT NULL))
-);
-ALTER TABLE media.object_location ADD COLUMN IF NOT EXISTS owner_intent_id uuid;
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.object_location'::regclass AND conname='object_location_work_owner_fkey') THEN
-  ALTER TABLE media.object_location ADD CONSTRAINT object_location_work_owner_fkey FOREIGN KEY(owner_intent_id,profile_id,bucket) REFERENCES media.storage_work_intent(id,profile_id,bucket);
-  ALTER TABLE media.object_location ADD CONSTRAINT object_location_single_owner_check CHECK(num_nonnulls(owner_session_id,owner_intent_id)<=1);
- END IF;
-END $$;
-CREATE OR REPLACE FUNCTION media.keep_storage_work() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
- IF TG_TABLE_NAME='object_location' THEN
-  IF OLD.owner_intent_id IS DISTINCT FROM NEW.owner_intent_id THEN
-   RAISE EXCEPTION 'storage work object owner is immutable' USING ERRCODE='23514';
-  END IF;
- ELSE
-  IF (to_jsonb(OLD)-'state'-'closed_at') IS DISTINCT FROM (to_jsonb(NEW)-'state'-'closed_at')
-   OR (OLD.state<>'open' AND NEW.state<>OLD.state)
-   OR (OLD.closed_at IS NOT NULL AND NEW.closed_at IS DISTINCT FROM OLD.closed_at) THEN
-   RAISE EXCEPTION 'storage work target is immutable' USING ERRCODE='23514';
-  END IF;
- END IF;
- RETURN NEW;
-END $$;
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.storage_work_intent'::regclass AND tgname='keep_storage_work') THEN
-  CREATE TRIGGER keep_storage_work BEFORE UPDATE ON media.storage_work_intent FOR EACH ROW EXECUTE FUNCTION media.keep_storage_work();
- END IF;
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.object_location'::regclass AND tgname='keep_storage_work') THEN
-  CREATE TRIGGER keep_storage_work BEFORE UPDATE ON media.object_location FOR EACH ROW EXECUTE FUNCTION media.keep_storage_work();
- END IF;
-END $$;
-CREATE INDEX IF NOT EXISTS storage_work_open_profile_idx ON media.storage_work_intent(profile_id,state);
-GRANT SELECT,INSERT,UPDATE ON media.storage_work_intent TO lanverse_app;
-
-CREATE TABLE IF NOT EXISTS media.storage_runtime (
- instance_id uuid PRIMARY KEY,
- role text NOT NULL CHECK(role IN ('api','worker','relay','setup')),
- revision text NOT NULL,
- config_sha256 text NOT NULL CHECK(config_sha256 ~ '^[a-f0-9]{64}$'),
- capabilities jsonb NOT NULL CHECK(jsonb_typeof(capabilities)='array'),
- expires_at timestamptz NOT NULL,
- updated_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE TABLE IF NOT EXISTS media.storage_deployment_evidence (
- config_sha256 text PRIMARY KEY CHECK(config_sha256 ~ '^[a-f0-9]{64}$'),
- evidence_sha256 text NOT NULL CHECK(evidence_sha256 ~ '^[a-f0-9]{64}$'),
- recorded_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE TABLE IF NOT EXISTS media.storage_probe_evidence (
- id uuid PRIMARY KEY,
- profile_id text NOT NULL REFERENCES media.storage_profile(id),
- resource_identity text NOT NULL,
- config_sha256 text NOT NULL CHECK(config_sha256 ~ '^[a-f0-9]{64}$'),
- evidence_sha256 text NOT NULL CHECK(evidence_sha256 ~ '^[a-f0-9]{64}$'),
- expires_at timestamptz NOT NULL,
- recorded_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE TABLE IF NOT EXISTS media.storage_activation_guard (
- revision text PRIMARY KEY REFERENCES media.storage_activation(revision),
- config_sha256 text NOT NULL CHECK(config_sha256 ~ '^[a-f0-9]{64}$'),
- deployment_evidence_sha256 text NOT NULL,
- activated_at timestamptz NOT NULL DEFAULT now()
-);
-DO $$ DECLARE name text; BEGIN
- FOREACH name IN ARRAY ARRAY['storage_deployment_evidence','storage_probe_evidence','storage_activation_guard'] LOOP
-  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=format('media.%I',name)::regclass AND tgname='keep_storage_evidence') THEN
-   EXECUTE format('CREATE TRIGGER keep_storage_evidence BEFORE UPDATE OR DELETE ON media.%I FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence()',name);
-  END IF;
- END LOOP;
-END $$;
-GRANT SELECT,INSERT ON media.storage_deployment_evidence,media.storage_probe_evidence,media.storage_activation_guard TO lanverse_app;
-GRANT SELECT,INSERT,UPDATE ON media.storage_runtime TO lanverse_app;
-
-CREATE TABLE IF NOT EXISTS media.storage_config_revision (
- revision text PRIMARY KEY,
- config_sha256 text NOT NULL UNIQUE CHECK(config_sha256 ~ '^[a-f0-9]{64}$'),
- profile_id text NOT NULL REFERENCES media.storage_profile(id),
- upload_policy jsonb NOT NULL CHECK(jsonb_typeof(upload_policy)='object'),
- session_ttl_seconds bigint NOT NULL CHECK(session_ttl_seconds BETWEEN 60 AND 604800),
- created_at timestamptz NOT NULL DEFAULT now()
-);
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.storage_config_revision'::regclass AND tgname='keep_storage_evidence') THEN
-  CREATE TRIGGER keep_storage_evidence BEFORE UPDATE OR DELETE ON media.storage_config_revision FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
- END IF;
-END $$;
-GRANT SELECT,INSERT ON media.storage_config_revision TO lanverse_app;
-
-CREATE OR REPLACE FUNCTION media.keep_object_binding() RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE old_id text; new_id text;
-BEGIN
- old_id=to_jsonb(OLD)->>TG_ARGV[0];
- new_id=to_jsonb(NEW)->>TG_ARGV[0];
- IF old_id IS NOT NULL AND new_id IS DISTINCT FROM old_id THEN
-  RAISE EXCEPTION 'physical object binding is immutable' USING ERRCODE='23514';
- END IF;
- RETURN NEW;
-END $$;
-DO $$ DECLARE item record; trigger_name text; BEGIN
- FOR item IN SELECT * FROM (VALUES
-  ('media','media_asset','object_location_id'),('media','rendition','object_location_id'),
-  ('media','package_object','object_location_id'),('media','project_copy_object','source_location_id'),('media','project_copy_object','target_location_id'),
-  ('media','transfer_object','source_location_id'),('media','transfer_object','target_location_id'),('media','purge_object','object_location_id'),
-  ('mediatool','depth_object','object_location_id'),('script','object_intent','object_location_id'),('script','object_state','object_location_id')
- ) AS refs(schema_name,table_name,location_column) LOOP
-  trigger_name='keep_'||item.location_column;
-  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=format('%I.%I',item.schema_name,item.table_name)::regclass AND tgname=trigger_name) THEN
-   EXECUTE format('CREATE TRIGGER %I BEFORE UPDATE ON %I.%I FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding(%L)',trigger_name,item.schema_name,item.table_name,item.location_column);
-  END IF;
- END LOOP;
-END $$;
-
-CREATE TABLE IF NOT EXISTS media.storage_legacy_tombstone (
- profile_id text NOT NULL,
- bucket text NOT NULL,
- object_key text NOT NULL,
- snapshot_sha256 text NOT NULL CHECK(snapshot_sha256 ~ '^[a-f0-9]{64}$'),
- location_id uuid NOT NULL,
- reference_count integer NOT NULL CHECK(reference_count>0),
- created_at timestamptz NOT NULL DEFAULT now(),
- PRIMARY KEY(profile_id,bucket,object_key,snapshot_sha256),
- FOREIGN KEY(location_id,object_key) REFERENCES media.object_location(id,object_key),
- FOREIGN KEY(profile_id,bucket) REFERENCES media.storage_profile(id,bucket)
-);
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.storage_legacy_tombstone'::regclass AND tgname='keep_storage_evidence') THEN
-  CREATE TRIGGER keep_storage_evidence BEFORE UPDATE OR DELETE ON media.storage_legacy_tombstone FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
- END IF;
-END $$;
-GRANT SELECT,INSERT ON media.storage_legacy_tombstone TO lanverse_app;
-
--- Storage write fencing (migration 013).
--- Explicitly reviewed incremental storage write fencing; never run at startup.
-ALTER TABLE media.object_location ADD COLUMN IF NOT EXISTS write_until timestamptz;
-CREATE OR REPLACE FUNCTION media.keep_storage_write_deadline() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
- IF OLD.write_until IS NOT NULL AND (NEW.write_until IS NULL OR NEW.write_until<OLD.write_until) THEN
-  RAISE EXCEPTION 'storage write deadline cannot regress' USING ERRCODE='23514';
- END IF;
- RETURN NEW;
-END $$;
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.object_location'::regclass AND tgname='keep_storage_write_deadline') THEN
-  CREATE TRIGGER keep_storage_write_deadline BEFORE UPDATE ON media.object_location FOR EACH ROW EXECUTE FUNCTION media.keep_storage_write_deadline();
- END IF;
-END $$;
-
--- Directory statistics/export temporary material (migration 011).
-CREATE TABLE identity.directory_export (
- id uuid PRIMARY KEY,
- actor_id uuid NOT NULL REFERENCES identity."user"(id) ON DELETE RESTRICT,
- team_id uuid REFERENCES workspace.team(id) ON DELETE RESTRICT,
- scope_kind text NOT NULL CHECK(scope_kind IN ('platform','team')),
- scope_id uuid NOT NULL,
- request_key uuid NOT NULL,
- actor_session_id uuid NOT NULL,
- credential_epoch bigint NOT NULL,
- platform_epoch bigint NOT NULL,
- team_revision bigint NOT NULL DEFAULT 0,
- filter_snapshot jsonb NOT NULL,
- snapshot_payload bytea,
- snapshot_key_id text NOT NULL,
- as_of timestamptz NOT NULL,
- status text NOT NULL CHECK(status IN ('pending','running','completed','failed','expired','revoked')),
- row_count integer NOT NULL CHECK(row_count BETWEEN 0 AND 10000),
- private_object_id uuid,
- expires_at timestamptz NOT NULL,
- created_at timestamptz NOT NULL,
- updated_at timestamptz NOT NULL,
- error_category text NOT NULL DEFAULT '',
- CHECK((scope_kind='platform' AND team_id IS NULL AND scope_id='00000000-0000-0000-0000-000000000000') OR (scope_kind='team' AND team_id IS NOT NULL AND scope_id=team_id)),
- UNIQUE(actor_id,scope_id,request_key)
-);
-CREATE INDEX directory_export_actor_idx ON identity.directory_export(actor_id,created_at DESC,id);
-CREATE INDEX directory_export_work_idx ON identity.directory_export(status,expires_at,created_at,id);
-GRANT SELECT,INSERT,UPDATE ON identity.directory_export TO lanverse_app;
-
--- Storage probe ownership/admission (migration 014).
--- Probe ownership is separate from reviewed bucket admission evidence.
-CREATE TABLE IF NOT EXISTS media.storage_probe_intent (
- id uuid PRIMARY KEY,
- profile_id text NOT NULL,
- bucket text NOT NULL,
- config_sha256 text NOT NULL CHECK(config_sha256 ~ '^[a-f0-9]{64}$'),
- sentinel_key text NOT NULL,
- removal_key text,
- mode text NOT NULL CHECK(mode IN ('read_only','read_write')),
- state text NOT NULL DEFAULT 'running' CHECK(state IN ('running','complete','cleaning','cleaned')),
- evidence_sha256 text CHECK(evidence_sha256 ~ '^[a-f0-9]{64}$'),
- created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
- updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
- FOREIGN KEY(profile_id,bucket) REFERENCES media.storage_profile(id,bucket),
- CHECK((mode='read_write' AND removal_key=sentinel_key||'.remove') OR (mode='read_only' AND removal_key IS NULL))
-);
-CREATE OR REPLACE FUNCTION media.keep_storage_probe_intent() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
- IF (to_jsonb(OLD)-'state'-'evidence_sha256'-'updated_at') IS DISTINCT FROM (to_jsonb(NEW)-'state'-'evidence_sha256'-'updated_at')
-  OR (OLD.state='running' AND NEW.state NOT IN ('running','complete','cleaning'))
-  OR (OLD.state='complete' AND NEW.state<>'complete')
-  OR (OLD.state='cleaning' AND NEW.state NOT IN ('cleaning','cleaned'))
-  OR (OLD.state='cleaned' AND NEW.state<>'cleaned')
-  OR (OLD.evidence_sha256 IS NOT NULL AND OLD.evidence_sha256 IS DISTINCT FROM NEW.evidence_sha256) THEN
-  RAISE EXCEPTION 'probe identity/outcome cannot be rebound' USING ERRCODE='23514';
- END IF;
- RETURN NEW;
-END $$;
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.storage_probe_intent'::regclass AND tgname='keep_storage_probe_intent') THEN
-  CREATE TRIGGER keep_storage_probe_intent BEFORE UPDATE ON media.storage_probe_intent FOR EACH ROW EXECUTE FUNCTION media.keep_storage_probe_intent();
- END IF;
-END $$;
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.storage_profile'::regclass AND conname='storage_profile_resource_pair_key') THEN
-  ALTER TABLE media.storage_profile ADD CONSTRAINT storage_profile_resource_pair_key UNIQUE(id,resource_identity);
- END IF;
-END $$;
-CREATE TABLE IF NOT EXISTS media.storage_bucket_evidence (
- id uuid PRIMARY KEY,
- profile_id text NOT NULL,
- resource_identity text NOT NULL,
- config_sha256 text NOT NULL CHECK(config_sha256 ~ '^[a-f0-9]{64}$'),
- evidence_sha256 text NOT NULL CHECK(evidence_sha256 ~ '^[a-f0-9]{64}$'),
- contract text NOT NULL CHECK(contract='private-flat-never-versioned-standard-v1'),
- expires_at timestamptz NOT NULL,
- created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
- FOREIGN KEY(profile_id,resource_identity) REFERENCES media.storage_profile(id,resource_identity)
-);
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.storage_bucket_evidence'::regclass AND tgname='keep_storage_evidence') THEN
-  CREATE TRIGGER keep_storage_evidence BEFORE UPDATE OR DELETE ON media.storage_bucket_evidence FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
- END IF;
-END $$;
-GRANT SELECT,INSERT,UPDATE ON media.storage_probe_intent TO lanverse_app;
-GRANT SELECT,INSERT ON media.storage_bucket_evidence TO lanverse_app;
-
-CREATE TABLE identity.session_refresh_token (
-    id uuid PRIMARY KEY,
-    session_id uuid NOT NULL REFERENCES identity.user_session(id) ON DELETE RESTRICT,
-    generation bigint NOT NULL CHECK (generation >= 0),
-    token_digest bytea NOT NULL UNIQUE CHECK (octet_length(token_digest) = 32),
-    issued_at timestamptz NOT NULL,
-    consumed_at timestamptz,
-    revoked_at timestamptz,
-    rotation_request_id uuid,
-    replay_until timestamptz,
-    receipt_ciphertext bytea,
-    UNIQUE (session_id,generation),
-    CHECK ((consumed_at IS NULL) = (rotation_request_id IS NULL)),
-    CHECK ((replay_until IS NULL) = (receipt_ciphertext IS NULL)),
-    CHECK (replay_until IS NULL OR (consumed_at IS NOT NULL AND replay_until > consumed_at AND replay_until <= consumed_at + interval '10 seconds' AND octet_length(receipt_ciphertext) > 0)),
-    CHECK (consumed_at IS NULL OR consumed_at >= issued_at),
-    CHECK (revoked_at IS NULL OR revoked_at >= issued_at)
-);
-CREATE UNIQUE INDEX session_refresh_one_active_idx ON identity.session_refresh_token(session_id) WHERE consumed_at IS NULL AND revoked_at IS NULL;
-CREATE INDEX session_refresh_replay_cleanup_idx ON identity.session_refresh_token(replay_until,id) WHERE receipt_ciphertext IS NOT NULL;
-GRANT SELECT,INSERT,DELETE ON identity.session_refresh_token TO lanverse_app;
-GRANT UPDATE (consumed_at,revoked_at,rotation_request_id,replay_until,receipt_ciphertext) ON identity.session_refresh_token TO lanverse_app;
-
--- Project activity is a read model; it does not change project CAS revisions.
-CREATE TABLE workspace.project_activity (
-    project_id uuid PRIMARY KEY REFERENCES workspace.project(id) ON DELETE CASCADE,
-    modified_at timestamptz NOT NULL,
-    basis text NOT NULL CHECK (basis IN ('created','metadata','content','legacy_metadata'))
-);
-CREATE INDEX project_activity_recent_idx ON workspace.project_activity (modified_at DESC,project_id DESC);
-GRANT SELECT,INSERT,UPDATE ON workspace.project_activity TO lanverse_app;

@@ -2,7 +2,6 @@ package identity_test
 
 import (
 	"errors"
-	"os"
 	"testing"
 	"time"
 
@@ -22,13 +21,7 @@ func TestProjectScopeDoesNotFollowPhysicalOrganization(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !installed {
-		migration, err := os.ReadFile("../../db/migrations/005_project_owner_scope.sql")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := tx.Exec(string(migration)).Error; err != nil {
-			t.Fatal(err)
-		}
+		t.Fatal("database is missing workspace.project.owner_scope_id; initialize it from db/schema.sql")
 	}
 	_, actor := verifiedTestActor(t, tx, "project-scope@example.invalid", now)
 	var personal struct{ ID, PhysicalScopeID uuid.UUID }

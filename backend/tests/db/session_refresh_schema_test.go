@@ -9,28 +9,36 @@ import (
 
 // This static review gate never executes DDL against the connected business DB.
 func TestSessionV2RepositorySchema(t *testing.T) {
-	for _, path := range []string{"../../db/schema.sql", "../../db/migrations/016_identity_session_refresh.sql"} {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			t.Errorf("read %s: %v", path, err)
-			continue
+	data, err := os.ReadFile("../../db/schema.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sql := strings.ToLower(strings.Join(strings.Fields(string(data)), " "))
+	for _, clause := range []string{
+		"create table identity.session_refresh_token",
+		"protocol_version smallint default 1 not null",
+		"idle_timeout_seconds integer default 43200 not null",
+		"refresh_generation bigint default 0 not null",
+		"references identity.user_session(id) on delete restrict",
+		"unique (session_id, generation)",
+		"unique (token_digest)",
+		"where ((consumed_at is null) and (revoked_at is null))",
+		"octet_length(token_digest) = 32",
+		"(consumed_at is null) = (rotation_request_id is null)",
+		"(replay_until is null) = (receipt_ciphertext is null)",
+		"replay_until <= (consumed_at + '00:00:10'::interval)",
+		"grant select,insert,delete on table identity.session_refresh_token to lanverse_app",
+		"grant update(consumed_at) on table identity.session_refresh_token to lanverse_app",
+		"grant update(revoked_at) on table identity.session_refresh_token to lanverse_app",
+		"grant update(rotation_request_id) on table identity.session_refresh_token to lanverse_app",
+		"grant update(replay_until) on table identity.session_refresh_token to lanverse_app",
+		"grant update(receipt_ciphertext) on table identity.session_refresh_token to lanverse_app",
+	} {
+		if !strings.Contains(sql, clause) {
+			t.Errorf("schema.sql missing %q", clause)
 		}
-		sql := strings.ToLower(strings.Join(strings.Fields(string(data)), " "))
-		for _, clause := range []string{
-			"protocol_version smallint not null default 1", "idle_timeout_seconds integer not null default 43200", "refresh_generation bigint not null default 0",
-			"create table identity.session_refresh_token", "references identity.user_session(id) on delete restrict",
-			"token_digest bytea not null unique", "unique (session_id,generation)",
-			"where consumed_at is null and revoked_at is null", "octet_length(token_digest) = 32",
-			"(consumed_at is null) = (rotation_request_id is null)", "(replay_until is null) = (receipt_ciphertext is null)", "replay_until <= consumed_at + interval '10 seconds'",
-			"grant select,insert,delete on identity.session_refresh_token to lanverse_app",
-			"grant update (consumed_at,revoked_at,rotation_request_id,replay_until,receipt_ciphertext) on identity.session_refresh_token to lanverse_app",
-		} {
-			if !strings.Contains(sql, clause) {
-				t.Errorf("%s missing %q", path, clause)
-			}
-		}
-		if regexp.MustCompile(`grant\s+(?:all(?:\s+privileges)?|[^;]*\btruncate\b[^;]*|[^;]*\bupdate\s*(?:,|on)[^;]*)\s+(?:on\s+)?(?:table\s+)?identity\.session_refresh_token\b`).MatchString(sql) {
-			t.Errorf("%s grants excessive privileges", path)
-		}
+	}
+	if regexp.MustCompile(`grant\s+(?:all(?:\s+privileges)?|[^;]*\btruncate\b[^;]*|[^;]*\bupdate\s*(?:,|on)[^;]*)\s+(?:on\s+)?(?:table\s+)?identity\.session_refresh_token\b`).MatchString(sql) {
+		t.Error("schema.sql grants excessive privileges on identity.session_refresh_token")
 	}
 }
