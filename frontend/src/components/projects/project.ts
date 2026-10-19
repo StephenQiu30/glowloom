@@ -10,6 +10,10 @@ export function isProjectID(value: unknown): value is string {
 }
 
 export type Project = {
+  status?: "active" | "archived" | "copying";
+  is_delete?: boolean;
+  last_modified_at?: string;
+  last_modified_basis?: "created" | "metadata" | "content" | "legacy_metadata";
   id: string;
   canvas_id: string | null;
   name: string;
@@ -28,7 +32,7 @@ export function requireProject(value: unknown, requireCanvas = false): Project {
     !(p.canvas_id === null || isProjectID(p.canvas_id)) ||
     (requireCanvas && !isProjectID(p.canvas_id)) ||
     typeof p.name !== "string" ||
-    !p.name.trim() ||
+    !Array.from(p.name).some((point) => !isNameSpace(point.codePointAt(0)!)) ||
     Array.from(p.name).length > 50 ||
     !["9:16", "16:9", "1:1"].includes(p.aspect_ratio ?? "") ||
     !(
@@ -39,6 +43,15 @@ export function requireProject(value: unknown, requireCanvas = false): Project {
     ) ||
     !Number.isSafeInteger(p.revision) ||
     p.revision! < 1 ||
+    (p.status !== undefined &&
+      !["active", "archived", "copying"].includes(p.status)) ||
+    (p.is_delete !== undefined && typeof p.is_delete !== "boolean") ||
+    (p.last_modified_at !== undefined &&
+      !Number.isFinite(Date.parse(p.last_modified_at))) ||
+    (p.last_modified_basis !== undefined &&
+      !["created", "metadata", "content", "legacy_metadata"].includes(
+        p.last_modified_basis,
+      )) ||
     typeof p.update_time !== "string" ||
     !Number.isFinite(Date.parse(p.update_time))
   ) {
@@ -94,4 +107,39 @@ export function projectErrorMessage(error: unknown) {
       return "项目参数不符合要求，请检查名称、画幅与风格。";
   }
   return "请求结果未确认。请重试原请求，或刷新项目列表确认是否已创建。";
+}
+
+function isNameSpace(value: number) {
+  return (
+    (value >= 9 && value <= 13) ||
+    value === 32 ||
+    value === 133 ||
+    value === 160 ||
+    value === 5760 ||
+    (value >= 8192 && value <= 8202) ||
+    value === 8232 ||
+    value === 8233 ||
+    value === 8239 ||
+    value === 8287 ||
+    value === 12288
+  );
+}
+export function normalizeProjectName(value: string) {
+  const points = Array.from(value);
+  let start = 0,
+    end = points.length;
+  while (start < end && isNameSpace(points[start].codePointAt(0)!)) start++;
+  while (end > start && isNameSpace(points[end - 1].codePointAt(0)!)) end--;
+  const name = points.slice(start, end).join("");
+  if (
+    end - start < 1 ||
+    end - start > 50 ||
+    name.includes(String.fromCharCode(0)) ||
+    Array.from(name).some((p) => {
+      const c = p.codePointAt(0)!;
+      return c >= 0xd800 && c <= 0xdfff;
+    })
+  )
+    throw new Error("名称需为1～50个Unicode码点，不能包含无效字符。");
+  return name;
 }

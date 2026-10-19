@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/context-menu";
 
 export function CanvasContextMenu({
+  readOnly = false,
   children,
   onAdd,
   onMaterials,
@@ -38,6 +39,7 @@ export function CanvasContextMenu({
   canDuplicate,
   canRemove,
 }: {
+  readOnly?: boolean;
   children: ReactNode;
   onAdd: (kind: "text" | "image_generation" | "video_generation") => void;
   onMaterials: () => void;
@@ -55,7 +57,9 @@ export function CanvasContextMenu({
 }) {
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuTrigger asChild disabled={readOnly}>
+        {children}
+      </ContextMenuTrigger>
       <ContextMenuContent
         className="canvas-view-menu"
         aria-label="画布右键菜单"

@@ -126,3 +126,31 @@ func TestProjectLifecycleHTTPInFlightConflictAndDeadline(t *testing.T) {
 		t.Fatal("wrong recovery deadline", expired.Code, expired.Body.String())
 	}
 }
+
+func TestProjectNameHTTPUnicodeCodepointsAndGoWhitespace(t *testing.T) {
+	for _, test := range []struct {
+		name, input, want string
+		status            int
+	}{
+		{"one emoji", "😀", "😀", 200}, {"fifty codepoints", strings.Repeat("😀", 50), strings.Repeat("😀", 50), 200},
+		{"fifty one codepoints", strings.Repeat("😀", 51), "", 422}, {"unicode whitespace", "\u0085名称\u0085", "名称", 200},
+		{"BOM is not Go whitespace", "\uFEFF名称\uFEFF", "\uFEFF名称\uFEFF", 200}, {"combining preserved", "e\u0301", "e\u0301", 200},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, db := workspaceMigrationDB(t)
+			actor := insertWorkspaceActor(ctx, t, db, insertWorkspaceOrganization(ctx, t, db))
+			id := insertWorkspaceProject(ctx, t, db, actor, "16:9", "realistic", nil)
+			body, _ := json.Marshal(map[string]any{"name": test.input, "expected_revision": 1})
+			response := projectHTTPRequest(ctx, lifecycleHTTPRouter(db, actor), "PATCH", "/api/projects/"+id, uuid.NewString(), body)
+			if response.Code != test.status {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+			if test.status == 200 {
+				var detail workspacehttp.ProjectDetailResponse
+				if json.Unmarshal(response.Body.Bytes(), &detail) != nil || detail.Name != test.want {
+					t.Fatalf("name changed: %q", detail.Name)
+				}
+			}
+		})
+	}
+}

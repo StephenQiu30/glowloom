@@ -12,7 +12,6 @@ import (
 	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
 	canvaspg "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	identitypg "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
@@ -57,7 +56,7 @@ func bibleFixtureCanvasStore(db *gorm.DB, media canvaspg.MediaReaderFactory) *ca
 	return canvaspg.NewScopedStore(db, media, composition.NewCanvasProjectAccess)
 }
 func bibleFixtureCanvasCopyStore(db *gorm.DB, media canvaspg.MediaReaderFactory, copied canvaspg.CopyMediaReaderFactory) *canvaspg.ProjectCopyStore {
-	return canvaspg.NewScopedProjectCopyStore(db, media, copied, func(tx *gorm.DB) canvasapp.ProjectAccess { return composition.NewMediaWorkerScopeAccess(tx) })
+	return canvaspg.NewScopedProjectCopyStore(db, media, copied, composition.NewWorkerCanvasProjectAccess)
 }
 func bibleFixtureWorkspaceStore(db *gorm.DB) *workspacepg.Store {
 	return workspacepg.NewScopedStore(db, bibleFixtureRequestScope, nil, nil)

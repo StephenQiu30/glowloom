@@ -99,7 +99,19 @@ func (s *Store) ReadProjectSnapshot(ctx context.Context, actor identityapp.Princ
 			return err
 		}
 		saved.CoverUnavailable, err = s.projectCoverUnavailable(ctx, tx, actor, saved.Project)
-		return err
+		if err != nil {
+			return err
+		}
+		var activity struct {
+			ModifiedAt time.Time
+			Basis      string
+		}
+		if err := tx.Raw(`SELECT COALESCE(a.modified_at,p.create_time) AS modified_at,COALESCE(a.basis,'created') AS basis FROM workspace.project p LEFT JOIN workspace.project_activity a ON a.project_id=p.id WHERE p.id=?`, id).Scan(&activity).Error; err != nil {
+			return err
+		}
+		saved.LastModifiedAt = &activity.ModifiedAt
+		saved.LastModifiedBasis = &activity.Basis
+		return nil
 	})
 	if err != nil {
 		return application.ProjectSnapshot{}, fmt.Errorf("read project snapshot transaction: %w", err)
@@ -207,6 +219,11 @@ func (s *Store) ApplyProjectChange(ctx context.Context, actor identityapp.Princi
 		}
 		if write.RowsAffected != 1 {
 			return domain.ErrProjectRevisionConflict
+		}
+		if input.Action == "patch" && projectMetadataChanged(current.Project, after) {
+			if err := markProjectActivity(tx, after.ID, "metadata"); err != nil {
+				return err
+			}
 		}
 		for _, event := range events {
 			result := tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,?,?,?::jsonb)`, event.ID, event.Topic, event.PartitionKey, string(event.Payload))

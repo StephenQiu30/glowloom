@@ -29,7 +29,7 @@ func mediaCanvasStore(db *gorm.DB, media pgcanvas.MediaReaderFactory) *pgcanvas.
 }
 
 func mediaCanvasWorkerStore(db *gorm.DB, media pgcanvas.MediaReaderFactory) *pgcanvas.Store {
-	return pgcanvas.NewScopedStore(db, media, func(tx *gorm.DB) canvasapp.ProjectAccess { return app.NewMediaWorkerScopeAccess(tx) })
+	return pgcanvas.NewScopedStore(db, media, app.NewWorkerCanvasProjectAccess)
 }
 
 func mediaLibraryStore(db *gorm.DB, project pgmedia.LibraryProjectAccessFactory, clock func() time.Time) *pgmedia.LibraryStore {
@@ -83,7 +83,7 @@ func mediaStorageUsageStore(db *gorm.DB, project pgmedia.LibraryProjectAccessFac
 }
 
 func mediaCanvasStoreWithScope(db *gorm.DB, media pgcanvas.MediaReaderFactory, scopes pgmedia.ScopeAccessFactory) *pgcanvas.Store {
-	return pgcanvas.NewScopedStore(db, media, func(tx *gorm.DB) canvasapp.ProjectAccess { return scopes(tx) })
+	return pgcanvas.NewScopedStore(db, media, func(tx *gorm.DB) canvasapp.ProjectAccess { return app.NewCanvasProjectAccessWithScope(tx, scopes(tx)) })
 }
 
 func mediaScopedIngestActivities(db *gorm.DB, objects *objectstorage.Client, policy mediaflow.DownloadPolicy) (*mediaflow.Activities, error) {

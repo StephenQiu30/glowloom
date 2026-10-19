@@ -449,9 +449,20 @@ async function proxy(
                             )
                           ? ["GET"]
                           : undefined;
-  const boundedRoute = [...identityRoutes, ...editorCatalogRoutes].find(
-    (rule) => new RegExp(`^${rule.pattern}$`, "i").test(resource),
-  );
+  const boundedRoute = [
+    {
+      pattern: `projects/${identityUUID}`,
+      methods: ["GET", "PATCH"],
+      query: [] as string[],
+    },
+    {
+      pattern: `project-creations/${identityUUID}`,
+      methods: ["GET"],
+      query: [] as string[],
+    },
+    ...identityRoutes,
+    ...editorCatalogRoutes,
+  ].find((rule) => new RegExp(`^${rule.pattern}$`, "i").test(resource));
   const methods =
     boundedRoute?.methods ??
     flowMethods ??
@@ -497,6 +508,17 @@ async function proxy(
         );
     }
   }
+  if (
+    resource === "projects" &&
+    incoming.searchParams.has("order") &&
+    (request.method !== "GET" ||
+      incoming.searchParams.getAll("order").length !== 1 ||
+      incoming.searchParams.get("order") !== "recent_content")
+  )
+    return Response.json(
+      { code: "invalid_request" },
+      { status: 422, headers: noStore },
+    );
   let uploadTooLarge = false;
   try {
     const upstream = new URL(
@@ -507,7 +529,7 @@ async function proxy(
       for (const [key, value] of incoming.searchParams)
         upstream.searchParams.set(key, value);
     if (resource === "projects")
-      for (const key of ["q", "limit", "cursor"])
+      for (const key of ["q", "limit", "cursor", "order"])
         if (incoming.searchParams.has(key))
           upstream.searchParams.set(key, incoming.searchParams.get(key)!);
     if (flowMethods && request.method === "GET")

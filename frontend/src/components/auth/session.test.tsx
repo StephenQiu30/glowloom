@@ -1,3 +1,5 @@
+import { requireSession } from "./contracts";
+import { isCurrentSession } from "./session-renewal";
 import { branchJournal } from "@/components/generation/draft-save";
 import {
   cleanup,
@@ -485,9 +487,13 @@ it("explicit logout clears the persistent identity before another route check", 
       </SessionGate>
     </SessionProvider>,
   );
-  fireEvent.click(
-    await screen.findByRole("button", { name: "退出当前测试账号" }),
+  const logout = await screen.findByRole("button", {
+    name: "退出当前测试账号",
+  });
+  await waitFor(() =>
+    expect(isCurrentSession(requireSession(validSession))).toBe(true),
   );
+  fireEvent.click(logout);
   await screen.findByText("会话已清理");
   expect(screen.queryByRole("button", { name: "退出当前测试账号" })).toBeNull();
   expect(

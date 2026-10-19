@@ -42,6 +42,7 @@ import {
 import { AccountMenu } from "@/components/account/account-menu";
 import { useOptionalSession, revokeSession } from "@/components/auth/session";
 import type { Project } from "@/components/projects/project";
+import { ProjectRenameDialog } from "@/components/projects/project-rename-dialog";
 import type { Node } from "./editor-state";
 
 const ProjectHistory = dynamic(() =>
@@ -59,6 +60,7 @@ export function CanvasHeader({
   onSelect,
   onMessage,
   onShortcuts,
+  canRename = false,
 }: {
   project: Project;
   nodes: Node[];
@@ -70,9 +72,11 @@ export function CanvasHeader({
   onSelect: (id: string) => void;
   onMessage: (message: string) => void;
   onShortcuts: () => void;
+  canRename?: boolean;
 }) {
   const [search, setSearch] = useState(false);
   const [history, setHistory] = useState(false);
+  const [rename, setRename] = useState(false);
   const [share, setShare] = useState(false);
   const session = useOptionalSession();
   async function copyLink() {
@@ -85,6 +89,11 @@ export function CanvasHeader({
   }
   return (
     <>
+      <ProjectRenameDialog
+        project={project}
+        open={rename}
+        onOpenChange={setRename}
+      />
       <div className="canvas-project-cluster">
         <Brand />
         <h1 className="canvas-project-heading" aria-label={project.name}>
@@ -102,6 +111,12 @@ export function CanvasHeader({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
               <DropdownMenuGroup>
+                <DropdownMenuItem
+                  disabled={!canRename}
+                  onSelect={() => setRename(true)}
+                >
+                  重命名画布
+                </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/projects">返回项目</Link>
                 </DropdownMenuItem>

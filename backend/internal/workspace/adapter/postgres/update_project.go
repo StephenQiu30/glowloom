@@ -93,6 +93,11 @@ func (s *Store) UpdateProjectWithEvents(ctx context.Context, actor identityapp.P
 		if result.RowsAffected != 1 {
 			return domain.ErrProjectRevisionConflict
 		}
+		if projectMetadataChanged(before, after) {
+			if err := markProjectActivity(tx, after.ID, "metadata"); err != nil {
+				return err
+			}
+		}
 		for _, event := range events {
 			result := tx.Exec(`
 				INSERT INTO infra.outbox (id, topic, partition_key, payload)

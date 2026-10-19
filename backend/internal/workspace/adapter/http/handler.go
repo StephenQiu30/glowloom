@@ -33,6 +33,8 @@ func NewHandler(list *application.ListProjectsQuery, create *application.CreateP
 
 // ProjectResponse exposes safe project-list fields needed for navigation.
 type ProjectResponse struct {
+	LastModifiedAt    time.Time  `json:"last_modified_at"`
+	LastModifiedBasis string     `json:"last_modified_basis"`
 	CoverAssetID      *uuid.UUID `json:"cover_asset_id" extensions:"x-nullable"`
 	CoverUnavailable  bool       `json:"cover_unavailable"`
 	ID                uuid.UUID  `json:"id"`
@@ -58,6 +60,7 @@ type ListResponse struct {
 	NextCursor *string           `json:"next_cursor" extensions:"x-nullable"`
 }
 type cursor struct {
+	Version int       `json:"version,omitempty"`
 	ID      uuid.UUID `json:"id"`
 	Time    time.Time `json:"time"`
 	Binding string    `json:"binding"`
@@ -81,6 +84,7 @@ func (h *Handler) Register(group *gin.RouterGroup) {
 // @Param status query string false "active或archived"
 // @Param deleted query boolean false "只查询回收中的项目"
 // @Param folder_id query string false "个人目录UUID，root表示未分类；未指定列出全部"
+// @Param order query string false "recent_content按真实最近修改排序，省略保持旧口径" Enums(recent_content)
 // @Success 200 {object} ListResponse
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
@@ -88,7 +92,7 @@ func (h *Handler) Register(group *gin.RouterGroup) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects [get]
 func (h *Handler) List(c *gin.Context) {
-	input := application.ListProjectsInput{Query: strings.TrimSpace(c.Query("q")), Status: c.Query("status"), Limit: 50}
+	input := application.ListProjectsInput{Query: strings.TrimSpace(c.Query("q")), Status: c.Query("status"), Order: c.Query("order"), Limit: 50}
 	if raw := c.Query("folder_id"); raw != "" {
 		id := uuid.Nil
 		if raw != "root" {
@@ -126,6 +130,15 @@ func (h *Handler) List(c *gin.Context) {
 		Deleted               bool
 		Limit                 int
 	}{input.Query, input.Status, c.Query("folder_id"), input.Deleted, input.Limit})
+	version := 0
+	if input.Order == "recent_content" {
+		version = 2
+		binding = cursorBinding(actor, "projects-recent-content-v2", struct {
+			Query, Status, Folder, Order string
+			Deleted                      bool
+			Limit                        int
+		}{input.Query, input.Status, c.Query("folder_id"), input.Order, input.Deleted, input.Limit})
+	}
 	if raw := c.Query("cursor"); raw != "" {
 		if len(raw) > base64.RawURLEncoding.EncodedLen(512) {
 			httpapi.WriteProblem(c, 422, "invalid_request", nil)
@@ -133,7 +146,7 @@ func (h *Handler) List(c *gin.Context) {
 		}
 		var cur cursor
 		body, err := base64.RawURLEncoding.DecodeString(raw)
-		if err != nil || len(body) > 512 || json.Unmarshal(body, &cur) != nil || cur.ID == uuid.Nil || cur.Time.IsZero() || cur.Binding != binding {
+		if err != nil || len(body) > 512 || json.Unmarshal(body, &cur) != nil || cur.ID == uuid.Nil || cur.Time.IsZero() || cur.Binding != binding || cur.Version != version {
 			httpapi.WriteProblem(c, 422, "invalid_request", nil)
 			return
 		}
@@ -159,10 +172,10 @@ func (h *Handler) List(c *gin.Context) {
 	}
 	response := ListResponse{Items: make([]ProjectResponse, 0, len(page.Projects))}
 	for _, p := range page.Projects {
-		response.Items = append(response.Items, ProjectResponse{CoverAssetID: p.CoverAssetID, CoverUnavailable: p.CoverUnavailable, ID: p.ID, CanvasID: p.CanvasID, StyleKey: p.StyleKey, UpdateTime: p.UpdateTime, Name: p.Name, Status: p.Status, Revision: p.Revision, AspectRatio: p.AspectRatio, StyleType: p.StyleType, IsDelete: p.IsDelete, ArchivedAt: p.ArchivedAt, DeleteTime: p.DeleteTime, PurgeAfter: p.PurgeAfter, FolderID: p.FolderID, PlacementRevision: p.PlacementRevision})
+		response.Items = append(response.Items, ProjectResponse{LastModifiedAt: p.LastModifiedAt, LastModifiedBasis: p.LastModifiedBasis, CoverAssetID: p.CoverAssetID, CoverUnavailable: p.CoverUnavailable, ID: p.ID, CanvasID: p.CanvasID, StyleKey: p.StyleKey, UpdateTime: p.UpdateTime, Name: p.Name, Status: p.Status, Revision: p.Revision, AspectRatio: p.AspectRatio, StyleType: p.StyleType, IsDelete: p.IsDelete, ArchivedAt: p.ArchivedAt, DeleteTime: p.DeleteTime, PurgeAfter: p.PurgeAfter, FolderID: p.FolderID, PlacementRevision: p.PlacementRevision})
 	}
 	if page.Next != nil {
-		body, _ := json.Marshal(cursor{ID: page.Next.ID, Time: page.Next.UpdateTime, Binding: binding})
+		body, _ := json.Marshal(cursor{Version: version, ID: page.Next.ID, Time: page.Next.UpdateTime, Binding: binding})
 		value := base64.RawURLEncoding.EncodeToString(body)
 		response.NextCursor = &value
 	}

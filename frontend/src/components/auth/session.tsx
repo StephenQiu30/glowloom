@@ -39,12 +39,25 @@ import {
   ApplicationState,
 } from "@/components/layout/application-state";
 import { toast } from "sonner";
+import { projectIntentStore } from "@/components/projects/project-intent-store";
+import { projectPresentationStore } from "@/components/projects/project-presentation-store";
+
 let privateCleanup = Promise.resolve();
 function queuePrivateCleanup(
   options?: Parameters<typeof branchJournal.clear>[0],
 ) {
+  projectPresentationStore.clear();
+  const intentCleanup = projectIntentStore
+    .invalidate(
+      options?.preserveInput || options?.retainWriter
+        ? "passive_expiry"
+        : "active_logout",
+    )
+    .catch(() => {});
   privateCleanup = privateCleanup
-    .then(() => branchJournal.clear(options))
+    .then(async () => {
+      await Promise.all([branchJournal.clear(options), intentCleanup]);
+    })
     .catch(() => {});
   return privateCleanup;
 }
@@ -315,6 +328,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           event.data.source !== sessionIdentitySource
         ) {
           branchJournal.invalidateObservedIdentity();
+          void projectIntentStore.invalidate("passive_expiry");
           foreground();
         }
       };

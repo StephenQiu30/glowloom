@@ -11,7 +11,7 @@ import {
 } from "react";
 import { cn } from "cn";
 import { useRouter } from "next/navigation";
-import { SpaceProvider } from "@/components/spaces/space-context";
+import { SpaceGate } from "@/components/spaces/space-context";
 import {
   SessionGate,
   useOptionalSession,
@@ -135,7 +135,7 @@ function Shell({
           data-full-bleed={fullBleed}
           className={cn(!fullBleed && "workspace-page")}
         >
-          <SpaceProvider>{children}</SpaceProvider>
+          <SpaceGate>{children}</SpaceGate>
         </div>
       </SidebarInset>
       <UnavailableDialog feature={feature} onClose={() => setFeature(null)} />

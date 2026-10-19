@@ -51,7 +51,7 @@ func provideProjectCopyStoreWithAccess(database *gorm.DB, scopes pgmedia.ScopeAc
 					return copiedCanvasMedia{store: pgmedia.NewScopedProjectCopyStore(mediaTx, scopes), binding: mediaapp.ProjectCopyBinding{
 						JobID: binding.JobID, OrgID: binding.OrgID, SourceProjectID: binding.SourceProjectID, TargetProjectID: binding.TargetProjectID,
 					}}
-				}, func(tx *gorm.DB) canvasapp.ProjectAccess { return scopes(tx) })
+				}, func(tx *gorm.DB) canvasapp.ProjectAccess { return canvasScopedAccess{ScopeAccess: scopes(tx), tx: tx} })
 			return workspaceapp.ProjectCopyOwners{Media: media, Canvas: canvas, Budget: pgbilling.NewScopedStore(tx, func(db *gorm.DB) billingapp.ProjectAccess { return copyBudgetAccess{scopes(db)} }), Cover: projectCopyCoverOwner{tx: tx, scopes: scopes}}
 		}, func(tx *gorm.DB, authority workspaceapp.ProjectCopyAuthority) workspaceapp.ProjectCopyScriptOwner {
 			return projectCopyScriptOwner{store: provideScriptProjectCopyStore(tx, authority)}

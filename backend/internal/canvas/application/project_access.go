@@ -10,6 +10,8 @@ import (
 
 // ProjectAccess authorizes exact project ownership without interpreting author IDs.
 type ProjectAccess interface {
+	ProjectPresentationReader
+	ProjectActivityWriter
 	AuthorizeProject(context.Context, identity.Principal, uuid.UUID, bool) error
 	AuthorizeCopyTarget(context.Context, identity.Principal, uuid.UUID) error
 }

@@ -56,7 +56,7 @@ func workspaceCopyAccess(tx *gorm.DB, authority workspaceapp.ProjectCopyAuthorit
 }
 
 func workspaceCanvasWorkerScope(tx *gorm.DB) canvasapp.ProjectAccess {
-	return app.NewMediaWorkerScopeAccess(tx)
+	return app.NewWorkerCanvasProjectAccess(tx)
 }
 
 func workspaceMediaStore(db *gorm.DB) *pgmedia.Store {

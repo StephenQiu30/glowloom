@@ -1,6 +1,9 @@
 "use client";
 
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import { useProjectPresentation } from "@/components/projects/project-presentation";
+import { publishProjectInvalidation } from "@/components/projects/project-presentation-store";
+import { useSpace } from "@/components/spaces/space-context";
 
 import {
   useCallback,
@@ -133,12 +136,23 @@ const CanvasAIPanel = dynamic(() =>
 );
 
 export function CanvasEditor({
-  project,
+  project: initialProject,
   initial,
 }: {
   project: Project;
   initial: Canvas;
 }) {
+  const presentation = useProjectPresentation(initialProject);
+  const project = presentation.project,
+    creationSpace = useSpace();
+  const readOnly =
+    project.status !== "active" ||
+    !!presentation.error ||
+    creationSpace.selected?.writable === false;
+  const readOnlyRef = useRef(readOnly);
+  useEffect(() => {
+    readOnlyRef.current = readOnly;
+  }, [readOnly]);
   const [aiOpen, setAIOpen] = useState(false);
   const [aiWidth, setAIWidth] = useState(400);
   const aiResize = useRef<{ x: number; width: number } | null>(null);
@@ -209,7 +223,8 @@ export function CanvasEditor({
   const baseline = new Map(base.nodes.map((n) => [n.id, n]));
   const dirty =
     canonical(edges) !== canonical(base.edges) ||
-    canonical(camera) !== canonical(base.viewport ?? defaultViewport) ||
+    (!readOnly &&
+      canonical(camera) !== canonical(base.viewport ?? defaultViewport)) ||
     nodes.length !== base.nodes.length ||
     nodes.some(
       (n) => !baseline.has(n.id) || !sameEditable(n, baseline.get(n.id)!),
@@ -433,7 +448,7 @@ export function CanvasEditor({
     nextEdges = localEdges.current,
     record = true,
   ) {
-    if (privateInvalid.current) return;
+    if (privateInvalid.current || (record && readOnlyRef.current)) return;
     if (record) setAutoSavePaused(false);
     if (record)
       history.record(
@@ -453,7 +468,13 @@ export function CanvasEditor({
     );
   }
   function stepHistory(direction: "undo" | "redo") {
-    if (busy.current || pending.current || conflict || privateInvalid.current)
+    if (
+      readOnlyRef.current ||
+      busy.current ||
+      pending.current ||
+      conflict ||
+      privateInvalid.current
+    )
       return;
     const graph = history[direction](savedBase.current);
     if (graph) {
@@ -1138,7 +1159,13 @@ export function CanvasEditor({
     }
   }
   async function saveOnce() {
-    if (busy.current || conflict || privateInvalid.current) return;
+    if (
+      readOnlyRef.current ||
+      busy.current ||
+      conflict ||
+      privateInvalid.current
+    )
+      return;
     const base = savedBase.current;
     let operation = pending.current;
     if (!operation) {
@@ -1214,6 +1241,7 @@ export function CanvasEditor({
       setAutoSavePaused(false);
       pending.current = null;
       setUnconfirmed(false);
+      publishProjectInvalidation(project.id);
       return committed;
     } catch (error) {
       if (!alive.current || controller.signal.aborted) return;
@@ -1277,6 +1305,7 @@ export function CanvasEditor({
     identityInvalid,
   ]);
   async function recoverCanvas(branch: LocalBranch) {
+    if (readOnlyRef.current) return;
     if (busy.current || privateInvalid.current) return;
     if (pending.current) {
       setMessage("请先重试原保存，确认结果后再恢复其他分支。");
@@ -1414,6 +1443,8 @@ export function CanvasEditor({
   }
 
   async function adoptResult(id: string, kind: string) {
+    if (readOnlyRef.current)
+      throw new Error("项目当前只读，无法采用生成结果。");
     if (!["image", "video", "audio"].includes(kind) || busy.current || conflict)
       throw new Error("请先解决画布保存状态，再采用结果。");
     const existing = local.current.find(
@@ -1634,12 +1665,19 @@ export function CanvasEditor({
         <CanvasHeader
           project={project}
           nodes={nodes}
-          status={status}
+          status={
+            readOnly
+              ? project.status === "archived"
+                ? "已归档 · 只读"
+                : "项目资料未确认 · 只读"
+              : status
+          }
           saveLabel={
             saving ? "正在保存…" : unconfirmed ? "重试原保存" : "保存画布"
           }
           saving={saving}
-          canSave={!conflict && (dirty || unconfirmed)}
+          canSave={!readOnly && !conflict && (dirty || unconfirmed)}
+          canRename={!readOnly}
           onSave={() => void save()}
           onSelect={(id) => selectNode(id)}
           onMessage={setMessage}
@@ -1647,6 +1685,15 @@ export function CanvasEditor({
         />
       </header>
       {message && <FeedbackToast message={message} tone="info" />}
+      {presentation.error && (
+        <FeedbackToast
+          message={presentation.error}
+          action={{
+            label: "重新读取项目",
+            onClick: () => void presentation.refresh().catch(() => {}),
+          }}
+        />
+      )}
       <Dialog open={leave} onOpenChange={setLeave}>
         <DialogContent role="alertdialog" showCloseButton={false}>
           <DialogTitle>确认离开画布</DialogTitle>
@@ -1722,6 +1769,7 @@ export function CanvasEditor({
         </section>
       )}
       <CanvasContextMenu
+        readOnly={readOnly}
         onCopy={() => void copyClipboard()}
         onPaste={() => void pasteClipboard()}
         onAdd={(kind) => {
@@ -1824,11 +1872,12 @@ export function CanvasEditor({
                 }}
                 addingAdjacent={addingAdjacent}
                 onAddAdjacent={
-                  isEditableNode(node)
+                  !readOnly && isEditableNode(node)
                     ? (kind, side) => void addAdjacent(node, kind, side)
                     : undefined
                 }
                 onEditTitle={() => {
+                  if (readOnly) return;
                   selectNode(node.id);
                   if (node.node_type === "director") setOpenToolID(node.id);
                   else setDetails(true);
@@ -1935,6 +1984,7 @@ export function CanvasEditor({
         )}
       </div>
       <CanvasToolbar
+        readOnly={readOnly}
         tool={tool}
         onToolChange={setTool}
         onAddTool={addTool}
@@ -1970,7 +2020,8 @@ export function CanvasEditor({
           }
         />
       )}
-      {current &&
+      {!readOnly &&
+        current &&
         current.node_type !== "timeline" &&
         current.id !== openToolID && (
           <CanvasNodePanel
@@ -2127,7 +2178,7 @@ export function CanvasEditor({
           ))}
         </div>
       )}
-      {aiOpen && (
+      {!readOnly && aiOpen && (
         <div
           className="canvas-ai-shell"
           style={{ width: effectiveAIWidth }}
@@ -2192,43 +2243,44 @@ export function CanvasEditor({
           />
         </div>
       )}
-      {nodes.find((n) => n.id === openToolID)?.node_type === "director" && (
-        <CanvasDirector
-          onSave={async () => !!(await save())}
-          saveMessage={
-            message ||
-            (unconfirmed
-              ? "保存结果待确认"
-              : conflict
-                ? "画布版本冲突，请关闭导演台处理"
-                : dirty
-                  ? "有未保存的编辑"
-                  : "已保存")
-          }
-          saving={saving}
-          key={openToolID}
-          node={nodes.find((n) => n.id === openToolID)!}
-          nodes={nodes}
-          projectID={project.id}
-          onUpdate={(config) =>
-            update(openToolID!, {
-              config: {
-                ...local.current.find((n) => n.id === openToolID)?.config,
-                director: config,
-              },
-            })
-          }
-          onClose={() => setOpenToolID(undefined)}
-        />
-      )}
-      {generation && (
+      {!readOnly &&
+        nodes.find((n) => n.id === openToolID)?.node_type === "director" && (
+          <CanvasDirector
+            onSave={async () => !!(await save())}
+            saveMessage={
+              message ||
+              (unconfirmed
+                ? "保存结果待确认"
+                : conflict
+                  ? "画布版本冲突，请关闭导演台处理"
+                  : dirty
+                    ? "有未保存的编辑"
+                    : "已保存")
+            }
+            saving={saving}
+            key={openToolID}
+            node={nodes.find((n) => n.id === openToolID)!}
+            nodes={nodes}
+            projectID={project.id}
+            onUpdate={(config) =>
+              update(openToolID!, {
+                config: {
+                  ...local.current.find((n) => n.id === openToolID)?.config,
+                  director: config,
+                },
+              })
+            }
+            onClose={() => setOpenToolID(undefined)}
+          />
+        )}
+      {!readOnly && generation && (
         <GenerationDialog
           seed={generation}
           onClose={() => setGeneration(null)}
           onAdopt={adoptResult}
         />
       )}
-      {materials && (
+      {!readOnly && materials && (
         <CanvasMaterialDialog
           projectID={project.id}
           initialTab={materials.tab}
@@ -2238,7 +2290,7 @@ export function CanvasEditor({
           onSubject={useSubject}
         />
       )}
-      {upload && (
+      {!readOnly && upload && (
         <UploadDialog
           projectID={project.id}
           onClose={() => setUpload(false)}

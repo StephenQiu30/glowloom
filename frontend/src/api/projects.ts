@@ -3,6 +3,23 @@
 import { request } from "@/lib/request";
 import type { RequestOptions } from "@/lib/request";
 
+/** 查询画布创建结果 GET /api/project-creations/${param0} */
+export async function getProjectCreation(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getProjectCreationParams,
+  options?: RequestOptions,
+) {
+  const { key: param0, ...queryParams } = params;
+  return request<API.ProjectCreationRecoveryResponse>(
+    `/api/project-creations/${param0}`,
+    {
+      method: "GET",
+      params: { ...queryParams },
+      ...(options || {}),
+    },
+  );
+}
+
 /** 项目目录列表 GET /api/project-folders */
 export async function listProjectFolders(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

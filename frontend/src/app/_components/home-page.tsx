@@ -1,4 +1,5 @@
 "use client";
+import { NewCanvasButton } from "@/components/projects/new-canvas-button";
 import { useState, useRef, useEffect, type SetStateAction } from "react";
 import Link from "next/link";
 import {
@@ -456,12 +457,10 @@ function HomeContent({ searchQuery }: { searchQuery: string }) {
         ) : (
           <div className="home-canvas-launch">
             <div className="home-canvas-list">
-              <Button variant="tile" asChild>
-                <Link href="/projects">
-                  <Plus />
-                  <span>新建画布</span>
-                </Link>
-              </Button>
+              <NewCanvasButton variant="tile">
+                <Plus />
+                <span>新建画布</span>
+              </NewCanvasButton>
               <Button variant="tile" asChild>
                 <Link href="/projects">
                   <span>我的画布</span>

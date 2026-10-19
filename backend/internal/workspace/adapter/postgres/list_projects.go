@@ -19,7 +19,7 @@ func (s *Store) ListProjectsForActor(ctx context.Context, actor identityapp.Prin
 	if s == nil || s.db == nil {
 		return application.ProjectListPage{}, ErrUnavailable
 	}
-	if input.Limit < 1 || input.Limit > 200 ||
+	if (input.Order != "" && input.Order != "recent_content") || input.Limit < 1 || input.Limit > 200 ||
 		(input.Status != "" && input.Status != "active" && input.Status != "archived") ||
 		(input.After != nil && (input.After.ID == uuid.Nil || input.After.UpdateTime.IsZero())) ||
 		(input.Deleted && input.FolderID != nil) {
@@ -39,14 +39,20 @@ func (s *Store) ListProjectsForActor(ctx context.Context, actor identityapp.Prin
 				return domain.ErrProjectFolderNotFound
 			}
 		}
+		timeColumn := "p.update_time"
+		if input.Order == "recent_content" {
+			timeColumn = "COALESCE(a.modified_at,p.create_time)"
+		}
 		query := `
 			SELECT p.id, p.org_id, p.initial_canvas_id AS canvas_id, p.style_key, p.name, p.aspect_ratio, p.style_type,
+			       COALESCE(a.modified_at,p.create_time) AS last_modified_at,COALESCE(a.basis,'created') AS last_modified_basis,
 			       p.style_subtype, p.style_preset_id, p.cover_asset_id, p.resolution,
 			       p.allow_overseas_models, p.status, p.is_delete,
 			       p.archived_at, p.delete_time, p.purge_after, p.revision,
 			       p.create_time, p.update_time, f.id AS folder_id,
 			       coalesce(m.revision,0) AS placement_revision
 			FROM workspace.project AS p
+			LEFT JOIN workspace.project_activity a ON a.project_id=p.id
 			LEFT JOIN workspace.project_folder_placement m ON m.project_id=p.id AND m.org_id=p.org_id AND m.owner_scope_id=p.owner_scope_id AND m.actor_id=?::uuid
 			LEFT JOIN workspace.project_folder f ON f.id=m.folder_id AND f.org_id=m.org_id AND f.actor_id=m.actor_id AND f.owner_scope_id=m.owner_scope_id AND NOT f.is_delete
 			WHERE p.org_id = ?::uuid AND p.owner_scope_id = ?::uuid AND p.is_delete = ? AND p.status IN ('active','archived')
@@ -69,10 +75,10 @@ func (s *Store) ListProjectsForActor(ctx context.Context, actor identityapp.Prin
 			args = append(args, input.Query)
 		}
 		if input.After != nil {
-			query += ` AND (p.update_time, p.id) < (?::timestamptz, ?::uuid)`
+			query += ` AND (` + timeColumn + `, p.id) < (?::timestamptz, ?::uuid)`
 			args = append(args, input.After.UpdateTime.UTC(), input.After.ID.String())
 		}
-		query += ` ORDER BY p.update_time DESC, p.id DESC LIMIT ?`
+		query += ` ORDER BY ` + timeColumn + ` DESC, p.id DESC LIMIT ?`
 		args = append(args, input.Limit+1)
 
 		var rows []projectListRow
@@ -95,7 +101,11 @@ func (s *Store) ListProjectsForActor(ctx context.Context, actor identityapp.Prin
 		}
 		if more {
 			last := page.Projects[len(page.Projects)-1]
-			page.Next = &application.ProjectListCursor{UpdateTime: last.UpdateTime, ID: last.ID}
+			boundary := last.UpdateTime
+			if input.Order == "recent_content" {
+				boundary = last.LastModifiedAt
+			}
+			page.Next = &application.ProjectListCursor{UpdateTime: boundary, ID: last.ID}
 		}
 		return nil
 	})
@@ -106,6 +116,8 @@ func (s *Store) ListProjectsForActor(ctx context.Context, actor identityapp.Prin
 }
 
 type projectListRow struct {
+	LastModifiedAt      time.Time
+	LastModifiedBasis   string
 	CoverAssetID        *uuid.UUID
 	ID                  uuid.UUID
 	OrgID               uuid.UUID
@@ -132,6 +144,7 @@ type projectListRow struct {
 
 func (row projectListRow) item() application.ProjectListItem {
 	item := application.ProjectListItem{CoverAssetID: row.CoverAssetID,
+		LastModifiedAt: row.LastModifiedAt, LastModifiedBasis: row.LastModifiedBasis,
 		ID: row.ID, OrgID: row.OrgID, CanvasID: row.CanvasID, StyleKey: row.StyleKey, Name: row.Name,
 		AspectRatio: row.AspectRatio, StyleType: row.StyleType,
 		StylePresetID: row.StylePresetID, Resolution: row.Resolution,

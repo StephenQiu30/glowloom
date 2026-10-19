@@ -56,6 +56,10 @@ func (s *Store) List(ctx context.Context, a identityapp.Principal, p uuid.UUID) 
 		if err := s.authorize(tx, a, p, false); err != nil {
 			return err
 		}
+		presentation, err := s.presentation(tx, a, p)
+		if err != nil {
+			return err
+		}
 		var rows []documentRow
 		if err := tx.Raw(`SELECT id,project_id,name,scope,revision,viewport FROM canvas.document WHERE project_id=? AND NOT is_delete ORDER BY update_time DESC,id`, p).Scan(&rows).Error; err != nil {
 			return err
@@ -64,6 +68,9 @@ func (s *Store) List(ctx context.Context, a identityapp.Principal, p uuid.UUID) 
 			d, err := row.document()
 			if err != nil {
 				return err
+			}
+			if d.ID == presentation.MainCanvasID {
+				d.Name = presentation.Name
 			}
 			items = append(items, d)
 		}
@@ -84,6 +91,16 @@ func (s *Store) Get(ctx context.Context, a identityapp.Principal, id uuid.UUID) 
 			return err
 		}
 		doc, err = load(tx, id, false)
+		if err != nil {
+			return err
+		}
+		presentation, err := s.presentation(tx, a, p)
+		if err != nil {
+			return err
+		}
+		if id == presentation.MainCanvasID {
+			doc.Name = presentation.Name
+		}
 		return err
 	})
 	return doc, err
@@ -184,6 +201,18 @@ func (s *Store) Execute(ctx context.Context, a identityapp.Principal, id uuid.UU
 		}
 		if err := saveInputs(tx, a.ID, doc, input.Commands); err != nil {
 			return err
+		}
+		presentation, err := s.presentation(tx, a, p)
+		if err != nil {
+			return err
+		}
+		if id == presentation.MainCanvasID {
+			updated.Name = presentation.Name
+			if domain.HasContentChanges(doc, updated) {
+				if err := s.project(tx).MarkProjectContentChanged(ctx, a, p); err != nil {
+					return err
+				}
+			}
 		}
 		commands, err := json.Marshal(input.Commands)
 		if err != nil {
@@ -595,6 +624,16 @@ func (s *Store) mutateDocument(ctx context.Context, a identityapp.Principal, id 
 		replayed, err := replay(tx, a.ID, key, hash, result)
 		if err != nil || replayed {
 			return err
+		}
+		presentation, err := s.presentation(tx, a, row.ProjectID)
+		if err != nil {
+			return err
+		}
+		if presentation.MainCanvasID == id {
+			if remove {
+				return application.ErrMainCanvasRequired
+			}
+			return application.ErrMainCanvasManagedByProject
 		}
 		doc, err := load(tx, id, true)
 		if err != nil {

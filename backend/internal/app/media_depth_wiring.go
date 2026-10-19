@@ -22,7 +22,7 @@ func provideMediaToolSourceWithAccess(tx *gorm.DB, scopes pgmedia.ScopeAccessFac
 	return canvasapp.NewTranscriptionSourceReader(pgcanvas.NewScopedStore(tx,
 		func(mediaTx *gorm.DB) canvasapp.MediaReader {
 			return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(mediaTx, scopes), nil)
-		}, func(tx *gorm.DB) canvasapp.ProjectAccess { return scopes(tx) }))
+		}, func(tx *gorm.DB) canvasapp.ProjectAccess { return canvasScopedAccess{ScopeAccess: scopes(tx), tx: tx} }))
 }
 
 // provideMediaDepthStore retains read, cancellation and exact reconciliation

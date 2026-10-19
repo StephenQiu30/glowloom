@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+
 	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
@@ -85,7 +87,9 @@ func TestMediaCanvasScopeConsumers(t *testing.T) {
 	personal := actor.ScopeID
 	actor.ScopeID = scope
 	access := func(tx *gorm.DB) mediaapp.ScopeAccess { return mediaScopeTestAccess{tx: tx, request: factory(tx)} }
-	canvasAccess := func(tx *gorm.DB) canvasapp.ProjectAccess { return mediaScopeTestAccess{tx: tx, request: factory(tx)} }
+	canvasAccess := func(tx *gorm.DB) canvasapp.ProjectAccess {
+		return app.NewCanvasProjectAccessWithScope(tx, mediaScopeTestAccess{tx: tx, request: factory(tx)})
+	}
 	media := pgmedia.NewScopedStore(tx, access)
 	canvas := pgcanvas.NewScopedStore(tx, nil, canvasAccess)
 	if err := media.AuthorizeDerivedProject(t.Context(), actor, project, false); err != nil {

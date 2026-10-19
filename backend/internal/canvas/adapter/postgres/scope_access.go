@@ -13,6 +13,17 @@ type ProjectAccessFactory func(*gorm.DB) application.ProjectAccess
 
 type projectAuthority struct{ project ProjectAccessFactory }
 
+func (s projectAuthority) presentation(tx *gorm.DB, actor identity.Principal, id uuid.UUID) (application.ProjectPresentation, error) {
+	if tx == nil || s.project == nil {
+		return application.ProjectPresentation{}, application.ErrNotFound
+	}
+	access := s.project(tx)
+	if access == nil {
+		return application.ProjectPresentation{}, application.ErrNotFound
+	}
+	return access.ReadProjectPresentation(tx.Statement.Context, actor, id)
+}
+
 func (s projectAuthority) authorize(tx *gorm.DB, actor identity.Principal, id uuid.UUID, write bool) error {
 	if tx == nil || s.project == nil {
 		return application.ErrNotFound

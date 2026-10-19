@@ -108,6 +108,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	protected.Use(workspacehttp.RequireProjectAccess(workspaceStore))
 	workspacehttp.NewHandler(workspaceapp.NewListProjectsQuery(workspaceStore), workspaceapp.NewCreateProjectCommand(workspaceStore, time.Now), workspaceapp.NewListStylePresetsQuery(workspaceStore)).Register(protected)
 	workspacehttp.NewProjectLifecycleHandler(workspaceapp.NewProjectLifecycle(workspaceStore, time.Now)).Register(protected)
+	workspacehttp.NewProjectCreationRecoveryHandler(workspaceapp.NewProjectCreationRecoveryQuery(workspaceStore)).Register(protected)
 	workspacehttp.NewProjectCopyHandler(workspaceapp.NewProjectCopyService(provideProjectCopyStore(database), time.Now)).Register(protected)
 	mediahttp.NewTransferHandler(provideMediaTransferStore(database)).Register(protected)
 	mediahttp.NewPurgeHandler(provideMediaPurgeStore(database)).Register(protected)

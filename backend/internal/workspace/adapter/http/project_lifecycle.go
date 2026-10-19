@@ -38,6 +38,8 @@ func (h *ProjectLifecycleHandler) Register(group *gin.RouterGroup) {
 
 // ProjectDetailResponse contains safe settings and actual persisted recovery facts.
 type ProjectDetailResponse struct {
+	LastModifiedAt      *time.Time        `json:"last_modified_at,omitempty"`
+	LastModifiedBasis   *string           `json:"last_modified_basis,omitempty"`
 	CoverAssetID        *uuid.UUID        `json:"cover_asset_id" extensions:"x-nullable"`
 	CoverUnavailable    bool              `json:"cover_unavailable"`
 	ID                  uuid.UUID         `json:"id"`
@@ -265,7 +267,7 @@ func writeProjectSnapshot(c *gin.Context, s application.ProjectSnapshot) {
 		id := p.StylePresetID
 		preset = &id
 	}
-	response := ProjectDetailResponse{CoverAssetID: p.CoverAssetID, CoverUnavailable: s.CoverUnavailable, ID: p.ID, CanvasID: projectCanvasID(p.CanvasID), StyleKey: p.StyleKey, Name: p.Name, Description: p.Description, AspectRatio: p.AspectRatio, StyleType: p.StyleType, StyleSubtype: p.StyleSubtype, StylePresetID: preset, Resolution: p.Resolution, AllowOverseasModels: p.AllowOverseasModels, DefaultModels: s.DefaultModels, Status: p.Status, IsDelete: p.IsDelete, ArchivedAt: p.ArchivedAt, DeleteTime: p.DeleteTime, PurgeAfter: p.PurgeAfter, Revision: p.Revision, CreateTime: p.CreateTime, UpdateTime: p.UpdateTime}
+	response := ProjectDetailResponse{LastModifiedAt: s.LastModifiedAt, LastModifiedBasis: s.LastModifiedBasis, CoverAssetID: p.CoverAssetID, CoverUnavailable: s.CoverUnavailable, ID: p.ID, CanvasID: projectCanvasID(p.CanvasID), StyleKey: p.StyleKey, Name: p.Name, Description: p.Description, AspectRatio: p.AspectRatio, StyleType: p.StyleType, StyleSubtype: p.StyleSubtype, StylePresetID: preset, Resolution: p.Resolution, AllowOverseasModels: p.AllowOverseasModels, DefaultModels: s.DefaultModels, Status: p.Status, IsDelete: p.IsDelete, ArchivedAt: p.ArchivedAt, DeleteTime: p.DeleteTime, PurgeAfter: p.PurgeAfter, Revision: p.Revision, CreateTime: p.CreateTime, UpdateTime: p.UpdateTime}
 	c.Header("Cache-Control", "private, no-store")
 	c.JSON(200, response)
 }

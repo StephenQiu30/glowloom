@@ -54,6 +54,7 @@ function ToolButton({ title, ...props }: ComponentProps<typeof Button>) {
   );
 }
 export function CanvasToolbar({
+  readOnly = false,
   tool,
   onToolChange,
   onAddTool,
@@ -74,6 +75,7 @@ export function CanvasToolbar({
   onShowEdges,
   onFitSelection,
 }: {
+  readOnly?: boolean;
   tool: "select" | "pan";
   onAddTool: (kind: "director") => void;
   onAI: () => void;
@@ -99,6 +101,8 @@ export function CanvasToolbar({
     <TooltipProvider>
       <div
         className="canvas-main-dock"
+        inert={readOnly}
+        aria-disabled={readOnly}
         role="toolbar"
         aria-label="画布工具"
         data-canvas-no-zoom
@@ -349,7 +353,12 @@ export function CanvasToolbar({
           </DialogContent>
         </Dialog>
       </div>
-      <Button variant="ghost" className="canvas-ai-trigger" onClick={onAI}>
+      <Button
+        variant="ghost"
+        className="canvas-ai-trigger"
+        disabled={readOnly}
+        onClick={onAI}
+      >
         <Sparkles data-icon="inline-start" />与 AI 对话
       </Button>
     </TooltipProvider>

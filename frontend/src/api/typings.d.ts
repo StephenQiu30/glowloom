@@ -1652,6 +1652,11 @@ declare namespace API {
     id: string;
   };
 
+  type getProjectCreationParams = {
+    /** 原创建UUID幂等键 */
+    key: string;
+  };
+
   type getProjectModelDefaultsParams = {
     /** 项目UUID */
     pid: string;
@@ -2373,6 +2378,8 @@ declare namespace API {
     deleted?: boolean;
     /** 个人目录UUID，root表示未分类；未指定列出全部 */
     folder_id?: string;
+    /** recent_content按真实最近修改排序，省略保持旧口径 */
+    order?: "recent_content";
   };
 
   type listPromptDraftsParams = {
@@ -3212,6 +3219,13 @@ declare namespace API {
     counts?: ProjectCopyScriptCounts;
   };
 
+  type ProjectCreationRecoveryResponse = {
+    canvas_id?: string;
+    project_id?: string;
+    project_status?: string;
+    state?: "created" | "unrecorded";
+  };
+
   type ProjectDetailResponse = {
     allow_overseas_models?: boolean;
     archived_at?: string;
@@ -3225,6 +3239,8 @@ declare namespace API {
     description?: string;
     id?: string;
     is_delete?: boolean;
+    last_modified_at?: string;
+    last_modified_basis?: string;
     name?: string;
     purge_after?: string;
     resolution?: string;
@@ -3301,6 +3317,8 @@ declare namespace API {
     folder_id?: string;
     id?: string;
     is_delete?: boolean;
+    last_modified_at?: string;
+    last_modified_basis?: string;
     name?: string;
     placement_revision?: number;
     purge_after?: string;

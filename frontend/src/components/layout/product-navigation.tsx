@@ -1,4 +1,5 @@
 "use client";
+import { NewCanvasButton } from "@/components/projects/new-canvas-button";
 
 import Link from "next/link";
 import type { ComponentProps } from "react";
@@ -186,13 +187,14 @@ export function ProductNavigation({
             <>
               <SidebarGroupLabel>画布</SidebarGroupLabel>
               <SidebarGroupAction asChild>
-                <Link
-                  href="/projects"
-                  aria-label="我的画布"
+                <NewCanvasButton
+                  variant="ghost"
+                  size="icon"
+                  aria-label="新建画布"
                   onClick={closeMobile}
                 >
                   <Plus />
-                </Link>
+                </NewCanvasButton>
               </SidebarGroupAction>
             </>
           )}

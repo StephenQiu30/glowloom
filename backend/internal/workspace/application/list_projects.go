@@ -27,6 +27,8 @@ type ProjectListCursor struct {
 
 // ProjectListItem contains the fields needed by the project list and recycle bin.
 type ProjectListItem struct {
+	LastModifiedAt      time.Time
+	LastModifiedBasis   string
 	CoverAssetID        *uuid.UUID
 	CoverUnavailable    bool
 	ID                  uuid.UUID
@@ -60,6 +62,7 @@ type ProjectListPage struct {
 
 // ListProjectsInput selects current or deleted projects in an organization.
 type ListProjectsInput struct {
+	Order   string
 	Status  string
 	Deleted bool
 	Query   string
@@ -92,7 +95,7 @@ func (q *ListProjectsQuery) Execute(ctx context.Context, actor identityapp.Princ
 		return ProjectListPage{}, identityapp.ErrForbidden
 	}
 	input.Query = strings.TrimSpace(input.Query)
-	if (input.Status != "" && input.Status != "active" && input.Status != "archived") ||
+	if (input.Order != "" && input.Order != "recent_content") || (input.Status != "" && input.Status != "active" && input.Status != "archived") ||
 		input.Limit < 0 || input.Limit > 200 || !utf8.ValidString(input.Query) ||
 		utf8.RuneCountInString(input.Query) > 200 ||
 		(input.After != nil && (input.After.ID == uuid.Nil || input.After.UpdateTime.IsZero())) ||
@@ -131,7 +134,11 @@ func (q *ListProjectsQuery) Execute(ctx context.Context, actor identityapp.Princ
 	}
 	if page.Next != nil {
 		last := page.Projects[len(page.Projects)-1]
-		if page.Next.ID != last.ID || !page.Next.UpdateTime.Equal(last.UpdateTime) {
+		boundary := last.UpdateTime
+		if input.Order == "recent_content" {
+			boundary = last.LastModifiedAt
+		}
+		if page.Next.ID != last.ID || !page.Next.UpdateTime.Equal(boundary) {
 			return ProjectListPage{}, ErrInvalidProjectList
 		}
 	}

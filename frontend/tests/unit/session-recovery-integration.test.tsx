@@ -30,6 +30,7 @@ import {
   branchJournal,
   type LocalBranch,
 } from "@/components/generation/draft-save";
+import { SpaceProvider } from "@/components/spaces/space-context";
 import { HomePage } from "@/app/_components/home-page";
 import { RichGeneration } from "@/components/generation/rich-generation";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -738,7 +739,9 @@ it("the actual home prompt restores text only after same-account new-sid and wri
     <SessionProvider>
       <Private />
       <TooltipProvider>
-        <HomePage />
+        <SpaceProvider blockUntilReady={false}>
+          <HomePage />
+        </SpaceProvider>
       </TooltipProvider>
     </SessionProvider>,
   );
@@ -794,7 +797,9 @@ it("the actual home with retained input sends no activity GET when its Provider 
       <SessionProvider>
         <Private />
         <TooltipProvider>
-          <HomePage />
+          <SpaceProvider blockUntilReady={false}>
+            <HomePage />
+          </SpaceProvider>
         </TooltipProvider>
       </SessionProvider>,
     );
@@ -832,7 +837,9 @@ it.each(["different account", "different scope", "explicit logout"])(
       <SessionProvider>
         <Private />
         <TooltipProvider>
-          <HomePage />
+          <SpaceProvider blockUntilReady={false}>
+            <HomePage />
+          </SpaceProvider>
         </TooltipProvider>
       </SessionProvider>,
     );
@@ -869,7 +876,9 @@ it.each(["revoked", "read-only"])(
       <SessionProvider>
         <Private />
         <TooltipProvider>
-          <HomePage />
+          <SpaceProvider blockUntilReady={false}>
+            <HomePage />
+          </SpaceProvider>
         </TooltipProvider>
       </SessionProvider>,
     );

@@ -1,3 +1,4 @@
+import { SpaceProvider } from "@/components/spaces/space-context";
 import { SessionProvider } from "@/components/auth/session";
 import {
   cleanup,
@@ -19,7 +20,9 @@ vi.mock("@/lib/request", async (importOriginal) => {
 function render(children: ReactNode) {
   return renderUI(
     <SessionProvider>
-      <TooltipProvider>{children}</TooltipProvider>
+      <SpaceProvider blockUntilReady={false}>
+        <TooltipProvider>{children}</TooltipProvider>
+      </SpaceProvider>
     </SessionProvider>,
   );
 }
@@ -291,7 +294,7 @@ it("空间读取期间保留顶栏和侧栏，只阻止正文私有内容", asyn
   expect(screen.getByRole("link", { name: "素材库" })).toBeTruthy();
   expect(await screen.findByRole("status")).toHaveProperty(
     "textContent",
-    "正在加载…",
+    "正在确认创作归属…",
   );
   expect(screen.queryByText("private subject content")).toBeNull();
   await act(async () =>

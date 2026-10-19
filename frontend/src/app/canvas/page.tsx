@@ -1,5 +1,5 @@
 import { SessionGate } from "@/components/auth/session";
-import { SpaceProvider } from "@/components/spaces/space-context";
+import { SpaceGate } from "@/components/spaces/space-context";
 import { CanvasPage } from "./_components/canvas-page";
 
 export const metadata = { title: "无限画布" };
@@ -14,7 +14,7 @@ export default async function Page({
   const params = await searchParams;
   return (
     <SessionGate>
-      <SpaceProvider>
+      <SpaceGate>
         <CanvasPage
           projectID={
             typeof params.project_id === "string"
@@ -25,7 +25,7 @@ export default async function Page({
             typeof params.canvas_id === "string" ? params.canvas_id : undefined
           }
         />
-      </SpaceProvider>
+      </SpaceGate>
     </SessionGate>
   );
 }

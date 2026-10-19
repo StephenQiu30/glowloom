@@ -32,9 +32,11 @@ type ProjectWorkGuard interface {
 // ProjectSnapshot is an authorized project's settings and lifecycle facts.
 // Defaults remain owned by workspace and are read at the same project revision.
 type ProjectSnapshot struct {
-	Project          domain.Project
-	DefaultModels    map[string]string
-	CoverUnavailable bool `json:"CoverUnavailable,omitempty"`
+	LastModifiedAt    *time.Time `json:",omitempty"`
+	LastModifiedBasis *string    `json:",omitempty"`
+	Project           domain.Project
+	DefaultModels     map[string]string
+	CoverUnavailable  bool `json:"CoverUnavailable,omitempty"`
 }
 
 // ProjectChangeInput reuses the mutable patch contract for all project changes.

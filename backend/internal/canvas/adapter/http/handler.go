@@ -160,6 +160,10 @@ func writeError(c *gin.Context, err error) {
 		meta = map[string]any{"command_index": commandError.Index}
 	}
 	switch {
+	case errors.Is(err, application.ErrMainCanvasManagedByProject):
+		httpapi.WriteProblem(c, 409, "main_canvas_managed_by_project", nil)
+	case errors.Is(err, application.ErrMainCanvasRequired):
+		httpapi.WriteProblem(c, 409, "main_canvas_required", nil)
 	case errors.As(err, &conflict):
 		httpapi.WriteProblem(c, http.StatusConflict, "revision_conflict", map[string]any{"current_revision": conflict.CurrentRevision})
 	case errors.Is(err, application.ErrNotFound), errors.Is(err, mediaapp.ErrNotFound):

@@ -42,6 +42,80 @@ it("项目查询只透传允许的筛选参数，详情只读且必须是UUID", 
 const context = (path: string) => ({
   params: Promise.resolve({ path: path.split("/") }),
 });
+
+it("project creation recovery is GET only and recent content order is preserved", async () => {
+  const fetcher = vi
+    .fn()
+    .mockResolvedValue(
+      new Response(
+        '{"state":"unrecorded","project_id":null,"canvas_id":null,"project_status":null}',
+      ),
+    );
+  vi.stubGlobal("fetch", fetcher);
+  const path = "project-creations/00000000-0000-4000-8000-000000000001";
+  expect(
+    (await GET(new Request(`http://localhost/api/${path}`), context(path)))
+      .status,
+  ).toBe(200);
+  expect((fetcher.mock.calls[0][0] as URL).pathname).toBe(`/api/${path}`);
+  fetcher.mockClear();
+  expect(
+    (
+      await POST(
+        new Request(`http://localhost/api/${path}`, { method: "POST" }),
+        context(path),
+      )
+    ).status,
+  ).toBe(405);
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(
+    (
+      await GET(
+        new Request("http://localhost/api/projects?order=recent_content"),
+        context("projects"),
+      )
+    ).status,
+  ).toBe(200);
+  expect((fetcher.mock.calls[0][0] as URL).searchParams.get("order")).toBe(
+    "recent_content",
+  );
+  fetcher.mockClear();
+  expect(
+    (
+      await GET(
+        new Request(`http://localhost/api/${path}?q=private`),
+        context(path),
+      )
+    ).status,
+  ).toBe(422);
+  expect(
+    (
+      await GET(
+        new Request("http://localhost/api/projects?order=wrong"),
+        context("projects"),
+      )
+    ).status,
+  ).toBe(422);
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("project rename permits PATCH only on an exact project UUID and retains its key", async () => {
+  const { PATCH } = await import("./route");
+  const fetcher = vi.fn().mockResolvedValue(new Response('{"revision":2}'));
+  vi.stubGlobal("fetch", fetcher);
+  const path = "projects/00000000-0000-4000-8000-000000000001",
+    key = "00000000-0000-4000-8000-000000000002";
+  const response = await PATCH(
+    new Request(`http://localhost/api/${path}`, {
+      method: "PATCH",
+      headers: { "Idempotency-Key": key },
+      body: '{"expected_revision":1,"name":"统一名称"}',
+    }),
+    context(path),
+  );
+  expect(response.status).toBe(200);
+  expect(fetcher.mock.calls[0][1].headers.get("Idempotency-Key")).toBe(key);
+});
 it("画布命令限定UUID和POST，透传同一请求正文与幂等键", async () => {
   const fetcher = vi.fn().mockResolvedValue(new Response('{"revision":2}'));
   vi.stubGlobal("fetch", fetcher);

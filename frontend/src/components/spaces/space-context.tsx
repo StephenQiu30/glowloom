@@ -38,21 +38,30 @@ const SpaceContext = createContext<{
   spaces: API.SpaceView[];
   selected: API.SpaceView | null;
   pending: boolean;
+  error: string;
   refresh: () => Promise<void>;
   select: (id: string) => Promise<void>;
 }>({
   spaces: [],
   selected: null,
   pending: false,
+  error: "",
   refresh: async () => {},
   select: async () => {},
 });
 export const useSpace = () => useContext(SpaceContext);
 let remembered: { actor: string; id: string } | null = null;
-export function SpaceProvider({ children }: { children: ReactNode }) {
+export function SpaceProvider({
+  children,
+  blockUntilReady = true,
+}: {
+  children: ReactNode;
+  blockUntilReady?: boolean;
+}) {
   const session = useOptionalSession();
   const [spaces, setSpaces] = useState<API.SpaceView[]>([]);
   const [selected, setSelected] = useState<API.SpaceView | null>(null);
+  const [selectedActor, setSelectedActor] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [generation, setGeneration] = useState(0);
   const [notice, setNotice] = useState("");
@@ -95,13 +104,16 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       remembered = { actor: session.actor.id, id: next.id };
       setSpaces(result.items);
       setSelected(next);
+      setSelectedActor(session.actor.id);
     } catch (e) {
       if (!controller.signal.aborted) setError(authErrorMessage(e));
     } finally {
-      locked.current = false;
-      if (!controller.signal.aborted) {
-        setScopeSwitching(false);
-        setPending(false);
+      if (flight.current === controller) {
+        locked.current = false;
+        if (!controller.signal.aborted) {
+          setScopeSwitching(false);
+          setPending(false);
+        }
       }
     }
   }
@@ -114,6 +126,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
       flight.current?.abort();
+      locked.current = false;
       setScopeSwitching(false);
     };
   }, [session?.actor.id]);
@@ -127,9 +140,10 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
   return (
     <SpaceContext.Provider
       value={{
-        spaces,
-        selected,
+        spaces: selectedActor === session?.actor.id ? spaces : [],
+        selected: selectedActor === session?.actor.id ? selected : null,
         pending,
+        error,
         refresh: () => load(),
         select: (id) => load(id),
       }}
@@ -151,7 +165,9 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
         key={`${session?.actor.id ?? "guest"}:${generation}`}
         className="contents"
       >
-        {session && !selected ? (
+        {blockUntilReady &&
+        session &&
+        (!selected || selectedActor !== session.actor.id) ? (
           error && !pending ? (
             <Empty>
               <EmptyHeader>
@@ -172,6 +188,26 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       </div>
     </SpaceContext.Provider>
   );
+}
+
+export function SpaceGate({ children }: { children: ReactNode }) {
+  const session = useOptionalSession(),
+    space = useSpace();
+  if (!session || space.selected) return children;
+  if (space.error && !space.pending)
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyTitle>暂时无法打开空间</EmptyTitle>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button variant="outline" onClick={() => void space.refresh()}>
+            重试
+          </Button>
+        </EmptyContent>
+      </Empty>
+    );
+  return <PageLoading message="正在确认创作归属…" />;
 }
 export function SpaceSwitcher() {
   const { spaces, selected, pending, select } = useSpace();
