@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -201,26 +200,6 @@ func TestPublicCanvasAPIWithLocalPostgres(t *testing.T) {
 	for _, path := range []string{"/api/auth/me", "/api/auth/login", "/api/auth/logout", "/api/auth/password"} {
 		if code, _ := request("GET", path, nil, "", ""); code != 404 {
 			t.Fatalf("removed auth route %s status %d", path, code)
-		}
-	}
-	if address := os.Getenv("LV_TEST_CANVAS_API_ADDR"); address != "" {
-		// Browser verification uses the same router and isolated stores, never a production fixture.
-		var listenerConfig net.ListenConfig
-		listener, err := listenerConfig.Listen(t.Context(), "tcp", address)
-		if err != nil {
-			t.Fatal(err)
-		}
-		srv := &http.Server{Handler: router, ReadHeaderTimeout: 30 * time.Second}
-		done := make(chan struct{})
-		go func() { defer close(done); _ = srv.Serve(listener) }()
-		t.Cleanup(func() { _ = srv.Close(); <-done })
-		t.Logf("isolated browser API ready at %s, project %s", address, project)
-		deadline := time.Now().Add(30 * time.Minute)
-		for time.Now().Before(deadline) {
-			if _, err := os.Stat("/tmp/lanverse-canvas-e3607-stop"); err == nil {
-				return
-			}
-			time.Sleep(time.Second)
 		}
 	}
 }

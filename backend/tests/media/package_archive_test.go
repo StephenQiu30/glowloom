@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"os"
 	"testing"
 	"time"
@@ -55,27 +54,20 @@ func sourcePackageManifest(t *testing.T, binary []byte) []byte {
 func TestMediaPackageSourceV1RequiresAllActualFilesAndDoesNotTrustURLsOrConsent(t *testing.T) {
 	image := uploadPNG(t)
 	manifest := sourcePackageManifest(t, image)
-	data := packageZIP(t, []string{"assets.json", "files/original.png"}, [][]byte{manifest, image}, false)
-	archive, err := mediaapp.ReadLibraryPackage(t.Context(), bytes.NewReader(data), int64(len(data)))
-	if err != nil || archive.SourceFormat != "beeftv-assets-v1" || len(archive.Manifest.Items) != 1 || len(archive.Manifest.Files) != 1 {
-		t.Fatal("source v1 complete actual package", archive, err)
+	cases := []struct {
+		names  []string
+		bodies [][]byte
+	}{
+		{[]string{"assets.json", "files/original.png"}, [][]byte{manifest, image}},
+		{[]string{"assets.json"}, [][]byte{manifest}},
+		{[]string{"manifest.json", "assets.json"}, [][]byte{manifest, image}},
 	}
-	item := archive.Manifest.Items[0]
-	if item.Kind != "image" || item.Metadata.FolderID != nil || item.Metadata.Title != "源角色" || len(archive.Warnings) == 0 {
-		t.Fatal("source-only annotations became owned authority or a fake directory", item, archive.Warnings)
-	}
-	file, err := archive.Open(t.Context(), "files/original.png")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = file.Close() }()
-	actual, err := io.ReadAll(file.File)
-	if err != nil || !bytes.Equal(actual, image) || file.SHA256 != archive.Manifest.Files[0].SHA256 {
-		t.Fatal("archive returned anything other than actual contained bytes", err)
-	}
-	missing := packageZIP(t, []string{"assets.json"}, [][]byte{manifest}, false)
-	if _, err := mediaapp.ReadLibraryPackage(t.Context(), bytes.NewReader(missing), int64(len(missing))); !errors.Is(err, mediaapp.ErrPackageIncomplete) {
-		t.Fatal("source missing blob was silently skipped", err)
+	for _, item := range cases {
+		names := item.names
+		data := packageZIP(t, names, item.bodies, false)
+		if _, err := mediaapp.ReadLibraryPackage(t.Context(), bytes.NewReader(data), int64(len(data))); !errors.Is(err, mediaapp.ErrInvalidPackage) {
+			t.Fatal("upstream asset package was accepted", names, err)
+		}
 	}
 }
 
@@ -108,7 +100,8 @@ func TestMediaPackageRejectsUnsafeDuplicateSymlinkCRCAndUnclaimedContent(t *test
 			}
 		})
 	}
-	data := packageZIP(t, []string{"assets.json", "files/original.png"}, [][]byte{manifest, image}, false)
+	data := ownPackageZIP(t)
+	image = uploadPNG(t)
 	loc := bytes.Index(data, image)
 	if loc < 0 {
 		t.Fatal("fixture payload absent")

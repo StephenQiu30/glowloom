@@ -23,8 +23,6 @@ export const screens = [
   { id: "storyboard", name: "分镜", node: "5:2", group: "创作" },
   { id: "shot", name: "镜头", node: "4:2", group: "创作" },
   { id: "analytics", name: "统计", node: "6:2", group: "创作" },
-  { id: "design-system", name: "设计规范", node: "365:17335", group: "规范" },
-  { id: "layout", name: "布局规范", node: "365:17335", group: "规范" },
 ] as const;
 export type Screen = (typeof screens)[number]["id"];
 export const screenHref = (screen: string) =>

@@ -22,7 +22,7 @@ export function RouteLoading() {
     screens.find((screen) => pathname.startsWith(`${screenHref(screen.id)}/`));
   if (
     !screen ||
-    ["canvas", "layout", "design-system", "reset-password"].includes(screen.id)
+    ["canvas", "reset-password"].includes(screen.id)
   )
     return <ApplicationLoading />;
   return (

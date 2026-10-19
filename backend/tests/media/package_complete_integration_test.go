@@ -166,40 +166,20 @@ func TestMediaPackageSourceV1ActualImportNeverPromotesSourceConsentOrURLs(t *tes
 	db := libraryRuntimeDB(t)
 	objects := mediaobjects.NewProjectCopyObjects(glbTestObjects(t))
 	actor, _ := mediaStoreProject(t, db)
-	repo, service := packageActualService(t, db, objects, packageTestAccess)
+	_, service := packageActualService(t, db, objects, packageTestAccess)
 	image := uploadPNG(t)
 	data := packageZIP(t, []string{"assets.json", "files/original.png"}, [][]byte{sourcePackageManifest(t, image), image}, false)
 	scope := domain.LibraryScope{Kind: domain.LibraryPersonal}
 	job, err := service.Import(t.Context(), actor, mediaapp.PackageImportRequest{Scope: scope, LocalReviewConfirmed: true, Key: uuid.New(), RequestID: uuid.New()}, packageDownloaded(t, data))
-	if err != nil || job.Status != "succeeded" || len(job.Warnings) == 0 {
-		t.Fatal(job, err)
+	if err == nil && job.Status == "succeeded" {
+		t.Fatal("upstream asset package was imported")
 	}
-	packageCleanup(t, repo, objects, actor, scope)
-	var rows []struct {
-		ID                 uuid.UUID
-		ContainsRealPerson bool
-		ConsentRecordID    *uuid.UUID
-		ModerationDetail   json.RawMessage
-		ObjectKey          string
-	}
-	if err := db.Raw(`SELECT id,contains_real_person,consent_record_id,moderation_detail,object_key FROM media.media_asset WHERE personal_actor_id=?`, actor.ID).Scan(&rows).Error; err != nil || len(rows) != 1 {
+	if err != nil && !errors.Is(err, mediaapp.ErrInvalidPackage) {
 		t.Fatal(err)
 	}
-	var review mediaapp.LocalUploadReview
-	if rows[0].ContainsRealPerson || rows[0].ConsentRecordID != nil || json.Unmarshal(rows[0].ModerationDetail, &review) != nil || review.PrincipalID != actor.ID || !review.RightsConfirmed {
-		t.Fatal("source allegations became target consent")
-	}
-	if bytes.Contains(rows[0].ModerationDetail, []byte("example.invalid")) {
-		t.Fatal("source URL persisted as review")
-	}
-	input, err := objects.Get(t.Context(), rows[0].ObjectKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	actual, err := io.ReadAll(input)
-	_ = input.Close()
-	if err != nil || !bytes.Equal(actual, image) {
-		t.Fatal("source bytes not independently retained", err)
+	var count int64
+	if err := db.Raw(`SELECT count(*) FROM media.media_asset WHERE personal_actor_id=?`, actor.ID).Scan(&count).Error; err != nil || count != 0 {
+		t.Fatal("rejected upstream package left an asset", count, err)
 	}
 }
 

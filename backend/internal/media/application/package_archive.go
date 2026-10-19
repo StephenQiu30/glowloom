@@ -78,29 +78,18 @@ func ReadLibraryPackage(ctx context.Context, reader io.ReaderAt, size int64) (*L
 		}
 		archive.entries[file.Name] = file
 	}
-	manifestName := "manifest.json"
-	_, own := archive.entries[manifestName]
+	_, own := archive.entries["manifest.json"]
 	_, source := archive.entries["assets.json"]
-	if own == source {
+	if !own || source {
 		return nil, ErrInvalidPackage
 	}
-	if source {
-		manifestName = "assets.json"
-	}
-	manifest, err := readPackageEntry(ctx, archive.entries[manifestName], maxPackageManifestBytes)
+	manifest, err := readPackageEntry(ctx, archive.entries["manifest.json"], maxPackageManifestBytes)
 	if err != nil {
 		return nil, err
 	}
-	if source {
-		archive.SourceFormat = "beeftv-assets-v1"
-		if err := archive.readSource(ctx, manifest); err != nil {
-			return nil, err
-		}
-	} else {
-		archive.SourceFormat = "lanverse-media-library-v1"
-		if err := decodePackageJSON(manifest, &archive.Manifest); err != nil {
-			return nil, err
-		}
+	archive.SourceFormat = "lanverse-media-library-v1"
+	if err := decodePackageJSON(manifest, &archive.Manifest); err != nil {
+		return nil, err
 	}
 	if err := archive.Manifest.validate(); err != nil {
 		return nil, err
