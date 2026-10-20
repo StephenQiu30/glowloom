@@ -1,9 +1,11 @@
-package app
+package media
 
 import (
 	"context"
 	"errors"
 	"time"
+
+	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -52,13 +54,13 @@ func (a mediaScopeAccess) AuthorizePersonal(ctx context.Context, actor identity.
 	var kind string
 	var physical uuid.UUID
 	if a.worker {
-		s, err := provideScopeAccess(a.tx).Resolve(ctx, actor.ID, id, write)
+		s, err := scopewire.ProvideScopeAccess(a.tx).Resolve(ctx, actor.ID, id, write)
 		if err != nil {
 			return mediaLibraryProjectError(err)
 		}
 		owner, kind, physical = s.OwnerUserID, s.Kind, s.PhysicalScopeID
 	} else {
-		s, err := provideRequestScopeAccess(a.tx).Resolve(ctx, actor, id, write)
+		s, err := scopewire.ProvideRequestScopeAccess(a.tx).Resolve(ctx, actor, id, write)
 		if err != nil {
 			return mediaLibraryProjectError(err)
 		}
@@ -71,9 +73,9 @@ func (a mediaScopeAccess) AuthorizePersonal(ctx context.Context, actor identity.
 }
 func (a mediaScopeAccess) project() *pgworkspace.ProjectContentAccessStore {
 	if a.worker {
-		return provideWorkerProjectContentAccess(a.tx)
+		return scopewire.ProvideWorkerProjectContentAccess(a.tx)
 	}
-	return provideProjectContentAccess(a.tx)
+	return scopewire.ProvideProjectContentAccess(a.tx)
 }
 func (a mediaScopeAccess) AuthorizeProject(ctx context.Context, actor identity.Principal, id uuid.UUID, write bool) error {
 	_, err := a.project().Authorize(ctx, actor, id, write)
@@ -112,13 +114,13 @@ func (a mediaScopeAccess) TransferActor(ctx context.Context, actor identity.Prin
 		return actor, err
 	}
 	if a.worker {
-		scope, err := provideScopeAccess(a.tx).Resolve(ctx, actor.ID, id, write)
+		scope, err := scopewire.ProvideScopeAccess(a.tx).Resolve(ctx, actor.ID, id, write)
 		if err != nil {
 			return actor, mediaLibraryProjectError(err)
 		}
 		actor.ScopeID, actor.OrgID = scope.ID, scope.PhysicalScopeID
 	} else {
-		scope, err := provideRequestScopeAccess(a.tx).Resolve(ctx, actor, id, write)
+		scope, err := scopewire.ProvideRequestScopeAccess(a.tx).Resolve(ctx, actor, id, write)
 		if err != nil {
 			return actor, mediaLibraryProjectError(err)
 		}

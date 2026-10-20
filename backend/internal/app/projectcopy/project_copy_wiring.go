@@ -1,8 +1,12 @@
-package app
+package projectcopy
 
 import (
 	"context"
 	"time"
+
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+	workspacewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/workspace"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -35,12 +39,12 @@ func (r copiedCanvasMedia) Reference(ctx context.Context, actor identityapp.Prin
 	return r.store.ReferenceCopiedAsset(ctx, actor, r.binding, assetID)
 }
 
-func provideProjectCopyStore(database *gorm.DB) *pgworkspace.ProjectCopyStore {
-	return provideProjectCopyStoreWithAccess(database, NewMediaScopeAccess)
+func ProvideProjectCopyStore(database *gorm.DB) *pgworkspace.ProjectCopyStore {
+	return ProvideProjectCopyStoreWithAccess(database, mediawire.NewMediaScopeAccess)
 }
 
-func provideProjectCopyStoreWithAccess(database *gorm.DB, scopes pgmedia.ScopeAccessFactory) *pgworkspace.ProjectCopyStore {
-	return pgworkspace.NewScopedProjectCopyStoreWithBible(database, provideRequestScopeAccess, provideCopyWorkerScopeAccess, provideProjectWorkGuard,
+func ProvideProjectCopyStoreWithAccess(database *gorm.DB, scopes pgmedia.ScopeAccessFactory) *pgworkspace.ProjectCopyStore {
+	return pgworkspace.NewScopedProjectCopyStoreWithBible(database, scopewire.ProvideRequestScopeAccess, provideCopyWorkerScopeAccess, workspacewire.ProvideProjectWorkGuard,
 		func(tx *gorm.DB) workspaceapp.ProjectCopyOwners {
 			media := pgmedia.NewScopedProjectCopyStore(tx, scopes)
 			canvas := pgcanvas.NewScopedProjectCopyStore(tx,
@@ -51,7 +55,9 @@ func provideProjectCopyStoreWithAccess(database *gorm.DB, scopes pgmedia.ScopeAc
 					return copiedCanvasMedia{store: pgmedia.NewScopedProjectCopyStore(mediaTx, scopes), binding: mediaapp.ProjectCopyBinding{
 						JobID: binding.JobID, OrgID: binding.OrgID, SourceProjectID: binding.SourceProjectID, TargetProjectID: binding.TargetProjectID,
 					}}
-				}, func(tx *gorm.DB) canvasapp.ProjectAccess { return canvasScopedAccess{ScopeAccess: scopes(tx), tx: tx} })
+				}, func(tx *gorm.DB) canvasapp.ProjectAccess {
+					return mediawire.NewCanvasProjectAccessWithScope(tx, scopes(tx))
+				})
 			return workspaceapp.ProjectCopyOwners{Media: media, Canvas: canvas, Budget: pgbilling.NewScopedStore(tx, func(db *gorm.DB) billingapp.ProjectAccess { return copyBudgetAccess{scopes(db)} }), Cover: projectCopyCoverOwner{tx: tx, scopes: scopes}}
 		}, func(tx *gorm.DB, authority workspaceapp.ProjectCopyAuthority) workspaceapp.ProjectCopyScriptOwner {
 			return projectCopyScriptOwner{store: provideScriptProjectCopyStore(tx, authority)}
@@ -60,8 +66,8 @@ func provideProjectCopyStoreWithAccess(database *gorm.DB, scopes pgmedia.ScopeAc
 		})
 }
 
-func provideProjectCopyWorker(database *gorm.DB, storage *objectstorage.Client) (*workspaceapp.ProjectCopyWorker, *pgworkspace.ProjectCopyStore) {
-	store := provideProjectCopyStoreWithAccess(database, NewMediaWorkerScopeAccess)
+func ProvideProjectCopyWorker(database *gorm.DB, storage *objectstorage.Client) (*workspaceapp.ProjectCopyWorker, *pgworkspace.ProjectCopyStore) {
+	store := ProvideProjectCopyStoreWithAccess(database, mediawire.NewMediaWorkerScopeAccess)
 	transfer := func(job workspacedomain.ProjectCopyJob, worker uuid.UUID, cleanup bool) *mediaapp.ProjectCopyTransfer {
 		return mediaapp.NewProjectCopyTransfer(pgworkspace.NewProjectCopyMediaObjects(store, job.ID, worker, cleanup), mediaobjects.NewProjectCopyObjects(storage), "")
 	}

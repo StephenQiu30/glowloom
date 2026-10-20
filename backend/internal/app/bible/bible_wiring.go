@@ -1,10 +1,15 @@
-package app
+package bible
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
 	"time"
+
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
+	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -24,22 +29,22 @@ import (
 )
 
 func provideBibleProjectAccess(tx *gorm.DB) bibleapp.ProjectAccess {
-	return provideProjectContentAccess(tx)
+	return scopewire.ProvideProjectContentAccess(tx)
 }
 
-func provideBibleStore(database *gorm.DB, storage *objectstorage.Client, validator catalogapp.ModelVersionValidator) *pgbible.Store {
+func ProvideBibleStore(database *gorm.DB, storage *objectstorage.Client, validator catalogapp.ModelVersionValidator) *pgbible.Store {
 	return pgbible.NewStore(database, pgbible.Factories{
 		Access:  provideBibleProjectAccess,
 		Impacts: provideBibleDeletionImpacts,
 		Media: func(tx *gorm.DB) bibleapp.MediaReferences {
 			return bibleMediaReferences{query: mediaapp.NewReferenceFactQuery(
-				pgmedia.NewScopedLibraryStore(tx, NewMediaLibraryProjectAccess, time.Now, NewMediaScopeAccess), storage)}
+				pgmedia.NewScopedLibraryStore(tx, mediawire.NewMediaLibraryProjectAccess, time.Now, mediawire.NewMediaScopeAccess), storage)}
 		},
 		Scopes: func(tx *gorm.DB) bibleapp.ScriptScopes {
-			return bibleScriptScopes{query: pgscript.NewBibleScopes(tx, provideScriptProjectAccess(tx))}
+			return bibleScriptScopes{query: pgscript.NewBibleScopes(tx, scriptwire.ProvideScriptProjectAccess(tx))}
 		},
 		Voices: func(tx *gorm.DB) bibleapp.CatalogVoices {
-			return bibleCatalogVoices{query: catalogapp.NewVoiceCatalog(NewCatalogStore(tx), validator)}
+			return bibleCatalogVoices{query: catalogapp.NewVoiceCatalog(operationwire.NewCatalogStore(tx), validator)}
 		},
 	})
 }
@@ -178,7 +183,7 @@ type scriptCharacterReferences struct {
 	reader bibleapp.CharacterReferenceReader
 }
 
-func provideScriptCharacterReferences(tx *gorm.DB) scriptapp.CharacterReferences {
+func ProvideScriptCharacterReferences(tx *gorm.DB) scriptapp.CharacterReferences {
 	return scriptCharacterReferences{reader: pgbible.NewReferences(tx, provideBibleProjectAccess(tx))}
 }
 

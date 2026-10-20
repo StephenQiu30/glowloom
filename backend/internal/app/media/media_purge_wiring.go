@@ -1,9 +1,12 @@
-package app
+package media
 
 import (
 	"context"
 	"fmt"
 	"time"
+
+	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
+	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -67,7 +70,7 @@ func (g mediaReferenceOwners) HasMediaReferences(ctx context.Context, actor iden
 }
 
 func provideMediaReferenceOwners(tx *gorm.DB) mediaapp.LibraryReferences {
-	return provideMediaReferenceOwnersWithAccess(tx, provideProjectContentAccess(tx), NewMediaLibraryProjectAccess, NewMediaScopeAccess)
+	return provideMediaReferenceOwnersWithAccess(tx, scopewire.ProvideProjectContentAccess(tx), NewMediaLibraryProjectAccess, NewMediaScopeAccess)
 }
 
 // The same installed reference owners use the transaction-bound authority of
@@ -77,7 +80,7 @@ func provideMediaReferenceOwnersWithAccess(tx *gorm.DB, access *pgworkspace.Proj
 	return mediaReferenceOwners{avatars: []avatarReferenceOwner{pgidentity.NewAvatarReferences(tx), pgworkspace.NewTeamAvatarReferences(tx)}, owners: []mediaapp.LibraryReferences{
 		pgworkspace.NewScopedMediaReferenceGuard(tx, access),
 		pgcanvas.NewScopedMediaReferenceGuard(tx, func(tx *gorm.DB) canvasapp.ProjectAccess { return canvasScopedAccess{ScopeAccess: scopes(tx), tx: tx} }),
-		pgoperation.NewScopedMediaReferenceGuard(tx, func(*gorm.DB) operationapp.ProjectAccess { return operationProjectAccess{store: access} }),
+		pgoperation.NewScopedMediaReferenceGuard(tx, func(*gorm.DB) operationapp.ProjectAccess { return operationwire.ContentProjectAccess(access) }),
 		pgbible.NewMediaReferenceGuard(tx, access),
 		pgscript.NewMediaReferenceGuard(tx, access),
 		pgmediatool.NewRetainedMediaReader(tx, mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, scopes))),
@@ -85,21 +88,21 @@ func provideMediaReferenceOwnersWithAccess(tx *gorm.DB, access *pgworkspace.Proj
 	}}
 }
 
-func provideMediaPurgeStore(database *gorm.DB) *pgmedia.PurgeStore {
+func ProvideMediaPurgeStore(database *gorm.DB) *pgmedia.PurgeStore {
 	return pgmedia.NewScopedPurgeStore(database, NewMediaLibraryProjectAccess, provideMediaLibraryWorkGuards, provideMediaReferenceOwners, time.Now, NewMediaScopeAccess)
 }
 
 // NewMediaPurgeWorker composes the worker with current membership and reference owners.
 func NewMediaPurgeWorker(database *gorm.DB, storage *objectstorage.Client) (*mediaapp.PurgeWorker, *pgmedia.PurgeStore) {
-	store := provideMediaPurgeWorkerStore(database)
+	store := ProvideMediaPurgeWorkerStore(database)
 	return mediaapp.NewPurgeWorker(store, mediaobjects.NewProjectCopyObjects(storage)), store
 }
 
 // NewMediaWorkerReferenceOwners composes retained owners without an initiating request session.
 func NewMediaWorkerReferenceOwners(tx *gorm.DB) mediaapp.LibraryReferences {
-	return provideMediaReferenceOwnersWithAccess(tx, provideWorkerProjectContentAccess(tx), NewMediaLibraryWorkerProjectAccess, NewMediaWorkerScopeAccess)
+	return provideMediaReferenceOwnersWithAccess(tx, scopewire.ProvideWorkerProjectContentAccess(tx), NewMediaLibraryWorkerProjectAccess, NewMediaWorkerScopeAccess)
 }
 
-func provideMediaPurgeWorkerStore(database *gorm.DB) *pgmedia.PurgeStore {
+func ProvideMediaPurgeWorkerStore(database *gorm.DB) *pgmedia.PurgeStore {
 	return pgmedia.NewScopedPurgeStore(database, NewMediaLibraryWorkerProjectAccess, provideMediaLibraryWorkGuards, NewMediaWorkerReferenceOwners, time.Now, NewMediaWorkerScopeAccess)
 }

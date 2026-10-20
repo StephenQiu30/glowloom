@@ -1,8 +1,13 @@
-package app
+package workspace
 
 import (
 	"context"
 	"fmt"
+
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
+	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -36,20 +41,20 @@ func (g projectWorkGuard) HasInflightWork(ctx context.Context, actor identityapp
 	return blocked, nil
 }
 
-func provideWorkspaceLifecycleStore(database *gorm.DB) *pgworkspace.Store {
-	return pgworkspace.NewScopedStore(database, provideRequestScopeAccess, provideProjectWorkGuard, func(tx *gorm.DB) workspaceapp.ProjectCoverReference {
-		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, NewMediaScopeAccess), nil)
+func ProvideWorkspaceLifecycleStore(database *gorm.DB) *pgworkspace.Store {
+	return pgworkspace.NewScopedStore(database, scopewire.ProvideRequestScopeAccess, ProvideProjectWorkGuard, func(tx *gorm.DB) workspaceapp.ProjectCoverReference {
+		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess), nil)
 	})
 }
 
-func provideProjectWorkGuard(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
+func ProvideProjectWorkGuard(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
 	return projectWorkGuard{owners: []workspaceapp.ProjectWorkGuard{
-		provideOperationStore(tx), pgmedia.NewScopedStore(tx, NewMediaScopeAccess), pgmediatool.NewStore(tx, nil, nil), provideMediaTranscriptionStore(tx, false),
+		operationwire.ProvideOperationStore(tx), pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess), pgmediatool.NewStore(tx, nil, nil), mediawire.ProvideMediaTranscriptionStore(tx, false),
 		pgworkspace.NewProjectCopyStore(tx, nil, nil),
-		provideMediaDepthStore(tx, false),
-		provideScriptSourceStore(tx),
-		provideMediaTransferStore(tx),
-		provideMediaPurgeStore(tx),
-		mediaPackageWorkGuard{store: provideMediaPackageStore(tx)},
+		mediawire.ProvideMediaDepthStore(tx, false),
+		scriptwire.ProvideScriptSourceStore(tx),
+		mediawire.ProvideMediaTransferStore(tx),
+		mediawire.ProvideMediaPurgeStore(tx),
+		mediawire.PackageWorkGuard(tx),
 	}}
 }

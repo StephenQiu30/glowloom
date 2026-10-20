@@ -1,4 +1,4 @@
-package app
+package media
 
 import (
 	"time"
@@ -11,15 +11,15 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
-func provideMediaTransferStore(database *gorm.DB) *pgmedia.TransferStore {
+func ProvideMediaTransferStore(database *gorm.DB) *pgmedia.TransferStore {
 	return pgmedia.NewScopedTransferStore(database, NewMediaLibraryProjectAccess, provideMediaLibraryWorkGuards, time.Now, NewMediaScopeAccess)
 }
 
-func provideMediaTransferWorker(database *gorm.DB, storage *objectstorage.Client) (*mediaapp.TransferWorker, *pgmedia.TransferStore) {
-	store := provideMediaTransferWorkerStore(database)
+func ProvideMediaTransferWorker(database *gorm.DB, storage *objectstorage.Client) (*mediaapp.TransferWorker, *pgmedia.TransferStore) {
+	store := ProvideMediaTransferWorkerStore(database)
 	return mediaapp.NewTransferWorker(store, mediaobjects.NewProjectCopyObjects(storage), ""), store
 }
 
-func provideMediaTransferWorkerStore(database *gorm.DB) *pgmedia.TransferStore {
+func ProvideMediaTransferWorkerStore(database *gorm.DB) *pgmedia.TransferStore {
 	return pgmedia.NewScopedTransferStore(database, NewMediaLibraryWorkerProjectAccess, provideMediaLibraryWorkGuards, time.Now, NewMediaWorkerScopeAccess)
 }

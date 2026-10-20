@@ -1,4 +1,4 @@
-package app
+package media
 
 import (
 	"fmt"
@@ -25,13 +25,13 @@ func provideMediaToolSourceWithAccess(tx *gorm.DB, scopes pgmedia.ScopeAccessFac
 		}, func(tx *gorm.DB) canvasapp.ProjectAccess { return canvasScopedAccess{ScopeAccess: scopes(tx), tx: tx} }))
 }
 
-// provideMediaDepthStore retains read, cancellation and exact reconciliation
+// ProvideMediaDepthStore retains read, cancellation and exact reconciliation
 // while unconfigured inference refuses new creation and retry before writes.
-func provideMediaDepthStore(database *gorm.DB, enabled bool) *pgtool.DepthStore {
-	return provideMediaDepthStoreWithAccess(database, enabled, NewMediaScopeAccess)
+func ProvideMediaDepthStore(database *gorm.DB, enabled bool) *pgtool.DepthStore {
+	return ProvideMediaDepthStoreWithAccess(database, enabled, NewMediaScopeAccess)
 }
 
-func provideMediaDepthStoreWithAccess(database *gorm.DB, enabled bool, scopes pgmedia.ScopeAccessFactory) *pgtool.DepthStore {
+func ProvideMediaDepthStoreWithAccess(database *gorm.DB, enabled bool, scopes pgmedia.ScopeAccessFactory) *pgtool.DepthStore {
 	var source pgtool.TranscriptionSourceFactory
 	if enabled {
 		source = func(tx *gorm.DB) toolapp.TranscriptionSourceReader {
@@ -44,9 +44,9 @@ func provideMediaDepthStoreWithAccess(database *gorm.DB, enabled bool, scopes pg
 		})
 }
 
-// provideMediaDepthWorker owns one Runner for every native job on this media
+// ProvideMediaDepthWorker owns one Runner for every native job on this media
 // worker, so concurrent Activities share the same physical inference slot.
-func provideMediaDepthWorker(database *gorm.DB, storage *objectstorage.Client, cfg config.Config) (*toolapp.DepthWorker, *pgtool.DepthStore, error) {
+func ProvideMediaDepthWorker(database *gorm.DB, storage *objectstorage.Client, cfg config.Config) (*toolapp.DepthWorker, *pgtool.DepthStore, error) {
 	verifier, err := videodepth.NewPreprocessor("ffmpeg", "ffprobe")
 	if err != nil {
 		return nil, nil, fmt.Errorf("configure video depth verification: %w", err)
@@ -62,7 +62,7 @@ func provideMediaDepthWorker(database *gorm.DB, storage *objectstorage.Client, c
 			return nil, nil, fmt.Errorf("configure offline video depth inference: %w", err)
 		}
 	}
-	store := provideMediaDepthStoreWithAccess(database, processor != nil, NewMediaWorkerScopeAccess)
+	store := ProvideMediaDepthStoreWithAccess(database, processor != nil, NewMediaWorkerScopeAccess)
 	consumer := toolapp.NewDepthWorker(store, toolflow.NewObjects(storage), processor, mediaflow.FFProber{}, mediaflow.FFUploadRenderer{}, verifier)
 	return consumer, store, nil
 }

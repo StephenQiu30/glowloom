@@ -9,6 +9,15 @@ import (
 	"os"
 	"time"
 
+	biblewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/bible"
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
+	copywire "github.com/StephenQiu30/glowloom-server/backend/internal/app/projectcopy"
+	promptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/prompt"
+	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
+	workspacewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/workspace"
+
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -103,50 +112,50 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	protected.Use(auth.RequireSession())
 	registerSelf(protected)
 	identityProtected := protected.Group("")
-	workspaceStore := provideWorkspaceLifecycleStore(database)
-	protected.Use(workspacehttp.RequireCreationScope(provideRequestScopeAccess(database)))
+	workspaceStore := workspacewire.ProvideWorkspaceLifecycleStore(database)
+	protected.Use(workspacehttp.RequireCreationScope(scopewire.ProvideRequestScopeAccess(database)))
 	protected.Use(workspacehttp.RequireProjectAccess(workspaceStore))
 	workspacehttp.NewHandler(workspaceapp.NewListProjectsQuery(workspaceStore), workspaceapp.NewCreateProjectCommand(workspaceStore, time.Now), workspaceapp.NewListStylePresetsQuery(workspaceStore)).Register(protected)
 	workspacehttp.NewProjectLifecycleHandler(workspaceapp.NewProjectLifecycle(workspaceStore, time.Now)).Register(protected)
 	workspacehttp.NewProjectCreationRecoveryHandler(workspaceapp.NewProjectCreationRecoveryQuery(workspaceStore)).Register(protected)
-	workspacehttp.NewProjectCopyHandler(workspaceapp.NewProjectCopyService(provideProjectCopyStore(database), time.Now)).Register(protected)
-	mediahttp.NewTransferHandler(provideMediaTransferStore(database)).Register(protected)
-	mediahttp.NewPurgeHandler(provideMediaPurgeStore(database)).Register(protected)
-	mediahttp.NewStorageUsageHandler(provideMediaStorageUsage(database, storage)).Register(protected)
-	workspacehttp.NewProjectFolderHandler(workspaceapp.NewProjectFolders(provideProjectFolderStore(database), time.Now)).Register(protected)
+	workspacehttp.NewProjectCopyHandler(workspaceapp.NewProjectCopyService(copywire.ProvideProjectCopyStore(database), time.Now)).Register(protected)
+	mediahttp.NewTransferHandler(mediawire.ProvideMediaTransferStore(database)).Register(protected)
+	mediahttp.NewPurgeHandler(mediawire.ProvideMediaPurgeStore(database)).Register(protected)
+	mediahttp.NewStorageUsageHandler(mediawire.ProvideMediaStorageUsage(database, storage)).Register(protected)
+	workspacehttp.NewProjectFolderHandler(workspaceapp.NewProjectFolders(workspacewire.ProvideProjectFolderStore(database), time.Now)).Register(protected)
 	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader {
-		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, NewMediaScopeAccess), nil)
+		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess), nil)
 	}
-	canvashttp.NewHandler(canvasapp.NewService(pgcanvas.NewScopedStore(database, mediaFactory, NewCanvasProjectAccess))).Register(protected)
-	mediahttp.NewHandler(mediaapp.NewAssetQuery(pgmedia.NewScopedStore(database, NewMediaScopeAccess), storage)).Register(protected)
-	mediahttp.NewDocumentHandler(mediaapp.NewDocumentSources(pgmedia.NewScopedDocumentSourceStore(database, NewMediaScopeAccess), storage)).Register(protected)
-	library := pgmedia.NewScopedLibraryStore(database, NewMediaLibraryProjectAccess, time.Now, NewMediaScopeAccess)
+	canvashttp.NewHandler(canvasapp.NewService(pgcanvas.NewScopedStore(database, mediaFactory, mediawire.NewCanvasProjectAccess))).Register(protected)
+	mediahttp.NewHandler(mediaapp.NewAssetQuery(pgmedia.NewScopedStore(database, mediawire.NewMediaScopeAccess), storage)).Register(protected)
+	mediahttp.NewDocumentHandler(mediaapp.NewDocumentSources(pgmedia.NewScopedDocumentSourceStore(database, mediawire.NewMediaScopeAccess), storage)).Register(protected)
+	library := pgmedia.NewScopedLibraryStore(database, mediawire.NewMediaLibraryProjectAccess, time.Now, mediawire.NewMediaScopeAccess)
 	mediahttp.NewLibraryHandler(library).Register(protected)
 	mediahttp.NewLibraryMediaHandler(mediaapp.NewLibraryMediaQuery(library, storage, storage)).Register(protected)
-	script := provideScriptServices(database, storage)
-	scripthttp.NewSourceHandler(script.sources).Register(protected)
-	scripthttp.NewSourceRecoveryHandler(script.recovery).Register(protected)
-	scripthttp.NewReviewHandler(script.episodes, script.history).Register(protected)
-	scripthttp.NewVersionHandler(script.history, script.adopt).Register(protected)
-	scripthttp.NewImportHandler(script.imports).Register(protected)
+	scripts := scriptwire.ProvideServices(database, storage)
+	scripthttp.NewSourceHandler(scripts.Sources).Register(protected)
+	scripthttp.NewSourceRecoveryHandler(scripts.Recovery).Register(protected)
+	scripthttp.NewReviewHandler(scripts.Episodes, scripts.History).Register(protected)
+	scripthttp.NewVersionHandler(scripts.History, scripts.Adopt).Register(protected)
+	scripthttp.NewImportHandler(scripts.Imports).Register(protected)
 	modelValidator, err := gltf.NewValidator()
 	if err != nil {
 		return nil, fmt.Errorf("configure model upload validation: %w", err)
 	}
-	uploadStore := pgmedia.NewScopedStore(database, NewMediaScopeAccess)
+	uploadStore := pgmedia.NewScopedStore(database, mediawire.NewMediaScopeAccess)
 	scopedUpload := mediaapp.NewScopedUploadService(uploadStore, uploadStore, mediaflow.NewUploadProber(modelValidator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(storage), time.Now)
 	mediahttp.NewUploadHandler(scopedUpload).Register(protected)
-	mediahttp.NewPackageHandler(provideMediaPackages(database, storage, scopedUpload)).Register(protected)
-	exports := provideMediaExportStore(database)
+	mediahttp.NewPackageHandler(mediawire.ProvideMediaPackages(database, storage, scopedUpload)).Register(protected)
+	exports := mediawire.ProvideMediaExportStore(database)
 	toolhttp.NewHandler(exports, toolapp.NewExportQuery(exports, storage, storage)).Register(protected)
-	transcriber, err := provideTranscriber(cfg)
+	transcriber, err := mediawire.ProvideTranscriber(cfg)
 	if err != nil {
 		return nil, err
 	}
-	toolhttp.NewTranscriptionHandler(provideMediaTranscriptionStore(database, transcriber != nil)).Register(protected)
-	depths := provideMediaDepthStore(database, cfg.VideoDepthPythonPath != "")
+	toolhttp.NewTranscriptionHandler(mediawire.ProvideMediaTranscriptionStore(database, transcriber != nil)).Register(protected)
+	depths := mediawire.ProvideMediaDepthStore(database, cfg.VideoDepthPythonPath != "")
 	toolhttp.NewDepthHandler(depths, toolapp.NewDepthQuery(depths, storage, storage)).Register(protected)
-	catalogStore := NewCatalogStore(database)
+	catalogStore := operationwire.NewCatalogStore(database)
 	cataloghttp.NewPresetHandler(catalogapp.NewProviderPresets(catalogStore)).Register(identityProtected)
 	cataloghttp.NewConfigHandler(catalogapp.NewProviderConfigs(catalogStore)).Register(identityProtected)
 	cataloghttp.NewReleaseHandler(catalogapp.NewModelReleases(catalogStore)).Register(identityProtected)
@@ -158,7 +167,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	if err != nil {
 		return nil, fmt.Errorf("configure model parameter validation: %w", err)
 	}
-	biblehttp.NewHandler(bibleapp.NewService(provideBibleStore(database, storage, parameterValidator), time.Now)).Register(protected)
+	biblehttp.NewHandler(bibleapp.NewService(biblewire.ProvideBibleStore(database, storage, parameterValidator), time.Now)).Register(protected)
 	priceValidator, err := pricevalidation.NewValidator()
 	if err != nil {
 		return nil, fmt.Errorf("configure model price validation: %w", err)
@@ -187,9 +196,9 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	}
 	cataloghttp.NewHandler(catalogapp.NewListModelsQuery(catalogStore)).Register(protected)
 	workspacehttp.NewModelDefaultsHandler(workspaceapp.NewModelDefaultsService(workspaceStore, time.Now)).Register(protected)
-	prompthttp.NewHandler(promptapp.NewPreferences(providePromptPreferenceStore(database), time.Now)).Register(identityProtected)
+	prompthttp.NewHandler(promptapp.NewPreferences(operationwire.ProvidePromptPreferenceStore(database), time.Now)).Register(identityProtected)
 	prompthttp.NewDraftHandler(pgprompt.NewDraftStore(database, func(tx *gorm.DB) promptapp.DraftAccess {
-		return promptDraftAccess{provideProjectContentAccess(tx)}
+		return promptwire.DraftAccess(tx)
 	})).Register(protected)
 	cataloghttp.NewAdminHandler(cataloghttp.AdminDependencies{
 		Providers:         catalogapp.NewListProvidersQuery(catalogStore),
@@ -206,12 +215,12 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		SetModelStatus:    catalogapp.NewSetModelStatusCommand(catalogStore, time.Now),
 	}).Register(identityProtected)
 	operations := pgoperation.NewScopedStoreWithEditor(database, func(tx *gorm.DB) operationapp.QuotePromptCompiler {
-		return promptapp.NewCompiler(providePromptPreferenceStore(tx))
+		return promptapp.NewCompiler(operationwire.ProvidePromptPreferenceStore(tx))
 	}, func(tx *gorm.DB) operationapp.EditorSnapshots {
 		return pgprompt.NewDraftStore(tx, func(ownerTx *gorm.DB) promptapp.DraftAccess {
-			return promptDraftAccess{provideProjectContentAccess(ownerTx)}
+			return promptwire.DraftAccess(ownerTx)
 		})
-	}, provideOperationProjectAccess, provideOperationWorkerAccess, provideOperationPlatformAccess)
+	}, operationwire.ProvideOperationProjectAccess, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationPlatformAccess)
 	operationhttp.NewSubmissionHandler(operations).Register(protected)
 	operationhttp.NewProviderTrialHandler(operations).Register(protected)
 	operationhttp.NewHandler(operationhttp.Dependencies{

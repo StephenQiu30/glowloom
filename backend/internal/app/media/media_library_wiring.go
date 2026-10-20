@@ -1,8 +1,10 @@
-package app
+package media
 
 import (
 	"context"
 	"errors"
+
+	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -27,8 +29,22 @@ type mediaLibraryWorkGuards struct {
 	guard workspaceapp.ProjectWorkGuard
 }
 
+var projectWorkGuard func(*gorm.DB) workspaceapp.ProjectWorkGuard
+
+// BindProjectWorkGuard installs the workspace owner list. Media does not import that assembler.
+func BindProjectWorkGuard(fn func(*gorm.DB) workspaceapp.ProjectWorkGuard) {
+	projectWorkGuard = fn
+}
+
+func boundProjectWorkGuard(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
+	if projectWorkGuard == nil {
+		panic("media project work guard is not bound")
+	}
+	return projectWorkGuard(tx)
+}
+
 func provideMediaLibraryWorkGuards(tx *gorm.DB) mediaapp.LibraryWorkGuards {
-	return mediaLibraryWorkGuards{guard: provideProjectWorkGuard(tx)}
+	return mediaLibraryWorkGuards{guard: boundProjectWorkGuard(tx)}
 }
 
 func (g mediaLibraryWorkGuards) HasInflightProjectWork(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID) (bool, error) {
@@ -41,12 +57,12 @@ func (g mediaLibraryWorkGuards) HasInflightProjectWork(ctx context.Context, acto
 
 // NewMediaLibraryProjectAccess constructs current request-bound project authorization.
 func NewMediaLibraryProjectAccess(tx *gorm.DB) mediaapp.LibraryProjectAccess {
-	return mediaLibraryProjectAccess{store: provideProjectContentAccess(tx)}
+	return mediaLibraryProjectAccess{store: scopewire.ProvideProjectContentAccess(tx)}
 }
 
 // NewMediaLibraryWorkerProjectAccess never requires an initiating HTTP session.
 func NewMediaLibraryWorkerProjectAccess(tx *gorm.DB) mediaapp.LibraryProjectAccess {
-	return mediaLibraryProjectAccess{store: provideWorkerProjectContentAccess(tx)}
+	return mediaLibraryProjectAccess{store: scopewire.ProvideWorkerProjectContentAccess(tx)}
 }
 
 func (a mediaLibraryProjectAccess) Authorize(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID, write bool) (mediaapp.LibraryProjectFacts, error) {

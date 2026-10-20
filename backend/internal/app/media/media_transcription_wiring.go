@@ -1,4 +1,4 @@
-package app
+package media
 
 import (
 	"fmt"
@@ -15,13 +15,13 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 )
 
-// provideMediaTranscriptionStore retains query and cancel access when native
+// ProvideMediaTranscriptionStore retains query and cancel access when native
 // inference is disabled, while refusing new commands before any side effect.
-func provideMediaTranscriptionStore(database *gorm.DB, enabled bool) *pgtool.TranscriptionStore {
-	return provideMediaTranscriptionStoreWithAccess(database, enabled, NewMediaScopeAccess)
+func ProvideMediaTranscriptionStore(database *gorm.DB, enabled bool) *pgtool.TranscriptionStore {
+	return ProvideMediaTranscriptionStoreWithAccess(database, enabled, NewMediaScopeAccess)
 }
 
-func provideMediaTranscriptionStoreWithAccess(database *gorm.DB, enabled bool, scopes pgmedia.ScopeAccessFactory) *pgtool.TranscriptionStore {
+func ProvideMediaTranscriptionStoreWithAccess(database *gorm.DB, enabled bool, scopes pgmedia.ScopeAccessFactory) *pgtool.TranscriptionStore {
 	var source pgtool.TranscriptionSourceFactory
 	if enabled {
 		source = func(tx *gorm.DB) toolapp.TranscriptionSourceReader {
@@ -34,7 +34,7 @@ func provideMediaTranscriptionStoreWithAccess(database *gorm.DB, enabled bool, s
 		})
 }
 
-func provideTranscriber(cfg config.Config) (toolapp.Transcriber, error) {
+func ProvideTranscriber(cfg config.Config) (toolapp.Transcriber, error) {
 	if cfg.WhisperEndpoint == "" {
 		return nil, nil
 	}

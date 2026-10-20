@@ -1,9 +1,11 @@
-package app
+package projectcopy
 
 import (
 	"context"
 	"errors"
 	"time"
+
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -76,9 +78,9 @@ func projectCopyBibleError(err error) error {
 	return err
 }
 func provideBibleProjectCopyStore(database *gorm.DB, authority workspaceapp.ProjectCopyAuthority, mediaSnapshot mediaapp.ProjectCopySnapshot) *pgbible.ProjectCopyStore {
-	scopes := NewMediaScopeAccess
+	scopes := mediawire.NewMediaScopeAccess
 	if authority.WorkerID != uuid.Nil {
-		scopes = NewMediaWorkerScopeAccess
+		scopes = mediawire.NewMediaWorkerScopeAccess
 	}
 	return pgbible.NewProjectCopyStore(database, func(tx *gorm.DB) bibleapp.ProjectCopyAccess {
 		return projectCopyBibleAccess{store: provideCopyAccess(tx, authority)}

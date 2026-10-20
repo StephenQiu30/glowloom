@@ -1,8 +1,10 @@
-package app
+package projectcopy
 
 import (
 	"context"
 	"errors"
+
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -81,7 +83,7 @@ func (r projectCopyBibleMediaReader) read(ctx context.Context, actor identityapp
 			return err
 		}
 		var err error
-		owner := pgmedia.NewScopedProjectCopyStore(tx, NewMediaWorkerScopeAccess)
+		owner := pgmedia.NewScopedProjectCopyStore(tx, mediawire.NewMediaWorkerScopeAccess)
 		if transferred {
 			result, err = owner.ReadTransferredCopyReference(ctx, actor, b, s, f)
 		} else {

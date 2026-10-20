@@ -1,7 +1,9 @@
-package app
+package bible
 
 import (
 	"context"
+
+	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -13,7 +15,7 @@ import (
 )
 
 func provideBibleDeletionImpacts(tx *gorm.DB) bibleapp.Impacts {
-	return pgbible.NewDeletionImpacts(tx, provideBibleProjectAccess(tx), bibleCharacterUsage{pgscript.NewBibleScopes(tx, provideScriptProjectAccess(tx))})
+	return pgbible.NewDeletionImpacts(tx, provideBibleProjectAccess(tx), bibleCharacterUsage{pgscript.NewBibleScopes(tx, scriptwire.ProvideScriptProjectAccess(tx))})
 }
 
 type bibleCharacterUsage struct{ reader *pgscript.BibleScopes }

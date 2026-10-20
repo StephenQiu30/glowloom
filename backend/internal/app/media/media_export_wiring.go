@@ -1,4 +1,4 @@
-package app
+package media
 
 import (
 	"gorm.io/gorm"
@@ -11,13 +11,13 @@ import (
 	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 )
 
-// provideMediaExportStore binds source authorization and media publication to
+// ProvideMediaExportStore binds source authorization and media publication to
 // the export command transaction through their owning application ports.
-func provideMediaExportStore(database *gorm.DB) *pgtool.Store {
-	return provideMediaExportStoreWithAccess(database, NewMediaScopeAccess)
+func ProvideMediaExportStore(database *gorm.DB) *pgtool.Store {
+	return ProvideMediaExportStoreWithAccess(database, NewMediaScopeAccess)
 }
 
-func provideMediaExportStoreWithAccess(database *gorm.DB, scopes pgmedia.ScopeAccessFactory) *pgtool.Store {
+func ProvideMediaExportStoreWithAccess(database *gorm.DB, scopes pgmedia.ScopeAccessFactory) *pgtool.Store {
 	return pgtool.NewStore(database,
 		func(tx *gorm.DB) toolapp.TimelineReader {
 			return canvasapp.NewTimelineReader(pgcanvas.NewScopedStore(tx,

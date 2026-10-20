@@ -16,7 +16,11 @@
 
 后端只有一个进程入口 `backend/cmd/glowloom`。默认以 `--role=api|worker|relay|all` 运行对应角色；身份维护、对象存储维护、Temporal 计划和分区确保分别是 `glowloom identity`、`glowloom storage`、`glowloom temporal setup`、`glowloom partitions ensure`。不保留 `cmd/identity`，也不再使用名为 lanverse 的二进制。镜像入口和用法字符串同为 `glowloom`。
 
-业务实现放在 `backend/internal/<模块>/`：`domain` 只含规则，`application` 编排用例，`adapter/<技术>` 对接 HTTP、数据库、工作流或外部系统。领域与应用不依赖 Gin、GORM，也不调用另一个业务模块的应用服务。跨模块事实由消费方定义小接口，在 `backend/internal/app` 启动时注入。`internal/app` 只负责角色进程、Wire 装配和这种跨模块适配，不在该包新增业务规则，也不把同一服务再拆成另一个 `cmd`。
+业务实现放在 `backend/internal/<模块>/`：`domain` 只含规则，`application` 编排用例，`adapter/<技术>` 对接 HTTP、数据库、工作流或外部系统。领域与应用不依赖 Gin、GORM，也不调用另一个业务模块的应用服务。跨模块事实由消费方定义小接口。
+
+包按 Google Go 的内聚规则划分：一个包只放必须一起使用的类型，调用方不需要同时理解无关实现。整个后端不放进一个包，也不使用 `util`、`common` 这类无职责包。
+
+`backend/internal/app` 的 `package app` 只保留角色进程、路由入口和 Wire 注入。圣经、素材、项目复制、画布、操作等服务的跨模块适配各自放在 `backend/internal/app/<服务>/`，包名与目录一致。这些包只做注入适配，不放领域规则，也不再增加进程入口。身份运行时、身份维护和存储维护保持各自的包，不并入 `package app`。新的服务接线写入对应服务包；不再往 `package app` 增加服务接线文件。
 
 `backend/internal/platform/` 提供配置、日志以及数据库、Redis、Kafka、Temporal、对象存储连接。进程配置继续读 `LV_*`；邮件沿用既有 `SMTP_*`。数据库角色、库名、Kafka 主题、Temporal namespace 和对象桶名保持当前部署标识，命令改名不迁移这些资源。
 

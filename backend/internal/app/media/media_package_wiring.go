@@ -1,4 +1,4 @@
-package app
+package media
 
 import (
 	"context"
@@ -21,8 +21,13 @@ func provideMediaPackageStore(database *gorm.DB) *pgmedia.PackageStore {
 	return pgmedia.NewScopedPackageStore(database, NewMediaLibraryProjectAccess, provideMediaLibraryWorkGuards, time.Now, NewMediaScopeAccess)
 }
 
-func provideMediaPackages(database *gorm.DB, storage *objectstorage.Client, uploads *mediaapp.UploadService) *mediaapp.LibraryPackageService {
+func ProvideMediaPackages(database *gorm.DB, storage *objectstorage.Client, uploads *mediaapp.UploadService) *mediaapp.LibraryPackageService {
 	return mediaapp.NewLibraryPackageService(provideMediaPackageStore(database), uploads, mediaobjects.NewProjectCopyObjects(storage), time.Now)
+}
+
+// PackageWorkGuard reports in-flight package work for the workspace lifecycle owner list.
+func PackageWorkGuard(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
+	return mediaPackageWorkGuard{store: provideMediaPackageStore(tx)}
 }
 
 type mediaPackageWorkGuard struct{ store *pgmedia.PackageStore }
