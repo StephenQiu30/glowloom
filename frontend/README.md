@@ -14,4 +14,4 @@
 
 交互控件、卡片、表单与状态展示统一复用官方 shadcn/ui Radix Nova，图标使用 Lucide。HTML 仅用于框架根节点、必要语义布局、文本与媒体，不自行实现已有控件。字体直接使用 Vercel 官方 `geist` 包，中文回退系统字体；主题沿用现有 neutral 语义颜色，不增加页面专属主题。
 
-产品不提供第三方许可导航或页面；依赖版权源文件保留，Geist 原始声明位于 `licenses/geist-OFL.txt`。
+产品不提供第三方许可导航或页面；Geist 字体由 `geist` 包提供，其许可原文位于该包的 `LICENSE.txt`。
