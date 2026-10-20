@@ -1,3 +1,4 @@
+// Package bible wires bible storage and cross-module references.
 package bible
 
 import (

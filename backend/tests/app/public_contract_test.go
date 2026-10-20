@@ -48,8 +48,18 @@ func TestPublicRouterGeneratedSwaggerContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	routes := make(map[string]struct{})
+	liveRegistered := false
 	for _, route := range router.Routes() {
+		if route.Method == http.MethodGet && route.Path == "/api/canvases/:id/live" {
+			// Upgrade/frame contracts are exercised by the real WS/PG suite;
+			// generating an HTTP fetch client for them would be misleading.
+			liveRegistered = true
+			continue
+		}
 		routes[route.Method+" "+route.Path] = struct{}{}
+	}
+	if !liveRegistered {
+		t.Fatal("canvas WebSocket route missing")
 	}
 	if err := validatePublicSwagger(schema, routes); err != nil {
 		t.Fatal(err)

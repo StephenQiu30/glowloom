@@ -79,6 +79,7 @@ type Store interface {
 	Get(context.Context, identityapp.Principal, uuid.UUID) (domain.Document, error)
 	Create(context.Context, identityapp.Principal, uuid.UUID, string, CreateInput) (domain.Document, error)
 	Execute(context.Context, identityapp.Principal, uuid.UUID, string, CommandsInput) (Result, error)
+	Resolve(context.Context, identityapp.Principal, uuid.UUID, string, CommandsInput) (*Result, error)
 	Rename(context.Context, identityapp.Principal, uuid.UUID, string, RenameInput) (domain.Document, error)
 	Delete(context.Context, identityapp.Principal, uuid.UUID, string, DeleteInput) (DeleteResult, error)
 }
@@ -136,4 +137,13 @@ func (s *Service) Delete(ctx context.Context, a identityapp.Principal, id uuid.U
 		return DeleteResult{}, domain.ErrInvalidCommand
 	}
 	return s.store.Delete(ctx, a, id, key, input)
+}
+
+// Resolve checks the original durable receipt without executing or rebasing it.
+// A nil result means unknown, not a confirmed rejection.
+func (s *Service) Resolve(ctx context.Context, a identityapp.Principal, id uuid.UUID, key string, input CommandsInput) (*Result, error) {
+	if !validKey(key) || input.ExpectedRevision < 1 || len(input.Commands) < 1 || len(input.Commands) > 100 {
+		return nil, domain.ErrInvalidCommand
+	}
+	return s.store.Resolve(ctx, a, id, key, input)
 }

@@ -12,6 +12,7 @@ import { RequestError } from "@/lib/request";
 import type { Node } from "@/app/canvas/document";
 const api = vi.hoisted(() => ({
   project: vi.fn(),
+  live: vi.fn(),
   identity: vi.fn(),
   canvas: vi.fn(),
   save: vi.fn(),
@@ -90,6 +91,28 @@ vi.mock("@/components/generation/draft-save", async (original) => ({
     list: api.branches,
     write: api.write,
     remove: api.remove,
+  },
+}));
+vi.mock("@/app/canvas/live", () => ({
+  CanvasLive: class {
+    constructor(
+      private id: string,
+      private callbacks: {
+        status: (status: string, writable?: boolean) => void;
+      },
+    ) {
+      api.live(this.callbacks);
+    }
+    start() {
+      this.callbacks.status("live", true);
+    }
+    stop() {}
+    submit(key: string, body: API.CommandsInput) {
+      return api.save({ id: this.id }, body, {
+        headers: { "Idempotency-Key": key },
+        signal: new AbortController().signal,
+      });
+    }
   },
 }));
 vi.mock("@/api/canvases", () => ({
@@ -341,9 +364,9 @@ it("冲突保留本地草稿，由用户明确采用服务端版本继续保存"
   });
   fireEvent.click(screen.getByRole("button", { name: "保存画布" }));
   await screen.findByRole("button", { name: "保留本地编辑，以版本 3 继续" });
-  expect(
-    (screen.getByLabelText("测试共享富文本") as HTMLInputElement).value,
-  ).toBe("保留我的稿");
+  expect(screen.getByLabelText("本地未保存内容").textContent).toContain(
+    "保留我的稿",
+  );
   fireEvent.click(
     screen.getByRole("button", { name: "保留本地编辑，以版本 3 继续" }),
   );
@@ -650,7 +673,7 @@ it("含只读直接成员的分组不能解组，不污染其他合法编辑", a
   ).toBe(true);
 });
 
-it.each([403, 422])(
+it.each([403, 413, 422])(
   "确定性 %i 拒绝后暂停自动重发，修改后可继续保存",
   async (status) => {
     await openDraft();
@@ -1092,4 +1115,136 @@ it("只读拒绝后未保存文本仍触发刷新和站内离开保护", async (
   expect(unload.defaultPrevented).toBe(true);
   fireEvent.click(screen.getByRole("link", { name: "织光首页" }));
   await screen.findByRole("heading", { name: "确认离开画布" });
+});
+
+it("远端快照更新干净画布，后续提交以数据库新版本为基线", async () => {
+  api.project.mockResolvedValue(project);
+  api.canvas.mockResolvedValue(canvas);
+  render(<CanvasPage projectID={projectID} canvasID={canvasID} />);
+  await screen.findByText("双击画布，创建节点");
+  const { createResourceNode } = await import("@/app/canvas/document");
+  const node = {
+    ...createResourceNode("text", { x: 0, y: 0 }),
+    title: "远端文本",
+    config: { text: "数据库新内容" },
+  };
+  act(() =>
+    api.live.mock.lastCall![0].snapshot(
+      { ...canvas, revision: 2, nodes: [node] },
+      true,
+    ),
+  );
+  await screen.findByRole("button", { name: "移动 远端文本" });
+  fireEvent.click(screen.getByRole("button", { name: "添加文本" }));
+  api.save.mockImplementation((_p, body) =>
+    Promise.resolve({
+      ...canvas,
+      revision: 3,
+      nodes: [node, ...body.commands[0].nodes],
+      results: body.commands.map(() => ({ ok: true })),
+    }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "保存画布" }));
+  await waitFor(() => expect(api.save).toHaveBeenCalledOnce());
+  expect(api.save.mock.calls[0][1].expected_revision).toBe(2);
+});
+it("本地有编辑时远端新版本保留本地内容并阻止自动覆盖", async () => {
+  await openDraft();
+  fireEvent.change(screen.getByLabelText("测试共享富文本"), {
+    target: { value: "保留未提交意图" },
+  });
+  act(() =>
+    api.live.mock.lastCall![0].snapshot({ ...canvas, revision: 2 }, true),
+  );
+  expect(screen.getByLabelText("本地未保存内容").textContent).toContain(
+    "保留未提交意图",
+  );
+  expect(screen.getByRole("region", { name: "版本冲突处理" })).toBeTruthy();
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  expect(api.save).not.toHaveBeenCalled();
+});
+it("断线时显示连接状态并暂停新编辑，恢复后允许继续", async () => {
+  await openDraft();
+  act(() => api.live.mock.lastCall![0].status("reconnecting"));
+  expect(screen.getByRole("status").textContent).toContain("连接中断");
+  expect(
+    screen
+      .getByRole("toolbar", { name: "画布工具" })
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
+  act(() => api.live.mock.lastCall![0].status("live", true));
+  expect(
+    screen
+      .getByRole("toolbar", { name: "画布工具" })
+      .getAttribute("aria-disabled"),
+  ).toBe("false");
+});
+
+it("未知配置只读基线收到新快照保持opaque，不解析或触发重连", async () => {
+  api.project.mockResolvedValue(project);
+  const { createResourceNode } = await import("@/app/canvas/document");
+  const node = {
+    ...createResourceNode("text", { x: 0, y: 0 }),
+    title: "旧图不透明节点",
+    node_type: "future_kind",
+    config: { timeline: { clips: { future: 1 } } },
+  };
+  const protectedCanvas = {
+    ...canvas,
+    nodes: [node],
+    read_only_reason: "unsupported",
+  };
+  api.canvas.mockResolvedValue(protectedCanvas);
+  render(<CanvasPage projectID={projectID} canvasID={canvasID} />);
+  await screen.findByRole("heading", { name: "旧图不透明节点" });
+  expect(() =>
+    act(() =>
+      api.live.mock.lastCall![0].snapshot(
+        {
+          ...protectedCanvas,
+          revision: 2,
+          nodes: [{ ...node, title: "新版不透明节点" }],
+        },
+        true,
+      ),
+    ),
+  ).not.toThrow();
+  await screen.findByRole("heading", { name: "新版不透明节点" });
+  expect(api.save).not.toHaveBeenCalled();
+});
+it("冲突对照显示远端文本、composer及节点删除和连线变化", async () => {
+  await openDraft();
+  const { createResourceNode, createDraftNode, richCanvasDraft } =
+    await import("@/app/canvas/document");
+  const { emptyPromptDraft } =
+    await import("@/components/generation/prompt-document");
+  const text = {
+    ...createResourceNode("text", { x: 0, y: 0 }),
+    title: "远端文本节点",
+    config: { text: "远端修改的正文" },
+  };
+  const draft = emptyPromptDraft();
+  draft.document.content = [
+    {
+      type: "paragraph",
+      content: [{ type: "text", text: "远端富文本提示词" }],
+    },
+  ];
+  const generation = {
+    ...createDraftNode("image_generation", "1:1", 0),
+    title: "远端生成节点",
+    input_revision: 1,
+    config: { draft: richCanvasDraft(draft) },
+  };
+  act(() =>
+    api.live.mock.lastCall![0].snapshot(
+      { ...canvas, revision: 2, nodes: [text, generation] },
+      true,
+    ),
+  );
+  const comparison = screen.getByLabelText("服务端内容");
+  expect(comparison.textContent).toContain("远端修改的正文");
+  expect(comparison.textContent).toContain("远端富文本提示词");
+  expect(comparison.textContent).toContain("连线");
+  expect(comparison.textContent).toContain("删除");
 });

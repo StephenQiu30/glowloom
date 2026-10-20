@@ -55,6 +55,7 @@ func (s mediaStorageIntents) StorageUsageKeys(ctx context.Context, actor identit
 	return keys, nil
 }
 
+// ProvideMediaStorageUsage assembles the storage usage reader.
 func ProvideMediaStorageUsage(database *gorm.DB, storage *objectstorage.Client) *mediaapp.StorageUsageReader {
 	source := pgmedia.NewScopedStorageUsageStore(database, NewMediaLibraryProjectAccess, func(tx *gorm.DB) mediaapp.StorageUsageIntentSource {
 		return mediaStorageIntents{

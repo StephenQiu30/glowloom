@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
@@ -167,6 +167,6 @@ func TestConcurrentCanvasCommandsAdvanceOneRevision(t *testing.T) {
 
 func canvasStore(database *gorm.DB) *pgcanvas.Store {
 	return pgcanvas.NewScopedStore(database, func(tx *gorm.DB) application.MediaReader {
-		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, app.NewMediaScopeAccess), nil)
-	}, app.NewCanvasProjectAccess)
+		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess), nil)
+	}, mediawire.NewCanvasProjectAccess)
 }

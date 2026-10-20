@@ -1,3 +1,4 @@
+// Package workspace wires project lifecycle and folder dependencies.
 package workspace
 
 import (
@@ -12,6 +13,7 @@ import (
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
+// ProvideProjectFolderStore assembles project folder persistence.
 func ProvideProjectFolderStore(database *gorm.DB) *pgworkspace.FolderStore {
 	return pgworkspace.NewScopedFolderStore(database, scopewire.ProvideRequestScopeAccess, ProvideProjectWorkGuard,
 		func(tx *gorm.DB) workspaceapp.FolderMediaReader {

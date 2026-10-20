@@ -113,6 +113,7 @@ import {
   connectedReferenceSources,
   materializeReferences,
 } from "./composer/references";
+import { CanvasLive, type LiveStatus } from "./live";
 import "./editor.css";
 
 type Pending = {
@@ -122,6 +123,26 @@ type Pending = {
   body: API.CommandsInput;
   edges?: API.Edge[];
 };
+function nodePreviewText(node: Node): string {
+  if (node.node_type === "text") return node.config.text ?? "";
+  if (!isDraft(node)) return "";
+  const draft = node.config.draft;
+  return draft.composer
+    ? draft.composer.document.content
+        .map((paragraph) =>
+          (paragraph.content ?? [])
+            .map((part) =>
+              part.type === "text"
+                ? part.text
+                : part.type === "hardBreak"
+                  ? "\n"
+                  : "[引用]",
+            )
+            .join(""),
+        )
+        .join("\n")
+    : [draft.prompt, draft.negative_prompt].filter(Boolean).join("\n");
+}
 const limit = (value: number) => Math.max(-1e6, Math.min(1e6, value));
 const CanvasMaterialDialog = dynamic(() =>
   import("@/components/media/project-asset-dialog").then(
@@ -143,9 +164,11 @@ const CanvasImageDialog = dynamic(() =>
 export function CanvasEditor({
   project: initialProject,
   initial,
+  developmentPreview = false,
 }: {
   project: Project;
   initial: Canvas;
+  developmentPreview?: boolean;
 }) {
   const presentation = useProjectPresentation(initialProject);
   const project = presentation.project,
@@ -154,8 +177,21 @@ export function CanvasEditor({
     initial.read_only_reason ?? "",
   );
   const [identityPending, setIdentityPending] = useState(false);
+  const [liveStatus, setLiveStatus] = useState<LiveStatus>(
+    developmentPreview ? "live" : "connecting",
+  );
+  const [socketWritable, setSocketWritable] = useState(developmentPreview);
+  const [syncBlocked, setSyncBlocked] = useState(false);
+  const live = useRef<CanvasLive | null>(null);
+  const deferredSnapshot = useRef<{
+    document: unknown;
+    writable: boolean;
+  } | null>(null);
   const verifyIdentity = useRef<() => void>(() => {});
   const readOnly =
+    liveStatus !== "live" ||
+    !socketWritable ||
+    syncBlocked ||
     identityPending ||
     !!graphReadOnlyReason ||
     project.status !== "active" ||
@@ -182,11 +218,11 @@ export function CanvasEditor({
   const [preview, setPreview] = useState<Node | null>(null);
   const [base, setBaseState] = useState(initial);
   const savedBase = useRef(initial);
-  const setBase = (value: Canvas) => {
+  const setBase = useCallback((value: Canvas) => {
     savedBase.current = value;
     setGraphReadOnlyReason(value.read_only_reason ?? "");
     setBaseState(value);
-  };
+  }, []);
   const privateInvalid = useRef(false);
   const [identityInvalid, setIdentityInvalid] = useState(false);
   const [nodes, setNodes] = useState(initial.nodes);
@@ -256,8 +292,68 @@ export function CanvasEditor({
     size.height,
     aiOpen ? effectiveAIWidth : 0,
   );
+  const receiveSnapshot = useCallback(
+    (document: unknown, writable: boolean) => {
+      if (privateInvalid.current) return;
+      const server = requireCanvas(document, initial.project_id, initial.id);
+      setSocketWritable(writable);
+      if (busy.current || pending.current) {
+        deferredSnapshot.current = { document, writable };
+        return;
+      }
+      if (server.revision <= savedBase.current.revision) return;
+      const prior = new Map(
+        savedBase.current.nodes.map((node) => [node.id, node]),
+      );
+      const changed =
+        canonical(localEdges.current) !== canonical(savedBase.current.edges) ||
+        local.current.length !== prior.size ||
+        local.current.some((node) => {
+          const old = prior.get(node.id);
+          return (
+            !old ||
+            (savedBase.current.read_only_reason
+              ? canonical(node) !== canonical(old)
+              : !sameEditable(node, old))
+          );
+        });
+      if (changed) {
+        readOnlyRef.current = true;
+        setSyncBlocked(true);
+        setConflict({ server });
+        setMessage("画布已有新版本，本地编辑已保留。请对照后明确选择。");
+      } else {
+        history.reset();
+        local.current = server.nodes;
+        localEdges.current = server.edges;
+        setNodes(server.nodes);
+        setEdges(server.edges);
+        setBase(server);
+      }
+    },
+    [history, initial.id, initial.project_id, setBase],
+  );
+  useEffect(() => {
+    if (developmentPreview) return;
+    const socket = new CanvasLive(initial.id, {
+      snapshot: (document, writable) => receiveSnapshot(document, writable),
+      status: (status, writable) => {
+        setLiveStatus(status);
+        if (writable !== undefined) setSocketWritable(writable);
+      },
+      revoked: () =>
+        window.dispatchEvent(new Event("glowloom:private-cache-cleared")),
+    });
+    live.current = socket;
+    socket.start();
+    return () => {
+      live.current = null;
+      socket.stop();
+    };
+  }, [initial.id, developmentPreview, receiveSnapshot]);
   useEffect(() => {
     const suspend = () => {
+      live.current?.stop();
       privateInvalid.current = true;
       request.current?.abort();
       setIdentityInvalid(true);
@@ -1280,10 +1376,12 @@ export function CanvasEditor({
     const controller = new AbortController();
     request.current = controller;
     try {
-      const value = await applyCanvasCommands({ id: base.id }, operation.body, {
-        headers: { "Idempotency-Key": operation.key },
-        signal: controller.signal,
-      });
+      const value = developmentPreview
+        ? await applyCanvasCommands({ id: base.id }, operation.body, {
+            headers: { "Idempotency-Key": operation.key },
+            signal: controller.signal,
+          })
+        : await live.current!.submit(operation.key, operation.body);
       const committed = requireSaveResult(
         value,
         operation.base,
@@ -1334,6 +1432,8 @@ export function CanvasEditor({
       ) {
         pending.current = null;
         setUnconfirmed(false);
+        readOnlyRef.current = true;
+        setSyncBlocked(true);
         setConflict({ server: null });
         setMessage(
           "画布已被其他窗口修改，本地编辑已保留。请对照服务端内容后明确选择。",
@@ -1341,7 +1441,7 @@ export function CanvasEditor({
         await readConflict();
       } else if (
         error instanceof RequestError &&
-        [401, 403, 404, 409, 422].includes(error.status)
+        [401, 403, 404, 409, 413, 422].includes(error.status)
       ) {
         pending.current = null;
         setUnconfirmed(false);
@@ -1349,7 +1449,9 @@ export function CanvasEditor({
         setMessage(
           error.status === 401
             ? "登录已失效，本地编辑仍保留，请重新登录后重开画布。"
-            : "服务端拒绝保存，本地编辑仍保留。请检查权限、节点及参数。",
+            : error.status === 413
+              ? "本次编辑内容过大，已停止自动保存。本地内容仍保留，请减少本次编辑内容后保存。"
+              : "服务端拒绝保存，本地编辑仍保留。请检查权限、节点及参数。",
         );
       } else {
         setUnconfirmed(true);
@@ -1359,12 +1461,30 @@ export function CanvasEditor({
       }
     } finally {
       busy.current = false;
-      if (alive.current) setSaving(false);
+      if (alive.current) {
+        setSaving(false);
+        const latest = deferredSnapshot.current;
+        deferredSnapshot.current = null;
+        if (latest) receiveSnapshot(latest.document, latest.writable);
+      }
     }
   }
   useEffect(() => {
     saveLatest.current = save;
   });
+  const resumeSave = useEffectEvent(() => {
+    if (
+      liveStatus === "live" &&
+      unconfirmed &&
+      !readOnly &&
+      !conflict &&
+      !saving
+    )
+      void saveLatest.current();
+  });
+  useEffect(() => {
+    resumeSave();
+  }, [liveStatus]);
   useEffect(() => {
     if (
       !dirty ||
@@ -1638,17 +1758,23 @@ export function CanvasEditor({
     }
     setBase(server);
     setConflict(null);
+    setSyncBlocked(false);
     setMessage("");
   }
-  const status = saving
-    ? "正在保存…"
-    : unconfirmed
-      ? "保存未确认"
-      : conflict
-        ? "版本冲突，本地编辑保留"
-        : dirty
-          ? "有未保存的编辑"
-          : `已保存 · 版本 ${base.revision}`;
+  const status =
+    liveStatus !== "live"
+      ? liveStatus === "connecting"
+        ? "正在连接画布…"
+        : "连接中断，正在重连；编辑暂存于当前页面"
+      : saving
+        ? "正在保存…"
+        : unconfirmed
+          ? "保存未确认"
+          : conflict
+            ? "版本冲突，本地编辑保留"
+            : dirty
+              ? "有未保存的编辑"
+              : `已保存 · 版本 ${base.revision}`;
   if (identityInvalid)
     return (
       <Empty>
@@ -1684,15 +1810,23 @@ export function CanvasEditor({
           project={project}
           nodes={nodes}
           status={
-            readOnly
-              ? graphReadOnlyReason
+            liveStatus !== "live"
+              ? status
+              : graphReadOnlyReason
                 ? "画布数据待兼容 · 只读"
-                : identityPending
-                  ? "登录状态待核验 · 只读"
-                  : project.status === "archived"
-                    ? "已归档 · 只读"
-                    : "项目资料未确认 · 只读"
-              : status
+                : syncBlocked
+                  ? "版本冲突，本地编辑保留"
+                  : !socketWritable
+                    ? "画布只读"
+                    : readOnly
+                      ? graphReadOnlyReason
+                        ? "画布数据待兼容 · 只读"
+                        : identityPending
+                          ? "登录状态待核验 · 只读"
+                          : project.status === "archived"
+                            ? "已归档 · 只读"
+                            : "项目资料未确认 · 只读"
+                      : status
           }
           saveLabel={
             saving ? "正在保存…" : unconfirmed ? "重试原保存" : "保存画布"
@@ -1760,32 +1894,97 @@ export function CanvasEditor({
             {conflict.server
               ? `服务端版本 ${conflict.server.revision}`
               : "正在读取服务端版本…"}
-            。本地稿仍在编辑面板中。
+            。编辑已暂停，本地内容仍保留在当前页面。
           </p>
+          <div
+            aria-label="本地未保存内容"
+            className="max-h-40 overflow-auto rounded border p-3"
+          >
+            <p className="mb-2 font-medium">
+              本地内容（仅当前页面） · {nodes.length} 个节点 · {edges.length}{" "}
+              条连线
+            </p>
+            {nodes.map((node) => (
+              <p key={node.id} className="break-words whitespace-pre-wrap">
+                {node.title}
+                <br />
+                {base.read_only_reason
+                  ? "数据待兼容，仅展示名称"
+                  : nodePreviewText(node)}
+              </p>
+            ))}
+          </div>
           {conflict.server && (
-            <div className="max-h-40 overflow-auto rounded border p-3">
-              <p className="mb-2 font-medium">服务端草稿</p>
-              {conflict.server.read_only_reason ? (
-                <>
-                  <p>
-                    服务端数据待兼容，当前仅可查看。载入前请明确放弃本地未保存编辑。
-                  </p>
-                  {conflict.server.nodes.map((node) => (
-                    <p key={node.id}>{node.title}</p>
-                  ))}
-                </>
-              ) : (
-                conflict.server.nodes.filter(isDraft).map((n) => (
-                  <p key={n.id} className="break-words whitespace-pre-wrap">
-                    {n.title} · {n.config.draft.aspect_ratio} ·{" "}
-                    {n.config.draft.candidate_count} 个候选
-                    <br />
-                    {n.config.draft.prompt || "（空提示词）"}
-                    <br />
-                    {n.config.draft.negative_prompt}
-                  </p>
-                ))
+            <div
+              aria-label="服务端内容"
+              className="max-h-56 overflow-auto rounded border p-3"
+            >
+              <p className="mb-2 font-medium">
+                服务端内容 · {conflict.server.nodes.length} 个节点 ·{" "}
+                {conflict.server.edges.length} 条连线
+              </p>
+              <p>
+                较本地基线删除{" "}
+                {
+                  base.nodes.filter(
+                    (node) =>
+                      !conflict.server!.nodes.some(
+                        (remote) => remote.id === node.id,
+                      ),
+                  ).length
+                }{" "}
+                个节点；新增{" "}
+                {
+                  conflict.server.nodes.filter(
+                    (node) => !base.nodes.some((old) => old.id === node.id),
+                  ).length
+                }{" "}
+                个节点
+              </p>
+              {conflict.server.read_only_reason && (
+                <p>
+                  服务端数据待兼容，当前仅可查看名称。载入前请明确放弃本地未保存编辑。
+                </p>
               )}
+              {conflict.server.nodes.map((node) => (
+                <p key={node.id} className="break-words whitespace-pre-wrap">
+                  {node.title}
+                  <br />
+                  {conflict.server!.read_only_reason
+                    ? ""
+                    : nodePreviewText(node)}
+                </p>
+              ))}
+              <p>
+                连线变化：新增{" "}
+                {
+                  conflict.server.edges.filter(
+                    (edge) => !base.edges.some((old) => old.id === edge.id),
+                  ).length
+                }{" "}
+                条，删除{" "}
+                {
+                  base.edges.filter(
+                    (edge) =>
+                      !conflict.server!.edges.some(
+                        (remote) => remote.id === edge.id,
+                      ),
+                  ).length
+                }{" "}
+                条
+              </p>
+              {conflict.server.edges.map((edge) => (
+                <p key={edge.id}>
+                  {conflict.server!.nodes.find(
+                    (node) => node.id === edge.source_node_id,
+                  )?.title ?? edge.source_node_id}{" "}
+                  →{" "}
+                  {conflict.server!.nodes.find(
+                    (node) => node.id === edge.target_node_id,
+                  )?.title ?? edge.target_node_id}
+                  （{edge.edge_type}）
+                </p>
+              ))}
             </div>
           )}
           <div className="flex flex-wrap gap-2">

@@ -21,6 +21,7 @@ func ProvideMediaTranscriptionStore(database *gorm.DB, enabled bool) *pgtool.Tra
 	return ProvideMediaTranscriptionStoreWithAccess(database, enabled, NewMediaScopeAccess)
 }
 
+// ProvideMediaTranscriptionStoreWithAccess assembles transcription storage with explicit scope access.
 func ProvideMediaTranscriptionStoreWithAccess(database *gorm.DB, enabled bool, scopes pgmedia.ScopeAccessFactory) *pgtool.TranscriptionStore {
 	var source pgtool.TranscriptionSourceFactory
 	if enabled {
@@ -34,6 +35,7 @@ func ProvideMediaTranscriptionStoreWithAccess(database *gorm.DB, enabled bool, s
 		})
 }
 
+// ProvideTranscriber constructs the configured transcription provider.
 func ProvideTranscriber(cfg config.Config) (toolapp.Transcriber, error) {
 	if cfg.WhisperEndpoint == "" {
 		return nil, nil

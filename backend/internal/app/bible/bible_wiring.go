@@ -32,6 +32,7 @@ func provideBibleProjectAccess(tx *gorm.DB) bibleapp.ProjectAccess {
 	return scopewire.ProvideProjectContentAccess(tx)
 }
 
+// ProvideBibleStore assembles the bible store and its reference readers.
 func ProvideBibleStore(database *gorm.DB, storage *objectstorage.Client, validator catalogapp.ModelVersionValidator) *pgbible.Store {
 	return pgbible.NewStore(database, pgbible.Factories{
 		Access:  provideBibleProjectAccess,
@@ -183,6 +184,7 @@ type scriptCharacterReferences struct {
 	reader bibleapp.CharacterReferenceReader
 }
 
+// ProvideScriptCharacterReferences adapts bible character references for scripts.
 func ProvideScriptCharacterReferences(tx *gorm.DB) scriptapp.CharacterReferences {
 	return scriptCharacterReferences{reader: pgbible.NewReferences(tx, provideBibleProjectAccess(tx))}
 }

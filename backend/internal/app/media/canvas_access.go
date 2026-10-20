@@ -1,3 +1,4 @@
+// Package media wires media authority and cross-module dependencies.
 package media
 
 import (

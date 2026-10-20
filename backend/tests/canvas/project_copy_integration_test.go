@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
@@ -36,7 +36,7 @@ func TestProjectCopyCanvasPersistsFrozenGraphsAndHidesTarget(t *testing.T) {
 	var snapshot application.ProjectCopySnapshot
 	if err := database.Transaction(func(tx *gorm.DB) error {
 		var err error
-		snapshot, err = pgcanvas.NewScopedProjectCopyStore(tx, nil, nil, app.NewCanvasProjectAccess).Freeze(t.Context(), actor, binding, map[uuid.UUID]uuid.UUID{})
+		snapshot, err = pgcanvas.NewScopedProjectCopyStore(tx, nil, nil, mediawire.NewCanvasProjectAccess).Freeze(t.Context(), actor, binding, map[uuid.UUID]uuid.UUID{})
 		if err != nil {
 			return err
 		}
@@ -50,12 +50,12 @@ func TestProjectCopyCanvasPersistsFrozenGraphsAndHidesTarget(t *testing.T) {
 	// No referenced media exists in this text-only graph; the reader remains an
 	// actual owner query so an unexpected reference would fail closed.
 	factory := func(tx *gorm.DB, _ application.ProjectCopyBinding) application.MediaReader {
-		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, app.NewMediaScopeAccess), nil)
+		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess), nil)
 	}
 	var receipt application.ProjectCopyReceipt
 	if err := database.Transaction(func(tx *gorm.DB) error {
 		var err error
-		receipt, err = pgcanvas.NewScopedProjectCopyStore(tx, nil, factory, app.NewCanvasProjectAccess).Copy(t.Context(), actor, binding, snapshot)
+		receipt, err = pgcanvas.NewScopedProjectCopyStore(tx, nil, factory, mediawire.NewCanvasProjectAccess).Copy(t.Context(), actor, binding, snapshot)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -74,7 +74,7 @@ func TestProjectCopyCanvasPersistsFrozenGraphsAndHidesTarget(t *testing.T) {
 		t.Fatal("unpublished canvas visible through normal get", err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		replayed, err := pgcanvas.NewScopedProjectCopyStore(tx, nil, factory, app.NewCanvasProjectAccess).Copy(t.Context(), actor, binding, snapshot)
+		replayed, err := pgcanvas.NewScopedProjectCopyStore(tx, nil, factory, mediawire.NewCanvasProjectAccess).Copy(t.Context(), actor, binding, snapshot)
 		if err != nil || replayed != receipt {
 			return errors.New("persistent receipt mismatch")
 		}
@@ -92,7 +92,7 @@ func TestProjectCopyCanvasPersistsFrozenGraphsAndHidesTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = database.Transaction(func(tx *gorm.DB) error {
-		return pgcanvas.NewScopedProjectCopyStore(tx, nil, factory, app.NewCanvasProjectAccess).Cleanup(t.Context(), actor, binding, snapshot)
+		return pgcanvas.NewScopedProjectCopyStore(tx, nil, factory, mediawire.NewCanvasProjectAccess).Cleanup(t.Context(), actor, binding, snapshot)
 	})
 	if !errors.Is(err, domain.ErrInvalidProjectCopy) {
 		t.Fatal("corrupt snapshot accepted for destructive cleanup", err)
@@ -128,7 +128,7 @@ func TestProjectCopyCanvasRejectsUnknownConfigWithoutPartialSnapshot(t *testing.
 		t.Fatal(err)
 	}
 	err = database.Transaction(func(tx *gorm.DB) error {
-		_, err := pgcanvas.NewScopedProjectCopyStore(tx, nil, nil, app.NewCanvasProjectAccess).Freeze(t.Context(), actor, binding, map[uuid.UUID]uuid.UUID{})
+		_, err := pgcanvas.NewScopedProjectCopyStore(tx, nil, nil, mediawire.NewCanvasProjectAccess).Freeze(t.Context(), actor, binding, map[uuid.UUID]uuid.UUID{})
 		return err
 	})
 	if !errors.Is(err, domain.ErrUnsupportedProjectCopy) {

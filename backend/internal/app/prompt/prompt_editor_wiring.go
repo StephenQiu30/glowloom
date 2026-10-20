@@ -1,3 +1,4 @@
+// Package prompt wires prompt editor access dependencies.
 package prompt
 
 import (

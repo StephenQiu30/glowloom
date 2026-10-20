@@ -39,10 +39,12 @@ func (r copiedCanvasMedia) Reference(ctx context.Context, actor identityapp.Prin
 	return r.store.ReferenceCopiedAsset(ctx, actor, r.binding, assetID)
 }
 
+// ProvideProjectCopyStore assembles request-authorized project copy storage.
 func ProvideProjectCopyStore(database *gorm.DB) *pgworkspace.ProjectCopyStore {
 	return ProvideProjectCopyStoreWithAccess(database, mediawire.NewMediaScopeAccess)
 }
 
+// ProvideProjectCopyStoreWithAccess assembles project copy storage with explicit scope access.
 func ProvideProjectCopyStoreWithAccess(database *gorm.DB, scopes pgmedia.ScopeAccessFactory) *pgworkspace.ProjectCopyStore {
 	return pgworkspace.NewScopedProjectCopyStoreWithBible(database, scopewire.ProvideRequestScopeAccess, provideCopyWorkerScopeAccess, workspacewire.ProvideProjectWorkGuard,
 		func(tx *gorm.DB) workspaceapp.ProjectCopyOwners {
@@ -66,6 +68,7 @@ func ProvideProjectCopyStoreWithAccess(database *gorm.DB, scopes pgmedia.ScopeAc
 		})
 }
 
+// ProvideProjectCopyWorker assembles the project copy worker and its store.
 func ProvideProjectCopyWorker(database *gorm.DB, storage *objectstorage.Client) (*workspaceapp.ProjectCopyWorker, *pgworkspace.ProjectCopyStore) {
 	store := ProvideProjectCopyStoreWithAccess(database, mediawire.NewMediaWorkerScopeAccess)
 	transfer := func(job workspacedomain.ProjectCopyJob, worker uuid.UUID, cleanup bool) *mediaapp.ProjectCopyTransfer {

@@ -29,46 +29,57 @@ func init() {
 // The constructors below stay on the process package so existing callers keep one composition entry.
 // Their implementations live in the service packages.
 
+// NewMediaScopeAccess provides request scope access for media callers.
 func NewMediaScopeAccess(tx *gorm.DB) mediaapp.ScopeAccess {
 	return mediawire.NewMediaScopeAccess(tx)
 }
 
+// NewMediaWorkerScopeAccess provides worker scope access for media callers.
 func NewMediaWorkerScopeAccess(tx *gorm.DB) mediaapp.ScopeAccess {
 	return mediawire.NewMediaWorkerScopeAccess(tx)
 }
 
+// NewCanvasProjectAccess provides project authority for canvas callers.
 func NewCanvasProjectAccess(tx *gorm.DB) canvasapp.ProjectAccess {
 	return mediawire.NewCanvasProjectAccess(tx)
 }
 
+// NewCanvasProjectAccessWithScope provides canvas project authority using explicit scope access.
 func NewCanvasProjectAccessWithScope(tx *gorm.DB, access mediaapp.ScopeAccess) canvasapp.ProjectAccess {
 	return mediawire.NewCanvasProjectAccessWithScope(tx, access)
 }
 
+// NewWorkerCanvasProjectAccess provides worker project authority for canvas callers.
 func NewWorkerCanvasProjectAccess(tx *gorm.DB) canvasapp.ProjectAccess {
 	return mediawire.NewWorkerCanvasProjectAccess(tx)
 }
 
+// NewMediaLibraryProjectAccess provides project authority for media library callers.
 func NewMediaLibraryProjectAccess(tx *gorm.DB) mediaapp.LibraryProjectAccess {
 	return mediawire.NewMediaLibraryProjectAccess(tx)
 }
 
+// NewMediaLibraryWorkerProjectAccess provides worker project authority for media library callers.
 func NewMediaLibraryWorkerProjectAccess(tx *gorm.DB) mediaapp.LibraryProjectAccess {
 	return mediawire.NewMediaLibraryWorkerProjectAccess(tx)
 }
 
+// NewMediaPurgeWorker assembles the media purge worker and its store.
 func NewMediaPurgeWorker(database *gorm.DB, storage *objectstorage.Client) (*mediaapp.PurgeWorker, *pgmedia.PurgeStore) {
 	return mediawire.NewMediaPurgeWorker(database, storage)
 }
 
+// NewMediaWorkerReferenceOwners assembles reference owners for media workers.
 func NewMediaWorkerReferenceOwners(tx *gorm.DB) mediaapp.LibraryReferences {
 	return mediawire.NewMediaWorkerReferenceOwners(tx)
 }
 
+// NewOperationFinalizer assembles operation finalization dependencies.
 func NewOperationFinalizer(db *gorm.DB, operation *pgoperation.Store, billing *pgbilling.Store) operationflow.OperationFinalizer {
 	return operationwire.NewOperationFinalizer(db, operation, billing)
 }
 
+// NewCatalogStore assembles the operation-facing catalog store.
 func NewCatalogStore(db *gorm.DB) *pgcatalog.Store {
 	return operationwire.NewCatalogStore(db)
 }

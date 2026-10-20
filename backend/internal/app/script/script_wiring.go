@@ -1,3 +1,4 @@
+// Package script wires script sources, imports, and project authority.
 package script
 
 import (
@@ -24,6 +25,7 @@ func BindCharacterReferences(fn func(*gorm.DB) scriptapp.CharacterReferences) {
 	characterReferences = fn
 }
 
+// ProvideScriptSourceStore assembles script sources and their reference dependencies.
 func ProvideScriptSourceStore(database *gorm.DB) *pgscript.SourceStore {
 	if characterReferences == nil {
 		panic("script character references are not bound")
@@ -31,10 +33,12 @@ func ProvideScriptSourceStore(database *gorm.DB) *pgscript.SourceStore {
 	return pgscript.NewSourceStoreWithCharacters(database, ProvideScriptProjectAccess, characterReferences)
 }
 
+// ProvideScriptProjectAccess adapts project authority for scripts.
 func ProvideScriptProjectAccess(tx *gorm.DB) scriptapp.ProjectAccess {
 	return scopewire.ProvideProjectContentAccess(tx)
 }
 
+// ProvideScriptImportStore assembles script import storage.
 func ProvideScriptImportStore(database *gorm.DB) *pgscript.ImportStore {
 	return pgscript.NewImportStoreWithWorkerAccess(database, ProvideScriptProjectAccess, provideScriptWorkerAccess, func(tx *gorm.DB) scriptapp.SourceAssetReader {
 		// Admission freezes media facts in this transaction, without object I/O.
@@ -52,6 +56,7 @@ type Services struct {
 	Imports  *scriptapp.ImportService
 }
 
+// ProvideServices assembles script services used by the API.
 func ProvideServices(database *gorm.DB, storage *objectstorage.Client) Services {
 	store := ProvideScriptSourceStore(database)
 	sources := scriptapp.NewSourceService(store, scriptobjects.NewStorage(storage), time.Now)
@@ -59,6 +64,7 @@ func ProvideServices(database *gorm.DB, storage *objectstorage.Client) Services 
 	return Services{Sources: sources, Recovery: scriptapp.NewSourceRecovery(store, sources, time.Now), Episodes: scriptapp.NewEpisodeService(store, sources, time.Now), History: scriptapp.NewHistoryService(store, sources), Adopt: scriptapp.NewAdoptService(store, time.Now), Imports: scriptapp.NewImportService(ProvideScriptImportStore(database), time.Now)}
 }
 
+// ProvideScriptImportWorker assembles the script import worker and its store.
 func ProvideScriptImportWorker(database *gorm.DB, storage *objectstorage.Client) (*scriptapp.ImportWorker, *pgscript.ImportStore) {
 	store := ProvideScriptImportStore(database)
 	objects := scriptobjects.NewStorage(storage)

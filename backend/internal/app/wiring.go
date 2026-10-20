@@ -101,7 +101,7 @@ func provideAPIServer(ctx context.Context, cfg config.Config, logger *zap.Logger
 	if err != nil {
 		return nil, nil, err
 	}
-	router, err := NewBusinessRouter(logger, ready, tracerProvider, cfg, dbConn.DB, storage, sessions)
+	router, err := NewBusinessRouter(logger, ready, tracerProvider, cfg, dbConn.DB, storage, sessions, ctx)
 	if err != nil {
 		return nil, nil, err
 	}

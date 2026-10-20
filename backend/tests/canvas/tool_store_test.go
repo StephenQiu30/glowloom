@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
@@ -17,7 +17,7 @@ import (
 func TestToolConfigurationsSurviveDatabaseReloadAndIdempotentReplay(t *testing.T) {
 	database := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
-	service := application.NewService(pgcanvas.NewScopedStore(database, nil, app.NewCanvasProjectAccess))
+	service := application.NewService(pgcanvas.NewScopedStore(database, nil, mediawire.NewCanvasProjectAccess))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "完整工具输入恢复"})
 	if err != nil {
 		t.Fatal(err)

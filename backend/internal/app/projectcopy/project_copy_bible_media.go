@@ -1,3 +1,4 @@
+// Package projectcopy wires project copy reference and transfer dependencies.
 package projectcopy
 
 import (

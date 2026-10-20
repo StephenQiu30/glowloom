@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
@@ -210,8 +210,8 @@ func TestDirectorOutputsHoldMediaEligibilityUntilCommit(t *testing.T) {
 			var release sync.Once
 			defer func() { release.Do(func() { close(resume) }); cancel(); workers.Wait() }()
 			service := application.NewService(pgcanvas.NewScopedStore(database, func(tx *gorm.DB) application.MediaReader {
-				return pausedMediaReference{reader: mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, app.NewMediaScopeAccess), nil), read: read, resume: resume}
-			}, app.NewCanvasProjectAccess))
+				return pausedMediaReference{reader: mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess), nil), read: read, resume: resume}
+			}, mediawire.NewCanvasProjectAccess))
 			doc, err := service.Create(ctx, actor, project, uuid.NewString(), application.CreateInput{Name: "截图授权事务"})
 			if err != nil {
 				t.Fatal(err)
@@ -282,7 +282,7 @@ func TestDirectorOutputsHoldMediaEligibilityUntilCommit(t *testing.T) {
 			if err := <-mutated; err != nil {
 				t.Fatalf("media updater did not resume: %v", err)
 			}
-			if _, err := mediaapp.NewAssetQuery(pgmedia.NewScopedStore(database, app.NewMediaScopeAccess), nil).Reference(ctx, actor, project, asset); !errors.Is(err, mediaapp.ErrNotFound) {
+			if _, err := mediaapp.NewAssetQuery(pgmedia.NewScopedStore(database, mediawire.NewMediaScopeAccess), nil).Reference(ctx, actor, project, asset); !errors.Is(err, mediaapp.ErrNotFound) {
 				t.Fatalf("later media state bypassed current authorization: %v", err)
 			}
 		})

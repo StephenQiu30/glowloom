@@ -1,3 +1,4 @@
+// Package operation wires operation authority and persistence dependencies.
 package operation
 
 import (
@@ -45,17 +46,22 @@ func ContentProjectAccess(store interface {
 	return operationProjectAccess{store: store}
 }
 
+// ProvideOperationProjectAccess adapts request project authority for operations.
 func ProvideOperationProjectAccess(tx *gorm.DB) operation.ProjectAccess {
 	return operationProjectAccess{store: scopewire.ProvideProjectContentAccess(tx)}
 }
+
+// ProvideOperationWorkerAccess adapts worker project authority for operations.
 func ProvideOperationWorkerAccess(tx *gorm.DB) operation.ProjectAccess {
 	return operationProjectAccess{store: scopewire.ProvideWorkerProjectContentAccess(tx), worker: true}
 }
 
+// ProvideOperationStore assembles operation persistence and cross-module dependencies.
 func ProvideOperationStore(db *gorm.DB) *pgoperation.Store {
 	return pgoperation.NewScopedStore(db, ProvideOperationProjectAccess, ProvideOperationWorkerAccess, ProvideOperationPlatformAccess)
 }
 
+// ProvidePromptPreferenceStore assembles prompt preferences with operation authority.
 func ProvidePromptPreferenceStore(db *gorm.DB) *pgprompt.Store {
 	return pgprompt.NewScopedStore(db, func(tx *gorm.DB) prompt.ActorAccess { return pgidentity.NewStore(tx) })
 }
@@ -71,6 +77,7 @@ func NewCatalogStore(db *gorm.DB) *pgcatalog.Store {
 	})
 }
 
+// ProvideOperationPlatformAccess adapts platform authority for operations.
 func ProvideOperationPlatformAccess(tx *gorm.DB) operation.PlatformAccess {
 	return pgidentity.NewStore(tx)
 }

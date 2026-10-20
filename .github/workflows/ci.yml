@@ -707,4 +707,4 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: docker build --file backend/Dockerfile --tag glowloom/backend:ci backend
-      - run: docker build --file frontend/Dockerfile --tag glowloom/frontend:ci frontend
+      - run: docker build --file frontend/Dockerfile --build-arg LV_BACKEND_ORIGIN=http://backend-api:8080 --tag glowloom/frontend:ci frontend

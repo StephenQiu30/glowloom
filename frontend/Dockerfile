@@ -15,9 +15,11 @@ EXPOSE 3000
 CMD ["pnpm", "exec", "next", "dev", "--hostname", "0.0.0.0", "--port", "3000"]
 
 FROM base AS build
+# Next persists external Upgrade rewrites in its build manifest.
+ARG LV_BACKEND_ORIGIN
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN pnpm exec next build
+RUN test -n "$LV_BACKEND_ORIGIN" && pnpm exec next build
 
 FROM node:24.21.0-bookworm-slim
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000

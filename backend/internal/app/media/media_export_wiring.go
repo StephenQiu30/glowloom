@@ -17,6 +17,7 @@ func ProvideMediaExportStore(database *gorm.DB) *pgtool.Store {
 	return ProvideMediaExportStoreWithAccess(database, NewMediaScopeAccess)
 }
 
+// ProvideMediaExportStoreWithAccess assembles the export store with explicit scope access.
 func ProvideMediaExportStoreWithAccess(database *gorm.DB, scopes pgmedia.ScopeAccessFactory) *pgtool.Store {
 	return pgtool.NewStore(database,
 		func(tx *gorm.DB) toolapp.TimelineReader {

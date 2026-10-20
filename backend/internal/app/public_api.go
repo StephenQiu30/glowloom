@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	biblewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/bible"
+	canvaswire "github.com/StephenQiu30/glowloom-server/backend/internal/app/canvas"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
 	copywire "github.com/StephenQiu30/glowloom-server/backend/internal/app/projectcopy"
@@ -28,6 +30,7 @@ import (
 	bibleapp "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
 	canvashttp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/http"
 	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
+	canvaslive "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/websocket"
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialschema"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialseal"
@@ -65,7 +68,7 @@ import (
 // @version 0.1
 // @description Glowloom local workspace API for projects, canvases, media, scripts, bible, model catalog and operations.
 // @BasePath /
-func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProvider, cfg config.Config, database *gorm.DB, storage *objectstorage.Client, sessions identityruntime.SessionDependencies) (*gin.Engine, error) {
+func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProvider, cfg config.Config, database *gorm.DB, storage *objectstorage.Client, sessions identityruntime.SessionDependencies, lifetime ...context.Context) (*gin.Engine, error) {
 	if database == nil {
 		return nil, fmt.Errorf("public API requires database")
 	}
@@ -126,7 +129,16 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader {
 		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess), nil)
 	}
-	canvashttp.NewHandler(canvasapp.NewService(pgcanvas.NewScopedStore(database, mediaFactory, mediawire.NewCanvasProjectAccess))).Register(protected)
+	canvasService := canvasapp.NewService(pgcanvas.NewScopedStore(database, mediaFactory, mediawire.NewCanvasProjectAccess))
+	live := canvaslive.NewHandler(canvasService, canvaswire.SocketAuthority(database, auth), cfg.PublicOrigin)
+	socketLifetime := context.Background()
+	if len(lifetime) > 0 {
+		socketLifetime = lifetime[0]
+	}
+	socketRoutes := api.Group("")
+	socketRoutes.Use(auth.RequireSession())
+	live.Register(socketLifetime, socketRoutes)
+	canvashttp.NewHandler(canvasService).WithNotification(live.Notify).Register(protected)
 	mediahttp.NewHandler(mediaapp.NewAssetQuery(pgmedia.NewScopedStore(database, mediawire.NewMediaScopeAccess), storage)).Register(protected)
 	mediahttp.NewDocumentHandler(mediaapp.NewDocumentSources(pgmedia.NewScopedDocumentSourceStore(database, mediawire.NewMediaScopeAccess), storage)).Register(protected)
 	library := pgmedia.NewScopedLibraryStore(database, mediawire.NewMediaLibraryProjectAccess, time.Now, mediawire.NewMediaScopeAccess)
@@ -197,9 +209,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	cataloghttp.NewHandler(catalogapp.NewListModelsQuery(catalogStore)).Register(protected)
 	workspacehttp.NewModelDefaultsHandler(workspaceapp.NewModelDefaultsService(workspaceStore, time.Now)).Register(protected)
 	prompthttp.NewHandler(promptapp.NewPreferences(operationwire.ProvidePromptPreferenceStore(database), time.Now)).Register(identityProtected)
-	prompthttp.NewDraftHandler(pgprompt.NewDraftStore(database, func(tx *gorm.DB) promptapp.DraftAccess {
-		return promptwire.DraftAccess(tx)
-	})).Register(protected)
+	prompthttp.NewDraftHandler(pgprompt.NewDraftStore(database, promptwire.DraftAccess)).Register(protected)
 	cataloghttp.NewAdminHandler(cataloghttp.AdminDependencies{
 		Providers:         catalogapp.NewListProvidersQuery(catalogStore),
 		Provider:          catalogapp.NewProviderDetailQuery(catalogStore, credentialSchema),
@@ -217,9 +227,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	operations := pgoperation.NewScopedStoreWithEditor(database, func(tx *gorm.DB) operationapp.QuotePromptCompiler {
 		return promptapp.NewCompiler(operationwire.ProvidePromptPreferenceStore(tx))
 	}, func(tx *gorm.DB) operationapp.EditorSnapshots {
-		return pgprompt.NewDraftStore(tx, func(ownerTx *gorm.DB) promptapp.DraftAccess {
-			return promptwire.DraftAccess(ownerTx)
-		})
+		return pgprompt.NewDraftStore(tx, promptwire.DraftAccess)
 	}, operationwire.ProvideOperationProjectAccess, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationPlatformAccess)
 	operationhttp.NewSubmissionHandler(operations).Register(protected)
 	operationhttp.NewProviderTrialHandler(operations).Register(protected)

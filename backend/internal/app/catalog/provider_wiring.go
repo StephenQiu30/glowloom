@@ -1,3 +1,4 @@
+// Package catalog wires provider worker activities.
 package catalog
 
 import (
@@ -22,6 +23,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
+// RegisterProviderActivities registers provider activities with the operation worker.
 func RegisterProviderActivities(w worker.Worker, database *gorm.DB, cfg config.Config) error {
 	file, err := os.Open(cfg.CredentialPrivateKeyFile)
 	if err != nil {

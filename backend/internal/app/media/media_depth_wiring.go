@@ -31,6 +31,7 @@ func ProvideMediaDepthStore(database *gorm.DB, enabled bool) *pgtool.DepthStore 
 	return ProvideMediaDepthStoreWithAccess(database, enabled, NewMediaScopeAccess)
 }
 
+// ProvideMediaDepthStoreWithAccess assembles the depth store with explicit scope access.
 func ProvideMediaDepthStoreWithAccess(database *gorm.DB, enabled bool, scopes pgmedia.ScopeAccessFactory) *pgtool.DepthStore {
 	var source pgtool.TranscriptionSourceFactory
 	if enabled {

@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
@@ -45,7 +45,7 @@ func TestDAGGetRetriesWholeSnapshotAfterConcurrentCommitAndBoundsRetries(t *test
 			calls := 0
 			revision := int64(2)
 			reader := pgcanvas.NewScopedStore(db, nil, func(tx *gorm.DB) application.ProjectAccess {
-				return saveBeforeReadAuthorization{ProjectAccess: app.NewCanvasProjectAccess(tx), save: func() error {
+				return saveBeforeReadAuthorization{ProjectAccess: mediawire.NewCanvasProjectAccess(tx), save: func() error {
 					calls++
 					if continuous || calls == 1 {
 						_, err := writer.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: revision, Commands: []domain.Command{{Type: "MoveNodes", Moves: []domain.Move{{ID: node.ID, X: 35}}}}})

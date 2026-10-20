@@ -88,6 +88,7 @@ func provideMediaReferenceOwnersWithAccess(tx *gorm.DB, access *pgworkspace.Proj
 	}}
 }
 
+// ProvideMediaPurgeStore assembles the purge store and reference checks.
 func ProvideMediaPurgeStore(database *gorm.DB) *pgmedia.PurgeStore {
 	return pgmedia.NewScopedPurgeStore(database, NewMediaLibraryProjectAccess, provideMediaLibraryWorkGuards, provideMediaReferenceOwners, time.Now, NewMediaScopeAccess)
 }
@@ -103,6 +104,7 @@ func NewMediaWorkerReferenceOwners(tx *gorm.DB) mediaapp.LibraryReferences {
 	return provideMediaReferenceOwnersWithAccess(tx, scopewire.ProvideWorkerProjectContentAccess(tx), NewMediaLibraryWorkerProjectAccess, NewMediaWorkerScopeAccess)
 }
 
+// ProvideMediaPurgeWorkerStore assembles worker-authorized purge storage.
 func ProvideMediaPurgeWorkerStore(database *gorm.DB) *pgmedia.PurgeStore {
 	return pgmedia.NewScopedPurgeStore(database, NewMediaLibraryWorkerProjectAccess, provideMediaLibraryWorkGuards, NewMediaWorkerReferenceOwners, time.Now, NewMediaWorkerScopeAccess)
 }

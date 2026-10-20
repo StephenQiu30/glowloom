@@ -99,6 +99,7 @@ export function CanvasPreview() {
           <div className="min-h-0 flex-1">
             <CanvasEditor
               key={epoch}
+              developmentPreview
               project={data.project}
               initial={structuredClone(data.state.canvas)}
             />

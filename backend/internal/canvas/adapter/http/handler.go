@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
@@ -16,10 +17,16 @@ import (
 )
 
 // Handler adapts the authorized canvas application service.
-type Handler struct{ service *application.Service }
+type Handler struct {
+	service *application.Service
+	notify  func(uuid.UUID)
+}
 
 // NewHandler injects the canvas service.
 func NewHandler(service *application.Service) *Handler { return &Handler{service: service} }
+
+// WithNotification installs a best-effort post-commit live wakeup.
+func (h *Handler) WithNotification(notify func(uuid.UUID)) *Handler { h.notify = notify; return h }
 
 // ListResponse is the document-summary collection contract.
 type ListResponse struct {
@@ -150,6 +157,9 @@ func (h *Handler) Commands(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
+	if h.notify != nil {
+		h.notify(id)
+	}
 	c.JSON(200, result)
 }
 func writeError(c *gin.Context, err error) {
@@ -215,6 +225,9 @@ func (h *Handler) Rename(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
+	if h.notify != nil {
+		h.notify(id)
+	}
 	c.JSON(200, result)
 }
 
@@ -247,6 +260,9 @@ func (h *Handler) Delete(c *gin.Context) {
 	if err != nil {
 		writeError(c, err)
 		return
+	}
+	if h.notify != nil {
+		h.notify(id)
 	}
 	c.JSON(200, result)
 }

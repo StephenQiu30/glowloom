@@ -1,3 +1,4 @@
+// Package scope wires creation scope and project authority.
 package scope
 
 import (
@@ -24,6 +25,7 @@ func (a scopeActorAccess) CheckActive(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+// ProvideScopeAccess assembles creation scope access.
 func ProvideScopeAccess(database *gorm.DB) *workspaceapp.ScopeAccess {
 	return workspaceapp.NewScopeAccess(pgworkspace.NewScopeStore(database, func(tx *gorm.DB) workspaceapp.ActorAccess { return scopeActorAccess{store: pgidentity.NewStore(tx)} }))
 }
@@ -35,10 +37,12 @@ func ProvideRequestScopeAccess(tx *gorm.DB) workspaceapp.RequestScopeResolver {
 	}), time.Now)
 }
 
+// ProvideProjectContentAccess assembles request-authorized project content access.
 func ProvideProjectContentAccess(tx *gorm.DB) *pgworkspace.ProjectContentAccessStore {
 	return pgworkspace.NewScopedProjectContentAccessStore(tx, ProvideRequestScopeAccess(tx))
 }
 
+// ProvideWorkerProjectContentAccess assembles worker-authorized project content access.
 func ProvideWorkerProjectContentAccess(tx *gorm.DB) *pgworkspace.ProjectContentAccessStore {
 	return pgworkspace.NewWorkerProjectContentAccessStore(tx, ProvideScopeAccess(tx))
 }
