@@ -551,10 +551,25 @@ async function proxy(
         if (incoming.searchParams.has(key))
           upstream.searchParams.set(key, incoming.searchParams.get(key)!);
     if (resource.startsWith("media/library") && request.method === "GET") {
+      const scope = incoming.searchParams.get("scope") ?? "personal";
+      const projectID = incoming.searchParams.get("project_id");
+      if (
+        incoming.searchParams.getAll("scope").length > 1 ||
+        incoming.searchParams.getAll("project_id").length > 1 ||
+        !["personal", "project"].includes(scope) ||
+        (scope === "project"
+          ? !projectID || !new RegExp(`^${identityUUID}$`, "i").test(projectID)
+          : projectID !== null)
+      )
+        return Response.json(
+          { code: "invalid_request" },
+          { status: 422, headers: noStore },
+        );
       const allowed =
         resource === "media/library"
           ? [
               "scope",
+              "project_id",
               "page",
               "page_size",
               "kind",
@@ -567,12 +582,12 @@ async function proxy(
               "search",
               "order",
             ]
-          : ["scope"];
+          : ["scope", "project_id"];
       for (const key of allowed)
         if (incoming.searchParams.has(key))
           upstream.searchParams.set(key, incoming.searchParams.get(key)!);
-      // This frontend currently exposes personal assets only. Project reads remain separately scoped.
-      upstream.searchParams.set("scope", "personal");
+      // The backend checks membership and asset ownership for the explicit library scope.
+      upstream.searchParams.set("scope", scope);
     }
     const headers = new Headers();
     for (const key of [

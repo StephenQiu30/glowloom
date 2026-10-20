@@ -223,7 +223,7 @@ it("个人素材查询不透传外部地址或其他身份，私有下载保留�
   vi.stubGlobal("fetch", fetcher);
   const response = await GET(
     new Request(
-      "http://localhost/api/media/library?scope=project&project_id=foreign&actor_id=other&search=flower",
+      "http://localhost/api/media/library?scope=personal&actor_id=other&search=flower",
     ),
     context("media/library"),
   );
@@ -235,6 +235,51 @@ it("个人素材查询不透传外部地址或其他身份，私有下载保留�
   expect(url.searchParams.get("search")).toBe("flower");
   expect(response.headers.get("Content-Disposition")).toContain("attachment");
   expect(response.headers.get("Cache-Control")).toBe("no-store");
+});
+it("项目素材列表、预览和下载保留显式项目作用域，由后端核验权限", async () => {
+  const pid = "00000000-0000-4000-8000-000000000001";
+  const item = "00000000-0000-4000-8000-000000000002";
+  const fetcher = vi
+    .fn()
+    .mockImplementation(async () => new Response("denied", { status: 403 }));
+  vi.stubGlobal("fetch", fetcher);
+  for (const path of [
+    "media/library",
+    `media/library/items/${item}/preview`,
+    `media/library/items/${item}/download`,
+  ]) {
+    const result = await GET(
+      new Request(
+        `http://localhost/api/${path}?scope=project&project_id=${pid}&actor_id=foreign&host=https://other.invalid`,
+        { headers: { "X-Creation-Scope": "current-scope" } },
+      ),
+      context(path),
+    );
+    expect(result.status).toBe(403);
+    const [url, init] = fetcher.mock.calls.at(-1)!;
+    expect(url.searchParams.get("scope")).toBe("project");
+    expect(url.searchParams.get("project_id")).toBe(pid);
+    expect(url.searchParams.has("actor_id")).toBe(false);
+    expect(url.searchParams.has("host")).toBe(false);
+    expect(init.headers.get("X-Creation-Scope")).toBe("current-scope");
+  }
+});
+it.each([
+  "scope=project",
+  "scope=project&project_id=foreign",
+  "scope=personal&project_id=00000000-0000-4000-8000-000000000001",
+  "scope=team",
+  "scope=personal&scope=project",
+  "scope=project&project_id=00000000-0000-4000-8000-000000000001&project_id=00000000-0000-4000-8000-000000000002",
+])("拒绝含糊或错误的素材作用域，不静默降为个人库：%s", async (query) => {
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  const result = await GET(
+    new Request(`http://localhost/api/media/library?${query}`),
+    context("media/library"),
+  );
+  expect(result.status).toBe(422);
+  expect(fetcher).not.toHaveBeenCalled();
 });
 it("素材上传流式透传multipart正文和原幂等键，不受JSON 1MB上限影响", async () => {
   const fetcher = vi.fn().mockImplementation(async (_url, init) => {
