@@ -12,6 +12,8 @@ type PreviewProps = {
   id: string;
   kind?: string;
   large?: boolean;
+  fit?: "contain" | "cover";
+  interactive?: boolean;
 };
 export function ProjectMediaPreview(props: PreviewProps) {
   return (
@@ -26,12 +28,9 @@ function MediaPreview({
   id,
   kind = "image",
   large = false,
-}: {
-  projectID: string;
-  id: string;
-  kind?: string;
-  large?: boolean;
-}) {
+  fit = large ? "contain" : "cover",
+  interactive = large,
+}: PreviewProps) {
   const [url, setURL] = useState(""),
     [failed, setFailed] = useState(false),
     [retry, setRetry] = useState(0);
@@ -87,9 +86,15 @@ function MediaPreview({
     return (
       <video
         src={url}
-        controls={large}
+        aria-label="视频素材"
+        controls={interactive}
+        playsInline
         preload="metadata"
         className="size-full object-contain"
+        onPointerDown={(event) => {
+          if (interactive) event.stopPropagation();
+        }}
+        onKeyDown={(event) => event.stopPropagation()}
         onError={() => setFailed(true)}
       />
     );
@@ -97,8 +102,11 @@ function MediaPreview({
     return (
       <audio
         src={url}
+        aria-label="音频素材"
         controls
         preload="metadata"
+        onPointerDown={(event) => event.stopPropagation()}
+        onKeyDown={(event) => event.stopPropagation()}
         onError={() => setFailed(true)}
       />
     );
@@ -109,7 +117,7 @@ function MediaPreview({
       fill
       sizes={large ? "80vw" : "280px"}
       unoptimized
-      className={large ? "object-contain" : "object-cover"}
+      className={fit === "contain" ? "object-contain" : "object-cover"}
       onError={() => setFailed(true)}
     />
   );

@@ -12,6 +12,7 @@ import {
   VideoIcon,
   Type,
   Group,
+  Grip,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +24,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import dynamic from "next/dynamic";
+const DocumentEditor = dynamic(() =>
+  import("@/components/generation/document-editor").then(
+    (m) => m.DocumentEditor,
+  ),
+);
 import { ProjectMediaPreview } from "@/components/media/project-media";
 import { isDraft, isEditableNode, type Node } from "../document";
 import { ConnectionPort, type ConnectionDrop } from "./connection-port";
@@ -36,6 +43,7 @@ export function CanvasNode({
   onResizePreview,
   onSelect,
   onEditTitle,
+  onOpen,
   onMove,
   onDragStart,
   onDragMove,
@@ -47,7 +55,15 @@ export function CanvasNode({
   onConnect,
   addingAdjacent = false,
   readOnly = false,
+  editingText = false,
+  onEditText,
+  onTextChange,
+  onFinishText,
 }: {
+  editingText?: boolean;
+  onEditText?: () => void;
+  onTextChange?: (text: string) => void;
+  onFinishText?: () => void;
   node: Node;
   projectID?: string;
   selected: boolean;
@@ -61,9 +77,10 @@ export function CanvasNode({
   onResizePreview: () => void;
   onSelect: (additive?: boolean) => void;
   onEditTitle: () => void;
+  onOpen?: () => void;
   onMove: (x: number, y: number) => void;
-  onDragStart: (event: PointerEvent<HTMLButtonElement>) => void;
-  onDragMove: (event: PointerEvent<HTMLButtonElement>) => void;
+  onDragStart: (event: PointerEvent<HTMLElement>) => void;
+  onDragMove: (event: PointerEvent<HTMLElement>) => void;
   onDragEnd: (cancel?: boolean) => void;
   onDuplicate?: () => void;
   onRemove?: () => void;
@@ -172,7 +189,7 @@ export function CanvasNode({
     ? VideoIcon
     : node.node_type === "audio"
       ? AudioLines
-      : node.node_type === "model"
+      : ["model", "director"].includes(node.node_type)
         ? Box
         : node.node_type === "text"
           ? Type
@@ -184,6 +201,7 @@ export function CanvasNode({
       data-node-id={node.id}
       className="canvas-media-node"
       data-selected={selected}
+      data-editing={editingText || undefined}
       data-node-kind={node.node_type}
       style={
         {
@@ -228,7 +246,7 @@ export function CanvasNode({
           }
         }}
       >
-        <Icon className="size-3 shrink-0" />
+        <Icon className="size-3.5 shrink-0" />
         <span className="truncate">{node.title}</span>
       </Button>
       {editable &&
@@ -250,8 +268,14 @@ export function CanvasNode({
               <DropdownMenuGroup>
                 <DropdownMenuItem onSelect={onEditTitle}>
                   <Pencil data-icon="inline-start" />
-                  编辑节点参数
+                  重命名节点
                 </DropdownMenuItem>
+                {onOpen && (
+                  <DropdownMenuItem onSelect={onOpen}>
+                    <Box data-icon="inline-start" />
+                    打开导演台
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onSelect={onDuplicate}>
                   <Copy data-icon="inline-start" />
                   复制节点
@@ -298,51 +322,73 @@ export function CanvasNode({
             onConnect={onConnect}
           />
         ))}
-      <Button
-        variant="secondary"
-        type="button"
-        className="canvas-node-shell h-auto p-0"
+      <div
+        className="canvas-node-shell"
+        role={editingText ? undefined : "button"}
+        tabIndex={editingText ? undefined : 0}
+        onDoubleClick={
+          node.node_type === "text" && editable ? onEditText : onOpen
+        }
         onClick={(event) =>
           onSelect(event.shiftKey || event.metaKey || event.ctrlKey)
         }
-        onPointerDown={onDragStart}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onSelect();
+            if (node.node_type === "text" && editable) onEditText?.();
+          }
+        }}
+        onPointerDown={(event) => {
+          if (!editingText) onDragStart(event);
+        }}
         onPointerMove={onDragMove}
         onPointerUp={() => onDragEnd()}
         onPointerCancel={() => onDragEnd(true)}
         onLostPointerCapture={() => onDragEnd(true)}
-        aria-label={`选择 ${node.title}`}
+        aria-label={editingText ? undefined : `选择 ${node.title}`}
         style={{ height: "var(--canvas-node-height)" }}
       >
-        {projectID &&
-        (node.node_type === "image" ||
-          (["video", "audio"].includes(node.node_type) && selected)) &&
-        node.ref_type === "media_asset" &&
-        node.ref_id ? (
+        {node.node_type === "text" ? (
+          <DocumentEditor
+            id={node.id}
+            text={node.config.text ?? ""}
+            editable={editingText && editable}
+            onChange={(text) => onTextChange?.(text)}
+            onFinish={onFinishText}
+          />
+        ) : projectID &&
+          ["image", "video", "audio"].includes(node.node_type) &&
+          node.ref_type === "media_asset" &&
+          node.ref_id ? (
           <ProjectMediaPreview
             projectID={projectID}
             id={node.ref_id}
             kind={node.node_type}
+            fit="contain"
+            interactive={selected}
           />
         ) : (
-          <Icon data-icon="inline-start" strokeWidth={1.5} />
+          <>
+            <Icon data-icon="inline-start" strokeWidth={1.5} />
+            <span>
+              {isDraft(node)
+                ? ""
+                : node.node_type === "group"
+                  ? node.config.collapsed
+                    ? "已收起分组"
+                    : "分组"
+                  : node.node_type === "director"
+                    ? "双击进入导演台"
+                    : node.title}
+            </span>
+          </>
         )}
-        <span>
-          {isDraft(node)
-            ? ""
-            : node.node_type === "text"
-              ? node.config.text || "编辑文本内容"
-              : node.node_type === "group"
-                ? node.config.collapsed
-                  ? "已收起分组"
-                  : "分组"
-                : node.ref_type === "media_asset"
-                  ? ""
-                  : node.title}
-        </span>
-      </Button>
+      </div>
       {editable &&
         selected &&
-        (["nw", "ne", "sw", "se"] as const).map((corner) => (
+        (["se"] as const).map((corner) => (
           <Button
             variant="ghost"
             size="icon-xs"
@@ -392,7 +438,9 @@ export function CanvasNode({
                 y: node.y + (corner.includes("n") ? height - h : 0),
               });
             }}
-          />
+          >
+            <Grip aria-hidden="true" />
+          </Button>
         ))}
     </article>
   );

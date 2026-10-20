@@ -65,7 +65,6 @@ export function createDirectorShot(
     shot_size: "full",
     camera_move: "static",
     prompt: "",
-    screenshots: [],
   };
 }
 export function createDirectorConfig(): API.DirectorConfig {

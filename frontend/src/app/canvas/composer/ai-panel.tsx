@@ -24,6 +24,8 @@ import {
 } from "@/components/generation/contracts";
 import type { GenerationSeed } from "@/components/generation/generation-dialog";
 import type { Project } from "@/components/projects/project";
+import { PromptTextEditor } from "@/components/generation/prompt-text-editor";
+import type { ComposerSession } from "@/components/generation/composer-session";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -38,7 +40,6 @@ import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
-  InputGroupTextarea,
 } from "@/components/ui/input-group";
 import {
   Item,
@@ -96,7 +97,7 @@ function CanvasAIContent({
   const [contextID, setContextID] = useState("");
   const [omittedReferenceID, setOmittedReferenceID] = useState("");
   const detailCache = useRef<Record<string, Task>>({});
-  const textarea = useRef<HTMLTextAreaElement>(null);
+  const promptSession = useRef<ComposerSession | null>(null);
   const mounted = useRef(true);
   const actionLock = useRef(false);
   const selected =
@@ -194,7 +195,7 @@ function CanvasAIContent({
       aiModes.some((entry) => entry.starter === prompt)
     )
       setPrompt(skill.starter);
-    textarea.current?.focus();
+    promptSession.current?.editor.commands.focus();
   }
 
   function submit() {
@@ -429,7 +430,7 @@ function CanvasAIContent({
                         size="sm"
                         onClick={() => {
                           setContextID(task.id!);
-                          textarea.current?.focus();
+                          promptSession.current?.editor.commands.focus();
                         }}
                       >
                         继续创作
@@ -536,29 +537,21 @@ function CanvasAIContent({
         >
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="canvas-ai-prompt" className="sr-only">
-                创作需求
-              </FieldLabel>
+              <FieldLabel className="sr-only">创作需求</FieldLabel>
               <InputGroup variant="composer">
-                <InputGroupTextarea
-                  ref={textarea}
-                  id="canvas-ai-prompt"
-                  value={prompt}
-                  maxLength={10000}
-                  onChange={(event) => setPrompt(event.target.value)}
+                <PromptTextEditor
+                  id={`canvas-ai/${project.id}`}
+                  label="创作需求"
+                  text={prompt}
+                  onChange={setPrompt}
+                  onReady={(session) => {
+                    promptSession.current = session;
+                  }}
+                  onRequestSubmit={submit}
                   placeholder={
                     aiModes.find((skill) => skill.id === mode)?.starter
                   }
-                  rows={3}
-                  onKeyDown={(event) => {
-                    if (
-                      (event.metaKey || event.ctrlKey) &&
-                      event.key === "Enter"
-                    ) {
-                      event.preventDefault();
-                      submit();
-                    }
-                  }}
+                  className="max-h-64 min-h-24 overflow-y-auto px-3 py-2 outline-none"
                 />
                 <InputGroupAddon align="block-end">
                   <span className="text-xs text-muted-foreground">

@@ -363,11 +363,22 @@ export function ProjectAssetDialog({
               asset &&
               ["image", "video", "audio", "model"].includes(asset.kind ?? "")
             ) {
+              if (reference && asset.kind !== initialKind) {
+                setConfirmError(
+                  "素材已上传到项目，但类型与当前参考不符，请选择对应类型的素材。",
+                );
+                return;
+              }
+              setConfirmError("");
+              setQuery("");
               setKind(asset.kind!);
               setSelected((items) =>
-                items.length < limit && !items.some((i) => i.id === asset.id)
-                  ? [...items, asset]
-                  : items,
+                reference
+                  ? [asset]
+                  : items.length < limit &&
+                      !items.some((i) => i.id === asset.id)
+                    ? [...items, asset]
+                    : items,
               );
             }
           }}
@@ -514,14 +525,16 @@ function MaterialList({
               : "正在读取素材…"
             : `${filtered.length} 个结果`}
         </span>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={loading || !filtered.length || selected.length >= limit}
-          onClick={() => onSelectPage(filtered)}
-        >
-          选择本页
-        </Button>
+        {limit > 1 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={loading || !filtered.length || selected.length >= limit}
+            onClick={() => onSelectPage(filtered)}
+          >
+            选择本页
+          </Button>
+        )}
       </div>
       <div className="canvas-material-content" data-canvas-wheel-scroll>
         {error && (
@@ -548,7 +561,7 @@ function MaterialList({
                 className="canvas-material-card h-auto p-0 whitespace-normal"
                 aria-label={`选择素材 ${a.file_name || "未命名素材"}`}
                 aria-pressed={chosen}
-                disabled={!chosen && selected.length >= limit}
+                disabled={limit > 1 && !chosen && selected.length >= limit}
                 onClick={() => onToggle(a)}
               >
                 <Card variant="media" className="w-full">

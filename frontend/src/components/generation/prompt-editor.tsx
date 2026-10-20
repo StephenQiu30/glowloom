@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { EditorContent, useEditor } from "@tiptap/react";
+import { useEffect } from "react";
+import { EditorContent } from "@tiptap/react";
+import { useEditorSurface } from "./editor-surface";
 import {
   ComposerSession,
   composerEditorOptions,
@@ -35,52 +36,20 @@ export function PromptEditor({
   label?: string;
 }) {
   const editorOptions = composerEditorOptions(options);
-  const attributes = editorOptions.editorProps?.attributes;
-  const initialAttributes = useRef(attributes);
-  const editor = useEditor(
+  const editor = useEditorSurface(
     {
       ...editorOptions,
-      editorProps: {
-        ...editorOptions.editorProps,
-        attributes: (state) => ({
-          ...(typeof attributes === "function"
-            ? attributes(state)
-            : attributes),
-          "aria-label": label,
-          ...(placeholder === undefined
-            ? {}
-            : { "data-placeholder": placeholder }),
-          ...(className === undefined ? {} : { class: className }),
-          ...(inputGroup ? { "data-slot": "input-group-control" } : {}),
-        }),
-      },
-      immediatelyRender: false,
-      shouldRerenderOnTransaction: false,
       onCreate: ({ editor }) => onReady(new ComposerSession(editor)),
       onDestroy: () => onDispose?.(),
     },
     [options.contextKey, options.replicaId],
+    {
+      "aria-label": label,
+      ...(placeholder === undefined ? {} : { "data-placeholder": placeholder }),
+      ...(className === undefined ? {} : { class: className }),
+      ...(inputGroup ? { "data-slot": "input-group-control" } : {}),
+    },
   );
-  useEffect(() => {
-    if (!editor) return;
-    const baseAttributes = initialAttributes.current;
-    editor.setOptions({
-      editorProps: {
-        ...editor.options.editorProps,
-        attributes: (state) => ({
-          ...(typeof baseAttributes === "function"
-            ? baseAttributes(state)
-            : baseAttributes),
-          "aria-label": label,
-          ...(placeholder === undefined
-            ? {}
-            : { "data-placeholder": placeholder }),
-          ...(className === undefined ? {} : { class: className }),
-          ...(inputGroup ? { "data-slot": "input-group-control" } : {}),
-        }),
-      },
-    });
-  }, [editor, placeholder, className, inputGroup, label]);
   useEffect(() => {
     if (!editor) return;
     const changed = () => onChange?.(new ComposerSession(editor).snapshot());

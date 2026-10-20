@@ -288,7 +288,7 @@ export function createMediaNode(
   const ratio =
     asset.width && asset.height && asset.width > 0 && asset.height > 0
       ? asset.height / asset.width
-      : 200 / 288;
+      : 9 / 16;
   return {
     id: crypto.randomUUID(),
     title: Array.from(asset.file_name?.trim() || "项目素材")
@@ -302,8 +302,8 @@ export function createMediaNode(
     x: 80 + (index % 3) * 340,
     y: 80 + Math.floor(index / 3) * 260,
     z_index: 0,
-    width: 288,
-    height: Math.max(40, Math.min(2000, Math.round(288 * ratio))),
+    width: 320,
+    height: Math.max(40, Math.min(2000, Math.round(320 * ratio))),
   };
 }
 export function duplicateNode(n: Node): Node {
@@ -627,6 +627,23 @@ export function removeCanvasNode(nodes: Node[], id: string): Node[] {
 
 // Older stored documents and idempotent receipts encode absent timeline references as null.
 function normalizeNode(node: Node): Node {
+  // Go omits an empty optional screenshot list in both live and idempotent receipts.
+  if (node.config.director) {
+    node = {
+      ...node,
+      config: {
+        ...node.config,
+        director: {
+          ...node.config.director,
+          shots: node.config.director.shots?.map((shot) => {
+            const clean = { ...shot };
+            if (clean.screenshots?.length === 0) delete clean.screenshots;
+            return clean;
+          }),
+        },
+      },
+    };
+  }
   if (!node.config.timeline) return node;
   return {
     ...node,

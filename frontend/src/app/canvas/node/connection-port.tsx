@@ -207,7 +207,7 @@ export function ConnectionPort({
                 ).map(({ kind, label, icon: Icon }) => (
                   <CommandItem
                     key={kind}
-                    className="min-h-11"
+                    className="min-h-11 data-selected:bg-accent"
                     onSelect={() => {
                       onAdd(kind, drop);
                       setOpen(false);

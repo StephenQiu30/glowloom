@@ -5,6 +5,7 @@ import {
 } from "@/components/generation/prompt-document";
 import type { CanvasReferenceSource } from "@/components/generation/reference-source";
 import { RequestError } from "@/lib/request";
+import { placeNode } from "../node/placement";
 import {
   createDraftNode,
   createMediaNode,
@@ -290,15 +291,7 @@ export function materializeReferences(
       );
       resource.x = owner.x - (resource.width ?? 320) - 96;
       resource.y = owner.y;
-      while (
-        next.some(
-          (n) =>
-            n.node_type !== "group" &&
-            Math.abs(n.x - resource!.x) < (resource!.width ?? 320) + 24 &&
-            Math.abs(n.y - resource!.y) < (resource!.height ?? 200) + 24,
-        )
-      )
-        resource.y += (resource.height ?? 200) + 48;
+      resource = placeNode(resource, next);
       next.push(resource);
     }
     if (

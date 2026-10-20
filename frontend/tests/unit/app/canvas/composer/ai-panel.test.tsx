@@ -1,14 +1,51 @@
 import {
   cleanup,
+  act,
   fireEvent,
   render,
   screen,
   waitFor,
 } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { CanvasAIPanel } from "@/app/canvas/composer/ai-panel";
 import type { Project } from "@/components/projects/project";
 import type { Node } from "@/app/canvas/document";
+
+import type { ComposerSession } from "@/components/generation/composer-session";
+let session: ComposerSession;
+vi.mock("@/components/generation/prompt-editor", async (original) => {
+  const { PromptEditor } =
+    await original<typeof import("@/components/generation/prompt-editor")>();
+  return {
+    PromptEditor: (props: React.ComponentProps<typeof PromptEditor>) => (
+      <PromptEditor
+        {...props}
+        onReady={(value) => {
+          session = value;
+          props.onReady(value);
+        }}
+      />
+    ),
+  };
+});
+async function enterPrompt(text: string) {
+  await screen.findByRole("textbox", { name: "创作需求" });
+  await waitFor(() => expect(session.editor.isDestroyed).toBe(false));
+  act(() =>
+    session.editor.commands.setContent({
+      type: "doc",
+      content: [{ type: "paragraph", content: [{ type: "text", text }] }],
+    }),
+  );
+}
 
 const api = vi.hoisted(() => ({
   list: vi.fn(),
@@ -51,6 +88,17 @@ const props = () => ({
   onInsertText: vi.fn(),
   onClose: vi.fn(),
 });
+// jsdom has no layout API for Range; TipTap focuses and scrolls selection asynchronously.
+beforeAll(() => {
+  Object.defineProperties(Range.prototype, {
+    getClientRects: { configurable: true, value: () => [] },
+    getBoundingClientRect: { configurable: true, value: () => new DOMRect() },
+  });
+});
+afterAll(() => {
+  Reflect.deleteProperty(Range.prototype, "getClientRects");
+  Reflect.deleteProperty(Range.prototype, "getBoundingClientRect");
+});
 beforeEach(() => {
   vi.clearAllMocks();
   api.list.mockResolvedValue({ items: [] });
@@ -64,9 +112,7 @@ it("五个真实创作模式通过现有报价入口提交，关闭有响应", a
   render(<CanvasAIPanel {...p} />);
   await screen.findByText("还没有生成任务");
   expect(screen.getByRole("radio", { name: "全流程广告片导演" })).toBeTruthy();
-  fireEvent.change(screen.getByRole("textbox", { name: "创作需求" }), {
-    target: { value: "写一段开场" },
-  });
+  await enterPrompt("写一段开场");
   fireEvent.click(screen.getByRole("button", { name: "选择模型并获取报价" }));
   expect(p.onGenerate).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -91,9 +137,7 @@ it("只展示任务真实文本，采用失败可重试且连续创作包含真�
   fireEvent.click(screen.getByRole("button", { name: "插入画布" }));
   await waitFor(() => expect(p.onInsertText).toHaveBeenCalledTimes(2));
   fireEvent.click(screen.getByRole("button", { name: "继续创作" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "创作需求" }), {
-    target: { value: "再短一点" },
-  });
+  await enterPrompt("再短一点");
   fireEvent.click(screen.getByRole("button", { name: "选择模型并获取报价" }));
   expect(p.onGenerate).toHaveBeenLastCalledWith(
     expect.objectContaining({
@@ -157,9 +201,7 @@ it("选中媒体明确阻止不受支持的文字请求，移除参考后可以�
   const p = props();
   render(<CanvasAIPanel {...p} nodes={[media]} selectedNode={media} />);
   await screen.findByText("还没有生成任务");
-  fireEvent.change(screen.getByRole("textbox", { name: "创作需求" }), {
-    target: { value: "镜头一是森林" },
-  });
+  await enterPrompt("镜头一是森林");
   fireEvent.click(screen.getByRole("button", { name: "选择模型并获取报价" }));
   await screen.findByText(
     "当前文字生成不支持读取媒体，请移除本次参考并提供镜头或画面文字描述。",
@@ -181,9 +223,7 @@ it("项目切换中止旧详情读取并清除已输入需求", async () => {
   const p = props();
   const view = render(<CanvasAIPanel {...p} />);
   await waitFor(() => expect(api.get).toHaveBeenCalledOnce());
-  fireEvent.change(screen.getByRole("textbox", { name: "创作需求" }), {
-    target: { value: "旧项目需求" },
-  });
+  await enterPrompt("旧项目需求");
   api.list.mockResolvedValue({ items: [] });
   view.rerender(
     <CanvasAIPanel
@@ -194,8 +234,23 @@ it("项目切换中止旧详情读取并清除已输入需求", async () => {
   finish(task);
   await screen.findByText("还没有生成任务");
   expect(screen.queryByText("供应商返回的真实剧本")).toBeNull();
-  expect(
-    (screen.getByRole("textbox", { name: "创作需求" }) as HTMLTextAreaElement)
-      .value,
-  ).toBe("");
+  expect(screen.getByRole("textbox", { name: "创作需求" }).textContent).toBe(
+    "",
+  );
+});
+
+it("选择模式后聚焦不会用旧正文覆盖模式提示，已有自定义正文不被替换", async () => {
+  render(<CanvasAIPanel {...props()} />);
+  await screen.findByRole("textbox", { name: "创作需求" });
+  fireEvent.click(screen.getByRole("radio", { name: "剧本开发" }));
+  await waitFor(() =>
+    expect(
+      screen.getByRole("textbox", { name: "创作需求" }).textContent,
+    ).not.toBe(""),
+  );
+  await enterPrompt("保留我的需求");
+  fireEvent.click(screen.getByRole("radio", { name: "剧情短片" }));
+  expect(screen.getByRole("textbox", { name: "创作需求" }).textContent).toBe(
+    "保留我的需求",
+  );
 });

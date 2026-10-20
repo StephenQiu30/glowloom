@@ -8,7 +8,11 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ProjectAssetDialog as CanvasMaterialDialog } from "@/components/media/project-asset-dialog";
-const api = vi.hoisted(() => ({ list: vi.fn(), preview: vi.fn() }));
+const api = vi.hoisted(() => ({
+  list: vi.fn(),
+  preview: vi.fn(),
+  upload: vi.fn(),
+}));
 vi.mock("@/api/media", () => ({
   listMediaAssets: api.list,
   getMediaPreview: api.preview,
@@ -17,7 +21,10 @@ vi.mock("@/components/media/project-media", () => ({
   ProjectMediaPreview: () => null,
 }));
 vi.mock("@/components/media/upload-dialog", () => ({
-  UploadDialog: () => null,
+  UploadDialog: (props: unknown) => {
+    api.upload(props);
+    return null;
+  },
 }));
 vi.mock("@/components/subjects/subject-list", () => ({
   SubjectList: () => null,
@@ -42,6 +49,36 @@ beforeEach(() => {
   );
 });
 afterEach(cleanup);
+it("单选参考上传同类素材时替换原选择，异类上传不改变参考类型", async () => {
+  api.list.mockResolvedValue({ items: [a, b] });
+  const add = vi.fn();
+  render(
+    <CanvasMaterialDialog
+      projectID={pid}
+      reference
+      initialKind="image"
+      onClose={vi.fn()}
+      onAdd={add}
+    />,
+  );
+  fireEvent.click(
+    await screen.findByRole("button", { name: "选择素材 海边香氛.png" }),
+  );
+  const replacement = screen.getByRole("button", { name: "选择素材 蓝蝶.png" });
+  expect(replacement.hasAttribute("disabled")).toBe(false);
+  fireEvent.click(replacement);
+  expect(replacement.getAttribute("aria-pressed")).toBe("true");
+  fireEvent.click(
+    screen.getByRole("button", { name: "选择素材 海边香氛.png" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "上传素材" }));
+  act(() => api.upload.mock.lastCall![0].onUploaded(b));
+  fireEvent.click(screen.getByRole("button", { name: "添加为参考" }));
+  await waitFor(() => expect(add).toHaveBeenCalledWith([b]));
+  fireEvent.click(screen.getByRole("button", { name: "上传素材" }));
+  act(() => api.upload.mock.lastCall![0].onUploaded({ ...b, kind: "video" }));
+  await waitFor(() => expect(api.list.mock.lastCall![0].kind).toBe("image"));
+});
 it("多选、搜索与分页保留已选资源身份，确认前不写入画布", async () => {
   api.list
     .mockResolvedValueOnce({ items: [a], next_cursor: "next" })

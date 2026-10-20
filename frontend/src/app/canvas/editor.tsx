@@ -65,13 +65,12 @@ import {
   defaultViewport,
   isAnnotation,
   type Canvas,
-  type Draft,
-  type DraftNode,
   type Node,
 } from "./document";
 
 import { RichGeneration } from "@/components/generation/rich-generation";
 import { CanvasNodeLayer } from "./node/layer";
+import { placeNode } from "./node/placement";
 import { createHistory } from "./history/history";
 import { descendants, moveSelection } from "./viewport/render-model";
 import { groupWrapRect } from "./group/geometry";
@@ -80,11 +79,10 @@ import { isCanvasShortcut } from "./chrome/shortcut";
 import { CanvasSelectionToolbar } from "./chrome/selection-toolbar";
 import { CanvasMediaActions } from "./image/actions";
 import type { ImageOperation } from "./image/operations";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { ViewportSurface } from "./viewport/surface";
 import { CanvasNode } from "./node/node";
-import { CanvasTextEditor } from "./node/text-editor";
 import type { ConnectionDrop } from "./node/connection-port";
 import { CanvasHeader } from "./chrome/header";
 import { CanvasContextMenu } from "./chrome/context-menu";
@@ -97,7 +95,6 @@ import { createDirectorConfig } from "./director/model";
 import { fitNodes, zoomAt } from "./viewport/frame";
 import { canvasWorkspaceRect } from "./viewport/workspace-rect";
 import { CanvasToolbar } from "./chrome/toolbar";
-import { CanvasComposer } from "./composer/composer";
 import { CanvasMiniMap } from "./viewport/minimap";
 import {
   CANVAS_NODE_DRAG_EVENT,
@@ -144,21 +141,24 @@ function nodePreviewText(node: Node): string {
     : [draft.prompt, draft.negative_prompt].filter(Boolean).join("\n");
 }
 const limit = (value: number) => Math.max(-1e6, Math.min(1e6, value));
-const CanvasMaterialDialog = dynamic(() =>
-  import("@/components/media/project-asset-dialog").then(
-    (module) => module.ProjectAssetDialog,
-  ),
+const CanvasMaterialDialog = dynamic(
+  () =>
+    import("@/components/media/project-asset-dialog").then(
+      (module) => module.ProjectAssetDialog,
+    ),
+  { loading: () => null },
 );
-
 const CanvasDirector = dynamic(
   () => import("./director/director").then((m) => m.CanvasDirector),
   { ssr: false },
 );
-const CanvasAIPanel = dynamic(() =>
-  import("./composer/ai-panel").then((m) => m.CanvasAIPanel),
+const CanvasAIPanel = dynamic(
+  () => import("./composer/ai-panel").then((m) => m.CanvasAIPanel),
+  { loading: () => null },
 );
-const CanvasImageDialog = dynamic(() =>
-  import("./image/dialog").then((module) => module.CanvasImageDialog),
+const CanvasImageDialog = dynamic(
+  () => import("./image/dialog").then((module) => module.CanvasImageDialog),
+  { loading: () => null },
 );
 
 export function CanvasEditor({
@@ -205,6 +205,8 @@ export function CanvasEditor({
   const [aiWidth, setAIWidth] = useState(400);
   const aiResize = useRef<{ x: number; width: number } | null>(null);
   const [openToolID, setOpenToolID] = useState<string>();
+  const [editingTextID, setEditingTextID] = useState<string>();
+  const [textDrafts, setTextDrafts] = useState(new Map<string, string>());
   const [generation, setGeneration] = useState<GenerationSeed | null>(null);
   const [materials, setMaterials] = useState<{
     tab: "assets" | "subjects";
@@ -250,7 +252,10 @@ export function CanvasEditor({
   const contextPoint = useRef<{ x: number; y: number } | null>(null);
   const [tool, setTool] = useState<"select" | "pan">("select");
   const [selectedIDs, setSelectedIDs] = useState<string[]>([]);
-  const [details, setDetails] = useState(false);
+  const [renaming, setRenaming] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
   const [miniMap, setMiniMap] = useState(false);
   const [size, setSize] = useState({ width: 1024, height: 768 });
   const [camera, setCamera] = useState(initial.viewport ?? defaultViewport);
@@ -264,7 +269,7 @@ export function CanvasEditor({
     nextX: number;
     nextY: number;
     card: HTMLElement;
-    button: HTMLButtonElement;
+    button: HTMLElement;
     pointerId: number;
     members: {
       id: string;
@@ -369,6 +374,7 @@ export function CanvasEditor({
       setPreview(null);
       setImageTool(null);
       setMaterials(null);
+      setRenaming(null);
       setConflict(null);
       setOpenToolID(undefined);
     };
@@ -467,6 +473,7 @@ export function CanvasEditor({
     setCamera(next);
   }
   function selectNode(id?: string, additive = false) {
+    setEditingTextID(undefined);
     const target = local.current.find((n) => n.id === id);
     if (target && !additive) {
       const v = view.current;
@@ -486,7 +493,6 @@ export function CanvasEditor({
         });
       }
     }
-    if (id !== selected) setDetails(false);
     setSelected(id);
     setSelectedIDs((ids) =>
       additive && id
@@ -755,11 +761,6 @@ export function CanvasEditor({
       setMessage(error instanceof Error ? error.message : "无法移除所选节点。");
     }
   }
-  function draft(patch: Partial<Draft>) {
-    const n = local.current.find((n) => n.id === selected);
-    if (n && isDraft(n))
-      update(n.id, { config: { draft: { ...n.config.draft, ...patch } } });
-  }
   const adjacentRequest = useRef<AbortController | null>(null);
   const [addingAdjacent, setAddingAdjacent] = useState(false);
   useEffect(() => () => adjacentRequest.current?.abort(), []);
@@ -978,7 +979,9 @@ export function CanvasEditor({
           node.y = limit(Math.round(top + Math.floor(index / 3) * row));
         });
       }
-      if (added.length) edit([...local.current, ...added]);
+      const placed = [...local.current];
+      for (const node of added) placed.push(placeNode(node, placed));
+      if (added.length) edit(placed);
       const last = requested.at(-1);
       selectNode(
         local.current.find(
@@ -1185,9 +1188,13 @@ export function CanvasEditor({
       changeCamera({ x: 0, y: 0, zoom: 1 });
       return;
     }
-    changeCamera(fitNodes(visible, workspace, selectionOnly));
+    const frame =
+      selectionOnly && visible.length === 1 && isDraft(visible[0])
+        ? { ...workspace, height: Math.max(260, workspace.height - 320) }
+        : workspace;
+    changeCamera(fitNodes(visible, frame, selectionOnly));
   }
-  function beginDrag(e: PointerEvent<HTMLButtonElement>, node: Node) {
+  function beginDrag(e: PointerEvent<HTMLElement>, node: Node) {
     if (
       !isEditableNode(node) ||
       e.button !== 0 ||
@@ -1233,7 +1240,7 @@ export function CanvasEditor({
         })),
     };
   }
-  function moveDrag(e: PointerEvent<HTMLButtonElement>) {
+  function moveDrag(e: PointerEvent<HTMLElement>) {
     const d = drag.current;
     if (!d) return;
     d.nextX = limit(
@@ -1512,15 +1519,67 @@ export function CanvasEditor({
     identityInvalid,
     readOnly,
   ]);
-  function seedForNode(node: DraftNode): GenerationSeed {
-    const composer = nodePromptDraft(node);
-    const sources = referenceSources(nodes);
-    const ownerNode = node.id;
+  function changeNodeDraft(ownerNode: string, value: PromptDraft) {
+    const n = local.current.find((n) => n.id === ownerNode);
+    if (n && isDraft(n)) {
+      try {
+        const graph = materializeReferences(
+          local.current,
+          localEdges.current,
+          ownerNode,
+          value,
+          project.id,
+        );
+        const textOnly =
+          graph.nodes.length === local.current.length &&
+          graph.edges.length === localEdges.current.length;
+        edit(
+          graph.nodes,
+          textOnly ? `${ownerNode}/config` : undefined,
+          graph.edges,
+        );
+      } catch (error) {
+        setMessage(
+          error instanceof Error ? error.message : "引用无法同步到画布。",
+        );
+      }
+    }
+  }
+  async function flushNodeDraft(ownerNode: string, composer: PromptDraft) {
+    if (privateInvalid.current || readOnlyRef.current)
+      throw new Error("画布保存尚未确认，请重新打开画布。");
+    const existing = local.current.find((n) => n.id === ownerNode);
+    if (!existing || !isDraft(existing))
+      throw new Error("画布节点已不可编辑。");
+    if (!existing.config.draft.composer)
+      update(ownerNode, { config: { draft: richCanvasDraft(composer) } });
+    const committed = await saveLatest.current();
+    if (!committed)
+      throw new Error("画布保存尚未确认，请先处理冲突或重试原保存。");
+    const owner = committed.nodes.find((n) => n.id === ownerNode);
+    if (!owner || !isDraft(owner) || !owner.config.draft.composer)
+      throw new Error("请先完成节点草稿保存。");
+    const latest = local.current.find((n) => n.id === ownerNode);
+    if (!latest || !sameEditable(latest, owner))
+      throw new Error("保存期间节点已变化，请重新保存当前输入。");
     return {
+      kind: "canvas_input" as const,
+      canvas_id: committed.id,
+      node_id: ownerNode,
+      canvas_revision: committed.revision,
+      input_revision: owner.input_revision,
+    };
+  }
+  let currentSeed: GenerationSeed | undefined;
+  if (!readOnly && current && isDraft(current)) {
+    const composer = nodePromptDraft(current);
+    const sources = referenceSources(nodes);
+    const ownerNode = current.id;
+    currentSeed = {
       project,
       prompt: "",
       composer,
-      capability: node.node_type === "video_generation" ? "video" : "image",
+      capability: current.node_type === "video_generation" ? "video" : "image",
       source: {
         canvas_id: initial.id,
         node_id: ownerNode,
@@ -1533,57 +1592,8 @@ export function CanvasEditor({
           (source) => source.nodeID !== ownerNode,
         ),
         incomingSources: connectedReferenceSources(nodes, edges, ownerNode),
-        onChange: (value: PromptDraft) => {
-          const n = local.current.find((n) => n.id === ownerNode);
-          if (n && isDraft(n)) {
-            try {
-              const graph = materializeReferences(
-                local.current,
-                localEdges.current,
-                ownerNode,
-                value,
-                project.id,
-              );
-              const textOnly =
-                graph.nodes.length === local.current.length &&
-                graph.edges.length === localEdges.current.length;
-              edit(
-                graph.nodes,
-                textOnly ? `${ownerNode}/config` : undefined,
-                graph.edges,
-              );
-            } catch (error) {
-              setMessage(
-                error instanceof Error ? error.message : "引用无法同步到画布。",
-              );
-            }
-          }
-        },
-        flush: async () => {
-          if (privateInvalid.current || readOnlyRef.current)
-            throw new Error("画布保存尚未确认，请重新打开画布。");
-          const existing = local.current.find((n) => n.id === ownerNode);
-          if (!existing || !isDraft(existing))
-            throw new Error("画布节点已不可编辑。");
-          if (!existing.config.draft.composer)
-            update(ownerNode, { config: { draft: richCanvasDraft(composer) } });
-          const committed = await saveLatest.current();
-          if (!committed)
-            throw new Error("画布保存尚未确认，请先处理冲突或重试原保存。");
-          const owner = committed.nodes.find((n) => n.id === ownerNode);
-          if (!owner || !isDraft(owner) || !owner.config.draft.composer)
-            throw new Error("请先完成节点草稿保存。");
-          const latest = local.current.find((n) => n.id === ownerNode);
-          if (!latest || !sameEditable(latest, owner))
-            throw new Error("保存期间节点已变化，请重新保存当前输入。");
-          return {
-            kind: "canvas_input",
-            canvas_id: committed.id,
-            node_id: ownerNode,
-            canvas_revision: committed.revision,
-            input_revision: owner.input_revision,
-          };
-        },
+        onChange: (value) => changeNodeDraft(ownerNode, value),
+        flush: () => flushNodeDraft(ownerNode, composer),
       },
     };
   }
@@ -1861,6 +1871,52 @@ export function CanvasEditor({
           }}
         />
       )}
+      <Dialog
+        open={!!renaming}
+        onOpenChange={(open) => {
+          if (!open) setRenaming(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogTitle>重命名节点</DialogTitle>
+          <DialogDescription>名称用于画布与引用列表。</DialogDescription>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!renaming?.title.trim()) return;
+              update(renaming.id, { title: renaming.title.trim() });
+              setRenaming(null);
+            }}
+          >
+            <Field>
+              <FieldLabel htmlFor="canvas-node-name">节点名称</FieldLabel>
+              <Input
+                id="canvas-node-name"
+                autoFocus
+                maxLength={128}
+                value={renaming?.title ?? ""}
+                onChange={(event) =>
+                  setRenaming(
+                    (value) => value && { ...value, title: event.target.value },
+                  )
+                }
+              />
+            </Field>
+            <DialogFooter className="mt-4">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setRenaming(null)}
+              >
+                取消
+              </Button>
+              <Button type="submit" disabled={!renaming?.title.trim()}>
+                保存名称
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
       <Dialog open={leave} onOpenChange={setLeave}>
         <DialogContent role="alertdialog" showCloseButton={false}>
           <DialogTitle>确认离开画布</DialogTitle>
@@ -2121,6 +2177,21 @@ export function CanvasEditor({
                   projectID={project.id}
                   readOnly={readOnly}
                   selected={selectedIDs.includes(node.id)}
+                  editingText={
+                    !readOnly &&
+                    editingTextID === node.id &&
+                    selectedIDs.length === 1 &&
+                    selected === node.id
+                  }
+                  onEditText={() => {
+                    selectNode(node.id);
+                    setEditingTextID(node.id);
+                  }}
+                  onFinishText={() => setEditingTextID(undefined)}
+                  onTextChange={(text) => {
+                    if (!readOnlyRef.current && isEditableNode(node))
+                      update(node.id, { config: { text } });
+                  }}
                   zoom={liveZoom}
                   onResize={(size) =>
                     update(node.id, {
@@ -2141,7 +2212,9 @@ export function CanvasEditor({
                   }}
                   addingAdjacent={addingAdjacent}
                   onAddAdjacent={
-                    !readOnly && isEditableNode(node)
+                    !readOnly &&
+                    isEditableNode(node) &&
+                    node.node_type !== "group"
                       ? (kind, side, point) =>
                           void addAdjacent(node, kind, side, point)
                       : undefined
@@ -2150,9 +2223,13 @@ export function CanvasEditor({
                   onEditTitle={() => {
                     if (readOnly) return;
                     selectNode(node.id);
-                    if (node.node_type === "director") setOpenToolID(node.id);
-                    else setDetails(true);
+                    setRenaming({ id: node.id, title: node.title });
                   }}
+                  onOpen={
+                    node.node_type === "director"
+                      ? () => setOpenToolID(node.id)
+                      : undefined
+                  }
                   onMove={(x, y) => {
                     try {
                       edit(
@@ -2237,6 +2314,9 @@ export function CanvasEditor({
           current?.node_type === "group" ||
           (current && isMediaNode(current))) && (
           <CanvasSelectionToolbar
+            onReveal={(dy) =>
+              changeCamera({ ...view.current, y: view.current.y + dy })
+            }
             rightInset={aiOpen ? effectiveAIWidth + 24 : 0}
             nodes={nodes.filter((node) => selectedIDs.includes(node.id))}
             containerRef={board}
@@ -2254,6 +2334,14 @@ export function CanvasEditor({
                     isEditableNode(node) &&
                     (!baseline.has(node.id) || !isDraft(node)),
                 )
+            }
+            onToggleGroup={
+              current?.node_type === "group" && selectedIDs.length === 1
+                ? () =>
+                    update(current.id, {
+                      config: { collapsed: !current.config.collapsed },
+                    })
+                : undefined
             }
             onGroup={groupSelection}
             onUngroup={ungroup}
@@ -2328,7 +2416,10 @@ export function CanvasEditor({
       )}
       {!readOnly &&
         current &&
-        current.node_type !== "timeline" &&
+        selectedIDs.length === 1 &&
+        isEditableNode(current) &&
+        (isDraft(current) || current.node_type === "text") &&
+        current.id !== editingTextID &&
         current.id !== openToolID && (
           <CanvasNodePanel
             onReveal={(dy) =>
@@ -2339,117 +2430,39 @@ export function CanvasEditor({
             viewport={{ x: camera.x, y: camera.y, k: camera.zoom }}
             containerRef={board}
           >
-            {current.node_type === "director" ? (
-              <aside className="canvas-node-composer" data-canvas-no-zoom>
-                <Button onClick={() => setOpenToolID(current.id)}>
-                  打开导演台
-                </Button>
-              </aside>
-            ) : current.node_type === "text" ||
-              current.node_type === "group" ? (
-              <aside
-                className="canvas-node-composer"
-                aria-label="节点编辑"
-                data-canvas-no-zoom
-              >
-                <FieldGroup>
-                  <Field>
-                    <FieldLabel htmlFor="canvas-resource-title">
-                      节点名称
-                    </FieldLabel>
-                    <Input
-                      id="canvas-resource-title"
-                      aria-label="节点名称"
-                      value={current.title}
-                      maxLength={128}
-                      disabled={!isEditableNode(current)}
-                      onChange={(event) =>
-                        update(current.id, { title: event.target.value })
-                      }
-                    />
-                  </Field>
-                </FieldGroup>
-                {current.node_type === "text" ? (
-                  <CanvasTextEditor
-                    key={current.id}
-                    id={current.id}
-                    text={current.config.text ?? ""}
-                    onChange={(text) => {
-                      if (isEditableNode(current))
-                        update(current.id, { config: { text } });
-                    }}
-                  />
-                ) : (
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={!isEditableNode(current)}
-                      onClick={() =>
-                        update(current.id, {
-                          config: { collapsed: !current.config.collapsed },
-                        })
-                      }
-                    >
-                      {current.config.collapsed ? "展开分组" : "收起分组"}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={!isEditableNode(current)}
-                      onClick={ungroup}
-                    >
-                      解除分组关系
-                    </Button>
-                  </div>
-                )}
-              </aside>
-            ) : (
-              <CanvasComposer
-                node={current}
-                details={details}
-                onDetails={setDetails}
-                onUpdate={(patch) => update(current.id, patch)}
-                onDraft={draft}
-                richComposer={
-                  isDraft(current)
-                    ? (actions) => {
-                        const seed = seedForNode(current);
-                        return (
-                          <RichGeneration
-                            key={current.id}
-                            projectID={project.id}
-                            seed={seed}
-                            canvas={seed.canvasOwner}
-                            presentation="canvas"
-                            headerActions={actions}
-                            onAdopt={adoptResult}
-                          />
-                        );
-                      }
-                    : undefined
-                }
-                onPreview={() => setPreview(current)}
-                onContinue={() => {
-                  if (
-                    current.ref_id &&
-                    ["image", "video", "audio"].includes(current.node_type)
+            {current.node_type === "text" ? (
+              <RichGeneration
+                key={`text-prompt/${current.id}`}
+                projectID={project.id}
+                seed={{ project, capability: "text", prompt: "" }}
+                draftID={textDrafts.get(current.id)}
+                onDraftReady={(id) =>
+                  setTextDrafts((previous) =>
+                    previous.get(current.id) === id
+                      ? previous
+                      : new Map(previous).set(current.id, id),
                   )
-                    setGeneration({
-                      project,
-                      prompt: "",
-                      capability:
-                        current.node_type === "image" ? "image" : "video",
-                      reference: {
-                        assetID: current.ref_id,
-                        kind: current.node_type as "image" | "video" | "audio",
-                      },
-                    });
-                }}
-                generating={saving}
-                blocked={!!conflict || unconfirmed}
+                }
+                presentation="canvas"
               />
-            )}
+            ) : isDraft(current) ? (
+              <aside
+                aria-label="节点编辑"
+                className="canvas-node-composer"
+                data-generation="true"
+                data-canvas-no-zoom
+                data-canvas-wheel-scroll
+              >
+                <RichGeneration
+                  key={current.id}
+                  projectID={project.id}
+                  seed={currentSeed!}
+                  canvas={currentSeed!.canvasOwner}
+                  presentation="canvas"
+                  onAdopt={adoptResult}
+                />
+              </aside>
+            ) : null}
           </CanvasNodePanel>
         )}
       {!readOnly && aiOpen && (

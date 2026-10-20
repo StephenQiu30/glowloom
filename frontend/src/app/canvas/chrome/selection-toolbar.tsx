@@ -1,7 +1,16 @@
 "use client";
 
 import { useLayoutEffect, useRef, type RefObject, type ReactNode } from "react";
-import { Copy, Group, Link2, Unlink, Trash2, Ungroup } from "lucide-react";
+import {
+  Copy,
+  Group,
+  Link2,
+  Unlink,
+  Trash2,
+  Ungroup,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -21,6 +30,7 @@ export function CanvasSelectionToolbar({
   canEdit,
   canRemove,
   onGroup,
+  onToggleGroup,
   onUngroup,
   onCopy,
   onRemove,
@@ -28,14 +38,17 @@ export function CanvasSelectionToolbar({
   onDisconnect,
   children,
   rightInset = 0,
+  onReveal,
 }: {
   rightInset?: number;
+  onReveal?: (dy: number) => void;
   children?: ReactNode;
   nodes: Node[];
   containerRef: RefObject<HTMLDivElement | null>;
   canEdit: boolean;
   canRemove: boolean;
   onGroup: () => void;
+  onToggleGroup?: () => void;
   onUngroup: () => void;
   onCopy: () => void;
   onRemove: () => void;
@@ -43,6 +56,7 @@ export function CanvasSelectionToolbar({
   onDisconnect: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const revealed = useRef("");
   useLayoutEffect(() => {
     const container = containerRef.current,
       toolbar = ref.current;
@@ -62,6 +76,15 @@ export function CanvasSelectionToolbar({
           2 -
         bounds.left;
       const top = Math.min(...boxes.map((box) => box.top)) - bounds.top;
+      const key = nodes
+        .map((node) => node.id)
+        .sort()
+        .join("/");
+      if (revealed.current !== key) {
+        revealed.current = key;
+        const missing = 64 + toolbar.offsetHeight + 36 - top;
+        if (bounds.height > 0 && missing > 0) onReveal?.(missing);
+      }
       const available = Math.max(80, container.clientWidth - rightInset);
       toolbar.style.maxWidth = `${Math.max(56, available - 24)}px`;
       toolbar.style.left = `${Math.max(12, Math.min(available - toolbar.offsetWidth - 12, center - toolbar.offsetWidth / 2))}px`;
@@ -78,8 +101,18 @@ export function CanvasSelectionToolbar({
       container.removeEventListener(CANVAS_VIEWPORT_EVENT, position);
       container.removeEventListener(CANVAS_NODE_DRAG_EVENT, position);
     };
-  }, [containerRef, nodes, rightInset]);
+  }, [containerRef, nodes, rightInset, onReveal]);
   const actions = [
+    ...(onToggleGroup
+      ? [
+          {
+            label: nodes[0]?.config.collapsed ? "展开分组" : "收起分组",
+            Icon: nodes[0]?.config.collapsed ? ChevronDown : ChevronUp,
+            run: onToggleGroup,
+            disabled: !canEdit,
+          },
+        ]
+      : []),
     {
       label: "组合所选节点",
       Icon: Group,

@@ -1,7 +1,14 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CanvasNode } from "@/app/canvas/node/node";
-import { createDraftNode } from "@/app/canvas/document";
+import { createDraftNode, createResourceNode } from "@/app/canvas/document";
+const media = vi.hoisted(() => vi.fn());
+vi.mock("@/components/media/project-media", () => ({
+  ProjectMediaPreview: (props: unknown) => {
+    media(props);
+    return <video aria-label="视频素材" controls />;
+  },
+}));
 beforeEach(() => {
   vi.stubGlobal(
     "PointerEvent",
@@ -43,16 +50,17 @@ function node() {
     card: document.querySelector<HTMLElement>("[data-node-id]")!,
   };
 }
-it("四角尺寸预览使用世界坐标，取消恢复，结束只提交一次", () => {
+it("只保留内侧尺寸手柄，预览取消恢复，结束只提交一次", () => {
   const { value, resized, preview, card } = node();
   const corner = screen.getByRole("button", {
-    name: `调整 ${value.title} 左上尺寸`,
+    name: `调整 ${value.title} 右下尺寸`,
   });
+  expect(screen.getAllByRole("button", { name: /^调整/ })).toHaveLength(1);
   fireEvent.pointerDown(corner, { button: 0, clientX: 100, clientY: 100 });
   fireEvent.pointerMove(corner, { clientX: 120, clientY: 140 });
-  expect(card.style.width).toBe("310px");
-  expect(card.style.left).toBe("90px");
-  expect(card.style.top).toBe("100px");
+  expect(card.style.width).toBe("330px");
+  expect(card.style.left).toBe("80px");
+  expect(card.style.top).toBe("80px");
   expect(preview).toHaveBeenCalled();
   expect(resized).not.toHaveBeenCalled();
   fireEvent.pointerCancel(corner);
@@ -63,10 +71,10 @@ it("四角尺寸预览使用世界坐标，取消恢复，结束只提交一次"
   fireEvent.pointerUp(corner);
   fireEvent.lostPointerCapture(corner);
   expect(resized).toHaveBeenCalledExactlyOnceWith({
-    x: 90,
-    y: 100,
-    width: 310,
-    height: 300,
+    x: 80,
+    y: 80,
+    width: 330,
+    height: 340,
   });
 });
 it("手柄提供键盘等价操作，Shift指针调整保持比例", () => {
@@ -116,4 +124,41 @@ it("节点媒体区域与标题一样支持拖动和取消", () => {
   expect(start).toHaveBeenCalledTimes(1);
   expect(move).toHaveBeenCalledTimes(1);
   expect(end).toHaveBeenCalledWith(true);
+});
+
+it("未选中的视频也复用媒体预览，选中启用播放而不嵌套按钮", () => {
+  const value = {
+    ...createResourceNode("text", { x: 0, y: 0 }),
+    node_type: "video",
+    ref_type: "media_asset",
+    ref_id: "asset",
+    config: {},
+  };
+  const props = {
+    node: value,
+    projectID: "project",
+    selected: false,
+    zoom: 1,
+    onResize: vi.fn(),
+    onResizePreview: vi.fn(),
+    onSelect: vi.fn(),
+    onEditTitle: vi.fn(),
+    onMove: vi.fn(),
+    onDragStart: vi.fn(),
+    onDragMove: vi.fn(),
+    onDragEnd: vi.fn(),
+  };
+  const view = render(<CanvasNode {...props} />);
+  expect(media).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      kind: "video",
+      fit: "contain",
+      interactive: false,
+    }),
+  );
+  expect(screen.getByLabelText("视频素材").closest("button")).toBeNull();
+  view.rerender(<CanvasNode {...props} selected />);
+  expect(media).toHaveBeenLastCalledWith(
+    expect.objectContaining({ interactive: true }),
+  );
 });

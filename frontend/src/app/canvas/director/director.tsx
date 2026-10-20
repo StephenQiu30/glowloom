@@ -48,7 +48,8 @@ import {
   NativeSelect,
   NativeSelectOption,
 } from "@/components/ui/native-select";
-import { Textarea } from "@/components/ui/textarea";
+import { PromptTextEditor } from "@/components/generation/prompt-text-editor";
+import { InputGroup } from "@/components/ui/input-group";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { getMediaPreview, uploadMediaAsset } from "@/api/media";
 import { cn } from "cn";
@@ -1439,14 +1440,17 @@ export function CanvasDirector({
                     运动意图用于镜头说明；实际运动由摄像机关键帧控制。
                   </p>
                   <Field>
-                    <FieldLabel>
-                      镜头描述
-                      <Textarea
-                        value={shot.prompt ?? ""}
-                        maxLength={10000}
-                        onChange={(e) => patchShot({ prompt: e.target.value })}
+                    <FieldLabel>镜头描述</FieldLabel>
+                    <InputGroup variant="composer" className="h-auto">
+                      <PromptTextEditor
+                        key={shot.id}
+                        id={`director-shot/${shot.id}`}
+                        label="镜头描述"
+                        text={shot.prompt ?? ""}
+                        className="max-h-64 min-h-24 overflow-y-auto px-3 py-2 outline-none"
+                        onChange={(prompt) => patchShot({ prompt })}
                       />
-                    </FieldLabel>
+                    </InputGroup>
                   </Field>
                 </FieldGroup>
               </FieldSet>

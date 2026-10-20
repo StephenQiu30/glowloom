@@ -2,7 +2,6 @@
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import {
-  Check,
   AudioLines,
   ChevronRight,
   ImageIcon,
@@ -180,7 +179,7 @@ export function ReferenceMentionMenu({
                         {titleFor(ref) ? ` · ${titleFor(ref)}` : ""}
                       </span>
                       {mentioned.has(ref.id) && (
-                        <Check className="ml-auto size-4" aria-label="已引用" />
+                        <span className="sr-only">已引用</span>
                       )}
                     </CommandItem>
                   ))}

@@ -73,8 +73,13 @@ export function CanvasNodePanel({
           ? Math.max(160, container.clientHeight - bottomInset)
           : Number.POSITIVE_INFINITY,
       );
-      if (revealed.current !== node.id && container.clientHeight && onReveal) {
-        revealed.current = node.id;
+      const revealKey = `${node.id}/${container.clientWidth}/${container.clientHeight}`;
+      if (
+        revealed.current !== revealKey &&
+        container.clientHeight &&
+        onReveal
+      ) {
+        revealed.current = revealKey;
         const missing =
           position.top +
           Math.min(panel.scrollHeight || 280, 320) +

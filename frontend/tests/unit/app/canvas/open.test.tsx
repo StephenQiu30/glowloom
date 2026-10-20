@@ -35,7 +35,7 @@ vi.mock("@/components/generation/rich-generation", () => ({
     api.rich(props);
     const owner = props.canvas;
     if (!owner)
-      throw new Error("Canvas must provide its shared composer owner");
+      return <div data-testid="text-generation-composer">文本生成</div>;
     const text = owner.draft.document.content
       .map((paragraph) =>
         (paragraph.content ?? [])
@@ -128,8 +128,8 @@ vi.mock("@/components/media/project-media", () => ({
   ProjectMediaPicker: () => null,
 }));
 
-vi.mock("@/app/canvas/node/text-editor", () => ({
-  CanvasTextEditor: ({
+vi.mock("@/components/generation/document-editor", () => ({
+  DocumentEditor: ({
     text,
     onChange,
   }: {
@@ -281,17 +281,19 @@ it("丢回执重试保留原key和冻结body，键盘移动可保存", async () 
     key: "ArrowRight",
     shiftKey: true,
   });
-  fireEvent.click(screen.getByRole("button", { name: "节点参数" }));
-  expect((screen.getByLabelText("X 坐标") as HTMLInputElement).value).toBe(
-    "90",
-  );
-  fireEvent.keyDown(screen.getByLabelText("X 坐标"), { key: "Escape" });
   api.save.mockRejectedValueOnce(new RequestError("request_unconfirmed"));
   fireEvent.click(screen.getByRole("button", { name: "保存画布" }));
   await screen.findByRole("button", { name: "重试原保存" });
   const frozen = structuredClone(
     api.save.mock.calls[0][1],
   ) as API.CommandsInput;
+  expect(frozen.commands).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        nodes: expect.arrayContaining([expect.objectContaining({ x: 90 })]),
+      }),
+    ]),
+  );
   const key = api.save.mock.calls[0][2].headers["Idempotency-Key"];
   api.save.mockResolvedValueOnce(addReceipt(frozen));
   fireEvent.click(screen.getByRole("button", { name: "重试原保存" }));
@@ -444,6 +446,9 @@ it("媒体节点移动使用真实命令，复制保留媒体身份，移除本�
     }),
   );
   render(<CanvasPage projectID={projectID} canvasID={canvasID} />);
+  fireEvent.click(await screen.findByRole("button", { name: "选择 海边.png" }));
+  expect(screen.queryByLabelText("节点编辑")).toBeNull();
+  expect(screen.getByRole("toolbar", { name: "所选节点操作" })).toBeTruthy();
   fireEvent.keyDown(
     await screen.findByRole("button", { name: "移动 海边.png" }),
     { key: "ArrowRight", shiftKey: true },
@@ -492,6 +497,8 @@ it("文字节点可编辑、撤销重做并通过原命令保存", async () => {
   render(<CanvasPage projectID={projectID} canvasID={canvasID} />);
   await screen.findByText("双击画布，创建节点");
   fireEvent.click(screen.getByRole("button", { name: "添加文本" }));
+  fireEvent.doubleClick(screen.getByRole("button", { name: "选择 文本" }));
+  await screen.findByRole("textbox", { name: "文本内容" });
   fireEvent.change(screen.getByRole("textbox", { name: "文本内容" }), {
     target: { value: "一段真实文字" },
   });
@@ -666,7 +673,7 @@ it("含只读直接成员的分组不能解组，不污染其他合法编辑", a
   api.canvas.mockResolvedValue({ ...canvas, nodes: [group, child] });
   render(<CanvasPage projectID={projectID} canvasID={canvasID} />);
   fireEvent.click(await screen.findByRole("button", { name: "选择 受限分组" }));
-  fireEvent.click(screen.getByRole("button", { name: "解除分组关系" }));
+  fireEvent.click(screen.getByRole("button", { name: "解除所选分组" }));
   await findFeedback("分组包含只读成员，不能解除关系。");
   expect(
     screen.getByRole("button", { name: "保存画布" }).hasAttribute("disabled"),
@@ -1096,6 +1103,38 @@ it("冲突读回未知生成配置可只读查看和明确载入，不解析未�
   expect(node.config).toEqual({ future: { version: 99 } });
   expect(api.save).toHaveBeenCalledOnce();
 });
+it("文本单选展示生成提示词，双击正文隐藏下方面板，上传素材不展示面板", async () => {
+  api.project.mockResolvedValue(project);
+  api.canvas.mockResolvedValue({
+    ...canvas,
+    nodes: [
+      {
+        id: "00000000-0000-4000-8000-000000000013",
+        title: "上传图片",
+        node_type: "image",
+        node_action: "resource",
+        ref_type: "media_asset",
+        ref_id: "00000000-0000-4000-8000-000000000014",
+        config: {},
+        x: 800,
+        y: 80,
+        z_index: 0,
+      },
+    ],
+  });
+  render(<CanvasPage projectID={projectID} canvasID={canvasID} />);
+  fireEvent.click(await screen.findByRole("button", { name: "选择 上传图片" }));
+  expect(document.querySelector(".canvas-node-panel")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "添加文本" }));
+  await screen.findByTestId("text-generation-composer");
+  fireEvent.doubleClick(screen.getByRole("button", { name: "选择 文本" }));
+  expect(screen.queryByTestId("text-generation-composer")).toBeNull();
+  expect(document.querySelector(".canvas-node-panel")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "选择 上传图片" }));
+  fireEvent.click(screen.getByRole("button", { name: "选择 文本" }));
+  await screen.findByTestId("text-generation-composer");
+});
+
 it("只读拒绝后未保存文本仍触发刷新和站内离开保护", async () => {
   api.project.mockResolvedValue(project);
   api.canvas.mockResolvedValue(canvas);
@@ -1105,6 +1144,8 @@ it("只读拒绝后未保存文本仍触发刷新和站内离开保护", async (
   render(<CanvasPage projectID={projectID} canvasID={canvasID} />);
   await screen.findByText("双击画布，创建节点");
   fireEvent.click(screen.getByRole("button", { name: "添加文本" }));
+  fireEvent.doubleClick(screen.getByRole("button", { name: "选择 文本" }));
+  await screen.findByRole("textbox", { name: "文本内容" });
   fireEvent.change(screen.getByRole("textbox", { name: "文本内容" }), {
     target: { value: "尚未保存的文本" },
   });

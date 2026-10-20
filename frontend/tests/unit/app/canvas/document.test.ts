@@ -183,7 +183,8 @@ it("项目素材节点保存几何与名称，拒绝跨项目及受业务操作�
     0,
   );
   const base = { ...empty, nodes: [n] };
-  expect(n.height).toBe(192);
+  expect(n.width).toBe(320);
+  expect(n.height).toBe(213);
   const unicodeTitle = { ...n, title: "🎬".repeat(128) };
   expect(commandBatch(empty, [unicodeTitle]).commands?.[0].type).toBe(
     "AddNodes",
@@ -481,4 +482,53 @@ it("旧时间线的null引用在读取和幂等回执确认时规范化为缺省
   );
   expect(sameEditable(timeline, saved)).toBe(true);
   expect(confirmed.nodes[0].config.timeline?.clips?.[0].text).toBe("验收");
+});
+
+it("导演台空截图列表省略后仍确认保存，非空截图差异仍拒绝", () => {
+  const shot = {
+    id: crypto.randomUUID(),
+    prompt: "镜头描述\n第二行",
+    screenshots: [],
+  };
+  const node = {
+    ...createResourceNode("text", { x: 0, y: 0 }),
+    node_type: "director",
+    node_action: "tool",
+    config: { director: { version: 1, shots: [shot] } },
+  };
+  const body = commandBatch(empty, [node]);
+  const saved = {
+    ...node,
+    config: {
+      director: { version: 1, shots: [{ id: shot.id, prompt: shot.prompt }] },
+    },
+  };
+  const receipt = {
+    ...empty,
+    nodes: [saved],
+    revision: 2,
+    results: [{ ok: true }],
+  };
+  expect(
+    requireSaveResult(receipt, empty, [node], body).nodes[0].config.director
+      ?.shots?.[0].prompt,
+  ).toBe(shot.prompt);
+  expect(() =>
+    requireSaveResult(
+      receipt,
+      empty,
+      [
+        {
+          ...node,
+          config: {
+            director: {
+              version: 1,
+              shots: [{ ...shot, screenshots: [{ id: crypto.randomUUID() }] }],
+            },
+          },
+        },
+      ],
+      body,
+    ),
+  ).toThrow("invalid_receipt");
 });
