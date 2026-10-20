@@ -40,11 +40,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
   Field,
   FieldGroup,
   FieldLabel,
   FieldDescription,
+  FieldError,
 } from "@/components/ui/field";
 import {
   Card,
@@ -86,6 +88,7 @@ function PasswordInput({
     <InputGroup className="h-10 max-md:h-11">
       <InputGroupInput
         id={id}
+        name={id}
         className="h-full"
         type={visible ? "text" : "password"}
         value={value}
@@ -157,11 +160,17 @@ export function AuthView({
   embedded = false,
   onAuthenticated,
   onPendingChange,
+  initialEmail = "",
+  onEmailChange,
+  onLoginRequested,
 }: {
   mode: "login" | "register" | "reset-password" | "recover";
   embedded?: boolean;
   onAuthenticated?: (session: API.EmailSessionView) => void;
   onPendingChange?: (pending: boolean) => void;
+  initialEmail?: string;
+  onEmailChange?: (email: string) => void;
+  onLoginRequested?: (email: string) => void;
 }) {
   const router = useRouter();
   const [policyStatus, setPolicyStatus] = useState<
@@ -173,7 +182,8 @@ export function AuthView({
   const [invalidField, setInvalidField] = useState("");
   const recoveryProof = useRef<string | null>(null);
   const [policy, setPolicy] = useState<API.AuthPolicyView | null>(null);
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail);
+  const [registrationComplete, setRegistrationComplete] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -194,6 +204,8 @@ export function AuthView({
   const [now, setNow] = useState(0);
   const flight = useRef<AbortController | null>(null);
   const form = useRef<HTMLFormElement>(null);
+  const emailInput = useRef<HTMLInputElement>(null);
+  const loginButton = useRef<HTMLButtonElement>(null);
   const errorField = useRef("");
   const lock = useRef(false);
   const change = mode === "reset-password" && !recoveryToken;
@@ -202,7 +214,9 @@ export function AuthView({
   const register = mode === "register";
   const invited = Boolean(pendingInvitation());
   const registrationAllowed = Boolean(
-    policy?.registration_enabled || (invited && policy?.terms_version),
+    policy?.terms_version &&
+    policy.closed_reason !== "mail_unavailable" &&
+    (policy.registration_enabled || invited),
   );
   const recover = mode === "recover" || Boolean(recoveryToken);
   useEffect(() => {
@@ -299,7 +313,31 @@ export function AuthView({
       if (input) input.focus();
     }
   }, [error, feedbackAttempt]);
+  useEffect(() => {
+    if (registrationComplete) loginButton.current?.focus();
+    else if (register && operation)
+      form.current
+        ?.querySelector<HTMLInputElement>(
+          grant ? "#display-name" : "#verification-code",
+        )
+        ?.focus();
+  }, [register, operation, grant, registrationComplete]);
   const remaining = Math.max(0, Math.ceil((retryAt - now) / 1000));
+  function changeRegistrationEmail() {
+    if (lock.current) return;
+    setOperation("");
+    setGrant("");
+    setCode("");
+    setPassword("");
+    setConfirmation("");
+    setDisplayName("");
+    setAccepted(false);
+    setRetryAt(0);
+    setNotice("");
+    setError("");
+    setInvalidField("");
+    emailInput.current?.focus();
+  }
   async function switchAccount() {
     if (!session || lock.current) return;
     lock.current = true;
@@ -391,6 +429,30 @@ export function AuthView({
       setError("请先加载会话并输入当前密码。");
       return;
     }
+    if (
+      register &&
+      operation &&
+      !grant &&
+      action !== "resend" &&
+      !/^\d{6}$/.test(code)
+    ) {
+      errorField.current = "verification-code";
+      setInvalidField("verification-code");
+      setError("请输入 6 位数字验证码。");
+      return;
+    }
+    if (
+      register &&
+      grant &&
+      (Array.from(displayName.trim()).length < 1 ||
+        Array.from(displayName.trim()).length > 32 ||
+        /\p{Cc}/u.test(displayName.trim()))
+    ) {
+      errorField.current = "display-name";
+      setInvalidField("display-name");
+      setError("显示名需为 1～32 个字符，不能包含控制字符。");
+      return;
+    }
     lock.current = true;
     setPending(true);
     onPendingChange?.(true);
@@ -437,10 +499,12 @@ export function AuthView({
           setNotice("邮箱验证成功，请设置账号。");
         } else {
           if (!accepted) {
+            errorField.current = "accept-terms";
+            setInvalidField("accept-terms");
             setError("请先阅读并同意协议。");
             return;
           }
-          await completeRegistration(
+          const result = await completeRegistration(
             { id: operation },
             {
               registration_grant: grant,
@@ -453,9 +517,22 @@ export function AuthView({
             options,
           );
           if (!controller.signal.aborted) {
+            if (
+              !result ||
+              !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                result.account_id,
+              ) ||
+              result.next !== "login"
+            )
+              throw new RequestError("invalid_receipt");
             setGrant("");
             setOperation("");
-            router.replace("/login");
+            setCode("");
+            setPassword("");
+            setConfirmation("");
+            setAccepted(false);
+            setNotice("");
+            setRegistrationComplete(true);
           }
         }
       } else if (recover) {
@@ -541,7 +618,30 @@ export function AuthView({
       setError("");
     }
   }
-  const formContent = (
+  const registrationStep = grant ? 2 : operation ? 1 : 0;
+  const formContent = registrationComplete ? (
+    <div
+      className="flex w-full flex-col gap-5"
+      role="status"
+      aria-live="polite"
+    >
+      <Alert>
+        <AlertTitle>账号已创建</AlertTitle>
+        <AlertDescription>
+          使用 {email} 和刚设置的密码登录，继续你的创作。
+        </AlertDescription>
+      </Alert>
+      {onLoginRequested ? (
+        <Button ref={loginButton} onClick={() => onLoginRequested(email)}>
+          前往登录
+        </Button>
+      ) : (
+        <Button asChild>
+          <Link href="/login">前往登录</Link>
+        </Button>
+      )}
+    </div>
+  ) : (
     <form
       ref={form}
       noValidate
@@ -564,6 +664,25 @@ export function AuthView({
       ) : null}
       <FieldGroup>
         {register ? (
+          <ol
+            aria-label="注册步骤"
+            className="flex items-center justify-between gap-2 text-xs text-muted-foreground"
+            aria-live="polite"
+          >
+            {["填写邮箱", "验证邮箱", "设置账号"].map((label, index) => (
+              <li
+                key={label}
+                aria-current={index === registrationStep ? "step" : undefined}
+                className={cn(
+                  index === registrationStep && "font-medium text-foreground",
+                )}
+              >
+                {index + 1}. {label}
+              </li>
+            ))}
+          </ol>
+        ) : null}
+        {register ? (
           <p className="text-sm text-muted-foreground">
             {policyStatus === "loading"
               ? "正在读取注册策略…"
@@ -573,7 +692,9 @@ export function AuthView({
                   ? "受邀注册：请验证受邀邮箱，并阅读服务条款与隐私政策。"
                   : policy?.registration_enabled
                     ? `协议版本 ${policy.terms_version}`
-                    : "注册暂未开放。请稍后再试，您仍可查阅服务条款与隐私政策。"}
+                    : policy?.closed_reason === "mail_unavailable"
+                      ? "验证邮件服务暂不可用，请稍后再试。已有账号仍可登录。"
+                      : "注册暂未开放。请稍后再试，您仍可查阅服务条款与隐私政策。"}
           </p>
         ) : null}
         {register && policyStatus === "error" ? (
@@ -598,7 +719,9 @@ export function AuthView({
           >
             <FieldLabel htmlFor="email">邮箱</FieldLabel>
             <Input
+              ref={emailInput}
               id="email"
+              name="email"
               className={securityPage ? "h-10 max-md:h-11" : undefined}
               aria-invalid={Boolean(error && invalidField === "email")}
               aria-describedby={
@@ -606,14 +729,30 @@ export function AuthView({
               }
               type="email"
               autoComplete="email"
+              spellCheck={false}
+              autoCapitalize="none"
               value={email}
               maxLength={254}
-              disabled={pending || Boolean(operation)}
+              disabled={pending}
+              readOnly={Boolean(operation)}
               onChange={(e) => {
                 setEmail(e.target.value);
+                onEmailChange?.(e.target.value);
                 clearFieldError("email");
               }}
             />
+            {register && operation ? (
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="w-fit self-start px-0"
+                disabled={pending}
+                onClick={changeRegistrationEmail}
+              >
+                更换邮箱
+              </Button>
+            ) : null}
           </Field>
         ) : null}
         {register ? (
@@ -628,17 +767,31 @@ export function AuthView({
           </p>
         ) : null}
         {register && operation && !grant ? (
-          <Field>
+          <Field
+            data-invalid={invalidField === "verification-code" || undefined}
+          >
             <FieldLabel htmlFor="verification-code">邮箱验证码</FieldLabel>
             <Input
               id="verification-code"
+              name="verification-code"
               inputMode="numeric"
               autoComplete="one-time-code"
+              spellCheck={false}
+              aria-invalid={invalidField === "verification-code"}
+              aria-describedby={
+                invalidField === "verification-code" ? errorID : undefined
+              }
               maxLength={6}
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={(e) => {
+                setCode(e.target.value);
+                clearFieldError("verification-code");
+              }}
               disabled={pending}
             />
+            {invalidField === "verification-code" ? (
+              <FieldError>{error}</FieldError>
+            ) : null}
             <Button
               type="button"
               variant="outline"
@@ -650,14 +803,29 @@ export function AuthView({
           </Field>
         ) : null}
         {register && grant ? (
-          <Field>
+          <Field data-invalid={invalidField === "display-name" || undefined}>
             <FieldLabel htmlFor="display-name">显示名</FieldLabel>
             <Input
               id="display-name"
+              name="display-name"
+              autoComplete="nickname"
+              aria-invalid={invalidField === "display-name"}
+              aria-describedby={
+                invalidField === "display-name" ? errorID : "display-name-help"
+              }
               value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
+              onChange={(e) => {
+                setDisplayName(e.target.value);
+                clearFieldError("display-name");
+              }}
               disabled={pending}
             />
+            <FieldDescription id="display-name-help">
+              1～32 个字符，可稍后在账号设置中修改。
+            </FieldDescription>
+            {invalidField === "display-name" ? (
+              <FieldError>{error}</FieldError>
+            ) : null}
           </Field>
         ) : null}
         {change ? (
@@ -772,23 +940,35 @@ export function AuthView({
           </>
         ) : null}
         {register && grant ? (
-          <Field orientation="horizontal">
+          <Field
+            orientation="horizontal"
+            data-invalid={invalidField === "accept-terms" || undefined}
+          >
             <Checkbox
               id="accept-terms"
+              aria-invalid={invalidField === "accept-terms"}
+              aria-describedby={
+                invalidField === "accept-terms" ? errorID : undefined
+              }
               checked={accepted}
               disabled={pending}
-              onCheckedChange={(value) => setAccepted(value === true)}
+              onCheckedChange={(value) => {
+                setAccepted(value === true);
+                clearFieldError("accept-terms");
+              }}
             />
             <FieldLabel htmlFor="accept-terms">
-              阅读并同意{" "}
-              <Link href="/terms" target="_blank">
-                服务条款
-              </Link>{" "}
-              和{" "}
-              <Link href="/privacy" target="_blank">
-                隐私政策
-              </Link>
-              （版本 {policy?.terms_version}）
+              <span>
+                阅读并同意{" "}
+                <Link href="/terms" target="_blank">
+                  服务条款
+                </Link>{" "}
+                和{" "}
+                <Link href="/privacy" target="_blank">
+                  隐私政策
+                </Link>
+                （版本 {policy?.terms_version}）
+              </span>
             </FieldLabel>
           </Field>
         ) : null}

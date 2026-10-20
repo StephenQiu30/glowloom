@@ -16,20 +16,27 @@ import { AuthView } from "./auth-view";
 
 export type AuthMode = "login" | "register";
 
-export function AuthDialog({
-  open,
-  onOpenChange,
-  onAuthenticated,
-  initialMode = "login",
-  fallbackFocusRef,
-}: {
+type AuthDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAuthenticated: (session: API.EmailSessionView) => void;
   initialMode?: AuthMode;
   fallbackFocusRef?: RefObject<HTMLElement | null>;
-}) {
+};
+
+export function AuthDialog(props: AuthDialogProps) {
+  return props.open ? <OpenAuthDialog {...props} /> : null;
+}
+
+function OpenAuthDialog({
+  open,
+  onOpenChange,
+  onAuthenticated,
+  initialMode = "login",
+  fallbackFocusRef,
+}: AuthDialogProps) {
   const [mode, setMode] = useState<AuthMode>(initialMode);
+  const [email, setEmail] = useState("");
   const [pending, setPending] = useState(false);
   const content = useRef<HTMLDivElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
@@ -100,6 +107,12 @@ export function AuthDialog({
               <AuthView
                 embedded
                 mode={value}
+                initialEmail={email}
+                onEmailChange={setEmail}
+                onLoginRequested={(value) => {
+                  setEmail(value);
+                  setMode("login");
+                }}
                 onPendingChange={setPending}
                 onAuthenticated={onAuthenticated}
               />

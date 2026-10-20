@@ -2,6 +2,7 @@ import { render, findFeedback } from "../../../tests/feedback";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AuthView } from "./auth-view";
+import { AuthDialog } from "./auth-dialog";
 import { requireSession } from "./contracts";
 import {
   configureSessionRenewal,
@@ -44,6 +45,170 @@ const policy = {
   terms_url: "/terms",
   privacy_url: "/privacy",
 };
+
+function mockRegistration(
+  completion: unknown = { account_id: session.actor.id, next: "login" },
+) {
+  vi.mocked(request).mockImplementation(async (url) =>
+    url === "/api/auth-policy"
+      ? policy
+      : url === "/api/registrations"
+        ? {
+            operation_id: "33333333-3333-4333-8333-333333333333",
+            retry_after_seconds: 60,
+          }
+        : url.endsWith("/verify")
+          ? { outcome: "verified", registration_grant: "single-use-grant" }
+          : completion,
+  );
+}
+async function requestCode() {
+  await screen.findByText("协议版本 2026-10-15.1");
+  fireEvent.change(screen.getByLabelText("邮箱"), {
+    target: { value: "alice@example.com" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "发送验证码" }));
+  await screen.findByLabelText("邮箱验证码");
+}
+async function verifyCode() {
+  await requestCode();
+  fireEvent.change(screen.getByLabelText("邮箱验证码"), {
+    target: { value: "123456" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "验证邮箱" }));
+  await screen.findByLabelText("显示名");
+}
+function fillAccount(name = "Alice") {
+  fireEvent.change(screen.getByLabelText("显示名"), {
+    target: { value: name },
+  });
+  fireEvent.change(screen.getByLabelText("新密码", { exact: true }), {
+    target: { value: "abC789xy" },
+  });
+  fireEvent.change(screen.getByLabelText("确认新密码"), {
+    target: { value: "abC789xy" },
+  });
+  fireEvent.click(screen.getByRole("checkbox"));
+}
+it("更换邮箱放弃旧流程且不自动发信，重新提交绑定新邮箱", async () => {
+  mockRegistration();
+  render(<AuthView mode="register" />);
+  await requestCode();
+  fireEvent.click(screen.getByRole("button", { name: "更换邮箱" }));
+  expect(screen.queryByLabelText("邮箱验证码")).toBeNull();
+  expect(document.activeElement).toBe(screen.getByLabelText("邮箱"));
+  expect(request).toHaveBeenCalledTimes(2);
+  fireEvent.change(screen.getByLabelText("邮箱"), {
+    target: { value: "bob@example.com" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "发送验证码" }));
+  await waitFor(() => expect(request).toHaveBeenCalledTimes(3));
+  expect(request).toHaveBeenLastCalledWith(
+    "/api/registrations",
+    expect.objectContaining({
+      data: expect.objectContaining({ email: "bob@example.com" }),
+    }),
+  );
+});
+it("注册步骤可读，格式错误验证码不消耗服务端尝试", async () => {
+  mockRegistration();
+  render(<AuthView mode="register" />);
+  await requestCode();
+  expect(
+    screen
+      .getByRole("list", { name: "注册步骤" })
+      .querySelector('[aria-current="step"]')?.textContent,
+  ).toContain("验证邮箱");
+  fireEvent.change(screen.getByLabelText("邮箱验证码"), {
+    target: { value: "123" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "验证邮箱" }));
+  expect(await findFeedback("请输入 6 位数字验证码。")).toBeTruthy();
+  expect(document.activeElement).toBe(screen.getByLabelText("邮箱验证码"));
+  expect(request).toHaveBeenCalledTimes(2);
+});
+it.each(["", "字".repeat(33), "bad\u0001name"])(
+  "显示名无效时定位字段且不提交建号 %j",
+  async (name) => {
+    mockRegistration();
+    render(<AuthView mode="register" />);
+    await verifyCode();
+    fillAccount(name);
+    fireEvent.click(screen.getByRole("button", { name: "创建账号" }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByLabelText("显示名")),
+    );
+    expect(request).toHaveBeenCalledTimes(3);
+  },
+);
+it("异常建号回执不显示成功、不建立会话", async () => {
+  mockRegistration({});
+  render(<AuthView mode="register" />);
+  await verifyCode();
+  fillAccount();
+  fireEvent.click(screen.getByRole("button", { name: "创建账号" }));
+  expect(await findFeedback("暂时无法确认结果，请重试。")).toBeTruthy();
+  expect(screen.queryByText("账号已创建")).toBeNull();
+  expect(router.replace).not.toHaveBeenCalled();
+});
+it("弹窗注册成功明确转登录，保留邮箱并清空密码，不自动认证或跳转", async () => {
+  mockRegistration();
+  const authenticated = vi.fn();
+  render(
+    <AuthDialog
+      open
+      initialMode="register"
+      onOpenChange={vi.fn()}
+      onAuthenticated={authenticated}
+    />,
+  );
+  await verifyCode();
+  fillAccount();
+  fireEvent.click(screen.getByRole("button", { name: "创建账号" }));
+  expect(await screen.findByText("账号已创建")).toBeTruthy();
+  expect(authenticated).not.toHaveBeenCalled();
+  expect(router.replace).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "前往登录" }));
+  expect(screen.getByLabelText("邮箱")).toHaveProperty(
+    "value",
+    "alice@example.com",
+  );
+  expect(screen.getByLabelText("密码", { exact: true })).toHaveProperty(
+    "value",
+    "",
+  );
+});
+it("弹窗切换仅保留邮箱，关闭重开清空表单", async () => {
+  mockRegistration();
+  const props = { onOpenChange: vi.fn(), onAuthenticated: vi.fn() };
+  const view = render(<AuthDialog open {...props} />);
+  fireEvent.change(screen.getByLabelText("邮箱"), {
+    target: { value: "alice@example.com" },
+  });
+  fireEvent.change(screen.getByLabelText("密码", { exact: true }), {
+    target: { value: "private-password" },
+  });
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "注册" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  await screen.findByText("协议版本 2026-10-15.1");
+  expect(screen.getByLabelText("邮箱")).toHaveProperty(
+    "value",
+    "alice@example.com",
+  );
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "登录" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  expect(screen.getByLabelText("密码", { exact: true })).toHaveProperty(
+    "value",
+    "",
+  );
+  view.rerender(<AuthDialog open={false} {...props} />);
+  view.rerender(<AuthDialog open {...props} />);
+  expect(screen.getByLabelText("邮箱")).toHaveProperty("value", "");
+});
 afterEach(() => {
   cleanup();
   disposeSessionRenewal();
@@ -130,6 +295,19 @@ it("closed server policy disables registration and provides readable agreements"
     screen.getByRole("button", { name: "发送验证码" }).hasAttribute("disabled"),
   ).toBe(true);
 });
+it("邮件不可用时说明恢复方式并阻止发码", async () => {
+  vi.mocked(request).mockResolvedValue({
+    ...policy,
+    registration_enabled: false,
+    closed_reason: "mail_unavailable",
+  });
+  render(<AuthView mode="register" />);
+  expect(await screen.findByText(/验证邮件服务暂不可用/)).toBeTruthy();
+  expect(screen.getByRole("button", { name: "发送验证码" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+});
 it("registration verifies email then requires explicit agreement and server version", async () => {
   vi.mocked(request).mockImplementation(async (url) =>
     url === "/api/auth-policy"
@@ -170,7 +348,8 @@ it("registration verifies email then requires explicit agreement and server vers
   expect(request).toHaveBeenCalledTimes(3);
   fireEvent.click(screen.getByRole("checkbox"));
   fireEvent.click(screen.getByRole("button", { name: "创建账号" }));
-  await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/login"));
+  expect(await screen.findByText("账号已创建")).toBeTruthy();
+  expect(router.replace).not.toHaveBeenCalled();
   expect(request).toHaveBeenLastCalledWith(
     expect.stringContaining("/complete"),
     expect.objectContaining({
