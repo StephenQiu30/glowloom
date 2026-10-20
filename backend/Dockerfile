@@ -18,7 +18,7 @@ if [ -z "${LV_ENV_FILE:-}" ] && [ -r /run/secrets/identity-runtime.env ]; then
 fi
 mkdir -p /tmp/glowloom-dev
 printf '%s\n' '[glowloom-dev] Building current source in /src...' >&2
-if ! go build -mod=readonly -p 2 -o /tmp/glowloom-dev/lanverse ./cmd/lanverse; then
+if ! go build -mod=readonly -p 2 -o /tmp/glowloom-dev/glowloom ./cmd/glowloom; then
   printf '%s\n' '[glowloom-dev] Build failed; application was not started. Fix the source and restart.' >&2
   exit 1
 fi
@@ -32,7 +32,7 @@ if [ "${LV_DEV_API_PROXY:-false}" = "true" ]; then
   socat TCP-LISTEN:18080,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:8080 &
 fi
 printf '%s\n' '[glowloom-dev] Build succeeded; starting current source.' >&2
-exec /tmp/glowloom-dev/lanverse "$@"
+exec /tmp/glowloom-dev/glowloom "$@"
 ENTRYPOINT
 ENTRYPOINT ["/usr/local/bin/glowloom-dev-entrypoint"]
 CMD ["--role=api"]
@@ -42,19 +42,19 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/lanverse ./cmd/lanverse
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/glowloom ./cmd/glowloom
 
 FROM debian:12-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /work \
     && chown 65532:65532 /work
-COPY --from=build /out/lanverse /usr/local/bin/lanverse
+COPY --from=build /out/glowloom /usr/local/bin/glowloom
 COPY internal/media/adapter/gltf/schema/COPYING.adoc internal/media/adapter/gltf/schema/LICENSE.adoc internal/media/adapter/gltf/schema/PROVENANCE.md /usr/share/glowloom/licenses/gltf/
 COPY internal/media/adapter/gltf/schema/LICENSES/ /usr/share/glowloom/licenses/gltf/LICENSES/
 COPY internal/mediatool/adapter/ffmpeg/fonts/OFL.txt internal/mediatool/adapter/ffmpeg/fonts/PROVENANCE.md /usr/share/glowloom/licenses/noto-cjk/
 ENV TMPDIR=/work
 USER 65532:65532
 EXPOSE 8080 8081 8082
-ENTRYPOINT ["/usr/local/bin/lanverse"]
+ENTRYPOINT ["/usr/local/bin/glowloom"]
 CMD ["--role=api"]

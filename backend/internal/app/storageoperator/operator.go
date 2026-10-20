@@ -38,7 +38,7 @@ func Run(args []string) error {
 // ordinary application DSN. Errors do not print DSNs, credentials or signed URLs.
 func Execute(ctx context.Context, args []string, output io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: lanverse storage validate|register|bind-legacy|backfill|backfill-work|reconcile-work|probe|record-deployment|activate --config <path>")
+		return errors.New("usage: glowloom storage validate|register|bind-legacy|backfill|backfill-work|reconcile-work|probe|record-deployment|activate --config <path>")
 	}
 	command := args[0]
 	switch command {

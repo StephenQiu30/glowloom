@@ -34,7 +34,7 @@ type Command struct {
 // ParseCommand validates arguments without loading configuration or changing resources.
 func ParseCommand(args []string) (Command, error) {
 	var command Command
-	usage := errors.New("usage: lanverse identity key-init | bind-start --login-name NAME --email EMAIL [--platform-admin] | bind-complete --operation UUID [--platform-admin] | mail-run --operation UUID")
+	usage := errors.New("usage: glowloom identity key-init | bind-start --login-name NAME --email EMAIL [--platform-admin] | bind-complete --operation UUID [--platform-admin] | mail-run --operation UUID")
 	if len(args) == 0 {
 		return command, usage
 	}

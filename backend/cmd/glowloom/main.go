@@ -1,4 +1,4 @@
-// Command lanverse runs backend roles and installs Temporal maintenance schedules.
+// Command glowloom runs backend roles and operator subcommands.
 package main
 
 import (
@@ -22,7 +22,7 @@ import (
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "lanverse:", err)
+		fmt.Fprintln(os.Stderr, "glowloom:", err)
 		os.Exit(1)
 	}
 }
@@ -38,13 +38,13 @@ func run() error {
 	var queues, schedulePrefix string
 	setup := len(os.Args) > 1 && os.Args[1] == "temporal"
 	if len(os.Args) > 1 && os.Args[1] == "admin" {
-		return fmt.Errorf("legacy administrator bootstrap was removed; use lanverse identity")
+		return fmt.Errorf("legacy administrator bootstrap was removed; use glowloom identity")
 	}
 	partitions := len(os.Args) > 1 && os.Args[1] == "partitions"
 	switch {
 	case setup:
 		if len(os.Args) < 3 || os.Args[2] != "setup" {
-			return fmt.Errorf("usage: lanverse temporal setup [--prefix=value]")
+			return fmt.Errorf("usage: glowloom temporal setup [--prefix=value]")
 		}
 		setupFlags := flag.NewFlagSet("temporal setup", flag.ContinueOnError)
 		prefixFlag := setupFlags.String("prefix", "", "optional prefix for isolated schedule verification")
@@ -57,7 +57,7 @@ func run() error {
 		schedulePrefix = *prefixFlag
 	case partitions:
 		if len(os.Args) != 3 || os.Args[2] != "ensure" {
-			return fmt.Errorf("usage: lanverse partitions ensure")
+			return fmt.Errorf("usage: glowloom partitions ensure")
 		}
 	default:
 		roleFlag := flag.String("role", string(app.RoleAPI), "process role: api|worker|relay|all")

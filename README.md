@@ -36,6 +36,6 @@ Temporal返回命名空间不存在时，先用`temporal operator namespace list
 
 前端开发可在 `frontend/` 执行 `pnpm exec next dev --hostname 127.0.0.1 --port 3141`。服务访问地址以实际启动配置为准；启动成功不代表业务或邮件已验收。
 
-工程与门禁见 [PROJECT](PROJECT.md)，协作规则见 [AGENTS](AGENTS.md)，共享视觉规范见 [DESIGN](DESIGN.md)，当前事项见 [BACKLOG](BACKLOG.md)。现有 `LV_*` 配置、`lanverse` 命令及数据库/存储标识保留，不随文档清理改变运行环境。
+工程与门禁见 [PROJECT](PROJECT.md)，协作规则见 [AGENTS](AGENTS.md)，共享视觉规范见 [DESIGN](DESIGN.md)，当前事项见 [BACKLOG](BACKLOG.md)。进程命令为 `glowloom`，入口是 `backend/cmd/glowloom`。现有 `LV_*` 配置及数据库/存储标识保留，不随文档清理改变运行环境。
 
 文档直接维护 Markdown，只保留现行正文。第三方版权与许可见 [THIRD_PARTY_NOTICES](frontend/public/THIRD_PARTY_NOTICES.md)。

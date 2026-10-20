@@ -14,6 +14,12 @@
 
 业务按职责组织，`adapter → application → domain`，依赖显式注入，接口由消费方定义。编码与审查遵循AGENTS的Google Go与Vercel/Next.js规范；不预建未来目录、通用框架或空转发层。
 
+后端只有一个进程入口 `backend/cmd/glowloom`。默认以 `--role=api|worker|relay|all` 运行对应角色；身份维护、对象存储维护、Temporal 计划和分区确保分别是 `glowloom identity`、`glowloom storage`、`glowloom temporal setup`、`glowloom partitions ensure`。不保留 `cmd/identity`，也不再使用名为 lanverse 的二进制。镜像入口和用法字符串同为 `glowloom`。
+
+业务实现放在 `backend/internal/<模块>/`：`domain` 只含规则，`application` 编排用例，`adapter/<技术>` 对接 HTTP、数据库、工作流或外部系统。领域与应用不依赖 Gin、GORM，也不调用另一个业务模块的应用服务。跨模块事实由消费方定义小接口，在 `backend/internal/app` 启动时注入。`internal/app` 只负责角色进程、Wire 装配和这种跨模块适配，不在该包新增业务规则，也不把同一服务再拆成另一个 `cmd`。
+
+`backend/internal/platform/` 提供配置、日志以及数据库、Redis、Kafka、Temporal、对象存储连接。进程配置继续读 `LV_*`；邮件沿用既有 `SMTP_*`。数据库角色、库名、Kafka 主题、Temporal namespace 和对象桶名保持当前部署标识，命令改名不迁移这些资源。
+
 前端复用组件按 feature 放在 `frontend/src/components/<feature>/`；`components/ui/` 只保留有消费者的 shadcn/Radix 基础组件。当前跨页面复用内容按实际业务职责归属维护，直接导入具体文件，不使用产品拼音目录或统一导出层。
 
 页面与页面独有组件放在对应 App Router 页面目录：`src/app/<路由>/page.tsx` 负责入口与元数据，`src/app/<路由>/_components/` 存放页面实现、局部状态和私有组件；首页使用 `src/app/_components/`。不额外建立 `src/features/` 或另一套 Pages Router。共享认证视图服务登录、注册和重置密码三个页面；公共灵感素材在 `components/inspiration/`，个人素材合同和预览在 `components/media/`。复用组件不得反向导入路由页面或页面私有组件；页面不得从其他页面模块导入共用数据或控件。
