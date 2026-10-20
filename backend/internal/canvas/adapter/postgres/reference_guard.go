@@ -89,14 +89,35 @@ func (g *MediaReferenceGuard) HasMediaReferences(ctx context.Context, actor iden
 			return found, err
 		}
 	}
-	var logs []struct{ Commands []byte }
-	if err := tx.Raw(`SELECT c.commands FROM canvas.command_log c JOIN canvas.document d ON d.id=c.document_id WHERE d.project_id=? ORDER BY d.id,c.revision LIMIT ? FOR SHARE OF c,d`, project, maxMediaReferenceFacts+1).Scan(&logs).Error; err != nil {
+	var logs []struct {
+		Commands         []byte
+		OperationVersion int
+	}
+	if err := tx.Raw(`SELECT c.commands,c.operation_version FROM canvas.command_log c JOIN canvas.document d ON d.id=c.document_id WHERE d.project_id=? ORDER BY d.id,c.revision LIMIT ? FOR SHARE OF c,d`, project, maxMediaReferenceFacts+1).Scan(&logs).Error; err != nil {
 		return false, fmt.Errorf("read retained canvas commands: %w", err)
 	}
 	if len(nodes)+len(logs) > maxMediaReferenceFacts {
 		return false, fmt.Errorf("retained canvas facts exceed reference read budget")
 	}
 	for _, log := range logs {
+		if log.OperationVersion == 1 {
+			var entry collaborationLog
+			if err := decodeReferenceJSON(log.Commands, &entry); err != nil || entry.MediaReferences == nil {
+				return false, domain.ErrInvalidCommand
+			}
+			for _, id := range entry.MediaReferences {
+				if id == uuid.Nil {
+					return false, domain.ErrInvalidCommand
+				}
+				if id == asset {
+					return true, nil
+				}
+			}
+			continue
+		}
+		if log.OperationVersion != 0 {
+			return false, domain.ErrUnsupportedCommand
+		}
 		var commands []json.RawMessage
 		if err := decodeReferenceJSON(log.Commands, &commands); err != nil || commands == nil {
 			return false, domain.ErrInvalidCommand
@@ -172,10 +193,41 @@ func nodeMediaReference(kind string, id *uuid.UUID, config domain.NodeConfig, as
 	return configMediaReference(config, asset)
 }
 func configMediaReference(config domain.NodeConfig, asset uuid.UUID) (bool, error) {
+	ids, err := configMediaReferences(config)
+	if err != nil {
+		return false, err
+	}
+	for _, id := range ids {
+		if id == asset {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+func configMediaReferences(config domain.NodeConfig) ([]uuid.UUID, error) {
 	if config.IsOpaque() {
-		return false, domain.ErrUnsupportedCommand
+		return nil, domain.ErrUnsupportedCommand
 	}
 	var ids []uuid.UUID
+	if config.Draft != nil && config.Draft.Composer != nil {
+		for _, ref := range config.Draft.Composer.References {
+			sources := ref.Source.Media
+			if ref.Source.Kind == "media" {
+				id, err := uuid.Parse(ref.Source.SourceID)
+				if err != nil {
+					return nil, domain.ErrInvalidCommand
+				}
+				ids = append(ids, id)
+			}
+			for _, source := range sources {
+				id, err := uuid.Parse(source.SourceID)
+				if err != nil {
+					return nil, domain.ErrInvalidCommand
+				}
+				ids = append(ids, id)
+			}
+		}
+	}
 	if c := config.Generation; c != nil {
 		for _, input := range c.Inputs {
 			ids = append(ids, input.MediaAssetID)
@@ -208,13 +260,10 @@ func configMediaReference(config domain.NodeConfig, asset uuid.UUID) (bool, erro
 	}
 	for _, id := range ids {
 		if id == uuid.Nil {
-			return false, domain.ErrInvalidCommand
-		}
-		if id == asset {
-			return true, nil
+			return nil, domain.ErrInvalidCommand
 		}
 	}
-	return false, nil
+	return ids, nil
 }
 
 // NewScopedMediaReferenceGuard uses the caller request or worker authority.

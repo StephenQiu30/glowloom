@@ -1,3 +1,4 @@
+import type { Change, Receipt, Envelope } from "./collaboration";
 import { getCanvas } from "@/api/canvases";
 import {
   getCSRFToken,
@@ -12,6 +13,15 @@ type Callbacks = {
   snapshot: (document: unknown, writable: boolean) => void;
   status: (status: LiveStatus, writable?: boolean) => void;
   revoked: () => void;
+  collaboration?: {
+    revision: () => number;
+    pending: () => Envelope | undefined;
+    changes: (changes: Change[]) => void;
+    receipt: (receipt: Receipt) => void;
+    resync: () => void;
+    actor: (id: string) => void;
+    error?: (code: string, status: number) => void;
+  };
 };
 type Pending = {
   key: string;
@@ -104,7 +114,10 @@ export class CanvasLive {
       if (this.socket !== socket || this.stopped) return;
       this.send({
         type: "join",
-        protocol_version: 1,
+        protocol_version: this.callbacks.collaboration ? 2 : 1,
+        ...(this.callbacks.collaboration
+          ? { last_revision: this.callbacks.collaboration.revision() }
+          : {}),
         scope_id: getCreationScope(),
         csrf_token: getCSRFToken(),
       });
@@ -117,9 +130,34 @@ export class CanvasLive {
         const p = JSON.parse(event.data) as Record<string, unknown>;
         if (p.type === "snapshot" && typeof p.writable === "boolean") {
           this.callbacks.snapshot(p.document, p.writable);
+        } else if (p.type === "changes" && this.callbacks.collaboration) {
+          if (!Array.isArray(p.changes)) throw new Error("invalid_changes");
+          this.callbacks.collaboration.changes(p.changes as Change[]);
+        } else if (
+          p.type === "resync_required" &&
+          this.callbacks.collaboration
+        ) {
+          this.callbacks.collaboration.resync();
+        } else if (
+          p.type === "ack" &&
+          this.callbacks.collaboration &&
+          p.receipt
+        ) {
+          this.callbacks.collaboration.receipt(p.receipt as Receipt);
+        } else if (p.type === "not_found" && this.callbacks.collaboration) {
+          const pending = this.callbacks.collaboration.pending();
+          if (pending && p.op_id === pending.key)
+            this.sendCollaboration(pending);
         } else if (p.type === "ready") {
           this.ready = true;
           this.attempts = 0;
+          if (this.callbacks.collaboration) {
+            if (typeof p.actor_id !== "string")
+              throw new Error("invalid_actor");
+            this.callbacks.collaboration.actor(p.actor_id);
+            const pending = this.callbacks.collaboration.pending();
+            if (pending) this.sendCollaboration(pending, true);
+          }
           this.callbacks.status("live", p.writable === true);
           if (this.pending)
             this.send({
@@ -167,6 +205,15 @@ export class CanvasLive {
           } else if ([401, 403, 404].includes(Number(p.status))) {
             this.revoke();
           } else if (
+            this.callbacks.collaboration &&
+            Number(p.status) >= 400 &&
+            Number(p.status) < 500
+          ) {
+            this.callbacks.collaboration.error?.(
+              String(p.code),
+              Number(p.status),
+            );
+          } else if (
             this.pending &&
             p.op_id === this.pending.key &&
             Number(p.status) >= 400 &&
@@ -210,6 +257,27 @@ export class CanvasLive {
         );
       }, delay);
     };
+  }
+  sendCollaboration(envelope: Envelope, resolve = false) {
+    if (
+      !this.callbacks.collaboration ||
+      !this.ready ||
+      this.stopped ||
+      !this.current()
+    )
+      throw new RequestError("request_unconfirmed");
+    const message = {
+      type: resolve ? "resolve" : "submit",
+      op_id: envelope.key,
+      body: envelope.body,
+    };
+    if (
+      new TextEncoder().encode(JSON.stringify({ ...message, type: "resolve" }))
+        .length >
+      1 << 20
+    )
+      throw new RequestError("canvas_request_too_large", 413);
+    this.send(message);
   }
   submit(key: string, body: API.CommandsInput): Promise<API.Result> {
     if (this.stopped || !this.current())

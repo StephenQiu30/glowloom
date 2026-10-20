@@ -730,6 +730,9 @@ CREATE TABLE billing.reservation (
 );
 
 CREATE TABLE canvas.command_log (
+    op_id uuid,
+    base_revision integer,
+    operation_version integer DEFAULT 0 NOT NULL,
     id uuid NOT NULL,
     document_id uuid NOT NULL,
     revision integer NOT NULL,
@@ -740,7 +743,12 @@ CREATE TABLE canvas.command_log (
     is_delete boolean DEFAULT false NOT NULL
 );
 
+CREATE INDEX canvas_operation_tombstones ON canvas.command_log USING gin(commands jsonb_path_ops) WHERE operation_version=1;
+
+CREATE UNIQUE INDEX canvas_operation_identity ON canvas.command_log(document_id,create_by,op_id) WHERE op_id IS NOT NULL;
+
 CREATE TABLE canvas.document (
+    operation_version integer DEFAULT 0 NOT NULL CHECK (operation_version IN (0,1)),
     id uuid NOT NULL,
     project_id uuid NOT NULL,
     name text NOT NULL,
@@ -836,12 +844,13 @@ CREATE TABLE canvas.save_receipt (
     idem_key uuid NOT NULL,
     document_id uuid NOT NULL,
     request_hash text NOT NULL,
-    result_revision bigint NOT NULL,
+    status text DEFAULT 'accepted' NOT NULL,
+    result_revision bigint,
     response_body jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT save_receipt_request_hash_check CHECK ((request_hash ~ '^[0-9a-f]{64}$'::text)),
     CONSTRAINT save_receipt_response_body_check CHECK ((jsonb_typeof(response_body) = 'object'::text)),
-    CONSTRAINT save_receipt_result_revision_check CHECK ((result_revision > 1))
+    CONSTRAINT save_receipt_result_revision_check CHECK ((status='accepted' AND result_revision IS NOT NULL AND result_revision>1) OR (status='rejected' AND result_revision IS NULL))
 );
 
 CREATE TABLE catalog.capability (

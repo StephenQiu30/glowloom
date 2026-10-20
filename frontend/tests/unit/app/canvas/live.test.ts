@@ -218,3 +218,70 @@ it("rejects an oversized UTF-8 envelope before sending and leaves no unknown pen
   });
   await small;
 });
+
+it("protocol 2 resumes changes then resolves the exact coordinator envelope", async () => {
+  const envelope = {
+    key: id,
+    body: {
+      operation_version: 1 as const,
+      base_revision: 2,
+      operations: [{ type: "set", node_id: id, path: ["title"], value: "OT" }],
+    },
+  };
+  const changes = vi.fn(),
+    receipt = vi.fn(),
+    resync = vi.fn(),
+    actor = vi.fn();
+  live = new CanvasLive(id, {
+    snapshot: vi.fn(),
+    status: vi.fn(),
+    revoked: vi.fn(),
+    collaboration: {
+      revision: () => 2,
+      pending: () => envelope,
+      changes,
+      receipt,
+      resync,
+      actor,
+    },
+  });
+  live.start();
+  const socket = Socket.all[0];
+  socket.open();
+  expect(socket.sent[0]).toMatchObject({
+    protocol_version: 2,
+    last_revision: 2,
+  });
+  socket.receive({ type: "changes", revision: 3, changes: [{ revision: 3 }] });
+  expect(changes).toHaveBeenCalledWith([{ revision: 3 }]);
+  socket.receive({
+    type: "ready",
+    actor_id: "actor",
+    revision: 3,
+    writable: true,
+  });
+  expect(actor).toHaveBeenCalledWith("actor");
+  expect(socket.sent.at(-1)).toEqual({
+    type: "resolve",
+    op_id: id,
+    body: envelope.body,
+  });
+  socket.receive({ type: "not_found", op_id: id });
+  expect(socket.sent.at(-1)).toEqual({
+    type: "submit",
+    op_id: id,
+    body: envelope.body,
+  });
+  socket.receive({
+    type: "ack",
+    op_id: id,
+    receipt: { status: "rejected", op_id: id, code: "field_conflict" },
+  });
+  expect(receipt).toHaveBeenCalledWith({
+    status: "rejected",
+    op_id: id,
+    code: "field_conflict",
+  });
+  socket.receive({ type: "resync_required", code: "history_unavailable" });
+  expect(resync).toHaveBeenCalled();
+});

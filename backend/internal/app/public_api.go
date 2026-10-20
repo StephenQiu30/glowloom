@@ -129,8 +129,9 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader {
 		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess), nil)
 	}
-	canvasService := canvasapp.NewService(pgcanvas.NewScopedStore(database, mediaFactory, mediawire.NewCanvasProjectAccess))
-	live := canvaslive.NewHandler(canvasService, canvaswire.SocketAuthority(database, auth), cfg.PublicOrigin)
+	canvasStore := pgcanvas.NewScopedStore(database, mediaFactory, mediawire.NewCanvasProjectAccess)
+	canvasService := canvasapp.NewService(canvasStore)
+	live := canvaslive.NewHandler(canvasService, canvaswire.SocketAuthority(database, auth), cfg.PublicOrigin).WithCollaboration(canvasapp.NewCollaborationService(canvasStore))
 	socketLifetime := context.Background()
 	if len(lifetime) > 0 {
 		socketLifetime = lifetime[0]

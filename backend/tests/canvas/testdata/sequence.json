@@ -1,0 +1,286 @@
+[
+  {
+    "name": "shift-delete",
+    "before": [
+      {
+        "type": "text",
+        "text": "AB"
+      }
+    ],
+    "a": [
+      {
+        "insert": [
+          {
+            "type": "text",
+            "text": "X"
+          }
+        ]
+      }
+    ],
+    "b": [
+      {
+        "retain": 1
+      },
+      {
+        "delete": 1
+      }
+    ],
+    "want": [
+      {
+        "type": "text",
+        "text": "XA"
+      }
+    ]
+  },
+  {
+    "name": "same-position",
+    "before": [
+      {
+        "type": "text",
+        "text": "AB"
+      }
+    ],
+    "a": [
+      {
+        "retain": 1
+      },
+      {
+        "insert": [
+          {
+            "type": "text",
+            "text": "X"
+          }
+        ]
+      }
+    ],
+    "b": [
+      {
+        "retain": 1
+      },
+      {
+        "insert": [
+          {
+            "type": "text",
+            "text": "Y"
+          }
+        ]
+      }
+    ],
+    "want": [
+      {
+        "type": "text",
+        "text": "AXYB"
+      }
+    ]
+  },
+  {
+    "name": "preserve-unseen-insert",
+    "before": [
+      {
+        "type": "text",
+        "text": "ABCD"
+      }
+    ],
+    "a": [
+      {
+        "retain": 1
+      },
+      {
+        "delete": 2
+      }
+    ],
+    "b": [
+      {
+        "retain": 2
+      },
+      {
+        "insert": [
+          {
+            "type": "text",
+            "text": "X"
+          }
+        ]
+      }
+    ],
+    "want": [
+      {
+        "type": "text",
+        "text": "AXD"
+      }
+    ]
+  },
+  {
+    "name": "overlapping-delete",
+    "before": [
+      {
+        "type": "text",
+        "text": "ABCD"
+      }
+    ],
+    "a": [
+      {
+        "retain": 1
+      },
+      {
+        "delete": 2
+      }
+    ],
+    "b": [
+      {
+        "retain": 2
+      },
+      {
+        "delete": 2
+      }
+    ],
+    "want": [
+      {
+        "type": "text",
+        "text": "A"
+      }
+    ]
+  },
+  {
+    "name": "replace-order",
+    "before": [
+      {
+        "type": "text",
+        "text": "ABC"
+      }
+    ],
+    "a": [
+      {
+        "retain": 1
+      },
+      {
+        "insert": [
+          {
+            "type": "text",
+            "text": "X"
+          }
+        ]
+      },
+      {
+        "delete": 1
+      }
+    ],
+    "b": [
+      {
+        "retain": 1
+      },
+      {
+        "insert": [
+          {
+            "type": "text",
+            "text": "Y"
+          }
+        ]
+      },
+      {
+        "delete": 1
+      }
+    ],
+    "want": [
+      {
+        "type": "text",
+        "text": "AXYC"
+      }
+    ]
+  },
+  {
+    "name": "utf16",
+    "before": [
+      {
+        "type": "text",
+        "text": "A😀B"
+      }
+    ],
+    "a": [
+      {
+        "retain": 1
+      },
+      {
+        "insert": [
+          {
+            "type": "text",
+            "text": "X"
+          }
+        ]
+      }
+    ],
+    "b": [
+      {
+        "retain": 3
+      },
+      {
+        "delete": 1
+      }
+    ],
+    "want": [
+      {
+        "type": "text",
+        "text": "AX😀"
+      }
+    ]
+  },
+  {
+    "name": "typed-atoms",
+    "before": [
+      {
+        "type": "text",
+        "text": "A"
+      },
+      {
+        "type": "paragraphBreak"
+      },
+      {
+        "type": "reference",
+        "reference_id": "r"
+      },
+      {
+        "type": "hardBreak"
+      },
+      {
+        "type": "text",
+        "text": "B"
+      }
+    ],
+    "a": [
+      {
+        "retain": 1
+      },
+      {
+        "insert": [
+          {
+            "type": "text",
+            "text": "X"
+          }
+        ]
+      }
+    ],
+    "b": [
+      {
+        "retain": 2
+      },
+      {
+        "delete": 1
+      }
+    ],
+    "want": [
+      {
+        "type": "text",
+        "text": "AX"
+      },
+      {
+        "type": "paragraphBreak"
+      },
+      {
+        "type": "hardBreak"
+      },
+      {
+        "type": "text",
+        "text": "B"
+      }
+    ]
+  }
+]

@@ -70,15 +70,16 @@ type Edge struct {
 
 // Document is the authoritative current graph.
 type Document struct {
-	ReadOnlyReason string          `json:"read_only_reason,omitempty"`
-	ID             uuid.UUID       `json:"id"`
-	ProjectID      uuid.UUID       `json:"project_id"`
-	Name           string          `json:"name"`
-	Scope          json.RawMessage `json:"scope" swaggertype:"object"`
-	Revision       int64           `json:"revision"`
-	Viewport       Viewport        `json:"viewport"`
-	Nodes          []Node          `json:"nodes"`
-	Edges          []Edge          `json:"edges"`
+	OperationVersion int             `json:"operation_version,omitempty"`
+	ReadOnlyReason   string          `json:"read_only_reason,omitempty"`
+	ID               uuid.UUID       `json:"id"`
+	ProjectID        uuid.UUID       `json:"project_id"`
+	Name             string          `json:"name"`
+	Scope            json.RawMessage `json:"scope" swaggertype:"object"`
+	Revision         int64           `json:"revision"`
+	Viewport         Viewport        `json:"viewport"`
+	Nodes            []Node          `json:"nodes"`
+	Edges            []Edge          `json:"edges"`
 }
 
 // Move changes absolute world position; moving a group does not implicitly move children.

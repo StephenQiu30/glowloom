@@ -63,7 +63,7 @@ func (s *Store) List(ctx context.Context, a identityapp.Principal, p uuid.UUID) 
 			return err
 		}
 		var rows []documentRow
-		if err := tx.Raw(`SELECT id,project_id,name,scope,revision,viewport FROM canvas.document WHERE project_id=? AND NOT is_delete ORDER BY update_time DESC,id`, p).Scan(&rows).Error; err != nil {
+		if err := tx.Raw(`SELECT id,project_id,name,scope,revision,viewport,operation_version FROM canvas.document WHERE project_id=? AND NOT is_delete ORDER BY update_time DESC,id`, p).Scan(&rows).Error; err != nil {
 			return err
 		}
 		for _, row := range rows {
@@ -174,6 +174,9 @@ func (s *Store) Execute(ctx context.Context, a identityapp.Principal, id uuid.UU
 		if err != nil {
 			return err
 		}
+		if doc.OperationVersion != 0 {
+			return &domain.OperationError{Code: "operation_version_required"}
+		}
 		if doc.Revision != input.ExpectedRevision {
 			return &application.RevisionConflict{CurrentRevision: doc.Revision}
 		}
@@ -257,16 +260,17 @@ func (s *Store) Execute(ctx context.Context, a identityapp.Principal, id uuid.UU
 }
 
 type documentRow struct {
-	ID        uuid.UUID
-	ProjectID uuid.UUID
-	Name      string
-	Scope     []byte
-	Revision  int64
-	Viewport  []byte
+	OperationVersion int
+	ID               uuid.UUID
+	ProjectID        uuid.UUID
+	Name             string
+	Scope            []byte
+	Revision         int64
+	Viewport         []byte
 }
 
 func (r documentRow) document() (domain.Document, error) {
-	d := domain.Document{ID: r.ID, ProjectID: r.ProjectID, Name: r.Name, Scope: json.RawMessage(r.Scope), Revision: r.Revision, Nodes: []domain.Node{}, Edges: []domain.Edge{}}
+	d := domain.Document{OperationVersion: r.OperationVersion, ID: r.ID, ProjectID: r.ProjectID, Name: r.Name, Scope: json.RawMessage(r.Scope), Revision: r.Revision, Nodes: []domain.Node{}, Edges: []domain.Edge{}}
 	if err := json.Unmarshal(r.Viewport, &d.Viewport); err != nil {
 		return domain.Document{}, err
 	}
@@ -281,7 +285,7 @@ func load(tx *gorm.DB, id uuid.UUID, write bool) (domain.Document, error) {
 	if write {
 		lock = " FOR UPDATE"
 	}
-	r := tx.Raw(`SELECT id,project_id,name,scope,revision,viewport FROM canvas.document WHERE id=? AND NOT is_delete`+lock, id).Scan(&row)
+	r := tx.Raw(`SELECT id,project_id,name,scope,revision,viewport,operation_version FROM canvas.document WHERE id=? AND NOT is_delete`+lock, id).Scan(&row)
 	if r.Error != nil {
 		return domain.Document{}, r.Error
 	}
