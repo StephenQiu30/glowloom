@@ -1235,7 +1235,7 @@ function EditorWorkspace({
                 canvas.collaboration?.history[direction]()
               }
               onCompositionState={(active) =>
-                canvas.collaboration?.composition(active)
+                canvas.collaboration?.composition(active, "negative_prompt")
               }
             />
           ) : (

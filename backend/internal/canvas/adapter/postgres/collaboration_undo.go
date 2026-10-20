@@ -47,7 +47,13 @@ func collaborationUndoHistory(tx *gorm.DB, head domain.Document, actor uuid.UUID
 	}
 	history := make([]domain.ContributionBatch, len(rows))
 	for i, row := range rows {
-		history[i] = domain.ContributionBatch{Revision: row.Revision, ActorID: row.CreateBy, OpID: row.OpID, UndoOf: row.Log.Original.UndoOf, OriginalBase: row.Log.OriginalBase, Original: row.Log.OriginalOperations, Operations: row.Log.Operations, Effects: row.Log.Effects, Touches: row.Log.Touches}
+		deletions := []domain.Operation{}
+		for _, op := range row.Log.Original.Operations {
+			if op.Type == "delete_node" || op.Type == "disconnect" || op.Type == "remove" {
+				deletions = append(deletions, op)
+			}
+		}
+		history[i] = domain.ContributionBatch{Revision: row.Revision, ActorID: row.CreateBy, OpID: row.OpID, UndoOf: row.Log.Original.UndoOf, OriginalBase: row.Log.OriginalBase, Deletions: deletions, Original: row.Log.OriginalOperations, Operations: row.Log.Operations, Effects: row.Log.Effects, Touches: row.Log.Touches}
 	}
 	return floor, history, nil
 }

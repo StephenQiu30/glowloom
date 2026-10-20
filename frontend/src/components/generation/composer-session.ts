@@ -451,7 +451,7 @@ export type ComposerCollaboration = {
     canRedo?: () => boolean;
   };
   pendingReference: (id: string) => boolean;
-  composition: (active: boolean) => void;
+  composition: (active: boolean, source?: string) => void;
 };
 function collaborationOptions(
   editor: Editor,
@@ -541,7 +541,12 @@ export function composerEditorOptions(
               return false;
             }
           },
-          view: () => ({ destroy: () => clearTimeout(settleTimer) }),
+          view: () => ({
+            destroy: () => {
+              clearTimeout(settleTimer);
+              options.collaboration?.composition(false, options.contextKey);
+            },
+          }),
           props: {
             handleClickOn: (_view, _pos, node, _nodePos, _event, direct) => {
               if (direct && node.type.name === "reference")
@@ -586,7 +591,7 @@ export function composerEditorOptions(
               },
               compositionstart: (view) => {
                 clearTimeout(settleTimer);
-                options.collaboration?.composition(true);
+                options.collaboration?.composition(true, options.contextKey);
                 view.dispatch(
                   view.state.tr.setMeta(sessionKey, {
                     composing: true,
@@ -605,7 +610,10 @@ export function composerEditorOptions(
                 settleTimer = setTimeout(() => {
                   if (editor.isDestroyed) return;
                   if (!inComposition(editor))
-                    options.collaboration?.composition(false);
+                    options.collaboration?.composition(
+                      false,
+                      options.contextKey,
+                    );
                   const request = stateOf(editor.state).deferredMode;
                   if (request)
                     new ComposerSession(editor).resolveModeSelection(request);

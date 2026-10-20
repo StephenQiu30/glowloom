@@ -96,3 +96,31 @@ it("retains the displayed branch immediately when P prediction becomes invalid, 
   ).toBe("**AB**");
   hook.unmount();
 });
+
+it("keeps independent composition owners until the last editor releases", () => {
+  const initial: Canvas = {
+    id: crypto.randomUUID(),
+    project_id: crypto.randomUUID(),
+    revision: 1,
+    nodes: [],
+    edges: [],
+  };
+  const hook = renderHook(() =>
+    useCanvasCollaboration(initial, true, {
+      update: () => {},
+      status: () => {},
+      revoked: () => {},
+      message: () => {},
+    }),
+  );
+  const owner = hook.result.current.owner("node");
+  act(() => {
+    owner.composition(true, "prompt");
+    owner.composition(true, "negative_prompt");
+    owner.composition(false, "prompt");
+  });
+  expect(hook.result.current.controller.current?.isComposing).toBe(true);
+  act(() => owner.composition(false, "negative_prompt"));
+  expect(hook.result.current.controller.current?.isComposing).toBe(false);
+  hook.unmount();
+});

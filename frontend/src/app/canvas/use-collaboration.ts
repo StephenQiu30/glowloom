@@ -425,9 +425,10 @@ export function useCanvasCollaboration(
         !controller.current?.base.nodes
           .find((n) => n.id === id)
           ?.config.draft?.composer?.references.some((r) => r.id === ref),
-      composition: (active) => {
-        if (active) composing.current.add(id);
-        else composing.current.delete(id);
+      composition: (active, source = "document") => {
+        const owner = id + ":" + source;
+        if (active) composing.current.add(owner);
+        else composing.current.delete(owner);
         controller.current?.composition(composing.current.size > 0);
       },
     }),

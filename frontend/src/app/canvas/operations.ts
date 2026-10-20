@@ -559,6 +559,15 @@ export function usesNode(op: Operation, id: string | undefined) {
   )
     return op.value === id;
   if (
+    ["insert", "restore_item"].includes(op.type) &&
+    path.join(".") === "config.batch_table.rows" &&
+    op.value &&
+    typeof op.value === "object"
+  ) {
+    const slots = (op.value as Record<string, unknown>).input_node_ids;
+    return Array.isArray(slots) && slots.includes(id);
+  }
+  if (
     path[0] === "config" &&
     ((path[1] === "timeline" && path[2] === "clips") ||
       (path[1] === "director" && path[2] === "objects")) &&

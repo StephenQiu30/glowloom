@@ -17,6 +17,7 @@ type ContributionBatch struct {
 	OpID         string
 	UndoOf       string
 	OriginalBase int64
+	Deletions    []Operation // Raw deletion intent, including known-removal normalization.
 	Original     []Operation
 	Operations   []Operation
 	Effects      []Effect
@@ -128,7 +129,7 @@ func UndoContribution(floor Document, history []ContributionBatch, target string
 		}
 	}
 	for i, row := range history {
-		replay += len(row.Operations) + len(row.Original)
+		replay += len(row.Operations) + len(row.Original) + len(row.Deletions)
 		if i > targetIndex {
 			later += len(row.Operations)
 		}
@@ -206,6 +207,19 @@ func UndoContribution(floor Document, history []ContributionBatch, target string
 	// Equal-value writes still transfer ownership. Comparing current values alone
 	// would miss ABA and let undo erase another editor's accepted choice.
 	for _, row := range history[targetIndex+1:] {
+		// Normalized/effective noops must not erase independent deletion intent.
+		// Original is also inspected for trusted callers predating Deletions.
+		for _, ops := range [][]Operation{row.Deletions, row.Original, row.Operations} {
+			for _, deletion := range ops {
+				for _, restore := range inverse {
+					if deletion.Type == "delete_node" && restore.Type == "restore_node" && restore.Node != nil && deletion.NodeID == restore.Node.ID ||
+						deletion.Type == "disconnect" && restore.Type == "restore_edge" && restore.Edge != nil && deletion.NodeID == restore.Edge.ID ||
+						deletion.Type == "remove" && restore.Type == "restore_item" && deletion.NodeID == restore.NodeID && deletion.ItemID == restore.ItemID && slices.Equal(deletion.Path, restore.Path) {
+						return nil, operationError("undo_conflict")
+					}
+				}
+			}
+		}
 		for _, changed := range row.Operations {
 			for _, op := range own.Operations {
 				if (op.Type == "create_node" || op.Type == "restore_node" || op.Type == "delete_node") && operationUsesNode(changed, func() uuid.UUID {

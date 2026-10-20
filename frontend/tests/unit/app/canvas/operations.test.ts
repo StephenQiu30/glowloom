@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  usesNode,
   applyOperations,
   transformOperationPair,
   type Operation,
@@ -128,4 +129,21 @@ it("deleting a source clears every batch slot without deleting its media", () =>
     null,
   ]);
   expect(nodes[0].ref_id).toBe("55555555-5555-4555-8555-555555555555");
+});
+
+it("detects inserted and restored batch-row graph consumers", () => {
+  for (const type of ["insert", "restore_item"] as const) {
+    expect(
+      usesNode(
+        {
+          type,
+          node_id: "table",
+          path: ["config", "batch_table", "rows"],
+          item_id: "row",
+          value: { id: "row", input_node_ids: [null, "image"] },
+        },
+        "image",
+      ),
+    ).toBe(true);
+  }
 });

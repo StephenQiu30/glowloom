@@ -52,6 +52,14 @@ func operationUsesNode(op Operation, id uuid.UUID) bool {
 		var source uuid.UUID
 		return json.Unmarshal(op.Value, &source) == nil && source == id
 	}
+	if insertionOperation(op.Type) && slices.Equal(op.Path, []string{"config", "batch_table", "rows"}) {
+		var row struct {
+			InputNodeIDs []*uuid.UUID `json:"input_node_ids"`
+		}
+		if json.Unmarshal(op.Value, &row) == nil {
+			return slices.ContainsFunc(row.InputNodeIDs, func(source *uuid.UUID) bool { return source != nil && *source == id })
+		}
+	}
 	// These are the only value containers in the finite vocabulary that introduce
 	// a graph source premise. Asset and subject UUIDs are separate identities.
 	if len(op.Path) >= 3 && (slices.Equal(op.Path[:3], []string{"config", "timeline", "clips"}) || slices.Equal(op.Path[:3], []string{"config", "director", "objects"})) {

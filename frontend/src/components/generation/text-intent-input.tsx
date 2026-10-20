@@ -33,6 +33,17 @@ export function TextIntentInput({
     lastApplied = useRef(value);
   const before = useRef<BeforeTextInput | undefined>(undefined),
     composition = useRef<BeforeTextInput | undefined>(undefined);
+  const compositionOwner = useRef(onCompositionState);
+  useEffect(() => {
+    compositionOwner.current = onCompositionState;
+  }, [onCompositionState]);
+  useEffect(
+    () => () => {
+      if (composition.current) compositionOwner.current?.(false);
+      composition.current = undefined;
+    },
+    [],
+  );
   useEffect(() => {
     if (!composition.current) {
       setDisplay(value);

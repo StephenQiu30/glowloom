@@ -95,7 +95,7 @@ func (op *Operation) UnmarshalJSON(body []byte) error {
 func (op Operation) MarshalJSON() ([]byte, error) {
 	type wire Operation
 	body, err := json.Marshal(wire(op))
-	if err != nil || len(op.unknown) == 0 && op.NodeID != uuid.Nil && !(op.Type == "text" && len(op.Text) == 0) {
+	if err != nil || len(op.unknown) == 0 && op.NodeID != uuid.Nil && (op.Type != "text" || len(op.Text) != 0) {
 		return body, err
 	}
 	var fields map[string]json.RawMessage
