@@ -4,7 +4,7 @@
 
 认证使用邮箱和密码调用真实会话接口。不同业务的实现及验收状态以 [PROJECT](../PROJECT.md#1-当前阶段与文件职责)、服务回执和实际验收证据为准。
 
-复用组件位于 `src/components/<feature>/`；页面实现、独有组件和交互测试位于对应 `src/app/<路由>/_components/`；基础组件使用 `components/ui/`。目录和依赖边界见 [PROJECT](../PROJECT.md#2-可继续使用的工具)。
+复用组件位于 `src/components/<feature>/`；页面实现和独有组件位于对应 `src/app/<路由>/_components/`；基础组件使用 `components/ui/`。测试位于 `tests/`，与 `src/` 分开。目录和依赖边界见 [PROJECT](../PROJECT.md#2-可继续使用的工具)。
 
 ## 开发
 

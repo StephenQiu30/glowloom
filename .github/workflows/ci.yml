@@ -689,6 +689,13 @@ jobs:
           package-manager-cache: false
       - run: npm install --global pnpm@12.4.2
       - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Keep frontend tests outside production source
+        run: |
+          test_file="$(find src -type f \( -name '*.test.ts' -o -name '*.test.tsx' -o -name '*.spec.ts' -o -name '*.spec.tsx' \) -print -quit)"
+          if [ -n "$test_file" ]; then
+            echo "Frontend tests must live under frontend/tests/: $test_file" >&2
+            exit 1
+          fi
       - run: pnpm exec eslint .
       - run: pnpm exec next typegen
       - run: pnpm exec tsc --noEmit

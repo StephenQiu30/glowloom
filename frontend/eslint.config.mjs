@@ -40,19 +40,14 @@ export default defineConfig([
   },
   {
     files: ["src/**/*.{ts,tsx}"],
-    ignores: ["src/**/*.test.{ts,tsx}", "src/app/api/**", "src/lib/request.ts"],
+    ignores: ["src/app/api/**", "src/lib/request.ts"],
     rules: {
       "no-restricted-syntax": ["error", ...apiSyntaxRules],
     },
   },
   {
     files: ["src/**/*.tsx"],
-    ignores: [
-      "src/**/*.test.{ts,tsx}",
-      "src/app/api/**",
-      "src/lib/request.ts",
-      "src/components/ui/**",
-    ],
+    ignores: ["src/app/api/**", "src/lib/request.ts", "src/components/ui/**"],
     rules: {
       "no-restricted-syntax": [
         "error",
