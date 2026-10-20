@@ -2,168 +2,132 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 版本与日期 | v0.1；2026-10-20 |
-| 状态 | 设计建议待评审；未实现、未配置代理、未运行验收 |
-| 上游 | [需求09](../requirement/09-画布WebSocket实时同步需求.md) v0.3全部SYNC规则 |
-| 关联 | [数据设计14](14-画布数据服务与DAG设计.md)、[OT设计16](16-画布OT协同一致性设计.md)；专项PRD与Plan未形成 |
-| 方法与责任 | pm-execution:user-stories/test-scenarios；画布前后端、身份、部署与测试职责，具体人员未定 |
+| 版本与更新 | v0.6；2026-10-20 |
+| 文档状态 | 草稿；coder/websocket已选，连接/恢复细化待评审；未实现、未运行验收 |
+| 维护与评审 | 画布前后端、身份、部署与测试职责；实际人员与评审人未指定 |
+| 适用范围 | 现有Go进程内WebSocket双向更新；单实时实例为建议范围，本轮只做设计 |
+| 上游基线 | [需求09](../requirement/09-画布WebSocket实时同步需求.md) v0.3全部SYNC规则；按[统一模板](../templates/02-设计文档模板.md)组织 |
+| 下游关联 | [数据设计14](14-画布数据服务与DAG设计.md)、[OT设计17](17-画布OT处理设计.md)；[PRD08](../prd/08-画布WebSocket实时同步.md)、[计划18](../plan/18-画布WebSocket实时同步实施计划.md)；均为待评审草稿 |
 
-## 1. 现状、目标与部署选择
+## 1. 设计目标、现状与约束
 
-让编辑操作、权威确认和他人修改通过WebSocket双向传输，连接中断后按数据库版本恢复。HTTP继续处理初始化辅助请求、项目管理、上传及会话续期。
+让编辑操作、数据库确认和远端变化经WebSocket传递，断线后不漏已接受修改、不误报已保存。coder/websocket由用户选定，Go/PG与现有会话系统继续复用。2026-10-20核对现有HTTP入口与Next代理，尚无本轮WebSocket实现或运行证据。
 
-源码核对：当前`frontend/src/app/api/[...path]/route.ts`是fetch型HTTP代理，转发Cookie、Origin及创建范围等头；没有WebSocket升级通路。`backend/internal/canvas/adapter/http/handler.go`只有HTTP画布路由。已有identity认证、PostgreSQL和infra.outbox→Kafka投递，不能把这些当成已存在的socket会话实现。
+## 2. 方案比较与选择
 
-**建议采用同站入口代理将`/api/canvases/{id}/live`的Upgrade请求直接路由到Go，其余路径沿现有Next BFF。** 本地开发也须具备同一入口路径，不把LV_BACKEND_ORIGIN暴露给浏览器。仓库当前Compose没有核实可复用的升级代理，此配置是实施前置工作。若现有部署平台不能支持长连接，先解决部署，不用轮询冒充需求已完成。
+| 方案 | 价值、成本及限制 | 结论 |
+| --- | --- | --- |
+| 现有Go＋coder/websocket，同站升级代理 | 复用业务授权及事务，满足双向通信；需补实际Upgrade路由 | 用户已选库，采用此接入建议 |
+| 独立连接服务、跨实例广播框架 | 当前没有容量证据证明必须增加组件 | 不预建；未来多实例须补证 |
+| HTTP写入＋WebSocket只发通知 | 不能满足上行编辑也走WebSocket的原要求 | 不作为需求完成方案 |
 
-| 方案 | 判断 |
+新增一个画布WebSocket入口，建议路径`/api/canvases/{id}/live`，连接绑定一个画布。生产使用同站wss，本地使用同一业务路径。现有Gin完成会话和来源检查，再用coder/websocket处理升级与收发；继续复用画布应用服务。
+
+[coder/websocket官方API](https://pkg.go.dev/github.com/coder/websocket)提供Accept、Read/Write、SetReadLimit、Ping及关闭能力，采用[ISC许可](https://github.com/coder/websocket/blob/master/LICENSE.txt)。具体版本在实施时锁定并检查，本轮不安装依赖。它不提供画布房间、数据库保存或OT，这些由我们的少量业务代码负责。
+
+现有[Next Route Handler](../../frontend/src/app/api/[...path]/route.ts)为fetch型HTTP代理，不能假设可透传Upgrade。部署入口须将该WebSocket路径转发到Go，保持同站Cookie和原始Origin，其他HTTP路径沿现有BFF；不为此引入新业务服务。[升级代理说明](https://nginx.org/en/docs/http/websocket.html)仅为配置参考，不代表选定或已有NGINX。此路由是实施必须补齐的一项部署工作。
+
+最小运行范围为一个承接画布实时连接的Go实例；内存仅保存连接、订阅和发送队列，数据库仍负责权威顺序。不预建跨实例房间或Kafka广播；现有outbox继续其原职责。多实例同时承接画布连接不在本版接受范围，实际发布需要多实例时须先补通知分发验证，不能直接扩副本宣称已支持。
+## 3. 用户流程与交互状态
+
+沿现有画布与保存提示，不新增协作光标/邀请UI或原型。
+
+| 状态/触发 | 用户反馈及允许动作 | 退出与恢复 | 对应验收 |
+| --- | --- | --- | --- |
+| connecting/initializing | 暂停编辑，等待snapshot/changes和ready | 基线连续且pending已处理后live | AC-SYNC-01 |
+| live＋dirty/pending | 显示本地编辑及未保存/待确认 | 自己的终态与本地缓冲均处理完才显示已保存 | AC-SYNC-01、02 |
+| reconnecting/resync | 暂停新编辑，保留内存意图，不承诺刷新恢复 | 重鉴权、查回执、追赶或重读 | AC-SYNC-02、03 |
+| rejected | 原因可见；拒绝效果退出共享画面，安全内容保留作恢复对照 | 调整意图后新操作；不自动覆盖或重发已拒请求 | AC-SYNC-02、03 |
+| readonly/revoked | 归档只读；失去读权限清理私有数据并断开 | 重新授权，账号切换不继承旧内存 | AC-SYNC-04 |
+
+## 4. 模块职责与接口合同
+
+### 4.1 职责和依赖
+
+实时适配器负责Upgrade、帧校验及有序发送；画布应用服务决定读写权限、提交和回执；数据库提供版本、快照和日志；客户端维护权威基线及未确认内存。实时适配器不拥有独立权威图、不自行转换业务操作。模块均在现有服务内，详细依赖见设计14。
+
+### 4.2 消息合同
+
+采用JSON消息，固定一个操作模型版本；`op_id`为UUID，复用现有幂等键。初版revision保持当前数据库整数范围。只定义完成闭环所需消息，不引入多套schema协商或快照分片协议。
+
+| 方向与消息 | 最少内容与行为 |
 | --- | --- |
-| Next现有Route Handler直接fetch转发升级 | 当前实现不支持，不假设加一个API路由即可完成 |
-| 同站反向代理 → Go实时适配器 | 建议选用；共享Cookie和Origin，复用现有服务权限与事务 |
-| 浏览器跨站直连独立协作服务 | 暂不选；增加跨站凭据、部署和数据权威边界 |
+| 客户端join | scope_id、operation_version、last_revision（初次为空）、pending_op_id（若有）；scope只是范围选择，不是授权凭据 |
+| 服务端ready | revision；初始化或恢复追赶已连续到该版本，允许进入实时订阅；编辑仍须快照/权限状态可写且无恢复阻断，并不确认其他pending |
+| 服务端snapshot | document及revision、当前可读/可写状态；节点边来自数据库一致性读取 |
+| 客户端submit | op_id、base_revision、operation_version、commands；原信封一经发送不可修改 |
+| 服务端ack | actor_id、op_id、operation_version、接受revision、规范命令及必要结果；仅数据库提交后发送，不广播回执中的整图或内部前像 |
+| 服务端changes | from_revision、to_revision、有序日志项（revision、actor_id、op_id、operation_version、commands），仅投递客户端需应用的规范效果，不广播内部撤销前值；客户端按revision连续应用 |
+| 服务端reject / error | reject为已持久化的业务拒绝（op_id、原因、observed_revision）；error为入口/连接错误或结果未知，不能让客户端把未知结果当终态 |
+| 客户端sync / 服务端同步响应 | 客户端提供last_revision及pending_op_id；服务端返回该用户回执结果（accepted/rejected/not_found）、changes，历史不足则返回snapshot及重同步原因 |
 
-协议依据[RFC 6455](https://datatracker.ietf.org/doc/html/rfc6455)；升级代理的Upgrade/Connection头和超时要求参考[NGINX官方说明](https://nginx.org/en/docs/http/websocket.html)，并不表示当前已部署NGINX。Go库候选为[coder/websocket](https://github.com/coder/websocket)，利用其context、限读和关闭能力；具体固定版本、依赖风险与代理兼容需要选型验证，不在本轮安装。
+握手成功后须完成join授权才发送私有图。ack可与changes重复，客户端按revision和(actor_id,op_id)识别已处理结果；ack提前到达只确认保存，缺失的前序版本补齐后再推进本地权威基线。查回执返回not_found只表示当前未查到，不证明原提交不会随后完成；使用原请求再次提交，由数据库幂等锁裁定。
 
-## 2. 用户故事和状态
+连接URL绑定document_id，join范围必须与其项目一致；submit无需重复传文档ID，服务端补入完整信封及请求hash，重复提供且不一致时拒绝。ack与changes使用同一操作身份和版本，不能依赖连接身份猜测别的标签页操作。
 
-| 故事卡片 | 场景讨论 | 确认 |
+已有HTTP初始化读取、上传、登录刷新和项目管理继续存在；正式画布编辑上行、保存确认及其他客户端的增量均走WebSocket。HTTP残留写入必须沿数据设计14提交，不能保留另一套绕过权限或版本的保存路径。WebSocket消息仅包裹必要同步元数据并复用业务命令类型；不把它伪装成HTTP OpenAPI接口，也不在本轮预建通用协议生成框架。
+
+回执状态由数据设计14唯一规定：accepted/rejected是持久终态；not_found不是拒绝。终态重复返回原结果，不能在拒绝响应丢失后又接受同一操作。已认证且操作版本可识别的base_future/history_unavailable/order_conflict均为持久reject；读取回执需当前读权限，归档只读用户仍可查自己此前已提交的结果，无读权限不返回私有结果。模型版本必须在join及submit检查，未知操作不跳过；重新修改命令使用新op_id。
+
+## 5. 数据、状态与一致性
+
+1. 授权后先登记画布订阅，再读一致快照R。订阅期间的变更只记录“需要追赶”提示，在数据库取固定水位H，读完R到H的连续日志后发送ready(H)，再从H之后追赶；始终按revision排序。避免“有快照就可编辑”及初始化窗口漏更新。
+2. 客户端在内存显示编辑，最多一个批次在途，其余编辑留在内存缓冲。服务端调用现有事务提交路径；成功后ack，并唤醒该画布所有授权连接按revision读取changes，不直接按提交回调先后乱序广播。
+3. 所有画布提交（含HTTP/后台）在提交后通知本进程订阅者。为覆盖提交成功但通知丢失，连接心跳时核对数据库head；发现落后就补读日志。无须为这一兜底新增消息基础设施。
+4. 断线后显示重连中与待确认，暂停新编辑、保留内存。重连重新鉴权，先核实pending_op_id，再补缺失日志；未确认原请求只能原样重试。
+5. 日志不连续、基准过旧或操作模型不兼容时读取snapshot。已接受的pending不得再次执行；其他意图按设计17重建或明确提示冲突，不用旧整图覆盖服务器。刷新后没有内存基线，直接读取数据库快照。重同步的ready只表示权威基线就绪，pending处理完成前仍禁止自动发送新批次。
+
+连接状态为连接中/已连接/重连中/无权访问，保存状态为未保存/待确认/已保存/被拒绝，两者分别显示。有待发送内容时不能仅凭另一批ack显示“全部已保存”。断线、拒绝和历史不足均保留当前页面可查看的未确认内容；账号切换或撤权时清理旧账号私有内存。
+
+每连接同一时间只有一个初始化/补齐任务；新的sync合并进当前追赶，不能并发发送两份不同基线。重复/较旧revision忽略，revision跳跃先缓冲并请求sync，缓冲达到上限则重同步。恢复时回执与快照/日志不能互相覆盖：即使快照版本更高，仍要用操作身份查清原提交。
+
+submit/ack/changes沿[设计17第4.4节](17-画布OT处理设计.md#44-纯文本与实际富文本规则)的类型化序列及第4.6节字段操作传递，不发送Tiptap/ProseMirror Step或整份composer作为普通编辑。服务端生成的input_revision、新增引用的权威编号、删节点的槽清空/资产固定均包含在同一revision规范效果中；客户端按referenceId/子对象ID协调，临时标签不成为协议身份。快照继续使用现有JSON结构。设计14第5.3节识别的未知/损坏图在join时给出只读原因，ready只确认追赶完成，不将只读状态改成可编辑；只读订阅仍受权限控制，不能通过旧HTTP入口绕过写入限制。
+
+新增持久字段及终态回执均引用设计14，不另定一套存储；单实例订阅只保留连接与版本游标。所有改变客户端可见状态的写入，包括归档/后台结果，必须可通知或被head/权限检查发现。没有规范日志的段落只允许安全快照恢复，不能作为OT转换历史。
+
+## 6. 异常、安全与恢复
+
+- 会话沿现有Cookie认证，握手严格验证允许的Origin；不把token放URL。用户身份由服务器取得，客户端不能指定actor。归档仅允许读。
+- 每次提交及每次实际发送私有数据前重新检查当前会话、范围和项目权限；撤权后清理队列并关闭。空闲连接按有界权限检查周期核对并处理撤权，该周期须在发布前结合身份合同确定；每次发送前的授权检查为投递判定点，已经写入网络的字节无法撤回。
+- 会话过期关闭连接，沿既有HTTP续期后重连；socket心跳不自动延长账号活跃期限。只读权限改变必须更新编辑状态。
+- 每连接一个读取循环和有界有序发送队列，受服务生命周期context管理，关闭时释放订阅、队列和goroutine。使用库的读限制、发送超时及Ping；不要把已结束的HTTP请求context当成长连接生命周期。
+- 复用现有100命令批次边界，设置Ping周期、读写超时、最大消息字节和有界发送队列。前版30秒/10秒/1MiB/64条/8MiB没有本项目测量依据，移出设计承诺；实施前用真实合法节点样本和代理时限确定配置基线。
+- 快照最大字节数单独按现有最大合法画布样本确定，不能将单操作消息上限误套为整图容量；超过已验证容量要明确返回容量错误，不截断。此容量未关闭前不能接受全部节点恢复。慢客户端队列满则关闭并重同步，不静默跳过增量；不预先做自定义分片。
+- 重连采用有上限的退避和抖动，停止重复计时器。服务退出先停止新连接，有界等待在途事务并断开连接；未收到ack不代表未提交。
+
+参数是设计建议，实际代理超时、Cookie路径、scope解析及身份模块当前改动须在接入时联合验证。记录连接数量、关闭原因、保存/远端可见延迟及补齐失败，不记录凭据和完整提示词。
+
+| 失败分类 | 结果与恢复 | 验证 |
 | --- | --- | --- |
-| US-SYNC-01：创作者编辑后希望其他窗口立即看到 | 一端写、另一端观察；编辑提交也走WebSocket，不能只做通知 | AC-SYNC-01 |
-| US-SYNC-02：断网后希望知道哪些修改保存了 | 同一操作重试查证、补齐版本；禁止未确认状态显示已保存 | AC-SYNC-02、AC-SYNC-03 |
-| US-SYNC-03：成员权限变化后访问立即受控 | 连接建立不永久授予读写权；切换账号清理旧连接与私有内存 | AC-SYNC-04 |
+| 输入格式/版本不支持 | error；不应用未知命令，提示升级或调整 | 旧客户端/恶意帧，AC-SYNC-03、04 |
+| 图约束/受保护字段等确定业务拒绝 | reject与持久终态一致，整批不生效 | 拒绝响应丢失后重试，AC-SYNC-02 |
+| 超时、断线、提交结果未知 | 保持pending，原op_id查证；不换ID重发 | 提交前后各断点，AC-SYNC-02 |
+| 历史缺失、乱序或慢消费 | sync/快照；停止继续套用操作；队列满断开再恢复 | 不丢pending、不丢中间版本，AC-SYNC-03 |
+| 撤权/过期/账号改变 | 停止新私有投递、清队列、关闭或只读 | 投递前授权判定和既定检测窗口，AC-SYNC-04 |
 
-| 连接/同步状态 | 允许动作与界面 | 转移 |
+## 7. 质量保障与可验证性
+
+| 前置与角色 | 操作与预期 | 对应验收 |
 | --- | --- | --- |
-| connecting / initializing | 展示加载或已知只读画面，暂停结构写入 | 收到snapshot/changes及ready后进入live |
-| live + clean | 可编辑，显示已保存版本 | 本地操作→dirty→pending |
-| live + pending | 当前会话保留outstanding/buffer，显示同步中 | 自己的accepted/noop/rejected及完整版本应用后更新状态 |
-| reconnecting | 显示断线/待确认，暂停新结构操作，保留已有内存意图 | 鉴权成功→resume；失效→reauth_required |
-| resync_required | 暂停写入，获取权威快照并处理未确认意图 | 可重放→live；不能安全变换→明确人工恢复 |
-| readonly / revoked | 禁止写；撤权清理待发私有消息、关闭连接 | 按既有登录/权限流程恢复，不能自动创建新画布 |
+| 两个授权客户端、真实Go/PG | A经WebSocket编辑→提交后A收到ack、B自动收到changes；初始化期间另一次编辑也不漏 | AC-SYNC-01 |
+| 在途操作、可控断网 | 分别在提交前、提交中、提交后ack前断线→重连核实并原样重试；一次业务效果，保存提示准确 | AC-SYNC-02 |
+| 同一部署、故障注入 | 重启进程、漏通知、重复/乱序消息、旧日志、慢客户端→补齐或安全重读，不盲目重放或泄漏连接 | AC-SYNC-03 |
+| 普通成员及管理员 | 未授权订阅拒绝；撤权/过期停止后续私有投递；归档不能写；切账号无旧内容 | AC-SYNC-04 |
 
-连接状态与保存状态分别呈现；远端新版本到达并不意味着本地pending已保存。
+FR-SYNC-01～03、BR-SYNC-01～06、IR-SYNC-01～02由第3～6节承接。NFR-SYNC-01～03按有明确图规模、连接数、RTT和持续时间的运行证据接受，按需求09 NFR-SYNC-01，图规模/人数/RTT/持续时长及p50/p95/p99目标须在设计评审及合同冻结前确定；当前未达成此条件，设计仅为草稿，不能标为已接受。正式测试前再冻结环境配置，不以本地演示代替。以上测试均未运行；接入阻断项见第8节。OT未完成时通信可独立测试，但不代表三个需求已交付。
 
-## 3. 服务职责与生命周期
+## 8. 兼容、发布边界与评审
 
-实时适配器负责Upgrade、帧校验、心跳、连接关闭；会话协调职责负责订阅与按版本追赶；画布应用服务负责授权查询、提交与持久回执；OT不放进socket handler。
+按[实时计划18](../plan/18-画布WebSocket实时同步实施计划.md)接入通道；[OT计划19](../plan/19-画布OT协同一致性实施计划.md)先交接操作合同并验证高风险规则，[数据计划17](../plan/17-画布数据库持久化与DAG实施计划.md)提供统一保存与终态回执，升级路由可在合同明确后开发；单写者实时闭环仅作中间验证，最后集成通过算法关卡的全部范围。此顺序是验证依赖，不是批准拆批发布。旧整配置写入按设计14的模型版本门禁处理；服务重启靠数据库恢复，不增加持久浏览器缓存。回退到兼容读取/只读，不能放开旧客户端覆盖新图。
 
-每连接一个受服务生命周期管理的context，一个读取循环和一个有界写入循环；关闭取消订阅/计时器、释放队列并等待退出。升级后context的所有者显式转移给连接管理器，不能依赖已经完成的HTTP处理函数或无主background goroutine。
+| 待决或风险 | 影响与建议 | 责任职责 | 关闭条件与阻断阶段 |
+| --- | --- | --- | --- |
+| 同站Upgrade、Cookie与scope | 现有fetch代理不提供长连接；按真实入口接入 | 前后端、部署、身份 | 本地及目标环境握手/续期测试，阻断通信实施接受 |
+| 单实例部署前提 | 不能静默缩减实际多副本部署需求 | 部署、后端 | 确认首期拓扑；若多实例补分发方案和跨实例测试，阻断发布 |
+| 消息、快照及队列容量 | 限制必须覆盖真实节点合法数据 | 前后端、测试 | 确定测量样本和阈值，通过大图/慢端测试，阻断通信接受 |
+| 延迟、恢复和撤权窗口 | 本轮撤下无证据固定值，但不是不需要目标 | 产品、身份、测试 | 设计评审/合同冻结前明确规模/人数/RTT/持续时间和p50/p95/p99目标；测试前冻结环境与阈值，缺项阻断NFR接受 |
+| pending与OT协议 | ACK、拒绝、重连和三方并发必须一致 | 前后端 | 按设计17测试向量及AC-COL-06验证，阻断联合接受 |
 
-同一文档跨实例仍由数据库行锁排序，不依赖进程内房间锁或粘性会话。每实例只持有本实例连接和版本游标，不持有权威图。
-
-跨实例传播建议复用既有outbox/Kafka的“文档版本发生变化”提示：不同实时实例须各自接收所需提示，不能用一个竞争消费组导致只有一个实例通知。每实例收到提示后按数据库日志拉取连续版本；提示可重复或丢失，周期性核对活跃文档head作为兜底。Kafka不是浏览器可直接读的操作历史，也不直接把私有outbox负载广播到socket。
-
-## 4. 鉴权与协议
-
-### 4.1 连接规则
-
-- `GET /api/canvases/{document_id}/live`升级，子协议建议`glowloom.canvas.v2`。握手严格匹配Origin允许列表，检查会话Cookie和文档可读权限；拒绝缺失/未知Origin的浏览器请求，不开启通配跨站。
-- 原生浏览器WebSocket不能像普通请求随意加自定义头，故范围选择在首帧显式传入scope_id并由服务端验证；它不是授权凭据。不得信任客户端actor_id/org_id，当前Principal从身份服务取得。
-- 握手与每次提交复用当前会话/项目授权；建立连接、心跳和被动收消息不自动延长“用户活跃”期限。沿既有HTTP刷新流程续期，过期连接关闭后重新认证连接。
-- 对出站私有数据，在取数及实际写队列出队时再次核验会话/项目有效性；撤权提示清空未发送队列。已写入网络缓冲的历史字节无法撤回，权限线性化点和最大检测窗口需在身份设计评审中明确，不能宣称物理瞬时撤回。
-- 未授权返回不泄漏资源详情的错误；日志禁止Cookie、token及正文。无access token拼接在URL中。
-
-### 4.2 帧合同
-
-JSON UTF-8、每帧一个对象；UUID为字符串，revision/base_revision/seq为十进制字符串。`v=2`为传输协议版本，`schema_version`为图类型版本，`ot_version`为转换语义版本；版本不支持则拒绝写入，禁止宽松忽略未知操作。
-
-| 方向与type | 核心字段 | 语义 |
-| --- | --- | --- |
-| C→S `subscribe` | scope_id、schema_version、ot_version、last_revision或null、pending_op_ids[] | 固定握手文档；pending仅查本人的回执；初次连接不相信本地持久快照 |
-| S→C `snapshot` | document_id、revision、history_floor、schema_version、ot_version、nodes、edges、自己的view、access | 一致权威状态；来自数据设计14，包含只读能力 |
-| S→C `changes` | from_revision、to_revision、operations[] | 连续规范日志，每项含op_id、revision、actor展示所需最小信息、canonical_ops、outcome |
-| S→C `ready` | revision | 初始追赶结束标记；只保证到该revision连续，之后仍可能有changes |
-| C→S `submit` | op_id、base_revision、schema_version、ot_version、operations[] | 不可变在途信封；同op_id重传原内容；一次原子批次 |
-| S→C `accepted` | op_id、revision、canonical_ops、outcome=accepted/noop | 已持久化；与changes中同op_id/revision可能重复，只应用一次 |
-| S→C `rejected` | op_id、code、observed_revision、safe_details | 确定未写图；可持久回执；前端按设计16重算 |
-| C→S `receipt_query` / S→C `receipts` | 本人op_ids；逐项accepted/noop/rejected/not_found | 已授权范围内核实；not_found不等于之前肯定未到达，若旧请求还在途仍须同op_id提交查证 |
-| C→S `catch_up` | after_revision | 不连续或重连时补齐；超窗口返回resync_required |
-| S→C `resync_required` | reason、head_revision、history_floor | 不能盲目重放旧操作；见第5节 |
-| C→S `view_update` / S→C `view_saved` | expected_view_revision、viewport；view_revision | 用户私有CAS，不入图OT日志，不广播给其他用户 |
-| S→C `access_changed` / `reauth_required` | read/write状态或原因 | 禁止后续无权读写；需登录刷新走现有HTTP |
-
-帧例子仅说明合同，UUID为占位：
-
-```json
-{
-  "v": 2,
-  "type": "submit",
-  "op_id": "<uuid>",
-  "base_revision": "42",
-  "schema_version": 1,
-  "ot_version": 1,
-  "operations": [{"kind":"node.move","id":"<node-uuid>","x":120,"y":80}]
-}
-```
-
-新HTTP辅助入口（快照/回执/用户视图若实施）按现有swag→openapi2ts链生成。WebSocket帧不伪装为HTTP OpenAPI操作：建议由后端闭合消息模型导出JSON Schema和TS类型，建立生成一致性及跨语言golden vectors；不得维护另一套手写且不校验的业务DTO。schema导出与消费工具在实施前做最小验证，尚未生成文件。
-
-### 4.3 错误与流控
-
-| code | 是否能原信封重试 | 行为 |
-| --- | --- | --- |
-| `op_id_conflict` | 否 | 同ID不同请求，明确客户端错误 |
-| `invalid_operation`、`dag_cycle`、`protected_relation` | 否 | 确定拒绝；修改意图后新op_id |
-| `history_expired`、`schema_mismatch`、`ot_version_mismatch` | 原操作不得盲目改base重发 | 重建/升级；保留会话内意图 |
-| `permission_denied`、`reauth_required` | 仅重新授权后查证 | 停止写入或关闭；不向新账号移交旧状态 |
-| `rate_limited`、`server_busy` | 可按retry_after同信封重试 | 不产生成功回执，不启动新操作ID |
-| 断线、提交超时、数据库提交结果未知 | 可 | pending不变，查回执/同信封重试 |
-
-工程初始参数建议：心跳25秒、60秒无响应关闭、写队列256帧或8MiB先到者触发慢客户端关闭、submit帧1MiB上限，保留100命令/2000节点/4000边现行上限。以上是压测候选，不是性能接受承诺；snapshot/changes须分片传输，单帧同样限界并带snapshot_id、chunk_index/count和最终hash，客户端完整校验后才替换状态。复杂director配置可能接近上限，必须纳入压测而非悄悄截断。
-
-队列满时发送可行的resync提示并关闭，不静默丢掉中间操作；重连指数退避加抖动，服务端retry_after优先。禁止不受控累积心跳、读循环或重连定时器。
-
-## 5. 初始化、提交与恢复时序
-
-```mermaid
-sequenceDiagram
-  participant C as 客户端
-  participant W as 实时适配器
-  participant A as 画布应用服务
-  participant D as PostgreSQL
-  C->>W: subscribe(last_revision,pending_op_ids)
-  W->>A: 授权并读取一致快照/连续日志
-  A->>D: 读图、版本、回执
-  D-->>A: 一致状态
-  W-->>C: snapshot/changes + receipts + ready
-  C->>W: submit(冻结信封)
-  W->>A: SubmitOperation
-  A->>D: 授权/锁/去重/转换/校验/事务提交
-  D-->>A: 已提交版本
-  W-->>C: accepted
-  W-->>C: 后续连续changes
-```
-
-初始化先登记文档版本提示订阅（只缓存提示，不读私有正文），再在授权一致性事务读快照R；随后从数据库补读R之后到固定水位H的连续日志，发送ready(H)，转入live后继续从H追赶。任何提示都只促成数据库追赶，实际发送按revision排序，因此不会在“读快照—注册订阅”间漏修改。授权失败撤销订阅。
-
-重连时页面有权威内存基线R：先重新授权及核实pending回执，再补R之后日志。ACK先于缺失的较早revision到达时仅暂存，不跳版本；自己accepted与changes重复按(op_id,revision)消重。页面刷新无基线则读取snapshot，不从浏览器持久缓存恢复。
-
-历史不足：读当前snapshot，核实未确认操作的回执。已接受操作不得再提交；未接受且有足够基准/转换证据才由设计16重建操作。缺证据或查询不明则保留会话内对照并提示选择，不把旧整图覆盖当前状态。回执和日志保留政策必须与数据设计14一致。
-
-提交后进程在ACK前崩溃：回执和日志已在数据库，重连查证恢复；提交前崩溃：不存在成功回执，同op_id重试正常执行。广播失败不回滚已提交数据。
-
-## 6. 验证与运行边界
-
-| 测试场景：角色与前置 | 动作 → 逐步预期 | 覆盖 |
-| --- | --- | --- |
-| TS-SYNC-01；两个授权浏览器、代理入口 | A通过socket提交→数据库提交→A确认→B自动显示；抓包核验不存在HTTP代提交；初始化期间再提交不漏版本 | AC-SYNC-01 |
-| TS-SYNC-02；故障注入与同一op_id | 发送前/提交中/提交后ACK前断网→重连查询→重发；数据库仅一次业务效果，界面不误报 | AC-SYNC-02 |
-| TS-SYNC-03；两个Go实例、跨实例连接 | 重启一个实例、丢提示、重复帧、慢消费→head核对或重连补齐；按序收敛且无连接泄漏 | AC-SYNC-03 |
-| TS-SYNC-04；普通成员/管理员/未授权者 | 越权订阅拒绝→已有成员撤权→队列清理和连接结束；归档后读可用写拒绝；切账号不串内容 | AC-SYNC-04 |
-| TS-SYNC-05；history_floor高于客户端基准 | catch_up→resync_required→snapshot和回执核实；pending不被直接丢弃/重放 | AC-SYNC-02、AC-SYNC-03 |
-
-观测连接数、握手拒绝、ACK/远端可见延迟、lag、backpressure关闭、补齐成功率、撤权窗口及goroutine数量。每项带图规模/人数/网络/部署条件，不预设已达标。实时请求不调用收费供应商。
-
-## 7. 兼容与评审交接
-
-部署兼容数据库和统一提交路径 → 升级代理与帧合同 → 验证单写者同步 → OT集成 → 逐画布protocol_version=2切换。服务关闭先停止新连接，等待有界在途事务结束，通知重连并释放连接；不能为等慢socket无限等待。
-
-没有OT的单写者验证只是SYNC专项接受，不代表可以删去OT或完成用户全部要求。旧v1整配置写入在v2画布上拒绝，后台业务写入必须可规范化记录。回退使用可读v2的兼容构建，不能让旧客户端全量覆盖新状态。
-
-| 上游 | 承接 |
-| --- | --- |
-| FR-SYNC-01～03 | 第2、4、5节 |
-| BR-SYNC-01～06；IR-SYNC-01～02 | 第3～5节 |
-| NFR-SYNC-01～03；AC-SYNC-01～04 | 第4、6节 |
-
-待关闭：实际反向代理部署、库固定版本、会话续期与授权线性化点、帧类型生成、快照分片和流控参数、outbox跨实例分发方案及压测。设计草稿保存不等于上述运行条件已具备。
+| 评审日期与版本 | 接受范围 | 确认来源 | 残余限制 |
+| --- | --- | --- | --- |
+| 2026-10-20；v0.6待评审 | coder/websocket与复用Go/PG已选；其余细化未确认 | 本会话用户指令 | 未写代码、配置代理或运行验收；单实例与参数待确认 |
