@@ -51,7 +51,14 @@ import {
   NativeSelect,
   NativeSelectOption,
 } from "@/components/ui/native-select";
-import { useEffect, useEffectEvent, useRef, useState, useId } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  useId,
+  useMemo,
+} from "react";
 import {
   resolvePromptUpload,
   validatePromptFragment,
@@ -76,6 +83,7 @@ import { subjectText, type Subject } from "@/components/subjects/contracts";
 import { uploadMediaAsset } from "@/api/media";
 import { validateUpload } from "@/components/media/library";
 import { ReferenceSearch } from "./reference-search";
+import { ReferenceMentionMenu } from "./reference-mention-menu";
 import { ComposerSession } from "./composer-session";
 import {
   referenceLabel,
@@ -186,6 +194,10 @@ export function ReferenceControls({
   const [sourceQuery, setSourceQuery] = useState("");
   const [readingSource, setReadingSource] = useState<string | null>(null);
   const sourceRequest = useRef<AbortController | null>(null);
+  const currentSources = useRef({ canvasSources, incomingSources });
+  useEffect(() => {
+    currentSources.current = { canvasSources, incomingSources };
+  }, [canvasSources, incomingSources]);
   useEffect(() => () => sourceRequest.current?.abort(), []);
   const referenceUploadInput = useRef<HTMLInputElement>(null);
   const inlineSource = useRef(false);
@@ -195,6 +207,29 @@ export function ReferenceControls({
     range: { from: number; to: number };
     index: number;
   } | null>(null);
+  const mentionFrom = mention?.range.from;
+  const mentionAnchor = useMemo(
+    () => ({
+      current: {
+        contextElement: session.editor.view.dom,
+        getBoundingClientRect: () => {
+          try {
+            const from = mentionFrom ?? session.editor.state.selection.from;
+            const rect = session.editor.view.coordsAtPos(from);
+            return new DOMRect(
+              rect.left,
+              rect.top,
+              1,
+              Math.max(1, rect.bottom - rect.top),
+            );
+          } catch {
+            return session.editor.view.dom.getBoundingClientRect();
+          }
+        },
+      },
+    }),
+    [session, mentionFrom],
+  );
   useEffect(() => {
     const changed = (
       value: {
@@ -205,6 +240,9 @@ export function ReferenceControls({
     ) => {
       setMention(value);
       if (value) {
+        setAddOpen(false);
+        setSourceKind(null);
+        setSourceQuery("");
         setMenu(true);
         setSearch(value.query);
       } else setMenu(false);
@@ -239,15 +277,19 @@ export function ReferenceControls({
       role,
     ]),
   ];
-  function add(binding: ReferenceBinding, inline = false) {
+  function add(
+    binding: ReferenceBinding,
+    inline = false,
+    range = inline ? mention?.range : undefined,
+  ) {
     try {
-      session.insertReference(
-        binding,
-        inline,
-        inline ? mention?.range : undefined,
-      );
+      session.insertReference(binding, inline, range);
       setMenu(false);
       setError("");
+      if (inline) {
+        setDetailsID(null);
+        session.editor.commands.focus(undefined, { scrollIntoView: false });
+      }
     } catch (e) {
       setError(String(e));
     }
@@ -259,6 +301,11 @@ export function ReferenceControls({
     if (!source.assetID || disabled || sourceRequest.current) return;
     const controller = new AbortController();
     const seq = session.snapshot().localSeq;
+    const range = inline ? mention?.range : undefined;
+    const connection = incomingSources?.find(
+      (item) =>
+        item.nodeID === source.nodeID && item.assetID === source.assetID,
+    );
     const sessionGeneration = getSessionGeneration(),
       scopeGeneration = getScopeGeneration();
     sourceRequest.current = controller;
@@ -283,8 +330,27 @@ export function ReferenceControls({
         throw new Error("参考素材范围不匹配，请重新选择。");
       if (session.snapshot().localSeq !== seq)
         throw new Error("正文已变化，请重新选择参考。");
+      const latestSources = connection
+        ? currentSources.current.incomingSources
+        : currentSources.current.canvasSources;
+      if (
+        !latestSources?.some(
+          (item) =>
+            item.nodeID === source.nodeID &&
+            item.assetID === source.assetID &&
+            item.kind === source.kind &&
+            (!connection ||
+              ("edgeID" in item && item.edgeID === connection.edgeID)),
+        )
+      )
+        throw new Error("参考连接或来源已变化，请重新选择。");
       const binding = mediaBinding(preview.asset, `reference_${source.kind}`);
-      add(binding, inline);
+      if (
+        connection &&
+        !session.snapshot().draft.labelState.allocations[connection.edgeID]
+      )
+        binding.id = connection.edgeID;
+      add(binding, inline, range);
       setAddOpen(false);
       setSourceKind(null);
     } catch (error) {
@@ -1057,7 +1123,8 @@ export function ReferenceControls({
             处
           </p>
           {compact ? (
-            <PopoverAnchor asChild>
+            <>
+              <PopoverAnchor virtualRef={mentionAnchor} />
               <div
                 className="flex w-full min-w-0 items-start gap-2 overflow-x-auto pb-1"
                 aria-label="参考内容"
@@ -1229,17 +1296,18 @@ export function ReferenceControls({
                   </PopoverContent>
                 </Popover>
               </div>
-            </PopoverAnchor>
+            </>
           ) : (
             referenceActions
           )}
           {menu &&
             (compact ? (
               <PopoverContent
-                side="top"
+                side="bottom"
                 align="start"
+                sideOffset={8}
                 collisionPadding={16}
-                className="max-h-(--radix-popover-content-available-height) w-72 overflow-hidden p-0"
+                className="max-h-(--radix-popover-content-available-height) w-60 overflow-visible p-0"
                 aria-label="引用候选"
                 onClick={(event) => event.stopPropagation()}
                 onOpenAutoFocus={(event) => {
@@ -1252,7 +1320,16 @@ export function ReferenceControls({
                     event.preventDefault();
                 }}
               >
-                {compactMenu(true)}
+                <ReferenceMentionMenu
+                  session={session}
+                  draft={draft}
+                  sources={incomingSources}
+                  query={mention ? search : ""}
+                  busy={!!readingSource}
+                  disabled={disabled}
+                  onReference={(ref) => add(ref, true)}
+                  onSource={(source) => void addCanvasSource(source, true)}
+                />
               </PopoverContent>
             ) : (
               referenceMenu

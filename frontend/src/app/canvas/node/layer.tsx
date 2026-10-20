@@ -163,11 +163,12 @@ export function CanvasNodeLayer({
             data-connection-kind={edge.edge_type}
             d={path}
             fill="none"
-            stroke={
+            stroke="var(--muted-foreground)"
+            strokeOpacity={
               selectedIDs.includes(edge.source_node_id ?? "") ||
               selectedIDs.includes(edge.target_node_id ?? "")
-                ? "var(--foreground)"
-                : "var(--muted-foreground)"
+                ? 0.7
+                : 0.45
             }
             strokeWidth={1}
             strokeDasharray={

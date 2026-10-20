@@ -1,22 +1,12 @@
 "use client";
-import { FeedbackToast } from "@/components/feedback/feedback-toast";
-import { LoadingState } from "@/components/layout/loading-state";
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { ImageIcon, Upload, RotateCw } from "lucide-react";
-import { getMediaPreview, listMediaAssets } from "@/api/media";
-import { isProjectID } from "@/components/projects/project";
+import { ImageIcon, RotateCw } from "lucide-react";
+import { getMediaPreview } from "@/api/media";
 import { RequestError } from "@/lib/request";
 import { developmentMediaURL } from "@/lib/development-transport";
-import { flowError } from "@/components/generation/contracts";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { UploadDialog } from "./upload-dialog";
+import dynamic from "next/dynamic";
 type PreviewProps = {
   projectID: string;
   id: string;
@@ -124,6 +114,9 @@ function MediaPreview({
     />
   );
 }
+const AssetDialog = dynamic(() =>
+  import("./project-asset-dialog").then((m) => m.ProjectAssetDialog),
+);
 export function ProjectMediaPicker({
   projectID,
   onSelect,
@@ -135,138 +128,15 @@ export function ProjectMediaPicker({
   onSelect: (asset: API.AssetSummary) => void;
   onClose: () => void;
 }) {
-  const [items, setItems] = useState<API.AssetSummary[]>([]),
-    [cursor, setCursor] = useState<string | undefined>(),
-    [error, setError] = useState(""),
-    [loading, setLoading] = useState(true),
-    [upload, setUpload] = useState(false),
-    [retry, setRetry] = useState(0);
-  function validate(p: API.AssetPage) {
-    if (
-      !Array.isArray(p.items) ||
-      p.items.some(
-        (i) =>
-          !isProjectID(i.id) || i.project_id !== projectID || i.kind !== kind,
-      )
-    )
-      throw new RequestError("invalid_receipt");
-    return p;
-  }
-  useEffect(() => {
-    const c = new AbortController();
-    listMediaAssets({ pid: projectID, kind, limit: 40 }, { signal: c.signal })
-      .then(validate)
-      .then((p) => {
-        if (!c.signal.aborted) {
-          setItems(p.items!);
-          setCursor(p.next_cursor);
-          setError("");
-        }
-      })
-      .catch((e) => {
-        if (!c.signal.aborted) setError(flowError(e));
-      })
-      .finally(() => {
-        if (!c.signal.aborted) setLoading(false);
-      });
-    return () => c.abort();
-  }, [projectID, kind, retry]); // eslint-disable-line react-hooks/exhaustive-deps
-  async function more() {
-    setLoading(true);
-    try {
-      const p = validate(
-        await listMediaAssets({ pid: projectID, kind, limit: 40, cursor }),
-      );
-      setItems((v) => [...v, ...p.items!]);
-      setCursor(p.next_cursor);
-    } catch (e) {
-      setError(flowError(e));
-    } finally {
-      setLoading(false);
-    }
-  }
   return (
-    <>
-      <Dialog
-        open
-        onOpenChange={(v) => {
-          if (!v) onClose();
-        }}
-      >
-        <DialogContent className="sm:max-w-3xl">
-          <DialogTitle>选择参考素材</DialogTitle>
-          <DialogDescription>
-            选择当前项目中可用的
-            {kind === "image" ? "图片" : kind === "video" ? "视频" : "音频"}
-            ，或上传新的文件。
-          </DialogDescription>
-          <Button variant="outline" onClick={() => setUpload(true)}>
-            <Upload />
-            从本地添加
-          </Button>
-          {error && (
-            <FeedbackToast
-              message={error}
-              action={{
-                label: "重新读取",
-                onClick: () => {
-                  setError("");
-                  setLoading(true);
-                  setRetry((n) => n + 1);
-                },
-              }}
-            />
-          )}
-          <div className="media-picker-grid">
-            {items.map((a) => (
-              <Button
-                variant="ghost"
-                className="h-auto p-0"
-                key={a.id}
-                onClick={() => onSelect(a)}
-              >
-                <span className="media-picker-image">
-                  <ProjectMediaPreview
-                    projectID={projectID}
-                    id={a.id!}
-                    kind={a.kind}
-                  />
-                </span>
-                <span>{a.file_name}</span>
-              </Button>
-            ))}
-          </div>
-          {loading ? (
-            <LoadingState>正在读取素材…</LoadingState>
-          ) : !error && items.length === 0 ? (
-            <p>当前项目还没有可用素材。上传完成后可以继续选择。</p>
-          ) : null}
-          {cursor && (
-            <Button
-              disabled={loading}
-              variant="ghost"
-              onClick={() => void more()}
-            >
-              加载更多
-            </Button>
-          )}
-        </DialogContent>
-      </Dialog>
-      {upload && (
-        <UploadDialog
-          projectID={projectID}
-          onClose={() => setUpload(false)}
-          onUploaded={(a) => {
-            setUpload(false);
-            if (a?.kind === kind && isProjectID(a.id)) {
-              onSelect(a);
-            } else {
-              setLoading(true);
-              setRetry((n) => n + 1);
-            }
-          }}
-        />
-      )}
-    </>
+    <AssetDialog
+      projectID={projectID}
+      initialKind={kind}
+      reference
+      onClose={onClose}
+      onAdd={(assets) => {
+        for (const asset of assets) onSelect(asset);
+      }}
+    />
   );
 }

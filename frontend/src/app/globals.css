@@ -50,6 +50,10 @@
 }
 
 :root {
+  --editor-surface: var(--card);
+  --floating-surface: var(--popover);
+  --floating-active: var(--accent);
+  --connection-active: #0aa9ff;
   --brand-mark: #52a8ff;
   --cover-foreground: #ededed;
   --cover-overlay: rgb(0 0 0 / 72%);
@@ -88,6 +92,9 @@
 }
 
 .dark {
+  --editor-surface: #202020;
+  --floating-surface: #262626;
+  --floating-active: #363636;
   --background: #0a0a0a;
   --foreground: #ededed;
   --surface-1: #111111;

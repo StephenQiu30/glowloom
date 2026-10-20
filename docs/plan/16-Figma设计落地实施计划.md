@@ -106,3 +106,7 @@ DataPagination 组合官方 Pagination、Select、Field 与 Button，默认 12�
 SidebarInset 增加沿用现有 Slot 的 asChild 组合能力，BasicLayout 以布局 div 包含独立 header 与 main，只有正文为 main，跳过导航目标和滚动边界保持不变。agent-browser 复查 DOM 只有一个 main，header 不在 main 内；原 header 的 ARIA incomplete 消失。首页完整 WCAG 2A/2AA 自动审计无已确认 violation，仅图片背景文字对比度仍需人工核验。
 
 桌面1460px及手机320px重新检查：首页是真实 contenteditable，图片/视频 Tab 切换保留文字，320px 无横向溢出，空编辑器占位可见；未收费生成。工程检查完整93文件620测试、ESLint、typegen、TypeScript与生产构建通过。截图：父工作区 `output/agent-browser-acceptance/screenshots/home-rich-desktop.png` 与 `home-rich-empty-mobile.png`。真实登录后引用、五类未接入生成、积分钱包与支付依旧未完成，不能作为完整产品验收通过。
+
+## 2026-10-20 画布交互修订实施
+
+依据用户实施授权及设计10第11节，依次完成：端口/面板几何与取消手势；共享编辑器/引用菜单；库选择与上传引用物化为媒体节点；共享资产库搜索、多选、权限版本核验；工具栏视觉与活动态。针对几何、身份防重、跨分页搜索、失败保留补测试，再运行前端质量门禁和桌面/窄屏浏览器验证。保留既有引用改动，不提交推送。时间/来源筛选因当前接口缺字段明确展示不可用；真实接口、上传和生成与Mock证据分别记录。

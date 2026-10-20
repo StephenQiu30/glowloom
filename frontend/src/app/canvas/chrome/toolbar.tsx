@@ -49,12 +49,16 @@ function ToolButton({ title, ...props }: ComponentProps<typeof Button>) {
       <TooltipTrigger asChild>
         <Button {...props} />
       </TooltipTrigger>
-      <TooltipContent>{title ?? props["aria-label"]}</TooltipContent>
+      <TooltipContent side="right" sideOffset={12}>
+        {title ?? props["aria-label"]}
+      </TooltipContent>
     </Tooltip>
   );
 }
 export function CanvasToolbar({
   readOnly = false,
+  materialsOpen = false,
+  uploadOpen = false,
   tool,
   onToolChange,
   onAddTool,
@@ -76,6 +80,8 @@ export function CanvasToolbar({
   onFitSelection,
 }: {
   readOnly?: boolean;
+  materialsOpen?: boolean;
+  uploadOpen?: boolean;
   tool: "select" | "pan";
   onAddTool: (kind: "director") => void;
   onAI: () => void;
@@ -165,8 +171,9 @@ export function CanvasToolbar({
         <ToolButton
           variant="ghost"
           size="icon"
-          aria-label="素材库"
-          title="素材库"
+          aria-label="资产库"
+          aria-pressed={materialsOpen}
+          title="资产库"
           onClick={() => onMaterials("assets")}
         >
           <Folder data-icon="inline-start" />
@@ -175,6 +182,7 @@ export function CanvasToolbar({
           variant="ghost"
           size="icon"
           aria-label="上传素材"
+          aria-pressed={uploadOpen}
           title="上传素材"
           onClick={onUpload}
         >

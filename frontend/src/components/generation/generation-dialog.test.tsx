@@ -409,9 +409,96 @@ it("紧凑加号与提及入口仍调用已有引用控制器", async () => {
       screen.getByRole("textbox", { name: "创作提示词" }),
     ),
   );
+  expect(screen.getByRole("option", { name: "主体" })).toBeTruthy();
+  expect(screen.getByRole("option", { name: "图片" })).toBeTruthy();
   expect(
-    screen.getByRole("option", { name: "搜索项目素材与主体" }),
-  ).toBeTruthy();
+    screen.queryByRole("option", { name: "搜索项目素材与主体" }),
+  ).toBeNull();
+});
+
+it("@分类候选展示已连接内容，核验后替换为真实引用且不混入未连接素材", async () => {
+  const linked = {
+    nodeID: crypto.randomUUID(),
+    edgeID: crypto.randomUUID(),
+    title: "已连接海报",
+    kind: "image" as const,
+    assetID: id,
+  };
+  const { canvas, props, rerender } = await compactWorkspace(false, [
+    linked,
+    {
+      nodeID: crypto.randomUUID(),
+      title: "未连接海报",
+      kind: "image",
+      assetID: crypto.randomUUID(),
+    },
+  ]);
+  rerender(
+    <RichGeneration
+      {...props}
+      canvas={{ ...canvas, incomingSources: [linked] }}
+    />,
+  );
+  api.preview.mockResolvedValue({
+    asset: { id, project_id: project.id, kind: "image", revision: 3 },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "提及素材或主体" }));
+  fireEvent.click(await screen.findByRole("option", { name: "图片" }));
+  expect(screen.queryByRole("option", { name: /未连接海报/ })).toBeNull();
+  fireEvent.click(screen.getByRole("option", { name: /已连接海报/ }));
+  await waitFor(() =>
+    expect(canvas.onChange.mock.calls.at(-1)?.[0].references).toEqual([
+      expect.objectContaining({
+        id: linked.edgeID,
+        source: { kind: "media", sourceId: id, sourceVersion: "3" },
+      }),
+    ]),
+  );
+  expect(
+    screen
+      .getByRole("textbox", { name: "创作提示词" })
+      .querySelectorAll("[data-prompt-reference]"),
+  ).toHaveLength(1);
+  expect(screen.queryByRole("dialog", { name: "引用候选" })).toBeNull();
+});
+
+it("@核验期间连接被移除时拒绝旧结果，不把断线素材加入正文", async () => {
+  const linked = {
+    nodeID: crypto.randomUUID(),
+    edgeID: crypto.randomUUID(),
+    title: "待核验海报",
+    kind: "image" as const,
+    assetID: id,
+  };
+  const { canvas, props, rerender } = await compactWorkspace();
+  rerender(
+    <RichGeneration
+      {...props}
+      canvas={{ ...canvas, incomingSources: [linked] }}
+    />,
+  );
+  let resolve!: (value: { asset: API.AssetSummary }) => void;
+  api.preview.mockImplementation(
+    () =>
+      new Promise((done) => {
+        resolve = done;
+      }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "提及素材或主体" }));
+  fireEvent.click(await screen.findByRole("option", { name: "图片" }));
+  fireEvent.click(screen.getByRole("option", { name: /待核验海报/ }));
+  await waitFor(() => expect(resolve).toBeTypeOf("function"));
+  rerender(
+    <RichGeneration {...props} canvas={{ ...canvas, incomingSources: [] }} />,
+  );
+  resolve({
+    asset: { id, project_id: project.id, kind: "image", revision: 3 },
+  });
+  await findFeedback("参考连接或来源已变化");
+  expect(canvas.onChange.mock.calls.at(-1)?.[0].references ?? []).toEqual([]);
+  expect(screen.getByRole("textbox", { name: "创作提示词" }).textContent).toBe(
+    "@保留同一富文本会话",
+  );
 });
 
 it("从画布添加先核验真实素材版本，同一来源不重复且不触发生成", async () => {
@@ -530,9 +617,7 @@ it("紧凑引用默认缩略，详情内提及写入同一富文本会话且展�
       JSON.stringify(canvas.onChange.mock.calls.at(-1)?.[0].document),
     ).toContain('"type":"reference"'),
   );
-  fireEvent.keyDown(screen.getByRole("dialog", { name: "参考详情" }), {
-    key: "Escape",
-  });
+  expect(screen.queryByRole("dialog", { name: "参考详情" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "展开编辑器" }));
   expect(screen.getByRole("textbox", { name: "创作提示词" })).toBe(editor);
   expect(editor.textContent).toContain("保留同一富文本会话");

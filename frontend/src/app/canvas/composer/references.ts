@@ -7,8 +7,10 @@ import type { CanvasReferenceSource } from "@/components/generation/reference-so
 import { RequestError } from "@/lib/request";
 import {
   createDraftNode,
+  createMediaNode,
   createResourceNode,
   isDraft,
+  isAnnotation,
   richCanvasDraft,
   type DraftNode,
   type Node,
@@ -49,6 +51,31 @@ export function referenceSources(nodes: Node[]): CanvasReferenceSource[] {
         assetID: n.ref_type === "media_asset" ? n.ref_id : undefined,
       },
     ];
+  });
+}
+
+export function connectedReferenceSources(
+  nodes: Node[],
+  edges: API.Edge[],
+  ownerID: string,
+): (CanvasReferenceSource & { edgeID: string })[] {
+  const sources = new Map(
+    referenceSources(nodes).map((source) => [source.nodeID, source]),
+  );
+  const seen = new Set<string>();
+  return edges.flatMap((edge) => {
+    if (!isAnnotation(edge) || !edge.id) return [];
+    const otherID =
+      edge.target_node_id === ownerID
+        ? edge.source_node_id
+        : edge.source_node_id === ownerID
+          ? edge.target_node_id
+          : undefined;
+    const source =
+      otherID && otherID !== ownerID ? sources.get(otherID) : undefined;
+    if (!source || seen.has(source.nodeID)) return [];
+    seen.add(source.nodeID);
+    return [{ ...source, edgeID: edge.id }];
   });
 }
 
@@ -152,6 +179,21 @@ export function referenceEdges(nodes: Node[], edges: API.Edge[]): API.Edge[] {
   const lines = [...edges];
   const nodeByID = new Map(nodes.map((node) => [node.id, node]));
   const edgeByID = new Map(edges.map((edge) => [edge.id, edge]));
+  const neighbors = new Map<string, Node[]>();
+  for (const edge of edges) {
+    if (!isAnnotation(edge)) continue;
+    const source = nodeByID.get(edge.source_node_id ?? "");
+    const target = nodeByID.get(edge.target_node_id ?? "");
+    if (!source || !target) continue;
+    for (const [owner, other] of [
+      [source, target],
+      [target, source],
+    ]) {
+      const list = neighbors.get(owner.id) ?? [];
+      list.push(other);
+      neighbors.set(owner.id, list);
+    }
+  }
   const mediaNodes = new Map<string, Node>();
   for (const node of nodes) {
     if (
@@ -176,16 +218,26 @@ export function referenceEdges(nodes: Node[], edges: API.Edge[]): API.Edge[] {
       const connected =
         bindingEdge?.target_node_id === target.id
           ? nodeByID.get(bindingEdge.source_node_id ?? "")
-          : undefined;
+          : bindingEdge?.source_node_id === target.id &&
+              isAnnotation(bindingEdge)
+            ? nodeByID.get(bindingEdge.target_node_id ?? "")
+            : undefined;
       const source =
         connected?.ref_type === "media_asset" &&
         connected.ref_id === assetID &&
         connected.node_type === ref.mediaKind
           ? connected
-          : mediaNodes.get(`${ref.mediaKind}/${assetID}`);
+          : (neighbors
+              .get(target.id)
+              ?.find(
+                (node) =>
+                  node.ref_type === "media_asset" &&
+                  node.ref_id === assetID &&
+                  node.node_type === ref.mediaKind,
+              ) ?? mediaNodes.get(`${ref.mediaKind}/${assetID}`));
       if (!source) continue;
       const pair = `${source.id}/${target.id}`;
-      const prior = pairs.get(pair);
+      const prior = pairs.get(pair) ?? pairs.get(`${target.id}/${source.id}`);
       if (prior !== undefined) {
         if (lines[prior].edge_type === "annotation")
           lines[prior] = { ...lines[prior], edge_type: "prompt_reference" };
@@ -201,4 +253,76 @@ export function referenceEdges(nodes: Node[], edges: API.Edge[]): API.Edge[] {
     }
   }
   return lines;
+}
+
+/** Reuse media resources when a library/upload binding enters a canvas draft. */
+export function materializeReferences(
+  nodes: Node[],
+  edges: API.Edge[],
+  ownerID: string,
+  draft: PromptDraft,
+  projectID: string,
+) {
+  const owner = nodes.find((n) => n.id === ownerID);
+  if (!owner || !isDraft(owner)) throw new Error("创作节点已不可编辑。");
+  const next = [...nodes];
+  const lines = [...edges];
+  for (const ref of draft.references) {
+    if (ref.source.kind !== "media") continue;
+    const id = ref.source.sourceId;
+    let resource = next.find(
+      (n) =>
+        n.ref_type === "media_asset" &&
+        n.ref_id === id &&
+        n.node_type === ref.mediaKind,
+    );
+    if (!resource) {
+      if (next.length >= 2000) throw new Error("画布节点已达到上限。");
+      resource = createMediaNode(
+        {
+          id,
+          project_id: projectID,
+          kind: ref.mediaKind,
+          revision: Number(ref.source.sourceVersion),
+        },
+        projectID,
+        next.length,
+      );
+      resource.x = owner.x - (resource.width ?? 320) - 96;
+      resource.y = owner.y;
+      while (
+        next.some(
+          (n) =>
+            n.node_type !== "group" &&
+            Math.abs(n.x - resource!.x) < (resource!.width ?? 320) + 24 &&
+            Math.abs(n.y - resource!.y) < (resource!.height ?? 200) + 24,
+        )
+      )
+        resource.y += (resource.height ?? 200) + 48;
+      next.push(resource);
+    }
+    if (
+      !lines.some(
+        (e) =>
+          (e.source_node_id === resource!.id && e.target_node_id === ownerID) ||
+          (e.target_node_id === resource!.id && e.source_node_id === ownerID),
+      )
+    ) {
+      if (lines.length >= 4000) throw new Error("画布连线已达到上限。");
+      lines.push({
+        id: crypto.randomUUID(),
+        edge_type: "annotation",
+        source_node_id: resource.id,
+        target_node_id: ownerID,
+      });
+    }
+  }
+  return {
+    nodes: next.map((n) =>
+      n.id === ownerID
+        ? { ...owner, config: { draft: richCanvasDraft(draft) } }
+        : n,
+    ),
+    edges: lines,
+  };
 }

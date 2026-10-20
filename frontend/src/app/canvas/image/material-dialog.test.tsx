@@ -7,10 +7,11 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { CanvasMaterialDialog } from "./material-dialog";
-const api = vi.hoisted(() => ({ list: vi.fn() }));
+import { ProjectAssetDialog as CanvasMaterialDialog } from "@/components/media/project-asset-dialog";
+const api = vi.hoisted(() => ({ list: vi.fn(), preview: vi.fn() }));
 vi.mock("@/api/media", () => ({
   listMediaAssets: api.list,
+  getMediaPreview: api.preview,
 }));
 vi.mock("@/components/media/project-media", () => ({
   ProjectMediaPreview: () => null,
@@ -26,6 +27,7 @@ const a = {
   id: "00000000-0000-4000-8000-000000000011",
   project_id: pid,
   kind: "image",
+  revision: 1,
   file_name: "海边香氛.png",
 };
 const b = {
@@ -33,12 +35,18 @@ const b = {
   id: "00000000-0000-4000-8000-000000000012",
   file_name: "蓝蝶.png",
 };
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.resetAllMocks();
+  api.preview.mockImplementation(({ asset_id }) =>
+    Promise.resolve({ asset: asset_id === a.id ? a : b }),
+  );
+});
 afterEach(cleanup);
 it("多选、搜索与分页保留已选资源身份，确认前不写入画布", async () => {
   api.list
     .mockResolvedValueOnce({ items: [a], next_cursor: "next" })
-    .mockResolvedValueOnce({ items: [b] });
+    .mockResolvedValueOnce({ items: [b] })
+    .mockResolvedValue({ items: [a, b] });
   const add = vi.fn();
   render(
     <CanvasMaterialDialog
@@ -56,7 +64,7 @@ it("多选、搜索与分页保留已选资源身份，确认前不写入画布"
   fireEvent.click(
     await screen.findByRole("button", { name: "选择素材 蓝蝶.png" }),
   );
-  fireEvent.change(screen.getByLabelText("搜索已加载素材"), {
+  fireEvent.change(screen.getByLabelText("搜索项目素材"), {
     target: { value: "蓝蝶" },
   });
   expect(
@@ -64,7 +72,7 @@ it("多选、搜索与分页保留已选资源身份，确认前不写入画布"
   ).toBeNull();
   expect(screen.getByText("已选择 2 个素材（最多 24 个）")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "添加到画布" }));
-  expect(add).toHaveBeenCalledExactlyOnceWith([a, b]);
+  await waitFor(() => expect(add).toHaveBeenCalledExactlyOnceWith([a, b]));
   expect(api.list.mock.calls[1][0]).toEqual({
     pid,
     kind: "image",
@@ -125,10 +133,10 @@ it("真实空列表和已加载素材搜索无结果具有不同提示", async (
     />,
   );
   await screen.findByRole("button", { name: "选择素材 海边香氛.png" });
-  fireEvent.change(screen.getByLabelText("搜索已加载素材"), {
+  fireEvent.change(screen.getByLabelText("搜索项目素材"), {
     target: { value: "不存在" },
   });
-  expect(screen.getByText("没有匹配的素材")).toBeTruthy();
+  expect(await screen.findByText("没有匹配的素材")).toBeTruthy();
   expect(
     screen.getByRole("button", { name: "添加到画布" }).hasAttribute("disabled"),
   ).toBe(true);
@@ -146,4 +154,44 @@ it("真实空分页的 null 游标显示空态而非回执错误", async () => {
   );
   expect(await screen.findByText("当前项目暂无此类素材")).toBeTruthy();
   expect(screen.queryByText(/连接中断|结果未确认/)).toBeNull();
+});
+
+it("搜索会遍历项目后续分页，选中项不受关键词影响", async () => {
+  api.list.mockImplementation(({ cursor }) =>
+    Promise.resolve(
+      cursor ? { items: [b] } : { items: [a], next_cursor: "later" },
+    ),
+  );
+  render(
+    <CanvasMaterialDialog projectID={pid} onClose={vi.fn()} onAdd={vi.fn()} />,
+  );
+  fireEvent.click(
+    await screen.findByRole("button", { name: "选择素材 海边香氛.png" }),
+  );
+  fireEvent.change(screen.getByLabelText("搜索项目素材"), {
+    target: { value: "蓝蝶" },
+  });
+  expect(
+    await screen.findByRole("button", { name: "选择素材 蓝蝶.png" }),
+  ).toBeTruthy();
+  expect(screen.getByText("已选择 1 个素材（最多 24 个）")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "选择本页" }));
+  expect(screen.getByText("已选择 2 个素材（最多 24 个）")).toBeTruthy();
+});
+it("确认核验失败保留选择且不调用添加", async () => {
+  api.list.mockResolvedValue({ items: [a] });
+  api.preview.mockRejectedValue(new Error("素材不可用"));
+  const add = vi.fn();
+  render(
+    <CanvasMaterialDialog projectID={pid} onClose={vi.fn()} onAdd={add} />,
+  );
+  fireEvent.click(
+    await screen.findByRole("button", { name: "选择素材 海边香氛.png" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "添加到画布" }));
+  expect((await screen.findByRole("alert")).textContent).toContain(
+    "素材不可用",
+  );
+  expect(add).not.toHaveBeenCalled();
+  expect(screen.getByText("已选择 1 个素材（最多 24 个）")).toBeTruthy();
 });

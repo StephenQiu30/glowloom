@@ -6,8 +6,10 @@ import {
 import { createDraftNode, createMediaNode, commandBatch } from "../document";
 import {
   adjacentGraph,
+  materializeReferences,
   referenceEdges,
   referenceSources,
+  connectedReferenceSources,
 } from "./references";
 
 const pid = "00000000-0000-4000-8000-000000000001";
@@ -135,4 +137,108 @@ it("同一素材有多个画布副本时，自动引用保持原连接来源", (
     target_node_id: node.id,
     edge_type: "prompt_reference",
   });
+});
+
+it("参考候选只取当前节点实际相连的媒体，兼容连线两端并排除业务边", () => {
+  const owner = createDraftNode("video_generation", "16:9", 0);
+  const image = createMediaNode(asset, pid, 0);
+  const empty = createDraftNode("image_generation", "1:1", 1);
+  const unrelated = { ...image, id: crypto.randomUUID() };
+  const edges = [
+    {
+      id: "out",
+      edge_type: "annotation",
+      source_node_id: owner.id,
+      target_node_id: image.id,
+    },
+    {
+      id: "in",
+      edge_type: "annotation",
+      source_node_id: empty.id,
+      target_node_id: owner.id,
+    },
+    {
+      id: "business",
+      edge_type: "dependency",
+      source_node_id: unrelated.id,
+      target_node_id: owner.id,
+    },
+  ];
+  expect(
+    connectedReferenceSources(
+      [owner, image, empty, unrelated],
+      edges,
+      owner.id,
+    ),
+  ).toEqual([
+    {
+      nodeID: image.id,
+      edgeID: "out",
+      title: image.title,
+      kind: "image",
+      assetID: asset.id,
+    },
+    {
+      nodeID: empty.id,
+      edgeID: "in",
+      title: empty.title,
+      kind: "image",
+      assetID: undefined,
+    },
+  ]);
+});
+
+it("反向标注线引用已有素材时复用原线，保留同素材副本的来源", () => {
+  const image = createMediaNode(asset, pid, 0);
+  const duplicate = { ...image, id: crypto.randomUUID() };
+  const { node, edge } = adjacentGraph(
+    image,
+    "video_generation",
+    "right",
+    "1:1",
+    asset,
+  );
+  const reverse = {
+    ...edge,
+    source_node_id: node.id,
+    target_node_id: image.id,
+  };
+  expect(referenceEdges([duplicate, image, node], [reverse])).toEqual([
+    { ...reverse, edge_type: "prompt_reference" },
+  ]);
+  const otherBinding = structuredClone(node);
+  otherBinding.config.draft!.composer!.references[0].id = crypto.randomUUID();
+  expect(referenceEdges([duplicate, image, otherBinding], [reverse])).toEqual([
+    { ...reverse, edge_type: "prompt_reference" },
+  ]);
+});
+
+it("上传或库引用复用媒体节点与同一关系，正文编辑不重复建图", () => {
+  const owner = createDraftNode("video_generation", "16:9", 0);
+  const draft = emptyPromptDraft();
+  draft.references = [
+    {
+      id: crypto.randomUUID(),
+      order: 0,
+      bindingGeneration: 1,
+      mediaKind: "image",
+      role: "reference_image",
+      source: { kind: "media", sourceId: asset.id!, sourceVersion: "3" },
+    },
+  ];
+  const first = materializeReferences([owner], [], owner.id, draft, pid);
+  expect(first.nodes).toHaveLength(2);
+  expect(first.edges).toHaveLength(1);
+  const second = materializeReferences(
+    first.nodes,
+    first.edges,
+    owner.id,
+    draft,
+    pid,
+  );
+  expect(second.nodes).toHaveLength(2);
+  expect(second.edges).toEqual(first.edges);
+  expect(second.nodes.find((n) => n.ref_id === asset.id)?.node_type).toBe(
+    "image",
+  );
 });

@@ -101,6 +101,22 @@ vi.mock("@/components/media/project-media", () => ({
   ProjectMediaPreview: () => null,
   ProjectMediaPicker: () => null,
 }));
+
+vi.mock("./node/text-editor", () => ({
+  CanvasTextEditor: ({
+    text,
+    onChange,
+  }: {
+    text: string;
+    onChange: (text: string) => void;
+  }) => (
+    <input
+      aria-label="文本内容"
+      value={text}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  ),
+}));
 const projectID = "00000000-0000-4000-8000-000000000001";
 const canvasID = "00000000-0000-4000-8000-000000000002";
 const project = {
@@ -302,11 +318,7 @@ it("即梦选择抓手切换不触发保存，输入框内V仍用于输入", asy
 it("冲突保留本地草稿，由用户明确采用服务端版本继续保存", async () => {
   await openDraft();
   const node = structuredClone(
-    (await import("./document")).createDraftNode(
-      "image_generation",
-      "1:1",
-      0,
-    ),
+    (await import("./document")).createDraftNode("image_generation", "1:1", 0),
   );
   api.save.mockRejectedValueOnce(new RequestError("revision_conflict", 409));
   api.canvas.mockResolvedValueOnce({
@@ -584,10 +596,8 @@ it("素材侧边创建视频带入授权版本，连线与引用一次撤销重�
   }));
   render(<CanvasPage projectID={projectID} canvasID={canvasID} />);
   fireEvent.click(await screen.findByRole("button", { name: "选择 参考图片" }));
-  fireEvent.keyDown(screen.getByRole("button", { name: "在右侧添加节点" }), {
-    key: "Enter",
-  });
-  fireEvent.click(await screen.findByRole("menuitem", { name: "视频" }));
+  fireEvent.click(screen.getByRole("button", { name: "在右侧添加节点" }));
+  fireEvent.click(await screen.findByRole("option", { name: "视频" }));
   await screen.findByRole("button", { name: "选择 视频草稿" });
   expect(api.preview).toHaveBeenCalledWith(
     { pid: projectID, asset_id: asset.id },

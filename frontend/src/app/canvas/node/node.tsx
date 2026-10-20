@@ -8,7 +8,6 @@ import {
   ImageIcon,
   MoreHorizontal,
   Pencil,
-  Plus,
   Trash2,
   VideoIcon,
   Type,
@@ -26,7 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ProjectMediaPreview } from "@/components/media/project-media";
 import { isDraft, isEditableNode, type Node } from "../document";
-import { cn } from "cn";
+import { ConnectionPort, type ConnectionDrop } from "./connection-port";
 
 export function CanvasNode({
   node,
@@ -45,6 +44,7 @@ export function CanvasNode({
   onRemove,
   canRemove = false,
   onAddAdjacent,
+  onConnect,
   addingAdjacent = false,
 }: {
   node: Node;
@@ -68,9 +68,11 @@ export function CanvasNode({
   onRemove?: () => void;
   canRemove?: boolean;
   addingAdjacent?: boolean;
+  onConnect?: (targetID: string) => void;
   onAddAdjacent?: (
     kind: "text" | "image_generation" | "video_generation",
     side: "left" | "right",
+    point?: ConnectionDrop,
   ) => void;
 }) {
   const resize = useRef<{
@@ -286,52 +288,13 @@ export function CanvasNode({
       {selected &&
         onAddAdjacent &&
         (["left", "right"] as const).map((side) => (
-          <DropdownMenu key={side}>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon-xs"
-                className={cn(
-                  "canvas-node-port",
-                  side === "left"
-                    ? "canvas-node-port-left"
-                    : "canvas-node-port-right",
-                )}
-                disabled={addingAdjacent}
-                aria-label={`在${side === "left" ? "左" : "右"}侧添加节点`}
-                data-canvas-no-zoom
-                onPointerDown={(event) => event.stopPropagation()}
-              >
-                <Plus data-icon="inline-start" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              side={side}
-              align="start"
-              sideOffset={8}
-              collisionPadding={16}
-            >
-              <DropdownMenuLabel>添加节点</DropdownMenuLabel>
-              <DropdownMenuGroup>
-                <DropdownMenuItem onSelect={() => onAddAdjacent("text", side)}>
-                  <Type data-icon="inline-start" />
-                  文本
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() => onAddAdjacent("image_generation", side)}
-                >
-                  <ImageIcon data-icon="inline-start" />
-                  图片
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() => onAddAdjacent("video_generation", side)}
-                >
-                  <VideoIcon data-icon="inline-start" />
-                  视频
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <ConnectionPort
+            key={side}
+            side={side}
+            disabled={addingAdjacent}
+            onAdd={(kind, point) => onAddAdjacent(kind, side, point)}
+            onConnect={onConnect}
+          />
         ))}
       <Button
         variant="secondary"

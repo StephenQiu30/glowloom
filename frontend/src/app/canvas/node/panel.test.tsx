@@ -38,17 +38,17 @@ it("提示词浮层逐帧跟随真实媒体矩形，切换节点更换锚点", (
   const panel = document.querySelector<HTMLElement>(
     "[data-canvas-node-panel]",
   )!;
-  expect([panel.style.left, panel.style.top]).toEqual(["76px", "320px"]);
+  expect([panel.style.left, panel.style.top]).toEqual(["76px", "316px"]);
   expect(panel.style.transform).toBe("");
   bottom = 380;
   left = 400;
   container.current.dispatchEvent(new Event(CANVAS_NODE_DRAG_EVENT));
-  expect([panel.style.left, panel.style.top]).toEqual(["204px", "400px"]);
+  expect([panel.style.left, panel.style.top]).toEqual(["76px", "396px"]);
   expect(panel.style.transform).toBe("");
   bottom = 240;
   left = 500;
   applyCanvasLiveViewport(container.current, { x: 100, y: -100, k: 0.5 });
-  expect([panel.style.left, panel.style.top]).toEqual(["304px", "260px"]);
+  expect([panel.style.left, panel.style.top]).toEqual(["164px", "256px"]);
   expect(panel.style.transform).toBe("");
   view.rerender(
     <CanvasNodePanel
@@ -60,7 +60,7 @@ it("提示词浮层逐帧跟随真实媒体矩形，切换节点更换锚点", (
     </CanvasNodePanel>,
   );
   expect(panel.dataset.canvasNodePanel).toBe(other.id);
-  expect([panel.style.left, panel.style.top]).toEqual(["404px", "520px"]);
+  expect([panel.style.left, panel.style.top]).toEqual(["264px", "516px"]);
   expect(panel.style.transform).toBe("");
   view.unmount();
   container.current.dispatchEvent(new Event(CANVAS_NODE_DRAG_EVENT));

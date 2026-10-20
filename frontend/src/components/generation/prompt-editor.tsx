@@ -21,6 +21,7 @@ export function PromptEditor({
   placeholder,
   className,
   inputGroup = false,
+  label = "创作提示词",
   ...options
 }: ComposerOptions & {
   onReady: (session: ComposerSession) => void;
@@ -31,6 +32,7 @@ export function PromptEditor({
   placeholder?: string;
   className?: string;
   inputGroup?: boolean;
+  label?: string;
 }) {
   const editorOptions = composerEditorOptions(options);
   const attributes = editorOptions.editorProps?.attributes;
@@ -44,6 +46,7 @@ export function PromptEditor({
           ...(typeof attributes === "function"
             ? attributes(state)
             : attributes),
+          "aria-label": label,
           ...(placeholder === undefined
             ? {}
             : { "data-placeholder": placeholder }),
@@ -68,6 +71,7 @@ export function PromptEditor({
           ...(typeof baseAttributes === "function"
             ? baseAttributes(state)
             : baseAttributes),
+          "aria-label": label,
           ...(placeholder === undefined
             ? {}
             : { "data-placeholder": placeholder }),
@@ -76,7 +80,7 @@ export function PromptEditor({
         }),
       },
     });
-  }, [editor, placeholder, className, inputGroup]);
+  }, [editor, placeholder, className, inputGroup, label]);
   useEffect(() => {
     if (!editor) return;
     const changed = () => onChange?.(new ComposerSession(editor).snapshot());

@@ -17,6 +17,7 @@ export function CanvasNodePanel({
   children,
   rightInset = 0,
   bottomInset = 0,
+  onReveal,
 }: {
   node: Node;
   viewport: ViewportTransform;
@@ -24,8 +25,10 @@ export function CanvasNodePanel({
   children: ReactNode;
   rightInset?: number;
   bottomInset?: number;
+  onReveal?: (dy: number) => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const revealed = useRef<string | null>(null);
   useLayoutEffect(() => {
     const container = containerRef.current,
       panel = panelRef.current;
@@ -51,6 +54,17 @@ export function CanvasNodePanel({
               width: node.width ?? 288,
               height: node.height ?? 200,
             };
+      const expanded = !!panel.querySelector('[data-expanded="true"]');
+      panel.style.visibility =
+        !expanded &&
+        rect &&
+        bounds.height &&
+        (rect.bottom < bounds.top ||
+          rect.top > bounds.bottom ||
+          rect.right < bounds.left ||
+          rect.left > bounds.right)
+          ? "hidden"
+          : "";
       const position = nodePanelPosition(
         screenNode,
         rect && container.clientWidth ? { x: 0, y: 0, k: 1 } : liveViewport,
@@ -58,8 +72,16 @@ export function CanvasNodePanel({
         container.clientHeight
           ? Math.max(160, container.clientHeight - bottomInset)
           : Number.POSITIVE_INFINITY,
-        panel.offsetHeight || 216,
       );
+      if (revealed.current !== node.id && container.clientHeight && onReveal) {
+        revealed.current = node.id;
+        const missing =
+          position.top +
+          Math.min(panel.scrollHeight || 280, 320) +
+          56 -
+          container.clientHeight;
+        if (missing > 0) onReveal(-missing);
+      }
       panel.style.maxHeight = Number.isFinite(position.maxHeight)
         ? `${position.maxHeight}px`
         : "";
@@ -96,6 +118,7 @@ export function CanvasNodePanel({
     viewport,
     rightInset,
     bottomInset,
+    onReveal,
   ]);
   return (
     <div

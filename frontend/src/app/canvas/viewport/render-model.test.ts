@@ -164,3 +164,25 @@ it("历史时间线保留在文档中但不进入画布渲染或固定节点", (
   ).toEqual([text.id]);
   expect(original).toHaveLength(2);
 });
+
+it("同侧多条参考线在节点移动和改变尺寸后仍汇合于同一中心", () => {
+  const upper = {
+    ...createResourceNode("text", { x: 100, y: 100 }),
+    width: 320,
+    height: 180,
+  };
+  const lower = { ...upper, id: "lower", y: 600 };
+  const target = {
+    ...upper,
+    id: "target",
+    x: 700,
+    y: 300,
+    width: 480,
+    height: 270,
+  };
+  for (const node of [target, { ...target, x: 800, y: 500, height: 360 }]) {
+    const end = `${node.x} ${node.y + node.height / 2}`;
+    expect(connectionPath(upper, node).endsWith(end)).toBe(true);
+    expect(connectionPath(lower, node).endsWith(end)).toBe(true);
+  }
+});

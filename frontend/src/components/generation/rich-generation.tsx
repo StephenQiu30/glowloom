@@ -488,6 +488,29 @@ function EditorWorkspace({
       params: PromptDraft["params"];
     } | null>(null),
     [serverConflict, setServerConflict] = useState<SavedDraft | null>(null);
+  const workspaceRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const section = workspaceRef.current;
+    if (!full || !section) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const siblings: [HTMLElement, boolean][] = [];
+    let child: HTMLElement = section;
+    while (child.parentElement) {
+      for (const sibling of child.parentElement.children) {
+        if (sibling !== child && sibling instanceof HTMLElement) {
+          siblings.push([sibling, sibling.inert]);
+          sibling.inert = true;
+        }
+      }
+      child = child.parentElement;
+      if (child === document.body) break;
+    }
+    section.querySelector<HTMLElement>('[aria-label="退出全屏"]')?.focus();
+    return () => {
+      for (const [element, inert] of siblings) element.inert = inert;
+      if (previous?.isConnected) previous.focus({ preventScroll: true });
+    };
+  }, [full]);
   const contextKey = `${actor}/${projectID}/${canvas?.contextKey ?? snapshot.draft_id}`;
   const sessionRef = useRef<ComposerSession | null>(null);
   const firstDirtyAt = useRef<number | null>(null);
@@ -1351,12 +1374,37 @@ function EditorWorkspace({
     );
   return (
     <section
+      ref={workspaceRef}
       className={cn(
         "flex min-w-0 flex-col gap-4",
-        full && "fixed inset-0 z-50 overflow-y-auto bg-background p-4 sm:p-8",
+        full &&
+          "fixed inset-0 z-50 items-center justify-center overflow-y-auto bg-black/60 p-4 sm:p-8",
       )}
       onKeyDownCapture={(event) => {
-        if (full && event.key === "Escape") {
+        if (full && event.key === "Tab") {
+          const focusable = Array.from(
+            event.currentTarget.querySelectorAll<HTMLElement>(
+              'button:not(:disabled),input:not(:disabled),[contenteditable="true"],[tabindex="0"]',
+            ),
+          ).filter((n) => n.getClientRects().length);
+          const first = focusable[0],
+            last = focusable.at(-1);
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+          }
+          if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+          }
+        }
+        if (
+          full &&
+          event.key === "Escape" &&
+          !(event.target as HTMLElement).closest(
+            '[data-slot="popover-content"]',
+          )
+        ) {
           event.preventDefault();
           event.stopPropagation();
           setFull(false);
@@ -1364,12 +1412,16 @@ function EditorWorkspace({
       }}
       data-expanded={full || undefined}
       data-presentation={presentation}
+      role={full ? "dialog" : undefined}
+      aria-modal={full || undefined}
       aria-label="多参考创作编辑器"
     >
       <div
         className={cn(
           "mx-auto flex w-full max-w-5xl flex-col gap-4",
           compact && "gap-2",
+          full &&
+            "max-h-[90dvh] overflow-y-auto rounded-3xl bg-card p-4 sm:p-6",
         )}
       >
         {!compact && (

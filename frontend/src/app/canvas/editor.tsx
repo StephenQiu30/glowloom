@@ -90,9 +90,10 @@ import { CanvasMediaActions } from "./image/actions";
 import type { ImageOperation } from "./image/operations";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { ViewportSurface } from "./viewport/surface";
 import { CanvasNode } from "./node/node";
+import { CanvasTextEditor } from "./node/text-editor";
+import type { ConnectionDrop } from "./node/connection-port";
 import { CanvasHeader } from "./chrome/header";
 import { CanvasContextMenu } from "./chrome/context-menu";
 import {
@@ -117,6 +118,8 @@ import {
   nodePromptDraft,
   referenceEdges,
   referenceSources,
+  connectedReferenceSources,
+  materializeReferences,
 } from "./composer/references";
 import "./editor.css";
 
@@ -130,8 +133,8 @@ type Pending = {
 };
 const limit = (value: number) => Math.max(-1e6, Math.min(1e6, value));
 const CanvasMaterialDialog = dynamic(() =>
-  import("./image/material-dialog").then(
-    (module) => module.CanvasMaterialDialog,
+  import("@/components/media/project-asset-dialog").then(
+    (module) => module.ProjectAssetDialog,
   ),
 );
 
@@ -593,6 +596,54 @@ export function CanvasEditor({
       ),
     );
   }
+  function connectNodes(sourceID: string, targetID: string) {
+    if (
+      readOnlyRef.current ||
+      busy.current ||
+      pending.current ||
+      unconfirmed ||
+      conflict
+    )
+      return;
+    const source = local.current.find((n) => n.id === sourceID);
+    const target = local.current.find((n) => n.id === targetID);
+    if (
+      !source ||
+      !target ||
+      source === target ||
+      !isEditableNode(source) ||
+      !isEditableNode(target) ||
+      source.node_type === "group" ||
+      target.node_type === "group"
+    ) {
+      setMessage("此节点不能建立连接。");
+      return;
+    }
+    if (
+      localEdges.current.some(
+        (e) =>
+          (e.source_node_id === sourceID && e.target_node_id === targetID) ||
+          (e.source_node_id === targetID && e.target_node_id === sourceID),
+      )
+    ) {
+      setMessage("这两个节点已连接。");
+      return;
+    }
+    if (localEdges.current.length >= 4000) {
+      setMessage("画布已达到 4000 条连线上限。");
+      return;
+    }
+    edit(local.current, undefined, [
+      ...localEdges.current,
+      {
+        id: crypto.randomUUID(),
+        edge_type: "annotation",
+        source_node_id: sourceID,
+        target_node_id: targetID,
+      },
+    ]);
+    selectNode(targetID);
+  }
   function connectSelection() {
     const selected = local.current.filter((n) => selectedIDs.includes(n.id));
     if (selected.length !== 2 || selected.some((n) => !isEditableNode(n)))
@@ -665,6 +716,7 @@ export function CanvasEditor({
     source: Node,
     kind: "text" | "image_generation" | "video_generation",
     side: "left" | "right",
+    point?: ConnectionDrop,
   ) {
     if (
       adjacentRequest.current ||
@@ -724,6 +776,17 @@ export function CanvasEditor({
         asset,
         original,
       );
+      if (point && board.current) {
+        const bounds = board.current.getBoundingClientRect();
+        result.node.x = limit(
+          (point.x - bounds.left - view.current.x) / view.current.zoom -
+            (side === "left" ? (result.node.width ?? 320) : 0),
+        );
+        result.node.y = limit(
+          (point.y - bounds.top - view.current.y) / view.current.zoom -
+            (result.node.height ?? 200) / 2,
+        );
+      }
       edit([...local.current, result.node], undefined, [
         ...localEdges.current,
         result.edge,
@@ -824,14 +887,25 @@ export function CanvasEditor({
   }
   function addMaterials(assets: API.AssetSummary[], source?: Node) {
     if (readOnlyRef.current || privateInvalid.current) return false;
-    if (local.current.length + assets.length > 2000) {
-      setMessage("画布已达到 2000 个节点上限，请减少所选素材。");
-      return false;
-    }
     try {
-      const added = assets.map((a, i) =>
-        createMediaNode(a, project.id, local.current.length + i),
-      );
+      const requested = [
+        ...new Map(assets.map((a) => [`${a.kind}/${a.id}`, a])).values(),
+      ];
+      const added = requested
+        .map((a, i) => createMediaNode(a, project.id, local.current.length + i))
+        .filter(
+          (node) =>
+            !local.current.some(
+              (existing) =>
+                existing.ref_type === "media_asset" &&
+                existing.ref_id === node.ref_id &&
+                existing.node_type === node.node_type,
+            ),
+        );
+      if (local.current.length + added.length > 2000) {
+        setMessage("画布已达到 2000 个节点上限，请减少所选素材。");
+        return false;
+      }
       const bounds = board.current?.getBoundingClientRect();
       if (bounds?.width && bounds.height) {
         const x =
@@ -853,10 +927,22 @@ export function CanvasEditor({
           node.y = limit(Math.round(top + Math.floor(index / 3) * row));
         });
       }
-      edit([...local.current, ...added]);
-      selectNode(added.at(-1)?.id);
+      if (added.length) edit([...local.current, ...added]);
+      const last = requested.at(-1);
+      selectNode(
+        local.current.find(
+          (node) =>
+            node.ref_type === "media_asset" &&
+            node.ref_id === last?.id &&
+            node.node_type === last?.kind,
+        )?.id,
+      );
       setMaterials(null);
-      setMessage(`已添加 ${added.length} 个素材，请保存画布。`);
+      setMessage(
+        added.length
+          ? `已添加 ${added.length} 个素材，请保存画布。`
+          : "已定位已有素材节点。",
+      );
       return true;
     } catch {
       setMessage("素材信息不完整或不属于当前项目，请重新读取后添加。");
@@ -1421,9 +1507,6 @@ export function CanvasEditor({
   function seedForNode(node: DraftNode): GenerationSeed {
     const composer = nodePromptDraft(node);
     const sources = referenceSources(nodes);
-    const sourceByID = new Map(
-      sources.map((source) => [source.nodeID, source]),
-    );
     const ownerNode = node.id;
     return {
       project,
@@ -1441,16 +1524,32 @@ export function CanvasEditor({
         referenceSources: sources.filter(
           (source) => source.nodeID !== ownerNode,
         ),
-        incomingSources: edges
-          .filter((e) => isAnnotation(e) && e.target_node_id === ownerNode)
-          .flatMap((e) => {
-            const source = sourceByID.get(e.source_node_id ?? "");
-            return source ? [{ ...source, edgeID: e.id! }] : [];
-          }),
+        incomingSources: connectedReferenceSources(nodes, edges, ownerNode),
         onChange: (value: PromptDraft) => {
           const n = local.current.find((n) => n.id === ownerNode);
-          if (n && isDraft(n))
-            update(ownerNode, { config: { draft: richCanvasDraft(value) } });
+          if (n && isDraft(n)) {
+            try {
+              const graph = materializeReferences(
+                local.current,
+                localEdges.current,
+                ownerNode,
+                value,
+                project.id,
+              );
+              const textOnly =
+                graph.nodes.length === local.current.length &&
+                graph.edges.length === localEdges.current.length;
+              edit(
+                graph.nodes,
+                textOnly ? `${ownerNode}/config` : undefined,
+                graph.edges,
+              );
+            } catch (error) {
+              setMessage(
+                error instanceof Error ? error.message : "引用无法同步到画布。",
+              );
+            }
+          }
         },
         flush: async () => {
           const existing = local.current.find((n) => n.id === ownerNode);
@@ -1901,9 +2000,11 @@ export function CanvasEditor({
                 addingAdjacent={addingAdjacent}
                 onAddAdjacent={
                   !readOnly && isEditableNode(node)
-                    ? (kind, side) => void addAdjacent(node, kind, side)
+                    ? (kind, side, point) =>
+                        void addAdjacent(node, kind, side, point)
                     : undefined
                 }
+                onConnect={(targetID) => connectNodes(node.id, targetID)}
                 onEditTitle={() => {
                   if (readOnly) return;
                   selectNode(node.id);
@@ -2036,6 +2137,8 @@ export function CanvasEditor({
           </CanvasSelectionToolbar>
         )}
       <CanvasToolbar
+        materialsOpen={!!materials}
+        uploadOpen={upload}
         readOnly={readOnly}
         tool={tool}
         onToolChange={setTool}
@@ -2077,6 +2180,9 @@ export function CanvasEditor({
         current.node_type !== "timeline" &&
         current.id !== openToolID && (
           <CanvasNodePanel
+            onReveal={(dy) =>
+              changeCamera({ ...view.current, y: view.current.y + dy })
+            }
             rightInset={aiOpen ? effectiveAIWidth + 24 : 0}
             node={current}
             viewport={{ x: camera.x, y: camera.y, k: camera.zoom }}
@@ -2113,16 +2219,14 @@ export function CanvasEditor({
                   </Field>
                 </FieldGroup>
                 {current.node_type === "text" ? (
-                  <Textarea
-                    aria-label="文本内容"
-                    value={current.config.text ?? ""}
-                    maxLength={10000}
-                    disabled={!isEditableNode(current)}
-                    onChange={(event) =>
-                      update(current.id, {
-                        config: { text: event.target.value },
-                      })
-                    }
+                  <CanvasTextEditor
+                    key={current.id}
+                    id={current.id}
+                    text={current.config.text ?? ""}
+                    onChange={(text) => {
+                      if (isEditableNode(current))
+                        update(current.id, { config: { text } });
+                    }}
                   />
                 ) : (
                   <div className="flex gap-2">
@@ -2338,7 +2442,10 @@ export function CanvasEditor({
           initialTab={materials.tab}
           initialKind={materials.kind}
           onClose={() => setMaterials(null)}
-          onAdd={addMaterials}
+          onAdd={(assets) => {
+            if (!addMaterials(assets))
+              throw new Error("无法添加素材，请检查画布状态。");
+          }}
           onSubject={useSubject}
         />
       )}

@@ -3,6 +3,8 @@ import { FeedbackToast } from "@/components/feedback/feedback-toast";
 
 import { useEffect, useRef, useState } from "react";
 import {
+  CalendarDays,
+  ListFilter,
   AudioLines,
   Box,
   Check,
@@ -21,6 +23,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
@@ -44,13 +51,18 @@ import {
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import { listMediaAssets } from "@/api/media";
+import { getMediaPreview, listMediaAssets } from "@/api/media";
 import { ProjectMediaPreview } from "@/components/media/project-media";
 import { UploadDialog } from "@/components/media/upload-dialog";
 import { SubjectList } from "@/components/subjects/subject-list";
 import { subjectText, type Subject } from "@/components/subjects/contracts";
-import { RequestError } from "@/lib/request";
+import {
+  getScopeGeneration,
+  getSessionGeneration,
+  RequestError,
+} from "@/lib/request";
 import { flowError } from "@/components/generation/contracts";
+import "./project-asset-dialog.css";
 import { isProjectID } from "@/components/projects/project";
 
 const mediaKinds = [
@@ -60,21 +72,30 @@ const mediaKinds = [
   { value: "model", label: "3D", icon: Box },
 ];
 
-export function CanvasMaterialDialog({
+export function ProjectAssetDialog({
   projectID,
   initialTab = "assets",
   initialKind = "image",
   onClose,
   onAdd,
   onSubject,
+  reference = false,
 }: {
   projectID: string;
   initialTab?: "assets" | "subjects";
   initialKind?: string;
   onClose: () => void;
-  onAdd: (assets: API.AssetSummary[]) => void;
-  onSubject: (subject: Subject) => void;
+  onAdd: (assets: API.AssetSummary[]) => void | Promise<void>;
+  reference?: boolean;
+  onSubject?: (subject: Subject) => void;
 }) {
+  const limit = reference ? 1 : 24;
+  const [query, setQuery] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const [confirmError, setConfirmError] = useState("");
+  const confirmLock = useRef(false);
+  const confirmRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => confirmRequest.current?.abort(), []);
   const [tab, setTab] = useState(initialTab);
   const [kind, setKind] = useState(initialKind);
   const [subjectKind, setSubjectKind] = useState<API.Kind>("character");
@@ -86,9 +107,11 @@ export function CanvasMaterialDialog({
     setSelected((items) =>
       items.some((i) => i.id === asset.id)
         ? items.filter((i) => i.id !== asset.id)
-        : items.length < 24
-          ? [...items, asset]
-          : items,
+        : reference
+          ? [asset]
+          : items.length < limit
+            ? [...items, asset]
+            : items,
     );
   }
   return (
@@ -96,12 +119,15 @@ export function CanvasMaterialDialog({
       <Dialog
         open
         onOpenChange={(open) => {
-          if (!open) onClose();
+          if (!open && !confirmLock.current) onClose();
         }}
       >
-        <DialogContent className="canvas-material-dialog sm:max-w-[800px]">
-          <DialogHeader>
-            <DialogTitle>选择素材</DialogTitle>
+        <DialogContent
+          showCloseButton={!confirming}
+          className="canvas-material-dialog sm:max-w-[800px]"
+        >
+          <DialogHeader className="sr-only">
+            <DialogTitle>{reference ? "选择参考素材" : "资产库"}</DialogTitle>
             <DialogDescription>
               从当前项目添加素材，或选择主体开始创作。
             </DialogDescription>
@@ -110,10 +136,11 @@ export function CanvasMaterialDialog({
             value={tab}
             onValueChange={(value) => setTab(value as typeof tab)}
             className="min-h-0 flex-1"
+            inert={confirming}
           >
-            <TabsList variant="line">
+            <TabsList>
               <TabsTrigger value="assets">资产</TabsTrigger>
-              <TabsTrigger value="subjects">主体</TabsTrigger>
+              {onSubject && <TabsTrigger value="subjects">主体</TabsTrigger>}
             </TabsList>
             <TabsContent value="assets" className="flex min-h-0 flex-col gap-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -125,12 +152,14 @@ export function CanvasMaterialDialog({
                   }}
                   aria-label="素材类型"
                 >
-                  {mediaKinds.map(({ value, label, icon: Icon }) => (
-                    <ToggleGroupItem key={value} value={value}>
-                      <Icon data-icon="inline-start" />
-                      {label}
-                    </ToggleGroupItem>
-                  ))}
+                  {mediaKinds
+                    .filter((k) => !reference || k.value === initialKind)
+                    .map(({ value, label, icon: Icon }) => (
+                      <ToggleGroupItem key={value} value={value}>
+                        <Icon data-icon="inline-start" />
+                        {label}
+                      </ToggleGroupItem>
+                    ))}
                 </ToggleGroup>
                 <Button
                   variant="outline"
@@ -141,12 +170,63 @@ export function CanvasMaterialDialog({
                   上传素材
                 </Button>
               </div>
+              <div className="flex items-center gap-2">
+                <InputGroup>
+                  <InputGroupAddon>
+                    <Search />
+                  </InputGroupAddon>
+                  <InputGroupInput
+                    aria-label="搜索项目素材"
+                    placeholder="搜索项目素材"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
+                  {query && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setQuery("")}
+                    >
+                      清除搜索
+                    </Button>
+                  )}
+                </InputGroup>
+                {[
+                  { icon: CalendarDays, label: "时间筛选" },
+                  { icon: ListFilter, label: "来源筛选" },
+                ].map(({ icon: Icon, label }) => (
+                  <Popover key={label}>
+                    <PopoverTrigger asChild>
+                      <Button variant="ghost" size="icon" aria-label={label}>
+                        <Icon />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end">
+                      <p className="font-medium">{label}暂不可用</p>
+                      <p className="text-muted-foreground">
+                        素材服务尚未提供对应信息，可先按类型或名称查找。
+                      </p>
+                    </PopoverContent>
+                  </Popover>
+                ))}
+              </div>
               <MaterialList
-                key={projectID + kind + revision}
+                key={projectID + kind + revision + query}
                 projectID={projectID}
                 kind={kind}
                 selected={selected}
                 onToggle={toggle}
+                query={query}
+                limit={limit}
+                onSelectPage={(items) =>
+                  setSelected((previous) =>
+                    [
+                      ...new Map(
+                        [...previous, ...items].map((a) => [a.id, a]),
+                      ).values(),
+                    ].slice(0, limit),
+                  )
+                }
               />
             </TabsContent>
             <TabsContent
@@ -178,29 +258,96 @@ export function CanvasMaterialDialog({
               />
             </TabsContent>
           </Tabs>
+          {confirmError && (
+            <p role="alert" className="text-sm text-destructive">
+              {confirmError}
+            </p>
+          )}
           <DialogFooter className="canvas-material-footer">
             <p
               className="mr-auto text-xs text-muted-foreground"
               aria-live="polite"
             >
               {tab === "assets"
-                ? `已选择 ${selected.length} 个素材（最多 24 个）`
+                ? `已选择 ${selected.length} 个素材（最多 ${limit} 个）`
                 : subject
                   ? `已选择：${subjectText(subject).name ?? "未命名主体"}`
                   : "请选择一个主体"}
             </p>
-            <Button variant="outline" onClick={onClose}>
+            {tab === "assets" && selected.length > 0 && (
+              <Button
+                variant="ghost"
+                disabled={confirming}
+                onClick={() => setSelected([])}
+              >
+                清空选择
+              </Button>
+            )}
+            <Button variant="outline" disabled={confirming} onClick={onClose}>
               取消
             </Button>
             <Button
-              disabled={tab === "assets" ? !selected.length : !subject}
-              onClick={() =>
-                tab === "assets"
-                  ? onAdd(selected)
-                  : subject && onSubject(subject)
+              disabled={
+                confirming || (tab === "assets" ? !selected.length : !subject)
               }
+              onClick={async () => {
+                if (confirmLock.current) return;
+                confirmLock.current = true;
+                setConfirming(true);
+                setConfirmError("");
+                const controller = new AbortController();
+                confirmRequest.current = controller;
+                const scope = getScopeGeneration(),
+                  session = getSessionGeneration();
+                try {
+                  if (tab === "assets") {
+                    const verified = await Promise.all(
+                      selected.map(async (asset) => {
+                        const result = await getMediaPreview(
+                          { pid: projectID, asset_id: asset.id! },
+                          { signal: controller.signal },
+                        );
+                        if (
+                          !result.asset ||
+                          result.asset.id !== asset.id ||
+                          result.asset.project_id !== projectID ||
+                          result.asset.kind !== asset.kind ||
+                          !Number.isSafeInteger(result.asset.revision) ||
+                          result.asset.revision! < 1 ||
+                          result.asset.revision !== asset.revision
+                        )
+                          throw new Error("素材权限或版本已变化，请重新选择。");
+                        return result.asset;
+                      }),
+                    );
+                    if (
+                      controller.signal.aborted ||
+                      scope !== getScopeGeneration() ||
+                      session !== getSessionGeneration()
+                    )
+                      return;
+                    await onAdd(verified);
+                  } else if (subject) onSubject?.(subject);
+                } catch (error) {
+                  if (!controller.signal.aborted)
+                    setConfirmError(
+                      error instanceof Error
+                        ? error.message
+                        : "素材暂不可用，请重试。",
+                    );
+                } finally {
+                  confirmLock.current = false;
+                  if (!controller.signal.aborted) setConfirming(false);
+                }
+              }}
             >
-              {tab === "assets" ? "添加到画布" : "用主体创作"}
+              {confirming
+                ? "正在核验…"
+                : tab === "assets"
+                  ? reference
+                    ? "添加为参考"
+                    : "添加到画布"
+                  : "用主体创作"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -218,7 +365,7 @@ export function CanvasMaterialDialog({
             ) {
               setKind(asset.kind!);
               setSelected((items) =>
-                items.length < 24 && !items.some((i) => i.id === asset.id)
+                items.length < limit && !items.some((i) => i.id === asset.id)
                   ? [...items, asset]
                   : items,
               );
@@ -235,15 +382,20 @@ function MaterialList({
   kind,
   selected,
   onToggle,
+  query,
+  onSelectPage,
+  limit,
 }: {
   projectID: string;
   kind: string;
   selected: API.AssetSummary[];
   onToggle: (asset: API.AssetSummary) => void;
+  query: string;
+  limit: number;
+  onSelectPage: (assets: API.AssetSummary[]) => void;
 }) {
   const [items, setItems] = useState<API.AssetSummary[]>([]);
   const [cursor, setCursor] = useState<string>();
-  const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
@@ -264,28 +416,58 @@ function MaterialList({
   useEffect(() => {
     const controller = new AbortController();
     request.current = controller;
-    listMediaAssets(
-      { pid: projectID, kind, limit: 40 },
-      { signal: controller.signal },
-    )
-      .then(validate)
-      .then((page) => {
-        if (controller.signal.aborted) return;
-        setItems(page.items!);
-        setCursor(page.next_cursor);
-        setError("");
-      })
-      .catch((e) => {
-        if (!controller.signal.aborted) setError(flowError(e));
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
+    async function read() {
+      const page = validate(
+        await listMediaAssets(
+          { pid: projectID, kind, limit: 40 },
+          { signal: controller.signal },
+        ),
+      );
+      if (!query.trim()) return page;
+      const all = [...page.items!];
+      let next = page.next_cursor;
+      const seen = new Set<string>();
+      while (next && !controller.signal.aborted) {
+        if (seen.has(next)) throw new RequestError("invalid_receipt");
+        seen.add(next);
+        const more = validate(
+          await listMediaAssets(
+            { pid: projectID, kind, limit: 200, cursor: next },
+            { signal: controller.signal },
+          ),
+        );
+        all.push(...more.items!);
+        next = more.next_cursor;
+      }
+      return {
+        items: [...new Map(all.map((a) => [a.id, a])).values()],
+        next_cursor: undefined,
+      };
+    }
+    const timer = setTimeout(
+      () => {
+        void read()
+          .then((page) => {
+            if (controller.signal.aborted) return;
+            setItems(page.items!);
+            setCursor(page.next_cursor);
+            setError("");
+          })
+          .catch((e) => {
+            if (!controller.signal.aborted) setError(flowError(e));
+          })
+          .finally(() => {
+            if (!controller.signal.aborted) setLoading(false);
+          });
+      },
+      query ? 250 : 0,
+    );
     return () => {
+      clearTimeout(timer);
       controller.abort();
       request.current?.abort();
     };
-  }, [projectID, kind, retry]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [projectID, kind, retry, query]); // eslint-disable-line react-hooks/exhaustive-deps
   async function more() {
     if (busy.current || loading || !cursor) return;
     busy.current = true;
@@ -324,17 +506,23 @@ function MaterialList({
   const Icon = mediaKinds.find((k) => k.value === kind)!.icon;
   return (
     <>
-      <InputGroup>
-        <InputGroupAddon>
-          <Search />
-        </InputGroupAddon>
-        <InputGroupInput
-          aria-label="搜索已加载素材"
-          placeholder="搜索已加载素材名称"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      </InputGroup>
+      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span>
+          {loading
+            ? query
+              ? "正在搜索当前项目…"
+              : "正在读取素材…"
+            : `${filtered.length} 个结果`}
+        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={loading || !filtered.length || selected.length >= limit}
+          onClick={() => onSelectPage(filtered)}
+        >
+          选择本页
+        </Button>
+      </div>
       <div className="canvas-material-content" data-canvas-wheel-scroll>
         {error && (
           <FeedbackToast
@@ -360,7 +548,7 @@ function MaterialList({
                 className="canvas-material-card h-auto p-0 whitespace-normal"
                 aria-label={`选择素材 ${a.file_name || "未命名素材"}`}
                 aria-pressed={chosen}
-                disabled={!chosen && selected.length >= 24}
+                disabled={!chosen && selected.length >= limit}
                 onClick={() => onToggle(a)}
               >
                 <Card variant="media" className="w-full">
@@ -413,7 +601,7 @@ function MaterialList({
               </EmptyTitle>
               <EmptyDescription>
                 {query
-                  ? "换个关键词，或加载更多素材继续搜索。"
+                  ? "换个关键词，或清除搜索查看全部素材。"
                   : "上传素材后，即可添加到画布。"}
               </EmptyDescription>
             </EmptyHeader>
