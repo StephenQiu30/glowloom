@@ -13,35 +13,19 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
-func saveInputs(tx *gorm.DB, actor uuid.UUID, before domain.Document, commands []domain.Command) error {
-	previous := map[uuid.UUID]int64{}
-	for _, n := range before.Nodes {
-		previous[n.ID] = n.InputRevision
-	}
-	// Retain intermediate drafts even if the same node is edited twice in a batch.
-	for _, command := range commands {
-		next, err := domain.Apply(before, []domain.Command{command})
+func saveInputs(tx *gorm.DB, actor uuid.UUID, inputs []domain.InputSnapshot) error {
+	for _, input := range inputs {
+		draft, err := json.Marshal(input.Draft)
 		if err != nil {
-			return err
+			return fmt.Errorf("encode canvas input: %w", err)
 		}
-		for _, n := range next.Nodes {
-			if !domain.IsDraft(n) || previous[n.ID] == n.InputRevision {
-				continue
-			}
-			draft, err := json.Marshal(n.Config.Draft)
-			if err != nil {
-				return fmt.Errorf("encode canvas input: %w", err)
-			}
-			r := tx.Exec(`INSERT INTO canvas.node_input(node_id,input_revision,draft,created_by) VALUES(?,?,?::jsonb,?)`, n.ID, n.InputRevision, string(draft), actor)
-			if r.Error != nil {
-				return fmt.Errorf("append canvas input: %w", r.Error)
-			}
-			if r.RowsAffected != 1 {
-				return fmt.Errorf("append canvas input: no committed row")
-			}
-			previous[n.ID] = n.InputRevision
+		r := tx.Exec(`INSERT INTO canvas.node_input(node_id,input_revision,draft,created_by) VALUES(?,?,?::jsonb,?)`, input.NodeID, input.Revision, string(draft), actor)
+		if r.Error != nil {
+			return fmt.Errorf("append canvas input: %w", r.Error)
 		}
-		before = next
+		if r.RowsAffected != 1 {
+			return fmt.Errorf("append canvas input: no committed row")
+		}
 	}
 	return nil
 }

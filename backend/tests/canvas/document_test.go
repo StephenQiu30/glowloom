@@ -39,7 +39,7 @@ func TestCanvasCommandsAreAtomicAndRejectBusinessBindings(t *testing.T) {
 func TestCanvasAnnotationAndViewport(t *testing.T) {
 	a, b, edge := uuid.New(), uuid.New(), uuid.New()
 	doc := domain.Document{ID: uuid.New(), Nodes: []domain.Node{
-		{ID: a, Title: "备注", NodeType: "text", NodeAction: "resource"}, {ID: b, Title: "备注", NodeType: "text", NodeAction: "resource"},
+		{ID: a, Title: "备注", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: ptr("备注")}}, {ID: b, Title: "备注", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: ptr("备注")}},
 	}, Edges: []domain.Edge{}}
 	updated, err := domain.Apply(doc, []domain.Command{{Type: "Connect", Edges: []domain.Edge{{ID: edge, EdgeType: "annotation", SourceNodeID: a, TargetNodeID: b}}}, {Type: "SetViewport", Viewport: &domain.Viewport{X: 12, Y: 34, Zoom: 1.2}}})
 	if err != nil || len(updated.Edges) != 1 || updated.Viewport.Zoom != 1.2 {
@@ -69,8 +69,8 @@ func TestCanvasViewportSupportsJimengZoomRange(t *testing.T) {
 func TestCanvasDraftLayoutConnectionsDoNotGrantBusinessBindings(t *testing.T) {
 	a, b := uuid.New(), uuid.New()
 	doc := domain.Document{ID: uuid.New(), Nodes: []domain.Node{
-		{ID: a, Title: "图片草稿", NodeType: "image_generation", NodeAction: "generate"},
-		{ID: b, Title: "视频草稿", NodeType: "video_generation", NodeAction: "generate"},
+		{ID: a, Title: "图片草稿", NodeType: "image_generation", NodeAction: "generate", Config: domain.NodeConfig{Draft: draftNode(t, "image_generation").Config.Draft}},
+		{ID: b, Title: "视频草稿", NodeType: "video_generation", NodeAction: "generate", Config: domain.NodeConfig{Draft: draftNode(t, "video_generation").Config.Draft}},
 	}, Edges: []domain.Edge{}}
 	edge := domain.Edge{ID: uuid.New(), EdgeType: "annotation", SourceNodeID: a, TargetNodeID: b}
 	result, err := domain.Apply(doc, []domain.Command{{Type: "Connect", Edges: []domain.Edge{edge}}})

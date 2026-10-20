@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -28,6 +29,9 @@ func (s *Store) FreezeTranscriptionSource(ctx context.Context, actor identityapp
 		}
 		if doc.ProjectID != project {
 			return application.ErrNotFound
+		}
+		if doc.ReadOnlyReason != "" {
+			return fmt.Errorf("%w: %w", domain.ErrInvalidCommand, domain.ErrGraphReadOnly)
 		}
 		if doc.Revision != revision {
 			return &application.RevisionConflict{CurrentRevision: doc.Revision}

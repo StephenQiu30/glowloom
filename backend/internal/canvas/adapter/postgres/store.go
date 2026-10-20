@@ -4,6 +4,7 @@ package postgres
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -15,6 +16,7 @@ import (
 	pgprompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/adapter/postgres"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
@@ -82,28 +84,41 @@ func (s *Store) List(ctx context.Context, a identityapp.Principal, p uuid.UUID) 
 // Get reads one complete live graph under a document lock.
 func (s *Store) Get(ctx context.Context, a identityapp.Principal, id uuid.UUID) (domain.Document, error) {
 	var doc domain.Document
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		p, err := documentProject(tx, id)
-		if err != nil {
+	var err error
+	// A save can commit after the first lookup establishes the snapshot.
+	// Retry the entire authorized read, never only its final locking query.
+	for range 3 {
+		doc = domain.Document{}
+		err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			p, err := documentProject(tx, id)
+			if err != nil {
+				return err
+			}
+			if err = s.authorize(tx, a, p, false); err != nil {
+				return err
+			}
+			doc, err = load(tx, id, false)
+			if err != nil {
+				return err
+			}
+			presentation, err := s.presentation(tx, a, p)
+			if err != nil {
+				return err
+			}
+			if id == presentation.MainCanvasID {
+				doc.Name = presentation.Name
+			}
 			return err
+		}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+		var serialization *pgconn.PgError
+		if !errors.As(err, &serialization) || serialization.Code != "40001" {
+			return doc, err
 		}
-		if err = s.authorize(tx, a, p, false); err != nil {
-			return err
+		if err := ctx.Err(); err != nil {
+			return domain.Document{}, err
 		}
-		doc, err = load(tx, id, false)
-		if err != nil {
-			return err
-		}
-		presentation, err := s.presentation(tx, a, p)
-		if err != nil {
-			return err
-		}
-		if id == presentation.MainCanvasID {
-			doc.Name = presentation.Name
-		}
-		return err
-	})
-	return doc, err
+	}
+	return domain.Document{}, err
 }
 
 // Create commits a document and a durable actor/key response in the same transaction.
@@ -162,7 +177,7 @@ func (s *Store) Execute(ctx context.Context, a identityapp.Principal, id uuid.UU
 		if doc.Revision != input.ExpectedRevision {
 			return &application.RevisionConflict{CurrentRevision: doc.Revision}
 		}
-		updated, err := domain.Apply(doc, input.Commands)
+		updated, inputs, err := domain.ApplyWithInputs(doc, input.Commands)
 		if err != nil {
 			return err
 		}
@@ -199,7 +214,7 @@ func (s *Store) Execute(ctx context.Context, a identityapp.Principal, id uuid.UU
 			}
 			return err
 		}
-		if err := saveInputs(tx, a.ID, doc, input.Commands); err != nil {
+		if err := saveInputs(tx, a.ID, inputs); err != nil {
 			return err
 		}
 		presentation, err := s.presentation(tx, a, p)
@@ -290,6 +305,9 @@ func load(tx *gorm.DB, id uuid.UUID, write bool) (domain.Document, error) {
 	}
 	if err := tx.Raw(`SELECT id,edge_type,source_node_id,target_node_id,role,binding FROM canvas.edge WHERE document_id=? AND NOT is_delete ORDER BY id`, id).Scan(&doc.Edges).Error; err != nil {
 		return doc, err
+	}
+	if err := domain.ValidateGraph(doc); err != nil {
+		doc.ReadOnlyReason = err.Error()
 	}
 	return doc, nil
 }
@@ -638,6 +656,9 @@ func (s *Store) mutateDocument(ctx context.Context, a identityapp.Principal, id 
 		doc, err := load(tx, id, true)
 		if err != nil {
 			return err
+		}
+		if doc.ReadOnlyReason != "" {
+			return domain.ErrGraphReadOnly
 		}
 		if doc.Revision != expected {
 			return &application.RevisionConflict{CurrentRevision: doc.Revision}

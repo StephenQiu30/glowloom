@@ -172,6 +172,9 @@ func nodeMediaReference(kind string, id *uuid.UUID, config domain.NodeConfig, as
 	return configMediaReference(config, asset)
 }
 func configMediaReference(config domain.NodeConfig, asset uuid.UUID) (bool, error) {
+	if config.IsOpaque() {
+		return false, domain.ErrUnsupportedCommand
+	}
 	var ids []uuid.UUID
 	if c := config.Generation; c != nil {
 		for _, input := range c.Inputs {

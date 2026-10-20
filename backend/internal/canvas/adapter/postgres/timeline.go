@@ -30,6 +30,9 @@ func (s *Store) FreezeTimeline(ctx context.Context, actor identityapp.Principal,
 		if doc.ProjectID != project {
 			return application.ErrNotFound
 		}
+		if doc.ReadOnlyReason != "" {
+			return fmt.Errorf("%w: %w", domain.ErrInvalidCommand, domain.ErrGraphReadOnly)
+		}
 		if doc.Revision != revision {
 			return &application.RevisionConflict{CurrentRevision: doc.Revision}
 		}

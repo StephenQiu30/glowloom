@@ -339,6 +339,7 @@ declare namespace API {
     name?: string;
     nodes?: Node[];
     project_id?: string;
+    read_only_reason?: string;
     revision?: number;
     scope?: Record<string, any>;
     viewport?: Viewport;
@@ -3874,6 +3875,7 @@ declare namespace API {
     name?: string;
     nodes?: Node[];
     project_id?: string;
+    read_only_reason?: string;
     results?: CommandResult[];
     revision?: number;
     scope?: Record<string, any>;

@@ -174,6 +174,8 @@ func writeError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
 	case errors.Is(err, application.ErrIdempotencyConflict):
 		httpapi.WriteProblem(c, 409, "idempotency_key_reused", nil)
+	case errors.Is(err, domain.ErrGraphReadOnly):
+		httpapi.WriteProblem(c, 422, "canvas_graph_read_only", meta)
 	case errors.Is(err, domain.ErrUnsupportedCommand):
 		httpapi.WriteProblem(c, 422, "unsupported_command", meta)
 	case errors.Is(err, domain.ErrInvalidCommand):
