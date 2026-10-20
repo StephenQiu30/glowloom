@@ -65,6 +65,8 @@ services:
         target: identity-jwt-key
       - source: identity-jwt-keyring
         target: identity-jwt-keyring
+      - source: identity-jwt-public-key
+        target: identity-jwt-public-key
       - source: identity-refresh-receipt-key
         target: identity-refresh-receipt-key
     healthcheck:
@@ -139,6 +141,8 @@ secrets:
     file: ${LV_IDENTITY_JWT_KEY_FILE:-${LV_IDENTITY_KEY_FILE:-./.identity.key}}
   identity-jwt-keyring:
     file: ${LV_IDENTITY_JWT_VERIFY_KEYS_FILE:-${LV_IDENTITY_KEY_FILE:-./.identity.key}}
+  identity-jwt-public-key:
+    file: ${LV_IDENTITY_JWT_PUBLIC_KEY_FILE:-${LV_IDENTITY_KEY_FILE:-./.identity.key}}
   identity-refresh-receipt-key:
     file: ${LV_IDENTITY_REFRESH_RECEIPT_KEY_FILE:-${LV_IDENTITY_KEY_FILE:-./.identity.key}}
 

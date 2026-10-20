@@ -33,6 +33,7 @@ test-results/
 tmp/
 temp/
 .tmp/
+/.local/
 
 data/
 logs/

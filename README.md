@@ -26,6 +26,10 @@ docker compose up -d --build backend  # 仅启动或更新后端
 
 现有依赖服务、Temporal namespace、身份密钥及 `.env` 须提前准备；Compose 复用这些资源，不执行数据库迁移。启动后使用 `docker compose ps` 查看状态，使用 `docker compose logs --tail=100 backend` 排查编译或启动错误。
 
+会话v2的签名私钥、公钥、验证映射和回执密钥须使用持久路径，例如已忽略的`.local/identity/`，不要引用临时任务目录。分别设置`.env.example`中的`LV_IDENTITY_JWT_*`和`LV_IDENTITY_REFRESH_RECEIPT_KEY_FILE`；验证映射中的公钥容器路径为`/run/secrets/identity-jwt-public-key`。私钥和回执密钥须独立，文件权限为0600；已有密钥不能随启动重新生成。若原文件丢失，本机会话需要重新登录；身份主密钥必须保留。
+
+Temporal返回命名空间不存在时，先用`temporal operator namespace list --address 127.0.0.1:7233`核对现有服务，再按`.env`中的实际命名空间显式注册；不改用其他项目的命名空间。本地默认值可使用`temporal operator namespace create --namespace lanverse-local --address 127.0.0.1:7233 --retention 7d`，随后重启后端。
+
 后端每次启动都编译只读挂载的当前源码，成功后才启动服务；编译失败直接停止，不运行旧程序。独立 Go 构建缓存卷减少重复编译耗时。首次更新开发镜像后，纯 Go 源码更新也可执行 `docker compose restart backend`；修改依赖、Dockerfile、启动入口或 Compose 配置时重新执行上述带 `--build` 的命令。裸 `docker compose up -d` 不会强制更新已运行容器，开发后端运行中也不会自动热重载。
 
 启动会使用工作区当前源码，包括未提交修改；存在并行任务时，先确认这些修改可以一起运行，或在隔离的源码快照中验证。前端继续使用现有 Next.js 开发服务热更新，依赖卷的升级仍按现有依赖管理流程处理；生产镜像仍在构建阶段编译。
