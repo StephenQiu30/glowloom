@@ -311,8 +311,7 @@ export function CanvasNode({
             <Pencil data-icon="inline-start" />
           </Button>
         ))}
-      {selected &&
-        onAddAdjacent &&
+      {onAddAdjacent &&
         (["left", "right"] as const).map((side) => (
           <ConnectionPort
             key={side}

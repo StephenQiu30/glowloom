@@ -17,7 +17,6 @@ export function CanvasNodePanel({
   children,
   rightInset = 0,
   bottomInset = 0,
-  onReveal,
 }: {
   node: Node;
   viewport: ViewportTransform;
@@ -25,10 +24,8 @@ export function CanvasNodePanel({
   children: ReactNode;
   rightInset?: number;
   bottomInset?: number;
-  onReveal?: (dy: number) => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const revealed = useRef<string | null>(null);
   useLayoutEffect(() => {
     const container = containerRef.current,
       panel = panelRef.current;
@@ -72,21 +69,8 @@ export function CanvasNodePanel({
         container.clientHeight
           ? Math.max(160, container.clientHeight - bottomInset)
           : Number.POSITIVE_INFINITY,
+        panel.scrollHeight || 224,
       );
-      const revealKey = `${node.id}/${container.clientWidth}/${container.clientHeight}`;
-      if (
-        revealed.current !== revealKey &&
-        container.clientHeight &&
-        onReveal
-      ) {
-        revealed.current = revealKey;
-        const missing =
-          position.top +
-          Math.min(panel.scrollHeight || 280, 320) +
-          56 -
-          container.clientHeight;
-        if (missing > 0) onReveal(-missing);
-      }
       panel.style.maxHeight = Number.isFinite(position.maxHeight)
         ? `${position.maxHeight}px`
         : "";
@@ -123,7 +107,6 @@ export function CanvasNodePanel({
     viewport,
     rightInset,
     bottomInset,
-    onReveal,
   ]);
   return (
     <div

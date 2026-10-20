@@ -2422,9 +2422,6 @@ export function CanvasEditor({
         current.id !== editingTextID &&
         current.id !== openToolID && (
           <CanvasNodePanel
-            onReveal={(dy) =>
-              changeCamera({ ...view.current, y: view.current.y + dy })
-            }
             rightInset={aiOpen ? effectiveAIWidth + 24 : 0}
             node={current}
             viewport={{ x: camera.x, y: camera.y, k: camera.zoom }}

@@ -705,6 +705,7 @@ html:has(.creation-canvas) {
   border-radius: inherit;
 }
 .creation-canvas .canvas-node-port {
+  visibility: hidden;
   position: absolute;
   top: calc(var(--canvas-node-height) / 2);
   z-index: 8;
@@ -716,6 +717,11 @@ html:has(.creation-canvas) {
   background: transparent;
   touch-action: none;
   transform: translate(-50%, -50%) scale(var(--canvas-live-inverse-scale, 1));
+}
+.creation-canvas .canvas-media-node[data-selected="true"] .canvas-node-port,
+.creation-canvas:has(.canvas-node-port[data-dragging="true"])
+  .canvas-node-port {
+  visibility: visible;
 }
 .creation-canvas .canvas-node-port > span {
   display: grid;
