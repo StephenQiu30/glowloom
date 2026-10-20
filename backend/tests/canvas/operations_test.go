@@ -3,6 +3,7 @@ package canvas_test
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -414,10 +415,10 @@ func TestOptionalContainerPresenceUsesCASAndCannotRevive(t *testing.T) {
 		t.Fatal("optional creation", err)
 	}
 	present := true
-	clear := domain.Operation{Type: "set", NodeID: n.ID, Path: op.Path, ExpectedExists: &present, Expected: op.Value, Unset: true}
-	out, err = domain.ApplyOperations(out.Document, []domain.Operation{clear})
+	cleared := domain.Operation{Type: "set", NodeID: n.ID, Path: op.Path, ExpectedExists: &present, Expected: op.Value, Unset: true}
+	out, err = domain.ApplyOperations(out.Document, []domain.Operation{cleared})
 	if err != nil || out.Document.Nodes[0].Config.Director.Ground != nil {
-		t.Fatal("optional clear", err)
+		t.Fatal("optional cleared", err)
 	}
 }
 
@@ -501,5 +502,298 @@ func TestUndoDeletedGroupPreservesChildTitle(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("child lost")
+	}
+}
+
+func TestReferenceUndoRestoresMentionsWithNewBindingGeneration(t *testing.T) {
+	doc := otDoc()
+	n := composerNode(t)
+	doc.Nodes = []domain.Node{n}
+	actor := uuid.New()
+	insert := domain.Operation{Type: "insert", NodeID: n.ID, Path: []string{"config", "draft", "composer", "references"}, ItemID: "r", Value: raw(`{"id":"r","source":{"kind":"media","sourceId":"asset-r","sourceVersion":"v1"},"bindingGeneration":1,"mediaKind":"image","role":"reference_image","order":0}`)}
+	out, err := domain.ApplyOperations(doc, []domain.Operation{insert, {Type: "text", NodeID: n.ID, Path: []string{"config", "draft", "composer", "document"}, Text: domain.SequenceEdit{{Insert: []domain.Atom{{Type: "reference", ReferenceID: "r"}, {Type: "text", Text: "中"}, {Type: "reference", ReferenceID: "r"}}}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc = out.Document
+	remove := domain.Operation{Type: "remove", NodeID: n.ID, Path: insert.Path, ItemID: "r"}
+	out, err = domain.ApplyOperations(doc, []domain.Operation{remove})
+	if err != nil {
+		t.Fatal(err)
+	}
+	history := []domain.ContributionBatch{{Revision: 2, ActorID: actor, OpID: "remove", OriginalBase: 1, Original: []domain.Operation{remove}, Operations: []domain.Operation{remove}, Effects: out.Effects, Touches: out.Changes}}
+	inverse, err := domain.UndoContribution(doc, history, "remove", actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, err := domain.ApplyOperations(out.Document, inverse)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rich := restored.Document.Nodes[0].Config.Draft.Composer
+	if rich.References[0].BindingGeneration != 2 || len(rich.Document.Content[0].Content) != 3 || rich.LabelState.Allocations["r"].Ordinal != 1 {
+		t.Fatal("restoration reused stale binding or lost mentions", rich)
+	}
+}
+
+func TestSlotUndoFollowsColumnIdentityAfterReordering(t *testing.T) {
+	image := resourceNode("image")
+	table := batchNode(&image.ID)
+	second := uuid.New()
+	table.Config.BatchTable.ReferenceColumns = append(table.Config.BatchTable.ReferenceColumns, domain.BatchReferenceColumn{ID: second, Label: "second"})
+	table.Config.BatchTable.Rows[0].InputNodeIDs = append(table.Config.BatchTable.Rows[0].InputNodeIDs, nil)
+	doc := otDoc()
+	doc.Nodes = []domain.Node{image, table}
+	first := table.Config.BatchTable.ReferenceColumns[0].ID
+	actor := uuid.New()
+	ops := [][]domain.Operation{{{Type: "set", NodeID: table.ID, Path: []string{"config", "batch_table", "rows", "@" + table.Config.BatchTable.Rows[0].ID.String(), "input_node_ids", "@" + first.String()}, Value: raw(`null`)}}, {{Type: "move", NodeID: table.ID, Path: []string{"config", "batch_table", "reference_columns"}, ItemID: first.String()}}}
+	history := []domain.ContributionBatch{}
+	state := doc
+	for i, batch := range ops {
+		out, err := domain.ApplyOperations(state, batch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		history = append(history, domain.ContributionBatch{Revision: int64(2 + i), ActorID: actor, OpID: []string{"slot", "reorder"}[i], OriginalBase: state.Revision, Original: batch, Operations: batch, Effects: out.Effects, Touches: out.Changes})
+		state = out.Document
+		state.Revision = int64(2 + i)
+	}
+	inverse, err := domain.UndoContribution(doc, history, "slot", actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := domain.ApplyOperations(state, inverse)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored *domain.BatchTableConfig
+	for _, n := range out.Document.Nodes {
+		if n.ID == table.ID {
+			restored = n.Config.BatchTable
+		}
+	}
+	if restored.ReferenceColumns[1].ID != first || restored.Rows[0].InputNodeIDs[0] != nil || restored.Rows[0].InputNodeIDs[1] == nil || *restored.Rows[0].InputNodeIDs[1] != image.ID {
+		t.Fatal("undo restored to index instead of column ID", restored)
+	}
+}
+
+func TestMarkdownSourceFormattingUsesNarrowCAS(t *testing.T) {
+	doc := otDoc()
+	doc.Nodes[0].Config.Text = ptr("AB")
+	exists := true
+	format := domain.Operation{Type: "set", NodeID: doc.Nodes[0].ID, Path: []string{"config", "text_source"}, ExpectedExists: &exists, Expected: raw(`{"text":"AB"}`), Value: raw(`{"text":"**AB**"}`)}
+	out, err := domain.ApplyOperations(doc, []domain.Operation{format})
+	if err != nil || *out.Document.Nodes[0].Config.Text != "**AB**" {
+		t.Fatal("format not preserved", err)
+	}
+	typing := domain.Operation{Type: "text", NodeID: doc.Nodes[0].ID, Path: []string{"config", "text"}, Text: domain.SequenceEdit{{Retain: 1}, {Insert: []domain.Atom{{Type: "text", Text: "X"}}}}}
+	if _, _, err := domain.TransformOperationPair(doc, []domain.Operation{typing}, []domain.Operation{format}); err == nil {
+		t.Fatal("formatting overwrote concurrent typing")
+	}
+}
+
+func TestOptionalNegativePromptUsesTextOTFromEmpty(t *testing.T) {
+	doc := otDoc()
+	n := composerNode(t)
+	doc.Nodes = []domain.Node{n}
+	path := []string{"config", "draft", "composer", "params", "negative_prompt"}
+	a := domain.Operation{Type: "text", NodeID: n.ID, Path: path, Context: raw(`{"modelVersion":null,"mode":null}`), Text: domain.SequenceEdit{{Insert: []domain.Atom{{Type: "text", Text: "不要"}}}}}
+	b := a
+	b.Text = domain.SequenceEdit{{Insert: []domain.Atom{{Type: "text", Text: "模糊"}}}}
+	_, bp, err := domain.TransformOperationPair(doc, []domain.Operation{a}, []domain.Operation{b})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := domain.ApplyOperations(doc, []domain.Operation{a})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err = domain.ApplyOperations(out.Document, bp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Document.Nodes[0].Config.Draft.Composer.Params["negative_prompt"] != "不要模糊" {
+		t.Fatal(out.Document)
+	}
+	cleared := a
+	cleared.Text = domain.SequenceEdit{{Delete: 4}}
+	out, err = domain.ApplyOperations(out.Document, []domain.Operation{cleared})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := out.Document.Nodes[0].Config.Draft.Composer.Params["negative_prompt"]; exists {
+		t.Fatal("empty text did not restore canonical absence")
+	}
+}
+
+func TestFirstComposerEditUndoKeepsMigrationAndRestoresExactText(t *testing.T) {
+	doc := otDoc()
+	n := draftNode(t, "image_generation")
+	n.InputRevision = 1
+	n.Config.Draft.Prompt = "aaa"
+	doc.Nodes = []domain.Node{n}
+	actor := uuid.New()
+	expected, _ := json.Marshal(n.Config.Draft)
+	operations := []domain.Operation{{Type: "migrate_composer", NodeID: n.ID, Expected: expected}, {Type: "text", NodeID: n.ID, Path: []string{"config", "draft", "composer", "document"}, Text: domain.SequenceEdit{{Retain: 1}, {Delete: 1}}}}
+	out, err := domain.ApplyOperations(doc, operations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	history := []domain.ContributionBatch{{Revision: 2, ActorID: actor, OpID: "first", OriginalBase: 1, Original: operations, Operations: operations, Effects: out.Effects, Touches: out.Changes}}
+	inverse, err := domain.UndoContribution(doc, history, "first", actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, err := domain.ApplyOperations(out.Document, inverse)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := restored.Document.Nodes[0].Config.Draft
+	if d.Composer == nil || d.Composer.Document.Content[0].Content[0].Text != "aaa" {
+		t.Fatal("migration or input lost", d)
+	}
+}
+
+func TestOperationWireRejectsUnknownFieldsWithoutLosingRequestIdentity(t *testing.T) {
+	var op domain.Operation
+	payload := `{"type":"set","node_id":"` + uuid.NewString() + `","path":["title"],"value":"hello","unrecognized":{"v":1}}`
+	if err := json.Unmarshal([]byte(payload), &op); err != nil {
+		t.Fatal(err)
+	}
+	if err := domain.ValidateWireOperations([]domain.Operation{op}); err == nil {
+		t.Fatal("unknown field accepted")
+	}
+	encoded, err := json.Marshal(op)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	_ = json.Unmarshal(encoded, &fields)
+	if fields["unrecognized"] == nil {
+		t.Fatal("request hash lost unknown payload")
+	}
+	op = domain.Operation{Type: "set", NodeID: uuid.New(), Path: []string{"title"}, Value: raw(`"x"`), Unset: true}
+	if err := domain.ValidateWireOperations([]domain.Operation{op}); err == nil {
+		t.Fatal("ambiguous set accepted")
+	}
+}
+func TestEffectsRejectCorruptEdgePreimage(t *testing.T) {
+	doc := otDoc()
+	doc.Edges = []domain.Edge{{ID: uuid.New(), SourceNodeID: doc.Nodes[0].ID, TargetNodeID: uuid.New()}}
+	bad := doc.Edges[0]
+	bad.TargetNodeID = uuid.New()
+	encoded, _ := json.Marshal(bad)
+	_, err := domain.RewindEffects(doc, []domain.Effect{{Entity: "edge", ID: bad.ID, AfterExists: true, After: encoded, BeforeExists: false}})
+	if err == nil {
+		t.Fatal("corrupt edge accepted")
+	}
+}
+
+func TestUndoCreatedNodeRejectsNewTypedConsumer(t *testing.T) {
+	doc := otDoc()
+	doc.Nodes = nil
+	actor := uuid.New()
+	media := resourceNode("image")
+	table := batchNode(nil)
+	table.Config.BatchTable.ReferenceColumns = []domain.BatchReferenceColumn{{ID: uuid.New(), Label: "A"}}
+	table.Config.BatchTable.Rows[0].InputNodeIDs = []*uuid.UUID{nil}
+	doc.Nodes = []domain.Node{table}
+	state := doc
+	history := []domain.ContributionBatch{}
+	batches := [][]domain.Operation{{{Type: "create_node", Node: &media}}, {{Type: "set", NodeID: table.ID, Path: []string{"config", "batch_table", "rows", "@" + table.Config.BatchTable.Rows[0].ID.String(), "input_node_ids", "@" + table.Config.BatchTable.ReferenceColumns[0].ID.String()}, Value: effectUUID(media.ID)}}}
+	for i, ops := range batches {
+		out, err := domain.ApplyOperations(state, ops)
+		if err != nil {
+			t.Fatal(err)
+		}
+		history = append(history, domain.ContributionBatch{Revision: int64(i + 2), ActorID: actor, OpID: []string{"created", "consumer"}[i], OriginalBase: int64(i + 1), Original: ops, Operations: ops, Effects: out.Effects, Touches: out.Changes})
+		state = out.Document
+		state.Revision = int64(i + 2)
+	}
+	if _, err := domain.UndoContribution(doc, history, "created", actor); err == nil {
+		t.Fatal("undo erased another contribution's source slot")
+	}
+}
+func effectUUID(id uuid.UUID) json.RawMessage { v, _ := json.Marshal(id); return v }
+func TestTransformRejectsExcessivePairWork(t *testing.T) {
+	doc := otDoc()
+	ops := make([]domain.Operation, 65)
+	for i := range ops {
+		ops[i] = domain.Operation{Type: "set", NodeID: doc.Nodes[0].ID, Path: []string{"title"}, Value: raw(`"Name"`)}
+	}
+	if _, _, err := domain.TransformOperationPair(doc, ops, ops); err == nil {
+		t.Fatal("unbounded transform work")
+	}
+}
+
+func TestUndoTypingBatchDoesNotSpendQuadraticBudgetWithoutLaterWork(t *testing.T) {
+	doc := otDoc()
+	doc.Nodes[0].Config.Text = ptr("")
+	ops := make([]domain.Operation, 50)
+	for i := range ops {
+		edit := domain.SequenceEdit{}
+		if i > 0 {
+			edit = append(edit, domain.SequenceComponent{Retain: i})
+		}
+		edit = append(edit, domain.SequenceComponent{Insert: []domain.Atom{{Type: "text", Text: "x"}}})
+		ops[i] = domain.Operation{Type: "text", NodeID: doc.Nodes[0].ID, Path: []string{"config", "text"}, Text: edit}
+	}
+
+	out, err := domain.ApplyOperations(doc, ops)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor := uuid.New()
+	inverse, err := domain.UndoContribution(doc, []domain.ContributionBatch{{Revision: 2, ActorID: actor, OpID: "typed", OriginalBase: 1, Original: ops, Operations: ops, Effects: out.Effects, Touches: out.Changes}}, "typed", actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, err := domain.ApplyOperations(out.Document, inverse)
+	if err != nil || *back.Document.Nodes[0].Config.Text != "" {
+		t.Fatal("typing undo failed", err)
+	}
+}
+func TestOperationsRejectSameBatchIdentityReuse(t *testing.T) {
+	doc := otDoc()
+	n := resourceNode("text")
+	if _, err := domain.ApplyOperations(doc, []domain.Operation{{Type: "create_node", Node: &n}, {Type: "delete_node", NodeID: n.ID}, {Type: "create_node", Node: &n}}); err == nil {
+		t.Fatal("node identity reused")
+	}
+	table := batchNode(nil)
+	doc.Nodes = []domain.Node{table}
+	id := uuid.NewString()
+	path := []string{"config", "batch_table", "rows"}
+	v := raw(`{"id":"` + id + `","prompt":"","candidate_count":1,"input_node_ids":[]}`)
+	if _, err := domain.ApplyOperations(doc, []domain.Operation{{Type: "insert", NodeID: table.ID, Path: path, ItemID: id, Value: v}, {Type: "remove", NodeID: table.ID, Path: path, ItemID: id}, {Type: "insert", NodeID: table.ID, Path: path, ItemID: id, Value: v}}); err == nil {
+		t.Fatal("collection identity reused")
+	}
+}
+
+func TestTransformBoundedMaximumCanvas(t *testing.T) {
+	doc := otDoc()
+	doc.Nodes = make([]domain.Node, 2000)
+	for i := range doc.Nodes {
+		doc.Nodes[i] = resourceNode("text")
+		doc.Nodes[i].Config.Text = ptr("AB中文😀")
+	}
+	a := []domain.Operation{{Type: "text", NodeID: doc.Nodes[0].ID, Path: []string{"config", "text"}, Text: domain.SequenceEdit{{Insert: []domain.Atom{{Type: "text", Text: "X"}}}}}}
+	b := []domain.Operation{{Type: "text", NodeID: doc.Nodes[0].ID, Path: []string{"config", "text"}, Text: domain.SequenceEdit{{Retain: 1}, {Delete: 1}}}}
+	start := time.Now()
+	_, bp, err := domain.TransformOperationPair(doc, a, b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := domain.ApplyOperations(doc, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	last, err := domain.ApplyOperations(first.Document, bp)
+	if err != nil || *last.Document.Nodes[0].Config.Text != "XA中文😀" {
+		t.Fatal(err)
+	}
+	body, _ := json.Marshal(doc)
+	t.Logf("nodes=2000 edges=0 bytes=%d history=1 pair=1 elapsed=%s", len(body), time.Since(start))
+	if err := domain.ValidateTransformWork(doc, 4096); err == nil {
+		t.Fatal("oversized estimated copy work accepted")
 	}
 }

@@ -1,8 +1,10 @@
 package domain
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -39,6 +41,7 @@ func readOperationSequence(doc Document, op Operation) ([]Atom, error) {
 		return nil, operationError("unsupported_field")
 	}
 	value, exists := fieldValue(parent, key, rule)
+	value, exists = textValue(op.Path, value, exists)
 	if !exists {
 		return nil, operationError("target_deleted")
 	}
@@ -52,6 +55,13 @@ func inverseField(doc Document, op Operation) (Operation, error) {
 	object, err := nodeObject(doc.Nodes[index])
 	if err != nil {
 		return Operation{}, err
+	}
+	if isBatchSlot(op.Path) {
+		value, err := batchSlotValue(object, op.Path)
+		if err != nil {
+			return Operation{}, err
+		}
+		return Operation{Type: "set", NodeID: op.NodeID, Path: slices.Clone(op.Path), Value: value}, nil
 	}
 	parent, key, err := fieldContainer(object, op.Path)
 	if err != nil {
@@ -70,7 +80,8 @@ func inverseField(doc Document, op Operation) (Operation, error) {
 		}
 	}
 	if op.Type == "text" {
-		sequence, err := operationSequence(before, key == "document")
+		textBefore, _ := textValue(op.Path, before, exists)
+		sequence, err := operationSequence(textBefore, key == "document")
 		if err != nil {
 			return Operation{}, err
 		}
@@ -107,6 +118,25 @@ func UndoContribution(floor Document, history []ContributionBatch, target string
 	if targetIndex < 0 {
 		return nil, operationError("undo_unavailable")
 	}
+	// Charge the work actually performed: replay, lineage per touched text field,
+	// and inverse pairs against later operations, rather than squaring all typing.
+	ownCount, later, replay := len(history[targetIndex].Operations), 0, 0
+	textPaths := map[string]bool{}
+	for _, op := range history[targetIndex].Operations {
+		if op.Type == "text" {
+			textPaths[op.NodeID.String()+strings.Join(op.Path, "/")] = true
+		}
+	}
+	for i, row := range history {
+		replay += len(row.Operations) + len(row.Original)
+		if i > targetIndex {
+			later += len(row.Operations)
+		}
+	}
+	if err := ValidateTransformWork(floor, replay*(1+len(textPaths))+ownCount*(1+later)); err != nil {
+		return nil, err
+	}
+
 	for _, later := range history[targetIndex+1:] {
 		if later.UndoOf == target {
 			return nil, operationError("undo_conflict")
@@ -125,11 +155,22 @@ func UndoContribution(floor Document, history []ContributionBatch, target string
 	state := targetBase
 	inverse := []Operation{}
 	textFields := []Operation{}
+	created := map[uuid.UUID]bool{}
+	for _, op := range own.Operations {
+		if (op.Type == "create_node" || op.Type == "restore_node") && op.Node != nil {
+			created[op.Node.ID] = true
+		}
+	}
 	for _, op := range own.Operations {
 		switch op.Type {
 		case "noop":
 			continue
+		case "migrate_composer":
+			// Representation migration is retained when undoing the first user edit.
 		case "text", "set":
+			if created[op.NodeID] {
+				break
+			}
 			inv, err := inverseField(state, op)
 			if err != nil {
 				return nil, operationError("undo_unavailable")
@@ -173,6 +214,9 @@ func UndoContribution(floor Document, history []ContributionBatch, target string
 					}
 					return op.NodeID
 				}()) {
+					return nil, operationError("undo_conflict")
+				}
+				if insertionOperation(op.Type) && isReferenceCollection(op.Path) && changed.NodeID == op.NodeID && insertedReference(changed.Text, op.ItemID) {
 					return nil, operationError("undo_conflict")
 				}
 				if structureOperation(op.Type) && touchesSameItem(op, changed) {
@@ -275,6 +319,22 @@ func applyContributionTokens(before []contributionToken, edit SequenceEdit, tag 
 func contributionStep(tokens []contributionToken, op, field Operation, tag string) ([]contributionToken, []contributionToken, error) {
 	if op.NodeID != field.NodeID {
 		return tokens, nil, nil
+	}
+	if op.Type == "migrate_composer" && referenceText(field) {
+		var legacy Draft
+		if json.Unmarshal(op.Expected, &legacy) != nil {
+			return nil, nil, operationError("undo_unavailable")
+		}
+		atoms := []Atom{}
+		for i, line := range strings.Split(legacy.Prompt, "\n") {
+			if i > 0 {
+				atoms = append(atoms, Atom{Type: "paragraphBreak"})
+			}
+			if line != "" {
+				atoms = append(atoms, Atom{Type: "text", Text: line})
+			}
+		}
+		return contributionTokens(atoms, tag+"/migration"), nil, nil
 	}
 	if op.Type == "text" && slices.Equal(op.Path, field.Path) {
 		return applyContributionTokens(tokens, op.Text, tag)

@@ -1,4 +1,8 @@
 "use client";
+
+import type { Transaction } from "@tiptap/pm/state";
+import type { ComposerCollaboration } from "./composer-session";
+import { TextIntentInput } from "./text-intent-input";
 import {
   Empty,
   EmptyHeader,
@@ -123,9 +127,12 @@ import { fieldsForMode, requireQuote, money, type Quote } from "./contracts";
 import { TaskDetail, type GenerationSeed } from "./generation-dialog";
 import type { CanvasReferenceSource } from "./reference-source";
 export type CanvasComposerOwner = {
+  readOnly?: boolean;
   contextKey: string;
   draft: PromptDraft;
-  onChange: (draft: PromptDraft) => void;
+  onChange: (draft: PromptDraft, transaction?: Transaction) => void;
+  collaboration?: ComposerCollaboration;
+  onSession?: (session: ComposerSession) => (() => void) | void;
   flush: () => Promise<API.InputSource>;
   referenceSources?: CanvasReferenceSource[];
   incomingSources?: (CanvasReferenceSource & { edgeID: string })[];
@@ -246,7 +253,8 @@ export function RichGeneration(props: Props) {
         if (!identity.actor?.id) throw new RequestError("session_invalid");
         let snapshot: SavedDraft;
         if (props.canvas) {
-          if (props.presentation === "canvas") await props.canvas.flush();
+          if (props.presentation === "canvas" && !props.canvas.readOnly)
+            await props.canvas.flush();
           snapshot = {
             draft_id: props.canvas.contextKey,
             revision: 1,
@@ -547,7 +555,7 @@ function EditorWorkspace({
       });
     return () => controller.abort();
   }, [sourceKey, projectID]);
-  const frozen = confirmUnknown;
+  const frozen = confirmUnknown || canvas?.readOnly === true;
   const recoveredChanged =
     !quote &&
     !!current.submission?.draft &&
@@ -624,11 +632,12 @@ function EditorWorkspace({
               { headers: { "Idempotency-Key": request.key } },
             ),
           ),
-        persist: branchJournal.write,
+        persist:
+          presentation === "canvas" ? async () => {} : branchJournal.write,
         changed: updateStatus,
       });
     }
-    if (!canvas)
+    if (!canvas && presentation !== "canvas")
       branchJournal
         .list(contextKey)
         .then((found) => {
@@ -652,15 +661,27 @@ function EditorWorkspace({
       void saver.current?.flush().catch(() => {});
       saver.current?.dispose();
     };
-  }, [contextKey, replicaId, snapshot, projectID, updateStatus, canvas]);
+  }, [
+    contextKey,
+    replicaId,
+    snapshot,
+    projectID,
+    updateStatus,
+    canvas,
+    presentation,
+  ]);
   useEffect(() => {
     onLock?.(frozen || pending);
-    session?.editor.setEditable(!frozen);
+    session?.editor.setEditable(
+      !suspended && (!frozen || session.composing),
+      false,
+    );
     return () => {
       onLock?.(false);
     };
-  }, [frozen, pending, onLock, session]);
+  }, [frozen, pending, onLock, session, suspended, draft]);
   useEffect(() => {
+    if (canvas) return;
     const before = (e: BeforeUnloadEvent) => {
       if (saver.current?.status !== "saved" || confirmUnknown) {
         e.preventDefault();
@@ -668,7 +689,7 @@ function EditorWorkspace({
     };
     window.addEventListener("beforeunload", before);
     return () => window.removeEventListener("beforeunload", before);
-  }, [confirmUnknown]);
+  }, [confirmUnknown, canvas]);
   useEffect(() => {
     const suspend = () => {
       saver.current?.dispose();
@@ -701,14 +722,18 @@ function EditorWorkspace({
       window.removeEventListener("online", check);
     };
   }, [actor, session]);
+  const ownerSessionCleanup = useRef<(() => void) | undefined>(undefined);
   const changed = useCallback(
-    (value: ComposerSnapshot) => {
+    (value: ComposerSnapshot, transaction?: Transaction) => {
       const previous = latest.current;
       latest.current = value;
       setDraft(value.draft);
       setSeq(value.localSeq);
       saver.current?.edit(value);
-      if (!sessionRef.current?.composing) canvas?.onChange(value.draft);
+      if (transaction?.getMeta("composer-authoritative")) return;
+      if (canvas?.collaboration || !sessionRef.current?.composing)
+        if (canvas?.collaboration) canvas.onChange(value.draft, transaction);
+        else canvas?.onChange(value.draft);
       if (previous.localSeq === value.localSeq && !firstDirtyAt.current) return;
       firstDirtyAt.current ??= Date.now();
       if (timer.current) clearTimeout(timer.current);
@@ -1083,10 +1108,21 @@ function EditorWorkspace({
       contextKey={contextKey}
       replicaId={replicaId}
       draft={snapshot.draft}
+      collaboration={canvas?.collaboration}
+      onDispose={() => {
+        ownerSessionCleanup.current?.();
+        ownerSessionCleanup.current = undefined;
+      }}
       onReady={(value) => {
         sessionRef.current = value;
         setSession(value);
-        canvas?.onChange(value.snapshot().draft);
+        ownerSessionCleanup.current?.();
+        ownerSessionCleanup.current = canvas?.onSession?.(value) || undefined;
+        const current = value.snapshot();
+        latest.current = current;
+        setDraft(current.draft);
+        setSeq(current.localSeq);
+        canvas?.onChange(current.draft);
       }}
       onChange={changed}
       onRequestSave={() =>
@@ -1185,6 +1221,21 @@ function EditorWorkspace({
                   ...draft.params,
                   [f.field]: e === true,
                 })
+              }
+            />
+          ) : canvas?.collaboration && f.field === "negative_prompt" ? (
+            <TextIntentInput
+              id={`${formFieldId}-field-3-${fieldIndex0}`}
+              disabled={frozen}
+              value={String(draft.params[f.field] ?? "")}
+              onEdit={(value, edit) =>
+                session?.updateTextParam(f.field, value, edit)
+              }
+              onHistory={(direction) =>
+                canvas.collaboration?.history[direction]()
+              }
+              onCompositionState={(active) =>
+                canvas.collaboration?.composition(active)
               }
             />
           ) : (

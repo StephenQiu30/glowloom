@@ -2,9 +2,11 @@ package application
 
 import (
 	"context"
+
+	"github.com/google/uuid"
+
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	"github.com/google/uuid"
 )
 
 // CollaborationInput is one immutable, causally ordered atomic batch.
@@ -41,23 +43,31 @@ type CollaborationStore interface {
 	CollaborationChanges(context.Context, identity.Principal, uuid.UUID, int64) ([]CollaborationChange, error)
 }
 
+// CollaborationService exposes the ordered operation protocol.
 type CollaborationService struct{ store CollaborationStore }
 
+// NewCollaborationService injects durable collaboration storage.
 func NewCollaborationService(store CollaborationStore) *CollaborationService {
 	return &CollaborationService{store: store}
 }
+
+// Submit accepts or durably rejects an immutable batch.
 func (s *CollaborationService) Submit(ctx context.Context, a identity.Principal, id uuid.UUID, key string, input CollaborationInput) (CollaborationReceipt, error) {
 	if !validKey(key) {
 		return CollaborationReceipt{}, domain.ErrInvalidCommand
 	}
 	return s.store.SubmitCollaboration(ctx, a, id, key, input)
 }
+
+// Resolve queries the terminal outcome of the exact original request.
 func (s *CollaborationService) Resolve(ctx context.Context, a identity.Principal, id uuid.UUID, key string, input CollaborationInput) (*CollaborationReceipt, error) {
 	if !validKey(key) {
 		return nil, domain.ErrInvalidCommand
 	}
 	return s.store.ResolveCollaboration(ctx, a, id, key, input)
 }
+
+// Changes reads contiguous canonical changes after the client baseline.
 func (s *CollaborationService) Changes(ctx context.Context, a identity.Principal, id uuid.UUID, after int64) ([]CollaborationChange, error) {
 	if after < 1 {
 		return nil, domain.ErrInvalidCommand

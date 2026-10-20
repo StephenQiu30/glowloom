@@ -1,3 +1,9 @@
+import {
+  Decoration,
+  DecorationSet,
+  type Decoration as PMDecoration,
+} from "@tiptap/pm/view";
+import type { TextInputEdit } from "./text-input-intent";
 import Suggestion, { exitSuggestion } from "@tiptap/suggestion";
 import { Editor, Extension, Node, type EditorOptions } from "@tiptap/core";
 import Document from "@tiptap/extension-document";
@@ -75,6 +81,7 @@ type SessionState = {
   group: { kind: string; time: number } | null;
 };
 type Action = {
+  authoritative?: boolean;
   settledUpload?: { key: string; source: ReferenceBinding["source"] };
   intent?: Intent;
   labels?: LabelState;
@@ -195,20 +202,26 @@ function candidate(previous: SessionState, tr: Transaction): Frame {
     doc: tr.doc,
     selection: tr.selection.toJSON(),
     intent:
-      action.intent || action.settledUpload
-        ? completedIntent(
-            action.intent ?? previous.frame.intent,
-            action.settledUpload
-              ? {
-                  ...previous.completedUploads,
-                  [action.settledUpload.key]: action.settledUpload.source,
-                }
-              : previous.completedUploads,
-          )
-        : previous.frame.intent,
+      action.authoritative && action.intent
+        ? action.intent
+        : action.intent || action.settledUpload
+          ? completedIntent(
+              action.intent ?? previous.frame.intent,
+              action.settledUpload
+                ? {
+                    ...previous.completedUploads,
+                    [action.settledUpload.key]: action.settledUpload.source,
+                  }
+                : previous.completedUploads,
+            )
+          : previous.frame.intent,
   };
 }
-function apply(tr: Transaction, previous: SessionState): SessionState {
+function apply(
+  tr: Transaction,
+  previous: SessionState,
+  collaborative = false,
+): SessionState {
   const action: Action = tr.getMeta(sessionKey) ?? {};
   let next = {
     ...previous,
@@ -268,6 +281,15 @@ function apply(tr: Transaction, previous: SessionState): SessionState {
       next.group = null;
     return next;
   }
+  if (action.authoritative || collaborative)
+    return {
+      ...next,
+      completedUploads: action.authoritative ? {} : next.completedUploads,
+      past: [],
+      future: [],
+      localSeq: previous.localSeq + 1,
+      group: null,
+    };
   const composition = tr.getMeta("composition");
   const kind =
     composition !== undefined
@@ -301,6 +323,8 @@ function apply(tr: Transaction, previous: SessionState): SessionState {
 }
 function history(editor: Editor, direction: "undo" | "redo") {
   if (editor.isDestroyed || !editor.isEditable) return false;
+  const owner = collaborationOptions(editor)?.history;
+  if (owner) return owner[direction]();
   const current = stateOf(editor.state);
   if (current.composing || editor.view.composing) return false;
   const entry = (direction === "undo" ? current.past : current.future).at(-1);
@@ -328,13 +352,72 @@ function inComposition(editor: Editor, event?: KeyboardEvent | InputEvent) {
 }
 
 /** Only text, paragraphs, hard breaks and opaque reference IDs. Never parse reference IDs from HTML. */
-function referenceToken(initialLabels: LabelState) {
+function referenceToken(
+  initialLabels: LabelState,
+  pending?: (id: string) => boolean,
+) {
+  const display = (id: string, labels: LabelState) =>
+    pending?.(id) ? "待确认引用" : referenceLabel(labels, id);
   return Node.create({
     name: "reference",
     group: "inline",
     inline: true,
     atom: true,
     selectable: true,
+    addProseMirrorPlugins() {
+      return [
+        new Plugin({
+          props: {
+            decorations(state) {
+              const labels =
+                  sessionKey.getState(state)?.labels ?? initialLabels,
+                decorations: PMDecoration[] = [];
+              state.doc.descendants((node, pos) => {
+                if (node.type.name === "reference") {
+                  const label = display(node.attrs.referenceId, labels);
+                  decorations.push(
+                    Decoration.node(
+                      pos,
+                      pos + node.nodeSize,
+                      { "data-reference-label": label },
+                      { referenceLabel: label },
+                    ),
+                  );
+                }
+              });
+              return DecorationSet.create(state.doc, decorations);
+            },
+          },
+        }),
+      ];
+    },
+    addNodeView() {
+      return ({ node, decorations }) => {
+        const dom = document.createElement("span");
+        dom.setAttribute("data-prompt-reference", "");
+        dom.contentEditable = "false";
+        dom.className = "rounded bg-muted px-1 text-foreground";
+        const update = (
+          current: PMNode,
+          currentDecorations: readonly PMDecoration[],
+        ) => {
+          if (current.type.name !== "reference") return false;
+          const label =
+            currentDecorations.find(
+              (d) => typeof d.spec.referenceLabel === "string",
+            )?.spec.referenceLabel ??
+            display(
+              current.attrs.referenceId,
+              sessionKey.getState(this.editor.state)?.labels ?? initialLabels,
+            );
+          dom.textContent = String(label);
+          dom.setAttribute("aria-label", String(label));
+          return true;
+        };
+        update(node, decorations);
+        return { dom, update };
+      };
+    },
     addAttributes: () => ({ referenceId: { default: null, rendered: false } }),
     renderHTML({ node }) {
       return [
@@ -344,23 +427,43 @@ function referenceToken(initialLabels: LabelState) {
           contenteditable: "false",
           class: "rounded bg-muted px-1 text-foreground",
         },
-        referenceLabel(
+        display(
+          node.attrs.referenceId,
           (this.editor && sessionKey.getState(this.editor.state)?.labels) ??
             initialLabels,
-          node.attrs.referenceId,
         ),
       ];
     },
     renderText({ node }) {
-      return referenceLabel(
+      return display(
+        node.attrs.referenceId,
         (this.editor && sessionKey.getState(this.editor.state)?.labels) ??
           initialLabels,
-        node.attrs.referenceId,
       );
     },
   });
 }
+export type ComposerCollaboration = {
+  history: {
+    undo: () => boolean;
+    redo: () => boolean;
+    canUndo?: () => boolean;
+    canRedo?: () => boolean;
+  };
+  pendingReference: (id: string) => boolean;
+  composition: (active: boolean) => void;
+};
+function collaborationOptions(
+  editor: Editor,
+): ComposerCollaboration | undefined {
+  return editor.extensionManager.extensions.find(
+    (extension) => extension.name === "composerSession",
+  )?.options.collaboration as ComposerCollaboration | undefined;
+}
 export type ComposerOptions = {
+  plainTextOnly?: boolean;
+  maxPlainLength?: number;
+  collaboration?: ComposerCollaboration;
   contextKey: string;
   replicaId: string;
   draft: PromptDraft;
@@ -375,6 +478,9 @@ export function composerEditorOptions(
   const { document: initialDocument, labelState, ...intent } = draft;
   const sessionExtension = Extension.create({
     name: "composerSession",
+    addOptions() {
+      return { collaboration: options.collaboration };
+    },
     priority: 1000,
     addProseMirrorPlugins() {
       const editor = this.editor;
@@ -403,11 +509,26 @@ export function composerEditorOptions(
               composing: false,
               group: null,
             }),
-            apply,
+            apply: (tr, previous) =>
+              apply(tr, previous, !!options.collaboration),
           },
           filterTransaction(tr, state) {
             if (!tr.docChanged && !tr.getMeta(sessionKey)?.intent) return true;
             const previous = stateOf(state);
+            if (options.plainTextOnly) {
+              let reference = false;
+              tr.doc.descendants((node) => {
+                if (node.type.name === "reference") reference = true;
+              });
+              if (
+                reference ||
+                (options.maxPlainLength !== undefined &&
+                  Array.from(
+                    tr.doc.textBetween(0, tr.doc.content.size, "\n", "\n"),
+                  ).length > options.maxPlainLength)
+              )
+                return false;
+            }
             try {
               validatePromptDraft(
                 frameDraft(
@@ -464,6 +585,8 @@ export function composerEditorOptions(
                 return true;
               },
               compositionstart: (view) => {
+                clearTimeout(settleTimer);
+                options.collaboration?.composition(true);
                 view.dispatch(
                   view.state.tr.setMeta(sessionKey, {
                     composing: true,
@@ -481,6 +604,8 @@ export function composerEditorOptions(
                 clearTimeout(settleTimer);
                 settleTimer = setTimeout(() => {
                   if (editor.isDestroyed) return;
+                  if (!inComposition(editor))
+                    options.collaboration?.composition(false);
                   const request = stateOf(editor.state).deferredMode;
                   if (request)
                     new ComposerSession(editor).resolveModeSelection(request);
@@ -616,7 +741,7 @@ export function composerEditorOptions(
       Paragraph,
       Text,
       HardBreak,
-      referenceToken(labelState),
+      referenceToken(labelState, options.collaboration?.pendingReference),
       sessionExtension,
       referenceSuggestions(),
     ],
@@ -653,6 +778,55 @@ export class ComposerSession {
   }
   get composing() {
     return inComposition(this.editor);
+  }
+  referencePending(id: string) {
+    return collaborationOptions(this.editor)?.pendingReference(id) ?? false;
+  }
+  applyAuthoritative(draft: PromptDraft, tr: Transaction) {
+    if (this.editor.isDestroyed || inComposition(this.editor)) return false;
+    validatePromptDraft(draft);
+    if (
+      !tr.before.eq(this.editor.state.doc) ||
+      !tr.doc.eq(this.editor.schema.nodeFromJSON(draft.document))
+    )
+      throw new Error("unmapped_authoritative_document");
+    const {
+      document: _document,
+      labelState: labels,
+      ...intent
+    } = structuredClone(draft);
+    void _document;
+    tr.setMeta(sessionKey, {
+      intent,
+      labels,
+      authoritative: true,
+    } satisfies Action)
+      .setMeta("composer-authoritative", true)
+      .setMeta("addToHistory", false);
+    this.editor.view.dispatch(tr);
+    return true;
+  }
+  updateTextParam(field: string, value: string, edit: TextInputEdit) {
+    if (!this.editable() || field !== "negative_prompt") return false;
+    const state = stateOf(this.editor.state),
+      old = String(state.frame.intent.params[field] ?? "");
+    if (
+      edit.from < 0 ||
+      edit.to < edit.from ||
+      edit.to > old.length ||
+      old.slice(0, edit.from) + edit.text + old.slice(edit.to) !== value
+    )
+      return false;
+    const params = { ...state.frame.intent.params };
+    if (value) params[field] = value;
+    else delete params[field];
+    const intent = { ...state.frame.intent, params };
+    this.editor.view.dispatch(
+      this.editor.state.tr
+        .setMeta(sessionKey, { intent, isolated: true } satisfies Action)
+        .setMeta("composer-text-parameter", { field, ...edit }),
+    );
+    return true;
   }
   undo() {
     return history(this.editor, "undo");

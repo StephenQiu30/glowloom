@@ -27,7 +27,7 @@ func fieldContext(object map[string]any, path []string, rule fieldPolicy) (json.
 	if err != nil {
 		return nil, err
 	}
-	keys := []string{}
+	var keys []string
 	switch {
 	case key == "model" && len(parts) > 1 && parts[1] == "generation":
 		keys = []string{"capability", "model_profile_id", "mode"}

@@ -2,8 +2,9 @@ package domain
 
 import (
 	"encoding/json"
-	"github.com/google/uuid"
 	"slices"
+
+	"github.com/google/uuid"
 )
 
 func inverseStructure(before Document, op Operation) ([]Operation, error) {

@@ -2,9 +2,10 @@ package otvectors_test
 
 import (
 	"encoding/json"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	"os"
 	"testing"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 )
 
 func TestSequenceProtocolVectors(t *testing.T) {

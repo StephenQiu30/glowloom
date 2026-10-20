@@ -6,6 +6,7 @@ export type FieldPolicy = {
   optional?: boolean;
 };
 export const fieldPolicies: Record<string, FieldPolicy> = {
+  "config.text_source": { kind: "set", group: ["text"], cas: true },
   title: {
     kind: "set",
   },

@@ -512,3 +512,65 @@ it("批量候选按选择顺序替换 @ 查询，一次撤销恢复文字且编�
   expect(session.editor.getText()).toBe("@图片");
   expect(session.snapshot().draft.labelState.highWater.image).toBe(2);
 });
+
+it("routes collaborative history and accepts authoritative label corrections without echo history", () => {
+  const undo = vi.fn(() => true),
+    redo = vi.fn(() => true);
+  let pending = true;
+  const editor = new Editor(
+    composerEditorOptions({
+      contextKey: "ot",
+      replicaId: "replica",
+      draft: emptyPromptDraft(),
+      collaboration: {
+        history: { undo, redo },
+        pendingReference: () => pending,
+        composition: () => {},
+      },
+    }),
+  );
+  editors.push(editor);
+  const session = new ComposerSession(editor);
+  session.insertReference(media("r"));
+  expect(
+    editor.view.dom.querySelector("[data-prompt-reference]")?.textContent,
+  ).toBe("待确认引用");
+  const canonical = session.snapshot().draft;
+  canonical.labelState.highWater.image = 2;
+  canonical.labelState.allocations.r.ordinal = 2;
+  canonical.references[0].bindingGeneration = 2;
+  pending = false;
+  session.applyAuthoritative(canonical, editor.state.tr);
+  expect(session.snapshot().draft.labelState.allocations.r.ordinal).toBe(2);
+  expect(
+    editor.view.dom.querySelector("[data-prompt-reference]")?.textContent,
+  ).toBe("图片2");
+  expect(session.undo()).toBe(true);
+  expect(undo).toHaveBeenCalledOnce();
+  expect(session.snapshot().draft.references).toHaveLength(1);
+  session.redo();
+  expect(redo).toHaveBeenCalledOnce();
+});
+
+it("records a negative-prompt edit with the native input range", () => {
+  const session = create();
+  session.updateParams({ negative_prompt: "aaa" });
+  let received: unknown;
+  session.editor.on("transaction", ({ transaction }) => {
+    received = transaction.getMeta("composer-text-parameter");
+  });
+  expect(
+    session.updateTextParam("negative_prompt", "aa", {
+      from: 1,
+      to: 2,
+      text: "",
+    }),
+  ).toBe(true);
+  expect(received).toEqual({
+    field: "negative_prompt",
+    from: 1,
+    to: 2,
+    text: "",
+  });
+  expect(session.snapshot().draft.params.negative_prompt).toBe("aa");
+});

@@ -1,6 +1,9 @@
+import { canonical } from "@/components/generation/draft-save";
 import type { Canvas } from "./document";
 import {
   applyEffects,
+  fieldPolicy,
+  usesNode,
   applyOperations,
   operationError,
   transformOperationPair,
@@ -28,12 +31,18 @@ export type Change = {
   operations: Operation[];
   effects: Effect[];
 };
-type Intent = { key: string; operations: Operation[] };
+type HistoryIntent = { direction: "undo" | "redo"; target: string };
+type Intent = { key: string; operations: Operation[]; history?: HistoryIntent };
 type Pending = Envelope & {
+  history?: HistoryIntent;
   display: Operation[];
   receipt?: Receipt;
   applied?: boolean;
   invalid?: string;
+};
+export type CollaborationTransition = {
+  kind: "local" | "remote" | "canonical" | "status";
+  operations?: Operation[];
 };
 export type Recovery = Intent & { reason: string };
 function freeze<T>(value: T): T {
@@ -46,33 +55,64 @@ function freeze<T>(value: T): T {
 // Dependency is deliberately about operation targets and source premises, not
 // whole-node equality. Distinct scalar fields remain independently recoverable.
 function depends(a: Operation[], b: Operation[]): boolean {
-  const creates = new Set(
-    a.filter((o) => o.type === "create_node").map((o) => o.node?.id),
-  );
-  return b.some(
-    (y) =>
-      creates.has(y.node_id) ||
-      creates.has(y.edge?.source_node_id) ||
-      creates.has(y.edge?.target_node_id) ||
-      a.some((x) => {
-        if (x.node_id !== y.node_id) return false;
-        if (
-          x.type === "delete_node" ||
-          x.type === "create_node" ||
-          y.type === "delete_node"
+  const paths = (op: Operation): string[][] => {
+    const p = op.path ?? [];
+    try {
+      const group = fieldPolicy(p).group;
+      return group?.length ? group.map((k) => [...p.slice(0, -1), k]) : [p];
+    } catch {
+      return [p];
+    }
+  };
+  return b.some((y) =>
+    a.some((x) => {
+      if (x.type === "create_node" && usesNode(y, x.node?.id)) return true;
+      if (x.node_id !== y.node_id) return false;
+      if (
+        x.type === "delete_node" ||
+        x.type === "migrate_composer" ||
+        y.type === "delete_node"
+      )
+        return true;
+      if (
+        paths(x).some((p) =>
+          paths(y).some((q) =>
+            p
+              .slice(0, Math.min(p.length, q.length))
+              .every((v, i) => v === q[i]),
+          ),
         )
-          return true;
-        const p = x.path ?? [],
-          q = y.path ?? [],
-          n = Math.min(p.length, q.length);
-        if (p.slice(0, n).every((v, i) => v === q[i])) return true;
-        return (
-          (x.item_id !== undefined && q.includes("@" + x.item_id)) ||
-          (x.item_id !== undefined && x.item_id === y.before_id) ||
-          p.at(-1) === "model" ||
-          p.at(-1) === "source"
-        );
-      }),
+      )
+        return true;
+      const p = x.path ?? [],
+        q = y.path ?? [];
+      if (
+        x.item_id &&
+        (q.includes("@" + x.item_id) ||
+          x.item_id === y.before_id ||
+          y.text?.some((c) =>
+            c.insert?.some(
+              (t) => t.type === "reference" && t.reference_id === x.item_id,
+            ),
+          ))
+      )
+        return true;
+      // A model/source premise only constrains its own finite container.
+      if (["model", "source"].includes(p.at(-1) ?? "")) {
+        try {
+          const context = fieldPolicy(q).context;
+          if (
+            context &&
+            context === p.at(-1) &&
+            p.slice(0, -1).every((v, i) => v === q[i])
+          )
+            return true;
+        } catch {
+          /* closed structural path */
+        }
+      }
+      return false;
+    }),
   );
 }
 
@@ -85,14 +125,29 @@ export class Collaboration {
   private online = false;
   private writable = false;
   private actor = "";
+  private undoStack: string[] = [];
+  private redoStack: string[] = [];
+  lastRejection?: Receipt;
+  invalidDraft = false;
+  private composing = false;
+  private resynchronizing = false;
+  private deadline = 0;
+  private idleTimer?: ReturnType<typeof setTimeout>;
+  private draining = false;
+  private held: ({ changes: Change[] } | { receipt: Receipt })[] = [];
+  private heldBytes = 0;
   private waiters: {
     resolve: (doc: Canvas) => void;
     reject: (error: Error) => void;
   }[] = [];
   constructor(
     initial: Canvas,
-    private changed: () => void,
+    private changed: (transition?: CollaborationTransition) => void,
     private submit: (envelope: Envelope) => void,
+    private options: {
+      debounceMs?: number;
+      validate?: (document: Canvas) => boolean;
+    } = {},
   ) {
     this.base = structuredClone(initial);
   }
@@ -102,6 +157,9 @@ export class Collaboration {
       doc = applyOperations(doc, this.pending.display);
     for (const item of this.queue) doc = applyOperations(doc, item.operations);
     return doc;
+  }
+  get isComposing() {
+    return this.composing;
   }
   get dirty() {
     return !!this.pending || this.queue.length > 0;
@@ -114,28 +172,108 @@ export class Collaboration {
     this.changed();
   }
   enqueue(operations: Operation[], key = crypto.randomUUID()) {
-    if (!this.online || !this.writable)
+    const continuation =
+      this.composing &&
+      operations.every(
+        (op) =>
+          op.type === "text" ||
+          (op.type === "set" && op.path?.join(".") === "config.text_source"),
+      );
+    if (
+      (!this.online || !this.writable || this.resynchronizing) &&
+      !continuation
+    )
       return operationError("connection_read_only");
+    if (this.pending?.body.undo_of) operationError("undo_pending");
+    if (!operations.length) return;
     // Symbols and any prediction-only labels can never enter the wire intent.
     const clean = JSON.parse(JSON.stringify(operations)) as Operation[];
     applyOperations(this.document, clean);
+    if (
+      new TextEncoder().encode(
+        JSON.stringify({
+          type: "resolve",
+          op_id: key,
+          body: {
+            operation_version: 1,
+            base_revision: 2147483647,
+            operations: clean,
+          },
+        }),
+      ).length >
+      1 << 20
+    )
+      operationError("canvas_request_too_large");
     this.queue.push({ key, operations: clean });
+    this.deadline = Date.now() + (this.options.debounceMs ?? 0);
     this.pump();
     this.changed();
   }
   private pump() {
+    clearTimeout(this.idleTimer);
+    if (this.composing || this.draining || this.resynchronizing) return;
     if (!this.pending && this.queue.length && this.online && this.writable) {
-      const intent = this.queue.shift()!;
+      if (this.deadline > Date.now()) {
+        this.idleTimer = setTimeout(
+          () => this.pump(),
+          this.deadline - Date.now(),
+        );
+        return;
+      }
+      const first = this.queue[0];
+      let count = 0,
+        operations: Operation[] = [];
+      for (const item of this.queue) {
+        if (count > 0 && (first.history || item.history)) break;
+        const joined = [...operations, ...item.operations];
+        if (
+          joined.length > 100 ||
+          new TextEncoder().encode(
+            JSON.stringify({
+              type: "resolve",
+              op_id: first.key,
+              body: {
+                operation_version: 1,
+                base_revision: 2147483647,
+                operations: joined,
+              },
+            }),
+          ).length >
+            1 << 20
+        )
+          break;
+        operations = joined;
+        count++;
+      }
+      if (count === 0) operationError("canvas_request_too_large");
+      const valid =
+        !this.options.validate ||
+        this.options.validate(applyOperations(this.base, operations));
+      if (!valid) {
+        this.invalidDraft = true;
+        for (const waiter of this.waiters.splice(0))
+          waiter.reject(new Error("invalid_draft"));
+        return;
+      }
+      this.invalidDraft = false;
+      this.queue.splice(0, count);
+      const intent = { ...first, operations };
       const body = freeze(
         JSON.parse(
           JSON.stringify({
             operation_version: 1,
             base_revision: this.base.revision,
             operations: intent.operations,
+            ...(intent.history ? { undo_of: intent.history.target } : {}),
           }),
         ) as Body,
       );
-      this.pending = { key: intent.key, body, display: intent.operations };
+      this.pending = {
+        key: intent.key,
+        body,
+        display: intent.operations,
+        history: intent.history,
+      };
       this.submit({ key: intent.key, body });
     }
     if (!this.dirty) {
@@ -148,6 +286,10 @@ export class Collaboration {
     }
   }
   receipt(receipt: Receipt) {
+    if (this.composing) {
+      this.hold({ receipt });
+      return;
+    }
     const p = this.pending;
     if (!p || receipt.op_id !== p.key) return;
     if (p.receipt && JSON.stringify(p.receipt) !== JSON.stringify(receipt))
@@ -155,11 +297,17 @@ export class Collaboration {
     p.receipt = receipt;
     if (receipt.status === "rejected") {
       if (p.applied) return operationError("inconsistent_receipt");
-      this.recoverPending(receipt.code ?? "rejected");
+      this.lastRejection = receipt;
+      if (p.history) {
+        const stack =
+          p.history.direction === "undo" ? this.undoStack : this.redoStack;
+        if (stack.at(-1) === p.history.target) stack.pop();
+        this.pending = undefined;
+      } else this.recoverPending(receipt.code ?? "rejected");
     } else if (p.applied) {
       if (receipt.revision !== this.appliedRevision)
         return operationError("inconsistent_receipt");
-      this.pending = undefined;
+      this.acceptPending(p);
     }
     this.pump();
     this.changed();
@@ -170,16 +318,18 @@ export class Collaboration {
     this.recovery.push({ key: p.key, operations: p.body.operations, reason });
     const blocked = [...p.body.operations],
       remaining: Intent[] = [];
+    let state = this.base;
     for (const q of this.queue) {
       if (depends(blocked, q.operations)) {
         this.recovery.push({ ...q, reason: "dependency_rejected" });
         blocked.push(...q.operations);
       } else {
         try {
-          applyOperations(this.base, q.operations);
+          state = applyOperations(state, q.operations);
           remaining.push(q);
         } catch {
           this.recovery.push({ ...q, reason: "precondition_changed" });
+          blocked.push(...q.operations);
         }
       }
     }
@@ -187,6 +337,10 @@ export class Collaboration {
     this.pending = undefined;
   }
   changes(changes: Change[]) {
+    if (this.composing) {
+      this.hold({ changes });
+      return;
+    }
     for (const change of changes) {
       if (change.revision <= this.base.revision) continue;
       if (change.revision !== this.base.revision + 1)
@@ -215,10 +369,11 @@ export class Collaboration {
             this.recovery.push({ ...q, reason: "canonical_effect_changed" });
           this.queue = [];
         }
+        this.changed({ kind: "canonical", operations: [] });
         if (p.receipt) {
           if (p.receipt.revision !== change.revision)
             return operationError("inconsistent_receipt");
-          this.pending = undefined;
+          this.acceptPending(p);
         }
       } else {
         let carry = change.operations,
@@ -239,9 +394,12 @@ export class Collaboration {
             this.blockDependent(p.body.operations, p.invalid);
           }
         }
-        const next: Intent[] = [];
+        const next: Intent[] = [],
+          failed: Operation[] = [];
         for (const q of this.queue) {
           try {
+            if (depends(failed, q.operations))
+              throw new Error("dependency_rejected");
             const [remote, local] = transformOperationPair(
               state,
               carry,
@@ -251,6 +409,7 @@ export class Collaboration {
             carry = remote;
             next.push({ ...q, operations: local });
           } catch (error) {
+            failed.push(...q.operations);
             this.recovery.push({
               ...q,
               reason:
@@ -263,6 +422,7 @@ export class Collaboration {
           ...applyEffects(before, change.effects),
           revision: change.revision,
         };
+        this.changed({ kind: "remote", operations: carry });
       }
     }
     this.pump();
@@ -279,6 +439,129 @@ export class Collaboration {
     }
     this.queue = remaining;
   }
+  private acceptPending(p: Pending) {
+    if (p.history) {
+      if (p.history.direction === "undo") {
+        if (this.undoStack.at(-1) === p.history.target) this.undoStack.pop();
+        this.redoStack.push(p.key);
+      } else {
+        if (this.redoStack.at(-1) === p.history.target) this.redoStack.pop();
+        this.undoStack.push(p.key);
+      }
+    } else if (
+      p.body.operations.some(
+        (op) => !["noop", "migrate_composer"].includes(op.type),
+      )
+    ) {
+      this.undoStack.push(p.key);
+      this.redoStack = [];
+    }
+    this.pending = undefined;
+  }
+  get canUndo() {
+    return (
+      this.online &&
+      this.writable &&
+      !this.dirty &&
+      !this.recovery.length &&
+      !this.composing &&
+      !this.resynchronizing &&
+      this.undoStack.length > 0
+    );
+  }
+  get canRedo() {
+    return (
+      this.online &&
+      this.writable &&
+      !this.dirty &&
+      !this.recovery.length &&
+      !this.composing &&
+      !this.resynchronizing &&
+      this.redoStack.length > 0
+    );
+  }
+  history(direction: "undo" | "redo") {
+    if (!(direction === "undo" ? this.canUndo : this.canRedo)) return false;
+    const target = (direction === "undo" ? this.undoStack : this.redoStack).at(
+      -1,
+    )!;
+    this.deadline = 0;
+    this.queue.push({
+      key: crypto.randomUUID(),
+      operations: [],
+      history: { direction, target },
+    });
+    this.pump();
+    this.changed();
+    return true;
+  }
+  get canVerifyResync() {
+    return !this.composing && (!this.pending || !!this.pending.receipt);
+  }
+  requireResync() {
+    this.resynchronizing = true;
+    this.changed();
+  }
+  verifiedResync(snapshot: Canvas) {
+    if (
+      snapshot.id !== this.base.id ||
+      snapshot.project_id !== this.base.project_id ||
+      snapshot.revision < this.base.revision
+    )
+      operationError("invalid_receipt");
+    if (this.composing) operationError("composition_in_progress");
+    const p = this.pending;
+    if (p && !p.receipt) operationError("request_unconfirmed");
+    if (p?.receipt?.status === "accepted") {
+      if (!p.receipt.revision || snapshot.revision < p.receipt.revision)
+        operationError("invalid_receipt");
+      this.acceptPending(p);
+    } else if (p) {
+      this.recovery.push({
+        key: p.key,
+        operations: p.body.operations,
+        reason: p.receipt?.code ?? "history_unavailable",
+      });
+      this.pending = undefined;
+    }
+    for (const q of this.queue)
+      this.recovery.push({ ...q, reason: "history_unavailable" });
+    this.queue = [];
+    this.base = structuredClone(snapshot);
+    this.resynchronizing = false;
+    this.changed({ kind: "canonical" });
+    this.pump();
+  }
+  discardRecovery() {
+    if (this.dirty) operationError("request_unconfirmed");
+    this.recovery = [];
+    this.lastRejection = undefined;
+    this.changed();
+  }
+  private hold(event: { changes: Change[] } | { receipt: Receipt }) {
+    const bytes = new TextEncoder().encode(JSON.stringify(event)).length;
+    if (this.held.length >= 128 || this.heldBytes + bytes > 4 << 20)
+      operationError("history_unavailable");
+    this.held.push(event);
+    this.heldBytes += bytes;
+  }
+  composition(active: boolean) {
+    this.composing = active;
+    if (!active) {
+      this.draining = true;
+      try {
+        for (const event of this.held.splice(0)) {
+          if ("changes" in event) this.changes(event.changes);
+          else this.receipt(event.receipt);
+        }
+      } finally {
+        this.heldBytes = 0;
+        this.draining = false;
+      }
+      this.pump();
+      this.changed();
+    }
+  }
   private compatibleNormalization(predicted: Canvas, actual: Canvas) {
     // Text is never re-positioned by string diff. The transform kernel must explain
     // its exact new coordinates; unknown effects require explicit recovery.
@@ -288,8 +571,8 @@ export class Collaboration {
       for (const key of ["text"] as const)
         if (n.config[key] !== other.config[key]) return false;
       if (
-        JSON.stringify(n.config.draft?.composer?.document) !==
-        JSON.stringify(other.config.draft?.composer?.document)
+        canonical(n.config.draft?.composer?.document) !==
+        canonical(other.config.draft?.composer?.document)
       )
         return false;
     }
@@ -300,13 +583,25 @@ export class Collaboration {
       return this.recovery.length
         ? Promise.reject(new Error("collaboration_recovery_required"))
         : Promise.resolve(this.base);
-    return new Promise((resolve, reject) =>
+    const promise = new Promise<Canvas>((resolve, reject) =>
       this.waiters.push({ resolve, reject }),
     );
+    this.deadline = 0;
+    this.pump();
+    return promise;
   }
   dispose() {
+    clearTimeout(this.idleTimer);
     this.online = false;
     for (const w of this.waiters.splice(0))
       w.reject(new Error("request_unconfirmed"));
+    this.pending = undefined;
+    this.queue = [];
+    this.recovery = [];
+    this.held = [];
+    this.heldBytes = 0;
+    this.undoStack = [];
+    this.redoStack = [];
+    this.base = { ...this.base, nodes: [], edges: [] };
   }
 }

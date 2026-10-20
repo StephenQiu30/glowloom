@@ -1,4 +1,10 @@
 "use client";
+import type { EditTrace } from "../operation-adapters";
+import { plainEditorTrace } from "../operation-traces";
+import type {
+  ComposerSession,
+  ComposerCollaboration,
+} from "@/components/generation/composer-session";
 
 import {
   useEffect,
@@ -78,7 +84,10 @@ type Props = {
   node: Node;
   nodes: Node[];
   projectID?: string;
-  onUpdate: (config: API.DirectorConfig) => void;
+  onUpdate: (config: API.DirectorConfig, trace?: EditTrace) => void;
+  readOnly?: boolean;
+  collaboration?: ComposerCollaboration;
+  onTextSession?: (path: string[], session: ComposerSession) => () => void;
   onClose: () => void;
   onSave?: () => Promise<boolean>;
   saveMessage?: string;
@@ -281,6 +290,9 @@ export function CanvasDirector({
   onSave,
   saveMessage,
   saving = false,
+  readOnly = false,
+  collaboration,
+  onTextSession,
 }: Props) {
   const [saveNotice, setSaveNotice] = useState("");
   const [savePending, setSavePending] = useState(false);
@@ -338,11 +350,12 @@ export function CanvasDirector({
   const selectedFrame = frames.find(
     (frame) => Math.abs((frame.time ?? 0) - frameTime) < 0.001,
   );
-  function update(next: API.DirectorConfig) {
+  function update(next: API.DirectorConfig, trace?: EditTrace) {
+    if (readOnly && !trace?.text?.length) return;
     setSaveNotice("");
     current.current = next;
     setConfig(next);
-    onUpdate(next);
+    onUpdate(next, trace);
   }
   function patchEntity(
     patch: Partial<API.DirectorObject & API.DirectorCamera & API.DirectorLight>,
@@ -447,11 +460,14 @@ export function CanvasDirector({
     setTime(start);
     update({ ...config, active_shot_id: id });
   }
-  function patchShot(patch: API.DirectorShot) {
-    update({
-      ...config,
-      shots: shots.map((s) => (s.id === shot?.id ? { ...s, ...patch } : s)),
-    });
+  function patchShot(patch: API.DirectorShot, trace?: EditTrace) {
+    update(
+      {
+        ...config,
+        shots: shots.map((s) => (s.id === shot?.id ? { ...s, ...patch } : s)),
+      },
+      trace,
+    );
   }
   async function saveCanvas() {
     if (!onSave || saving || savePending) return;
@@ -1447,8 +1463,39 @@ export function CanvasDirector({
                         id={`director-shot/${shot.id}`}
                         label="镜头描述"
                         text={shot.prompt ?? ""}
+                        editable={!readOnly}
+                        collaboration={collaboration}
+                        onSession={(session) =>
+                          onTextSession?.(
+                            [
+                              "config",
+                              "director",
+                              "shots",
+                              "@" + shot.id,
+                              "prompt",
+                            ],
+                            session,
+                          )
+                        }
                         className="max-h-64 min-h-24 overflow-y-auto px-3 py-2 outline-none"
-                        onChange={(prompt) => patchShot({ prompt })}
+                        onChange={(prompt, tr) =>
+                          patchShot(
+                            { prompt },
+                            tr
+                              ? plainEditorTrace(
+                                  node.id,
+                                  [
+                                    "config",
+                                    "director",
+                                    "shots",
+                                    "@" + shot.id,
+                                    "prompt",
+                                  ],
+                                  tr,
+                                )
+                              : undefined,
+                          )
+                        }
                       />
                     </InputGroup>
                   </Field>

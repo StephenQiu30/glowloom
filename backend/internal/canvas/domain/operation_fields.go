@@ -8,6 +8,7 @@ var operationFields = map[string]fieldPolicy{
 	"parent_id":                      {kind: "set"},
 	"position":                       {kind: "set", group: []string{"x", "y"}},
 	"size":                           {kind: "set", group: []string{"width", "height"}},
+	"config.text_source":             {kind: "set", group: []string{"text"}, cas: true},
 	"config.text":                    {kind: "text"},
 	"config.collapsed":               {kind: "set"},
 	"config.draft.prompt":            {kind: "text"},

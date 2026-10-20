@@ -1,5 +1,8 @@
 "use client";
 
+import type { Transaction } from "@tiptap/pm/state";
+import type { ComposerCollaboration } from "./composer-session";
+
 import { useEffect, useRef, useState } from "react";
 import { PromptEditor } from "./prompt-editor";
 import type { ComposerSession } from "./composer-session";
@@ -21,13 +24,19 @@ export function PromptTextEditor({
   onChange,
   onReady,
   onRequestSubmit,
+  collaboration,
+  editable = true,
+  onSession,
   label,
   placeholder,
   className,
 }: {
   id: string;
   text: string;
-  onChange: (text: string) => void;
+  onChange: (text: string, transaction?: Transaction) => void;
+  collaboration?: ComposerCollaboration;
+  editable?: boolean;
+  onSession?: (session: ComposerSession) => (() => void) | void;
   onReady?: (session: ComposerSession) => void;
   onRequestSubmit?: () => void;
   label: string;
@@ -36,6 +45,7 @@ export function PromptTextEditor({
 }) {
   const [session, setSession] = useState<ComposerSession | null>(null);
   const syncing = useRef(false);
+  const cleanup = useRef<(() => void) | undefined>(undefined);
   const lastText = useRef(text);
   const [draft] = useState(() => textDraft(text));
   useEffect(() => {
@@ -46,12 +56,23 @@ export function PromptTextEditor({
     session.adoptDraft(textDraft(text));
     syncing.current = false;
   }, [session, text]);
+  useEffect(() => {
+    if (session)
+      session.editor.setEditable(editable || session.composing, false);
+  }, [session, editable, text]);
   return (
     <div className="w-full min-w-0">
       <PromptEditor
         contextKey={id}
         replicaId={id}
         draft={draft}
+        collaboration={collaboration}
+        plainTextOnly
+        maxPlainLength={10000}
+        onDispose={() => {
+          cleanup.current?.();
+          cleanup.current = undefined;
+        }}
         label={label}
         placeholder={placeholder}
         className={className}
@@ -59,9 +80,11 @@ export function PromptTextEditor({
         onReady={(value) => {
           setSession(value);
           onReady?.(value);
+          cleanup.current?.();
+          cleanup.current = onSession?.(value) || undefined;
         }}
         onRequestSubmit={onRequestSubmit}
-        onChange={(snapshot) => {
+        onChange={(snapshot, transaction) => {
           if (syncing.current) return;
           const value = snapshot.draft.document.content
             .map((p) =>
@@ -76,10 +99,14 @@ export function PromptTextEditor({
                 .join(""),
             )
             .join("\n");
-          const bounded = value.slice(0, 10000);
-          if (bounded === lastText.current) return;
+          const bounded = value;
+          if (transaction?.getMeta("composer-authoritative")) {
+            lastText.current = bounded;
+            return;
+          }
+          if (bounded === lastText.current && !transaction?.docChanged) return;
           lastText.current = bounded;
-          onChange(bounded);
+          onChange(bounded, transaction);
         }}
       />
     </div>

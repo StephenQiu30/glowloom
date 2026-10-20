@@ -131,3 +131,34 @@ it("只读正文不提供编辑工具，外部文字变化同步而不回写", a
   await screen.findByText("远端正文");
   expect(change).not.toHaveBeenCalled();
 });
+
+it("协同正文交付真实步骤并将撤销交给共享贡献历史", async () => {
+  let editor: Editor | null = null;
+  const onChange = vi.fn(),
+    undo = vi.fn(() => true),
+    redo = vi.fn(() => true);
+  render(
+    <DocumentEditor
+      id="collaborative"
+      text="aaa"
+      editable
+      onChange={onChange}
+      onReady={(value) => {
+        editor = value;
+      }}
+      collaboration={{
+        history: { undo, redo, canUndo: () => true, canRedo: () => true },
+        composition: () => {},
+      }}
+    />,
+  );
+  await waitFor(() => expect(editor).toBeTruthy());
+  act(() => {
+    editor!.view.dispatch(editor!.state.tr.delete(2, 3));
+  });
+  expect(onChange.mock.calls.at(-1)?.[0]).toBe("aa");
+  expect(onChange.mock.calls.at(-1)?.[1].steps).toHaveLength(1);
+  fireEvent.click(screen.getByRole("button", { name: "撤销文本编辑" }));
+  expect(undo).toHaveBeenCalledOnce();
+  expect(editor!.getText()).toBe("aa");
+});

@@ -164,6 +164,10 @@ export function ReferenceControls({
   canvasSources?: CanvasReferenceSource[];
   incomingSources?: (CanvasReferenceSource & { edgeID: string })[];
 }) {
+  const displayLabel = (id: string) =>
+    session.referencePending(id)
+      ? "待确认引用"
+      : referenceLabel(draft.labelState, id);
   const formFieldId = useId();
 
   const [picker, setPicker] = useState<{
@@ -660,12 +664,10 @@ export function ReferenceControls({
       />
       <div className="flex flex-wrap gap-2">
         {draft.references
-          .filter((r) =>
-            referenceLabel(draft.labelState, r.id).includes(search),
-          )
+          .filter((r) => displayLabel(r.id).includes(search))
           .map((r) => (
             <Button key={r.id} variant="ghost" onClick={() => add(r, true)}>
-              {referenceLabel(draft.labelState, r.id)}
+              {displayLabel(r.id)}
             </Button>
           ))}
       </div>
@@ -705,9 +707,7 @@ export function ReferenceControls({
             className="flex min-w-0 flex-col gap-3"
           >
             <div className="flex items-center justify-between">
-              {!compact ? (
-                <strong>{referenceLabel(draft.labelState, ref.id)}</strong>
-              ) : null}
+              {!compact ? <strong>{displayLabel(ref.id)}</strong> : null}
               <span className="text-xs text-muted-foreground">
                 {mentioned.has(ref.id) ? "已提及" : "全局参考"}
               </span>
@@ -730,7 +730,7 @@ export function ReferenceControls({
               <p className="text-sm">来源待核验；确认权限前隐藏内容。</p>
             )}
             <NativeSelect
-              aria-label={`${referenceLabel(draft.labelState, ref.id)}角色`}
+              aria-label={`${displayLabel(ref.id)}角色`}
               disabled={disabled}
               value={ref.role}
               className="w-full"
@@ -762,7 +762,7 @@ export function ReferenceControls({
                   查询原上传结果
                 </Button>
                 <Input
-                  aria-label={`重选${referenceLabel(draft.labelState, ref.id)}`}
+                  aria-label={`重选${displayLabel(ref.id)}`}
                   type="file"
                   accept={`${ref.mediaKind}/*`}
                   disabled={disabled}
@@ -893,7 +893,7 @@ export function ReferenceControls({
     { kind: "audio" as const, label: "音频", icon: AudioLines },
   ];
   const matchingReferences = draft.references.filter((ref) =>
-    referenceLabel(draft.labelState, ref.id).includes(search),
+    displayLabel(ref.id).includes(search),
   );
   const compactMenu = (inline: boolean) => (
     <Command
@@ -929,9 +929,7 @@ export function ReferenceControls({
           <CommandGroup heading="本次参考">
             {draft.references
               .filter((ref) =>
-                referenceLabel(draft.labelState, ref.id).includes(
-                  inline ? search : sourceQuery,
-                ),
+                displayLabel(ref.id).includes(inline ? search : sourceQuery),
               )
               .map((ref) => (
                 <CommandItem
@@ -949,7 +947,7 @@ export function ReferenceControls({
                   ) : (
                     <ImageIcon />
                   )}
-                  {referenceLabel(draft.labelState, ref.id)}
+                  {displayLabel(ref.id)}
                 </CommandItem>
               ))}
           </CommandGroup>
@@ -1154,7 +1152,7 @@ export function ReferenceControls({
                           type="button"
                           variant="outline"
                           className="relative h-14 w-16 shrink-0 flex-col gap-1 overflow-hidden"
-                          aria-label={`查看${referenceLabel(draft.labelState, ref.id)}详情`}
+                          aria-label={`查看${displayLabel(ref.id)}详情`}
                         >
                           {authorized &&
                           ref.source.kind === "media" &&
@@ -1170,7 +1168,7 @@ export function ReferenceControls({
                             <Icon data-icon="inline-start" />
                           )}
                           <Badge variant="secondary" className="relative">
-                            {referenceLabel(draft.labelState, ref.id)}
+                            {displayLabel(ref.id)}
                           </Badge>
                           {automatic ? (
                             <Badge
@@ -1205,7 +1203,7 @@ export function ReferenceControls({
                       >
                         <PopoverHeader>
                           <PopoverTitle>
-                            {referenceLabel(draft.labelState, ref.id)}
+                            {displayLabel(ref.id)}
                             {automatic ? (
                               <Badge variant="secondary" className="ml-2">
                                 <Link2 data-icon="inline-start" />

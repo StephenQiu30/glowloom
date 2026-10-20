@@ -687,8 +687,18 @@ func (s *Store) mutateDocument(ctx context.Context, a identityapp.Principal, id 
 		if err != nil {
 			return err
 		}
-		if err := tx.Exec(`INSERT INTO canvas.command_log(id,document_id,revision,commands,create_by) VALUES(?,?,?,?::jsonb,?)`, uuid.New(), id, doc.Revision, string(log), a.ID).Error; err != nil {
-			return err
+		if doc.OperationVersion == 1 {
+			log, err = json.Marshal(collaborationLog{System: kind, Name: name, OriginalBase: doc.Revision - 1, OriginalOperations: []domain.Operation{}, Operations: []domain.Operation{}, Effects: []domain.Effect{}, Touches: []domain.FieldChange{}, MediaReferences: []uuid.UUID{}})
+			if err != nil {
+				return err
+			}
+			if err := tx.Exec(`INSERT INTO canvas.command_log(id,document_id,revision,commands,create_by,operation_version,op_id,base_revision) VALUES(?,?,?,?::jsonb,?,1,?,?)`, uuid.New(), id, doc.Revision, string(log), a.ID, uuid.New(), doc.Revision-1).Error; err != nil {
+				return err
+			}
+		} else {
+			if err := tx.Exec(`INSERT INTO canvas.command_log(id,document_id,revision,commands,create_by) VALUES(?,?,?,?::jsonb,?)`, uuid.New(), id, doc.Revision, string(log), a.ID).Error; err != nil {
+				return err
+			}
 		}
 		if err := changed(tx, a, id, doc.ProjectID, doc.Revision); err != nil {
 			return err

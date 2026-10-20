@@ -4,7 +4,7 @@ import {
   transformOperationPair,
   type Operation,
 } from "@/app/canvas/operations";
-import type { Canvas } from "@/app/canvas/document";
+import { removeCanvasNode, type Canvas } from "@/app/canvas/document";
 const doc = (): Canvas => ({
   id: "doc",
   project_id: "p",
@@ -89,4 +89,43 @@ describe("finite graph OT", () => {
       ]),
     ).toThrow();
   });
+});
+
+it("deleting a source clears every batch slot without deleting its media", () => {
+  const nodes: Canvas["nodes"] = [
+    {
+      id: "image",
+      title: "image",
+      node_type: "image",
+      node_action: "resource",
+      ref_type: "media_asset",
+      ref_id: "55555555-5555-4555-8555-555555555555",
+      x: 0,
+      y: 0,
+      z_index: 0,
+      config: {},
+    },
+    {
+      id: "table",
+      title: "table",
+      node_type: "batch_table",
+      node_action: "tool",
+      x: 0,
+      y: 0,
+      z_index: 0,
+      config: {
+        batch_table: {
+          version: 1,
+          rows: [{ id: "row", input_node_ids: ["image", "image"] }],
+        },
+      },
+    },
+  ];
+  const result = removeCanvasNode(nodes, "image");
+  expect(result).toHaveLength(1);
+  expect(result[0].config.batch_table?.rows?.[0].input_node_ids).toEqual([
+    null,
+    null,
+  ]);
+  expect(nodes[0].ref_id).toBe("55555555-5555-4555-8555-555555555555");
 });

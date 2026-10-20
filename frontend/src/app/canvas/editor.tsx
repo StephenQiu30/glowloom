@@ -1,5 +1,10 @@
 "use client";
 
+import type { Transaction } from "@tiptap/pm/state";
+import { useCanvasCollaboration } from "./use-collaboration";
+import { composerTrace, markdownEditorTrace } from "./operation-traces";
+import type { EditTrace } from "./operation-adapters";
+
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useProjectPresentation } from "@/components/projects/project-presentation";
 import { publishProjectInvalidation } from "@/components/projects/project-presentation-store";
@@ -110,7 +115,7 @@ import {
   connectedReferenceSources,
   materializeReferences,
 } from "./composer/references";
-import { CanvasLive, type LiveStatus } from "./live";
+import type { LiveStatus } from "./live";
 import "./editor.css";
 
 type Pending = {
@@ -182,11 +187,6 @@ export function CanvasEditor({
   );
   const [socketWritable, setSocketWritable] = useState(developmentPreview);
   const [syncBlocked, setSyncBlocked] = useState(false);
-  const live = useRef<CanvasLive | null>(null);
-  const deferredSnapshot = useRef<{
-    document: unknown;
-    writable: boolean;
-  } | null>(null);
   const verifyIdentity = useRef<() => void>(() => {});
   const readOnly =
     liveStatus !== "live" ||
@@ -278,8 +278,40 @@ export function CanvasEditor({
       element: HTMLElement | null;
     }[];
   } | null>(null);
+  const collaboration = useCanvasCollaboration(initial, !developmentPreview, {
+    update: (display, authoritative, state) => {
+      if (privateInvalid.current) return;
+      local.current = display.nodes;
+      localEdges.current = display.edges;
+      setNodes(display.nodes);
+      setEdges(display.edges);
+      setBase(authoritative);
+      setSaving(state.pending && !state.unconfirmed);
+      setUnconfirmed(state.unconfirmed);
+      setSyncBlocked(state.recovering);
+      if (state.recovering) {
+        readOnlyRef.current = true;
+        setConflict({ server: authoritative });
+      } else setConflict(null);
+      if (state.rejection)
+        setMessage(
+          state.rejection === "undo_conflict"
+            ? "后续编辑影响了这次撤销，已保留当前内容。"
+            : "有修改未能保存，请核对保留内容后处理。",
+        );
+    },
+    status: (status, writable) => {
+      setLiveStatus(status);
+      if (writable !== undefined) setSocketWritable(writable);
+      if (status !== "live" || writable === false) readOnlyRef.current = true;
+    },
+    revoked: () =>
+      window.dispatchEvent(new Event("glowloom:private-cache-cleared")),
+    message: setMessage,
+  });
   const baseline = new Map(base.nodes.map((n) => [n.id, n]));
   const dirty =
+    (!developmentPreview && !!collaboration.controller.current?.dirty) ||
     canonical(edges) !== canonical(base.edges) ||
     nodes.length !== base.nodes.length ||
     nodes.some((node) => {
@@ -297,68 +329,10 @@ export function CanvasEditor({
     size.height,
     aiOpen ? effectiveAIWidth : 0,
   );
-  const receiveSnapshot = useCallback(
-    (document: unknown, writable: boolean) => {
-      if (privateInvalid.current) return;
-      const server = requireCanvas(document, initial.project_id, initial.id);
-      setSocketWritable(writable);
-      if (busy.current || pending.current) {
-        deferredSnapshot.current = { document, writable };
-        return;
-      }
-      if (server.revision <= savedBase.current.revision) return;
-      const prior = new Map(
-        savedBase.current.nodes.map((node) => [node.id, node]),
-      );
-      const changed =
-        canonical(localEdges.current) !== canonical(savedBase.current.edges) ||
-        local.current.length !== prior.size ||
-        local.current.some((node) => {
-          const old = prior.get(node.id);
-          return (
-            !old ||
-            (savedBase.current.read_only_reason
-              ? canonical(node) !== canonical(old)
-              : !sameEditable(node, old))
-          );
-        });
-      if (changed) {
-        readOnlyRef.current = true;
-        setSyncBlocked(true);
-        setConflict({ server });
-        setMessage("画布已有新版本，本地编辑已保留。请对照后明确选择。");
-      } else {
-        history.reset();
-        local.current = server.nodes;
-        localEdges.current = server.edges;
-        setNodes(server.nodes);
-        setEdges(server.edges);
-        setBase(server);
-      }
-    },
-    [history, initial.id, initial.project_id, setBase],
-  );
-  useEffect(() => {
-    if (developmentPreview) return;
-    const socket = new CanvasLive(initial.id, {
-      snapshot: (document, writable) => receiveSnapshot(document, writable),
-      status: (status, writable) => {
-        setLiveStatus(status);
-        if (writable !== undefined) setSocketWritable(writable);
-      },
-      revoked: () =>
-        window.dispatchEvent(new Event("glowloom:private-cache-cleared")),
-    });
-    live.current = socket;
-    socket.start();
-    return () => {
-      live.current = null;
-      socket.stop();
-    };
-  }, [initial.id, developmentPreview, receiveSnapshot]);
+  const suspendCollaboration = collaboration.suspend;
   useEffect(() => {
     const suspend = () => {
-      live.current?.stop();
+      suspendCollaboration();
       privateInvalid.current = true;
       request.current?.abort();
       setIdentityInvalid(true);
@@ -420,7 +394,7 @@ export function CanvasEditor({
       window.removeEventListener("glowloom:private-cache-cleared", suspend);
       document.removeEventListener("visibilitychange", verify);
     };
-  }, [history]);
+  }, [history, suspendCollaboration]);
 
   useEffect(() => {
     alive.current = true;
@@ -522,9 +496,28 @@ export function CanvasEditor({
     key?: string,
     nextEdges = localEdges.current,
     record = true,
+    trace: EditTrace = {},
   ) {
-    if (privateInvalid.current || (record && readOnlyRef.current)) return;
+    const compositionContinuation =
+      collaboration.controller.current?.isComposing &&
+      !!(trace.text?.length || trace.markdownSource?.size);
+    if (
+      privateInvalid.current ||
+      (record && readOnlyRef.current && !compositionContinuation)
+    )
+      return;
     if (record) setAutoSavePaused(false);
+    if (!developmentPreview && record) {
+      collaboration.edit(
+        {
+          ...collaboration.controller.current!.document,
+          nodes: next,
+          edges: nextEdges,
+        },
+        trace,
+      );
+      return;
+    }
     if (record)
       history.record(
         { nodes: local.current, edges: localEdges.current },
@@ -536,10 +529,13 @@ export function CanvasEditor({
     setNodes(next);
     setEdges(nextEdges);
   }
-  function update(id: string, patch: Partial<Node>) {
+  function update(id: string, patch: Partial<Node>, trace: EditTrace = {}) {
     edit(
       local.current.map((n) => (n.id === id ? { ...n, ...patch } : n)),
       `${id}/${Object.keys(patch).join()}`,
+      localEdges.current,
+      true,
+      trace,
     );
   }
   function stepHistory(direction: "undo" | "redo") {
@@ -551,6 +547,10 @@ export function CanvasEditor({
       privateInvalid.current
     )
       return;
+    if (!developmentPreview) {
+      collaboration.history(direction);
+      return;
+    }
     const graph = history[direction](savedBase.current);
     if (graph) {
       edit(graph.nodes, undefined, graph.edges, false);
@@ -1151,7 +1151,7 @@ export function CanvasEditor({
       busy.current ||
       unconfirmed ||
       conflict ||
-      (baseline.has(node.id) && isDraft(node)) ||
+      (developmentPreview && baseline.has(node.id) && isDraft(node)) ||
       !isEditableNode(node)
     )
       return;
@@ -1315,6 +1315,22 @@ export function CanvasEditor({
     async () => undefined,
   );
   async function save() {
+    if (!developmentPreview) {
+      if (privateInvalid.current) return;
+      try {
+        const result = await collaboration.flush();
+        publishProjectInvalidation(project.id);
+        return result;
+      } catch (error) {
+        if (!privateInvalid.current)
+          setMessage(
+            error instanceof Error && error.message === "invalid_draft"
+              ? "请先填写有效的节点名称、尺寸和参数，内容仍保留在当前页面。"
+              : "保存尚未确认或存在冲突，编辑仍保留。请等待重连或核对保留内容。",
+          );
+        return;
+      }
+    }
     if (saveFlight.current) return saveFlight.current;
     const flight = (async () => {
       try {
@@ -1343,6 +1359,7 @@ export function CanvasEditor({
     }
   }
   async function saveOnce() {
+    if (!developmentPreview) return;
     if (
       readOnlyRef.current ||
       busy.current ||
@@ -1383,12 +1400,10 @@ export function CanvasEditor({
     const controller = new AbortController();
     request.current = controller;
     try {
-      const value = developmentPreview
-        ? await applyCanvasCommands({ id: base.id }, operation.body, {
-            headers: { "Idempotency-Key": operation.key },
-            signal: controller.signal,
-          })
-        : await live.current!.submit(operation.key, operation.body);
+      const value = await applyCanvasCommands({ id: base.id }, operation.body, {
+        headers: { "Idempotency-Key": operation.key },
+        signal: controller.signal,
+      });
       const committed = requireSaveResult(
         value,
         operation.base,
@@ -1470,9 +1485,6 @@ export function CanvasEditor({
       busy.current = false;
       if (alive.current) {
         setSaving(false);
-        const latest = deferredSnapshot.current;
-        deferredSnapshot.current = null;
-        if (latest) receiveSnapshot(latest.document, latest.writable);
       }
     }
   }
@@ -1493,6 +1505,7 @@ export function CanvasEditor({
     resumeSave();
   }, [liveStatus]);
   useEffect(() => {
+    if (!developmentPreview) return;
     if (
       !dirty ||
       readOnly ||
@@ -1518,8 +1531,13 @@ export function CanvasEditor({
     conflict,
     identityInvalid,
     readOnly,
+    developmentPreview,
   ]);
-  function changeNodeDraft(ownerNode: string, value: PromptDraft) {
+  function changeNodeDraft(
+    ownerNode: string,
+    value: PromptDraft,
+    transaction?: Transaction,
+  ) {
     const n = local.current.find((n) => n.id === ownerNode);
     if (n && isDraft(n)) {
       try {
@@ -1537,6 +1555,8 @@ export function CanvasEditor({
           graph.nodes,
           textOnly ? `${ownerNode}/config` : undefined,
           graph.edges,
+          true,
+          composerTrace(ownerNode, transaction),
         );
       } catch (error) {
         setMessage(
@@ -1571,7 +1591,7 @@ export function CanvasEditor({
     };
   }
   let currentSeed: GenerationSeed | undefined;
-  if (!readOnly && current && isDraft(current)) {
+  if (current && isDraft(current) && !graphReadOnlyReason && !identityInvalid) {
     const composer = nodePromptDraft(current);
     const sources = referenceSources(nodes);
     const ownerNode = current.id;
@@ -1592,7 +1612,17 @@ export function CanvasEditor({
           (source) => source.nodeID !== ownerNode,
         ),
         incomingSources: connectedReferenceSources(nodes, edges, ownerNode),
-        onChange: (value) => changeNodeDraft(ownerNode, value),
+        readOnly,
+        ...(!developmentPreview
+          ? {
+              collaboration: collaboration.owner(ownerNode),
+              onSession: (
+                session: import("@/components/generation/composer-session").ComposerSession,
+              ) => collaboration.bindPrompt(ownerNode, session),
+            }
+          : {}),
+        onChange: (value, transaction) =>
+          changeNodeDraft(ownerNode, value, transaction),
         flush: () => flushNodeDraft(ownerNode, composer),
       },
     };
@@ -1678,7 +1708,7 @@ export function CanvasEditor({
       current
     ) {
       event.preventDefault();
-      if (baseline.has(current.id) && isDraft(current))
+      if (developmentPreview && baseline.has(current.id) && isDraft(current))
         setMessage("生成草稿已关联服务端版本，不能直接删除。");
       else removeLocal(current);
     }
@@ -1706,6 +1736,25 @@ export function CanvasEditor({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
   function resolveConflict(discard: boolean) {
+    if (!developmentPreview) {
+      const action = discard
+        ? Promise.resolve().then(() => collaboration.discard())
+        : collaboration.retryFields();
+      void action
+        .then(() => {
+          setConflict(null);
+          setSyncBlocked(false);
+          setMessage("");
+        })
+        .catch((error: unknown) =>
+          setMessage(
+            error instanceof Error
+              ? error.message
+              : "请先确认原请求，再处理保留内容。",
+          ),
+        );
+      return;
+    }
     const server = conflict?.server;
     if (!server || (!discard && server.read_only_reason)) return;
     if (discard) {
@@ -1842,7 +1891,10 @@ export function CanvasEditor({
             saving ? "正在保存…" : unconfirmed ? "重试原保存" : "保存画布"
           }
           saving={saving}
-          canSave={!readOnly && !conflict && (dirty || unconfirmed)}
+          canSave={
+            !identityInvalid &&
+            (unconfirmed || (!readOnly && !conflict && dirty))
+          }
           canRename={!readOnly}
           onSave={() => void save()}
           onSelect={(id) => selectNode(id)}
@@ -2044,6 +2096,19 @@ export function CanvasEditor({
             </div>
           )}
           <div className="flex flex-wrap gap-2">
+            {!developmentPreview && (
+              <Button
+                variant="outline"
+                onClick={() =>
+                  void collaboration
+                    .copyRecovery()
+                    .then(() => setMessage("保留内容已复制。"))
+                    .catch(() => setMessage("复制失败，请保留当前页面。"))
+                }
+              >
+                复制保留内容
+              </Button>
+            )}
             {conflict.server ? (
               <>
                 <Button
@@ -2051,7 +2116,9 @@ export function CanvasEditor({
                   disabled={!!conflict.server.read_only_reason}
                   onClick={() => resolveConflict(false)}
                 >
-                  保留本地编辑，以版本 {conflict.server.revision} 继续
+                  {developmentPreview
+                    ? `保留本地编辑，以版本 ${conflict.server.revision} 继续`
+                    : "确认并重提交可恢复字段"}
                 </Button>
                 <Button
                   variant="destructive"
@@ -2087,12 +2154,28 @@ export function CanvasEditor({
         }}
         onUndo={() => stepHistory("undo")}
         onRedo={() => stepHistory("redo")}
-        canUndo={!saving && !unconfirmed && !conflict && history.canUndo(base)}
-        canRedo={!saving && !unconfirmed && !conflict && history.canRedo(base)}
+        canUndo={
+          !saving &&
+          !unconfirmed &&
+          !conflict &&
+          (developmentPreview
+            ? history.canUndo(base)
+            : !!collaboration.controller.current?.canUndo)
+        }
+        canRedo={
+          !saving &&
+          !unconfirmed &&
+          !conflict &&
+          (developmentPreview
+            ? history.canRedo(base)
+            : !!collaboration.controller.current?.canRedo)
+        }
         canDuplicate={!!current && isEditableNode(current)}
         canRemove={
           !!current &&
-          (!baseline.has(current.id) || !isDraft(current)) &&
+          (!developmentPreview ||
+            !baseline.has(current.id) ||
+            !isDraft(current)) &&
           !saving &&
           !unconfirmed &&
           !conflict
@@ -2188,10 +2271,28 @@ export function CanvasEditor({
                     setEditingTextID(node.id);
                   }}
                   onFinishText={() => setEditingTextID(undefined)}
-                  onTextChange={(text) => {
-                    if (!readOnlyRef.current && isEditableNode(node))
-                      update(node.id, { config: { text } });
+                  onTextChange={(text, transaction, editor) => {
+                    if (
+                      (!readOnlyRef.current ||
+                        collaboration.controller.current?.isComposing) &&
+                      isEditableNode(node)
+                    )
+                      update(
+                        node.id,
+                        { config: { text } },
+                        !developmentPreview && transaction && editor
+                          ? markdownEditorTrace(node.id, editor, transaction)
+                          : {},
+                      );
                   }}
+                  onTextEditor={(editor) =>
+                    collaboration.bindDocument(node.id, editor)
+                  }
+                  collaboration={
+                    !developmentPreview
+                      ? collaboration.owner(node.id)
+                      : undefined
+                  }
                   zoom={liveZoom}
                   onResize={(size) =>
                     update(node.id, {
@@ -2249,7 +2350,9 @@ export function CanvasEditor({
                   onDragEnd={endDrag}
                   onDuplicate={() => copyNode(node)}
                   canRemove={
-                    (!baseline.has(node.id) || !isDraft(node)) &&
+                    (!developmentPreview ||
+                      !baseline.has(node.id) ||
+                      !isDraft(node)) &&
                     !saving &&
                     !unconfirmed &&
                     !conflict
@@ -2287,7 +2390,9 @@ export function CanvasEditor({
             saving ||
             unconfirmed ||
             !!conflict ||
-            !history.canUndo(base)
+            !(developmentPreview
+              ? history.canUndo(base)
+              : !!collaboration.controller.current?.canUndo)
           }
           onClick={() => stepHistory("undo")}
         >
@@ -2302,7 +2407,9 @@ export function CanvasEditor({
             saving ||
             unconfirmed ||
             !!conflict ||
-            !history.canRedo(base)
+            !(developmentPreview
+              ? history.canRedo(base)
+              : !!collaboration.controller.current?.canRedo)
           }
           onClick={() => stepHistory("redo")}
         >
@@ -2332,7 +2439,9 @@ export function CanvasEditor({
                 .every(
                   (node) =>
                     isEditableNode(node) &&
-                    (!baseline.has(node.id) || !isDraft(node)),
+                    (!developmentPreview ||
+                      !baseline.has(node.id) ||
+                      !isDraft(node)),
                 )
             }
             onToggleGroup={
@@ -2414,8 +2523,8 @@ export function CanvasEditor({
           }
         />
       )}
-      {!readOnly &&
-        current &&
+      {current &&
+        (isDraft(current) ? !!currentSeed : !readOnly) &&
         selectedIDs.length === 1 &&
         isEditableNode(current) &&
         (isDraft(current) || current.node_type === "text") &&
@@ -2527,36 +2636,51 @@ export function CanvasEditor({
           />
         </div>
       )}
-      {!readOnly &&
-        nodes.find((n) => n.id === openToolID)?.node_type === "director" && (
-          <CanvasDirector
-            onSave={async () => !!(await save())}
-            saveMessage={
-              message ||
-              (unconfirmed
-                ? "保存结果待确认"
-                : conflict
-                  ? "画布版本冲突，请关闭导演台处理"
-                  : dirty
-                    ? "有未保存的编辑"
-                    : "已保存")
-            }
-            saving={saving}
-            key={openToolID}
-            node={nodes.find((n) => n.id === openToolID)!}
-            nodes={nodes}
-            projectID={project.id}
-            onUpdate={(config) =>
-              update(openToolID!, {
+      {nodes.find((n) => n.id === openToolID)?.node_type === "director" && (
+        <CanvasDirector
+          onSave={async () => !!(await save())}
+          saveMessage={
+            message ||
+            (unconfirmed
+              ? "保存结果待确认"
+              : conflict
+                ? "画布版本冲突，请关闭导演台处理"
+                : dirty
+                  ? "有未保存的编辑"
+                  : "已保存")
+          }
+          saving={saving}
+          key={openToolID}
+          node={nodes.find((n) => n.id === openToolID)!}
+          nodes={nodes}
+          projectID={project.id}
+          readOnly={readOnly}
+          collaboration={
+            developmentPreview
+              ? undefined
+              : collaboration.owner(`director/${openToolID}`)
+          }
+          onTextSession={
+            developmentPreview
+              ? undefined
+              : (path, session) =>
+                  collaboration.bindPlain(openToolID!, path, session)
+          }
+          onUpdate={(config, trace) =>
+            update(
+              openToolID!,
+              {
                 config: {
                   ...local.current.find((n) => n.id === openToolID)?.config,
                   director: config,
                 },
-              })
-            }
-            onClose={() => setOpenToolID(undefined)}
-          />
-        )}
+              },
+              trace,
+            )
+          }
+          onClose={() => setOpenToolID(undefined)}
+        />
+      )}
       {!readOnly && generation && (
         <GenerationDialog
           seed={generation}

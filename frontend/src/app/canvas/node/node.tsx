@@ -1,4 +1,8 @@
 "use client";
+
+import type { Editor } from "@tiptap/core";
+import type { Transaction } from "@tiptap/pm/state";
+import type { ComposerCollaboration } from "@/components/generation/composer-session";
 // BeefTV a2196d3: canvas-node.tsx, NodeExternalHeader and node media shells (MIT).
 import { useRef, type PointerEvent, type CSSProperties } from "react";
 import {
@@ -58,11 +62,19 @@ export function CanvasNode({
   editingText = false,
   onEditText,
   onTextChange,
+  onTextEditor,
+  collaboration,
   onFinishText,
 }: {
   editingText?: boolean;
   onEditText?: () => void;
-  onTextChange?: (text: string) => void;
+  onTextChange?: (
+    text: string,
+    transaction?: Transaction,
+    editor?: Editor,
+  ) => void;
+  onTextEditor?: (editor: Editor) => (() => void) | void;
+  collaboration?: Pick<ComposerCollaboration, "history" | "composition">;
   onFinishText?: () => void;
   node: Node;
   projectID?: string;
@@ -94,6 +106,7 @@ export function CanvasNode({
     point?: ConnectionDrop,
   ) => void;
 }) {
+  const textEditorCleanup = useRef<(() => void) | undefined>(undefined);
   const resize = useRef<{
     pointerID: number;
     button: HTMLButtonElement;
@@ -354,7 +367,18 @@ export function CanvasNode({
             id={node.id}
             text={node.config.text ?? ""}
             editable={editingText && editable}
-            onChange={(text) => onTextChange?.(text)}
+            onChange={(text, transaction, editor) =>
+              onTextChange?.(text, transaction, editor)
+            }
+            collaboration={collaboration}
+            onReady={(editor) => {
+              textEditorCleanup.current?.();
+              textEditorCleanup.current = onTextEditor?.(editor) || undefined;
+            }}
+            onDispose={() => {
+              textEditorCleanup.current?.();
+              textEditorCleanup.current = undefined;
+            }}
             onFinish={onFinishText}
           />
         ) : projectID &&

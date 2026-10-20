@@ -1,11 +1,13 @@
 package canvas_test
 
 import (
-	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
+	"testing"
+
 	"github.com/coder/websocket/wsjson"
 	"github.com/google/uuid"
-	"testing"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 )
 
 func TestCollaborationLiveOrderedChangesAndOriginalReceipt(t *testing.T) {

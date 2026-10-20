@@ -285,3 +285,48 @@ it("protocol 2 resumes changes then resolves the exact coordinator envelope", as
   socket.receive({ type: "resync_required", code: "history_unavailable" });
   expect(resync).toHaveBeenCalled();
 });
+
+it("protocol 2 waits for write access before replaying a proven missing request", () => {
+  const envelope = {
+    key: id,
+    body: {
+      operation_version: 1 as const,
+      base_revision: 2,
+      operations: [
+        { type: "set", node_id: id, path: ["title"], value: "mine" },
+      ],
+    },
+  };
+  live = new CanvasLive(id, {
+    snapshot: vi.fn(),
+    status: vi.fn(),
+    revoked: vi.fn(),
+    collaboration: {
+      revision: () => 2,
+      pending: () => envelope,
+      changes: vi.fn(),
+      receipt: vi.fn(),
+      resync: vi.fn(),
+      actor: vi.fn(),
+    },
+  });
+  live.start();
+  const socket = Socket.all[0];
+  socket.open();
+  socket.receive({
+    type: "ready",
+    actor_id: "me",
+    revision: 2,
+    writable: false,
+  });
+  socket.receive({ type: "not_found", op_id: id });
+  expect(socket.sent.at(-1)?.type).toBe("resolve");
+  socket.receive({ type: "heartbeat", revision: 2, writable: true });
+  expect(socket.sent.at(-1)).toEqual({
+    type: "resolve",
+    op_id: id,
+    body: envelope.body,
+  });
+  socket.receive({ type: "not_found", op_id: id });
+  expect(socket.sent.at(-1)?.type).toBe("submit");
+});

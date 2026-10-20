@@ -70,6 +70,18 @@ func normalizeReferenceCollection(object map[string]any, op Operation) error {
 			refs[index].(map[string]any)["bindingGeneration"] = 1
 		}
 	}
+	if op.Type == "restore_item" {
+		index := collectionIndex(refs, op.ItemID)
+		if index < 0 {
+			return operationError("undo_conflict")
+		}
+		ref := refs[index].(map[string]any)
+		var generation int64
+		if json.Unmarshal(effectJSON(ref["bindingGeneration"]), &generation) != nil || generation < 1 || generation >= 9007199254740991 {
+			return operationError("binding_generation_limit")
+		}
+		ref["bindingGeneration"] = generation + 1
+	}
 	if op.Type == "remove" {
 		document, _ := parent["document"].(map[string]any)
 		paragraphs, _ := document["content"].([]any)

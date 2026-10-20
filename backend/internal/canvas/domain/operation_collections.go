@@ -38,7 +38,32 @@ func operationTargetsItem(op, change Operation) bool {
 	return len(op.Path) > len(change.Path) && slices.Equal(op.Path[:len(change.Path)], change.Path) && op.Path[len(change.Path)] == "@"+change.ItemID
 }
 func operationUsesNode(op Operation, id uuid.UUID) bool {
-	return op.NodeID == id || op.Node != nil && op.Node.ID == id || op.Edge != nil && (op.Edge.SourceNodeID == id || op.Edge.TargetNodeID == id)
+	if op.NodeID == id || op.Edge != nil && (op.Edge.SourceNodeID == id || op.Edge.TargetNodeID == id) {
+		return true
+	}
+	if op.Node != nil {
+		used := op.Node.ID == id || op.Node.ParentID != nil && *op.Node.ParentID == id
+		inputSources(*op.Node, func(source uuid.UUID) { used = used || source == id })
+		if used {
+			return true
+		}
+	}
+	if op.Type == "set" && (slices.Equal(op.Path, []string{"parent_id"}) || isBatchSlot(op.Path)) {
+		var source uuid.UUID
+		return json.Unmarshal(op.Value, &source) == nil && source == id
+	}
+	// These are the only value containers in the finite vocabulary that introduce
+	// a graph source premise. Asset and subject UUIDs are separate identities.
+	if len(op.Path) >= 3 && (slices.Equal(op.Path[:3], []string{"config", "timeline", "clips"}) || slices.Equal(op.Path[:3], []string{"config", "director", "objects"})) {
+		var source struct {
+			NodeID       *uuid.UUID `json:"node_id"`
+			SourceNodeID *uuid.UUID `json:"source_node_id"`
+		}
+		if json.Unmarshal(op.Value, &source) == nil {
+			return source.NodeID != nil && *source.NodeID == id || source.SourceNodeID != nil && *source.SourceNodeID == id
+		}
+	}
+	return false
 }
 func operationsOverlap(a, b Operation) bool {
 	paths := func(op Operation) [][]string {
@@ -68,7 +93,20 @@ func applyStructure(doc *Document, op Operation) error {
 		if op.Node == nil || !editable(*op.Node) || nodeIndex(doc, op.Node.ID) >= 0 {
 			return operationError("undo_conflict")
 		}
-		doc.Nodes = append(doc.Nodes, *op.Node)
+		var restored Node
+		if json.Unmarshal(effectJSON(op.Node), &restored) != nil {
+			return operationError("undo_conflict")
+		}
+		if restored.Config.Draft != nil && restored.Config.Draft.Composer != nil {
+			for i := range restored.Config.Draft.Composer.References {
+				ref := &restored.Config.Draft.Composer.References[i]
+				if ref.BindingGeneration >= 9007199254740991 {
+					return operationError("binding_generation_limit")
+				}
+				ref.BindingGeneration++
+			}
+		}
+		doc.Nodes = append(doc.Nodes, restored)
 		return nil
 	case "restore_edge":
 		if op.Edge == nil || !annotation(*op.Edge) || slices.ContainsFunc(doc.Edges, func(e Edge) bool { return e.ID == op.Edge.ID }) {

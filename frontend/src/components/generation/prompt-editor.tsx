@@ -1,5 +1,7 @@
 "use client";
 
+import type { Transaction } from "@tiptap/pm/state";
+
 import { useEffect } from "react";
 import { EditorContent } from "@tiptap/react";
 import { useEditorSurface } from "./editor-surface";
@@ -26,7 +28,7 @@ export function PromptEditor({
   ...options
 }: ComposerOptions & {
   onReady: (session: ComposerSession) => void;
-  onChange?: (snapshot: ComposerSnapshot) => void;
+  onChange?: (snapshot: ComposerSnapshot, transaction?: Transaction) => void;
   onDispose?: () => void;
   onRequestSave?: (snapshot: ComposerSnapshot) => void;
   onRequestSubmit?: () => void;
@@ -52,7 +54,11 @@ export function PromptEditor({
   );
   useEffect(() => {
     if (!editor) return;
-    const changed = () => onChange?.(new ComposerSession(editor).snapshot());
+    const changed = ({ transaction }: { transaction: Transaction }) => {
+      const snapshot = new ComposerSession(editor).snapshot();
+      if (options.collaboration) onChange?.(snapshot, transaction);
+      else onChange?.(snapshot);
+    };
     editor.on("transaction", changed);
     if (onRequestSave) editor.on("composerSaveRequested", onRequestSave);
     if (onRequestSubmit) editor.on("composerSubmitRequested", onRequestSubmit);
@@ -62,7 +68,7 @@ export function PromptEditor({
       if (onRequestSubmit)
         editor.off("composerSubmitRequested", onRequestSubmit);
     };
-  }, [editor, onRequestSave, onRequestSubmit, onChange]);
+  }, [editor, onRequestSave, onRequestSubmit, onChange, options.collaboration]);
 
   return <EditorContent editor={editor} />;
 }

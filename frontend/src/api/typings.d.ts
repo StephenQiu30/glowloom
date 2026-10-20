@@ -338,6 +338,7 @@ declare namespace API {
     id?: string;
     name?: string;
     nodes?: Node[];
+    operation_version?: number;
     project_id?: string;
     read_only_reason?: string;
     revision?: number;
@@ -3874,6 +3875,7 @@ declare namespace API {
     id?: string;
     name?: string;
     nodes?: Node[];
+    operation_version?: number;
     project_id?: string;
     read_only_reason?: string;
     results?: CommandResult[];

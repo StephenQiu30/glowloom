@@ -276,7 +276,7 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 				continue
 			}
 			if join.ProtocolVersion == 2 {
-				if !h.processCollaboration(ctx, c, authorized, id, msg, syncBlocked, send, fail) {
+				if !h.processCollaboration(ctx, authorized, id, msg, syncBlocked, send, fail) {
 					return
 				}
 				continue

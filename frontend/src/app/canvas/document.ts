@@ -238,7 +238,11 @@ export function isToolNode(n: Node): boolean {
       ? "timeline"
       : n.node_type === "director"
         ? "director"
-        : undefined;
+        : n.node_type === "batch_table"
+          ? "batch_table"
+          : n.node_type === "generation"
+            ? "generation"
+            : undefined;
   return (
     !!key &&
     Object.keys(n.config).filter(
@@ -589,16 +593,20 @@ export function removeCanvasNode(nodes: Node[], id: string): Node[] {
   const removed = nodes.find((n) => n.id === id);
   if (!removed || !isEditableNode(removed))
     throw new RequestError("invalid_request");
-  if (
-    nodes.some((n) =>
-      n.config.batch_table?.rows?.some((r) => r.input_node_ids?.includes(id)),
-    )
-  )
-    throw new Error("请先移除批处理表中对此节点的引用。");
   return nodes
     .filter((n) => n.id !== id)
     .map((n) => {
       const config = { ...n.config };
+      if (config.batch_table)
+        config.batch_table = {
+          ...config.batch_table,
+          rows: config.batch_table.rows?.map((row) => ({
+            ...row,
+            input_node_ids: row.input_node_ids?.map((source) =>
+              source === id ? null : source,
+            ) as typeof row.input_node_ids,
+          })),
+        };
       if (config.timeline)
         config.timeline = {
           ...config.timeline,

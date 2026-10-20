@@ -1,15 +1,17 @@
 import { Editor } from "@tiptap/core";
 import { Slice, Fragment } from "@tiptap/pm/model";
+import { EditorState, TextSelection } from "@tiptap/pm/state";
 import { ReplaceAroundStep } from "@tiptap/pm/transform";
 import { afterEach, expect, it } from "vitest";
 import { composerEditorOptions } from "@/components/generation/composer-session";
 import { emptyPromptDraft } from "@/components/generation/prompt-document";
 import {
+  applySequenceTransaction,
   editorSequenceEdits,
   promptSequence,
   sequencePrompt,
 } from "@/app/canvas/editor-ot";
-import { applySequence } from "@/app/canvas/sequence";
+import { applySequence, type SequenceEdit } from "@/app/canvas/sequence";
 const editors: Editor[] = [];
 function create(lines: string[]) {
   const draft = emptyPromptDraft();
@@ -100,4 +102,35 @@ it("round trips empty paragraphs and repeated reference atoms without lossy mark
       ],
     }),
   ).toThrow();
+});
+
+it("projects remote sequence replacements as PM steps and preserves mapped selection", () => {
+  const editor = create(["A😀", "B"]);
+  const state = EditorState.create({
+    schema: editor.schema,
+    doc: editor.schema.nodeFromJSON({
+      type: "doc",
+      content: [
+        { type: "paragraph", content: [{ type: "text", text: "A😀" }] },
+        {
+          type: "paragraph",
+          content: [
+            { type: "reference", attrs: { referenceId: "r" } },
+            { type: "text", text: "B" },
+          ],
+        },
+      ],
+    }),
+  });
+  const tr = state.tr.setSelection(TextSelection.create(state.doc, 4));
+  const edit: SequenceEdit = [
+    { retain: 3 },
+    { delete: 2 },
+    { insert: [{ type: "text", text: "中" }, { type: "hardBreak" }] },
+  ];
+  applySequenceTransaction(tr, edit);
+  expect(promptSequence(tr.doc.toJSON())).toEqual(
+    applySequence(promptSequence(state.doc.toJSON()), edit),
+  );
+  expect(tr.selection.from).toBeGreaterThan(0);
 });

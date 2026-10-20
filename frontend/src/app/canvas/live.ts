@@ -39,6 +39,7 @@ export class CanvasLive {
   private pending?: Pending;
   private stopped = true;
   private ready = false;
+  private writable = false;
   private attempts = 0;
   private session = 0;
   private scope = 0;
@@ -78,8 +79,11 @@ export class CanvasLive {
   private sync = () => {
     if (document.visibilityState !== "visible" || this.stopped) return;
     if (!this.current()) return this.revoke();
-    if (this.ready) this.send({ type: "sync" });
-    else if (!this.socket || this.socket.readyState === 3) {
+    if (this.ready) {
+      this.send({ type: "sync" });
+      const pending = this.callbacks.collaboration?.pending();
+      if (pending) this.sendCollaboration(pending, true);
+    } else if (!this.socket || this.socket.readyState === 3) {
       clearTimeout(this.retry);
       this.connect();
     }
@@ -132,6 +136,10 @@ export class CanvasLive {
           this.callbacks.snapshot(p.document, p.writable);
         } else if (p.type === "changes" && this.callbacks.collaboration) {
           if (!Array.isArray(p.changes)) throw new Error("invalid_changes");
+          if (this.ready && typeof p.writable === "boolean") {
+            this.writable = p.writable;
+            this.callbacks.status("live", p.writable);
+          }
           this.callbacks.collaboration.changes(p.changes as Change[]);
         } else if (
           p.type === "resync_required" &&
@@ -146,10 +154,22 @@ export class CanvasLive {
           this.callbacks.collaboration.receipt(p.receipt as Receipt);
         } else if (p.type === "not_found" && this.callbacks.collaboration) {
           const pending = this.callbacks.collaboration.pending();
-          if (pending && p.op_id === pending.key)
+          if (pending && p.op_id === pending.key && this.writable)
             this.sendCollaboration(pending);
+        } else if (
+          p.type === "heartbeat" &&
+          this.callbacks.collaboration &&
+          this.ready &&
+          typeof p.writable === "boolean"
+        ) {
+          const pending = this.callbacks.collaboration.pending(),
+            restored = !this.writable && p.writable;
+          this.writable = p.writable;
+          this.callbacks.status("live", p.writable);
+          if (restored && pending) this.sendCollaboration(pending, true);
         } else if (p.type === "ready") {
           this.ready = true;
+          this.writable = p.writable === true;
           this.attempts = 0;
           if (this.callbacks.collaboration) {
             if (typeof p.actor_id !== "string")
@@ -209,6 +229,7 @@ export class CanvasLive {
             Number(p.status) >= 400 &&
             Number(p.status) < 500
           ) {
+            if (p.code === "canvas_read_only") this.writable = false;
             this.callbacks.collaboration.error?.(
               String(p.code),
               Number(p.status),

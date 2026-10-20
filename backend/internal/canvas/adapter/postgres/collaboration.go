@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -22,6 +23,8 @@ const maxCollaborationHistory = 128
 const maxCollaborationBytes = 4 << 20
 
 type collaborationLog struct {
+	System             string                         `json:"system,omitempty"`
+	Name               string                         `json:"name,omitempty"`
 	OriginalBase       int64                          `json:"original_base"`
 	OriginalOperations []domain.Operation             `json:"original_operations"`
 	MediaReferences    []uuid.UUID                    `json:"media_references"`
@@ -229,8 +232,18 @@ func (s *Store) SubmitCollaboration(ctx context.Context, a identity.Principal, i
 		if _, err := domain.ApplyOperations(base, normalized); err != nil {
 			return rejectError(err)
 		}
+		work := 0
+		for _, row := range history {
+			work += len(normalized)*len(row.Log.Operations) + len(normalized) + len(row.Log.Operations)
+		}
+		if err := domain.ValidateTransformWork(doc, work); err != nil {
+			return rejectError(err)
+		}
 		transformed := normalized
 		for _, row := range history {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			_, transformed, err = domain.TransformOperationPair(base, row.Log.Operations, transformed)
 			if err != nil {
 				return rejectError(err)
@@ -249,14 +262,15 @@ func (s *Store) SubmitCollaboration(ctx context.Context, a identity.Principal, i
 		if err := s.collaborationIdentities(tx, doc, transformed); err != nil {
 			return rejectError(err)
 		}
-		commands := make([]domain.Command, 0, len(candidate.Document.Nodes))
-		for _, n := range candidate.Document.Nodes {
+		sourceNodes := append(slices.Clone(candidate.Document.Nodes), candidate.IntermediateNodes...)
+		commands := make([]domain.Command, 0, len(sourceNodes))
+		for _, n := range sourceNodes {
 			commands = append(commands, domain.Command{Type: "AddNodes", Nodes: []domain.Node{n}})
 		}
 		if err := s.checkMediaReferences(ctx, tx, a, p, commands, candidate.Document); err != nil {
 			return rejectError(err)
 		}
-		for _, n := range candidate.Document.Nodes {
+		for _, n := range sourceNodes {
 			if domain.IsDraft(n) && n.Config.Draft.Composer != nil {
 				if err := pgprompt.ValidateDraftSources(tx, a, p, *n.Config.Draft.Composer, false); err != nil {
 					return rejectError(err)
@@ -310,7 +324,7 @@ func (s *Store) SubmitCollaboration(ctx context.Context, a identity.Principal, i
 		if effects == nil {
 			effects = []domain.Effect{}
 		}
-		refs, err := collaborationRetainedMedia(doc, updated)
+		refs, err := collaborationRetainedMedia(doc, updated, domain.Document{Nodes: candidate.IntermediateNodes})
 		if err != nil {
 			return err
 		}
@@ -350,6 +364,20 @@ func (s *Store) collaborationIdentities(tx *gorm.DB, doc domain.Document, ops []
 			id = op.Edge.ID
 		}
 		if table != "" {
+			var needle []byte
+			// Only the immutable identity belongs in the containment query.
+			if op.Node != nil {
+				needle, _ = json.Marshal(map[string]any{"operations": []any{map[string]any{"type": "create_node", "node": map[string]any{"id": id}}}})
+			} else {
+				needle, _ = json.Marshal(map[string]any{"operations": []any{map[string]any{"type": "connect", "edge": map[string]any{"id": id}}}})
+			}
+			var used int
+			if err := tx.Raw(`SELECT 1 FROM canvas.command_log WHERE document_id=? AND operation_version=1 AND commands @> ?::jsonb LIMIT 1`, doc.ID, string(needle)).Scan(&used).Error; err != nil {
+				return err
+			}
+			if used == 1 {
+				return &domain.OperationError{Code: "id_conflict"}
+			}
 			var count int64
 			// table is a closed constant selected above, never client SQL.
 			if err := tx.Raw("SELECT count(*) FROM "+table+" WHERE id=?", id).Scan(&count).Error; err != nil {
@@ -363,6 +391,7 @@ func (s *Store) collaborationIdentities(tx *gorm.DB, doc domain.Document, ops []
 	return nil
 }
 
+// ResolveCollaboration queries the exact original receipt without writing the graph.
 func (s *Store) ResolveCollaboration(ctx context.Context, a identity.Principal, id uuid.UUID, key string, input application.CollaborationInput) (*application.CollaborationReceipt, error) {
 	hash, err := collaborationHash(id, input)
 	if err != nil {
@@ -383,6 +412,7 @@ func (s *Store) ResolveCollaboration(ctx context.Context, a identity.Principal, 
 	return result, err
 }
 
+// CollaborationChanges returns ordered authorized canonical graph effects.
 func (s *Store) CollaborationChanges(ctx context.Context, a identity.Principal, id uuid.UUID, after int64) ([]application.CollaborationChange, error) {
 	result := []application.CollaborationChange{}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -420,10 +450,10 @@ func (s *Store) CollaborationChanges(ctx context.Context, a identity.Principal, 
 
 // History keeps immutable asset identities needed for owning retention admission.
 // This compact index contains no URL, source body or full-node snapshot.
-func collaborationRetainedMedia(before, after domain.Document) ([]uuid.UUID, error) {
+func collaborationRetainedMedia(documents ...domain.Document) ([]uuid.UUID, error) {
 	refs := []uuid.UUID{}
 	seen := map[uuid.UUID]bool{}
-	for _, document := range []domain.Document{before, after} {
+	for _, document := range documents {
 		for _, node := range document.Nodes {
 			ids, err := configMediaReferences(node.Config)
 			if err != nil {

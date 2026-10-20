@@ -1,5 +1,8 @@
 "use client";
 
+import type { Transaction } from "@tiptap/pm/state";
+import type { ComposerCollaboration } from "./composer-session";
+
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { EditorContent, useEditorState } from "@tiptap/react";
@@ -74,33 +77,76 @@ export function DocumentEditor({
   onChange,
   onReady,
   onFinish,
+  onDispose,
+  collaboration,
 }: {
   id: string;
   text: string;
   editable: boolean;
-  onChange: (text: string) => void;
+  onChange: (text: string, transaction?: Transaction, editor?: Editor) => void;
+  collaboration?: Pick<ComposerCollaboration, "history" | "composition">;
+  onDispose?: () => void;
   onReady?: (editor: Editor) => void;
   onFinish?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [error, setError] = useState("");
-  const latest = useRef({ text, onChange, onReady });
+  const [compositionActive, setCompositionActive] = useState(false);
+  const latest = useRef({ text, onChange, onReady, onDispose, collaboration });
   useEffect(() => {
-    latest.current = { text, onChange, onReady };
-  }, [text, onChange, onReady]);
+    latest.current = { text, onChange, onReady, onDispose, collaboration };
+  }, [text, onChange, onReady, onDispose, collaboration]);
   const last = useRef(text);
+  const compositionTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+      undefined,
+    ),
+    composing = useRef(false);
   const surface = useRef<HTMLDivElement>(null);
   const editor = useEditorSurface(
     {
       extensions: [
-        documentKit,
+        documentKit.configure({ undoRedo: collaboration ? false : undefined }),
         textAlign,
         Markdown,
         Extension.create({
           name: "documentLength",
+          priority: 1000,
           addProseMirrorPlugins() {
             return [
               new Plugin({
+                props: {
+                  handleKeyDown: (_view, event) => {
+                    if (!collaboration || event.isComposing) return false;
+                    const key = event.key.toLowerCase();
+                    if (
+                      (event.metaKey || event.ctrlKey) &&
+                      ["z", "y"].includes(key)
+                    ) {
+                      collaboration.history[
+                        key === "y" || event.shiftKey ? "redo" : "undo"
+                      ]();
+                      event.preventDefault();
+                      return true;
+                    }
+                    return false;
+                  },
+                  handleDOMEvents: {
+                    beforeinput: (_view, event) => {
+                      const input = event as InputEvent;
+                      if (
+                        collaboration &&
+                        ["historyUndo", "historyRedo"].includes(input.inputType)
+                      ) {
+                        event.preventDefault();
+                        collaboration.history[
+                          input.inputType === "historyUndo" ? "undo" : "redo"
+                        ]();
+                        return true;
+                      }
+                      return false;
+                    },
+                  },
+                },
                 filterTransaction: (transaction) => {
                   if (!transaction.docChanged) return true;
                   const next =
@@ -118,7 +164,12 @@ export function DocumentEditor({
       content: text,
       contentType: "markdown",
       onCreate: ({ editor }) => latest.current.onReady?.(editor),
-      onUpdate: ({ editor }) => {
+      onDestroy: () => {
+        clearTimeout(compositionTimer.current);
+        if (composing.current) collaboration?.composition(false);
+        latest.current.onDispose?.();
+      },
+      onUpdate: ({ editor, transaction }) => {
         const next = editor.getMarkdown();
         if (Array.from(next).length > 10000) {
           setError("文本最多保存 10000 字，请缩短内容。");
@@ -126,7 +177,8 @@ export function DocumentEditor({
         }
         setError("");
         last.current = next;
-        latest.current.onChange(next);
+        if (collaboration) latest.current.onChange(next, transaction, editor);
+        else latest.current.onChange(next);
       },
       editorProps: {
         handleDOMEvents: {
@@ -145,11 +197,39 @@ export function DocumentEditor({
       "data-placeholder": "双击编辑文本",
       class: "rich-document-body",
     },
-    editable,
+    editable || compositionActive,
   );
+  useEffect(() => {
+    if (!editor) return;
+    const start = () => {
+      clearTimeout(compositionTimer.current);
+      composing.current = true;
+      setCompositionActive(true);
+      latest.current.collaboration?.composition(true);
+    };
+    const end = () => {
+      clearTimeout(compositionTimer.current);
+      compositionTimer.current = setTimeout(() => {
+        composing.current = false;
+        setCompositionActive(false);
+        latest.current.collaboration?.composition(false);
+      }, 0);
+    };
+    const dom = editor.view.dom;
+    dom.addEventListener("compositionstart", start);
+    dom.addEventListener("compositionend", end);
+    return () => {
+      dom.removeEventListener("compositionstart", start);
+      dom.removeEventListener("compositionend", end);
+      clearTimeout(compositionTimer.current);
+      if (composing.current) latest.current.collaboration?.composition(false);
+      composing.current = false;
+    };
+  }, [editor]);
   useEffect(() => {
     if (!editor || text === last.current) return;
     last.current = text;
+    if (editor.getMarkdown() === text) return;
     editor.commands.setContent(text, {
       contentType: "markdown",
       emitUpdate: false,
@@ -205,6 +285,7 @@ export function DocumentEditor({
     >
       {editable && editor && (
         <DocumentToolbar
+          collaboration={collaboration}
           editor={editor}
           expanded={expanded}
           onExpand={() => setExpanded(!expanded)}
@@ -239,7 +320,9 @@ function DocumentToolbar({
   editor,
   expanded,
   onExpand,
+  collaboration,
 }: {
+  collaboration?: Pick<ComposerCollaboration, "history" | "composition">;
   editor: Editor;
   expanded: boolean;
   onExpand: () => void;
@@ -261,8 +344,8 @@ function DocumentToolbar({
         : editor.isActive({ textAlign: "right" })
           ? "right"
           : "left",
-      undo: editor.can().undo(),
-      redo: editor.can().redo(),
+      undo: collaboration ? false : editor.can().undo(),
+      redo: collaboration ? false : editor.can().redo(),
     }),
   });
   const actions = [
@@ -404,8 +487,16 @@ function DocumentToolbar({
         variant="ghost"
         size="icon-sm"
         aria-label="撤销文本编辑"
-        disabled={!state.undo}
-        onClick={() => editor.chain().focus().undo().run()}
+        disabled={
+          collaboration
+            ? !(collaboration.history.canUndo?.() ?? false)
+            : !state.undo
+        }
+        onClick={() =>
+          collaboration
+            ? collaboration.history.undo()
+            : editor.chain().focus().undo().run()
+        }
       >
         <Undo2 />
       </Button>
@@ -413,8 +504,16 @@ function DocumentToolbar({
         variant="ghost"
         size="icon-sm"
         aria-label="重做文本编辑"
-        disabled={!state.redo}
-        onClick={() => editor.chain().focus().redo().run()}
+        disabled={
+          collaboration
+            ? !(collaboration.history.canRedo?.() ?? false)
+            : !state.redo
+        }
+        onClick={() =>
+          collaboration
+            ? collaboration.history.redo()
+            : editor.chain().focus().redo().run()
+        }
       >
         <Redo2 />
       </Button>

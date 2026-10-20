@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   Collaboration,
   type Change,
@@ -123,4 +123,225 @@ describe("authoritative B, immutable P and causal Q", () => {
     expect(c.recovery).toHaveLength(2);
     expect(sent).toHaveLength(1);
   });
+});
+
+it("holds remote changes through IME and transforms committed input before sending", () => {
+  const sent: Envelope[] = [];
+  const c = new Collaboration(
+    doc(),
+    () => {},
+    (e) => sent.push(e),
+  );
+  c.connection(true, true, "me");
+  c.composition(true);
+  c.enqueue([text([{ insert: [{ type: "text", text: "中😀" }] }])], "ime");
+  c.changes([
+    change(2, "other", "delete", [text([{ retain: 1 }, { delete: 1 }])], "A"),
+  ]);
+  expect(c.base.revision).toBe(1);
+  expect(sent).toHaveLength(0);
+  expect(c.document.nodes[0].config.text).toBe("中😀AB");
+  c.composition(false);
+  expect(sent).toHaveLength(1);
+  expect(sent[0].body.base_revision).toBe(2);
+  expect(c.document.nodes[0].config.text).toBe("中😀A");
+});
+
+it("uses new identities for server contribution Undo and Redo", () => {
+  const sent: Envelope[] = [];
+  const c = new Collaboration(
+    doc(),
+    () => {},
+    (e) => sent.push(e),
+  );
+  c.connection(true, true, "me");
+  c.enqueue(
+    [{ type: "set", node_id: "n", path: ["title"], value: "mine" }],
+    "own",
+  );
+  const own: Change = {
+    revision: 2,
+    actor_id: "me",
+    op_id: "own",
+    operations: sent[0].body.operations,
+    effects: [
+      {
+        entity: "node",
+        id: "n",
+        path: ["title"],
+        index: 0,
+        after: "mine",
+        after_exists: true,
+      },
+    ],
+  };
+  c.changes([own]);
+  c.receipt({ status: "accepted", op_id: "own", revision: 2 });
+  expect(c.canUndo).toBe(true);
+  expect(c.history("undo")).toBe(true);
+  const undo = sent[1];
+  expect(undo.key).not.toBe("own");
+  expect(undo.body.undo_of).toBe("own");
+  expect(undo.body.operations).toEqual([]);
+  c.changes([
+    {
+      revision: 3,
+      actor_id: "me",
+      op_id: undo.key,
+      operations: [{ type: "set", node_id: "n", path: ["title"], value: "N" }],
+      effects: [
+        {
+          entity: "node",
+          id: "n",
+          path: ["title"],
+          index: 0,
+          after: "N",
+          after_exists: true,
+        },
+      ],
+    },
+  ]);
+  c.receipt({ status: "accepted", op_id: undo.key, revision: 3 });
+  expect(c.canRedo).toBe(true);
+  expect(c.history("redo")).toBe(true);
+  expect(sent[2].body.undo_of).toBe(undo.key);
+  expect(sent[2].key).not.toBe(undo.key);
+});
+
+it("requires a terminal original receipt before a verified history-gap snapshot", () => {
+  const sent: Envelope[] = [];
+  const c = new Collaboration(
+    doc(),
+    () => {},
+    (e) => sent.push(e),
+  );
+  c.connection(true, true, "me");
+  c.enqueue([text([{ insert: [{ type: "text", text: "X" }] }])], "p");
+  const latest = doc();
+  latest.revision = 200;
+  latest.nodes[0].config.text = "XAB!";
+  expect(() => c.verifiedResync(latest)).toThrow("request_unconfirmed");
+  c.receipt({ status: "accepted", op_id: "p", revision: 2 });
+  c.verifiedResync(latest);
+  expect(c.pending).toBeUndefined();
+  expect(c.base.revision).toBe(200);
+  expect(c.document.nodes[0].config.text).toBe("XAB!");
+});
+
+it("batches a short control edit atomically and flush bypasses the idle delay", async () => {
+  vi.useFakeTimers();
+  try {
+    const sent: Envelope[] = [];
+    const c = new Collaboration(
+      doc(),
+      () => {},
+      (e) => sent.push(e),
+      { debounceMs: 900 },
+    );
+    c.connection(true, true, "me");
+    c.enqueue(
+      [{ type: "set", node_id: "n", path: ["title"], value: "" }],
+      "first",
+    );
+    c.enqueue(
+      [{ type: "set", node_id: "n", path: ["title"], value: "new" }],
+      "second",
+    );
+    expect(sent).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(900);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].body.operations).toHaveLength(2);
+    expect(c.document.nodes[0].title).toBe("new");
+    c.dispose();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("retains the active IME continuation when the connection drops", () => {
+  const sent: Envelope[] = [];
+  const c = new Collaboration(
+    doc(),
+    () => {},
+    (e) => sent.push(e),
+  );
+  c.connection(true, true, "me");
+  c.composition(true);
+  c.connection(false, false, "me");
+  c.enqueue([text([{ insert: [{ type: "text", text: "中😀" }] }])], "ime");
+  c.composition(false);
+  expect(sent).toHaveLength(0);
+  expect(c.document.nodes[0].config.text).toBe("中😀AB");
+  expect(() =>
+    c.enqueue([text([{ insert: [{ type: "text", text: "new" }] }])]),
+  ).toThrow("connection_read_only");
+  c.connection(true, true, "me");
+  expect(sent).toHaveLength(1);
+  expect(sent[0].key).toBe("ime");
+});
+
+it("keeps causal Q when Go canonical JSON changes property order only", async () => {
+  const { emptyPromptDraft } =
+    await import("@/components/generation/prompt-document");
+  const d = doc();
+  const draft = emptyPromptDraft();
+  d.nodes[0].node_type = "image_generation";
+  d.nodes[0].node_action = "generate";
+  d.nodes[0].config = {
+    draft: {
+      prompt: "",
+      negative_prompt: "",
+      aspect_ratio: "",
+      candidate_count: 0,
+      composer: draft,
+    },
+  };
+  const sent: Envelope[] = [];
+  const c = new Collaboration(
+    d,
+    () => {},
+    (e) => sent.push(e),
+  );
+  c.connection(true, true, "me");
+  const edit = (value: string, offset: number): Operation => ({
+    type: "text",
+    node_id: "n",
+    path: ["config", "draft", "composer", "document"],
+    text: [
+      ...(offset ? [{ retain: offset }] : []),
+      { insert: [{ type: "text", text: value }] },
+    ],
+  });
+  c.enqueue([edit("中", 0)], "p");
+  c.enqueue([edit("😀", 1)], "q");
+  c.receipt({ status: "accepted", op_id: "p", revision: 2 });
+  c.changes([
+    {
+      revision: 2,
+      actor_id: "me",
+      op_id: "p",
+      operations: [edit("中", 0)],
+      effects: [
+        {
+          entity: "node",
+          id: "n",
+          path: ["config", "draft", "composer", "document"],
+          index: 0,
+          after_exists: true,
+          after: {
+            content: [
+              { content: [{ text: "中", type: "text" }], type: "paragraph" },
+            ],
+            type: "doc",
+          },
+        },
+      ],
+    },
+  ]);
+  expect(c.recovery).toEqual([]);
+  expect(sent).toHaveLength(2);
+  expect(
+    c.document.nodes[0].config.draft?.composer?.document.content[0]
+      .content?.[0],
+  ).toEqual({ type: "text", text: "中😀" });
 });

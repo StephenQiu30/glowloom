@@ -16,6 +16,7 @@ import (
 // Operation is the closed collaboration vocabulary. Paths address named fields
 // and stable collection identities, never arbitrary JSON paths or array indices.
 type Operation struct {
+	unknown        map[string]json.RawMessage
 	labelBase      *prompt.LabelState
 	labelOrder     []string
 	Type           string          `json:"type"`
@@ -52,10 +53,13 @@ type FieldChange struct {
 
 // OperationOutcome is a fully evaluated candidate, not a persistence receipt.
 type OperationOutcome struct {
-	Document Document
-	Changes  []FieldChange
-	Effects  []Effect
-	Inputs   []InputSnapshot
+	// IntermediateNodes are evaluated touched entities for source authorization and
+	// immutable history retention, never snapshots persisted as graph authority.
+	IntermediateNodes []Node
+	Document          Document
+	Changes           []FieldChange
+	Effects           []Effect
+	Inputs            []InputSnapshot
 }
 
 type fieldPolicy struct {
@@ -201,11 +205,12 @@ func applyField(document *Document, op Operation) (FieldChange, error) {
 		}
 	}
 	if op.Type == "text" {
-		if !exists || op.Value != nil || op.Unset {
+		textBefore, textExists := textValue(op.Path, before, exists)
+		if !textExists || op.Value != nil || op.Unset {
 			return FieldChange{}, operationError("invalid_operation")
 		}
 		rich := key == "document"
-		sequence, err := operationSequence(before, rich)
+		sequence, err := operationSequence(textBefore, rich)
 		if err != nil {
 			return FieldChange{}, err
 		}
@@ -232,7 +237,11 @@ func applyField(document *Document, op Operation) (FieldChange, error) {
 				}
 				text.WriteString(atom.Text)
 			}
-			parent[key] = text.String()
+			if negativePromptPath(op.Path) && text.Len() == 0 {
+				delete(parent, key)
+			} else {
+				parent[key] = text.String()
+			}
 		}
 	} else {
 		if op.Text != nil || (op.Value == nil && !op.Unset) {
@@ -246,7 +255,8 @@ func applyField(document *Document, op Operation) (FieldChange, error) {
 				return FieldChange{}, operationError("invalid_operation")
 			}
 		}
-		if rule.group != nil {
+		switch {
+		case rule.group != nil:
 			group, ok := value.(map[string]any)
 			if op.Unset && rule.optional {
 				group = map[string]any{}
@@ -271,9 +281,9 @@ func applyField(document *Document, op Operation) (FieldChange, error) {
 				}
 				parent[member] = v
 			}
-		} else if op.Unset {
+		case op.Unset:
 			delete(parent, key)
-		} else {
+		default:
 			parent[key] = value
 		}
 	}
@@ -307,12 +317,34 @@ func applyOperations(document Document, operations []Operation, final bool) (Ope
 		return OperationOutcome{}, err
 	}
 	out := OperationOutcome{}
+	created := map[uuid.UUID]bool{}
+	removedItems := map[string]bool{}
 	for index, op := range operations {
 		if err := validOperationShape(op); err != nil {
 			return OperationOutcome{}, fmt.Errorf("operation %d: %w", index, err)
 		}
 		if op.Type == "noop" {
 			continue
+		}
+		var newID uuid.UUID
+		if op.Type == "create_node" && op.Node != nil {
+			newID = op.Node.ID
+		}
+		if op.Type == "connect" && op.Edge != nil {
+			newID = op.Edge.ID
+		}
+		if newID != uuid.Nil {
+			if created[newID] {
+				return OperationOutcome{}, operationError("id_conflict")
+			}
+			created[newID] = true
+		}
+		itemKey := op.NodeID.String() + "/" + strings.Join(op.Path, "/") + "/" + op.ItemID
+		if op.Type == "insert" && removedItems[itemKey] {
+			return OperationOutcome{}, operationError("id_conflict")
+		}
+		if op.Type == "remove" {
+			removedItems[itemKey] = true
 		}
 		var change FieldChange
 		var err error
@@ -334,6 +366,19 @@ func applyOperations(document Document, operations []Operation, final bool) (Ope
 		if change.Path != nil {
 			out.Changes = append(out.Changes, change)
 		}
+		if final {
+			target := op.NodeID
+			if op.Node != nil {
+				target = op.Node.ID
+			}
+			if i := nodeIndex(&doc, target); i >= 0 {
+				var touched Node
+				if err := json.Unmarshal(effectJSON(doc.Nodes[i]), &touched); err != nil {
+					return OperationOutcome{}, err
+				}
+				out.IntermediateNodes = append(out.IntermediateNodes, touched)
+			}
+		}
 	}
 	if final {
 		for i := range doc.Nodes {
@@ -342,7 +387,8 @@ func applyOperations(document Document, operations []Operation, final bool) (Ope
 				continue
 			}
 			old := nodeIndex(&document, n.ID)
-			if old < 0 {
+			switch {
+			case old < 0:
 				n.InputRevision = 1
 				for _, op := range operations {
 					if op.Type == "restore_node" && op.Node != nil && op.Node.ID == n.ID {
@@ -352,12 +398,12 @@ func applyOperations(document Document, operations []Operation, final bool) (Ope
 						n.InputRevision = op.Node.InputRevision + 1
 					}
 				}
-			} else if !SameInput(*document.Nodes[old].Config.Draft, *n.Config.Draft) {
+			case !SameInput(*document.Nodes[old].Config.Draft, *n.Config.Draft):
 				if document.Nodes[old].InputRevision >= math.MaxInt32 {
 					return OperationOutcome{}, operationError("input_revision_limit")
 				}
 				n.InputRevision = document.Nodes[old].InputRevision + 1
-			} else {
+			default:
 				continue
 			}
 			out.Inputs = append(out.Inputs, InputSnapshot{NodeID: n.ID, Revision: n.InputRevision, Draft: *n.Config.Draft})
@@ -489,7 +535,8 @@ func pairOperations(base Document, a, b Operation) (Operation, Operation, error)
 			return a, b, err
 		}
 		rule, _ := policy(a.Path)
-		value, _ := fieldValue(parent, key, rule)
+		value, exists := fieldValue(parent, key, rule)
+		value, _ = textValue(a.Path, value, exists)
 		sequence, err := operationSequence(value, key == "document")
 		if err != nil {
 			return a, b, err
@@ -510,6 +557,9 @@ func pairOperations(base Document, a, b Operation) (Operation, Operation, error)
 // TransformOperationPair preserves causal step order inside both batches. A is
 // earlier in authoritative server order; inputs must share the original base.
 func TransformOperationPair(base Document, a, b []Operation) ([]Operation, []Operation, error) {
+	if err := ValidateTransformWork(base, len(a)*len(b)+len(a)+len(b)); err != nil {
+		return nil, nil, err
+	}
 	if _, err := ApplyOperations(base, a); err != nil {
 		return nil, nil, err
 	}
@@ -545,4 +595,20 @@ func TransformOperationPair(base Document, a, b []Operation) ([]Operation, []Ope
 		prefix = step.Document
 	}
 	return ap, bp, nil
+}
+
+// ValidateTransformWork bounds in-memory work before cloning or entering the
+// pair grid. Storage/request byte bounds alone do not bound transform CPU cost.
+func ValidateTransformWork(document Document, cells int) error {
+	if cells < 0 || cells > 4096 {
+		return operationError("history_unavailable")
+	}
+	body, err := json.Marshal(document)
+	if err != nil {
+		return err
+	}
+	if int64(len(body))*int64(cells) > 32<<20 {
+		return operationError("history_unavailable")
+	}
+	return nil
 }

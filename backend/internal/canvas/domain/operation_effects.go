@@ -147,7 +147,8 @@ func RewindEffects(document Document, effects []Effect) (Document, error) {
 		if e.Index < 0 {
 			return Document{}, operationError("history_unavailable")
 		}
-		if e.Entity == "node" {
+		switch {
+		case e.Entity == "node":
 			index := nodeIndex(&doc, e.ID)
 			if len(e.Path) == 0 {
 				if (index >= 0) != e.AfterExists || index >= 0 && !equalJSON(effectJSON(doc.Nodes[index]), e.After) {
@@ -201,8 +202,11 @@ func RewindEffects(document Document, effects []Effect) (Document, error) {
 				return Document{}, operationError("history_unavailable")
 			}
 			doc.Nodes[index] = restored
-		} else if e.Entity == "edge" && len(e.Path) == 0 {
+		case e.Entity == "edge" && len(e.Path) == 0:
 			index := slices.IndexFunc(doc.Edges, func(edge Edge) bool { return edge.ID == e.ID })
+			if (index >= 0) != e.AfterExists || index >= 0 && !equalJSON(effectJSON(doc.Edges[index]), e.After) {
+				return Document{}, operationError("history_unavailable")
+			}
 			if e.BeforeExists {
 				var edge Edge
 				if json.Unmarshal(e.Before, &edge) != nil || edge.ID != e.ID {
@@ -216,7 +220,7 @@ func RewindEffects(document Document, effects []Effect) (Document, error) {
 			} else if index >= 0 {
 				doc.Edges = slices.Delete(doc.Edges, index, index+1)
 			}
-		} else {
+		default:
 			return Document{}, operationError("history_unavailable")
 		}
 	}

@@ -1,4 +1,4 @@
-import type { Node as PMNode } from "@tiptap/pm/model";
+import { Slice, type Node as PMNode } from "@tiptap/pm/model";
 import type { Transaction } from "@tiptap/pm/state";
 import type {
   PromptDocument,
@@ -75,7 +75,34 @@ export function sequencePrompt(atoms: Atom[]): PromptDocument {
   return { type: "doc", content };
 }
 function project(doc: PMNode, plain: boolean) {
-  const rich = promptSequence(doc.toJSON());
+  let source = doc.toJSON();
+  if (plain) {
+    const content: PromptDocument["content"] = [];
+    doc.forEach((paragraph) => {
+      if (
+        paragraph.type.name !== "paragraph" ||
+        Object.entries(paragraph.attrs).some(
+          ([key, value]) =>
+            key !== "textAlign" || (value !== null && value !== "left"),
+        )
+      )
+        unsupported();
+      const children: PromptInline[] = [];
+      paragraph.forEach((inline) => {
+        if (inline.marks.length) unsupported();
+        if (inline.isText) children.push({ type: "text", text: inline.text! });
+        else if (inline.type.name === "hardBreak")
+          children.push({ type: "hardBreak" });
+        else unsupported();
+      });
+      content.push({
+        type: "paragraph",
+        ...(children.length ? { content: children } : {}),
+      });
+    });
+    source = { type: "doc", content };
+  }
+  const rich = promptSequence(source);
   const atoms: Atom[] = plain
     ? rich.map((atom) => {
         if (atom.type === "reference") return unsupported();
@@ -162,4 +189,75 @@ export function editorSequenceEdits(
     if (edit.length) result.push(edit);
   }
   return result;
+}
+
+/** Applies a canonical sequence as local PM replacements. PM maps the existing
+ * selection through these steps; no full-document overwrite or text diff occurs. */
+export function applySequenceTransaction(
+  transaction: Transaction,
+  edit: SequenceEdit,
+  plain = false,
+): Transaction {
+  const before = project(transaction.doc, plain);
+  const expected = applySequence(before.atoms, edit);
+  const positions = new Map<number, number>();
+  let position = 0;
+  transaction.doc.forEach((paragraph, offset, index) => {
+    if (index) position++;
+    positions.set(position, offset + 1);
+    paragraph.forEach((inline, childOffset) => {
+      for (let i = 0; i <= inline.nodeSize; i++)
+        positions.set(position + i, offset + 1 + childOffset + i);
+      position += inline.nodeSize;
+    });
+    positions.set(position, offset + 1 + paragraph.content.size);
+  });
+  const spans: { from: number; to: number; insert: Atom[] }[] = [];
+  let cursor = 0;
+  for (const part of edit) {
+    if (part.retain) cursor += part.retain;
+    else if (part.insert)
+      spans.push({ from: cursor, to: cursor, insert: part.insert });
+    else if (part.delete) {
+      spans.push({ from: cursor, to: cursor + part.delete, insert: [] });
+      cursor += part.delete;
+    }
+  }
+  for (const span of spans.reverse()) {
+    const from = positions.get(span.from),
+      to = positions.get(span.to);
+    if (from === undefined || to === undefined) return unsupported();
+    let atoms = span.insert;
+    if (plain) {
+      atoms = [];
+      for (const atom of span.insert) {
+        if (atom.type !== "text") return unsupported();
+        atom.text.split("\n").forEach((line, i) => {
+          if (i) atoms.push({ type: "paragraphBreak" });
+          if (line) atoms.push({ type: "text", text: line });
+        });
+      }
+    }
+    const slice = atoms.length
+      ? new Slice(
+          transaction.doc.type.schema.nodeFromJSON(sequencePrompt(atoms))
+            .content,
+          1,
+          1,
+        )
+      : Slice.empty;
+    transaction.replaceRange(from, to, slice);
+  }
+  if (
+    JSON.stringify(project(transaction.doc, plain).atoms) !==
+    JSON.stringify(expected)
+  )
+    return unsupported();
+  return transaction;
+}
+
+export function plainEditorText(document: PMNode): string {
+  return project(document, true)
+    .atoms.map((atom) => (atom.type === "text" ? atom.text : ""))
+    .join("");
 }

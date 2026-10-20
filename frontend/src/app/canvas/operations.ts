@@ -85,7 +85,11 @@ export function fieldContainer(
   value: unknown,
   path: string[],
 ): [ObjectValue, string] {
-  if (!path.length || path.length > 16)
+  if (
+    !path.length ||
+    path.length > 16 ||
+    path.some((p) => ["__proto__", "constructor", "prototype"].includes(p))
+  )
     return operationError("unsupported_field");
   let current = value;
   for (const key of path.slice(0, -1)) {
@@ -96,19 +100,67 @@ export function fieldContainer(
   }
   return [object(current), path.at(-1)!];
 }
+function negativePromptPath(path: string[]) {
+  return pathEqual(path, [
+    "config",
+    "draft",
+    "composer",
+    "params",
+    "negative_prompt",
+  ]);
+}
 export function fieldValue(
   node: unknown,
   path: string[],
   rule = fieldPolicy(path),
 ): { value: unknown; exists: boolean } {
+  if (
+    path.length === 6 &&
+    path[1] === "batch_table" &&
+    path[2] === "rows" &&
+    path[4] === "input_node_ids"
+  ) {
+    const config = object(object(node).config),
+      table = object(config.batch_table);
+    const columns = (table.reference_columns as unknown[]) ?? [],
+      rows = (table.rows as unknown[]) ?? [];
+    const column = columns.findIndex((c) => identity(c) === path[5].slice(1)),
+      row = rows.find((r) => identity(r) === path[3].slice(1));
+    if (column < 0 || !row) return operationError("target_not_found");
+    const slots = object(row).input_node_ids as unknown[];
+    if (!slots || column >= slots.length)
+      return operationError("target_not_found");
+    return { value: slots[column], exists: true };
+  }
   const [parent, key] = fieldContainer(node, path);
   if (rule.group) {
     const value: ObjectValue = {};
-    for (const member of rule.group)
-      if (member in parent) value[member] = parent[member];
+    for (const member of rule.group) {
+      if (
+        path[1] === "timeline" &&
+        path[2] === "clips" &&
+        ["node_id", "asset_id", "source_duration_ms"].includes(member)
+      )
+        value[member] = parent[member] ?? null;
+      else if (
+        path.at(-1) === "model" &&
+        ["model_profile_id", "modelVersion"].includes(member)
+      )
+        value[member] = parent[member] ?? null;
+      else if (
+        path.at(-1) === "model" &&
+        member === "mode" &&
+        path[1] === "draft"
+      )
+        value[member] = parent[member] ?? null;
+      else if (member in parent) value[member] = parent[member];
+    }
     return { value, exists: !rule.optional || Object.keys(value).length > 0 };
   }
-  return { value: parent[key], exists: key in parent };
+  return {
+    value: negativePromptPath(path) ? (parent[key] ?? "") : parent[key],
+    exists: negativePromptPath(path) || key in parent,
+  };
 }
 export function fieldContext(
   node: unknown,
@@ -347,7 +399,12 @@ function applyOne(doc: Canvas, op: Operation) {
       if (index >= 0) return operationError("id_conflict");
       if (identity(op.value) !== op.item_id)
         return operationError("invalid_operation");
-      items.push(structuredClone(op.value));
+      const value = structuredClone(op.value);
+      if (op.type === "restore_item" && referenceCollection(path)) {
+        const ref = object(value);
+        ref.bindingGeneration = Number(ref.bindingGeneration) + 1;
+      }
+      items.push(value);
       index = items.length - 1;
     } else if (index < 0) return operationError("target_not_found");
     if (op.type === "remove") items.splice(index, 1);
@@ -398,9 +455,11 @@ function applyOne(doc: Canvas, op: Operation) {
     else {
       if (atoms.some((a) => a.type !== "text"))
         return operationError("invalid_sequence");
-      parent[key] = atoms
+      const value = atoms
         .map((a) => (a.type === "text" ? a.text : ""))
         .join("");
+      if (negativePromptPath(path) && !value) delete parent[key];
+      else parent[key] = value;
     }
   } else if (rule.group) {
     const value = op.unset && rule.optional ? {} : object(op.value);
@@ -433,7 +492,24 @@ function applyOne(doc: Canvas, op: Operation) {
 export function applyOperations(document: Canvas, ops: Operation[]): Canvas {
   if (ops.length > 100) operationError("operation_limit");
   const doc = structuredClone(document);
-  for (const op of ops) applyOne(doc, op);
+  const created = new Set<string>(),
+    removed = new Set<string>();
+  for (const op of ops) {
+    const id =
+      op.type === "create_node"
+        ? op.node?.id
+        : op.type === "connect"
+          ? op.edge?.id
+          : undefined;
+    if (id) {
+      if (created.has(id)) operationError("id_conflict");
+      created.add(id);
+    }
+    const key = [op.node_id, ...(op.path ?? []), op.item_id].join("/");
+    if (op.type === "insert" && removed.has(key)) operationError("id_conflict");
+    if (op.type === "remove") removed.add(key);
+    applyOne(doc, op);
+  }
   for (const n of doc.nodes)
     if (isDraft(n)) {
       const old = document.nodes.find((p) => p.id === n.id);
@@ -457,14 +533,42 @@ function targetsItem(op: Operation, removed: Operation) {
     q[p.length] === "@" + removed.item_id
   );
 }
-function usesNode(op: Operation, id: string | undefined) {
-  return (
-    !!id &&
-    (op.node_id === id ||
-      op.node?.id === id ||
-      op.edge?.source_node_id === id ||
-      op.edge?.target_node_id === id)
-  );
+export function usesNode(op: Operation, id: string | undefined) {
+  if (!id) return false;
+  if (
+    op.node_id === id ||
+    op.node?.id === id ||
+    op.node?.parent_id === id ||
+    op.edge?.source_node_id === id ||
+    op.edge?.target_node_id === id
+  )
+    return true;
+  const n = op.node;
+  if (
+    n &&
+    (n.config.batch_table?.rows?.some((r) => r.input_node_ids?.includes(id)) ||
+      n.config.timeline?.clips?.some((c) => c.node_id === id) ||
+      n.config.director?.objects?.some((o) => o.source_node_id === id))
+  )
+    return true;
+  const path = op.path ?? [];
+  if (
+    op.type === "set" &&
+    (path.join(".") === "parent_id" ||
+      (path[1] === "batch_table" && path[4] === "input_node_ids"))
+  )
+    return op.value === id;
+  if (
+    path[0] === "config" &&
+    ((path[1] === "timeline" && path[2] === "clips") ||
+      (path[1] === "director" && path[2] === "objects")) &&
+    op.value &&
+    typeof op.value === "object"
+  ) {
+    const v = op.value as Record<string, unknown>;
+    return v.node_id === id || v.source_node_id === id;
+  }
+  return false;
 }
 function structural(op: Operation) {
   return ["insert", "restore_item", "remove", "move"].includes(op.type);
@@ -489,7 +593,7 @@ function pair(
   earlier: Operation,
   later: Operation,
 ): [Operation, Operation] {
-  const a = { ...earlier },
+  let a = { ...earlier },
     b = { ...later };
   if (a.type === "delete_node" && usesNode(b, a.node_id)) {
     if (b.type === "delete_node" && a.node_id === b.node_id)
@@ -566,6 +670,31 @@ function pair(
     }
     return [a, b];
   }
+  const restoredRow = (columns: Operation, row: Operation) => {
+    if (
+      row.type !== "restore_item" ||
+      row.node_id !== columns.node_id ||
+      row.path?.join(".") !== "config.batch_table.rows" ||
+      columns.path?.join(".") !== "config.batch_table.reference_columns"
+    )
+      return row;
+    const old =
+      base.nodes.find((n) => n.id === row.node_id)?.config.batch_table
+        ?.reference_columns ?? [];
+    const after =
+      applyOperations(base, [columns]).nodes.find((n) => n.id === row.node_id)
+        ?.config.batch_table?.reference_columns ?? [];
+    const value = structuredClone(row.value) as API.BatchTableRow;
+    const slots = new Map(
+      old.map((c, i) => [c.id, value.input_node_ids?.[i] ?? null]),
+    );
+    value.input_node_ids = after.map(
+      (c) => slots.get(c.id) ?? null,
+    ) as API.BatchTableRow["input_node_ids"];
+    return { ...row, value };
+  };
+  if (structural(a)) b = restoredRow(a, b);
+  if (structural(b)) a = restoredRow(b, a);
   if (structural(a) && structural(b) && pathEqual(a.path, b.path)) {
     if (a.type === "move" || b.type === "move")
       return operationError("order_conflict");
@@ -674,6 +803,21 @@ export type Effect = {
 export function applyEffects(document: Canvas, effects: Effect[]): Canvas {
   const doc = structuredClone(document);
   for (const e of effects) {
+    if (
+      !["node", "edge"].includes(e.entity) ||
+      !e.id ||
+      !Array.isArray(e.path) ||
+      !Number.isSafeInteger(e.index) ||
+      e.index < 0 ||
+      e.path.some(
+        (p) =>
+          typeof p !== "string" ||
+          ["__proto__", "constructor", "prototype"].includes(p),
+      )
+    )
+      return operationError("history_unavailable");
+    if (!e.path.length && e.after_exists && object(e.after).id !== e.id)
+      return operationError("history_unavailable");
     const items = e.entity === "node" ? doc.nodes : doc.edges;
     const index = items.findIndex((n) => n.id === e.id);
     if (!e.path.length) {

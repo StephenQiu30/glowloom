@@ -5,14 +5,14 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
-func (h *Handler) processCollaboration(ctx context.Context, c *gin.Context, authorize func(context.Context) (identity.Principal, bool, error), id uuid.UUID, msg incoming, blocked bool, send func(packet) bool, fail func(string, error) bool) bool {
+func (h *Handler) processCollaboration(ctx context.Context, authorize func(context.Context) (identity.Principal, bool, error), id uuid.UUID, msg incoming, blocked bool, send func(packet) bool, fail func(string, error) bool) bool {
 	var input application.CollaborationInput
 	decoder := json.Unmarshal(msg.Body, &input)
 	if decoder != nil {
