@@ -1,6 +1,6 @@
 import { SessionGate } from "@/components/auth/session";
 import { SpaceGate } from "@/components/spaces/space-context";
-import { CanvasPage } from "./_components/canvas-page";
+import { CanvasPage } from "./open";
 
 export const metadata = { title: "无限画布" };
 export default async function Page({

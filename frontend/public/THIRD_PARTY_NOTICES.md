@@ -6,19 +6,19 @@
 
 固定来源：[glanderness/BeefTV `a2196d32782be6090beb003590ce11a956a423e1`](https://github.com/glanderness/BeefTV/tree/a2196d32782be6090beb003590ce11a956a423e1)，MIT。版权为2026 @beefnoode、BeefTV contributors、basketikun和ddcat。[完整许可](/licenses/beeftv.txt)与[上游NOTICE](/licenses/beeftv-notice.txt)随应用分发；NOTICE包含Infinite Canvas派生来源及其重许可说明。
 
-以下源路径相对于该固定提交`web/src/`；目标均位于浮光`frontend/src/app/canvas/_components/`。
+以下源路径相对于该固定提交`web/src/`；目标均位于浮光`frontend/src/app/canvas/`。
 
 | 目标                                                | 上游源                                                                                                           | 改写范围                                                                                     |
 | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `infinite-canvas.tsx`                               | `components/canvas/infinite-canvas.tsx`                                                                          | 指针/触控/滚轮、空格平移、48px网格与生命周期；替换上游主题/广播，排除Radix浮层，接本项目框选 |
-| `canvas-viewport.ts`                                | `lib/canvas/canvas-live-viewport.ts`、`canvas-selection.ts`                                                      | 合成层变换、指针意图与坐标转换，去除未使用的图形层广播                                       |
-| `canvas-node.tsx`                                   | `components/canvas/canvas-node.tsx`                                                                              | 外置节点标题、铅笔入口、媒体容器、四角尺寸手柄与选中样式；接真实草稿，去除本地媒体/任务调用  |
-| `canvas-composer.tsx`                               | `components/canvas/canvas-node-prompt-panel.tsx`                                                                 | 紧凑提示词面板、参数与提交位置；改为shadcn与服务端草稿，生成明确禁用                         |
-| `canvas-node-panel.tsx`、`canvas-panel-position.ts` | `components/canvas/canvas-workspace-overlays.tsx`、`pages/canvas/project.tsx`                                    | 选中节点锚点、16px下间距、660～920px宽度与逐帧视口/节点矩形；手机仅缩窄，不固定底部          |
-| `canvas-toolbar.tsx`                                | `components/canvas/canvas-toolbar.tsx`、`canvas-zoom-controls.tsx`、`components/ui/aceternity/floating-dock.tsx` | 44px胶囊Dock、抓手/框选、创建、缩放与快捷键；使用Radix浮层，去除上游工具注册表与Motion依赖   |
-| `canvas-mini-map.tsx`                               | `components/canvas/canvas-mini-map.tsx`                                                                          | 世界边界、500单位留白、小地图与视口定位；无媒体解码                                          |
-| `canvas.css`                                        | `lib/canvas-theme.ts`、`styles/globals.css`                                                                      | 保留明暗语义表面、节点/浮层/Dock形状及尺寸；限定画布页，去除全局覆盖与重复规则               |
-| `canvas-editor.tsx`                                 | `pages/canvas/canvas-project-top-bar.tsx`                                                                        | 浮动项目簇与工作区编排；Next.js路由、现有Go命令、不可变输入、回执与冲突恢复由浮光维护        |
+| `viewport/surface.tsx`                              | `components/canvas/infinite-canvas.tsx`                                                                          | 指针/触控/滚轮、空格平移、48px网格与生命周期；替换上游主题/广播，排除Radix浮层，接本项目框选 |
+| `viewport/transform.ts`                             | `lib/canvas/canvas-live-viewport.ts`、`canvas-selection.ts`                                                      | 合成层变换、指针意图与坐标转换，去除未使用的图形层广播                                       |
+| `node/node.tsx`                                     | `components/canvas/canvas-node.tsx`                                                                              | 外置节点标题、铅笔入口、媒体容器、四角尺寸手柄与选中样式；接真实草稿，去除本地媒体/任务调用  |
+| `composer/composer.tsx`                             | `components/canvas/canvas-node-prompt-panel.tsx`                                                                 | 紧凑提示词面板、参数与提交位置；改为shadcn与服务端草稿，生成明确禁用                         |
+| `node/panel.tsx`、`node/panel-position.ts`          | `components/canvas/canvas-workspace-overlays.tsx`、`pages/canvas/project.tsx`                                    | 选中节点锚点、16px下间距、660～920px宽度与逐帧视口/节点矩形；手机仅缩窄，不固定底部          |
+| `chrome/toolbar.tsx`                                | `components/canvas/canvas-toolbar.tsx`、`canvas-zoom-controls.tsx`、`components/ui/aceternity/floating-dock.tsx` | 44px胶囊Dock、抓手/框选、创建、缩放与快捷键；使用Radix浮层，去除上游工具注册表与Motion依赖   |
+| `viewport/minimap.tsx`                              | `components/canvas/canvas-mini-map.tsx`                                                                          | 世界边界、500单位留白、小地图与视口定位；无媒体解码                                          |
+| `editor.css`                                        | `lib/canvas-theme.ts`、`styles/globals.css`                                                                      | 保留明暗语义表面、节点/浮层/Dock形状及尺寸；限定画布页，去除全局覆盖与重复规则               |
+| `editor.tsx`                                        | `pages/canvas/canvas-project-top-bar.tsx`                                                                        | 浮动项目簇与工作区编排；Next.js路由、现有Go命令、不可变输入、回执与冲突恢复由浮光维护        |
 
 未复制品牌图像、模型权重、第三方媒体或其他工具资源。来源登记说明实际改写范围，不表示上游全部业务工具、真实生成或产品验收完成。
 
@@ -132,12 +132,12 @@ R6 画布重建保留上节登记的指针、坐标与节点交互算法，改�
 
 ## Glowloom 无限画布核心增量
 
-固定参考：[BeefTV `ddaf5f9abc64b16567c28ea5399d8f2069c47832`](https://github.com/glanderness/BeefTV/tree/ddaf5f9abc64b16567c28ea5399d8f2069c47832)，MIT；完整许可及传递来源继续随应用分发于 `/licenses/beeftv.txt` 和 `/licenses/beeftv-notice.txt`。目标均位于 `frontend/src/app/canvas/_components/`。
+固定参考：[BeefTV `ddaf5f9abc64b16567c28ea5399d8f2069c47832`](https://github.com/glanderness/BeefTV/tree/ddaf5f9abc64b16567c28ea5399d8f2069c47832)，MIT；完整许可及传递来源继续随应用分发于 `/licenses/beeftv.txt` 和 `/licenses/beeftv-notice.txt`。目标位于 `frontend/src/app/canvas/`。
 
-| 目标                     | 固定来源（相对上游 `web/src/`）                                                                    | 改写                                                                          |
-| ------------------------ | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `canvas-render-model.ts` | `lib/canvas/canvas-spatial-index.ts`、`canvas-frame.ts`，`pages/canvas/use-canvas-render-model.ts` | 世界坐标索引、超大元素独立查询、组后代与可见边；不截断节点数量                |
-| `canvas-node-layer.tsx`  | `pages/canvas/use-canvas-render-model.ts` 的进入/保留机制                                          | 独立订阅现有视口/拖动预览、焦点保留及SVG标注线；沿项目媒体和节点组件          |
-| `canvas-history.ts`      | `pages/canvas/use-canvas-history.ts` 的操作边界与有界历史机制                                      | 本地不可变图引用、合法命令检查、保存后限制及引用编号保护；不迁入上游持久store |
+| 目标                          | 固定来源（相对上游 `web/src/`）                                                                    | 改写                                                                          |
+| ----------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `viewport/render-model.ts`    | `lib/canvas/canvas-spatial-index.ts`、`canvas-frame.ts`，`pages/canvas/use-canvas-render-model.ts` | 世界坐标索引、超大元素独立查询、组后代与可见边；不截断节点数量                |
+| `node/layer.tsx`              | `pages/canvas/use-canvas-render-model.ts` 的进入/保留机制                                          | 独立订阅现有视口/拖动预览、焦点保留及SVG标注线；沿项目媒体和节点组件          |
+| `history/history.ts`          | `pages/canvas/use-canvas-history.ts` 的操作边界与有界历史机制                                      | 本地不可变图引用、合法命令检查、保存后限制及引用编号保护；不迁入上游持久store |
 
 编辑器新增文字、分组、标注线及相机保存沿现有生成API和Go合同实现；未引入上游Wails、SQLite、供应商调用或远程插件运行时。来源说明不代表上游全部功能、容量性能或真实业务验收完成。

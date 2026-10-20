@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { CanvasPreview } from "../_components/canvas-preview";
+import { CanvasPreview } from "./screen";
 
 export const metadata = { title: "画布 · Mock 预览" };
 export default function Page() {
