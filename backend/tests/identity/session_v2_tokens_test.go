@@ -38,7 +38,7 @@ func TestSessionV2Tokens(t *testing.T) {
 	if err != nil || got.UserID != claims.UserID {
 		t.Fatalf("roundtrip %v", err)
 	}
-	parsed, err := jwt.Parse(raw, func(t *jwt.Token) (any, error) {
+	parsed, err := jwt.Parse(raw, func(_ *jwt.Token) (any, error) {
 		return &key.PublicKey, nil
 	}, jwt.WithValidMethods([]string{"RS256"}))
 	if err != nil {
