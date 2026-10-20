@@ -34,7 +34,7 @@ import {
   NativeSelect,
   NativeSelectOption,
 } from "@/components/ui/native-select";
-const SpaceContext = createContext<{
+export const SpaceContext = createContext<{
   spaces: API.SpaceView[];
   selected: API.SpaceView | null;
   pending: boolean;

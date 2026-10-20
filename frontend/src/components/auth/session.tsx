@@ -61,7 +61,7 @@ function queuePrivateCleanup(
     .catch(() => {});
   return privateCleanup;
 }
-const SessionContext = createContext<API.EmailSessionView | null>(null);
+export const SessionContext = createContext<API.EmailSessionView | null>(null);
 const SessionUpdateContext = createContext<
   (session: API.EmailSessionView) => void
 >(() => {});

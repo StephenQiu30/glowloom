@@ -541,7 +541,7 @@ export function requireSaveResult(
   return c;
 }
 
-function sameDraftInput(a: Draft, b: Draft) {
+export function sameDraftInput(a: Draft, b: Draft) {
   if (!a.composer || !b.composer) return sameDraft(a, b);
   const intent = (d: PromptDraft) => ({
     ...d,

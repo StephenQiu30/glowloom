@@ -14,6 +14,14 @@
   color: var(--canvas-node-text);
   background: var(--canvas-bg);
 }
+.canvas-preview {
+  display: flex;
+  height: 100dvh;
+  flex-direction: column;
+}
+.canvas-preview .creation-canvas {
+  height: 100%;
+}
 .creation-canvas .canvas-header {
   position: absolute;
   inset-inline: 12px;
@@ -35,15 +43,17 @@
   position: absolute;
   z-index: 30;
   left: 12px;
-  top: calc(50% + 28px);
+  top: 50%;
   transform: translateY(-50%);
   display: flex;
   align-items: center;
   flex-direction: column;
   width: 48px;
+  height: 356px;
   max-height: calc(100% - 152px);
   overflow-y: auto;
   gap: 2px;
+  justify-content: space-between;
   padding: 4px;
   border: 0;
   border-radius: 12px;
@@ -526,6 +536,20 @@
 .creation-canvas .canvas-edit-actions button {
   pointer-events: auto;
 }
+.creation-canvas .canvas-selection-toolbar {
+  position: absolute;
+  z-index: 28;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  max-width: calc(100% - 24px);
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
 .creation-canvas [data-node-kind="group"] .canvas-node-shell {
   background: var(--canvas-selection);
   border-style: dashed;
@@ -601,8 +625,7 @@
 }
 .creation-canvas
   .canvas-save-button:not([data-error="true"]):not(:focus-visible),
-.creation-canvas
-  .canvas-edit-actions:not([data-multi="true"]):not(:focus-within) {
+.creation-canvas .canvas-edit-actions:not(:focus-within) {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -819,19 +842,22 @@ html:has(.creation-canvas) {
 
 @media (max-width: 767px) {
   .creation-canvas .canvas-main-dock {
-    top: 68px;
-    right: 12px;
-    width: auto;
-    height: 48px;
-    max-height: none;
-    flex-direction: row;
-    overflow-x: auto;
-    overflow-y: hidden;
-    transform: none;
+    top: 50%;
+    right: auto;
+    width: 48px;
+    height: 356px;
+    max-height: calc(100% - 152px);
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    transform: translateY(-50%);
   }
   .creation-canvas .canvas-dock-divider {
-    width: 1px;
-    min-width: 1px;
-    height: 24px;
+    width: 24px;
+    min-height: 1px;
+    height: 1px;
+  }
+  .creation-canvas .canvas-node-panel {
+    z-index: 31;
   }
 }

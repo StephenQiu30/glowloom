@@ -1,4 +1,5 @@
 import axios, { type AxiosRequestConfig } from "axios";
+import { developmentResponse } from "./development-transport";
 
 export type RequestOptions = Omit<AxiosRequestConfig, "url"> & {
   /** Emitted by @umijs/openapi for multipart uploads. */
@@ -189,6 +190,8 @@ export async function request<T>(
   url: string,
   options: RequestOptions = {},
 ): Promise<T> {
+  const local = developmentResponse(url, options);
+  if (local) return (await local) as T;
   const { requestType, sessionRecovery = "auto", ...config } = options;
   if (requestType === "form") {
     config.timeout ??= 120_000;

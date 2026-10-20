@@ -7,6 +7,7 @@ import { ImageIcon, Upload, RotateCw } from "lucide-react";
 import { getMediaPreview, listMediaAssets } from "@/api/media";
 import { isProjectID } from "@/components/projects/project";
 import { RequestError } from "@/lib/request";
+import { developmentMediaURL } from "@/lib/development-transport";
 import { flowError } from "@/components/generation/contracts";
 import {
   Dialog,
@@ -52,7 +53,7 @@ function MediaPreview({
           r.asset?.id !== id ||
           r.asset?.project_id !== projectID ||
           !r.url ||
-          !/^https?:\/\//.test(r.url) ||
+          (!/^https?:\/\//.test(r.url) && !developmentMediaURL(r.url)) ||
           !Number.isFinite(Date.parse(r.expires_at ?? "")) ||
           Date.parse(r.expires_at ?? "") <= Date.now()
         )

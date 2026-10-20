@@ -5,6 +5,7 @@ import {
   getCSRFToken,
   sessionCancellation,
 } from "@/lib/request";
+import { developmentJournal } from "@/lib/development-transport";
 import { getSession, listMySpaces } from "@/api/identity";
 import { readPromptDraft } from "@/api/promptEditor";
 import { requireSession } from "@/components/auth/contracts";
@@ -295,7 +296,7 @@ function inputOnly(branch: LocalBranch): LocalBranch | null {
     ackedSeq: -1,
   };
 }
-export const branchJournal = {
+const durableBranchJournal = {
   // An observed external identity change revokes eligibility immediately, even
   // when both the ensuing server read and durable cleanup are unavailable.
   invalidateObservedIdentity() {
@@ -304,7 +305,7 @@ export const branchJournal = {
     passiveRecovery = undefined;
     pendingStrongClear = true;
   },
-  async checkpoint() {
+  async checkpoint(): Promise<string | null> {
     return transaction<string | null>("readonly", (store, set) => {
       const req = store.get(fenceKey);
       req.onsuccess = () => set(req.result?.epoch ?? null);
@@ -602,6 +603,14 @@ export const branchJournal = {
       lease = next;
   },
 };
+
+// The development preview owns a separate journal; it never activates or clears
+// the authenticated account's durable fence or recovery branches.
+export const branchJournal = new Proxy(durableBranchJournal, {
+  get(target, property, receiver) {
+    return Reflect.get(developmentJournal() ?? target, property, receiver);
+  },
+});
 
 // Swag's optional string maps nil pointers to undefined on write; the server returns explicit nulls.
 export function draftRequest(draft: PromptDraft): API.PromptDraft {

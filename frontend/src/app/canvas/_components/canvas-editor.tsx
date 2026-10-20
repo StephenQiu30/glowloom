@@ -63,6 +63,7 @@ import {
   duplicateNode,
   isDraft,
   isEditableNode,
+  isMediaNode,
   requireCanvas,
   requireSaveResult,
   sameEditable,
@@ -81,6 +82,10 @@ import { RichGeneration } from "@/components/generation/rich-generation";
 import { CanvasNodeLayer } from "./canvas-node-layer";
 import { createHistory } from "./canvas-history";
 import { descendants, moveSelection } from "./canvas-render-model";
+import { reconcileGroupDrop } from "./canvas-grouping";
+import { CanvasSelectionToolbar } from "./canvas-selection-toolbar";
+import { CanvasMediaActions } from "./canvas-media-actions";
+import type { ImageOperation } from "./canvas-image-operations";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -134,6 +139,9 @@ const CanvasDirector = dynamic(
 const CanvasAIPanel = dynamic(() =>
   import("./canvas-ai-panel").then((m) => m.CanvasAIPanel),
 );
+const CanvasImageDialog = dynamic(() =>
+  import("./canvas-image-dialog").then((module) => module.CanvasImageDialog),
+);
 
 export function CanvasEditor({
   project: initialProject,
@@ -163,6 +171,10 @@ export function CanvasEditor({
     kind?: string;
   } | null>(null);
   const [upload, setUpload] = useState(false);
+  const [imageTool, setImageTool] = useState<{
+    node: Node;
+    kind: ImageOperation["kind"];
+  } | null>(null);
   const [preview, setPreview] = useState<Node | null>(null);
   const [base, setBaseState] = useState(initial);
   const savedBase = useRef(initial);
@@ -559,10 +571,17 @@ export function CanvasEditor({
     selectNode(group.id);
   }
   function ungroup() {
-    if (!current || current.node_type !== "group") return;
+    const selected = new Set(selectedIDs);
+    const groups = new Set(
+      local.current
+        .filter((n) => selected.has(n.id) && n.node_type === "group")
+        .map((n) => n.id),
+    );
     if (
       local.current.some(
-        (n) => n.parent_id === current.id && !isEditableNode(n),
+        (n) =>
+          (selected.has(n.id) || (n.parent_id && groups.has(n.parent_id))) &&
+          !isEditableNode(n),
       )
     ) {
       setMessage("分组包含只读成员，不能解除关系。");
@@ -570,7 +589,9 @@ export function CanvasEditor({
     }
     edit(
       local.current.map((n) =>
-        n.parent_id === current.id ? { ...n, parent_id: undefined } : n,
+        n.parent_id && (groups.has(n.parent_id) || selected.has(n.id))
+          ? { ...n, parent_id: undefined }
+          : n,
       ),
     );
   }
@@ -614,6 +635,25 @@ export function CanvasEditor({
           !chosen.has(e.target_node_id ?? ""),
       ),
     );
+  }
+  function removeSelection() {
+    if (readOnlyRef.current || busy.current || unconfirmed || conflict) return;
+    try {
+      let next = local.current;
+      for (const id of selectedIDs) next = removeCanvasNode(next, id);
+      const kept = new Set(next.map((node) => node.id));
+      // Validate the complete transaction before changing the local graph.
+      const nextEdges = localEdges.current.filter(
+        (edge) =>
+          kept.has(edge.source_node_id ?? "") &&
+          kept.has(edge.target_node_id ?? ""),
+      );
+      commandBatch(savedBase.current, next, { edges: nextEdges });
+      edit(next, undefined, nextEdges);
+      selectNode(undefined);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "无法移除所选节点。");
+    }
   }
   function draft(patch: Partial<Draft>) {
     const n = local.current.find((n) => n.id === selected);
@@ -784,10 +824,11 @@ export function CanvasEditor({
     if (!(await save())) throw new Error("采用结果尚未确认保存，请重试。");
     pendingAIText.current.delete(text);
   }
-  function addMaterials(assets: API.AssetSummary[]) {
+  function addMaterials(assets: API.AssetSummary[], source?: Node) {
+    if (readOnlyRef.current || privateInvalid.current) return false;
     if (local.current.length + assets.length > 2000) {
       setMessage("画布已达到 2000 个节点上限，请减少所选素材。");
-      return;
+      return false;
     }
     try {
       const added = assets.map((a, i) =>
@@ -805,12 +846,23 @@ export function CanvasEditor({
           n.y = limit(Math.round(y + Math.floor(i / 3) * 260));
         });
       }
+      if (source) {
+        const top =
+          Math.max(...local.current.map((n) => n.y + (n.height ?? 200))) + 64;
+        const row = Math.max(...added.map((n) => n.height ?? 200)) + 64;
+        added.forEach((node, index) => {
+          node.x = limit(Math.round(source.x + (index % 3) * 340));
+          node.y = limit(Math.round(top + Math.floor(index / 3) * row));
+        });
+      }
       edit([...local.current, ...added]);
       selectNode(added.at(-1)?.id);
       setMaterials(null);
       setMessage(`已添加 ${added.length} 个素材，请保存画布。`);
+      return true;
     } catch {
       setMessage("素材信息不完整或不属于当前项目，请重新读取后添加。");
+      return false;
     }
   }
   function copyNode(node: Node) {
@@ -1104,9 +1156,13 @@ export function CanvasEditor({
         },
       ]),
     );
+    if (d.nextX === d.x && d.nextY === d.y) return;
     edit(
-      local.current.map((node) =>
-        moved.has(node.id) ? { ...node, ...moved.get(node.id)! } : node,
+      reconcileGroupDrop(
+        local.current.map((node) =>
+          moved.has(node.id) ? { ...node, ...moved.get(node.id)! } : node,
+        ),
+        new Set(moved.keys()),
       ),
     );
   }
@@ -1925,7 +1981,6 @@ export function CanvasEditor({
       )}
       <div
         className="canvas-edit-actions"
-        data-multi={selectedIDs.length > 1}
         role="toolbar"
         aria-label="画布编辑操作"
         data-canvas-no-zoom
@@ -1952,37 +2007,62 @@ export function CanvasEditor({
         >
           重做
         </Button>
-        {selectedIDs.length > 1 && (
-          <>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={groupSelection}
-              disabled={selectedIDs.some(
-                (id) => !nodes.some((n) => n.id === id && isEditableNode(n)),
-              )}
-            >
-              组合所选节点
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={connectSelection}
-              disabled={
-                selectedIDs.length !== 2 ||
-                nodes.some(
-                  (n) => selectedIDs.includes(n.id) && !isEditableNode(n),
-                )
-              }
-            >
-              连接所选节点
-            </Button>
-            <Button size="sm" variant="outline" onClick={disconnectSelection}>
-              移除所选标注
-            </Button>
-          </>
-        )}
       </div>
+      {!readOnly &&
+        (selectedIDs.length > 1 ||
+          current?.node_type === "group" ||
+          (current && isMediaNode(current))) && (
+          <CanvasSelectionToolbar
+            rightInset={aiOpen ? effectiveAIWidth + 24 : 0}
+            nodes={nodes.filter((node) => selectedIDs.includes(node.id))}
+            containerRef={board}
+            canEdit={nodes
+              .filter((node) => selectedIDs.includes(node.id))
+              .every(isEditableNode)}
+            canRemove={
+              !saving &&
+              !unconfirmed &&
+              !conflict &&
+              nodes
+                .filter((node) => selectedIDs.includes(node.id))
+                .every(
+                  (node) =>
+                    isEditableNode(node) &&
+                    (!baseline.has(node.id) || !isDraft(node)),
+                )
+            }
+            onGroup={groupSelection}
+            onUngroup={ungroup}
+            onCopy={() => {
+              try {
+                insertClipboard(selectedClipboard());
+              } catch (error) {
+                setMessage((error as Error).message);
+              }
+            }}
+            onRemove={removeSelection}
+            onConnect={connectSelection}
+            onDisconnect={disconnectSelection}
+          >
+            {selectedIDs.length === 1 && current && isMediaNode(current) ? (
+              <CanvasMediaActions
+                node={current}
+                projectID={project.id}
+                disabled={
+                  saving ||
+                  unconfirmed ||
+                  !!conflict ||
+                  !isEditableNode(current)
+                }
+                onPreview={() => setPreview(current)}
+                onImageTool={(kind) => setImageTool({ node: current, kind })}
+                onCreate={() =>
+                  void addAdjacent(current, "image_generation", "right")
+                }
+              />
+            ) : undefined}
+          </CanvasSelectionToolbar>
+        )}
       <CanvasToolbar
         readOnly={readOnly}
         tool={tool}
@@ -2306,6 +2386,17 @@ export function CanvasEditor({
                 "文件已上传。当前画布支持图片、视频、音频及 3D 素材，请在项目素材中查看文件。",
               );
           }}
+        />
+      )}
+      {!readOnly && imageTool?.node.ref_id && (
+        <CanvasImageDialog
+          key={`${imageTool.node.id}/${imageTool.kind}`}
+          projectID={project.id}
+          assetID={imageTool.node.ref_id}
+          kind={imageTool.kind}
+          availableSlots={2000 - nodes.length}
+          onClose={() => setImageTool(null)}
+          onCreated={(assets) => addMaterials(assets, imageTool.node)}
         />
       )}
       {preview?.ref_id && (
