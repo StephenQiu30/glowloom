@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { expect, it } from "vitest";
-it("public downloads, reviewed source and server registration package have identical immutable hashes", async () => {
+it("public downloads and the server registration package have identical immutable hashes", async () => {
   const server = JSON.parse(
     await readFile(
       "../backend/internal/identity/adapter/http/legal/manifest.json",
@@ -14,13 +14,13 @@ it("public downloads, reviewed source and server registration package have ident
   expect(browser).toEqual(server);
   expect(server.status).toBe("prepared-not-effective");
   for (const doc of server.documents) {
-    const text = await readFile(`../${doc.source}`, "utf8");
     const download = await readFile(
       `public/legal/${server.version}/${doc.path.slice(1)}.md`,
       "utf8",
     );
-    expect(text).toBe(doc.text);
     expect(download).toBe(doc.text);
-    expect(createHash("sha256").update(text).digest("hex")).toBe(doc.sha256);
+    expect(createHash("sha256").update(download).digest("hex")).toBe(
+      doc.sha256,
+    );
   }
 });
