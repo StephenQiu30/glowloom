@@ -38,6 +38,21 @@ func TestSessionV2Tokens(t *testing.T) {
 	if err != nil || got.UserID != claims.UserID {
 		t.Fatalf("roundtrip %v", err)
 	}
+	parsed, err := jwt.Parse(raw, func(t *jwt.Token) (any, error) {
+		return &key.PublicKey, nil
+	}, jwt.WithValidMethods([]string{"RS256"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, ok := parsed.Claims.(jwt.MapClaims)
+	if !ok {
+		t.Fatal("claims type")
+	}
+	for _, name := range []string{"platform_role", "role", "team_role", "status", "email"} {
+		if _, present := body[name]; present {
+			t.Fatalf("access token carries %s", name)
+		}
+	}
 	if _, err = codec.Verify(raw, claims.ExpiresAt.Add(31*time.Second)); !errors.Is(err, app.ErrAccessExpired) {
 		t.Fatalf("expiry %v", err)
 	}
