@@ -74,6 +74,17 @@ it("滚轮以光标为锚点缩放，编辑区滚动不改变视口", () => {
   act(() => vi.advanceTimersByTime(140));
   expect(change).not.toHaveBeenCalled();
 });
+it("页滚动取画布实际高度，零输入不会启动保存计时", () => {
+  const { el, change } = canvas();
+  Object.defineProperty(el, "clientHeight", { configurable: true, value: 844 });
+  fireEvent.wheel(el, { deltaY: 1, deltaMode: 2 });
+  act(() => vi.advanceTimersByTime(140));
+  expect(change).toHaveBeenCalledExactlyOnceWith({ x: 0, y: -844, k: 1 });
+  change.mockClear();
+  fireEvent.wheel(el, { deltaX: 0, deltaY: 0 });
+  act(() => vi.advanceTimersByTime(140));
+  expect(change).not.toHaveBeenCalled();
+});
 it("框选提交世界坐标，取消框选不提交", () => {
   const { el, select } = canvas();
   fireEvent.pointerDown(el, { button: 0, clientX: 40, clientY: 50 });

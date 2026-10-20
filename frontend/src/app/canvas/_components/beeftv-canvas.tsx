@@ -15,6 +15,7 @@ import {
   selectionArea,
   resolveCanvasPointerIntent,
 } from "./canvas-viewport";
+import { canvasWheelViewport } from "./canvas-wheel";
 type CanvasBackgroundMode = "dots" | "lines" | "blank";
 type InfiniteCanvasProps = {
   interactive?: boolean;
@@ -221,10 +222,8 @@ export function BeefCanvas({
   const handleWheel = useCallback(
     (event: WheelEvent) => {
       const target = event.target instanceof Element ? event.target : null;
-      const deltaX = wheelDeltaToPixels(event.deltaX, event.deltaMode);
-      const deltaY = wheelDeltaToPixels(event.deltaY, event.deltaMode);
-      const absX = Math.abs(deltaX);
-      const absY = Math.abs(deltaY);
+      const absX = Math.abs(event.deltaX);
+      const absY = Math.abs(event.deltaY);
       const isPinchZoom = event.ctrlKey || event.metaKey;
       if (target?.closest(CANVAS_WHEEL_IGNORE_SELECTOR) && !isPinchZoom) {
         // 内部区域保留纵向滚动，但横向手势不能泄漏为 macOS 浏览器前进/后退。
@@ -234,43 +233,21 @@ export function BeefCanvas({
 
       // Ctrl/Meta + 滚轮在画布内始终由画布接管，避免浮层区域触发浏览器页面缩放。
       event.preventDefault();
-      interactingRef.current = true;
       const current = viewportRef.current;
-      if (!isPinchZoom) {
-        const panX = event.shiftKey && absX < 1 ? deltaY : deltaX;
-        scheduleViewportChange(
-          {
-            x: current.x - panX,
-            y: current.y - (event.shiftKey && absX < 1 ? 0 : deltaY),
-            k: current.k,
-          },
-          true,
-        );
-        return;
-      }
-
       const rect =
         containerRectRef.current ||
         containerRef.current?.getBoundingClientRect();
       if (!rect) return;
-      const mouseX = event.clientX - rect.left;
-      const mouseY = event.clientY - rect.top;
-      const factor = Math.max(
-        1 / 1.2,
-        Math.min(1.2, Math.pow(2, -deltaY * 0.01)),
+      const next = canvasWheelViewport(
+        current,
+        event,
+        { x: event.clientX - rect.left, y: event.clientY - rect.top },
+        containerRef.current?.clientHeight || rect.height || window.innerHeight,
       );
-      const newScale = clampScale(current.k * factor);
-      const worldX = (mouseX - current.x) / current.k;
-      const worldY = (mouseY - current.y) / current.k;
-
-      scheduleViewportChange(
-        {
-          x: mouseX - worldX * newScale,
-          y: mouseY - worldY * newScale,
-          k: newScale,
-        },
-        true,
-      );
+      if (next.x === current.x && next.y === current.y && next.k === current.k)
+        return;
+      interactingRef.current = true;
+      scheduleViewportChange(next, true);
     },
     [containerRef, scheduleViewportChange],
   );
@@ -684,12 +661,6 @@ function CanvasGrid({ mode }: { mode: CanvasBackgroundMode }) {
       }}
     />
   );
-}
-
-function wheelDeltaToPixels(delta: number, deltaMode: number) {
-  if (deltaMode === 1) return delta * 16;
-  if (deltaMode === 2) return delta * 720;
-  return delta;
 }
 
 function clampScale(scale: number) {
