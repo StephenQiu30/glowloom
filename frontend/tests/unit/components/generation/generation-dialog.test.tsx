@@ -26,6 +26,8 @@ const api = vi.hoisted(() => ({
   upload: vi.fn(),
   uploadResult: vi.fn(),
   drafts: vi.fn(),
+  branchList: vi.fn(),
+  branchWrite: vi.fn(),
 }));
 vi.mock("@/api/identity", () => ({
   getSession: api.identity,
@@ -58,8 +60,8 @@ vi.mock("@/components/generation/draft-save", async (importOriginal) => ({
     typeof import("@/components/generation/draft-save")
   >()),
   branchJournal: {
-    list: async () => [],
-    write: async () => {},
+    list: api.branchList,
+    write: api.branchWrite,
     remove: async () => true,
   },
 }));
@@ -101,6 +103,8 @@ function saved(body: API.DraftRequest) {
 }
 beforeEach(() => {
   vi.resetAllMocks();
+  api.branchList.mockResolvedValue([]);
+  api.branchWrite.mockResolvedValue(undefined);
   api.validate.mockResolvedValue({});
   api.uploadResult.mockResolvedValue({ found: false });
   current = { epoch: 0 };
@@ -979,4 +983,11 @@ it("恢复报价即使正文相同也必须核对独立草稿修订", async () =
   const confirm = await screen.findByRole("button", { name: "确认费用并生成" });
   expect(confirm.hasAttribute("disabled")).toBe(true);
   expect(api.confirm).not.toHaveBeenCalled();
+});
+
+it("画布共享富文本不读写本地恢复分支", async () => {
+  await compactWorkspace();
+  expect(api.branchList).not.toHaveBeenCalled();
+  expect(api.branchWrite).not.toHaveBeenCalled();
+  expect(screen.queryByText(/恢复.*分支/)).toBeNull();
 });

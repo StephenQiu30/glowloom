@@ -37,16 +37,9 @@ import {
   GenerationDialog,
   type GenerationSeed,
 } from "@/components/generation/generation-dialog";
-import {
-  emptyPromptDraft,
-  type PromptDraft,
-} from "@/components/generation/prompt-document";
+import type { PromptDraft } from "@/components/generation/prompt-document";
 import { getSession } from "@/api/identity";
-import {
-  branchJournal,
-  canonical,
-  type LocalBranch,
-} from "@/components/generation/draft-save";
+import { canonical } from "@/components/generation/draft-save";
 import {
   RequestError,
   getSessionGeneration,
@@ -71,7 +64,6 @@ import {
   removeCanvasNode,
   defaultViewport,
   isAnnotation,
-  type CanvasViewport,
   type Canvas,
   type Draft,
   type DraftNode,
@@ -129,7 +121,6 @@ type Pending = {
   nodes: Node[];
   body: API.CommandsInput;
   edges?: API.Edge[];
-  viewport?: CanvasViewport;
 };
 const limit = (value: number) => Math.max(-1e6, Math.min(1e6, value));
 const CanvasMaterialDialog = dynamic(() =>
@@ -159,7 +150,14 @@ export function CanvasEditor({
   const presentation = useProjectPresentation(initialProject);
   const project = presentation.project,
     creationSpace = useSpace();
+  const [graphReadOnlyReason, setGraphReadOnlyReason] = useState(
+    initial.read_only_reason ?? "",
+  );
+  const [identityPending, setIdentityPending] = useState(false);
+  const verifyIdentity = useRef<() => void>(() => {});
   const readOnly =
+    identityPending ||
+    !!graphReadOnlyReason ||
     project.status !== "active" ||
     !!presentation.error ||
     creationSpace.selected?.writable === false;
@@ -186,6 +184,7 @@ export function CanvasEditor({
   const savedBase = useRef(initial);
   const setBase = (value: Canvas) => {
     savedBase.current = value;
+    setGraphReadOnlyReason(value.read_only_reason ?? "");
     setBaseState(value);
   };
   const privateInvalid = useRef(false);
@@ -241,12 +240,15 @@ export function CanvasEditor({
   const baseline = new Map(base.nodes.map((n) => [n.id, n]));
   const dirty =
     canonical(edges) !== canonical(base.edges) ||
-    (!readOnly &&
-      canonical(camera) !== canonical(base.viewport ?? defaultViewport)) ||
     nodes.length !== base.nodes.length ||
-    nodes.some(
-      (n) => !baseline.has(n.id) || !sameEditable(n, baseline.get(n.id)!),
-    );
+    nodes.some((node) => {
+      const previous = baseline.get(node.id);
+      if (!previous) return true;
+      // A protected snapshot must not go through current-version config normalization.
+      return graphReadOnlyReason
+        ? canonical(node) !== canonical(previous)
+        : !sameEditable(node, previous);
+    });
   const current = nodes.find((n) => n.id === selected);
   const effectiveAIWidth = Math.min(aiWidth, Math.max(240, size.width - 84));
   const workspace = canvasWorkspaceRect(
@@ -254,42 +256,25 @@ export function CanvasEditor({
     size.height,
     aiOpen ? effectiveAIWidth : 0,
   );
-  const [replicaId] = useState(() => crypto.randomUUID());
-  const [recoveryContext, setRecoveryContext] = useState("");
-  const [recoveryBranches, setRecoveryBranches] = useState<LocalBranch[]>([]);
-  const recordRevision = useRef(0),
-    journal = useRef(Promise.resolve());
-  useEffect(() => {
-    let active = true;
-    getSession()
-      .then(async (identity) => {
-        if (!identity.actor?.id) throw new Error("session_invalid");
-        const context = `${identity.actor.id}/${project.id}/canvas/${initial.id}`;
-        const branches = await branchJournal.list(context);
-        if (active) {
-          setRecoveryContext(context);
-          setRecoveryBranches(
-            branches.filter(
-              (b) =>
-                b.replicaId !== replicaId && b.ackedSeq !== b.snapshot.localSeq,
-            ),
-          );
-        }
-      })
-      .catch(() => {
-        if (active)
-          setMessage("本地恢复待核验；请保持当前页面并确认登录状态。");
-      });
-    return () => {
-      active = false;
-    };
-  }, [project.id, initial.id, replicaId]);
   useEffect(() => {
     const suspend = () => {
       privateInvalid.current = true;
       request.current?.abort();
       setIdentityInvalid(true);
+      pending.current = null;
+      local.current = [];
+      localEdges.current = [];
+      savedBase.current = { ...savedBase.current, nodes: [], edges: [] };
+      setNodes([]);
+      setEdges([]);
+      setBaseState(savedBase.current);
+      history.reset();
       setGeneration(null);
+      setPreview(null);
+      setImageTool(null);
+      setMaterials(null);
+      setConflict(null);
+      setOpenToolID(undefined);
     };
     const channel =
       typeof BroadcastChannel !== "undefined"
@@ -297,73 +282,43 @@ export function CanvasEditor({
         : null;
     if (channel) channel.onmessage = suspend;
     window.addEventListener("glowloom:private-cache-cleared", suspend);
+    let owner: string | undefined;
+    let active = true;
     const verify = () => {
-      if (document.visibilityState === "visible" && recoveryContext) {
+      if (document.visibilityState === "visible") {
         void getSession()
           .then((identity) => {
-            if (
-              !identity.actor?.id ||
-              !recoveryContext.startsWith(identity.actor.id + "/")
-            )
-              suspend();
+            if (!active) return;
+            const actor = identity.actor?.id;
+            if (!actor || (owner && owner !== actor)) suspend();
+            else {
+              owner = actor;
+              setIdentityPending(false);
+            }
           })
-          .catch(suspend);
+          .catch((error: unknown) => {
+            if (!active) return;
+            if (
+              error instanceof RequestError &&
+              [401, 403].includes(error.status)
+            ) {
+              suspend();
+            } else {
+              setIdentityPending(true);
+            }
+          });
       }
     };
+    verifyIdentity.current = verify;
+    verify();
     document.addEventListener("visibilitychange", verify);
     return () => {
+      active = false;
       channel?.close();
       window.removeEventListener("glowloom:private-cache-cleared", suspend);
       document.removeEventListener("visibilitychange", verify);
     };
-  }, [recoveryContext]);
-  const persistCanvas = useCallback(async () => {
-    if (!recoveryContext || privateInvalid.current) return;
-    const revision = ++recordRevision.current;
-    const record: LocalBranch = {
-      contextKey: recoveryContext,
-      replicaId,
-      localRecordRevision: revision,
-      snapshot: {
-        contextKey: recoveryContext,
-        replicaId,
-        localSeq: revision,
-        draft: emptyPromptDraft(),
-      },
-      serverRevision: savedBase.current.revision,
-      ackedSeq: dirty || pending.current ? -1 : revision,
-      ownerState: {
-        base: savedBase.current,
-        nodes: structuredClone(local.current),
-        edges: structuredClone(localEdges.current),
-        viewport: { ...view.current },
-        pending: structuredClone(pending.current),
-      },
-    };
-    journal.current = journal.current
-      .catch(() => {})
-      .then(() =>
-        privateInvalid.current ? undefined : branchJournal.write(record),
-      );
-    try {
-      await journal.current;
-    } catch {
-      if (alive.current)
-        setMessage("本地恢复不可用；请保存到服务端后再关闭页面。");
-    }
-  }, [recoveryContext, replicaId, dirty]);
-  useEffect(() => {
-    void persistCanvas();
-  }, [
-    nodes,
-    edges,
-    camera,
-    base,
-    recoveryContext,
-    saving,
-    unconfirmed,
-    persistCanvas,
-  ]);
+  }, [history]);
 
   useEffect(() => {
     alive.current = true;
@@ -1242,7 +1197,11 @@ export function CanvasEditor({
         base.project_id,
         base.id,
       );
-      if (alive.current) setConflict({ server });
+      if (alive.current) {
+        if (server.read_only_reason)
+          setGraphReadOnlyReason(server.read_only_reason);
+        setConflict({ server });
+      }
     } catch {
       if (alive.current && !controller.signal.aborted)
         setMessage("未能读取服务端版本，本地编辑仍保留，请重试读取。");
@@ -1263,7 +1222,6 @@ export function CanvasEditor({
           !privateInvalid.current &&
           commandBatch(result, local.current, {
             edges: localEdges.current,
-            viewport: view.current,
           }).commands?.length
         )
           result = await saveOnce();
@@ -1295,19 +1253,18 @@ export function CanvasEditor({
       try {
         const frozen = structuredClone(local.current);
         const frozenEdges = structuredClone(localEdges.current);
-        const frozenViewport = { ...view.current };
         const body = commandBatch(base, frozen, {
           edges: frozenEdges,
-          viewport: frozenViewport,
         });
-        if (!body.commands?.length) return base;
+        if (!body.commands?.length) {
+          return base;
+        }
         operation = {
           key: crypto.randomUUID(),
           base,
           nodes: frozen,
           body,
           edges: frozenEdges,
-          viewport: frozenViewport,
         };
         pending.current = operation;
       } catch {
@@ -1320,7 +1277,6 @@ export function CanvasEditor({
     busy.current = true;
     setSaving(true);
     setMessage("");
-    await persistCanvas();
     const controller = new AbortController();
     request.current = controller;
     try {
@@ -1353,13 +1309,6 @@ export function CanvasEditor({
           : localEdges.current,
         false,
       );
-      if (
-        canonical(view.current) ===
-        canonical(
-          operation.viewport ?? operation.base.viewport ?? defaultViewport,
-        )
-      )
-        changeCamera(committed.viewport ?? defaultViewport);
       setBase(committed);
       setAutoSavePaused(false);
       pending.current = null;
@@ -1368,7 +1317,21 @@ export function CanvasEditor({
       return committed;
     } catch (error) {
       if (!alive.current || controller.signal.aborted) return;
-      if (error instanceof RequestError && error.code === "revision_conflict") {
+      if (
+        error instanceof RequestError &&
+        error.code === "canvas_graph_read_only"
+      ) {
+        pending.current = null;
+        setUnconfirmed(false);
+        setAutoSavePaused(true);
+        setGraphReadOnlyReason(error.code);
+        setMessage(
+          "画布包含尚未兼容的数据，已停止编辑。当前未保存内容仅留在此页面。",
+        );
+      } else if (
+        error instanceof RequestError &&
+        error.code === "revision_conflict"
+      ) {
         pending.current = null;
         setUnconfirmed(false);
         setConflict({ server: null });
@@ -1405,6 +1368,7 @@ export function CanvasEditor({
   useEffect(() => {
     if (
       !dirty ||
+      readOnly ||
       saving ||
       autoSavePaused ||
       unconfirmed ||
@@ -1426,84 +1390,8 @@ export function CanvasEditor({
     unconfirmed,
     conflict,
     identityInvalid,
+    readOnly,
   ]);
-  async function recoverCanvas(branch: LocalBranch) {
-    if (readOnlyRef.current) return;
-    if (busy.current || privateInvalid.current) return;
-    if (pending.current) {
-      setMessage("请先重试原保存，确认结果后再恢复其他分支。");
-      return;
-    }
-    const expectedNodes = local.current;
-    const expectedEdges = localEdges.current;
-    const expectedCamera = view.current;
-    busy.current = true;
-    setSaving(true);
-    try {
-      const value = branch.ownerState as {
-        base: Canvas;
-        nodes: Node[];
-        pending: Pending | null;
-        edges?: API.Edge[];
-        viewport?: CanvasViewport;
-      };
-      let baseline = requireCanvas(value.base, project.id, initial.id);
-      commandBatch(baseline, value.nodes, {
-        edges: value.edges ?? baseline.edges,
-        viewport: value.viewport ?? baseline.viewport,
-      });
-      if (value.pending) {
-        if (
-          canonical(value.pending.body) !==
-          canonical(
-            commandBatch(value.pending.base, value.pending.nodes, {
-              edges: value.pending.edges,
-              viewport: value.pending.viewport,
-            }),
-          )
-        )
-          throw new Error("恢复请求不完整");
-        const replay = await applyCanvasCommands(
-          { id: initial.id },
-          value.pending.body,
-          { headers: { "Idempotency-Key": value.pending.key } },
-        );
-        baseline = requireSaveResult(
-          replay,
-          value.pending.base,
-          value.pending.nodes,
-          value.pending.body,
-        );
-      }
-      const server = requireCanvas(
-        await getCanvas({ id: initial.id }),
-        project.id,
-        initial.id,
-      );
-      if (!alive.current || privateInvalid.current) return;
-      if (
-        local.current !== expectedNodes ||
-        localEdges.current !== expectedEdges ||
-        view.current !== expectedCamera
-      )
-        throw new Error("恢复期间有新编辑，未覆盖；原分支仍保留。");
-      history.reset();
-      edit(value.nodes, undefined, value.edges ?? baseline.edges, false);
-      changeCamera(value.viewport ?? baseline.viewport ?? defaultViewport);
-      if (server.revision !== baseline.revision) {
-        setConflict({ server });
-        setMessage("已恢复所选本地分支，请处理服务端冲突。");
-      } else setBase(server);
-    } catch (e) {
-      if (alive.current && !privateInvalid.current)
-        setMessage(
-          e instanceof Error ? e.message : "本地恢复失败；原分支仍保留。",
-        );
-    } finally {
-      busy.current = false;
-      if (alive.current) setSaving(false);
-    }
-  }
   function seedForNode(node: DraftNode): GenerationSeed {
     const composer = nodePromptDraft(node);
     const sources = referenceSources(nodes);
@@ -1552,6 +1440,8 @@ export function CanvasEditor({
           }
         },
         flush: async () => {
+          if (privateInvalid.current || readOnlyRef.current)
+            throw new Error("画布保存尚未确认，请重新打开画布。");
           const existing = local.current.find((n) => n.id === ownerNode);
           if (!existing || !isDraft(existing))
             throw new Error("画布节点已不可编辑。");
@@ -1687,11 +1577,10 @@ export function CanvasEditor({
   }, []);
   function resolveConflict(discard: boolean) {
     const server = conflict?.server;
-    if (!server) return;
+    if (!server || (!discard && server.read_only_reason)) return;
     if (discard) {
       history.reset();
       edit(server.nodes, undefined, server.edges, false);
-      changeCamera(server.viewport ?? defaultViewport);
       selectNode(undefined);
     } else {
       const own = new Map(local.current.map((n) => [n.id, n]));
@@ -1765,7 +1654,9 @@ export function CanvasEditor({
       <Empty>
         <EmptyHeader>
           <EmptyTitle>请重新打开画布</EmptyTitle>
-          <EmptyDescription>登录状态已变化，本地编辑已保留。</EmptyDescription>
+          <EmptyDescription>
+            登录状态已变化，当前页面数据已清除。请重新登录后读取数据库中的画布。
+          </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
           <Button asChild>
@@ -1794,9 +1685,13 @@ export function CanvasEditor({
           nodes={nodes}
           status={
             readOnly
-              ? project.status === "archived"
-                ? "已归档 · 只读"
-                : "项目资料未确认 · 只读"
+              ? graphReadOnlyReason
+                ? "画布数据待兼容 · 只读"
+                : identityPending
+                  ? "登录状态待核验 · 只读"
+                  : project.status === "archived"
+                    ? "已归档 · 只读"
+                    : "项目资料未确认 · 只读"
               : status
           }
           saveLabel={
@@ -1812,6 +1707,17 @@ export function CanvasEditor({
         />
       </header>
       {message && <FeedbackToast message={message} tone="info" />}
+      {identityPending && (
+        <section
+          className="canvas-feedback flex flex-wrap items-center gap-3 text-sm"
+          aria-label="登录状态待核验"
+        >
+          <p>暂时无法核验登录状态，当前未保存内容仍在页面内存。</p>
+          <Button variant="outline" onClick={() => verifyIdentity.current()}>
+            重新核验登录
+          </Button>
+        </section>
+      )}
       {presentation.error && (
         <FeedbackToast
           message={presentation.error}
@@ -1859,16 +1765,27 @@ export function CanvasEditor({
           {conflict.server && (
             <div className="max-h-40 overflow-auto rounded border p-3">
               <p className="mb-2 font-medium">服务端草稿</p>
-              {conflict.server.nodes.filter(isDraft).map((n) => (
-                <p key={n.id} className="break-words whitespace-pre-wrap">
-                  {n.title} · {n.config.draft.aspect_ratio} ·{" "}
-                  {n.config.draft.candidate_count} 个候选
-                  <br />
-                  {n.config.draft.prompt || "（空提示词）"}
-                  <br />
-                  {n.config.draft.negative_prompt}
-                </p>
-              ))}
+              {conflict.server.read_only_reason ? (
+                <>
+                  <p>
+                    服务端数据待兼容，当前仅可查看。载入前请明确放弃本地未保存编辑。
+                  </p>
+                  {conflict.server.nodes.map((node) => (
+                    <p key={node.id}>{node.title}</p>
+                  ))}
+                </>
+              ) : (
+                conflict.server.nodes.filter(isDraft).map((n) => (
+                  <p key={n.id} className="break-words whitespace-pre-wrap">
+                    {n.title} · {n.config.draft.aspect_ratio} ·{" "}
+                    {n.config.draft.candidate_count} 个候选
+                    <br />
+                    {n.config.draft.prompt || "（空提示词）"}
+                    <br />
+                    {n.config.draft.negative_prompt}
+                  </p>
+                ))
+              )}
             </div>
           )}
           <div className="flex flex-wrap gap-2">
@@ -1876,6 +1793,7 @@ export function CanvasEditor({
               <>
                 <Button
                   variant="outline"
+                  disabled={!!conflict.server.read_only_reason}
                   onClick={() => resolveConflict(false)}
                 >
                   保留本地编辑，以版本 {conflict.server.revision} 继续
@@ -1969,75 +1887,101 @@ export function CanvasEditor({
           <CanvasNodeLayer
             containerRef={board}
             nodes={nodes}
-            edges={showEdges ? referenceEdges(nodes, edges) : []}
+            edges={
+              showEdges
+                ? graphReadOnlyReason
+                  ? edges
+                  : referenceEdges(nodes, edges)
+                : []
+            }
             viewport={{ x: camera.x, y: camera.y, k: camera.zoom }}
             size={size}
             selectedIDs={selectedIDs}
-            renderNode={(node, liveZoom) => (
-              <CanvasNode
-                key={node.id}
-                node={node}
-                projectID={project.id}
-                selected={selectedIDs.includes(node.id)}
-                zoom={liveZoom}
-                onResize={(size) =>
-                  update(node.id, {
-                    ...size,
-                    x: limit(size.x),
-                    y: limit(size.y),
-                  })
-                }
-                onResizePreview={() =>
-                  board.current?.dispatchEvent(
-                    new Event(CANVAS_NODE_DRAG_EVENT),
-                  )
-                }
-                onSelect={(additive) => {
-                  if (!additive && selectedIDs.includes(node.id))
-                    setSelected(node.id);
-                  else selectNode(node.id, additive);
-                }}
-                addingAdjacent={addingAdjacent}
-                onAddAdjacent={
-                  !readOnly && isEditableNode(node)
-                    ? (kind, side, point) =>
-                        void addAdjacent(node, kind, side, point)
-                    : undefined
-                }
-                onConnect={(targetID) => connectNodes(node.id, targetID)}
-                onEditTitle={() => {
-                  if (readOnly) return;
-                  selectNode(node.id);
-                  if (node.node_type === "director") setOpenToolID(node.id);
-                  else setDetails(true);
-                }}
-                onMove={(x, y) => {
-                  try {
-                    edit(
-                      moveSelection(
-                        local.current,
-                        new Set([node.id]),
-                        x - node.x,
-                        y - node.y,
-                      ),
-                    );
-                  } catch (error) {
-                    setMessage((error as Error).message);
+            renderNode={(node, liveZoom) =>
+              graphReadOnlyReason ? (
+                <article
+                  key={node.id}
+                  data-node-id={node.id}
+                  className="absolute rounded-lg border bg-card p-4 text-card-foreground"
+                  style={{
+                    left: node.x,
+                    top: node.y,
+                    width: node.width ?? 288,
+                    minHeight: 100,
+                  }}
+                >
+                  <h2 className="truncate">{node.title}</h2>
+                  <p className="text-sm text-muted-foreground">
+                    节点数据待兼容，当前仅可查看。
+                  </p>
+                </article>
+              ) : (
+                <CanvasNode
+                  key={node.id}
+                  node={node}
+                  projectID={project.id}
+                  readOnly={readOnly}
+                  selected={selectedIDs.includes(node.id)}
+                  zoom={liveZoom}
+                  onResize={(size) =>
+                    update(node.id, {
+                      ...size,
+                      x: limit(size.x),
+                      y: limit(size.y),
+                    })
                   }
-                }}
-                onDragStart={(event) => beginDrag(event, node)}
-                onDragMove={moveDrag}
-                onDragEnd={endDrag}
-                onDuplicate={() => copyNode(node)}
-                canRemove={
-                  (!baseline.has(node.id) || !isDraft(node)) &&
-                  !saving &&
-                  !unconfirmed &&
-                  !conflict
-                }
-                onRemove={() => removeLocal(node)}
-              />
-            )}
+                  onResizePreview={() =>
+                    board.current?.dispatchEvent(
+                      new Event(CANVAS_NODE_DRAG_EVENT),
+                    )
+                  }
+                  onSelect={(additive) => {
+                    if (!additive && selectedIDs.includes(node.id))
+                      setSelected(node.id);
+                    else selectNode(node.id, additive);
+                  }}
+                  addingAdjacent={addingAdjacent}
+                  onAddAdjacent={
+                    !readOnly && isEditableNode(node)
+                      ? (kind, side, point) =>
+                          void addAdjacent(node, kind, side, point)
+                      : undefined
+                  }
+                  onConnect={(targetID) => connectNodes(node.id, targetID)}
+                  onEditTitle={() => {
+                    if (readOnly) return;
+                    selectNode(node.id);
+                    if (node.node_type === "director") setOpenToolID(node.id);
+                    else setDetails(true);
+                  }}
+                  onMove={(x, y) => {
+                    try {
+                      edit(
+                        moveSelection(
+                          local.current,
+                          new Set([node.id]),
+                          x - node.x,
+                          y - node.y,
+                        ),
+                      );
+                    } catch (error) {
+                      setMessage((error as Error).message);
+                    }
+                  }}
+                  onDragStart={(event) => beginDrag(event, node)}
+                  onDragMove={moveDrag}
+                  onDragEnd={endDrag}
+                  onDuplicate={() => copyNode(node)}
+                  canRemove={
+                    (!baseline.has(node.id) || !isDraft(node)) &&
+                    !saving &&
+                    !unconfirmed &&
+                    !conflict
+                  }
+                  onRemove={() => removeLocal(node)}
+                />
+              )
+            }
           />
         </ViewportSurface>
       </CanvasContextMenu>
@@ -2063,7 +2007,11 @@ export function CanvasEditor({
           variant="outline"
           aria-label="撤销编辑"
           disabled={
-            saving || unconfirmed || !!conflict || !history.canUndo(base)
+            readOnly ||
+            saving ||
+            unconfirmed ||
+            !!conflict ||
+            !history.canUndo(base)
           }
           onClick={() => stepHistory("undo")}
         >
@@ -2074,7 +2022,11 @@ export function CanvasEditor({
           variant="outline"
           aria-label="重做编辑"
           disabled={
-            saving || unconfirmed || !!conflict || !history.canRedo(base)
+            readOnly ||
+            saving ||
+            unconfirmed ||
+            !!conflict ||
+            !history.canRedo(base)
           }
           onClick={() => stepHistory("redo")}
         >
@@ -2301,39 +2253,6 @@ export function CanvasEditor({
             )}
           </CanvasNodePanel>
         )}
-      {recoveryBranches.length > 0 && (
-        <div
-          className="fixed bottom-4 left-4 z-40 max-w-lg space-y-2 rounded-lg border bg-background p-4"
-          role="status"
-        >
-          <p>发现 {recoveryBranches.length} 份未同步画布分支</p>
-          {recoveryBranches.map((branch) => (
-            <div key={branch.replicaId} className="flex gap-2">
-              <span>基线 r{branch.serverRevision}</span>
-              <Button
-                disabled={saving}
-                onClick={() => void recoverCanvas(branch)}
-              >
-                恢复此分支
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  void branchJournal.remove(branch).then((removed) => {
-                    if (removed)
-                      setRecoveryBranches((v) =>
-                        v.filter((b) => b.replicaId !== branch.replicaId),
-                      );
-                    else setMessage("该分支已有新修改，未删除。");
-                  });
-                }}
-              >
-                丢弃此分支
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
       {!readOnly && aiOpen && (
         <div
           className="canvas-ai-shell"

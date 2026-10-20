@@ -2,7 +2,6 @@ import type { RequestOptions } from "@/lib/request";
 import { RequestError } from "@/lib/request";
 import type { Project } from "@/components/projects/project";
 import { canonical } from "@/components/generation/draft-save";
-import type { LocalBranch } from "@/components/generation/draft-save";
 import {
   createDraftNode,
   createMediaNode,
@@ -16,53 +15,7 @@ import {
 
 export const previewActor = "f0000000-0000-4000-8000-000000000001";
 export const previewScope = "f0000000-0000-4000-8000-000000000002";
-const branchKey = "glowloom.canvas-preview.branches.v1";
-export const previewJournal = {
-  invalidateObservedIdentity() {},
-  checkpoint: async () => null,
-  activateAccount: async () => {},
-  async list(context: string): Promise<LocalBranch[]> {
-    return (
-      JSON.parse(localStorage.getItem(branchKey) ?? "[]") as LocalBranch[]
-    ).filter((branch) => branch.contextKey === context);
-  },
-  async write(branch: LocalBranch) {
-    if (!branch.contextKey.startsWith(`${previewActor}/`))
-      throw new Error("Invalid preview journal scope");
-    const values = JSON.parse(
-      localStorage.getItem(branchKey) ?? "[]",
-    ) as LocalBranch[];
-    localStorage.setItem(
-      branchKey,
-      JSON.stringify([
-        ...values.filter(
-          (value) =>
-            value.contextKey !== branch.contextKey ||
-            value.replicaId !== branch.replicaId,
-        ),
-        branch,
-      ]),
-    );
-  },
-  async remove(branch: LocalBranch) {
-    const values = JSON.parse(
-      localStorage.getItem(branchKey) ?? "[]",
-    ) as LocalBranch[];
-    const kept = values.filter(
-      (value) =>
-        value.contextKey !== branch.contextKey ||
-        value.replicaId !== branch.replicaId ||
-        value.localRecordRevision !== branch.localRecordRevision,
-    );
-    localStorage.setItem(branchKey, JSON.stringify(kept));
-    return kept.length < values.length;
-  },
-  async clear() {
-    localStorage.removeItem(branchKey);
-  },
-};
 const projectID = "f0000000-0000-4000-8000-000000000003";
-const key = "glowloom.canvas-preview.v1";
 type Asset = { asset: API.AssetSummary; item: string; url?: string };
 type PreviewResult = Canvas & { results: API.CommandResult[] };
 type Receipt = { key: string; body: string; result: PreviewResult };
@@ -306,63 +259,20 @@ export function applyPreviewCommands(
   };
   return { ...next, results: (body.commands ?? []).map(() => ({ ok: true })) };
 }
-function fileStore<T>(
-  mode: IDBTransactionMode,
-  action: (store: IDBObjectStore) => IDBRequest<T>,
-): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const open = indexedDB.open("glowloom-canvas-preview", 1);
-    open.onupgradeneeded = () => open.result.createObjectStore("files");
-    open.onerror = () => reject(open.error);
-    open.onsuccess = () => {
-      const db = open.result,
-        tx = db.transaction("files", mode),
-        result = action(tx.objectStore("files"));
-      tx.oncomplete = () => {
-        db.close();
-        resolve(result.result);
-      };
-      tx.onerror = () => {
-        db.close();
-        reject(tx.error);
-      };
-      tx.onabort = () => {
-        db.close();
-        reject(tx.error);
-      };
-    };
-  });
-}
 export class CanvasPreviewData {
   state: State;
   project: Project;
   private urls = new Map<string, string>();
+  private files = new Map<string, File>();
   private disposed = false;
   constructor(state: State) {
     this.state = state;
     this.project = { ...previewProject(), canvas_id: state.canvas.id };
   }
   static load() {
-    try {
-      const value = JSON.parse(
-        localStorage.getItem(key) ?? "null",
-      ) as State | null;
-      if (
-        value?.canvas &&
-        Array.isArray(value.assets) &&
-        Array.isArray(value.receipts)
-      ) {
-        requireCanvas(value.canvas, projectID, value.canvas.id);
-        return new CanvasPreviewData(value);
-      }
-    } catch {}
     return new CanvasPreviewData(initialPreviewState());
   }
-  persist() {
-    localStorage.setItem(key, JSON.stringify(this.state));
-  }
   private commit(next: State) {
-    localStorage.setItem(key, JSON.stringify(next));
     this.state = next;
   }
   activate() {
@@ -374,16 +284,15 @@ export class CanvasPreviewData {
     this.urls.clear();
   }
   async reset(count: number) {
-    await fileStore("readwrite", (store) => store.clear());
+    this.dispose();
+    this.files.clear();
+    this.activate();
     this.commit(initialPreviewState(count));
-    await previewJournal.clear();
   }
   async media(asset: Asset) {
     if (asset.url) return new URL(asset.url, location.origin).href;
     if (!this.urls.has(asset.asset.id!)) {
-      const file = await fileStore<File>("readonly", (store) =>
-        store.get(asset.asset.id!),
-      );
+      const file = this.files.get(asset.asset.id!);
       if (!file) throw new RequestError("preview_asset_missing", 404);
       if (this.disposed)
         throw new DOMException("Preview disposed", "AbortError");
@@ -543,7 +452,7 @@ export class CanvasPreviewData {
           revision: 1,
         },
       };
-      await fileStore("readwrite", (store) => store.put(file, id));
+      this.files.set(id, file);
       try {
         this.commit({
           ...this.state,
@@ -554,7 +463,7 @@ export class CanvasPreviewData {
           ],
         });
       } catch (error) {
-        await fileStore("readwrite", (store) => store.delete(id));
+        this.files.delete(id);
         throw error;
       }
       return { asset: item.asset };
@@ -604,10 +513,7 @@ export class CanvasPreviewData {
     if (itemID) {
       const item = this.state.assets.find((item) => item.item === itemID);
       if (!item) throw new RequestError("not_found", 404);
-      if (!item.url)
-        return fileStore<File>("readonly", (store) =>
-          store.get(item.asset.id!),
-        );
+      if (!item.url) return this.files.get(item.asset.id!);
       // eslint-disable-next-line no-restricted-syntax -- Reads a checked-in /design/ fixture, never a business API.
       const response = await fetch(item.url, {
         signal: options.signal as AbortSignal,

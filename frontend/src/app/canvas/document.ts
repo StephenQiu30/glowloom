@@ -31,6 +31,7 @@ export type Canvas = {
   id: string;
   project_id: string;
   revision: number;
+  read_only_reason?: string;
   nodes: Node[];
   edges: API.Edge[];
   viewport?: CanvasViewport;
@@ -127,6 +128,7 @@ export function requireCanvas(
     )
       throw new RequestError("invalid_receipt");
     if (
+      !c.read_only_reason &&
       isDraft(n) &&
       (n.node_action !== "generate" ||
         !!n.ref_id ||
@@ -163,7 +165,11 @@ export function requireCanvas(
       throw new RequestError("invalid_receipt");
     edgeIDs.add(edge.id);
   }
-  return { ...c, nodes: c.nodes.map(normalizeNode) } as Canvas;
+  // Protected history is an opaque read snapshot; never normalize unknown config.
+  return {
+    ...c,
+    nodes: c.read_only_reason ? c.nodes : c.nodes.map(normalizeNode),
+  } as Canvas;
 }
 export function createDraftNode(
   kind: DraftNode["node_type"],
@@ -334,6 +340,8 @@ export function commandBatch(
   nodes: Node[],
   options: GraphOptions = {},
 ): API.CommandsInput {
+  if (base.read_only_reason)
+    throw new RequestError("canvas_graph_read_only", 422);
   if (nodes.length > 2000) throw new RequestError("batch_too_large");
   const byID = new Map(base.nodes.map((n) => [n.id, n]));
   const commands: API.Command[] = [];

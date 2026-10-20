@@ -46,6 +46,7 @@ export function CanvasNode({
   onAddAdjacent,
   onConnect,
   addingAdjacent = false,
+  readOnly = false,
 }: {
   node: Node;
   projectID?: string;
@@ -68,6 +69,7 @@ export function CanvasNode({
   onRemove?: () => void;
   canRemove?: boolean;
   addingAdjacent?: boolean;
+  readOnly?: boolean;
   onConnect?: (targetID: string) => void;
   onAddAdjacent?: (
     kind: "text" | "image_generation" | "video_generation",
@@ -165,7 +167,7 @@ export function CanvasNode({
       onResizePreview();
     } else onResize(d.next);
   }
-  const editable = isEditableNode(node);
+  const editable = !readOnly && isEditableNode(node);
   const Icon = node.node_type.includes("video")
     ? VideoIcon
     : node.node_type === "audio"

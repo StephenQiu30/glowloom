@@ -13,7 +13,7 @@ import {
   isEditableNode,
 } from "@/app/canvas/document";
 beforeEach(() => localStorage.clear());
-it("Mock保存通过正式命令与回执验证，刷新保留编辑与原幂等回执", async () => {
+it("Mock保存通过正式命令与回执验证，同页面保留幂等回执而重开回到示例", async () => {
   const state = initialPreviewState(0),
     data = new CanvasPreviewData(state);
   const nodes = [createResourceNode("text", { x: 80, y: 160 })];
@@ -34,14 +34,15 @@ it("Mock保存通过正式命令与回执验证，刷新保留编辑与原幂等
       body,
     ).nodes[0].config.text,
   ).toBe("中文 Mock 保存");
-  const reopened = CanvasPreviewData.load();
-  expect(reopened.state.canvas.nodes[0].config.text).toBe("中文 Mock 保存");
+  const reopened = data;
+  expect(CanvasPreviewData.load().state.canvas.revision).toBe(1);
+  expect(localStorage.getItem("glowloom.canvas-preview.v1")).toBeNull();
   expect(await reopened.request(url, options)).toEqual(result);
   await expect(
     reopened.request(url, { ...options, data: { ...body, commands: [] } }),
   ).rejects.toThrow("idempotency_conflict");
 });
-it("Mock上传回执刷新后同键同体重放，异体拒绝", async () => {
+it("Mock上传回执仅在当前内存中同键同体重放，异体拒绝", async () => {
   const state = initialPreviewState();
   const file = new File(["fixture"], "test.png", { type: "image/png" });
   Object.defineProperty(file, "arrayBuffer", {
@@ -55,7 +56,6 @@ it("Mock上传回执刷新后同键同体重放，异体拒绝", async () => {
     },
   ];
   const data = new CanvasPreviewData(state);
-  data.persist();
   const form = new FormData();
   form.set("file", file);
   const options = {
@@ -64,7 +64,7 @@ it("Mock上传回执刷新后同键同体重放，异体拒绝", async () => {
     headers: { "Idempotency-Key": "upload-key" },
   };
   expect(
-    await CanvasPreviewData.load().request(
+    await data.request(
       `/api/projects/${state.canvas.project_id}/media/uploads`,
       options,
     ),
@@ -123,29 +123,31 @@ it("Mock新增媒体的回执保持可编辑，等同JSON接口清除undefined�
   const result = applyPreviewCommands(state.canvas, body);
   expect(isEditableNode(result.nodes[0])).toBe(true);
 });
-it("Mock持久化失败不能被同键重试误报为已保存", async () => {
-  const state = initialPreviewState(0),
-    data = new CanvasPreviewData(state);
-  data.persist();
-  const before = localStorage.getItem("glowloom.canvas-preview.v1");
-  const body = commandBatch(state.canvas, [
-    createResourceNode("text", { x: 0, y: 0 }),
-  ]);
-  const options = {
-    method: "POST",
-    data: body,
-    headers: { "Idempotency-Key": "retry" },
-  };
-  const url = `/api/canvases/${state.canvas.id}/commands`;
+it("浏览器存储被禁用时Mock仍可编辑且不写业务缓存", async () => {
+  const read = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+    throw new DOMException("blocked", "SecurityError");
+  });
   const write = vi
     .spyOn(Storage.prototype, "setItem")
-    .mockImplementationOnce(() => {
-      throw new DOMException("full", "QuotaExceededError");
+    .mockImplementation(() => {
+      throw new DOMException("blocked", "SecurityError");
     });
-  await expect(data.request(url, options)).rejects.toThrow("full");
-  expect(localStorage.getItem("glowloom.canvas-preview.v1")).toBe(before);
-  expect(data.state.canvas.revision).toBe(1);
-  await data.request(url, options);
-  expect(CanvasPreviewData.load().state.canvas.nodes).toHaveLength(1);
-  write.mockRestore();
+  try {
+    const data = CanvasPreviewData.load();
+    const body = commandBatch(data.state.canvas, [
+      ...data.state.canvas.nodes,
+      createResourceNode("text", { x: 0, y: 0 }),
+    ]);
+    await data.request(`/api/canvases/${data.state.canvas.id}/commands`, {
+      method: "POST",
+      data: body,
+      headers: { "Idempotency-Key": "memory" },
+    });
+    expect(data.state.canvas.revision).toBe(2);
+    expect(write).not.toHaveBeenCalled();
+    expect(read).not.toHaveBeenCalled();
+  } finally {
+    read.mockRestore();
+    write.mockRestore();
+  }
 });

@@ -628,23 +628,24 @@ function EditorWorkspace({
         changed: updateStatus,
       });
     }
-    branchJournal
-      .list(contextKey)
-      .then((found) => {
-        if (alive.current)
-          setBranches(
-            found.filter(
-              (b) =>
-                b.replicaId !== replicaId &&
-                (b.pendingSave ||
-                  b.pendingSubmission ||
-                  b.ackedSeq !== b.snapshot.localSeq),
-            ),
-          );
-      })
-      .catch(() => {
-        if (alive.current) setSaveState("本地恢复不可用");
-      });
+    if (!canvas)
+      branchJournal
+        .list(contextKey)
+        .then((found) => {
+          if (alive.current)
+            setBranches(
+              found.filter(
+                (b) =>
+                  b.replicaId !== replicaId &&
+                  (b.pendingSave ||
+                    b.pendingSubmission ||
+                    b.ackedSeq !== b.snapshot.localSeq),
+              ),
+            );
+        })
+        .catch(() => {
+          if (alive.current) setSaveState("本地恢复不可用");
+        });
     return () => {
       alive.current = false;
       if (timer.current) clearTimeout(timer.current);

@@ -13,7 +13,6 @@ import {
   previewSession,
   previewSpace,
   previewScope,
-  previewJournal,
 } from "./data";
 
 const CanvasEditor = dynamic(() =>
@@ -22,25 +21,17 @@ const CanvasEditor = dynamic(() =>
 export function CanvasPreview() {
   const [data, setData] = useState<CanvasPreviewData | null>(null);
   const [error, setError] = useState("");
+  const [epoch, setEpoch] = useState(0);
   const [session] = useState(previewSession);
   const retained = useRef<CanvasPreviewData | null>(null);
   useLayoutEffect(() => {
     if (process.env.NODE_ENV !== "development") return;
     const source = retained.current ?? CanvasPreviewData.load();
     retained.current = source;
-    try {
-      source.persist();
-    } catch {
-      queueMicrotask(() =>
-        setError("浏览器本地存储不可用，请允许存储后刷新预览。"),
-      );
-      return;
-    }
     source.activate();
     const remove = installDevelopmentTransport({
       matches: (path) => path === "/canvas/preview",
       request: (url, options) => source.request(url, options),
-      journal: previewJournal,
     });
     setCreationScope(previewScope);
     let active = true;
@@ -57,9 +48,9 @@ export function CanvasPreview() {
   async function reset(count: number) {
     try {
       await data?.reset(count);
-      window.location.reload();
+      setEpoch((n) => n + 1);
     } catch {
-      setError("无法重置本地演示数据，请检查浏览器存储。");
+      setError("无法重置演示数据，请重新打开预览。");
     }
   }
   if (!data)
@@ -87,7 +78,7 @@ export function CanvasPreview() {
             aria-label="Mock预览状态"
           >
             <strong>Mock 数据</strong>
-            <span>仅保存在本浏览器 · 不写入真实项目</span>
+            <span>仅当前页面内存 · 刷新重置 · 不写入真实项目</span>
             <Button size="xs" variant="outline" onClick={() => void reset(3)}>
               重置示例
             </Button>
@@ -107,6 +98,7 @@ export function CanvasPreview() {
           </div>
           <div className="min-h-0 flex-1">
             <CanvasEditor
+              key={epoch}
               project={data.project}
               initial={structuredClone(data.state.canvas)}
             />

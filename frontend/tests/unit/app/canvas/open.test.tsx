@@ -12,9 +12,12 @@ import { RequestError } from "@/lib/request";
 import type { Node } from "@/app/canvas/document";
 const api = vi.hoisted(() => ({
   project: vi.fn(),
+  identity: vi.fn(),
   canvas: vi.fn(),
   save: vi.fn(),
   branches: vi.fn(),
+  write: vi.fn(),
+  remove: vi.fn(),
   rich: vi.fn(),
   preview: vi.fn(),
   flushResolved: vi.fn(),
@@ -79,14 +82,14 @@ vi.mock("@/components/generation/rich-generation", () => ({
   },
 }));
 vi.mock("@/api/identity", () => ({
-  getSession: async () => ({ actor: { id: "actor" } }),
+  getSession: api.identity,
 }));
 vi.mock("@/components/generation/draft-save", async (original) => ({
   ...(await original<typeof import("@/components/generation/draft-save")>()),
   branchJournal: {
     list: api.branches,
-    write: async () => {},
-    remove: async () => true,
+    write: api.write,
+    remove: api.remove,
   },
 }));
 vi.mock("@/api/canvases", () => ({
@@ -145,10 +148,13 @@ beforeAll(async () => {
 });
 beforeEach(() => {
   vi.clearAllMocks();
+  api.identity.mockReset().mockResolvedValue({ actor: { id: "actor" } });
   api.project.mockReset();
   api.canvas.mockReset();
   api.save.mockReset();
   api.branches.mockReset().mockResolvedValue([]);
+  api.write.mockReset().mockResolvedValue(undefined);
+  api.remove.mockReset().mockResolvedValue(true);
 });
 afterEach(() => {
   cleanup();
@@ -451,50 +457,6 @@ it("媒体节点移动使用真实命令，复制保留媒体身份，移除本�
   expect(screen.getByRole("status").textContent).toContain("已保存");
 });
 
-it("恢复画布的迟到结果不覆盖等待期间的新编辑", async () => {
-  const { createDraftNode } = await import("@/app/canvas/document");
-  const node = {
-    ...createDraftNode("image_generation", "1:1", 0),
-    input_revision: 1,
-  };
-  const remote = { ...canvas, nodes: [node] };
-  const recovered = structuredClone(node);
-  recovered.config.draft.prompt = "旧分支";
-  api.branches.mockResolvedValue([
-    {
-      replicaId: "old",
-      serverRevision: 1,
-      ackedSeq: -1,
-      snapshot: { localSeq: 1 },
-      ownerState: { base: remote, nodes: [recovered], pending: null },
-    },
-  ]);
-  api.project.mockResolvedValue(project);
-  api.canvas.mockResolvedValue(remote);
-  render(<CanvasPage projectID={projectID} canvasID={canvasID} />);
-  await screen.findByRole("button", { name: "恢复此分支" });
-  fireEvent.click(screen.getByRole("button", { name: "移动 图片草稿" }));
-  let release!: (value: unknown) => void;
-  api.canvas.mockImplementationOnce(
-    () =>
-      new Promise((r) => {
-        release = r;
-      }),
-  );
-  fireEvent.click(screen.getByRole("button", { name: "恢复此分支" }));
-  await waitFor(() => expect(api.canvas).toHaveBeenCalledTimes(2));
-  fireEvent.change(screen.getByLabelText("测试共享富文本"), {
-    target: { value: "等待中新增的意图" },
-  });
-  await act(async () => release(remote));
-  expect(
-    (screen.getByLabelText("测试共享富文本") as HTMLInputElement).value,
-  ).toBe("等待中新增的意图");
-  expect(
-    await screen.findByText("恢复期间有新编辑，未覆盖；原分支仍保留。"),
-  ).toBeTruthy();
-});
-
 it("文字节点可编辑、撤销重做并通过原命令保存", async () => {
   api.project.mockResolvedValue(project);
   api.canvas.mockResolvedValue(canvas);
@@ -628,18 +590,12 @@ it("素材侧边创建视频带入授权版本，连线与引用一次撤销重�
   });
 });
 
-it("读取服务端相机，并保存改变后的视角，不改写节点", async () => {
+it("历史视口仅兼容读取，缩放不触发数据库写入或本地业务缓存", async () => {
   api.project.mockResolvedValue(project);
   api.canvas.mockResolvedValue({
     ...canvas,
     viewport: { x: 120, y: -80, zoom: 0.5 },
   });
-  api.save.mockImplementation(async (_path, body: API.CommandsInput) => ({
-    ...canvas,
-    viewport: body.commands?.find((c) => c.type === "SetViewport")?.viewport,
-    revision: 2,
-    results: body.commands?.map(() => ({ ok: true })),
-  }));
   render(<CanvasPage projectID={projectID} canvasID={canvasID} />);
   await screen.findByText("双击画布，创建节点");
   expect(screen.getByText("50%")).toBeTruthy();
@@ -647,15 +603,17 @@ it("读取服务端相机，并保存改变后的视角，不改写节点", asyn
     key: "+",
     ctrlKey: true,
   });
-  fireEvent.click(screen.getByRole("button", { name: "保存画布" }));
-  await waitFor(() => expect(api.save).toHaveBeenCalledOnce());
-  expect(api.save.mock.calls[0][1].commands).toEqual([
-    {
-      type: "SetViewport",
-      viewport: { x: 41.60000000000002, y: -172.79999999999995, zoom: 0.6 },
-    },
-  ]);
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 1000));
+  });
+  expect(
+    (screen.getByRole("button", { name: "保存画布" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  expect(api.save).not.toHaveBeenCalled();
+  expect(api.write).not.toHaveBeenCalled();
 });
+
 it("含只读直接成员的分组不能解组，不污染其他合法编辑", async () => {
   const group = {
     id: "00000000-0000-4000-8000-000000000030",
@@ -956,4 +914,182 @@ it("正式入口直接挂载受控画布及共享富文本，工具栏没有时�
   ).not.toBeNull();
   expect(screen.getByTestId("controlled-shared-composer")).toBeTruthy();
   expect(screen.queryByRole("button", { name: /时间线/ })).toBeNull();
+});
+
+it("服务端只读原因禁止整图编辑且保留未知草稿原样展示", async () => {
+  const { createDraftNode } = await import("@/app/canvas/document");
+  const node = {
+    ...createDraftNode("image_generation", "1:1", 0),
+    config: { future: { version: 99 } },
+  };
+  api.project.mockResolvedValue(project);
+  api.canvas.mockResolvedValue({
+    ...canvas,
+    nodes: [node],
+    read_only_reason: "unclassified node config",
+  });
+  render(<CanvasPage projectID={projectID} canvasID={canvasID} />);
+  await screen.findByText("画布数据待兼容 · 只读");
+  expect(
+    (screen.getByRole("button", { name: "保存画布" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  expect(
+    screen.getByRole("button", { name: "添加文本" }).closest("[inert]"),
+  ).toBeTruthy();
+  fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+  expect(api.save).not.toHaveBeenCalled();
+  expect(api.write).not.toHaveBeenCalled();
+});
+it("数据库保存不依赖本地分支库且卸载重开读取已确认数据", async () => {
+  api.branches.mockRejectedValue(new DOMException("blocked", "SecurityError"));
+  await openDraft();
+  api.save.mockImplementation(async (_p, body) => addReceipt(body));
+  fireEvent.click(screen.getByRole("button", { name: "保存画布" }));
+  await screen.findByText("已保存");
+  expect(api.write).not.toHaveBeenCalled();
+  const committed = await api.save.mock.results[0].value;
+  cleanup();
+  api.canvas.mockResolvedValue(committed);
+  render(<CanvasPage projectID={projectID} canvasID={canvasID} />);
+  await screen.findByRole("button", { name: "移动 图片草稿" });
+  expect(api.canvas).toHaveBeenCalledTimes(2);
+  expect(api.save).toHaveBeenCalledOnce();
+});
+
+it("后端返回整图只读拒绝后停止后续编辑", async () => {
+  await openDraft();
+  api.save.mockRejectedValue(new RequestError("canvas_graph_read_only", 422));
+  fireEvent.click(screen.getByRole("button", { name: "保存画布" }));
+  await screen.findByText("画布数据待兼容 · 只读");
+  expect(
+    (screen.getByRole("button", { name: "保存画布" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  expect(api.save).toHaveBeenCalledOnce();
+});
+
+it("已归档画布节点不显示重命名及尺寸编辑控件", async () => {
+  const { createResourceNode } = await import("@/app/canvas/document");
+  const node = createResourceNode("text", { x: 80, y: 80 });
+  api.project.mockResolvedValue({ ...project, status: "archived" });
+  api.canvas.mockResolvedValue({ ...canvas, nodes: [node] });
+  render(<CanvasPage projectID={projectID} canvasID={canvasID} />);
+  await screen.findByText("已归档 · 只读");
+  fireEvent.click(screen.getByRole("button", { name: "查看 文本" }));
+  expect(screen.queryByRole("button", { name: "节点操作：文本" })).toBeNull();
+  expect(screen.queryByRole("button", { name: /调整 文本/ })).toBeNull();
+});
+
+it("旧本地分支不再读取、恢复或参与画布保存", async () => {
+  api.branches.mockResolvedValue([
+    { ownerState: { nodes: [{ title: "历史本地数据" }] } },
+  ]);
+  await openDraft();
+  expect(api.branches).not.toHaveBeenCalled();
+  expect(api.write).not.toHaveBeenCalled();
+  expect(api.remove).not.toHaveBeenCalled();
+  expect(screen.queryByRole("button", { name: "恢复此分支" })).toBeNull();
+});
+
+it.each([
+  new RequestError("request_unconfirmed"),
+  new RequestError("dependency_unavailable", 503),
+])(
+  "登录核验瞬时失败保留原结果未知请求，重核验后重试同键同体 %s",
+  async (error) => {
+    await openDraft();
+    api.save.mockRejectedValueOnce(new RequestError("request_unconfirmed"));
+    fireEvent.click(screen.getByRole("button", { name: "保存画布" }));
+    await screen.findByRole("button", { name: "重试原保存" });
+    const [path, body, options] = api.save.mock.calls[0];
+    api.identity.mockRejectedValueOnce(error);
+    fireEvent(document, new Event("visibilitychange"));
+    await screen.findByText("登录状态待核验 · 只读");
+    expect(screen.queryByText("请重新打开画布")).toBeNull();
+    expect(screen.getByRole("button", { name: "查看 图片草稿" })).toBeTruthy();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "重新核验登录" }),
+    );
+    await waitFor(() =>
+      expect(
+        (
+          screen.getByRole("button", {
+            name: "重试原保存",
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false),
+    );
+    api.save.mockResolvedValueOnce(addReceipt(body));
+    fireEvent.click(screen.getByRole("button", { name: "重试原保存" }));
+    await screen.findByText("已保存");
+    expect(api.save.mock.calls[1][0]).toEqual(path);
+    expect(api.save.mock.calls[1][1]).toEqual(body);
+    expect(api.save.mock.calls[1][2].headers).toEqual(options.headers);
+  },
+);
+it.each([
+  new RequestError("unauthenticated", 401),
+  { actor: { id: "another-actor" } },
+])("明确失效或切换账号才清除画布私有内容 %s", async (result) => {
+  await openDraft();
+  if (result instanceof Error) api.identity.mockRejectedValueOnce(result);
+  else api.identity.mockResolvedValueOnce(result);
+  fireEvent(document, new Event("visibilitychange"));
+  await screen.findByText("请重新打开画布");
+  expect(screen.queryByRole("button", { name: /图片草稿/ })).toBeNull();
+  expect(api.save).not.toHaveBeenCalled();
+});
+it("冲突读回未知生成配置可只读查看和明确载入，不解析未知草稿", async () => {
+  const { createDraftNode } = await import("@/app/canvas/document");
+  await openDraft();
+  const node = {
+    ...createDraftNode("image_generation", "1:1", 0),
+    title: "未知版本草稿",
+    config: { future: { version: 99 } },
+  };
+  const server = {
+    ...canvas,
+    revision: 2,
+    nodes: [node],
+    read_only_reason: "unknown config",
+  };
+  api.canvas.mockResolvedValueOnce(server);
+  api.save.mockRejectedValueOnce(new RequestError("revision_conflict", 409));
+  fireEvent.click(screen.getByRole("button", { name: "保存画布" }));
+  await screen.findByText("画布数据待兼容 · 只读");
+  expect(screen.getByRole("region", { name: "版本冲突处理" })).toBeTruthy();
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "保留本地编辑，以版本 2 继续",
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true);
+  fireEvent.click(
+    screen.getByRole("button", { name: "放弃本地编辑，载入服务端版本" }),
+  );
+  await screen.findByRole("heading", { name: "未知版本草稿" });
+  expect(node.config).toEqual({ future: { version: 99 } });
+  expect(api.save).toHaveBeenCalledOnce();
+});
+it("只读拒绝后未保存文本仍触发刷新和站内离开保护", async () => {
+  api.project.mockResolvedValue(project);
+  api.canvas.mockResolvedValue(canvas);
+  api.save.mockRejectedValueOnce(
+    new RequestError("canvas_graph_read_only", 422),
+  );
+  render(<CanvasPage projectID={projectID} canvasID={canvasID} />);
+  await screen.findByText("双击画布，创建节点");
+  fireEvent.click(screen.getByRole("button", { name: "添加文本" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "文本内容" }), {
+    target: { value: "尚未保存的文本" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存画布" }));
+  await screen.findByText("画布数据待兼容 · 只读");
+  const unload = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(unload);
+  expect(unload.defaultPrevented).toBe(true);
+  fireEvent.click(screen.getByRole("link", { name: "织光首页" }));
+  await screen.findByRole("heading", { name: "确认离开画布" });
 });
