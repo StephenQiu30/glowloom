@@ -111,6 +111,11 @@
 .creation-canvas .canvas-media-node {
   position: absolute;
   contain: layout style;
+  /* The document owns left/top. A gesture owns only this independent preview. */
+  translate: calc(
+      var(--canvas-drag-x, var(--canvas-node-x)) - var(--canvas-node-x)
+    )
+    calc(var(--canvas-drag-y, var(--canvas-node-y)) - var(--canvas-node-y));
 }
 .creation-canvas .canvas-media-node[data-selected="true"] {
   z-index: 5;
@@ -827,4 +832,14 @@ html:has(.creation-canvas) {
 }
 .creation-canvas [data-prompt-reference]::before {
   content: "@";
+}
+
+/* The pointer gesture owns node movement; native image/text drags must not take over. */
+.creation-canvas .canvas-node-external-header,
+.creation-canvas .canvas-node-shell,
+.creation-canvas .canvas-resize-handle {
+  touch-action: none;
+}
+.creation-canvas .canvas-media-node:not([data-editing="true"]) {
+  user-select: none;
 }

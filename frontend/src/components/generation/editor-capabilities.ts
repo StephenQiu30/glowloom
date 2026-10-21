@@ -12,7 +12,7 @@ export function editorIssues(
     !model.credential_present ||
     model.current_version?.id !== draft.modelVersion
   )
-    return ["请选择当前可用的模型版本；已有输入会保留。"];
+    return ["请选择可用模型。"];
   if (!draft.mode || !model.current_version.modes?.includes(draft.mode))
     issues.push("该模式当前不可用。");
   const limits = model.current_version.limits as

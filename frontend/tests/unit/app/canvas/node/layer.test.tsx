@@ -100,3 +100,49 @@ it("拖动预览同步标注线的世界端点，不等待图保存", () => {
     /^M 388 160 /,
   );
 });
+
+it("协同重绘仍沿手势预览连接端点，不闪回文档坐标", () => {
+  const board = createRef<HTMLDivElement>();
+  const a = createResourceNode("text", { x: 0, y: 0 });
+  const b = createResourceNode("text", { x: 600, y: 0 });
+  const graph = (x: number) => (
+    <div ref={board}>
+      <CanvasNodeLayer
+        containerRef={board}
+        nodes={[{ ...a, x }, b]}
+        edges={[
+          {
+            id: "edge",
+            edge_type: "annotation",
+            source_node_id: a.id,
+            target_node_id: b.id,
+          },
+        ]}
+        viewport={{ x: 0, y: 0, k: 1 }}
+        size={{ width: 1200, height: 700 }}
+        selectedIDs={[a.id]}
+        renderNode={(node) => (
+          <div
+            data-node-id={node.id}
+            style={{ left: node.x, top: node.y, width: 288 }}
+          />
+        )}
+      />
+    </div>
+  );
+  const view = render(graph(0));
+  const source = board.current!.querySelector<HTMLElement>(
+    `[data-node-id="${a.id}"]`,
+  )!;
+  source.style.setProperty("--canvas-drag-x", "100px");
+  act(() =>
+    board.current!.dispatchEvent(new Event("canvas:node-drag-preview")),
+  );
+  expect(board.current!.querySelector("path")?.getAttribute("d")).toMatch(
+    /^M 388 160 /,
+  );
+  view.rerender(graph(800));
+  expect(board.current!.querySelector("path")?.getAttribute("d")).toMatch(
+    /^M 388 160 /,
+  );
+});

@@ -38,10 +38,8 @@ export function CanvasSelectionToolbar({
   onDisconnect,
   children,
   rightInset = 0,
-  onReveal,
 }: {
   rightInset?: number;
-  onReveal?: (dy: number) => void;
   children?: ReactNode;
   nodes: Node[];
   containerRef: RefObject<HTMLDivElement | null>;
@@ -56,7 +54,6 @@ export function CanvasSelectionToolbar({
   onDisconnect: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const revealed = useRef("");
   useLayoutEffect(() => {
     const container = containerRef.current,
       toolbar = ref.current;
@@ -76,15 +73,6 @@ export function CanvasSelectionToolbar({
           2 -
         bounds.left;
       const top = Math.min(...boxes.map((box) => box.top)) - bounds.top;
-      const key = nodes
-        .map((node) => node.id)
-        .sort()
-        .join("/");
-      if (revealed.current !== key) {
-        revealed.current = key;
-        const missing = 64 + toolbar.offsetHeight + 36 - top;
-        if (bounds.height > 0 && missing > 0) onReveal?.(missing);
-      }
       const available = Math.max(80, container.clientWidth - rightInset);
       toolbar.style.maxWidth = `${Math.max(56, available - 24)}px`;
       toolbar.style.left = `${Math.max(12, Math.min(available - toolbar.offsetWidth - 12, center - toolbar.offsetWidth / 2))}px`;
@@ -101,7 +89,7 @@ export function CanvasSelectionToolbar({
       container.removeEventListener(CANVAS_VIEWPORT_EVENT, position);
       container.removeEventListener(CANVAS_NODE_DRAG_EVENT, position);
     };
-  }, [containerRef, nodes, rightInset, onReveal]);
+  }, [containerRef, nodes, rightInset]);
   const actions = [
     ...(onToggleGroup
       ? [

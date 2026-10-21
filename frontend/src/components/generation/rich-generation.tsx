@@ -22,16 +22,15 @@ import {
   TableBody,
   TableCell,
 } from "@/components/ui/table";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { cn } from "cn";
 import {
+  ArrowUp,
   AtSign,
-  SlidersHorizontal,
+  ChevronDown,
+  LoaderCircle,
   Maximize2,
   Minimize2,
-  Undo2,
-  Redo2,
-  Save,
 } from "lucide-react";
 import {
   InputGroup,
@@ -43,17 +42,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   NativeSelect,
   NativeSelectOption,
@@ -103,6 +91,8 @@ import { reconcileLabels } from "./draft-resolution";
 import { canonical } from "./draft-save";
 import { PromptEditor } from "./prompt-editor";
 import { ModelPicker } from "./model-picker";
+import { GenerationParameters } from "./generation-parameters";
+import { referenceMode, referenceGeneration } from "./reference-mode";
 import { ComposerSession, type ComposerSnapshot } from "./composer-session";
 import {
   emptyPromptDraft,
@@ -435,6 +425,24 @@ function EditorWorkspace({
   const [quoteReviewOpen, setQuoteReviewOpen] = useState(true);
 
   const [models, setModels] = useState(initialModels);
+  const catalog = useRef(initialModels);
+  useEffect(() => {
+    catalog.current = models;
+  }, [models]);
+  const resolveReferenceGeneration = useCallback(
+    (
+      value: PromptDraft,
+      previous?: Pick<PromptDraft, "modelVersion" | "mode">,
+    ) =>
+      referenceGeneration(
+        value,
+        catalog.current.find(
+          (item) => item.current_version?.id === value.modelVersion,
+        ),
+        previous,
+      ),
+    [],
+  );
   const [modelError, setModelError] = useState(initialModelError);
   const [reloadingModels, setReloadingModels] = useState(false);
   const modelRequest = useRef<AbortController | null>(null);
@@ -828,10 +836,19 @@ function EditorWorkspace({
     });
   }
   async function getQuote() {
+    if (compact && (issues.length || pendingMode || !sourceReady)) {
+      setError(
+        issues[0] ??
+          (pendingMode
+            ? "正在核验模型，请稍后再试。"
+            : "正在核验参考内容，请稍后再试。"),
+      );
+      return;
+    }
     if (compact) setQuoteReviewOpen(true);
     await run(async () => {
       if (issues.length || pendingMode || !sourceReady)
-        throw new Error("请先修复当前输入。");
+        throw new Error(issues[0] ?? "请等待参考内容核验完成。");
       const captured = latest.current.localSeq;
       const pointer = await flush();
       if (latest.current.localSeq !== captured)
@@ -937,7 +954,11 @@ function EditorWorkspace({
   }
   const resolveKeys = useRef(new Map<string, string>());
   async function selectMode(version: string, mode: string) {
-    if (!session || !version || !mode) return;
+    if (!session || !version) return;
+    if (!mode) {
+      setError("该模型不支持当前参考组合，请选择其他模型。");
+      return;
+    }
     const request = session.beginModeSelection({ modelVersion: version, mode });
     try {
       const page = await listProjectModels({
@@ -977,6 +998,9 @@ function EditorWorkspace({
         !found.credential_present
       )
         throw new Error("该模型当前不可用");
+      catalog.current = catalog.current.map((item) =>
+        item.current_version?.id === version ? found! : item,
+      );
       session.resolveModeSelection(request);
     } catch (error) {
       if (session.pendingTarget?.selectionEpoch !== request.selectionEpoch)
@@ -1096,15 +1120,8 @@ function EditorWorkspace({
       className={
         compact ? "max-h-80 min-h-16 overflow-y-auto outline-none" : undefined
       }
-      placeholder={
-        compact
-          ? seed.capability === "video"
-            ? "上传参考视频、输入文字或 @ 主体，描述你想生成的视频"
-            : seed.capability === "image"
-              ? "上传参考图、输入文字或 @ 主体，描述你想生成的图片"
-              : "输入文字或 @ 主体，描述你的创作需求"
-          : undefined
-      }
+      placeholder={compact ? "描述创意，@ 引用素材" : undefined}
+      resolveGeneration={compact ? resolveReferenceGeneration : undefined}
       contextKey={contextKey}
       replicaId={replicaId}
       draft={snapshot.draft}
@@ -1146,146 +1163,65 @@ function EditorWorkspace({
       incomingSources={canvas?.incomingSources}
     />
   ) : null;
-  const parameterControls = model ? (
-    <FieldGroup className="grid gap-3 sm:grid-cols-2">
-      {(() => {
-        try {
-          return fieldsForMode(
-            model.current_version?.param_schema,
-            draft.mode ?? "",
-          );
-        } catch {
-          return [];
-        }
-      })().map((f, fieldIndex0) => (
-        <Field key={f.field} data-disabled={frozen}>
-          <FieldLabel htmlFor={`${formFieldId}-field-3-${fieldIndex0}`}>
-            <span>{f.label}</span>
-          </FieldLabel>
-          {f.enum && compact && f.enum.length <= 7 ? (
-            <ToggleGroup
-              id={`${formFieldId}-field-3-${fieldIndex0}`}
-              aria-label={f.label}
-              type="single"
-              value={String(draft.params[f.field] ?? "")}
-              disabled={frozen}
-              className="flex-wrap justify-start"
-              onValueChange={(value) => {
-                if (value)
-                  session?.updateParams({
-                    ...draft.params,
-                    [f.field]:
-                      f.type === "number" || f.type === "integer"
-                        ? Number(value)
-                        : value,
-                  });
-              }}
-            >
-              {f.enum.map((value) => (
-                <ToggleGroupItem key={String(value)} value={String(value)}>
-                  {value}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-          ) : f.enum ? (
-            <NativeSelect
-              id={`${formFieldId}-field-3-${fieldIndex0}`}
-
-              disabled={frozen}
-              value={String(draft.params[f.field] ?? "")}
-              onChange={(e) =>
-                session?.updateParams({
-                  ...draft.params,
-                  [f.field]:
-                    f.type === "number" || f.type === "integer"
-                      ? Number(e.target.value)
-                      : e.target.value,
-                })
-              }
-            >
-              <NativeSelectOption value="">请选择</NativeSelectOption>
-              {f.enum.map((v) => (
-                <NativeSelectOption key={String(v)} value={v}>
-                  {v}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          ) : f.type === "boolean" ? (
-            <Checkbox
-              id={`${formFieldId}-field-3-${fieldIndex0}`}
-
-              disabled={frozen}
-              checked={!!draft.params[f.field]}
-              onCheckedChange={(e) =>
-                session?.updateParams({
-                  ...draft.params,
-                  [f.field]: e === true,
-                })
-              }
-            />
-          ) : canvas?.collaboration && f.field === "negative_prompt" ? (
-            <TextIntentInput
-              id={`${formFieldId}-field-3-${fieldIndex0}`}
-              disabled={frozen}
-              value={String(draft.params[f.field] ?? "")}
-              onEdit={(value, edit) =>
-                session?.updateTextParam(f.field, value, edit)
-              }
-              onHistory={(direction) =>
-                canvas.collaboration?.history[direction]()
-              }
-              onCompositionState={(active) =>
-                canvas.collaboration?.composition(active, "negative_prompt")
-              }
-            />
-          ) : (
-            <Input
-              id={`${formFieldId}-field-3-${fieldIndex0}`}
-
-              disabled={frozen}
-              type={f.type === "string" ? "text" : "number"}
-              value={String(draft.params[f.field] ?? "")}
-              min={f.min}
-              max={f.max}
-              onChange={(e) =>
-                session?.updateParams({
-                  ...draft.params,
-                  [f.field]:
-                    f.type === "string"
-                      ? e.target.value
-                      : e.target.value === ""
-                        ? null
-                        : Number(e.target.value),
-                })
-              }
-            />
-          )}
-        </Field>
-      ))}
-      <Field data-disabled={frozen}>
-        <FieldLabel htmlFor={`${formFieldId}-field-4`}>
-          <span>候选数量</span>
-        </FieldLabel>
-        <Input
-          id={`${formFieldId}-field-4`}
-
-          type="number"
-          min={1}
-          max={Math.min(
-            8,
-            Number(model.current_version?.limits?.max_outputs ?? 1),
-          )}
-          disabled={frozen}
-          value={Number(draft.params.output_count ?? 1)}
-          onChange={(e) =>
-            session?.updateParams({
-              ...draft.params,
-              output_count: Number(e.target.value),
-            })
+  const collaborativeNegativeField =
+    canvas?.collaboration && model
+      ? (() => {
+          try {
+            return fieldsForMode(
+              model.current_version?.param_schema,
+              draft.mode ?? "",
+            ).find(
+              (f) =>
+                f.field === "negative_prompt" && !f.enum && f.type === "string",
+            );
+          } catch {
+            return undefined;
           }
-        />
-      </Field>
-    </FieldGroup>
+        })()
+      : undefined;
+  const parameterControls = model ? (
+    <>
+      <GenerationParameters
+        fields={(() => {
+          try {
+            return fieldsForMode(
+              model.current_version?.param_schema,
+              draft.mode ?? "",
+            );
+          } catch {
+            return [];
+          }
+        })().filter(
+          (f) => !collaborativeNegativeField || f.field !== "negative_prompt",
+        )}
+        params={draft.params}
+        maxOutputs={Number(model.current_version?.limits?.max_outputs ?? 1)}
+        disabled={frozen}
+        compact={compact}
+        onChange={(params) => session?.updateParams(params)}
+      />
+      {collaborativeNegativeField ? (
+        <Field data-disabled={frozen}>
+          <FieldLabel htmlFor={`${formFieldId}-negative`}>
+            {collaborativeNegativeField.label}
+          </FieldLabel>
+          <TextIntentInput
+            id={`${formFieldId}-negative`}
+            disabled={frozen}
+            value={String(draft.params.negative_prompt ?? "")}
+            onEdit={(value, edit) =>
+              session?.updateTextParam("negative_prompt", value, edit)
+            }
+            onHistory={(direction) =>
+              canvas?.collaboration?.history[direction]()
+            }
+            onCompositionState={(active) =>
+              canvas?.collaboration?.composition(active, "negative_prompt")
+            }
+          />
+        </Field>
+      ) : null}
+    </>
   ) : null;
   const issuesPanel =
     issues.length > 0 ? (
@@ -1665,96 +1601,40 @@ function EditorWorkspace({
                   if (target.current_version?.id)
                     void selectMode(
                       target.current_version.id,
-                      target.current_version.modes?.[0] ?? "",
+                      referenceMode(
+                        { ...draft, modelVersion: target.current_version.id },
+                        target,
+                      ) ?? "",
                     );
                 }}
               />
-              <Select
-                value={draft.mode ?? ""}
-                disabled={frozen || !model || !session}
-                onValueChange={(mode) =>
-                  void selectMode(draft.modelVersion!, mode)
-                }
-              >
-                <SelectTrigger aria-label="生成模式" size="sm" variant="quiet">
-                  <SelectValue placeholder="选择模式" />
-                </SelectTrigger>
-                <SelectContent
-                  position="popper"
-                  side="bottom"
-                  align="start"
-                  sideOffset={8}
-                  collisionPadding={16}
-                >
-                  <SelectGroup>
-                    {model?.current_version?.modes?.map((mode) => (
-                      <SelectItem key={mode} value={mode}>
-                        {generationModeLabel(mode)}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
               <Popover>
                 <PopoverTrigger asChild>
                   <InputGroupButton
                     aria-label="生成参数"
                     disabled={!model || !session || frozen}
                   >
-                    <SlidersHorizontal data-icon="inline-start" />
                     {[draft.params.aspect_ratio, draft.params.resolution]
                       .filter((value) => typeof value === "string" && value)
                       .join(" · ") || "参数"}{" "}
-                    · {Number(draft.params.output_count ?? 1)}个
+                    · {Number(draft.params.output_count ?? 1)}
+                    <ChevronDown data-icon="inline-end" />
                   </InputGroupButton>
                 </PopoverTrigger>
                 <PopoverContent
-                  side="bottom"
+                  side="top"
                   align="start"
                   sideOffset={8}
                   collisionPadding={16}
-                  className="max-h-[70dvh] w-80 max-w-[calc(100vw-32px)] overflow-y-auto"
+                  className="max-h-[min(70dvh,var(--radix-popover-content-available-height))] w-[336px] max-w-[calc(100vw-32px)] overflow-y-auto rounded-2xl bg-(--floating-surface) p-4 shadow-xl"
                   aria-label="生成参数"
                 >
                   {parameterControls}
-                  <div className="flex flex-wrap gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="撤销"
-                      disabled={frozen || !session}
-                      onClick={() => session?.undo()}
-                    >
-                      <Undo2 />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="重做"
-                      disabled={frozen || !session}
-                      onClick={() => session?.redo()}
-                    >
-                      <Redo2 />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={pending}
-                      onClick={() =>
-                        void run(async () => {
-                          await flush();
-                        })
-                      }
-                    >
-                      <Save data-icon="inline-start" />
-                      保存草稿
-                    </Button>
-                  </div>
-                  <p role="status" className="text-xs text-muted-foreground">
-                    {canvas ? "随画布保存" : saveState} · r{revision}
-                  </p>
                 </PopoverContent>
               </Popover>
+              <span className="px-2 text-xs text-muted-foreground">
+                全能参考
+              </span>
               <InputGroupButton
                 aria-label="提及素材或主体"
                 size="icon-sm"
@@ -1769,19 +1649,6 @@ function EditorWorkspace({
               >
                 <AtSign />
               </InputGroupButton>
-              {issues.length > 0 ? (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <InputGroupButton>需要调整</InputGroupButton>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    side="top"
-                    className="max-h-[70dvh] w-80 overflow-y-auto"
-                  >
-                    {issuesPanel}
-                  </PopoverContent>
-                </Popover>
-              ) : null}
               {current.submission ? (
                 <InputGroupButton
                   className="ml-auto"
@@ -1794,18 +1661,19 @@ function EditorWorkspace({
                 </InputGroupButton>
               ) : (
                 <InputGroupButton
-                  className="ml-auto"
+                  className="ml-auto size-9 shrink-0 rounded-full"
+                  size="icon-sm"
                   variant="default"
-                  disabled={
-                    pending ||
-                    issues.length > 0 ||
-                    !!pendingMode ||
-                    confirmUnknown ||
-                    !sourceReady
-                  }
+                  aria-label="检查费用"
+                  title="检查费用并继续"
+                  disabled={pending || confirmUnknown}
                   onClick={() => void getQuote()}
                 >
-                  {pending ? "正在保存并检查…" : "检查费用"}
+                  {pending ? (
+                    <LoaderCircle className="animate-spin" />
+                  ) : (
+                    <ArrowUp className="size-5" />
+                  )}
                 </InputGroupButton>
               )}
             </InputGroupAddon>
@@ -2093,24 +1961,5 @@ function sameSource(a: API.InputSource, b?: API.InputSource) {
       : a.canvas_id === b.canvas_id &&
         a.node_id === b.node_id &&
         a.input_revision === b.input_revision)
-  );
-}
-
-function generationModeLabel(mode: string) {
-  return (
-    (
-      {
-        text_to_image: "文生图",
-        text2image: "文生图",
-        image_to_image: "图生图",
-        image2image: "图生图",
-        text_to_video: "文生视频",
-        text2video: "文生视频",
-        image_to_video: "图生视频",
-        image2video: "图生视频",
-        omni_reference: "全能参考",
-        text_to_text: "文字创作",
-      } as Record<string, string>
-    )[mode] ?? mode
   );
 }

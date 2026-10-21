@@ -42,7 +42,6 @@ export function ModelPicker({
           disabled={disabled}
           className="max-w-60 justify-start pr-2 pl-0"
         >
-          <Box data-icon="inline-start" />
           <span className="truncate">
             {current?.display_name ?? "选择模型"}
           </span>
@@ -50,18 +49,18 @@ export function ModelPicker({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        side="bottom"
+        side="top"
         align="start"
         sideOffset={8}
         collisionPadding={16}
-        className="w-96 max-w-[calc(100vw-32px)] p-1"
+        className="w-80 max-w-[calc(100vw-32px)] rounded-2xl bg-(--floating-surface) p-1.5 shadow-xl"
         aria-label="选择模型"
       >
         <Command label="搜索模型">
           <CommandInput aria-label="搜索模型" placeholder="搜索模型" />
           <CommandList className="max-h-80">
             <CommandEmpty>暂无匹配的可用模型</CommandEmpty>
-            <CommandGroup heading="选择模型">
+            <CommandGroup>
               {models
                 .filter((model) => model.current_version?.id)
                 .map((model) => {

@@ -123,7 +123,10 @@ it("节点媒体区域与标题一样支持拖动和取消", () => {
   fireEvent.pointerCancel(body);
   expect(start).toHaveBeenCalledTimes(1);
   expect(move).toHaveBeenCalledTimes(1);
-  expect(end).toHaveBeenCalledWith(true);
+  expect(end).toHaveBeenCalledWith(
+    true,
+    expect.objectContaining({ pointerId: 1 }),
+  );
 });
 
 it("未选中的视频也复用媒体预览，选中启用播放而不嵌套按钮", () => {

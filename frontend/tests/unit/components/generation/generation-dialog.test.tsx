@@ -331,17 +331,13 @@ it("画布紧凑呈现保持真正富文本内联，先保存新节点且重渲�
   const { props, canvas, rerender } = await compactWorkspace();
   const editor = screen.getByRole("textbox", { name: "创作提示词" });
   expect(editor.getAttribute("contenteditable")).toBe("true");
-  expect(editor.getAttribute("data-placeholder")).toBe(
-    "上传参考图、输入文字或 @ 主体，描述你想生成的图片",
-  );
+  expect(editor.getAttribute("data-placeholder")).toBe("描述创意，@ 引用素材");
   expect(editor.closest('[data-slot="input-group-control"]')).toBeTruthy();
   expect(
     screen.getByRole("button", { name: "生成模型" }).textContent,
   ).toContain("真实模型");
-  expect(
-    screen.getByRole("combobox", { name: "生成模式" }).textContent,
-  ).toContain("文生图");
-  expect(screen.queryByText("全能参考")).toBeNull();
+  expect(screen.queryByRole("combobox", { name: "生成模式" })).toBeNull();
+  expect(screen.getByText("全能参考")).toBeTruthy();
   expect(canvas.flush).toHaveBeenCalledOnce();
   expect(canvas.flush.mock.invocationCallOrder[0]).toBeLessThan(
     api.current.mock.invocationCallOrder[0],
@@ -361,10 +357,11 @@ it("画布紧凑呈现保持真正富文本内联，先保存新节点且重渲�
 it("紧凑参数使用模型schema与候选上限，同一画布来源报价后才允许确认", async () => {
   const { canvas, pointer } = await compactWorkspace();
   fireEvent.click(screen.getByRole("button", { name: "生成参数" }));
-  expect(screen.getByLabelText("画幅")).toBeTruthy();
-  const count = screen.getByLabelText("候选数量");
-  expect(count.getAttribute("max")).toBe("4");
-  fireEvent.change(count, { target: { value: "2" } });
+  expect(screen.getByLabelText("比例")).toBeTruthy();
+  expect(screen.getByLabelText("数量").querySelectorAll("button")).toHaveLength(
+    4,
+  );
+  fireEvent.click(screen.getByRole("radio", { name: "2" }));
   await waitFor(() =>
     expect(canvas.onChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -381,16 +378,15 @@ it("紧凑参数使用模型schema与候选上限，同一画布来源报价后�
   await waitFor(() => expect(api.confirm).toHaveBeenCalledOnce());
 });
 
-it("全能参考模式来自真实目录合同，切换不重建正文或触发生成", async () => {
+it("默认全能参考来自真实目录合同，无模式切换且不重建正文或触发生成", async () => {
   const models = await api.models();
   models.items[0].current_version.modes.push("omni_reference");
   api.models.mockResolvedValue(models);
   const { canvas } = await compactWorkspace();
   const editor = screen.getByRole("textbox", { name: "创作提示词" });
-  fireEvent.keyDown(screen.getByRole("combobox", { name: "生成模式" }), {
-    key: "ArrowDown",
-  });
-  fireEvent.click(await screen.findByRole("option", { name: "全能参考" }));
+  expect(screen.queryByRole("combobox", { name: "生成模式" })).toBeNull();
+  expect(screen.queryByText("需要调整")).toBeNull();
+  expect(screen.getByText("全能参考")).toBeTruthy();
   await waitFor(() =>
     expect(canvas.onChange.mock.calls.at(-1)?.[0].mode).toBe("omni_reference"),
   );
@@ -658,11 +654,10 @@ it("紧凑上传进入同一审核与恢复流程，失败重试复用引用身�
   await screen.findByRole("dialog", { name: "参考详情" });
   const upload = screen.getByRole("button", { name: "上传 / 重试原请求" });
   expect(upload.hasAttribute("disabled")).toBe(true);
-  expect(
-    screen
-      .getByRole("button", { name: "检查费用", hidden: true })
-      .hasAttribute("disabled"),
-  ).toBe(true);
+  fireEvent.click(
+    screen.getByRole("button", { name: "检查费用", hidden: true }),
+  );
+  expect(api.quote).not.toHaveBeenCalled();
   fireEvent.click(
     screen.getByRole("checkbox", { name: "我已确认这些素材可以用于本次创作" }),
   );
@@ -737,9 +732,9 @@ it("模型目录503仍能输入和保存，局部重试恢复模型且保留正�
   const editor = await screen.findByRole("textbox", { name: "创作提示词" });
   expect(editor.getAttribute("contenteditable")).toBe("true");
   expect(await screen.findByText("模型目录暂不可用")).toBeTruthy();
-  expect(
-    screen.getByRole("button", { name: "检查费用" }).hasAttribute("disabled"),
-  ).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
+  expect(api.quote).not.toHaveBeenCalled();
+  expect(screen.queryByText("需要调整")).toBeNull();
   fireEvent.paste(editor, {
     clipboardData: {
       files: [],

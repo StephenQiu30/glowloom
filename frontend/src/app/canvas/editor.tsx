@@ -18,6 +18,7 @@ import {
   useState,
   type PointerEvent,
 } from "react";
+import { flushSync } from "react-dom";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
@@ -268,7 +269,12 @@ export function CanvasEditor({
     y: number;
     nextX: number;
     nextY: number;
-    card: HTMLElement;
+    bounds: { left: number; top: number };
+    grabOffset: { x: number; y: number };
+    frame: number | null;
+    moved: boolean;
+    finished: Promise<void>;
+    finish: () => void;
     button: HTMLElement;
     pointerId: number;
     members: {
@@ -303,7 +309,8 @@ export function CanvasEditor({
     status: (status, writable) => {
       setLiveStatus(status);
       if (writable !== undefined) setSocketWritable(writable);
-      if (status !== "live" || writable === false) readOnlyRef.current = true;
+      // The coordinator fences writes synchronously; readOnlyRef follows the
+      // rendered policy so batched reconnects cannot leave a stale override.
     },
     revoked: () =>
       window.dispatchEvent(new Event("glowloom:private-cache-cleared")),
@@ -400,6 +407,9 @@ export function CanvasEditor({
     alive.current = true;
     return () => {
       alive.current = false;
+      if (drag.current?.frame != null) cancelAnimationFrame(drag.current.frame);
+      drag.current?.finish();
+      drag.current = null;
       request.current?.abort();
     };
   }, []);
@@ -1196,6 +1206,8 @@ export function CanvasEditor({
   }
   function beginDrag(e: PointerEvent<HTMLElement>, node: Node) {
     if (
+      readOnlyRef.current ||
+      drag.current ||
       !isEditableNode(node) ||
       e.button !== 0 ||
       tool === "pan" ||
@@ -1213,9 +1225,15 @@ export function CanvasEditor({
       return;
     }
     e.stopPropagation();
+    e.preventDefault();
     if (!selectedIDs.includes(node.id)) selectNode(node.id);
     e.currentTarget.setPointerCapture(e.pointerId);
-    const card = e.currentTarget.parentElement!;
+    const bounds = board.current!.getBoundingClientRect();
+    const origin = view.current;
+    let finish!: () => void;
+    const finished = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
     drag.current = {
       id: node.id,
       clientX: e.clientX,
@@ -1224,7 +1242,15 @@ export function CanvasEditor({
       y: node.y,
       nextX: node.x,
       nextY: node.y,
-      card,
+      bounds: { left: bounds.left, top: bounds.top },
+      grabOffset: {
+        x: (e.clientX - bounds.left - origin.x) / origin.zoom - node.x,
+        y: (e.clientY - bounds.top - origin.y) / origin.zoom - node.y,
+      },
+      frame: null,
+      moved: false,
+      finished,
+      finish,
       button: e.currentTarget,
       pointerId: e.pointerId,
       members: local.current
@@ -1240,56 +1266,87 @@ export function CanvasEditor({
         })),
     };
   }
-  function moveDrag(e: PointerEvent<HTMLElement>) {
+  function previewDrag() {
     const d = drag.current;
     if (!d) return;
-    d.nextX = limit(
-      Math.round(d.x + (e.clientX - d.clientX) / view.current.zoom),
-    );
-    d.nextY = limit(
-      Math.round(d.y + (e.clientY - d.clientY) / view.current.zoom),
-    );
+    d.frame = null;
     for (const member of d.members) {
       if (member.element) {
-        member.element.style.left = `${limit(member.x + d.nextX - d.x)}px`;
-        member.element.style.top = `${limit(member.y + d.nextY - d.y)}px`;
+        member.element.style.setProperty(
+          "--canvas-drag-x",
+          `${limit(member.x + d.nextX - d.x)}px`,
+        );
+        member.element.style.setProperty(
+          "--canvas-drag-y",
+          `${limit(member.y + d.nextY - d.y)}px`,
+        );
       }
     }
     board.current?.dispatchEvent(new Event(CANVAS_NODE_DRAG_EVENT));
   }
-  function endDrag(cancel = false) {
+  function moveDrag(e: PointerEvent<HTMLElement>) {
     const d = drag.current;
-    if (!d) return;
+    if (!d || e.pointerId !== d.pointerId) return;
+    e.stopPropagation();
+    if (
+      !d.moved &&
+      Math.hypot(e.clientX - d.clientX, e.clientY - d.clientY) < 3
+    )
+      return;
+    d.moved = true;
+    // Keep the grabbed world point under the pointer, even if the viewport changes.
+    const current = view.current;
+    d.nextX = limit(
+      Math.round(
+        (e.clientX - d.bounds.left - current.x) / current.zoom - d.grabOffset.x,
+      ),
+    );
+    d.nextY = limit(
+      Math.round(
+        (e.clientY - d.bounds.top - current.y) / current.zoom - d.grabOffset.y,
+      ),
+    );
+    if (d.frame === null) d.frame = requestAnimationFrame(previewDrag);
+  }
+  function endDrag(cancel = false, event?: PointerEvent<HTMLElement>) {
+    const d = drag.current;
+    if (!d || (event && event.pointerId !== d.pointerId)) return;
+    event?.stopPropagation();
+    if (!cancel && event) moveDrag(event);
+    if (d.frame !== null) cancelAnimationFrame(d.frame);
+    if (!cancel) previewDrag();
     drag.current = null;
     if (d.button.hasPointerCapture(d.pointerId))
       d.button.releasePointerCapture(d.pointerId);
-    if (cancel) {
-      for (const member of d.members)
-        if (member.element) {
-          member.element.style.left = `${member.x}px`;
-          member.element.style.top = `${member.y}px`;
-        }
-      board.current?.dispatchEvent(new Event(CANVAS_NODE_DRAG_EVENT));
-      return;
-    }
-    const moved = new Map(
-      d.members.map((member) => [
-        member.id,
-        {
-          x: limit(member.x + d.nextX - d.x),
-          y: limit(member.y + d.nextY - d.y),
-        },
-      ]),
-    );
-    if (d.nextX === d.x && d.nextY === d.y) return;
-    edit(
-      reconcileGroupDrop(
-        local.current.map((node) =>
-          moved.has(node.id) ? { ...node, ...moved.get(node.id)! } : node,
+    if (!cancel && (d.nextX !== d.x || d.nextY !== d.y)) {
+      const moved = new Map(
+        d.members.map((member) => [
+          member.id,
+          {
+            x: limit(member.x + d.nextX - d.x),
+            y: limit(member.y + d.nextY - d.y),
+          },
+        ]),
+      );
+      // Hand the final preview to the document in one paint. Only pointerup flushes;
+      // pointermove never updates React state or writes document-owned coordinates.
+      flushSync(() =>
+        edit(
+          reconcileGroupDrop(
+            local.current.map((node) =>
+              moved.has(node.id) ? { ...node, ...moved.get(node.id)! } : node,
+            ),
+            new Set(moved.keys()),
+          ),
         ),
-        new Set(moved.keys()),
-      ),
-    );
+      );
+    }
+    for (const member of d.members) {
+      member.element?.style.removeProperty("--canvas-drag-x");
+      member.element?.style.removeProperty("--canvas-drag-y");
+    }
+    board.current?.dispatchEvent(new Event(CANVAS_NODE_DRAG_EVENT));
+    d.finish();
   }
   async function readConflict() {
     const controller = new AbortController();
@@ -1315,6 +1372,7 @@ export function CanvasEditor({
     async () => undefined,
   );
   async function save() {
+    if (drag.current?.moved) await drag.current.finished;
     if (!developmentPreview) {
       if (privateInvalid.current) return;
       try {
@@ -1360,7 +1418,10 @@ export function CanvasEditor({
   }
   async function saveOnce() {
     if (!developmentPreview) return;
+    // A save consumes a completed gesture, never an intermediate visual position.
+    if (drag.current?.moved) await drag.current.finished;
     if (
+      !alive.current ||
       readOnlyRef.current ||
       busy.current ||
       conflict ||
@@ -2421,9 +2482,6 @@ export function CanvasEditor({
           current?.node_type === "group" ||
           (current && isMediaNode(current))) && (
           <CanvasSelectionToolbar
-            onReveal={(dy) =>
-              changeCamera({ ...view.current, y: view.current.y + dy })
-            }
             rightInset={aiOpen ? effectiveAIWidth + 24 : 0}
             nodes={nodes.filter((node) => selectedIDs.includes(node.id))}
             containerRef={board}

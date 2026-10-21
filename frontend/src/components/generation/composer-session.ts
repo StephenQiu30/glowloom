@@ -196,9 +196,13 @@ function completedIntent(
     }),
   };
 }
-function candidate(previous: SessionState, tr: Transaction): Frame {
+function candidate(
+  previous: SessionState,
+  tr: Transaction,
+  resolveGeneration?: ComposerOptions["resolveGeneration"],
+): Frame {
   const action: Action = tr.getMeta(sessionKey) ?? {};
-  return {
+  const frame = {
     doc: tr.doc,
     selection: tr.selection.toJSON(),
     intent:
@@ -216,16 +220,29 @@ function candidate(previous: SessionState, tr: Transaction): Frame {
             )
           : previous.frame.intent,
   };
+  if (resolveGeneration && !action.authoritative) {
+    const selection = resolveGeneration(
+      frameDraft(frame, action.labels ?? previous.labels),
+      previous.frame.intent,
+    );
+    if (
+      selection.mode !== frame.intent.mode ||
+      selection.params !== frame.intent.params
+    )
+      frame.intent = { ...frame.intent, ...selection };
+  }
+  return frame;
 }
 function apply(
   tr: Transaction,
   previous: SessionState,
   collaborative = false,
+  resolveGeneration?: ComposerOptions["resolveGeneration"],
 ): SessionState {
   const action: Action = tr.getMeta(sessionKey) ?? {};
   let next = {
     ...previous,
-    frame: candidate(previous, tr),
+    frame: candidate(previous, tr, resolveGeneration),
     labels: action.labels ?? previous.labels,
   };
   if (action.settledUpload) {
@@ -271,7 +288,7 @@ function apply(
   }
   const changed =
     !tr.doc.eq(previous.frame.doc) ||
-    (action.intent && action.intent !== previous.frame.intent);
+    next.frame.intent !== previous.frame.intent;
   if (!changed) {
     if (
       action.breakGroup ||
@@ -467,6 +484,10 @@ export type ComposerOptions = {
   contextKey: string;
   replicaId: string;
   draft: PromptDraft;
+  resolveGeneration?: (
+    draft: PromptDraft,
+    previous?: Pick<PromptDraft, "modelVersion" | "mode">,
+  ) => Pick<PromptDraft, "mode" | "params">;
 };
 export function composerEditorOptions(
   options: ComposerOptions,
@@ -475,6 +496,8 @@ export function composerEditorOptions(
   if (!options.contextKey || !options.replicaId)
     throw new Error("composer_context_required");
   const draft = structuredClone(options.draft);
+  if (options.resolveGeneration && !options.collaboration)
+    Object.assign(draft, options.resolveGeneration(draft));
   const { document: initialDocument, labelState, ...intent } = draft;
   const sessionExtension = Extension.create({
     name: "composerSession",
@@ -510,7 +533,12 @@ export function composerEditorOptions(
               group: null,
             }),
             apply: (tr, previous) =>
-              apply(tr, previous, !!options.collaboration),
+              apply(
+                tr,
+                previous,
+                !!options.collaboration,
+                options.resolveGeneration,
+              ),
           },
           filterTransaction(tr, state) {
             if (!tr.docChanged && !tr.getMeta(sessionKey)?.intent) return true;
@@ -532,7 +560,7 @@ export function composerEditorOptions(
             try {
               validatePromptDraft(
                 frameDraft(
-                  candidate(previous, tr),
+                  candidate(previous, tr, options.resolveGeneration),
                   tr.getMeta(sessionKey)?.labels ?? previous.labels,
                 ),
               );

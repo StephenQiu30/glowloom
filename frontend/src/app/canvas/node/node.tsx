@@ -93,7 +93,7 @@ export function CanvasNode({
   onMove: (x: number, y: number) => void;
   onDragStart: (event: PointerEvent<HTMLElement>) => void;
   onDragMove: (event: PointerEvent<HTMLElement>) => void;
-  onDragEnd: (cancel?: boolean) => void;
+  onDragEnd: (cancel?: boolean, event?: PointerEvent<HTMLElement>) => void;
   onDuplicate?: () => void;
   onRemove?: () => void;
   canRemove?: boolean;
@@ -211,6 +211,7 @@ export function CanvasNode({
             : ImageIcon;
   return (
     <article
+      onDragStart={(event) => event.preventDefault()}
       data-node-id={node.id}
       className="canvas-media-node"
       data-selected={selected}
@@ -224,6 +225,8 @@ export function CanvasNode({
               : Math.max(selected ? 5 : 1, node.z_index + 1),
           left: node.x,
           top: node.y,
+          "--canvas-node-x": `${node.x}px`,
+          "--canvas-node-y": `${node.y}px`,
           width: node.width ?? 288,
           "--canvas-node-height": `${node.height ?? 200}px`,
         } as CSSProperties
@@ -239,9 +242,9 @@ export function CanvasNode({
         }
         onPointerDown={onDragStart}
         onPointerMove={onDragMove}
-        onPointerUp={() => onDragEnd()}
-        onPointerCancel={() => onDragEnd(true)}
-        onLostPointerCapture={() => onDragEnd(true)}
+        onPointerUp={(event) => onDragEnd(false, event)}
+        onPointerCancel={(event) => onDragEnd(true, event)}
+        onLostPointerCapture={(event) => onDragEnd(true, event)}
         onKeyDown={(event) => {
           if (!editable) return;
           const step = event.shiftKey ? 10 : 1;
@@ -356,9 +359,9 @@ export function CanvasNode({
           if (!editingText) onDragStart(event);
         }}
         onPointerMove={onDragMove}
-        onPointerUp={() => onDragEnd()}
-        onPointerCancel={() => onDragEnd(true)}
-        onLostPointerCapture={() => onDragEnd(true)}
+        onPointerUp={(event) => onDragEnd(false, event)}
+        onPointerCancel={(event) => onDragEnd(true, event)}
+        onLostPointerCapture={(event) => onDragEnd(true, event)}
         aria-label={editingText ? undefined : `选择 ${node.title}`}
         style={{ height: "var(--canvas-node-height)" }}
       >

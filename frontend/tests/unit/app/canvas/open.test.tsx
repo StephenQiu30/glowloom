@@ -702,3 +702,262 @@ it("未知配置只读基线收到新快照保持opaque，不解析或触发重�
   await screen.findByRole("heading", { name: "新版不透明节点" });
   expect(api.save).not.toHaveBeenCalled();
 });
+function nodePointer(
+  target: Element,
+  type: string,
+  x: number,
+  y: number,
+  pointerId = 1,
+) {
+  const event = new MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    button: 0,
+    clientX: x,
+    clientY: y,
+  });
+  Object.defineProperty(event, "pointerId", { value: pointerId });
+  fireEvent(target, event);
+  return event;
+}
+async function openDraggableNode() {
+  const { createResourceNode } = await import("@/app/canvas/document");
+  const node = {
+    ...createResourceNode("text", { x: 200, y: 150 }),
+    title: "拖动回归",
+  };
+  await open({ ...canvas, nodes: [node], viewport: { x: 0, y: 0, zoom: 0.5 } });
+  const handle = await screen.findByRole("button", { name: "移动 拖动回归" });
+  handle.hasPointerCapture = () => false;
+  document.querySelector<HTMLElement>(
+    "[data-canvas-viewport]",
+  )!.hasPointerCapture = () => false;
+  return { node, handle, card: handle.parentElement! };
+}
+function remotePosition(nodeID: string, x: number, y: number) {
+  const operations: import("@/app/canvas/operations").Operation[] = [
+    { type: "set", node_id: nodeID, path: ["position"], value: { x, y } },
+  ];
+  confirm(
+    {
+      key: crypto.randomUUID(),
+      body: { operation_version: 1, base_revision: base.revision, operations },
+    },
+    operations,
+    "other",
+  );
+}
+it("拖动阻止原生拖拽，忽略其他指针并通过服务端贡献撤销落点", async () => {
+  const { node, handle, card } = await openDraggableNode();
+  expect(nodePointer(handle, "pointerdown", 100, 75).defaultPrevented).toBe(
+    true,
+  );
+  nodePointer(handle, "pointermove", 600, 400, 2);
+  expect(card.style.left).toBe("200px");
+  nodePointer(handle, "pointermove", 130, 95);
+  nodePointer(handle, "pointerup", 150, 115);
+  expect([card.style.left, card.style.top]).toEqual(["300px", "230px"]);
+  save();
+  await waitFor(() => expect(api.send).toHaveBeenCalled());
+  const move = api.send.mock.calls[0][0] as Envelope;
+  act(() => confirm(move));
+  fireEvent.click(screen.getByRole("button", { name: "撤销编辑" }));
+  await waitFor(() =>
+    expect(
+      api.send.mock.calls.some((c) => c[0].body.undo_of === move.key),
+    ).toBe(true),
+  );
+  const undo = api.send.mock.calls.find(
+    (c) => c[0].body.undo_of === move.key,
+  )![0] as Envelope;
+  act(() =>
+    confirm(undo, [
+      {
+        type: "set",
+        node_id: node.id,
+        path: ["position"],
+        value: { x: 200, y: 150 },
+      },
+    ]),
+  );
+  expect([card.style.left, card.style.top]).toEqual(["200px", "150px"]);
+  fireEvent.click(screen.getByRole("button", { name: "重做编辑" }));
+  await waitFor(() =>
+    expect(
+      api.send.mock.calls.some((c) => c[0].body.undo_of === undo.key),
+    ).toBe(true),
+  );
+  const redo = api.send.mock.calls.find(
+    (c) => c[0].body.undo_of === undo.key,
+  )![0] as Envelope;
+  act(() =>
+    confirm(redo, [
+      {
+        type: "set",
+        node_id: node.id,
+        path: ["position"],
+        value: { x: 300, y: 230 },
+      },
+    ]),
+  );
+  expect([card.style.left, card.style.top]).toEqual(["300px", "230px"]);
+  expect(api.save).not.toHaveBeenCalled();
+});
+it("拖动中的远端位置参与OT，松手后只提交最终落点", async () => {
+  const { node, handle, card } = await openDraggableNode();
+  nodePointer(handle, "pointerdown", 100, 75);
+  nodePointer(handle, "pointermove", 130, 95);
+  act(() => remotePosition(node.id, 800, 150));
+  nodePointer(handle, "pointerup", 150, 115);
+  expect([card.style.left, card.style.top]).toEqual(["300px", "230px"]);
+  save();
+  await waitFor(() => expect(api.send).toHaveBeenCalled());
+  expect(api.send.mock.calls[0][0].body).toMatchObject({
+    base_revision: 2,
+    operations: [
+      { type: "set", path: ["position"], value: { x: 300, y: 230 } },
+    ],
+  });
+  expect(screen.queryByRole("region", { name: "版本冲突处理" })).toBeNull();
+  expect(api.save).not.toHaveBeenCalled();
+});
+it("取消拖动保留已同步的远端位置，不产生本地移动", async () => {
+  const { node, handle, card } = await openDraggableNode();
+  nodePointer(handle, "pointerdown", 100, 75);
+  nodePointer(handle, "pointermove", 130, 95);
+  act(() => remotePosition(node.id, 800, 150));
+  nodePointer(handle, "pointercancel", 130, 95);
+  expect(card.style.left).toBe("800px");
+  expect(api.send).not.toHaveBeenCalled();
+});
+it("连续拖动跨越旧操作回执，后一落点仍提交到新版本", async () => {
+  const { handle, card } = await openDraggableNode();
+  nodePointer(handle, "pointerdown", 100, 75);
+  nodePointer(handle, "pointerup", 150, 115);
+  save();
+  await waitFor(() => expect(api.send).toHaveBeenCalledOnce());
+  const first = api.send.mock.calls[0][0] as Envelope;
+  nodePointer(handle, "pointerdown", 150, 115);
+  nodePointer(handle, "pointermove", 170, 125);
+  act(() => confirm(first));
+  nodePointer(handle, "pointerup", 200, 145);
+  expect([card.style.left, card.style.top]).toEqual(["400px", "290px"]);
+  save();
+  await waitFor(() =>
+    expect(api.send.mock.calls.filter((c) => !c[1])).toHaveLength(2),
+  );
+  const second = api.send.mock.calls.filter((c) => !c[1])[1][0] as Envelope;
+  expect(second.body).toMatchObject({
+    base_revision: 2,
+    operations: [
+      { type: "set", path: ["position"], value: { x: 400, y: 290 } },
+    ],
+  });
+  act(() => confirm(second));
+  await waitFor(() =>
+    expect(screen.getByRole("status").textContent).toContain("已保存"),
+  );
+  expect([card.style.left, card.style.top]).toEqual(["400px", "290px"]);
+});
+it("拖动中请求保存等待手势完成，只提交最终位置", async () => {
+  const { handle } = await openDraggableNode();
+  nodePointer(handle, "pointerdown", 100, 75);
+  nodePointer(handle, "pointermove", 130, 95);
+  fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+  expect(api.send).not.toHaveBeenCalled();
+  nodePointer(handle, "pointerup", 150, 115);
+  await waitFor(() => expect(api.send).toHaveBeenCalledOnce());
+  expect(api.send.mock.calls[0][0].body.operations).toMatchObject([
+    { type: "set", path: ["position"], value: { x: 300, y: 230 } },
+  ]);
+});
+it("按下后未移动不把单击当成拖动", async () => {
+  const { handle } = await openDraggableNode();
+  nodePointer(handle, "pointerdown", 100, 75);
+  fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+  nodePointer(handle, "pointerup", 101, 76);
+  expect(handle.parentElement!.style.left).toBe("200px");
+  expect(api.send).not.toHaveBeenCalled();
+  expect(api.save).not.toHaveBeenCalled();
+});
+
+it("指针静止时协同位置到达也不能覆盖正在显示的拖动落点", async () => {
+  const { node, handle, card } = await openDraggableNode();
+  nodePointer(handle, "pointerdown", 100, 75);
+  nodePointer(handle, "pointermove", 130, 95);
+  await act(
+    () =>
+      new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+  );
+  const shownX = () =>
+    Number.parseFloat(
+      card.style.getPropertyValue("--canvas-drag-x") || card.style.left,
+    );
+  expect(shownX()).toBe(260);
+  act(() => remotePosition(node.id, 800, 150));
+  expect(shownX()).toBe(260);
+  nodePointer(handle, "pointerup", 130, 95);
+  expect(card.style.left).toBe("260px");
+  expect(card.style.getPropertyValue("--canvas-drag-x")).toBe("");
+});
+
+it.each(["read_only", "reconnecting"] as const)(
+  "拖动开始后%s，松手清理预览且恢复后可以继续提交",
+  async (reason) => {
+    const { node, handle, card } = await openDraggableNode();
+    nodePointer(handle, "pointerdown", 100, 75);
+    nodePointer(handle, "pointermove", 130, 95);
+    await act(
+      () =>
+        new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+    );
+    act(() =>
+      cb().status(reason === "reconnecting" ? "reconnecting" : "live", false),
+    );
+    nodePointer(handle, "pointerup", 150, 115);
+    expect([card.style.left, card.style.top]).toEqual(["200px", "150px"]);
+    expect(card.style.getPropertyValue("--canvas-drag-x")).toBe("");
+    expect(card.style.getPropertyValue("--canvas-drag-y")).toBe("");
+    expect(api.send).not.toHaveBeenCalled();
+    act(() => cb().status("live", true));
+    expect([card.style.left, card.style.top]).toEqual(["200px", "150px"]);
+    nodePointer(handle, "pointerdown", 100, 75);
+    nodePointer(handle, "pointerup", 125, 95);
+    save();
+    await waitFor(() => expect(api.send).toHaveBeenCalledOnce());
+    expect(api.send.mock.calls[0][0].body.operations).toMatchObject([
+      {
+        type: "set",
+        node_id: node.id,
+        path: ["position"],
+        value: { x: 250, y: 190 },
+      },
+    ]);
+  },
+);
+
+it("连接状态在一次渲染前恢复，可写界面仍允许后续拖动", async () => {
+  const { node, handle, card } = await openDraggableNode();
+  act(() => {
+    cb().status("reconnecting", false);
+    cb().status("live", true);
+  });
+  expect(
+    screen
+      .getByRole("toolbar", { name: "画布工具" })
+      .getAttribute("aria-disabled"),
+  ).toBe("false");
+  nodePointer(handle, "pointerdown", 100, 75);
+  nodePointer(handle, "pointerup", 125, 95);
+  expect([card.style.left, card.style.top]).toEqual(["250px", "190px"]);
+  save();
+  await waitFor(() => expect(api.send).toHaveBeenCalledOnce());
+  expect(api.send.mock.calls[0][0].body.operations).toMatchObject([
+    {
+      type: "set",
+      node_id: node.id,
+      path: ["position"],
+      value: { x: 250, y: 190 },
+    },
+  ]);
+});

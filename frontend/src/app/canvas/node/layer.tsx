@@ -123,8 +123,16 @@ export function CanvasNodeLayer({
         };
         return {
           ...node,
-          x: value(element?.style.left, node.x),
-          y: value(element?.style.top, node.y),
+          x: value(
+            element?.style.getPropertyValue("--canvas-drag-x") ||
+              element?.style.left,
+            node.x,
+          ),
+          y: value(
+            element?.style.getPropertyValue("--canvas-drag-y") ||
+              element?.style.top,
+            node.y,
+          ),
           width: value(element?.style.width, node.width ?? 288),
           height: value(
             element?.style.getPropertyValue("--canvas-node-height"),
@@ -142,6 +150,9 @@ export function CanvasNodeLayer({
         if (a && b) path.setAttribute("d", connectionPath(a, b));
       }
     };
+    // A remote render changes the SVG path too; keep it on the held preview
+    // before paint even when the pointer has stopped producing events.
+    preview();
     container.addEventListener(CANVAS_NODE_DRAG_EVENT, preview);
     return () => container.removeEventListener(CANVAS_NODE_DRAG_EVENT, preview);
   }, [containerRef, index, edges]);
