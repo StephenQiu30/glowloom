@@ -4,18 +4,18 @@
 
 ## 当前需求
 
-当前范围涵盖用户体系、项目与主画布、统一创作入口、多参考编辑器、AI接入、上传存储及画布数据/协作。完整候选目录不等于全部已排期；当前实施进度、剩余工作与阻塞统一见 [BACKLOG](BACKLOG.md)，规则与历史证据见对应来源和设计。
+当前范围涵盖用户体系、项目与主画布、统一创作入口、多参考编辑器、AI接入、上传存储及画布数据/协作。完整候选目录不等于全部已排期；当前实施进度、剩余工作与阻塞统一见 [BACKLOG](BACKLOG.md)，规则见原始需求及设计，实施与历史证据见对应 Plan。
 
 - [文档入口](docs/00-文档索引.md)
 - [产品总览设计](docs/design/24-产品总览与交付边界设计.md) · [全部主题设计](docs/design/00-设计导航.md)
 - [统一工作台与创作入口设计](docs/design/09-统一顶栏与阶段入口设计.md) · [AI接入设计](docs/design/07-AI平台接入市场调研与架构设计.md)
-- [详细需求与验收](docs/design/01-用户系统总体设计.md#36-需求原文与规则文首来源与范围)
+- [详细需求与验收](docs/requirement/02-用户系统需求.md)
 - [系统设计](docs/design/01-用户系统总体设计.md) · [数据库](docs/design/02-用户系统数据库设计.md) · [接口](docs/design/03-用户系统接口设计.md) · [测试与运行](docs/design/04-用户系统测试与运行设计.md)
-- [用户系统产品定义](docs/design/01-用户系统总体设计.md#34-产品定义文首来源与范围)
+- [用户系统产品定义](docs/prd/01-用户系统.md)
 - [落地任务与验证](docs/design/01-用户系统总体设计.md)
-- [全产品能力范围](docs/design/24-产品总览与交付边界设计.md#33-需求原文与规则文首来源与范围)
+- [全产品能力范围](docs/requirement/01-产品范围.md)
 
-任务按[设计、用户故事、测试场景模板](docs/templates/00-模板导航.md)组织，当前实施状态统一维护在 [BACKLOG](BACKLOG.md)。原需求、产品定义、调研与任务均已归入对应设计，原文、确认和证据保留；多参考编辑器仍沿已确认的 Tiptap 方案，规则和分层证据见[编辑器设计](docs/design/06-多参考提示词编辑器调研与设计.md)。
+任务按[设计、用户故事、测试场景模板](docs/templates/00-模板导航.md)组织，当前实施状态统一维护在 [BACKLOG](BACKLOG.md)。原始需求、技术设计、PRD、Plan 和长期调研独立维护；按 design → PRD → Plan 显式链接，原文、确认和证据保留；多参考编辑器仍沿已确认的 Tiptap 方案，规则和分层证据见[编辑器设计](docs/design/06-多参考提示词编辑器调研与设计.md)。
 
 ## 开发与协作
 
@@ -28,7 +28,7 @@ docker compose up -d --build backend  # 仅启动或更新后端
 
 现有依赖服务、Temporal namespace、身份密钥及 `.env` 须提前准备；Compose 复用这些资源，不执行数据库迁移。启动后使用 `docker compose ps` 查看状态，使用 `docker compose logs --tail=100 backend` 排查编译或启动错误。
 
-会话v2的签名私钥、公钥、验证映射和回执密钥须使用持久路径，例如已忽略的`.local/identity/`，不要引用临时任务目录。分别设置`.env.example`中的`LV_IDENTITY_JWT_*`和`LV_IDENTITY_REFRESH_RECEIPT_KEY_FILE`；验证映射中的公钥容器路径为`/run/secrets/identity-jwt-public-key`。私钥和回执密钥须独立，文件权限为0600；已有密钥不能随启动重新生成。若原文件丢失，本机会话需要重新登录；身份主密钥必须保留。
+身份与会话密钥由 `.env` 直接注入，配置名及格式见 `.env.example`：`LV_IDENTITY_KEY`、`LV_IDENTITY_JWT_PRIVATE_KEY`、`LV_IDENTITY_JWT_VERIFY_KEYS`、`LV_IDENTITY_JWT_ACTIVE_KID`、`LV_IDENTITY_REFRESH_RECEIPT_KEY`。JWT 私钥使用 Base64 PEM，验证映射为 KID 到 Base64 公钥 PEM 的 JSON，回执密钥为独立32字节 Base64值；运行时不加载独立密钥文件或 Compose secret 挂载。已有密钥不得随启动重新生成，缺失密钥按恢复授权处理，身份主密钥必须保留。
 
 Temporal返回命名空间不存在时，先用`temporal operator namespace list --address 127.0.0.1:7233`核对现有服务，再按`.env`中的实际命名空间显式注册；不改用其他项目的命名空间。本地默认值可使用`temporal operator namespace create --namespace glowloom-local --address 127.0.0.1:7233 --retention 7d`，随后重启后端。
 
