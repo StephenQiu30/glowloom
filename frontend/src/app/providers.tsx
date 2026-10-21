@@ -18,8 +18,7 @@ export function Providers({
   initialSidebarOpen?: boolean;
 }) {
   const pathname = usePathname();
-  const preview =
-    process.env.NODE_ENV === "development" && pathname === "/canvas/preview";
+  const standaloneCanvas = pathname === "/canvas";
   return (
     <ThemeProvider
       attribute="class"
@@ -27,7 +26,7 @@ export function Providers({
       enableSystem
       disableTransitionOnChange
     >
-      {preview ? (
+      {standaloneCanvas ? (
         <TooltipProvider>{children}</TooltipProvider>
       ) : (
         <SessionProvider>
