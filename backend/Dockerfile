@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM golang:1.26.9-bookworm AS dev
+FROM golang:1.26.10-bookworm AS dev
 ENV CGO_ENABLED=0 GOMAXPROCS=2 GOCACHE=/go/build-cache
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg curl socat \
     && rm -rf /var/lib/apt/lists/*
@@ -37,7 +37,7 @@ ENTRYPOINT
 ENTRYPOINT ["/usr/local/bin/glowloom-dev-entrypoint"]
 CMD ["--role=api"]
 
-FROM golang:1.26.9-alpine AS build
+FROM golang:1.26.10-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
