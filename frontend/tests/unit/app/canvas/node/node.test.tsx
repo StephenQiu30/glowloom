@@ -39,8 +39,6 @@ function node() {
       onEditTitle={vi.fn()}
       onMove={vi.fn()}
       onDragStart={vi.fn()}
-      onDragMove={vi.fn()}
-      onDragEnd={vi.fn()}
     />,
   );
   return {
@@ -97,11 +95,9 @@ it("手柄提供键盘等价操作，Shift指针调整保持比例", () => {
   ).toBeCloseTo(1);
 });
 
-it("节点媒体区域与标题一样支持拖动和取消", () => {
+it("节点媒体区域与标题只负责发起画布手势", () => {
   const value = createDraftNode("video_generation", "1:1", 0),
-    start = vi.fn(),
-    move = vi.fn(),
-    end = vi.fn();
+    start = vi.fn();
   render(
     <CanvasNode
       node={value}
@@ -113,8 +109,6 @@ it("节点媒体区域与标题一样支持拖动和取消", () => {
       onEditTitle={vi.fn()}
       onMove={vi.fn()}
       onDragStart={start}
-      onDragMove={move}
-      onDragEnd={end}
     />,
   );
   const body = screen.getByRole("button", { name: `选择 ${value.title}` });
@@ -122,11 +116,11 @@ it("节点媒体区域与标题一样支持拖动和取消", () => {
   fireEvent.pointerMove(body, { clientX: 100 });
   fireEvent.pointerCancel(body);
   expect(start).toHaveBeenCalledTimes(1);
-  expect(move).toHaveBeenCalledTimes(1);
-  expect(end).toHaveBeenCalledWith(
-    true,
-    expect.objectContaining({ pointerId: 1 }),
+  fireEvent.pointerDown(
+    screen.getByRole("button", { name: `移动 ${value.title}` }),
+    { button: 0 },
   );
+  expect(start).toHaveBeenCalledTimes(2);
 });
 
 it("未选中的视频也复用媒体预览，选中启用播放而不嵌套按钮", () => {
@@ -148,8 +142,6 @@ it("未选中的视频也复用媒体预览，选中启用播放而不嵌套按�
     onEditTitle: vi.fn(),
     onMove: vi.fn(),
     onDragStart: vi.fn(),
-    onDragMove: vi.fn(),
-    onDragEnd: vi.fn(),
   };
   const view = render(<CanvasNode {...props} />);
   expect(media).toHaveBeenLastCalledWith(

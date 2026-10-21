@@ -131,8 +131,6 @@ export class Collaboration {
   invalidDraft = false;
   private composing = false;
   private resynchronizing = false;
-  private deadline = 0;
-  private idleTimer?: ReturnType<typeof setTimeout>;
   private draining = false;
   private held: ({ changes: Change[] } | { receipt: Receipt })[] = [];
   private heldBytes = 0;
@@ -145,7 +143,6 @@ export class Collaboration {
     private changed: (transition?: CollaborationTransition) => void,
     private submit: (envelope: Envelope) => void,
     private options: {
-      debounceMs?: number;
       validate?: (document: Canvas) => boolean;
     } = {},
   ) {
@@ -179,10 +176,7 @@ export class Collaboration {
           op.type === "text" ||
           (op.type === "set" && op.path?.join(".") === "config.text_source"),
       );
-    if (
-      (!this.online || !this.writable || this.resynchronizing) &&
-      !continuation
-    )
+    if ((!this.writable || this.resynchronizing) && !continuation)
       return operationError("connection_read_only");
     if (this.pending?.body.undo_of) operationError("undo_pending");
     if (!operations.length) return;
@@ -204,22 +198,22 @@ export class Collaboration {
       1 << 20
     )
       operationError("canvas_request_too_large");
+    // Bound the page-memory backlog during a slow or disconnected transport.
+    // Keep the accepted queue intact if the new intent exceeds this budget.
+    if (
+      new TextEncoder().encode(
+        JSON.stringify([...this.queue.map((item) => item.operations), clean]),
+      ).length >
+      1 << 20
+    )
+      operationError("canvas_request_too_large");
     this.queue.push({ key, operations: clean });
-    this.deadline = Date.now() + (this.options.debounceMs ?? 0);
     this.pump();
     this.changed();
   }
   private pump() {
-    clearTimeout(this.idleTimer);
     if (this.composing || this.draining || this.resynchronizing) return;
     if (!this.pending && this.queue.length && this.online && this.writable) {
-      if (this.deadline > Date.now()) {
-        this.idleTimer = setTimeout(
-          () => this.pump(),
-          this.deadline - Date.now(),
-        );
-        return;
-      }
       const first = this.queue[0];
       let count = 0,
         operations: Operation[] = [];
@@ -485,7 +479,6 @@ export class Collaboration {
     const target = (direction === "undo" ? this.undoStack : this.redoStack).at(
       -1,
     )!;
-    this.deadline = 0;
     this.queue.push({
       key: crypto.randomUUID(),
       operations: [],
@@ -579,6 +572,8 @@ export class Collaboration {
     return true;
   }
   flush(): Promise<Canvas> {
+    if (!this.online || !this.writable || this.resynchronizing)
+      return Promise.reject(new Error("request_unconfirmed"));
     if (!this.dirty)
       return this.recovery.length
         ? Promise.reject(new Error("collaboration_recovery_required"))
@@ -586,12 +581,10 @@ export class Collaboration {
     const promise = new Promise<Canvas>((resolve, reject) =>
       this.waiters.push({ resolve, reject }),
     );
-    this.deadline = 0;
     this.pump();
     return promise;
   }
   dispose() {
-    clearTimeout(this.idleTimer);
     this.online = false;
     for (const w of this.waiters.splice(0))
       w.reject(new Error("request_unconfirmed"));

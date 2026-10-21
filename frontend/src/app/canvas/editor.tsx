@@ -146,6 +146,10 @@ function nodePreviewText(node: Node): string {
         .join("\n")
     : [draft.prompt, draft.negative_prompt].filter(Boolean).join("\n");
 }
+type DragPointer = Pick<
+  PointerEvent<HTMLElement>,
+  "pointerId" | "clientX" | "clientY" | "stopPropagation"
+>;
 const limit = (value: number) => Math.max(-1e6, Math.min(1e6, value));
 const CanvasMaterialDialog = dynamic(
   () =>
@@ -189,8 +193,10 @@ export function CanvasEditor({
   const [socketWritable, setSocketWritable] = useState(developmentPreview);
   const [syncBlocked, setSyncBlocked] = useState(false);
   const verifyIdentity = useRef<() => void>(() => {});
+  // Transport availability controls sending, not the last authorized edit grant.
+  // Reconnecting must not turn a held gesture or its local intent into read-only.
   const readOnly =
-    liveStatus !== "live" ||
+    liveStatus === "closed" ||
     !socketWritable ||
     syncBlocked ||
     identityPending ||
@@ -275,6 +281,7 @@ export function CanvasEditor({
     moved: boolean;
     finished: Promise<void>;
     finish: () => void;
+    cleanup: () => void;
     button: HTMLElement;
     pointerId: number;
     members: {
@@ -408,6 +415,7 @@ export function CanvasEditor({
     return () => {
       alive.current = false;
       if (drag.current?.frame != null) cancelAnimationFrame(drag.current.frame);
+      drag.current?.cleanup();
       drag.current?.finish();
       drag.current = null;
       request.current?.abort();
@@ -1230,6 +1238,27 @@ export function CanvasEditor({
     e.currentTarget.setPointerCapture(e.pointerId);
     const bounds = board.current!.getBoundingClientRect();
     const origin = view.current;
+    // The canvas owns the full gesture. DOM movement, overlays or capture loss
+    // must not prevent pointerup from releasing it and accepting the next drag.
+    const move = (event: globalThis.PointerEvent) => moveDrag(event);
+    const up = (event: globalThis.PointerEvent) => endDrag(false, event);
+    const cancel = (event: globalThis.PointerEvent) => endDrag(true, event);
+    const blur = () => endDrag(true);
+    const hidden = () => {
+      if (document.visibilityState === "hidden") endDrag(true);
+    };
+    window.addEventListener("pointermove", move, true);
+    window.addEventListener("pointerup", up, true);
+    window.addEventListener("pointercancel", cancel, true);
+    window.addEventListener("blur", blur);
+    document.addEventListener("visibilitychange", hidden);
+    const cleanup = () => {
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", up, true);
+      window.removeEventListener("pointercancel", cancel, true);
+      window.removeEventListener("blur", blur);
+      document.removeEventListener("visibilitychange", hidden);
+    };
     let finish!: () => void;
     const finished = new Promise<void>((resolve) => {
       finish = resolve;
@@ -1251,6 +1280,7 @@ export function CanvasEditor({
       moved: false,
       finished,
       finish,
+      cleanup,
       button: e.currentTarget,
       pointerId: e.pointerId,
       members: local.current
@@ -1284,7 +1314,7 @@ export function CanvasEditor({
     }
     board.current?.dispatchEvent(new Event(CANVAS_NODE_DRAG_EVENT));
   }
-  function moveDrag(e: PointerEvent<HTMLElement>) {
+  function moveDrag(e: DragPointer) {
     const d = drag.current;
     if (!d || e.pointerId !== d.pointerId) return;
     e.stopPropagation();
@@ -1308,7 +1338,7 @@ export function CanvasEditor({
     );
     if (d.frame === null) d.frame = requestAnimationFrame(previewDrag);
   }
-  function endDrag(cancel = false, event?: PointerEvent<HTMLElement>) {
+  function endDrag(cancel = false, event?: DragPointer) {
     const d = drag.current;
     if (!d || (event && event.pointerId !== d.pointerId)) return;
     event?.stopPropagation();
@@ -1316,6 +1346,7 @@ export function CanvasEditor({
     if (d.frame !== null) cancelAnimationFrame(d.frame);
     if (!cancel) previewDrag();
     drag.current = null;
+    d.cleanup();
     if (d.button.hasPointerCapture(d.pointerId))
       d.button.releasePointerCapture(d.pointerId);
     if (!cancel && (d.nextX !== d.x || d.nextY !== d.y)) {
@@ -2407,8 +2438,6 @@ export function CanvasEditor({
                     }
                   }}
                   onDragStart={(event) => beginDrag(event, node)}
-                  onDragMove={moveDrag}
-                  onDragEnd={endDrag}
                   onDuplicate={() => copyNode(node)}
                   canRemove={
                     (!developmentPreview ||

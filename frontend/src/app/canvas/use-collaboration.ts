@@ -208,7 +208,6 @@ export function useCanvasCollaboration(
       },
       (envelope) => live.sendCollaboration(envelope),
       {
-        debounceMs: 900,
         validate: (doc) => {
           try {
             requireCanvas(doc, initial.project_id, initial.id);
@@ -376,11 +375,6 @@ export function useCanvasCollaboration(
     flush: () => {
       const session = controller.current;
       if (!session) return Promise.reject(new Error("connection_read_only"));
-      if (session.pending)
-        socket.current?.sendCollaboration(
-          { key: session.pending.key, body: session.pending.body },
-          true,
-        );
       return session.flush();
     },
     history: (direction: "undo" | "redo") =>

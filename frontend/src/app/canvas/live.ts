@@ -162,11 +162,12 @@ export class CanvasLive {
           this.ready &&
           typeof p.writable === "boolean"
         ) {
-          const pending = this.callbacks.collaboration.pending(),
-            restored = !this.writable && p.writable;
+          const pending = this.callbacks.collaboration.pending();
           this.writable = p.writable;
           this.callbacks.status("live", p.writable);
-          if (restored && pending) this.sendCollaboration(pending, true);
+          // A healthy connection can still lose an application ACK. Heartbeats
+          // reconcile the frozen request through this socket, never a second saver.
+          if (pending && p.writable) this.sendCollaboration(pending, true);
         } else if (p.type === "ready") {
           this.ready = true;
           this.writable = p.writable === true;

@@ -50,8 +50,6 @@ export function CanvasNode({
   onOpen,
   onMove,
   onDragStart,
-  onDragMove,
-  onDragEnd,
   onDuplicate,
   onRemove,
   canRemove = false,
@@ -92,8 +90,6 @@ export function CanvasNode({
   onOpen?: () => void;
   onMove: (x: number, y: number) => void;
   onDragStart: (event: PointerEvent<HTMLElement>) => void;
-  onDragMove: (event: PointerEvent<HTMLElement>) => void;
-  onDragEnd: (cancel?: boolean, event?: PointerEvent<HTMLElement>) => void;
   onDuplicate?: () => void;
   onRemove?: () => void;
   canRemove?: boolean;
@@ -241,10 +237,6 @@ export function CanvasNode({
           onSelect(event.shiftKey || event.metaKey || event.ctrlKey)
         }
         onPointerDown={onDragStart}
-        onPointerMove={onDragMove}
-        onPointerUp={(event) => onDragEnd(false, event)}
-        onPointerCancel={(event) => onDragEnd(true, event)}
-        onLostPointerCapture={(event) => onDragEnd(true, event)}
         onKeyDown={(event) => {
           if (!editable) return;
           const step = event.shiftKey ? 10 : 1;
@@ -358,10 +350,6 @@ export function CanvasNode({
         onPointerDown={(event) => {
           if (!editingText) onDragStart(event);
         }}
-        onPointerMove={onDragMove}
-        onPointerUp={(event) => onDragEnd(false, event)}
-        onPointerCancel={(event) => onDragEnd(true, event)}
-        onLostPointerCapture={(event) => onDragEnd(true, event)}
         aria-label={editingText ? undefined : `选择 ${node.title}`}
         style={{ height: "var(--canvas-node-height)" }}
       >

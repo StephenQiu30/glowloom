@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
   Collaboration,
   type Change,
@@ -228,34 +228,26 @@ it("requires a terminal original receipt before a verified history-gap snapshot"
   expect(c.document.nodes[0].config.text).toBe("XAB!");
 });
 
-it("batches a short control edit atomically and flush bypasses the idle delay", async () => {
-  vi.useFakeTimers();
-  try {
-    const sent: Envelope[] = [];
-    const c = new Collaboration(
-      doc(),
-      () => {},
-      (e) => sent.push(e),
-      { debounceMs: 900 },
-    );
-    c.connection(true, true, "me");
-    c.enqueue(
-      [{ type: "set", node_id: "n", path: ["title"], value: "" }],
-      "first",
-    );
-    c.enqueue(
-      [{ type: "set", node_id: "n", path: ["title"], value: "new" }],
-      "second",
-    );
-    expect(sent).toHaveLength(0);
-    await vi.advanceTimersByTimeAsync(900);
-    expect(sent).toHaveLength(1);
-    expect(sent[0].body.operations).toHaveLength(2);
-    expect(c.document.nodes[0].title).toBe("new");
-    c.dispose();
-  } finally {
-    vi.useRealTimers();
-  }
+it("sends a completed transaction immediately and queues only behind its receipt", () => {
+  const sent: Envelope[] = [];
+  const c = new Collaboration(
+    doc(),
+    () => {},
+    (e) => sent.push(e),
+  );
+  c.connection(true, true, "me");
+  c.enqueue(
+    [{ type: "set", node_id: "n", path: ["title"], value: "first" }],
+    "first",
+  );
+  expect(sent).toHaveLength(1);
+  c.enqueue(
+    [{ type: "set", node_id: "n", path: ["title"], value: "second" }],
+    "second",
+  );
+  expect(sent).toHaveLength(1);
+  expect(c.document.nodes[0].title).toBe("second");
+  c.dispose();
 });
 
 it("retains the active IME continuation when the connection drops", () => {
@@ -344,4 +336,115 @@ it("keeps causal Q when Go canonical JSON changes property order only", async ()
     c.document.nodes[0].config.draft?.composer?.document.content[0]
       .content?.[0],
   ).toEqual({ type: "text", text: "中😀" });
+});
+
+it("offline editing queues behind immutable P and reconnect ACK cannot overwrite Q", () => {
+  const sent: Envelope[] = [];
+  const c = new Collaboration(
+    doc(),
+    () => {},
+    (e) => sent.push(e),
+  );
+  c.connection(true, true, "me");
+  c.enqueue(
+    [
+      {
+        type: "set",
+        node_id: "n",
+        path: ["position"],
+        value: { x: 10, y: 20 },
+      },
+    ],
+    "p",
+  );
+  const frozen = JSON.stringify(sent[0]);
+  c.connection(false, true, "me");
+  c.enqueue(
+    [
+      {
+        type: "set",
+        node_id: "n",
+        path: ["position"],
+        value: { x: 30, y: 40 },
+      },
+    ],
+    "q",
+  );
+  expect(c.document.nodes[0]).toMatchObject({ x: 30, y: 40 });
+  expect(sent).toHaveLength(1);
+  c.connection(true, true, "me");
+  c.receipt({ status: "accepted", op_id: "p", revision: 2 });
+  c.changes([
+    {
+      revision: 2,
+      actor_id: "me",
+      op_id: "p",
+      operations: sent[0].body.operations,
+      effects: [
+        {
+          entity: "node",
+          id: "n",
+          path: ["position"],
+          index: 0,
+          after: { x: 10, y: 20 },
+          after_exists: true,
+        },
+      ],
+    },
+  ]);
+  expect(JSON.stringify(sent[0])).toBe(frozen);
+  expect(sent).toHaveLength(2);
+  expect(sent[1].body.base_revision).toBe(2);
+  expect(c.document.nodes[0]).toMatchObject({ x: 30, y: 40 });
+  c.connection(true, false, "me");
+  expect(() =>
+    c.enqueue([
+      { type: "set", node_id: "n", path: ["title"], value: "denied" },
+    ]),
+  ).toThrow("connection_read_only");
+  c.dispose();
+});
+
+it("offline flush cannot claim a saved source for generation", async () => {
+  const c = new Collaboration(
+    doc(),
+    () => {},
+    () => {},
+  );
+  c.connection(true, true, "me");
+  c.connection(false, true, "me");
+  await expect(c.flush()).rejects.toThrow("request_unconfirmed");
+  c.enqueue([{ type: "set", node_id: "n", path: ["title"], value: "offline" }]);
+  await expect(c.flush()).rejects.toThrow("request_unconfirmed");
+  expect(c.document.nodes[0].title).toBe("offline");
+  c.dispose();
+});
+
+it("bounds disconnected intent backlog without replacing accepted local intent", () => {
+  const sent: Envelope[] = [];
+  const c = new Collaboration(
+    doc(),
+    () => {},
+    (e) => sent.push(e),
+  );
+  c.connection(true, true, "me");
+  c.connection(false, true, "me");
+  const first = "a".repeat(600_000);
+  c.enqueue([{ type: "set", node_id: "n", path: ["title"], value: first }]);
+  expect(() =>
+    c.enqueue([
+      {
+        type: "set",
+        node_id: "n",
+        path: ["title"],
+        value: "b".repeat(600_000),
+      },
+    ]),
+  ).toThrow("canvas_request_too_large");
+  expect(c.document.nodes[0].title).toBe(first);
+  expect(sent).toHaveLength(0);
+  c.connection(true, true, "me");
+  expect(sent).toHaveLength(1);
+  expect(sent[0].body.operations).toHaveLength(1);
+  c.dispose();
 });

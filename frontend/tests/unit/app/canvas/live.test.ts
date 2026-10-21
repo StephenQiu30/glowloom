@@ -330,3 +330,56 @@ it("protocol 2 waits for write access before replaying a proven missing request"
   socket.receive({ type: "not_found", op_id: id });
   expect(socket.sent.at(-1)?.type).toBe("submit");
 });
+
+it("healthy heartbeat resolves a missing ACK through the same socket and identity", () => {
+  const envelope = {
+    key: id,
+    body: {
+      operation_version: 1 as const,
+      base_revision: 2,
+      operations: [
+        { type: "set", node_id: id, path: ["title"], value: "saved" },
+      ],
+    },
+  };
+  let pending: typeof envelope | undefined;
+  live = new CanvasLive(id, {
+    snapshot: vi.fn(),
+    status: vi.fn(),
+    revoked: vi.fn(),
+    collaboration: {
+      revision: () => 2,
+      pending: () => pending,
+      changes: vi.fn(),
+      receipt: () => {
+        pending = undefined;
+      },
+      resync: vi.fn(),
+      actor: vi.fn(),
+    },
+  });
+  live.start();
+  const socket = Socket.all[0];
+  socket.open();
+  socket.receive({
+    type: "ready",
+    actor_id: "me",
+    revision: 2,
+    writable: true,
+  });
+  pending = envelope;
+  live.sendCollaboration(envelope);
+  socket.receive({ type: "heartbeat", revision: 3, writable: true });
+  expect(socket.sent.at(-1)).toEqual({
+    type: "resolve",
+    op_id: id,
+    body: envelope.body,
+  });
+  socket.receive({
+    type: "ack",
+    receipt: { status: "accepted", op_id: id, revision: 3 },
+  });
+  const count = socket.sent.length;
+  socket.receive({ type: "heartbeat", revision: 3, writable: true });
+  expect(socket.sent).toHaveLength(count);
+});

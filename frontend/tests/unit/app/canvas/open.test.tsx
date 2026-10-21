@@ -193,7 +193,10 @@ function input(session: ComposerSession, text: string) {
   );
 }
 function save() {
-  fireEvent.click(screen.getByRole("button", { name: "保存画布" }));
+  // Completed transactions already auto-submit. Explicit flush is available only
+  // when the page still has a stable dirty draft, not while its ACK is in flight.
+  const button = screen.queryByRole("button", { name: "保存画布" });
+  if (button && !button.hasAttribute("disabled")) fireEvent.click(button);
 }
 beforeEach(() => {
   vi.clearAllMocks();
@@ -220,13 +223,16 @@ it("缺少上下文不请求固定项目，拒绝项目与画布串线", async (
 });
 it("实际编辑步骤经协议2发送，数据库回执前flush不能生成", async () => {
   const session = await draft();
+  const creation = api.send.mock.calls[0][0] as Envelope;
+  act(() => confirm(creation));
+  api.send.mockClear();
   input(session, "中文😀");
   fireEvent.click(screen.getByRole("button", { name: "测试确认共享输入" }));
   await waitFor(() => expect(api.send).toHaveBeenCalledOnce());
   const envelope = api.send.mock.calls[0][0] as Envelope;
   expect(envelope.body).toMatchObject({
     operation_version: 1,
-    base_revision: 1,
+    base_revision: 2,
   });
   expect(
     envelope.body.operations.some(
@@ -242,7 +248,7 @@ it("实际编辑步骤经协议2发送，数据库回执前flush不能生成", a
   act(() => confirm(envelope));
   await waitFor(() => expect(api.flushResolved).toHaveBeenCalledOnce());
   expect(api.flushResolved.mock.calls[0][0]).toMatchObject({
-    input_revision: 1,
+    input_revision: 2,
   });
 });
 it("P冻结且ACK不提前确认B，后续Q使用确认后的新基线", async () => {
@@ -273,22 +279,17 @@ it("P冻结且ACK不提前确认B，后续Q使用确认后的新基线", async (
     expect(screen.getByRole("status").textContent).toContain("已保存"),
   );
 });
-it("断线保留原P并阻止新编辑，重试发送原key和原body查证", async () => {
+it("断线保留原P和后续输入，重连查证仍引用原key和原body", async () => {
   const session = await draft();
   input(session, "原请求");
-  save();
-  await waitFor(() => expect(api.send).toHaveBeenCalledOnce());
-  const p = api.send.mock.calls[0][0] as Envelope,
-    frozen = JSON.stringify(p);
-  act(() => cb().status("reconnecting", false));
-  expect(session.editor.getText()).toBe("原请求");
-  const retry = await screen.findByRole("button", { name: "重试原保存" });
-  fireEvent.click(retry);
-  await waitFor(() =>
-    expect(api.send.mock.calls.some((c) => c[1] === true)).toBe(true),
-  );
-  const resent = api.send.mock.calls.find((c) => c[1] === true)![0];
-  expect(JSON.stringify(resent)).toBe(frozen);
+  const p = api.send.mock.calls[0][0] as Envelope;
+  const frozen = JSON.stringify(p);
+  act(() => cb().status("reconnecting"));
+  input(session, "后续输入");
+  expect(session.editor.getText()).toBe("原请求后续输入");
+  expect(JSON.stringify(cb().collaboration!.pending())).toContain(p.key);
+  expect(JSON.stringify(api.send.mock.calls[0][0])).toBe(frozen);
+  expect(api.send).toHaveBeenCalledOnce();
   expect(api.save).not.toHaveBeenCalled();
 });
 it.each(["field_conflict", "history_unavailable", "canvas_graph_read_only"])(
@@ -653,7 +654,7 @@ it("文本单选展示生成提示词，双击正文隐藏下方面板，上传�
   await screen.findByTestId("text-generation-composer");
 });
 
-it("断线时显示连接状态并暂停新编辑，恢复后允许继续", async () => {
+it("断线仅显示连接状态，不撤销已确认的编辑权限", async () => {
   await openDraft();
   act(() => api.live.mock.lastCall![0].status("reconnecting"));
   expect(screen.getByRole("status").textContent).toContain("连接中断");
@@ -661,7 +662,7 @@ it("断线时显示连接状态并暂停新编辑，恢复后允许继续", asyn
     screen
       .getByRole("toolbar", { name: "画布工具" })
       .getAttribute("aria-disabled"),
-  ).toBe("true");
+  ).toBe("false");
   act(() => api.live.mock.lastCall![0].status("live", true));
   expect(
     screen
@@ -703,7 +704,7 @@ it("未知配置只读基线收到新快照保持opaque，不解析或触发重�
   expect(api.save).not.toHaveBeenCalled();
 });
 function nodePointer(
-  target: Element,
+  target: Element | Window,
   type: string,
   x: number,
   y: number,
@@ -960,4 +961,58 @@ it("连接状态在一次渲染前恢复，可写界面仍允许后续拖动", a
       value: { x: 250, y: 190 },
     },
   ]);
+});
+
+it("短暂断线仍能完成并继续拖动，重连仅经WebSocket保存最新落点", async () => {
+  const { handle, card } = await openDraggableNode();
+  nodePointer(handle, "pointerdown", 100, 75);
+  nodePointer(handle, "pointermove", 130, 95);
+  act(() => cb().status("reconnecting"));
+  expect(screen.getByRole("button", { name: "移动 拖动回归" })).toBeTruthy();
+  nodePointer(handle, "pointerup", 150, 115);
+  expect([card.style.left, card.style.top]).toEqual(["300px", "230px"]);
+  nodePointer(handle, "pointerdown", 150, 115);
+  nodePointer(handle, "pointerup", 175, 135);
+  expect([card.style.left, card.style.top]).toEqual(["350px", "270px"]);
+  expect(api.send).not.toHaveBeenCalled();
+  act(() => cb().status("live", true));
+  expect(api.send).toHaveBeenCalledOnce();
+  const p = api.send.mock.calls[0][0] as Envelope;
+  act(() => confirm(p));
+  expect([card.style.left, card.style.top]).toEqual(["350px", "270px"]);
+  expect(api.save).not.toHaveBeenCalled();
+});
+
+it("松手立即提交WebSocket操作，不等待静默定时器", async () => {
+  const { handle } = await openDraggableNode();
+  nodePointer(handle, "pointerdown", 100, 75);
+  nodePointer(handle, "pointermove", 130, 95);
+  expect(api.send).not.toHaveBeenCalled();
+  nodePointer(handle, "pointerup", 150, 115);
+  expect(api.send).toHaveBeenCalledOnce();
+  expect(api.save).not.toHaveBeenCalled();
+});
+
+it("松手落在节点外仍结束手势，连续拖动不能被旧手势锁住", async () => {
+  const { handle, card } = await openDraggableNode();
+  nodePointer(handle, "pointerdown", 100, 75);
+  nodePointer(window, "pointermove", 130, 95);
+  nodePointer(window, "pointerup", 150, 115);
+  expect([card.style.left, card.style.top]).toEqual(["300px", "230px"]);
+  nodePointer(handle, "pointerdown", 150, 115);
+  nodePointer(window, "pointerup", 175, 135);
+  expect([card.style.left, card.style.top]).toEqual(["350px", "270px"]);
+});
+
+it("窗口失焦取消手势并释放监听，回来后可以重新拖动", async () => {
+  const { handle, card } = await openDraggableNode();
+  nodePointer(handle, "pointerdown", 100, 75);
+  nodePointer(window, "pointermove", 130, 95);
+  fireEvent(window, new Event("blur"));
+  nodePointer(window, "pointerup", 150, 115);
+  expect(card.style.left).toBe("200px");
+  expect(api.send).not.toHaveBeenCalled();
+  nodePointer(handle, "pointerdown", 100, 75);
+  nodePointer(window, "pointerup", 150, 115);
+  expect(card.style.left).toBe("300px");
 });
