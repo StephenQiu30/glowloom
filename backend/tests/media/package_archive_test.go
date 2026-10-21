@@ -115,7 +115,7 @@ func TestMediaPackageRejectsUnsafeDuplicateSymlinkCRCAndUnclaimedContent(t *test
 func TestMediaPackageOwnManifestPreservesFoldersAndRejectsDigestOrIdentityMismatch(t *testing.T) {
 	folder := uuid.New()
 	content := "包内完整文字"
-	manifest := mediaapp.LibraryPackageManifest{App: "lanverse-media-library", Version: 1, ExportedAt: time.Now().UTC(), LibraryKind: domain.LibraryProject,
+	manifest := mediaapp.LibraryPackageManifest{App: "glowloom-media-library", Version: 1, ExportedAt: time.Now().UTC(), LibraryKind: domain.LibraryProject,
 		Folders: []mediaapp.LibraryPackageFolder{{ID: folder, Name: "角色", Style: "cinema", Theme: "obsidian", Position: 0}},
 		Items:   []mediaapp.LibraryPackageItem{{ID: uuid.NewString(), Kind: "text", Metadata: mediaapp.LibraryMetadata{FolderID: &folder, PlainText: &content, Title: "正文", Category: "character", Tags: []string{}}, State: "active"}}, Files: []mediaapp.LibraryPackageFile{}}
 	binary, err := json.Marshal(manifest)
@@ -141,3 +141,23 @@ func TestMediaPackageOwnManifestPreservesFoldersAndRejectsDigestOrIdentityMismat
 }
 
 func ptrUUID(id uuid.UUID) *uuid.UUID { return &id }
+
+// This is the exact byte marker in previously exported version-1 archives.
+func TestMediaPackagePublishedV1RemainsReadableAfterBrandChange(t *testing.T) {
+	marker := string([]byte{108, 97, 110, 118, 101, 114, 115, 101, 45, 109, 101, 100, 105, 97, 45, 108, 105, 98, 114, 97, 114, 121})
+	for _, app := range []string{marker, "other-media-library"} {
+		manifest := mediaapp.LibraryPackageManifest{App: app, Version: 1, ExportedAt: time.Now().UTC(), LibraryKind: domain.LibraryPersonal, Folders: []mediaapp.LibraryPackageFolder{}, Items: []mediaapp.LibraryPackageItem{}, Files: []mediaapp.LibraryPackageFile{}}
+		body, err := json.Marshal(manifest)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data := packageZIP(t, []string{"manifest.json"}, [][]byte{body}, false)
+		_, err = mediaapp.ReadLibraryPackage(t.Context(), bytes.NewReader(data), int64(len(data)))
+		if app == marker && err != nil {
+			t.Fatal("published archive rejected", err)
+		}
+		if app != marker && !errors.Is(err, mediaapp.ErrInvalidPackage) {
+			t.Fatal("unknown namespace accepted", err)
+		}
+	}
+}

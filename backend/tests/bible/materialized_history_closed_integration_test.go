@@ -30,11 +30,11 @@ func bibleClosedHistoryDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 		t.Skip("set isolated LV_TEST_BIBLE_CLOSED_DB_DSN")
 	}
 	parsed, err := url.Parse(dsn)
-	if err != nil || parsed.Path != "/lanverse_reference" {
-		t.Fatal("closed history requires isolated lanverse_reference database", err)
+	if err != nil || parsed.Path != "/glowloom_reference" {
+		t.Fatal("closed history requires isolated glowloom_reference database", err)
 	}
 	query := parsed.Query()
-	query.Set("options", "-c role=lanverse_app")
+	query.Set("options", "-c role=glowloom_app")
 	parsed.RawQuery = query.Encode()
 	open := func(dsn string) *gorm.DB {
 		client, err := platformdb.Open(t.Context(), dsn, noop.NewTracerProvider())
@@ -50,7 +50,7 @@ func bibleClosedHistoryDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 	}
 	runtime, owner := open(parsed.String()), open(dsn)
 	var role string
-	if err := runtime.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "lanverse_app" {
+	if err := runtime.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "glowloom_app" {
 		t.Fatal("closed history requires actual nonowner", role, err)
 	}
 	return runtime, owner
@@ -93,11 +93,11 @@ func bibleClosedMutation(t *testing.T, owner *gorm.DB, seed func(*gorm.DB), read
 		}
 	}()
 	seed(tx)
-	if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+	if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 		t.Fatal(err)
 	}
 	var role string
-	if err := tx.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "lanverse_app" {
+	if err := tx.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "glowloom_app" {
 		t.Fatal("historical reader lacks actual nonowner", role, err)
 	}
 	read(tx)

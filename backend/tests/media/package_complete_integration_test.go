@@ -30,7 +30,7 @@ type packageFixtureFile struct {
 
 func packageFilesZIP(t *testing.T, files []packageFixtureFile) []byte {
 	t.Helper()
-	m := mediaapp.LibraryPackageManifest{App: "lanverse-media-library", Version: 1, ExportedAt: time.Now().UTC(), LibraryKind: domain.LibraryPersonal, Folders: []mediaapp.LibraryPackageFolder{}, Items: []mediaapp.LibraryPackageItem{}, Files: []mediaapp.LibraryPackageFile{}}
+	m := mediaapp.LibraryPackageManifest{App: "glowloom-media-library", Version: 1, ExportedAt: time.Now().UTC(), LibraryKind: domain.LibraryPersonal, Folders: []mediaapp.LibraryPackageFolder{}, Items: []mediaapp.LibraryPackageItem{}, Files: []mediaapp.LibraryPackageFile{}}
 	names, bodies := []string{"manifest.json"}, [][]byte{nil}
 	for _, f := range files {
 		path := "files/" + f.name

@@ -111,7 +111,7 @@ func TestProjectHTTPCreatePersistsFirstResponseAcrossConcurrentRequests(t *testi
 		t.Fatalf("key reuse response: %d %s", mismatch.Code, mismatch.Body.String())
 	}
 	var audit struct{ Payload []byte }
-	if err := database.Raw(`SELECT payload FROM infra.outbox WHERE partition_key=? AND topic='lanverse.audit.recorded.v1'`, created.ID.String()).Scan(&audit).Error; err != nil {
+	if err := database.Raw(`SELECT payload FROM infra.outbox WHERE partition_key=? AND topic='glowloom.audit.recorded.v1'`, created.ID.String()).Scan(&audit).Error; err != nil {
 		t.Fatal(err)
 	}
 	if bytes.Contains(audit.Payload, []byte("真实项目闭环")) || bytes.Contains(audit.Payload, []byte("不进入审计")) {

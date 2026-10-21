@@ -36,7 +36,7 @@ func ownPackageZIP(t *testing.T) []byte {
 	digest := sha256.Sum256(image)
 	folder := uuid.New()
 	text := "  完整正文\n第二行🌧️  "
-	m := mediaapp.LibraryPackageManifest{App: "lanverse-media-library", Version: 1, ExportedAt: time.Now().UTC(), LibraryKind: domain.LibraryProject,
+	m := mediaapp.LibraryPackageManifest{App: "glowloom-media-library", Version: 1, ExportedAt: time.Now().UTC(), LibraryKind: domain.LibraryProject,
 		Folders: []mediaapp.LibraryPackageFolder{{ID: folder, Name: "人物", Style: "cinema", Theme: "obsidian"}},
 		Items: []mediaapp.LibraryPackageItem{
 			{ID: "source-image", Kind: "image", Metadata: mediaapp.LibraryMetadata{FolderID: &folder, Title: "原件", Category: "character", Tags: []string{"人物"}, Note: "完整说明"}, State: "active", FilePath: packageString("files/source.png")},

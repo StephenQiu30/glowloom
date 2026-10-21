@@ -198,7 +198,7 @@ func TestBudgetChangeReachesSSEThroughRelay(t *testing.T) {
 		switch event.Topic {
 		case realtime.BudgetChangedTopic:
 			changeEvent, changePayload = event.ID, event.Payload
-		case "lanverse.audit.recorded.v1":
+		case "glowloom.audit.recorded.v1":
 			auditEvent = event.ID
 		default:
 			t.Fatalf("unexpected budget Outbox topic %q", event.Topic)

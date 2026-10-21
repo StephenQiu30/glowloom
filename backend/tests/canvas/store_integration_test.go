@@ -122,8 +122,8 @@ func TestCanvasPersistenceRevisionReplayRollbackAndRestore(t *testing.T) {
 		t.Fatalf("revoked actor replayed: %v", err)
 	}
 	var changes, audits, logs int64
-	database.Raw(`SELECT count(*) FROM infra.outbox WHERE partition_key=? AND topic='lanverse.canvas.document_changed.v1'`, project.String()).Scan(&changes)
-	database.Raw(`SELECT count(*) FROM infra.outbox WHERE partition_key=? AND topic='lanverse.audit.recorded.v1'`, project.String()).Scan(&audits)
+	database.Raw(`SELECT count(*) FROM infra.outbox WHERE partition_key=? AND topic='glowloom.canvas.document_changed.v1'`, project.String()).Scan(&changes)
+	database.Raw(`SELECT count(*) FROM infra.outbox WHERE partition_key=? AND topic='glowloom.audit.recorded.v1'`, project.String()).Scan(&audits)
 	database.Raw(`SELECT count(*) FROM canvas.command_log WHERE document_id=?`, doc.ID).Scan(&logs)
 	if changes != 4 || audits != 0 || logs != 3 {
 		t.Fatalf("events changes=%d audits=%d logs=%d", changes, audits, logs)

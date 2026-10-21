@@ -99,7 +99,7 @@ func TestProjectCreateAndUpdateReachSSEThroughRelay(t *testing.T) {
 		switch event.Topic {
 		case realtime.ProjectChangedTopic:
 			changeID = event.ID
-		case "lanverse.audit.recorded.v1":
+		case "glowloom.audit.recorded.v1":
 			auditID = event.ID
 		default:
 			t.Fatalf("unexpected project Outbox topic %q", event.Topic)
@@ -276,7 +276,7 @@ func TestProjectCreateAndUpdateReachSSEThroughRelay(t *testing.T) {
 		switch event.Topic {
 		case realtime.ProjectChangedTopic:
 			updateChangeID = event.ID
-		case "lanverse.audit.recorded.v1":
+		case "glowloom.audit.recorded.v1":
 			updateAuditID = event.ID
 		default:
 			t.Fatalf("unexpected project update Outbox topic %q", event.Topic)

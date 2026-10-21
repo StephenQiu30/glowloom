@@ -115,7 +115,7 @@ func TestCreateProjectCommandCommitsProjectBudgetAndSafeEvents(t *testing.T) {
 		}
 		seen[event.Topic] = true
 		switch event.Topic {
-		case "lanverse.audit.recorded.v1":
+		case "glowloom.audit.recorded.v1":
 			audit, parseErr := auditapp.NewRecordedActionParser().Parse(inbox.Record{
 				Topic: event.Topic, Key: []byte(event.PartitionKey), Value: event.Payload,
 			})
@@ -147,7 +147,7 @@ func TestCreateProjectCommandCommitsProjectBudgetAndSafeEvents(t *testing.T) {
 				summary.Status != "active" || summary.Revision != 1 {
 				t.Fatalf("project audit summary does not match committed specification: %v", err)
 			}
-		case "lanverse.workspace.project_changed.v1":
+		case "glowloom.workspace.project_changed.v1":
 			var envelope struct {
 				EventID   uuid.UUID `json:"event_id"`
 				EventType string    `json:"event_type"`
@@ -167,7 +167,7 @@ func TestCreateProjectCommandCommitsProjectBudgetAndSafeEvents(t *testing.T) {
 			t.Fatalf("unexpected project event topic %q", event.Topic)
 		}
 	}
-	if !seen["lanverse.audit.recorded.v1"] || !seen["lanverse.workspace.project_changed.v1"] {
+	if !seen["glowloom.audit.recorded.v1"] || !seen["glowloom.workspace.project_changed.v1"] {
 		t.Fatalf("missing required project events: %+v", seen)
 	}
 }
@@ -274,7 +274,7 @@ func TestCreateProjectCommandRollsBackWhenAuditOutboxInsertFails(t *testing.T) {
 	functionSQL := fmt.Sprintf(`
 		CREATE FUNCTION %s() RETURNS trigger LANGUAGE plpgsql AS $$
 		BEGIN
-		  IF NEW.topic = 'lanverse.audit.recorded.v1'
+		  IF NEW.topic = 'glowloom.audit.recorded.v1'
 		     AND NEW.payload #>> '{data,request_id}' = '%s'
 		  THEN RAISE EXCEPTION 'reject project audit'; END IF;
 		  RETURN NEW;

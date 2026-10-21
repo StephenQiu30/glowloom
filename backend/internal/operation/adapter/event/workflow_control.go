@@ -16,7 +16,7 @@ import (
 )
 
 // WorkflowControlTopic transports durable user cancellation and resume intents.
-const WorkflowControlTopic = "lanverse.workflow.control_requested.v1"
+const WorkflowControlTopic = "glowloom.workflow.control_requested.v1"
 
 // ErrInvalidWorkflowControlEvent rejects unbound identities and arbitrary signals.
 var ErrInvalidWorkflowControlEvent = errors.New("invalid workflow control event")

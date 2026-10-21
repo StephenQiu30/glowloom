@@ -155,7 +155,7 @@ func validProjectCreatedEvents(actor identityapp.Principal, project domain.Proje
 			return false
 		}
 		switch event.Topic {
-		case "lanverse.workspace.project_changed.v1":
+		case "glowloom.workspace.project_changed.v1":
 			var data projectChangedData
 			if envelope.Aggregate.Type != "project" || envelope.Aggregate.ID != project.ID ||
 				envelope.Aggregate.Revision == nil || *envelope.Aggregate.Revision != 1 ||
@@ -163,7 +163,7 @@ func validProjectCreatedEvents(actor identityapp.Principal, project domain.Proje
 				return false
 			}
 			changedAt = envelope.OccurredAt
-		case "lanverse.audit.recorded.v1":
+		case "glowloom.audit.recorded.v1":
 			var data projectCreatedAuditData
 			if envelope.Aggregate.Type != "audit" || envelope.Aggregate.ID != event.ID ||
 				envelope.Aggregate.Revision != nil || !decodeProjectEvent(envelope.Data, &data) ||
@@ -207,8 +207,8 @@ func validProjectCreatedEvents(actor identityapp.Principal, project domain.Proje
 			return false
 		}
 	}
-	return seen["lanverse.workspace.project_changed.v1"] &&
-		seen["lanverse.audit.recorded.v1"] && changedAt.Equal(auditedAt)
+	return seen["glowloom.workspace.project_changed.v1"] &&
+		seen["glowloom.audit.recorded.v1"] && changedAt.Equal(auditedAt)
 }
 
 func decodeProjectEvent[T any](payload json.RawMessage, target *T) bool {

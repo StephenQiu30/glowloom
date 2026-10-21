@@ -1,12 +1,32 @@
 "use client";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { PageLayout } from "@/components/layout/page-layout";
-import { NewCanvasButton } from "@/components/projects/new-canvas-button";
 import { ProjectList } from "./project-list";
 export function ProjectsPage() {
+  return (
+    <Suspense>
+      <ProjectsRoute />
+    </Suspense>
+  );
+}
+function ProjectsRoute() {
+  const state = useSearchParams().get("state");
+  const filter = state === "archived" || state === "deleted" ? state : "active";
+  return <ProjectsContent key={filter} filter={filter} />;
+}
+function ProjectsContent({
+  filter,
+}: {
+  filter: "active" | "archived" | "deleted";
+}) {
   const [search, setSearch] = useState(""),
     [query, setQuery] = useState("");
+  const router = useRouter();
+  const [sort, setSort] = useState<"recent_content" | "metadata">(
+    "recent_content",
+  );
   return (
     <PageLayout
       screen="projects"
@@ -23,11 +43,15 @@ export function ProjectsPage() {
           画布
         </Link>
       </nav>
-      <div className="workspace-toolbar">
-        <span className="text-xs text-muted-foreground">最近修改</span>
-        <NewCanvasButton className="ml-auto" />
-      </div>
-      <ProjectList key={query} query={query} view="grid" />
+      <ProjectList
+        key={`${query}:${filter}:${sort}`}
+        query={query}
+        view="grid"
+        filter={filter}
+        onFilterChange={(value) => router.push(`/projects?state=${value}`)}
+        sort={sort}
+        onSortChange={setSort}
+      />
     </PageLayout>
   );
 }

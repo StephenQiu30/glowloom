@@ -130,7 +130,7 @@ type providerUpdateAuditEvent struct {
 
 func validProviderUpdateEvents(actorID, orgID uuid.UUID, before, after domain.Provider, events []identityapp.OutboxEvent) bool {
 	if len(events) != 2 || events[0].ID == uuid.Nil || events[1].ID == uuid.Nil || events[0].ID == events[1].ID ||
-		events[0].Topic != "lanverse.catalog.provider_changed.v1" || events[1].Topic != "lanverse.audit.recorded.v1" {
+		events[0].Topic != "glowloom.catalog.provider_changed.v1" || events[1].Topic != "glowloom.audit.recorded.v1" {
 		return false
 	}
 	for _, event := range events {

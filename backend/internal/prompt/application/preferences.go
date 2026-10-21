@@ -128,7 +128,7 @@ func (p *Preferences) Save(ctx context.Context, actor identityapp.Principal, inp
 	eventID := uuid.New()
 	hash := sha256.Sum256([]byte(input.Content))
 	payload, err := json.Marshal(map[string]any{
-		"event_id": eventID, "event_type": "lanverse.audit.recorded.v1", "occurred_at": occurredAt, "org_id": actor.OrgID,
+		"event_id": eventID, "event_type": "glowloom.audit.recorded.v1", "occurred_at": occurredAt, "org_id": actor.OrgID,
 		"actor": map[string]any{"kind": "user", "id": actor.ID}, "aggregate": map[string]any{"type": "audit", "id": eventID},
 		"data": map[string]any{"action": "prompt.customization_saved", "object": map[string]any{"type": "prompt_customization", "id": customization.ID},
 			"request_id": input.RequestID, "before": map[string]any{"revision": input.ExpectedRevision},
@@ -137,7 +137,7 @@ func (p *Preferences) Save(ctx context.Context, actor identityapp.Principal, inp
 	if err != nil {
 		return domain.Customization{}, fmt.Errorf("encode prompt preference audit: %w", err)
 	}
-	saved, err := p.store.SaveCustomization(ctx, actor, input, customization, identityapp.OutboxEvent{ID: eventID, Topic: "lanverse.audit.recorded.v1", PartitionKey: actor.OrgID.String(), Payload: payload})
+	saved, err := p.store.SaveCustomization(ctx, actor, input, customization, identityapp.OutboxEvent{ID: eventID, Topic: "glowloom.audit.recorded.v1", PartitionKey: actor.OrgID.String(), Payload: payload})
 	if err != nil {
 		return domain.Customization{}, fmt.Errorf("save workspace prompt preference: %w", err)
 	}

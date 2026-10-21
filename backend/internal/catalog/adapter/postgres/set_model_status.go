@@ -105,7 +105,7 @@ func validModelStatusAudit(actorID, orgID, modelID uuid.UUID, status domain.Mode
 	default:
 		return false
 	}
-	if event.ID == uuid.Nil || event.Topic != "lanverse.audit.recorded.v1" ||
+	if event.ID == uuid.Nil || event.Topic != "glowloom.audit.recorded.v1" ||
 		event.PartitionKey != orgID.String() || len(event.Payload) == 0 || len(event.Payload) > 32*1024 {
 		return false
 	}

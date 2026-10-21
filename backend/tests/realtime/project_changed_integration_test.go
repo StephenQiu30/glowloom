@@ -116,7 +116,7 @@ func TestProjectChangedWithHostPostgresAndRedis(t *testing.T) {
 func projectChangedRecord(t *testing.T, eventID, projectID, orgID, actorID string, revision int64, change string) inbox.Record {
 	t.Helper()
 	payload, err := json.Marshal(map[string]any{
-		"event_id": eventID, "event_type": "lanverse.workspace.project_changed.v1",
+		"event_id": eventID, "event_type": "glowloom.workspace.project_changed.v1",
 		"occurred_at": time.Now().UTC(), "org_id": orgID, "project_id": projectID,
 		"actor":     map[string]any{"kind": "user", "id": actorID},
 		"aggregate": map[string]any{"type": "project", "id": projectID, "revision": revision},
@@ -125,7 +125,7 @@ func projectChangedRecord(t *testing.T, eventID, projectID, orgID, actorID strin
 	if err != nil {
 		t.Fatalf("encode project event: %v", err)
 	}
-	return inbox.Record{Topic: "lanverse.workspace.project_changed.v1", Key: []byte(projectID), Value: payload}
+	return inbox.Record{Topic: "glowloom.workspace.project_changed.v1", Key: []byte(projectID), Value: payload}
 }
 
 func assertProjectChangedPublication(ctx context.Context, t *testing.T, sub *redisclient.PubSub, eventID, projectID string, revision int64, change string) {

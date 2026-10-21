@@ -90,13 +90,13 @@ func TestAuditRestrictedLoginCanAppendAndReadButCannotRewrite(t *testing.T) {
 	}
 	var inheritedAppRole, inheritedOwnerRole bool
 	if err := loginConn.DB.WithContext(ctx).Raw(`
-		SELECT pg_has_role(current_user, 'lanverse_app', 'member') AS inherited_app_role,
+		SELECT pg_has_role(current_user, 'glowloom_app', 'member') AS inherited_app_role,
 		       pg_has_role(current_user, ?::name, 'member') AS inherited_owner_role
 	`, auditOwner).Row().Scan(&inheritedAppRole, &inheritedOwnerRole); err != nil {
 		t.Fatalf("check restricted-login role memberships: %v", err)
 	}
 	if !inheritedAppRole || inheritedOwnerRole {
-		t.Fatalf("application role membership: lanverse_app=%t audit_owner=%t; want true/false",
+		t.Fatalf("application role membership: glowloom_app=%t audit_owner=%t; want true/false",
 			inheritedAppRole, inheritedOwnerRole)
 	}
 

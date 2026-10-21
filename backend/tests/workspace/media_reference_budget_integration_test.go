@@ -19,14 +19,14 @@ func workspaceReferenceAllocation(t *testing.T, db *gorm.DB, actor identityapp.P
 	runtime.ReadMemStats(&before)
 	var found bool
 	err := db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		var role string
 		if err := tx.Raw(`SELECT current_user`).Scan(&role).Error; err != nil {
 			return err
 		}
-		if role != "lanverse_app" {
+		if role != "glowloom_app" {
 			t.Error("guard did not run with the actual nonowner role")
 		}
 		var err error

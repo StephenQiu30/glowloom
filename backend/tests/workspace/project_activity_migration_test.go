@@ -22,7 +22,7 @@ func TestProjectActivityRejectsOrphansAndInvalidBasis(t *testing.T) {
 		t.Fatal("non-content basis accepted")
 	}
 	var grants struct{ Read, Write, Remove bool }
-	if err := db.Raw(`SELECT has_table_privilege('lanverse_app','workspace.project_activity','SELECT') AS read,has_table_privilege('lanverse_app','workspace.project_activity','INSERT,UPDATE') AS write,has_table_privilege('lanverse_app','workspace.project_activity','DELETE') AS remove`).Scan(&grants).Error; err != nil || !grants.Read || !grants.Write || grants.Remove {
+	if err := db.Raw(`SELECT has_table_privilege('glowloom_app','workspace.project_activity','SELECT') AS read,has_table_privilege('glowloom_app','workspace.project_activity','INSERT,UPDATE') AS write,has_table_privilege('glowloom_app','workspace.project_activity','DELETE') AS remove`).Scan(&grants).Error; err != nil || !grants.Read || !grants.Write || grants.Remove {
 		t.Fatalf("activity role permissions: %+v %v", grants, err)
 	}
 }

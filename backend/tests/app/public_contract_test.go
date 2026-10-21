@@ -137,7 +137,7 @@ func TestPublicBusinessRoutesRequireSession(t *testing.T) {
 				t.Fatalf("anonymous problem = %q, want %q", problem.Code, wantCode)
 			}
 			for _, cookie := range response.Result().Cookies() {
-				if cookie.Value != "" && (strings.Contains(cookie.Name, "access") || strings.Contains(cookie.Name, "refresh") || strings.Contains(cookie.Name, "csrf") || cookie.Name == "lanverse_session") {
+				if cookie.Value != "" && (strings.Contains(cookie.Name, "access") || strings.Contains(cookie.Name, "refresh") || strings.Contains(cookie.Name, "csrf") || cookie.Name == "glowloom_session") {
 					t.Fatalf("anonymous route issued credential cookie %q", cookie.Name)
 				}
 			}
@@ -175,7 +175,7 @@ func TestWorkspaceAPIDoesNotExposeAnonymousAccessOutsideThisHost(t *testing.T) {
 		{"staging", "staging", "127.0.0.1:8080", "https://localhost:3000"},
 		{"production", "prod", "127.0.0.1:8080", "https://localhost:3000"},
 		{"wildcard", "local", ":8080", "http://localhost:3000"},
-		{"external browser", "local", "127.0.0.1:8080", "https://lanverse.example"},
+		{"external browser", "local", "127.0.0.1:8080", "https://glowloom.example"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{Env: tc.env, HTTPAddr: tc.address, PublicOrigin: tc.origin}, &gorm.DB{}, nil, identityruntime.SessionDependencies{})

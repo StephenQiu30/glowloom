@@ -16,7 +16,7 @@ import (
 )
 
 // TransferTopic carries only permanent media-owner transfer command identities.
-const TransferTopic = "lanverse.media.transfer_command.v1"
+const TransferTopic = "glowloom.media.transfer_command.v1"
 
 // TransferInbox owns durable acknowledgement around external delivery.
 type TransferInbox interface {

@@ -7,9 +7,9 @@ services:
   postgres:
     image: postgres:18.4-alpine
     environment:
-      POSTGRES_USER: ${LV_PG_USER:-lanverse}
+      POSTGRES_USER: ${LV_PG_USER:-glowloom}
       POSTGRES_PASSWORD: ${LV_PG_PASSWORD:?Set LV_PG_PASSWORD for Compose}
-      POSTGRES_DB: ${LV_PG_DATABASE:-lanverse}
+      POSTGRES_DB: ${LV_PG_DATABASE:-glowloom}
     ports:
       - "${LV_PG_PORT:-5432}:5432"
     volumes:
@@ -62,7 +62,7 @@ services:
     image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
-      MINIO_ROOT_USER: ${LV_MINIO_USER:-lanverse}
+      MINIO_ROOT_USER: ${LV_MINIO_USER:-glowloom}
       MINIO_ROOT_PASSWORD: ${LV_MINIO_PASSWORD:?Set LV_MINIO_PASSWORD for Compose}
     ports:
       - "${LV_MINIO_PORT:-9000}:9000"
@@ -84,10 +84,10 @@ services:
     environment:
       DB: postgres12
       DB_PORT: 5432
-      POSTGRES_USER: ${LV_PG_USER:-lanverse}
+      POSTGRES_USER: ${LV_PG_USER:-glowloom}
       POSTGRES_PWD: ${LV_PG_PASSWORD:?Set LV_PG_PASSWORD for Compose}
       POSTGRES_SEEDS: postgres
-      DEFAULT_NAMESPACE: ${LV_TEMPORAL_NAMESPACE:-lanverse-local}
+      DEFAULT_NAMESPACE: ${LV_TEMPORAL_NAMESPACE:-glowloom-local}
     ports:
       - "${LV_TEMPORAL_PORT:-7233}:7233"
     healthcheck:
@@ -119,10 +119,10 @@ services:
 
 volumes:
   postgres-data:
-    name: lanverse_postgres-data
+    name: glowloom_postgres-data
   redis-data:
-    name: lanverse_redis-data
+    name: glowloom_redis-data
   kafka-data:
-    name: lanverse_kafka-data
+    name: glowloom_kafka-data
   minio-data:
-    name: lanverse_minio-data
+    name: glowloom_minio-data

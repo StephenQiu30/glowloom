@@ -452,7 +452,12 @@ async function proxy(
   const boundedRoute = [
     {
       pattern: `projects/${identityUUID}`,
-      methods: ["GET", "PATCH"],
+      methods: ["GET", "PATCH", "DELETE"],
+      query: [] as string[],
+    },
+    {
+      pattern: `projects/${identityUUID}/(archive|unarchive|restore)`,
+      methods: ["POST"],
       query: [] as string[],
     },
     {
@@ -529,7 +534,15 @@ async function proxy(
       for (const [key, value] of incoming.searchParams)
         upstream.searchParams.set(key, value);
     if (resource === "projects")
-      for (const key of ["q", "limit", "cursor", "order"])
+      for (const key of [
+        "q",
+        "limit",
+        "cursor",
+        "order",
+        "status",
+        "deleted",
+        "include_expired",
+      ])
         if (incoming.searchParams.has(key))
           upstream.searchParams.set(key, incoming.searchParams.get(key)!);
     if (flowMethods && request.method === "GET")

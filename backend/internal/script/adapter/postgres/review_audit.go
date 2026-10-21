@@ -11,7 +11,7 @@ import (
 )
 
 func reviewAudit(tx *gorm.DB, actor identityapp.Principal, project, key, request uuid.UUID, action string, revision int64, version uuid.UUID, episode *uuid.UUID, now time.Time) error {
-	const topic = "lanverse.audit.recorded.v1"
+	const topic = "glowloom.audit.recorded.v1"
 	id := uuid.NewSHA1(key, []byte("script-review-audit/"+actor.ID.String()+"/"+action))
 	summary := struct {
 		ScriptRevision int64      `json:"script_revision"`

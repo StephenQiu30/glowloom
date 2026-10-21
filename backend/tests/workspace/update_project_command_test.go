@@ -103,7 +103,7 @@ func TestUpdateProjectCommandChangesOnlyMutableSettingsAndEmitsSafeEvents(t *tes
 		}
 		events[event.Topic] = event
 	}
-	changed, ok := events["lanverse.workspace.project_changed.v1"]
+	changed, ok := events["glowloom.workspace.project_changed.v1"]
 	if !ok {
 		t.Fatal("missing project change event")
 	}
@@ -130,7 +130,7 @@ func TestUpdateProjectCommandChangesOnlyMutableSettingsAndEmitsSafeEvents(t *tes
 		change.Data.Change != "updated" {
 		t.Fatalf("invalid project change event: %+v err=%v", change, err)
 	}
-	auditEvent, ok := events["lanverse.audit.recorded.v1"]
+	auditEvent, ok := events["glowloom.audit.recorded.v1"]
 	if !ok {
 		t.Fatal("missing project update audit")
 	}

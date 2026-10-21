@@ -51,8 +51,8 @@ func TestUpdateProviderCommandEmitsSafeEvents(t *testing.T) {
 		t.Fatalf("updated provider %+v, writes %d: %v", result, store.writes, err)
 	}
 	if store.before.Revision != 1 || store.after.Revision != 2 || len(store.events) != 2 ||
-		store.events[0].Topic != "lanverse.catalog.provider_changed.v1" ||
-		store.events[1].Topic != "lanverse.audit.recorded.v1" {
+		store.events[0].Topic != "glowloom.catalog.provider_changed.v1" ||
+		store.events[1].Topic != "glowloom.audit.recorded.v1" {
 		t.Fatalf("provider events %+v", store.events)
 	}
 	audit, err := auditapp.NewRecordedActionParser().Parse(inbox.Record{

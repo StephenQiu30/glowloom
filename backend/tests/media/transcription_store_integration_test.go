@@ -93,7 +93,7 @@ func TestTranscriptionRuntimeRoleOwnsOnlyMutableFacts(t *testing.T) {
 	if err := db.Raw(`SELECT current_role AS role,(SELECT rolsuper FROM pg_roles WHERE rolname=current_role) superuser,(SELECT pg_get_userbyid(relowner)=current_role FROM pg_class WHERE oid='mediatool.transcription_job'::regclass) owner,has_table_privilege(current_role,'mediatool.transcription_job','SELECT,INSERT') read,has_column_privilege(current_role,'mediatool.transcription_job','inference_state','UPDATE') write,has_column_privilege(current_role,'mediatool.transcription_job','frozen','UPDATE') freeze,has_table_privilege(current_role,'mediatool.transcription_command','SELECT,INSERT') commands,has_table_privilege(current_role,'infra.outbox','SELECT,INSERT') outbox,has_table_privilege(current_role,'infra.processed_event','SELECT,INSERT') inbox,has_table_privilege(current_role,'audit.audit_log','SELECT,INSERT') audit`).Scan(&role).Error; err != nil {
 		t.Fatal(err)
 	}
-	if role.Role != "lanverse_app" || role.Superuser || role.Owner || role.Freeze || !role.Read || !role.Write || !role.Commands || !role.Outbox || !role.Inbox || !role.Audit {
+	if role.Role != "glowloom_app" || role.Superuser || role.Owner || role.Freeze || !role.Read || !role.Write || !role.Commands || !role.Outbox || !role.Inbox || !role.Audit {
 		t.Fatalf("invalid non-owner ACL: %+v", role)
 	}
 }

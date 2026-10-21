@@ -178,7 +178,7 @@ func TestLoadWorkflowOperationUsesFrozenModelAndPrivateTaskID(t *testing.T) {
 	var published string
 	if err := database.Raw(`
 		SELECT payload::text FROM infra.outbox
-		WHERE topic = 'lanverse.operation.status_changed.v1'
+		WHERE topic = 'glowloom.operation.status_changed.v1'
 		  AND payload -> 'aggregate' ->> 'id' = ?
 		ORDER BY create_time DESC LIMIT 1
 	`, operationID.String()).Scan(&published).Error; err != nil {
@@ -227,7 +227,7 @@ func TestWorkflowTransitionIsConditionalAndReplaySafe(t *testing.T) {
 	if err := database.Raw(`SELECT count(*) FROM operation.operation_event WHERE operation_id = ?::uuid`, operationID.String()).Scan(&events).Error; err != nil {
 		t.Fatalf("count operation events: %v", err)
 	}
-	if err := database.Raw(`SELECT count(*) FROM infra.outbox WHERE topic = 'lanverse.operation.status_changed.v1' AND payload -> 'aggregate' ->> 'id' = ?`, operationID.String()).Scan(&outbox).Error; err != nil {
+	if err := database.Raw(`SELECT count(*) FROM infra.outbox WHERE topic = 'glowloom.operation.status_changed.v1' AND payload -> 'aggregate' ->> 'id' = ?`, operationID.String()).Scan(&outbox).Error; err != nil {
 		t.Fatalf("count outbox events: %v", err)
 	}
 	if events != 1 || outbox != 1 {
@@ -285,7 +285,7 @@ func TestWorkflowManualEventIsReplaySafe(t *testing.T) {
 	var manualEvents int64
 	if err := database.Raw(`
 		SELECT count(*) FROM infra.outbox
-		WHERE topic = 'lanverse.operation.manual.v1'
+		WHERE topic = 'glowloom.operation.manual.v1'
 		  AND payload -> 'aggregate' ->> 'id' = ?
 	`, operationID.String()).Scan(&manualEvents).Error; err != nil || manualEvents != 1 {
 		t.Fatalf("manual events=%d err=%v", manualEvents, err)

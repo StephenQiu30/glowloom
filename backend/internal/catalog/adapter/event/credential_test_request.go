@@ -17,7 +17,7 @@ import (
 )
 
 // CredentialTestTopic carries only authorized credential test identities.
-const CredentialTestTopic = "lanverse.catalog.credential_test_requested.v1"
+const CredentialTestTopic = "glowloom.catalog.credential_test_requested.v1"
 
 // ErrInvalidCredentialTestEvent rejects malformed and unbound test requests.
 var ErrInvalidCredentialTestEvent = errors.New("invalid credential test request event")

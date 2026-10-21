@@ -40,7 +40,7 @@ func NewValidator() (*Validator, error) {
 	}
 	compiler := jsonschema.NewCompiler()
 	compiler.DefaultDraft(jsonschema.Draft2020)
-	const location = "https://lanverse.local/catalog/model-version.schema.json"
+	const location = "https://glowloom.local/catalog/model-version.schema.json"
 	if err := compiler.AddResource(location, document); err != nil {
 		return nil, fmt.Errorf("add model configuration schema: %w", err)
 	}

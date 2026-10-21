@@ -201,7 +201,7 @@ func (s *PurgeStore) scopeBusy(ctx context.Context, tx *gorm.DB, actor identitya
 }
 
 // PurgeTopic carries permanent owning commands, not model generation operations.
-const PurgeTopic = "lanverse.media.purge_command.v1"
+const PurgeTopic = "glowloom.media.purge_command.v1"
 
 func recordPurgeCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash, action string, job domain.PurgeJob, emit bool) error {
 	response, err := json.Marshal(job)

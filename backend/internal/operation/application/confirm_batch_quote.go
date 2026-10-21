@@ -13,7 +13,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 
-const batchConfirmedTopic = "lanverse.batch.confirmed.v1"
+const batchConfirmedTopic = "glowloom.batch.confirmed.v1"
 
 // ErrInvalidConfirmBatchQuote means a batch confirmation lacks stable identities.
 var ErrInvalidConfirmBatchQuote = errors.New("invalid batch quote confirmation")

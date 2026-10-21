@@ -31,7 +31,7 @@ func TestProjectFolderPGWriteFaultsCannotCommitPartialRecycle(t *testing.T) {
 				if err := tx.Exec("CREATE TRIGGER folder_test_fault BEFORE INSERT ON " + table + " FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_folder_write()").Error; err != nil {
 					return err
 				}
-				if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+				if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 					return err
 				}
 				if _, err := workspaceapp.NewProjectFolders(folderStore(tx), time.Now).Change(ctx, actor, in); err == nil {
@@ -68,7 +68,7 @@ func TestProjectFolderPGSchemaEnforcesNarrowGrants(t *testing.T) {
 	actor := insertWorkspaceActor(ctx, t, owner, insertWorkspaceOrganization(ctx, t, owner))
 	rollback := errors.New("DDL verification rollback")
 	err := owner.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		var grants struct{ Insert, Rewrite, Remove bool }

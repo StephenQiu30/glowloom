@@ -116,7 +116,7 @@ func TestSelfProfileHTTPRejectsAuthorityFields(t *testing.T) {
 		r.Header.Set("Content-Type", "application/json")
 		r.Header.Set("Origin", "http://localhost:3200")
 		r.Header.Set("X-CSRF-Token", login.CSRFToken)
-		r.AddCookie(&http.Cookie{Name: "lanverse_session", Value: login.Token})
+		r.AddCookie(&http.Cookie{Name: "glowloom_session", Value: login.Token})
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, r)
 		return w

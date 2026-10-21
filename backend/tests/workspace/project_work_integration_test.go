@@ -171,7 +171,7 @@ func TestProjectLifecycleRuntimeRoleAndAtomicFaults(t *testing.T) {
 	ctx, db := workspaceMigrationDB(t)
 	actor, project := lifecycleActorProject(ctx, t, db)
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		service := workspaceapp.NewProjectLifecycle(owningLifecycleStore(tx), time.Now)

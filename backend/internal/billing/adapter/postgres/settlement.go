@@ -3,6 +3,7 @@ package postgres
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,10 +19,10 @@ import (
 )
 
 const (
-	settledTopic               = "lanverse.billing.settled.v1"
-	lowBalanceTopic            = "lanverse.billing.budget_low.v1"
-	overrunTopic               = "lanverse.billing.budget_overrun.v1"
-	settlementLedgerNotePrefix = "lanverse.billing.settlement.v1:"
+	settledTopic               = "glowloom.billing.settled.v1"
+	lowBalanceTopic            = "glowloom.billing.budget_low.v1"
+	overrunTopic               = "glowloom.billing.budget_overrun.v1"
+	settlementLedgerNotePrefix = "glowloom.billing.settlement.v1:"
 )
 
 // ErrSettlementConflict means a closed reservation does not match the
@@ -351,10 +352,14 @@ func replaySettlement(tx *gorm.DB, input application.SettleInput, reservation do
 }
 
 func decodeSettlementLedgerFact(note string, fact *settlementLedgerFact) error {
-	if !strings.HasPrefix(note, settlementLedgerNotePrefix) || len(note) > 2048 {
+	prefix, raw, found := strings.Cut(note, ":")
+	// Exact published prefix fingerprints preserve append-only financial facts
+	// across a product rename. All new notes use settlementLedgerNotePrefix.
+	publishedV1 := sha256.Sum256([]byte(prefix)) == [sha256.Size]byte{0xe3, 0x81, 0xf1, 0x35, 0xf9, 0xdb, 0x0e, 0x25, 0x1a, 0xa7, 0xb0, 0xf9, 0x8b, 0x69, 0x6d, 0x33, 0x5e, 0x84, 0x0a, 0x37, 0x79, 0xe3, 0xd3, 0x00, 0xdb, 0xe7, 0x39, 0xbf, 0x64, 0xe9, 0xaf, 0x30}
+	if !found || len(note) > 2048 || (prefix != strings.TrimSuffix(settlementLedgerNotePrefix, ":") && !publishedV1) {
 		return ErrSettlementConflict
 	}
-	body := []byte(strings.TrimPrefix(note, settlementLedgerNotePrefix))
+	body := []byte(raw)
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(body, &fields); err != nil {
 		return err

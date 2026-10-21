@@ -16,8 +16,8 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 
-const workflowControlTopic = "lanverse.workflow.control_requested.v1"
-const controlAuditTopic = "lanverse.audit.recorded.v1"
+const workflowControlTopic = "glowloom.workflow.control_requested.v1"
+const controlAuditTopic = "glowloom.audit.recorded.v1"
 
 // RequestWorkflowControl atomically persists one authorized intent and its receipt.
 // Lifecycle and settlement remain owned by the workflow after signal delivery.

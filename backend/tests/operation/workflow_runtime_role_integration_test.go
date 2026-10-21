@@ -29,7 +29,7 @@ func TestWorkflowTransitionAndSettlementUnderRuntimeRole(t *testing.T) {
 	}
 	requestKey := "operation/" + operationID.String()
 	err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return fmt.Errorf("assume runtime role: %w", err)
 		}
 		operationStore := operationStore(tx)

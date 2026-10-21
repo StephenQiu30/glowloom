@@ -66,7 +66,7 @@ func TestCodexProcessHandshake(t *testing.T) {
 		UserAgent string `json:"userAgent"`
 	}
 	call(1, "initialize", map[string]any{
-		"clientInfo":   map[string]any{"name": "lanverse-m0-probe", "version": "1"},
+		"clientInfo":   map[string]any{"name": "glowloom-m0-probe", "version": "1"},
 		"capabilities": map[string]any{"experimentalApi": true},
 	}, &initialized)
 	if initialized.UserAgent == "" {

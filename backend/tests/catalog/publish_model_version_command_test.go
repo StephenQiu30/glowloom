@@ -85,7 +85,7 @@ func TestPublishModelVersionCommandBuildsSafeAuditAndVersion(t *testing.T) {
 	if validator.version.ID != store.version.ID || validator.version.ModelID != store.version.ModelID {
 		t.Fatal("validator did not see the version committed by the store")
 	}
-	if store.event.Topic != "lanverse.audit.recorded.v1" || store.event.PartitionKey != actor.OrgID.String() ||
+	if store.event.Topic != "glowloom.audit.recorded.v1" || store.event.PartitionKey != actor.OrgID.String() ||
 		bytes.Contains(store.event.Payload, []byte("private-parameter-description")) {
 		t.Fatalf("unsafe model version audit envelope: %+v", store.event)
 	}

@@ -73,7 +73,7 @@ func (f liveFixture) dial(t *testing.T) *websocket.Conn {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
-	conn, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(f.server.URL, "http")+"/api/canvases/"+f.doc.ID.String()+"/live", &websocket.DialOptions{HTTPHeader: http.Header{"Origin": {liveOrigin}, "Cookie": {"lanverse_session=" + f.auth.Token}}})
+	conn, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(f.server.URL, "http")+"/api/canvases/"+f.doc.ID.String()+"/live", &websocket.DialOptions{HTTPHeader: http.Header{"Origin": {liveOrigin}, "Cookie": {"glowloom_session=" + f.auth.Token}}})
 	if resp != nil && resp.Body != nil {
 		defer func() { _ = resp.Body.Close() }()
 	}
@@ -184,7 +184,7 @@ func TestCanvasWebSocketRejectsForeignOriginBeforeUpgrade(t *testing.T) {
 	f := newLiveFixture(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
-	conn, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(f.server.URL, "http")+fmt.Sprintf("/api/canvases/%s/live", f.doc.ID), &websocket.DialOptions{HTTPHeader: http.Header{"Origin": {"http://foreign.invalid"}, "Cookie": {"lanverse_session=" + f.auth.Token}}})
+	conn, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(f.server.URL, "http")+fmt.Sprintf("/api/canvases/%s/live", f.doc.ID), &websocket.DialOptions{HTTPHeader: http.Header{"Origin": {"http://foreign.invalid"}, "Cookie": {"glowloom_session=" + f.auth.Token}}})
 	if resp != nil && resp.Body != nil {
 		defer func() { _ = resp.Body.Close() }()
 	}
@@ -264,7 +264,7 @@ func TestCanvasWebSocketHeartbeatDoesNotExtendSessionAndRevocationCloses(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	probe.Header.Set("Cookie", "lanverse_session="+f.auth.Token)
+	probe.Header.Set("Cookie", "glowloom_session="+f.auth.Token)
 	probe.Header.Set("X-Creation-Scope", f.actor.ScopeID.String())
 	response, err := http.DefaultClient.Do(probe)
 	if err != nil {

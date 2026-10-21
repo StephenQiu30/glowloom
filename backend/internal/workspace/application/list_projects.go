@@ -56,18 +56,20 @@ type ProjectListItem struct {
 
 // ProjectListPage contains one bounded page of project summaries.
 type ProjectListPage struct {
-	Projects []ProjectListItem
-	Next     *ProjectListCursor
+	ServerTime time.Time
+	Projects   []ProjectListItem
+	Next       *ProjectListCursor
 }
 
 // ListProjectsInput selects current or deleted projects in an organization.
 type ListProjectsInput struct {
-	Order   string
-	Status  string
-	Deleted bool
-	Query   string
-	Limit   int
-	After   *ProjectListCursor
+	IncludeExpired bool
+	Order          string
+	Status         string
+	Deleted        bool
+	Query          string
+	Limit          int
+	After          *ProjectListCursor
 	// FolderID is nil for all projects, uuid.Nil for root, or a personal folder.
 	FolderID *uuid.UUID
 }
@@ -99,7 +101,7 @@ func (q *ListProjectsQuery) Execute(ctx context.Context, actor identityapp.Princ
 		input.Limit < 0 || input.Limit > 200 || !utf8.ValidString(input.Query) ||
 		utf8.RuneCountInString(input.Query) > 200 ||
 		(input.After != nil && (input.After.ID == uuid.Nil || input.After.UpdateTime.IsZero())) ||
-		(input.Deleted && input.FolderID != nil) {
+		(input.Deleted && input.FolderID != nil) || (input.IncludeExpired && !input.Deleted) {
 		return ProjectListPage{}, ErrInvalidProjectList
 	}
 	for _, r := range input.Query {

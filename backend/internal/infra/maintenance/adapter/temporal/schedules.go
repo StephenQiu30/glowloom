@@ -114,3 +114,12 @@ func sameCleanupSchedule(description *client.ScheduleDescription, options client
 		policy.CatchupWindow == options.CatchupWindow &&
 		policy.PauseOnFailure == options.PauseOnFailure
 }
+
+// ProjectRetentionScheduleID is installed only after the project retention schema is reviewed.
+const ProjectRetentionScheduleID = "project-retention"
+
+// InstallProjectRetentionSchedule explicitly enables the daily project-content sweep.
+// Normal cleanup installation never enables destructive content retention implicitly.
+func (i *ScheduleInstaller) InstallProjectRetentionSchedule(ctx context.Context) error {
+	return i.ensureSchedule(ctx, cleanupScheduleOptions(i.prefix+ProjectRetentionScheduleID, "ProjectRetentionWorkflow", 5*time.Hour))
+}

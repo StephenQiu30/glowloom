@@ -16,7 +16,7 @@ import (
 )
 
 // PurgeTopic carries only permanent media-owner purge command identities.
-const PurgeTopic = "lanverse.media.purge_command.v1"
+const PurgeTopic = "glowloom.media.purge_command.v1"
 
 // PurgeInbox owns durable acknowledgement around external delivery.
 type PurgeInbox interface {

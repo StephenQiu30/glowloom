@@ -117,7 +117,7 @@ func TestDisableCredentialCommitsSafeEventsAndRollsBackOnAuditFailure(t *testing
 			t.Fatal("disable event disclosed key material or changed partition")
 		}
 		switch event.Topic {
-		case "lanverse.catalog.credential_changed.v1":
+		case "glowloom.catalog.credential_changed.v1":
 			var payload struct {
 				Data struct {
 					Change string `json:"change"`
@@ -127,7 +127,7 @@ func TestDisableCredentialCommitsSafeEventsAndRollsBackOnAuditFailure(t *testing
 				t.Fatalf("wrong change event: %v %+v", err, payload)
 			}
 			sawChange = true
-		case "lanverse.audit.recorded.v1":
+		case "glowloom.audit.recorded.v1":
 			audit, err := auditapp.NewRecordedActionParser().Parse(inbox.Record{
 				Topic: event.Topic, Key: []byte(event.PartitionKey), Value: event.Payload,
 			})
@@ -164,7 +164,7 @@ func TestDisableCredentialCommitsSafeEventsAndRollsBackOnAuditFailure(t *testing
 	if err := conn.DB.WithContext(ctx).Exec(`
 		CREATE FUNCTION reject_disable_audit() RETURNS trigger LANGUAGE plpgsql AS $$
 		BEGIN
-		  IF NEW.topic = 'lanverse.audit.recorded.v1' THEN RAISE EXCEPTION 'reject disable audit'; END IF;
+		  IF NEW.topic = 'glowloom.audit.recorded.v1' THEN RAISE EXCEPTION 'reject disable audit'; END IF;
 		  RETURN NEW;
 		END $$
 	`).Error; err != nil {

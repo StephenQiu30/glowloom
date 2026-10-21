@@ -53,7 +53,7 @@ func TestMediaIngestAndModerationUnderRuntimeRole(t *testing.T) {
 	defer cancel()
 	var ingested mediaflow.IngestOutput
 	err = database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return fmt.Errorf("assume runtime role: %w", err)
 		}
 		activities, err := mediaScopedIngestActivities(tx, objects, mediaflow.DownloadPolicy{

@@ -117,7 +117,7 @@ func TestBatchLaunchProviderSlotReleasesWithTerminalSettlement(t *testing.T) {
 		t.Fatalf("failed settlement released slot: %q, %v", stateBefore.State, err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		roleStore := operationStore(tx)
@@ -139,7 +139,7 @@ func TestBatchLaunchProviderSlotReleasesWithTerminalSettlement(t *testing.T) {
 	waitingBatchID := batchByOperation[waiting]
 	roleBatchChange := func(change func(*pgoperation.Store) error) error {
 		return database.Transaction(func(tx *gorm.DB) error {
-			if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+			if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 				return err
 			}
 			return change(operationStore(tx))
@@ -173,7 +173,7 @@ func TestBatchLaunchProviderSlotReleasesWithTerminalSettlement(t *testing.T) {
 	}
 	completedBatchID := batchByOperation[winner]
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		return operationStore(tx).FinishWorkflowBatch(t.Context(), completedBatchID)
@@ -186,7 +186,7 @@ func TestBatchLaunchProviderSlotReleasesWithTerminalSettlement(t *testing.T) {
 	var finishedEvents int64
 	if err := database.Raw(`
 		SELECT count(*) FROM infra.outbox
-		WHERE topic = 'lanverse.batch.finished.v1'
+		WHERE topic = 'glowloom.batch.finished.v1'
 		  AND payload->'data'->>'batch_id' = ?
 	`, completedBatchID.String()).Scan(&finishedEvents).Error; err != nil || finishedEvents != 1 {
 		t.Fatalf("batch finished events = %d, %v", finishedEvents, err)
@@ -194,7 +194,7 @@ func TestBatchLaunchProviderSlotReleasesWithTerminalSettlement(t *testing.T) {
 	var eventRow struct{ Payload []byte }
 	if err := database.Raw(`
 		SELECT payload FROM infra.outbox
-		WHERE topic = 'lanverse.batch.finished.v1'
+		WHERE topic = 'glowloom.batch.finished.v1'
 		  AND payload->'data'->>'batch_id' = ?
 	`, completedBatchID.String()).Scan(&eventRow).Error; err != nil {
 		t.Fatal(err)

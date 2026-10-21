@@ -21,7 +21,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/kafkaconn"
 )
 
-const budgetLowTopic = "lanverse.billing.budget_low.v1"
+const budgetLowTopic = "glowloom.billing.budget_low.v1"
 
 func TestBudgetThresholdEventReachesKafkaThroughOutboxRelay(t *testing.T) {
 	dsn := os.Getenv("LV_TEST_BILLING_RELAY_DB_DSN")

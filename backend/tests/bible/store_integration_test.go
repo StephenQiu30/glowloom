@@ -27,11 +27,11 @@ func bibleTestDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 		t.Skip("set LV_TEST_BIBLE_DB_DSN to isolated Bible PostgreSQL")
 	}
 	parsed, err := url.Parse(dsn)
-	if err != nil || parsed.Path != "/lanverse_bible" {
-		t.Fatal("requires task-owned lanverse_bible", err)
+	if err != nil || parsed.Path != "/glowloom_bible" {
+		t.Fatal("requires task-owned glowloom_bible", err)
 	}
 	q := parsed.Query()
-	q.Set("options", "-c role=lanverse_app")
+	q.Set("options", "-c role=glowloom_app")
 	parsed.RawQuery = q.Encode()
 	open := func(d string) *gorm.DB {
 		client, err := platformdb.Open(t.Context(), d, noop.NewTracerProvider())
@@ -47,7 +47,7 @@ func bibleTestDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 	}
 	runtime, owner := open(parsed.String()), open(dsn)
 	var role string
-	if err := runtime.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "lanverse_app" {
+	if err := runtime.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "glowloom_app" {
 		t.Fatal("missing nonowner", role, err)
 	}
 	return runtime, owner

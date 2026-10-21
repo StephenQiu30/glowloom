@@ -45,7 +45,7 @@ func coverTestDB(t *testing.T) (context.Context, *gorm.DB, *gorm.DB) {
 	}
 	r, o := open(runtime), open(owner)
 	var row struct{ Actor, Database string }
-	if err := r.Raw(`SELECT current_user AS actor,current_database() AS database`).Scan(&row).Error; err != nil || row.Actor != "lanverse_app" || row.Database != "lanverse_cover" {
+	if err := r.Raw(`SELECT current_user AS actor,current_database() AS database`).Scan(&row).Error; err != nil || row.Actor != "glowloom_app" || row.Database != "glowloom_cover" {
 		t.Fatal("test must use isolated cover database/runtime role", row, err)
 	}
 	return ctx, r, o

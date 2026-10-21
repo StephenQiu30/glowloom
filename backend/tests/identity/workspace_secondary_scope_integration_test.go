@@ -159,7 +159,7 @@ func TestSecondaryCopyDispatchRechecksMembership(t *testing.T) {
 	tx, actor, team, _, job, store, _ := secondaryCopyFixture(t)
 	d := workspace.ProjectCopyDelivery{EventID: uuid.New(), OrgID: actor.OrgID, JobID: job.ID, SourceProjectID: job.SourceProjectID, TargetProjectID: job.TargetProjectID, ActorID: actor.ID, Revision: 1, Action: "requested", Status: "queued", Stage: "media", OccurredAt: time.Now().UTC().Truncate(time.Microsecond)}
 	body, _ := json.Marshal(map[string]any{"event_id": d.EventID, "event_type": workspaceevent.ProjectCopyTopic, "project_id": job.SourceProjectID, "aggregate": map[string]any{"type": "project_copy", "id": job.ID, "revision": 1}, "org_id": d.OrgID, "occurred_at": d.OccurredAt.Format(time.RFC3339Nano), "actor": map[string]any{"id": actor.ID, "kind": "user"}, "data": map[string]any{"copy_job_id": job.ID, "source_project_id": job.SourceProjectID, "target_project_id": job.TargetProjectID, "revision": 1, "action": "requested", "status": "queued", "stage": "media"}})
-	if err := tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload)VALUES(?,'lanverse.workspace.project_copy_requested.v1',?,?::jsonb)`, d.EventID, job.ID.String(), string(body)).Error; err != nil {
+	if err := tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload)VALUES(?,'glowloom.workspace.project_copy_requested.v1',?,?::jsonb)`, d.EventID, job.ID.String(), string(body)).Error; err != nil {
 		t.Fatal(err)
 	}
 	if ok, err := store.VerifyDelivery(t.Context(), d); err != nil || !ok {

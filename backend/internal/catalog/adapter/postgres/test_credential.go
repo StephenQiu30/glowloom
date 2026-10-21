@@ -185,7 +185,7 @@ type credentialTestChangedEvent struct {
 func validCredentialTestEvents(observation application.CredentialTestObservation, events []identityapp.OutboxEvent) bool {
 	if len(events) != 2 || events[0].ID != uuid.NewSHA1(observation.TestID, []byte("catalog.credential_changed.v1")) ||
 		events[1].ID != uuid.NewSHA1(observation.TestID, []byte("audit.recorded.v1")) ||
-		events[0].Topic != "lanverse.catalog.credential_changed.v1" || events[1].Topic != "lanverse.audit.recorded.v1" {
+		events[0].Topic != "glowloom.catalog.credential_changed.v1" || events[1].Topic != "glowloom.audit.recorded.v1" {
 		return false
 	}
 	for _, event := range events {

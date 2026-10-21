@@ -262,7 +262,7 @@ func speechAuditEvents(t *testing.T, db *gorm.DB, project uuid.UUID) {
 		Topic, PartitionKey string
 		Payload             []byte
 	}
-	if err := db.Raw(`SELECT topic,partition_key,payload FROM infra.outbox WHERE topic='lanverse.audit.recorded.v1' AND payload->>'project_id'=? AND payload->'data'->'object'->>'type'='media_transcription' ORDER BY create_time,id`, project.String()).Scan(&rows).Error; err != nil || len(rows) == 0 {
+	if err := db.Raw(`SELECT topic,partition_key,payload FROM infra.outbox WHERE topic='glowloom.audit.recorded.v1' AND payload->>'project_id'=? AND payload->'data'->'object'->>'type'='media_transcription' ORDER BY create_time,id`, project.String()).Scan(&rows).Error; err != nil || len(rows) == 0 {
 		t.Fatal("produced speech audits missing", err)
 	}
 	consumer := auditevent.NewHandler(inboxpg.NewStore(db), auditapp.NewRecordedActionParser())

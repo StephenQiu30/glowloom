@@ -37,7 +37,7 @@ func (g mediaPackageWorkGuard) HasInflightWork(ctx context.Context, actor identi
 	if g.store == nil {
 		return false, workspaceapp.ErrProjectDependencyUnavailable
 	}
-	return g.store.HasInflightPackageWork(ctx, actor, project)
+	return g.store.HasInflightProjectLifecycleWork(ctx, actor, project)
 }
 
 type mediaPackageReferences struct{ store *pgmedia.PackageStore }

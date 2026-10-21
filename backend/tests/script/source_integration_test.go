@@ -33,7 +33,7 @@ func scriptTestDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 		t.Fatal(err)
 	}
 	q := parsed.Query()
-	q.Set("options", "-c role=lanverse_app")
+	q.Set("options", "-c role=glowloom_app")
 	parsed.RawQuery = q.Encode()
 	open := func(d string) *gorm.DB {
 		client, err := platformdb.Open(t.Context(), d, noop.NewTracerProvider())
@@ -49,7 +49,7 @@ func scriptTestDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 	}
 	runtime, owner := open(parsed.String()), open(dsn)
 	var role string
-	if err := runtime.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "lanverse_app" {
+	if err := runtime.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "glowloom_app" {
 		t.Fatal("test lacks actual nonowner", role, err)
 	}
 	return runtime, owner

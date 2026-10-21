@@ -165,7 +165,7 @@ func TestExportRuntimeRoleOwnsOnlyMutableJobFacts(t *testing.T) {
 	if err := db.Raw(`SELECT current_role AS role,(SELECT rolsuper FROM pg_roles WHERE rolname=current_role) superuser,(SELECT pg_get_userbyid(relowner)=current_role FROM pg_class WHERE oid='mediatool.export_job'::regclass) owns_jobs,has_table_privilege(current_role,'mediatool.export_job','SELECT,INSERT') can_insert,has_column_privilege(current_role,'mediatool.export_job','active_worker','UPDATE') can_update,has_column_privilege(current_role,'mediatool.export_job','frozen','UPDATE') can_freeze,has_table_privilege(current_role,'mediatool.export_command','SELECT,INSERT') can_command,has_table_privilege(current_role,'infra.outbox','SELECT,INSERT') can_outbox,has_table_privilege(current_role,'infra.processed_event','SELECT,INSERT') can_inbox,has_table_privilege(current_role,'audit.audit_log','SELECT,INSERT') can_audit`).Scan(&role).Error; err != nil {
 		t.Fatal(err)
 	}
-	if role.Role != "lanverse_app" || role.Superuser || role.OwnsJobs || role.CanFreeze || !role.CanInsert || !role.CanUpdate || !role.CanCommand || !role.CanOutbox || !role.CanInbox || !role.CanAudit {
+	if role.Role != "glowloom_app" || role.Superuser || role.OwnsJobs || role.CanFreeze || !role.CanInsert || !role.CanUpdate || !role.CanCommand || !role.CanOutbox || !role.CanInbox || !role.CanAudit {
 		t.Fatalf("incorrect non-owning runtime ACL: %+v", role)
 	}
 }

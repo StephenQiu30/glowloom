@@ -129,7 +129,7 @@ func updateImportState(tx *gorm.DB, j application.ImportJob, owner *uuid.UUID, i
 }
 
 // ImportCommandTopic is the sole new command topic produced by document imports.
-const ImportCommandTopic = "lanverse.script.import_command.v1"
+const ImportCommandTopic = "glowloom.script.import_command.v1"
 
 func recordImportCommand(tx *gorm.DB, actor identityapp.Principal, key, request uuid.UUID, action, hash string, revision int64, j application.ImportJob, emit string, now time.Time) error {
 	id := uuid.NewSHA1(key, []byte("script-file-import/"+actor.ID.String()+"/"+emit))
@@ -158,7 +158,7 @@ func recordImportCommand(tx *gorm.DB, actor identityapp.Principal, key, request 
 }
 
 func importAudit(tx *gorm.DB, actor identityapp.Principal, key, request uuid.UUID, action string, j application.ImportJob, now time.Time) error {
-	const topic = "lanverse.audit.recorded.v1"
+	const topic = "glowloom.audit.recorded.v1"
 	id := uuid.NewSHA1(key, []byte("script-file-import-audit/"+actor.ID.String()+"/"+action))
 	summary := map[string]any{"id": j.ID, "revision": j.Revision, "attempt": j.Attempt, "status": j.Status, "stage": j.Stage, "file_count": len(j.Files), "script_revision": j.LatestScriptRevision}
 	payload, err := json.Marshal(map[string]any{"event_id": id, "event_type": topic, "occurred_at": now, "org_id": actor.OrgID, "project_id": j.ProjectID, "actor": map[string]any{"kind": "user", "id": actor.ID}, "aggregate": map[string]any{"type": "audit", "id": id}, "data": map[string]any{"action": "script.file_import_" + action, "object": map[string]any{"type": "script_import", "id": j.ID.String()}, "before": nil, "after": summary, "request_id": request.String()}})

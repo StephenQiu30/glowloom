@@ -18,7 +18,7 @@ import (
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 )
 
-const auditTopic = "lanverse.audit.recorded.v1"
+const auditTopic = "glowloom.audit.recorded.v1"
 
 // ErrInvalidEvent means an audit event cannot be stored without violating its contract.
 var ErrInvalidEvent = errors.New("invalid audit event")

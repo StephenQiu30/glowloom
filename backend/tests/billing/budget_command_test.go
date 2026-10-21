@@ -105,7 +105,7 @@ func TestChangeBudgetCommandWritesSignedLedgerAndSafeEvents(t *testing.T) {
 		}
 		events[event.Topic] = event
 	}
-	changed, ok := events["lanverse.billing.budget_changed.v1"]
+	changed, ok := events["glowloom.billing.budget_changed.v1"]
 	if !ok {
 		t.Fatal("missing budget changed event")
 	}
@@ -139,7 +139,7 @@ func TestChangeBudgetCommandWritesSignedLedgerAndSafeEvents(t *testing.T) {
 		change.Data.AvailableMicros != 150_000_000 || change.Data.IsOverrun {
 		t.Fatalf("invalid budget change event: %+v err=%v", change, err)
 	}
-	auditEvent, ok := events["lanverse.audit.recorded.v1"]
+	auditEvent, ok := events["glowloom.audit.recorded.v1"]
 	if !ok {
 		t.Fatal("missing budget audit event")
 	}
@@ -319,7 +319,7 @@ func TestChangeBudgetEmitsLowEventOnlyWhenCrossingThreshold(t *testing.T) {
 			}
 			var lowEvents int
 			for _, event := range store.events {
-				if event.Topic != "lanverse.billing.budget_low.v1" {
+				if event.Topic != "glowloom.billing.budget_low.v1" {
 					continue
 				}
 				lowEvents++

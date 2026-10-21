@@ -36,6 +36,7 @@ func run() error {
 	}
 	var role app.Role
 	var queues, schedulePrefix string
+	var projectRetention bool
 	setup := len(os.Args) > 1 && os.Args[1] == "temporal"
 	if len(os.Args) > 1 && os.Args[1] == "admin" {
 		return fmt.Errorf("legacy administrator bootstrap was removed; use glowloom identity")
@@ -44,10 +45,11 @@ func run() error {
 	switch {
 	case setup:
 		if len(os.Args) < 3 || os.Args[2] != "setup" {
-			return fmt.Errorf("usage: glowloom temporal setup [--prefix=value]")
+			return fmt.Errorf("usage: glowloom temporal setup [--prefix=value] [--project-retention]")
 		}
 		setupFlags := flag.NewFlagSet("temporal setup", flag.ContinueOnError)
 		prefixFlag := setupFlags.String("prefix", "", "optional prefix for isolated schedule verification")
+		projectRetentionFlag := setupFlags.Bool("project-retention", false, "install only expired project content cleanup after schema review")
 		if err := setupFlags.Parse(os.Args[3:]); err != nil {
 			return err
 		}
@@ -55,6 +57,7 @@ func run() error {
 			return fmt.Errorf("unexpected temporal setup argument: %q", setupFlags.Arg(0))
 		}
 		schedulePrefix = *prefixFlag
+		projectRetention = *projectRetentionFlag
 	case partitions:
 		if len(os.Args) != 3 || os.Args[2] != "ensure" {
 			return fmt.Errorf("usage: glowloom partitions ensure")
@@ -92,10 +95,7 @@ func run() error {
 
 	if setup {
 		logger.Info("starting Temporal setup")
-		if err := app.InstallCleanupSchedules(ctx, cfg, logger, schedulePrefix); err != nil {
-			return err
-		}
-		return app.InstallQuoteExpirySchedule(ctx, cfg, logger, schedulePrefix)
+		return app.SetupTemporalSchedules(ctx, cfg, logger, schedulePrefix, projectRetention)
 	}
 	if partitions {
 		return app.EnsurePartitions(ctx, cfg, logger, time.Now().UTC())

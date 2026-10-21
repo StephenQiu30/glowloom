@@ -295,7 +295,7 @@ func TestRealProviderUsagePricesFrozenRuleOnce(t *testing.T) {
 		}
 		if sequence == 2 {
 			if err := database.Transaction(func(tx *gorm.DB) error {
-				if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+				if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 					return err
 				}
 				return operationStore(tx).CompleteProviderCall(t.Context(), result)
@@ -723,7 +723,7 @@ func TestProviderCallSettlementUnderRuntimeRole(t *testing.T) {
 	opID, _ := seedProviderCallOperation(t, database)
 	requestKey := "operation/" + opID.String()
 	err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return fmt.Errorf("assume runtime role: %w", err)
 		}
 		store := operationStore(tx)

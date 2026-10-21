@@ -80,11 +80,11 @@ func catalogRequest[T any](ctx context.Context, db *gorm.DB, actors ActorAccessF
 			return nil
 		}
 		eventID := uuid.New()
-		event, err := json.Marshal(map[string]any{"event_id": eventID, "event_type": "lanverse.audit.recorded.v1", "occurred_at": time.Now().UTC(), "org_id": actor.OrgID, "actor": map[string]any{"kind": "user", "id": actor.ID}, "aggregate": map[string]any{"type": "audit", "id": eventID}, "data": map[string]any{"action": action, "object": map[string]any{"type": "catalog", "id": target}, "request_id": requestID}})
+		event, err := json.Marshal(map[string]any{"event_id": eventID, "event_type": "glowloom.audit.recorded.v1", "occurred_at": time.Now().UTC(), "org_id": actor.OrgID, "actor": map[string]any{"kind": "user", "id": actor.ID}, "aggregate": map[string]any{"type": "audit", "id": eventID}, "data": map[string]any{"action": action, "object": map[string]any{"type": "catalog", "id": target}, "request_id": requestID}})
 		if err != nil {
 			return err
 		}
-		return tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,'lanverse.audit.recorded.v1',?,?::jsonb)`, eventID, actor.OrgID.String(), string(event)).Error
+		return tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,'glowloom.audit.recorded.v1',?,?::jsonb)`, eventID, actor.OrgID.String(), string(event)).Error
 	})
 	if err != nil {
 		return output, fmt.Errorf("catalog %s: %w", action, mapPresetConflict(err))

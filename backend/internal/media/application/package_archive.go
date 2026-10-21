@@ -87,7 +87,7 @@ func ReadLibraryPackage(ctx context.Context, reader io.ReaderAt, size int64) (*L
 	if err != nil {
 		return nil, err
 	}
-	archive.SourceFormat = "lanverse-media-library-v1"
+	archive.SourceFormat = "glowloom-media-library-v1"
 	if err := decodePackageJSON(manifest, &archive.Manifest); err != nil {
 		return nil, err
 	}

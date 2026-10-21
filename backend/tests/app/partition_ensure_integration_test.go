@@ -98,7 +98,7 @@ func TestEnsurePartitionsUsesSeparateOwnerAndRollsBackBothTables(t *testing.T) {
 	outboxID, auditID, orgID := uuid.NewString(), uuid.NewString(), uuid.NewString()
 	if err := appConn.DB.WithContext(ctx).Exec(`
 		INSERT INTO infra.outbox(id, topic, partition_key, payload, create_time)
-		VALUES (?::uuid, 'lanverse.partition.test.v1', ?, ?::jsonb, ?)
+		VALUES (?::uuid, 'glowloom.partition.test.v1', ?, ?::jsonb, ?)
 	`, outboxID, orgID, `{"test":"partition-maintenance"}`, rowTime).Error; err != nil {
 		t.Fatalf("insert Outbox row through application role: %v", err)
 	}

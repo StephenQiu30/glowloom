@@ -14,7 +14,7 @@ import (
 )
 
 // DepthTopic carries exact committed depth commands without private file paths.
-const DepthTopic = "lanverse.mediatool.depth_command.v1"
+const DepthTopic = "glowloom.mediatool.depth_command.v1"
 
 // DepthDeliveryStore proves immutable command and original outbox data before delivery.
 type DepthDeliveryStore interface {

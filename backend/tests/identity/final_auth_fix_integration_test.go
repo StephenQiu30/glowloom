@@ -62,7 +62,7 @@ func finalAuthRequest(t *testing.T, router *gin.Engine, path, peer, forwarded st
 	request.Header.Set("X-Real-IP", forwarded)
 	request.Header.Set("Forwarded", "for="+forwarded)
 	if login.Token != "" {
-		request.AddCookie(&http.Cookie{Name: "lanverse_session", Value: login.Token})
+		request.AddCookie(&http.Cookie{Name: "glowloom_session", Value: login.Token})
 		request.Header.Set("X-CSRF-Token", login.CSRFToken)
 	}
 	response := httptest.NewRecorder()

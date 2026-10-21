@@ -65,14 +65,14 @@ func newRetainedExportFixture(t *testing.T, count int) retainedExportFixture {
 func retainedRuntimeRead(t *testing.T, database *gorm.DB, use func(*toolpg.RetainedMediaReader) error) {
 	t.Helper()
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		var role string
 		if err := tx.Raw(`SELECT current_user`).Scan(&role).Error; err != nil {
 			return err
 		}
-		if role != "lanverse_app" {
+		if role != "glowloom_app" {
 			t.Fatal("retained reader requires the actual non-owner role")
 		}
 		return use(toolpg.NewRetainedMediaReader(tx, mediaapp.NewDerivedService(mediaTestStore(tx))))

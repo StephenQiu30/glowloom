@@ -29,7 +29,7 @@ const (
 	maxImagePixels    int64 = 40_000_000
 	maxImageDimension       = 8192
 	maxDepth                = 64
-	schemaBase              = "https://lanverse.local/gltf/"
+	schemaBase              = "https://glowloom.local/gltf/"
 )
 
 // ErrInvalidModel identifies an unsupported or malformed uploaded glTF model.

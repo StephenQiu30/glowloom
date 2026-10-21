@@ -210,7 +210,7 @@ func (b *bound) Record(ctx context.Context, actor identityapp.Principal, c appli
 	if err := exactlyOne(b.tx.WithContext(ctx).Exec(`INSERT INTO bible.command(actor_id,request_id,org_id,project_id,kind,action,request_hash,response,created_at) VALUES(?,?,?,?,?,?,?,?::jsonb,?)`, actor.ID, c.Key, actor.OrgID, c.ProjectID, c.Kind, c.Action, hash, string(response), now)); err != nil {
 		return err
 	}
-	const topic = "lanverse.audit.recorded.v1"
+	const topic = "glowloom.audit.recorded.v1"
 	id := uuid.NewSHA1(c.Key, []byte("bible-audit/"+actor.ID.String()))
 	after := struct {
 		Revision        int64     `json:"revision"`

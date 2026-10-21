@@ -20,8 +20,8 @@ import (
 )
 
 const (
-	credentialChangedTopic = "lanverse.catalog.credential_changed.v1"
-	auditTopic             = "lanverse.audit.recorded.v1"
+	credentialChangedTopic = "glowloom.catalog.credential_changed.v1"
+	auditTopic             = "glowloom.audit.recorded.v1"
 )
 
 // ErrInvalidSetCredential means the command input or committed result is invalid.

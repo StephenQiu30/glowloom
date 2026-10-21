@@ -47,7 +47,7 @@ func createWorkspaceProjectInStore(ctx context.Context, store *pgworkspace.Store
 	changedID, auditID := uuid.New(), uuid.New()
 	occurredAt := time.Now().UTC()
 	changed, err := json.Marshal(map[string]any{
-		"event_id": changedID, "event_type": "lanverse.workspace.project_changed.v1",
+		"event_id": changedID, "event_type": "glowloom.workspace.project_changed.v1",
 		"occurred_at": occurredAt, "org_id": actor.OrgID, "project_id": project.ID,
 		"actor":     map[string]any{"kind": "user", "id": actor.ID},
 		"aggregate": map[string]any{"type": "project", "id": project.ID, "revision": project.Revision},
@@ -67,7 +67,7 @@ func createWorkspaceProjectInStore(ctx context.Context, store *pgworkspace.Store
 		after["style_preset_id"] = project.StylePresetID
 	}
 	audit, err := json.Marshal(map[string]any{
-		"event_id": auditID, "event_type": "lanverse.audit.recorded.v1",
+		"event_id": auditID, "event_type": "glowloom.audit.recorded.v1",
 		"occurred_at": occurredAt, "org_id": actor.OrgID, "project_id": project.ID,
 		"actor":     map[string]any{"kind": "user", "id": actor.ID},
 		"aggregate": map[string]any{"type": "audit", "id": auditID},
@@ -81,8 +81,8 @@ func createWorkspaceProjectInStore(ctx context.Context, store *pgworkspace.Store
 	}
 	key := project.ID.String()
 	_, err = store.CreateProjectWithEvents(ctx, actor, project, []identityapp.OutboxEvent{
-		{ID: changedID, Topic: "lanverse.workspace.project_changed.v1", PartitionKey: key, Payload: changed},
-		{ID: auditID, Topic: "lanverse.audit.recorded.v1", PartitionKey: key, Payload: audit},
+		{ID: changedID, Topic: "glowloom.workspace.project_changed.v1", PartitionKey: key, Payload: changed},
+		{ID: auditID, Topic: "glowloom.audit.recorded.v1", PartitionKey: key, Payload: audit},
 	})
 	return err
 }

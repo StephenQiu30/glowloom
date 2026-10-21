@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	operationConfirmedTopic = "lanverse.operation.confirmed.v1"
-	operationAuditTopic     = "lanverse.audit.recorded.v1"
+	operationConfirmedTopic = "glowloom.operation.confirmed.v1"
+	operationAuditTopic     = "glowloom.audit.recorded.v1"
 )
 
 var (

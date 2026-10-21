@@ -12,7 +12,7 @@ import (
 )
 
 // ProjectChangedTopic carries project invalidations from the workspace Outbox.
-const ProjectChangedTopic = "lanverse.workspace.project_changed.v1"
+const ProjectChangedTopic = "glowloom.workspace.project_changed.v1"
 
 // ProjectChangedHandler projects a workspace event into a safe SSE invalidation.
 type ProjectChangedHandler struct {

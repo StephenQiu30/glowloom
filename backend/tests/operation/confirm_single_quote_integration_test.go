@@ -51,7 +51,7 @@ func TestConfirmSingleQuoteCommitsReservationAndEvents(t *testing.T) {
 	if err := database.Raw(`SELECT count(*) FROM billing.ledger_entry WHERE operation_id = ?::uuid AND entry_type = 'reserve'`, quoted.ID.String()).Scan(&ledger).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := database.Raw(`SELECT count(*) FROM infra.outbox WHERE partition_key = ? AND topic IN ('lanverse.operation.confirmed.v1', 'lanverse.audit.recorded.v1')`, projectID.String()).Scan(&events).Error; err != nil {
+	if err := database.Raw(`SELECT count(*) FROM infra.outbox WHERE partition_key = ? AND topic IN ('glowloom.operation.confirmed.v1', 'glowloom.audit.recorded.v1')`, projectID.String()).Scan(&events).Error; err != nil {
 		t.Fatal(err)
 	}
 	if reservations != 1 || ledger != 1 || events != 2 {
@@ -172,7 +172,7 @@ func TestConfirmSingleQuoteRunsAsRuntimeRole(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		_, err := operationStore(tx).ConfirmSingleQuote(t.Context(), actor, operationapp.ConfirmSingleQuoteInput{
@@ -195,16 +195,16 @@ func TestConfirmSingleQuoteRollsBackWhenOutboxInsertFails(t *testing.T) {
 	if err := store.CreateQuoteSnapshot(t.Context(), actor, nil, []pgoperation.QuoteItem{item}); err != nil {
 		t.Fatal(err)
 	}
-	if err := database.Exec(`REVOKE INSERT ON infra.outbox FROM lanverse_app`).Error; err != nil {
+	if err := database.Exec(`REVOKE INSERT ON infra.outbox FROM glowloom_app`).Error; err != nil {
 		t.Fatal(err)
 	}
 	defer func() {
-		if err := database.Exec(`GRANT INSERT ON infra.outbox TO lanverse_app`).Error; err != nil {
+		if err := database.Exec(`GRANT INSERT ON infra.outbox TO glowloom_app`).Error; err != nil {
 			t.Errorf("restore outbox grant: %v", err)
 		}
 	}()
 	err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		_, err := operationStore(tx).ConfirmSingleQuote(t.Context(), actor, operationapp.ConfirmSingleQuoteInput{

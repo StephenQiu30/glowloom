@@ -272,7 +272,7 @@ func TestExportRealHTTPFrozenCanvasPrivateRenderingReviewAndDownload(t *testing.
 		Topic, PartitionKey string
 		Payload             []byte
 	}
-	if err := db.Raw(`SELECT topic,partition_key,payload FROM infra.outbox WHERE topic='lanverse.audit.recorded.v1' AND payload->>'project_id'=? AND payload->'data'->'object'->>'type'='media_export' ORDER BY create_time,id`, project.String()).Scan(&events).Error; err != nil || len(events) != 2 {
+	if err := db.Raw(`SELECT topic,partition_key,payload FROM infra.outbox WHERE topic='glowloom.audit.recorded.v1' AND payload->>'project_id'=? AND payload->'data'->'object'->>'type'='media_export' ORDER BY create_time,id`, project.String()).Scan(&events).Error; err != nil || len(events) != 2 {
 		t.Fatalf("actual produced export audit events count=%d err=%v", len(events), err)
 	}
 	auditConsumer := auditevent.NewHandler(inboxpg.NewStore(db), auditapp.NewRecordedActionParser())
@@ -285,7 +285,7 @@ func TestExportRealHTTPFrozenCanvasPrivateRenderingReviewAndDownload(t *testing.
 		}
 	}
 	var counts struct{ Assets, Commands, Outboxes, Audits int }
-	if err := db.Raw(`SELECT (SELECT count(*) FROM media.media_asset WHERE project_id=?) assets,(SELECT count(*) FROM mediatool.export_command WHERE job_id=?) commands,(SELECT count(*) FROM infra.outbox WHERE topic='lanverse.mediatool.export_command.v1' AND payload->'data'->>'job_id'=?) outboxes,(SELECT count(*) FROM audit.audit_log WHERE project_id=? AND object_type='media_export') audits`, project, job.ID, job.ID.String(), project).Scan(&counts).Error; err != nil || counts.Assets != 2 || counts.Commands != 2 || counts.Outboxes != 1 || counts.Audits != 2 {
+	if err := db.Raw(`SELECT (SELECT count(*) FROM media.media_asset WHERE project_id=?) assets,(SELECT count(*) FROM mediatool.export_command WHERE job_id=?) commands,(SELECT count(*) FROM infra.outbox WHERE topic='glowloom.mediatool.export_command.v1' AND payload->'data'->>'job_id'=?) outboxes,(SELECT count(*) FROM audit.audit_log WHERE project_id=? AND object_type='media_export') audits`, project, job.ID, job.ID.String(), project).Scan(&counts).Error; err != nil || counts.Assets != 2 || counts.Commands != 2 || counts.Outboxes != 1 || counts.Audits != 2 {
 		t.Fatalf("durable export facts=%+v err=%v", counts, err)
 	}
 	// A real renderer activity must return and relinquish its own worker session

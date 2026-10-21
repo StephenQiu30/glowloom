@@ -16,7 +16,7 @@ func operationReferenceFixture(t *testing.T) (*gorm.DB, identityapp.Principal, u
 	t.Helper()
 	database := operationStoreDB(t)
 	var name string
-	if err := database.Raw(`SELECT current_database()`).Scan(&name).Error; err != nil || name != "lanverse_reference" {
+	if err := database.Raw(`SELECT current_database()`).Scan(&name).Error; err != nil || name != "glowloom_reference" {
 		t.Fatal("isolated reference database required", err)
 	}
 	actor, project := operationStoreProject(t, database)
@@ -27,7 +27,7 @@ func operationReferenceCheck(t *testing.T, database *gorm.DB, actor identityapp.
 	t.Helper()
 	var found bool
 	err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		var err error

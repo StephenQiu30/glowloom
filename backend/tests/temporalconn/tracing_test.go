@@ -44,7 +44,7 @@ func TestQueryWorkflowKeepsParentTrace(t *testing.T) {
 	ctx, parent := provider.Tracer("test").Start(t.Context(), "api request")
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	_, err = conn.Client.QueryWorkflow(ctx, "lanverse-trace-probe-nonexistent", "", "trace-probe")
+	_, err = conn.Client.QueryWorkflow(ctx, "glowloom-trace-probe-nonexistent", "", "trace-probe")
 	parent.End()
 	if err == nil {
 		t.Fatal("QueryWorkflow() found a nonexistent workflow")
@@ -90,7 +90,7 @@ func TestWorkflowActivityKeepsParentTrace(t *testing.T) {
 		t.Fatalf("Open() error = %v", err)
 	}
 	t.Cleanup(conn.Close)
-	queue := "lanverse-test-trace-" + uuid.NewString()
+	queue := "glowloom-test-trace-" + uuid.NewString()
 	queueWorker := worker.New(conn.Client, queue, worker.Options{})
 	queueWorker.RegisterWorkflow(traceProbeWorkflow)
 	queueWorker.RegisterActivityWithOptions(traceProbeActivity, activity.RegisterOptions{Name: "trace.probe"})
@@ -104,7 +104,7 @@ func TestWorkflowActivityKeepsParentTrace(t *testing.T) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	run, err := conn.Client.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
-		ID: "lanverse-trace-probe-" + uuid.NewString(), TaskQueue: queue,
+		ID: "glowloom-trace-probe-" + uuid.NewString(), TaskQueue: queue,
 	}, traceProbeWorkflow)
 	if err != nil {
 		t.Fatalf("start trace workflow: %v", err)

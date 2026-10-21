@@ -386,7 +386,7 @@ func TestDepthJobPGCommandsNilRuntimeCASAndImmutableACL(t *testing.T) {
 		t.Fatal("disabled retry accepted", err)
 	}
 	var rights struct{ Frozen, Source, Result, Commands, State, Objects, Delete bool }
-	if err := f.db.Raw(`SELECT has_column_privilege('lanverse_app','mediatool.depth_job','frozen','UPDATE') frozen,has_column_privilege('lanverse_app','mediatool.depth_job','source_sha256','UPDATE') source,has_table_privilege('lanverse_app','mediatool.depth_result_intent','UPDATE') result,has_table_privilege('lanverse_app','mediatool.depth_command','UPDATE') commands,has_column_privilege('lanverse_app','mediatool.depth_job','status','UPDATE') state,has_column_privilege('lanverse_app','mediatool.depth_object','status','UPDATE') objects,has_table_privilege('lanverse_app','mediatool.depth_result_intent','DELETE') delete`).Scan(&rights).Error; err != nil {
+	if err := f.db.Raw(`SELECT has_column_privilege('glowloom_app','mediatool.depth_job','frozen','UPDATE') frozen,has_column_privilege('glowloom_app','mediatool.depth_job','source_sha256','UPDATE') source,has_table_privilege('glowloom_app','mediatool.depth_result_intent','UPDATE') result,has_table_privilege('glowloom_app','mediatool.depth_command','UPDATE') commands,has_column_privilege('glowloom_app','mediatool.depth_job','status','UPDATE') state,has_column_privilege('glowloom_app','mediatool.depth_object','status','UPDATE') objects,has_table_privilege('glowloom_app','mediatool.depth_result_intent','DELETE') delete`).Scan(&rights).Error; err != nil {
 		t.Fatal(err)
 	}
 	if rights.Frozen || rights.Source || rights.Result || rights.Commands || rights.Delete || !rights.State || !rights.Objects {
@@ -406,7 +406,7 @@ func TestDepthJobPGCommandsNilRuntimeCASAndImmutableACL(t *testing.T) {
 func TestDepthJobPGNonOwnerTransactionAndWriteDenials(t *testing.T) {
 	f := depthHTTP(t)
 	if err := f.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec("SET LOCAL ROLE lanverse_app").Error; err != nil {
+		if err := tx.Exec("SET LOCAL ROLE glowloom_app").Error; err != nil {
 			return err
 		}
 		s := depthStore(tx, true)

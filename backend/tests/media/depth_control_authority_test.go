@@ -290,7 +290,7 @@ func TestDepthJobActualAdministratorCleanupFailureReconcilesOriginalObjects(t *t
 		t.Fatal("cleanup authority restored creator generation permission", err)
 	}
 	var auditActor string
-	if err := f.db.Raw(`SELECT payload->'actor'->>'id' FROM infra.outbox WHERE topic='lanverse.audit.recorded.v1' AND payload->'data'->>'action'='media.depth_cancelled' AND payload->'data'->'object'->>'id'=?`, j.ID.String()).Scan(&auditActor).Error; err != nil || auditActor != replacement.ID.String() {
+	if err := f.db.Raw(`SELECT payload->'actor'->>'id' FROM infra.outbox WHERE topic='glowloom.audit.recorded.v1' AND payload->'data'->>'action'='media.depth_cancelled' AND payload->'data'->'object'->>'id'=?`, j.ID.String()).Scan(&auditActor).Error; err != nil || auditActor != replacement.ID.String() {
 		t.Fatal("cancelled fact attributed to revoked creator/controller", auditActor, err)
 	}
 }

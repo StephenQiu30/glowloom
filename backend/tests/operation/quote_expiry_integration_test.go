@@ -102,7 +102,7 @@ func TestExpireQuotedUnderRuntimeRole(t *testing.T) {
 		t.Fatal(err)
 	}
 	err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		counts, err := operationStore(tx).ExpireQuoted(t.Context(), item.Operation.QuoteExpiresAt.Add(time.Minute), 10)

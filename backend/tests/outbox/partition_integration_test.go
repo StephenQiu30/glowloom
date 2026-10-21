@@ -32,7 +32,7 @@ func TestEnsurePartitionsMovesDefaultRowsBeforeAttach(t *testing.T) {
 	id := uuid.NewString()
 	if err := conn.DB.WithContext(ctx).Exec(
 		"INSERT INTO infra.outbox(id, topic, partition_key, payload, create_time) VALUES (?::uuid, ?, ?, ?::jsonb, ?)",
-		id, "lanverse.operation.status_changed.v1", uuid.NewString(), `{"event_id":"`+id+`"}`, rowTime,
+		id, "glowloom.operation.status_changed.v1", uuid.NewString(), `{"event_id":"`+id+`"}`, rowTime,
 	).Error; err != nil {
 		t.Fatalf("insert overflow event: %v", err)
 	}

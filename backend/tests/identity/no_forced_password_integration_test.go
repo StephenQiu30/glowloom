@@ -66,7 +66,7 @@ func TestHistoricalPasswordFlagNeverRestrictsAuthenticatedAccount(t *testing.T) 
 			router.GET("/protected", handler.RequireSession(), func(c *gin.Context) { c.Status(http.StatusNoContent) })
 			for _, path := range []string{"/protected", "/api/session"} {
 				req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil)
-				req.AddCookie(&http.Cookie{Name: "lanverse_session", Value: login.Token})
+				req.AddCookie(&http.Cookie{Name: "glowloom_session", Value: login.Token})
 				rec := httptest.NewRecorder()
 				router.ServeHTTP(rec, req)
 				if rec.Code >= 300 {

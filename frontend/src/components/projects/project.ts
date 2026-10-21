@@ -12,6 +12,9 @@ export function isProjectID(value: unknown): value is string {
 export type Project = {
   status?: "active" | "archived" | "copying";
   is_delete?: boolean;
+  delete_time?: string | null;
+  purge_after?: string | null;
+  server_time?: string;
   last_modified_at?: string;
   last_modified_basis?: "created" | "metadata" | "content" | "legacy_metadata";
   id: string;
@@ -46,6 +49,15 @@ export function requireProject(value: unknown, requireCanvas = false): Project {
     (p.status !== undefined &&
       !["active", "archived", "copying"].includes(p.status)) ||
     (p.is_delete !== undefined && typeof p.is_delete !== "boolean") ||
+    [p.delete_time, p.purge_after, p.server_time].some(
+      (value) =>
+        value != null &&
+        (typeof value !== "string" || !Number.isFinite(Date.parse(value))),
+    ) ||
+    (p.is_delete === true &&
+      (!p.delete_time ||
+        !p.purge_after ||
+        Date.parse(p.purge_after) <= Date.parse(p.delete_time))) ||
     (p.last_modified_at !== undefined &&
       !Number.isFinite(Date.parse(p.last_modified_at))) ||
     (p.last_modified_basis !== undefined &&
@@ -63,8 +75,13 @@ export function requireProject(value: unknown, requireCanvas = false): Project {
 export function requireProjectList(value: unknown): {
   items: Project[];
   next_cursor: string | null;
+  server_time?: string;
 } {
-  const page = value as { items?: unknown; next_cursor?: unknown } | null;
+  const page = value as {
+    items?: unknown;
+    next_cursor?: unknown;
+    server_time?: unknown;
+  } | null;
   if (
     !page ||
     !Array.isArray(page.items) ||
@@ -77,13 +94,30 @@ export function requireProjectList(value: unknown): {
     )
   )
     throw new RequestError("invalid_receipt");
-  const items = page.items.map((item: unknown) => requireProject(item));
+  if (
+    page.server_time !== undefined &&
+    (typeof page.server_time !== "string" ||
+      !Number.isFinite(Date.parse(page.server_time)))
+  )
+    throw new RequestError("invalid_receipt");
+  const items = page.items.map((item: unknown) => ({
+    ...requireProject(item),
+    ...(typeof page.server_time === "string"
+      ? { server_time: page.server_time }
+      : {}),
+  }));
   if (
     new Set(items.map((p) => p.id)).size !== items.length ||
     (items.length === 0 && page.next_cursor !== null)
   )
     throw new RequestError("invalid_receipt");
-  return { items, next_cursor: page.next_cursor } as {
+  return {
+    items,
+    next_cursor: page.next_cursor,
+    ...(typeof page.server_time === "string"
+      ? { server_time: page.server_time }
+      : {}),
+  } as {
     items: Project[];
     next_cursor: string | null;
   };

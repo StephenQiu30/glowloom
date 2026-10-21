@@ -109,6 +109,7 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		toolflow.RegisterTranscriptionWorkflow(queueWorker)
 		toolflow.RegisterDepthWorkflow(queueWorker)
 		workspaceflow.RegisterProjectCopyWorkflow(queueWorker)
+		workspaceflow.RegisterProjectRetention(queueWorker, workspaceflow.NewProjectRetentionActivities(NewProjectRetention(dbConn.DB)))
 		scriptflow.RegisterImportWorkflow(queueWorker)
 		mediaflow.RegisterTransferWorkflow(queueWorker)
 		mediaflow.RegisterPurgeWorkflow(queueWorker)
@@ -221,7 +222,7 @@ func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Conn
 		return nil, nil, fmt.Errorf("configure relay realtime consumer: %w", err)
 	}
 	auditConsumer, err := kafkainbox.NewConsumer(cfg.KafkaBrokers, auditConsumerGroup,
-		[]string{"lanverse.audit.recorded.v1"},
+		[]string{"glowloom.audit.recorded.v1"},
 		auditevent.NewHandler(processed, auditapp.NewRecordedActionParser()))
 	if err != nil {
 		realtimeConsumer.Close()

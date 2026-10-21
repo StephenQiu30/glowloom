@@ -46,11 +46,11 @@ func TestAuditApplicationRoleOnlyAppendsThroughParent(t *testing.T) {
 	}
 
 	var canLogin, superuser bool
-	if err := tx.QueryRowContext(ctx, "SELECT rolcanlogin, rolsuper FROM pg_roles WHERE rolname = 'lanverse_app'").Scan(&canLogin, &superuser); err != nil {
+	if err := tx.QueryRowContext(ctx, "SELECT rolcanlogin, rolsuper FROM pg_roles WHERE rolname = 'glowloom_app'").Scan(&canLogin, &superuser); err != nil {
 		t.Fatalf("read application role attributes: %v", err)
 	}
 	if canLogin || superuser {
-		t.Fatal("lanverse_app must be NOLOGIN NOSUPERUSER")
+		t.Fatal("glowloom_app must be NOLOGIN NOSUPERUSER")
 	}
 
 	now := time.Now().UTC()
@@ -68,21 +68,21 @@ func TestAuditApplicationRoleOnlyAppendsThroughParent(t *testing.T) {
 	var appOwnsParent, appOwnsNewPartition bool
 	if err := tx.QueryRowContext(ctx, `
 		SELECT
-		  (SELECT relowner = 'lanverse_app'::regrole FROM pg_class WHERE oid = 'audit.audit_log'::regclass),
-		  (SELECT relowner = 'lanverse_app'::regrole FROM pg_class WHERE oid = $1::regclass)
+		  (SELECT relowner = 'glowloom_app'::regrole FROM pg_class WHERE oid = 'audit.audit_log'::regclass),
+		  (SELECT relowner = 'glowloom_app'::regrole FROM pg_class WHERE oid = $1::regclass)
 	`, futurePartition).Scan(&appOwnsParent, &appOwnsNewPartition); err != nil {
 		t.Fatalf("check audit table owners: %v", err)
 	}
 	if appOwnsParent || appOwnsNewPartition {
-		t.Fatal("lanverse_app must not own the audit parent or a new partition")
+		t.Fatal("glowloom_app must not own the audit parent or a new partition")
 	}
 
-	if _, err := tx.ExecContext(ctx, "SET LOCAL ROLE lanverse_app"); err != nil {
+	if _, err := tx.ExecContext(ctx, "SET LOCAL ROLE glowloom_app"); err != nil {
 		t.Fatalf("assume application role (requires migration owner or superuser): %v", err)
 	}
 	var activeRole string
-	if err := tx.QueryRowContext(ctx, "SELECT current_user").Scan(&activeRole); err != nil || activeRole != "lanverse_app" {
-		t.Fatalf("current_user = %q, error = %v, want lanverse_app", activeRole, err)
+	if err := tx.QueryRowContext(ctx, "SELECT current_user").Scan(&activeRole); err != nil || activeRole != "glowloom_app" {
+		t.Fatalf("current_user = %q, error = %v, want glowloom_app", activeRole, err)
 	}
 
 	var canUseSchema, canInsert, canSelect, canUpdate, canDelete, canTruncate bool
@@ -132,7 +132,7 @@ func TestAuditApplicationRoleOnlyAppendsThroughParent(t *testing.T) {
 		"DELETE FROM audit.audit_log",
 		"TRUNCATE audit.audit_log",
 		"ALTER TABLE audit.audit_log ADD COLUMN acl_probe text",
-		"ALTER TABLE audit.audit_log OWNER TO lanverse_app",
+		"ALTER TABLE audit.audit_log OWNER TO glowloom_app",
 	} {
 		assertAuditACLPermissionDenied(ctx, t, tx, stmt)
 	}

@@ -15,7 +15,7 @@ import (
 )
 
 // Topic carries server-issued export and cancellation identities, never URLs.
-const Topic = "lanverse.mediatool.export_command.v1"
+const Topic = "glowloom.mediatool.export_command.v1"
 
 // ProcessedStore owns existing durable external-delivery deduplication.
 type ProcessedStore interface {

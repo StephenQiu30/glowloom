@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	budgetChangedTopic = "lanverse.billing.budget_changed.v1"
-	budgetLowTopic     = "lanverse.billing.budget_low.v1"
-	budgetAuditTopic   = "lanverse.audit.recorded.v1"
+	budgetChangedTopic = "glowloom.billing.budget_changed.v1"
+	budgetLowTopic     = "glowloom.billing.budget_low.v1"
+	budgetAuditTopic   = "glowloom.audit.recorded.v1"
 )
 
 // ErrInvalidChangeBudget means the input or committed result is invalid.

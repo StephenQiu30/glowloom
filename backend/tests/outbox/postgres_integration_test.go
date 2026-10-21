@@ -29,7 +29,7 @@ func TestPostgresOutboxAcknowledgesOnlyAfterDelivery(t *testing.T) {
 	t.Cleanup(func() { _ = conn.Close() })
 
 	id, projectID := uuid.NewString(), uuid.NewString()
-	topic := "lanverse.operation.status_changed.v1"
+	topic := "glowloom.operation.status_changed.v1"
 	payload := `{"event_id":"` + id + `","event_type":"` + topic + `","project_id":"` + projectID + `"}`
 	if err := conn.DB.WithContext(ctx).Exec(
 		"INSERT INTO infra.outbox(id, topic, partition_key, payload, headers) VALUES (?::uuid, ?, ?, ?::jsonb, ?::jsonb)",

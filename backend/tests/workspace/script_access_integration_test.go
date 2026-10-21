@@ -103,7 +103,7 @@ func TestScriptProjectAccessPGCommitsContentInvalidationAtomically(t *testing.T)
 	if err := owner.Raw(`SELECT (SELECT count(*) FROM infra.outbox WHERE partition_key=?) AS events,(SELECT revision FROM workspace.project WHERE id=?) AS revision,(SELECT payload->'data'->>'change' FROM infra.outbox WHERE partition_key=? LIMIT 1) AS change,(SELECT topic FROM infra.outbox WHERE partition_key=? LIMIT 1) AS topic`, project.String(), project, project.String(), project.String()).Scan(&facts).Error; err != nil {
 		t.Fatal(err)
 	}
-	if facts.Events != 1 || facts.Revision != 2 || facts.Change != "updated" || facts.Topic != "lanverse.workspace.project_changed.v1" {
+	if facts.Events != 1 || facts.Revision != 2 || facts.Change != "updated" || facts.Topic != "glowloom.workspace.project_changed.v1" {
 		t.Fatalf("content and actual invalidation diverged: %+v", facts)
 	}
 	for _, fault := range []string{"RAISE EXCEPTION 'synthetic script invalidation fault'", "RETURN NULL"} {
@@ -116,7 +116,7 @@ func TestScriptProjectAccessPGCommitsContentInvalidationAtomically(t *testing.T)
 				if err := tx.Exec(`CREATE TRIGGER script_invalidation_fault BEFORE INSERT ON infra.outbox FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_script_invalidation()`).Error; err != nil {
 					return err
 				}
-				if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+				if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 					return err
 				}
 				if _, err := workspaceProjectAccess(tx).TouchContent(ctx, actor, project, 2); err == nil {

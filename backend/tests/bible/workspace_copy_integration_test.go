@@ -354,7 +354,7 @@ func TestBibleWorkspacePGFullActualOwnersAndFiveStagePublication(t *testing.T) {
 		t.Fatal("complete stages/counts", stages, final)
 	}
 	var checkpoints []string
-	if e := owner.Raw(`SELECT payload->'data'->>'stage' FROM infra.outbox WHERE partition_key=? AND topic='lanverse.workspace.project_copy_changed.v1' ORDER BY (payload->'data'->>'revision')::bigint`, j.ID.String()).Scan(&checkpoints).Error; e != nil || !reflect.DeepEqual(checkpoints, []string{"media", "bible", "script", "canvases", "finalizing", "complete"}) {
+	if e := owner.Raw(`SELECT payload->'data'->>'stage' FROM infra.outbox WHERE partition_key=? AND topic='glowloom.workspace.project_copy_changed.v1' ORDER BY (payload->'data'->>'revision')::bigint`, j.ID.String()).Scan(&checkpoints).Error; e != nil || !reflect.DeepEqual(checkpoints, []string{"media", "bible", "script", "canvases", "finalizing", "complete"}) {
 		t.Fatal("durable five-stage checkpoints", checkpoints, e)
 	}
 	var n int64

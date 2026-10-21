@@ -279,11 +279,11 @@ func bibleReferenceDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 		return bibleTestDB(t)
 	}
 	parsed, err := url.Parse(dsn)
-	if err != nil || parsed.Path != "/lanverse_reference" {
-		t.Fatal("reference guard requires isolated lanverse_reference database", err)
+	if err != nil || parsed.Path != "/glowloom_reference" {
+		t.Fatal("reference guard requires isolated glowloom_reference database", err)
 	}
 	query := parsed.Query()
-	query.Set("options", "-c role=lanverse_app")
+	query.Set("options", "-c role=glowloom_app")
 	parsed.RawQuery = query.Encode()
 	open := func(dsn string) *gorm.DB {
 		client, err := platformdb.Open(t.Context(), dsn, noop.NewTracerProvider())
@@ -299,7 +299,7 @@ func bibleReferenceDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 	}
 	runtime, owner := open(parsed.String()), open(dsn)
 	var role string
-	if err := runtime.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "lanverse_app" {
+	if err := runtime.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "glowloom_app" {
 		t.Fatal("reference guard requires actual nonowner", role, err)
 	}
 	return runtime, owner
@@ -394,11 +394,11 @@ func TestBibleMediaReferencePGBoundedCompleteHistory(t *testing.T) {
 				}
 			}()
 			bibleReferenceHistory(t, tx, detail.Current, test.count, test.looks, test.padding)
-			if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+			if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 				t.Fatal(err)
 			}
 			var role string
-			if err := tx.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "lanverse_app" {
+			if err := tx.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "glowloom_app" {
 				t.Fatal("history guard lacks actual nonowner", role, err)
 			}
 			found, err := pg.NewMediaReferenceGuard(tx, bibleFixtureProjectAccess(tx)).HasMediaReferences(t.Context(), actor, project, asset)

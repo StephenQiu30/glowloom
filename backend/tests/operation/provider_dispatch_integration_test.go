@@ -331,7 +331,7 @@ func TestM1DispatchClaimUnderRuntimeRole(t *testing.T) {
 	database := operationStoreDB(t)
 	identity, _ := seedDispatchCall(t, database, true)
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		store := operationStore(tx)

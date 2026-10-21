@@ -176,7 +176,7 @@ func TestLedgerMigrationEnforcesAppendOnlyAndApplicationPrivileges(t *testing.T)
 		t.Fatalf("begin ACL transaction: %v", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.ExecContext(ctx, "SET LOCAL ROLE lanverse_app"); err != nil {
+	if _, err := tx.ExecContext(ctx, "SET LOCAL ROLE glowloom_app"); err != nil {
 		t.Fatalf("assume application role: %v", err)
 	}
 	var canInsert, canSelect, canUpdateAmount, canUpdateDelete, canDelete bool

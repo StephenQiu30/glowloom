@@ -24,7 +24,7 @@ func retainedToolDatabase(t *testing.T) (*gorm.DB, identityapp.Principal, uuid.U
 	t.Helper()
 	database := mediaStoreDB(t)
 	var name string
-	if err := database.Raw(`SELECT current_database()`).Scan(&name).Error; err != nil || name != "lanverse_reference" {
+	if err := database.Raw(`SELECT current_database()`).Scan(&name).Error; err != nil || name != "glowloom_reference" {
 		t.Fatal("isolated reference database required", err)
 	}
 	actor, project := mediaStoreProject(t, database)
@@ -96,7 +96,7 @@ func TestMediaToolRetainedReaderProtectsFrozenSourcesAndUnpublishedDepthObjects(
 	}
 	for _, id := range []uuid.UUID{source.ID, video.AssetID, outputID} {
 		if err := database.Transaction(func(tx *gorm.DB) error {
-			if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+			if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 				return err
 			}
 			reader := toolpg.NewRetainedMediaReader(tx, mediaapp.NewDerivedService(mediaTestStore(tx)))
@@ -122,7 +122,7 @@ func TestMediaToolRetainedReaderRejectsUnknownHistoryWithoutSubtotal(t *testing.
 		t.Fatal(err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		reader := toolpg.NewRetainedMediaReader(tx, mediaapp.NewDerivedService(mediaTestStore(tx)))
@@ -145,7 +145,7 @@ func TestMediaToolRetainedReaderRequiresCurrentAuthorityAndCallerTransaction(t *
 	}
 	foreign, _ := mediaStoreProject(t, database)
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		if _, err := toolpg.NewRetainedMediaReader(tx, mediaapp.NewDerivedService(mediaTestStore(tx))).StorageUsageKeys(t.Context(), foreign, project); !errors.Is(err, mediaapp.ErrNotFound) {
@@ -162,7 +162,7 @@ func TestMediaToolRetainedReaderRequiresCurrentAuthorityAndCallerTransaction(t *
 		t.Fatal(err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		_, err := toolpg.NewRetainedMediaReader(tx, mediaapp.NewDerivedService(mediaTestStore(tx))).StorageUsageKeys(t.Context(), actor, project)

@@ -54,7 +54,7 @@ func TestFindReusableCompletedRequiresSameProjectAndSafeOutputs(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		got, err := operationStore(tx).FindReusableCompleted(t.Context(), actor, projectID, hash)

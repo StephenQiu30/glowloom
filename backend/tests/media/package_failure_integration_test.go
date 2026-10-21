@@ -133,7 +133,7 @@ func TestMediaPackageProjectFolderEightLevelsCompleteMappingAndPersonalDepthReje
 	actor, project := mediaStoreProject(t, db)
 	repo, service := packageActualService(t, db, objects, packageTestAccess)
 	scope := domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}
-	m := mediaapp.LibraryPackageManifest{App: "lanverse-media-library", Version: 1, ExportedAt: time.Now().UTC(), LibraryKind: domain.LibraryProject, Folders: []mediaapp.LibraryPackageFolder{}, Items: []mediaapp.LibraryPackageItem{}, Files: []mediaapp.LibraryPackageFile{}}
+	m := mediaapp.LibraryPackageManifest{App: "glowloom-media-library", Version: 1, ExportedAt: time.Now().UTC(), LibraryKind: domain.LibraryProject, Folders: []mediaapp.LibraryPackageFolder{}, Items: []mediaapp.LibraryPackageItem{}, Files: []mediaapp.LibraryPackageFile{}}
 	var parent *uuid.UUID
 	for i := 0; i < 8; i++ {
 		id := uuid.New()

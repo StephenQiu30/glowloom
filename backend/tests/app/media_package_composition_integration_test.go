@@ -69,7 +69,7 @@ func packageCompositionZIP(t *testing.T, kind domain.LibraryKind) []byte {
 	}
 	digest := sha256.Sum256(imageBytes.Bytes())
 	filePath := "files/actual.png"
-	manifest := mediaapp.LibraryPackageManifest{App: "lanverse-media-library", Version: 1, ExportedAt: time.Now().UTC(), LibraryKind: kind, Folders: []mediaapp.LibraryPackageFolder{}, Items: []mediaapp.LibraryPackageItem{{ID: "actual-image", Kind: "image", FilePath: &filePath, State: "active", Metadata: mediaapp.LibraryMetadata{Title: "根接线原图", Category: "material", Tags: []string{}}}}, Files: []mediaapp.LibraryPackageFile{{Path: filePath, FileName: "原图.png", MIMEType: "image/png", ByteSize: int64(imageBytes.Len()), SHA256: hex.EncodeToString(digest[:])}}}
+	manifest := mediaapp.LibraryPackageManifest{App: "glowloom-media-library", Version: 1, ExportedAt: time.Now().UTC(), LibraryKind: kind, Folders: []mediaapp.LibraryPackageFolder{}, Items: []mediaapp.LibraryPackageItem{{ID: "actual-image", Kind: "image", FilePath: &filePath, State: "active", Metadata: mediaapp.LibraryMetadata{Title: "根接线原图", Category: "material", Tags: []string{}}}}, Files: []mediaapp.LibraryPackageFile{{Path: filePath, FileName: "原图.png", MIMEType: "image/png", ByteSize: int64(imageBytes.Len()), SHA256: hex.EncodeToString(digest[:])}}}
 	body, err := json.Marshal(manifest)
 	if err != nil {
 		t.Fatal(err)
@@ -272,11 +272,11 @@ func TestMediaPackageProductionLifecycleUnknownAndOtherUnreadableOwnerRemainClos
 	if response.Code != 409 {
 		t.Fatal("production lifecycle ignored actual package reservation", response.Code, response.Body.String())
 	}
-	if err := f.owner.Exec(`REVOKE SELECT ON mediatool.export_job FROM lanverse_app`).Error; err != nil {
+	if err := f.owner.Exec(`REVOKE SELECT ON mediatool.export_job FROM glowloom_app`).Error; err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := f.owner.Exec(`GRANT SELECT ON mediatool.export_job TO lanverse_app`).Error; err != nil {
+		if err := f.owner.Exec(`GRANT SELECT ON mediatool.export_job TO glowloom_app`).Error; err != nil {
 			t.Error("restore isolated installed owner permission", err)
 		}
 	})
@@ -288,7 +288,7 @@ func TestMediaPackageProductionLifecycleUnknownAndOtherUnreadableOwnerRemainClos
 	if response.Code != 503 || strings.Contains(response.Body.String(), "used_bytes") {
 		t.Fatal("retained source ZIP hid another unreadable usage owner", response.Code)
 	}
-	if err := f.owner.Exec(`GRANT SELECT ON mediatool.export_job TO lanverse_app`).Error; err != nil {
+	if err := f.owner.Exec(`GRANT SELECT ON mediatool.export_job TO glowloom_app`).Error; err != nil {
 		t.Fatal(err)
 	}
 	actual := mediaapp.NewLibraryPackageService(repo, uploads, objects, time.Now)

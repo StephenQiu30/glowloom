@@ -47,9 +47,9 @@ func TestOperationStatusEventRetriesAndDeduplicates(t *testing.T) {
 	handler := realtime.NewOperationStatusHandler(store, sink)
 	eventID, projectID, operationID, targetID := uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString()
 	record := inbox.Record{
-		Topic: "lanverse.operation.status_changed.v1",
+		Topic: "glowloom.operation.status_changed.v1",
 		Key:   []byte(projectID),
-		Value: []byte(`{"event_id":"` + eventID + `","event_type":"lanverse.operation.status_changed.v1","project_id":"` + projectID + `","aggregate":{"type":"operation","id":"` + operationID + `"},"data":{"target_type":"shot_frame","target_id":"` + targetID + `","status":"submitted"}}`),
+		Value: []byte(`{"event_id":"` + eventID + `","event_type":"glowloom.operation.status_changed.v1","project_id":"` + projectID + `","aggregate":{"type":"operation","id":"` + operationID + `"},"data":{"target_type":"shot_frame","target_id":"` + targetID + `","status":"submitted"}}`),
 	}
 	if err := handler.Handle(t.Context(), record); !errors.Is(err, sink.err) {
 		t.Fatalf("first attempt = %v, want Redis error", err)
@@ -79,9 +79,9 @@ func TestOperationStatusRejectsMismatchedRouting(t *testing.T) {
 	handler := realtime.NewOperationStatusHandler(store, sink)
 	projectID := uuid.NewString()
 	record := inbox.Record{
-		Topic: "lanverse.operation.status_changed.v1",
+		Topic: "glowloom.operation.status_changed.v1",
 		Key:   []byte(uuid.NewString()),
-		Value: []byte(`{"event_id":"` + uuid.NewString() + `","event_type":"lanverse.operation.status_changed.v1","project_id":"` + projectID + `","aggregate":{"type":"operation","id":"` + uuid.NewString() + `"},"data":{"target_type":"shot_frame","status":"submitted"}}`),
+		Value: []byte(`{"event_id":"` + uuid.NewString() + `","event_type":"glowloom.operation.status_changed.v1","project_id":"` + projectID + `","aggregate":{"type":"operation","id":"` + uuid.NewString() + `"},"data":{"target_type":"shot_frame","status":"submitted"}}`),
 	}
 	if err := handler.Handle(t.Context(), record); !errors.Is(err, realtime.ErrInvalidEvent) {
 		t.Fatalf("mismatched project key = %v", err)

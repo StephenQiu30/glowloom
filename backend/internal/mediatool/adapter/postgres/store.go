@@ -157,7 +157,7 @@ func recordCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash
 		eventAction = &emit
 		eventAttempt = &job.Attempt
 		delivery := application.Delivery{WorkID: application.WorkID{JobID: job.ID, Attempt: job.Attempt}, EventID: id, RequestID: key, ActorID: actor.ID, OrgID: actor.OrgID, ProjectID: job.ProjectID, Action: emit}
-		const topic = "lanverse.mediatool.export_command.v1"
+		const topic = "glowloom.mediatool.export_command.v1"
 		payload, err := json.Marshal(struct {
 			EventID    uuid.UUID            `json:"event_id"`
 			EventType  string               `json:"event_type"`
@@ -197,7 +197,7 @@ func recordCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash
 		return err
 	}
 	auditID := uuid.NewSHA1(key, []byte("media-export-audit/"+actor.ID.String()))
-	const auditTopic = "lanverse.audit.recorded.v1"
+	const auditTopic = "glowloom.audit.recorded.v1"
 	auditEvent, err := json.Marshal(map[string]any{"event_id": auditID, "event_type": auditTopic, "occurred_at": now, "org_id": actor.OrgID, "project_id": job.ProjectID, "actor": map[string]any{"kind": "user", "id": actor.ID}, "aggregate": map[string]any{"type": "audit", "id": auditID}, "data": map[string]any{"action": "media.export_" + action, "object": map[string]any{"type": "media_export", "id": job.ID.String()}, "before": nil, "after": json.RawMessage(auditBody), "request_id": key.String()}})
 	if err != nil {
 		return err

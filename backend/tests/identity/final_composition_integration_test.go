@@ -33,7 +33,7 @@ func TestFinalUserRouterSeparatesIdentityAndContentScopes(t *testing.T) {
 	scope := identityfixture.Scope(t, tx, login.User.ID)
 	call := func(path, scope string) *httptest.ResponseRecorder {
 		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil)
-		req.AddCookie(&http.Cookie{Name: "lanverse_session", Value: login.Token})
+		req.AddCookie(&http.Cookie{Name: "glowloom_session", Value: login.Token})
 		if scope != "" {
 			req.Header.Set("X-Creation-Scope", scope)
 		}

@@ -56,8 +56,8 @@ func TestDisableCredentialCommandReturnsSafeSummaryAndEvents(t *testing.T) {
 	if err != nil || bytes.Contains(encoded, []byte("ciphertext")) || bytes.Contains(encoded, []byte("key_id")) {
 		t.Fatalf("unsafe disable summary %s: %v", encoded, err)
 	}
-	if len(store.events) != 2 || store.events[0].Topic != "lanverse.catalog.credential_changed.v1" ||
-		store.events[1].Topic != "lanverse.audit.recorded.v1" {
+	if len(store.events) != 2 || store.events[0].Topic != "glowloom.catalog.credential_changed.v1" ||
+		store.events[1].Topic != "glowloom.audit.recorded.v1" {
 		t.Fatalf("wrong disable events: %+v", store.events)
 	}
 	var changed struct {

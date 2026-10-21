@@ -73,7 +73,7 @@ func TestDepthJobPGRejectedUndispatchedCancelHasPublicRecovery(t *testing.T) {
 				t.Fatal("permission rejection was mislabeled as native or object failure", failed.FailureCode)
 			}
 			var rejectedActor string
-			if err := f.db.Raw(`SELECT payload->'actor'->>'id' FROM infra.outbox WHERE topic='lanverse.audit.recorded.v1' AND payload->'data'->>'action'='media.depth_failed' AND payload->'data'->'after'->>'failure_code'='depth_control_forbidden' AND payload->'data'->'object'->>'id'=?`, j.ID.String()).Scan(&rejectedActor).Error; err != nil || rejectedActor != controller.ID.String() {
+			if err := f.db.Raw(`SELECT payload->'actor'->>'id' FROM infra.outbox WHERE topic='glowloom.audit.recorded.v1' AND payload->'data'->>'action'='media.depth_failed' AND payload->'data'->'after'->>'failure_code'='depth_control_forbidden' AND payload->'data'->'object'->>'id'=?`, j.ID.String()).Scan(&rejectedActor).Error; err != nil || rejectedActor != controller.ID.String() {
 				t.Fatal("rejected control intent attributed to a different principal", rejectedActor, err)
 			}
 			var preserved []byte
@@ -145,18 +145,18 @@ func TestDepthJobPGUndispatchedRejectionRetainsUnknownEvidence(t *testing.T) {
 				}
 				var err error
 				if evidence == "unreadable_proof" {
-					if err := f.db.Exec(`REVOKE SELECT ON mediatool.depth_result_intent FROM lanverse_app`).Error; err != nil {
+					if err := f.db.Exec(`REVOKE SELECT ON mediatool.depth_result_intent FROM glowloom_app`).Error; err != nil {
 						t.Fatal(err)
 					}
 					// Permission changes are restricted to the isolated test
 					// database and restored before inspecting the result.
 					err = f.db.Transaction(func(tx *gorm.DB) error {
-						if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+						if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 							return err
 						}
 						return invoke(depthWorkerStore(tx, true))
 					})
-					if restoreErr := f.db.Exec(`GRANT SELECT ON mediatool.depth_result_intent TO lanverse_app`).Error; restoreErr != nil {
+					if restoreErr := f.db.Exec(`GRANT SELECT ON mediatool.depth_result_intent TO glowloom_app`).Error; restoreErr != nil {
 						t.Fatal("restore isolated permission", restoreErr)
 					}
 					var pgErr *pgconn.PgError

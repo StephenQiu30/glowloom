@@ -16,9 +16,9 @@ import (
 
 const (
 	// OperationConfirmedTopic starts one confirmed operation outside a batch.
-	OperationConfirmedTopic = "lanverse.operation.confirmed.v1"
+	OperationConfirmedTopic = "glowloom.operation.confirmed.v1"
 	// BatchConfirmedTopic starts the parent workflow for confirmed batch members.
-	BatchConfirmedTopic     = "lanverse.batch.confirmed.v1"
+	BatchConfirmedTopic     = "glowloom.batch.confirmed.v1"
 	workflowStarterConsumer = "workflow-starter"
 )
 

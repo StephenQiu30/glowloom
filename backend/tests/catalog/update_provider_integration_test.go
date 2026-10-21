@@ -89,7 +89,7 @@ func TestUpdateProviderCommitsEventsAndRejectsStaleAdminOnLocalPostgres(t *testi
 	var auditCount, changedCount int
 	for _, event := range events {
 		switch event.Topic {
-		case "lanverse.audit.recorded.v1":
+		case "glowloom.audit.recorded.v1":
 			auditCount++
 			audit, err := auditapp.NewRecordedActionParser().Parse(inbox.Record{
 				Topic: event.Topic, Key: []byte(event.PartitionKey), Value: event.Payload,
@@ -97,7 +97,7 @@ func TestUpdateProviderCommitsEventsAndRejectsStaleAdminOnLocalPostgres(t *testi
 			if err != nil || audit.Action != "provider.updated" || audit.ObjectID != provider.ID.String() {
 				t.Fatalf("provider update audit %+v: %v", audit, err)
 			}
-		case "lanverse.catalog.provider_changed.v1":
+		case "glowloom.catalog.provider_changed.v1":
 			changedCount++
 		default:
 			t.Fatalf("unexpected provider event %q", event.Topic)
@@ -112,7 +112,7 @@ func TestUpdateProviderCommitsEventsAndRejectsStaleAdminOnLocalPostgres(t *testi
 	if err := conn.DB.WithContext(ctx).Exec(`
 		CREATE FUNCTION reject_provider_update_audit() RETURNS trigger LANGUAGE plpgsql AS $$
 		BEGIN
-		  IF NEW.topic = 'lanverse.audit.recorded.v1' THEN RAISE EXCEPTION 'reject provider update audit'; END IF;
+		  IF NEW.topic = 'glowloom.audit.recorded.v1' THEN RAISE EXCEPTION 'reject provider update audit'; END IF;
 		  RETURN NEW;
 		END $$
 	`).Error; err != nil {

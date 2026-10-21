@@ -69,7 +69,7 @@ func (s *Store) RequestCredentialTest(ctx context.Context, actor identityapp.Pri
 		}
 		eventID := uuid.NewSHA1(request.TestID, []byte("credential_test_requested"))
 		now := time.Now().UTC()
-		const topic = "lanverse.catalog.credential_test_requested.v1"
+		const topic = "glowloom.catalog.credential_test_requested.v1"
 		payload, err := json.Marshal(map[string]any{"event_id": eventID, "event_type": topic, "occurred_at": now, "org_id": actor.OrgID, "actor": map[string]any{"kind": "user", "id": actor.ID}, "aggregate": map[string]any{"type": "provider_credential", "id": request.CredentialID}, "data": map[string]any{"test_id": request.TestID, "provider_id": request.ProviderID, "credential_id": request.CredentialID, "request_id": request.RequestID}})
 		if err != nil {
 			return fmt.Errorf("encode credential test request: %w", err)

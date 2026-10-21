@@ -86,7 +86,7 @@ func TestReserveInTransactionRollbackAndZeroCost(t *testing.T) {
 		t.Fatalf("rolled back reservation count = %d, %v", count, err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		result, err := store.ReserveInTransaction(t.Context(), tx, input)

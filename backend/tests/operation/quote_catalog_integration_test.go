@@ -29,7 +29,7 @@ func TestReadCurrentQuoteCatalogTracksPublishedVersionsAndAvailability(t *testin
 	}
 	assertCatalog(quoted.ModelProfileVersionID, quoted.PriceRuleVersionID)
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		model, price, err := operationStore(tx).ReadCurrentQuoteCatalog(t.Context(), actor, quoted, now)

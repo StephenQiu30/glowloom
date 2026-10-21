@@ -78,7 +78,7 @@ func newMediaCompositionFixture(t *testing.T) mediaCompositionFixture {
 		}
 		t.Cleanup(func() { _ = connection.Close() })
 		var scope struct{ Database, Role string }
-		if err := connection.DB.Raw(`SELECT current_database() AS database,current_user AS role`).Scan(&scope).Error; err != nil || !strings.HasPrefix(scope.Database, "lanverse_composition_") || runtime && scope.Role != "lanverse_app" {
+		if err := connection.DB.Raw(`SELECT current_database() AS database,current_user AS role`).Scan(&scope).Error; err != nil || !strings.HasPrefix(scope.Database, "glowloom_composition_") || runtime && scope.Role != "glowloom_app" {
 			t.Fatal("composition requires isolated database and the actual non-owner runtime role")
 		}
 		return connection.DB
@@ -99,7 +99,7 @@ func newMediaCompositionFixture(t *testing.T) mediaCompositionFixture {
 		t.Fatal("invalid synthetic private storage configuration")
 	}
 	endpoint, err := url.Parse(storage.Endpoint)
-	if err != nil || endpoint.Scheme != "http" || endpoint.Hostname() != "127.0.0.1" || storage.Bucket != "lanverse-receipt-test" {
+	if err != nil || endpoint.Scheme != "http" || endpoint.Hostname() != "127.0.0.1" || storage.Bucket != "glowloom-receipt-test" {
 		t.Fatal("composition requires the isolated loopback test bucket")
 	}
 	fixture.objects, err = objectstorage.Open(storage.Endpoint, storage.Bucket, storage.AccessKey, storage.SecretKey, "")
@@ -117,7 +117,7 @@ func newMediaCompositionFixture(t *testing.T) mediaCompositionFixture {
 	fixture.actor = identityapp.Principal{ID: user.ID, OrgID: user.OrgID, ScopeID: scope, SessionID: authResult.Session.ID, CredentialEpoch: user.SessionEpoch, PlatformEpoch: user.PlatformEpoch, Role: user.Role}
 	baseRouter := fixture.router
 	fixture.router = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.AddCookie(&http.Cookie{Name: "lanverse_session", Value: authResult.Token})
+		r.AddCookie(&http.Cookie{Name: "glowloom_session", Value: authResult.Token})
 		r.Header.Set("X-CSRF-Token", authResult.CSRFToken)
 		r.Header.Set("X-Creation-Scope", scope.String())
 		baseRouter.ServeHTTP(w, r)

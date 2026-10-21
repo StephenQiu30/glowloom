@@ -101,7 +101,7 @@ func TestPublicOperationHTTPRealQuotesConfirmationRefreshAndCancellation(t *test
 		t.Fatalf("cancel replay=%d %s", replay.Code, replay.Body)
 	}
 	var count int64
-	if err := database.Raw(`SELECT count(*) FROM infra.outbox WHERE topic='lanverse.workflow.control_requested.v1' AND payload->'aggregate'->>'id'=?`, quote.OperationID.String()).Scan(&count).Error; err != nil || count != 1 {
+	if err := database.Raw(`SELECT count(*) FROM infra.outbox WHERE topic='glowloom.workflow.control_requested.v1' AND payload->'aggregate'->>'id'=?`, quote.OperationID.String()).Scan(&count).Error; err != nil || count != 1 {
 		t.Fatalf("durable single control=%d %v", count, err)
 	}
 	res = publicOperationRequest(t, router, "GET", "/api/operations/"+quote.OperationID.String()+"?project_id="+project.String(), "", "")

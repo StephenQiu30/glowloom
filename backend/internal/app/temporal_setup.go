@@ -37,3 +37,29 @@ func InstallQuoteExpirySchedule(ctx context.Context, cfg config.Config, logger *
 	logger.Info("quote expiry schedule installed", zap.String("namespace", cfg.TemporalNamespace))
 	return nil
 }
+
+// InstallProjectRetentionSchedule enables expired project-content cleanup after schema review.
+func InstallProjectRetentionSchedule(ctx context.Context, cfg config.Config, logger *zap.Logger, prefix string) error {
+	installer, cleanup, err := initializeMaintenanceSetup(ctx, cfg, logger, prefix)
+	if err != nil {
+		return fmt.Errorf("initialize project retention setup: %w", err)
+	}
+	defer cleanup()
+	if err := installer.InstallProjectRetentionSchedule(ctx); err != nil {
+		return fmt.Errorf("install project retention schedule: %w", err)
+	}
+	logger.Info("project retention schedule installed", zap.String("namespace", cfg.TemporalNamespace))
+	return nil
+}
+
+// SetupTemporalSchedules installs only the explicitly selected maintenance scope.
+// Project retention is a separate opt-in and never enables unrelated cleanup.
+func SetupTemporalSchedules(ctx context.Context, cfg config.Config, logger *zap.Logger, prefix string, projectRetentionOnly bool) error {
+	if projectRetentionOnly {
+		return InstallProjectRetentionSchedule(ctx, cfg, logger, prefix)
+	}
+	if err := InstallCleanupSchedules(ctx, cfg, logger, prefix); err != nil {
+		return err
+	}
+	return InstallQuoteExpirySchedule(ctx, cfg, logger, prefix)
+}

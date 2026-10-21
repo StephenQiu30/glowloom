@@ -4,7 +4,6 @@ package domain
 import (
 	"crypto/sha256"
 	"errors"
-	"fmt"
 	"regexp"
 	"slices"
 	"strings"
@@ -59,7 +58,7 @@ func Definitions() []Definition {
 			definition.Variables = []Variable{}
 		}
 		hash := sha256.Sum256([]byte(definition.DefaultContent + "\x00" + definition.OutputContract))
-		definition.TemplateID = uuid.NewSHA1(uuid.NameSpaceURL, []byte(fmt.Sprintf("lanverse/prompt/%s/%x", definition.Operation, hash)))
+		definition.TemplateID = promptTemplateID(definition.Operation, hash)
 		definition.TemplateVersion = 1
 	}
 	return definitions

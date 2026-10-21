@@ -14,7 +14,7 @@
 
 业务按职责组织，`adapter → application → domain`，依赖显式注入，接口由消费方定义。编码与审查遵循AGENTS的Google Go与Vercel/Next.js规范；不预建未来目录、通用框架或空转发层。
 
-后端只有一个进程入口 `backend/cmd/glowloom`。默认以 `--role=api|worker|relay|all` 运行对应角色；身份维护、对象存储维护、Temporal 计划和分区确保分别是 `glowloom identity`、`glowloom storage`、`glowloom temporal setup`、`glowloom partitions ensure`。不保留 `cmd/identity`，也不再使用名为 lanverse 的二进制。镜像入口和用法字符串同为 `glowloom`。
+后端只有一个进程入口 `backend/cmd/glowloom`。默认以 `--role=api|worker|relay|all` 运行对应角色；身份维护、对象存储维护、Temporal 计划和分区确保分别是 `glowloom identity`、`glowloom storage`、`glowloom temporal setup`、`glowloom partitions ensure`。所有运维子命令共用当前 `glowloom` 二进制，不保留 `cmd/identity` 独立入口。镜像入口和用法字符串同为 `glowloom`。
 
 业务实现放在 `backend/internal/<模块>/`：`domain` 只含规则，`application` 编排用例，`adapter/<技术>` 对接 HTTP、数据库、工作流或外部系统。领域与应用不依赖 Gin、GORM，也不调用另一个业务模块的应用服务。跨模块事实由消费方定义小接口。
 

@@ -92,7 +92,7 @@ func TestCreateProjectCommandCreatesSafeProjectAndEvents(t *testing.T) {
 				}
 				events[event.Topic] = event
 			}
-			changed, ok := events["lanverse.workspace.project_changed.v1"]
+			changed, ok := events["glowloom.workspace.project_changed.v1"]
 			if !ok {
 				t.Fatal("missing project change event")
 			}
@@ -115,7 +115,7 @@ func TestCreateProjectCommandCreatesSafeProjectAndEvents(t *testing.T) {
 				changedBody.Aggregate.ID != created.ID || changedBody.Aggregate.Revision != 1 {
 				t.Fatalf("invalid project change event: %+v err=%v", changedBody, err)
 			}
-			auditEvent, ok := events["lanverse.audit.recorded.v1"]
+			auditEvent, ok := events["glowloom.audit.recorded.v1"]
 			if !ok {
 				t.Fatal("missing project create audit")
 			}

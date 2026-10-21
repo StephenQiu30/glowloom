@@ -163,7 +163,7 @@ func TestCreateBatchFreeQuoteAsRuntimeRole(t *testing.T) {
 		Items: []operationapp.FreeQuoteItemInput{item, item},
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		result, err := operationStore(tx).CreateBatchFreeQuote(t.Context(), actor, input)

@@ -85,7 +85,7 @@ func TestPublishPriceRuleCommandBuildsSafeAuditAndVersion(t *testing.T) {
 		!bytes.Equal(validator.price.Rule, store.price.Rule) {
 		t.Fatal("validator did not see the price published by the store")
 	}
-	if store.event.Topic != "lanverse.audit.recorded.v1" || store.event.PartitionKey != actor.OrgID.String() ||
+	if store.event.Topic != "glowloom.audit.recorded.v1" || store.event.PartitionKey != actor.OrgID.String() ||
 		bytes.Contains(store.event.Payload, []byte("secret-mode-123")) ||
 		bytes.Contains(store.event.Payload, []byte("base_micros")) {
 		t.Fatalf("unsafe price audit envelope: %+v", store.event)

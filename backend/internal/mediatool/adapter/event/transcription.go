@@ -14,7 +14,7 @@ import (
 )
 
 // TranscriptionTopic carries server-issued speech job identities, never URLs.
-const TranscriptionTopic = "lanverse.mediatool.transcription_command.v1"
+const TranscriptionTopic = "glowloom.mediatool.transcription_command.v1"
 
 // TranscriptionDeliveryStore proves a command receipt and fences delayed attempt events.
 type TranscriptionDeliveryStore interface {

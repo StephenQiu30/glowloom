@@ -56,6 +56,7 @@ type ProjectResponse struct {
 
 // ListResponse contains one keyset page of visible projects.
 type ListResponse struct {
+	ServerTime time.Time         `json:"server_time"`
 	Items      []ProjectResponse `json:"items"`
 	NextCursor *string           `json:"next_cursor" extensions:"x-nullable"`
 }
@@ -83,6 +84,7 @@ func (h *Handler) Register(group *gin.RouterGroup) {
 // @Param q query string false "名称检索"
 // @Param status query string false "active或archived"
 // @Param deleted query boolean false "只查询回收中的项目"
+// @Param include_expired query boolean false "回收核验包含过期对象，仅deleted=true可用"
 // @Param folder_id query string false "个人目录UUID，root表示未分类；未指定列出全部"
 // @Param order query string false "recent_content按真实最近修改排序，省略保持旧口径" Enums(recent_content)
 // @Success 200 {object} ListResponse
@@ -121,6 +123,18 @@ func (h *Handler) List(c *gin.Context) {
 		}
 		input.Deleted = deleted
 	}
+	if values, present := c.Request.URL.Query()["include_expired"]; present {
+		if len(values) != 1 || !input.Deleted {
+			httpapi.WriteProblem(c, 422, "invalid_request", nil)
+			return
+		}
+		value, err := strconv.ParseBool(values[0])
+		if err != nil {
+			httpapi.WriteProblem(c, 422, "invalid_request", nil)
+			return
+		}
+		input.IncludeExpired = value
+	}
 	if input.Limit == 0 {
 		input.Limit = 50
 	}
@@ -138,6 +152,14 @@ func (h *Handler) List(c *gin.Context) {
 			Deleted                      bool
 			Limit                        int
 		}{input.Query, input.Status, c.Query("folder_id"), input.Order, input.Deleted, input.Limit})
+	}
+	if _, explicit := c.Request.URL.Query()["include_expired"]; explicit {
+		version = 3
+		binding = cursorBinding(actor, "projects-recycle-v3", struct {
+			Query, Status, Folder, Order string
+			IncludeExpired               bool
+			Limit                        int
+		}{input.Query, input.Status, c.Query("folder_id"), input.Order, input.IncludeExpired, input.Limit})
 	}
 	if raw := c.Query("cursor"); raw != "" {
 		if len(raw) > base64.RawURLEncoding.EncodedLen(512) {
@@ -170,7 +192,7 @@ func (h *Handler) List(c *gin.Context) {
 		}
 		return
 	}
-	response := ListResponse{Items: make([]ProjectResponse, 0, len(page.Projects))}
+	response := ListResponse{ServerTime: page.ServerTime, Items: make([]ProjectResponse, 0, len(page.Projects))}
 	for _, p := range page.Projects {
 		response.Items = append(response.Items, ProjectResponse{LastModifiedAt: p.LastModifiedAt, LastModifiedBasis: p.LastModifiedBasis, CoverAssetID: p.CoverAssetID, CoverUnavailable: p.CoverUnavailable, ID: p.ID, CanvasID: p.CanvasID, StyleKey: p.StyleKey, UpdateTime: p.UpdateTime, Name: p.Name, Status: p.Status, Revision: p.Revision, AspectRatio: p.AspectRatio, StyleType: p.StyleType, IsDelete: p.IsDelete, ArchivedAt: p.ArchivedAt, DeleteTime: p.DeleteTime, PurgeAfter: p.PurgeAfter, FolderID: p.FolderID, PlacementRevision: p.PlacementRevision})
 	}

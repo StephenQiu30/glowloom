@@ -15,7 +15,7 @@ import (
 )
 
 // TransferTopic identifies media-owned permanent commands, never paid operations.
-const TransferTopic = "lanverse.media.transfer_command.v1"
+const TransferTopic = "glowloom.media.transfer_command.v1"
 
 func recordTransferCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash, action string, job domain.TransferJob, emit string) error {
 	response, err := json.Marshal(job)

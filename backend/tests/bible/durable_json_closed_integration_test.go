@@ -31,11 +31,11 @@ func bibleDurableMutation(t *testing.T, owner *gorm.DB, seed, read func(*gorm.DB
 		}
 	}()
 	seed(tx)
-	if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+	if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 		t.Fatal(err)
 	}
 	var role string
-	if err := tx.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "lanverse_app" {
+	if err := tx.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "glowloom_app" {
 		t.Fatal("durable readers require actual nonowner", role, err)
 	}
 	read(tx)

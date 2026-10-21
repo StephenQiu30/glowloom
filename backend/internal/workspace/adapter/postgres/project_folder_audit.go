@@ -31,7 +31,7 @@ func folderAudit(tx *gorm.DB, actor identityapp.Principal, in application.Folder
 		}
 	}
 	eventID := uuid.New()
-	const topic = "lanverse.audit.recorded.v1"
+	const topic = "glowloom.audit.recorded.v1"
 	body, err := json.Marshal(map[string]any{"event_id": eventID, "event_type": topic, "occurred_at": now.UTC(), "org_id": actor.OrgID, "project_id": project, "actor": map[string]any{"kind": "user", "id": actor.ID}, "aggregate": map[string]any{"type": "audit", "id": eventID}, "data": map[string]any{"action": "project_folder." + actions[in.Action], "object": map[string]any{"type": "project_folder", "id": id}, "request_id": in.RequestID, "before": nil, "after": summary}})
 	if err != nil {
 		return err

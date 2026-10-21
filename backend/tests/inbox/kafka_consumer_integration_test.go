@@ -32,7 +32,7 @@ func TestKafkaConsumerCommitsOnlyAfterHandling(t *testing.T) {
 		t.Fatalf("open Kafka producer: %v", err)
 	}
 	t.Cleanup(producer.Close)
-	group := "lanverse-test-inbox-" + uuid.NewString()
+	group := "glowloom-test-inbox-" + uuid.NewString()
 	value := []byte(uuid.NewString())
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()

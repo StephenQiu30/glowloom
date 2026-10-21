@@ -2378,6 +2378,8 @@ declare namespace API {
     status?: string;
     /** 只查询回收中的项目 */
     deleted?: boolean;
+    /** 回收核验包含过期对象，仅deleted=true可用 */
+    include_expired?: boolean;
     /** 个人目录UUID，root表示未分类；未指定列出全部 */
     folder_id?: string;
     /** recent_content按真实最近修改排序，省略保持旧口径 */
@@ -5221,6 +5223,7 @@ declare namespace API {
   type WorkspaceListResponse = {
     items?: ProjectResponse[];
     next_cursor?: string;
+    server_time?: string;
   };
 
   type WorkspaceView = {

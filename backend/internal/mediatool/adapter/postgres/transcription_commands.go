@@ -14,7 +14,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
-const transcriptionTopic = "lanverse.mediatool.transcription_command.v1"
+const transcriptionTopic = "glowloom.mediatool.transcription_command.v1"
 
 func recordTranscriptionCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash, action string, job domain.TranscriptionJob, emit string) error {
 	now := time.Now().UTC()
@@ -54,7 +54,7 @@ func recordTranscriptionAudit(tx *gorm.DB, actor identityapp.Principal, key uuid
 	now := time.Now().UTC()
 	summary := map[string]any{"id": job.ID, "project_id": job.ProjectID, "canvas_id": job.Source.CanvasID, "node_id": job.Source.NodeID, "source_revision": job.Source.Revision, "language": job.Language, "status": job.Status, "stage": job.Stage, "progress": job.Progress, "attempt": job.Attempt, "revision": job.Revision, "result_sha256": job.ResultSHA256, "failure_code": job.FailureCode, "created_at": job.CreatedAt.Format(time.RFC3339Nano), "updated_at": job.UpdatedAt.Format(time.RFC3339Nano)}
 	auditID := uuid.NewSHA1(key, []byte("media-transcription-audit/"+actor.ID.String()+"/"+action))
-	const topic = "lanverse.audit.recorded.v1"
+	const topic = "glowloom.audit.recorded.v1"
 	payload, err := json.Marshal(map[string]any{"event_id": auditID, "event_type": topic, "occurred_at": now, "org_id": actor.OrgID, "project_id": job.ProjectID, "actor": map[string]any{"kind": "user", "id": actor.ID}, "aggregate": map[string]any{"type": "audit", "id": auditID}, "data": map[string]any{"action": "media.transcription_" + action, "object": map[string]any{"type": "media_transcription", "id": job.ID.String()}, "before": nil, "after": summary, "request_id": key.String()}})
 	if err != nil {
 		return err

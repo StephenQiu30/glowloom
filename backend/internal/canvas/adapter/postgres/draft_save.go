@@ -77,13 +77,13 @@ func recordSave(tx *gorm.DB, actor uuid.UUID, key, hash string, result applicati
 func savedAudit(tx *gorm.DB, a identityapp.Principal, doc domain.Document, key string) error {
 	id := uuid.New()
 	payload, err := json.Marshal(map[string]any{
-		"event_id": id, "event_type": "lanverse.audit.recorded.v1", "occurred_at": time.Now().UTC(), "org_id": a.OrgID, "project_id": doc.ProjectID,
+		"event_id": id, "event_type": "glowloom.audit.recorded.v1", "occurred_at": time.Now().UTC(), "org_id": a.OrgID, "project_id": doc.ProjectID,
 		"actor": map[string]any{"kind": "user", "id": a.ID}, "aggregate": map[string]any{"type": "audit", "id": id},
 		"data": map[string]any{"action": "canvas.saved", "object": map[string]any{"type": "canvas", "id": doc.ID}, "request_id": key, "after": map[string]any{"revision": doc.Revision, "node_count": len(doc.Nodes)}}})
 	if err != nil {
 		return fmt.Errorf("encode canvas audit: %w", err)
 	}
-	r := tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,'lanverse.audit.recorded.v1',?,?::jsonb)`, id, doc.ProjectID.String(), string(payload))
+	r := tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,'glowloom.audit.recorded.v1',?,?::jsonb)`, id, doc.ProjectID.String(), string(payload))
 	if r.Error != nil {
 		return fmt.Errorf("record canvas audit: %w", r.Error)
 	}

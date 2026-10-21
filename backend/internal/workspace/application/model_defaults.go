@@ -95,7 +95,7 @@ func (s *ModelDefaultsService) Save(ctx context.Context, actor identityapp.Princ
 		return ModelDefaults{}, ErrInvalidModelDefaults
 	}
 	payload, err := json.Marshal(map[string]any{
-		"event_id": eventID, "event_type": "lanverse.audit.recorded.v1", "occurred_at": occurredAt,
+		"event_id": eventID, "event_type": "glowloom.audit.recorded.v1", "occurred_at": occurredAt,
 		"org_id": actor.OrgID, "project_id": input.ProjectID,
 		"actor": map[string]any{"kind": "user", "id": actor.ID}, "aggregate": map[string]any{"type": "audit", "id": eventID},
 		"data": map[string]any{"action": "project.defaults_changed", "object": map[string]any{"type": "project", "id": input.ProjectID},
@@ -105,7 +105,7 @@ func (s *ModelDefaultsService) Save(ctx context.Context, actor identityapp.Princ
 	if err != nil {
 		return ModelDefaults{}, fmt.Errorf("encode project defaults audit: %w", err)
 	}
-	saved, err := s.store.SaveModelDefaults(ctx, actor, input, identityapp.OutboxEvent{ID: eventID, Topic: "lanverse.audit.recorded.v1", PartitionKey: input.ProjectID.String(), Payload: payload})
+	saved, err := s.store.SaveModelDefaults(ctx, actor, input, identityapp.OutboxEvent{ID: eventID, Topic: "glowloom.audit.recorded.v1", PartitionKey: input.ProjectID.String(), Payload: payload})
 	if err != nil {
 		return ModelDefaults{}, fmt.Errorf("save project model defaults: %w", err)
 	}

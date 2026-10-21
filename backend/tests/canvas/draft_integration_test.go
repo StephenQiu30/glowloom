@@ -68,7 +68,7 @@ func TestM1DraftPersistenceHistoryReplayAndRollback(t *testing.T) {
 	a, p := seedCanvasActor(t, owner)
 	runtime := canvasDB(t, "LV_TEST_CANVAS_M1_RUNTIME_DSN")
 	var role string
-	if err := runtime.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "lanverse_app" {
+	if err := runtime.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "glowloom_app" {
 		t.Fatal("must use actual runtime role", role, err)
 	}
 	s := application.NewService(canvasStore(runtime))
@@ -141,12 +141,12 @@ func TestM1DraftPersistenceHistoryReplayAndRollback(t *testing.T) {
 		}
 	}
 	var audits int64
-	if err := owner.Raw(`SELECT count(*) FROM infra.outbox WHERE topic='lanverse.audit.recorded.v1' AND payload->'data'->>'action'='canvas.saved' AND partition_key=?`, p.String()).Scan(&audits).Error; err != nil || audits != 2 {
+	if err := owner.Raw(`SELECT count(*) FROM infra.outbox WHERE topic='glowloom.audit.recorded.v1' AND payload->'data'->>'action'='canvas.saved' AND partition_key=?`, p.String()).Scan(&audits).Error; err != nil || audits != 2 {
 		t.Fatal("audit count/replay", audits, err)
 	}
 	// A database-triggered audit failure must roll back the graph, history and receipt.
 	trigger := "m1_audit_" + uuid.NewString()[:8]
-	query := `CREATE FUNCTION infra.` + trigger + `() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.topic='lanverse.audit.recorded.v1' AND NEW.partition_key='` + p.String() + `' THEN RAISE EXCEPTION 'synthetic audit failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER ` + trigger + ` BEFORE INSERT ON infra.outbox FOR EACH ROW EXECUTE FUNCTION infra.` + trigger + `()`
+	query := `CREATE FUNCTION infra.` + trigger + `() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.topic='glowloom.audit.recorded.v1' AND NEW.partition_key='` + p.String() + `' THEN RAISE EXCEPTION 'synthetic audit failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER ` + trigger + ` BEFORE INSERT ON infra.outbox FOR EACH ROW EXECUTE FUNCTION infra.` + trigger + `()`
 	if err := owner.Exec(query).Error; err != nil {
 		t.Fatal(err)
 	}

@@ -168,7 +168,7 @@ func TestExportAudioKindIsFrozenImmutableAndBoundToIdempotentRequest(t *testing.
 		t.Fatalf("unknown output kind queued: %v", err)
 	}
 	var canMutate bool
-	if err := db.Raw(`SELECT has_column_privilege('lanverse_app','mediatool.export_job','output_kind','UPDATE')`).Scan(&canMutate).Error; err != nil || canMutate {
+	if err := db.Raw(`SELECT has_column_privilege('glowloom_app','mediatool.export_job','output_kind','UPDATE')`).Scan(&canMutate).Error; err != nil || canMutate {
 		t.Fatalf("runtime can alter frozen output kind: %v %v", canMutate, err)
 	}
 	if os.Getenv("LV_TEST_MEDIA_EXPORT_REQUIRE_ROLE") == "1" {

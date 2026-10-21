@@ -18,7 +18,7 @@ func TestProjectCopyRetainedDocumentActualPrivateBytesAndOrdinaryReadFence(t *te
 	database := mediaStoreDB(t)
 	owner := libraryOwnerDB(t)
 	var name, role string
-	if err := database.Raw(`SELECT current_database(),current_user`).Row().Scan(&name, &role); err != nil || name != "lanverse_library" || role != "lanverse_app" {
+	if err := database.Raw(`SELECT current_database(),current_user`).Row().Scan(&name, &role); err != nil || name != "glowloom_library" || role != "glowloom_app" {
 		t.Fatal("retained document test requires isolated library DB and runtime role", name, role, err)
 	}
 	objects := glbTestObjects(t)
@@ -118,7 +118,7 @@ func TestProjectCopyRetainedReferencesMissingForeignAndDuplicateFailAtomically(t
 	// retained-document fixtures; the ordinary media database is not its scope.
 	_ = libraryOwnerDB(t)
 	var name, role string
-	if err := database.Raw(`SELECT current_database(),current_user`).Row().Scan(&name, &role); err != nil || name != "lanverse_library" || role != "lanverse_app" {
+	if err := database.Raw(`SELECT current_database(),current_user`).Row().Scan(&name, &role); err != nil || name != "glowloom_library" || role != "glowloom_app" {
 		t.Fatal("retained reference test requires isolated library DB and runtime role", name, role, err)
 	}
 	actor, project := mediaStoreProject(t, database)

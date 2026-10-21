@@ -48,7 +48,7 @@ func TestCreateModelCommandBuildsSafeAuditAndDisabledModel(t *testing.T) {
 		created.CurrentVersionID != uuid.Nil {
 		t.Fatalf("created model %+v: %v", created, err)
 	}
-	if store.event.Topic != "lanverse.audit.recorded.v1" || store.event.PartitionKey != actor.OrgID.String() {
+	if store.event.Topic != "glowloom.audit.recorded.v1" || store.event.PartitionKey != actor.OrgID.String() {
 		t.Fatalf("wrong audit event: %+v", store.event)
 	}
 	audit, err := auditapp.NewRecordedActionParser().Parse(inbox.Record{

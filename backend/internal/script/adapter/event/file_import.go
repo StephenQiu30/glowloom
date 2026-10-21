@@ -16,7 +16,7 @@ import (
 )
 
 // ImportTopic is the single persistent file-import command topic.
-const ImportTopic = "lanverse.script.import_command.v1"
+const ImportTopic = "glowloom.script.import_command.v1"
 
 // ProcessedStore serializes successful external delivery with permanent inbox evidence.
 type ProcessedStore interface {

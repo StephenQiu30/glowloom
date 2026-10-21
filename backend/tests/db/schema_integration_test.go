@@ -50,11 +50,11 @@ func TestSchemaInitializesEmptyDatabaseAndRejectsReplay(t *testing.T) {
 	}
 	var canAppend, canRead, canUpdate, canDelete, canTruncate bool
 	if err := tx.QueryRowContext(ctx, `SELECT
-		has_table_privilege('lanverse_app', 'audit.audit_log', 'INSERT'),
-		has_table_privilege('lanverse_app', 'audit.audit_log', 'SELECT'),
-		has_table_privilege('lanverse_app', 'audit.audit_log', 'UPDATE'),
-		has_table_privilege('lanverse_app', 'audit.audit_log', 'DELETE'),
-		has_table_privilege('lanverse_app', 'audit.audit_log', 'TRUNCATE')
+		has_table_privilege('glowloom_app', 'audit.audit_log', 'INSERT'),
+		has_table_privilege('glowloom_app', 'audit.audit_log', 'SELECT'),
+		has_table_privilege('glowloom_app', 'audit.audit_log', 'UPDATE'),
+		has_table_privilege('glowloom_app', 'audit.audit_log', 'DELETE'),
+		has_table_privilege('glowloom_app', 'audit.audit_log', 'TRUNCATE')
 	`).Scan(&canAppend, &canRead, &canUpdate, &canDelete, &canTruncate); err != nil {
 		t.Fatal(err)
 	}
@@ -63,11 +63,11 @@ func TestSchemaInitializesEmptyDatabaseAndRejectsReplay(t *testing.T) {
 	}
 	for _, table := range []string{"identity.user_session", "identity.login_guard", "identity.auth_event", "canvas.node_input", "canvas.save_receipt"} {
 		if err := tx.QueryRowContext(ctx, `SELECT
-			has_table_privilege('lanverse_app', $1, 'INSERT'),
-			has_table_privilege('lanverse_app', $1, 'SELECT'),
-			has_table_privilege('lanverse_app', $1, 'UPDATE'),
-			has_table_privilege('lanverse_app', $1, 'DELETE'),
-			has_table_privilege('lanverse_app', $1, 'TRUNCATE')`, table).Scan(&canAppend, &canRead, &canUpdate, &canDelete, &canTruncate); err != nil {
+			has_table_privilege('glowloom_app', $1, 'INSERT'),
+			has_table_privilege('glowloom_app', $1, 'SELECT'),
+			has_table_privilege('glowloom_app', $1, 'UPDATE'),
+			has_table_privilege('glowloom_app', $1, 'DELETE'),
+			has_table_privilege('glowloom_app', $1, 'TRUNCATE')`, table).Scan(&canAppend, &canRead, &canUpdate, &canDelete, &canTruncate); err != nil {
 			t.Fatal(err)
 		}
 		wantUpdate := table == "identity.user_session" || table == "identity.login_guard"

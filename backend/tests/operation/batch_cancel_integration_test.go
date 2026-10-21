@@ -18,7 +18,7 @@ import (
 func TestBatchCancelQueuedChildReleasesReservationOnce(t *testing.T) {
 	database, store, batchID, operationID := confirmedOneItemBatch(t)
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		roleStore := operationStore(tx)
@@ -53,13 +53,13 @@ func TestBatchCancelQueuedChildReleasesReservationOnce(t *testing.T) {
 	}
 	var summaryCount int64
 	if err := database.Raw(`SELECT count(*) FROM infra.outbox
-		WHERE topic = 'lanverse.batch.finished.v1' AND payload->'data'->>'batch_id' = ?`,
+		WHERE topic = 'glowloom.batch.finished.v1' AND payload->'data'->>'batch_id' = ?`,
 		batchID.String()).Scan(&summaryCount).Error; err != nil || summaryCount != 1 {
 		t.Fatalf("cancelled batch summaries = %d, %v", summaryCount, err)
 	}
 	var eventStatus string
 	if err := database.Raw(`SELECT payload->'data'->>'status' FROM infra.outbox
-		WHERE topic = 'lanverse.batch.finished.v1' AND payload->'data'->>'batch_id' = ?`,
+		WHERE topic = 'glowloom.batch.finished.v1' AND payload->'data'->>'batch_id' = ?`,
 		batchID.String()).Scan(&eventStatus).Error; err != nil || eventStatus != "cancelled" {
 		t.Fatalf("cancelled batch summary status = %q, %v", eventStatus, err)
 	}

@@ -70,7 +70,7 @@ func TestPublicCanvasAPIWithLocalPostgres(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		req.AddCookie(&http.Cookie{Name: "lanverse_session", Value: authResult.Token})
+		req.AddCookie(&http.Cookie{Name: "glowloom_session", Value: authResult.Token})
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-CSRF-Token", authResult.CSRFToken)
 		req.Header.Set("X-Creation-Scope", scope.String())

@@ -22,13 +22,16 @@ func (s *Store) ListProjectsForActor(ctx context.Context, actor identityapp.Prin
 	if (input.Order != "" && input.Order != "recent_content") || input.Limit < 1 || input.Limit > 200 ||
 		(input.Status != "" && input.Status != "active" && input.Status != "archived") ||
 		(input.After != nil && (input.After.ID == uuid.Nil || input.After.UpdateTime.IsZero())) ||
-		(input.Deleted && input.FolderID != nil) {
+		(input.Deleted && input.FolderID != nil) || (input.IncludeExpired && !input.Deleted) {
 		return application.ProjectListPage{}, application.ErrInvalidProjectList
 	}
 	var page application.ProjectListPage
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := s.requireScope(ctx, tx, actor, false); err != nil {
 			return err
+		}
+		if err := tx.Raw(`SELECT clock_timestamp()`).Scan(&page.ServerTime).Error; err != nil {
+			return fmt.Errorf("read project list time: %w", err)
 		}
 		if input.FolderID != nil && *input.FolderID != uuid.Nil {
 			var exists bool
@@ -65,6 +68,10 @@ func (s *Store) ListProjectsForActor(ctx context.Context, actor identityapp.Prin
 				query += ` AND f.id=?::uuid`
 				args = append(args, input.FolderID.String())
 			}
+		}
+		if input.Deleted && !input.IncludeExpired {
+			query += ` AND p.purge_after > ?`
+			args = append(args, page.ServerTime)
 		}
 		if input.Status != "" {
 			query += ` AND p.status = ?`

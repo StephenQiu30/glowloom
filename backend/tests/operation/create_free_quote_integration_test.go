@@ -143,7 +143,7 @@ func TestCreateFreeQuoteLocksReadyMediaAndFreezesAssetIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		runtimeInput := input
@@ -227,7 +227,7 @@ func TestCreateFreeQuoteUsesProjectDefaultModelAndReplaysResolvedQuote(t *testin
 		t.Fatalf("batch effective model keys = %+v, %v", batch, err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		runtimeInput := input
@@ -425,7 +425,7 @@ func TestCreateFreeQuoteRejectsUnavailableModelAndForeignProjectWithoutWrites(t 
 		t.Fatalf("rejected quote rows = %d, %v", count, err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		if _, err := operationStore(tx).CreateFreeQuote(t.Context(), actor, input); !errors.Is(err, operationapp.ErrFreeQuoteModelMissing) {
@@ -439,7 +439,7 @@ func TestCreateFreeQuoteRejectsUnavailableModelAndForeignProjectWithoutWrites(t 
 		t.Fatal(err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		created, err := operationStore(tx).CreateFreeQuote(t.Context(), actor, input)

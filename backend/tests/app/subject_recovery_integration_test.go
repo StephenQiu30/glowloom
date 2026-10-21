@@ -33,7 +33,7 @@ func TestSubjectRecoveryPublicRouter(t *testing.T) {
 		t.Skip("requires isolated subject database")
 	}
 	u, err := url.Parse(dsn)
-	if err != nil || !strings.HasPrefix(u.Path, "/lanverse_subject_validation_") {
+	if err != nil || !strings.HasPrefix(u.Path, "/glowloom_subject_validation_") {
 		t.Fatal("requires task-owned subject database")
 	}
 	owner, err := platformdb.Open(t.Context(), dsn, noop.NewTracerProvider())
@@ -47,7 +47,7 @@ func TestSubjectRecoveryPublicRouter(t *testing.T) {
 		t.Fatal(err)
 	}
 	q := u.Query()
-	q.Set("options", "-c role=lanverse_app")
+	q.Set("options", "-c role=glowloom_app")
 	u.RawQuery = q.Encode()
 	db, err := platformdb.Open(t.Context(), u.String(), noop.NewTracerProvider())
 	if err != nil {
@@ -77,7 +77,7 @@ func TestSubjectRecoveryPublicRouter(t *testing.T) {
 		req.Header.Set("X-CSRF-Token", account.CSRFToken)
 		req.Header.Set("X-Creation-Scope", scope.String())
 		req.Header.Set("Idempotency-Key", key)
-		req.AddCookie(&http.Cookie{Name: "lanverse_session", Value: account.Token})
+		req.AddCookie(&http.Cookie{Name: "glowloom_session", Value: account.Token})
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 		return w

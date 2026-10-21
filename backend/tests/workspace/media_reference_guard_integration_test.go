@@ -18,7 +18,7 @@ func workspaceReferenceFixture(t *testing.T) (context.Context, *gorm.DB, identit
 	t.Helper()
 	ctx, db := workspaceMigrationDB(t)
 	var name string
-	if db.Raw(`SELECT current_database()`).Scan(&name).Error != nil || name != "lanverse_reference" {
+	if db.Raw(`SELECT current_database()`).Scan(&name).Error != nil || name != "glowloom_reference" {
 		t.Fatal("isolated reference database required")
 	}
 	actor := insertWorkspaceActor(ctx, t, db, insertWorkspaceOrganization(ctx, t, db))
@@ -30,7 +30,7 @@ func workspaceReferenceCheck(t *testing.T, db *gorm.DB, actor identityapp.Princi
 	t.Helper()
 	var found bool
 	err := db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		var err error

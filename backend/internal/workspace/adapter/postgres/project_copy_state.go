@@ -164,9 +164,9 @@ func nullableCopyWorker(id uuid.UUID) any {
 
 func copyChanged(tx *gorm.DB, job domain.ProjectCopyJob, action string, now time.Time) error {
 	id := uuid.New()
-	topic := "lanverse.workspace.project_copy_changed.v1"
+	topic := "glowloom.workspace.project_copy_changed.v1"
 	if action == "requested" || action == "retry" || action == "cancel" || action == "reconcile" {
-		topic = "lanverse.workspace.project_copy_requested.v1"
+		topic = "glowloom.workspace.project_copy_requested.v1"
 	}
 	payload, err := json.Marshal(map[string]any{"event_id": id, "event_type": topic, "occurred_at": now.UTC(), "org_id": job.OrgID, "project_id": job.SourceProjectID, "actor": map[string]any{"kind": "user", "id": job.ExecutionActor()}, "aggregate": map[string]any{"type": "project_copy", "id": job.ID, "revision": job.Revision}, "data": map[string]any{"copy_job_id": job.ID, "source_project_id": job.SourceProjectID, "target_project_id": job.TargetProjectID, "status": job.Status, "stage": job.Stage, "revision": job.Revision, "action": action}})
 	if err != nil {

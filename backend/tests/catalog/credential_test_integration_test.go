@@ -104,7 +104,7 @@ func TestCredentialTestRecordsCurrentResultAndEventsOnLocalPostgres(t *testing.T
 			t.Fatal("credential test outbox contains sealed credential material")
 		}
 		switch event.Topic {
-		case "lanverse.catalog.credential_test_requested.v1":
+		case "glowloom.catalog.credential_test_requested.v1":
 			var payload struct {
 				Data struct {
 					TestID       uuid.UUID `json:"test_id"`
@@ -116,7 +116,7 @@ func TestCredentialTestRecordsCurrentResultAndEventsOnLocalPostgres(t *testing.T
 				t.Fatal("invalid accepted test request", err)
 			}
 			sawRequest = true
-		case "lanverse.audit.recorded.v1":
+		case "glowloom.audit.recorded.v1":
 			audit, err := auditapp.NewRecordedActionParser().Parse(inbox.Record{
 				Topic: event.Topic, Key: []byte(event.PartitionKey), Value: event.Payload,
 			})
@@ -142,7 +142,7 @@ func TestCredentialTestRecordsCurrentResultAndEventsOnLocalPostgres(t *testing.T
 				t.Fatalf("test audit accepted credential material: %v", err)
 			}
 			sawAudit = true
-		case "lanverse.catalog.credential_changed.v1":
+		case "glowloom.catalog.credential_changed.v1":
 			var payload struct {
 				Data struct {
 					Result string `json:"result"`
@@ -171,7 +171,7 @@ func TestCredentialTestRecordsCurrentResultAndEventsOnLocalPostgres(t *testing.T
 	if err := conn.DB.WithContext(ctx).Exec(`
 		CREATE FUNCTION reject_test_audit() RETURNS trigger LANGUAGE plpgsql AS $$
 		BEGIN
-		  IF NEW.topic = 'lanverse.audit.recorded.v1' THEN RAISE EXCEPTION 'reject test audit'; END IF;
+		  IF NEW.topic = 'glowloom.audit.recorded.v1' THEN RAISE EXCEPTION 'reject test audit'; END IF;
 		  RETURN NEW;
 		END $$
 	`).Error; err != nil {

@@ -62,7 +62,7 @@ func TestSessionClockPreferencesHTTPInterleaving(t *testing.T) {
 			identityhttp.NewSelfProfileHandler(identity.NewSelfProfile(delayed, now)).Register(router.Group("/api", handler.RequireSession()))
 			request := func(path string) *httptest.ResponseRecorder {
 				req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil)
-				req.AddCookie(&http.Cookie{Name: "lanverse_session", Value: login.Token})
+				req.AddCookie(&http.Cookie{Name: "glowloom_session", Value: login.Token})
 				response := httptest.NewRecorder()
 				router.ServeHTTP(response, req)
 				return response

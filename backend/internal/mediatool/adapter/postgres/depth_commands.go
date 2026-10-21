@@ -13,7 +13,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
-const depthTopic = "lanverse.mediatool.depth_command.v1"
+const depthTopic = "glowloom.mediatool.depth_command.v1"
 
 func recordDepthCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash, action string, job domain.DepthJob, emit string) error {
 	now := time.Now().UTC()
@@ -51,7 +51,7 @@ func recordDepthCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID,
 }
 func depthAudit(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, action string, j domain.DepthJob) error {
 	id := uuid.NewSHA1(key, []byte("media-depth-audit/"+actor.ID.String()+"/"+action))
-	const topic = "lanverse.audit.recorded.v1"
+	const topic = "glowloom.audit.recorded.v1"
 	summary := map[string]any{"id": j.ID, "project_id": j.ProjectID, "canvas_id": j.Source.CanvasID, "node_id": j.Source.NodeID, "source_revision": j.Source.Revision, "source_asset_id": j.SourceAssetID, "source_asset_revision": j.SourceAssetRevision, "profile_id": j.ProfileID, "status": j.Status, "stage": j.Stage, "attempt": j.Attempt, "revision": j.Revision, "asset_id": j.AssetID, "sha256": j.SHA256, "failure_code": j.FailureCode, "needs_reconciliation": j.NeedsReconciliation, "execution_unconfirmed": j.ExecutionUnconfirmed}
 	data, err := json.Marshal(map[string]any{"event_id": id, "event_type": topic, "occurred_at": time.Now().UTC(), "org_id": actor.OrgID, "project_id": j.ProjectID, "actor": map[string]any{"kind": "user", "id": actor.ID}, "aggregate": map[string]any{"type": "audit", "id": id}, "data": map[string]any{"action": "media.depth_" + action, "object": map[string]any{"type": "media_depth", "id": j.ID.String()}, "before": nil, "after": summary, "request_id": key.String()}})
 	if err != nil {

@@ -168,7 +168,7 @@ func TestTemplateQuoteAtomicRollbackAndRuntimePrivileges(t *testing.T) {
 		t.Fatal("rollback kept idempotency receipt", err)
 	}
 	err = database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		quote, err := templateQuoteStore(tx).CreateFreeQuote(t.Context(), actor, input)

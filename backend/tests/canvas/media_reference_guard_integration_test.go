@@ -23,7 +23,7 @@ func canvasReferenceCheck(t *testing.T, db *gorm.DB, actor identityapp.Principal
 	t.Helper()
 	var found bool
 	err := db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		var err error
@@ -115,8 +115,8 @@ func TestCanvasMediaReferenceGuardCorruptHistoricalConfigFailsClosed(t *testing.
 func TestCanvasMediaReferenceGuardBoundsCombinedRetainedHistory(t *testing.T) {
 	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
 	var name string
-	if err := db.Raw(`SELECT current_database()`).Scan(&name).Error; err != nil || name != "lanverse_reference" {
-		t.Fatal("budget guard requires isolated lanverse_reference", name, err)
+	if err := db.Raw(`SELECT current_database()`).Scan(&name).Error; err != nil || name != "glowloom_reference" {
+		t.Fatal("budget guard requires isolated glowloom_reference", name, err)
 	}
 	for _, test := range []struct {
 		name                 string
@@ -168,11 +168,11 @@ func TestCanvasMediaReferenceGuardBoundsCombinedRetainedHistory(t *testing.T) {
 					t.Fatal("owned retained command metadata", read.RowsAffected, read.Error)
 				}
 			}
-			if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+			if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 				t.Fatal(err)
 			}
 			var role string
-			if err := tx.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "lanverse_app" {
+			if err := tx.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "glowloom_app" {
 				t.Fatal("history guard lacks actual nonowner", role, err)
 			}
 			found, err := pgcanvas.NewScopedMediaReferenceGuard(tx, mediawire.NewCanvasProjectAccess).HasMediaReferences(t.Context(), actor, project, asset)
@@ -187,7 +187,7 @@ func TestCanvasMediaReferenceGuardRetainsHistoryBudgetLock(t *testing.T) {
 	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, db)
 	err := db.WithContext(t.Context()).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		if found, err := pgcanvas.NewScopedMediaReferenceGuard(tx, mediawire.NewCanvasProjectAccess).HasMediaReferences(t.Context(), actor, project, uuid.New()); err != nil || found {
@@ -198,11 +198,11 @@ func TestCanvasMediaReferenceGuardRetainsHistoryBudgetLock(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), 250*time.Millisecond)
 		defer cancel()
 		writerErr := db.WithContext(ctx).Transaction(func(writer *gorm.DB) error {
-			if err := writer.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+			if err := writer.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 				return err
 			}
 			var role string
-			if err := writer.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "lanverse_app" {
+			if err := writer.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "glowloom_app" {
 				t.Fatal("history writer lacks actual nonowner", role, err)
 			}
 			var locked int

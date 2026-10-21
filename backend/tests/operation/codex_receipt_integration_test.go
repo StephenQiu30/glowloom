@@ -137,7 +137,7 @@ func receiptTestObjects(t *testing.T) *objectstorage.Client {
 		t.Fatal("invalid temporary storage fixture config")
 	}
 	endpoint, err := url.Parse(config.Endpoint)
-	if err != nil || endpoint.Scheme != "http" || (endpoint.Hostname() != "127.0.0.1" && endpoint.Hostname() != "localhost") || config.Bucket != "lanverse-receipt-test" {
+	if err != nil || endpoint.Scheme != "http" || (endpoint.Hostname() != "127.0.0.1" && endpoint.Hostname() != "localhost") || config.Bucket != "glowloom-receipt-test" {
 		t.Fatal("storage fixture must be a dedicated loopback test bucket")
 	}
 	sdk, err := minio.New(endpoint.Host, &minio.Options{Creds: credentials.NewStaticV4(config.AccessKey, config.SecretKey, ""), Secure: false})

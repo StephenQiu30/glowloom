@@ -35,7 +35,7 @@ func TestActualPrivateObjectInventory(t *testing.T) {
 		AccessKey string `json:"access_key"`
 		SecretKey string `json:"secret_key"`
 	}
-	if json.Unmarshal(raw, &cfg) != nil || cfg.Endpoint != "http://127.0.0.1:19000" || cfg.Bucket != "lanverse-receipt-test" {
+	if json.Unmarshal(raw, &cfg) != nil || cfg.Endpoint != "http://127.0.0.1:19000" || cfg.Bucket != "glowloom-receipt-test" {
 		t.Fatal("isolated inventory service required")
 	}
 	client, err := objectstorage.Open(cfg.Endpoint, cfg.Bucket, cfg.AccessKey, cfg.SecretKey, "")

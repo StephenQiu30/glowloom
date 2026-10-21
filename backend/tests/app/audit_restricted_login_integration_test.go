@@ -62,7 +62,7 @@ func TestAuditRestrictedLoginRelayDeduplicates(t *testing.T) {
 		}
 	})
 
-	const topic = "lanverse.audit.recorded.v1"
+	const topic = "glowloom.audit.recorded.v1"
 	producer, err := kgo.NewClient(kgo.SeedBrokers(strings.Split(brokers, ",")...))
 	if err != nil {
 		t.Fatalf("open audit test Kafka client: %v", err)
@@ -162,7 +162,7 @@ func assertRestrictedAuditLogin(ctx context.Context, t *testing.T, handle *gorm.
 		       r.rolcreaterole AS create_role, r.rolcreatedb AS create_db,
 		       pg_has_role(current_user, a.relowner, 'MEMBER') AS audit_owner,
 		       pg_has_role(current_user, o.relowner, 'MEMBER') AS outbox_owner,
-		       pg_has_role(current_user, 'lanverse_app', 'USAGE') AS inherits_app,
+		       pg_has_role(current_user, 'glowloom_app', 'USAGE') AS inherits_app,
 		       has_schema_privilege('audit', 'USAGE') AS schema_usage,
 		       has_table_privilege('audit.audit_log', 'INSERT') AS can_insert,
 		       has_table_privilege('audit.audit_log', 'SELECT') AS can_select,
@@ -200,7 +200,7 @@ func assertEmptyAuditRoleDatabase(ctx context.Context, t *testing.T, handle *gor
 func auditRolePayload(t *testing.T, eventID, orgID, actorID uuid.UUID) []byte {
 	t.Helper()
 	payload, err := json.Marshal(map[string]any{
-		"event_id": eventID.String(), "event_type": "lanverse.audit.recorded.v1",
+		"event_id": eventID.String(), "event_type": "glowloom.audit.recorded.v1",
 		"occurred_at": time.Now().UTC(), "org_id": orgID.String(),
 		"actor":     map[string]any{"kind": "user", "id": actorID.String()},
 		"aggregate": map[string]any{"type": "audit", "id": eventID.String()},

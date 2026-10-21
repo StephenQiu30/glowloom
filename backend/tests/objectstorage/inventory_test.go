@@ -29,14 +29,14 @@ func inventoryClient(t *testing.T, body string) (*objectstorage.Client, *atomic.
 		}
 	}))
 	t.Cleanup(server.Close)
-	client, err := objectstorage.Open(server.URL, "lanverse-test", "synthetic-access", "synthetic-secret", "us-east-1")
+	client, err := objectstorage.Open(server.URL, "glowloom-test", "synthetic-access", "synthetic-secret", "us-east-1")
 	if err != nil {
 		t.Fatal(err)
 	}
 	return client, calls
 }
 func TestInventoryReadsExactPrefixAndRejectsIncompleteBound(t *testing.T) {
-	body := `<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Name>lanverse-test</Name><Prefix>projects/own/image/</Prefix><IsTruncated>false</IsTruncated><Contents><Key>projects/own/image/a.png</Key><Size>11</Size></Contents><Contents><Key>projects/own/image/b.png</Key><Size>27</Size></Contents></ListBucketResult>`
+	body := `<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Name>glowloom-test</Name><Prefix>projects/own/image/</Prefix><IsTruncated>false</IsTruncated><Contents><Key>projects/own/image/a.png</Key><Size>11</Size></Contents><Contents><Key>projects/own/image/b.png</Key><Size>27</Size></Contents></ListBucketResult>`
 	client, calls := inventoryClient(t, body)
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
@@ -55,7 +55,7 @@ func TestInventoryReadsExactPrefixAndRejectsIncompleteBound(t *testing.T) {
 func TestInventoryRejectsForeignKeysDuplicateAndInvalidSize(t *testing.T) {
 	for _, content := range []string{`<Contents><Key>projects/other/image/a.png</Key><Size>11</Size></Contents>`, `<Contents><Key>projects/own/image/a.png</Key><Size>-1</Size></Contents>`, `<Contents><Key>projects/own/image/a.png</Key><Size>11</Size></Contents><Contents><Key>projects/own/image/a.png</Key><Size>11</Size></Contents>`} {
 		t.Run(content, func(t *testing.T) {
-			body := `<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Name>lanverse-test</Name><IsTruncated>false</IsTruncated>` + content + `</ListBucketResult>`
+			body := `<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Name>glowloom-test</Name><IsTruncated>false</IsTruncated>` + content + `</ListBucketResult>`
 			client, _ := inventoryClient(t, body)
 			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 			defer cancel()

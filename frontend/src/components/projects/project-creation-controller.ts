@@ -510,6 +510,8 @@ export class ProjectCreationController {
 
 export function creationMessage(reason: unknown) {
   if (reason instanceof RequestError) {
+    if (["origin_forbidden", "origin_mismatch"].includes(reason.code))
+      return "当前访问地址与服务配置不一致，无法确认创建结果。请从已配置的访问地址打开，保留原创建记录。";
     if (reason.status === 401)
       return "登录已失效。重新登录后先确认原创建结果。";
     if (reason.status === 403 || reason.status === 404)

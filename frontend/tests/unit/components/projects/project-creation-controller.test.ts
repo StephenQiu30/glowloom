@@ -1,6 +1,9 @@
 import { RequestError } from "@/lib/request";
 import { expect, it, vi } from "vitest";
-import { ProjectCreationController } from "@/components/projects/project-creation-controller";
+import {
+  creationMessage,
+  ProjectCreationController,
+} from "@/components/projects/project-creation-controller";
 import {
   ProjectIntentStore,
   type IntentDatabase,
@@ -306,4 +309,13 @@ it("logout intent invalidates navigation even after acknowledgement committed bu
   release();
   await pending;
   expect(f.navigate).not.toHaveBeenCalled();
+});
+
+it("Origin配置拒绝不能误报为归属或对象变化", () => {
+  expect(creationMessage(new RequestError("origin_forbidden", 403))).toContain(
+    "访问地址",
+  );
+  expect(
+    creationMessage(new RequestError("origin_forbidden", 403)),
+  ).not.toContain("对象已变化");
 });

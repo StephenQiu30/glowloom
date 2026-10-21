@@ -46,7 +46,7 @@ func TestCreateProviderCommandCommitsSafeAudit(t *testing.T) {
 		created.Status != domain.ProviderActive || created.AdapterKey != "openrouter" {
 		t.Fatalf("provider result %+v: %v", created, err)
 	}
-	if len(store.events) != 1 || store.events[0].Topic != "lanverse.audit.recorded.v1" ||
+	if len(store.events) != 1 || store.events[0].Topic != "glowloom.audit.recorded.v1" ||
 		store.events[0].PartitionKey != actor.OrgID.String() {
 		t.Fatalf("wrong provider audit: %+v", store.events)
 	}

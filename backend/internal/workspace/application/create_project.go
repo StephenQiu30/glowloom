@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	projectChangedTopic = "lanverse.workspace.project_changed.v1"
-	projectAuditTopic   = "lanverse.audit.recorded.v1"
+	projectChangedTopic = "glowloom.workspace.project_changed.v1"
+	projectAuditTopic   = "glowloom.audit.recorded.v1"
 )
 
 // ErrInvalidCreateProject means the create command or committed result is invalid.

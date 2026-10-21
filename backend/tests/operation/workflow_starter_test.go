@@ -349,7 +349,7 @@ func TestWorkflowStarterReadsCommittedSingleAndSweepCandidates(t *testing.T) {
 		t.Fatalf("confirmed batch snapshot: %+v, %v", snapshot, err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		_, err := operationStore(tx).LoadWorkflowBatch(t.Context(), batchID)
@@ -372,7 +372,7 @@ func TestWorkflowStarterReadsCommittedSingleAndSweepCandidates(t *testing.T) {
 		t.Fatalf("running batch snapshot: %+v, %v", snapshot, err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		acquired, err := operationStore(tx).AcquireBatchLaunch(t.Context(), batchID, quoted.ID)

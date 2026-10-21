@@ -149,8 +149,8 @@ secrets:
 volumes:
   backend-go-build:
   frontend-modules:
-    name: lanverse-dev_frontend-modules
+    name: glowloom-dev_frontend-modules
     external: true
   frontend-next:
-    name: lanverse-dev_frontend-next
+    name: glowloom-dev_frontend-next
     external: true

@@ -212,7 +212,7 @@ func TestProjectCoverPermanentActualOldProductionFingerprintGolden(t *testing.T)
 	actor = identityfixture.Session(t, tx, actor)
 	lifecycleFixtureSQL(t, tx, `INSERT INTO workspace.project(id,org_id,owner_id,owner_scope_id,name,aspect_ratio,style_type,resolution,revision)VALUES(?,?,?,?,'later content','16:9','realistic','1080p',9)`, input.Patch.ProjectID, actor.OrgID, actor.ID, actor.ScopeID)
 	lifecycleFixtureSQL(t, tx, `INSERT INTO infra.idempotency_record(id,actor_id,idem_key,request_hash,status_code,response_body,expires_at)VALUES(?,?,?,?,200,?::jsonb,clock_timestamp()-interval '1 year')`, uuid.New(), actor.ID, input.IdempotencyKey.String(), golden.Fingerprint, golden.ResponseBytes)
-	lifecycleFixtureSQL(t, tx, `SET LOCAL ROLE lanverse_app`)
+	lifecycleFixtureSQL(t, tx, `SET LOCAL ROLE glowloom_app`)
 	replayed, err := workspaceapp.NewProjectLifecycle(coverStore(tx), time.Now).Change(ctx, actor, input)
 	encoded, _ := json.Marshal(replayed)
 	if err != nil || !bytes.Equal(encoded, []byte(golden.ResponseBytes)) {

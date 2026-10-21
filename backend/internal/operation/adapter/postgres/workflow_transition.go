@@ -213,7 +213,7 @@ func appendWorkflowTransition(tx *gorm.DB, row workflowTransitionRow, from domai
 	if result.RowsAffected != 1 {
 		return fmt.Errorf("insert operation transition event: wrote %d rows", result.RowsAffected)
 	}
-	const topic = "lanverse.operation.status_changed.v1"
+	const topic = "glowloom.operation.status_changed.v1"
 	data := struct {
 		BatchID    *uuid.UUID `json:"batch_id,omitempty"`
 		TargetType string     `json:"target_type"`
@@ -235,7 +235,7 @@ func appendWorkflowTransition(tx *gorm.DB, row workflowTransitionRow, from domai
 		return fmt.Errorf("insert operation status outbox: wrote %d rows", result.RowsAffected)
 	}
 	if input.To == domain.StatusManual {
-		return appendWorkflowSpecialEvent(tx, row, "lanverse.operation.manual.v1", struct {
+		return appendWorkflowSpecialEvent(tx, row, "glowloom.operation.manual.v1", struct {
 			Status string `json:"status"`
 		}{Status: string(input.To)})
 	}

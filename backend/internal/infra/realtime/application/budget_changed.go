@@ -12,7 +12,7 @@ import (
 )
 
 // BudgetChangedTopic carries available-balance changes from the billing Outbox.
-const BudgetChangedTopic = "lanverse.billing.budget_changed.v1"
+const BudgetChangedTopic = "glowloom.billing.budget_changed.v1"
 
 // BudgetChangedHandler projects one committed budget change to project SSE.
 type BudgetChangedHandler struct {

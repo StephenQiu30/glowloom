@@ -27,12 +27,12 @@ func TestSessionV2RepositorySchema(t *testing.T) {
 		"(consumed_at is null) = (rotation_request_id is null)",
 		"(replay_until is null) = (receipt_ciphertext is null)",
 		"replay_until <= (consumed_at + '00:00:10'::interval)",
-		"grant select,insert,delete on table identity.session_refresh_token to lanverse_app",
-		"grant update(consumed_at) on table identity.session_refresh_token to lanverse_app",
-		"grant update(revoked_at) on table identity.session_refresh_token to lanverse_app",
-		"grant update(rotation_request_id) on table identity.session_refresh_token to lanverse_app",
-		"grant update(replay_until) on table identity.session_refresh_token to lanverse_app",
-		"grant update(receipt_ciphertext) on table identity.session_refresh_token to lanverse_app",
+		"grant select,insert,delete on table identity.session_refresh_token to glowloom_app",
+		"grant update(consumed_at) on table identity.session_refresh_token to glowloom_app",
+		"grant update(revoked_at) on table identity.session_refresh_token to glowloom_app",
+		"grant update(rotation_request_id) on table identity.session_refresh_token to glowloom_app",
+		"grant update(replay_until) on table identity.session_refresh_token to glowloom_app",
+		"grant update(receipt_ciphertext) on table identity.session_refresh_token to glowloom_app",
 	} {
 		if !strings.Contains(sql, clause) {
 			t.Errorf("schema.sql missing %q", clause)

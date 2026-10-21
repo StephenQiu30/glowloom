@@ -40,9 +40,9 @@ func (p *recordingPublisher) Publish(_ context.Context, event application.Event)
 func TestRelayRetriesAfterPublishFailure(t *testing.T) {
 	event := application.Event{
 		ID:           "event-1",
-		Topic:        "lanverse.operation.status_changed.v1",
+		Topic:        "glowloom.operation.status_changed.v1",
 		PartitionKey: "test-project",
-		Payload:      []byte(`{"event_id":"event-1","event_type":"lanverse.operation.status_changed.v1"}`),
+		Payload:      []byte(`{"event_id":"event-1","event_type":"glowloom.operation.status_changed.v1"}`),
 	}
 	store := &memoryStore{event: event, pending: true}
 	wantErr := errors.New("broker unavailable")
@@ -73,9 +73,9 @@ func TestRelayRejectsMismatchedEventEnvelope(t *testing.T) {
 		pending: true,
 		event: application.Event{
 			ID:           "event-1",
-			Topic:        "lanverse.operation.status_changed.v1",
+			Topic:        "glowloom.operation.status_changed.v1",
 			PartitionKey: "test-project",
-			Payload:      []byte(`{"event_id":"different","event_type":"lanverse.operation.status_changed.v1"}`),
+			Payload:      []byte(`{"event_id":"different","event_type":"glowloom.operation.status_changed.v1"}`),
 		},
 	}
 	publisher := &recordingPublisher{}

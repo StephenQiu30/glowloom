@@ -74,7 +74,7 @@ func TestConfirmBatchQuoteReplaysFirstResultAndRejectsChangedExclusions(t *testi
 		t.Fatal(err)
 	}
 	if err := database.Raw(`SELECT count(*) FROM infra.outbox
-		WHERE topic = 'lanverse.batch.confirmed.v1' AND payload->'data'->>'batch_id' = ?`,
+		WHERE topic = 'glowloom.batch.confirmed.v1' AND payload->'data'->>'batch_id' = ?`,
 		batchID.String()).Scan(&events).Error; err != nil {
 		t.Fatal(err)
 	}

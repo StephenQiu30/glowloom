@@ -171,7 +171,7 @@ func prepareThread(ctx context.Context, client *rpcClient, model, dir string) (s
 	var initialized struct {
 		UserAgent string `json:"userAgent"`
 	}
-	if err := client.call(ctx, "initialize", map[string]any{"clientInfo": map[string]any{"name": "lanverse-image-worker", "version": "1"}, "capabilities": map[string]any{"experimentalApi": true}}, &initialized); err != nil {
+	if err := client.call(ctx, "initialize", map[string]any{"clientInfo": map[string]any{"name": "glowloom-image-worker", "version": "1"}, "capabilities": map[string]any{"experimentalApi": true}}, &initialized); err != nil {
 		return "", err
 	}
 	if err := client.send(ctx, map[string]any{"method": "initialized"}); err != nil {

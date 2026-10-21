@@ -48,7 +48,7 @@ func newPreferenceFixture(t *testing.T) preferenceFixture {
 		t.Skip("isolated PostgreSQL DSN not configured")
 	}
 	parsed, err := url.Parse(dsn)
-	if err != nil || parsed.Hostname() != "127.0.0.1" || parsed.Path != "/lanverse_receipt" {
+	if err != nil || parsed.Hostname() != "127.0.0.1" || parsed.Path != "/glowloom_receipt" {
 		t.Fatal("preferences tests require the task's isolated receipt database")
 	}
 	database, err := gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
@@ -314,7 +314,7 @@ func TestPreferenceApplicationRoleAndOutdatedBaseline(t *testing.T) {
 	// and switch its effective role to verify the exact table grants without changing it.
 	sqlDB.SetMaxOpenConns(1)
 	sqlDB.SetMaxIdleConns(1)
-	if err := database.Exec(`SET ROLE lanverse_app`).Error; err != nil {
+	if err := database.Exec(`SET ROLE glowloom_app`).Error; err != nil {
 		t.Fatal("switch isolated connection to application role", err)
 	}
 	t.Cleanup(func() {

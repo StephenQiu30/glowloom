@@ -34,7 +34,7 @@ func packageLockDB(t *testing.T) *gorm.DB {
 	}
 	t.Cleanup(func() { _ = connection.Close() })
 	var database, role, owner string
-	if err := connection.DB.Raw(`SELECT current_database(),current_user,pg_get_userbyid(datdba) FROM pg_database WHERE datname=current_database()`).Row().Scan(&database, &role, &owner); err != nil || !strings.HasPrefix(database, "lanverse_composition_package_lock_") || role != "lanverse_app" || role == owner {
+	if err := connection.DB.Raw(`SELECT current_database(),current_user,pg_get_userbyid(datdba) FROM pg_database WHERE datname=current_database()`).Row().Scan(&database, &role, &owner); err != nil || !strings.HasPrefix(database, "glowloom_composition_package_lock_") || role != "glowloom_app" || role == owner {
 		t.Fatal("package lock tests require their independent database and actual nonowner role")
 	}
 	return connection.DB

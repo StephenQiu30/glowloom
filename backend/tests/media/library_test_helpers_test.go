@@ -23,7 +23,7 @@ func libraryOwnerDB(t *testing.T) *gorm.DB {
 	}
 	t.Cleanup(func() { _ = connection.Close() })
 	var name, role, owner string
-	if err := connection.DB.Raw(`SELECT current_database(),current_user,pg_get_userbyid(datdba) FROM pg_database WHERE datname=current_database()`).Row().Scan(&name, &role, &owner); err != nil || name != "lanverse_library" || role == "lanverse_app" || role != owner {
+	if err := connection.DB.Raw(`SELECT current_database(),current_user,pg_get_userbyid(datdba) FROM pg_database WHERE datname=current_database()`).Row().Scan(&name, &role, &owner); err != nil || name != "glowloom_library" || role == "glowloom_app" || role != owner {
 		t.Fatal("owner fixture writes require isolated library database", name, role, err)
 	}
 	return connection.DB

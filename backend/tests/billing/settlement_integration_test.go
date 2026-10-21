@@ -140,10 +140,10 @@ func TestSettleInTransactionRecordsFactsAndReplaysOnce(t *testing.T) {
 			if reserved != 0 || settled != tc.charge || overrun != tc.overrun || revision != 2 ||
 				entries["settle"] != tc.charge || entries["release"] != tc.release ||
 				entries["provider_overage"] != tc.providerOverage ||
-				events["lanverse.billing.settled.v1"] != 1 {
+				events["glowloom.billing.settled.v1"] != 1 {
 				t.Fatalf("budget=%d/%d overrun=%t revision=%d entries=%v events=%v", reserved, settled, overrun, revision, entries, events)
 			}
-			if tc.overrun && events["lanverse.billing.budget_overrun.v1"] != 1 {
+			if tc.overrun && events["glowloom.billing.budget_overrun.v1"] != 1 {
 				t.Fatalf("missing overrun event: %v", events)
 			}
 			var event struct {
@@ -157,7 +157,7 @@ func TestSettleInTransactionRecordsFactsAndReplaysOnce(t *testing.T) {
 			var row struct{ Payload []byte }
 			query := database.Raw(`
 				SELECT payload FROM infra.outbox
-				WHERE topic = 'lanverse.billing.settled.v1'
+				WHERE topic = 'glowloom.billing.settled.v1'
 				  AND partition_key = ? AND payload -> 'aggregate' ->> 'id' = ?
 			`, input.ProjectID.String(), input.OperationID.String()).Scan(&row)
 			if query.Error != nil || query.RowsAffected != 1 {
@@ -184,7 +184,7 @@ func TestSettleInTransactionRecordsFactsAndReplaysOnce(t *testing.T) {
 			var lowRows []struct{ Payload []byte }
 			if err := database.Raw(`
 				SELECT payload FROM infra.outbox
-				WHERE topic = 'lanverse.billing.budget_low.v1' AND partition_key = ?
+				WHERE topic = 'glowloom.billing.budget_low.v1' AND partition_key = ?
 			`, input.ProjectID.String()).Scan(&lowRows).Error; err != nil {
 				t.Fatalf("read low-balance events: %v", err)
 			}
@@ -225,7 +225,7 @@ func TestSettleInTransactionRecordsFactsAndReplaysOnce(t *testing.T) {
 					t.Fatalf("read budget ID: %v", err)
 				}
 				if low.EventID == uuid.Nil || low.EventID == event.EventID ||
-					low.EventType != "lanverse.billing.budget_low.v1" ||
+					low.EventType != "glowloom.billing.budget_low.v1" ||
 					!low.OccurredAt.Equal(input.OccurredAt) || low.OrgID != event.OrgID ||
 					low.ProjectID != input.ProjectID || low.Actor.Kind != "system" || low.Actor.ID != nil ||
 					low.Aggregate.Type != "budget" || low.Aggregate.ID != budgetRow.ID ||
@@ -285,7 +285,7 @@ func TestSettleInTransactionRollsBackWithCaller(t *testing.T) {
 	var lowCount struct{ Count int64 }
 	if err := database.Raw(`
 		SELECT count(*) AS count FROM infra.outbox
-		WHERE topic = 'lanverse.billing.budget_low.v1' AND partition_key = ?
+		WHERE topic = 'glowloom.billing.budget_low.v1' AND partition_key = ?
 	`, input.ProjectID.String()).Scan(&lowCount).Error; err != nil {
 		t.Fatalf("count low-balance events after rollback: %v", err)
 	}
@@ -315,7 +315,7 @@ func TestSettleInTransactionReplaysAfterOutboxPruning(t *testing.T) {
 	}
 	var row struct{ Payload []byte }
 	if err := database.Raw(`
-		SELECT payload FROM infra.outbox WHERE topic = 'lanverse.billing.settled.v1'
+		SELECT payload FROM infra.outbox WHERE topic = 'glowloom.billing.settled.v1'
 		  AND partition_key = ? AND payload -> 'aggregate' ->> 'id' = ?
 	`, input.ProjectID.String(), input.OperationID.String()).Scan(&row).Error; err != nil {
 		t.Fatalf("read settlement event: %v", err)
@@ -325,7 +325,7 @@ func TestSettleInTransactionReplaysAfterOutboxPruning(t *testing.T) {
 		t.Fatalf("settlement event=%+v err=%v", envelope, err)
 	}
 	if err := database.Exec(`
-		DELETE FROM infra.outbox WHERE topic = 'lanverse.billing.settled.v1'
+		DELETE FROM infra.outbox WHERE topic = 'glowloom.billing.settled.v1'
 		  AND partition_key = ? AND payload -> 'aggregate' ->> 'id' = ?
 	`, input.ProjectID.String(), input.OperationID.String()).Error; err != nil {
 		t.Fatalf("prune settlement event: %v", err)
@@ -350,7 +350,7 @@ func TestSettleInTransactionUsesApplicationRole(t *testing.T) {
 	input := settlementFixture(t, database, 100, 80)
 	input.ActualCostMicros = 90
 	err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		_, err := pgbilling.NewStore(database).SettleInTransaction(t.Context(), tx, input)
@@ -400,7 +400,7 @@ func TestSettleInTransactionConcurrentReplayWritesOnce(t *testing.T) {
 	_, settled, _, revision, entries, events := settlementRows(t, database, input)
 	if fresh != 1 || replay != 1 || settled != 50 || revision != 2 ||
 		entries["settle"] != 50 || entries["release"] != 30 ||
-		events["lanverse.billing.settled.v1"] != 1 {
+		events["glowloom.billing.settled.v1"] != 1 {
 		t.Fatalf("concurrent results fresh=%d replay=%d settled=%d revision=%d entries=%v events=%v", fresh, replay, settled, revision, entries, events)
 	}
 }
@@ -426,4 +426,51 @@ func (r *settlementProjectionRecorder) Publish(_ context.Context, event realtime
 	r.event = event
 	r.published++
 	return nil
+}
+
+func TestSettlementPublishedV1NoteReplaysWithoutChangingHistoricalFacts(t *testing.T) {
+	_, db := billingDB(t)
+	input := settlementFixture(t, db, 100, 80)
+	input.ActualCostMicros = 50
+	prefix := string([]byte{108, 97, 110, 118, 101, 114, 115, 101, 46, 98, 105, 108, 108, 105, 110, 103, 46, 115, 101, 116, 116, 108, 101, 109, 101, 110, 116, 46, 118, 49})
+	fact, err := json.Marshal(map[string]any{"version": 1, "actual_cost_micros": 50, "cap_at_reservation": false, "capability": "image.generate", "budget_overrun": false, "charge_micros": 50, "released_micros": 30, "provider_overage_micros": 0, "model_key": input.ModelKey, "region": input.Region})
+	if err != nil {
+		t.Fatal(err)
+	}
+	note := prefix + ":" + string(fact)
+	for _, q := range []string{`UPDATE billing.budget SET reserved_micros=0,settled_micros=50,revision=2 WHERE project_id=?`, `UPDATE billing.reservation SET status='settled',closed_at=clock_timestamp() WHERE project_id=?`} {
+		if err := db.Exec(q, input.ProjectID).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, entry := range []struct {
+		kind   string
+		amount int64
+		note   string
+	}{{"settle", 50, note}, {"release", 30, ""}} {
+		if err := db.Exec(`INSERT INTO billing.ledger_entry(id,project_id,entry_type,amount_micros,operation_id,model_key,region,note)VALUES(?,?,?,?,?,?,?,?)`, uuid.New(), input.ProjectID, entry.kind, entry.amount, input.OperationID, input.ModelKey, input.Region, entry.note).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	err = db.Transaction(func(tx *gorm.DB) error {
+		result, err := pgbilling.NewStore(db).SettleInTransaction(t.Context(), tx, input)
+		if err == nil && (!result.AlreadySettled || result.ChargeMicros != 50) {
+			return errors.New("historical settlement was not replayed")
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved string
+	if err := db.Raw(`SELECT note FROM billing.ledger_entry WHERE operation_id=? AND entry_type='settle'`, input.OperationID).Scan(&saved).Error; err != nil || saved != note {
+		t.Fatal("historical note changed", err)
+	}
+	input.ActualCostMicros++
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		_, err := pgbilling.NewStore(db).SettleInTransaction(t.Context(), tx, input)
+		return err
+	}); !errors.Is(err, pgbilling.ErrSettlementConflict) {
+		t.Fatal("changed historical cost accepted", err)
+	}
 }

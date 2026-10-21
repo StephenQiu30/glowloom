@@ -93,7 +93,7 @@ func TestConfirmedOutboxStartsOneWorkflowThroughLocalKafkaAndTemporal(t *testing
 	var assignedOnce sync.Once
 	consumer, err := kgo.NewClient(
 		kgo.SeedBrokers(strings.Split(brokers, ",")...),
-		kgo.ConsumerGroup("lanverse-workflow-e2e-"+uuid.NewString()),
+		kgo.ConsumerGroup("glowloom-workflow-e2e-"+uuid.NewString()),
 		kgo.ConsumeTopics(operationevent.OperationConfirmedTopic),
 		kgo.ConsumeStartOffset(kgo.NewOffset().AtEnd()),
 		kgo.DisableAutoCommit(),

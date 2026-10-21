@@ -46,7 +46,7 @@ func documentTestDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 	}
 	r, o := open(runtime), open(owner)
 	var current string
-	if err := r.Raw(`SELECT current_user`).Scan(&current).Error; err != nil || current != "lanverse_app" {
+	if err := r.Raw(`SELECT current_user`).Scan(&current).Error; err != nil || current != "glowloom_app" {
 		t.Fatal("document test needs nonowner runtime role", current, err)
 	}
 	return r, o

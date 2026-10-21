@@ -167,7 +167,7 @@ it("代理传递真实会话Cookie、写入来源和回执Cookie并禁止缓存"
     new Response('{"session_id":"receipt"}', {
       status: 201,
       headers: {
-        "Set-Cookie": "lanverse_session=test; HttpOnly; Path=/",
+        "Set-Cookie": "glowloom_session=test; HttpOnly; Path=/",
         "Content-Type": "application/json",
       },
     }),
@@ -177,7 +177,7 @@ it("代理传递真实会话Cookie、写入来源和回执Cookie并禁止缓存"
     new Request("http://localhost/api/sessions", {
       method: "POST",
       headers: {
-        Cookie: "lanverse_session=old",
+        Cookie: "glowloom_session=old",
         Origin: "http://localhost",
         "Idempotency-Key": "test",
       },
@@ -189,7 +189,7 @@ it("代理传递真实会话Cookie、写入来源和回执Cookie并禁止缓存"
   expect(response.headers.get("Cache-Control")).toBe("no-store");
   expect(response.headers.get("Set-Cookie")).toContain("HttpOnly");
   const [, init] = fetcher.mock.calls[0];
-  expect(init.headers.get("Cookie")).toBe("lanverse_session=old");
+  expect(init.headers.get("Cookie")).toBe("glowloom_session=old");
   expect(init.headers.get("Origin")).toBe("http://localhost");
 });
 it("上游失败返回明确503，超大请求不进入上游", async () => {
@@ -876,4 +876,69 @@ it.each([
   expect(result.status).toBe(404);
   expect(result.headers.get("Cache-Control")).toBe("no-store");
   expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("项目管理仅开放精确生命周期路由并透传状态筛选", async () => {
+  const { DELETE } = await import("@/app/api/[...path]/route");
+  const fetcher = vi
+    .fn()
+    .mockImplementation(async () => new Response('{"revision":2}'));
+  vi.stubGlobal("fetch", fetcher);
+  const base = "projects/00000000-0000-4000-8000-000000000001";
+  for (const action of ["archive", "unarchive", "restore"]) {
+    const path = `${base}/${action}`;
+    expect(
+      (
+        await POST(
+          new Request(`http://localhost/api/${path}`, {
+            method: "POST",
+            body: '{"expected_revision":1}',
+          }),
+          context(path),
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (await GET(new Request(`http://localhost/api/${path}`), context(path)))
+        .status,
+    ).toBe(405);
+  }
+  expect(
+    (
+      await DELETE(
+        new Request(`http://localhost/api/${base}`, {
+          method: "DELETE",
+          body: '{"expected_revision":1}',
+        }),
+        context(base),
+      )
+    ).status,
+  ).toBe(200);
+  await GET(
+    new Request(
+      "http://localhost/api/projects?status=archived&deleted=true&org_id=foreign",
+    ),
+    context("projects"),
+  );
+  const url = fetcher.mock.calls.at(-1)![0] as URL;
+  expect(url.searchParams.get("status")).toBe("archived");
+  expect(url.searchParams.get("deleted")).toBe("true");
+  expect(url.searchParams.has("org_id")).toBe(false);
+});
+
+it("回收核验只透传include_expired，不接受浏览器指定范围", async () => {
+  const fetcher = vi
+    .fn()
+    .mockResolvedValue(new Response('{"items":[],"next_cursor":null}'));
+  vi.stubGlobal("fetch", fetcher);
+  const response = await GET(
+    new Request(
+      "http://localhost/api/projects?deleted=true&include_expired=true&owner_scope_id=foreign",
+    ),
+    context("projects"),
+  );
+  expect(response.status).toBe(200);
+  const upstream = fetcher.mock.calls[0][0] as URL;
+  expect(upstream.searchParams.get("include_expired")).toBe("true");
+  expect(upstream.searchParams.has("owner_scope_id")).toBe(false);
 });

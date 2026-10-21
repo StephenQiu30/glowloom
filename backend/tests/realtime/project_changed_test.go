@@ -173,7 +173,7 @@ func TestRealtimeHandlerDispatchesKnownTopicsAndRejectsUnknown(t *testing.T) {
 	}
 
 	unknown := unitProjectChangedRecord(t, newProjectChangedEnvelope())
-	unknown.Topic = "lanverse.unknown.v1"
+	unknown.Topic = "glowloom.unknown.v1"
 	if err := handler.Handle(t.Context(), unknown); !errors.Is(err, realtime.ErrInvalidEvent) {
 		t.Fatalf("unknown topic error = %v, want ErrInvalidEvent", err)
 	}

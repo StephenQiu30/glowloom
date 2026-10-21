@@ -80,9 +80,9 @@ func assertDirectoryExportSchema(t *testing.T, tx *gorm.DB) {
       (SELECT count(*)=1 FROM pg_constraint WHERE conrelid='identity.directory_export'::regclass AND contype='u') AND
       (SELECT count(*)=2 FROM pg_constraint WHERE conrelid='identity.directory_export'::regclass AND contype='f') AND
       (SELECT count(*)=4 FROM pg_constraint WHERE conrelid='identity.directory_export'::regclass AND contype='c') AND
-      has_table_privilege('lanverse_app','identity.directory_export','SELECT') AND
-      has_table_privilege('lanverse_app','identity.directory_export','INSERT') AND
-      has_table_privilege('lanverse_app','identity.directory_export','UPDATE')`).Scan(&valid).Error; err != nil || !valid {
+      has_table_privilege('glowloom_app','identity.directory_export','SELECT') AND
+      has_table_privilege('glowloom_app','identity.directory_export','INSERT') AND
+      has_table_privilege('glowloom_app','identity.directory_export','UPDATE')`).Scan(&valid).Error; err != nil || !valid {
 		t.Fatal("directory export constraint/privilege contract differs", err)
 	}
 }
@@ -229,11 +229,11 @@ func TestDirectoryExportRestrictedApplicationRole(t *testing.T) {
 	installDirectoryExport(t, tx)
 	// SET LOCAL affects this rollback transaction only; no role/grant is changed
 	// globally. The migration's ACL must work when the runtime assumes its role.
-	if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+	if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 		t.Fatal("approved connection cannot verify restricted application role", err)
 	}
 	var role string
-	if err := tx.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "lanverse_app" {
+	if err := tx.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "glowloom_app" {
 		t.Fatal("test did not run as application role", err)
 	}
 	var grants struct{ SelectOK, InsertOK, UpdateOK bool }

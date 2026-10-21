@@ -101,7 +101,7 @@ func TestSetCredentialCommitsSealedDataAndEventsOnLocalPostgres(t *testing.T) {
 			bytes.Contains(row.Payload, []byte("test-group")) || bytes.Contains(row.Payload, []byte("ciphertext")) {
 			t.Fatal("outbox leaked plaintext or changed organization partition")
 		}
-		if row.Topic == "lanverse.audit.recorded.v1" {
+		if row.Topic == "glowloom.audit.recorded.v1" {
 			audit, err := auditapp.NewRecordedActionParser().Parse(inbox.Record{
 				Topic: row.Topic, Key: []byte(row.PartitionKey), Value: row.Payload,
 			})
@@ -117,7 +117,7 @@ func TestSetCredentialCommitsSealedDataAndEventsOnLocalPostgres(t *testing.T) {
 	if err := conn.DB.WithContext(ctx).Exec(`
 		CREATE FUNCTION reject_credential_audit() RETURNS trigger LANGUAGE plpgsql AS $$
 		BEGIN
-		  IF NEW.topic = 'lanverse.audit.recorded.v1' THEN
+		  IF NEW.topic = 'glowloom.audit.recorded.v1' THEN
 		    RAISE EXCEPTION 'reject test audit row';
 		  END IF;
 		  RETURN NEW;

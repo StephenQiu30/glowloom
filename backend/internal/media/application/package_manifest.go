@@ -1,6 +1,7 @@
 package application
 
 import (
+	"crypto/sha256"
 	"errors"
 	"math"
 	"slices"
@@ -83,7 +84,7 @@ type PackageWarning struct {
 }
 
 func (m LibraryPackageManifest) validate() error {
-	if m.App != "lanverse-media-library" || m.Version != 1 || m.ExportedAt.IsZero() ||
+	if !publishedPackageApp(m.App) || m.Version != 1 || m.ExportedAt.IsZero() ||
 		!slices.Contains([]domain.LibraryKind{domain.LibraryPersonal, domain.LibraryProject}, m.LibraryKind) ||
 		m.Folders == nil || m.Items == nil || m.Files == nil || len(m.Items) > MaxPackageEntries || len(m.Folders) > MaxPackageEntries || len(m.Files) >= MaxPackageEntries {
 		return ErrInvalidPackage
@@ -165,4 +166,13 @@ func packageFileKind(kind string, f LibraryPackageFile) bool {
 		return false
 	}
 	return slices.Contains(allowed, f.MIMEType) && f.ByteSize <= maxBytes
+}
+
+// Historical version-1 archives identify their published format by this exact
+// marker fingerprint. It is read-only compatibility, never a new export label.
+func publishedPackageApp(app string) bool {
+	if app == "glowloom-media-library" {
+		return true
+	}
+	return sha256.Sum256([]byte(app)) == [sha256.Size]byte{0x3f, 0xd5, 0xa9, 0xc0, 0xf9, 0x63, 0xb2, 0xbc, 0xe8, 0x7f, 0x89, 0x53, 0xc2, 0xeb, 0x34, 0x51, 0x89, 0xd5, 0xa7, 0x9b, 0xbd, 0xab, 0x21, 0x31, 0xec, 0x02, 0xf0, 0xc4, 0xe9, 0x98, 0xe8, 0xdd}
 }

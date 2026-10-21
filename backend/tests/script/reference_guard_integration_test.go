@@ -23,8 +23,8 @@ func scriptReferenceDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 	t.Helper()
 	db, owner := scriptTestDB(t)
 	var name string
-	if err := owner.Raw(`SELECT current_database()`).Scan(&name).Error; err != nil || name != "lanverse_reference" {
-		t.Fatal("reference guard requires isolated lanverse_reference database", name, err)
+	if err := owner.Raw(`SELECT current_database()`).Scan(&name).Error; err != nil || name != "glowloom_reference" {
+		t.Fatal("reference guard requires isolated glowloom_reference database", name, err)
 	}
 	return db, owner
 }
@@ -53,11 +53,11 @@ func scriptReferenceMutation(t *testing.T, owner *gorm.DB, actor identityapp.Pri
 		}
 	}()
 	seed(tx)
-	if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+	if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 		t.Fatal(err)
 	}
 	var role string
-	if err := tx.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "lanverse_app" {
+	if err := tx.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "glowloom_app" {
 		t.Fatal("guard mutation fixture lacks actual nonowner", role, err)
 	}
 	return pg.NewMediaReferenceGuard(tx, scriptFixtureProjectAccess(tx)).HasMediaReferences(t.Context(), actor, project, asset)

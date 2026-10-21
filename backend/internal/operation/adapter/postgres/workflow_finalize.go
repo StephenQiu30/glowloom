@@ -164,9 +164,9 @@ func appendWorkflowTerminalEvent(tx *gorm.DB, row workflowTransitionRow, input a
 	var topic string
 	switch input.To {
 	case domain.StatusCompleted:
-		topic = "lanverse.operation.completed.v1"
+		topic = "glowloom.operation.completed.v1"
 	case domain.StatusFailed:
-		topic = "lanverse.operation.failed.v1"
+		topic = "glowloom.operation.failed.v1"
 	default:
 		return nil
 	}

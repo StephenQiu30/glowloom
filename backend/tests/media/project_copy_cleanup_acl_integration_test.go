@@ -16,7 +16,7 @@ import (
 func TestProjectCopyCleanupSchemaColumnGrantsRemainClosed(t *testing.T) {
 	runtime := libraryRuntimeDB(t)
 	var name, role string
-	if err := runtime.Raw(`SELECT current_database(),current_user`).Row().Scan(&name, &role); err != nil || name != "lanverse_library" || role != "lanverse_app" {
+	if err := runtime.Raw(`SELECT current_database(),current_user`).Row().Scan(&name, &role); err != nil || name != "glowloom_library" || role != "glowloom_app" {
 		t.Fatal("cleanup ACL test requires isolated library database and runtime role", name, role, err)
 	}
 	for _, column := range []string{"project_id", "object_key"} {
@@ -29,12 +29,12 @@ func TestProjectCopyCleanupSchemaColumnGrantsRemainClosed(t *testing.T) {
 	for _, column := range []string{"is_delete", "delete_time", "purge_after", "revision", "sha256", "project_id", "object_key"} {
 		want := column == "revision" || column == "sha256" || column == "is_delete" || column == "delete_time" || column == "purge_after"
 		var actual bool
-		if err := runtime.Raw(`SELECT has_column_privilege('lanverse_app','media.media_asset',?,'UPDATE')`, column).Scan(&actual).Error; err != nil || actual != want {
+		if err := runtime.Raw(`SELECT has_column_privilege('glowloom_app','media.media_asset',?,'UPDATE')`, column).Scan(&actual).Error; err != nil || actual != want {
 			t.Fatal("schema granted unexpected column authority", column, actual, want, err)
 		}
 	}
 	var canDelete bool
-	if err := runtime.Raw(`SELECT has_table_privilege('lanverse_app','media.media_asset','DELETE')`).Scan(&canDelete).Error; err != nil || canDelete {
+	if err := runtime.Raw(`SELECT has_table_privilege('glowloom_app','media.media_asset','DELETE')`).Scan(&canDelete).Error; err != nil || canDelete {
 		t.Fatal("cleanup acquired physical asset DELETE", err)
 	}
 }

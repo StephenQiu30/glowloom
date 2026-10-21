@@ -76,7 +76,7 @@ func TestMediaStorageUsageActualObjectsIncludesTrashUnknownIntentAndPhysicalRemo
 		expected += info.Size
 	}
 	unknown := "personal/" + actor.OrgID.String() + "/" + actor.ID.String() + "/image/unknown-" + uuid.NewString() + ".png"
-	intent := "lanverse-library-usage/" + uuid.NewString() + "/unregistered/output.bin"
+	intent := "glowloom-library-usage/" + uuid.NewString() + "/unregistered/output.bin"
 	foreignKey := "personal/" + foreign.OrgID.String() + "/" + foreign.ID.String() + "/image/foreign-" + uuid.NewString() + ".png"
 	usagePut(t, objects, unknown, []byte("unregistered upload"))
 	usagePut(t, objects, intent, []byte("unregistered own intent"))

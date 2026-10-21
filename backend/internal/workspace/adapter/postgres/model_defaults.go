@@ -53,7 +53,7 @@ func (s *Store) SaveModelDefaults(ctx context.Context, actor identityapp.Princip
 		return application.ModelDefaults{}, ErrUnavailable
 	}
 	if input.ProjectID == uuid.Nil || input.IdempotencyKey == uuid.Nil || input.ExpectedRevision < 1 ||
-		event.ID == uuid.Nil || event.Topic != "lanverse.audit.recorded.v1" || event.PartitionKey != input.ProjectID.String() || len(event.Payload) == 0 {
+		event.ID == uuid.Nil || event.Topic != "glowloom.audit.recorded.v1" || event.PartitionKey != input.ProjectID.String() || len(event.Payload) == 0 {
 		return application.ModelDefaults{}, application.ErrInvalidModelDefaults
 	}
 	body, err := json.Marshal(struct {

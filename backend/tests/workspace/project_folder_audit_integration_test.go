@@ -49,7 +49,7 @@ func TestProjectFolderPGSafetyAuditActualInbox(t *testing.T) {
 		PartitionKey string
 		Payload      json.RawMessage
 	}
-	if err = db.Raw(`SELECT id,partition_key,payload FROM infra.outbox WHERE topic='lanverse.audit.recorded.v1' AND payload->'actor'->>'id'=? ORDER BY create_time,id`, actor.ID.String()).Scan(&rows).Error; err != nil {
+	if err = db.Raw(`SELECT id,partition_key,payload FROM infra.outbox WHERE topic='glowloom.audit.recorded.v1' AND payload->'actor'->>'id'=? ORDER BY create_time,id`, actor.ID.String()).Scan(&rows).Error; err != nil {
 		t.Fatal(err)
 	}
 	if len(rows) != 5 {
@@ -59,7 +59,7 @@ func TestProjectFolderPGSafetyAuditActualInbox(t *testing.T) {
 		if strings.Contains(string(row.Payload), "不进入审计") {
 			t.Fatal("private title persisted in audit")
 		}
-		record := inbox.Record{Topic: "lanverse.audit.recorded.v1", Key: []byte(row.PartitionKey), Value: row.Payload}
+		record := inbox.Record{Topic: "glowloom.audit.recorded.v1", Key: []byte(row.PartitionKey), Value: row.Payload}
 		if err = handler.Handle(ctx, record); err != nil {
 			t.Fatalf("consume closed audit %v", err)
 		}
@@ -68,7 +68,7 @@ func TestProjectFolderPGSafetyAuditActualInbox(t *testing.T) {
 		}
 	}
 	var counts struct{ Logs, Markers int64 }
-	if err = db.Raw(`SELECT(SELECT count(*) FROM audit.audit_log WHERE actor_id=?)AS logs,(SELECT count(*) FROM infra.processed_event WHERE consumer='audit' AND event_id IN(SELECT id FROM infra.outbox WHERE topic='lanverse.audit.recorded.v1' AND payload->'actor'->>'id'=?))AS markers`, actor.ID, actor.ID.String()).Scan(&counts).Error; err != nil || counts.Logs != 5 || counts.Markers != 5 {
+	if err = db.Raw(`SELECT(SELECT count(*) FROM audit.audit_log WHERE actor_id=?)AS logs,(SELECT count(*) FROM infra.processed_event WHERE consumer='audit' AND event_id IN(SELECT id FROM infra.outbox WHERE topic='glowloom.audit.recorded.v1' AND payload->'actor'->>'id'=?))AS markers`, actor.ID, actor.ID.String()).Scan(&counts).Error; err != nil || counts.Logs != 5 || counts.Markers != 5 {
 		t.Fatalf("actual inbox dedup %+v %v", counts, err)
 	}
 }

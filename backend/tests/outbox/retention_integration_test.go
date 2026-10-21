@@ -61,7 +61,7 @@ func TestPrunePublishedPreservesPendingAndRecentEvents(t *testing.T) {
 		if err := conn.DB.WithContext(ctx).Exec(`
 			INSERT INTO infra.outbox(id, topic, partition_key, payload, create_time, published_at)
 			VALUES (?::uuid, ?, ?, ?::jsonb, ?, ?)
-		`, row.id, "lanverse.operation.status_changed.v1", uuid.NewString(), `{}`, row.created, row.published).Error; err != nil {
+		`, row.id, "glowloom.operation.status_changed.v1", uuid.NewString(), `{}`, row.created, row.published).Error; err != nil {
 			t.Fatalf("insert event: %v", err)
 		}
 	}

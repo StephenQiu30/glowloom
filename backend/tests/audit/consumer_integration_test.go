@@ -108,7 +108,7 @@ func auditRecord(t *testing.T, eventID, orgID, projectID, actorID string, when t
 		key = orgID
 	}
 	body := map[string]any{
-		"event_id": eventID, "event_type": "lanverse.audit.recorded.v1",
+		"event_id": eventID, "event_type": "glowloom.audit.recorded.v1",
 		"occurred_at": when.Format(time.RFC3339Nano), "org_id": orgID,
 		"project_id": projectID, "actor": actor,
 		"aggregate": map[string]any{"type": "audit", "id": eventID},
@@ -123,5 +123,5 @@ func auditRecord(t *testing.T, eventID, orgID, projectID, actorID string, when t
 	if err != nil {
 		t.Fatalf("encode audit event: %v", err)
 	}
-	return inbox.Record{Topic: "lanverse.audit.recorded.v1", Key: []byte(key), Value: value}
+	return inbox.Record{Topic: "glowloom.audit.recorded.v1", Key: []byte(key), Value: value}
 }

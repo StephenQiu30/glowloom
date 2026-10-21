@@ -774,7 +774,7 @@ func (s *PackageStore) InspectPackageExport(ctx context.Context, actor identitya
 				return application.ErrPackageIncomplete
 			}
 		}
-		export := application.PackageExport{Manifest: application.LibraryPackageManifest{App: "lanverse-media-library", Version: 1, ExportedAt: s.clock().UTC(), LibraryKind: scope.Kind, Folders: []application.LibraryPackageFolder{}, Items: []application.LibraryPackageItem{}, Files: []application.LibraryPackageFile{}}, Objects: map[string]application.PackageObject{}}
+		export := application.PackageExport{Manifest: application.LibraryPackageManifest{App: "glowloom-media-library", Version: 1, ExportedAt: s.clock().UTC(), LibraryKind: scope.Kind, Folders: []application.LibraryPackageFolder{}, Items: []application.LibraryPackageItem{}, Files: []application.LibraryPackageFile{}}, Objects: map[string]application.PackageObject{}}
 		for _, f := range folders {
 			export.Manifest.Folders = append(export.Manifest.Folders, application.LibraryPackageFolder{ID: f.ID, ParentID: f.ParentID, Name: f.Name, Style: f.Style, Theme: f.Theme, Position: f.Position})
 		}

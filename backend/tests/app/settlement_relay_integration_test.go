@@ -31,7 +31,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/redisconn"
 )
 
-const settlementBudgetLowTopic = "lanverse.billing.budget_low.v1"
+const settlementBudgetLowTopic = "glowloom.billing.budget_low.v1"
 
 func TestSettlementReachesBudgetSSEThroughRelay(t *testing.T) {
 	dsn := os.Getenv("LV_TEST_RELAY_DB_DSN")

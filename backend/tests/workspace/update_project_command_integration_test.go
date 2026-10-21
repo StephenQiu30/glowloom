@@ -119,7 +119,7 @@ func TestUpdateProjectCommandCommitsMutableSettingsAndBothEvents(t *testing.T) {
 	`, project.ID.String(), input.RequestID).Scan(&events).Error; err != nil {
 		t.Fatalf("read update audit: %v", err)
 	}
-	if len(events) != 1 || events[0].Topic != "lanverse.audit.recorded.v1" ||
+	if len(events) != 1 || events[0].Topic != "glowloom.audit.recorded.v1" ||
 		events[0].PartitionKey != project.ID.String() ||
 		bytes.Contains(events[0].Payload, []byte("新名称")) ||
 		bytes.Contains(events[0].Payload, []byte(*input.Description)) {
@@ -135,7 +135,7 @@ func TestUpdateProjectCommandCommitsMutableSettingsAndBothEvents(t *testing.T) {
 	var changed []struct{ Payload []byte }
 	if err := database.WithContext(ctx).Raw(`
 		SELECT payload FROM infra.outbox
-		WHERE partition_key = ? AND topic = 'lanverse.workspace.project_changed.v1'
+		WHERE partition_key = ? AND topic = 'glowloom.workspace.project_changed.v1'
 		  AND payload #>> '{data,change}' = 'updated'
 	`, project.ID.String()).Scan(&changed).Error; err != nil || len(changed) != 1 {
 		t.Fatalf("updated change event = %+v: %v", changed, err)
@@ -279,7 +279,7 @@ func TestUpdateProjectCommandRollsBackWhenAuditInsertFails(t *testing.T) {
 	functionSQL := fmt.Sprintf(`
 		CREATE FUNCTION %s() RETURNS trigger LANGUAGE plpgsql AS $$
 		BEGIN
-		  IF NEW.topic = 'lanverse.audit.recorded.v1'
+		  IF NEW.topic = 'glowloom.audit.recorded.v1'
 		     AND NEW.payload #>> '{data,request_id}' = '%s'
 		  THEN RAISE EXCEPTION 'reject project update audit'; END IF;
 		  RETURN NEW;

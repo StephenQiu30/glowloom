@@ -36,7 +36,7 @@ func (s *queuedStore) WithNext(_ context.Context, deliver func(application.Event
 
 func TestRelayRunDrainsBacklogAndStopsOnCancellation(t *testing.T) {
 	newEvent := func(id string) application.Event {
-		return application.Event{ID: id, Topic: "lanverse.operation.status_changed.v1", PartitionKey: "project", Payload: []byte(`{"event_id":"` + id + `","event_type":"lanverse.operation.status_changed.v1"}`)}
+		return application.Event{ID: id, Topic: "glowloom.operation.status_changed.v1", PartitionKey: "project", Payload: []byte(`{"event_id":"` + id + `","event_type":"glowloom.operation.status_changed.v1"}`)}
 	}
 	store := &queuedStore{events: []application.Event{newEvent("one"), newEvent("two")}, idle: make(chan struct{}, 1)}
 	publisher := &recordingPublisher{}

@@ -349,7 +349,7 @@ func TestDepthJobPGLockFinishConvergesConcurrentCancel(t *testing.T) {
 				t.Fatal("stopped execution retained an owner or lost cessation", state, err)
 			}
 			var actor string
-			if err := f.db.Raw(`SELECT payload->'actor'->>'id' FROM infra.outbox WHERE topic='lanverse.audit.recorded.v1' AND payload->'data'->>'action'='media.depth_cancelled' AND payload->'data'->'object'->>'id'=?`, j.ID.String()).Scan(&actor).Error; err != nil || actor != replacement.ID.String() {
+			if err := f.db.Raw(`SELECT payload->'actor'->>'id' FROM infra.outbox WHERE topic='glowloom.audit.recorded.v1' AND payload->'data'->>'action'='media.depth_cancelled' AND payload->'data'->'object'->>'id'=?`, j.ID.String()).Scan(&actor).Error; err != nil || actor != replacement.ID.String() {
 				t.Fatal("completion borrowed the previous control actor", actor, err)
 			}
 		})
@@ -427,7 +427,7 @@ func TestDepthJobPGLockRevokedControlRetainsRecovery(t *testing.T) {
 				t.Fatal("undispatched permission rejection stranded recovery", failed, err)
 			}
 			var auditActor string
-			if err := f.db.Raw(`SELECT payload->'actor'->>'id' FROM infra.outbox WHERE topic='lanverse.audit.recorded.v1' AND payload->'data'->>'action'='media.depth_failed' AND payload->'data'->'object'->>'id'=?`, j.ID.String()).Scan(&auditActor).Error; err != nil || auditActor != controller.ID.String() {
+			if err := f.db.Raw(`SELECT payload->'actor'->>'id' FROM infra.outbox WHERE topic='glowloom.audit.recorded.v1' AND payload->'data'->>'action'='media.depth_failed' AND payload->'data'->'object'->>'id'=?`, j.ID.String()).Scan(&auditActor).Error; err != nil || auditActor != controller.ID.String() {
 				t.Fatal("rejected intent attributed to another actor", auditActor, err)
 			}
 		})

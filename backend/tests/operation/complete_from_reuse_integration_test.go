@@ -93,10 +93,10 @@ func TestCompleteFromReuseCopiesOutputsAndSettlesZeroOnce(t *testing.T) {
 	if err := database.Raw(`SELECT count(*) FROM operation.provider_call WHERE operation_id = ?::uuid`, quoted.ID.String()).Scan(&calls).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := database.Raw(`SELECT count(*) FROM infra.outbox WHERE topic = 'lanverse.billing.settled.v1' AND payload -> 'data' ->> 'operation_id' = ?`, quoted.ID.String()).Scan(&settledEvents).Error; err != nil {
+	if err := database.Raw(`SELECT count(*) FROM infra.outbox WHERE topic = 'glowloom.billing.settled.v1' AND payload -> 'data' ->> 'operation_id' = ?`, quoted.ID.String()).Scan(&settledEvents).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := database.Raw(`SELECT count(*) FROM infra.outbox WHERE topic = 'lanverse.operation.completed.v1' AND payload -> 'aggregate' ->> 'id' = ?`, quoted.ID.String()).Scan(&completedEvents).Error; err != nil {
+	if err := database.Raw(`SELECT count(*) FROM infra.outbox WHERE topic = 'glowloom.operation.completed.v1' AND payload -> 'aggregate' ->> 'id' = ?`, quoted.ID.String()).Scan(&completedEvents).Error; err != nil {
 		t.Fatal(err)
 	}
 	if calls != 0 || settledEvents != 1 || completedEvents != 1 {
@@ -168,7 +168,7 @@ func TestCompleteFromReuseRunsAsRuntimeRole(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		finalizer := app.NewOperationFinalizer(tx, operationStore(tx), pgbilling.NewStore(tx))

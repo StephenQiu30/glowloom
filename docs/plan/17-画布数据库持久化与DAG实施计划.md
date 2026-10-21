@@ -149,9 +149,9 @@
 | T-DATA-02相关基础 | [求值与输入快照](../../backend/internal/canvas/domain/document.go)一次处理完整批次；保存器直接写入结果，最终图检查不被中间引用状态误拒；图/日志/旧回执仍沿同一事务提交 | 旧命令每步骤的不可变输入版本合同保持，已有回归验证；新operation_version的每批最终输入版本、终态拒绝回执及OT转换尚未实现 |
 | T-DATA-04相关保护 | [配置解码](../../backend/internal/canvas/domain/config_json.go)保留顶层/嵌套未知原文，load返回read_only_reason；整个未知/损坏图禁止普通写入，HTTP返回canvas_graph_read_only；项目复制及素材历史引用检查不能把未知解释成无引用，导出/转写/深度处理的新输入冻结同样拒绝整图只读状态 | 已实现服务器保护及生成API类型；后端阶段尚无真实存量盘点/修复；后续前端只读呈现及浏览器持久缓存退出见第7.2节 |
 | T-DATA-01相关读取 | Get以REPEATABLE READ和现有文档锁读取一致图；并发提交引发40001时最多三次重试整个授权读取，复用原有关系表 | 没有新增表、迁移业务库或启动生产切换；正式日志/回执字段增量仍待后续合同 |
-| T-DATA-06部分证据 | [领域用例](../../backend/tests/canvas/dag_test.go)、[真实PG用例](../../backend/tests/canvas/dag_integration_test.go)覆盖完整批次、重开/重放、非法引用整批回滚、并发单胜者、旧关系与未知字段只读、删除槽位/资产保留及HTTP错误 | 隔离PG18及现有lanverse_app角色验证；全节点/浏览器、真实供应商、迁移回退、WebSocket/OT联合接受未执行 |
+| T-DATA-06部分证据 | [领域用例](../../backend/tests/canvas/dag_test.go)、[真实PG用例](../../backend/tests/canvas/dag_integration_test.go)覆盖完整批次、重开/重放、非法引用整批回滚、并发单胜者、旧关系与未知字段只读、删除槽位/资产保留及HTTP错误 | 隔离PG18及现有glowloom_app角色验证；全节点/浏览器、真实供应商、迁移回退、WebSocket/OT联合接受未执行 |
 
-本轮检查包含默认后端全量测试、隔离PG画布测试与race、go vet、canvas范围golangci-lint、生成API一致性及govulncheck。隔离PG全包运行明确排除了仅允许固定lanverse_reference库名的历史容量压力用例；未为运行该用例操作同名既有库。govulncheck未发现可达或导入包漏洞，另有一个未被当前代码调用的依赖模块公告。实际命令、完整输出与工作区差异由本次交付记录提供，不把这些工程检查等同于18项AC或完整计划接受。
+本轮检查包含默认后端全量测试、隔离PG画布测试与race、go vet、canvas范围golangci-lint、生成API一致性及govulncheck。隔离PG全包运行明确排除了仅允许固定glowloom_reference库名的历史容量压力用例；未为运行该用例操作同名既有库。govulncheck未发现可达或导入包漏洞，另有一个未被当前代码调用的依赖模块公告。实际命令、完整输出与工作区差异由本次交付记录提供，不把这些工程检查等同于18项AC或完整计划接受。
 
 
 ### 7.2 前端数据库接入与本地存储退出切片（2026-10-20）

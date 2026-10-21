@@ -72,9 +72,9 @@ func TestConfirmBatchQuoteCommitsSelectedReservationsAndOneBatchEvent(t *testing
 	}{
 		{`SELECT count(*) FROM billing.reservation WHERE operation_id = ?::uuid`, []any{items[0].Operation.ID.String()}, &reservations},
 		{`SELECT count(*) FROM billing.ledger_entry WHERE operation_id = ?::uuid AND entry_type = 'reserve'`, []any{items[0].Operation.ID.String()}, &ledger},
-		{`SELECT count(*) FROM infra.outbox WHERE topic = 'lanverse.batch.confirmed.v1' AND payload->'data'->>'batch_id' = ?`, []any{batchID.String()}, &batchEvents},
-		{`SELECT count(*) FROM infra.outbox WHERE topic = 'lanverse.operation.confirmed.v1' AND partition_key = ?`, []any{projectID.String()}, &singleEvents},
-		{`SELECT count(*) FROM infra.outbox WHERE topic = 'lanverse.audit.recorded.v1' AND payload->'data'->>'action' = 'batch.confirmed' AND partition_key = ?`, []any{projectID.String()}, &auditEvents},
+		{`SELECT count(*) FROM infra.outbox WHERE topic = 'glowloom.batch.confirmed.v1' AND payload->'data'->>'batch_id' = ?`, []any{batchID.String()}, &batchEvents},
+		{`SELECT count(*) FROM infra.outbox WHERE topic = 'glowloom.operation.confirmed.v1' AND partition_key = ?`, []any{projectID.String()}, &singleEvents},
+		{`SELECT count(*) FROM infra.outbox WHERE topic = 'glowloom.audit.recorded.v1' AND payload->'data'->>'action' = 'batch.confirmed' AND partition_key = ?`, []any{projectID.String()}, &auditEvents},
 	} {
 		if err := database.Raw(check.query, check.args...).Scan(check.count).Error; err != nil {
 			t.Fatal(err)
@@ -167,7 +167,7 @@ func TestConfirmBatchQuoteRunsAsRuntimeRole(t *testing.T) {
 	database := operationStoreDB(t)
 	actor, projectID, batchID, _ := seedConfirmableBatch(t, database, 20)
 	err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		_, err := operationStore(tx).ConfirmBatchQuote(t.Context(), actor,

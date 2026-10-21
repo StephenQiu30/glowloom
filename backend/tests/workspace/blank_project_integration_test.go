@@ -33,7 +33,7 @@ func TestM1BlankProjectOwnsInitialCanvasAndReceipt(t *testing.T) {
 		t.Fatal(err)
 	}
 	query := runtimeURL.Query()
-	query.Set("options", "-c role=lanverse_app")
+	query.Set("options", "-c role=glowloom_app")
 	runtimeURL.RawQuery = query.Encode()
 	conn, err := db.Open(ctx, runtimeURL.String(), noop.NewTracerProvider())
 	if err != nil {
@@ -42,7 +42,7 @@ func TestM1BlankProjectOwnsInitialCanvasAndReceipt(t *testing.T) {
 	t.Cleanup(func() { _ = conn.Close() })
 	database = conn.DB
 	var role string
-	if err := database.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "lanverse_app" {
+	if err := database.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "glowloom_app" {
 		t.Fatal("runtime role", err)
 	}
 	router := projectHTTPRouter(database, actor)
@@ -107,7 +107,7 @@ func TestM1BlankProjectOwnsInitialCanvasAndReceipt(t *testing.T) {
 		t.Fatal("duplicate or missing initial canvas", err)
 	}
 	var audit struct{ StyleKey string }
-	if err := database.Raw(`SELECT payload->'data'->'after'->>'style_key' AS style_key FROM infra.outbox WHERE partition_key=? AND topic='lanverse.audit.recorded.v1'`, receipt.ID.String()).Scan(&audit).Error; err != nil || audit.StyleKey != "film" {
+	if err := database.Raw(`SELECT payload->'data'->'after'->>'style_key' AS style_key FROM infra.outbox WHERE partition_key=? AND topic='glowloom.audit.recorded.v1'`, receipt.ID.String()).Scan(&audit).Error; err != nil || audit.StyleKey != "film" {
 		t.Fatal("creation audit omitted selected style", err)
 	}
 }

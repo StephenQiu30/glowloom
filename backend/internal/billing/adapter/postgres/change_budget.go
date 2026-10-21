@@ -201,12 +201,12 @@ func validBudgetChangedEvents(actor identityapp.Principal, before, after domain.
 	}
 	if len(events) != wantCount || events[0].ID == uuid.Nil || events[1].ID == uuid.Nil ||
 		events[0].ID == events[1].ID ||
-		events[0].Topic != "lanverse.billing.budget_changed.v1" ||
-		events[1].Topic != "lanverse.audit.recorded.v1" {
+		events[0].Topic != "glowloom.billing.budget_changed.v1" ||
+		events[1].Topic != "glowloom.audit.recorded.v1" {
 		return false
 	}
 	if wantLow && (events[2].ID == uuid.Nil || events[2].ID == events[0].ID ||
-		events[2].ID == events[1].ID || events[2].Topic != "lanverse.billing.budget_low.v1") {
+		events[2].ID == events[1].ID || events[2].Topic != "glowloom.billing.budget_low.v1") {
 		return false
 	}
 	for _, event := range events {

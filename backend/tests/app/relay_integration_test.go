@@ -121,7 +121,7 @@ func TestRelayRoleConsumesAuditOnLocalServices(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = dbConn.Close() })
 	eventID, orgID, actorID := uuid.NewString(), uuid.NewString(), uuid.NewString()
-	const topic = "lanverse.audit.recorded.v1"
+	const topic = "glowloom.audit.recorded.v1"
 	payload, err := json.Marshal(map[string]any{
 		"event_id": eventID, "event_type": topic, "occurred_at": time.Now().UTC(), "org_id": orgID,
 		"actor":     map[string]any{"kind": "user", "id": actorID},

@@ -456,7 +456,7 @@ func TestSessionV2HTTPCookieAmbiguity(t *testing.T) {
 					}
 				}
 			}
-			for _, name := range []string{foreign + "access", foreign + "refresh", foreign + "csrf", "lanverse_session"} {
+			for _, name := range []string{foreign + "access", foreign + "refresh", foreign + "csrf", "glowloom_session"} {
 				mixed := append(append([]*http.Cookie{}, cookies...), &http.Cookie{Name: name, Value: "stale"})
 				for _, tc := range []struct{ method, path string }{{"GET", "/api/session"}, {"POST", "/api/session/refresh"}, {"DELETE", "/api/sessions/" + sid.String()}} {
 					rec := sessionHTTPRequest(t, r, tc.method, tc.path, mixed, csrf)
@@ -488,7 +488,7 @@ func TestSessionV2HTTPLegacyCookieAmbiguity(t *testing.T) {
 	}
 	initial := m.sessions[sid].LastActiveAt
 	*now = now.Add(time.Minute)
-	for _, name := range []string{"lanverse_session", "__Host-glowloom_access", "__Host-glowloom_refresh", "__Host-glowloom_csrf", "glowloom_access", "glowloom_refresh", "glowloom_csrf"} {
+	for _, name := range []string{"glowloom_session", "__Host-glowloom_access", "__Host-glowloom_refresh", "__Host-glowloom_csrf", "glowloom_access", "glowloom_refresh", "glowloom_csrf"} {
 		cookies := append(append([]*http.Cookie{}, legacy...), &http.Cookie{Name: name, Value: "bad-second"})
 		for _, tc := range []struct{ method, path string }{{"GET", "/api/session"}, {"POST", "/api/me/reauthentication"}, {"DELETE", "/api/sessions/" + sid.String()}} {
 			rec := sessionHTTPRequest(t, r, tc.method, tc.path, cookies, session.CSRFToken)
@@ -506,7 +506,7 @@ func TestSessionV2HTTPLoginClearsStaleNamespaces(t *testing.T) {
 			if !secure {
 				foreign = "__Host-glowloom_"
 			}
-			stale := []*http.Cookie{{Name: foreign + "access", Value: "stale"}, {Name: foreign + "refresh", Value: "stale"}, {Name: foreign + "csrf", Value: "stale"}, {Name: "lanverse_session", Value: "stale"}}
+			stale := []*http.Cookie{{Name: foreign + "access", Value: "stale"}, {Name: foreign + "refresh", Value: "stale"}, {Name: foreign + "csrf", Value: "stale"}, {Name: "glowloom_session", Value: "stale"}}
 			rec := sessionHTTPRequest(t, r, "POST", "/api/sessions", stale, "")
 			if rec.Code != 201 {
 				t.Fatalf("stale cookies blocked original password %d", rec.Code)
@@ -605,7 +605,7 @@ func TestSessionV2HTTPPasswordReplacesLegacyCookies(t *testing.T) {
 			jar[c.Name] = c
 		}
 	}
-	if _, ok := jar["lanverse_session"]; ok {
+	if _, ok := jar["glowloom_session"]; ok {
 		t.Fatal("v2 password issuance retained conflicting legacy cookie")
 	}
 	cookies = nil
@@ -625,7 +625,7 @@ func TestSessionV2UpgradeHTTP(t *testing.T) {
 	identityhttp.NewEmailAuthHandler(a, "https://fixture.invalid", false).WithSessionPolicy(identityhttp.SessionHTTPPolicy{V2Enabled: true, LegacyUpgradeUntil: now.Add(24 * time.Hour)}).Register(r.Group("/api"))
 	cookies := []*http.Cookie{{Name: "glowloom_session", Value: old.Token}}
 	// Use the actual legacy cookie name used by the existing transport.
-	cookies[0].Name = "lanverse_session"
+	cookies[0].Name = "glowloom_session"
 	current := sessionHTTPRequest(t, r, "GET", "/api/session", cookies, "")
 	var metadata map[string]any
 	if err := json.Unmarshal(current.Body.Bytes(), &metadata); err != nil {
@@ -669,7 +669,7 @@ func TestSessionV2UpgradeTrustedSourceHTTP(t *testing.T) {
 		req.Header.Set("Idempotency-Key", uuid.NewString())
 		req.Header.Set("X-Forwarded-For", "203.0.113.99")
 		req.Header.Set("X-Real-IP", "203.0.113.98")
-		req.AddCookie(&http.Cookie{Name: "lanverse_session", Value: old.Token})
+		req.AddCookie(&http.Cookie{Name: "glowloom_session", Value: old.Token})
 		rec := httptest.NewRecorder()
 		r.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {

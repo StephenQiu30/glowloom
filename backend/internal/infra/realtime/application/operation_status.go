@@ -15,7 +15,7 @@ import (
 )
 
 // OperationStatusTopic is the event topic accepted by the realtime projection.
-const OperationStatusTopic = "lanverse.operation.status_changed.v1"
+const OperationStatusTopic = "glowloom.operation.status_changed.v1"
 
 // ErrInvalidEvent means the record cannot be safely projected.
 var ErrInvalidEvent = errors.New("invalid realtime event")

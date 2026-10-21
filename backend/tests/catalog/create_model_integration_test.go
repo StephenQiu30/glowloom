@@ -118,7 +118,7 @@ func TestCreateModelCommitsAuditAndRechecksAdminOnLocalPostgres(t *testing.T) {
 	if err := conn.DB.WithContext(ctx).Exec(`
 		CREATE FUNCTION reject_model_audit() RETURNS trigger LANGUAGE plpgsql AS $$
 		BEGIN
-		  IF NEW.topic = 'lanverse.audit.recorded.v1' THEN RAISE EXCEPTION 'reject model audit'; END IF;
+		  IF NEW.topic = 'glowloom.audit.recorded.v1' THEN RAISE EXCEPTION 'reject model audit'; END IF;
 		  RETURN NEW;
 		END $$
 	`).Error; err != nil {

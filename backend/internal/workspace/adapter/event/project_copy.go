@@ -16,7 +16,7 @@ import (
 )
 
 // ProjectCopyTopic carries committed copy commands without private manifests.
-const ProjectCopyTopic = "lanverse.workspace.project_copy_requested.v1"
+const ProjectCopyTopic = "glowloom.workspace.project_copy_requested.v1"
 
 // ProjectCopyProcessedStore gives the existing inbox durable external delivery ownership.
 type ProjectCopyProcessedStore interface {

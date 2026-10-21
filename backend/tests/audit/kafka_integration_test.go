@@ -32,7 +32,7 @@ func TestAuditKafkaRetriesThenCommitsAfterDatabaseWrite(t *testing.T) {
 	if dsn == "" || brokers == "" {
 		t.Skip("set LV_TEST_AUDIT_DB_DSN and LV_TEST_AUDIT_KAFKA_BROKERS with a disposable audit topic")
 	}
-	const topic = "lanverse.audit.recorded.v1"
+	const topic = "glowloom.audit.recorded.v1"
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
 	conn, err := db.Open(ctx, dsn, noop.NewTracerProvider())
@@ -53,7 +53,7 @@ func TestAuditKafkaRetriesThenCommitsAfterDatabaseWrite(t *testing.T) {
 	if err := producer.ProduceSync(ctx, &kgo.Record{Topic: topic, Key: record.Key, Value: record.Value}).FirstErr(); err != nil {
 		t.Fatalf("produce audit event: %v", err)
 	}
-	group := "lanverse-test-audit-" + uuid.NewString()
+	group := "glowloom-test-audit-" + uuid.NewString()
 	wantErr := errors.New("audit database temporarily unavailable")
 	failed, err := kafkainbox.NewConsumer(brokers, group, []string{topic}, auditHandlerFunc(func(context.Context, inbox.Record) error {
 		return wantErr

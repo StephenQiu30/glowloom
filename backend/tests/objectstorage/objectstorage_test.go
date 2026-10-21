@@ -22,13 +22,13 @@ func TestOpenRejectsMissingAndInvalidConfiguration(t *testing.T) {
 		secret   string
 		want     error
 	}{
-		{name: "missing endpoint", bucket: "lanverse-local", access: "access", secret: "secret", want: objectstorage.ErrEndpointRequired},
+		{name: "missing endpoint", bucket: "glowloom-local", access: "access", secret: "secret", want: objectstorage.ErrEndpointRequired},
 		{name: "missing bucket", endpoint: "http://127.0.0.1:9000", access: "access", secret: "secret", want: objectstorage.ErrBucketRequired},
-		{name: "missing access key", endpoint: "http://127.0.0.1:9000", bucket: "lanverse-local", secret: "secret", want: objectstorage.ErrCredentialsRequired},
-		{name: "missing secret key", endpoint: "http://127.0.0.1:9000", bucket: "lanverse-local", access: "access", want: objectstorage.ErrCredentialsRequired},
-		{name: "unsupported scheme", endpoint: "ftp://127.0.0.1:9000", bucket: "lanverse-local", access: "access", secret: "secret", want: objectstorage.ErrInvalidEndpoint},
-		{name: "credentials in URL", endpoint: "http://user:password@127.0.0.1:9000", bucket: "lanverse-local", access: "access", secret: "secret", want: objectstorage.ErrInvalidEndpoint},
-		{name: "endpoint path", endpoint: "http://127.0.0.1:9000/storage", bucket: "lanverse-local", access: "access", secret: "secret", want: objectstorage.ErrInvalidEndpoint},
+		{name: "missing access key", endpoint: "http://127.0.0.1:9000", bucket: "glowloom-local", secret: "secret", want: objectstorage.ErrCredentialsRequired},
+		{name: "missing secret key", endpoint: "http://127.0.0.1:9000", bucket: "glowloom-local", access: "access", want: objectstorage.ErrCredentialsRequired},
+		{name: "unsupported scheme", endpoint: "ftp://127.0.0.1:9000", bucket: "glowloom-local", access: "access", secret: "secret", want: objectstorage.ErrInvalidEndpoint},
+		{name: "credentials in URL", endpoint: "http://user:password@127.0.0.1:9000", bucket: "glowloom-local", access: "access", secret: "secret", want: objectstorage.ErrInvalidEndpoint},
+		{name: "endpoint path", endpoint: "http://127.0.0.1:9000/storage", bucket: "glowloom-local", access: "access", secret: "secret", want: objectstorage.ErrInvalidEndpoint},
 		{name: "invalid bucket", endpoint: "http://127.0.0.1:9000", bucket: "BAD_NAME", access: "access", secret: "secret", want: objectstorage.ErrInvalidBucket},
 	}
 	for _, tt := range tests {
@@ -48,7 +48,7 @@ func TestPingChecksConfiguredBucketWithoutWriting(t *testing.T) {
 		mu.Lock()
 		methods = append(methods, r.Method)
 		mu.Unlock()
-		if r.Method != http.MethodHead || r.URL.Path != "/lanverse-local/" {
+		if r.Method != http.MethodHead || r.URL.Path != "/glowloom-local/" {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -56,7 +56,7 @@ func TestPingChecksConfiguredBucketWithoutWriting(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	conn, err := objectstorage.Open(server.URL, "lanverse-local", "access", "secret", "us-east-1")
+	conn, err := objectstorage.Open(server.URL, "glowloom-local", "access", "secret", "us-east-1")
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
@@ -78,7 +78,7 @@ func TestPingFailsWhenBucketIsAbsent(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	conn, err := objectstorage.Open(server.URL, "lanverse-local", "access", "secret", "us-east-1")
+	conn, err := objectstorage.Open(server.URL, "glowloom-local", "access", "secret", "us-east-1")
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
@@ -90,7 +90,7 @@ func TestPingFailsWhenBucketIsAbsent(t *testing.T) {
 }
 
 func TestObjectWritesRejectUnsafeKeysAndInvalidMetadata(t *testing.T) {
-	conn, err := objectstorage.Open("https://storage.example.test", "lanverse-local", "access", "secret", "")
+	conn, err := objectstorage.Open("https://storage.example.test", "glowloom-local", "access", "secret", "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -51,7 +51,7 @@ func glbTestObjects(t *testing.T) *objectstorage.Client {
 		t.Fatal("invalid synthetic object storage configuration")
 	}
 	endpoint, err := url.Parse(cfg.Endpoint)
-	if err != nil || endpoint.Scheme != "http" || endpoint.Hostname() != "127.0.0.1" || cfg.Bucket != "lanverse-receipt-test" {
+	if err != nil || endpoint.Scheme != "http" || endpoint.Hostname() != "127.0.0.1" || cfg.Bucket != "glowloom-receipt-test" {
 		t.Fatal("storage must be an isolated loopback test bucket")
 	}
 	objects, err := objectstorage.Open(cfg.Endpoint, cfg.Bucket, cfg.AccessKey, cfg.SecretKey, "")

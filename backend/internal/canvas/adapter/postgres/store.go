@@ -452,11 +452,11 @@ func receipt(tx *gorm.DB, actor uuid.UUID, key, hash string, status int, respons
 }
 func changed(tx *gorm.DB, a identityapp.Principal, id, p uuid.UUID, revision int64) error {
 	eventID := uuid.New()
-	payload, err := json.Marshal(map[string]any{"event_id": eventID, "event_type": "lanverse.canvas.document_changed.v1", "occurred_at": time.Now().UTC(), "org_id": a.OrgID, "project_id": p, "actor": map[string]any{"kind": "user", "id": a.ID}, "aggregate": map[string]any{"type": "canvas_document", "id": id, "revision": revision}, "data": map[string]any{"document_id": id, "revision": revision}})
+	payload, err := json.Marshal(map[string]any{"event_id": eventID, "event_type": "glowloom.canvas.document_changed.v1", "occurred_at": time.Now().UTC(), "org_id": a.OrgID, "project_id": p, "actor": map[string]any{"kind": "user", "id": a.ID}, "aggregate": map[string]any{"type": "canvas_document", "id": id, "revision": revision}, "data": map[string]any{"document_id": id, "revision": revision}})
 	if err != nil {
 		return err
 	}
-	return tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?, 'lanverse.canvas.document_changed.v1',?,?::jsonb)`, eventID, p.String(), string(payload)).Error
+	return tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?, 'glowloom.canvas.document_changed.v1',?,?::jsonb)`, eventID, p.String(), string(payload)).Error
 }
 
 func nullableText(s string) any {

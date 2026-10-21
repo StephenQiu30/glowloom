@@ -11,18 +11,18 @@ import (
 
 func TestLoadFromDotEnvFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "local.env.example")
-	if err := os.WriteFile(path, []byte("LV_ENV=staging\nLV_HTTP_ADDR=:9011\nLV_WORKER_HEALTH_ADDR=:9012\nLV_RELAY_HEALTH_ADDR=:9013\nLV_LOG_LEVEL=warn\nLV_DB_DSN=postgres://local/db\nLV_PARTITION_MAINTENANCE_DB_DSN=postgres://owner/db\nLV_REDIS_URL=redis://127.0.0.1:6379/2\nLV_KAFKA_BROKERS=127.0.0.1:9092,127.0.0.1:9093\nLV_TEMPORAL_ADDR=127.0.0.1:7233\nLV_TEMPORAL_NAMESPACE=lanverse-staging\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("LV_ENV=staging\nLV_HTTP_ADDR=:9011\nLV_WORKER_HEALTH_ADDR=:9012\nLV_RELAY_HEALTH_ADDR=:9013\nLV_LOG_LEVEL=warn\nLV_DB_DSN=postgres://local/db\nLV_PARTITION_MAINTENANCE_DB_DSN=postgres://owner/db\nLV_REDIS_URL=redis://127.0.0.1:6379/2\nLV_KAFKA_BROKERS=127.0.0.1:9092,127.0.0.1:9093\nLV_TEMPORAL_ADDR=127.0.0.1:7233\nLV_TEMPORAL_NAMESPACE=glowloom-staging\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("LV_ENV_FILE", path)
 	t.Setenv("LV_ENV", "prod")
-	t.Setenv("LV_PUBLIC_ORIGIN", "https://lanverse.example")
+	t.Setenv("LV_PUBLIC_ORIGIN", "https://glowloom.example")
 
 	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if cfg.Env != "prod" || cfg.HTTPAddr != ":9011" || cfg.WorkerHealthAddr != ":9012" || cfg.RelayHealthAddr != ":9013" || cfg.LogLevel != "warn" || cfg.DBDSN != "postgres://local/db" || cfg.PartitionMaintenanceDBDSN != "postgres://owner/db" || cfg.RedisURL != "redis://127.0.0.1:6379/2" || cfg.KafkaBrokers != "127.0.0.1:9092,127.0.0.1:9093" || cfg.TemporalAddr != "127.0.0.1:7233" || cfg.TemporalNamespace != "lanverse-staging" {
+	if cfg.Env != "prod" || cfg.HTTPAddr != ":9011" || cfg.WorkerHealthAddr != ":9012" || cfg.RelayHealthAddr != ":9013" || cfg.LogLevel != "warn" || cfg.DBDSN != "postgres://local/db" || cfg.PartitionMaintenanceDBDSN != "postgres://owner/db" || cfg.RedisURL != "redis://127.0.0.1:6379/2" || cfg.KafkaBrokers != "127.0.0.1:9092,127.0.0.1:9093" || cfg.TemporalAddr != "127.0.0.1:7233" || cfg.TemporalNamespace != "glowloom-staging" {
 		t.Error("Load() did not apply the expected environment override and file values")
 	}
 }
@@ -81,22 +81,22 @@ func TestCredentialSealingConfigurationRequiresPublicKeyAndIdentity(t *testing.T
 
 func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("LV_ENV", "staging")
-	t.Setenv("LV_PUBLIC_ORIGIN", "https://lanverse.example")
+	t.Setenv("LV_PUBLIC_ORIGIN", "https://glowloom.example")
 	t.Setenv("LV_HTTP_ADDR", ":9090")
 	t.Setenv("LV_WORKER_HEALTH_ADDR", ":9091")
 	t.Setenv("LV_RELAY_HEALTH_ADDR", ":9092")
 	t.Setenv("LV_LOG_LEVEL", "debug")
-	t.Setenv("LV_DB_DSN", "postgres://localhost/lanverse")
+	t.Setenv("LV_DB_DSN", "postgres://localhost/glowloom")
 	t.Setenv("LV_REDIS_URL", "redis://localhost:6379/1")
 	t.Setenv("LV_KAFKA_BROKERS", "localhost:9092")
 	t.Setenv("LV_TEMPORAL_ADDR", "localhost:7233")
-	t.Setenv("LV_TEMPORAL_NAMESPACE", "lanverse-staging")
+	t.Setenv("LV_TEMPORAL_NAMESPACE", "glowloom-staging")
 
 	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	want := config.Config{Env: "staging", PublicOrigin: "https://lanverse.example", HTTPAddr: ":9090", WorkerHealthAddr: ":9091", RelayHealthAddr: ":9092", LogLevel: "debug", DBDSN: "postgres://localhost/lanverse", RedisURL: "redis://localhost:6379/1", KafkaBrokers: "localhost:9092", TemporalAddr: "localhost:7233", TemporalNamespace: "lanverse-staging"}
+	want := config.Config{Env: "staging", PublicOrigin: "https://glowloom.example", HTTPAddr: ":9090", WorkerHealthAddr: ":9091", RelayHealthAddr: ":9092", LogLevel: "debug", DBDSN: "postgres://localhost/glowloom", RedisURL: "redis://localhost:6379/1", KafkaBrokers: "localhost:9092", TemporalAddr: "localhost:7233", TemporalNamespace: "glowloom-staging"}
 	if cfg != want {
 		t.Errorf("Load() = %+v, want %+v", cfg, want)
 	}
@@ -104,7 +104,7 @@ func TestLoadFromEnv(t *testing.T) {
 
 func TestLoadObjectStorageFromEnv(t *testing.T) {
 	t.Setenv("LV_OBJECT_STORAGE_ENDPOINT", "http://127.0.0.1:9000")
-	t.Setenv("LV_OBJECT_STORAGE_BUCKET", "lanverse-local")
+	t.Setenv("LV_OBJECT_STORAGE_BUCKET", "glowloom-local")
 	t.Setenv("LV_OBJECT_STORAGE_ACCESS_KEY", "test-access")
 	t.Setenv("LV_OBJECT_STORAGE_SECRET_KEY", "test-secret")
 	t.Setenv("LV_OBJECT_STORAGE_REGION", "us-east-1")
@@ -113,7 +113,7 @@ func TestLoadObjectStorageFromEnv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if cfg.ObjectStorageEndpoint != "http://127.0.0.1:9000" || cfg.ObjectStorageBucket != "lanverse-local" || cfg.ObjectStorageAccessKey != "test-access" || cfg.ObjectStorageSecretKey != "test-secret" || cfg.ObjectStorageRegion != "us-east-1" {
+	if cfg.ObjectStorageEndpoint != "http://127.0.0.1:9000" || cfg.ObjectStorageBucket != "glowloom-local" || cfg.ObjectStorageAccessKey != "test-access" || cfg.ObjectStorageSecretKey != "test-secret" || cfg.ObjectStorageRegion != "us-east-1" {
 		t.Fatal("Load() did not preserve object storage configuration")
 	}
 }
@@ -129,7 +129,7 @@ func TestLoadMediaResultDownloadPolicy(t *testing.T) {
 		t.Fatal("Load() did not preserve media result policy")
 	}
 	t.Setenv("LV_ENV", "prod")
-	t.Setenv("LV_PUBLIC_ORIGIN", "https://lanverse.example")
+	t.Setenv("LV_PUBLIC_ORIGIN", "https://glowloom.example")
 	if _, err := config.Load(); !errors.Is(err, config.ErrInvalid) {
 		t.Fatalf("production loopback policy error = %v, want ErrInvalid", err)
 	}

@@ -25,7 +25,7 @@ type Problem struct {
 
 // WriteProblem aborts a request with the stable error and request identifier.
 func WriteProblem(c *gin.Context, status int, code string, meta map[string]any) {
-	problem := Problem{Type: "https://lanverse.local/errors/" + code, Title: http.StatusText(status), Status: status, Code: code, Detail: http.StatusText(status), RequestID: c.GetString("request_id"), Meta: meta}
+	problem := Problem{Type: "https://glowloom.local/errors/" + code, Title: http.StatusText(status), Status: status, Code: code, Detail: http.StatusText(status), RequestID: c.GetString("request_id"), Meta: meta}
 	c.Header("Content-Type", "application/problem+json")
 	c.AbortWithStatusJSON(status, problem)
 }

@@ -38,7 +38,7 @@ func folderTestDB(t *testing.T) (context.Context, *gorm.DB, *gorm.DB) {
 	}
 	r, o := open(runtime), open(owner)
 	var current string
-	if err := r.Raw(`SELECT current_user`).Scan(&current).Error; err != nil || current != "lanverse_app" {
+	if err := r.Raw(`SELECT current_user`).Scan(&current).Error; err != nil || current != "glowloom_app" {
 		t.Fatalf("test must use runtime role: %s %v", current, err)
 	}
 	return ctx, r, o
@@ -201,7 +201,7 @@ func TestProjectFolderPGWholeRecycleAtomicGuardsAndRestore(t *testing.T) {
 				t.Fatalf("real owning guard ignored: %v", err)
 			}
 			var counts struct{ Deleted, Receipts, Placements, Changes int64 }
-			if err := db.Raw(`SELECT(SELECT count(*) FROM workspace.project WHERE id IN (?,?) AND is_delete)AS deleted,(SELECT count(*) FROM workspace.project_folder_command WHERE actor_id=? AND idem_key=?)AS receipts,(SELECT count(*) FROM workspace.project_folder_placement WHERE actor_id=? AND folder_id=?)AS placements,(SELECT count(*) FROM infra.outbox WHERE topic='lanverse.workspace.project_changed.v1' AND partition_key IN (?,?))AS changes`, ids[0], ids[1], actor.ID, recycle.IdempotencyKey, actor.ID, f.ID, ids[0].String(), ids[1].String()).Scan(&counts).Error; err != nil {
+			if err := db.Raw(`SELECT(SELECT count(*) FROM workspace.project WHERE id IN (?,?) AND is_delete)AS deleted,(SELECT count(*) FROM workspace.project_folder_command WHERE actor_id=? AND idem_key=?)AS receipts,(SELECT count(*) FROM workspace.project_folder_placement WHERE actor_id=? AND folder_id=?)AS placements,(SELECT count(*) FROM infra.outbox WHERE topic='glowloom.workspace.project_changed.v1' AND partition_key IN (?,?))AS changes`, ids[0], ids[1], actor.ID, recycle.IdempotencyKey, actor.ID, f.ID, ids[0].String(), ids[1].String()).Scan(&counts).Error; err != nil {
 				t.Fatal(err)
 			}
 			if counts.Deleted != 0 || counts.Receipts != 0 || counts.Placements != 2 || counts.Changes != 0 {

@@ -11,6 +11,7 @@ import { ProjectsPage } from "@/app/projects/_components/projects-page";
 import { ProjectCreationProvider } from "@/components/projects/project-creation";
 import { projectIntentStore } from "@/components/projects/project-intent-store";
 import { projectPresentationStore } from "@/components/projects/project-presentation-store";
+import { RequestError } from "@/lib/request";
 import { setCreationScope } from "@/lib/request";
 const api = vi.hoisted(() => ({
   create: vi.fn(),
@@ -19,6 +20,8 @@ const api = vi.hoisted(() => ({
   canvas: vi.fn(),
   recover: vi.fn(),
   update: vi.fn(),
+  archive: vi.fn(),
+  restore: vi.fn(),
   push: vi.fn(),
 }));
 const account = vi.hoisted(() => ({
@@ -50,8 +53,29 @@ const scope = vi.hoisted(() => ({
   team_id: "",
   writable: true,
 }));
+const navigation = vi.hoisted(() => ({
+  search: "",
+  subscribers: new Set<() => void>(),
+}));
 const router = vi.hoisted(() => ({ push: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => router }));
+vi.mock("next/navigation", async () => {
+  const { useSyncExternalStore } = await import("react");
+  return {
+    useRouter: () => router,
+    useSearchParams: () =>
+      new URLSearchParams(
+        useSyncExternalStore(
+          (listener) => {
+            navigation.subscribers.add(listener);
+            return () => {
+              navigation.subscribers.delete(listener);
+            };
+          },
+          () => navigation.search,
+        ),
+      ),
+  };
+});
 vi.mock("@/components/auth/session", () => ({
   useOptionalSession: () => account,
   useSessionUpdate: () => vi.fn(),
@@ -114,6 +138,10 @@ vi.mock("@/api/projects", () => ({
   getProject: api.project,
   getProjectCreation: api.recover,
   updateProject: api.update,
+  archiveProject: api.archive,
+  unarchiveProject: vi.fn(),
+  deleteProject: vi.fn(),
+  restoreProject: api.restore,
 }));
 vi.mock("@/api/canvases", () => ({ getCanvas: api.canvas }));
 const project = {
@@ -159,6 +187,11 @@ beforeEach(async () => {
   );
   Element.prototype.scrollIntoView = vi.fn();
   vi.clearAllMocks();
+  navigation.search = "";
+  router.push.mockImplementation((url: string) => {
+    navigation.search = new URL(url, "http://localhost").search;
+    navigation.subscribers.forEach((listener) => listener());
+  });
   api.create.mockReset();
   api.list.mockReset().mockResolvedValue({ items: [], next_cursor: null });
   api.recover.mockReset().mockResolvedValue({
@@ -250,6 +283,7 @@ it("列表加载失败不显示示例项目，名称搜索与真实最近修改�
     q: "真实",
     limit: 12,
     order: "recent_content",
+    status: "active",
   });
   expect(
     screen.getByRole("link", { name: /打开画布/ }).getAttribute("href"),
@@ -316,3 +350,106 @@ it.each([
     }
   },
 );
+
+it("批量选择不进入画布，确认后调用已有归档接口", async () => {
+  api.list.mockResolvedValue({ items: [project], next_cursor: null });
+  api.archive.mockResolvedValue({
+    ...project,
+    revision: 2,
+    status: "archived",
+  });
+  page();
+  await screen.findByText("真实项目");
+  fireEvent.click(screen.getByRole("button", { name: "批量管理" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "选择本页" }));
+  expect(screen.getByText("已选择 1 项")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "归档所选" }));
+  await screen.findByRole("dialog");
+  fireEvent.click(screen.getByRole("button", { name: "归档" }));
+  await screen.findByText("已归档 1 个画布。");
+  expect(api.archive).toHaveBeenCalledTimes(1);
+});
+it("已归档与回收站按真实状态查询", async () => {
+  page();
+  fireEvent.click(screen.getByRole("button", { name: "已归档" }));
+  await waitFor(() =>
+    expect(api.list.mock.calls.at(-1)?.[0]).toMatchObject({
+      status: "archived",
+    }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "回收站" }));
+  await waitFor(() =>
+    expect(api.list.mock.calls.at(-1)?.[0]).toMatchObject({ deleted: true }),
+  );
+});
+
+it("从默认画布切到回收站再恢复，结果入口返回active筛选", async () => {
+  const recycled = {
+    ...project,
+    revision: 2,
+    is_delete: true,
+    delete_time: "2026-10-21T00:00:00Z",
+    purge_after: "2026-11-20T00:00:00Z",
+  };
+  api.list.mockImplementation(async (params) => ({
+    items: params.deleted ? [recycled] : [project],
+    next_cursor: null,
+    server_time: "2026-10-21T00:00:00Z",
+  }));
+  api.restore.mockResolvedValue({ ...project, revision: 3 });
+  const view = page();
+  await screen.findByText("真实项目");
+  fireEvent.click(screen.getByRole("button", { name: "回收站" }));
+  await waitFor(() =>
+    expect(api.list.mock.calls.at(-1)?.[0]).toMatchObject({ deleted: true }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "批量管理" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "选择本页" }));
+  fireEvent.click(screen.getByRole("button", { name: "恢复所选" }));
+  fireEvent.click(await screen.findByRole("button", { name: /^恢复$/ }));
+  await screen.findByText("已恢复 1 个画布。");
+  const destination = screen.getByRole("link", { name: "查看画布" });
+  expect(destination.getAttribute("href")).toBe("/projects?state=active");
+  fireEvent.click(destination);
+  act(() => router.push("/projects?state=active"));
+  view.rerender(
+    <ProjectCreationProvider>
+      <ProjectsPage />
+    </ProjectCreationProvider>,
+  );
+  await waitFor(() =>
+    expect(api.list.mock.calls.at(-1)?.[0]).toMatchObject({ status: "active" }),
+  );
+  expect(
+    screen.getByRole("button", { name: /^画布$/ }).getAttribute("aria-pressed"),
+  ).toBe("true");
+});
+
+it("未知项原操作重试成功后仍保留首轮被拒绝项与原因", async () => {
+  const second = {
+    ...project,
+    id: "00000000-0000-4000-8000-000000000003",
+    name: "第二项",
+  };
+  api.list.mockResolvedValue({ items: [project, second], next_cursor: null });
+  api.project.mockImplementation(async ({ pid }) =>
+    pid === second.id ? second : project,
+  );
+  api.archive
+    .mockRejectedValueOnce(new RequestError("inflight_work", 409))
+    .mockRejectedValueOnce(new Error("not delivered"))
+    .mockResolvedValueOnce({ ...second, revision: 2, status: "archived" });
+  page();
+  await screen.findByText("第二项");
+  fireEvent.click(screen.getByRole("button", { name: "批量管理" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "选择本页" }));
+  fireEvent.click(screen.getByRole("button", { name: "归档所选" }));
+  fireEvent.click(await screen.findByRole("button", { name: /^归档$/ }));
+  await screen.findByText(/已完成 0 项，1 项被拒绝，1 项结果未确认/);
+  fireEvent.click(screen.getByRole("button", { name: "重试原操作" }));
+  await screen.findByText(/已完成 1 项，1 项被拒绝，0 项结果未确认/);
+  expect(screen.getByText(/真实项目：画布仍有进行中的任务/)).toBeTruthy();
+  expect(api.archive.mock.calls[2]).toEqual(api.archive.mock.calls[1]);
+  fireEvent.click(screen.getByRole("button", { name: "完成" }));
+  expect(await screen.findByText("已选择 1 项")).toBeTruthy();
+});

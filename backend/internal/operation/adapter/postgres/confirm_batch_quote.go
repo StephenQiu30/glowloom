@@ -235,7 +235,7 @@ func (s *Store) confirmBatchQuote(ctx context.Context, actor identityapp.Princip
 			return err
 		}
 		for _, event := range events {
-			if event.Topic == "lanverse.audit.recorded.v1" {
+			if event.Topic == "glowloom.audit.recorded.v1" {
 				if _, err := auditapp.NewRecordedActionParser().Parse(inbox.Record{
 					Topic: event.Topic, Key: []byte(event.PartitionKey), Value: event.Payload,
 				}); err != nil {

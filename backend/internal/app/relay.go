@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	realtimeConsumerGroup = "lanverse-realtime"
-	auditConsumerGroup    = "lanverse-audit"
-	workflowStarterGroup  = "lanverse-workflow-starter"
+	realtimeConsumerGroup = "glowloom-realtime"
+	auditConsumerGroup    = "glowloom-audit"
+	workflowStarterGroup  = "glowloom-workflow-starter"
 )
 
 type relayRuntime struct {

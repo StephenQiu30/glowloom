@@ -54,9 +54,9 @@ func TestOperationStatusWithHostPostgresAndRedis(t *testing.T) {
 	}
 	handler := realtime.NewOperationStatusHandler(pginbox.NewStore(dbConn.DB), redisrealtime.NewSink(redisConn.Client))
 	record := inbox.Record{
-		Topic: "lanverse.operation.status_changed.v1",
+		Topic: "glowloom.operation.status_changed.v1",
 		Key:   []byte(projectID),
-		Value: []byte(`{"event_id":"` + eventID + `","event_type":"lanverse.operation.status_changed.v1","project_id":"` + projectID + `","aggregate":{"type":"operation","id":"` + operationID + `"},"data":{"target_type":"shot_frame","target_id":"` + targetID + `","status":"submitted"}}`),
+		Value: []byte(`{"event_id":"` + eventID + `","event_type":"glowloom.operation.status_changed.v1","project_id":"` + projectID + `","aggregate":{"type":"operation","id":"` + operationID + `"},"data":{"target_type":"shot_frame","target_id":"` + targetID + `","status":"submitted"}}`),
 	}
 	if err := handler.Handle(ctx, record); err != nil {
 		t.Fatalf("handle event: %v", err)

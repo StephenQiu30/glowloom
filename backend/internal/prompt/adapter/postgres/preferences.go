@@ -54,7 +54,7 @@ func (s *Store) SaveCustomization(ctx context.Context, actor identityapp.Princip
 		return domain.Customization{}, errUnavailable
 	}
 	if desired.Validate() != nil || desired.Revision != input.ExpectedRevision+1 || input.IdempotencyKey == uuid.Nil ||
-		event.ID == uuid.Nil || event.Topic != "lanverse.audit.recorded.v1" || event.PartitionKey != actor.OrgID.String() || len(event.Payload) == 0 {
+		event.ID == uuid.Nil || event.Topic != "glowloom.audit.recorded.v1" || event.PartitionKey != actor.OrgID.String() || len(event.Payload) == 0 {
 		return domain.Customization{}, domain.ErrInvalidCustomization
 	}
 	body, err := json.Marshal(struct {

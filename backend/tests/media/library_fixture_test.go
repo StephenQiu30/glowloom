@@ -17,7 +17,7 @@ func libraryRuntimeDB(t *testing.T) *gorm.DB {
 	}
 	db := mediaStoreDB(t)
 	var name, role string
-	if err := db.Raw(`SELECT current_database(),current_user`).Row().Scan(&name, &role); err != nil || name != "lanverse_library" || role != "lanverse_app" {
+	if err := db.Raw(`SELECT current_database(),current_user`).Row().Scan(&name, &role); err != nil || name != "glowloom_library" || role != "glowloom_app" {
 		t.Fatal("library tests require isolated database and actual nonowner role", name, role, err)
 	}
 	return db

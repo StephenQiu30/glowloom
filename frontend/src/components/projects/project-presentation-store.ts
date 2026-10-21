@@ -26,7 +26,27 @@ export const isProjectProofCurrent = (proof: ProjectProof) =>
   proof.scopeGeneration === getScopeGeneration() &&
   proof.scopeId === getCreationScope();
 
+export type ManagementAttempt = {
+  key: string;
+  action: "archive" | "unarchive" | "recycle" | "restore";
+  project: Project;
+};
+
 export class ProjectPresentationStore {
+  private managementAttempts = new Map<string, ManagementAttempt>();
+  management(namespace: string, id: string) {
+    return this.managementAttempts.get(this.key(namespace, id));
+  }
+  setManagement(namespace: string, id: string, attempt: ManagementAttempt) {
+    const key = this.key(namespace, id);
+    if (this.managementAttempts.has(key))
+      throw new RequestError("management_pending", 409);
+    this.managementAttempts.set(key, structuredClone(attempt));
+  }
+  dropManagement(namespace: string, id: string, key: string) {
+    if (this.managementAttempts.get(this.key(namespace, id))?.key === key)
+      this.managementAttempts.delete(this.key(namespace, id));
+  }
   private values = new Map<string, Project>();
   private renames = new Map<string, RenameAttempt>();
   private listeners = new Set<() => void>();
@@ -100,6 +120,7 @@ export class ProjectPresentationStore {
   clear() {
     this.values.clear();
     this.renames.clear();
+    this.managementAttempts.clear();
     this.notify();
   }
 }

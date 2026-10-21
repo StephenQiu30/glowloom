@@ -13,7 +13,7 @@ import (
 )
 
 // BillingSettledTopic carries committed operation settlement facts.
-const BillingSettledTopic = "lanverse.billing.settled.v1"
+const BillingSettledTopic = "glowloom.billing.settled.v1"
 
 // BillingSettledHandler projects the post-settlement available balance to SSE.
 type BillingSettledHandler struct {

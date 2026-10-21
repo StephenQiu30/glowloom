@@ -54,7 +54,7 @@ func projectCopyObjects(t *testing.T) *objectstorage.Client {
 		t.Fatal("invalid synthetic copy storage configuration")
 	}
 	u, err := url.Parse(cfg.Endpoint)
-	if err != nil || u.Scheme != "http" || u.Hostname() != "127.0.0.1" || cfg.Bucket != "lanverse-receipt-test" {
+	if err != nil || u.Scheme != "http" || u.Hostname() != "127.0.0.1" || cfg.Bucket != "glowloom-receipt-test" {
 		t.Fatal("copy storage must be the isolated loopback test bucket")
 	}
 	objects, err := objectstorage.Open(cfg.Endpoint, cfg.Bucket, cfg.AccessKey, cfg.SecretKey, "")
@@ -425,11 +425,11 @@ func TestProjectCopyRealNonOwnerPermissionsAndObjectFence(t *testing.T) {
 	objects := projectCopyObjects(t)
 	actor, source, _, _ := seedProjectCopyContent(ctx, t, db, objects, false)
 	err := db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		var role struct{ Runtime, Superuser, Owner, FrozenUpdate, HistoryDelete bool }
-		if err := tx.Raw(`SELECT current_user='lanverse_app' AS runtime,(SELECT rolsuper FROM pg_roles WHERE rolname=current_user) AS superuser,(SELECT tableowner=current_user FROM pg_tables WHERE schemaname='workspace' AND tablename='project_copy_job') AS owner,has_column_privilege(current_user,'workspace.project_copy_job','manifest','UPDATE') AS frozen_update,has_table_privilege(current_user,'workspace.project_copy_job','DELETE') AS history_delete`).Scan(&role).Error; err != nil {
+		if err := tx.Raw(`SELECT current_user='glowloom_app' AS runtime,(SELECT rolsuper FROM pg_roles WHERE rolname=current_user) AS superuser,(SELECT tableowner=current_user FROM pg_tables WHERE schemaname='workspace' AND tablename='project_copy_job') AS owner,has_column_privilege(current_user,'workspace.project_copy_job','manifest','UPDATE') AS frozen_update,has_table_privilege(current_user,'workspace.project_copy_job','DELETE') AS history_delete`).Scan(&role).Error; err != nil {
 			return err
 		}
 		if !role.Runtime || role.Superuser || role.Owner || role.FrozenUpdate || role.HistoryDelete {

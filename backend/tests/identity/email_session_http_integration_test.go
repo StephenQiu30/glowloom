@@ -97,7 +97,7 @@ func TestVoluntaryEmailPasswordEightCharactersRotatesSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/me/password", bytes.NewReader(body))
-	request.AddCookie(&http.Cookie{Name: "lanverse_session", Value: login.Token})
+	request.AddCookie(&http.Cookie{Name: "glowloom_session", Value: login.Token})
 	request.Header.Set("Origin", origin)
 	request.Header.Set("X-CSRF-Token", login.CSRFToken)
 	request.Header.Set("Content-Type", "application/json")
@@ -155,7 +155,7 @@ func TestHistoricalPasswordFlagDoesNotRestrictSessionDirectory(t *testing.T) {
 	identityhttp.NewEmailAuthHandler(auth, origin, false).WithSessionRevocation(directory.Revoke).Register(router.Group("/api"))
 	revoke := func(id uuid.UUID, proof string) *httptest.ResponseRecorder {
 		request := httptest.NewRequestWithContext(t.Context(), http.MethodDelete, "/api/sessions/"+id.String(), nil)
-		request.AddCookie(&http.Cookie{Name: "lanverse_session", Value: login.Token})
+		request.AddCookie(&http.Cookie{Name: "glowloom_session", Value: login.Token})
 		request.Header.Set("Origin", origin)
 		request.Header.Set("X-CSRF-Token", proof)
 		request.Header.Set("Idempotency-Key", uuid.NewString())

@@ -28,7 +28,7 @@ func deletionDatabase(t *testing.T) (*gorm.DB, *gorm.DB) {
 		t.Skip("requires isolated PostgreSQL")
 	}
 	parsed, err := url.Parse(dsn)
-	if err != nil || !strings.HasPrefix(parsed.Path, "/lanverse_subject_validation_") {
+	if err != nil || !strings.HasPrefix(parsed.Path, "/glowloom_subject_validation_") {
 		t.Fatal("requires task-owned subject validation database")
 	}
 	open := func(d string) *gorm.DB {
@@ -41,7 +41,7 @@ func deletionDatabase(t *testing.T) (*gorm.DB, *gorm.DB) {
 	}
 	owner := open(dsn)
 	q := parsed.Query()
-	q.Set("options", "-c role=lanverse_app")
+	q.Set("options", "-c role=glowloom_app")
 	parsed.RawQuery = q.Encode()
 	return open(parsed.String()), owner
 }

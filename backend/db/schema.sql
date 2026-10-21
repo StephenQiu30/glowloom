@@ -1,5 +1,5 @@
 -- 空业务库的完整结构，只维护本文件。
--- PostgreSQL 18。由结构所有者执行，并预先创建 lanverse_app NOLOGIN NOSUPERUSER。
+-- PostgreSQL 18。由结构所有者执行，并预先创建 glowloom_app NOLOGIN NOSUPERUSER。
 -- psql "$LV_SCHEMA_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f backend/db/schema.sql
 -- 禁止对已有业务库重放本文件。
 
@@ -7,9 +7,9 @@ DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_roles
-    WHERE rolname = 'lanverse_app' AND NOT rolcanlogin AND NOT rolsuper
+    WHERE rolname = 'glowloom_app' AND NOT rolcanlogin AND NOT rolsuper
   ) THEN
-    RAISE EXCEPTION 'lanverse_app must be a pre-provisioned NOLOGIN, NOSUPERUSER role';
+    RAISE EXCEPTION 'glowloom_app must be a pre-provisioned NOLOGIN, NOSUPERUSER role';
   END IF;
   IF EXISTS (
     SELECT 1 FROM pg_namespace
@@ -5548,907 +5548,907 @@ ALTER TABLE ONLY workspace.team_member
 ALTER TABLE ONLY workspace.team_member
     ADD CONSTRAINT team_member_user_id_fkey FOREIGN KEY (user_id) REFERENCES identity."user"(id) ON DELETE RESTRICT;
 
-GRANT USAGE ON SCHEMA audit TO lanverse_app;
+GRANT USAGE ON SCHEMA audit TO glowloom_app;
 
-GRANT USAGE ON SCHEMA bible TO lanverse_app;
+GRANT USAGE ON SCHEMA bible TO glowloom_app;
 
-GRANT USAGE ON SCHEMA billing TO lanverse_app;
+GRANT USAGE ON SCHEMA billing TO glowloom_app;
 
-GRANT USAGE ON SCHEMA canvas TO lanverse_app;
+GRANT USAGE ON SCHEMA canvas TO glowloom_app;
 
-GRANT USAGE ON SCHEMA catalog TO lanverse_app;
+GRANT USAGE ON SCHEMA catalog TO glowloom_app;
 
-GRANT USAGE ON SCHEMA identity TO lanverse_app;
+GRANT USAGE ON SCHEMA identity TO glowloom_app;
 
-GRANT USAGE ON SCHEMA infra TO lanverse_app;
+GRANT USAGE ON SCHEMA infra TO glowloom_app;
 
-GRANT USAGE ON SCHEMA media TO lanverse_app;
+GRANT USAGE ON SCHEMA media TO glowloom_app;
 
-GRANT USAGE ON SCHEMA mediatool TO lanverse_app;
+GRANT USAGE ON SCHEMA mediatool TO glowloom_app;
 
-GRANT USAGE ON SCHEMA operation TO lanverse_app;
+GRANT USAGE ON SCHEMA operation TO glowloom_app;
 
-GRANT USAGE ON SCHEMA script TO lanverse_app;
+GRANT USAGE ON SCHEMA script TO glowloom_app;
 
-GRANT USAGE ON SCHEMA workspace TO lanverse_app;
+GRANT USAGE ON SCHEMA workspace TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE audit.audit_log TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE audit.audit_log TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE bible."character" TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE bible."character" TO glowloom_app;
 
-GRANT UPDATE(revision) ON TABLE bible."character" TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE bible."character" TO glowloom_app;
 
-GRANT UPDATE(current_version_id) ON TABLE bible."character" TO lanverse_app;
+GRANT UPDATE(current_version_id) ON TABLE bible."character" TO glowloom_app;
 
-GRANT UPDATE(confirmed_version_id) ON TABLE bible."character" TO lanverse_app;
+GRANT UPDATE(confirmed_version_id) ON TABLE bible."character" TO glowloom_app;
 
-GRANT UPDATE(redirect_id) ON TABLE bible."character" TO lanverse_app;
+GRANT UPDATE(redirect_id) ON TABLE bible."character" TO glowloom_app;
 
-GRANT UPDATE(is_delete) ON TABLE bible."character" TO lanverse_app;
+GRANT UPDATE(is_delete) ON TABLE bible."character" TO glowloom_app;
 
-GRANT UPDATE(updated_at) ON TABLE bible."character" TO lanverse_app;
+GRANT UPDATE(updated_at) ON TABLE bible."character" TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE bible.character_confirmation TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE bible.character_confirmation TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE bible.character_redirect TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE bible.character_redirect TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE bible.character_split TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE bible.character_split TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE bible.character_version TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE bible.character_version TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE bible.command TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE bible.command TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE bible.copy_cleanup_receipt TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE bible.copy_cleanup_receipt TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE bible.copy_receipt TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE bible.copy_receipt TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE bible.copy_snapshot TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE bible.copy_snapshot TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE bible.copy_transfer_receipt TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE bible.copy_transfer_receipt TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE bible.location TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE bible.location TO glowloom_app;
 
-GRANT UPDATE(revision) ON TABLE bible.location TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE bible.location TO glowloom_app;
 
-GRANT UPDATE(current_version_id) ON TABLE bible.location TO lanverse_app;
+GRANT UPDATE(current_version_id) ON TABLE bible.location TO glowloom_app;
 
-GRANT UPDATE(confirmed_version_id) ON TABLE bible.location TO lanverse_app;
+GRANT UPDATE(confirmed_version_id) ON TABLE bible.location TO glowloom_app;
 
-GRANT UPDATE(is_delete) ON TABLE bible.location TO lanverse_app;
+GRANT UPDATE(is_delete) ON TABLE bible.location TO glowloom_app;
 
-GRANT UPDATE(updated_at) ON TABLE bible.location TO lanverse_app;
+GRANT UPDATE(updated_at) ON TABLE bible.location TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE bible.location_confirmation TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE bible.location_confirmation TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE bible.location_version TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE bible.location_version TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE bible.look TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE bible.look TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE bible.look_version TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE bible.look_version TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE bible.prop TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE bible.prop TO glowloom_app;
 
-GRANT UPDATE(revision) ON TABLE bible.prop TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE bible.prop TO glowloom_app;
 
-GRANT UPDATE(current_version_id) ON TABLE bible.prop TO lanverse_app;
+GRANT UPDATE(current_version_id) ON TABLE bible.prop TO glowloom_app;
 
-GRANT UPDATE(confirmed_version_id) ON TABLE bible.prop TO lanverse_app;
+GRANT UPDATE(confirmed_version_id) ON TABLE bible.prop TO glowloom_app;
 
-GRANT UPDATE(is_delete) ON TABLE bible.prop TO lanverse_app;
+GRANT UPDATE(is_delete) ON TABLE bible.prop TO glowloom_app;
 
-GRANT UPDATE(updated_at) ON TABLE bible.prop TO lanverse_app;
+GRANT UPDATE(updated_at) ON TABLE bible.prop TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE bible.prop_confirmation TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE bible.prop_confirmation TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE bible.prop_version TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE bible.prop_version TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE bible.reference_version TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE bible.reference_version TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE bible.voice_version TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE bible.voice_version TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE billing.budget TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE billing.budget TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE billing.ledger_entry TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE billing.ledger_entry TO glowloom_app;
 
-GRANT UPDATE(update_time) ON TABLE billing.ledger_entry TO lanverse_app;
+GRANT UPDATE(update_time) ON TABLE billing.ledger_entry TO glowloom_app;
 
-GRANT UPDATE(is_delete) ON TABLE billing.ledger_entry TO lanverse_app;
+GRANT UPDATE(is_delete) ON TABLE billing.ledger_entry TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE billing.reservation TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE billing.reservation TO glowloom_app;
 
-GRANT UPDATE(status) ON TABLE billing.reservation TO lanverse_app;
+GRANT UPDATE(status) ON TABLE billing.reservation TO glowloom_app;
 
-GRANT UPDATE(closed_at) ON TABLE billing.reservation TO lanverse_app;
+GRANT UPDATE(closed_at) ON TABLE billing.reservation TO glowloom_app;
 
-GRANT UPDATE(update_time) ON TABLE billing.reservation TO lanverse_app;
+GRANT UPDATE(update_time) ON TABLE billing.reservation TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE canvas.command_log TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE canvas.command_log TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE canvas.document TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE canvas.document TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE canvas.edge TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE canvas.edge TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE canvas.node TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE canvas.node TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE canvas.node_input TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE canvas.node_input TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE canvas.project_copy_receipt TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE canvas.project_copy_receipt TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE canvas.project_copy_snapshot TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE canvas.project_copy_snapshot TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE canvas.save_receipt TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE canvas.save_receipt TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE catalog.capability TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE catalog.capability TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE catalog.capability_default TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE catalog.capability_default TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE catalog.config_request TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE catalog.config_request TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE catalog.model_candidate TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE catalog.model_candidate TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE catalog.model_profile TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE catalog.model_profile TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE catalog.model_profile_version TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE catalog.model_profile_version TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE catalog.model_release TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE catalog.model_release TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE catalog.model_validation TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE catalog.model_validation TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE catalog.price_rule_version TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE catalog.price_rule_version TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE catalog.provider TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE catalog.provider TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE catalog.provider_check TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE catalog.provider_check TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE catalog.provider_config_version TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE catalog.provider_config_version TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE catalog.provider_credential TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE catalog.provider_credential TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE catalog.provider_preset TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE catalog.provider_preset TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE catalog.provider_preset_version TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE catalog.provider_preset_version TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE identity.auth_challenge TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE identity.auth_challenge TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE identity.auth_event TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE identity.auth_event TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE identity.authority_proposal TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE identity.authority_proposal TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE identity.directory_export TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE identity.directory_export TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE identity.email_budget TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE identity.email_budget TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE identity.invitation TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE identity.invitation TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE identity.login_guard TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE identity.login_guard TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE identity.mail_delivery TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE identity.mail_delivery TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE identity.platform_settings TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE identity.platform_settings TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE identity.security_event TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE identity.security_event TO glowloom_app;
 
-GRANT SELECT,INSERT,DELETE ON TABLE identity.session_refresh_token TO lanverse_app;
+GRANT SELECT,INSERT,DELETE ON TABLE identity.session_refresh_token TO glowloom_app;
 
-GRANT UPDATE(consumed_at) ON TABLE identity.session_refresh_token TO lanverse_app;
+GRANT UPDATE(consumed_at) ON TABLE identity.session_refresh_token TO glowloom_app;
 
-GRANT UPDATE(revoked_at) ON TABLE identity.session_refresh_token TO lanverse_app;
+GRANT UPDATE(revoked_at) ON TABLE identity.session_refresh_token TO glowloom_app;
 
-GRANT UPDATE(rotation_request_id) ON TABLE identity.session_refresh_token TO lanverse_app;
+GRANT UPDATE(rotation_request_id) ON TABLE identity.session_refresh_token TO glowloom_app;
 
-GRANT UPDATE(replay_until) ON TABLE identity.session_refresh_token TO lanverse_app;
+GRANT UPDATE(replay_until) ON TABLE identity.session_refresh_token TO glowloom_app;
 
-GRANT UPDATE(receipt_ciphertext) ON TABLE identity.session_refresh_token TO lanverse_app;
+GRANT UPDATE(receipt_ciphertext) ON TABLE identity.session_refresh_token TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE identity."user" TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE identity."user" TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE identity.user_session TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE identity.user_session TO glowloom_app;
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE infra.idempotency_record TO lanverse_app;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE infra.idempotency_record TO glowloom_app;
 
-GRANT SELECT,INSERT,DELETE ON TABLE infra.outbox TO lanverse_app;
+GRANT SELECT,INSERT,DELETE ON TABLE infra.outbox TO glowloom_app;
 
-GRANT UPDATE(published_at) ON TABLE infra.outbox TO lanverse_app;
+GRANT UPDATE(published_at) ON TABLE infra.outbox TO glowloom_app;
 
-GRANT UPDATE(update_time) ON TABLE infra.outbox TO lanverse_app;
+GRANT UPDATE(update_time) ON TABLE infra.outbox TO glowloom_app;
 
-GRANT SELECT,INSERT,DELETE ON TABLE infra.processed_event TO lanverse_app;
+GRANT SELECT,INSERT,DELETE ON TABLE infra.processed_event TO glowloom_app;
 
-GRANT UPDATE(update_time) ON TABLE infra.processed_event TO lanverse_app;
+GRANT UPDATE(update_time) ON TABLE infra.processed_event TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.library TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.library TO glowloom_app;
 
-GRANT UPDATE(revision) ON TABLE media.library TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE media.library TO glowloom_app;
 
-GRANT UPDATE(update_time) ON TABLE media.library TO lanverse_app;
+GRANT UPDATE(update_time) ON TABLE media.library TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.library_command TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.library_command TO glowloom_app;
 
-GRANT SELECT,INSERT,DELETE ON TABLE media.library_folder TO lanverse_app;
+GRANT SELECT,INSERT,DELETE ON TABLE media.library_folder TO glowloom_app;
 
-GRANT UPDATE(parent_id) ON TABLE media.library_folder TO lanverse_app;
+GRANT UPDATE(parent_id) ON TABLE media.library_folder TO glowloom_app;
 
-GRANT UPDATE(name) ON TABLE media.library_folder TO lanverse_app;
+GRANT UPDATE(name) ON TABLE media.library_folder TO glowloom_app;
 
-GRANT UPDATE(name_key) ON TABLE media.library_folder TO lanverse_app;
+GRANT UPDATE(name_key) ON TABLE media.library_folder TO glowloom_app;
 
-GRANT UPDATE("position") ON TABLE media.library_folder TO lanverse_app;
+GRANT UPDATE("position") ON TABLE media.library_folder TO glowloom_app;
 
-GRANT UPDATE(style) ON TABLE media.library_folder TO lanverse_app;
+GRANT UPDATE(style) ON TABLE media.library_folder TO glowloom_app;
 
-GRANT UPDATE(theme) ON TABLE media.library_folder TO lanverse_app;
+GRANT UPDATE(theme) ON TABLE media.library_folder TO glowloom_app;
 
-GRANT UPDATE(revision) ON TABLE media.library_folder TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE media.library_folder TO glowloom_app;
 
-GRANT UPDATE(update_time) ON TABLE media.library_folder TO lanverse_app;
+GRANT UPDATE(update_time) ON TABLE media.library_folder TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.library_item TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.library_item TO glowloom_app;
 
-GRANT UPDATE(plain_text) ON TABLE media.library_item TO lanverse_app;
+GRANT UPDATE(plain_text) ON TABLE media.library_item TO glowloom_app;
 
-GRANT UPDATE(folder_id) ON TABLE media.library_item TO lanverse_app;
+GRANT UPDATE(folder_id) ON TABLE media.library_item TO glowloom_app;
 
-GRANT UPDATE(title) ON TABLE media.library_item TO lanverse_app;
+GRANT UPDATE(title) ON TABLE media.library_item TO glowloom_app;
 
-GRANT UPDATE(category) ON TABLE media.library_item TO lanverse_app;
+GRANT UPDATE(category) ON TABLE media.library_item TO glowloom_app;
 
-GRANT UPDATE(tags) ON TABLE media.library_item TO lanverse_app;
+GRANT UPDATE(tags) ON TABLE media.library_item TO glowloom_app;
 
-GRANT UPDATE(source_label) ON TABLE media.library_item TO lanverse_app;
+GRANT UPDATE(source_label) ON TABLE media.library_item TO glowloom_app;
 
-GRANT UPDATE(note) ON TABLE media.library_item TO lanverse_app;
+GRANT UPDATE(note) ON TABLE media.library_item TO glowloom_app;
 
-GRANT UPDATE(favorite) ON TABLE media.library_item TO lanverse_app;
+GRANT UPDATE(favorite) ON TABLE media.library_item TO glowloom_app;
 
-GRANT UPDATE(catalog_state) ON TABLE media.library_item TO lanverse_app;
+GRANT UPDATE(catalog_state) ON TABLE media.library_item TO glowloom_app;
 
-GRANT UPDATE(trashed_at) ON TABLE media.library_item TO lanverse_app;
+GRANT UPDATE(trashed_at) ON TABLE media.library_item TO glowloom_app;
 
-GRANT UPDATE("position") ON TABLE media.library_item TO lanverse_app;
+GRANT UPDATE("position") ON TABLE media.library_item TO glowloom_app;
 
-GRANT UPDATE(revision) ON TABLE media.library_item TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE media.library_item TO glowloom_app;
 
-GRANT UPDATE(update_time) ON TABLE media.library_item TO lanverse_app;
+GRANT UPDATE(update_time) ON TABLE media.library_item TO glowloom_app;
 
-GRANT UPDATE(purged_at) ON TABLE media.library_item TO lanverse_app;
+GRANT UPDATE(purged_at) ON TABLE media.library_item TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.media_asset TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.media_asset TO glowloom_app;
 
-GRANT UPDATE(status) ON TABLE media.media_asset TO lanverse_app;
+GRANT UPDATE(status) ON TABLE media.media_asset TO glowloom_app;
 
-GRANT UPDATE(mime_type) ON TABLE media.media_asset TO lanverse_app;
+GRANT UPDATE(mime_type) ON TABLE media.media_asset TO glowloom_app;
 
-GRANT UPDATE(byte_size) ON TABLE media.media_asset TO lanverse_app;
+GRANT UPDATE(byte_size) ON TABLE media.media_asset TO glowloom_app;
 
-GRANT UPDATE(sha256) ON TABLE media.media_asset TO lanverse_app;
+GRANT UPDATE(sha256) ON TABLE media.media_asset TO glowloom_app;
 
-GRANT UPDATE(width) ON TABLE media.media_asset TO lanverse_app;
+GRANT UPDATE(width) ON TABLE media.media_asset TO glowloom_app;
 
-GRANT UPDATE(height) ON TABLE media.media_asset TO lanverse_app;
+GRANT UPDATE(height) ON TABLE media.media_asset TO glowloom_app;
 
-GRANT UPDATE(duration_ms) ON TABLE media.media_asset TO lanverse_app;
+GRANT UPDATE(duration_ms) ON TABLE media.media_asset TO glowloom_app;
 
-GRANT UPDATE(fps) ON TABLE media.media_asset TO lanverse_app;
+GRANT UPDATE(fps) ON TABLE media.media_asset TO glowloom_app;
 
-GRANT UPDATE(audio_channels) ON TABLE media.media_asset TO lanverse_app;
+GRANT UPDATE(audio_channels) ON TABLE media.media_asset TO glowloom_app;
 
-GRANT UPDATE(codec) ON TABLE media.media_asset TO lanverse_app;
+GRANT UPDATE(codec) ON TABLE media.media_asset TO glowloom_app;
 
-GRANT UPDATE(moderation_status) ON TABLE media.media_asset TO lanverse_app;
+GRANT UPDATE(moderation_status) ON TABLE media.media_asset TO glowloom_app;
 
-GRANT UPDATE(moderation_detail) ON TABLE media.media_asset TO lanverse_app;
+GRANT UPDATE(moderation_detail) ON TABLE media.media_asset TO glowloom_app;
 
-GRANT UPDATE(failure_reason) ON TABLE media.media_asset TO lanverse_app;
+GRANT UPDATE(failure_reason) ON TABLE media.media_asset TO glowloom_app;
 
-GRANT UPDATE(delete_time) ON TABLE media.media_asset TO lanverse_app;
+GRANT UPDATE(delete_time) ON TABLE media.media_asset TO glowloom_app;
 
-GRANT UPDATE(purge_after) ON TABLE media.media_asset TO lanverse_app;
+GRANT UPDATE(purge_after) ON TABLE media.media_asset TO glowloom_app;
 
-GRANT UPDATE(revision) ON TABLE media.media_asset TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE media.media_asset TO glowloom_app;
 
-GRANT UPDATE(update_time) ON TABLE media.media_asset TO lanverse_app;
+GRANT UPDATE(update_time) ON TABLE media.media_asset TO glowloom_app;
 
-GRANT UPDATE(is_delete) ON TABLE media.media_asset TO lanverse_app;
+GRANT UPDATE(is_delete) ON TABLE media.media_asset TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE media.object_location TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE media.object_location TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.package_command TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.package_command TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.package_job TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.package_job TO glowloom_app;
 
-GRANT UPDATE(status) ON TABLE media.package_job TO lanverse_app;
+GRANT UPDATE(status) ON TABLE media.package_job TO glowloom_app;
 
-GRANT UPDATE(revision) ON TABLE media.package_job TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE media.package_job TO glowloom_app;
 
-GRANT UPDATE(library_revision) ON TABLE media.package_job TO lanverse_app;
+GRANT UPDATE(library_revision) ON TABLE media.package_job TO glowloom_app;
 
-GRANT UPDATE(project_revision) ON TABLE media.package_job TO lanverse_app;
+GRANT UPDATE(project_revision) ON TABLE media.package_job TO glowloom_app;
 
-GRANT UPDATE(result) ON TABLE media.package_job TO lanverse_app;
+GRANT UPDATE(result) ON TABLE media.package_job TO glowloom_app;
 
-GRANT UPDATE(updated_at) ON TABLE media.package_job TO lanverse_app;
+GRANT UPDATE(updated_at) ON TABLE media.package_job TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.package_object TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.package_object TO glowloom_app;
 
-GRANT UPDATE(status) ON TABLE media.package_object TO lanverse_app;
+GRANT UPDATE(status) ON TABLE media.package_object TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.project_copy_object TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.project_copy_object TO glowloom_app;
 
-GRANT UPDATE(byte_size) ON TABLE media.project_copy_object TO lanverse_app;
+GRANT UPDATE(byte_size) ON TABLE media.project_copy_object TO glowloom_app;
 
-GRANT UPDATE(source_verified) ON TABLE media.project_copy_object TO lanverse_app;
+GRANT UPDATE(source_verified) ON TABLE media.project_copy_object TO glowloom_app;
 
-GRANT UPDATE(write_started) ON TABLE media.project_copy_object TO lanverse_app;
+GRANT UPDATE(write_started) ON TABLE media.project_copy_object TO glowloom_app;
 
-GRANT UPDATE(sha256) ON TABLE media.project_copy_object TO lanverse_app;
+GRANT UPDATE(sha256) ON TABLE media.project_copy_object TO glowloom_app;
 
-GRANT UPDATE(status) ON TABLE media.project_copy_object TO lanverse_app;
+GRANT UPDATE(status) ON TABLE media.project_copy_object TO glowloom_app;
 
-GRANT UPDATE(update_time) ON TABLE media.project_copy_object TO lanverse_app;
+GRANT UPDATE(update_time) ON TABLE media.project_copy_object TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.project_copy_receipt TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.project_copy_receipt TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.project_copy_snapshot TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.project_copy_snapshot TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.purge_command TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.purge_command TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.purge_item TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.purge_item TO glowloom_app;
 
-GRANT UPDATE(status) ON TABLE media.purge_item TO lanverse_app;
+GRANT UPDATE(status) ON TABLE media.purge_item TO glowloom_app;
 
-GRANT UPDATE(failure_code) ON TABLE media.purge_item TO lanverse_app;
+GRANT UPDATE(failure_code) ON TABLE media.purge_item TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.purge_job TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.purge_job TO glowloom_app;
 
-GRANT UPDATE(status) ON TABLE media.purge_job TO lanverse_app;
+GRANT UPDATE(status) ON TABLE media.purge_job TO glowloom_app;
 
-GRANT UPDATE(stage) ON TABLE media.purge_job TO lanverse_app;
+GRANT UPDATE(stage) ON TABLE media.purge_job TO glowloom_app;
 
-GRANT UPDATE(attempt) ON TABLE media.purge_job TO lanverse_app;
+GRANT UPDATE(attempt) ON TABLE media.purge_job TO glowloom_app;
 
-GRANT UPDATE(revision) ON TABLE media.purge_job TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE media.purge_job TO glowloom_app;
 
-GRANT UPDATE(cancellation_requested) ON TABLE media.purge_job TO lanverse_app;
+GRANT UPDATE(cancellation_requested) ON TABLE media.purge_job TO glowloom_app;
 
-GRANT UPDATE(needs_reconciliation) ON TABLE media.purge_job TO lanverse_app;
+GRANT UPDATE(needs_reconciliation) ON TABLE media.purge_job TO glowloom_app;
 
-GRANT UPDATE(execution_unconfirmed) ON TABLE media.purge_job TO lanverse_app;
+GRANT UPDATE(execution_unconfirmed) ON TABLE media.purge_job TO glowloom_app;
 
-GRANT UPDATE(execution_id) ON TABLE media.purge_job TO lanverse_app;
+GRANT UPDATE(execution_id) ON TABLE media.purge_job TO glowloom_app;
 
-GRANT UPDATE(worker_fence) ON TABLE media.purge_job TO lanverse_app;
+GRANT UPDATE(worker_fence) ON TABLE media.purge_job TO glowloom_app;
 
-GRANT UPDATE(lease_until) ON TABLE media.purge_job TO lanverse_app;
+GRANT UPDATE(lease_until) ON TABLE media.purge_job TO glowloom_app;
 
-GRANT UPDATE(process_ended) ON TABLE media.purge_job TO lanverse_app;
+GRANT UPDATE(process_ended) ON TABLE media.purge_job TO glowloom_app;
 
-GRANT UPDATE(updated_at) ON TABLE media.purge_job TO lanverse_app;
+GRANT UPDATE(updated_at) ON TABLE media.purge_job TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.purge_object TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.purge_object TO glowloom_app;
 
-GRANT UPDATE(byte_size) ON TABLE media.purge_object TO lanverse_app;
+GRANT UPDATE(byte_size) ON TABLE media.purge_object TO glowloom_app;
 
-GRANT UPDATE(sha256) ON TABLE media.purge_object TO lanverse_app;
+GRANT UPDATE(sha256) ON TABLE media.purge_object TO glowloom_app;
 
-GRANT UPDATE(verified) ON TABLE media.purge_object TO lanverse_app;
+GRANT UPDATE(verified) ON TABLE media.purge_object TO glowloom_app;
 
-GRANT UPDATE(removal_started) ON TABLE media.purge_object TO lanverse_app;
+GRANT UPDATE(removal_started) ON TABLE media.purge_object TO glowloom_app;
 
-GRANT UPDATE(removed) ON TABLE media.purge_object TO lanverse_app;
+GRANT UPDATE(removed) ON TABLE media.purge_object TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.rendition TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.rendition TO glowloom_app;
 
-GRANT UPDATE(update_time) ON TABLE media.rendition TO lanverse_app;
+GRANT UPDATE(update_time) ON TABLE media.rendition TO glowloom_app;
 
-GRANT UPDATE(is_delete) ON TABLE media.rendition TO lanverse_app;
+GRANT UPDATE(is_delete) ON TABLE media.rendition TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.storage_activation TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.storage_activation TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.storage_activation_guard TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.storage_activation_guard TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.storage_bucket_evidence TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.storage_bucket_evidence TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.storage_config_revision TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.storage_config_revision TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.storage_deployment_evidence TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.storage_deployment_evidence TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.storage_legacy_binding TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.storage_legacy_binding TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.storage_legacy_receipt TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.storage_legacy_receipt TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.storage_legacy_tombstone TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.storage_legacy_tombstone TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.storage_probe_evidence TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.storage_probe_evidence TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE media.storage_probe_intent TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE media.storage_probe_intent TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.storage_profile TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.storage_profile TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE media.storage_route TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE media.storage_route TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE media.storage_runtime TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE media.storage_runtime TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE media.storage_work_intent TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE media.storage_work_intent TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.transfer_command TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.transfer_command TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.transfer_item TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.transfer_item TO glowloom_app;
 
-GRANT UPDATE(status) ON TABLE media.transfer_item TO lanverse_app;
+GRANT UPDATE(status) ON TABLE media.transfer_item TO glowloom_app;
 
-GRANT UPDATE(failure_code) ON TABLE media.transfer_item TO lanverse_app;
+GRANT UPDATE(failure_code) ON TABLE media.transfer_item TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.transfer_job TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.transfer_job TO glowloom_app;
 
-GRANT UPDATE(status) ON TABLE media.transfer_job TO lanverse_app;
+GRANT UPDATE(status) ON TABLE media.transfer_job TO glowloom_app;
 
-GRANT UPDATE(stage) ON TABLE media.transfer_job TO lanverse_app;
+GRANT UPDATE(stage) ON TABLE media.transfer_job TO glowloom_app;
 
-GRANT UPDATE(attempt) ON TABLE media.transfer_job TO lanverse_app;
+GRANT UPDATE(attempt) ON TABLE media.transfer_job TO glowloom_app;
 
-GRANT UPDATE(revision) ON TABLE media.transfer_job TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE media.transfer_job TO glowloom_app;
 
-GRANT UPDATE(needs_reconciliation) ON TABLE media.transfer_job TO lanverse_app;
+GRANT UPDATE(needs_reconciliation) ON TABLE media.transfer_job TO glowloom_app;
 
-GRANT UPDATE(cancellation_requested) ON TABLE media.transfer_job TO lanverse_app;
+GRANT UPDATE(cancellation_requested) ON TABLE media.transfer_job TO glowloom_app;
 
-GRANT UPDATE(execution_unconfirmed) ON TABLE media.transfer_job TO lanverse_app;
+GRANT UPDATE(execution_unconfirmed) ON TABLE media.transfer_job TO glowloom_app;
 
-GRANT UPDATE(execution_id) ON TABLE media.transfer_job TO lanverse_app;
+GRANT UPDATE(execution_id) ON TABLE media.transfer_job TO glowloom_app;
 
-GRANT UPDATE(worker_fence) ON TABLE media.transfer_job TO lanverse_app;
+GRANT UPDATE(worker_fence) ON TABLE media.transfer_job TO glowloom_app;
 
-GRANT UPDATE(lease_until) ON TABLE media.transfer_job TO lanverse_app;
+GRANT UPDATE(lease_until) ON TABLE media.transfer_job TO glowloom_app;
 
-GRANT UPDATE(process_ended) ON TABLE media.transfer_job TO lanverse_app;
+GRANT UPDATE(process_ended) ON TABLE media.transfer_job TO glowloom_app;
 
-GRANT UPDATE(updated_at) ON TABLE media.transfer_job TO lanverse_app;
+GRANT UPDATE(updated_at) ON TABLE media.transfer_job TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.transfer_object TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.transfer_object TO glowloom_app;
 
-GRANT UPDATE(byte_size) ON TABLE media.transfer_object TO lanverse_app;
+GRANT UPDATE(byte_size) ON TABLE media.transfer_object TO glowloom_app;
 
-GRANT UPDATE(sha256) ON TABLE media.transfer_object TO lanverse_app;
+GRANT UPDATE(sha256) ON TABLE media.transfer_object TO glowloom_app;
 
-GRANT UPDATE(source_verified) ON TABLE media.transfer_object TO lanverse_app;
+GRANT UPDATE(source_verified) ON TABLE media.transfer_object TO glowloom_app;
 
-GRANT UPDATE(write_started) ON TABLE media.transfer_object TO lanverse_app;
+GRANT UPDATE(write_started) ON TABLE media.transfer_object TO glowloom_app;
 
-GRANT UPDATE(status) ON TABLE media.transfer_object TO lanverse_app;
+GRANT UPDATE(status) ON TABLE media.transfer_object TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE media.upload_admission TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE media.upload_admission TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE media.upload_request TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE media.upload_request TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE mediatool.depth_command TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE mediatool.depth_command TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE mediatool.depth_job TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE mediatool.depth_job TO glowloom_app;
 
-GRANT UPDATE(status) ON TABLE mediatool.depth_job TO lanverse_app;
+GRANT UPDATE(status) ON TABLE mediatool.depth_job TO glowloom_app;
 
-GRANT UPDATE(stage) ON TABLE mediatool.depth_job TO lanverse_app;
+GRANT UPDATE(stage) ON TABLE mediatool.depth_job TO glowloom_app;
 
-GRANT UPDATE(attempt) ON TABLE mediatool.depth_job TO lanverse_app;
+GRANT UPDATE(attempt) ON TABLE mediatool.depth_job TO glowloom_app;
 
-GRANT UPDATE(revision) ON TABLE mediatool.depth_job TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE mediatool.depth_job TO glowloom_app;
 
-GRANT UPDATE(process_state) ON TABLE mediatool.depth_job TO lanverse_app;
+GRANT UPDATE(process_state) ON TABLE mediatool.depth_job TO glowloom_app;
 
-GRANT UPDATE(active_worker) ON TABLE mediatool.depth_job TO lanverse_app;
+GRANT UPDATE(active_worker) ON TABLE mediatool.depth_job TO glowloom_app;
 
-GRANT UPDATE(failure_code) ON TABLE mediatool.depth_job TO lanverse_app;
+GRANT UPDATE(failure_code) ON TABLE mediatool.depth_job TO glowloom_app;
 
-GRANT UPDATE(retryable) ON TABLE mediatool.depth_job TO lanverse_app;
+GRANT UPDATE(retryable) ON TABLE mediatool.depth_job TO glowloom_app;
 
-GRANT UPDATE(needs_reconciliation) ON TABLE mediatool.depth_job TO lanverse_app;
+GRANT UPDATE(needs_reconciliation) ON TABLE mediatool.depth_job TO glowloom_app;
 
-GRANT UPDATE(execution_unconfirmed) ON TABLE mediatool.depth_job TO lanverse_app;
+GRANT UPDATE(execution_unconfirmed) ON TABLE mediatool.depth_job TO glowloom_app;
 
-GRANT UPDATE(cancellation_requested) ON TABLE mediatool.depth_job TO lanverse_app;
+GRANT UPDATE(cancellation_requested) ON TABLE mediatool.depth_job TO glowloom_app;
 
-GRANT UPDATE(reconciliation_requested) ON TABLE mediatool.depth_job TO lanverse_app;
+GRANT UPDATE(reconciliation_requested) ON TABLE mediatool.depth_job TO glowloom_app;
 
-GRANT UPDATE(updated_at) ON TABLE mediatool.depth_job TO lanverse_app;
+GRANT UPDATE(updated_at) ON TABLE mediatool.depth_job TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE mediatool.depth_object TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE mediatool.depth_object TO glowloom_app;
 
-GRANT UPDATE(write_started) ON TABLE mediatool.depth_object TO lanverse_app;
+GRANT UPDATE(write_started) ON TABLE mediatool.depth_object TO glowloom_app;
 
-GRANT UPDATE(delete_started) ON TABLE mediatool.depth_object TO lanverse_app;
+GRANT UPDATE(delete_started) ON TABLE mediatool.depth_object TO glowloom_app;
 
-GRANT UPDATE(status) ON TABLE mediatool.depth_object TO lanverse_app;
+GRANT UPDATE(status) ON TABLE mediatool.depth_object TO glowloom_app;
 
-GRANT UPDATE(updated_at) ON TABLE mediatool.depth_object TO lanverse_app;
+GRANT UPDATE(updated_at) ON TABLE mediatool.depth_object TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE mediatool.depth_result_intent TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE mediatool.depth_result_intent TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE mediatool.export_command TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE mediatool.export_command TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE mediatool.export_job TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE mediatool.export_job TO glowloom_app;
 
-GRANT UPDATE(actor_id) ON TABLE mediatool.export_job TO lanverse_app;
+GRANT UPDATE(actor_id) ON TABLE mediatool.export_job TO glowloom_app;
 
-GRANT UPDATE(actor_role) ON TABLE mediatool.export_job TO lanverse_app;
+GRANT UPDATE(actor_role) ON TABLE mediatool.export_job TO glowloom_app;
 
-GRANT UPDATE(status) ON TABLE mediatool.export_job TO lanverse_app;
+GRANT UPDATE(status) ON TABLE mediatool.export_job TO glowloom_app;
 
-GRANT UPDATE(stage) ON TABLE mediatool.export_job TO lanverse_app;
+GRANT UPDATE(stage) ON TABLE mediatool.export_job TO glowloom_app;
 
-GRANT UPDATE(progress) ON TABLE mediatool.export_job TO lanverse_app;
+GRANT UPDATE(progress) ON TABLE mediatool.export_job TO glowloom_app;
 
-GRANT UPDATE(attempt) ON TABLE mediatool.export_job TO lanverse_app;
+GRANT UPDATE(attempt) ON TABLE mediatool.export_job TO glowloom_app;
 
-GRANT UPDATE(revision) ON TABLE mediatool.export_job TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE mediatool.export_job TO glowloom_app;
 
-GRANT UPDATE(asset_id) ON TABLE mediatool.export_job TO lanverse_app;
+GRANT UPDATE(asset_id) ON TABLE mediatool.export_job TO glowloom_app;
 
-GRANT UPDATE(sha256) ON TABLE mediatool.export_job TO lanverse_app;
+GRANT UPDATE(sha256) ON TABLE mediatool.export_job TO glowloom_app;
 
-GRANT UPDATE(failure_code) ON TABLE mediatool.export_job TO lanverse_app;
+GRANT UPDATE(failure_code) ON TABLE mediatool.export_job TO glowloom_app;
 
-GRANT UPDATE(active_worker) ON TABLE mediatool.export_job TO lanverse_app;
+GRANT UPDATE(active_worker) ON TABLE mediatool.export_job TO glowloom_app;
 
-GRANT UPDATE(updated_at) ON TABLE mediatool.export_job TO lanverse_app;
+GRANT UPDATE(updated_at) ON TABLE mediatool.export_job TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE mediatool.transcription_command TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE mediatool.transcription_command TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE mediatool.transcription_job TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE mediatool.transcription_job TO glowloom_app;
 
-GRANT UPDATE(actor_id) ON TABLE mediatool.transcription_job TO lanverse_app;
+GRANT UPDATE(actor_id) ON TABLE mediatool.transcription_job TO glowloom_app;
 
-GRANT UPDATE(actor_role) ON TABLE mediatool.transcription_job TO lanverse_app;
+GRANT UPDATE(actor_role) ON TABLE mediatool.transcription_job TO glowloom_app;
 
-GRANT UPDATE(status) ON TABLE mediatool.transcription_job TO lanverse_app;
+GRANT UPDATE(status) ON TABLE mediatool.transcription_job TO glowloom_app;
 
-GRANT UPDATE(stage) ON TABLE mediatool.transcription_job TO lanverse_app;
+GRANT UPDATE(stage) ON TABLE mediatool.transcription_job TO glowloom_app;
 
-GRANT UPDATE(progress) ON TABLE mediatool.transcription_job TO lanverse_app;
+GRANT UPDATE(progress) ON TABLE mediatool.transcription_job TO glowloom_app;
 
-GRANT UPDATE(attempt) ON TABLE mediatool.transcription_job TO lanverse_app;
+GRANT UPDATE(attempt) ON TABLE mediatool.transcription_job TO glowloom_app;
 
-GRANT UPDATE(revision) ON TABLE mediatool.transcription_job TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE mediatool.transcription_job TO glowloom_app;
 
-GRANT UPDATE(inference_state) ON TABLE mediatool.transcription_job TO lanverse_app;
+GRANT UPDATE(inference_state) ON TABLE mediatool.transcription_job TO glowloom_app;
 
-GRANT UPDATE(result) ON TABLE mediatool.transcription_job TO lanverse_app;
+GRANT UPDATE(result) ON TABLE mediatool.transcription_job TO glowloom_app;
 
-GRANT UPDATE(result_sha256) ON TABLE mediatool.transcription_job TO lanverse_app;
+GRANT UPDATE(result_sha256) ON TABLE mediatool.transcription_job TO glowloom_app;
 
-GRANT UPDATE(failure_code) ON TABLE mediatool.transcription_job TO lanverse_app;
+GRANT UPDATE(failure_code) ON TABLE mediatool.transcription_job TO glowloom_app;
 
-GRANT UPDATE(active_worker) ON TABLE mediatool.transcription_job TO lanverse_app;
+GRANT UPDATE(active_worker) ON TABLE mediatool.transcription_job TO glowloom_app;
 
-GRANT UPDATE(updated_at) ON TABLE mediatool.transcription_job TO lanverse_app;
+GRANT UPDATE(updated_at) ON TABLE mediatool.transcription_job TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE operation.batch TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE operation.batch TO glowloom_app;
 
-GRANT UPDATE(status) ON TABLE operation.batch TO lanverse_app;
+GRANT UPDATE(status) ON TABLE operation.batch TO glowloom_app;
 
-GRANT UPDATE(paused_reason) ON TABLE operation.batch TO lanverse_app;
+GRANT UPDATE(paused_reason) ON TABLE operation.batch TO glowloom_app;
 
-GRANT UPDATE(total_count) ON TABLE operation.batch TO lanverse_app;
+GRANT UPDATE(total_count) ON TABLE operation.batch TO glowloom_app;
 
-GRANT UPDATE(succeeded_count) ON TABLE operation.batch TO lanverse_app;
+GRANT UPDATE(succeeded_count) ON TABLE operation.batch TO glowloom_app;
 
-GRANT UPDATE(failed_count) ON TABLE operation.batch TO lanverse_app;
+GRANT UPDATE(failed_count) ON TABLE operation.batch TO glowloom_app;
 
-GRANT UPDATE(unknown_count) ON TABLE operation.batch TO lanverse_app;
+GRANT UPDATE(unknown_count) ON TABLE operation.batch TO glowloom_app;
 
-GRANT UPDATE(quote_total_micros) ON TABLE operation.batch TO lanverse_app;
+GRANT UPDATE(quote_total_micros) ON TABLE operation.batch TO glowloom_app;
 
-GRANT UPDATE(workflow_id) ON TABLE operation.batch TO lanverse_app;
+GRANT UPDATE(workflow_id) ON TABLE operation.batch TO glowloom_app;
 
-GRANT UPDATE(update_time) ON TABLE operation.batch TO lanverse_app;
+GRANT UPDATE(update_time) ON TABLE operation.batch TO glowloom_app;
 
-GRANT UPDATE(cancel_requested_at) ON TABLE operation.batch TO lanverse_app;
+GRANT UPDATE(cancel_requested_at) ON TABLE operation.batch TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE operation.batch_launch TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE operation.batch_launch TO glowloom_app;
 
-GRANT UPDATE(state) ON TABLE operation.batch_launch TO lanverse_app;
+GRANT UPDATE(state) ON TABLE operation.batch_launch TO glowloom_app;
 
-GRANT UPDATE(released_at) ON TABLE operation.batch_launch TO lanverse_app;
+GRANT UPDATE(released_at) ON TABLE operation.batch_launch TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE operation.confirmation_request TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE operation.confirmation_request TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE operation.operation TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE operation.operation TO glowloom_app;
 
-GRANT UPDATE(status) ON TABLE operation.operation TO lanverse_app;
+GRANT UPDATE(status) ON TABLE operation.operation TO glowloom_app;
 
-GRANT UPDATE(failure_code) ON TABLE operation.operation TO lanverse_app;
+GRANT UPDATE(failure_code) ON TABLE operation.operation TO glowloom_app;
 
-GRANT UPDATE(failure_message) ON TABLE operation.operation TO lanverse_app;
+GRANT UPDATE(failure_message) ON TABLE operation.operation TO glowloom_app;
 
-GRANT UPDATE(retryable) ON TABLE operation.operation TO lanverse_app;
+GRANT UPDATE(retryable) ON TABLE operation.operation TO glowloom_app;
 
-GRANT UPDATE(reservation_id) ON TABLE operation.operation TO lanverse_app;
+GRANT UPDATE(reservation_id) ON TABLE operation.operation TO glowloom_app;
 
-GRANT UPDATE(provider_request_key) ON TABLE operation.operation TO lanverse_app;
+GRANT UPDATE(provider_request_key) ON TABLE operation.operation TO glowloom_app;
 
-GRANT UPDATE(workflow_id) ON TABLE operation.operation TO lanverse_app;
+GRANT UPDATE(workflow_id) ON TABLE operation.operation TO glowloom_app;
 
-GRANT UPDATE(confirmed_at) ON TABLE operation.operation TO lanverse_app;
+GRANT UPDATE(confirmed_at) ON TABLE operation.operation TO glowloom_app;
 
-GRANT UPDATE(confirmed_by) ON TABLE operation.operation TO lanverse_app;
+GRANT UPDATE(confirmed_by) ON TABLE operation.operation TO glowloom_app;
 
-GRANT UPDATE(started_at) ON TABLE operation.operation TO lanverse_app;
+GRANT UPDATE(started_at) ON TABLE operation.operation TO glowloom_app;
 
-GRANT UPDATE(finished_at) ON TABLE operation.operation TO lanverse_app;
+GRANT UPDATE(finished_at) ON TABLE operation.operation TO glowloom_app;
 
-GRANT UPDATE(settled_micros) ON TABLE operation.operation TO lanverse_app;
+GRANT UPDATE(settled_micros) ON TABLE operation.operation TO glowloom_app;
 
-GRANT UPDATE(cost_estimated) ON TABLE operation.operation TO lanverse_app;
+GRANT UPDATE(cost_estimated) ON TABLE operation.operation TO glowloom_app;
 
-GRANT UPDATE(update_time) ON TABLE operation.operation TO lanverse_app;
+GRANT UPDATE(update_time) ON TABLE operation.operation TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE operation.operation_event TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE operation.operation_event TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE operation.operation_input TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE operation.operation_input TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE operation.operation_output TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE operation.operation_output TO glowloom_app;
 
-GRANT UPDATE(moderation_status) ON TABLE operation.operation_output TO lanverse_app;
+GRANT UPDATE(moderation_status) ON TABLE operation.operation_output TO glowloom_app;
 
-GRANT UPDATE(moderation_reason) ON TABLE operation.operation_output TO lanverse_app;
+GRANT UPDATE(moderation_reason) ON TABLE operation.operation_output TO glowloom_app;
 
-GRANT UPDATE(update_time) ON TABLE operation.operation_output TO lanverse_app;
+GRANT UPDATE(update_time) ON TABLE operation.operation_output TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE operation.prompt_resolution_receipt TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE operation.prompt_resolution_receipt TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE operation.prompt_submission TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE operation.prompt_submission TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE operation.prompt_submission_slot TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE operation.prompt_submission_slot TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE operation.provider_binding TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE operation.provider_binding TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE operation.provider_call TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE operation.provider_call TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE operation.provider_credential_binding TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE operation.provider_credential_binding TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE operation.provider_result TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE operation.provider_result TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE operation.provider_trial TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE operation.provider_trial TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE operation.quote_request TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE operation.quote_request TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.action_line TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.action_line TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.command TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.command TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.command_result TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.command_result TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.command_state TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.command_state TO glowloom_app;
 
-GRANT UPDATE(revision) ON TABLE script.command_state TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE script.command_state TO glowloom_app;
 
-GRANT UPDATE(status) ON TABLE script.command_state TO lanverse_app;
+GRANT UPDATE(status) ON TABLE script.command_state TO glowloom_app;
 
-GRANT UPDATE(failure_code) ON TABLE script.command_state TO lanverse_app;
+GRANT UPDATE(failure_code) ON TABLE script.command_state TO glowloom_app;
 
-GRANT UPDATE(cancellation_requested) ON TABLE script.command_state TO lanverse_app;
+GRANT UPDATE(cancellation_requested) ON TABLE script.command_state TO glowloom_app;
 
-GRANT UPDATE(needs_reconciliation) ON TABLE script.command_state TO lanverse_app;
+GRANT UPDATE(needs_reconciliation) ON TABLE script.command_state TO glowloom_app;
 
-GRANT UPDATE(io_owner_id) ON TABLE script.command_state TO lanverse_app;
+GRANT UPDATE(io_owner_id) ON TABLE script.command_state TO glowloom_app;
 
-GRANT UPDATE(io_state) ON TABLE script.command_state TO lanverse_app;
+GRANT UPDATE(io_state) ON TABLE script.command_state TO glowloom_app;
 
-GRANT UPDATE(updated_at) ON TABLE script.command_state TO lanverse_app;
+GRANT UPDATE(updated_at) ON TABLE script.command_state TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.copy_object_intent TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.copy_object_intent TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.copy_object_state TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.copy_object_state TO glowloom_app;
 
-GRANT UPDATE(put_started) ON TABLE script.copy_object_state TO lanverse_app;
+GRANT UPDATE(put_started) ON TABLE script.copy_object_state TO glowloom_app;
 
-GRANT UPDATE(confirmed) ON TABLE script.copy_object_state TO lanverse_app;
+GRANT UPDATE(confirmed) ON TABLE script.copy_object_state TO glowloom_app;
 
-GRANT UPDATE(removed) ON TABLE script.copy_object_state TO lanverse_app;
+GRANT UPDATE(removed) ON TABLE script.copy_object_state TO glowloom_app;
 
-GRANT UPDATE(updated_at) ON TABLE script.copy_object_state TO lanverse_app;
+GRANT UPDATE(updated_at) ON TABLE script.copy_object_state TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.copy_receipt TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.copy_receipt TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.copy_snapshot TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.copy_snapshot TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.dialogue_line TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.dialogue_line TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.episode TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.episode TO glowloom_app;
 
-GRANT UPDATE(title) ON TABLE script.episode TO lanverse_app;
+GRANT UPDATE(title) ON TABLE script.episode TO glowloom_app;
 
-GRANT UPDATE(revision) ON TABLE script.episode TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE script.episode TO glowloom_app;
 
-GRANT UPDATE(current_structure_id) ON TABLE script.episode TO lanverse_app;
+GRANT UPDATE(current_structure_id) ON TABLE script.episode TO glowloom_app;
 
-GRANT UPDATE(confirmed_structure_id) ON TABLE script.episode TO lanverse_app;
+GRANT UPDATE(confirmed_structure_id) ON TABLE script.episode TO glowloom_app;
 
-GRANT UPDATE(previous_episode_id) ON TABLE script.episode TO lanverse_app;
+GRANT UPDATE(previous_episode_id) ON TABLE script.episode TO glowloom_app;
 
-GRANT UPDATE(inherit_status) ON TABLE script.episode TO lanverse_app;
+GRANT UPDATE(inherit_status) ON TABLE script.episode TO glowloom_app;
 
-GRANT UPDATE(is_delete) ON TABLE script.episode TO lanverse_app;
+GRANT UPDATE(is_delete) ON TABLE script.episode TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.episode_structure TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.episode_structure TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.import_attempt TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.import_attempt TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.import_command TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.import_command TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.import_file TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.import_file TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.import_file_result TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.import_file_result TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.import_job TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.import_job TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.import_publication TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.import_publication TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.import_state TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.import_state TO glowloom_app;
 
-GRANT UPDATE(revision) ON TABLE script.import_state TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE script.import_state TO glowloom_app;
 
-GRANT UPDATE(attempt) ON TABLE script.import_state TO lanverse_app;
+GRANT UPDATE(attempt) ON TABLE script.import_state TO glowloom_app;
 
-GRANT UPDATE(status) ON TABLE script.import_state TO lanverse_app;
+GRANT UPDATE(status) ON TABLE script.import_state TO glowloom_app;
 
-GRANT UPDATE(stage) ON TABLE script.import_state TO lanverse_app;
+GRANT UPDATE(stage) ON TABLE script.import_state TO glowloom_app;
 
-GRANT UPDATE(latest_script_revision) ON TABLE script.import_state TO lanverse_app;
+GRANT UPDATE(latest_script_revision) ON TABLE script.import_state TO glowloom_app;
 
-GRANT UPDATE(latest_version_id) ON TABLE script.import_state TO lanverse_app;
+GRANT UPDATE(latest_version_id) ON TABLE script.import_state TO glowloom_app;
 
-GRANT UPDATE(cancellation_requested) ON TABLE script.import_state TO lanverse_app;
+GRANT UPDATE(cancellation_requested) ON TABLE script.import_state TO glowloom_app;
 
-GRANT UPDATE(reconciliation_requested) ON TABLE script.import_state TO lanverse_app;
+GRANT UPDATE(reconciliation_requested) ON TABLE script.import_state TO glowloom_app;
 
-GRANT UPDATE(needs_reconciliation) ON TABLE script.import_state TO lanverse_app;
+GRANT UPDATE(needs_reconciliation) ON TABLE script.import_state TO glowloom_app;
 
-GRANT UPDATE(failure_code) ON TABLE script.import_state TO lanverse_app;
+GRANT UPDATE(failure_code) ON TABLE script.import_state TO glowloom_app;
 
-GRANT UPDATE(io_owner_id) ON TABLE script.import_state TO lanverse_app;
+GRANT UPDATE(io_owner_id) ON TABLE script.import_state TO glowloom_app;
 
-GRANT UPDATE(io_state) ON TABLE script.import_state TO lanverse_app;
+GRANT UPDATE(io_state) ON TABLE script.import_state TO glowloom_app;
 
-GRANT UPDATE(updated_at) ON TABLE script.import_state TO lanverse_app;
+GRANT UPDATE(updated_at) ON TABLE script.import_state TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.object_intent TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.object_intent TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.object_state TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.object_state TO glowloom_app;
 
-GRANT UPDATE(put_started) ON TABLE script.object_state TO lanverse_app;
+GRANT UPDATE(put_started) ON TABLE script.object_state TO glowloom_app;
 
-GRANT UPDATE(confirmed) ON TABLE script.object_state TO lanverse_app;
+GRANT UPDATE(confirmed) ON TABLE script.object_state TO glowloom_app;
 
-GRANT UPDATE(removed) ON TABLE script.object_state TO lanverse_app;
+GRANT UPDATE(removed) ON TABLE script.object_state TO glowloom_app;
 
-GRANT UPDATE(updated_at) ON TABLE script.object_state TO lanverse_app;
+GRANT UPDATE(updated_at) ON TABLE script.object_state TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.project_state TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.project_state TO glowloom_app;
 
-GRANT UPDATE(revision) ON TABLE script.project_state TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE script.project_state TO glowloom_app;
 
-GRANT UPDATE(draft_version_id) ON TABLE script.project_state TO lanverse_app;
+GRANT UPDATE(draft_version_id) ON TABLE script.project_state TO glowloom_app;
 
-GRANT UPDATE(adopted_version_id) ON TABLE script.project_state TO lanverse_app;
+GRANT UPDATE(adopted_version_id) ON TABLE script.project_state TO glowloom_app;
 
-GRANT UPDATE(updated_at) ON TABLE script.project_state TO lanverse_app;
+GRANT UPDATE(updated_at) ON TABLE script.project_state TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.request TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.request TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.review_command TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.review_command TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.scene TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.scene TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.script_source TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.script_source TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.script_version TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.script_version TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.source_control TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.source_control TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.split_confirmation TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.split_confirmation TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.split_set TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.split_set TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.version_head TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.version_head TO glowloom_app;
 
-GRANT UPDATE(split_revision) ON TABLE script.version_head TO lanverse_app;
+GRANT UPDATE(split_revision) ON TABLE script.version_head TO glowloom_app;
 
-GRANT UPDATE(candidate_split_set_id) ON TABLE script.version_head TO lanverse_app;
+GRANT UPDATE(candidate_split_set_id) ON TABLE script.version_head TO glowloom_app;
 
-GRANT UPDATE(confirmed_split_set_id) ON TABLE script.version_head TO lanverse_app;
+GRANT UPDATE(confirmed_split_set_id) ON TABLE script.version_head TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE script.version_source TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE script.version_source TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE workspace.creation_scope TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE workspace.creation_scope TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE workspace.organization TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE workspace.organization TO glowloom_app;
 
-GRANT UPDATE(update_time) ON TABLE workspace.organization TO lanverse_app;
+GRANT UPDATE(update_time) ON TABLE workspace.organization TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE workspace.project TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE workspace.project TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE workspace.project_activity TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE workspace.project_activity TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE workspace.project_change_command TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE workspace.project_change_command TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE workspace.project_copy_command TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE workspace.project_copy_command TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE workspace.project_copy_job TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE workspace.project_copy_job TO glowloom_app;
 
-GRANT UPDATE(status) ON TABLE workspace.project_copy_job TO lanverse_app;
+GRANT UPDATE(status) ON TABLE workspace.project_copy_job TO glowloom_app;
 
-GRANT UPDATE(stage) ON TABLE workspace.project_copy_job TO lanverse_app;
+GRANT UPDATE(stage) ON TABLE workspace.project_copy_job TO glowloom_app;
 
-GRANT UPDATE(revision) ON TABLE workspace.project_copy_job TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE workspace.project_copy_job TO glowloom_app;
 
-GRANT UPDATE(attempt) ON TABLE workspace.project_copy_job TO lanverse_app;
+GRANT UPDATE(attempt) ON TABLE workspace.project_copy_job TO glowloom_app;
 
-GRANT UPDATE(worker_id) ON TABLE workspace.project_copy_job TO lanverse_app;
+GRANT UPDATE(worker_id) ON TABLE workspace.project_copy_job TO glowloom_app;
 
-GRANT UPDATE(started_at) ON TABLE workspace.project_copy_job TO lanverse_app;
+GRANT UPDATE(started_at) ON TABLE workspace.project_copy_job TO glowloom_app;
 
-GRANT UPDATE(media_receipt) ON TABLE workspace.project_copy_job TO lanverse_app;
+GRANT UPDATE(media_receipt) ON TABLE workspace.project_copy_job TO glowloom_app;
 
-GRANT UPDATE(canvas_receipt) ON TABLE workspace.project_copy_job TO lanverse_app;
+GRANT UPDATE(canvas_receipt) ON TABLE workspace.project_copy_job TO glowloom_app;
 
-GRANT UPDATE(failure_code) ON TABLE workspace.project_copy_job TO lanverse_app;
+GRANT UPDATE(failure_code) ON TABLE workspace.project_copy_job TO glowloom_app;
 
-GRANT UPDATE(retryable) ON TABLE workspace.project_copy_job TO lanverse_app;
+GRANT UPDATE(retryable) ON TABLE workspace.project_copy_job TO glowloom_app;
 
-GRANT UPDATE(needs_reconciliation) ON TABLE workspace.project_copy_job TO lanverse_app;
+GRANT UPDATE(needs_reconciliation) ON TABLE workspace.project_copy_job TO glowloom_app;
 
-GRANT UPDATE(cancellation_requested) ON TABLE workspace.project_copy_job TO lanverse_app;
+GRANT UPDATE(cancellation_requested) ON TABLE workspace.project_copy_job TO glowloom_app;
 
-GRANT UPDATE(reconciliation_requested) ON TABLE workspace.project_copy_job TO lanverse_app;
+GRANT UPDATE(reconciliation_requested) ON TABLE workspace.project_copy_job TO glowloom_app;
 
-GRANT UPDATE(execution_unconfirmed) ON TABLE workspace.project_copy_job TO lanverse_app;
+GRANT UPDATE(execution_unconfirmed) ON TABLE workspace.project_copy_job TO glowloom_app;
 
-GRANT UPDATE(update_time) ON TABLE workspace.project_copy_job TO lanverse_app;
+GRANT UPDATE(update_time) ON TABLE workspace.project_copy_job TO glowloom_app;
 
-GRANT UPDATE(script_receipt) ON TABLE workspace.project_copy_job TO lanverse_app;
+GRANT UPDATE(script_receipt) ON TABLE workspace.project_copy_job TO glowloom_app;
 
-GRANT UPDATE(bible_receipt) ON TABLE workspace.project_copy_job TO lanverse_app;
+GRANT UPDATE(bible_receipt) ON TABLE workspace.project_copy_job TO glowloom_app;
 
-GRANT UPDATE(execution_actor_id) ON TABLE workspace.project_copy_job TO lanverse_app;
+GRANT UPDATE(execution_actor_id) ON TABLE workspace.project_copy_job TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE workspace.project_creation_receipt TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE workspace.project_creation_receipt TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE workspace.project_folder TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE workspace.project_folder TO glowloom_app;
 
-GRANT UPDATE(name) ON TABLE workspace.project_folder TO lanverse_app;
+GRANT UPDATE(name) ON TABLE workspace.project_folder TO glowloom_app;
 
-GRANT UPDATE(cover_project_id) ON TABLE workspace.project_folder TO lanverse_app;
+GRANT UPDATE(cover_project_id) ON TABLE workspace.project_folder TO glowloom_app;
 
-GRANT UPDATE(cover_asset_id) ON TABLE workspace.project_folder TO lanverse_app;
+GRANT UPDATE(cover_asset_id) ON TABLE workspace.project_folder TO glowloom_app;
 
-GRANT UPDATE(revision) ON TABLE workspace.project_folder TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE workspace.project_folder TO glowloom_app;
 
-GRANT UPDATE(is_delete) ON TABLE workspace.project_folder TO lanverse_app;
+GRANT UPDATE(is_delete) ON TABLE workspace.project_folder TO glowloom_app;
 
-GRANT UPDATE(delete_time) ON TABLE workspace.project_folder TO lanverse_app;
+GRANT UPDATE(delete_time) ON TABLE workspace.project_folder TO glowloom_app;
 
-GRANT UPDATE(update_time) ON TABLE workspace.project_folder TO lanverse_app;
+GRANT UPDATE(update_time) ON TABLE workspace.project_folder TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE workspace.project_folder_command TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE workspace.project_folder_command TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE workspace.project_folder_placement TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE workspace.project_folder_placement TO glowloom_app;
 
-GRANT UPDATE(folder_id) ON TABLE workspace.project_folder_placement TO lanverse_app;
+GRANT UPDATE(folder_id) ON TABLE workspace.project_folder_placement TO glowloom_app;
 
-GRANT UPDATE(revision) ON TABLE workspace.project_folder_placement TO lanverse_app;
+GRANT UPDATE(revision) ON TABLE workspace.project_folder_placement TO glowloom_app;
 
-GRANT UPDATE(update_time) ON TABLE workspace.project_folder_placement TO lanverse_app;
+GRANT UPDATE(update_time) ON TABLE workspace.project_folder_placement TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE workspace.prompt_customization TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE workspace.prompt_customization TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE workspace.prompt_draft TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE workspace.prompt_draft TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE workspace.prompt_draft_receipt TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE workspace.prompt_draft_receipt TO glowloom_app;
 
-GRANT SELECT,INSERT ON TABLE workspace.style_preset TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE workspace.style_preset TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE workspace.team TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE workspace.team TO glowloom_app;
 
-GRANT SELECT,INSERT,UPDATE ON TABLE workspace.team_member TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE workspace.team_member TO glowloom_app;
 
 -- 分区按初始化时的当前 UTC 月及未来三个月生成，并保留默认分区。
 DO $$
@@ -6488,3 +6488,25 @@ ON CONFLICT(key) DO UPDATE SET
  modes=ARRAY(SELECT DISTINCT value FROM unnest(catalog.capability.modes || EXCLUDED.modes) AS value ORDER BY value),
  input_roles=ARRAY(SELECT DISTINCT value FROM unnest(catalog.capability.input_roles || EXCLUDED.input_roles) AS value ORDER BY value);
 
+-- Project recycle retention worker (metadata only until explicitly scheduled).
+CREATE TABLE IF NOT EXISTS workspace.project_retention_job (
+ project_id uuid NOT NULL REFERENCES workspace.project(id),
+ org_id uuid NOT NULL,
+ owner_scope_id uuid NOT NULL,
+ deleted_revision bigint NOT NULL CHECK(deleted_revision>0),
+ purge_after timestamptz NOT NULL,
+ status text NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','completed','skipped')),
+ attempts integer NOT NULL DEFAULT 0 CHECK(attempts>=0),
+ last_error text,
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ completed_at timestamptz,
+ PRIMARY KEY(project_id,deleted_revision)
+);
+CREATE INDEX IF NOT EXISTS project_retention_pending ON workspace.project_retention_job(purge_after,project_id) WHERE status='pending';
+CREATE INDEX IF NOT EXISTS project_recycle_expiry ON workspace.project(purge_after,id) WHERE is_delete;
+GRANT SELECT,INSERT,UPDATE ON workspace.project_retention_job TO glowloom_app;
+-- Only the internal retention transaction uses these; media entities and blobs are retained.
+GRANT DELETE ON canvas.edge,canvas.node TO glowloom_app;
+GRANT UPDATE ON canvas.save_receipt TO glowloom_app;
+GRANT DELETE ON workspace.prompt_draft TO glowloom_app;
+GRANT UPDATE ON workspace.prompt_draft_receipt TO glowloom_app;

@@ -62,7 +62,7 @@ export function DataPagination({
           <SelectTrigger
             id={id}
             aria-label={`${label}每页数量`}
-            className="w-20 max-md:min-h-11"
+            className="w-20 text-sm data-[size=default]:h-9 max-md:data-[size=default]:h-11"
           >
             <SelectValue />
           </SelectTrigger>
@@ -93,7 +93,7 @@ export function DataPagination({
             type="button"
             variant="outline"
             size="icon"
-            className="max-md:size-11"
+            className="size-9 max-md:size-11"
             aria-label="上一页"
             disabled={disabled || current <= 1}
             onClick={() => onPageChange(current - 1)}
@@ -106,7 +106,7 @@ export function DataPagination({
             type="button"
             variant="outline"
             size="icon"
-            className="max-md:size-11"
+            className="size-9 max-md:size-11"
             aria-label="下一页"
             disabled={
               disabled || (pages === undefined ? !hasNext : current >= pages)

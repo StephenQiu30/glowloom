@@ -119,7 +119,7 @@ func (c *UpdateProviderCommand) Execute(ctx context.Context, actor identityapp.P
 func providerUpdatedEvents(actor identityapp.Principal, before, after domain.Provider, requestID string, occurredAt time.Time) ([]identityapp.OutboxEvent, error) {
 	changedID, auditID := uuid.New(), uuid.New()
 	changed, err := json.Marshal(map[string]any{
-		"event_id": changedID, "event_type": "lanverse.catalog.provider_changed.v1",
+		"event_id": changedID, "event_type": "glowloom.catalog.provider_changed.v1",
 		"occurred_at": occurredAt, "org_id": actor.OrgID,
 		"actor":     map[string]any{"kind": "user", "id": actor.ID},
 		"aggregate": map[string]any{"type": "provider", "id": after.ID},
@@ -149,7 +149,7 @@ func providerUpdatedEvents(actor identityapp.Principal, before, after domain.Pro
 	}
 	key := actor.OrgID.String()
 	return []identityapp.OutboxEvent{
-		{ID: changedID, Topic: "lanverse.catalog.provider_changed.v1", PartitionKey: key, Payload: changed},
+		{ID: changedID, Topic: "glowloom.catalog.provider_changed.v1", PartitionKey: key, Payload: changed},
 		{ID: auditID, Topic: auditTopic, PartitionKey: key, Payload: audit},
 	}, nil
 }

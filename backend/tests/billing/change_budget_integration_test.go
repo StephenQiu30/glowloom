@@ -76,9 +76,9 @@ func TestChangeBudgetCommitsSignedLedgerAndBothEvents(t *testing.T) {
 			t.Fatalf("wrong event partition = %q", event.PartitionKey)
 		}
 		switch event.Topic {
-		case "lanverse.billing.budget_changed.v1":
+		case "glowloom.billing.budget_changed.v1":
 			changed++
-		case "lanverse.audit.recorded.v1":
+		case "glowloom.audit.recorded.v1":
 			audited++
 		default:
 			t.Fatalf("unexpected budget topic = %q", event.Topic)
@@ -122,7 +122,7 @@ func TestChangeBudgetRollsBackWhenOutboxWriteFails(t *testing.T) {
 	}
 	constraint := fmt.Sprintf(`
 		ALTER TABLE infra.outbox ADD CONSTRAINT ck_billing_test_reject_change
-		CHECK (topic <> 'lanverse.billing.budget_changed.v1' OR partition_key <> '%s')
+		CHECK (topic <> 'glowloom.billing.budget_changed.v1' OR partition_key <> '%s')
 	`, projectID.String())
 	if err := database.Exec(constraint).Error; err != nil {
 		t.Fatalf("install outbox failure constraint: %v", err)
@@ -285,7 +285,7 @@ func TestChangeBudgetPersistsLowEventOnThresholdCrossing(t *testing.T) {
 	}
 	var lowCount int
 	for _, event := range events {
-		if event.Topic == "lanverse.billing.budget_low.v1" {
+		if event.Topic == "glowloom.billing.budget_low.v1" {
 			lowCount++
 			if event.ID == uuid.Nil || !containsJSONEventID(event.Payload, event.ID) {
 				t.Fatalf("invalid low event = %+v", event)
@@ -316,7 +316,7 @@ func TestChangeBudgetRollsBackWhenLowEventFails(t *testing.T) {
 	}
 	constraint := fmt.Sprintf(`
 		ALTER TABLE infra.outbox ADD CONSTRAINT ck_billing_test_reject_low
-		CHECK (topic <> 'lanverse.billing.budget_low.v1' OR partition_key <> '%s')
+		CHECK (topic <> 'glowloom.billing.budget_low.v1' OR partition_key <> '%s')
 	`, projectID.String())
 	if err := database.Exec(constraint).Error; err != nil {
 		t.Fatalf("install low event failure constraint: %v", err)

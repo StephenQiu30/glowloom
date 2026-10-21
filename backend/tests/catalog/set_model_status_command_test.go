@@ -82,7 +82,7 @@ func TestSetModelStatusCommandBuildsSafeAuditAndReturnsChangedModel(t *testing.T
 				!changed.UpdateTime.Equal(store.saved.UpdateTime) {
 				t.Fatalf("status change mismatch: changed %+v, store %+v", changed, store)
 			}
-			if store.event.Topic != "lanverse.audit.recorded.v1" || store.event.PartitionKey != actor.OrgID.String() {
+			if store.event.Topic != "glowloom.audit.recorded.v1" || store.event.PartitionKey != actor.OrgID.String() {
 				t.Fatalf("wrong audit envelope: %+v", store.event)
 			}
 			audit, err := auditapp.NewRecordedActionParser().Parse(inbox.Record{

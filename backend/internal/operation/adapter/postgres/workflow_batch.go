@@ -389,7 +389,7 @@ func (s *Store) FinishWorkflowBatch(ctx context.Context, batchID uuid.UUID) erro
 		if updated.RowsAffected != 1 {
 			return application.ErrInvalidWorkflowBatch
 		}
-		const topic = "lanverse.batch.finished.v1"
+		const topic = "glowloom.batch.finished.v1"
 		eventID := uuid.New()
 		event := batchFinishedEvent{
 			EventID: eventID, EventType: topic, OccurredAt: time.Now().UTC(),

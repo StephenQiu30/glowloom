@@ -31,7 +31,7 @@ func TestConfirmationWritesUnderRuntimeRole(t *testing.T) {
 	reservationID, ledgerID := uuid.New(), uuid.New()
 	rollback := errors.New("rollback confirmation ACL probe")
 	err := database.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return fmt.Errorf("assume runtime role: %w", err)
 		}
 		if err := tx.Exec(`

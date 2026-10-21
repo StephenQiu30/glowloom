@@ -34,7 +34,7 @@ func packagePurgeDB(t *testing.T, owner bool) *gorm.DB {
 	}
 	t.Cleanup(func() { _ = connection.Close() })
 	var database, role, databaseOwner string
-	if err := connection.DB.Raw(`SELECT current_database(),current_user,pg_get_userbyid(datdba) FROM pg_database WHERE datname=current_database()`).Row().Scan(&database, &role, &databaseOwner); err != nil || !strings.HasPrefix(database, "lanverse_composition_package_") || !owner && role != "lanverse_app" || owner && (role == "lanverse_app" || role != databaseOwner) {
+	if err := connection.DB.Raw(`SELECT current_database(),current_user,pg_get_userbyid(datdba) FROM pg_database WHERE datname=current_database()`).Row().Scan(&database, &role, &databaseOwner); err != nil || !strings.HasPrefix(database, "glowloom_composition_package_") || !owner && role != "glowloom_app" || owner && (role == "glowloom_app" || role != databaseOwner) {
 		t.Fatal("package guards require their isolated database and actual owner/runtime roles")
 	}
 	return connection.DB
@@ -112,14 +112,14 @@ func TestMediaPackagePersonalUnreadableOwnerAndRevokedActorNeverAdmitPurge(t *te
 		t.Fatal(err)
 	}
 	var database string
-	if err := owner.Raw(`SELECT current_database()`).Scan(&database).Error; err != nil || !strings.HasPrefix(database, "lanverse_composition_package_") {
+	if err := owner.Raw(`SELECT current_database()`).Scan(&database).Error; err != nil || !strings.HasPrefix(database, "glowloom_composition_package_") {
 		t.Fatal("permission failure fixture requires its independent package composition database")
 	}
-	if err := owner.Exec(`REVOKE SELECT ON media.package_job FROM lanverse_app`).Error; err != nil {
+	if err := owner.Exec(`REVOKE SELECT ON media.package_job FROM glowloom_app`).Error; err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := owner.Exec(`GRANT SELECT ON media.package_job TO lanverse_app`).Error; err != nil {
+		if err := owner.Exec(`GRANT SELECT ON media.package_job TO glowloom_app`).Error; err != nil {
 			t.Error("restore only this isolated database package read permission", err)
 		}
 	})
@@ -128,7 +128,7 @@ func TestMediaPackagePersonalUnreadableOwnerAndRevokedActorNeverAdmitPurge(t *te
 	if _, err := purges.CreatePurge(t.Context(), actor, in); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("unreadable personal package owner was treated as idle", err)
 	}
-	if err := owner.Exec(`GRANT SELECT ON media.package_job TO lanverse_app`).Error; err != nil {
+	if err := owner.Exec(`GRANT SELECT ON media.package_job TO glowloom_app`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := owner.Exec(`UPDATE identity."user" SET is_delete=true WHERE id=?`, actor.ID).Error; err != nil {

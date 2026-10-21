@@ -30,7 +30,7 @@ func TestDirectoryExportCanonicalSchemaAndGrantParity(t *testing.T) {
 	if !strings.Contains(text, "CREATE TABLE identity.directory_export (") {
 		t.Error("schema is missing identity.directory_export")
 	}
-	if !strings.Contains(text, "GRANT SELECT,INSERT,UPDATE ON TABLE identity.directory_export TO lanverse_app;") {
+	if !strings.Contains(text, "GRANT SELECT,INSERT,UPDATE ON TABLE identity.directory_export TO glowloom_app;") {
 		t.Error("application role lacks explicit least-privilege export grant")
 	}
 }

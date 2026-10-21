@@ -51,11 +51,11 @@ func TestVoiceCatalogPGCurrentConfigurationScopeAndNonOwnerLocks(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
 			return err
 		}
 		var role string
-		if err := tx.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "lanverse_app" {
+		if err := tx.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "glowloom_app" {
 			t.Fatalf("missing actual non-owner role: %s %v", role, err)
 		}
 		q := catalogapp.NewVoiceCatalog(app.NewCatalogStore(tx), validator)

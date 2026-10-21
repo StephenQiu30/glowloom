@@ -102,7 +102,7 @@ func TestProjectCopyActualAuditOutboxFailureRollsBackEveryOwner(t *testing.T) {
 	actor, source := lifecycleActorProject(ctx, t, db)
 	function := "copy_outbox_test_" + uuid.New().String()[:8]
 	trigger := function + "_trigger"
-	create := `CREATE FUNCTION workspace.` + function + `()RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.topic='lanverse.audit.recorded.v1' AND NEW.payload->>'org_id'='` + actor.OrgID.String() + `' THEN RAISE EXCEPTION 'synthetic exact copy audit failure'; END IF; RETURN NEW; END $$`
+	create := `CREATE FUNCTION workspace.` + function + `()RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.topic='glowloom.audit.recorded.v1' AND NEW.payload->>'org_id'='` + actor.OrgID.String() + `' THEN RAISE EXCEPTION 'synthetic exact copy audit failure'; END IF; RETURN NEW; END $$`
 	if err := db.Exec(create).Error; err != nil {
 		t.Fatal(err)
 	}
