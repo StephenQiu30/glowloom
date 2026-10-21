@@ -97,6 +97,15 @@ func (s *Store) ReadAdminModel(ctx context.Context, actor identityapp.Principal,
 			return application.ErrModelNotFound
 		}
 		result.Model = createdModel(model)
+		var candidate struct{ Snapshot []byte }
+		if err := tx.Raw(`SELECT candidate_snapshot AS snapshot FROM catalog.model_profile WHERE id=?`, id).Scan(&candidate).Error; err != nil {
+			return fmt.Errorf("read model candidate: %w", err)
+		}
+		if len(candidate.Snapshot) > 0 {
+			if err := json.Unmarshal(candidate.Snapshot, &result.Candidate); err != nil {
+				return fmt.Errorf("decode model candidate: %w", err)
+			}
+		}
 		var versions []adminVersionRow
 		if err := tx.Raw(`SELECT id,version_no,provider_model_id,to_jsonb(modes)::text AS modes,
 limits::text AS limits,param_schema::text AS param_schema,supports_query,supports_cancel,supports_callback,

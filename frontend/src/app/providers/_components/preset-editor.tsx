@@ -224,9 +224,11 @@ export function PresetEditor({
                 <FieldSet>
                   <FieldLegend>可提供的能力</FieldLegend>
                   <FieldGroup className="flex-row flex-wrap">
-                    {(document.config?.adapter_key === "volcengine_ark"
-                      ? ["video"]
-                      : ["text", "image", "video"]
+                    {(document.config?.adapter_key === "deepseek"
+                      ? ["text"]
+                      : document.config?.adapter_key === "byteplus"
+                        ? ["text", "image"]
+                        : ["text", "image", "video"]
                     ).map((capability) => (
                       <Field key={capability} orientation="horizontal">
                         <Checkbox

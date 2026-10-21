@@ -141,6 +141,15 @@ export function ModelDetail({
               ? `配置 ${detail.versions?.find((v) => v.id === active.model_version_id)?.version_no ?? "—"} / 价格 ${detail.prices?.find((p) => p.id === active.price_version_id)?.version_no ?? "—"}`
               : "尚未发布"}
           </p>
+          {detail.candidate && !latest ? (
+            <p className="text-sm text-muted-foreground">
+              来自通用模型目录 {detail.candidate.catalog_version}。
+              {detail.candidate.model?.requires_model_selection
+                ? "请填写此账号已开通的模型 ID。"
+                : "已预填候选模型 ID，请核对账号权限。"}
+              此草稿尚无价格和验证记录。
+            </p>
+          ) : null}
           <Collapsible
             open={sectionOpen.configuration ?? !latest}
             onOpenChange={(open) =>
@@ -181,6 +190,7 @@ export function ModelDetail({
                     const configuration = modelConfiguration(
                       f,
                       model?.capability ?? "",
+                      config?.config?.adapter_key,
                     );
                     await mutation.run("model.version", id, (request) =>
                       publishAdminModelVersion(
@@ -217,7 +227,10 @@ export function ModelDetail({
                       required
                       name="upstream"
                       maxLength={256}
-                      defaultValue={latest?.provider_model_id}
+                      defaultValue={
+                        latest?.provider_model_id ??
+                        detail.candidate?.model?.provider_model_id
+                      }
                       placeholder="填写账号已开通的模型或推理接入点 ID"
                     />
                   </Field>
@@ -232,7 +245,9 @@ export function ModelDetail({
 
                               name="modes"
                               value={mode}
-                              defaultChecked={latest?.modes?.includes(mode)}
+                              defaultChecked={(
+                                latest?.modes ?? detail.candidate?.model?.modes
+                              )?.includes(mode)}
                             />
                             <FieldLabel
                               htmlFor={`${formFieldId}-field-2-${fieldIndex0}`}
@@ -259,6 +274,7 @@ export function ModelDetail({
                     />
                   </Field>
                   <ModelSetup
+                    adapter={config?.config?.adapter_key}
                     capability={model?.capability ?? ""}
                     limits={latest?.limits}
                     parameters={latest?.param_schema}

@@ -2,7 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Globe, MoreHorizontal, Plus, Server } from "lucide-react";
+import {
+  ChevronDown,
+  Globe,
+  MoreHorizontal,
+  Plus,
+  Server,
+  ShieldCheck,
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -16,7 +23,11 @@ import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { DownloadButton } from "@/components/media/download-button";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -46,7 +57,6 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
-  CardContent,
   CardFooter,
 } from "@/components/ui/card";
 import {
@@ -70,6 +80,7 @@ import {
   MutationStatus,
   useCatalogMutation,
 } from "@/components/catalog/mutation";
+import { ServiceTrial } from "./service-trial";
 import { PresetEditor } from "./preset-editor";
 import { ConnectionDetail } from "./connection-detail";
 import { PresetConnect } from "./preset-connect";
@@ -79,14 +90,32 @@ type Confirmation =
   | { kind: "provider"; provider: API.CreatedProvider }
   | { kind: "preset"; preset: API.Preset; action: "archive" | "emergency" };
 
-export function ProvidersPage({
+type ProvidersPageProps = { initialConnection?: string; search?: string };
+
+export function ProvidersPage(props: ProvidersPageProps) {
+  const session = useSession();
+  if (session.actor.platform_role !== "platform_admin") {
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyTitle>暂无访问权限</EmptyTitle>
+          <EmptyDescription>此页面仅向平台管理员开放。</EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button asChild variant="outline">
+            <Link href="/">返回创作</Link>
+          </Button>
+        </EmptyContent>
+      </Empty>
+    );
+  }
+  return <ProviderAdministration key={session.actor.id} {...props} />;
+}
+
+function ProviderAdministration({
   initialConnection = "",
   search = "",
-}: {
-  initialConnection?: string;
-  search?: string;
-}) {
-  const session = useSession();
+}: ProvidersPageProps) {
   const overlayTrigger = useRef<HTMLElement | null>(null);
   function rememberTrigger() {
     const active = document.activeElement;
@@ -102,7 +131,8 @@ export function ProvidersPage({
   function restoreFocus() {
     if (overlayTrigger.current?.isConnected) overlayTrigger.current.focus();
   }
-  const [tab, setTab] = useState("connections");
+  const [presetsOpen, setPresetsOpen] = useState(false);
+  const [trialOpen, setTrialOpen] = useState(false);
   const [providers, setProviders] = useState<API.ProviderListItem[]>([]);
   const [presets, setPresets] = useState<API.Preset[]>([]);
   const [selected, setSelected] = useState(initialConnection);
@@ -137,9 +167,7 @@ export function ProvidersPage({
     () => {},
     "preset.onboarding.credential",
   );
-  const admin = session.actor.platform_role === "platform_admin";
   useEffect(() => {
-    if (!admin) return;
     const controller = new AbortController();
     Promise.all([
       listAdminProviders({ limit: 200 }, { signal: controller.signal }),
@@ -159,7 +187,7 @@ export function ProvidersPage({
         }
       });
     return () => controller.abort();
-  }, [refresh, admin]);
+  }, [refresh]);
   function openConnect(preset: API.Preset | true) {
     rememberTrigger();
     connectVisible.current = true;
@@ -224,20 +252,6 @@ export function ProvidersPage({
       if (!controller.signal.aborted) setFeedback(catalogMessage(error));
     }
   }
-  if (!admin)
-    return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyTitle>暂无访问权限</EmptyTitle>
-          <EmptyDescription>此页面仅向平台管理员开放。</EmptyDescription>
-        </EmptyHeader>
-        <EmptyContent>
-          <Button asChild variant="outline">
-            <Link href="/">返回创作</Link>
-          </Button>
-        </EmptyContent>
-      </Empty>
-    );
   const query = search.trim().toLocaleLowerCase();
   const matches = (text: string) => text.toLocaleLowerCase().includes(query);
   const visibleProviders = providers.filter(
@@ -258,26 +272,33 @@ export function ProvidersPage({
     setRefresh((v) => v + 1);
   }
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 md:p-8">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-medium">AI 服务接入</h1>
-          <p className="text-sm text-muted-foreground">管理平台连接与预设。</p>
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-6 md:px-8 md:py-10">
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-col gap-2">
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <ShieldCheck className="size-3.5" />
+            仅管理员
+          </span>
+          <h1 className="text-2xl font-medium tracking-tight">AI 服务接入</h1>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="lg" className="max-md:h-11" asChild>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            className="max-md:h-11"
+            onClick={() => setTrialOpen(true)}
+          >
+            开发试验
+          </Button>
+          <Button variant="ghost" className="max-md:h-11" asChild>
             <Link href="/models">模型管理</Link>
           </Button>
           <Button
-            size="lg"
             className="max-md:h-11"
-            onClick={() =>
-              tab === "connections" ? openConnect(true) : openEditor("new")
-            }
+            onClick={() => openConnect(true)}
             disabled={loading || !!error}
           >
             <Plus data-icon="inline-start" />
-            {tab === "connections" ? "接入服务" : "新建预设"}
+            接入服务
           </Button>
         </div>
       </header>
@@ -294,78 +315,97 @@ export function ProvidersPage({
           </Button>
         </div>
       ) : null}
-      <Tabs value={tab} onValueChange={setTab} className="gap-6">
-        <TabsList aria-label="平台管理视图" className="max-md:h-11">
-          <TabsTrigger value="connections">连接</TabsTrigger>
-          <TabsTrigger value="presets">预设管理</TabsTrigger>
-        </TabsList>
-        {loading ? (
-          <div
-            role="status"
-            aria-label="正在加载 AI 服务"
-            className="flex flex-col gap-4"
+      {loading ? (
+        <div
+          role="status"
+          aria-label="正在加载 AI 服务"
+          className="flex flex-col gap-4"
+        >
+          {[0, 1, 2].map((n) => (
+            <Skeleton key={n} className="h-20 w-full" />
+          ))}
+        </div>
+      ) : error ? (
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>暂时无法加载</EmptyTitle>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button variant="outline" onClick={retry}>
+              重新加载
+            </Button>
+          </EmptyContent>
+        </Empty>
+      ) : (
+        <>
+          <section aria-label="已添加的服务" className="flex flex-col gap-4">
+            <h2 className="text-sm font-medium text-muted-foreground">
+              服务{" "}
+              <span className="ml-1 tabular-nums">
+                {visibleProviders.length}
+              </span>
+            </h2>
+            {visibleProviders.length ? (
+              <ConnectionList
+                items={visibleProviders}
+                pendingCredential={
+                  pendingKey.pending?.action === "credential.set"
+                    ? pendingKey.pending.target
+                    : undefined
+                }
+                onSelect={openConnection}
+                onDisable={(provider) =>
+                  openConfirmation({ kind: "provider", provider })
+                }
+              />
+            ) : (
+              <Empty>
+                <EmptyHeader>
+                  <EmptyTitle>
+                    {query ? "没有匹配的连接" : "还没有连接"}
+                  </EmptyTitle>
+                  <EmptyDescription>
+                    {query
+                      ? "试试其他关键词。"
+                      : "选择平台预设，添加 API Key。"}
+                  </EmptyDescription>
+                </EmptyHeader>
+                {!query ? (
+                  <EmptyContent>
+                    <Button
+                      onClick={() => openConnect(true)}
+                      className="max-md:h-11"
+                    >
+                      接入服务
+                    </Button>
+                  </EmptyContent>
+                ) : null}
+              </Empty>
+            )}
+          </section>
+          <Collapsible
+            open={presetsOpen || Boolean(query)}
+            onOpenChange={setPresetsOpen}
+            className="border-t pt-5"
           >
-            {[0, 1, 2].map((n) => (
-              <Skeleton key={n} className="h-20 w-full" />
-            ))}
-          </div>
-        ) : error ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>暂时无法加载</EmptyTitle>
-            </EmptyHeader>
-            <EmptyContent>
-              <Button variant="outline" onClick={retry}>
-                重新加载
-              </Button>
-            </EmptyContent>
-          </Empty>
-        ) : (
-          <>
-            <TabsContent value="connections" className="flex flex-col gap-6">
-              {visibleProviders.length ? (
-                <ConnectionList
-                  items={visibleProviders}
-                  pendingCredential={
-                    pendingKey.pending?.action === "credential.set"
-                      ? pendingKey.pending.target
-                      : undefined
-                  }
-                  onSelect={openConnection}
-                  onDisable={(provider) =>
-                    openConfirmation({ kind: "provider", provider })
-                  }
-                />
-              ) : (
-                <Empty>
-                  <EmptyHeader>
-                    <EmptyTitle>
-                      {query ? "没有匹配的连接" : "还没有连接"}
-                    </EmptyTitle>
-                    <EmptyDescription>
-                      {query
-                        ? "试试其他关键词。"
-                        : "选择平台预设，添加 API Key。"}
-                    </EmptyDescription>
-                  </EmptyHeader>
-                  {!query ? (
-                    <EmptyContent>
-                      <Button
-                        onClick={() => openConnect(true)}
-                        className="max-md:h-11"
-                      >
-                        接入服务
-                      </Button>
-                    </EmptyContent>
-                  ) : null}
-                </Empty>
-              )}
-              <p className="text-xs text-muted-foreground">
-                保存连接后，检查与模型发布分别进行。
-              </p>
-            </TabsContent>
-            <TabsContent value="presets" className="flex flex-col gap-6">
-              <div className="grid gap-6 md:grid-cols-2">
+            <div className="flex items-center justify-between gap-3">
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="group -ml-3 text-muted-foreground max-md:h-11"
+                >
+                  预设管理
+                  <ChevronDown className="size-4 transition-transform group-data-[state=open]:rotate-180" />
+                </Button>
+              </CollapsibleTrigger>
+              {presetsOpen || query ? (
+                <Button variant="outline" onClick={() => openEditor("new")}>
+                  新建预设
+                </Button>
+              ) : null}
+            </div>
+            <CollapsibleContent className="pt-4">
+              <div className="grid gap-3 sm:grid-cols-2">
                 {visiblePresets.map((p) => {
                   const Icon =
                     p.document?.config?.adapter_key === "volcengine_ark"
@@ -374,7 +414,7 @@ export function ProvidersPage({
                   return (
                     <Card
                       key={p.id}
-                      className="min-w-0 [--card-spacing:--spacing(6)]"
+                      className="min-w-0 gap-4 [--card-spacing:--spacing(4)]"
                     >
                       <CardHeader>
                         <CardTitle>
@@ -384,24 +424,16 @@ export function ProvidersPage({
                           </h2>
                         </CardTitle>
                         <CardDescription>
-                          {p.origin === "builtin" ? "内置" : "自定义"} ·{" "}
-                          {regionLabel(p.document?.config?.region)} ·{" "}
-                          {p.document?.config?.adapter_key} · v
-                          {p.version ?? "未知"}
+                          {regionLabel(p.document?.config?.region)}
+                          {p.emergency_disabled
+                            ? " · 紧急停用"
+                            : p.archived
+                              ? " · 已归档"
+                              : p.origin === "builtin"
+                                ? " · 内置"
+                                : " · 自定义"}
                         </CardDescription>
                       </CardHeader>
-                      <CardContent className="flex flex-col gap-2">
-                        <p className="text-sm text-muted-foreground">
-                          {p.document?.model_templates?.length
-                            ? `${p.document.model_templates.length} 个模型模板`
-                            : "不包含模型模板"}
-                        </p>
-                        {p.archived || p.emergency_disabled ? (
-                          <p className="text-sm">
-                            {p.emergency_disabled ? "紧急停用" : "已归档"}
-                          </p>
-                        ) : null}
-                      </CardContent>
                       <CardFooter className="flex-wrap gap-2">
                         <Button
                           disabled={p.archived || p.emergency_disabled}
@@ -410,72 +442,88 @@ export function ProvidersPage({
                         >
                           使用预设
                         </Button>
-                        <Button
-                          variant="outline"
-                          className="max-md:h-11"
-                          onClick={() => openEditor(p)}
-                        >
-                          {p.origin === "builtin" ? "复制并编辑" : "编辑新版本"}
-                        </Button>
-                        <DownloadButton
-                          filename={`provider-preset-${p.id}.json`}
-                          load={async () =>
-                            new Blob(
-                              [
-                                JSON.stringify(
-                                  await exportProviderPreset({ id: p.id! }),
-                                  null,
-                                  2,
-                                ),
-                              ],
-                              { type: "application/json" },
-                            )
-                          }
-                        >
-                          导出
-                        </DownloadButton>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
+                        <Collapsible className="w-full">
+                          <CollapsibleTrigger asChild>
                             <Button
                               variant="ghost"
-                              size="icon"
-                              className="max-md:size-11"
-                              aria-label={`${p.document?.name}预设的操作`}
+                              size="sm"
+                              className="text-muted-foreground"
                             >
-                              <MoreHorizontal data-icon="inline-start" />
+                              维护预设
+                              <ChevronDown className="size-3.5" />
                             </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuGroup>
-                              <DropdownMenuItem
-                                disabled={mutation.busy}
-                                onSelect={() =>
-                                  openConfirmation({
-                                    kind: "preset",
-                                    preset: p,
-                                    action: "archive",
-                                  })
-                                }
-                              >
-                                {p.archived ? "恢复预设" : "归档"}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                disabled={mutation.busy}
-                                onSelect={() =>
-                                  openConfirmation({
-                                    kind: "preset",
-                                    preset: p,
-                                    action: "emergency",
-                                  })
-                                }
-                              >
-                                {p.emergency_disabled
-                                  ? "解除紧急停用"
-                                  : "停止新任务"}
-                              </DropdownMenuItem>
-                            </DropdownMenuGroup>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="flex flex-wrap gap-2 pt-3">
+                            <Button
+                              variant="outline"
+                              className="max-md:h-11"
+                              onClick={() => openEditor(p)}
+                            >
+                              {p.origin === "builtin"
+                                ? "复制并编辑"
+                                : "编辑新版本"}
+                            </Button>
+                            <DownloadButton
+                              filename={`provider-preset-${p.id}.json`}
+                              load={async () =>
+                                new Blob(
+                                  [
+                                    JSON.stringify(
+                                      await exportProviderPreset({ id: p.id! }),
+                                      null,
+                                      2,
+                                    ),
+                                  ],
+                                  { type: "application/json" },
+                                )
+                              }
+                            >
+                              导出
+                            </DownloadButton>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="max-md:size-11"
+                                  aria-label={`${p.document?.name}预设的操作`}
+                                >
+                                  <MoreHorizontal data-icon="inline-start" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuGroup>
+                                  <DropdownMenuItem
+                                    disabled={mutation.busy}
+                                    onSelect={() =>
+                                      openConfirmation({
+                                        kind: "preset",
+                                        preset: p,
+                                        action: "archive",
+                                      })
+                                    }
+                                  >
+                                    {p.archived ? "恢复预设" : "归档"}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    disabled={mutation.busy}
+                                    onSelect={() =>
+                                      openConfirmation({
+                                        kind: "preset",
+                                        preset: p,
+                                        action: "emergency",
+                                      })
+                                    }
+                                  >
+                                    {p.emergency_disabled
+                                      ? "解除紧急停用"
+                                      : "停止新任务"}
+                                  </DropdownMenuItem>
+                                </DropdownMenuGroup>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </CollapsibleContent>
+                        </Collapsible>
                       </CardFooter>
                     </Card>
                   );
@@ -488,13 +536,17 @@ export function ProvidersPage({
                   </EmptyHeader>
                 </Empty>
               ) : null}
-              <p className="text-xs text-muted-foreground">
-                预设变更生成新版本，不自动改写已有连接。
-              </p>
-            </TabsContent>
-          </>
-        )}
-      </Tabs>
+            </CollapsibleContent>
+          </Collapsible>
+        </>
+      )}
+      {trialOpen ? (
+        <ServiceTrial
+          open={trialOpen}
+          onOpenChange={setTrialOpen}
+          providers={providers}
+        />
+      ) : null}
       <Dialog
         open={Boolean(connect)}
         onOpenChange={(open) => {
@@ -510,7 +562,9 @@ export function ProvidersPage({
         >
           <DialogHeader>
             <DialogTitle>接入 AI 服务</DialogTitle>
-            <DialogDescription>选择平台预设，添加 API Key。</DialogDescription>
+            <DialogDescription className="sr-only">
+              选择平台并添加 API Key。
+            </DialogDescription>
           </DialogHeader>
           {connect ? (
             <PresetConnect

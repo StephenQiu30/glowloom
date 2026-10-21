@@ -26,7 +26,9 @@ func TestPresetModelTemplatesArePortableAndProtocolBound(t *testing.T) {
 	require.Len(t, parsed.ModelTemplates, 1)
 	require.NotContains(t, string(encoded), "credential_id")
 	doc.Config = domain.BuiltinPresets()[0].Config
-	require.Error(t, doc.Validate(), "Ark video preset must not accept a text model")
+	require.NoError(t, doc.Validate(), "expanded Ark preset accepts text")
+	doc.Config.Capabilities = []string{"video"}
+	require.Error(t, doc.Validate(), "historical video-only config must reject text")
 	doc.Config = domain.BuiltinPresets()[1].Config
 	doc.ModelTemplates = append(doc.ModelTemplates, doc.ModelTemplates[0])
 	require.Error(t, doc.Validate(), "duplicate model template keys")

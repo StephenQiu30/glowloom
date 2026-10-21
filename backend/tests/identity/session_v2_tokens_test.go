@@ -6,8 +6,6 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -141,16 +139,16 @@ func TestSessionV2ConfigurationInvalidDeadline(t *testing.T) {
 }
 
 func TestSessionV2ConfigurationRollback(t *testing.T) {
-	c := config.Config{IdentityJWTVerifyKeysFile: "/controlled/verify.json"}
+	c := config.Config{IdentityJWTVerifyKeys: "/controlled/verify.json"}
 	if err := c.ValidateIdentitySessionV2(); err != nil {
 		t.Fatal(err)
 	}
 	c.IdentityJWTActiveKID = "retained"
-	c.IdentityJWTVerifyKeysFile = ""
+	c.IdentityJWTVerifyKeys = ""
 	if err := c.ValidateIdentitySessionV2(); err == nil {
 		t.Fatal("rollback lost verifier")
 	}
-	if _, err := token.LoadFiles("/missing/private", "/missing/verify", "active", true); err == nil {
+	if _, err := token.LoadValues("invalid", "invalid", "active"); err == nil {
 		t.Fatal("missing keys accepted")
 	}
 }
@@ -240,40 +238,5 @@ func TestSessionV2RotatedKeyRefresh(t *testing.T) {
 	}
 	if _, e = verifier.Verify(first.AccessToken, *now); !errors.Is(e, app.ErrAccessInvalid) {
 		t.Fatal("unknown kid accepted", e)
-	}
-}
-
-func TestSessionV2ControlledReceiptFiles(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "receipt")
-	if err := os.WriteFile(path, make([]byte, 32), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := token.LoadReceiptFile(path); err != nil {
-		t.Fatal(err)
-	}
-	link := filepath.Join(dir, "link")
-	if err := os.Symlink(path, link); err != nil {
-		t.Fatal(err)
-	}
-	for _, bad := range []string{link, "relative-receipt", dir} {
-		if _, err := token.LoadReceiptFile(bad); err == nil {
-			t.Fatal("uncontrolled file accepted")
-		}
-	}
-	if err := os.Chmod(path, 0644); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := token.LoadReceiptFile(path); err == nil {
-		t.Fatal("publicly readable receipt key accepted")
-	}
-	if err := os.Chmod(path, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, make([]byte, 65537), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := token.LoadReceiptFile(path); err == nil {
-		t.Fatal("oversize key accepted")
 	}
 }

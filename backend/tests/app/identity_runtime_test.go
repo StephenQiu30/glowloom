@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -13,17 +12,12 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 )
 
 func TestPreparedAgreementCannotEnableRegistration(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "identity.key")
-	if err := credentialproof.CreateFile(path); err != nil {
-		t.Fatal(err)
-	}
-	auth, err := identityruntime.NewAuth(&gorm.DB{}, config.Config{IdentityKeyFile: path, IdentityTermsVersion: "2026-10-15.1", IdentityMailSourceHourlyLimit: 10, IdentityMailGlobalHourlyLimit: 100}, time.Now)
+	auth, err := identityruntime.NewAuth(&gorm.DB{}, config.Config{IdentityKey: publicTestKey(t), IdentityTermsVersion: "2026-10-15.1", IdentityMailSourceHourlyLimit: 10, IdentityMailGlobalHourlyLimit: 100}, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}

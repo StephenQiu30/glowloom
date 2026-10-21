@@ -11,7 +11,10 @@ import (
 
 // ProcessLauncher starts the explicitly configured Codex executable without a
 // shell. It does not read, copy, or log the client's account credentials.
-type ProcessLauncher struct{ binary string }
+type ProcessLauncher struct {
+	binary, home, workRoot string
+	localIdentity          bool
+}
 
 // NewProcessLauncher fixes the executable path; version and real account/model
 // eligibility must be verified before the Worker registers this adapter.
@@ -27,6 +30,14 @@ func NewProcessLauncher(binary string) (*ProcessLauncher, error) {
 func (l *ProcessLauncher) Open(ctx context.Context, dir string) (io.ReadWriteCloser, error) {
 	childCtx, cancel := context.WithCancel(ctx)
 	cmd := exec.CommandContext(childCtx, l.binary, "app-server", "--stdio")
+	if l.home != "" {
+		var err error
+		cmd, err = l.isolatedCommand(childCtx, dir)
+		if err != nil {
+			cancel()
+			return nil, err
+		}
+	}
 	cmd.Dir = dir
 	cmd.Stderr = io.Discard
 	input, err := cmd.StdinPipe()

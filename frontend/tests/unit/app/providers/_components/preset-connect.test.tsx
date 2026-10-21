@@ -261,3 +261,62 @@ it("从其他预设打开时仍恢复原创建请求，不替换其平台", () =
   ).toBe("true");
   expect(api.connect).not.toHaveBeenCalled();
 });
+it("按目录版本提交候选模型，切换平台会清空旧选择", async () => {
+  const candidates: API.Preset[] = [
+    {
+      ...presets[0],
+      model_catalog: {
+        version: "catalog-v1",
+        models: [
+          {
+            key: "chat",
+            display_name: "通用聊天",
+            provider_model_id: "vendor/chat",
+          },
+        ],
+      },
+    },
+    {
+      id: "other",
+      version_id: "v2",
+      document: { name: "DeepSeek" },
+      model_catalog: {
+        version: "catalog-v2",
+        models: [{ key: "ds", display_name: "DeepSeek Flash" }],
+      },
+    },
+  ];
+  render(
+    <PresetConnect presets={candidates} onCreated={created} onSaved={saved} />,
+  );
+  fireEvent.click(screen.getByRole("radio", { name: /OpenRouter/ }));
+  expect(screen.queryByRole("checkbox", { name: "通用聊天" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "通用模型（可选）" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "通用聊天" }));
+  fireEvent.click(screen.getByRole("radio", { name: /DeepSeek/ }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "DeepSeek Flash" }));
+  fireEvent.change(screen.getByLabelText("API Key"), {
+    target: { value: "fixture-api-key-test" },
+  });
+  expect(screen.getByRole("button", { name: "保存连接" })).toHaveProperty(
+    "disabled",
+    false,
+  );
+  await waitFor(() =>
+    expect(
+      screen
+        .getByRole("button", { name: "保存连接" })
+        .closest("form")!
+        .checkValidity(),
+    ).toBe(true),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "保存连接" }));
+  await waitFor(() => expect(saved).toHaveBeenCalledOnce());
+  expect(api.connect).toHaveBeenCalledWith(
+    { id: "other" },
+    expect.objectContaining({
+      catalog_version: "catalog-v2",
+      candidate_keys: ["ds"],
+    }),
+  );
+});

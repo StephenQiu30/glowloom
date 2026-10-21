@@ -34,6 +34,47 @@ const presets: API.Preset[] = [
     },
   },
 ];
+presets[0].model_catalog = {
+  version: "fixture-catalog-v1",
+  models: [
+    {
+      key: "or-chat",
+      display_name: "GPT-5.4",
+      provider_model_id: "openai/gpt-5.4",
+      capability: "text.generate",
+    },
+    {
+      key: "or-image",
+      display_name: "GPT Image 2",
+      provider_model_id: "openai/gpt-image-2",
+      capability: "image.generate",
+    },
+  ],
+};
+for (const [name, adapter, region] of [
+  ["火山方舟", "volcengine_ark", "domestic"],
+  ["BytePlus", "byteplus", "overseas"],
+  ["DeepSeek", "deepseek", "domestic"],
+] as const) {
+  presets.push({
+    id: crypto.randomUUID(),
+    version_id: crypto.randomUUID(),
+    version: 1,
+    origin: "builtin",
+    document: { name, config: { adapter_key: adapter, region } },
+    model_catalog: {
+      version: "fixture-catalog-v1",
+      models: [
+        {
+          key: adapter + "-chat",
+          display_name: name + " 聊天",
+          capability: "text.generate",
+          requires_model_selection: adapter !== "deepseek",
+        },
+      ],
+    },
+  });
+}
 const price = {
   id: priceID,
   unit: "per_request",
@@ -86,6 +127,10 @@ const providers: API.ProviderListItem[] = [
     model_count: 1,
   },
 ];
+// Test-only mock server state survives a page reload. Production stores only the ID.
+const trials = new Map<string, API.TrialState>(
+  JSON.parse(sessionStorage.getItem("fixture.ai-trials") ?? "[]"),
+);
 const receipts = new Map<string, unknown>();
 let loseCreationReceipt = new URLSearchParams(location.search).has(
   "lost-create",
@@ -97,7 +142,79 @@ axios.defaults.adapter = async (config) => {
       ? JSON.parse(config.data)
       : (config.data ?? {});
   let data: unknown = {};
-  if (path === "/api/admin/provider-presets" && config.method === "get")
+  if (path === "/api/admin/ai-trials" && config.method === "post") {
+    const state: API.TrialState = {
+      kind: body.kind,
+      model: body.model,
+      state: "succeeded",
+      turns: [
+        {
+          request_id: body.request_id,
+          prompt: body.prompt,
+          state: "succeeded",
+          ...(body.kind === "probe"
+            ? {
+                models: ["fixture-codex"],
+                authenticated: true,
+                image_generation: true,
+              }
+            : body.kind === "chat"
+              ? { text: "Mock：第一轮聊天完成。" }
+              : {
+                  artifacts: [
+                    {
+                      sequence: 1,
+                      mime: "image/png",
+                      size: 68,
+                      sha256: "fixture",
+                    },
+                  ],
+                }),
+        },
+      ],
+    };
+    if (body.kind === "image") {
+      state.state = "unknown";
+      state.turns![0].state = "unknown";
+      state.turns![0].artifacts = [];
+    }
+    trials.set(body.request_id, state);
+    data = state;
+  } else if (path.startsWith("/api/admin/ai-trials/")) {
+    const id = path.split("/")[4];
+    const state = trials.get(id);
+    if (!state)
+      throw new axios.AxiosError(
+        "fixture trial missing",
+        "ERR_BAD_RESPONSE",
+        config,
+        undefined,
+        {
+          data: { code: "trial_not_found" },
+          status: 404,
+          statusText: "Not Found",
+          headers: {},
+          config,
+        },
+      );
+    if (path.endsWith("/turns")) {
+      state.turns!.push({
+        request_id: body.request_id,
+        prompt: body.prompt,
+        state: "succeeded",
+        text: "Mock：同会话续聊完成。",
+      });
+    }
+    if (path.endsWith("/recover")) {
+      state.state = "succeeded";
+      state.turns![0].state = "succeeded";
+      state.turns![0].artifacts = [
+        { sequence: 1, mime: "image/png", size: 68, sha256: "fixture" },
+      ];
+    }
+    if (path.endsWith("/cancel")) state.state = "closed";
+    data = state;
+  } else if (path === "/api/admin/provider-presets" && config.method === "get")
     data = { items: presets };
   else if (path === "/api/admin/providers") data = { items: providers };
   else if (path === "/api/admin/models") data = { items: [model] };
@@ -132,8 +249,8 @@ axios.defaults.adapter = async (config) => {
       provider: {
         id,
         name: `${p?.document?.name} 测试连接`,
-        adapter_key: "openrouter",
-        region: "overseas",
+        adapter_key: p?.document?.config?.adapter_key,
+        region: p?.document?.config?.region,
         status: "disabled",
         revision: 1,
       },
@@ -182,6 +299,10 @@ axios.defaults.adapter = async (config) => {
       config,
     );
   }
+  sessionStorage.setItem(
+    "fixture.ai-trials",
+    JSON.stringify([...trials.entries()]),
+  );
   return { data, status: 200, statusText: "OK", headers: {}, config };
 };
 const [{ ProvidersPage }, { AccountMenu }, { setCSRFToken }] =

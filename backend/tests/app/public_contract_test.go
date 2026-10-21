@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -42,7 +43,7 @@ func TestPublicRouterGeneratedSwaggerContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
-		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKeyFile: publicTestKey(t),
+		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKey: publicTestKey(t),
 	}, &gorm.DB{}, nil, identityruntime.SessionDependencies{})
 	if err != nil {
 		t.Fatal(err)
@@ -68,7 +69,7 @@ func TestPublicRouterGeneratedSwaggerContract(t *testing.T) {
 
 func TestPublicRouterRemovedAuthenticationRoutes(t *testing.T) {
 	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
-		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKeyFile: publicTestKey(t),
+		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKey: publicTestKey(t),
 	}, &gorm.DB{}, nil, identityruntime.SessionDependencies{})
 	if err != nil {
 		t.Fatal(err)
@@ -91,7 +92,7 @@ func TestPublicRouterRemovedAuthenticationRoutes(t *testing.T) {
 
 func TestPublicBusinessRoutesRequireSession(t *testing.T) {
 	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
-		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKeyFile: publicTestKey(t),
+		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKey: publicTestKey(t),
 	}, &gorm.DB{}, nil, identityruntime.SessionDependencies{})
 	if err != nil {
 		t.Fatal(err)
@@ -147,7 +148,7 @@ func TestPublicBusinessRoutesRequireSession(t *testing.T) {
 
 func TestPublicRouterRemovedSwaggerRoutes(t *testing.T) {
 	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
-		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKeyFile: publicTestKey(t),
+		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKey: publicTestKey(t),
 	}, &gorm.DB{}, nil, identityruntime.SessionDependencies{})
 	if err != nil {
 		t.Fatal(err)
@@ -355,5 +356,9 @@ func publicTestKey(t *testing.T) string {
 	if err := credentialproof.CreateFile(path); err != nil {
 		t.Fatal(err)
 	}
-	return path
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }

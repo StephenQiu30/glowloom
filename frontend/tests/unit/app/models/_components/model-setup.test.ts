@@ -75,3 +75,30 @@ describe("basic model setup", () => {
     ).toThrow();
   });
 });
+it.each(["volcengine_ark", "byteplus"])(
+  "%s 图片配置使用 size 并限制单图",
+  (adapter) => {
+    const result = modelConfiguration(
+      form({
+        max_outputs: "1",
+        sizes: "2K, 4K",
+        modes: "text2image",
+        provider_endpoint: "foreign",
+        aspect_ratios: "16:9",
+      }),
+      "image.generate",
+      adapter,
+    );
+    expect(result.limits).toEqual({ max_outputs: 1 });
+    expect(result.param_schema).toEqual([
+      expect.objectContaining({ field: "size", enum: ["2K", "4K"] }),
+    ]);
+    expect(() =>
+      modelConfiguration(
+        form({ max_outputs: "2", sizes: "2K" }),
+        "image.generate",
+        adapter,
+      ),
+    ).toThrow();
+  },
+);

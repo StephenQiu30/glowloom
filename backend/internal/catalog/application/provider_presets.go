@@ -46,10 +46,12 @@ type PresetStateInput struct {
 
 // ConnectPresetInput creates a disabled connection from a pinned preset version.
 type ConnectPresetInput struct {
-	VersionID uuid.UUID `json:"version_id"`
-	Key       string    `json:"key"`
-	Name      string    `json:"name"`
-	RequestID uuid.UUID `json:"request_id"`
+	CatalogVersion string    `json:"catalog_version,omitempty"`
+	CandidateKeys  []string  `json:"candidate_keys,omitempty"`
+	VersionID      uuid.UUID `json:"version_id"`
+	Key            string    `json:"key"`
+	Name           string    `json:"name"`
+	RequestID      uuid.UUID `json:"request_id"`
 }
 
 // ConnectionConfig preserves the nonsecret settings used by a connection.
@@ -87,7 +89,14 @@ func (s *ProviderPresets) List(ctx context.Context, actor identityapp.Principal)
 	if !IsPlatformAdmin(actor) {
 		return nil, identityapp.ErrForbidden
 	}
-	return s.store.ListPresets(ctx, actor)
+	presets, err := s.store.ListPresets(ctx, actor)
+	if err != nil {
+		return nil, err
+	}
+	for i := range presets {
+		presets[i].ModelCatalog = domain.ModelCatalogForConfig(presets[i].Document.Config)
+	}
+	return presets, nil
 }
 
 // Save verifies the exact preview before committing a custom preset version.

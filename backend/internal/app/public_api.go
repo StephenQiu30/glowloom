@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	trialwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/aitrial"
 	biblewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/bible"
 	canvaswire "github.com/StephenQiu30/glowloom-server/backend/internal/app/canvas"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
@@ -168,6 +169,9 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	toolhttp.NewTranscriptionHandler(mediawire.ProvideMediaTranscriptionStore(database, transcriber != nil)).Register(protected)
 	depths := mediawire.ProvideMediaDepthStore(database, cfg.VideoDepthPythonPath != "")
 	toolhttp.NewDepthHandler(depths, toolapp.NewDepthQuery(depths, storage, storage)).Register(protected)
+	if err := trialwire.RegisterAPI(socketLifetime, identityProtected, database, storage, cfg); err != nil {
+		return nil, err
+	}
 	catalogStore := operationwire.NewCatalogStore(database)
 	cataloghttp.NewPresetHandler(catalogapp.NewProviderPresets(catalogStore)).Register(identityProtected)
 	cataloghttp.NewConfigHandler(catalogapp.NewProviderConfigs(catalogStore)).Register(identityProtected)

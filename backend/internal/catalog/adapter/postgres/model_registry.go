@@ -248,7 +248,7 @@ func setModelStatusInTx(tx *gorm.DB, modelID uuid.UUID, status domain.ModelStatu
 		if err := tx.Raw(`SELECT adapter_key FROM catalog.provider WHERE id=?`, model.ProviderID).Scan(&adapter).Error; err != nil {
 			return err
 		}
-		if adapter == "openrouter" || adapter == "volcengine_ark" {
+		if domain.IsManagedCloud(adapter) {
 			return application.ErrReleaseUnverified
 		}
 		if model.CurrentVersionID == uuid.Nil {

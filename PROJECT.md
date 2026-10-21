@@ -4,9 +4,9 @@
 
 ## 1. 当前阶段与文件职责
 
-用户系统已进入实现与验证阶段：邮箱 + 密码、注册验证邮箱，个人与团队创作者共用账号，平台管理与团队管理权限分别校验；账号注销采用即时软删除并撤权。认证、个人中心、团队治理、统计导出、资源授权及前端已实现，分模块和最终复审、工程回归及现有容器更新已完成；原密码登录、同会话连续刷新与本人/平台页面读取已实测，完整业务与质量接受按[执行总览](docs/plan/01-用户系统执行总览.md)记录。当前事实与差异见[实现盘点](docs/design/01-用户系统总体设计.md#1-实现盘点)，代码实现、工程检查、运行验证与产品接受分别标明。
+已确认规则保留：邮箱 + 密码、注册验证邮箱；个人与团队创作者共用账号，平台管理与团队管理权限分别校验；账号注销采用即时软删除并撤权。当前实施进度、下一步与剩余接受统一见 [BACKLOG](BACKLOG.md)，历史证据保留在[用户系统设计](docs/design/01-用户系统总体设计.md)和[测试与运行设计](docs/design/04-用户系统测试与运行设计.md)。
 
-[文档索引](docs/00-文档索引.md) 为文档入口；文档链路统一为 **requirement → design → prd → plan**：requirement 定义需求、规则与验收来源，design 将需求转为交互及技术方案，prd 基于需求和设计汇总用户价值、交付范围与接受条件，plan 按 PRD 范围和设计拆解任务、依赖与验证；各目录正文按顺序编号。AGENTS 负责长期协作规则，根 DESIGN 负责共享视觉与交互，BACKLOG 只维护当前事项。未重新评审的其他业务能力保留在[产品范围](docs/requirement/01-产品范围.md)中，不承诺排期或完成。
+[文档索引](docs/00-文档索引.md) 为文档入口；新任务按[设计、用户故事、测试场景模板](docs/templates/00-模板导航.md)整理，故事和场景进入对应设计，实施状态只在 BACKLOG 维护。原需求、PRD、调研与任务的原文、范围、稳定ID、确认和证据已按主题并入design，变更既有规则时同步原权威来源及引用；市场、技术和选型调研在对应设计保留来源与适用版本，调研建议不等于已接受方案。各目录正文按顺序编号。AGENTS 负责长期协作规则，根 DESIGN 负责共享视觉与交互。未重新评审的其他业务能力保留在[产品范围](docs/design/24-产品总览与交付边界设计.md#33-需求原文与规则文首来源与范围)中，不承诺排期或完成。
 
 ## 2. 可继续使用的工具
 
@@ -14,7 +14,7 @@
 
 业务按职责组织，`adapter → application → domain`，依赖显式注入，接口由消费方定义。编码与审查遵循AGENTS的Google Go与Vercel/Next.js规范；不预建未来目录、通用框架或空转发层。
 
-后端只有一个进程入口 `backend/cmd/glowloom`。默认以 `--role=api|worker|relay|all` 运行对应角色；身份维护、对象存储维护、Temporal 计划和分区确保分别是 `glowloom identity`、`glowloom storage`、`glowloom temporal setup`、`glowloom partitions ensure`。所有运维子命令共用当前 `glowloom` 二进制，不保留 `cmd/identity` 独立入口。镜像入口和用法字符串同为 `glowloom`。
+后端只有一个进程入口 `backend/cmd/glowloom`。默认以 `--role=api|worker|relay|all` 运行对应角色；身份维护、对象存储维护、Temporal 计划和分区确保分别是 `glowloom identity`、`glowloom storage`、`glowloom temporal setup`、`glowloom partitions ensure`。不保留独立的 `cmd/identity`；全部运维子命令共用当前二进制。镜像入口和用法字符串同为 `glowloom`。
 
 业务实现放在 `backend/internal/<模块>/`：`domain` 只含规则，`application` 编排用例，`adapter/<技术>` 对接 HTTP、数据库、工作流或外部系统。领域与应用不依赖 Gin、GORM，也不调用另一个业务模块的应用服务。跨模块事实由消费方定义小接口。
 
@@ -33,7 +33,7 @@
 - 按接受的设计维护 Handler/DTO 和注解，由固定版本 swag 生成规范，再由固定版本 @umijs/openapi 生成前端调用；`frontend/src/api/` 全部为生成文件，不手改，不在组件目录手写业务请求函数或维护另一套客户端。`frontend/openapi2ts.config.ts` 只声明生成配置，遵循 [@umijs/openapi 官方用法](https://github.com/chenshuai2144/openapi2typescript#usage)，不执行外部命令、切换进程目录或改写工具模板。在 `frontend/` 执行 `pnpm api:generate`：先运行 `api:schema` 将后端注解导出到忽略目录 `node_modules/.cache/openapi/swagger.json`，再运行官方 openapi2ts 和项目 Prettier。无需启动后端；生成需要 Go、Node 和已安装的前端依赖。`pnpm api:check` 独立重生成并逐文件核对、核对全部 operationId，发现手改、漏生成或额外文件即失败。
 - 通用请求层为 `frontend/src/lib/request.ts`：使用 Axios 实例、原生 Axios 配置和拦截器，统一超时、幂等键、multipart 与 HTTP 错误转换，直接返回后端 payload。取消保留 Axios 的取消语义；传输层不导入 UI/认证组件，不弹窗或跳转。认证文案和会话校验位于 `components/auth/contracts.ts`。页面导入 `@/api/<标签>`，类型使用生成的 `API` 命名空间。下载传入自定义 options 时显式指定 `responseType: "blob"`；@umijs/openapi 1.14.1 原始模板只有在 options 未提供时使用 hook 默认值，不通过改写模板改变该行为。
 - 后端不提供在线 Swagger 路由，不新增跟踪的 backend/docs 产物。生成合同检查与实际路由双向核对。
-- `backend/db/schema.sql` 是唯一的数据库结构定义。它只用于空业务库；禁止对已有业务库重放、重建或清理数据。邮箱与身份引用保护见[用户系统设计](docs/design/01-用户系统总体设计.md#8-d6-迁移与切换)。
+- `backend/db/schema.sql` 是唯一的数据库结构定义。它只用于空业务库；禁止对已有业务库重放、重建或清理数据。邮箱与身份引用保护见[用户系统设计](docs/design/01-用户系统总体设计.md#81-d6-迁移与切换)。
 - 浏览器请求经同站代理；服务端 `LV_BACKEND_ORIGIN` 不进入浏览器。凭据不进入文档、日志、前端包或提交。
 - 默认本地工程验证不发起真实收费生成；fixture、协议握手或页面成功不能代替真实供应商验收。模型可用性以实际配置和适配能力为准。
 - 本地 namespace 显式准备，不由应用自动创建；Go 工具链与依赖版本以 go.mod、Dockerfile 为准。开发环境直接使用 `docker compose up -d --build` 启动或更新，只更新后端时追加 `backend`，不新增启动脚本。开发后端每次启动都从只读挂载的当前源码编译，编译失败即停止，不运行旧程序；构建缓存使用独立开发卷。纯 Go 源码更新也可 `docker compose restart backend`，运行中不会自动热重载；依赖、Dockerfile、入口或 Compose 配置更新须重新构建并更新容器。生产镜像仍在构建阶段编译。不把修改文档解释为重启服务授权。
@@ -55,6 +55,6 @@ Go 测试统一放在 `backend/tests/<业务模块>/`，通过模块构造函数
 
 ## 5. 本地文档与交付
 
-直接维护标准 Markdown，以 Git 管理修订。docs 仅保留现行 requirement、design、prd 和 plan，不另设历史目录、重复模板或逐轮交付日志。本机编辑器配置和第三方版权归属不是产品历史需求，不随本次清理删除。
+直接维护标准 Markdown，以 Git 管理修订。现行主题正文统一维护在 docs/design，模板维护在 docs/templates；原需求、PRD、调研与任务的原文、确认和证据在对应设计保留，当前实施进度只在 BACKLOG 维护。不另设历史目录、重复模板或逐轮交付日志。本机编辑器配置和第三方版权归属不是产品历史需求，不随本次清理删除。
 
 提交遵循 AGENTS；只包含本任务，报告检查结果、未决项与工作区状态。未经用户要求不提交、推送或发布，不改外部任务系统状态。

@@ -49,14 +49,20 @@ func Execute(ctx context.Context, args []string, output io.Writer) error {
 	flags := flag.NewFlagSet("storage "+command, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	path := flags.String("config", "", "reviewed storage YAML")
-	environment := flags.String("env", "production", "local|staging|production")
+	environment := flags.String("env", "prod", "local|staging|prod")
 	profile := flags.String("profile", "", "explicit resource profile")
 	expected := flags.String("expected-revision", "", "CAS revision; empty only for first activation")
 	evidence := flags.String("evidence-sha256", "", "reviewed external evidence digest")
 	probeID := flags.String("probe-id", "", "persisted failed diagnostic identity")
 	readKey := flags.String("read-key", "", "retained sentinel for read-only probe")
 	batch := flags.Int("batch", 100, "maximum historical objects to verify")
-	if flags.Parse(args[1:]) != nil || flags.NArg() != 0 || *path == "" || (*environment != "local" && *environment != "staging" && *environment != "production") {
+	if flags.Parse(args[1:]) != nil || flags.NArg() != 0 || *path == "" {
+		return errors.New("invalid storage arguments")
+	}
+	if *environment == "production" {
+		*environment = "prod"
+	}
+	if *environment != "local" && *environment != "staging" && *environment != "prod" {
 		return errors.New("invalid storage arguments")
 	}
 	visited := make(map[string]bool)

@@ -32,17 +32,28 @@ type ProviderConfig struct {
 
 // Validate admits only implemented protocols and bounded operational settings.
 func (c ProviderConfig) Validate() error {
-	allowed := []string{"video"}
+	var allowed []string
 	switch c.AdapterKey {
 	case "volcengine_ark":
 		if c.BaseURL != "https://ark.cn-beijing.volces.com/api/v3" || c.Region != RegionDomestic {
 			return ErrInvalidPreset
 		}
+		allowed = []string{"text", "image", "video"}
 	case "openrouter":
 		if c.BaseURL != "https://openrouter.ai/api/v1" || c.Region != RegionOverseas {
 			return ErrInvalidPreset
 		}
 		allowed = []string{"text", "image", "video"}
+	case "byteplus":
+		if c.BaseURL != "https://ark.ap-southeast.bytepluses.com/api/v3" || c.Region != RegionOverseas {
+			return ErrInvalidPreset
+		}
+		allowed = []string{"text", "image"}
+	case "deepseek":
+		if c.BaseURL != "https://api.deepseek.com" || c.Region != RegionDomestic {
+			return ErrInvalidPreset
+		}
+		allowed = []string{"text"}
 	default:
 		return ErrInvalidPreset
 	}
@@ -153,17 +164,18 @@ func rejectDuplicateFields(decoder *json.Decoder) error {
 
 // Preset keeps lifecycle separate from its immutable versioned content.
 type Preset struct {
-	ID                uuid.UUID      `json:"id"`
-	Slug              string         `json:"slug"`
-	Origin            string         `json:"origin"`
-	ParentID          *uuid.UUID     `json:"parent_id"`
-	Archived          bool           `json:"archived"`
-	EmergencyDisabled bool           `json:"emergency_disabled"`
-	Revision          int64          `json:"revision"`
-	Version           int            `json:"version"`
-	VersionID         uuid.UUID      `json:"version_id"`
-	Document          PresetDocument `json:"document"`
-	UpdatedAt         time.Time      `json:"updated_at"`
+	ModelCatalog      ModelCandidateCatalog `json:"model_catalog"`
+	ID                uuid.UUID             `json:"id"`
+	Slug              string                `json:"slug"`
+	Origin            string                `json:"origin"`
+	ParentID          *uuid.UUID            `json:"parent_id"`
+	Archived          bool                  `json:"archived"`
+	EmergencyDisabled bool                  `json:"emergency_disabled"`
+	Revision          int64                 `json:"revision"`
+	Version           int                   `json:"version"`
+	VersionID         uuid.UUID             `json:"version_id"`
+	Document          PresetDocument        `json:"document"`
+	UpdatedAt         time.Time             `json:"updated_at"`
 }
 
 // BuiltinPreset declares an installation seed, never a mutable global variable.
@@ -176,8 +188,10 @@ type BuiltinPreset struct {
 // BuiltinPresets returns fresh data so editing a copy cannot change the registry.
 func BuiltinPresets() []BuiltinPreset {
 	return []BuiltinPreset{
-		{Slug: "volcengine-ark", Name: "火山方舟", Config: ProviderConfig{AdapterKey: "volcengine_ark", BaseURL: "https://ark.cn-beijing.volces.com/api/v3", Region: RegionDomestic, Capabilities: []string{"video"}, TimeoutSeconds: 120, ConcurrencyLimit: 2, RateLimitPerMin: 30}},
+		{Slug: "volcengine-ark", Name: "火山方舟", Config: ProviderConfig{AdapterKey: "volcengine_ark", BaseURL: "https://ark.cn-beijing.volces.com/api/v3", Region: RegionDomestic, Capabilities: []string{"video", "text", "image"}, TimeoutSeconds: 120, ConcurrencyLimit: 2, RateLimitPerMin: 30}},
 		{Slug: "openrouter", Name: "OpenRouter", Config: ProviderConfig{AdapterKey: "openrouter", BaseURL: "https://openrouter.ai/api/v1", Region: RegionOverseas, Capabilities: []string{"text", "image", "video"}, TimeoutSeconds: 120, ConcurrencyLimit: 2, RateLimitPerMin: 30}},
+		{Slug: "byteplus", Name: "BytePlus", Config: ProviderConfig{AdapterKey: "byteplus", BaseURL: "https://ark.ap-southeast.bytepluses.com/api/v3", Region: RegionOverseas, Capabilities: []string{"text", "image"}, TimeoutSeconds: 120, ConcurrencyLimit: 2, RateLimitPerMin: 30}},
+		{Slug: "deepseek", Name: "DeepSeek", Config: ProviderConfig{AdapterKey: "deepseek", BaseURL: "https://api.deepseek.com", Region: RegionDomestic, Capabilities: []string{"text"}, TimeoutSeconds: 120, ConcurrencyLimit: 2, RateLimitPerMin: 30}},
 	}
 }
 

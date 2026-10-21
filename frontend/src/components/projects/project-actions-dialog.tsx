@@ -1,10 +1,12 @@
 "use client";
 import Link from "next/link";
+import { toast } from "sonner";
 import { RequestError } from "@/lib/request";
 import { useRef, useState } from "react";
 import { ensureSessionFresh } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
   DialogContent,
@@ -30,11 +32,13 @@ export function ProjectActionsDialog({
   action,
   onClose,
   onResult,
+  onRestoreFocus,
 }: {
   projects: Project[];
   action: ProjectAction;
   onClose: () => void;
   onResult: (success: string[], failed: string[]) => void;
+  onRestoreFocus: () => void;
 }) {
   const { proof, namespace } = useProjectPresentation(projects[0], false);
   const space = useSpace();
@@ -64,7 +68,6 @@ export function ProjectActionsDialog({
     running.current = true;
     const targets = retryOriginal ? unknownProjects.current : projects;
     const unresolved: Project[] = [];
-    setCanRetry(false);
     setPending(true);
     try {
       const identity = await ensureSessionFresh();
@@ -123,10 +126,32 @@ export function ProjectActionsDialog({
         o.message ? [o.message] : [],
       );
       onResult(success, failed);
+      if (failed.length === 0) {
+        onClose();
+        toast.success(`已${label} ${success.length} 个画布。`, {
+          duration: 5000,
+          description:
+            action === "recycle" ? (
+              "30天内可在回收站恢复。"
+            ) : action === "restore" ? (
+              <div className="flex flex-wrap gap-2">
+                {projects.some((p) => p.status === "active") && (
+                  <Button variant="link" size="sm" asChild>
+                    <Link href="/projects?state=active">查看画布</Link>
+                  </Button>
+                )}
+                {projects.some((p) => p.status === "archived") && (
+                  <Button variant="link" size="sm" asChild>
+                    <Link href="/projects?state=archived">查看已归档</Link>
+                  </Button>
+                )}
+              </div>
+            ) : undefined,
+        });
+        return;
+      }
       setResult(
-        failed.length
-          ? `已完成 ${success.length} 项，${rejected} 项被拒绝，${unknown} 项结果未确认。关闭后重新读取列表核对，未完成项保留选择。${failures.join("；")}`
-          : `已${label} ${success.length} 个画布。`,
+        `已完成 ${success.length} 项，${rejected} 项被拒绝，${unknown} 项结果未确认。关闭后重新读取列表核对，未完成项保留选择。${failures.join("；")}`,
       );
     } catch {
       setResult("无法确认当前登录状态，请关闭后重新读取。");
@@ -142,7 +167,20 @@ export function ProjectActionsDialog({
         if (!open && !pending) onClose();
       }}
     >
-      <DialogContent>
+      <DialogContent
+        aria-busy={pending}
+        showCloseButton={!pending}
+        onEscapeKeyDown={(event) => {
+          if (pending) event.preventDefault();
+        }}
+        onInteractOutside={(event) => {
+          if (pending) event.preventDefault();
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          onRestoreFocus();
+        }}
+      >
         <DialogTitle>
           {label} {projects.length} 个画布
         </DialogTitle>
@@ -166,36 +204,23 @@ export function ProjectActionsDialog({
             </li>
           ))}
         </ul>
-        <p role="status" className="text-sm">
-          {pending ? "正在处理，请稍候…" : result}
-        </p>
+        {(pending || result) && (
+          <p role="status" aria-atomic="true" className="text-sm break-words">
+            {pending ? "正在处理，请稍候…" : result}
+          </p>
+        )}
         <DialogFooter>
           <Button variant="outline" disabled={pending} onClick={onClose}>
-            {result ? "完成" : "取消"}
+            {result ? "关闭" : "取消"}
           </Button>
-          {result && action === "restore" && (
-            <>
-              {projects.some((p) => p.status === "active") && (
-                <Button variant="ghost" asChild>
-                  <Link href="/projects?state=active" onClick={onClose}>
-                    查看画布
-                  </Link>
-                </Button>
-              )}
-              {projects.some((p) => p.status === "archived") && (
-                <Button variant="ghost" asChild>
-                  <Link href="/projects?state=archived" onClick={onClose}>
-                    查看已归档
-                  </Link>
-                </Button>
-              )}
-            </>
-          )}
           {result && canRetry && (
             <Button
               disabled={pending || !proof || !space.selected?.writable}
               onClick={() => void submit(true)}
             >
+              {pending && (
+                <Spinner data-icon="inline-start" aria-hidden="true" />
+              )}
               重试原操作
             </Button>
           )}
@@ -204,6 +229,9 @@ export function ProjectActionsDialog({
               disabled={pending || !proof || !space.selected?.writable}
               onClick={() => void submit()}
             >
+              {pending && (
+                <Spinner data-icon="inline-start" aria-hidden="true" />
+              )}
               {label}
             </Button>
           )}

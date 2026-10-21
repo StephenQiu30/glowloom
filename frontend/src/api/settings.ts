@@ -3,6 +3,96 @@
 import { request } from "@/lib/request";
 import type { RequestOptions } from "@/lib/request";
 
+/** Start development AI trial POST /api/admin/ai-trials */
+export async function startAiTrial(
+  body: API.TrialRequest,
+  options?: RequestOptions,
+) {
+  return request<any>("/api/admin/ai-trials", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** Read development AI trial GET /api/admin/ai-trials/${param0} */
+export async function getAiTrial(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getAiTrialParams,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.TrialState>(`/api/admin/ai-trials/${param0}`, {
+    method: "GET",
+    params: { ...queryParams },
+    ...(options || {}),
+  });
+}
+
+/** Read development AI artifact GET /api/admin/ai-trials/${param0}/artifacts/${param1} */
+export async function getAiTrialArtifact(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getAiTrialArtifactParams,
+  options?: RequestOptions,
+) {
+  const { id: param0, sequence: param1, ...queryParams } = params;
+  return request<Blob>(`/api/admin/ai-trials/${param0}/artifacts/${param1}`, {
+    method: "GET",
+    params: { ...queryParams },
+    ...(options || { responseType: "blob" }),
+  });
+}
+
+/** Stop development AI trial POST /api/admin/ai-trials/${param0}/cancel */
+export async function cancelAiTrial(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.cancelAiTrialParams,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<any>(`/api/admin/ai-trials/${param0}/cancel`, {
+    method: "POST",
+    params: { ...queryParams },
+    ...(options || {}),
+  });
+}
+
+/** Recover development AI result POST /api/admin/ai-trials/${param0}/recover */
+export async function recoverAiTrial(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.recoverAiTrialParams,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<any>(`/api/admin/ai-trials/${param0}/recover`, {
+    method: "POST",
+    params: { ...queryParams },
+    ...(options || {}),
+  });
+}
+
+/** Continue development Codex chat POST /api/admin/ai-trials/${param0}/turns */
+export async function continueAiTrial(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.continueAiTrialParams,
+  body: API.TrialMessage,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<any>(`/api/admin/ai-trials/${param0}/turns`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    params: { ...queryParams },
+    data: body,
+    ...(options || {}),
+  });
+}
+
 /** 模型能力声明目录 GET /api/admin/capabilities */
 export async function listAdminCapabilities(options?: RequestOptions) {
   return request<API.CapabilitySummary[]>("/api/admin/capabilities", {

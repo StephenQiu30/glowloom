@@ -118,7 +118,7 @@ func (c *rpcClient) call(ctx context.Context, method string, params, target any)
 			if len(frame.ID) != 0 {
 				return errProtocol
 			}
-			if frame.Method == "item/completed" || frame.Method == "turn/completed" {
+			if frame.Method == "item/completed" || frame.Method == "turn/completed" || frame.Method == "item/agentMessage/delta" {
 				if len(c.pending) >= 64 {
 					return errProtocol
 				}

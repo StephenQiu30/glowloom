@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -29,32 +28,16 @@ func NewSessionDependencies(cfg config.Config, client *redis.Client) (SessionDep
 	if err := cfg.ValidateIdentitySessionV2(); err != nil {
 		return deps, err
 	}
-	paths := []string{cfg.IdentityKeyFile, cfg.IdentityJWTKeyFile, cfg.IdentityRefreshReceiptKeyFile}
-	for i, p := range paths {
-		if p == "" {
-			continue
-		}
-		for _, q := range paths[i+1:] {
-			if q == "" {
-				continue
-			}
-			a, ea := os.Stat(p)
-			b, eb := os.Stat(q)
-			if ea == nil && eb == nil && os.SameFile(a, b) {
-				return deps, fmt.Errorf("%w: identity key purposes must be independent", config.ErrInvalid)
-			}
-		}
-	}
-	if cfg.IdentityJWTVerifyKeysFile == "" {
+	if cfg.IdentityJWTVerifyKeys == "" {
 		return deps, nil
 	}
-	tokens, err := sessiontoken.LoadFiles(cfg.IdentityJWTKeyFile, cfg.IdentityJWTVerifyKeysFile, cfg.IdentityJWTActiveKID, cfg.IdentityJWTKeyFile != "")
+	tokens, err := sessiontoken.LoadValues(cfg.IdentityJWTPrivateKey, cfg.IdentityJWTVerifyKeys, cfg.IdentityJWTActiveKID)
 	if err != nil {
 		return deps, err
 	}
 	deps.Tokens = tokens
-	if cfg.IdentityRefreshReceiptKeyFile != "" {
-		deps.Receipts, err = sessiontoken.LoadReceiptFile(cfg.IdentityRefreshReceiptKeyFile)
+	if cfg.IdentityRefreshReceiptKey != "" {
+		deps.Receipts, err = sessiontoken.LoadReceiptValue(cfg.IdentityRefreshReceiptKey)
 		if err != nil {
 			return SessionDependencies{}, err
 		}

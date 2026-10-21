@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -41,10 +42,15 @@ func TestRuntimeTeamInvitationAndNotificationWiring(t *testing.T) {
 		t.Fatal(err)
 	}
 	token := completionPayload(t, tx, invitation.EmailKey, "team_invitation")["token"]
-	cfg := config.Config{IdentityKeyFile: filepath.Join(t.TempDir(), "identity.key"), PublicOrigin: "http://localhost:3200", IdentityTermsVersion: identityhttp.LegalPackageVersion(), IdentityMailSourceHourlyLimit: 100, IdentityMailGlobalHourlyLimit: 1000}
-	if err := credentialproof.CreateFile(cfg.IdentityKeyFile); err != nil {
+	cfg := config.Config{IdentityKey: filepath.Join(t.TempDir(), "identity.key"), PublicOrigin: "http://localhost:3200", IdentityTermsVersion: identityhttp.LegalPackageVersion(), IdentityMailSourceHourlyLimit: 100, IdentityMailGlobalHourlyLimit: 1000}
+	if err := credentialproof.CreateFile(cfg.IdentityKey); err != nil {
 		t.Fatal(err)
 	}
+	material, err := os.ReadFile(cfg.IdentityKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.IdentityKey = string(material)
 	auth, err := identityruntime.NewAuth(tx, cfg, func() time.Time { return now })
 	if err != nil {
 		t.Fatal(err)
@@ -101,7 +107,7 @@ func TestRuntimeTeamInvitationAndNotificationWiring(t *testing.T) {
 			KeyID            string
 			EncryptedPayload []byte
 		}
-		protector, err := credentialproof.LoadFile(cfg.IdentityKeyFile)
+		protector, err := credentialproof.LoadValue(cfg.IdentityKey)
 		if err != nil {
 			t.Fatal(err)
 		}

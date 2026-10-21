@@ -11,23 +11,6 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui/table";
-import {
-  Item,
-  ItemGroup,
-  ItemMedia,
-  ItemContent,
-  ItemTitle,
-  ItemDescription,
-  ItemActions,
-} from "@/components/ui/item";
 
 export function regionLabel(region?: string) {
   return region === "domestic"
@@ -113,140 +96,73 @@ export function ConnectionList({
   onDisable: (provider: API.CreatedProvider) => void;
 }) {
   return (
-    <section aria-label="连接列表">
-      <div className="hidden md:block">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>服务</TableHead>
-              <TableHead>状态</TableHead>
-              <TableHead>Key</TableHead>
-              <TableHead>模型</TableHead>
-              <TableHead>
-                <span className="sr-only">操作</span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((item) => {
-              const p = item.provider!;
-              const Icon = p.adapter_key === "volcengine_ark" ? Server : Globe;
-              return (
-                <TableRow key={p.id}>
-                  <TableCell className="w-2/5 whitespace-normal">
-                    <Button
-                      variant="ghost"
-                      className="h-auto min-h-16 w-full justify-start gap-3 px-2 py-3 whitespace-normal"
-                      onClick={() => onSelect(p.id!)}
-                      aria-label={`查看 ${p.name}`}
-                    >
-                      <Icon data-icon="inline-start" />
-                      <span className="flex min-w-0 flex-col items-start gap-1">
-                        <span className="break-words">{p.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {p.adapter_key} · {regionLabel(p.region)}
-                        </span>
-                      </span>
-                    </Button>
-                  </TableCell>
-                  <TableCell className="whitespace-normal">
-                    <div className="flex flex-col items-start gap-2">
-                      <Badge variant="secondary">
-                        {pendingCredential === p.id
-                          ? "保存待确认"
-                          : checkLabel(item.credential?.last_test_result)}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {p.status === "active"
-                          ? "已启用"
-                          : p.status === "disabled"
-                            ? "已停用"
-                            : "状态未知"}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="whitespace-normal">
-                    {pendingCredential === p.id ? (
-                      "待确认"
-                    ) : (
-                      <KeySummary credential={item.credential} />
-                    )}
-                  </TableCell>
-                  <TableCell className="whitespace-normal">
-                    {item.model_count === undefined
-                      ? "数量未知"
-                      : `${item.model_count} 个模型`}
-                  </TableCell>
-                  <TableCell>
-                    <ConnectionMenu
-                      item={item}
-                      onSelect={onSelect}
-                      onDisable={onDisable}
-                    />
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </div>
-      <ItemGroup className="md:hidden">
-        {items.map((item) => {
-          const p = item.provider!;
-          const Icon = p.adapter_key === "volcengine_ark" ? Server : Globe;
-          return (
-            <Item key={p.id} variant="outline">
-              <ItemMedia variant="icon">
-                <Icon />
-              </ItemMedia>
-              <ItemContent className="min-w-0">
-                <ItemTitle>
-                  <Button
-                    variant="ghost"
-                    className="h-auto min-h-11 justify-start px-0 whitespace-normal"
-                    onClick={() => onSelect(p.id!)}
-                    aria-label={`查看 ${p.name}`}
-                  >
-                    {p.name}
-                  </Button>
-                </ItemTitle>
-                <ItemDescription>
-                  {regionLabel(p.region)} ·{" "}
-                  {p.status === "active"
-                    ? "已启用"
-                    : p.status === "disabled"
-                      ? "已停用"
-                      : "状态未知"}
-                </ItemDescription>
-                <ItemDescription>
-                  {pendingCredential === p.id ? (
-                    "待确认"
-                  ) : (
-                    <KeySummary credential={item.credential} />
-                  )}
-                </ItemDescription>
-                <ItemDescription>
-                  {item.model_count === undefined
-                    ? "模型数量未知"
-                    : `${item.model_count} 个模型`}
-                </ItemDescription>
-                <Badge variant="secondary">
-                  {pendingCredential === p.id
-                    ? "保存待确认"
-                    : checkLabel(item.credential?.last_test_result)}
-                </Badge>
-              </ItemContent>
-              <ItemActions>
-                <ConnectionMenu
-                  item={item}
-                  onSelect={onSelect}
-                  onDisable={onDisable}
-                />
-              </ItemActions>
-            </Item>
-          );
-        })}
-      </ItemGroup>
+    <section aria-label="连接列表" className="grid gap-4 sm:grid-cols-2">
+      {items.map((item) => {
+        const p = item.provider!;
+        const Icon = p.adapter_key === "volcengine_ark" ? Server : Globe;
+        const pending = pendingCredential === p.id;
+        const status = pending
+          ? "保存待确认"
+          : p.status === "disabled"
+            ? "已停用"
+            : p.status !== "active"
+              ? "状态未知"
+              : !item.credential
+                ? "待配置 Key"
+                : item.credential.status === "disabled"
+                  ? "Key 已停用"
+                  : item.credential.status === "draining"
+                    ? "Key 仅供恢复"
+                    : item.credential.status !== "active"
+                      ? "Key 状态未知"
+                      : checkLabel(item.credential.last_test_result);
+        return (
+          <article
+            key={p.id}
+            className="flex min-w-0 flex-col gap-5 rounded-xl border bg-card p-5"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <Button
+                variant="ghost"
+                className="-mt-2 -ml-2 h-auto min-w-0 flex-1 justify-start gap-3 p-2 text-left whitespace-normal"
+                onClick={() => onSelect(p.id!)}
+                aria-label={`查看 ${p.name}`}
+              >
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-muted/40">
+                  <Icon className="size-5" />
+                </span>
+                <span className="flex min-w-0 flex-col gap-1">
+                  <span className="font-medium break-words">{p.name}</span>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {regionLabel(p.region)}
+                  </span>
+                </span>
+              </Button>
+              <ConnectionMenu
+                item={item}
+                onSelect={onSelect}
+                onDisable={onDisable}
+              />
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Badge variant="secondary">{status}</Badge>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {item.model_count === undefined
+                  ? "模型数量未知"
+                  : `${item.model_count} 个模型`}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2 border-t pt-3 text-xs text-muted-foreground">
+              <span>API Key</span>
+              {pending ? (
+                <span>待确认</span>
+              ) : (
+                <KeySummary credential={item.credential} />
+              )}
+            </div>
+          </article>
+        );
+      })}
     </section>
   );
 }

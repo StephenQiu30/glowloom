@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"path/filepath"
 	"time"
 )
 
@@ -19,24 +18,17 @@ func (c Config) ValidateIdentitySessionV2() error {
 		}
 	}
 
-	for _, p := range []string{c.IdentityJWTKeyFile, c.IdentityJWTVerifyKeysFile, c.IdentityRefreshReceiptKeyFile} {
-		if p != "" && !filepath.IsAbs(p) {
-			return fmt.Errorf("%w: session key files must be absolute", ErrInvalid)
-		}
-	}
-	if c.IdentitySessionV2Enabled && (c.IdentityJWTKeyFile == "" || c.IdentityJWTVerifyKeysFile == "" || c.IdentityJWTActiveKID == "" || c.IdentityRefreshReceiptKeyFile == "") {
+	if c.IdentitySessionV2Enabled && (c.IdentityJWTPrivateKey == "" || c.IdentityJWTVerifyKeys == "" || c.IdentityJWTActiveKID == "" || c.IdentityRefreshReceiptKey == "") {
 		return fmt.Errorf("%w: session v2 requires signing, verification and receipt keys", ErrInvalid)
 	}
-	if (c.IdentityJWTKeyFile != "" || c.IdentityJWTActiveKID != "") && c.IdentityJWTVerifyKeysFile == "" {
+	if (c.IdentityJWTPrivateKey != "" || c.IdentityJWTActiveKID != "") && c.IdentityJWTVerifyKeys == "" {
 		return fmt.Errorf("%w: retain access verification keys during rollback", ErrInvalid)
 	}
-	for _, p := range []string{c.IdentityJWTKeyFile, c.IdentityRefreshReceiptKeyFile} {
-		if p != "" && filepath.Clean(p) == filepath.Clean(c.IdentityKeyFile) {
-			return fmt.Errorf("%w: identity key purposes must be independent", ErrInvalid)
-		}
-	}
-	if c.IdentityJWTKeyFile != "" && filepath.Clean(c.IdentityJWTKeyFile) == filepath.Clean(c.IdentityRefreshReceiptKeyFile) {
+	if c.IdentityJWTPrivateKey != "" && c.IdentityJWTPrivateKey == c.IdentityRefreshReceiptKey {
 		return fmt.Errorf("%w: signing and receipt keys must be independent", ErrInvalid)
+	}
+	if len(c.IdentityJWTPrivateKey) > 16384 || len(c.IdentityJWTVerifyKeys) > 65536 || len(c.IdentityRefreshReceiptKey) > 128 {
+		return fmt.Errorf("%w: identity session key configuration too large", ErrInvalid)
 	}
 	if len(c.IdentityJWTActiveKID) > 128 {
 		return fmt.Errorf("%w: active key ID too long", ErrInvalid)

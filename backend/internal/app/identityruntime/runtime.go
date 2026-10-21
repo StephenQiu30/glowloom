@@ -30,7 +30,7 @@ import (
 // NewAuth composes email authentication against an existing connection.
 // Loading this runtime neither changes the schema nor enables registration.
 func NewAuth(database *gorm.DB, cfg config.Config, now func() time.Time) (*identityapp.Auth, error) {
-	protector, err := credentialproof.LoadFile(cfg.IdentityKeyFile)
+	protector, err := credentialproof.LoadValue(cfg.IdentityKey)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +44,7 @@ func NewMailDelivery(store identityapp.MailDeliveryStore, cfg config.Config, now
 	if !cfg.SMTPEnabled {
 		return nil, errors.New("identity SMTP is disabled")
 	}
-	protector, err := credentialproof.LoadFile(cfg.IdentityKeyFile)
+	protector, err := credentialproof.LoadValue(cfg.IdentityKey)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +57,7 @@ func NewMailDelivery(store identityapp.MailDeliveryStore, cfg config.Config, now
 
 // RegisterSelf installs public invitation preview and composes authenticated account services.
 func RegisterSelf(database *gorm.DB, auth *identityapp.Auth, cfg config.Config, storage *objectstorage.Client, public *gin.RouterGroup, now func() time.Time) (*http.EmailAuthHandler, func(*gin.RouterGroup), error) {
-	protector, err := credentialproof.LoadFile(cfg.IdentityKeyFile)
+	protector, err := credentialproof.LoadValue(cfg.IdentityKey)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -148,7 +148,7 @@ func StartDirectoryExportLoop(ctx context.Context, database *gorm.DB, cfg config
 	if storage == nil {
 		return func() {}, nil
 	}
-	protector, err := credentialproof.LoadFile(cfg.IdentityKeyFile)
+	protector, err := credentialproof.LoadValue(cfg.IdentityKey)
 	if err != nil {
 		return nil, err
 	}

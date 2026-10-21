@@ -703,6 +703,64 @@ it("未知配置只读基线收到新快照保持opaque，不解析或触发重�
   await screen.findByRole("heading", { name: "新版不透明节点" });
   expect(api.save).not.toHaveBeenCalled();
 });
+it("冲突对照显示远端文本、composer及节点删除和连线变化", async () => {
+  await openDraft();
+  const { createResourceNode, createDraftNode, richCanvasDraft } =
+    await import("@/app/canvas/document");
+  const { emptyPromptDraft } =
+    await import("@/components/generation/prompt-document");
+  const text = {
+    ...createResourceNode("text", { x: 0, y: 0 }),
+    title: "远端文本节点",
+    config: { text: "远端修改的正文" },
+  };
+  const draft = emptyPromptDraft();
+  draft.document.content = [
+    {
+      type: "paragraph",
+      content: [{ type: "text", text: "远端富文本提示词" }],
+    },
+  ];
+  const generation = {
+    ...createDraftNode("image_generation", "1:1", 0),
+    title: "远端生成节点",
+    input_revision: 1,
+    config: { draft: richCanvasDraft(draft) },
+  };
+  const operations: import("@/app/canvas/operations").Operation[] = [
+    { type: "create_node", node: text },
+    { type: "create_node", node: generation },
+  ];
+  act(() =>
+    confirm(
+      {
+        key: crypto.randomUUID(),
+        body: {
+          operation_version: 1,
+          base_revision: base.revision,
+          operations,
+        },
+      },
+      operations,
+      "other",
+    ),
+  );
+  save();
+  await waitFor(() => expect(api.send).toHaveBeenCalled());
+  act(() =>
+    cb().collaboration!.receipt({
+      status: "rejected",
+      op_id: api.send.mock.calls[0][0].key,
+      code: "field_conflict",
+    }),
+  );
+  const comparison = screen.getByLabelText("服务端内容");
+  expect(comparison.textContent).toContain("远端修改的正文");
+  expect(comparison.textContent).toContain("远端富文本提示词");
+  expect(comparison.textContent).toContain("连线");
+  expect(comparison.textContent).toContain("删除");
+});
+
 function nodePointer(
   target: Element | Window,
   type: string,

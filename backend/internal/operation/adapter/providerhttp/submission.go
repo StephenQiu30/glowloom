@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
 
@@ -14,10 +15,11 @@ func submission(input application.GenerationRequest) (string, map[string]any, bo
 		return "", nil, false
 	}
 	payload := map[string]any{"model": input.ModelID, "prompt": input.Prompt}
+	arkImage := input.Capability == "image.generate" && (input.Config.AdapterKey == "volcengine_ark" || input.Config.AdapterKey == "byteplus")
 	path := ""
 	switch input.Capability {
 	case "text.generate":
-		if input.Config.AdapterKey != "openrouter" || input.OutputCount != 1 || len(input.References) != 0 {
+		if !catalogdomain.IsManagedCloud(input.Config.AdapterKey) || input.OutputCount != 1 || len(input.References) != 0 {
 			return "", nil, false
 		}
 		path = "/chat/completions"
@@ -25,13 +27,23 @@ func submission(input application.GenerationRequest) (string, map[string]any, bo
 		payload["messages"] = []map[string]string{{"role": "user", "content": input.Prompt}}
 		payload["stream"] = false
 	case "image.generate":
-		if input.Config.AdapterKey != "openrouter" {
+		if input.Config.AdapterKey != "openrouter" && !arkImage {
 			return "", nil, false
 		}
 		path = "/images"
 		payload["n"] = input.OutputCount
+		if arkImage {
+			if input.OutputCount != 1 {
+				return "", nil, false
+			}
+			path = "/images/generations"
+			delete(payload, "n")
+			payload["response_format"] = "b64_json"
+			payload["sequential_image_generation"] = "disabled"
+			payload["stream"] = false
+		}
 	case "video.generate":
-		if input.OutputCount != 1 {
+		if input.OutputCount != 1 || (input.Config.AdapterKey != "openrouter" && input.Config.AdapterKey != "volcengine_ark") {
 			return "", nil, false
 		}
 		path = "/videos"
@@ -67,7 +79,7 @@ func submission(input application.GenerationRequest) (string, map[string]any, bo
 				return "", nil, false
 			}
 			payload["duration"] = milliseconds / 1000
-		case key == "aspect_ratio" && input.Config.AdapterKey == "volcengine_ark":
+		case key == "aspect_ratio" && input.Config.AdapterKey == "volcengine_ark" && input.Capability == "video.generate":
 			payload["ratio"] = value
 		default:
 			payload[key] = value
@@ -78,7 +90,7 @@ func submission(input application.GenerationRequest) (string, map[string]any, bo
 			return "", nil, false
 		}
 		payload["provider"] = map[string]any{"only": []string{input.EndpointTag}, "allow_fallbacks": false, "require_parameters": true}
-	} else if input.Capability == "text.generate" || input.Capability == "image.generate" {
+	} else if input.Config.AdapterKey == "openrouter" && (input.Capability == "text.generate" || input.Capability == "image.generate") {
 		payload["provider"] = map[string]any{"allow_fallbacks": false, "require_parameters": true}
 	}
 	references := []map[string]any{}
@@ -116,10 +128,19 @@ func submission(input application.GenerationRequest) (string, map[string]any, bo
 	if len(frames) > 0 && len(references) > 0 || seenFrames["last_frame"] && !seenFrames["first_frame"] {
 		return "", nil, false
 	}
-	if input.Config.AdapterKey == "volcengine_ark" {
+	switch {
+	case input.Config.AdapterKey == "volcengine_ark" && input.Capability == "video.generate":
 		delete(payload, "prompt")
 		payload["content"] = arkContent
-	} else {
+	case arkImage:
+		if len(input.References) > 0 {
+			images := make([]string, 0, len(input.References))
+			for _, ref := range input.References {
+				images = append(images, ref.URL)
+			}
+			payload["image"] = images
+		}
+	default:
 		if len(frames) > 0 {
 			payload["frame_images"] = frames
 		}

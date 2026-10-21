@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 
+	trialwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/aitrial"
+
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
 
 	"go.temporal.io/sdk/activity"
@@ -50,5 +52,8 @@ func RegisterProviderActivities(w worker.Worker, database *gorm.DB, cfg config.C
 	results := operationapp.NewManagedResults(staging.NewObjects(storage), store)
 	execution := managedprovider.NewActivities(store, unsealer, providerhttp.NewClient(&http.Client{}), results, storage, managedprovider.NewVideos())
 	w.RegisterActivityWithOptions(execution.Step, activity.RegisterOptions{Name: "provider.managed"})
+	if cfg.Env == "local" {
+		trialwire.RegisterCloud(w, database, unsealer, providerhttp.NewClient(&http.Client{}), storage, operationapp.TrialStorageID(cfg.ObjectStorageEndpoint, cfg.ObjectStorageBucket))
+	}
 	return nil
 }

@@ -907,6 +907,8 @@ CREATE TABLE catalog.model_profile (
     update_time timestamp with time zone DEFAULT now() NOT NULL,
     is_delete boolean DEFAULT false NOT NULL,
     active_release_id uuid,
+    candidate_snapshot jsonb,
+    CONSTRAINT model_profile_candidate_snapshot_check CHECK (candidate_snapshot IS NULL OR (jsonb_typeof(candidate_snapshot) = 'object' AND octet_length(candidate_snapshot::text) <= 8192)),
     CONSTRAINT model_profile_display_name_check CHECK ((btrim(display_name) <> ''::text)),
     CONSTRAINT model_profile_model_key_check CHECK ((btrim(model_key) <> ''::text)),
     CONSTRAINT model_profile_revision_check CHECK ((revision > 0)),
@@ -6487,6 +6489,14 @@ INSERT INTO catalog.capability(id,key,output_type,modes,input_roles) VALUES
 ON CONFLICT(key) DO UPDATE SET
  modes=ARRAY(SELECT DISTINCT value FROM unnest(catalog.capability.modes || EXCLUDED.modes) AS value ORDER BY value),
  input_roles=ARRAY(SELECT DISTINCT value FROM unnest(catalog.capability.input_roles || EXCLUDED.input_roles) AS value ORDER BY value);
+
+
+-- Versioned cloud provider expansion; existing connection snapshots stay pinned.
+INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash) VALUES('6da07a12-0000-4000-8000-000000000001','6da07a10-0000-4000-8000-000000000001',2,'{"schema_version":1,"name":"火山方舟","config":{"adapter_key":"volcengine_ark","base_url":"https://ark.cn-beijing.volces.com/api/v3","region":"domestic","capabilities":["video","text","image"],"timeout_seconds":120,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'77174ea84bdea57c6c3eef8fc352d2eb02a5c1db13645a3c801a05de33b7c94c');
+INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8000-000000000003','byteplus','builtin');
+INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash) VALUES('6da07a11-0000-4000-8000-000000000003','6da07a10-0000-4000-8000-000000000003',1,'{"schema_version":1,"name":"BytePlus","config":{"adapter_key":"byteplus","base_url":"https://ark.ap-southeast.bytepluses.com/api/v3","region":"overseas","capabilities":["text","image"],"timeout_seconds":120,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'fc1f34a321b3e757a5dce883b5e6bf8cb964844f37f4b5c09c1f5e9a917aedcc');
+INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8000-000000000004','deepseek','builtin');
+INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash) VALUES('6da07a11-0000-4000-8000-000000000004','6da07a10-0000-4000-8000-000000000004',1,'{"schema_version":1,"name":"DeepSeek","config":{"adapter_key":"deepseek","base_url":"https://api.deepseek.com","region":"domestic","capabilities":["text"],"timeout_seconds":120,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'da870135adccd6c8d3f5ab3073ed31876fcef9c6b654c90286f5cdc2290c8f79');
 
 -- Project recycle retention worker (metadata only until explicitly scheduled).
 CREATE TABLE IF NOT EXISTS workspace.project_retention_job (

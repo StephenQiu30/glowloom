@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -30,7 +32,7 @@ func freezeManagedRelease(tx *gorm.DB, op domain.Operation) error {
 	if r.Error != nil {
 		return fmt.Errorf("read quote release: %w", r.Error)
 	}
-	if row.AdapterKey != "openrouter" && row.AdapterKey != "volcengine_ark" {
+	if !catalogdomain.IsManagedCloud(row.AdapterKey) {
 		return nil
 	}
 	if row.ReleaseID == nil {
@@ -61,7 +63,7 @@ func admitManagedDispatch(tx *gorm.DB, identity application.ProviderDispatchIden
 	if r.Error != nil {
 		return fmt.Errorf("read dispatch binding: %w", r.Error)
 	}
-	if row.AdapterKey != "openrouter" && row.AdapterKey != "volcengine_ark" {
+	if !catalogdomain.IsManagedCloud(row.AdapterKey) {
 		return nil
 	}
 	if row.ReleaseID == nil || row.ConfigID == nil {

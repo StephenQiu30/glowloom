@@ -189,7 +189,7 @@ func safeUsage(raw json.RawMessage) json.RawMessage {
 
 // Query uses only the original adapter/account and constructs its own task URL.
 func (c *Client) Query(ctx context.Context, config catalogdomain.ProviderConfig, taskID, key string) (application.GenerationResult, error) {
-	if config.Validate() != nil || !validKey(key) || !validTaskID(taskID) {
+	if config.Validate() != nil || (config.AdapterKey != "openrouter" && config.AdapterKey != "volcengine_ark") || !validKey(key) || !validTaskID(taskID) {
 		return unknownResult(), nil
 	}
 	path := "/videos/" + taskID

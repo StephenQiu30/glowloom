@@ -301,14 +301,14 @@ func readFreeQuoteCatalog(tx *gorm.DB, input application.CreateFreeQuoteInput, a
 		JOIN catalog.capability AS capability
 		  ON capability.key = m.capability AND NOT capability.is_delete
 		JOIN catalog.model_profile_version AS v
-		  ON v.id = CASE WHEN provider.adapter_key IN ('volcengine_ark','openrouter') THEN published.model_version_id ELSE m.current_version_id END AND v.model_profile_id = m.id AND NOT v.is_delete
+		  ON v.id = CASE WHEN provider.adapter_key IN ('volcengine_ark','openrouter','byteplus','deepseek') THEN published.model_version_id ELSE m.current_version_id END AND v.model_profile_id = m.id AND NOT v.is_delete
 		JOIN LATERAL (
 		  SELECT id, version_no, unit, rule, currency, fx_rate_to_cny, effective_from
 		  FROM catalog.price_rule_version
-		  WHERE (provider.adapter_key NOT IN ('volcengine_ark','openrouter') OR id=published.price_version_id) AND model_profile_id = m.id AND effective_from <= ? AND NOT is_delete
+		  WHERE (provider.adapter_key NOT IN ('volcengine_ark','openrouter','byteplus','deepseek') OR id=published.price_version_id) AND model_profile_id = m.id AND effective_from <= ? AND NOT is_delete
 		  ORDER BY effective_from DESC, version_no DESC LIMIT 1
 		) AS price ON true
-		WHERE m.model_key = ? AND (provider.adapter_key NOT IN ('volcengine_ark','openrouter') OR EXISTS (SELECT 1 FROM catalog.provider_config_version pc JOIN catalog.provider_preset_version pv ON pv.id=pc.preset_version_id JOIN catalog.provider_preset preset ON preset.id=pv.preset_id WHERE pc.id=published.config_version_id AND NOT preset.emergency_disabled)) AND m.capability = ? AND m.status = 'active'
+		WHERE m.model_key = ? AND (provider.adapter_key NOT IN ('volcengine_ark','openrouter','byteplus','deepseek') OR EXISTS (SELECT 1 FROM catalog.provider_config_version pc JOIN catalog.provider_preset_version pv ON pv.id=pc.preset_version_id JOIN catalog.provider_preset preset ON preset.id=pv.preset_id WHERE pc.id=published.config_version_id AND NOT preset.emergency_disabled)) AND m.capability = ? AND m.status = 'active'
 		  AND NOT m.is_delete AND ? = ANY(v.modes) AND ? = ANY(capability.modes)
 		  AND 'prompt' = ANY(capability.input_roles)
 		  AND (? OR provider.region = 'domestic')

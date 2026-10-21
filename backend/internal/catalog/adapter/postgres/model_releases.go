@@ -94,7 +94,8 @@ func (s *Store) CreateModelRelease(ctx context.Context, actor identityapp.Princi
  AND (NOT v.limits ? 'provider_endpoint' OR (config.config->>'adapter_key'='openrouter' AND m.capability IN ('text.generate','image.generate')))
  AND v.queue='provider' AND v.moderation='provider' AND NOT v.supports_cancel AND NOT v.supports_callback
  AND ((m.capability='video.generate' AND config.config->>'adapter_key' IN ('openrouter','volcengine_ark'))
- OR (m.capability IN ('image.generate','text.generate') AND config.config->>'adapter_key'='openrouter'))
+ OR (m.capability='text.generate' AND config.config->>'adapter_key' IN ('openrouter','volcengine_ark','byteplus','deepseek'))
+ OR (m.capability='image.generate' AND (config.config->>'adapter_key'='openrouter' OR (config.config->>'adapter_key' IN ('volcengine_ark','byteplus') AND (v.limits->>'max_outputs')::int=1))))
  FOR SHARE OF preset,m`, id, input.ModelVersionID, input.PriceVersionID, input.ConfigVersionID).Scan(&found)
 		if r.Error != nil {
 			return application.ModelRelease{}, r.Error

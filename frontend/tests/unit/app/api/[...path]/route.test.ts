@@ -926,6 +926,34 @@ it("项目管理仅开放精确生命周期路由并透传状态筛选", async (
   expect(url.searchParams.has("org_id")).toBe(false);
 });
 
+it.each([
+  ["POST", "admin/ai-trials"],
+  ["GET", "admin/ai-trials/11111111-1111-4111-8111-111111111111"],
+  ["POST", "admin/ai-trials/11111111-1111-4111-8111-111111111111/turns"],
+  ["POST", "admin/ai-trials/11111111-1111-4111-8111-111111111111/cancel"],
+  ["POST", "admin/ai-trials/11111111-1111-4111-8111-111111111111/recover"],
+  ["GET", "admin/ai-trials/11111111-1111-4111-8111-111111111111/artifacts/1"],
+])("开发试验 %s %s 使用受限同站代理", async (method, path) => {
+  const fetcher = vi.fn().mockResolvedValue(new Response("{}"));
+  vi.stubGlobal("fetch", fetcher);
+  const handler = method === "GET" ? GET : POST;
+  const response = await handler(
+    new Request(
+      `http://localhost/api/${path}?thread_id=foreign&binary=anything`,
+      { method },
+    ),
+    context(path),
+  );
+  expect(response.status).toBe(422);
+  expect(fetcher).not.toHaveBeenCalled();
+  const accepted = await handler(
+    new Request(`http://localhost/api/${path}`, { method }),
+    context(path),
+  );
+  expect(accepted.status).toBe(200);
+  expect((fetcher.mock.calls[0][0] as URL).search).toBe("");
+});
+
 it("回收核验只透传include_expired，不接受浏览器指定范围", async () => {
   const fetcher = vi
     .fn()

@@ -111,3 +111,31 @@ it("复制内置预设创建派生副本，不写回内置版本", async () => {
   expect(api.save.mock.calls[0][0].parent_id).toBe("builtin");
   expect(api.version).not.toHaveBeenCalled();
 });
+it.each([
+  ["volcengine_ark", ["文本", "图片", "视频"]],
+  ["openrouter", ["文本", "图片", "视频"]],
+  ["byteplus", ["文本", "图片"]],
+  ["deepseek", ["文本"]],
+])("%s 仅展示已实现的能力", (adapter, supported) => {
+  const item = {
+    ...preset,
+    document: {
+      ...preset.document,
+      config: { ...preset.document?.config, adapter_key: adapter as string },
+    },
+  };
+  render(
+    <PresetEditor
+      preset={item}
+      presets={[item]}
+      onClose={vi.fn()}
+      onSaved={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "高级设置" }));
+  for (const name of ["文本", "图片", "视频"]) {
+    expect(!!screen.queryByRole("checkbox", { name })).toBe(
+      supported.includes(name),
+    );
+  }
+});

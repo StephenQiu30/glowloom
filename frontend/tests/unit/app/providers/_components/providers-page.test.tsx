@@ -170,3 +170,79 @@ it("关闭后收到保存成功只刷新列表，不重新弹出详情", async (
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(api.providers).toHaveBeenCalledTimes(2);
 });
+
+it.each(["creator", "admin", "team_admin"])(
+  "%s 直接打开连接不展示管理数据",
+  (role) => {
+    api.role = role;
+    render(<ProvidersPage initialConnection="private-connection" />);
+    expect(screen.getByText("暂无访问权限")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "接入服务" })).toBeNull();
+    expect(screen.queryByText("连接详情内容")).toBeNull();
+    expect(api.providers).not.toHaveBeenCalled();
+    expect(api.presets).not.toHaveBeenCalled();
+  },
+);
+
+it("预设与文件维护按需展开，主页面不展示协议与版本", async () => {
+  api.role = "platform_admin";
+  api.presets.mockResolvedValue({
+    items: [
+      {
+        id: "preset",
+        origin: "builtin",
+        version: 9,
+        document: {
+          name: "OpenRouter",
+          config: { adapter_key: "openrouter", region: "overseas" },
+        },
+      },
+    ],
+  });
+  render(<ProvidersPage />);
+  await screen.findByText("还没有连接");
+  expect(screen.getByText("仅管理员")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "使用预设" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "预设管理" }));
+  expect(screen.getByRole("button", { name: "使用预设" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "导出" })).toBeNull();
+  expect(screen.queryByText(/openrouter ·|v9/)).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "维护预设" }));
+  expect(screen.getByRole("button", { name: "导出" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "使用预设" }));
+  expect(screen.getByRole("dialog", { name: "接入 AI 服务" })).toBeTruthy();
+});
+
+it("权限撤销立即卸载管理详情，再恢复权限重新读取", async () => {
+  api.role = "platform_admin";
+  const page = render(<ProvidersPage initialConnection="private-connection" />);
+  await screen.findByText("还没有连接");
+  expect(screen.getByText("连接详情内容")).toBeTruthy();
+  api.role = "creator";
+  page.rerender(<ProvidersPage initialConnection="private-connection" />);
+  expect(screen.getByText("暂无访问权限")).toBeTruthy();
+  expect(screen.queryByText("连接详情内容")).toBeNull();
+  api.role = "platform_admin";
+  page.rerender(<ProvidersPage />);
+  await screen.findByText("还没有连接");
+  expect(api.providers).toHaveBeenCalledTimes(2);
+});
+
+it.each([
+  ["disabled", "Key 已停用"],
+  ["draining", "Key 仅供恢复"],
+])("凭据 %s 时不将历史检查通过显示为当前健康状态", async (status, label) => {
+  api.role = "platform_admin";
+  api.providers.mockResolvedValue({
+    items: [
+      {
+        provider: { id: "connection", name: "服务", status: "active" },
+        credential: { status, last_test_result: "ok" },
+        model_count: 0,
+      },
+    ],
+  });
+  render(<ProvidersPage />);
+  await screen.findByText(label);
+  expect(screen.queryByText("检查通过")).toBeNull();
+});

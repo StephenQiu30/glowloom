@@ -52,14 +52,14 @@ func TestRunAllStopsWhenARequiredDependencyCannotInitialize(t *testing.T) {
 
 func TestWorkerQueue(t *testing.T) {
 	for _, test := range []struct{ value, want string }{
-		{"", "flow"}, {"flow", "flow"}, {"media", "media"},
+		{"agent.codex", "agent.codex"}, {"provider,agent.codex", "provider,agent.codex"}, {"", "flow"}, {"flow", "flow"}, {"media", "media"},
 		{"flow,media", "flow,media"}, {"media,flow", "flow,media"},
 	} {
 		if got, err := app.WorkerQueue(test.value); err != nil || got != test.want {
 			t.Fatalf("WorkerQueue(%q) = %q, %v; want %q", test.value, got, err, test.want)
 		}
 	}
-	for _, value := range []string{"agent", "flow,flow", "flow,agent", "media,media"} {
+	for _, value := range []string{"agent.codex,agent.codex", "agent", "flow,flow", "flow,agent", "media,media"} {
 		if _, err := app.WorkerQueue(value); !errors.Is(err, app.ErrRoleNotAvailable) {
 			t.Fatalf("WorkerQueue(%q) error = %v, want unavailable", value, err)
 		}

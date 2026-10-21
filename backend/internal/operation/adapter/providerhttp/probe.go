@@ -24,10 +24,13 @@ func (c *Client) Probe(ctx context.Context, config catalogdomain.ProviderConfig,
 		return result
 	}
 	path := "/key"
-	if config.AdapterKey == "volcengine_ark" {
+	if config.AdapterKey == "volcengine_ark" || config.AdapterKey == "byteplus" {
 		path = "/contents/generations/tasks?page_size=1"
 	}
-	_, status, err := c.request(ctx, config, key, http.MethodGet, path, nil, 1<<20)
+	if config.AdapterKey == "deepseek" {
+		path = "/models"
+	}
+	authData, status, err := c.request(ctx, config, key, http.MethodGet, path, nil, 1<<20)
 	if err != nil {
 		result.Auth = "unreachable"
 		return result
@@ -37,7 +40,27 @@ func (c *Client) Probe(ctx context.Context, config catalogdomain.ProviderConfig,
 		return result
 	}
 	result.Auth = "ok"
-	if config.AdapterKey == "volcengine_ark" {
+	if config.AdapterKey == "volcengine_ark" || config.AdapterKey == "byteplus" {
+		return result
+	}
+	if config.AdapterKey == "deepseek" {
+		var response struct {
+			Data []struct {
+				ID string `json:"id"`
+			} `json:"data"`
+		}
+		if json.Unmarshal(authData, &response) != nil || response.Data == nil || len(response.Data) > 200 {
+			result.Discovery = "invalid_response"
+			return result
+		}
+		for _, model := range response.Data {
+			if model.ID == "" || len(model.ID) > 256 {
+				result.Discovery = "invalid_response"
+				return result
+			}
+			result.Candidates = append(result.Candidates, catalogapp.ModelCandidate{ProviderModelID: model.ID, DisplayName: model.ID, Capability: "text.generate", Metadata: json.RawMessage(`{"verified":false}`)})
+		}
+		result.Discovery = "ok"
 		return result
 	}
 	for _, entry := range []struct{ Path, Capability string }{{"/models", "text.generate"}, {"/images/models", "image.generate"}, {"/videos/models", "video.generate"}} {

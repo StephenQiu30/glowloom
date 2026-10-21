@@ -12,7 +12,52 @@ import {
   createMediaNode,
   isEditableNode,
 } from "@/app/canvas/document";
+import { emptyPromptDraft } from "@/components/generation/prompt-document";
+import { draftRequest, requireSaved } from "@/components/generation/draft-save";
 beforeEach(() => localStorage.clear());
+it("Mock文本创作草稿可创建、保存和重新读取，重试不重复创建", async () => {
+  const source = CanvasPreviewData.load();
+  const url = `/api/projects/${source.project.id}/prompt-drafts`;
+  const draft = emptyPromptDraft();
+  const create = {
+    method: "POST",
+    headers: { "Idempotency-Key": "text-draft" },
+    data: { expected_revision: 0, draft: draftRequest(draft) },
+  };
+  const saved = requireSaved(
+    (await source.request(url, create)) as API.DraftSnapshot,
+  );
+  expect(saved.draft).toEqual(draft);
+  expect(await source.request(url, create)).toEqual(saved);
+  draft.document.content[0].content = [{ type: "text", text: "保留创作要求" }];
+  const next = requireSaved(
+    (await source.request(`${url}/${saved.draft_id}`, {
+      method: "PUT",
+      headers: { "Idempotency-Key": "text-save" },
+      data: { expected_revision: saved.revision, draft: draftRequest(draft) },
+    })) as API.DraftSnapshot,
+  );
+  expect(next.revision).toBe(2);
+  expect(next.draft).toEqual(draft);
+  expect(await source.request(`${url}/${saved.draft_id}`, {})).toEqual(next);
+  await expect(
+    source.request(url, {
+      ...create,
+      data: { expected_revision: 0, draft: draftRequest(draft) },
+    }),
+  ).rejects.toThrow("idempotency_conflict");
+  await expect(
+    source.request(`${url}/${saved.draft_id}`, {
+      method: "PUT",
+      headers: { "Idempotency-Key": "stale" },
+      data: { expected_revision: 1, draft: draftRequest(draft) },
+    }),
+  ).rejects.toThrow("revision_conflict");
+  await source.reset(3);
+  await expect(source.request(`${url}/${saved.draft_id}`, {})).rejects.toThrow(
+    "not_found",
+  );
+});
 it("Mock保存通过正式命令与回执验证，同页面保留幂等回执而重开回到示例", async () => {
   const state = initialPreviewState(0),
     data = new CanvasPreviewData(state);

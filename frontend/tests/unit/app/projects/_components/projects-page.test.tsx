@@ -5,6 +5,7 @@ import {
   fireEvent,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ProjectsPage } from "@/app/projects/_components/projects-page";
@@ -21,6 +22,8 @@ const api = vi.hoisted(() => ({
   recover: vi.fn(),
   update: vi.fn(),
   archive: vi.fn(),
+  recycle: vi.fn(),
+  unarchive: vi.fn(),
   restore: vi.fn(),
   push: vi.fn(),
 }));
@@ -139,8 +142,8 @@ vi.mock("@/api/projects", () => ({
   getProjectCreation: api.recover,
   updateProject: api.update,
   archiveProject: api.archive,
-  unarchiveProject: vi.fn(),
-  deleteProject: vi.fn(),
+  unarchiveProject: api.unarchive,
+  deleteProject: api.recycle,
   restoreProject: api.restore,
 }));
 vi.mock("@/api/canvases", () => ({ getCanvas: api.canvas }));
@@ -366,7 +369,10 @@ it("批量选择不进入画布，确认后调用已有归档接口", async () =
   fireEvent.click(screen.getByRole("button", { name: "归档所选" }));
   await screen.findByRole("dialog");
   fireEvent.click(screen.getByRole("button", { name: "归档" }));
-  await screen.findByText("已归档 1 个画布。");
+  const notification = await findFeedback("已归档 1 个画布。");
+  expect(notification.closest('[data-type="success"]')).not.toBeNull();
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.getByText("已选择 0 项")).toBeTruthy();
   expect(api.archive).toHaveBeenCalledTimes(1);
 });
 it("已归档与回收站按真实状态查询", async () => {
@@ -407,7 +413,8 @@ it("从默认画布切到回收站再恢复，结果入口返回active筛选", a
   fireEvent.click(screen.getByRole("checkbox", { name: "选择本页" }));
   fireEvent.click(screen.getByRole("button", { name: "恢复所选" }));
   fireEvent.click(await screen.findByRole("button", { name: /^恢复$/ }));
-  await screen.findByText("已恢复 1 个画布。");
+  await findFeedback("已恢复 1 个画布。");
+  expect(screen.queryByRole("dialog")).toBeNull();
   const destination = screen.getByRole("link", { name: "查看画布" });
   expect(destination.getAttribute("href")).toBe("/projects?state=active");
   fireEvent.click(destination);
@@ -450,6 +457,136 @@ it("未知项原操作重试成功后仍保留首轮被拒绝项与原因", asyn
   await screen.findByText(/已完成 1 项，1 项被拒绝，0 项结果未确认/);
   expect(screen.getByText(/真实项目：画布仍有进行中的任务/)).toBeTruthy();
   expect(api.archive.mock.calls[2]).toEqual(api.archive.mock.calls[1]);
-  fireEvent.click(screen.getByRole("button", { name: "完成" }));
+  expect(
+    document.querySelector('[data-sonner-toast][data-type="success"]'),
+  ).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /^关闭$/ }));
   expect(await screen.findByText("已选择 1 项")).toBeTruthy();
+});
+
+it("回收处理中锁定弹窗，成功后自动关闭、刷新列表并只显示一次成功toast", async () => {
+  let finish!: (value: unknown) => void;
+  let recycled = false;
+  api.list.mockImplementation(async () => ({
+    items: recycled ? [] : [project],
+    next_cursor: null,
+  }));
+  api.recycle.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  page();
+  await screen.findByText("真实项目");
+  fireEvent.click(screen.getByRole("button", { name: "批量管理" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "选择本页" }));
+  fireEvent.click(screen.getByRole("button", { name: "移入回收站" }));
+  const dialog = await screen.findByRole("dialog");
+  const submit = within(dialog).getByRole("button", { name: "移入回收站" });
+  fireEvent.click(submit);
+  await waitFor(() => expect(api.recycle).toHaveBeenCalledTimes(1));
+  expect(submit).toHaveProperty("disabled", true);
+  expect(within(dialog).getByRole("button", { name: "取消" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  expect(
+    within(dialog).queryByRole("button", { name: "关闭对话框" }),
+  ).toBeNull();
+  fireEvent.keyDown(dialog, { key: "Escape" });
+  fireEvent.click(submit);
+  expect(screen.getByRole("dialog")).toBeTruthy();
+  expect(
+    document.querySelector('[data-sonner-toast][data-type="success"]'),
+  ).toBeNull();
+  recycled = true;
+  await act(async () =>
+    finish({
+      ...project,
+      revision: 2,
+      is_delete: true,
+      delete_time: "2026-10-21T00:00:00Z",
+      purge_after: "2026-11-20T00:00:00Z",
+    }),
+  );
+  const notification = await findFeedback("已移入回收站 1 个画布。");
+  expect(notification.closest('[data-type="success"]')).not.toBeNull();
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.queryByRole("button", { name: "完成" })).toBeNull();
+  await waitFor(() => expect(screen.queryByText("真实项目")).toBeNull());
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      screen.getByRole("group", { name: "画布管理工具栏" }),
+    ),
+  );
+  expect(
+    document.querySelectorAll('[data-sonner-toast][data-type="success"]'),
+  ).toHaveLength(1);
+  expect(api.recycle).toHaveBeenCalledTimes(1);
+});
+
+it("回收被拒绝时保留原因和选择，不显示成功toast", async () => {
+  api.list.mockResolvedValue({ items: [project], next_cursor: null });
+  api.recycle.mockRejectedValue(new RequestError("inflight_work", 409));
+  page();
+  await screen.findByText("真实项目");
+  fireEvent.click(screen.getByRole("button", { name: "批量管理" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "选择本页" }));
+  fireEvent.click(screen.getByRole("button", { name: "移入回收站" }));
+  fireEvent.click(
+    within(await screen.findByRole("dialog")).getByRole("button", {
+      name: "移入回收站",
+    }),
+  );
+  await screen.findByText(/画布仍有进行中的任务/);
+  expect(screen.getByRole("dialog")).toBeTruthy();
+  expect(
+    document.querySelector('[data-sonner-toast][data-type="success"]'),
+  ).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /^关闭$/ }));
+  expect(await screen.findByText("已选择 1 项")).toBeTruthy();
+});
+
+it("批量回收全部成功只显示一个总数toast并清空选择", async () => {
+  const second = {
+    ...project,
+    id: "00000000-0000-4000-8000-000000000003",
+    name: "第二项",
+  };
+  const completed = new Set<string>();
+  api.list.mockImplementation(async () => ({
+    items: [project, second].filter((p) => !completed.has(p.id)),
+    next_cursor: null,
+  }));
+  api.project.mockImplementation(async ({ pid }) =>
+    pid === second.id ? second : project,
+  );
+  api.recycle.mockImplementation(async ({ pid }) => {
+    completed.add(pid);
+    return {
+      ...(pid === second.id ? second : project),
+      revision: 2,
+      is_delete: true,
+      delete_time: "2026-10-21T00:00:00Z",
+      purge_after: "2026-11-20T00:00:00Z",
+    };
+  });
+  page();
+  await screen.findByText("第二项");
+  fireEvent.click(screen.getByRole("button", { name: "批量管理" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "选择本页" }));
+  fireEvent.click(screen.getByRole("button", { name: "移入回收站" }));
+  fireEvent.click(
+    within(await screen.findByRole("dialog")).getByRole("button", {
+      name: "移入回收站",
+    }),
+  );
+  await findFeedback("已移入回收站 2 个画布。");
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.getByText("已选择 0 项")).toBeTruthy();
+  expect(
+    document.querySelectorAll('[data-sonner-toast][data-type="success"]'),
+  ).toHaveLength(1);
+  await waitFor(() => expect(screen.queryByText("第二项")).toBeNull());
 });

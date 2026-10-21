@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
@@ -46,9 +47,10 @@ type AdminPrice struct {
 
 // AdminModelDetail combines the current identity and its real version history.
 type AdminModelDetail struct {
-	Model    CreatedModel        `json:"model"`
-	Versions []AdminModelVersion `json:"versions"`
-	Prices   []AdminPrice        `json:"prices"`
+	Candidate *domain.ModelCandidateSelection `json:"candidate,omitempty"`
+	Model     CreatedModel                    `json:"model"`
+	Versions  []AdminModelVersion             `json:"versions"`
+	Prices    []AdminPrice                    `json:"prices"`
 }
 
 // CapabilitySummary declares the modes and ordered reference roles for forms.

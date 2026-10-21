@@ -38,7 +38,7 @@ import (
 
 func TestMediaPackageProductionRouterInstallsAllSix(t *testing.T) {
 	gin.SetMode(gin.ReleaseMode)
-	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKeyFile: publicTestKey(t)}, &gorm.DB{}, nil, identityruntime.SessionDependencies{})
+	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKey: publicTestKey(t)}, &gorm.DB{}, nil, identityruntime.SessionDependencies{})
 	if err != nil {
 		t.Fatal(err)
 	}

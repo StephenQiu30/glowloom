@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	codexwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/codexruntime"
+
 	catalogwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/catalog"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
@@ -92,6 +94,9 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		MaxConcurrentActivityExecutionSize:     100,
 		WorkerStopTimeout:                      5 * time.Minute,
 	}
+	if queue == "agent.codex" {
+		options.MaxConcurrentActivityExecutionSize = 1
+	}
 	if queue == "media" {
 		// This queue registers Activities only; zero lets the SDK use its
 		// default workflow-task setting instead of rejecting a value of one.
@@ -100,11 +105,18 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 	}
 	queueWorker := worker.New(temporalConn.Client, queue, options)
 	switch queue {
+	case "agent.codex":
+		if err := codexwire.Register(ctx, queueWorker, dbConn.DB, cfg); err != nil {
+			return nil, err
+		}
 	case "provider":
 		if err := catalogwire.RegisterProviderActivities(queueWorker, dbConn.DB, cfg); err != nil {
 			return nil, err
 		}
 	case "flow":
+		if cfg.Env == "local" {
+			queueWorker.RegisterWorkflow(operationflow.TrialWorkflow)
+		}
 		toolflow.RegisterWorkflow(queueWorker)
 		toolflow.RegisterTranscriptionWorkflow(queueWorker)
 		toolflow.RegisterDepthWorkflow(queueWorker)

@@ -1,6 +1,7 @@
 package catalog_test
 
 import (
+	"encoding/json"
 	"os"
 
 	"testing"
@@ -79,4 +80,50 @@ func TestPresetModelsInstantiateAtomicallyWithoutCopyingPublication(t *testing.T
 	var after int64
 	require.NoError(t, conn.DB.Raw(`SELECT count(*) FROM catalog.provider`).Scan(&after).Error)
 	require.Equal(t, before, after)
+}
+
+func TestPresetCandidatesCreateOnlyDraftProfilesAndReplayExactly(t *testing.T) {
+	dsn := os.Getenv("LV_TEST_CATALOG_DB_DSN")
+	if dsn == "" {
+		t.Skip("requires disposable catalog database")
+	}
+	conn, err := db.Open(t.Context(), dsn, noop.NewTracerProvider())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	actor := identityapp.Principal{ID: uuid.New(), OrgID: uuid.New(), PlatformRole: "platform_admin"}
+	require.NoError(t, conn.DB.Exec(`INSERT INTO identity."user"(id,org_id,login_name,display_name,role,password_hash,must_change_password,platform_role) VALUES(?,?,?,'Candidate Admin','producer','synthetic',false,'platform_admin')`, actor.ID, actor.OrgID, "candidate-"+actor.ID.String()).Error)
+	actor = identityfixture.Session(t, conn.DB, actor)
+	service := catalogapp.NewProviderPresets(app.NewCatalogStore(conn.DB))
+	catalog := domain.BuiltinModelCatalog("deepseek")
+	input := catalogapp.ConnectPresetInput{VersionID: uuid.MustParse("6da07a11-0000-4000-8000-000000000004"), RequestID: uuid.New(), CatalogVersion: catalog.Version, CandidateKeys: []string{"ds-pro", "ds-flash"}}
+	presetID := uuid.MustParse("6da07a10-0000-4000-8000-000000000004")
+	receipt, err := service.Connect(t.Context(), actor, presetID, input)
+	require.NoError(t, err)
+	require.Len(t, receipt.ModelIDs, 2)
+	again, err := service.Connect(t.Context(), actor, presetID, input)
+	require.NoError(t, err)
+	require.Equal(t, receipt, again)
+	for i, id := range receipt.ModelIDs {
+		var row struct {
+			Status                     string
+			Candidate                  []byte
+			Versions, Prices, Releases int64
+		}
+		require.NoError(t, conn.DB.Raw(`SELECT status,candidate_snapshot AS candidate,(SELECT count(*) FROM catalog.model_profile_version WHERE model_profile_id=m.id) AS versions,(SELECT count(*) FROM catalog.price_rule_version WHERE model_profile_id=m.id) AS prices,(SELECT count(*) FROM catalog.model_release WHERE model_id=m.id) AS releases FROM catalog.model_profile m WHERE id=?`, id).Scan(&row).Error)
+		require.Equal(t, "disabled", row.Status)
+		require.Zero(t, row.Versions)
+		require.Zero(t, row.Prices)
+		require.Zero(t, row.Releases)
+		var snapshot domain.ModelCandidateSelection
+		require.NoError(t, json.Unmarshal(row.Candidate, &snapshot))
+		require.Equal(t, input.CandidateKeys[i], snapshot.Model.Key)
+		require.Equal(t, catalog.Version, snapshot.CatalogVersion)
+	}
+	input.RequestID = uuid.New()
+	input.CandidateKeys = []string{"or-gpt-chat"}
+	_, err = service.Connect(t.Context(), actor, presetID, input)
+	require.Error(t, err)
+	var count int64
+	require.NoError(t, conn.DB.Raw(`SELECT count(*) FROM catalog.provider WHERE key=?`, "connection-"+input.RequestID.String()).Scan(&count).Error)
+	require.Zero(t, count)
 }

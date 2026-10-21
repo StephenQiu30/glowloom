@@ -190,7 +190,7 @@ export function ConnectionDetail({
               : provider?.status === "disabled"
                 ? "已停用"
                 : "状态未知"}{" "}
-            · 配置 v{config?.version ?? "—"} · {regionLabel(provider?.region)}
+            · {regionLabel(provider?.region)}
           </p>
           {onboardingPending ? (
             <>
@@ -207,23 +207,11 @@ export function ConnectionDetail({
           <Tabs defaultValue="overview" className="gap-6">
             <TabsList className="w-full max-md:h-11" aria-label="连接详情视图">
               <TabsTrigger value="overview">概览</TabsTrigger>
-              <TabsTrigger value="key">Key</TabsTrigger>
-              <TabsTrigger value="config">配置</TabsTrigger>
+              <TabsTrigger value="key">API Key</TabsTrigger>
+              <TabsTrigger value="config">高级配置</TabsTrigger>
             </TabsList>
             <TabsContent value="overview" className="flex flex-col gap-6">
-              <ItemGroup>
-                <Item>
-                  <ItemContent>
-                    <ItemTitle>连接状态</ItemTitle>
-                    <ItemDescription>
-                      {provider?.status === "active"
-                        ? "已启用"
-                        : provider?.status === "disabled"
-                          ? "已停用"
-                          : "未知"}
-                    </ItemDescription>
-                  </ItemContent>
-                </Item>
+              <ItemGroup className="rounded-lg border">
                 <Item>
                   <ItemContent>
                     <ItemTitle>API Key</ItemTitle>
@@ -251,14 +239,6 @@ export function ConnectionDetail({
                     </ItemDescription>
                   </ItemContent>
                 </Item>
-                <Item>
-                  <ItemContent>
-                    <ItemTitle>模型发布</ItemTitle>
-                    <ItemDescription>
-                      在模型管理中查看发布状态。
-                    </ItemDescription>
-                  </ItemContent>
-                </Item>
               </ItemGroup>
               <Button
                 variant="outline"
@@ -270,9 +250,9 @@ export function ConnectionDetail({
                 </Link>
               </Button>
               <div className="flex flex-col gap-4">
-                <h3 className="font-medium">连接检查与模型发现</h3>
+                <h3 className="font-medium">连接检查</h3>
                 <p className="text-xs text-muted-foreground">
-                  仅执行读取请求。发现模型不代表账号具备权限，也不代表生成已通过。
+                  只读检查，不生成内容。
                 </p>
                 <Button
                   variant="outline"

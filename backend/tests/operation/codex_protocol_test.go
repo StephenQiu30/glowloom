@@ -3,6 +3,7 @@ package operation_test
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"image"
@@ -238,6 +239,7 @@ type codexTestLauncher struct {
 	cancel                             context.CancelFunc
 	opens, starts                      int
 	artifact, model, approval, sandbox string
+	encodedResult                      string
 	fallback                           bool
 	conn                               *codexTestConn
 }
@@ -253,7 +255,7 @@ func (l *codexTestLauncher) Open(_ context.Context, dir string) (io.ReadWriteClo
 		return nil, err
 	}
 	switch l.behavior {
-	case "outside":
+	case "encoded-outside", "encoded-truncated", "outside":
 		l.artifact = filepath.Join(l.t.TempDir(), "outside.png")
 		if err := os.WriteFile(l.artifact, buf.Bytes(), 0600); err != nil {
 			return nil, err
@@ -285,6 +287,12 @@ func (l *codexTestLauncher) Open(_ context.Context, dir string) (io.ReadWriteClo
 		}
 		if closeErr != nil {
 			return nil, closeErr
+		}
+	}
+	if strings.HasPrefix(l.behavior, "encoded-") {
+		l.encodedResult = base64.StdEncoding.EncodeToString(buf.Bytes())
+		if l.behavior == "encoded-truncated" {
+			l.encodedResult = base64.StdEncoding.EncodeToString(buf.Bytes()[:40])
 		}
 	}
 	c := &codexTestConn{messages: make(chan []byte, 16), done: make(chan struct{})}
@@ -382,7 +390,12 @@ func (l *codexTestLauncher) item(c *codexTestConn, thread, turn string, conflict
 	if l.behavior == "failed-image" {
 		status = "failed"
 	}
-	c.emit(map[string]any{"method": "item/completed", "params": map[string]any{"threadId": thread, "turnId": turn, "item": map[string]any{"id": "fixture-item", "type": "imageGeneration", "status": status, "savedPath": path, "result": "encoding-is-unknown"}}})
+	c.emit(map[string]any{"method": "item/completed", "params": map[string]any{"threadId": thread, "turnId": turn, "item": map[string]any{"id": "fixture-item", "type": "imageGeneration", "status": status, "savedPath": path, "result": func() string {
+		if l.encodedResult != "" {
+			return l.encodedResult
+		}
+		return "encoding-is-unknown"
+	}()}}})
 }
 
 type codexTestConn struct {
@@ -469,5 +482,27 @@ func TestM1CodexImageProtocolProcessExit(t *testing.T) {
 	}
 	if err := conn.Close(); err != nil {
 		t.Fatal("idempotent close failed")
+	}
+}
+
+func TestCodexTrialImageConsumesCompletedBytesWithoutReadingExternalPath(t *testing.T) {
+	for _, tc := range []struct {
+		behavior string
+		ok       bool
+	}{{"encoded-outside", true}, {"encoded-truncated", false}, {"outside", false}, {"no-image", false}, {"failed-turn", false}} {
+		t.Run(tc.behavior, func(t *testing.T) {
+			launcher := &codexTestLauncher{t: t, behavior: tc.behavior}
+			img, outcome, err := codex.TrialImage(t.Context(), launcher, t.TempDir(), "fixture-image", "circle")
+			if tc.ok {
+				if err != nil || outcome != "completed" || len(img.Bytes) == 0 {
+					t.Fatalf("completed encoded result rejected: %s %v", outcome, err)
+				}
+			} else if err == nil {
+				t.Fatal("unverified artifact accepted")
+			}
+			if launcher.starts != 1 {
+				t.Fatalf("submitted %d times", launcher.starts)
+			}
+		})
 	}
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
 )
 
-func TestIdentityKeyFileFailsClosed(t *testing.T) {
+func TestIdentityKeyFailsClosed(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "identity.key")
 	if _, err := credentialproof.LoadFile(path); err == nil {
 		t.Fatal("missing keys accepted")

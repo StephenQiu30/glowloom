@@ -129,7 +129,7 @@ func CredentialTestWorkflow(ctx workflow.Context, input Input) (output Output, r
 		},
 	}
 	queue := "agent"
-	if version != workflow.DefaultVersion && (loaded.AdapterKey == "volcengine_ark" || loaded.AdapterKey == "openrouter") {
+	if version != workflow.DefaultVersion && domain.IsManagedCloud(loaded.AdapterKey) {
 		queue = "provider"
 	}
 	agentCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{

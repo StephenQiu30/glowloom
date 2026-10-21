@@ -138,7 +138,7 @@ func (a *Adapter) Submit(ctx context.Context, input application.ProviderImageInp
 	if err != nil {
 		return imageFailure("unknown", "codex:turn_delivery_uncertain"), nil
 	}
-	evidence, path, err := completedImage(ctx, client, threadID, turnID)
+	evidence, item, err := completedImage(ctx, client, threadID, turnID)
 	if err != nil {
 		if ctx.Err() != nil {
 			interruptCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
@@ -147,7 +147,7 @@ func (a *Adapter) Submit(ctx context.Context, input application.ProviderImageInp
 		}
 		return imageFailure("unknown", "codex:image_completion_uncertain"), nil
 	}
-	output, data, err := readImage(dir, path)
+	output, data, err := readImage(dir, *item.SavedPath)
 	if err != nil {
 		return imageFailure("unknown", "codex:artifact_unverified"), nil
 	}
@@ -214,12 +214,12 @@ func startTurn(ctx context.Context, client *rpcClient, thread, model, prompt str
 	return response.Turn.ID, nil
 }
 
-func completedImage(ctx context.Context, client *rpcClient, thread, turn string) (ImageEvidence, string, error) {
+func completedImage(ctx context.Context, client *rpcClient, thread, turn string) (ImageEvidence, imageItem, error) {
 	var seen *imageItem
 	for {
 		event, err := client.event(ctx)
 		if err != nil {
-			return ImageEvidence{}, "", err
+			return ImageEvidence{}, imageItem{}, err
 		}
 		switch event.Method {
 		case "item/completed":
@@ -229,18 +229,18 @@ func completedImage(ctx context.Context, client *rpcClient, thread, turn string)
 				Item     imageItem `json:"item"`
 			}
 			if err := decodeJSON(event.Params, &notification); err != nil {
-				return ImageEvidence{}, "", err
+				return ImageEvidence{}, imageItem{}, err
 			}
 			if notification.ThreadID != thread || notification.TurnID != turn || notification.Item.Type != "imageGeneration" {
 				continue
 			}
 			item := notification.Item
 			if !validID(item.ID) || item.Status != "completed" || item.Failure != nil || item.SavedPath == nil || *item.SavedPath == "" {
-				return ImageEvidence{}, "", errProtocol
+				return ImageEvidence{}, imageItem{}, errProtocol
 			}
 			if seen != nil {
 				if seen.ID != item.ID || seen.Status != item.Status || *seen.SavedPath != *item.SavedPath || seen.Result != item.Result {
-					return ImageEvidence{}, "", errProtocol
+					return ImageEvidence{}, imageItem{}, errProtocol
 				}
 				continue
 			}
@@ -254,15 +254,15 @@ func completedImage(ctx context.Context, client *rpcClient, thread, turn string)
 				} `json:"turn"`
 			}
 			if err := decodeJSON(event.Params, &notification); err != nil {
-				return ImageEvidence{}, "", err
+				return ImageEvidence{}, imageItem{}, err
 			}
 			if notification.ThreadID != thread || notification.Turn.ID != turn {
 				continue
 			}
 			if notification.Turn.Status != "completed" || seen == nil {
-				return ImageEvidence{}, "", errProtocol
+				return ImageEvidence{}, imageItem{}, errProtocol
 			}
-			return ImageEvidence{ThreadID: thread, TurnID: turn, ItemID: seen.ID}, *seen.SavedPath, nil
+			return ImageEvidence{ThreadID: thread, TurnID: turn, ItemID: seen.ID}, *seen, nil
 		}
 	}
 }

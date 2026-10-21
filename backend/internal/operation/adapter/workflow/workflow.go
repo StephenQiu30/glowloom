@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
+
 	"github.com/google/uuid"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
@@ -129,7 +131,7 @@ func OperationWorkflow(ctx workflow.Context, input OperationInput) (resultErr er
 		}
 		return nil
 	}
-	if loaded.Provider.AdapterKey == "openrouter" || loaded.Provider.AdapterKey == "volcengine_ark" {
+	if catalogdomain.IsManagedCloud(loaded.Provider.AdapterKey) {
 		if workflow.GetVersion(ctx, "operation-managed-provider-v1", workflow.DefaultVersion, 1) == workflow.DefaultVersion {
 			return ErrUnsupportedOperation
 		}

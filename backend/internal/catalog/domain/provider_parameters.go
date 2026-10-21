@@ -4,6 +4,12 @@ package domain
 // cannot advertise parameters that the deployed protocol refuses to submit.
 // It returns fresh slices and never admits credential or routing headers.
 func (c ProviderConfig) ParameterFields(capability string) []string {
+	if capability == "text.generate" && IsManagedCloud(c.AdapterKey) {
+		return []string{"temperature", "top_p", "max_tokens", "seed", "response_format"}
+	}
+	if capability == "image.generate" && (c.AdapterKey == "volcengine_ark" || c.AdapterKey == "byteplus") {
+		return []string{"size", "seed", "watermark"}
+	}
 	if c.AdapterKey == "volcengine_ark" && capability == "video.generate" {
 		return []string{"duration", "duration_ms", "resolution", "ratio", "aspect_ratio", "generate_audio", "seed", "watermark", "camera_fixed"}
 	}
@@ -19,5 +25,15 @@ func (c ProviderConfig) ParameterFields(capability string) []string {
 		return []string{"duration", "duration_ms", "resolution", "aspect_ratio", "generate_audio", "seed"}
 	default:
 		return nil
+	}
+}
+
+// IsManagedCloud identifies protocols that require a frozen catalog release.
+func IsManagedCloud(adapter string) bool {
+	switch adapter {
+	case "volcengine_ark", "openrouter", "byteplus", "deepseek":
+		return true
+	default:
+		return false
 	}
 }

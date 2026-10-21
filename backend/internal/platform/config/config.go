@@ -18,6 +18,9 @@ var ErrInvalid = errors.New("invalid configuration")
 
 // Config is the validated configuration shared by every backend role.
 type Config struct {
+	CodexBinary                   string
+	CodexHome                     string
+	CodexWorkRoot                 string
 	Env                           string
 	HTTPAddr                      string
 	PublicOrigin                  string
@@ -58,11 +61,11 @@ type Config struct {
 	SMTPFromName                  string
 	IdentitySessionV2Enabled      bool
 	IdentityLegacyUpgradeUntil    time.Time
-	IdentityJWTKeyFile            string
-	IdentityJWTVerifyKeysFile     string
+	IdentityJWTPrivateKey         string
+	IdentityJWTVerifyKeys         string
 	IdentityJWTActiveKID          string
-	IdentityRefreshReceiptKeyFile string
-	IdentityKeyFile               string
+	IdentityRefreshReceiptKey     string
+	IdentityKey                   string
 	IdentityTermsVersion          string
 	IdentityMailSourceHourlyLimit int
 	IdentityMailGlobalHourlyLimit int
@@ -92,6 +95,9 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
+		CodexBinary:                   strings.TrimSpace(v.GetString("LV_CODEX_BINARY")),
+		CodexHome:                     strings.TrimSpace(v.GetString("LV_CODEX_HOME")),
+		CodexWorkRoot:                 strings.TrimSpace(v.GetString("LV_CODEX_WORK_ROOT")),
 		Env:                           strings.TrimSpace(v.GetString("LV_ENV")),
 		HTTPAddr:                      strings.TrimSpace(v.GetString("LV_HTTP_ADDR")),
 		PublicOrigin:                  strings.TrimSpace(v.GetString("LV_PUBLIC_ORIGIN")),
@@ -131,11 +137,11 @@ func Load() (Config, error) {
 		SMTPFromName:                  strings.TrimSpace(v.GetString("SMTP_FROM_NAME")),
 		IdentitySessionV2Enabled:      v.GetBool("LV_IDENTITY_SESSION_V2_ENABLED"),
 		IdentityLegacyUpgradeUntil:    v.GetTime("LV_IDENTITY_LEGACY_UPGRADE_UNTIL"),
-		IdentityJWTKeyFile:            strings.TrimSpace(v.GetString("LV_IDENTITY_JWT_KEY_FILE")),
-		IdentityJWTVerifyKeysFile:     strings.TrimSpace(v.GetString("LV_IDENTITY_JWT_VERIFY_KEYS_FILE")),
+		IdentityJWTPrivateKey:         strings.TrimSpace(v.GetString("LV_IDENTITY_JWT_PRIVATE_KEY")),
+		IdentityJWTVerifyKeys:         strings.TrimSpace(v.GetString("LV_IDENTITY_JWT_VERIFY_KEYS")),
 		IdentityJWTActiveKID:          strings.TrimSpace(v.GetString("LV_IDENTITY_JWT_ACTIVE_KID")),
-		IdentityRefreshReceiptKeyFile: strings.TrimSpace(v.GetString("LV_IDENTITY_REFRESH_RECEIPT_KEY_FILE")),
-		IdentityKeyFile:               strings.TrimSpace(v.GetString("LV_IDENTITY_KEY_FILE")),
+		IdentityRefreshReceiptKey:     strings.TrimSpace(v.GetString("LV_IDENTITY_REFRESH_RECEIPT_KEY")),
+		IdentityKey:                   strings.TrimSpace(v.GetString("LV_IDENTITY_KEY")),
 		IdentityTermsVersion:          strings.TrimSpace(v.GetString("LV_IDENTITY_TERMS_VERSION")),
 		IdentityMailSourceHourlyLimit: v.GetInt("LV_IDENTITY_MAIL_SOURCE_HOURLY_LIMIT"),
 		IdentityMailGlobalHourlyLimit: v.GetInt("LV_IDENTITY_MAIL_GLOBAL_HOURLY_LIMIT"),
@@ -168,8 +174,8 @@ func (c Config) validate() error {
 		return err
 	}
 
-	if c.IdentityKeyFile != "" && !filepath.IsAbs(c.IdentityKeyFile) {
-		return fmt.Errorf("%w: identity key file must be absolute", ErrInvalid)
+	if len(c.IdentityKey) > 4096 {
+		return fmt.Errorf("%w: identity key configuration too large", ErrInvalid)
 	}
 	for _, limit := range []int{c.IdentityMailSourceHourlyLimit, c.IdentityMailGlobalHourlyLimit} {
 		if limit < 0 || limit > 1000000 {

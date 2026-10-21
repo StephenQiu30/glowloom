@@ -21,30 +21,50 @@ function integer(form: FormData, name: string, min: number, max: number) {
     throw new Error("请检查数量、时长或 Token 上限。");
   return n;
 }
-export function modelConfiguration(form: FormData, capability: string) {
+export function modelConfiguration(
+  form: FormData,
+  capability: string,
+  adapter = "openrouter",
+) {
   if (form.get("setup_mode") === "advanced")
     return {
       limits: JSON.parse(String(form.get("limits"))),
       param_schema: JSON.parse(String(form.get("parameters"))),
     };
+  const arkImage =
+    capability === "image.generate" &&
+    ["volcengine_ark", "byteplus"].includes(adapter);
   const limits: Record<string, unknown> = {
     max_outputs: integer(
       form,
       "max_outputs",
       1,
-      capability === "image.generate" ? 8 : 1,
+      capability === "image.generate" && !arkImage ? 8 : 1,
     ),
   };
   const endpoint = String(form.get("provider_endpoint") ?? "").trim();
-  if (endpoint && capability !== "video.generate")
+  if (endpoint && adapter === "openrouter" && capability !== "video.generate")
     limits.provider_endpoint = endpoint;
   const param_schema: Record<string, unknown>[] = [];
+  if (arkImage) {
+    const sizes = values(form, "sizes");
+    if (!sizes.length) throw new Error("请填写账号模型支持的图片尺寸。");
+    param_schema.push({
+      field: "size",
+      label: "图片尺寸",
+      type: "string",
+      component: "select",
+      enum: sizes,
+      default: sizes[0],
+      required: true,
+    });
+  }
   for (const [name, label, source] of [
     ["resolution", "分辨率", "resolutions"],
     ["aspect_ratio", "画面比例", "aspect_ratios"],
   ]) {
     const options = values(form, source);
-    if (options.length) {
+    if (options.length && !arkImage) {
       limits[source] = options;
       param_schema.push({
         field: name,
@@ -113,12 +133,17 @@ export function ModelSetup({
   capability,
   limits,
   parameters,
+  adapter = "openrouter",
 }: {
   capability: string;
+  adapter?: string;
   limits?: Record<string, unknown>;
   parameters?: unknown;
 }) {
   const formFieldId = useId();
+  const arkImage =
+    capability === "image.generate" &&
+    ["volcengine_ark", "byteplus"].includes(adapter);
 
   const [advanced, setAdvanced] = useState(!!limits);
   return (
@@ -186,12 +211,12 @@ export function ModelSetup({
               name="max_outputs"
               type="number"
               min={1}
-              max={capability === "image.generate" ? 8 : 1}
+              max={capability === "image.generate" && !arkImage ? 8 : 1}
               required
               defaultValue={1}
             />
           </Field>
-          {capability !== "video.generate" && (
+          {adapter === "openrouter" && capability !== "video.generate" && (
             <Field>
               <FieldLabel htmlFor={`${formFieldId}-field-5`}>
                 <span>OpenRouter 固定服务端点（可选）</span>
@@ -225,26 +250,42 @@ export function ModelSetup({
             </Field>
           ) : (
             <>
-              <Field>
-                <FieldLabel htmlFor={`${formFieldId}-field-7`}>
-                  <span>支持的分辨率</span>
-                </FieldLabel>
-                <Input
-                  id={`${formFieldId}-field-7`}
-                  name="resolutions"
-                  placeholder="按模型文档填写，用逗号分隔"
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor={`${formFieldId}-field-8`}>
-                  <span>支持的画面比例</span>
-                </FieldLabel>
-                <Input
-                  id={`${formFieldId}-field-8`}
-                  name="aspect_ratios"
-                  placeholder="按模型文档填写，用逗号分隔"
-                />
-              </Field>
+              {arkImage ? (
+                <Field>
+                  <FieldLabel htmlFor={`${formFieldId}-sizes`}>
+                    图片尺寸
+                  </FieldLabel>
+                  <Input
+                    id={`${formFieldId}-sizes`}
+                    name="sizes"
+                    required
+                    placeholder="按账号模型文档填写，如 2K、4K 或宽x高"
+                  />
+                </Field>
+              ) : (
+                <>
+                  <Field>
+                    <FieldLabel htmlFor={`${formFieldId}-field-7`}>
+                      <span>支持的分辨率</span>
+                    </FieldLabel>
+                    <Input
+                      id={`${formFieldId}-field-7`}
+                      name="resolutions"
+                      placeholder="按模型文档填写，用逗号分隔"
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor={`${formFieldId}-field-8`}>
+                      <span>支持的画面比例</span>
+                    </FieldLabel>
+                    <Input
+                      id={`${formFieldId}-field-8`}
+                      name="aspect_ratios"
+                      placeholder="按模型文档填写，用逗号分隔"
+                    />
+                  </Field>
+                </>
+              )}
               <Field>
                 <FieldLabel htmlFor={`${formFieldId}-field-9`}>
                   <span>参考图数量上限</span>

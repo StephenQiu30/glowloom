@@ -67,7 +67,7 @@ func (s *Store) ReadCurrentQuoteCatalog(ctx context.Context, actor identityapp.P
 			PriceVersionID *uuid.UUID
 		}
 		result = tx.Raw(`
-			SELECT published.id AS release_id, CASE WHEN provider.adapter_key IN ('volcengine_ark','openrouter') THEN published.model_version_id ELSE m.current_version_id END AS model_version_id,
+			SELECT published.id AS release_id, CASE WHEN provider.adapter_key IN ('volcengine_ark','openrouter','byteplus','deepseek') THEN published.model_version_id ELSE m.current_version_id END AS model_version_id,
 			       price.id AS price_version_id
 			FROM catalog.model_profile_version AS quoted_version
 			JOIN catalog.model_profile AS m
@@ -81,16 +81,16 @@ func (s *Store) ReadCurrentQuoteCatalog(ctx context.Context, actor identityapp.P
 			JOIN catalog.capability AS capability
 			  ON capability.key = m.capability AND NOT capability.is_delete
 			JOIN catalog.model_profile_version AS current_version
-			  ON current_version.id = CASE WHEN provider.adapter_key IN ('volcengine_ark','openrouter') THEN published.model_version_id ELSE m.current_version_id END
+			  ON current_version.id = CASE WHEN provider.adapter_key IN ('volcengine_ark','openrouter','byteplus','deepseek') THEN published.model_version_id ELSE m.current_version_id END
 			 AND current_version.model_profile_id = m.id AND NOT current_version.is_delete
 			LEFT JOIN LATERAL (
 			  SELECT id FROM catalog.price_rule_version
-			  WHERE (provider.adapter_key NOT IN ('volcengine_ark','openrouter') OR id=published.price_version_id) AND model_profile_id = m.id AND effective_from <= ?
+			  WHERE (provider.adapter_key NOT IN ('volcengine_ark','openrouter','byteplus','deepseek') OR id=published.price_version_id) AND model_profile_id = m.id AND effective_from <= ?
 			    AND NOT is_delete
 			  ORDER BY effective_from DESC, version_no DESC
 			  LIMIT 1
 			) AS price ON true
-			WHERE quoted_version.id = ?::uuid AND (provider.adapter_key NOT IN ('volcengine_ark','openrouter') OR EXISTS (SELECT 1 FROM catalog.provider_config_version pc JOIN catalog.provider_preset_version pv ON pv.id=pc.preset_version_id JOIN catalog.provider_preset preset ON preset.id=pv.preset_id WHERE pc.id=published.config_version_id AND NOT preset.emergency_disabled)) AND NOT quoted_version.is_delete
+			WHERE quoted_version.id = ?::uuid AND (provider.adapter_key NOT IN ('volcengine_ark','openrouter','byteplus','deepseek') OR EXISTS (SELECT 1 FROM catalog.provider_config_version pc JOIN catalog.provider_preset_version pv ON pv.id=pc.preset_version_id JOIN catalog.provider_preset preset ON preset.id=pv.preset_id WHERE pc.id=published.config_version_id AND NOT preset.emergency_disabled)) AND NOT quoted_version.is_delete
 			  AND m.capability = ? AND m.status = 'active'
 			  AND provider.status = 'active'
 			  AND (? OR provider.region = 'domestic')

@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { ChevronDown, Eye, EyeOff, Globe, Server } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Spinner } from "@/components/ui/spinner";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -63,6 +64,7 @@ export function PresetConnect({
 }) {
   const fieldID = useId();
   const [presetID, setPresetID] = useState(initialPreset);
+  const [candidateKeys, setCandidateKeys] = useState<string[]>([]);
   const [visible, setVisible] = useState(false);
   const mounted = useRef(true);
   useEffect(() => {
@@ -142,6 +144,8 @@ export function PresetConnect({
                   request_id: requestID,
                   version_id: preset.version_id,
                   name: connectionName,
+                  catalog_version: preset.model_catalog?.version,
+                  candidate_keys: candidateKeys,
                 },
               ),
           );
@@ -172,10 +176,14 @@ export function PresetConnect({
             <FieldLegend variant="label">平台预设</FieldLegend>
             <RadioGroup
               aria-label="平台预设"
+              name={`${fieldID}-preset`}
               required={!targetID}
               value={selectedPreset}
               disabled={busy || !!targetID || !!create.pending}
-              onValueChange={setPresetID}
+              onValueChange={(id) => {
+                setPresetID(id);
+                setCandidateKeys([]);
+              }}
               className="grid-cols-1 sm:grid-cols-2"
             >
               {presets
@@ -202,7 +210,6 @@ export function PresetConnect({
                             : p.document?.config?.region === "overseas"
                               ? "海外"
                               : "区域未知"}{" "}
-                          · v{p.version ?? "未知"}
                         </FieldDescription>
                       </FieldContent>
                     </Field>
@@ -249,15 +256,62 @@ export function PresetConnect({
                 </InputGroupButton>
               </InputGroupAddon>
             </InputGroup>
-            <FieldDescription>Key 加密保存，保存后不可查看。</FieldDescription>
+            <FieldDescription>加密保存</FieldDescription>
           </Field>
         </FieldGroup>
+        {preset?.model_catalog?.models?.length && !targetID ? (
+          <Collapsible>
+            <CollapsibleTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                className="group w-full justify-between max-md:h-11"
+              >
+                <span>
+                  通用模型
+                  {candidateKeys.length
+                    ? ` · 已选 ${candidateKeys.length}`
+                    : "（可选）"}
+                </span>
+                <ChevronDown className="size-4 transition-transform group-data-[state=open]:rotate-180" />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-3">
+              <FieldSet disabled={busy || !!create.pending} className="gap-3">
+                <FieldDescription>草稿，需验证后启用。</FieldDescription>
+                {preset.model_catalog.models.map((candidate) => (
+                  <Field key={candidate.key} orientation="horizontal">
+                    <Checkbox
+                      id={`${fieldID}-candidate-${candidate.key}`}
+                      checked={candidateKeys.includes(candidate.key!)}
+                      onCheckedChange={(checked) =>
+                        setCandidateKeys((previous) =>
+                          checked === true
+                            ? [...previous, candidate.key!]
+                            : previous.filter((key) => key !== candidate.key),
+                        )
+                      }
+                    />
+                    <FieldLabel
+                      htmlFor={`${fieldID}-candidate-${candidate.key}`}
+                    >
+                      {candidate.display_name}
+                      {candidate.requires_model_selection
+                        ? " · 需选择账号模型"
+                        : ""}
+                    </FieldLabel>
+                  </Field>
+                ))}
+              </FieldSet>
+            </CollapsibleContent>
+          </Collapsible>
+        ) : null}
         {!targetID ? (
           <Collapsible>
             <CollapsibleTrigger asChild>
               <Button type="button" variant="ghost" className="max-md:h-11">
                 <ChevronDown data-icon="inline-start" />
-                更多设置（可选）
+                连接名称（可选）
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent>
@@ -278,19 +332,11 @@ export function PresetConnect({
             </CollapsibleContent>
           </Collapsible>
         ) : null}
-        {preset ? (
-          <p className="text-sm text-muted-foreground">
-            {preset.document?.model_templates?.length
-              ? `自动创建 ${preset.document.model_templates.length} 个待验证模型，复用预设中的参数和价格。`
-              : "此预设包含连接配置，保存后需由管理员补齐模型模板。"}{" "}
-            保存不会自动付费试运行或启用模型。
-          </p>
-        ) : null}
         {targetID ? (
           <p role="status" className="text-sm">
             {complete
-              ? "连接与 Key 已保存。请在连接详情检查账号权限与模型状态。"
-              : "连接已创建。若 Key 尚未保存，请重新输入后继续；结果未知时先查询回执。"}
+              ? "连接与 Key 已保存。"
+              : "连接已创建，请继续保存 Key；结果待确认时先查询回执。"}
           </p>
         ) : null}
         {create.pending || (!targetID && create.message) ? (
@@ -314,7 +360,10 @@ export function PresetConnect({
           />
         ) : null}
       </div>
-      <div className="flex shrink-0 flex-wrap justify-end gap-2">
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t pt-4">
+        <span className="mr-auto text-xs text-muted-foreground">
+          保存不会产生生成费用
+        </span>
         {onCancel ? (
           <Button
             type="button"

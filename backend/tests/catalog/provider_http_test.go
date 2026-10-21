@@ -81,6 +81,9 @@ func TestProviderModesRejectMismatchedReferencesBeforeDispatch(t *testing.T) {
 
 func TestProviderVideoMapsInternalDurationWithoutChangingFrozenInput(t *testing.T) {
 	for _, config := range domain.BuiltinPresets() {
+		if config.Config.AdapterKey != "volcengine_ark" && config.Config.AdapterKey != "openrouter" {
+			continue
+		}
 		calls := 0
 		client := providerhttp.NewClient(&http.Client{Transport: providerTransport(func(r *http.Request) (*http.Response, error) {
 			calls++

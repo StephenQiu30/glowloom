@@ -237,6 +237,18 @@ func (s *Store) ConnectPreset(ctx context.Context, actor identityapp.Principal, 
 		if err := presetvalidation.Validate(document); err != nil {
 			return application.PresetConnection{}, err
 		}
+		catalog := domain.ModelCatalogForConfig(document.Config)
+		candidates, err := catalog.Select(input.CatalogVersion, input.CandidateKeys)
+		if err != nil {
+			return application.PresetConnection{}, err
+		}
+		for _, candidate := range candidates {
+			for _, template := range document.ModelTemplates {
+				if candidate.ProviderModelID != "" && candidate.ProviderModelID == template.ProviderModelID && candidate.Capability == template.Capability {
+					return application.PresetConnection{}, domain.ErrInvalidPreset
+				}
+			}
+		}
 		if input.Name == "" {
 			input.Name = document.Name + " · " + input.RequestID.String()[:8]
 		}
@@ -260,6 +272,26 @@ func (s *Store) ConnectPreset(ctx context.Context, actor identityapp.Principal, 
 		if err != nil {
 			return application.PresetConnection{}, err
 		}
+		for _, candidate := range candidates {
+			id := uuid.New()
+			model := domain.ModelProfile{ID: id, Key: "candidate-" + id.String(), ProviderID: providerID, Capability: candidate.Capability, DisplayName: candidate.DisplayName, Status: domain.ModelDisabled, Revision: 1}
+			if err := createModelInTx(tx, model); err != nil {
+				return application.PresetConnection{}, err
+			}
+			snapshot, err := json.Marshal(domain.ModelCandidateSelection{CatalogVersion: catalog.Version, Model: candidate})
+			if err != nil {
+				return application.PresetConnection{}, err
+			}
+			if err := tx.Exec(`UPDATE catalog.model_profile SET candidate_snapshot=?::jsonb WHERE id=?`, string(snapshot), id).Error; err != nil {
+				return application.PresetConnection{}, err
+			}
+			modelIDs = append(modelIDs, id)
+		}
 		return application.PresetConnection{ProviderID: providerID, ModelIDs: modelIDs, Config: application.ConnectionConfig{ID: configID, ProviderID: providerID, PresetVersionID: input.VersionID, Version: 1, Config: config}}, nil
 	})
+}
+
+// AuthorizeDevelopmentTrial reuses the current platform-role and epoch checks.
+func (s *Store) AuthorizeDevelopmentTrial(ctx context.Context, actor identityapp.Principal) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return s.requirePlatformAdmin(tx, actor) })
 }

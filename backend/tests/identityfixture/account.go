@@ -2,6 +2,7 @@
 package identityfixture
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -20,10 +21,15 @@ import (
 // Configure creates a temporary test key shared by the router and session issuer.
 func Configure(t *testing.T, cfg config.Config) config.Config {
 	t.Helper()
-	cfg.IdentityKeyFile = filepath.Join(t.TempDir(), "identity-test.key")
-	if err := credentialproof.CreateFile(cfg.IdentityKeyFile); err != nil {
+	cfg.IdentityKey = filepath.Join(t.TempDir(), "identity-test.key")
+	if err := credentialproof.CreateFile(cfg.IdentityKey); err != nil {
 		t.Fatal(err)
 	}
+	material, err := os.ReadFile(cfg.IdentityKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.IdentityKey = string(material)
 	return cfg
 }
 

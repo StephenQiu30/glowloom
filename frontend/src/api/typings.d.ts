@@ -38,6 +38,7 @@ declare namespace API {
   };
 
   type AdminModelDetail = {
+    candidate?: ModelCandidateSelection;
     model?: CreatedModel;
     prices?: AdminPrice[];
     versions?: AdminModelVersion[];
@@ -249,6 +250,11 @@ declare namespace API {
     /** Identity kind */
     kind: "character" | "location" | "prop";
     /** Identity UUID */
+    id: string;
+  };
+
+  type cancelAiTrialParams = {
+    /** Trial request ID */
     id: string;
   };
 
@@ -565,6 +571,8 @@ declare namespace API {
   };
 
   type ConnectPresetInput = {
+    candidate_keys?: string[];
+    catalog_version?: string;
     key?: string;
     name?: string;
     request_id?: string;
@@ -581,6 +589,11 @@ declare namespace API {
     expected_revision?: number;
     location?: LocationContent;
     prop?: PropContent;
+  };
+
+  type continueAiTrialParams = {
+    /** Trial request ID */
+    id: string;
   };
 
   type ControlInput = {
@@ -1496,6 +1509,18 @@ declare namespace API {
 
   type getAdminProviderParams = {
     /** 渠道UUID */
+    id: string;
+  };
+
+  type getAiTrialArtifactParams = {
+    /** Trial request ID */
+    id: string;
+    /** Artifact sequence */
+    sequence: number;
+  };
+
+  type getAiTrialParams = {
+    /** Trial request ID */
     id: string;
   };
 
@@ -2601,6 +2626,30 @@ declare namespace API {
     provider_model_id?: string;
   };
 
+  type ModelCandidateCatalog = {
+    models?: ModelCandidatePreset[];
+    version?: string;
+  };
+
+  type ModelCandidatePreset = {
+    adapter_key?: string;
+    capability?: string;
+    display_name?: string;
+    key?: string;
+    lifecycle?: string;
+    max_outputs?: number;
+    modes?: string[];
+    provider_model_id?: string;
+    requires_model_selection?: boolean;
+    reviewed_at?: string;
+    source_url?: string;
+  };
+
+  type ModelCandidateSelection = {
+    catalog_version?: string;
+    model?: ModelCandidatePreset;
+  };
+
   type ModelDefaults = {
     default_models?: Record<string, any>;
     project_id?: string;
@@ -2988,6 +3037,7 @@ declare namespace API {
     document?: PresetDocument;
     emergency_disabled?: boolean;
     id?: string;
+    model_catalog?: ModelCandidateCatalog;
     origin?: string;
     parent_id?: string;
     revision?: number;
@@ -3461,6 +3511,11 @@ declare namespace API {
     next_cursor?: string;
   };
 
+  type ProviderReference = {
+    role?: string;
+    url?: string;
+  };
+
   type ProviderStatus = "active" | "disabled";
 
   type ProviderTrialQuote = {
@@ -3680,6 +3735,11 @@ declare namespace API {
     pid: string;
     /** 保存意图UUID */
     wid: string;
+  };
+
+  type recoverAiTrialParams = {
+    /** Trial request ID */
+    id: string;
   };
 
   type recycleProjectFolderParams = {
@@ -4973,9 +5033,60 @@ declare namespace API {
     page_size?: number;
   };
 
+  type TrialArtifact = {
+    mime?: string;
+    sequence?: number;
+    sha256?: string;
+    size?: number;
+    storage_id?: string;
+  };
+
   type TrialMediaInput = {
     media_asset_id?: string;
     role?: string;
+  };
+
+  type TrialMessage = {
+    prompt?: string;
+    request_id?: string;
+  };
+
+  type TrialRequest = {
+    kind?: string;
+    mode?: string;
+    model?: string;
+    params?: Record<string, any>;
+    prompt?: string;
+    provider_id?: string;
+    references?: ProviderReference[];
+    request_id?: string;
+    source?: string;
+  };
+
+  type TrialState = {
+    fingerprint?: string;
+    kind?: string;
+    model?: string;
+    provider_id?: string;
+    source?: string;
+    state?: string;
+    turns?: TrialTurn[];
+  };
+
+  type TrialTurn = {
+    artifacts?: TrialArtifact[];
+    authenticated?: boolean;
+    config_version_id?: string;
+    credential_id?: string;
+    error_code?: string;
+    image_generation?: boolean;
+    models?: string[];
+    prompt?: string;
+    request_id?: string;
+    state?: string;
+    task_id?: string;
+    text?: string;
+    thread_id?: string;
   };
 
   type unarchiveProjectParams = {

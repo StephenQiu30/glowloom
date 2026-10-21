@@ -67,8 +67,18 @@ func LoadFile(path string) (*Protector, error) {
 		return nil, invalid
 	}
 	defer clear(data)
+	return LoadValue(string(data))
+}
+
+// LoadValue reads the JSON value injected by the environment without filesystem access.
+// It preserves the existing key ID and material when migrating an operator configuration.
+func LoadValue(value string) (*Protector, error) {
+	invalid := errors.New("invalid identity key configuration")
+	if len(value) > 4096 {
+		return nil, invalid
+	}
 	var k keyFile
-	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder := json.NewDecoder(bytes.NewBufferString(value))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&k); err != nil {
 		return nil, invalid

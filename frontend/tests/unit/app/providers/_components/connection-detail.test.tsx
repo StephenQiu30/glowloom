@@ -52,7 +52,7 @@ it("Key 只进入提交请求，刷新恢复只查询安全回执", async () => 
   const view = render(
     <ConnectionDetail id="connection" presets={[]} onSaved={onSaved} />,
   );
-  fireEvent.mouseDown(await screen.findByRole("tab", { name: "Key" }), {
+  fireEvent.mouseDown(await screen.findByRole("tab", { name: "API Key" }), {
     button: 0,
     ctrlKey: false,
   });
@@ -86,7 +86,7 @@ it("旧 Key 可单独停用，当前 Key 不受影响", async () => {
   ]);
   api.disable.mockResolvedValue({ id: "old-key", status: "disabled" });
   render(<ConnectionDetail id="connection" presets={[]} onSaved={() => {}} />);
-  fireEvent.mouseDown(await screen.findByRole("tab", { name: "Key" }), {
+  fireEvent.mouseDown(await screen.findByRole("tab", { name: "API Key" }), {
     button: 0,
     ctrlKey: false,
   });
@@ -120,7 +120,7 @@ it("向导的 Key 写入未确认时，详情禁止绕过并使用原回执恢�
   });
   const onSaved = vi.fn();
   render(<ConnectionDetail id="connection" presets={[]} onSaved={onSaved} />);
-  fireEvent.mouseDown(await screen.findByRole("tab", { name: "Key" }), {
+  fireEvent.mouseDown(await screen.findByRole("tab", { name: "API Key" }), {
     button: 0,
     ctrlKey: false,
   });

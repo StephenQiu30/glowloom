@@ -67,6 +67,7 @@ export function ProjectList({
 }) {
   const space = useSpace();
   const [managing, setManaging] = useState(false);
+  const toolbar = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [operation, setOperation] = useState<{
     projects: Project[];
@@ -170,7 +171,13 @@ export function ProjectList({
         : ["archive", "recycle"];
   return (
     <div aria-busy={loading}>
-      <div className="workspace-toolbar project-management-toolbar">
+      <div
+        ref={toolbar}
+        role="group"
+        aria-label="画布管理工具栏"
+        tabIndex={-1}
+        className="workspace-toolbar project-management-toolbar outline-none focus-visible:ring-1 focus-visible:ring-ring/50"
+      >
         {managing ? (
           <>
             <Label className="flex items-center gap-2 text-sm">
@@ -356,6 +363,7 @@ export function ProjectList({
           projects={operation.projects}
           action={operation.action}
           onResult={(_success, failed) => setSelected(failed)}
+          onRestoreFocus={() => toolbar.current?.focus()}
           onClose={() => {
             setOperation(null);
             reload();

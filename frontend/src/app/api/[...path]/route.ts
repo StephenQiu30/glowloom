@@ -311,6 +311,18 @@ const editorCatalogRoutes: typeof identityRoutes = [
     methods: ["PUT"],
     query: [],
   },
+  { pattern: `admin/ai-trials`, methods: ["POST"], query: [] },
+  { pattern: `admin/ai-trials/${identityUUID}`, methods: ["GET"], query: [] },
+  {
+    pattern: `admin/ai-trials/${identityUUID}/(turns|cancel|recover)`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `admin/ai-trials/${identityUUID}/artifacts/1`,
+    methods: ["GET"],
+    query: [],
+  },
   {
     pattern: `admin/(providers|models)`,
     methods: ["GET", "POST"],

@@ -1,7 +1,8 @@
 import type { RequestOptions } from "@/lib/request";
 import { RequestError } from "@/lib/request";
 import type { Project } from "@/components/projects/project";
-import { canonical } from "@/components/generation/draft-save";
+import { canonical, type SavedDraft } from "@/components/generation/draft-save";
+import { validatePromptDraft } from "@/components/generation/prompt-document";
 import {
   createDraftNode,
   createMediaNode,
@@ -121,7 +122,7 @@ export function initialPreviewState(count = 3): State {
     ...createResourceNode("text", { x: 570, y: 200 }),
     title: "创作说明",
     config: {
-      text: "围绕香氛产品探索光影与材质。\n可拖动、分组、撤销、裁剪和拆图。\n当前全部为 Mock 数据。",
+      text: "围绕香氛产品探索光影与材质。\n突出玻璃瓶身的通透质感与柔和光影。",
     },
   };
   const draft = {
@@ -265,6 +266,11 @@ export class CanvasPreviewData {
   private urls = new Map<string, string>();
   private files = new Map<string, File>();
   private disposed = false;
+  private drafts = new Map<string, SavedDraft>();
+  private draftReceipts = new Map<
+    string,
+    { body: string; result: SavedDraft }
+  >();
   constructor(state: State) {
     this.state = state;
     this.project = { ...previewProject(), canvas_id: state.canvas.id };
@@ -286,6 +292,8 @@ export class CanvasPreviewData {
   async reset(count: number) {
     this.dispose();
     this.files.clear();
+    this.drafts.clear();
+    this.draftReceipts.clear();
     this.activate();
     this.commit(initialPreviewState(count));
   }
@@ -394,11 +402,57 @@ export class CanvasPreviewData {
           },
         ],
       };
-    if (
-      /\/operations$/.test(url) ||
-      /\/prompt-drafts$/.test(url) ||
-      /\/bible\//.test(url)
-    )
+    const draftBase = `/api/projects/${projectID}/prompt-drafts`;
+    if (url === draftBase || url.startsWith(`${draftBase}/`)) {
+      const draftID =
+        url === draftBase ? undefined : url.slice(draftBase.length + 1);
+      if (method === "GET") {
+        if (!draftID)
+          return { items: structuredClone([...this.drafts.values()]) };
+        const saved = this.drafts.get(draftID);
+        if (!saved) throw new RequestError("not_found", 404);
+        return structuredClone(saved);
+      }
+      if ((method === "POST" && !draftID) || (method === "PUT" && draftID)) {
+        const key = String(
+          (options.headers as Record<string, string>)?.["Idempotency-Key"] ??
+            "",
+        );
+        if (!key) throw new RequestError("idempotency_required", 422);
+        const body = canonical({ url, method, data });
+        const receipt = this.draftReceipts.get(key);
+        if (receipt) {
+          if (receipt.body !== body)
+            throw new RequestError("idempotency_conflict", 409);
+          return structuredClone(receipt.result);
+        }
+        const input = data as API.DraftRequest;
+        const previous = draftID ? this.drafts.get(draftID) : undefined;
+        if (draftID && !previous) throw new RequestError("not_found", 404);
+        if (input.expected_revision !== (previous?.revision ?? 0))
+          throw new RequestError("revision_conflict", 409);
+        const draft = structuredClone({
+          ...input.draft,
+          modelVersion: input.draft?.modelVersion ?? null,
+          mode: input.draft?.mode ?? null,
+        });
+        validatePromptDraft(draft);
+        const revision = (previous?.revision ?? 0) + 1;
+        const result: SavedDraft = {
+          draft_id: draftID ?? crypto.randomUUID(),
+          revision,
+          draft,
+          // Preview receipts are memory-only, never production authorization hashes.
+          draft_hash: `preview-${revision}`,
+          input_hash: `preview-${revision}`,
+        };
+        this.drafts.set(result.draft_id, result);
+        this.draftReceipts.set(key, { body, result });
+        return structuredClone(result);
+      }
+      throw new RequestError("Mock预览尚未接入此操作", 501);
+    }
+    if (/\/operations$/.test(url) || /\/bible\//.test(url))
       return { items: [] };
     if (/\/prompt-submissions\/current$/.test(url)) return { epoch: 0 };
     if (url === `/api/projects/${projectID}/media` && method === "GET")

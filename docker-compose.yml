@@ -58,17 +58,6 @@ services:
     volumes:
       - ./backend:/src:ro
       - backend-go-build:/go/build-cache
-    secrets:
-      - source: identity-key
-        target: identity-key
-      - source: identity-jwt-key
-        target: identity-jwt-key
-      - source: identity-jwt-keyring
-        target: identity-jwt-keyring
-      - source: identity-jwt-public-key
-        target: identity-jwt-public-key
-      - source: identity-refresh-receipt-key
-        target: identity-refresh-receipt-key
     healthcheck:
       test:
         [
@@ -97,11 +86,11 @@ services:
       LV_PUBLIC_ORIGIN: ${LV_PUBLIC_ORIGIN:-http://127.0.0.1:${LV_FRONTEND_PORT:-3200}}
       LV_IDENTITY_SESSION_V2_ENABLED: ${LV_IDENTITY_SESSION_V2_ENABLED:-false}
       LV_IDENTITY_LEGACY_UPGRADE_UNTIL: ${LV_IDENTITY_LEGACY_UPGRADE_UNTIL:-}
-      LV_IDENTITY_JWT_KEY_FILE: ${LV_IDENTITY_JWT_KEY_FILE:+/run/secrets/identity-jwt-key}
-      LV_IDENTITY_JWT_VERIFY_KEYS_FILE: ${LV_IDENTITY_JWT_VERIFY_KEYS_FILE:+/run/secrets/identity-jwt-keyring}
+      LV_IDENTITY_KEY: ${LV_IDENTITY_KEY:?Set LV_IDENTITY_KEY JSON in .env}
+      LV_IDENTITY_JWT_PRIVATE_KEY: ${LV_IDENTITY_JWT_PRIVATE_KEY:-}
+      LV_IDENTITY_JWT_VERIFY_KEYS: ${LV_IDENTITY_JWT_VERIFY_KEYS:-}
+      LV_IDENTITY_REFRESH_RECEIPT_KEY: ${LV_IDENTITY_REFRESH_RECEIPT_KEY:-}
       LV_IDENTITY_JWT_ACTIVE_KID: ${LV_IDENTITY_JWT_ACTIVE_KID:-}
-      LV_IDENTITY_REFRESH_RECEIPT_KEY_FILE: ${LV_IDENTITY_REFRESH_RECEIPT_KEY_FILE:+/run/secrets/identity-refresh-receipt-key}
-      LV_IDENTITY_KEY_FILE: "/run/secrets/identity-key"
       LV_IDENTITY_TERMS_VERSION: ${LV_IDENTITY_TERMS_VERSION:-}
       LV_IDENTITY_MAIL_SOURCE_HOURLY_LIMIT: ${LV_IDENTITY_MAIL_SOURCE_HOURLY_LIMIT:-0}
       LV_IDENTITY_MAIL_GLOBAL_HOURLY_LIMIT: ${LV_IDENTITY_MAIL_GLOBAL_HOURLY_LIMIT:-0}
@@ -130,21 +119,6 @@ services:
 
       - "127.0.0.1:${LV_WORKER_HEALTH_PORT:-8081}:8081"
       - "127.0.0.1:${LV_RELAY_HEALTH_PORT:-8082}:8082"
-
-secrets:
-  identity-key:
-    file: ${LV_IDENTITY_KEY_FILE:-./.identity.key}
-
-  # In v1 these fallback mounts are never loaded for JWT or receipts.
-  # Operators must supply independent files before enabling v2.
-  identity-jwt-key:
-    file: ${LV_IDENTITY_JWT_KEY_FILE:-${LV_IDENTITY_KEY_FILE:-./.identity.key}}
-  identity-jwt-keyring:
-    file: ${LV_IDENTITY_JWT_VERIFY_KEYS_FILE:-${LV_IDENTITY_KEY_FILE:-./.identity.key}}
-  identity-jwt-public-key:
-    file: ${LV_IDENTITY_JWT_PUBLIC_KEY_FILE:-${LV_IDENTITY_KEY_FILE:-./.identity.key}}
-  identity-refresh-receipt-key:
-    file: ${LV_IDENTITY_REFRESH_RECEIPT_KEY_FILE:-${LV_IDENTITY_KEY_FILE:-./.identity.key}}
 
 volumes:
   backend-go-build:

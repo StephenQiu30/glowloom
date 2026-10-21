@@ -65,7 +65,7 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 		return unknown, err
 	}
 	op := loaded.Operation
-	if (loaded.Provider.AdapterKey != "openrouter" && loaded.Provider.AdapterKey != "volcengine_ark") || op.ModelProfileVersionID == nil || op.PriceRuleVersionID == nil || op.Status.IsTerminal() {
+	if !catalogdomain.IsManagedCloud(loaded.Provider.AdapterKey) || op.ModelProfileVersionID == nil || op.PriceRuleVersionID == nil || op.Status.IsTerminal() {
 		return unknown, application.ErrInvalidProviderCall
 	}
 	identity := application.ProviderDispatchIdentity{ProjectID: op.ProjectID, OperationID: op.ID, ModelProfileVersionID: *op.ModelProfileVersionID, PriceRuleVersionID: *op.PriceRuleVersionID, Action: "submit", Attempt: 1, RequestKey: loaded.ProviderRequestKey}

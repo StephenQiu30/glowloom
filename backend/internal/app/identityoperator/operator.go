@@ -17,7 +17,6 @@ import (
 	"golang.org/x/term"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
@@ -34,7 +33,7 @@ type Command struct {
 // ParseCommand validates arguments without loading configuration or changing resources.
 func ParseCommand(args []string) (Command, error) {
 	var command Command
-	usage := errors.New("usage: glowloom identity key-init | bind-start --login-name NAME --email EMAIL [--platform-admin] | bind-complete --operation UUID [--platform-admin] | mail-run --operation UUID")
+	usage := errors.New("usage: glowloom identity bind-start --login-name NAME --email EMAIL [--platform-admin] | bind-complete --operation UUID [--platform-admin] | mail-run --operation UUID")
 	if len(args) == 0 {
 		return command, usage
 	}
@@ -43,7 +42,6 @@ func ParseCommand(args []string) (Command, error) {
 	flags.SetOutput(io.Discard)
 	var operation string
 	switch command.Action {
-	case "key-init":
 	case "bind-start":
 		flags.StringVar(&command.Login, "login-name", "", "explicit legacy account")
 		flags.StringVar(&command.Email, "email", "", "email to verify")
@@ -87,13 +85,7 @@ func Run(args []string) (runErr error) {
 	if err != nil {
 		return err
 	}
-	if command.Action == "key-init" {
-		if err := credentialproof.CreateFile(cfg.IdentityKeyFile); err != nil {
-			return err
-		}
-		_, err = fmt.Fprintln(os.Stdout, "Identity key file created. Keep a private backup; startup never regenerates it.")
-		return err
-	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)

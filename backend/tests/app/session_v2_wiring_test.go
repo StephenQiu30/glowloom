@@ -5,14 +5,13 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -152,24 +151,10 @@ func TestSessionReceiptCleanup(t *testing.T) {
 
 type proofFixture struct{ identity.ProofProtector }
 
-func TestSessionV2PurposeFiles(t *testing.T) {
-	dir := t.TempDir()
-	proof := filepath.Join(dir, "proof")
-	receipt := filepath.Join(dir, "receipt")
-	if err := os.WriteFile(proof, make([]byte, 32), 0600); err != nil {
-		t.Fatal(err)
-	}
-	alias := dir + "/unused/../proof"
-	cfg := config.Config{IdentityKeyFile: proof, IdentityRefreshReceiptKeyFile: alias}
+func TestSessionV2PurposeValues(t *testing.T) {
+	cfg := config.Config{IdentityJWTPrivateKey: "same", IdentityJWTVerifyKeys: "{}", IdentityRefreshReceiptKey: "same"}
 	if err := cfg.ValidateIdentitySessionV2(); err == nil {
-		t.Fatal("cleaned purpose alias accepted")
-	}
-	if err := os.Link(proof, receipt); err != nil {
-		t.Fatal(err)
-	}
-	cfg.IdentityRefreshReceiptKeyFile = receipt
-	if _, err := identityruntime.NewSessionDependencies(cfg, nil); err == nil {
-		t.Fatal("same-file purpose alias accepted")
+		t.Fatal("shared purpose key accepted")
 	}
 }
 
@@ -178,26 +163,16 @@ func TestSessionV2RealDependencies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir := t.TempDir()
-	private := filepath.Join(dir, "private")
-	public := filepath.Join(dir, "public")
-	keyring := filepath.Join(dir, "keyring")
-	receipt := filepath.Join(dir, "receipt")
-	publicBytes, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	private := base64.StdEncoding.EncodeToString(pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)}))
+	public := base64.StdEncoding.EncodeToString(pem.EncodeToMemory(&pem.Block{Type: "RSA PUBLIC KEY", Bytes: x509.MarshalPKCS1PublicKey(&key.PublicKey)}))
 	mapping, _ := json.Marshal(map[string]string{"current": public})
-	for path, b := range map[string][]byte{private: pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)}), public: pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: publicBytes}), keyring: mapping, receipt: make([]byte, 32)} {
-		if err := os.WriteFile(path, b, 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
+	keyring := string(mapping)
+	receipt := base64.StdEncoding.EncodeToString(make([]byte, 32))
 	client := redis.NewClient(&redis.Options{Addr: "unused.invalid:6379"})
 	hook := &wiringRedisHook{}
 	client.AddHook(hook)
 	defer func() { _ = client.Close() }()
-	cfg := config.Config{IdentitySessionV2Enabled: true, IdentityLegacyUpgradeUntil: time.Now().UTC().Add(time.Hour), IdentityJWTKeyFile: private, IdentityJWTVerifyKeysFile: keyring, IdentityJWTActiveKID: "current", IdentityRefreshReceiptKeyFile: receipt}
+	cfg := config.Config{IdentitySessionV2Enabled: true, IdentityLegacyUpgradeUntil: time.Now().UTC().Add(time.Hour), IdentityJWTPrivateKey: private, IdentityJWTVerifyKeys: keyring, IdentityJWTActiveKID: "current", IdentityRefreshReceiptKey: receipt}
 	deps, err := identityruntime.NewSessionDependencies(cfg, client)
 	if err != nil {
 		t.Fatal(err)
@@ -219,7 +194,7 @@ func TestSessionV2RealDependencies(t *testing.T) {
 		t.Fatal("runtime did not compose JWT adapter")
 	}
 	cfg.IdentitySessionV2Enabled = false
-	cfg.IdentityJWTKeyFile = ""
+	cfg.IdentityJWTPrivateKey = ""
 	cfg.IdentityJWTActiveKID = ""
 	deps, err = identityruntime.NewSessionDependencies(cfg, client)
 	if err != nil {
@@ -234,7 +209,7 @@ func TestSessionV2RealDependencies(t *testing.T) {
 }
 
 func TestSessionV2RouterConsumesSecurity(t *testing.T) {
-	cfg := config.Config{Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKeyFile: publicTestKey(t), IdentitySessionV2Enabled: true, IdentityLegacyUpgradeUntil: time.Now().UTC().Add(time.Hour)}
+	cfg := config.Config{Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKey: publicTestKey(t), IdentitySessionV2Enabled: true, IdentityLegacyUpgradeUntil: time.Now().UTC().Add(time.Hour)}
 	if _, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, &gorm.DB{}, nil, identityruntime.SessionDependencies{}); err == nil {
 		t.Fatal("router allowed enabled security without ports")
 	}

@@ -47,6 +47,13 @@ func readImage(dir, path string) (application.ProviderReceiptOutput, []byte, err
 	if err != nil || len(data) > maxImageBytes || int64(len(data)) != info.Size() {
 		return application.ProviderReceiptOutput{}, nil, errProtocol
 	}
+	return decodeImage(data)
+}
+
+func decodeImage(data []byte) (application.ProviderReceiptOutput, []byte, error) {
+	if len(data) == 0 || len(data) > maxImageBytes {
+		return application.ProviderReceiptOutput{}, nil, errProtocol
+	}
 	config, format, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil || config.Width < 1 || config.Height < 1 || config.Width > 8192 || config.Height > 8192 || int64(config.Width)*int64(config.Height) > 40_000_000 {
 		return application.ProviderReceiptOutput{}, nil, errProtocol

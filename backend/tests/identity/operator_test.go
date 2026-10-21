@@ -1,6 +1,7 @@
 package identity_test
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -15,13 +16,18 @@ import (
 
 func TestMigrationOperatorUsesConfiguredKeysAndExistingDatabase(t *testing.T) {
 	tx := existingIdentityTransaction(t)
-	cfg := config.Config{IdentityKeyFile: filepath.Join(t.TempDir(), "identity.key"), IdentityMailSourceHourlyLimit: 100, IdentityMailGlobalHourlyLimit: 1000}
+	cfg := config.Config{IdentityKey: filepath.Join(t.TempDir(), "identity.key"), IdentityMailSourceHourlyLimit: 100, IdentityMailGlobalHourlyLimit: 1000}
 	if _, err := identityruntime.NewAuth(tx, cfg, time.Now); err == nil {
 		t.Fatal("operator generated unconfigured keys")
 	}
-	if err := credentialproof.CreateFile(cfg.IdentityKeyFile); err != nil {
+	if err := credentialproof.CreateFile(cfg.IdentityKey); err != nil {
 		t.Fatal(err)
 	}
+	material, err := os.ReadFile(cfg.IdentityKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.IdentityKey = string(material)
 	auth, err := identityruntime.NewAuth(tx, cfg, time.Now)
 	if err != nil {
 		t.Fatal(err)
@@ -49,7 +55,11 @@ func TestOperatorMailCannotSendAnotherFlow(t *testing.T) {
 	if err := credentialproof.CreateFile(keyPath); err != nil {
 		t.Fatal(err)
 	}
-	auth, err := identityruntime.NewAuth(tx, config.Config{IdentityKeyFile: keyPath, IdentityTermsVersion: "test", IdentityMailSourceHourlyLimit: 100, IdentityMailGlobalHourlyLimit: 1000}, time.Now)
+	material, err := os.ReadFile(keyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth, err := identityruntime.NewAuth(tx, config.Config{IdentityKey: string(material), IdentityTermsVersion: "test", IdentityMailSourceHourlyLimit: 100, IdentityMailGlobalHourlyLimit: 1000}, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
