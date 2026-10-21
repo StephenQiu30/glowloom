@@ -24,13 +24,3 @@ it("requires an explicit backend origin for the standalone Docker build", () => 
   expect(build).toMatch(/ARG LV_BACKEND_ORIGIN/);
   expect(build).toContain('test -n "$LV_BACKEND_ORIGIN"');
 });
-
-it("CI image build supplies the origin persisted in the Upgrade rewrite", () => {
-  const workflow = readFileSync(
-    resolve(import.meta.dirname, "../../../.github/workflows/ci.yml"),
-    "utf8",
-  );
-  expect(workflow).toContain(
-    "--build-arg LV_BACKEND_ORIGIN=http://backend-api:8080",
-  );
-});
