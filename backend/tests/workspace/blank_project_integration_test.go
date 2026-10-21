@@ -28,7 +28,7 @@ func TestM1BlankProjectOwnsInitialCanvasAndReceipt(t *testing.T) {
 	if err := database.Exec(`INSERT INTO workspace.project(id,org_id,name,aspect_ratio,style_type) VALUES(?,?,'Unassigned legacy','16:9','realistic')`, uuid.New(), actor.OrgID).Error; err != nil {
 		t.Fatal(err)
 	}
-	runtimeURL, err := url.Parse(os.Getenv("LV_TEST_WORKSPACE_DB_DSN"))
+	runtimeURL, err := url.Parse(os.Getenv("GLOWLOOM_TEST_WORKSPACE_DB_DSN"))
 	if err != nil {
 		t.Fatal(err)
 	}

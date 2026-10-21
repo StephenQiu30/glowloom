@@ -9,7 +9,7 @@ import (
 )
 
 func TestLoadVideoDepthRequiresCompleteOfflineRuntime(t *testing.T) {
-	keys := []string{"LV_VIDEO_DEPTH_PYTHON_PATH", "LV_VIDEO_DEPTH_SOURCE_DIR", "LV_VIDEO_DEPTH_MODEL_PATH", "LV_VIDEO_DEPTH_DEVICE"}
+	keys := []string{"GLOWLOOM_VIDEO_DEPTH_PYTHON_PATH", "GLOWLOOM_VIDEO_DEPTH_SOURCE_DIR", "GLOWLOOM_VIDEO_DEPTH_MODEL_PATH", "GLOWLOOM_VIDEO_DEPTH_DEVICE"}
 	values := []string{"/configured/venv/bin/python", "/configured/vda", "/configured/weights/small.pth", "mps"}
 	for mask := 0; mask < 16; mask++ {
 		t.Run(fmt.Sprintf("configured_%04b", mask), func(t *testing.T) {
@@ -49,7 +49,7 @@ func TestLoadVideoDepthRequiresCompleteOfflineRuntime(t *testing.T) {
 		for index, key := range keys {
 			t.Setenv(key, values[index])
 		}
-		t.Setenv("LV_VIDEO_DEPTH_DEVICE", "cpu")
+		t.Setenv("GLOWLOOM_VIDEO_DEPTH_DEVICE", "cpu")
 		if _, err := config.Load(); !errors.Is(err, config.ErrInvalid) {
 			t.Fatal("CPU admission must remain disabled until its receipt profile is verified", err)
 		}

@@ -20,10 +20,10 @@ import (
 )
 
 func TestProjectChangedWithHostPostgresAndRedis(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_INBOX_DB_DSN")
-	redisURL := os.Getenv("LV_TEST_REALTIME_REDIS_URL")
+	dsn := os.Getenv("GLOWLOOM_TEST_INBOX_DB_DSN")
+	redisURL := os.Getenv("GLOWLOOM_TEST_REALTIME_REDIS_URL")
 	if dsn == "" || redisURL == "" {
-		t.Skip("set LV_TEST_INBOX_DB_DSN and LV_TEST_REALTIME_REDIS_URL for disposable integration data")
+		t.Skip("set GLOWLOOM_TEST_INBOX_DB_DSN and GLOWLOOM_TEST_REALTIME_REDIS_URL for disposable integration data")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 	defer cancel()

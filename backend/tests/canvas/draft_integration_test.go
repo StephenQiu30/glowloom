@@ -14,9 +14,9 @@ import (
 )
 
 func TestM1DraftTwoWindowsHaveOneCASWinner(t *testing.T) {
-	owner := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	owner := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	a, p := seedCanvasActor(t, owner)
-	runtime := canvasDB(t, "LV_TEST_CANVAS_M1_RUNTIME_DSN")
+	runtime := canvasDB(t, "GLOWLOOM_TEST_CANVAS_M1_RUNTIME_DSN")
 	s := application.NewService(canvasStore(runtime))
 	d, err := s.Create(t.Context(), a, p, uuid.NewString(), application.CreateInput{Name: "Concurrent draft"})
 	if err != nil {
@@ -64,9 +64,9 @@ func TestM1DraftTwoWindowsHaveOneCASWinner(t *testing.T) {
 }
 
 func TestM1DraftPersistenceHistoryReplayAndRollback(t *testing.T) {
-	owner := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	owner := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	a, p := seedCanvasActor(t, owner)
-	runtime := canvasDB(t, "LV_TEST_CANVAS_M1_RUNTIME_DSN")
+	runtime := canvasDB(t, "GLOWLOOM_TEST_CANVAS_M1_RUNTIME_DSN")
 	var role string
 	if err := runtime.Raw(`SELECT current_user`).Scan(&role).Error; err != nil || role != "glowloom_app" {
 		t.Fatal("must use actual runtime role", role, err)

@@ -20,7 +20,7 @@ import (
 )
 
 func TestDirectorOutputsPersistAndRejectUnavailableImages(t *testing.T) {
-	database := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
 	service := application.NewService(canvasStore(database))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "导演台图库"})
@@ -154,7 +154,7 @@ func TestDirectorOutputsPersistAndRejectUnavailableImages(t *testing.T) {
 }
 
 func TestDirectorGalleryLinksSurviveResourceNodeDeletion(t *testing.T) {
-	database := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
 	service := application.NewService(canvasStore(database))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "稳定图库引用"})
@@ -201,7 +201,7 @@ func TestDirectorGalleryLinksSurviveResourceNodeDeletion(t *testing.T) {
 func TestDirectorOutputsHoldMediaEligibilityUntilCommit(t *testing.T) {
 	for _, target := range []string{"gallery", "cover"} {
 		t.Run(target, func(t *testing.T) {
-			database := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+			database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 			actor, project := seedCanvasActor(t, database)
 			asset := seedCanvasMedia(t, database, project, "image")
 			read, resume := make(chan struct{}, 1), make(chan struct{})

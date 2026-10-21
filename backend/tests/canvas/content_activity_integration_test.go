@@ -11,7 +11,7 @@ import (
 )
 
 func TestContentActivityTracksPrimaryContentWithoutProjectCAS(t *testing.T) {
-	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, db)
 	service := application.NewService(canvasStore(db))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "主画布"})

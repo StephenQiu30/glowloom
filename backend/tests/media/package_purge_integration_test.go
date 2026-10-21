@@ -20,9 +20,9 @@ import (
 
 func packagePurgeDB(t *testing.T, owner bool) *gorm.DB {
 	t.Helper()
-	name := "LV_TEST_MEDIA_PACKAGE_GUARD_DB_DSN"
+	name := "GLOWLOOM_TEST_MEDIA_PACKAGE_GUARD_DB_DSN"
 	if owner {
-		name = "LV_TEST_MEDIA_PACKAGE_GUARD_OWNER_DB_DSN"
+		name = "GLOWLOOM_TEST_MEDIA_PACKAGE_GUARD_OWNER_DB_DSN"
 	}
 	dsn := os.Getenv(name)
 	if dsn == "" {

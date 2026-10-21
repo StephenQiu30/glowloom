@@ -8,7 +8,7 @@ import (
 )
 
 func TestDepthPreviewMatchesFixedWholeClipNormalizationByteForByte(t *testing.T) {
-	base, source := os.Getenv("LV_DEPTH_TEST_ROOT"), os.Getenv("LV_BEEFTV_SOURCE_ROOT")
+	base, source := os.Getenv("GLOWLOOM_DEPTH_TEST_ROOT"), os.Getenv("GLOWLOOM_BEEFTV_SOURCE_ROOT")
 	if base == "" || source == "" {
 		t.Skip("fixed native Python and BeefTV public source were not configured")
 	}

@@ -22,10 +22,10 @@ import (
 )
 
 func TestQueryWorkflowKeepsParentTrace(t *testing.T) {
-	addr := os.Getenv("LV_TEST_TEMPORAL_ADDR")
-	namespace := os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
+	addr := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR")
+	namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
 	if addr == "" || namespace == "" {
-		t.Skip("set LV_TEST_TEMPORAL_ADDR and LV_TEST_TEMPORAL_NAMESPACE for local Temporal")
+		t.Skip("set GLOWLOOM_TEST_TEMPORAL_ADDR and GLOWLOOM_TEST_TEMPORAL_NAMESPACE for local Temporal")
 	}
 	recorder := tracetest.NewSpanRecorder()
 	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
@@ -75,10 +75,10 @@ func traceProbeActivity(ctx context.Context) (string, error) {
 }
 
 func TestWorkflowActivityKeepsParentTrace(t *testing.T) {
-	addr := os.Getenv("LV_TEST_TEMPORAL_ADDR")
-	namespace := os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
+	addr := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR")
+	namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
 	if addr == "" || namespace == "" {
-		t.Skip("set LV_TEST_TEMPORAL_ADDR and LV_TEST_TEMPORAL_NAMESPACE for local Temporal")
+		t.Skip("set GLOWLOOM_TEST_TEMPORAL_ADDR and GLOWLOOM_TEST_TEMPORAL_NAMESPACE for local Temporal")
 	}
 	provider, shutdown, err := otelconn.Open(t.Context(), "", "glowloom-backend-worker")
 	if err != nil {

@@ -32,7 +32,7 @@ import (
 
 func documentTestDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 	t.Helper()
-	runtime, owner := os.Getenv("LV_TEST_DOCUMENT_DB_DSN"), os.Getenv("LV_TEST_DOCUMENT_OWNER_DSN")
+	runtime, owner := os.Getenv("GLOWLOOM_TEST_DOCUMENT_DB_DSN"), os.Getenv("GLOWLOOM_TEST_DOCUMENT_OWNER_DSN")
 	if runtime == "" || owner == "" {
 		t.Skip("set isolated document runtime/owner PostgreSQL DSNs")
 	}

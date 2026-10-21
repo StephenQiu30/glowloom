@@ -13,8 +13,8 @@ import (
 )
 
 func TestInitializeAPIExportsTraceWithHostServices(t *testing.T) {
-	if os.Getenv("LV_TEST_API_OTEL") != "1" {
-		t.Skip("set LV_TEST_API_OTEL=1 and LV_ENV_FILE to verify the host services and OTLP export")
+	if os.Getenv("GLOWLOOM_TEST_API_OTEL") != "1" {
+		t.Skip("set GLOWLOOM_TEST_API_OTEL=1 and GLOWLOOM_ENV_FILE to verify the host services and OTLP export")
 	}
 	requests := make(chan struct{}, 1)
 	receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -14,7 +14,7 @@ import (
 
 func writeOracle(t *testing.T, value any) {
 	t.Helper()
-	if path := os.Getenv("LV_OT_VECTOR_OUTPUT"); path != "" {
+	if path := os.Getenv("GLOWLOOM_OT_VECTOR_OUTPUT"); path != "" {
 		body, err := json.Marshal(value)
 		if err != nil {
 			t.Fatal(err)

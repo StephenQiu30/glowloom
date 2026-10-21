@@ -67,7 +67,7 @@ func mediaCompositionRequest(t *testing.T, router http.Handler, method, path str
 
 func newMediaCompositionFixture(t *testing.T) mediaCompositionFixture {
 	t.Helper()
-	dsn, ownerDSN, storageFile := os.Getenv("LV_TEST_MEDIA_COMPOSITION_DB_DSN"), os.Getenv("LV_TEST_MEDIA_COMPOSITION_OWNER_DB_DSN"), os.Getenv("LV_TEST_RECEIPT_STORAGE_CONFIG")
+	dsn, ownerDSN, storageFile := os.Getenv("GLOWLOOM_TEST_MEDIA_COMPOSITION_DB_DSN"), os.Getenv("GLOWLOOM_TEST_MEDIA_COMPOSITION_OWNER_DB_DSN"), os.Getenv("GLOWLOOM_TEST_RECEIPT_STORAGE_CONFIG")
 	if dsn == "" || ownerDSN == "" || storageFile == "" {
 		t.Skip("set isolated media composition database and synthetic private storage configuration")
 	}

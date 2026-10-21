@@ -14,10 +14,10 @@ import (
 )
 
 func TestScheduleInstallerIsIdempotentAndDetectsDrift(t *testing.T) {
-	addr := os.Getenv("LV_TEST_TEMPORAL_ADDR")
-	namespace := os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
+	addr := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR")
+	namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
 	if addr == "" || namespace == "" {
-		t.Skip("set LV_TEST_TEMPORAL_ADDR and LV_TEST_TEMPORAL_NAMESPACE")
+		t.Skip("set GLOWLOOM_TEST_TEMPORAL_ADDR and GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()

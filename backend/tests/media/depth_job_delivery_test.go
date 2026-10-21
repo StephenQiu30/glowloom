@@ -89,7 +89,7 @@ func (c isolatedDepthClient) ExecuteWorkflow(ctx context.Context, options client
 }
 
 func TestDepthJobRealTemporalDuplicateAndCancellationCommands(t *testing.T) {
-	address, namespace := os.Getenv("LV_TEST_TEMPORAL_ADDR"), os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
+	address, namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR"), os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
 	if address == "" || namespace == "" {
 		t.Skip("configure explicitly authorized isolated workflow queue on actual local Temporal")
 	}

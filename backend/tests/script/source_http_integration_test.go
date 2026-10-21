@@ -27,9 +27,9 @@ import (
 
 func scriptStorage(t *testing.T) *objectstorage.Client {
 	t.Helper()
-	file := os.Getenv("LV_TEST_RECEIPT_STORAGE_CONFIG")
+	file := os.Getenv("GLOWLOOM_TEST_RECEIPT_STORAGE_CONFIG")
 	if file == "" {
-		t.Skip("set isolated LV_TEST_RECEIPT_STORAGE_CONFIG; no business configuration is read")
+		t.Skip("set isolated GLOWLOOM_TEST_RECEIPT_STORAGE_CONFIG; no business configuration is read")
 	}
 	data, err := os.ReadFile(file)
 	if err != nil {

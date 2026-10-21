@@ -138,7 +138,7 @@
 
 测试位置：`backend/tests/canvas/live_integration_test.go`、`frontend/tests/unit/app/canvas/live.test.ts`、画布所有者集成测试及路由合同测试。迁移后的提交候选独立验证：前端110文件718测试通过，全量类型、生产构建、eslint通过；Go全量Race2146通过、988项因未配置外部环境跳过；真实PG完整画布专项215通过、0跳过，含8项WebSocket测试。Go vet、golangci-lint、govulncheck通过；迁移后的导出注释及两个冗余闭包一并补齐，不修改业务规则。全量Prettier仅既有第三方声明Markdown格式未通过，本轮源文件格式单独通过。真实专项首次与全量Race并行时冲突测试超时，现按每个协议断言独立设置15秒等待预算，未放宽冲突或数据库断言，完整专项重跑通过。
 
-部署配置：Next external rewrite 在构建时固定目标；正式 standalone 镜像构建必须显式传入 `--build-arg LV_BACKEND_ORIGIN=<Go内部地址>`，Docker build stage 非空校验，CI镜像构建已显式传参。更换后端地址须重建镜像，不能仅修改运行时环境变量；开发 `next dev` 使用启动时环境。仍不代表生产发布已验收。
+部署配置：Next external rewrite 在构建时固定目标；正式 standalone 镜像构建必须显式传入 `--build-arg GLOWLOOM_BACKEND_ORIGIN=<Go内部地址>`，Docker build stage 非空校验，CI镜像构建已显式传参。更换后端地址须重建镜像，不能仅修改运行时环境变量；开发 `next dev` 使用启动时环境。仍不代表生产发布已验收。
 
 迁移接入：SocketAuthority位于`backend/internal/app/canvas/`，主路由和API生命周期注入使用新服务包；画布旧测试直接导入`app/media`工厂。本次提交仅包含WebSocket闭环、迁移集成修复及相应文档/测试；并行身份配置与画布UI改版保留在工作区，未纳入提交。用户已授权验证后提交并推送main，发布及OT仍不在范围。
 

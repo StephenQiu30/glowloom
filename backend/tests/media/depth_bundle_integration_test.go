@@ -13,7 +13,7 @@ import (
 )
 
 func TestDepthNativeFixedSourceRejectsModifiedAndHiddenExecutable(t *testing.T) {
-	base := os.Getenv("LV_DEPTH_TEST_ROOT")
+	base := os.Getenv("GLOWLOOM_DEPTH_TEST_ROOT")
 	if base == "" {
 		t.Skip("actual fixed public VDA bundle was not configured")
 	}

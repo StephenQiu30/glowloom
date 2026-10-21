@@ -14,9 +14,9 @@ import (
 )
 
 func TestOperationStarterKeepsOneWorkflowOnLocalTemporal(t *testing.T) {
-	addr, namespace := os.Getenv("LV_TEST_TEMPORAL_ADDR"), os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
+	addr, namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR"), os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
 	if addr == "" || namespace == "" {
-		t.Skip("set LV_TEST_TEMPORAL_ADDR and LV_TEST_TEMPORAL_NAMESPACE for local Temporal")
+		t.Skip("set GLOWLOOM_TEST_TEMPORAL_ADDR and GLOWLOOM_TEST_TEMPORAL_NAMESPACE for local Temporal")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()

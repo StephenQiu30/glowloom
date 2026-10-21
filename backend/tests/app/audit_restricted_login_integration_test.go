@@ -27,10 +27,10 @@ import (
 // database. Kafka and Redis must be disposable for this test: the relay uses
 // the production audit topic and consumer group names.
 func TestAuditRestrictedLoginRelayDeduplicates(t *testing.T) {
-	ownerDSN := os.Getenv("LV_TEST_AUDIT_OWNER_DB_DSN")
-	loginDSN := os.Getenv("LV_TEST_AUDIT_LOGIN_DB_DSN")
-	brokers := os.Getenv("LV_TEST_KAFKA_BROKERS")
-	redisURL := os.Getenv("LV_TEST_REDIS_URL")
+	ownerDSN := os.Getenv("GLOWLOOM_TEST_AUDIT_OWNER_DB_DSN")
+	loginDSN := os.Getenv("GLOWLOOM_TEST_AUDIT_LOGIN_DB_DSN")
+	brokers := os.Getenv("GLOWLOOM_TEST_KAFKA_BROKERS")
+	redisURL := os.Getenv("GLOWLOOM_TEST_REDIS_URL")
 	if ownerDSN == "" && loginDSN == "" {
 		t.Skip("set the audit owner and restricted-login DSNs with disposable Kafka and Redis addresses")
 	}

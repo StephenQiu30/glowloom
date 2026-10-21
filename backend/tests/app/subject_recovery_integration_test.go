@@ -28,7 +28,7 @@ import (
 )
 
 func TestSubjectRecoveryPublicRouter(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_SUBJECT_RECOVERY_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_SUBJECT_RECOVERY_DB_DSN")
 	if dsn == "" {
 		t.Skip("requires isolated subject database")
 	}
@@ -127,10 +127,10 @@ func TestSubjectRecoveryPublicRouter(t *testing.T) {
 	if active.Code != 200 || !strings.Contains(active.Body.String(), receipt.EntryID.String()) || trash.Code != 200 || strings.Contains(trash.Body.String(), receipt.EntryID.String()) {
 		t.Fatal("persisted lists do not match restoration")
 	}
-	if os.Getenv("LV_SUBJECT_BROWSER_SERVER") != "1" {
+	if os.Getenv("GLOWLOOM_SUBJECT_BROWSER_SERVER") != "1" {
 		return
 	}
-	evidence := os.Getenv("LV_SUBJECT_BROWSER_EVIDENCE")
+	evidence := os.Getenv("GLOWLOOM_SUBJECT_BROWSER_EVIDENCE")
 	if !strings.HasPrefix(evidence, "/Users/stephenqiu/.codex/visualizations/") {
 		t.Fatal("explicit task evidence path required")
 	}

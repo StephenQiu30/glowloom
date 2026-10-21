@@ -20,7 +20,7 @@ import (
 // This overlap uses only locks and transaction IDs on an existing settings row.
 // No actor/session/export fixtures, DDL, new database or persistent writes occur.
 func TestDirectoryExportWaitingTransactionGetsFreshReceiptSnapshot(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_EXISTING_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_EXISTING_DB_DSN")
 	if dsn == "" {
 		t.Skip("existing database connection absent; overlap not verified")
 	}

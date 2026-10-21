@@ -261,7 +261,7 @@ func TestUploadStoreAuditFailureRollsBackPublication(t *testing.T) {
 	database := mediaStoreDB(t)
 	actor, project := mediaStoreProject(t, database)
 	fixtureDB := database
-	if os.Getenv("LV_TEST_LIBRARY_OWNER_DB_DSN") != "" {
+	if os.Getenv("GLOWLOOM_TEST_LIBRARY_OWNER_DB_DSN") != "" {
 		fixtureDB = libraryOwnerDB(t)
 	}
 	function := "reject_upload_audit_" + strings.ReplaceAll(project.String(), "-", "")

@@ -22,10 +22,10 @@ func (f recordHandler) Handle(ctx context.Context, record application.Record) er
 }
 
 func TestKafkaConsumerCommitsOnlyAfterHandling(t *testing.T) {
-	brokers := os.Getenv("LV_TEST_KAFKA_BROKERS")
-	topic := os.Getenv("LV_TEST_INBOX_KAFKA_TOPIC")
+	brokers := os.Getenv("GLOWLOOM_TEST_KAFKA_BROKERS")
+	topic := os.Getenv("GLOWLOOM_TEST_INBOX_KAFKA_TOPIC")
 	if brokers == "" || topic == "" {
-		t.Skip("set LV_TEST_KAFKA_BROKERS and a disposable LV_TEST_INBOX_KAFKA_TOPIC")
+		t.Skip("set GLOWLOOM_TEST_KAFKA_BROKERS and a disposable GLOWLOOM_TEST_INBOX_KAFKA_TOPIC")
 	}
 	producer, err := kgo.NewClient(kgo.SeedBrokers(strings.Split(brokers, ",")...))
 	if err != nil {

@@ -1,5 +1,5 @@
 -- Apply only to an existing database after review; does not delete business data.
--- psql "$LV_SCHEMA_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f backend/db/project_retention_incremental.sql
+-- psql "$GLOWLOOM_SCHEMA_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f backend/db/project_retention_incremental.sql
 CREATE TABLE IF NOT EXISTS workspace.project_retention_job (
  project_id uuid NOT NULL REFERENCES workspace.project(id),
  org_id uuid NOT NULL,

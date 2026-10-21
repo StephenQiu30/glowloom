@@ -88,7 +88,7 @@ func TestSessionV2Tokens(t *testing.T) {
 }
 
 func TestSessionV2Configuration(t *testing.T) {
-	t.Setenv("LV_IDENTITY_SESSION_V2_ENABLED", "true")
+	t.Setenv("GLOWLOOM_IDENTITY_SESSION_V2_ENABLED", "true")
 	if _, err := config.Load(); err == nil {
 		t.Fatal("enabled without keys")
 	}
@@ -132,7 +132,7 @@ func TestSessionV2TokensRejectHeaders(t *testing.T) {
 }
 
 func TestSessionV2ConfigurationInvalidDeadline(t *testing.T) {
-	t.Setenv("LV_IDENTITY_LEGACY_UPGRADE_UNTIL", "invalid")
+	t.Setenv("GLOWLOOM_IDENTITY_LEGACY_UPGRADE_UNTIL", "invalid")
 	if _, err := config.Load(); err == nil {
 		t.Fatal("invalid deadline accepted")
 	}

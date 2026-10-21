@@ -29,9 +29,9 @@ import (
 
 func coverTestDB(t *testing.T) (context.Context, *gorm.DB, *gorm.DB) {
 	t.Helper()
-	runtime, owner := os.Getenv("LV_TEST_COVER_DB_DSN"), os.Getenv("LV_TEST_COVER_OWNER_DSN")
+	runtime, owner := os.Getenv("GLOWLOOM_TEST_COVER_DB_DSN"), os.Getenv("GLOWLOOM_TEST_COVER_OWNER_DSN")
 	if runtime == "" || owner == "" {
-		t.Skip("set isolated LV_TEST_COVER_DB_DSN and LV_TEST_COVER_OWNER_DSN")
+		t.Skip("set isolated GLOWLOOM_TEST_COVER_DB_DSN and GLOWLOOM_TEST_COVER_OWNER_DSN")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 40*time.Second)
 	t.Cleanup(cancel)

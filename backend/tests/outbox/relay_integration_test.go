@@ -20,11 +20,11 @@ import (
 )
 
 func TestOutboxRelayWithHostPostgresAndKafka(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_OUTBOX_DB_DSN")
-	brokers := os.Getenv("LV_TEST_KAFKA_BROKERS")
-	topic := os.Getenv("LV_TEST_OUTBOX_KAFKA_TOPIC")
+	dsn := os.Getenv("GLOWLOOM_TEST_OUTBOX_DB_DSN")
+	brokers := os.Getenv("GLOWLOOM_TEST_KAFKA_BROKERS")
+	topic := os.Getenv("GLOWLOOM_TEST_OUTBOX_KAFKA_TOPIC")
 	if dsn == "" || brokers == "" || topic == "" {
-		t.Skip("set LV_TEST_OUTBOX_DB_DSN, LV_TEST_KAFKA_BROKERS, and a disposable LV_TEST_OUTBOX_KAFKA_TOPIC")
+		t.Skip("set GLOWLOOM_TEST_OUTBOX_DB_DSN, GLOWLOOM_TEST_KAFKA_BROKERS, and a disposable GLOWLOOM_TEST_OUTBOX_KAFKA_TOPIC")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 	defer cancel()

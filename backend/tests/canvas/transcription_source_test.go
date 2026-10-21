@@ -15,7 +15,7 @@ import (
 )
 
 func TestTranscriptionSourceFreezesFormalNodeAndLocksUntilOuterCommit(t *testing.T) {
-	database := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
 	service := application.NewService(canvasStore(database))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "真实转写输入"})
@@ -86,7 +86,7 @@ func TestTranscriptionSourceFreezesFormalNodeAndLocksUntilOuterCommit(t *testing
 }
 
 func TestTranscriptionSourceRejectsImageAndKindChangedAfterSave(t *testing.T) {
-	database := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
 	service := application.NewService(canvasStore(database))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "转写类型守卫"})

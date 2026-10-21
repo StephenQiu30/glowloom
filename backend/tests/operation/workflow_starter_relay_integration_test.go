@@ -36,11 +36,11 @@ import (
 )
 
 func TestConfirmedOutboxStartsOneWorkflowThroughLocalKafkaAndTemporal(t *testing.T) {
-	brokers := os.Getenv("LV_TEST_KAFKA_BROKERS")
-	addr := os.Getenv("LV_TEST_TEMPORAL_ADDR")
-	namespace := os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
-	if os.Getenv("LV_TEST_OPERATION_STARTER_DB_DSN") == "" || brokers == "" || addr == "" || namespace == "" {
-		t.Skip("set dedicated LV_TEST_OPERATION_STARTER_DB_DSN, local Kafka, and local Temporal test variables")
+	brokers := os.Getenv("GLOWLOOM_TEST_KAFKA_BROKERS")
+	addr := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR")
+	namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
+	if os.Getenv("GLOWLOOM_TEST_OPERATION_STARTER_DB_DSN") == "" || brokers == "" || addr == "" || namespace == "" {
+		t.Skip("set dedicated GLOWLOOM_TEST_OPERATION_STARTER_DB_DSN, local Kafka, and local Temporal test variables")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 25*time.Second)
 	defer cancel()
@@ -164,9 +164,9 @@ func TestConfirmedOutboxStartsOneWorkflowThroughLocalKafkaAndTemporal(t *testing
 }
 
 func TestProductionRelayStartsConfirmedBatchThroughLocalKafka(t *testing.T) {
-	brokers, redisURL := os.Getenv("LV_TEST_KAFKA_BROKERS"), os.Getenv("LV_TEST_REDIS_URL")
-	addr, namespace := os.Getenv("LV_TEST_TEMPORAL_ADDR"), os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
-	if os.Getenv("LV_TEST_OPERATION_STARTER_DB_DSN") == "" || brokers == "" || redisURL == "" ||
+	brokers, redisURL := os.Getenv("GLOWLOOM_TEST_KAFKA_BROKERS"), os.Getenv("GLOWLOOM_TEST_REDIS_URL")
+	addr, namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR"), os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
+	if os.Getenv("GLOWLOOM_TEST_OPERATION_STARTER_DB_DSN") == "" || brokers == "" || redisURL == "" ||
 		addr == "" || namespace == "" {
 		t.Skip("set isolated PostgreSQL, local Kafka, Redis, and Temporal test variables")
 	}
@@ -221,7 +221,7 @@ func TestProductionRelayStartsConfirmedBatchThroughLocalKafka(t *testing.T) {
 	relayDone := make(chan error, 1)
 	go func() {
 		relayDone <- app.RunRelay(relayCtx, config.Config{
-			DBDSN: os.Getenv("LV_TEST_OPERATION_STARTER_DB_DSN"), KafkaBrokers: brokers,
+			DBDSN: os.Getenv("GLOWLOOM_TEST_OPERATION_STARTER_DB_DSN"), KafkaBrokers: brokers,
 			RedisURL: redisURL, TemporalAddr: addr, TemporalNamespace: namespace,
 			RelayHealthAddr: "127.0.0.1:0",
 		}, zap.NewNop())
@@ -272,9 +272,9 @@ func TestProductionRelayStartsConfirmedBatchThroughLocalKafka(t *testing.T) {
 }
 
 func TestProductionRelayRecoversStaleConfirmedBatch(t *testing.T) {
-	brokers, redisURL := os.Getenv("LV_TEST_KAFKA_BROKERS"), os.Getenv("LV_TEST_REDIS_URL")
-	addr, namespace := os.Getenv("LV_TEST_TEMPORAL_ADDR"), os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
-	if os.Getenv("LV_TEST_OPERATION_STARTER_DB_DSN") == "" || brokers == "" || redisURL == "" ||
+	brokers, redisURL := os.Getenv("GLOWLOOM_TEST_KAFKA_BROKERS"), os.Getenv("GLOWLOOM_TEST_REDIS_URL")
+	addr, namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR"), os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
+	if os.Getenv("GLOWLOOM_TEST_OPERATION_STARTER_DB_DSN") == "" || brokers == "" || redisURL == "" ||
 		addr == "" || namespace == "" {
 		t.Skip("set isolated PostgreSQL, local Kafka, Redis, and Temporal test variables")
 	}
@@ -317,7 +317,7 @@ func TestProductionRelayRecoversStaleConfirmedBatch(t *testing.T) {
 	relayDone := make(chan error, 1)
 	go func() {
 		relayDone <- app.RunRelay(relayCtx, config.Config{
-			DBDSN: os.Getenv("LV_TEST_OPERATION_STARTER_DB_DSN"), KafkaBrokers: brokers,
+			DBDSN: os.Getenv("GLOWLOOM_TEST_OPERATION_STARTER_DB_DSN"), KafkaBrokers: brokers,
 			RedisURL: redisURL, TemporalAddr: addr, TemporalNamespace: namespace,
 			RelayHealthAddr: "127.0.0.1:0",
 		}, zap.NewNop())
@@ -361,7 +361,7 @@ func operationStarterDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	t.Cleanup(cancel)
-	conn, err := db.Open(ctx, os.Getenv("LV_TEST_OPERATION_STARTER_DB_DSN"), noop.NewTracerProvider())
+	conn, err := db.Open(ctx, os.Getenv("GLOWLOOM_TEST_OPERATION_STARTER_DB_DSN"), noop.NewTracerProvider())
 	if err != nil {
 		t.Fatalf("open dedicated workflow starter database: %v", err)
 	}

@@ -24,7 +24,7 @@ func depthNativeRunner(t *testing.T) *videodepth.Runner {
 
 func depthNativeRunnerBudget(t *testing.T, rss int64) *videodepth.Runner {
 	t.Helper()
-	base := os.Getenv("LV_DEPTH_TEST_ROOT")
+	base := os.Getenv("GLOWLOOM_DEPTH_TEST_ROOT")
 	if base == "" {
 		t.Skip("actual fixed VDA/PyTorch offline bundle was not configured")
 	}
@@ -57,7 +57,7 @@ func TestDepthNativeActualSmallMPSCompleteVideos(t *testing.T) {
 				t.Fatalf("fabricated/missing phases: %v", phases)
 			}
 			t.Logf("actual fixed Small MPS %ss SHA=%s bytes=%d receipt=%+v", duration, output.File.SHA256, output.File.Size, output.Receipt)
-			if base := os.Getenv("LV_DEPTH_TEST_EVIDENCE"); base != "" {
+			if base := os.Getenv("GLOWLOOM_DEPTH_TEST_EVIDENCE"); base != "" {
 				if err := os.MkdirAll(base, 0700); err != nil {
 					t.Fatal(err)
 				}
@@ -246,7 +246,7 @@ func TestDepthNativeActualSmallMPSMaximumFramesAndPixels(t *testing.T) {
 		t.Fatalf("maximum full input was reduced or truncated: %+v", out.Receipt)
 	}
 	t.Logf("actual 960x960/453-frame MPS source output SHA=%s bytes=%d receipt=%+v", out.File.SHA256, out.File.Size, out.Receipt)
-	if base := os.Getenv("LV_DEPTH_TEST_EVIDENCE"); base != "" {
+	if base := os.Getenv("GLOWLOOM_DEPTH_TEST_EVIDENCE"); base != "" {
 		if err := os.MkdirAll(base, 0700); err != nil {
 			t.Fatal(err)
 		}

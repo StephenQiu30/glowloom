@@ -22,9 +22,9 @@ import (
 
 func folderTestDB(t *testing.T) (context.Context, *gorm.DB, *gorm.DB) {
 	t.Helper()
-	runtime, owner := os.Getenv("LV_TEST_FOLDER_DB_DSN"), os.Getenv("LV_TEST_FOLDER_OWNER_DSN")
+	runtime, owner := os.Getenv("GLOWLOOM_TEST_FOLDER_DB_DSN"), os.Getenv("GLOWLOOM_TEST_FOLDER_OWNER_DSN")
 	if runtime == "" || owner == "" {
-		t.Skip("set LV_TEST_FOLDER_DB_DSN and LV_TEST_FOLDER_OWNER_DSN to isolated migrated PostgreSQL")
+		t.Skip("set GLOWLOOM_TEST_FOLDER_DB_DSN and GLOWLOOM_TEST_FOLDER_OWNER_DSN to isolated migrated PostgreSQL")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	t.Cleanup(cancel)

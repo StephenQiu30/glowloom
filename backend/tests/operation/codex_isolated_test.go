@@ -63,7 +63,7 @@ func TestIsolatedCodexRejectsSharedDirectories(t *testing.T) {
 	require.Error(t, err)
 }
 func TestIsolatedInstalledCodexHandshake(t *testing.T) {
-	binary := os.Getenv("LV_TEST_CODEX_BINARY")
+	binary := os.Getenv("GLOWLOOM_TEST_CODEX_BINARY")
 	if binary == "" {
 		t.Skip("explicit installed binary opt-in; no inference")
 	}

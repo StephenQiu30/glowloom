@@ -48,7 +48,7 @@ func directorOutputRequest(ctx context.Context, t *testing.T, router http.Handle
 }
 
 func TestDirectorOutputHTTPClosedJSONAndPersistentRefresh(t *testing.T) {
-	database := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
 	router := directorOutputRouter(database, actor)
 	create := directorOutputRequest(t.Context(), t, router, "POST", "/api/projects/"+project.String()+"/canvases", uuid.NewString(), []byte(`{"name":"HTTP图库","scope":{}}`))

@@ -48,7 +48,7 @@ type liveFixture struct {
 
 func newLiveFixture(t *testing.T, lifetime ...context.Context) liveFixture {
 	t.Helper()
-	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	cfg := identityfixture.Configure(t, config.Config{Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: liveOrigin})
 	auth := identityfixture.Create(t, db, cfg, "WS fixture", "WS fixture-only password!")
 	actor := identity.Principal{ID: auth.User.ID, OrgID: auth.User.OrgID, SessionID: auth.Session.ID, CredentialEpoch: auth.User.SessionEpoch, PlatformEpoch: auth.User.PlatformEpoch, PlatformRole: auth.User.PlatformRole, ScopeID: identityfixture.Scope(t, db, auth.User.ID)}

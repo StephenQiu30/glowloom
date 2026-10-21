@@ -57,7 +57,7 @@ func seedCanvasActor(t *testing.T, database *gorm.DB) (identityapp.Principal, uu
 	return a, p
 }
 func TestCanvasPersistenceRevisionReplayRollbackAndRestore(t *testing.T) {
-	database := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
 	service := application.NewService(canvasStore(database))
 	key := uuid.NewString()
@@ -131,7 +131,7 @@ func TestCanvasPersistenceRevisionReplayRollbackAndRestore(t *testing.T) {
 }
 
 func TestConcurrentCanvasCommandsAdvanceOneRevision(t *testing.T) {
-	database := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
 	service := application.NewService(canvasStore(database))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "Concurrent"})

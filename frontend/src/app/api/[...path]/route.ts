@@ -540,7 +540,9 @@ async function proxy(
   try {
     const upstream = new URL(
       `/api/${resource}`,
-      process.env.LV_BACKEND_ORIGIN ?? "http://127.0.0.1:8080",
+      process.env.GLOWLOOM_BACKEND_ORIGIN ??
+        process.env.LV_BACKEND_ORIGIN ??
+        "http://127.0.0.1:8080",
     );
     if (boundedRoute)
       for (const [key, value] of incoming.searchParams)

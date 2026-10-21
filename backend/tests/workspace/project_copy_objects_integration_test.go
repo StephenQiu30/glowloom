@@ -34,9 +34,9 @@ import (
 
 func projectCopyObjects(t *testing.T) *objectstorage.Client {
 	t.Helper()
-	path := os.Getenv("LV_TEST_RECEIPT_STORAGE_CONFIG")
+	path := os.Getenv("GLOWLOOM_TEST_RECEIPT_STORAGE_CONFIG")
 	if path == "" {
-		t.Skip("set isolated LV_TEST_RECEIPT_STORAGE_CONFIG; no business configuration is read")
+		t.Skip("set isolated GLOWLOOM_TEST_RECEIPT_STORAGE_CONFIG; no business configuration is read")
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {

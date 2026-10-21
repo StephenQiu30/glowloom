@@ -102,7 +102,7 @@ func (o *transferCancelWrite) PutIfAbsent(ctx context.Context, key string, reade
 }
 
 func TestMediaTransferActualTemporalPrivateObjectsCancellationAndRecovery(t *testing.T) {
-	address, namespace := os.Getenv("LV_TEST_TEMPORAL_ADDR"), os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
+	address, namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR"), os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
 	if address == "" || namespace == "" {
 		t.Skip("set explicitly authorized local Temporal with an isolated task-owned queue")
 	}

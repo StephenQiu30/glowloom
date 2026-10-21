@@ -81,7 +81,7 @@ func TestCollaborationStructuralDeletionIntentSurvivesNoop(t *testing.T) {
 	for _, kind := range []string{"node", "edge", "row"} {
 		for _, known := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/known=%t", kind, known), func(t *testing.T) {
-				db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+				db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 				actor, p := seedCanvasActor(t, db)
 				store := canvasStore(db)
 				svc := application.NewCollaborationService(store)
@@ -140,7 +140,7 @@ func TestCollaborationStructuralDeletionIntentSurvivesNoop(t *testing.T) {
 }
 
 func TestCollaborationInsertedRowConsumerRejectsCreateUndo(t *testing.T) {
-	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, p := seedCanvasActor(t, db)
 	store := canvasStore(db)
 	svc := application.NewCollaborationService(store)

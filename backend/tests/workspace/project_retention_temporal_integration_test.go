@@ -16,7 +16,7 @@ import (
 )
 
 func TestProjectRetentionRealScheduleAndWorker(t *testing.T) {
-	addr, namespace := os.Getenv("LV_TEST_TEMPORAL_ADDR"), os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
+	addr, namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR"), os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
 	if addr == "" || namespace == "" {
 		t.Skip("set isolated Temporal address and namespace")
 	}

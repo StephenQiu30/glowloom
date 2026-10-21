@@ -20,8 +20,8 @@ import (
 )
 
 func TestUploadRealMinIOOriginalRenditionsAndPreview(t *testing.T) {
-	if os.Getenv("LV_TEST_OBJECT_STORAGE") != "1" || os.Getenv("LV_TEST_MEDIA_STORE_DB_DSN") == "" {
-		t.Skip("set isolated LV_TEST_MEDIA_STORE_DB_DSN, LV_TEST_OBJECT_STORAGE=1 and related LV_ENV_FILE")
+	if os.Getenv("GLOWLOOM_TEST_OBJECT_STORAGE") != "1" || os.Getenv("GLOWLOOM_TEST_MEDIA_STORE_DB_DSN") == "" {
+		t.Skip("set isolated GLOWLOOM_TEST_MEDIA_STORE_DB_DSN, GLOWLOOM_TEST_OBJECT_STORAGE=1 and related GLOWLOOM_ENV_FILE")
 	}
 	database := mediaStoreDB(t)
 	actor, project := mediaStoreProject(t, database)

@@ -34,7 +34,7 @@ func (c isolatedImportClient) ExecuteWorkflow(ctx context.Context, options clien
 }
 
 func TestScriptFileImportRealTemporalExistingRunReceivesSavedControls(t *testing.T) {
-	address, namespace := os.Getenv("LV_TEST_TEMPORAL_ADDR"), os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
+	address, namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR"), os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
 	if address == "" || namespace == "" {
 		t.Skip("set actual authorized Temporal address/namespace; queue is unique and unpolled")
 	}
@@ -133,7 +133,7 @@ func (i *importQueueOutbound) ExecuteActivity(ctx workflow.Context, activityType
 }
 
 func TestScriptFileImportRealTemporalPGInboxActualPrivateOriginalToVersion(t *testing.T) {
-	address, namespace := os.Getenv("LV_TEST_TEMPORAL_ADDR"), os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
+	address, namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR"), os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
 	if address == "" || namespace == "" {
 		t.Skip("set authorized local Temporal address/namespace; all worker queues are task unique")
 	}

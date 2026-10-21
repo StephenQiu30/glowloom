@@ -12,28 +12,45 @@ export function ProjectsPage() {
   );
 }
 function ProjectsRoute() {
-  const state = useSearchParams().get("state");
+  const params = useSearchParams();
+  const state = params.get("state");
+  const query = (params.get("q") ?? "").trim();
+  const sort =
+    params.get("sort") === "metadata" ? "metadata" : "recent_content";
   const filter = state === "archived" || state === "deleted" ? state : "active";
-  return <ProjectsContent key={filter} filter={filter} />;
+  return (
+    <ProjectsContent
+      key={`${filter}:${query}`}
+      filter={filter}
+      query={query}
+      sort={sort}
+    />
+  );
 }
 function ProjectsContent({
   filter,
+  query,
+  sort,
 }: {
   filter: "active" | "archived" | "deleted";
+  query: string;
+  sort: "recent_content" | "metadata";
 }) {
-  const [search, setSearch] = useState(""),
-    [query, setQuery] = useState("");
+  const [search, setSearch] = useState(query);
   const router = useRouter();
-  const [sort, setSort] = useState<"recent_content" | "metadata">(
-    "recent_content",
-  );
+  function navigate(value: typeof filter, nextQuery = query, nextSort = sort) {
+    const params = new URLSearchParams({ state: value });
+    if (nextQuery.trim()) params.set("q", nextQuery.trim());
+    if (nextSort === "metadata") params.set("sort", nextSort);
+    router.push(`/projects?${params}`);
+  }
   return (
     <PageLayout
       screen="projects"
       search={{
         value: search,
         onValueChange: setSearch,
-        onSearch: setQuery,
+        onSearch: (value) => navigate(filter, value),
         label: "搜索画布",
       }}
     >
@@ -48,9 +65,9 @@ function ProjectsContent({
         query={query}
         view="grid"
         filter={filter}
-        onFilterChange={(value) => router.push(`/projects?state=${value}`)}
+        onFilterChange={(value) => navigate(value)}
         sort={sort}
-        onSortChange={setSort}
+        onSortChange={(value) => navigate(filter, query, value)}
       />
     </PageLayout>
   );

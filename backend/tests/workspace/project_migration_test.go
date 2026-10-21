@@ -16,9 +16,9 @@ import (
 
 func workspaceMigrationDB(t *testing.T) (context.Context, *gorm.DB) {
 	t.Helper()
-	dsn := os.Getenv("LV_TEST_WORKSPACE_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_WORKSPACE_DB_DSN")
 	if dsn == "" {
-		t.Skip("set LV_TEST_WORKSPACE_DB_DSN to an isolated PostgreSQL database with workspace migrations applied")
+		t.Skip("set GLOWLOOM_TEST_WORKSPACE_DB_DSN to an isolated PostgreSQL database with workspace migrations applied")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	t.Cleanup(cancel)

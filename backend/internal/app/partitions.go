@@ -33,10 +33,10 @@ type partitionDBIdentity struct {
 // from the application writer. Both tables change in one database transaction.
 func EnsurePartitions(ctx context.Context, cfg config.Config, logger *zap.Logger, now time.Time) error {
 	if strings.TrimSpace(cfg.PartitionMaintenanceDBDSN) == "" {
-		return fmt.Errorf("%w: LV_PARTITION_MAINTENANCE_DB_DSN is required", ErrInvalidPartitionMaintenanceRole)
+		return fmt.Errorf("%w: GLOWLOOM_PARTITION_MAINTENANCE_DB_DSN is required", ErrInvalidPartitionMaintenanceRole)
 	}
 	if strings.TrimSpace(cfg.DBDSN) == "" {
-		return fmt.Errorf("%w: LV_DB_DSN is required", ErrInvalidPartitionMaintenanceRole)
+		return fmt.Errorf("%w: GLOWLOOM_DB_DSN is required", ErrInvalidPartitionMaintenanceRole)
 	}
 	provider, cleanup, err := provideNamedTrace(ctx, cfg, logger, "partition-maintenance")
 	if err != nil {

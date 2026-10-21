@@ -25,7 +25,7 @@ import (
 
 func purgeScopeFixture(t *testing.T) (*gorm.DB, identity.Principal, uuid.UUID, uuid.UUID, media.PurgeWorkID) {
 	t.Helper()
-	dsn := os.Getenv("LV_TEST_EXISTING_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_EXISTING_DB_DSN")
 	if dsn == "" {
 		t.Skip("existing database connection absent; integration not verified")
 	}

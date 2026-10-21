@@ -16,7 +16,7 @@ import (
 )
 
 func TestMainCanvasProjectsCurrentNameAndRejectsDirectMutation(t *testing.T) {
-	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, db)
 	service := application.NewService(pgcanvas.NewScopedStore(db, nil, mediawire.NewCanvasProjectAccess))
 	created, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "原名称"})
@@ -57,7 +57,7 @@ func TestMainCanvasProjectsCurrentNameAndRejectsDirectMutation(t *testing.T) {
 }
 
 func TestMainCanvasGuardPreservesValidOldReceiptBeforeRejectingExpiredKey(t *testing.T) {
-	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, db)
 	service := application.NewService(pgcanvas.NewScopedStore(db, nil, mediawire.NewCanvasProjectAccess))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "历史名称"})
@@ -90,7 +90,7 @@ func TestMainCanvasGuardPreservesValidOldReceiptBeforeRejectingExpiredKey(t *tes
 }
 
 func TestMainCanvasDeleteGuardPreservesOldReceiptThenRejectsExpiredKey(t *testing.T) {
-	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, db)
 	service := application.NewService(canvasStore(db))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "历史文档"})

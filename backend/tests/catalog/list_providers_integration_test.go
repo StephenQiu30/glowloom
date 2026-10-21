@@ -21,9 +21,9 @@ import (
 )
 
 func TestListProvidersPagesSafeSummariesAndRealModelCountsOnLocalPostgres(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_CATALOG_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_CATALOG_DB_DSN")
 	if dsn == "" {
-		t.Skip("set LV_TEST_CATALOG_DB_DSN to an isolated migrated database")
+		t.Skip("set GLOWLOOM_TEST_CATALOG_DB_DSN to an isolated migrated database")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()

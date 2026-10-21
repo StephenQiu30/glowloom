@@ -24,7 +24,7 @@ import (
 
 func bibleObjects(t *testing.T) *objectstorage.Client {
 	t.Helper()
-	path := os.Getenv("LV_TEST_RECEIPT_STORAGE_CONFIG")
+	path := os.Getenv("GLOWLOOM_TEST_RECEIPT_STORAGE_CONFIG")
 	if path == "" {
 		t.Skip("set synthetic private storage config for real source bytes")
 	}

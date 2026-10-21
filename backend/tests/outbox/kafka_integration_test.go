@@ -16,10 +16,10 @@ import (
 )
 
 func TestKafkaPublisherPreservesEventContract(t *testing.T) {
-	brokers := os.Getenv("LV_TEST_KAFKA_BROKERS")
-	topic := os.Getenv("LV_TEST_OUTBOX_KAFKA_TOPIC")
+	brokers := os.Getenv("GLOWLOOM_TEST_KAFKA_BROKERS")
+	topic := os.Getenv("GLOWLOOM_TEST_OUTBOX_KAFKA_TOPIC")
 	if brokers == "" || topic == "" {
-		t.Skip("set LV_TEST_KAFKA_BROKERS and a disposable LV_TEST_OUTBOX_KAFKA_TOPIC")
+		t.Skip("set GLOWLOOM_TEST_KAFKA_BROKERS and a disposable GLOWLOOM_TEST_OUTBOX_KAFKA_TOPIC")
 	}
 	conn, err := kafkaconn.Open(brokers)
 	if err != nil {

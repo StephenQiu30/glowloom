@@ -27,9 +27,9 @@ func TestOpenRejectsMalformedBrokers(t *testing.T) {
 }
 
 func TestPingWithKafka(t *testing.T) {
-	brokers := os.Getenv("LV_TEST_KAFKA_BROKERS")
+	brokers := os.Getenv("GLOWLOOM_TEST_KAFKA_BROKERS")
 	if brokers == "" {
-		t.Skip("set LV_TEST_KAFKA_BROKERS to a disposable Kafka broker")
+		t.Skip("set GLOWLOOM_TEST_KAFKA_BROKERS to a disposable Kafka broker")
 	}
 	conn, err := kafkaconn.Open(brokers)
 	if err != nil {

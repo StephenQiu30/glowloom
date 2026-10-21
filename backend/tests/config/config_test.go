@@ -11,12 +11,12 @@ import (
 
 func TestLoadFromDotEnvFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "local.env.example")
-	if err := os.WriteFile(path, []byte("LV_ENV=staging\nLV_HTTP_ADDR=:9011\nLV_WORKER_HEALTH_ADDR=:9012\nLV_RELAY_HEALTH_ADDR=:9013\nLV_LOG_LEVEL=warn\nLV_DB_DSN=postgres://local/db\nLV_PARTITION_MAINTENANCE_DB_DSN=postgres://owner/db\nLV_REDIS_URL=redis://127.0.0.1:6379/2\nLV_KAFKA_BROKERS=127.0.0.1:9092,127.0.0.1:9093\nLV_TEMPORAL_ADDR=127.0.0.1:7233\nLV_TEMPORAL_NAMESPACE=glowloom-staging\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("GLOWLOOM_ENV=staging\nLV_HTTP_ADDR=:9011\nLV_WORKER_HEALTH_ADDR=:9012\nLV_RELAY_HEALTH_ADDR=:9013\nLV_LOG_LEVEL=warn\nLV_DB_DSN=postgres://local/db\nLV_PARTITION_MAINTENANCE_DB_DSN=postgres://owner/db\nLV_REDIS_URL=redis://127.0.0.1:6379/2\nLV_KAFKA_BROKERS=127.0.0.1:9092,127.0.0.1:9093\nLV_TEMPORAL_ADDR=127.0.0.1:7233\nLV_TEMPORAL_NAMESPACE=glowloom-staging\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("LV_ENV_FILE", path)
-	t.Setenv("LV_ENV", "prod")
-	t.Setenv("LV_PUBLIC_ORIGIN", "https://glowloom.example")
+	t.Setenv("GLOWLOOM_ENV_FILE", path)
+	t.Setenv("GLOWLOOM_ENV", "prod")
+	t.Setenv("GLOWLOOM_PUBLIC_ORIGIN", "https://glowloom.example")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -28,7 +28,7 @@ func TestLoadFromDotEnvFile(t *testing.T) {
 }
 
 func TestLoadRejectsMissingDotEnvFile(t *testing.T) {
-	t.Setenv("LV_ENV_FILE", filepath.Join(t.TempDir(), "missing.env"))
+	t.Setenv("GLOWLOOM_ENV_FILE", filepath.Join(t.TempDir(), "missing.env"))
 	_, err := config.Load()
 	if !errors.Is(err, config.ErrInvalid) {
 		t.Fatalf("Load() error = %v, want ErrInvalid", err)
@@ -67,12 +67,12 @@ func TestLoadDefaults(t *testing.T) {
 }
 
 func TestCredentialSealingConfigurationRequiresPublicKeyAndIdentity(t *testing.T) {
-	t.Setenv("LV_CREDENTIAL_PUBLIC_KEY_FILE", "/configured/public.pem")
-	t.Setenv("LV_CREDENTIAL_KEY_ID", "")
+	t.Setenv("GLOWLOOM_CREDENTIAL_PUBLIC_KEY_FILE", "/configured/public.pem")
+	t.Setenv("GLOWLOOM_CREDENTIAL_KEY_ID", "")
 	if _, err := config.Load(); !errors.Is(err, config.ErrInvalid) {
 		t.Fatalf("incomplete public key configuration accepted: %v", err)
 	}
-	t.Setenv("LV_CREDENTIAL_KEY_ID", "agent-key-1")
+	t.Setenv("GLOWLOOM_CREDENTIAL_KEY_ID", "agent-key-1")
 	cfg, err := config.Load()
 	if err != nil || cfg.CredentialPublicKeyFile != "/configured/public.pem" || cfg.CredentialKeyID != "agent-key-1" {
 		t.Fatalf("public key configuration not loaded: %v", err)
@@ -80,17 +80,17 @@ func TestCredentialSealingConfigurationRequiresPublicKeyAndIdentity(t *testing.T
 }
 
 func TestLoadFromEnv(t *testing.T) {
-	t.Setenv("LV_ENV", "staging")
-	t.Setenv("LV_PUBLIC_ORIGIN", "https://glowloom.example")
-	t.Setenv("LV_HTTP_ADDR", ":9090")
-	t.Setenv("LV_WORKER_HEALTH_ADDR", ":9091")
-	t.Setenv("LV_RELAY_HEALTH_ADDR", ":9092")
-	t.Setenv("LV_LOG_LEVEL", "debug")
-	t.Setenv("LV_DB_DSN", "postgres://localhost/glowloom")
-	t.Setenv("LV_REDIS_URL", "redis://localhost:6379/1")
-	t.Setenv("LV_KAFKA_BROKERS", "localhost:9092")
-	t.Setenv("LV_TEMPORAL_ADDR", "localhost:7233")
-	t.Setenv("LV_TEMPORAL_NAMESPACE", "glowloom-staging")
+	t.Setenv("GLOWLOOM_ENV", "staging")
+	t.Setenv("GLOWLOOM_PUBLIC_ORIGIN", "https://glowloom.example")
+	t.Setenv("GLOWLOOM_HTTP_ADDR", ":9090")
+	t.Setenv("GLOWLOOM_WORKER_HEALTH_ADDR", ":9091")
+	t.Setenv("GLOWLOOM_RELAY_HEALTH_ADDR", ":9092")
+	t.Setenv("GLOWLOOM_LOG_LEVEL", "debug")
+	t.Setenv("GLOWLOOM_DB_DSN", "postgres://localhost/glowloom")
+	t.Setenv("GLOWLOOM_REDIS_URL", "redis://localhost:6379/1")
+	t.Setenv("GLOWLOOM_KAFKA_BROKERS", "localhost:9092")
+	t.Setenv("GLOWLOOM_TEMPORAL_ADDR", "localhost:7233")
+	t.Setenv("GLOWLOOM_TEMPORAL_NAMESPACE", "glowloom-staging")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -103,11 +103,11 @@ func TestLoadFromEnv(t *testing.T) {
 }
 
 func TestLoadObjectStorageFromEnv(t *testing.T) {
-	t.Setenv("LV_OBJECT_STORAGE_ENDPOINT", "http://127.0.0.1:9000")
-	t.Setenv("LV_OBJECT_STORAGE_BUCKET", "glowloom-local")
-	t.Setenv("LV_OBJECT_STORAGE_ACCESS_KEY", "test-access")
-	t.Setenv("LV_OBJECT_STORAGE_SECRET_KEY", "test-secret")
-	t.Setenv("LV_OBJECT_STORAGE_REGION", "us-east-1")
+	t.Setenv("GLOWLOOM_OBJECT_STORAGE_ENDPOINT", "http://127.0.0.1:9000")
+	t.Setenv("GLOWLOOM_OBJECT_STORAGE_BUCKET", "glowloom-local")
+	t.Setenv("GLOWLOOM_OBJECT_STORAGE_ACCESS_KEY", "test-access")
+	t.Setenv("GLOWLOOM_OBJECT_STORAGE_SECRET_KEY", "test-secret")
+	t.Setenv("GLOWLOOM_OBJECT_STORAGE_REGION", "us-east-1")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -119,8 +119,8 @@ func TestLoadObjectStorageFromEnv(t *testing.T) {
 }
 
 func TestLoadMediaResultDownloadPolicy(t *testing.T) {
-	t.Setenv("LV_MEDIA_RESULT_ALLOWED_ORIGINS", "https://results.example.test")
-	t.Setenv("LV_MEDIA_ALLOW_TEST_LOOPBACK_TLS", "true")
+	t.Setenv("GLOWLOOM_MEDIA_RESULT_ALLOWED_ORIGINS", "https://results.example.test")
+	t.Setenv("GLOWLOOM_MEDIA_ALLOW_TEST_LOOPBACK_TLS", "true")
 	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
@@ -128,20 +128,20 @@ func TestLoadMediaResultDownloadPolicy(t *testing.T) {
 	if cfg.MediaResultAllowedOrigins != "https://results.example.test" || !cfg.MediaAllowTestLoopbackTLS {
 		t.Fatal("Load() did not preserve media result policy")
 	}
-	t.Setenv("LV_ENV", "prod")
-	t.Setenv("LV_PUBLIC_ORIGIN", "https://glowloom.example")
+	t.Setenv("GLOWLOOM_ENV", "prod")
+	t.Setenv("GLOWLOOM_PUBLIC_ORIGIN", "https://glowloom.example")
 	if _, err := config.Load(); !errors.Is(err, config.ErrInvalid) {
 		t.Fatalf("production loopback policy error = %v, want ErrInvalid", err)
 	}
 }
 
 func TestLoadOptionalWhisperEndpoint(t *testing.T) {
-	t.Setenv("LV_WHISPER_ENDPOINT", "")
+	t.Setenv("GLOWLOOM_WHISPER_ENDPOINT", "")
 	cfg, err := config.Load()
 	if err != nil || cfg.WhisperEndpoint != "" {
 		t.Fatalf("unconfigured speech endpoint must stay disabled: %v", err)
 	}
-	t.Setenv("LV_WHISPER_ENDPOINT", " http://127.0.0.1:19282 ")
+	t.Setenv("GLOWLOOM_WHISPER_ENDPOINT", " http://127.0.0.1:19282 ")
 	cfg, err = config.Load()
 	if err != nil || cfg.WhisperEndpoint != "http://127.0.0.1:19282" {
 		t.Fatalf("speech endpoint was not trimmed and loaded: %v", err)
@@ -149,7 +149,7 @@ func TestLoadOptionalWhisperEndpoint(t *testing.T) {
 }
 
 func TestLoadOTelEndpointFromEnv(t *testing.T) {
-	t.Setenv("LV_OTEL_ENDPOINT", "http://127.0.0.1:4318")
+	t.Setenv("GLOWLOOM_OTEL_ENDPOINT", "http://127.0.0.1:4318")
 	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
@@ -165,11 +165,11 @@ func TestLoadRejectsInvalidValues(t *testing.T) {
 		key  string
 		val  string
 	}{
-		{name: "unknown env", key: "LV_ENV", val: "dev"},
-		{name: "unknown log level", key: "LV_LOG_LEVEL", val: "verbose"},
-		{name: "empty http addr", key: "LV_HTTP_ADDR", val: " "},
-		{name: "empty worker health addr", key: "LV_WORKER_HEALTH_ADDR", val: " "},
-		{name: "empty relay health addr", key: "LV_RELAY_HEALTH_ADDR", val: " "},
+		{name: "unknown env", key: "GLOWLOOM_ENV", val: "dev"},
+		{name: "unknown log level", key: "GLOWLOOM_LOG_LEVEL", val: "verbose"},
+		{name: "empty http addr", key: "GLOWLOOM_HTTP_ADDR", val: " "},
+		{name: "empty worker health addr", key: "GLOWLOOM_WORKER_HEALTH_ADDR", val: " "},
+		{name: "empty relay health addr", key: "GLOWLOOM_RELAY_HEALTH_ADDR", val: " "},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

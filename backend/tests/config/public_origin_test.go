@@ -38,9 +38,9 @@ func TestBrowserOriginIsExactAndLocalHTTPIsLoopbackOnly(t *testing.T) {
 }
 
 func TestProductionWorkerConfigurationDoesNotRequireBrowserOrigin(t *testing.T) {
-	t.Setenv("LV_ENV_FILE", "")
-	t.Setenv("LV_ENV", "prod")
-	t.Setenv("LV_PUBLIC_ORIGIN", "")
+	t.Setenv("GLOWLOOM_ENV_FILE", "")
+	t.Setenv("GLOWLOOM_ENV", "prod")
+	t.Setenv("GLOWLOOM_PUBLIC_ORIGIN", "")
 	if _, err := config.Load(); err != nil {
 		t.Fatalf("non-HTTP role configuration rejected: %v", err)
 	}

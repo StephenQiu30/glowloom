@@ -298,7 +298,7 @@ AI 平台接入与预设管理：保留平台管理员统一配置凭据和原�
 
 - [ ] **Step 2:** backend运行 `go test ./tests/identity -run 'TestEmailPolicyBoundaries|TestPasswordUnicodeBoundaries' -count=1`；预期新函数缺失或旧72字节策略导致FAIL，不能以其他编译故障作为红证据。
 - [ ] **Step 3:** 实现上列两个函数与Principal/Scope；扩展schema的user/session/challenge/budget/settings、team/member/creation_scope基础表，约束精确按数据库设计。新密码弱密码校验由消费方注入本地阻断表；算法模块用Argon2id版本字符串，保持旧bcrypt核验。增量先仅扩展，旧列直到T-USER-17才收缩。
-- [ ] **Step 4:** 重跑策略测试PASS；复用现有连接，以 `LV_TEST_EXISTING_DB_DSN` 在同一事务内执行并回滚 `go test ./tests/identity -run TestUserSchemaConstraints -count=1 -v`（在 migration_integration_test.go 新增），插入重复邮箱/不合法scope/重复member须失败，合法旧ID回填成功；Skip不通过。
+- [ ] **Step 4:** 重跑策略测试PASS；复用现有连接，以 `GLOWLOOM_TEST_EXISTING_DB_DSN` 在同一事务内执行并回滚 `go test ./tests/identity -run TestUserSchemaConstraints -count=1 -v`（在 migration_integration_test.go 新增），插入重复邮箱/不合法scope/重复member须失败，合法旧ID回填成功；Skip不通过。
 - [ ] **Step 5:** 检查diff仅类型/策略/持久约束；记录红绿命令，未授权不commit。
 
 ### 4.29 02-邮箱认证与授权基础：T-USER-02：邮箱证明、会话与恢复事务
@@ -674,7 +674,7 @@ AI 平台接入与预设管理：保留平台管理员统一配置凭据和原�
 - [x] 写`TestSessionV2Tokens`，断言RS256、at+jwt、固定issuer/audience、未知kid/none/错算法拒绝、15分钟上限与30秒容差；写回执跨sid/代次/operation解密失败、旧公钥窗口及私钥缺失拒绝启动。
 - [x] 写`TestSessionV2RedisContract`，使用消费方fake/注入故障，断言5秒owner租约比较释放、peer60/min与sid12/min、10秒回执上界、无明文token键、故障返回dependency错误；不得对共享Redis使用FLUSHDB/FLUSHALL、CONFIG SET或停止服务。
 - [x] 执行`cd backend && go test -race ./tests/identity -run '^TestSessionV2(Tokens|RedisContract)$' -count=1`观察RED；实现适配器并固定依赖v5.3.1。密钥按2026-10-20修正只通过`.env`直接注入，JWT/回执用途与身份摘要密钥隔离；不手写JWT密码学。
-- [x] 原命令转绿，执行`govulncheck ./...`。新增配置为`LV_IDENTITY_SESSION_V2_ENABLED`、`LV_IDENTITY_LEGACY_UPGRADE_UNTIL`、`LV_IDENTITY_JWT_PRIVATE_KEY`、`LV_IDENTITY_JWT_VERIFY_KEYS`、`LV_IDENTITY_JWT_ACTIVE_KID`、`LV_IDENTITY_REFRESH_RECEIPT_KEY`，映射Config的`IdentitySessionV2Enabled bool`、`IdentityLegacyUpgradeUntil time.Time`、`IdentityJWTPrivateKey string`、`IdentityJWTVerifyKeys string`、`IdentityJWTActiveKID string`、`IdentityRefreshReceiptKey string`。开关默认false；验证公钥为kid到Base64公钥PEM的JSON映射，算法固定RS256；没有新的DB/Redis连接项。
+- [x] 原命令转绿，执行`govulncheck ./...`。新增配置为`GLOWLOOM_IDENTITY_SESSION_V2_ENABLED`、`GLOWLOOM_IDENTITY_LEGACY_UPGRADE_UNTIL`、`GLOWLOOM_IDENTITY_JWT_PRIVATE_KEY`、`GLOWLOOM_IDENTITY_JWT_VERIFY_KEYS`、`GLOWLOOM_IDENTITY_JWT_ACTIVE_KID`、`GLOWLOOM_IDENTITY_REFRESH_RECEIPT_KEY`，映射Config的`IdentitySessionV2Enabled bool`、`IdentityLegacyUpgradeUntil time.Time`、`IdentityJWTPrivateKey string`、`IdentityJWTVerifyKeys string`、`IdentityJWTActiveKID string`、`IdentityRefreshReceiptKey string`。开关默认false；验证公钥为kid到Base64公钥PEM的JSON映射，算法固定RS256；没有新的DB/Redis连接项。
 - [x] 记录代码检查与密钥轮换证据；未来获授权提交标题`impl(auth): 增加会话签名与刷新协调适配器`。公钥清单的kid与算法映射固定，客户端kid不能变成任意文件路径。
 
 ### 4.68 08-无感登录与会话续期实施计划：T-AUTH-04：登录签发、刷新与即时撤销
@@ -713,7 +713,7 @@ AI 平台接入与预设管理：保留平台管理员统一配置凭据和原�
 
 - [x] 写`canonical-origin.test.ts`：localhost:3200的GET/HEAD到固定127.0.0.1:3200，路径仅相对站内；恶意Host/外链return_to不反射，POST/PUT/PATCH/DELETE不重放；浏览器真实Origin仍被透传。
 - [x] 写BFF测试：refresh/upgrade仅POST、三个Set-Cookie独立保留、200/401/403/409/429/503不改语义、no-store、不得缓存恢复回执。执行`cd frontend && pnpm exec vitest run src/lib/canonical-origin.test.ts 'src/app/api/[...path]/route.test.ts'`观察RED。
-- [x] 实现proxy与BFF白名单，Compose只给现有frontend注入同一个`LV_PUBLIC_ORIGIN`，不添加依赖服务，不配置任意loopback白名单，不改写Origin。浏览器本地别名Cookie不复制至canonical；需要时正常登录一次。
+- [x] 实现proxy与BFF白名单，Compose只给现有frontend注入同一个`GLOWLOOM_PUBLIC_ORIGIN`，不添加依赖服务，不配置任意loopback白名单，不改写Origin。浏览器本地别名Cookie不复制至canonical；需要时正常登录一次。
 - [x] 执行`cd frontend && pnpm api:generate && pnpm api:check`，只能让Go注解→swag→openapi2ts产生客户端；补合同断言`refreshSession`/`upgradeSession`及新增DTO元数据存在且公开响应无access/refresh secret。`pnpm api:check`不启动后端。
 - [x] 原Vitest命令转绿；未来获授权提交标题`impl(auth): 统一可信站点与同站刷新合同`。T-AUTH-07当时未更新运行容器；此步骤的Compose变化已在T-AUTH-10按已审阅运行源码包应用。
 
@@ -1819,3 +1819,9 @@ AI 平台接入与预设管理：保留平台管理员统一配置凭据和原�
 来源：原需求《06-画布组件迁入与定制需求》第9节；对应[设计与证据](docs/requirement/06-画布组件迁入与定制需求.md#9-当前范围调整统一组件与内联富文本)。
 
 时间线退出当前实现与接受范围；已有服务端合同和历史数据保留兼容。NFR-CAN-03保存可靠、NFR-CAN-04键盘/中文输入、NFR-CAN-06复用现有组件继续有效。已保存资源按现有DeleteNodes及引用合同删除；生成草稿和只读投影仍受保护。
+
+## 2026-10-21 画布管理浏览器复验与配置键迁移
+
+- 已完成：专用普通账号真实登录，画布删除立即回收、准确30天展示、原ID／文本／归档状态恢复及混合批量恢复；搜索刷新丢失问题已修复并补回归，精确截止边界六场景通过。详细证据见Plan15与本地浏览器验收报告。
+- 已完成：`GLOWLOOM_*`为当前配置名，旧`LV_*`过渡兼容；新键优先（包括显式空值），31个本地私有键只改名，Compose解析值保持一致，注册策略已恢复关闭。合同与执行见设计23、PRD10、Plan20。
+- 验证边界：测试账号直接入库不构成公开注册接受；真实30天等待和生产发布未执行。完整Docker镜像重建被依赖代理EOF阻断，本地复用已有依赖与新入口编译当前源码完成运行验收。未将并行修改暂存或提交。

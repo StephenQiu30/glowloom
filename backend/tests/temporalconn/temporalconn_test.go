@@ -44,10 +44,10 @@ func TestOpenSurvivesUnavailableServer(t *testing.T) {
 }
 
 func TestPingWithTemporal(t *testing.T) {
-	addr := os.Getenv("LV_TEST_TEMPORAL_ADDR")
-	namespace := os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
+	addr := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR")
+	namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
 	if addr == "" || namespace == "" {
-		t.Skip("set LV_TEST_TEMPORAL_ADDR and LV_TEST_TEMPORAL_NAMESPACE for local Temporal")
+		t.Skip("set GLOWLOOM_TEST_TEMPORAL_ADDR and GLOWLOOM_TEST_TEMPORAL_NAMESPACE for local Temporal")
 	}
 	conn, err := temporalconn.Open(addr, namespace, zap.NewNop(), noop.NewTracerProvider())
 	if err != nil {
@@ -64,9 +64,9 @@ func TestPingWithTemporal(t *testing.T) {
 // TestPingRejectsMissingNamespace guards the startup failure observed in M0.
 // It queries a unique absent namespace without creating or modifying one.
 func TestPingRejectsMissingNamespace(t *testing.T) {
-	addr := os.Getenv("LV_TEST_TEMPORAL_ADDR")
+	addr := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR")
 	if addr == "" {
-		t.Skip("set LV_TEST_TEMPORAL_ADDR for local Temporal")
+		t.Skip("set GLOWLOOM_TEST_TEMPORAL_ADDR for local Temporal")
 	}
 	conn, err := temporalconn.Open(addr, "glowloom-m0-absent-"+uuid.NewString(), zap.NewNop(), noop.NewTracerProvider())
 	if err != nil {

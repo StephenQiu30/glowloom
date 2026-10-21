@@ -25,13 +25,13 @@ import (
 // migration owner's connection. The two DSNs must name one disposable,
 // migrated database; all inserted records are rolled back.
 func TestAuditRestrictedLoginCanAppendAndReadButCannotRewrite(t *testing.T) {
-	ownerDSN := os.Getenv("LV_TEST_DB_DSN")
-	loginDSN := os.Getenv("LV_TEST_AUDIT_LOGIN_DB_DSN")
+	ownerDSN := os.Getenv("GLOWLOOM_TEST_DB_DSN")
+	loginDSN := os.Getenv("GLOWLOOM_TEST_AUDIT_LOGIN_DB_DSN")
 	if loginDSN == "" {
-		t.Skip("set LV_TEST_DB_DSN and LV_TEST_AUDIT_LOGIN_DB_DSN for one disposable migrated PostgreSQL database")
+		t.Skip("set GLOWLOOM_TEST_DB_DSN and GLOWLOOM_TEST_AUDIT_LOGIN_DB_DSN for one disposable migrated PostgreSQL database")
 	}
 	if ownerDSN == "" {
-		t.Fatal("LV_TEST_DB_DSN is required with LV_TEST_AUDIT_LOGIN_DB_DSN")
+		t.Fatal("GLOWLOOM_TEST_DB_DSN is required with GLOWLOOM_TEST_AUDIT_LOGIN_DB_DSN")
 	}
 
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)

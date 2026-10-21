@@ -20,8 +20,8 @@ import (
 )
 
 func TestProductionFlowWorkerCancelsBatchOnLocalTemporal(t *testing.T) {
-	addr, namespace := os.Getenv("LV_TEST_TEMPORAL_ADDR"), os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
-	dsn := os.Getenv("LV_TEST_OPERATION_STORE_DB_DSN")
+	addr, namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR"), os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
+	dsn := os.Getenv("GLOWLOOM_TEST_OPERATION_STORE_DB_DSN")
 	if addr == "" || namespace == "" || dsn == "" {
 		t.Skip("set isolated PostgreSQL and local Temporal test variables")
 	}
@@ -82,8 +82,8 @@ func TestProductionFlowWorkerCancelsBatchOnLocalTemporal(t *testing.T) {
 }
 
 func TestBatchCancelResumesAfterProductionFlowWorkerRestart(t *testing.T) {
-	addr, namespace := os.Getenv("LV_TEST_TEMPORAL_ADDR"), os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
-	dsn := os.Getenv("LV_TEST_OPERATION_STORE_DB_DSN")
+	addr, namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR"), os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
+	dsn := os.Getenv("GLOWLOOM_TEST_OPERATION_STORE_DB_DSN")
 	if addr == "" || namespace == "" || dsn == "" {
 		t.Skip("set isolated PostgreSQL and local Temporal test variables")
 	}

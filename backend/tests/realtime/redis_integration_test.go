@@ -19,10 +19,10 @@ import (
 )
 
 func TestOperationStatusWithHostPostgresAndRedis(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_INBOX_DB_DSN")
-	url := os.Getenv("LV_TEST_REALTIME_REDIS_URL")
+	dsn := os.Getenv("GLOWLOOM_TEST_INBOX_DB_DSN")
+	url := os.Getenv("GLOWLOOM_TEST_REALTIME_REDIS_URL")
 	if dsn == "" || url == "" {
-		t.Skip("set LV_TEST_INBOX_DB_DSN and LV_TEST_REALTIME_REDIS_URL for disposable integration data")
+		t.Skip("set GLOWLOOM_TEST_INBOX_DB_DSN and GLOWLOOM_TEST_REALTIME_REDIS_URL for disposable integration data")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
@@ -93,9 +93,9 @@ func TestOperationStatusWithHostPostgresAndRedis(t *testing.T) {
 }
 
 func TestRedisReplayAfterLastEventAndResync(t *testing.T) {
-	url := os.Getenv("LV_TEST_REALTIME_REDIS_URL")
+	url := os.Getenv("GLOWLOOM_TEST_REALTIME_REDIS_URL")
 	if url == "" {
-		t.Skip("set LV_TEST_REALTIME_REDIS_URL for disposable integration data")
+		t.Skip("set GLOWLOOM_TEST_REALTIME_REDIS_URL for disposable integration data")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()

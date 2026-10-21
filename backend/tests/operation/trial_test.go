@@ -52,7 +52,7 @@ func TestTrialWorkflowDoesNotRetryAnUncertainDispatch(t *testing.T) {
 	require.Equal(t, 1, calls)
 }
 func TestLocalInstalledCodexTrialProbe(t *testing.T) {
-	binary := os.Getenv("LV_TEST_CODEX_BINARY")
+	binary := os.Getenv("GLOWLOOM_TEST_CODEX_BINARY")
 	if binary == "" {
 		t.Skip("explicit native CLI fixture required")
 	}
@@ -68,8 +68,8 @@ func TestLocalInstalledCodexTrialProbe(t *testing.T) {
 }
 
 func TestLocalInstalledCodexTrialInference(t *testing.T) {
-	mode := os.Getenv("LV_TEST_CODEX_INFERENCE")
-	binary := os.Getenv("LV_TEST_CODEX_BINARY")
+	mode := os.Getenv("GLOWLOOM_TEST_CODEX_INFERENCE")
+	binary := os.Getenv("GLOWLOOM_TEST_CODEX_BINARY")
 	if mode == "" || binary == "" {
 		t.Skip("explicit local inference opt-in required")
 	}
@@ -90,7 +90,7 @@ func TestLocalInstalledCodexTrialInference(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "completed", outcome)
 		require.NotEmpty(t, image.Bytes)
-		if dir := os.Getenv("LV_TEST_CODEX_ARTIFACT_DIR"); dir != "" {
+		if dir := os.Getenv("GLOWLOOM_TEST_CODEX_ARTIFACT_DIR"); dir != "" {
 			require.NoError(t, os.MkdirAll(dir, 0700))
 			require.NoError(t, os.WriteFile(filepath.Join(dir, "native-codex-image.png"), image.Bytes, 0600))
 		}

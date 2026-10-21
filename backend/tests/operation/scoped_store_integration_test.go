@@ -20,9 +20,9 @@ import (
 
 func operationStoreDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	dsn := os.Getenv("LV_TEST_OPERATION_STORE_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_OPERATION_STORE_DB_DSN")
 	if dsn == "" {
-		t.Skip("set LV_TEST_OPERATION_STORE_DB_DSN to an isolated migrated PostgreSQL database")
+		t.Skip("set GLOWLOOM_TEST_OPERATION_STORE_DB_DSN to an isolated migrated PostgreSQL database")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	t.Cleanup(cancel)

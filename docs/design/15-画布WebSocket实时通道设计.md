@@ -236,7 +236,7 @@ FR-SYNC-01～03、BR-SYNC-01～06、IR-SYNC-01～02由第3～6节承接。NFR-SY
 | ---------------------- | ---------------------------------------------- | -------------- | ------------------------------------------------ |
 | 2026-10-20；v0.6待评审 | coder/websocket与复用Go/PG已选；其余细化未确认 | 本会话用户指令 | 未写代码、配置代理或运行验收；单实例与参数待确认 |
 
-部署配置：Next external rewrite 在构建时固定目标；正式 standalone 镜像构建必须显式传入 `--build-arg LV_BACKEND_ORIGIN=<Go内部地址>`，Docker build stage 非空校验。更换后端地址须重建镜像，不能仅修改运行时环境变量；开发 `next dev` 使用启动时环境。仍不代表生产发布已验收。
+部署配置：Next external rewrite 在构建时固定目标；正式 standalone 镜像构建必须显式传入 `--build-arg GLOWLOOM_BACKEND_ORIGIN=<Go内部地址>`，Docker build stage 非空校验。更换后端地址须重建镜像，不能仅修改运行时环境变量；开发 `next dev` 使用启动时环境。仍不代表生产发布已验收。
 
 ### 8.4 CASE-SYNC-01：作为创作者，希望一次编辑经WS提交并让他端自动看到
 

@@ -13,7 +13,7 @@ import (
 )
 
 func TestDAGPersistenceCompleteBatchReloadCleanupAndReplay(t *testing.T) {
-	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, db)
 	service := application.NewService(canvasStore(db))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "DAG持久化"})
@@ -118,7 +118,7 @@ func TestDAGPersistenceCompleteBatchReloadCleanupAndReplay(t *testing.T) {
 func TestDAGPersistenceUnknownHistoryRemainsReadableAndReadOnly(t *testing.T) {
 	for _, kind := range []string{"input", "unknown_config", "nested_unknown", "unknown_type", "future_version", "invalid_endpoint"} {
 		t.Run(kind, func(t *testing.T) {
-			db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+			db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 			actor, project := seedCanvasActor(t, db)
 			service := application.NewService(canvasStore(db))
 			doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "旧图保护"})
@@ -219,7 +219,7 @@ func TestDAGPersistenceUnknownHistoryRemainsReadableAndReadOnly(t *testing.T) {
 }
 
 func TestDAGPersistenceConcurrentDuplicateAnnotationHasSingleWinner(t *testing.T) {
-	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, db)
 	service := application.NewService(canvasStore(db))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "并发图"})

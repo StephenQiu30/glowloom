@@ -12,7 +12,7 @@ import (
 
 func libraryRuntimeDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	if os.Getenv("LV_TEST_LIBRARY_OWNER_DB_DSN") == "" {
+	if os.Getenv("GLOWLOOM_TEST_LIBRARY_OWNER_DB_DSN") == "" {
 		t.Skip("set the isolated library fixture scope before running library integration tests")
 	}
 	db := mediaStoreDB(t)

@@ -43,7 +43,7 @@ type preferenceFixture struct {
 
 func newPreferenceFixture(t *testing.T) preferenceFixture {
 	t.Helper()
-	dsn := os.Getenv("LV_TEST_OPERATION_STORE_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_OPERATION_STORE_DB_DSN")
 	if dsn == "" {
 		t.Skip("isolated PostgreSQL DSN not configured")
 	}
@@ -298,7 +298,7 @@ func TestPreferencePublicHTTPProducerAndSecurity(t *testing.T) {
 
 func TestPreferenceApplicationRoleAndOutdatedBaseline(t *testing.T) {
 	f := newPreferenceFixture(t)
-	parsed, err := url.Parse(os.Getenv("LV_TEST_OPERATION_STORE_DB_DSN"))
+	parsed, err := url.Parse(os.Getenv("GLOWLOOM_TEST_OPERATION_STORE_DB_DSN"))
 	if err != nil {
 		t.Fatal(err)
 	}

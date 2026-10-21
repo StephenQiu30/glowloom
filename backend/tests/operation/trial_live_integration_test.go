@@ -27,7 +27,7 @@ import (
 )
 
 func TestTrialLiveHTTPTemporalNativeProbe(t *testing.T) {
-	address, namespace, binary := os.Getenv("LV_TEST_TEMPORAL_ADDR"), os.Getenv("LV_TEST_TEMPORAL_NAMESPACE"), os.Getenv("LV_TEST_CODEX_BINARY")
+	address, namespace, binary := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR"), os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE"), os.Getenv("GLOWLOOM_TEST_CODEX_BINARY")
 	if address == "" || namespace == "" || binary == "" {
 		t.Skip("requires isolated Temporal namespace, migrated DB and explicit native CLI")
 	}

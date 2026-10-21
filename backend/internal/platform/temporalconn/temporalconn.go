@@ -17,9 +17,9 @@ import (
 
 var (
 	// ErrAddrRequired means no Temporal service address is configured.
-	ErrAddrRequired = errors.New("LV_TEMPORAL_ADDR is required")
+	ErrAddrRequired = errors.New("GLOWLOOM_TEMPORAL_ADDR is required")
 	// ErrNamespaceRequired means no Temporal namespace is configured.
-	ErrNamespaceRequired = errors.New("LV_TEMPORAL_NAMESPACE is required")
+	ErrNamespaceRequired = errors.New("GLOWLOOM_TEMPORAL_NAMESPACE is required")
 	// ErrTracerProviderRequired means tracing was not explicitly configured.
 	ErrTracerProviderRequired = errors.New("temporal tracer provider is required")
 )

@@ -23,13 +23,13 @@ import (
 )
 
 func TestAllRoleRunsAndStopsOnLocalServices(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_ALL_DB_DSN")
-	brokers := os.Getenv("LV_TEST_ALL_KAFKA_BROKERS")
-	redisURL := os.Getenv("LV_TEST_ALL_REDIS_URL")
-	temporalAddr := os.Getenv("LV_TEST_ALL_TEMPORAL_ADDR")
-	namespace := os.Getenv("LV_TEST_ALL_TEMPORAL_NAMESPACE")
-	if dsn == "" || brokers == "" || redisURL == "" || temporalAddr == "" || namespace == "" || os.Getenv("LV_ENV_FILE") == "" {
-		t.Skip("set absolute LV_ENV_FILE with local MinIO credentials and disposable LV_TEST_ALL_* service configuration")
+	dsn := os.Getenv("GLOWLOOM_TEST_ALL_DB_DSN")
+	brokers := os.Getenv("GLOWLOOM_TEST_ALL_KAFKA_BROKERS")
+	redisURL := os.Getenv("GLOWLOOM_TEST_ALL_REDIS_URL")
+	temporalAddr := os.Getenv("GLOWLOOM_TEST_ALL_TEMPORAL_ADDR")
+	namespace := os.Getenv("GLOWLOOM_TEST_ALL_TEMPORAL_NAMESPACE")
+	if dsn == "" || brokers == "" || redisURL == "" || temporalAddr == "" || namespace == "" || os.Getenv("GLOWLOOM_ENV_FILE") == "" {
+		t.Skip("set absolute GLOWLOOM_ENV_FILE with local MinIO credentials and disposable GLOWLOOM_TEST_ALL_* service configuration")
 	}
 	cfg, err := config.Load()
 	if err != nil {

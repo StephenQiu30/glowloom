@@ -15,9 +15,9 @@ import (
 )
 
 func TestAuditEnsurePartitionsMovesDefaultRowsWithoutChangingRecords(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_DB_DSN")
 	if dsn == "" {
-		t.Skip("set LV_TEST_DB_DSN to a disposable PostgreSQL database")
+		t.Skip("set GLOWLOOM_TEST_DB_DSN to a disposable PostgreSQL database")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
@@ -158,9 +158,9 @@ func TestAuditEnsurePartitionsMovesDefaultRowsWithoutChangingRecords(t *testing.
 }
 
 func TestAuditEnsurePartitionsSerializesConcurrentMaintainers(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_AUDIT_PARTITION_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_AUDIT_PARTITION_DB_DSN")
 	if dsn == "" {
-		t.Skip("set LV_TEST_AUDIT_PARTITION_DB_DSN to a disposable PostgreSQL database initialized with schema.sql and no business or audit rows")
+		t.Skip("set GLOWLOOM_TEST_AUDIT_PARTITION_DB_DSN to a disposable PostgreSQL database initialized with schema.sql and no business or audit rows")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
@@ -174,7 +174,7 @@ func TestAuditEnsurePartitionsSerializesConcurrentMaintainers(t *testing.T) {
 		t.Fatalf("identify isolated database: %v", err)
 	}
 	if databaseName == "postgres" || databaseName == "template0" || databaseName == "template1" {
-		t.Fatal("LV_TEST_AUDIT_PARTITION_DB_DSN must not point to a PostgreSQL maintenance database")
+		t.Fatal("GLOWLOOM_TEST_AUDIT_PARTITION_DB_DSN must not point to a PostgreSQL maintenance database")
 	}
 
 	// Concurrent connections need committed fixtures. Refuse a populated audit
@@ -193,7 +193,7 @@ func TestAuditEnsurePartitionsSerializesConcurrentMaintainers(t *testing.T) {
 		t.Fatalf("check initialized audit database is empty: %v", err)
 	}
 	if existing.AuditRows != 0 || existing.BusinessRows {
-		t.Fatal("LV_TEST_AUDIT_PARTITION_DB_DSN must point to a disposable database initialized with schema.sql and no business or audit rows")
+		t.Fatal("GLOWLOOM_TEST_AUDIT_PARTITION_DB_DSN must point to a disposable database initialized with schema.sql and no business or audit rows")
 	}
 
 	firstConn, err := db.Open(ctx, dsn, noop.NewTracerProvider())

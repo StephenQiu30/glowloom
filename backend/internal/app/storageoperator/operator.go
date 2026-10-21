@@ -102,9 +102,12 @@ func Execute(ctx context.Context, args []string, output io.Writer) error {
 	if command == "validate" {
 		return encode(struct{ Revision, ConfigSHA256, DefaultWriteProfile string }{in.Revision, in.ConfigSHA256, in.DefaultWriteProfile})
 	}
-	dsn := os.Getenv("LV_STORAGE_MAINTENANCE_DSN")
+	dsn, configured := os.LookupEnv("GLOWLOOM_STORAGE_MAINTENANCE_DSN")
+	if !configured {
+		dsn = os.Getenv("LV_STORAGE_MAINTENANCE_DSN")
+	}
 	if dsn == "" {
-		return errors.New("LV_STORAGE_MAINTENANCE_DSN is required for this maintenance command")
+		return errors.New("GLOWLOOM_STORAGE_MAINTENANCE_DSN is required for this maintenance command")
 	}
 	connection, err := db.Open(ctx, dsn, noop.NewTracerProvider())
 	if err != nil {

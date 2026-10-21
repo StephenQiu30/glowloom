@@ -14,7 +14,7 @@ import (
 )
 
 func TestTimelineReaderFreezesOwnedMediaAndRejectsStaleRevision(t *testing.T) {
-	database := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
 	store := canvasStore(database)
 	service := application.NewService(store)

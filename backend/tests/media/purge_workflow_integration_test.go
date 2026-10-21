@@ -32,7 +32,7 @@ func (c isolatedPurgeClient) ExecuteWorkflow(ctx context.Context, options client
 }
 
 func TestMediaPurgeActualTemporalPrivateObjectsAndUnknownRecovery(t *testing.T) {
-	address, namespace := os.Getenv("LV_TEST_TEMPORAL_ADDR"), os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
+	address, namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR"), os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
 	if address == "" || namespace == "" {
 		t.Skip("set authorized Temporal address/namespace with an isolated owning queue")
 	}

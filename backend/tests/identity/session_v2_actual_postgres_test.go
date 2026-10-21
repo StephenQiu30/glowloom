@@ -32,10 +32,10 @@ type actualPGFixture struct {
 
 func actualPG(t *testing.T) *actualPGFixture {
 	t.Helper()
-	if os.Getenv("LV_TEST_SESSION_V2_PG_ACTUAL") != "reviewed-exact-fixtures" {
+	if os.Getenv("GLOWLOOM_TEST_SESSION_V2_PG_ACTUAL") != "reviewed-exact-fixtures" {
 		t.Skip("actual two-connection PostgreSQL NOT verified; safety review opt-in absent")
 	}
-	dsn := os.Getenv("LV_TEST_SESSION_V2_PG_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_SESSION_V2_PG_DSN")
 	if dsn == "" {
 		t.Fatal("reviewed existing database DSN required")
 	}
@@ -219,7 +219,7 @@ func actualPGRevoke(ctx context.Context, tx *gorm.DB, f *actualPGFixture) error 
 // adapters. The cache adapter deliberately rejects writes: durable receipt
 // recovery here is NOT evidence of a shared Redis outage or deployed HTTP.
 func TestSessionV2ActualPostgresCompetition(t *testing.T) {
-	if os.Getenv("LV_TEST_SESSION_V2_PG_ACTUAL") != "reviewed-exact-fixtures" {
+	if os.Getenv("GLOWLOOM_TEST_SESSION_V2_PG_ACTUAL") != "reviewed-exact-fixtures" {
 		t.Skip("actual two-connection PostgreSQL NOT verified; safety review opt-in absent")
 	}
 	for _, scenario := range []string{"refresh_refresh", "revoke_refresh", "refresh_revoke"} {

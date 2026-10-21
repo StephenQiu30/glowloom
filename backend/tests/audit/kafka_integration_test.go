@@ -27,10 +27,10 @@ func (f auditHandlerFunc) Handle(ctx context.Context, record inbox.Record) error
 }
 
 func TestAuditKafkaRetriesThenCommitsAfterDatabaseWrite(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_AUDIT_DB_DSN")
-	brokers := os.Getenv("LV_TEST_AUDIT_KAFKA_BROKERS")
+	dsn := os.Getenv("GLOWLOOM_TEST_AUDIT_DB_DSN")
+	brokers := os.Getenv("GLOWLOOM_TEST_AUDIT_KAFKA_BROKERS")
 	if dsn == "" || brokers == "" {
-		t.Skip("set LV_TEST_AUDIT_DB_DSN and LV_TEST_AUDIT_KAFKA_BROKERS with a disposable audit topic")
+		t.Skip("set GLOWLOOM_TEST_AUDIT_DB_DSN and GLOWLOOM_TEST_AUDIT_KAFKA_BROKERS with a disposable audit topic")
 	}
 	const topic = "glowloom.audit.recorded.v1"
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)

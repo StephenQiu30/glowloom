@@ -141,7 +141,7 @@ func exerciseCopyPageLocks(t *testing.T, queries []string, org, scope, source, l
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 6*time.Second)
 	defer cancel()
-	conn, err := db.Open(ctx, os.Getenv("LV_TEST_EXISTING_DB_DSN"), noop.NewTracerProvider())
+	conn, err := db.Open(ctx, os.Getenv("GLOWLOOM_TEST_EXISTING_DB_DSN"), noop.NewTracerProvider())
 	if err != nil {
 		t.Fatal("open existing lock harness database")
 	}

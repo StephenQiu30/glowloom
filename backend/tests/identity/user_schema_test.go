@@ -13,7 +13,7 @@ import (
 // This test uses the existing connection, rolls back all DDL and fixtures, and
 // never creates a database, schema namespace, role, service, or environment.
 func TestUserSchemaConstraints(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_EXISTING_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_EXISTING_DB_DSN")
 	if dsn == "" {
 		t.Skip("existing connected database not supplied; schema verification not performed")
 	}

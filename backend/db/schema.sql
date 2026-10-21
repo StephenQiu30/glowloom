@@ -1,6 +1,6 @@
 -- 空业务库的完整结构，只维护本文件。
 -- PostgreSQL 18。由结构所有者执行，并预先创建 glowloom_app NOLOGIN NOSUPERUSER。
--- psql "$LV_SCHEMA_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f backend/db/schema.sql
+-- psql "$GLOWLOOM_SCHEMA_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f backend/db/schema.sql
 -- 禁止对已有业务库重放本文件。
 
 DO $$

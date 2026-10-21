@@ -171,7 +171,7 @@ func TestExportAudioKindIsFrozenImmutableAndBoundToIdempotentRequest(t *testing.
 	if err := db.Raw(`SELECT has_column_privilege('glowloom_app','mediatool.export_job','output_kind','UPDATE')`).Scan(&canMutate).Error; err != nil || canMutate {
 		t.Fatalf("runtime can alter frozen output kind: %v %v", canMutate, err)
 	}
-	if os.Getenv("LV_TEST_MEDIA_EXPORT_REQUIRE_ROLE") == "1" {
+	if os.Getenv("GLOWLOOM_TEST_MEDIA_EXPORT_REQUIRE_ROLE") == "1" {
 		err := db.Exec(`UPDATE mediatool.export_job SET output_kind='video' WHERE id=?`, job.ID).Error
 		var denied *pgconn.PgError
 		if !errors.As(err, &denied) || denied.Code != "42501" {

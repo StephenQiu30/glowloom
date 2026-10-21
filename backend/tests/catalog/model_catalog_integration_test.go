@@ -24,9 +24,9 @@ import (
 
 func modelCatalogDB(t *testing.T) (context.Context, *gorm.DB) {
 	t.Helper()
-	dsn := os.Getenv("LV_TEST_MODEL_CATALOG_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_MODEL_CATALOG_DB_DSN")
 	if dsn == "" {
-		t.Skip("set LV_TEST_MODEL_CATALOG_DB_DSN to an isolated migrated database")
+		t.Skip("set GLOWLOOM_TEST_MODEL_CATALOG_DB_DSN to an isolated migrated database")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	t.Cleanup(cancel)

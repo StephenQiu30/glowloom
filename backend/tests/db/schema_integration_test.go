@@ -15,9 +15,9 @@ import (
 
 // The supplied database must be empty. Every probe rolls back its own changes.
 func TestSchemaInitializesEmptyDatabaseAndRejectsReplay(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_SCHEMA_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_SCHEMA_DB_DSN")
 	if dsn == "" {
-		t.Skip("set LV_TEST_SCHEMA_DB_DSN to an empty disposable PostgreSQL database")
+		t.Skip("set GLOWLOOM_TEST_SCHEMA_DB_DSN to an empty disposable PostgreSQL database")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()

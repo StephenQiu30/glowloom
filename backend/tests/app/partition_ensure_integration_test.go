@@ -22,12 +22,12 @@ import (
 // must own both partitioned tables, the third account must own neither table,
 // and the fourth must switch a privileged login into the application role.
 func TestEnsurePartitionsUsesSeparateOwnerAndRollsBackBothTables(t *testing.T) {
-	appDSN := os.Getenv("LV_TEST_PARTITIONS_DB_DSN")
-	ownerDSN := os.Getenv("LV_TEST_PARTITIONS_MAINTENANCE_DB_DSN")
-	nonOwnerDSN := os.Getenv("LV_TEST_PARTITIONS_NONOWNER_DB_DSN")
-	roleSwitchDSN := os.Getenv("LV_TEST_PARTITIONS_ROLE_SWITCH_DB_DSN")
+	appDSN := os.Getenv("GLOWLOOM_TEST_PARTITIONS_DB_DSN")
+	ownerDSN := os.Getenv("GLOWLOOM_TEST_PARTITIONS_MAINTENANCE_DB_DSN")
+	nonOwnerDSN := os.Getenv("GLOWLOOM_TEST_PARTITIONS_NONOWNER_DB_DSN")
+	roleSwitchDSN := os.Getenv("GLOWLOOM_TEST_PARTITIONS_ROLE_SWITCH_DB_DSN")
 	if appDSN == "" || ownerDSN == "" || nonOwnerDSN == "" || roleSwitchDSN == "" {
-		t.Skip("set all four LV_TEST_PARTITIONS_*_DB_DSN variables for one disposable migrated PostgreSQL database")
+		t.Skip("set all four GLOWLOOM_TEST_PARTITIONS_*_DB_DSN variables for one disposable migrated PostgreSQL database")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()

@@ -33,7 +33,7 @@ func canvasReferenceCheck(t *testing.T, db *gorm.DB, actor identityapp.Principal
 	return found, err
 }
 func TestCanvasMediaReferenceGuardRetainsSoftRemovedNodesAndCompleteConfigHistory(t *testing.T) {
-	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, db)
 	doc, err := application.NewService(canvasStore(db)).Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "完整引用保护"})
 	if err != nil {
@@ -81,7 +81,7 @@ func TestCanvasMediaReferenceGuardRetainsSoftRemovedNodesAndCompleteConfigHistor
 	}
 }
 func TestCanvasMediaReferenceGuardRequiresCallerTransactionAndCurrentScope(t *testing.T) {
-	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, db)
 	if _, err := pgcanvas.NewScopedMediaReferenceGuard(db, mediawire.NewCanvasProjectAccess).HasMediaReferences(context.Background(), actor, project, uuid.New()); err == nil {
 		t.Fatal("pool accepted as retained transaction")
@@ -98,7 +98,7 @@ func TestCanvasMediaReferenceGuardRequiresCallerTransactionAndCurrentScope(t *te
 	}
 }
 func TestCanvasMediaReferenceGuardCorruptHistoricalConfigFailsClosed(t *testing.T) {
-	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, db)
 	doc, err := application.NewService(canvasStore(db)).Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "损坏历史"})
 	if err != nil {
@@ -113,7 +113,7 @@ func TestCanvasMediaReferenceGuardCorruptHistoricalConfigFailsClosed(t *testing.
 }
 
 func TestCanvasMediaReferenceGuardBoundsCombinedRetainedHistory(t *testing.T) {
-	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	var name string
 	if err := db.Raw(`SELECT current_database()`).Scan(&name).Error; err != nil || name != "glowloom_reference" {
 		t.Fatal("budget guard requires isolated glowloom_reference", name, err)
@@ -184,7 +184,7 @@ func TestCanvasMediaReferenceGuardBoundsCombinedRetainedHistory(t *testing.T) {
 }
 
 func TestCanvasMediaReferenceGuardRetainsHistoryBudgetLock(t *testing.T) {
-	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, db)
 	err := db.WithContext(t.Context()).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {

@@ -154,8 +154,8 @@ func TestExportCancellationCannotBorrowAnotherWorkersCessation(t *testing.T) {
 }
 
 func TestExportRuntimeRoleOwnsOnlyMutableJobFacts(t *testing.T) {
-	if os.Getenv("LV_TEST_MEDIA_EXPORT_REQUIRE_ROLE") != "1" {
-		t.Skip("set LV_TEST_MEDIA_EXPORT_REQUIRE_ROLE=1 with isolated runtime-role DSN")
+	if os.Getenv("GLOWLOOM_TEST_MEDIA_EXPORT_REQUIRE_ROLE") != "1" {
+		t.Skip("set GLOWLOOM_TEST_MEDIA_EXPORT_REQUIRE_ROLE=1 with isolated runtime-role DSN")
 	}
 	db := mediaStoreDB(t)
 	var role struct {

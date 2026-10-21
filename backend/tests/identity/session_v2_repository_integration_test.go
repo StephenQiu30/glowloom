@@ -22,7 +22,7 @@ import (
 // No schema replay, settings mutation, real account lookup, or committed fixture writes.
 func sessionV2RollbackTransaction(t *testing.T) *gorm.DB {
 	t.Helper()
-	dsn := os.Getenv("LV_TEST_EXISTING_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_EXISTING_DB_DSN")
 	if dsn == "" {
 		t.Skip("existing database absent; rollback integration NOT verified")
 	}

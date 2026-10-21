@@ -274,7 +274,7 @@ func TestScriptMediaReferencePGCorruptRecoverableWriteCannotBecomeNoReference(t 
 // using independent UUID fixtures and an actual nonowner connection.
 func bibleReferenceDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 	t.Helper()
-	dsn := os.Getenv("LV_TEST_REFERENCE_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_REFERENCE_DB_DSN")
 	if dsn == "" {
 		return bibleTestDB(t)
 	}

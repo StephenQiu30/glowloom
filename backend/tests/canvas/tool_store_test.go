@@ -15,7 +15,7 @@ import (
 )
 
 func TestToolConfigurationsSurviveDatabaseReloadAndIdempotentReplay(t *testing.T) {
-	database := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
 	service := application.NewService(pgcanvas.NewScopedStore(database, nil, mediawire.NewCanvasProjectAccess))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "完整工具输入恢复"})

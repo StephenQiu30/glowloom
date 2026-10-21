@@ -29,11 +29,11 @@ import (
 )
 
 func TestPublicCanvasAPIWithLocalPostgres(t *testing.T) {
-	database := canvasDB(t, "LV_TEST_CANVAS_HTTP_DB_DSN")
+	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_HTTP_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
 	var storage *objectstorage.Client
 	var mediaDigests map[uuid.UUID][32]byte
-	if os.Getenv("LV_TEST_CANVAS_USE_ENV_OBJECT_STORAGE") == "1" {
+	if os.Getenv("GLOWLOOM_TEST_CANVAS_USE_ENV_OBJECT_STORAGE") == "1" {
 		// Only the caller can opt in to its already configured local object storage.
 		localConfig, err := config.Load()
 		if err != nil {

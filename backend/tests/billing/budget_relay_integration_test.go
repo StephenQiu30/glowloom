@@ -24,10 +24,10 @@ import (
 const budgetLowTopic = "glowloom.billing.budget_low.v1"
 
 func TestBudgetThresholdEventReachesKafkaThroughOutboxRelay(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_BILLING_RELAY_DB_DSN")
-	brokers := os.Getenv("LV_TEST_BILLING_RELAY_KAFKA_BROKERS")
+	dsn := os.Getenv("GLOWLOOM_TEST_BILLING_RELAY_DB_DSN")
+	brokers := os.Getenv("GLOWLOOM_TEST_BILLING_RELAY_KAFKA_BROKERS")
 	if dsn == "" || brokers == "" {
-		t.Skip("set LV_TEST_BILLING_RELAY_DB_DSN to a migrated disposable database and LV_TEST_BILLING_RELAY_KAFKA_BROKERS to local Kafka with billing, audit, and budget_low topics")
+		t.Skip("set GLOWLOOM_TEST_BILLING_RELAY_DB_DSN to a migrated disposable database and GLOWLOOM_TEST_BILLING_RELAY_KAFKA_BROKERS to local Kafka with billing, audit, and budget_low topics")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	t.Cleanup(cancel)

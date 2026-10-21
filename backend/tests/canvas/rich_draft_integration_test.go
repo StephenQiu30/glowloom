@@ -11,9 +11,9 @@ import (
 )
 
 func TestEditorCanvasMetadataUsesOneOwnerAndKeepsInputRevision(t *testing.T) {
-	owner := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	owner := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, p := seedCanvasActor(t, owner)
-	runtime := canvasDB(t, "LV_TEST_CANVAS_M1_RUNTIME_DSN")
+	runtime := canvasDB(t, "GLOWLOOM_TEST_CANVAS_M1_RUNTIME_DSN")
 	service := application.NewService(canvasStore(runtime))
 	doc, err := service.Create(t.Context(), actor, p, uuid.NewString(), application.CreateInput{Name: "Rich editor"})
 	if err != nil {

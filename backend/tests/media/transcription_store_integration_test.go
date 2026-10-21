@@ -82,8 +82,8 @@ func transcriptionPGFixture(t *testing.T) (*gorm.DB, *toolpg.TranscriptionStore,
 }
 
 func TestTranscriptionRuntimeRoleOwnsOnlyMutableFacts(t *testing.T) {
-	if os.Getenv("LV_TEST_TRANSCRIPTION_REQUIRE_ROLE") != "1" {
-		t.Skip("set isolated non-owner runtime-role DSN and LV_TEST_TRANSCRIPTION_REQUIRE_ROLE=1")
+	if os.Getenv("GLOWLOOM_TEST_TRANSCRIPTION_REQUIRE_ROLE") != "1" {
+		t.Skip("set isolated non-owner runtime-role DSN and GLOWLOOM_TEST_TRANSCRIPTION_REQUIRE_ROLE=1")
 	}
 	db := mediaStoreDB(t)
 	var role struct {

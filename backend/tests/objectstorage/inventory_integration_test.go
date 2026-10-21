@@ -17,7 +17,7 @@ import (
 )
 
 func TestActualPrivateObjectInventory(t *testing.T) {
-	path := os.Getenv("LV_TEST_OBJECT_INVENTORY_STORAGE_CONFIG")
+	path := os.Getenv("GLOWLOOM_TEST_OBJECT_INVENTORY_STORAGE_CONFIG")
 	if path == "" {
 		t.Skip("set isolated private inventory storage config")
 	}

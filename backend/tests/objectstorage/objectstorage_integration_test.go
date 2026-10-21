@@ -17,8 +17,8 @@ import (
 )
 
 func TestPingWithHostObjectStorage(t *testing.T) {
-	if os.Getenv("LV_TEST_OBJECT_STORAGE") != "1" {
-		t.Skip("set LV_TEST_OBJECT_STORAGE=1 and LV_ENV_FILE to verify the host object storage service")
+	if os.Getenv("GLOWLOOM_TEST_OBJECT_STORAGE") != "1" {
+		t.Skip("set GLOWLOOM_TEST_OBJECT_STORAGE=1 and GLOWLOOM_ENV_FILE to verify the host object storage service")
 	}
 	cfg, err := config.Load()
 	if err != nil {
@@ -36,8 +36,8 @@ func TestPingWithHostObjectStorage(t *testing.T) {
 }
 
 func TestPutStatAndRemoveWithHostObjectStorage(t *testing.T) {
-	if os.Getenv("LV_TEST_OBJECT_STORAGE") != "1" {
-		t.Skip("set LV_TEST_OBJECT_STORAGE=1 and LV_ENV_FILE for the host MinIO service")
+	if os.Getenv("GLOWLOOM_TEST_OBJECT_STORAGE") != "1" {
+		t.Skip("set GLOWLOOM_TEST_OBJECT_STORAGE=1 and GLOWLOOM_ENV_FILE for the host MinIO service")
 	}
 	cfg, err := config.Load()
 	if err != nil {

@@ -26,9 +26,9 @@ func (c isolatedCopyClient) ExecuteWorkflow(ctx context.Context, options client.
 }
 
 func TestProjectCopyRealTemporalRetrySignalsExistingWorkflow(t *testing.T) {
-	address, namespace := os.Getenv("LV_TEST_TEMPORAL_ADDR"), os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
+	address, namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR"), os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
 	if address == "" || namespace == "" {
-		t.Skip("set LV_TEST_TEMPORAL_ADDR and LV_TEST_TEMPORAL_NAMESPACE")
+		t.Skip("set GLOWLOOM_TEST_TEMPORAL_ADDR and GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
 	}
 	c, err := client.Dial(client.Options{HostPort: address, Namespace: namespace})
 	if err != nil {

@@ -70,11 +70,11 @@ func TestStorageActivationRequiresMigrationProbesAndEveryLiveRole(t *testing.T) 
 }
 
 func TestStorageActivationSerializesConcurrentOldProfileAdmission(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_STORAGE_RACE_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_STORAGE_RACE_DSN")
 	if dsn == "" {
-		t.Skip("set a separate empty LV_TEST_STORAGE_RACE_DSN")
+		t.Skip("set a separate empty GLOWLOOM_TEST_STORAGE_RACE_DSN")
 	}
-	t.Setenv("LV_TEST_STORAGE_ROUTE_DSN", dsn)
+	t.Setenv("GLOWLOOM_TEST_STORAGE_ROUTE_DSN", dsn)
 	database := storageRouteDB(t)
 	routes := pgmedia.NewStorageRoutes(database)
 	if _, err := routes.ReadActive(t.Context()); !errors.Is(err, mediaapp.ErrStorageNotReady) {
@@ -154,11 +154,11 @@ func TestStorageActivationSerializesConcurrentOldProfileAdmission(t *testing.T) 
 }
 
 func TestStorageActivationLostReplyAndRollbackPreserveInflightTargets(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_STORAGE_GATE_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_STORAGE_GATE_DSN")
 	if dsn == "" {
-		t.Skip("set a separate empty LV_TEST_STORAGE_GATE_DSN")
+		t.Skip("set a separate empty GLOWLOOM_TEST_STORAGE_GATE_DSN")
 	}
-	t.Setenv("LV_TEST_STORAGE_ROUTE_DSN", dsn)
+	t.Setenv("GLOWLOOM_TEST_STORAGE_ROUTE_DSN", dsn)
 	db := storageRouteDB(t).Begin()
 	t.Cleanup(func() { _ = db.Rollback().Error })
 	routes := pgmedia.NewStorageRoutes(db)
@@ -267,11 +267,11 @@ func TestStorageActivationLostReplyAndRollbackPreserveInflightTargets(t *testing
 }
 
 func TestStorageFinalSchemaRejectsStandaloneBareKeyUniqueIndex(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_STORAGE_GATE_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_STORAGE_GATE_DSN")
 	if dsn == "" {
-		t.Skip("set a separate empty LV_TEST_STORAGE_GATE_DSN")
+		t.Skip("set a separate empty GLOWLOOM_TEST_STORAGE_GATE_DSN")
 	}
-	t.Setenv("LV_TEST_STORAGE_ROUTE_DSN", dsn)
+	t.Setenv("GLOWLOOM_TEST_STORAGE_ROUTE_DSN", dsn)
 	database := storageRouteDB(t).Begin()
 	t.Cleanup(func() { _ = database.Rollback().Error })
 	// Simulate the separately reviewed finalization only in this empty,
@@ -296,11 +296,11 @@ func TestStorageFinalSchemaRejectsStandaloneBareKeyUniqueIndex(t *testing.T) {
 }
 
 func TestStorageFinalSchemaFenceBlocksConcurrentUniqueIndexCreation(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_STORAGE_GATE_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_STORAGE_GATE_DSN")
 	if dsn == "" {
-		t.Skip("set a separate empty LV_TEST_STORAGE_GATE_DSN")
+		t.Skip("set a separate empty GLOWLOOM_TEST_STORAGE_GATE_DSN")
 	}
-	t.Setenv("LV_TEST_STORAGE_ROUTE_DSN", dsn)
+	t.Setenv("GLOWLOOM_TEST_STORAGE_ROUTE_DSN", dsn)
 	database := storageRouteDB(t)
 	transaction := database.Begin()
 	defer func() { _ = transaction.Rollback().Error }()

@@ -17,7 +17,7 @@ import (
 )
 
 func TestProjectCopyCanvasPersistsFrozenGraphsAndHidesTarget(t *testing.T) {
-	database := canvasDB(t, "LV_TEST_PROJECT_COPY_DB_DSN")
+	database := canvasDB(t, "GLOWLOOM_TEST_PROJECT_COPY_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
 	service := application.NewService(canvasStore(database))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "复制源画布"})
@@ -114,7 +114,7 @@ func TestProjectCopyCanvasPersistsFrozenGraphsAndHidesTarget(t *testing.T) {
 }
 
 func TestProjectCopyCanvasRejectsUnknownConfigWithoutPartialSnapshot(t *testing.T) {
-	database := canvasDB(t, "LV_TEST_PROJECT_COPY_DB_DSN")
+	database := canvasDB(t, "GLOWLOOM_TEST_PROJECT_COPY_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
 	doc, err := application.NewService(canvasStore(database)).Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "未知来源配置"})
 	if err != nil {

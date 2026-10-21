@@ -429,34 +429,34 @@ func TestProjectHTTPStylePresetCursorRoundTripsEscapedNameAtFieldLimit(t *testin
 }
 
 func TestProjectHTTPCreationReceiptReplaysInAnotherProcess(t *testing.T) {
-	if os.Getenv("LV_TEST_PROJECT_REPLAY_CHILD") == "1" {
+	if os.Getenv("GLOWLOOM_TEST_PROJECT_REPLAY_CHILD") == "1" {
 		_, database := workspaceMigrationDB(t)
-		actorID, err := uuid.Parse(os.Getenv("LV_TEST_PROJECT_ACTOR"))
+		actorID, err := uuid.Parse(os.Getenv("GLOWLOOM_TEST_PROJECT_ACTOR"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		orgID, err := uuid.Parse(os.Getenv("LV_TEST_PROJECT_ORG"))
+		orgID, err := uuid.Parse(os.Getenv("GLOWLOOM_TEST_PROJECT_ORG"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		sessionID, err := uuid.Parse(os.Getenv("LV_TEST_PROJECT_SESSION"))
+		sessionID, err := uuid.Parse(os.Getenv("GLOWLOOM_TEST_PROJECT_SESSION"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		scopeID, err := uuid.Parse(os.Getenv("LV_TEST_PROJECT_SCOPE"))
+		scopeID, err := uuid.Parse(os.Getenv("GLOWLOOM_TEST_PROJECT_SCOPE"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		epoch, err := strconv.ParseInt(os.Getenv("LV_TEST_PROJECT_EPOCH"), 10, 64)
+		epoch, err := strconv.ParseInt(os.Getenv("GLOWLOOM_TEST_PROJECT_EPOCH"), 10, 64)
 		if err != nil {
 			t.Fatal(err)
 		}
 		actor := identityapp.Principal{ID: actorID, OrgID: orgID, Role: identitydomain.RoleProducer, SessionID: sessionID, ScopeID: scopeID, CredentialEpoch: epoch}
-		response := projectHTTPRequest(t.Context(), projectHTTPRouter(database, actor), http.MethodPost, "/api/projects", os.Getenv("LV_TEST_PROJECT_KEY"), []byte(`{"name":"跨进程回执","aspect_ratio":"16:9","style_type":"realistic"}`))
+		response := projectHTTPRequest(t.Context(), projectHTTPRouter(database, actor), http.MethodPost, "/api/projects", os.Getenv("GLOWLOOM_TEST_PROJECT_KEY"), []byte(`{"name":"跨进程回执","aspect_ratio":"16:9","style_type":"realistic"}`))
 		if response.Code != 201 {
 			t.Fatalf("child-process replay: %d %s", response.Code, response.Body.String())
 		}
-		if err := os.WriteFile(os.Getenv("LV_TEST_PROJECT_RESPONSE"), response.Body.Bytes(), 0o600); err != nil {
+		if err := os.WriteFile(os.Getenv("GLOWLOOM_TEST_PROJECT_RESPONSE"), response.Body.Bytes(), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		return
@@ -475,13 +475,13 @@ func TestProjectHTTPCreationReceiptReplaysInAnotherProcess(t *testing.T) {
 	// Explicitly pass only synthetic fixture identifiers and the isolated peer
 	// DSN. The child does not inherit unrelated local credentials or configuration.
 	command.Env = []string{
-		"LV_TEST_WORKSPACE_DB_DSN=" + os.Getenv("LV_TEST_WORKSPACE_DB_DSN"),
-		"LV_TEST_PROJECT_REPLAY_CHILD=1", "LV_TEST_PROJECT_ACTOR=" + actor.ID.String(),
-		"LV_TEST_PROJECT_ORG=" + actor.OrgID.String(), "LV_TEST_PROJECT_KEY=" + key,
-		"LV_TEST_PROJECT_RESPONSE=" + responsePath,
-		"LV_TEST_PROJECT_SESSION=" + actor.SessionID.String(),
-		"LV_TEST_PROJECT_SCOPE=" + actor.ScopeID.String(),
-		"LV_TEST_PROJECT_EPOCH=" + strconv.FormatInt(actor.CredentialEpoch, 10),
+		"GLOWLOOM_TEST_WORKSPACE_DB_DSN=" + os.Getenv("GLOWLOOM_TEST_WORKSPACE_DB_DSN"),
+		"GLOWLOOM_TEST_PROJECT_REPLAY_CHILD=1", "GLOWLOOM_TEST_PROJECT_ACTOR=" + actor.ID.String(),
+		"GLOWLOOM_TEST_PROJECT_ORG=" + actor.OrgID.String(), "GLOWLOOM_TEST_PROJECT_KEY=" + key,
+		"GLOWLOOM_TEST_PROJECT_RESPONSE=" + responsePath,
+		"GLOWLOOM_TEST_PROJECT_SESSION=" + actor.SessionID.String(),
+		"GLOWLOOM_TEST_PROJECT_SCOPE=" + actor.ScopeID.String(),
+		"GLOWLOOM_TEST_PROJECT_EPOCH=" + strconv.FormatInt(actor.CredentialEpoch, 10),
 	}
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("owned child process: %v %s", err, output)

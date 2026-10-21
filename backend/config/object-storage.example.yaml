@@ -1,4 +1,4 @@
-# Use LV_OBJECT_STORAGE_CONFIG to select this file; clear legacy LV_OBJECT_STORAGE_* fields.
+# Use GLOWLOOM_OBJECT_STORAGE_CONFIG to select this file; clear legacy GLOWLOOM_OBJECT_STORAGE_* fields.
 # This example names no real resource and contains no credential values.
 object_storage:
   schema_version: 1

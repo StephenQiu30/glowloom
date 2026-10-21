@@ -25,7 +25,7 @@ it("Go and TS produce identical wire operations for all literal and seeded vecto
       ],
       {
         cwd: resolve(root, "backend"),
-        env: { ...process.env, LV_OT_VECTOR_OUTPUT: out },
+        env: { ...process.env, GLOWLOOM_OT_VECTOR_OUTPUT: out },
         timeout: 120000,
         stdio: "pipe",
       },
@@ -77,7 +77,7 @@ it("Go and TS share every finite field policy and seeded causal graph result", a
       ],
       {
         cwd: resolve(root, "backend"),
-        env: { ...process.env, LV_OT_VECTOR_OUTPUT: out },
+        env: { ...process.env, GLOWLOOM_OT_VECTOR_OUTPUT: out },
         timeout: 120000,
         stdio: "pipe",
       },

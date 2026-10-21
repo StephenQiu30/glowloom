@@ -23,7 +23,7 @@ import (
 )
 
 func TestMediaIngestAndModerationUnderRuntimeRole(t *testing.T) {
-	if os.Getenv("LV_TEST_MEDIA_STORE_DB_DSN") == "" || os.Getenv("LV_TEST_OBJECT_STORAGE") != "1" {
+	if os.Getenv("GLOWLOOM_TEST_MEDIA_STORE_DB_DSN") == "" || os.Getenv("GLOWLOOM_TEST_OBJECT_STORAGE") != "1" {
 		t.Skip("set isolated PostgreSQL, native MinIO and root .env")
 	}
 	database := mediaStoreDB(t)

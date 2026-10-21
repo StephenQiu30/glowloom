@@ -32,10 +32,10 @@ func TestIdentityReusesSMTPConfiguration(t *testing.T) {
 }
 
 func TestIdentityConfigurationIsExplicit(t *testing.T) {
-	t.Setenv("LV_IDENTITY_KEY", "configured-json-value")
-	t.Setenv("LV_IDENTITY_TERMS_VERSION", "v1")
-	t.Setenv("LV_IDENTITY_MAIL_SOURCE_HOURLY_LIMIT", "100")
-	t.Setenv("LV_IDENTITY_MAIL_GLOBAL_HOURLY_LIMIT", "1000")
+	t.Setenv("GLOWLOOM_IDENTITY_KEY", "configured-json-value")
+	t.Setenv("GLOWLOOM_IDENTITY_TERMS_VERSION", "v1")
+	t.Setenv("GLOWLOOM_IDENTITY_MAIL_SOURCE_HOURLY_LIMIT", "100")
+	t.Setenv("GLOWLOOM_IDENTITY_MAIL_GLOBAL_HOURLY_LIMIT", "1000")
 	cfg, err := config.Load()
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +43,7 @@ func TestIdentityConfigurationIsExplicit(t *testing.T) {
 	if cfg.IdentityKey != "configured-json-value" || cfg.IdentityTermsVersion != "v1" || cfg.IdentityMailSourceHourlyLimit != 100 || cfg.IdentityMailGlobalHourlyLimit != 1000 {
 		t.Fatal("identity configuration missing")
 	}
-	t.Setenv("LV_IDENTITY_KEY", strings.Repeat("x", 4097))
+	t.Setenv("GLOWLOOM_IDENTITY_KEY", strings.Repeat("x", 4097))
 	if _, err := config.Load(); !errors.Is(err, config.ErrInvalid) {
 		t.Fatal("oversized identity key value accepted")
 	}

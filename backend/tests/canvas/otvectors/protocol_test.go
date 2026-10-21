@@ -42,7 +42,7 @@ func TestSequenceProtocolVectors(t *testing.T) {
 		}
 		results = append(results, result{v.Name, a, b})
 	}
-	if path := os.Getenv("LV_OT_VECTOR_OUTPUT"); path != "" {
+	if path := os.Getenv("GLOWLOOM_OT_VECTOR_OUTPUT"); path != "" {
 		data, err := json.Marshal(results)
 		if err != nil {
 			t.Fatal(err)

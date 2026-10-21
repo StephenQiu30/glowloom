@@ -24,7 +24,7 @@ import (
 
 // TestEditorBrowserFixture exposes only synthetic isolated data on loopback, when explicitly requested.
 func TestEditorBrowserFixture(t *testing.T) {
-	if os.Getenv("LV_EDITOR_BROWSER_FIXTURE") != "1" {
+	if os.Getenv("GLOWLOOM_EDITOR_BROWSER_FIXTURE") != "1" {
 		t.Skip("interactive browser fixture not requested")
 	}
 	db := operationStoreDB(t)

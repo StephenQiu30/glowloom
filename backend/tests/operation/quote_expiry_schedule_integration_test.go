@@ -18,9 +18,9 @@ import (
 )
 
 func TestQuoteExpiryScheduleInstallsIdempotentlyOnLocalTemporal(t *testing.T) {
-	addr, namespace := os.Getenv("LV_TEST_TEMPORAL_ADDR"), os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
+	addr, namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR"), os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
 	if addr == "" || namespace == "" {
-		t.Skip("set LV_TEST_TEMPORAL_ADDR and LV_TEST_TEMPORAL_NAMESPACE")
+		t.Skip("set GLOWLOOM_TEST_TEMPORAL_ADDR and GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
@@ -60,8 +60,8 @@ func TestQuoteExpiryScheduleInstallsIdempotentlyOnLocalTemporal(t *testing.T) {
 }
 
 func TestScheduledQuoteExpiryRunsAgainstLocalPostgresAndTemporal(t *testing.T) {
-	addr, namespace := os.Getenv("LV_TEST_TEMPORAL_ADDR"), os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
-	if os.Getenv("LV_TEST_OPERATION_STORE_DB_DSN") == "" || addr == "" || namespace == "" {
+	addr, namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR"), os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
+	if os.Getenv("GLOWLOOM_TEST_OPERATION_STORE_DB_DSN") == "" || addr == "" || namespace == "" {
 		t.Skip("set isolated operation PostgreSQL and local Temporal test variables")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 25*time.Second)

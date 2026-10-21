@@ -18,10 +18,10 @@ import (
 
 // Exact opt-in. Never pass a shared source string: peer hashes are fixture-owned.
 func TestSessionV2ActualRedisLua(t *testing.T) {
-	if os.Getenv("LV_TEST_SESSION_V2_REDIS_ACTUAL") != "reviewed-exact-keys" {
+	if os.Getenv("GLOWLOOM_TEST_SESSION_V2_REDIS_ACTUAL") != "reviewed-exact-keys" {
 		t.Skip("actual Redis Lua NOT verified; safety review opt-in absent")
 	}
-	raw := os.Getenv("LV_TEST_SESSION_V2_REDIS_URL")
+	raw := os.Getenv("GLOWLOOM_TEST_SESSION_V2_REDIS_URL")
 	if raw == "" {
 		t.Fatal("reviewed existing Redis URL required")
 	}

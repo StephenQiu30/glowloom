@@ -19,7 +19,7 @@ import (
 )
 
 func TestPresetManagementTransactions(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_CATALOG_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_CATALOG_DB_DSN")
 	if dsn == "" {
 		t.Skip("requires disposable catalog database")
 	}

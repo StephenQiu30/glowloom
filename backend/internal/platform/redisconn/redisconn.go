@@ -14,9 +14,9 @@ import (
 
 var (
 	// ErrURLRequired means the process has no Redis connection URL.
-	ErrURLRequired = errors.New("LV_REDIS_URL is required")
+	ErrURLRequired = errors.New("GLOWLOOM_REDIS_URL is required")
 	// ErrInvalidURL means the Redis URL could not be parsed.
-	ErrInvalidURL = errors.New("invalid LV_REDIS_URL")
+	ErrInvalidURL = errors.New("invalid GLOWLOOM_REDIS_URL")
 )
 
 // Connection owns the Redis client and its connection pool.

@@ -14,9 +14,9 @@ import (
 // TestCodexProcessHandshake verifies the installed transport without opening a
 // thread or submitting inference. The executable must be opted into explicitly.
 func TestCodexProcessHandshake(t *testing.T) {
-	binary := os.Getenv("LV_TEST_CODEX_BINARY")
+	binary := os.Getenv("GLOWLOOM_TEST_CODEX_BINARY")
 	if binary == "" {
-		t.Skip("set LV_TEST_CODEX_BINARY to the absolute installed Codex executable")
+		t.Skip("set GLOWLOOM_TEST_CODEX_BINARY to the absolute installed Codex executable")
 	}
 	launcher, err := codex.NewProcessLauncher(binary)
 	if err != nil {

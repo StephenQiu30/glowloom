@@ -18,11 +18,11 @@ import (
 )
 
 func TestWorkerRoleRunsMaintenanceOnLocalTemporal(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_WORKER_DB_DSN")
-	addr := os.Getenv("LV_TEST_TEMPORAL_ADDR")
-	namespace := os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
+	dsn := os.Getenv("GLOWLOOM_TEST_WORKER_DB_DSN")
+	addr := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR")
+	namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
 	if dsn == "" || addr == "" || namespace == "" {
-		t.Skip("set disposable LV_TEST_WORKER_DB_DSN, LV_TEST_TEMPORAL_ADDR, and LV_TEST_TEMPORAL_NAMESPACE")
+		t.Skip("set disposable GLOWLOOM_TEST_WORKER_DB_DSN, GLOWLOOM_TEST_TEMPORAL_ADDR, and GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()

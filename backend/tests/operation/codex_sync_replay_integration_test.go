@@ -17,9 +17,9 @@ import (
 // histories produced by baseline 84de390f on an isolated real Temporal namespace.
 // They use mock Activities; passing replay does not prove a real supplier works.
 func TestM1SyncWorkflowReplayLegacyTemporalHistories(t *testing.T) {
-	dir := os.Getenv("LV_TEST_SYNC_REPLAY_HISTORY_DIR")
+	dir := os.Getenv("GLOWLOOM_TEST_SYNC_REPLAY_HISTORY_DIR")
 	if dir == "" {
-		t.Skip("set LV_TEST_SYNC_REPLAY_HISTORY_DIR to the task's exported baseline fixture histories")
+		t.Skip("set GLOWLOOM_TEST_SYNC_REPLAY_HISTORY_DIR to the task's exported baseline fixture histories")
 	}
 	for _, scenario := range []string{"success", "unknown", "manual", "cancel"} {
 		t.Run(scenario, func(t *testing.T) {

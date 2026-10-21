@@ -31,11 +31,11 @@ import (
 )
 
 func TestOperationWorkflowResumesAfterFlowWorkerRestartOnLocalServices(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_OPERATION_STORE_DB_DSN")
-	addr := os.Getenv("LV_TEST_TEMPORAL_ADDR")
-	namespace := os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
-	if dsn == "" || addr == "" || namespace == "" || os.Getenv("LV_TEST_AGENT_WORKER") != "1" ||
-		os.Getenv("LV_TEST_OBJECT_STORAGE") != "1" || os.Getenv("LV_ENV_FILE") == "" {
+	dsn := os.Getenv("GLOWLOOM_TEST_OPERATION_STORE_DB_DSN")
+	addr := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR")
+	namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
+	if dsn == "" || addr == "" || namespace == "" || os.Getenv("GLOWLOOM_TEST_AGENT_WORKER") != "1" ||
+		os.Getenv("GLOWLOOM_TEST_OBJECT_STORAGE") != "1" || os.Getenv("GLOWLOOM_ENV_FILE") == "" {
 		t.Skip("set isolated PostgreSQL, local Temporal, root .env, MinIO, and a running native agent worker")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 150*time.Second)

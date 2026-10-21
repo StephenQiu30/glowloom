@@ -19,11 +19,11 @@ import (
 )
 
 func TestScheduledMaintenanceRunsOnLocalTemporal(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_MAINTENANCE_DB_DSN")
-	addr := os.Getenv("LV_TEST_TEMPORAL_ADDR")
-	namespace := os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
+	dsn := os.Getenv("GLOWLOOM_TEST_MAINTENANCE_DB_DSN")
+	addr := os.Getenv("GLOWLOOM_TEST_TEMPORAL_ADDR")
+	namespace := os.Getenv("GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
 	if dsn == "" || addr == "" || namespace == "" {
-		t.Skip("set LV_TEST_MAINTENANCE_DB_DSN, LV_TEST_TEMPORAL_ADDR, and LV_TEST_TEMPORAL_NAMESPACE")
+		t.Skip("set GLOWLOOM_TEST_MAINTENANCE_DB_DSN, GLOWLOOM_TEST_TEMPORAL_ADDR, and GLOWLOOM_TEST_TEMPORAL_NAMESPACE")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()

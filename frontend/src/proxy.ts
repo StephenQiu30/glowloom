@@ -9,6 +9,7 @@ export const config = {
 
 export function proxy(request: NextRequest) {
   const canonicalOrigin =
+    process.env.GLOWLOOM_PUBLIC_ORIGIN ??
     process.env.LV_PUBLIC_ORIGIN ??
     (process.env.NODE_ENV === "development"
       ? "http://127.0.0.1:3200"

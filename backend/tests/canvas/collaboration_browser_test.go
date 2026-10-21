@@ -25,11 +25,11 @@ import (
 // Explicit opt-in runtime for manual real-browser acceptance. The manifest is
 // private local test data; production credentials/services are never used.
 func TestCollaborationBrowserFixture(t *testing.T) {
-	manifest := os.Getenv("LV_OT_BROWSER_MANIFEST")
+	manifest := os.Getenv("GLOWLOOM_OT_BROWSER_MANIFEST")
 	if manifest == "" {
 		t.Skip("manual OT browser fixture not requested")
 	}
-	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	cfg := identityfixture.Configure(t, config.Config{Env: "local", HTTPAddr: "127.0.0.1:18982", PublicOrigin: "http://127.0.0.1:3199"})
 	auth := []identity.AuthResult{
 		identityfixture.Create(t, db, cfg, "OT Browser A", uuid.NewString()+"Aa!"),
@@ -100,7 +100,7 @@ func TestCollaborationBrowserFixture(t *testing.T) {
 		case <-t.Context().Done():
 			return
 		case <-tick.C:
-			if _, err := os.Stat(os.Getenv("LV_OT_BROWSER_STOP")); err == nil {
+			if _, err := os.Stat(os.Getenv("GLOWLOOM_OT_BROWSER_STOP")); err == nil {
 				return
 			}
 		}

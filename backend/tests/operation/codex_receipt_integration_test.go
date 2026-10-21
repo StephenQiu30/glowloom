@@ -117,9 +117,9 @@ func TestM1ReceiptRecoveryPrivateObjectsAndPostgres(t *testing.T) {
 
 func receiptTestObjects(t *testing.T) *objectstorage.Client {
 	t.Helper()
-	file := os.Getenv("LV_TEST_RECEIPT_STORAGE_CONFIG")
+	file := os.Getenv("GLOWLOOM_TEST_RECEIPT_STORAGE_CONFIG")
 	if file == "" {
-		t.Skip("set isolated LV_TEST_RECEIPT_STORAGE_CONFIG with newly generated test credentials")
+		t.Skip("set isolated GLOWLOOM_TEST_RECEIPT_STORAGE_CONFIG with newly generated test credentials")
 	}
 	raw, err := os.ReadFile(file)
 	if err != nil {

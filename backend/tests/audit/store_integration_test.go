@@ -17,9 +17,9 @@ import (
 )
 
 func TestAuditStoreScopesAndPagesRecords(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_AUDIT_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_AUDIT_DB_DSN")
 	if dsn == "" {
-		t.Skip("set LV_TEST_AUDIT_DB_DSN to a disposable database with audit migrations applied")
+		t.Skip("set GLOWLOOM_TEST_AUDIT_DB_DSN to a disposable database with audit migrations applied")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()

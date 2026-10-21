@@ -191,7 +191,7 @@ func TestSecondaryCopyDispatchRechecksMembership(t *testing.T) {
 
 func verifySecondaryRollback(t *testing.T) {
 	t.Helper()
-	dsn := os.Getenv("LV_TEST_EXISTING_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_EXISTING_DB_DSN")
 	if dsn == "" {
 		return
 	}

@@ -14,9 +14,9 @@ import (
 
 var (
 	// ErrBrokersRequired means no Kafka seed broker is configured.
-	ErrBrokersRequired = errors.New("LV_KAFKA_BROKERS is required")
+	ErrBrokersRequired = errors.New("GLOWLOOM_KAFKA_BROKERS is required")
 	// ErrInvalidBrokers means the broker list is not comma-separated host:port addresses.
-	ErrInvalidBrokers = errors.New("invalid LV_KAFKA_BROKERS")
+	ErrInvalidBrokers = errors.New("invalid GLOWLOOM_KAFKA_BROKERS")
 )
 
 // Connection owns a Kafka client. Close releases its background resources.

@@ -13,9 +13,9 @@ import (
 )
 
 func TestLegacyBillingSettlementResyncWithHostRedis(t *testing.T) {
-	url := os.Getenv("LV_TEST_REALTIME_REDIS_URL")
+	url := os.Getenv("GLOWLOOM_TEST_REALTIME_REDIS_URL")
 	if url == "" {
-		t.Skip("set LV_TEST_REALTIME_REDIS_URL to a disposable Redis database")
+		t.Skip("set GLOWLOOM_TEST_REALTIME_REDIS_URL to a disposable Redis database")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()

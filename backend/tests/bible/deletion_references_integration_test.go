@@ -23,7 +23,7 @@ import (
 
 func deletionDatabase(t *testing.T) (*gorm.DB, *gorm.DB) {
 	t.Helper()
-	dsn := os.Getenv("LV_TEST_SUBJECT_RECOVERY_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_SUBJECT_RECOVERY_DB_DSN")
 	if dsn == "" {
 		t.Skip("requires isolated PostgreSQL")
 	}

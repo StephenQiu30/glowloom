@@ -17,7 +17,7 @@ import (
 )
 
 // ErrDSNRequired means the process has no PostgreSQL connection string.
-var ErrDSNRequired = errors.New("LV_DB_DSN is required")
+var ErrDSNRequired = errors.New("GLOWLOOM_DB_DSN is required")
 
 // Connection owns both the GORM handle and its underlying SQL pool.
 type Connection struct {

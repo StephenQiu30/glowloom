@@ -22,9 +22,9 @@ import (
 
 func bibleTestDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 	t.Helper()
-	dsn := os.Getenv("LV_TEST_BIBLE_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_BIBLE_DB_DSN")
 	if dsn == "" {
-		t.Skip("set LV_TEST_BIBLE_DB_DSN to isolated Bible PostgreSQL")
+		t.Skip("set GLOWLOOM_TEST_BIBLE_DB_DSN to isolated Bible PostgreSQL")
 	}
 	parsed, err := url.Parse(dsn)
 	if err != nil || parsed.Path != "/glowloom_bible" {

@@ -51,7 +51,7 @@ func (p pausedMediaReference) Reference(ctx context.Context, actor identityapp.P
 }
 
 func TestMediaReferenceRemainsLockedUntilCanvasCommit(t *testing.T) {
-	database := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
 	asset := seedCanvasMedia(t, database, project, "image")
 	read, resume := make(chan struct{}, 1), make(chan struct{})
@@ -106,7 +106,7 @@ func TestMediaReferenceRemainsLockedUntilCanvasCommit(t *testing.T) {
 	}
 }
 func TestResourcePersistenceScopesMediaAndSoftDeleteReplay(t *testing.T) {
-	database := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
 	service := application.NewService(canvasStore(database))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "正式画布"})
@@ -175,7 +175,7 @@ func TestResourcePersistenceScopesMediaAndSoftDeleteReplay(t *testing.T) {
 }
 
 func TestResourceGroupRestoreAndParentValidationOnPostgres(t *testing.T) {
-	database := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
 	service := application.NewService(canvasStore(database))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "分组恢复"})
@@ -235,7 +235,7 @@ func TestResourceGroupRestoreAndParentValidationOnPostgres(t *testing.T) {
 }
 
 func TestResourceWithOperationBindingRejectsEditsWithoutFalseSavedRevision(t *testing.T) {
-	database := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
 	service := application.NewService(canvasStore(database))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "保护已绑定节点"})

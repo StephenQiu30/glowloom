@@ -21,11 +21,11 @@ import (
 )
 
 func TestRelayRolePublishesAndProjectsOnLocalServices(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_RELAY_DB_DSN")
-	brokers := os.Getenv("LV_TEST_RELAY_KAFKA_BROKERS")
-	redisURL := os.Getenv("LV_TEST_RELAY_REDIS_URL")
+	dsn := os.Getenv("GLOWLOOM_TEST_RELAY_DB_DSN")
+	brokers := os.Getenv("GLOWLOOM_TEST_RELAY_KAFKA_BROKERS")
+	redisURL := os.Getenv("GLOWLOOM_TEST_RELAY_REDIS_URL")
 	if dsn == "" || brokers == "" || redisURL == "" {
-		t.Skip("set disposable LV_TEST_RELAY_DB_DSN, LV_TEST_RELAY_KAFKA_BROKERS, and LV_TEST_RELAY_REDIS_URL")
+		t.Skip("set disposable GLOWLOOM_TEST_RELAY_DB_DSN, GLOWLOOM_TEST_RELAY_KAFKA_BROKERS, and GLOWLOOM_TEST_RELAY_REDIS_URL")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 25*time.Second)
 	defer cancel()
@@ -107,11 +107,11 @@ func TestRelayRolePublishesAndProjectsOnLocalServices(t *testing.T) {
 }
 
 func TestRelayRoleConsumesAuditOnLocalServices(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_RELAY_DB_DSN")
-	brokers := os.Getenv("LV_TEST_RELAY_KAFKA_BROKERS")
-	redisURL := os.Getenv("LV_TEST_RELAY_REDIS_URL")
+	dsn := os.Getenv("GLOWLOOM_TEST_RELAY_DB_DSN")
+	brokers := os.Getenv("GLOWLOOM_TEST_RELAY_KAFKA_BROKERS")
+	redisURL := os.Getenv("GLOWLOOM_TEST_RELAY_REDIS_URL")
 	if dsn == "" || brokers == "" || redisURL == "" {
-		t.Skip("set disposable LV_TEST_RELAY_DB_DSN, LV_TEST_RELAY_KAFKA_BROKERS, and LV_TEST_RELAY_REDIS_URL")
+		t.Skip("set disposable GLOWLOOM_TEST_RELAY_DB_DSN, GLOWLOOM_TEST_RELAY_KAFKA_BROKERS, and GLOWLOOM_TEST_RELAY_REDIS_URL")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
@@ -196,11 +196,11 @@ func TestRelayRoleConsumesAuditOnLocalServices(t *testing.T) {
 }
 
 func TestRelayRoleStopsOnInvalidOutboxEvent(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_RELAY_DB_DSN")
-	brokers := os.Getenv("LV_TEST_RELAY_KAFKA_BROKERS")
-	redisURL := os.Getenv("LV_TEST_RELAY_REDIS_URL")
+	dsn := os.Getenv("GLOWLOOM_TEST_RELAY_DB_DSN")
+	brokers := os.Getenv("GLOWLOOM_TEST_RELAY_KAFKA_BROKERS")
+	redisURL := os.Getenv("GLOWLOOM_TEST_RELAY_REDIS_URL")
 	if dsn == "" || brokers == "" || redisURL == "" {
-		t.Skip("set disposable LV_TEST_RELAY_DB_DSN, LV_TEST_RELAY_KAFKA_BROKERS, and LV_TEST_RELAY_REDIS_URL")
+		t.Skip("set disposable GLOWLOOM_TEST_RELAY_DB_DSN, GLOWLOOM_TEST_RELAY_KAFKA_BROKERS, and GLOWLOOM_TEST_RELAY_REDIS_URL")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()

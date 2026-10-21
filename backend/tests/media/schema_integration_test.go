@@ -18,9 +18,9 @@ import (
 
 // The fixture database must be initialized from db/schema.sql before this test.
 func TestMediaSchemaRelationships(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_MEDIA_SCHEMA_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_MEDIA_SCHEMA_DB_DSN")
 	if dsn == "" {
-		t.Skip("set LV_TEST_MEDIA_SCHEMA_DB_DSN to a disposable PostgreSQL database initialized from db/schema.sql")
+		t.Skip("set GLOWLOOM_TEST_MEDIA_SCHEMA_DB_DSN to a disposable PostgreSQL database initialized from db/schema.sql")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()

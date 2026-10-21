@@ -60,12 +60,12 @@ type speechHTTPFixture struct {
 
 func speechFixture(t *testing.T) *speechHTTPFixture {
 	t.Helper()
-	sample := os.Getenv("LV_TEST_WHISPER_SAMPLE")
+	sample := os.Getenv("GLOWLOOM_TEST_WHISPER_SAMPLE")
 	if sample == "" {
-		if os.Getenv("LV_TEST_WHISPER_REQUIRED") == "1" {
+		if os.Getenv("GLOWLOOM_TEST_WHISPER_REQUIRED") == "1" {
 			t.Fatal("actual official speech fixture is required")
 		}
-		t.Skip("set actual official LV_TEST_WHISPER_SAMPLE and isolated storage/PG")
+		t.Skip("set actual official GLOWLOOM_TEST_WHISPER_SAMPLE and isolated storage/PG")
 	}
 	return speechFixtureFrom(t, sample, "audio/wave", "audio")
 }
@@ -172,9 +172,9 @@ func (f *speechHTTPFixture) worker(t *testing.T, client toolapp.Transcriber) *to
 }
 
 func TestTranscriptionActualHTTPWhisperPrivateDraftSourceAndSRT(t *testing.T) {
-	endpoint := os.Getenv("LV_TEST_WHISPER_BASE_URL")
+	endpoint := os.Getenv("GLOWLOOM_TEST_WHISPER_BASE_URL")
 	if endpoint == "" {
-		if os.Getenv("LV_TEST_WHISPER_REQUIRED") == "1" {
+		if os.Getenv("GLOWLOOM_TEST_WHISPER_REQUIRED") == "1" {
 			t.Fatal("actual native endpoint required")
 		}
 		t.Skip("set task-owned actual native Whisper endpoint")

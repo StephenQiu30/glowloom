@@ -15,9 +15,9 @@ import (
 )
 
 func TestWhisperRealOfficialSpeechAndSyntheticChinese(t *testing.T) {
-	endpoint := os.Getenv("LV_TEST_WHISPER_BASE_URL")
+	endpoint := os.Getenv("GLOWLOOM_TEST_WHISPER_BASE_URL")
 	if endpoint == "" {
-		if os.Getenv("LV_TEST_WHISPER_REQUIRED") == "1" {
+		if os.Getenv("GLOWLOOM_TEST_WHISPER_REQUIRED") == "1" {
 			t.Fatal("required actual Whisper service is missing")
 		}
 		t.Skip("actual Whisper service was not configured")
@@ -34,7 +34,7 @@ func TestWhisperRealOfficialSpeechAndSyntheticChinese(t *testing.T) {
 		name, path, language string
 		duration             int64
 		phrase               string
-	}{{"official", os.Getenv("LV_TEST_WHISPER_SAMPLE"), "en", 11000, "ask not"}, {"synthetic Chinese", os.Getenv("LV_TEST_WHISPER_CHINESE_SAMPLE"), "zh", 5560, ""}} {
+	}{{"official", os.Getenv("GLOWLOOM_TEST_WHISPER_SAMPLE"), "en", 11000, "ask not"}, {"synthetic Chinese", os.Getenv("GLOWLOOM_TEST_WHISPER_CHINESE_SAMPLE"), "zh", 5560, ""}} {
 		t.Run(item.name, func(t *testing.T) {
 			if item.path == "" {
 				t.Fatal("required actual speech fixture is missing")

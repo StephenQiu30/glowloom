@@ -13,7 +13,7 @@ import (
 // libraryOwnerDB is used only to create synthetic protected-column fixtures.
 func libraryOwnerDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	dsn := os.Getenv("LV_TEST_LIBRARY_OWNER_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_LIBRARY_OWNER_DB_DSN")
 	if dsn == "" {
 		t.Skip("set the isolated library fixture owner DSN")
 	}

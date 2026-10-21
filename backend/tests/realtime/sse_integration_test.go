@@ -51,9 +51,9 @@ func TestProjectSSECanonicalizesProjectIDBeforeAuthorize(t *testing.T) {
 }
 
 func TestProjectSSEReplaysThenStreamsAndDeduplicates(t *testing.T) {
-	url := os.Getenv("LV_TEST_REALTIME_REDIS_URL")
+	url := os.Getenv("GLOWLOOM_TEST_REALTIME_REDIS_URL")
 	if url == "" {
-		t.Skip("set LV_TEST_REALTIME_REDIS_URL for disposable integration data")
+		t.Skip("set GLOWLOOM_TEST_REALTIME_REDIS_URL for disposable integration data")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
@@ -115,9 +115,9 @@ func TestProjectSSEReplaysThenStreamsAndDeduplicates(t *testing.T) {
 }
 
 func TestProjectSSERequiresAuthorizationAndResyncsMissingCursor(t *testing.T) {
-	url := os.Getenv("LV_TEST_REALTIME_REDIS_URL")
+	url := os.Getenv("GLOWLOOM_TEST_REALTIME_REDIS_URL")
 	if url == "" {
-		t.Skip("set LV_TEST_REALTIME_REDIS_URL for disposable integration data")
+		t.Skip("set GLOWLOOM_TEST_REALTIME_REDIS_URL for disposable integration data")
 	}
 	conn, err := redisconn.Open(url)
 	if err != nil {
@@ -169,9 +169,9 @@ func TestProjectSSERequiresAuthorizationAndResyncsMissingCursor(t *testing.T) {
 }
 
 func TestProjectSSERechecksAuthorizationBeforeReplay(t *testing.T) {
-	url := os.Getenv("LV_TEST_REALTIME_REDIS_URL")
+	url := os.Getenv("GLOWLOOM_TEST_REALTIME_REDIS_URL")
 	if url == "" {
-		t.Skip("set LV_TEST_REALTIME_REDIS_URL for disposable integration data")
+		t.Skip("set GLOWLOOM_TEST_REALTIME_REDIS_URL for disposable integration data")
 	}
 	conn, err := redisconn.Open(url)
 	if err != nil {
@@ -210,9 +210,9 @@ func TestProjectSSERechecksAuthorizationBeforeReplay(t *testing.T) {
 }
 
 func TestProjectSSEStopsAfterAuthorizationIsRevoked(t *testing.T) {
-	url := os.Getenv("LV_TEST_REALTIME_REDIS_URL")
+	url := os.Getenv("GLOWLOOM_TEST_REALTIME_REDIS_URL")
 	if url == "" {
-		t.Skip("set LV_TEST_REALTIME_REDIS_URL for disposable integration data")
+		t.Skip("set GLOWLOOM_TEST_REALTIME_REDIS_URL for disposable integration data")
 	}
 	conn, err := redisconn.Open(url)
 	if err != nil {
@@ -269,9 +269,9 @@ func TestProjectSSEStopsAfterAuthorizationIsRevoked(t *testing.T) {
 }
 
 func TestProjectSSEClosesOnHeartbeatAfterAuthorizationIsRevoked(t *testing.T) {
-	url := os.Getenv("LV_TEST_REALTIME_REDIS_URL")
+	url := os.Getenv("GLOWLOOM_TEST_REALTIME_REDIS_URL")
 	if url == "" {
-		t.Skip("set LV_TEST_REALTIME_REDIS_URL for disposable integration data")
+		t.Skip("set GLOWLOOM_TEST_REALTIME_REDIS_URL for disposable integration data")
 	}
 	conn, err := redisconn.Open(url)
 	if err != nil {

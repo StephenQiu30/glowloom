@@ -19,9 +19,9 @@ import (
 
 func storageRouteDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	dsn := os.Getenv("LV_TEST_STORAGE_ROUTE_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_STORAGE_ROUTE_DSN")
 	if dsn == "" {
-		t.Skip("set disposable LV_TEST_STORAGE_ROUTE_DSN; no deployment configuration is read")
+		t.Skip("set disposable GLOWLOOM_TEST_STORAGE_ROUTE_DSN; no deployment configuration is read")
 	}
 	conn, err := db.Open(t.Context(), dsn, noop.NewTracerProvider())
 	if err != nil {

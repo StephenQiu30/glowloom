@@ -590,3 +590,68 @@ it("批量回收全部成功只显示一个总数toast并清空选择", async ()
   ).toHaveLength(1);
   await waitFor(() => expect(screen.queryByText("第二项")).toBeNull());
 });
+
+it("画布搜索从URL恢复并跟随历史导航更新", async () => {
+  navigation.search = "?state=deleted&q=原画布&sort=metadata";
+  page();
+  await waitFor(() =>
+    expect(api.list).toHaveBeenLastCalledWith(
+      expect.objectContaining({ q: "原画布", deleted: true }),
+      expect.anything(),
+    ),
+  );
+  expect(
+    screen.getByRole("combobox", { name: "画布排序" }).textContent,
+  ).toContain("项目更新");
+  await act(async () => {
+    navigation.search = "?state=deleted&q=另一张";
+    navigation.subscribers.forEach((listener) => listener());
+  });
+  await waitFor(() =>
+    expect(api.list).toHaveBeenLastCalledWith(
+      expect.objectContaining({ q: "另一张", deleted: true }),
+      expect.anything(),
+    ),
+  );
+});
+
+it("提交画布搜索写入URL且切换回收站保留搜索词", async () => {
+  page();
+  await waitFor(() => expect(api.list).toHaveBeenCalled());
+  fireEvent.click(screen.getByRole("button", { name: "搜索画布" }));
+  fireEvent.change(await screen.findByRole("combobox", { name: "搜索画布" }), {
+    target: { value: "原画布 & A" },
+  });
+  fireEvent.click(screen.getByRole("option", { name: /搜索画布/ }));
+  await waitFor(() => {
+    expect(new URLSearchParams(navigation.search).get("q")).toBe("原画布 & A");
+  });
+  fireEvent.click(screen.getByRole("button", { name: "回收站" }));
+  await waitFor(() =>
+    expect(api.list).toHaveBeenLastCalledWith(
+      expect.objectContaining({ q: "原画布 & A", deleted: true }),
+      expect.anything(),
+    ),
+  );
+  expect(new URLSearchParams(navigation.search).get("q")).toBe("原画布 & A");
+});
+
+it("修改画布搜索保留项目更新排序且可从URL恢复", async () => {
+  page();
+  await waitFor(() => expect(api.list).toHaveBeenCalled());
+  fireEvent.click(screen.getByRole("combobox", { name: "画布排序" }));
+  fireEvent.click(await screen.findByRole("option", { name: "项目更新" }));
+  fireEvent.click(screen.getByRole("button", { name: "搜索画布" }));
+  fireEvent.change(await screen.findByRole("combobox", { name: "搜索画布" }), {
+    target: { value: "原画布" },
+  });
+  fireEvent.click(screen.getByRole("option", { name: /搜索画布/ }));
+  await waitFor(() => {
+    expect(new URLSearchParams(navigation.search).get("sort")).toBe("metadata");
+    expect(api.list.mock.calls.at(-1)?.[0]).toEqual({
+      q: "原画布",
+      limit: 12,
+      status: "active",
+    });
+  });
+});

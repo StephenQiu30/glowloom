@@ -71,8 +71,8 @@ func TestObjectStorageRejectsUnknownFieldsAndMixedSources(t *testing.T) {
 			t.Fatalf("unsafe or unsupported configuration accepted: %v", err)
 		}
 	}
-	t.Setenv("LV_OBJECT_STORAGE_CONFIG", storageConfigFile(t, storageFixture))
-	t.Setenv("LV_OBJECT_STORAGE_ENDPOINT", "https://old-storage.example.test")
+	t.Setenv("GLOWLOOM_OBJECT_STORAGE_CONFIG", storageConfigFile(t, storageFixture))
+	t.Setenv("GLOWLOOM_OBJECT_STORAGE_ENDPOINT", "https://old-storage.example.test")
 	if _, err := config.Load(); !errors.Is(err, config.ErrInvalid) {
 		t.Fatalf("YAML and legacy environment fields were mixed: %v", err)
 	}

@@ -29,9 +29,9 @@ func TestOpenRejectsMalformedURLWithoutExposingPassword(t *testing.T) {
 }
 
 func TestPingWithRedis(t *testing.T) {
-	url := os.Getenv("LV_TEST_REDIS_URL")
+	url := os.Getenv("GLOWLOOM_TEST_REDIS_URL")
 	if url == "" {
-		t.Skip("set LV_TEST_REDIS_URL to a disposable Redis database")
+		t.Skip("set GLOWLOOM_TEST_REDIS_URL to a disposable Redis database")
 	}
 	conn, err := redisconn.Open(url)
 	if err != nil {

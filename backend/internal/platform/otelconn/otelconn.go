@@ -17,7 +17,7 @@ import (
 )
 
 // ErrInvalidEndpoint means the OTLP/HTTP endpoint is not a plain HTTP(S) origin.
-var ErrInvalidEndpoint = errors.New("invalid LV_OTEL_ENDPOINT")
+var ErrInvalidEndpoint = errors.New("invalid GLOWLOOM_OTEL_ENDPOINT")
 
 // Open creates a per-process tracer provider. An empty endpoint disables export
 // while preserving trace context across process boundaries.

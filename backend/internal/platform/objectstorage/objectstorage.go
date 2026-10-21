@@ -18,15 +18,15 @@ import (
 
 var (
 	// ErrEndpointRequired means no object storage endpoint is configured.
-	ErrEndpointRequired = errors.New("LV_OBJECT_STORAGE_ENDPOINT is required")
+	ErrEndpointRequired = errors.New("GLOWLOOM_OBJECT_STORAGE_ENDPOINT is required")
 	// ErrInvalidEndpoint means the endpoint is not a plain HTTP(S) origin.
-	ErrInvalidEndpoint = errors.New("invalid LV_OBJECT_STORAGE_ENDPOINT")
+	ErrInvalidEndpoint = errors.New("invalid GLOWLOOM_OBJECT_STORAGE_ENDPOINT")
 	// ErrBucketRequired means no target bucket is configured.
-	ErrBucketRequired = errors.New("LV_OBJECT_STORAGE_BUCKET is required")
+	ErrBucketRequired = errors.New("GLOWLOOM_OBJECT_STORAGE_BUCKET is required")
 	// ErrInvalidBucket means the configured bucket name is not accepted by S3.
-	ErrInvalidBucket = errors.New("invalid LV_OBJECT_STORAGE_BUCKET")
+	ErrInvalidBucket = errors.New("invalid GLOWLOOM_OBJECT_STORAGE_BUCKET")
 	// ErrCredentialsRequired means the client has no access or secret key.
-	ErrCredentialsRequired = errors.New("LV_OBJECT_STORAGE_ACCESS_KEY and LV_OBJECT_STORAGE_SECRET_KEY are required")
+	ErrCredentialsRequired = errors.New("GLOWLOOM_OBJECT_STORAGE_ACCESS_KEY and GLOWLOOM_OBJECT_STORAGE_SECRET_KEY are required")
 	// ErrBucketMissing means the configured target bucket does not exist.
 	ErrBucketMissing = errors.New("configured object storage bucket does not exist")
 	// ErrInvalidObject means an object write or stat lacks a safe key or valid metadata.

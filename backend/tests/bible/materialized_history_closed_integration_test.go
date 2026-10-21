@@ -25,9 +25,9 @@ import (
 
 func bibleClosedHistoryDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 	t.Helper()
-	dsn := os.Getenv("LV_TEST_BIBLE_CLOSED_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_BIBLE_CLOSED_DB_DSN")
 	if dsn == "" {
-		t.Skip("set isolated LV_TEST_BIBLE_CLOSED_DB_DSN")
+		t.Skip("set isolated GLOWLOOM_TEST_BIBLE_CLOSED_DB_DSN")
 	}
 	parsed, err := url.Parse(dsn)
 	if err != nil || parsed.Path != "/glowloom_reference" {

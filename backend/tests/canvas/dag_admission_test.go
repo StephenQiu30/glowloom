@@ -31,7 +31,7 @@ func (a saveBeforeReadAuthorization) AuthorizeProject(ctx context.Context, actor
 func TestDAGGetRetriesWholeSnapshotAfterConcurrentCommitAndBoundsRetries(t *testing.T) {
 	for _, continuous := range []bool{false, true} {
 		t.Run(map[bool]string{false: "one concurrent commit", true: "bounded contention"}[continuous], func(t *testing.T) {
-			db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+			db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 			actor, project := seedCanvasActor(t, db)
 			writer := application.NewService(canvasStore(db))
 			doc, err := writer.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "一致性读取"})
@@ -73,7 +73,7 @@ func TestDAGGetRetriesWholeSnapshotAfterConcurrentCommitAndBoundsRetries(t *test
 func TestDAGReadOnlyGraphCannotAdmitNewExecutionInputs(t *testing.T) {
 	for _, kind := range []string{"unclassified_relation", "opaque_timeline", "opaque_audio"} {
 		t.Run(kind, func(t *testing.T) {
-			db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+			db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 			actor, project := seedCanvasActor(t, db)
 			store := canvasStore(db)
 			service := application.NewService(store)

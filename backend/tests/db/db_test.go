@@ -35,9 +35,9 @@ func TestOpenDoesNotExposePassword(t *testing.T) {
 }
 
 func TestOpenWithPostgres(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_DB_DSN")
+	dsn := os.Getenv("GLOWLOOM_TEST_DB_DSN")
 	if dsn == "" {
-		t.Skip("set LV_TEST_DB_DSN to a disposable PostgreSQL database")
+		t.Skip("set GLOWLOOM_TEST_DB_DSN to a disposable PostgreSQL database")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

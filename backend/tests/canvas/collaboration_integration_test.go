@@ -11,7 +11,7 @@ import (
 )
 
 func TestCollaborationPersistsTransformsAndTerminalRejections(t *testing.T) {
-	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, p := seedCanvasActor(t, db)
 	store := canvasStore(db)
 	legacy := application.NewService(store)
@@ -70,7 +70,7 @@ func TestCollaborationPersistsTransformsAndTerminalRejections(t *testing.T) {
 }
 
 func TestCollaborationHistoryGapAndDeletedIdentityStayTerminal(t *testing.T) {
-	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, p := seedCanvasActor(t, db)
 	store := canvasStore(db)
 	legacy := application.NewService(store)
@@ -121,7 +121,7 @@ func TestCollaborationHistoryGapAndDeletedIdentityStayTerminal(t *testing.T) {
 func TestCollaborationUndoKeepsOthersAndRejectsOverlappingDeletion(t *testing.T) {
 	for _, overlap := range []bool{false, true} {
 		t.Run(map[bool]string{false: "independent", true: "overlap"}[overlap], func(t *testing.T) {
-			db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+			db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 			actor, p := seedCanvasActor(t, db)
 			store := canvasStore(db)
 			svc := application.NewCollaborationService(store)
@@ -171,7 +171,7 @@ func TestCollaborationUndoKeepsOthersAndRejectsOverlappingDeletion(t *testing.T)
 }
 
 func TestCollaborationUndoRestoresNodeRelationsAndStableCollections(t *testing.T) {
-	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, p := seedCanvasActor(t, db)
 	store := canvasStore(db)
 	svc := application.NewCollaborationService(store)
@@ -222,7 +222,7 @@ func TestCollaborationUndoRestoresNodeRelationsAndStableCollections(t *testing.T
 }
 
 func TestCollaborationEphemeralIdentityAndMetadataRemainExplainable(t *testing.T) {
-	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, p := seedCanvasActor(t, db)
 	store := canvasStore(db)
 	legacy := application.NewService(store)
@@ -251,7 +251,7 @@ func TestCollaborationEphemeralIdentityAndMetadataRemainExplainable(t *testing.T
 }
 
 func TestCollaborationRetainsMediaFromIntermediateOperations(t *testing.T) {
-	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, p := seedCanvasActor(t, db)
 	store := canvasStore(db)
 	doc, err := application.NewService(store).Create(t.Context(), actor, p, uuid.NewString(), application.CreateInput{Name: "intermediate media"})
@@ -274,7 +274,7 @@ func TestCollaborationRetainsMediaFromIntermediateOperations(t *testing.T) {
 func TestCollaborationContributionOwnershipNoopAndRedo(t *testing.T) {
 	for _, scenario := range []string{"same-value", "deleted-noop", "redo"} {
 		t.Run(scenario, func(t *testing.T) {
-			db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+			db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 			actor, p := seedCanvasActor(t, db)
 			store := canvasStore(db)
 			svc := application.NewCollaborationService(store)
@@ -333,7 +333,7 @@ func TestCollaborationContributionOwnershipNoopAndRedo(t *testing.T) {
 }
 
 func TestCollaborationReferenceLabelsMentionsAndStaleBinding(t *testing.T) {
-	db := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
+	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, p := seedCanvasActor(t, db)
 	store := canvasStore(db)
 	svc := application.NewCollaborationService(store)
