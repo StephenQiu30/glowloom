@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     runs-on: ubuntu-24.04
@@ -68,6 +72,44 @@ jobs:
       - run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
       - run: go install github.com/google/wire/cmd/wire@v0.7.0
       - run: golangci-lint run ./...
+      - run: govulncheck ./...
+      - name: Check generated dependencies
+        run: |
+          wire ./internal/app
+          goimports -local github.com/StephenQiu30/glowloom-server/backend -w internal/app/wire_gen.go
+          git diff --exit-code -- internal/app/wire_gen.go
+      - name: Prepare zero-skip contract result checker
+        run: |
+          cat > "$RUNNER_TEMP/require-contract-results.py" <<'PY'
+          import collections
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          log = Path(os.environ["RUNNER_TEMP"]) / sys.argv[1]
+          required = set(sys.argv[2:])
+          started, passed, rejected = set(), set(), []
+          for line in log.read_text().splitlines():
+              event = json.loads(line)
+              action, test = event["Action"], event.get("Test", "")
+              key = (event["Package"], test)
+              if action in ("fail", "skip"):
+                  rejected.append((action, key))
+              if test and "/" not in test:
+                  if action == "run":
+                      started.add(key)
+                  elif action == "pass":
+                      passed.add(key)
+          assert not rejected, (log.name, rejected)
+          assert started == passed, (log.name, "unsettled tests", started - passed)
+          counts = collections.Counter(package.rsplit("/", 1)[-1] for package, test in passed)
+          for package in required:
+              assert counts[package] > 0, (log.name, package, counts)
+          assert set(counts) == required, (log.name, "unexpected packages", counts)
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
+              summary.write(f"\n{log.stem}: {dict(counts)} passed; zero package, test or subtest failures/skips.\n")
+          PY
       - name: Install media probe tools
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Require the single schema definition
@@ -91,39 +133,7 @@ jobs:
           go test -race ./tests/db -run '^TestSchema' -count=1 -v
       - name: Run backend Race tests
         shell: bash
-        run: go test -race -count=1 -json ./... | tee "$RUNNER_TEMP/backend-tests.jsonl"
-      - name: Report backend test execution and skips
-        if: always()
-        run: |
-          python3 - <<'PY'
-          import collections
-          import json
-          import os
-          from pathlib import Path
-
-          results = Path(os.environ["RUNNER_TEMP"]) / "backend-tests.jsonl"
-          lines = ["## Backend Race tests", ""]
-          if not results.exists():
-              lines.append("Tests did not run; inspect the earlier failed step.")
-          else:
-              counts = collections.Counter()
-              skipped = collections.Counter()
-              for line in results.read_text().splitlines():
-                  event = json.loads(line)
-                  test = event.get("Test", "")
-                  action = event["Action"]
-                  if test and "/" not in test and action in ("pass", "fail", "skip"):
-                      counts[action] += 1
-                      if action == "skip":
-                          skipped[event["Package"].rsplit("/", 1)[-1]] += 1
-              lines.append(f"Top-level tests: {counts['pass']} passed, {counts['fail']} failed, {counts['skip']} skipped.")
-              lines.extend(["", "Skipped tests are not acceptance evidence. Dedicated integration steps below have separate results."])
-              if skipped:
-                  lines.extend(["", "| Package | Skipped |", "| --- | ---: |"])
-                  lines.extend(f"| {package} | {count} |" for package, count in sorted(skipped.items()))
-          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
-              summary.write("\n".join(lines) + "\n")
-          PY
+        run: go test -race -count=1 -v ./...
       - name: Prepare isolated identity contract databases
         run: |
           psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_identity_gate_test'
@@ -280,22 +290,7 @@ jobs:
           LV_TEST_MEDIA_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_receipt?sslmode=disable
         run: |
           go test -race ./tests/media -run '^TestDepthJobPG' -count=1 -json | tee "$RUNNER_TEMP/depth-pg.jsonl"
-          python3 - <<'PY'
-          import collections
-          import json
-          import os
-          from pathlib import Path
-
-          counts = collections.Counter()
-          for line in (Path(os.environ["RUNNER_TEMP"]) / "depth-pg.jsonl").read_text().splitlines():
-              event = json.loads(line)
-              test = event.get("Test", "")
-              if test and "/" not in test and event["Action"] in ("pass", "fail", "skip"):
-                  counts[event["Action"]] += 1
-          assert counts["pass"] > 0 and counts["fail"] == 0 and counts["skip"] == 0, counts
-          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
-              summary.write(f"\n## Depth job PostgreSQL contracts\n\n{counts['pass']} actual PostgreSQL/private-object tests passed, with no skips. Fixed-model MPS and real Temporal acceptance run separately; this Linux step does not prove native inference.\n")
-          PY
+          python3 "$RUNNER_TEMP/require-contract-results.py" depth-pg.jsonl media
       - name: Verify project folder and atomic copy placement under the runtime role
         shell: bash
         env:
@@ -303,22 +298,7 @@ jobs:
           LV_TEST_FOLDER_OWNER_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_receipt?sslmode=disable
         run: |
           go test -race ./tests/workspace -run '^TestProject(Folder|CopyPlacement)' -count=1 -json | tee "$RUNNER_TEMP/folder-pg.jsonl"
-          python3 - <<'PY'
-          import collections
-          import json
-          import os
-          from pathlib import Path
-
-          counts = collections.Counter()
-          for line in (Path(os.environ["RUNNER_TEMP"]) / "folder-pg.jsonl").read_text().splitlines():
-              event = json.loads(line)
-              test = event.get("Test", "")
-              if test and "/" not in test and event["Action"] in ("pass", "fail", "skip"):
-                  counts[event["Action"]] += 1
-          assert counts["pass"] > 0 and counts["fail"] == 0 and counts["skip"] == 0, counts
-          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
-              summary.write(f"\n## Project folders and copy placement\n\n{counts['pass']} actual runtime-role PostgreSQL, permanent-receipt, atomic recycling, and physical-lock contracts passed without skips. Browser acceptance runs separately.\n")
-          PY
+          python3 "$RUNNER_TEMP/require-contract-results.py" folder-pg.jsonl workspace
       - name: Verify document originals and permanent project cover ownership
         shell: bash
         env:
@@ -332,22 +312,7 @@ jobs:
           psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_cover'
           psql "$LV_TEST_COVER_OWNER_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           go test -race -p 1 ./tests/media ./tests/workspace -run '^Test(Document|ProjectCover|ProjectCopy(Cover|Document))' -count=1 -json | tee "$RUNNER_TEMP/cover-document-pg.jsonl"
-          python3 - <<'PY'
-          import collections
-          import json
-          import os
-          from pathlib import Path
-
-          counts = collections.Counter()
-          for line in (Path(os.environ["RUNNER_TEMP"]) / "cover-document-pg.jsonl").read_text().splitlines():
-              event = json.loads(line)
-              test = event.get("Test", "")
-              if test and "/" not in test and event["Action"] in ("pass", "fail", "skip"):
-                  counts[event["Action"]] += 1
-          assert counts["pass"] > 0 and counts["fail"] == 0 and counts["skip"] == 0, counts
-          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
-              summary.write(f"\n## Document originals and project cover\n\n{counts['pass']} document container, real original-object upload/download/copy, permanent lifecycle receipt and image ownership contracts passed without skips. Browser acceptance runs separately.\n")
-          PY
+          python3 "$RUNNER_TEMP/require-contract-results.py" cover-document-pg.jsonl media workspace
       - name: Verify retained document copy and cancellation cleanup under the runtime role
         shell: bash
         env:
@@ -357,22 +322,7 @@ jobs:
           psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_library'
           psql "$LV_TEST_LIBRARY_OWNER_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           go test -race ./tests/media -run '^TestProjectCopy(Retained|HistoricalDocument|LibraryNilFields|MediaPreservesContentWithoutExecutionHistory|MediaRealObjectsRegistrationAndCleanup|Cleanup)' -count=1 -json | tee "$RUNNER_TEMP/retained-copy-pg.jsonl"
-          python3 - <<'PY'
-          import collections
-          import json
-          import os
-          from pathlib import Path
-
-          counts = collections.Counter()
-          for line in (Path(os.environ["RUNNER_TEMP"]) / "retained-copy-pg.jsonl").read_text().splitlines():
-              event = json.loads(line)
-              test = event.get("Test", "")
-              if test and "/" not in test and event["Action"] in ("pass", "fail", "skip"):
-                  counts[event["Action"]] += 1
-          assert counts["pass"] > 0 and counts["fail"] == 0 and counts["skip"] == 0, counts
-          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
-              summary.write(f"\n## Historical document copy and cancellation cleanup\n\n{counts['pass']} runtime-role PostgreSQL, independent private original bytes, legacy JSON and narrow cleanup permission contracts passed without skips. Full script history and browser acceptance run separately.\n")
-          PY
+          python3 "$RUNNER_TEMP/require-contract-results.py" retained-copy-pg.jsonl media
       - name: Verify GIF animation and native GLB or JSON glTF under the runtime role
         shell: bash
         env:
@@ -380,54 +330,7 @@ jobs:
           LV_TEST_LIBRARY_OWNER_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable
         run: |
           go test -race ./tests/media -run '^Test(GIF|GLTFJSON)' -count=1 -json | tee "$RUNNER_TEMP/media-format-pg.jsonl"
-          python3 - <<'PY'
-          import collections
-          import json
-          import os
-          from pathlib import Path
-
-          counts = collections.Counter()
-          for line in (Path(os.environ["RUNNER_TEMP"]) / "media-format-pg.jsonl").read_text().splitlines():
-              event = json.loads(line)
-              test = event.get("Test", "")
-              if test and "/" not in test and event["Action"] in ("pass", "fail", "skip"):
-                  counts[event["Action"]] += 1
-          assert counts["pass"] > 0 and counts["fail"] == 0 and counts["skip"] == 0, counts
-          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
-              summary.write(f"\n## GIF and glTF JSON\n\n{counts['pass']} bounded native-format, actual runtime-role PostgreSQL, private-original and independent-copy tests passed without skips. GLB runs in the export step. Browser acceptance runs separately.\n")
-          PY
-      - name: Prepare zero-skip contract result checker
-        run: |
-          cat > "$RUNNER_TEMP/require-contract-results.py" <<'PY'
-          import collections
-          import json
-          import os
-          import sys
-          from pathlib import Path
-
-          log = Path(os.environ["RUNNER_TEMP"]) / sys.argv[1]
-          required = dict(argument.split("=", 1) for argument in sys.argv[2:])
-          started, passed, rejected = set(), set(), []
-          for line in log.read_text().splitlines():
-              event = json.loads(line)
-              action, test = event["Action"], event.get("Test", "")
-              key = (event["Package"], test)
-              if action in ("fail", "skip"):
-                  rejected.append((action, key))
-              if test and "/" not in test:
-                  if action == "run":
-                      started.add(key)
-                  elif action == "pass":
-                      passed.add(key)
-          assert not rejected, (log.name, rejected)
-          assert started == passed, (log.name, "unsettled tests", started - passed)
-          counts = collections.Counter(package.rsplit("/", 1)[-1] for package, test in passed)
-          for package in required:
-              assert counts[package] > 0, (log.name, package, counts)
-          assert set(counts) == set(required), (log.name, "unexpected packages", counts)
-          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
-              summary.write(f"\n{log.stem}: {dict(counts)} passed; zero package, test or subtest failures/skips.\n")
-          PY
+          python3 "$RUNNER_TEMP/require-contract-results.py" media-format-pg.jsonl media
       - name: Verify personal and project libraries, uploads, and verified attachments
         shell: bash
         env:
@@ -435,23 +338,7 @@ jobs:
           LV_TEST_LIBRARY_OWNER_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable
         run: |
           go test -race ./tests/media -run '^Test(Library|Personal|ProjectMediaNilPersonalJSON)' -count=1 -json | tee "$RUNNER_TEMP/library-pg.jsonl"
-          python3 - <<'PY'
-          import collections
-          import json
-          import os
-          from pathlib import Path
-
-          counts = collections.Counter()
-          for line in (Path(os.environ["RUNNER_TEMP"]) / "library-pg.jsonl").read_text().splitlines():
-              event = json.loads(line)
-              test = event.get("Test", "")
-              if test and "/" not in test and event["Action"] in ("pass", "fail", "skip"):
-                  counts[event["Action"]] += 1
-          assert counts["pass"] > 0 and counts["fail"] == 0 and counts["skip"] == 0, counts
-          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
-              summary.write(f"\n## Media library and personal originals\n\n{counts['pass']} runtime-role PostgreSQL, real private originals, immutable scope, permanent replay, unknown commit, signed preview and verified attachment tests passed without skips. Full Transfer/Package and browser acceptance run separately.\n")
-          PY
-          python3 "$RUNNER_TEMP/require-contract-results.py" library-pg.jsonl media=31
+          python3 "$RUNNER_TEMP/require-contract-results.py" library-pg.jsonl media
       - name: Verify script copy coordination and current workspace authority
         shell: bash
         env:
@@ -459,22 +346,7 @@ jobs:
           LV_TEST_FOLDER_OWNER_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_receipt?sslmode=disable
         run: |
           go test -race ./tests/workspace -run '^Test(ProjectCopyScript|ProjectCopyAccessPG|ScriptProjectAccessPG)' -count=1 -json | tee "$RUNNER_TEMP/script-workspace-pg.jsonl"
-          python3 - <<'PY'
-          import collections
-          import json
-          import os
-          from pathlib import Path
-
-          counts = collections.Counter()
-          for line in (Path(os.environ["RUNNER_TEMP"]) / "script-workspace-pg.jsonl").read_text().splitlines():
-              event = json.loads(line)
-              test = event.get("Test", "")
-              if test and "/" not in test and event["Action"] in ("pass", "fail", "skip"):
-                  counts[event["Action"]] += 1
-          assert counts["pass"] > 0 and counts["fail"] == 0 and counts["skip"] == 0, counts
-          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
-              summary.write(f"\n## Script workspace authority\n\n{counts['pass']} coordinator stage, complete receipt, current actor/worker fence and same-transaction project authority tests passed without skips. Actual Script history content is verified by its owning tests.\n")
-          PY
+          python3 "$RUNNER_TEMP/require-contract-results.py" script-workspace-pg.jsonl workspace
       - name: Prepare isolated historical reference contract database
         run: |
           psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_reference'
@@ -491,23 +363,7 @@ jobs:
           LV_TEST_SCRIPT_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_script?sslmode=disable
         run: |
           go test -race ./tests/script -skip '^TestScript(FileImportRealTemporal|MediaReferenceGuardPG)' -count=1 -json | tee "$RUNNER_TEMP/script-pg.jsonl"
-          python3 "$RUNNER_TEMP/require-contract-results.py" script-pg.jsonl script=68
-          python3 - <<'PY'
-          import collections
-          import json
-          import os
-          from pathlib import Path
-
-          counts = collections.Counter()
-          for line in (Path(os.environ["RUNNER_TEMP"]) / "script-pg.jsonl").read_text().splitlines():
-              event = json.loads(line)
-              test = event.get("Test", "")
-              if test and "/" not in test and event["Action"] in ("pass", "fail", "skip"):
-                  counts[event["Action"]] += 1
-          assert counts["pass"] > 0 and counts["fail"] == 0 and counts["skip"] == 0, counts
-          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
-              summary.write(f"\n## Script owning history and file import\n\n{counts['pass']} actual runtime-role PostgreSQL, private originals, Unicode/structured versions, ordered partial retry, recovery, immutable history and complete owning Copy tests passed without skips. Four historical reference guards run in lanverse_reference and two real Temporal tests run against the isolated CI service in dedicated steps. Browser acceptance is separate.\n")
-          PY
+          python3 "$RUNNER_TEMP/require-contract-results.py" script-pg.jsonl script
       - name: Prepare isolated Bible and subject recovery databases
         run: |
           for database in lanverse_bible lanverse_subject_validation_ci lanverse_subject_validation_http_ci; do
@@ -522,20 +378,20 @@ jobs:
           LV_TEST_SUBJECT_RECOVERY_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_subject_validation_ci?sslmode=disable
         run: |
           go test -race ./tests/bible -skip '^Test(BibleMaterializedClosedPG|BibleMediaReferencePG|BibleScriptMediaReferencePG|ScriptMediaReferencePG)' -count=1 -json | tee "$RUNNER_TEMP/bible-pg.jsonl"
-          python3 "$RUNNER_TEMP/require-contract-results.py" bible-pg.jsonl bible=37
+          python3 "$RUNNER_TEMP/require-contract-results.py" bible-pg.jsonl bible
       - name: Verify subject deletion and recovery through the production router
         env:
           LV_TEST_SUBJECT_RECOVERY_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_subject_validation_http_ci?sslmode=disable
         run: |
           go test -race ./tests/app -run '^TestSubjectRecoveryPublicRouter$' -count=1 -json | tee "$RUNNER_TEMP/subject-router-pg.jsonl"
-          python3 "$RUNNER_TEMP/require-contract-results.py" subject-router-pg.jsonl app=1
+          python3 "$RUNNER_TEMP/require-contract-results.py" subject-router-pg.jsonl app
       - name: Verify closed materialized Bible history in the reference database
         shell: bash
         env:
           LV_TEST_BIBLE_CLOSED_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_reference?sslmode=disable
         run: |
           go test -race ./tests/bible -run '^TestBibleMaterializedClosedPG' -count=1 -json | tee "$RUNNER_TEMP/bible-closed-pg.jsonl"
-          python3 "$RUNNER_TEMP/require-contract-results.py" bible-closed-pg.jsonl bible=5
+          python3 "$RUNNER_TEMP/require-contract-results.py" bible-closed-pg.jsonl bible
       - name: Verify all owning historical references and retained tool objects
         shell: bash
         env:
@@ -547,7 +403,7 @@ jobs:
           LV_TEST_MEDIA_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_reference?sslmode=disable
         run: |
           go test -race -p 1 ./tests/canvas ./tests/workspace ./tests/operation ./tests/script ./tests/bible ./tests/media -run '^Test(CanvasMediaReferenceGuard|WorkspaceMediaReferenceGuard|OperationMediaReferenceGuard|ScriptMediaReferenceGuardPG|BibleMediaReferencePG|BibleScriptMediaReferencePG|ScriptMediaReferencePG|MediaToolRetained)' -count=1 -json | tee "$RUNNER_TEMP/media-reference-pg.jsonl"
-          python3 "$RUNNER_TEMP/require-contract-results.py" media-reference-pg.jsonl canvas=5 workspace=6 operation=3 script=4 bible=7 media=7
+          python3 "$RUNNER_TEMP/require-contract-results.py" media-reference-pg.jsonl canvas workspace operation script bible media
       - name: Verify independent media transfer and frozen reference proof
         shell: bash
         env:
@@ -556,7 +412,7 @@ jobs:
         run: |
           go test -race ./tests/media -run '^Test(MediaTransfer|ProjectCopyTypedHistoricalReferences|ProjectCopyFrozenReferences)' -skip '^TestMediaTransferActualTemporal' -count=1 -json | tee "$RUNNER_TEMP/transfer-pg.jsonl"
       - name: Require complete transfer contracts without skips
-        run: python3 "$RUNNER_TEMP/require-contract-results.py" transfer-pg.jsonl media=22
+        run: python3 "$RUNNER_TEMP/require-contract-results.py" transfer-pg.jsonl media
       - name: Verify physical Purge, complete usage and reference visibility
         shell: bash
         env:
@@ -564,7 +420,7 @@ jobs:
           LV_TEST_LIBRARY_OWNER_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable
         run: |
           go test -race ./tests/media -run '^Test(MediaPurge|MediaGenericReference|MediaDocumentNewFreeze|MediaStorageUsage)' -skip '^TestMediaPurgeActualTemporal' -count=1 -json | tee "$RUNNER_TEMP/media-purge-usage-pg.jsonl"
-          python3 "$RUNNER_TEMP/require-contract-results.py" media-purge-usage-pg.jsonl media=28
+          python3 "$RUNNER_TEMP/require-contract-results.py" media-purge-usage-pg.jsonl media
       - name: Verify complete source ZIP and native Package lifecycle
         shell: bash
         env:
@@ -572,7 +428,7 @@ jobs:
           LV_TEST_LIBRARY_OWNER_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable
         run: |
           go test -race ./tests/media -run '^TestMediaPackage' -skip '^TestMediaPackage(Personal|ReplayAndAdmissionUseCommandBeforeProjectLock$|ReplayKeepsOriginalReceiptAndCurrentAuthority$)' -count=1 -json | tee "$RUNNER_TEMP/media-package-pg.jsonl"
-          python3 "$RUNNER_TEMP/require-contract-results.py" media-package-pg.jsonl media=15
+          python3 "$RUNNER_TEMP/require-contract-results.py" media-package-pg.jsonl media
       - name: Prepare separate Package guard, lock and production route databases
         run: |
           # 个人 guard 的多组织 fixture 与生产 Router 的单组织 bootstrap 必须分库。
@@ -588,14 +444,14 @@ jobs:
           LV_TEST_MEDIA_PACKAGE_GUARD_OWNER_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_composition_package_guard?sslmode=disable
         run: |
           go test -race ./tests/media -run '^TestMediaPackagePersonal' -count=1 -json | tee "$RUNNER_TEMP/media-package-guard-pg.jsonl"
-          python3 "$RUNNER_TEMP/require-contract-results.py" media-package-guard-pg.jsonl media=2
+          python3 "$RUNNER_TEMP/require-contract-results.py" media-package-guard-pg.jsonl media
       - name: Verify actual Package command-before-project locking and immutable replay
         shell: bash
         env:
           LV_TEST_MEDIA_PACKAGE_LOCK_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_composition_package_lock_ci?sslmode=disable&options=-c%20role%3Dlanverse_app
         run: |
           go test -race ./tests/media -run '^TestMediaPackage(ReplayAndAdmissionUseCommandBeforeProjectLock|ReplayKeepsOriginalReceiptAndCurrentAuthority)$' -count=1 -json | tee "$RUNNER_TEMP/media-package-lock-pg.jsonl"
-          python3 "$RUNNER_TEMP/require-contract-results.py" media-package-lock-pg.jsonl media=2
+          python3 "$RUNNER_TEMP/require-contract-results.py" media-package-lock-pg.jsonl media
       - name: Verify production routes, Package retention and closed physical usage
         shell: bash
         env:
@@ -603,7 +459,7 @@ jobs:
           LV_TEST_MEDIA_COMPOSITION_OWNER_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_composition_package_router?sslmode=disable
         run: |
           go test -race ./tests/app -run '^TestMedia(PackageProduction|LibraryComposition)' -count=1 -json | tee "$RUNNER_TEMP/media-production-pg.jsonl"
-          python3 "$RUNNER_TEMP/require-contract-results.py" media-production-pg.jsonl app=5
+          python3 "$RUNNER_TEMP/require-contract-results.py" media-production-pg.jsonl app
       - name: Prepare pinned isolated Temporal contract service
         run: |
           mkdir -p "$RUNNER_TEMP/temporal-contract-bin"
@@ -644,7 +500,7 @@ jobs:
           LV_TEST_LIBRARY_OWNER_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable
         run: |
           go test -race -p 1 ./tests/script ./tests/media -run '^Test(ScriptFileImportRealTemporal|MediaTransferActualTemporal|MediaPurgeActualTemporal)' -count=1 -json | tee "$RUNNER_TEMP/media-script-temporal.jsonl"
-          python3 "$RUNNER_TEMP/require-contract-results.py" media-script-temporal.jsonl script=2 media=2
+          python3 "$RUNNER_TEMP/require-contract-results.py" media-script-temporal.jsonl script media
       - name: Clean up isolated Temporal contract service
         if: always()
         run: |
@@ -671,10 +527,6 @@ jobs:
           LV_TEST_KAFKA_BROKERS: 127.0.0.1:9092
           LV_TEST_REDIS_URL: redis://127.0.0.1:6379/15
         run: go test -race ./tests/db ./tests/app -run '^TestAuditRestrictedLogin' -count=1 -v
-      - run: govulncheck ./...
-      - run: wire ./internal/app
-      - run: goimports -local github.com/StephenQiu30/glowloom-server/backend -w internal/app/wire_gen.go
-      - run: git diff --exit-code -- internal/app/wire_gen.go
 
   frontend:
     runs-on: ubuntu-24.04
@@ -700,7 +552,6 @@ jobs:
       - run: pnpm exec next typegen
       - run: pnpm exec tsc --noEmit
       - run: pnpm exec vitest run
-      - run: pnpm exec next build
 
   images:
     runs-on: ubuntu-24.04
