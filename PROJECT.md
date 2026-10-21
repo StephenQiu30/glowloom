@@ -47,6 +47,8 @@
 | 前端实现 | 在 frontend 执行 pnpm exec eslint .、pnpm exec prettier --check .、pnpm exec next typegen、pnpm exec tsc --noEmit、pnpm exec vitest run、pnpm exec next build；交互变化补浏览器验证 |
 | 文档     | Markdown 格式、相对链接与锚点、来源路径、需求/验收对应关系、陈述与源码一致；第三方许可原文保持不变                                                                                  |
 
+默认 CI 仅保留 backend、frontend 两个任务：后端执行静态检查、漏洞检查、Wire 生成一致性和一次 `go test -race -count=1 -v ./...`；前端执行 lint、类型检查、Vitest 和一次 Next.js 构建，并保留两端的测试目录检查。不构建 Docker 镜像，也不启动 PostgreSQL、Redis、Kafka、对象存储或 Temporal。依赖这些外部服务的测试缺少配置时按现有用例跳过；专项集成与功能验收按模块变更在相应环境执行，不属于每次提交的默认门禁，默认 CI 通过也不代表这些专项验收通过。
+
 验证范围与修改风险匹配。文档变更不需要重跑无关业务测试；UI/工程检查、隔离存储、真实邮件、实际数据库迁移和产品接受分别记录。缺少外部条件或未执行的检查不得报告通过。
 
 Go 测试统一放在 `backend/tests/<业务模块>/`，通过模块构造函数、应用接口或真实协议入口验证行为；生产源码目录不放置 `*_test.go`。前端测试统一放在 `frontend/tests/`：单元与组件测试在 `frontend/tests/unit/`，目录与 `src/` 对齐，并通过 `@/` 导入被测模块；浏览器夹具留在 `frontend/tests/browser/`。生产源码目录不放置 `*.test.ts` 或 `*.test.tsx`。迁移测试时保留原有断言，不通过放宽 CI 目录门禁解决布局问题。
