@@ -11,6 +11,7 @@ import (
 
 // CollaborationInput is one immutable, causally ordered atomic batch.
 type CollaborationInput struct {
+	ClientID         uuid.UUID          `json:"client_id,omitempty"`
 	OperationVersion int                `json:"operation_version"`
 	BaseRevision     int64              `json:"base_revision"`
 	Operations       []domain.Operation `json:"operations"`
@@ -53,7 +54,7 @@ func NewCollaborationService(store CollaborationStore) *CollaborationService {
 
 // Submit accepts or durably rejects an immutable batch.
 func (s *CollaborationService) Submit(ctx context.Context, a identity.Principal, id uuid.UUID, key string, input CollaborationInput) (CollaborationReceipt, error) {
-	if !validKey(key) {
+	if !validKey(key) || input.ClientID == uuid.Nil {
 		return CollaborationReceipt{}, domain.ErrInvalidCommand
 	}
 	return s.store.SubmitCollaboration(ctx, a, id, key, input)

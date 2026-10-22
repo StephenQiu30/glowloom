@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -366,7 +368,7 @@ func TestProjectLifecycleBlocksConfirmedQuoteAndRejectsNewAdmission(t *testing.T
 	if _, err := operations.ConfirmSingleQuote(ctx, actor2, operationapp.ConfirmSingleQuoteInput{ProjectID: project2, OperationID: quote2.OperationID, RequestID: uuid.NewString()}); !errors.Is(err, domain.ErrProjectStateConflict) {
 		t.Fatalf("archived quote newly confirmed: %v", err)
 	}
-	if _, err := canvasapp.NewService(workspaceCanvasStore(db, nil)).Create(ctx, actor2, project2, uuid.NewString(), canvasapp.CreateInput{Name: "should reject"}); !errors.Is(err, domain.ErrProjectStateConflict) {
+	if _, err := canvasfixture.NewService(workspaceCanvasStore(db, nil)).Create(ctx, actor2, project2, uuid.NewString(), canvasapp.CreateInput{Name: "should reject"}); !errors.Is(err, domain.ErrProjectStateConflict) {
 		t.Fatalf("archived canvas admission: %v", err)
 	}
 	// Formal tool admission reaches its real project authorizer before source processing.
@@ -443,14 +445,14 @@ func TestProjectLifecycleOperationAndExportAdmissionLocks(t *testing.T) {
 	t.Run("formal export start", func(t *testing.T) {
 		actor, project := lifecycleActorProject(ctx, t, db)
 		canvasStore := workspaceCanvasStore(db, nil)
-		canvas := canvasapp.NewService(canvasStore)
+		canvas := canvasfixture.NewService(canvasStore)
 		doc, err := canvas.Create(ctx, actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "生命周期导出竞态"})
 		if err != nil {
 			t.Fatal(err)
 		}
 		track, node := uuid.New(), uuid.New()
 		config := canvasdomain.TimelineConfig{Version: 1, AspectRatio: "16:9", FPS: 30, Tracks: []canvasdomain.TimelineTrack{{ID: track, Kind: "text", Label: "文本", Visible: true}}, Clips: []canvasdomain.TimelineClip{{ID: uuid.New(), TrackID: track, Kind: "text", Title: "文本", Text: "合成锁证据", DurationMS: 1000, Volume: 1}}, SubtitleStyle: canvasdomain.SubtitleStyle{FontSize: 32, Color: "#ffffff", Position: "bottom"}}
-		saved, err := canvas.Execute(ctx, actor, doc.ID, uuid.NewString(), canvasapp.CommandsInput{ExpectedRevision: doc.Revision, Commands: []canvasdomain.Command{{Type: "AddNodes", Nodes: []canvasdomain.Node{{ID: node, Title: "时间线", NodeType: "timeline", NodeAction: "tool", Config: canvasdomain.NodeConfig{Timeline: &config}}}}}})
+		saved, err := canvas.Edit(ctx, actor, doc.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{{ID: node, Title: "时间线", NodeType: "timeline", NodeAction: "tool", Config: canvasdomain.NodeConfig{Timeline: &config}}}))})
 		if err != nil {
 			t.Fatal(err)
 		}

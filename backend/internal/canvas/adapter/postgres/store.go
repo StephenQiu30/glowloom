@@ -13,8 +13,6 @@ import (
 	"reflect"
 	"time"
 
-	pgprompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/adapter/postgres"
-
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
@@ -55,7 +53,8 @@ func documentProject(tx *gorm.DB, id uuid.UUID) (uuid.UUID, error) {
 func (s *Store) List(ctx context.Context, a identityapp.Principal, p uuid.UUID) ([]domain.Document, error) {
 	items := make([]domain.Document, 0)
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := s.authorize(tx, a, p, false); err != nil {
+		writable, err := s.readAuthority(tx, a, p)
+		if err != nil {
 			return err
 		}
 		presentation, err := s.presentation(tx, a, p)
@@ -63,13 +62,17 @@ func (s *Store) List(ctx context.Context, a identityapp.Principal, p uuid.UUID) 
 			return err
 		}
 		var rows []documentRow
-		if err := tx.Raw(`SELECT id,project_id,name,scope,revision,viewport,operation_version FROM canvas.document WHERE project_id=? AND NOT is_delete ORDER BY update_time DESC,id`, p).Scan(&rows).Error; err != nil {
+		if err := tx.Raw(`SELECT id,project_id,name,scope,revision,viewport,operation_version,schema_version FROM canvas.document WHERE project_id=? AND NOT is_delete ORDER BY update_time DESC,id`, p).Scan(&rows).Error; err != nil {
 			return err
 		}
 		for _, row := range rows {
 			d, err := row.document()
 			if err != nil {
 				return err
+			}
+			d.Writable = writable && d.SchemaVersion == application.SchemaVersion
+			if d.SchemaVersion != application.SchemaVersion {
+				d.ReadOnlyReason = "schema_unsupported"
 			}
 			if d.ID == presentation.MainCanvasID {
 				d.Name = presentation.Name
@@ -94,16 +97,24 @@ func (s *Store) Get(ctx context.Context, a identityapp.Principal, id uuid.UUID) 
 			if err != nil {
 				return err
 			}
-			if err = s.authorize(tx, a, p, false); err != nil {
-				return err
+			writable, accessErr := s.readAuthority(tx, a, p)
+			if accessErr != nil {
+				return accessErr
 			}
 			doc, err = load(tx, id, false)
+			doc.Writable = writable && doc.ReadOnlyReason == ""
 			if err != nil {
 				return err
 			}
 			presentation, err := s.presentation(tx, a, p)
 			if err != nil {
 				return err
+			}
+			if !writable && doc.ReadOnlyReason == "" {
+				doc.ReadOnlyReason = "scope_read_only"
+				if presentation.Status == "archived" {
+					doc.ReadOnlyReason = "project_archived"
+				}
 			}
 			if id == presentation.MainCanvasID {
 				doc.Name = presentation.Name
@@ -112,6 +123,9 @@ func (s *Store) Get(ctx context.Context, a identityapp.Principal, id uuid.UUID) 
 		}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 		var serialization *pgconn.PgError
 		if !errors.As(err, &serialization) || serialization.Code != "40001" {
+			if err == nil {
+				err = application.ValidateSnapshotCapacity(doc)
+			}
 			return doc, err
 		}
 		if err := ctx.Err(); err != nil {
@@ -137,7 +151,7 @@ func (s *Store) Create(ctx context.Context, a identityapp.Principal, p uuid.UUID
 		if err != nil || replayed {
 			return err
 		}
-		doc = domain.Document{ID: uuid.New(), ProjectID: p, Name: input.Name, Scope: input.Scope, Revision: 1, Viewport: domain.Viewport{Zoom: 1}, Nodes: []domain.Node{}, Edges: []domain.Edge{}}
+		doc = domain.Document{SchemaVersion: application.SchemaVersion, OperationVersion: application.OperationVersion, Writable: true, ID: uuid.New(), ProjectID: p, Name: input.Name, Scope: input.Scope, Revision: 1, Viewport: domain.Viewport{Zoom: 1}, Nodes: []domain.Node{}, Edges: []domain.Edge{}}
 		viewport, _ := json.Marshal(doc.Viewport)
 		if err := tx.Exec(`INSERT INTO canvas.document(id,project_id,name,scope,viewport) VALUES (?,?,?,?::jsonb,?::jsonb)`, doc.ID, p, doc.Name, string(doc.Scope), string(viewport)).Error; err != nil {
 			return err
@@ -147,119 +161,14 @@ func (s *Store) Create(ctx context.Context, a identityapp.Principal, p uuid.UUID
 		}
 		return receipt(tx, a.ID, key, hash, 201, doc)
 	})
+	if err == nil {
+		doc.Writable = true
+	}
 	return doc, err
 }
 
-// Execute locks the document, applies the complete batch, and stores one revision and replay response.
-func (s *Store) Execute(ctx context.Context, a identityapp.Principal, id uuid.UUID, key string, input application.CommandsInput) (application.Result, error) {
-	var result application.Result
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		p, err := documentProject(tx, id)
-		if err != nil {
-			return err
-		}
-		if err = s.authorize(tx, a, p, true); err != nil {
-			return err
-		}
-		body, err := json.Marshal(input)
-		if err != nil {
-			return domain.ErrInvalidCommand
-		}
-		hash := requestHash("commands/"+id.String(), body)
-		replayed, err := replaySave(tx, a.ID, id, key, hash, &result)
-		if err != nil || replayed {
-			return err
-		}
-		doc, err := load(tx, id, true)
-		if err != nil {
-			return err
-		}
-		if doc.OperationVersion != 0 {
-			return &domain.OperationError{Code: "operation_version_required"}
-		}
-		if doc.Revision != input.ExpectedRevision {
-			return &application.RevisionConflict{CurrentRevision: doc.Revision}
-		}
-		updated, inputs, err := domain.ApplyWithInputs(doc, input.Commands)
-		if err != nil {
-			return err
-		}
-		if doc.Revision >= math.MaxInt32 {
-			return domain.ErrInvalidCommand
-		}
-		if err := s.checkMediaReferences(ctx, tx, a, p, input.Commands, updated); err != nil {
-			return err
-		}
-
-		for _, node := range updated.Nodes {
-			if domain.IsDraft(node) && node.Config.Draft.Composer != nil {
-				if err := pgprompt.ValidateDraftSources(tx, a, p, *node.Config.Draft.Composer, false); err != nil {
-					return err
-				}
-			}
-		}
-		updated.Revision++
-		if err := saveGraph(tx, doc, updated); err != nil {
-			var collision *identityConflict
-			if errors.As(err, &collision) {
-				for index, command := range input.Commands {
-					for _, node := range command.Nodes {
-						if !collision.Edge && node.ID == collision.ID {
-							return &domain.CommandError{Index: index, Cause: application.ErrNotFound}
-						}
-					}
-					for _, edge := range command.Edges {
-						if collision.Edge && edge.ID == collision.ID {
-							return &domain.CommandError{Index: index, Cause: application.ErrNotFound}
-						}
-					}
-				}
-			}
-			return err
-		}
-		if err := saveInputs(tx, a.ID, inputs); err != nil {
-			return err
-		}
-		presentation, err := s.presentation(tx, a, p)
-		if err != nil {
-			return err
-		}
-		if id == presentation.MainCanvasID {
-			updated.Name = presentation.Name
-			if domain.HasContentChanges(doc, updated) {
-				if err := s.project(tx).MarkProjectContentChanged(ctx, a, p); err != nil {
-					return err
-				}
-			}
-		}
-		commands, err := json.Marshal(input.Commands)
-		if err != nil {
-			return err
-		}
-		if err := tx.Exec(`INSERT INTO canvas.command_log(id,document_id,revision,commands,create_by) VALUES(?,?,?,?::jsonb,?)`, uuid.New(), id, updated.Revision, string(commands), a.ID).Error; err != nil {
-			return err
-		}
-		if err := changed(tx, a, id, p, updated.Revision); err != nil {
-			return err
-		}
-		result = application.Result{Document: updated, Results: make([]application.CommandResult, len(input.Commands))}
-		for i := range result.Results {
-			result.Results[i].OK = true
-		}
-		for _, node := range updated.Nodes {
-			if domain.IsDraft(node) {
-				if err := savedAudit(tx, a, updated, key); err != nil {
-					return err
-				}
-				break
-			}
-		}
-		return recordSave(tx, a.ID, key, hash, result)
-	})
-	return result, err
-}
-
 type documentRow struct {
+	SchemaVersion    int
 	OperationVersion int
 	ID               uuid.UUID
 	ProjectID        uuid.UUID
@@ -270,7 +179,7 @@ type documentRow struct {
 }
 
 func (r documentRow) document() (domain.Document, error) {
-	d := domain.Document{OperationVersion: r.OperationVersion, ID: r.ID, ProjectID: r.ProjectID, Name: r.Name, Scope: json.RawMessage(r.Scope), Revision: r.Revision, Nodes: []domain.Node{}, Edges: []domain.Edge{}}
+	d := domain.Document{SchemaVersion: r.SchemaVersion, OperationVersion: r.OperationVersion, ID: r.ID, ProjectID: r.ProjectID, Name: r.Name, Scope: json.RawMessage(r.Scope), Revision: r.Revision, Nodes: []domain.Node{}, Edges: []domain.Edge{}}
 	if err := json.Unmarshal(r.Viewport, &d.Viewport); err != nil {
 		return domain.Document{}, err
 	}
@@ -285,7 +194,7 @@ func load(tx *gorm.DB, id uuid.UUID, write bool) (domain.Document, error) {
 	if write {
 		lock = " FOR UPDATE"
 	}
-	r := tx.Raw(`SELECT id,project_id,name,scope,revision,viewport,operation_version FROM canvas.document WHERE id=? AND NOT is_delete`+lock, id).Scan(&row)
+	r := tx.Raw(`SELECT id,project_id,name,scope,revision,viewport,operation_version,schema_version FROM canvas.document WHERE id=? AND NOT is_delete`+lock, id).Scan(&row)
 	if r.Error != nil {
 		return domain.Document{}, r.Error
 	}
@@ -297,11 +206,11 @@ func load(tx *gorm.DB, id uuid.UUID, write bool) (domain.Document, error) {
 		return doc, err
 	}
 	var nodes []nodeRow
-	if err := tx.Raw(`SELECT id,title,node_type,node_action,ref_type,ref_id,config,x,y,width,height,parent_id,z_index,last_operation_id,COALESCE(input_revision,0) AS input_revision FROM canvas.node WHERE document_id=? AND NOT is_delete ORDER BY id`, id).Scan(&nodes).Error; err != nil {
+	if err := tx.Raw(`SELECT id,title,node_type,node_action,ref_type,ref_id,config,x,y,width,height,parent_id,z_index,last_operation_id,COALESCE(input_revision,0) AS input_revision,content_version FROM canvas.node WHERE document_id=? AND NOT is_delete ORDER BY id`, id).Scan(&nodes).Error; err != nil {
 		return doc, err
 	}
 	for _, r := range nodes {
-		n := domain.Node{ID: r.ID, InputRevision: r.InputRevision, Title: r.Title, NodeType: r.NodeType, NodeAction: r.NodeAction, X: r.X, Y: r.Y, Width: r.Width, Height: r.Height, RefType: r.RefType, RefID: r.RefID, ParentID: r.ParentID, LastOperationID: r.LastOperationID, ZIndex: r.ZIndex}
+		n := domain.Node{ID: r.ID, ContentVersion: r.ContentVersion, InputRevision: r.InputRevision, Title: r.Title, NodeType: r.NodeType, NodeAction: r.NodeAction, X: r.X, Y: r.Y, Width: r.Width, Height: r.Height, RefType: r.RefType, RefID: r.RefID, ParentID: r.ParentID, LastOperationID: r.LastOperationID, ZIndex: r.ZIndex}
 		if err := json.Unmarshal(r.Config, &n.Config); err != nil {
 			return doc, err
 		}
@@ -310,13 +219,16 @@ func load(tx *gorm.DB, id uuid.UUID, write bool) (domain.Document, error) {
 	if err := tx.Raw(`SELECT id,edge_type,source_node_id,target_node_id,role,binding FROM canvas.edge WHERE document_id=? AND NOT is_delete ORDER BY id`, id).Scan(&doc.Edges).Error; err != nil {
 		return doc, err
 	}
-	if err := domain.ValidateGraph(doc); err != nil {
-		doc.ReadOnlyReason = err.Error()
+	if doc.SchemaVersion != application.SchemaVersion {
+		doc.ReadOnlyReason = "schema_unsupported"
+	} else if err := domain.ValidateGraph(doc); err != nil {
+		doc.ReadOnlyReason = "graph_read_only"
 	}
 	return doc, nil
 }
 
 type nodeRow struct {
+	ContentVersion  int64
 	InputRevision   int64
 	ID              uuid.UUID
 	Title           string
@@ -335,6 +247,12 @@ type nodeRow struct {
 }
 
 func saveGraph(tx *gorm.DB, before, after domain.Document) error {
+	if err := application.ValidateSnapshotCapacity(after); err != nil {
+		return err
+	}
+	if err := domain.ValidateDocumentCapacity(after); err != nil {
+		return err
+	}
 	previousNodes := make(map[uuid.UUID]domain.Node, len(before.Nodes))
 	for _, n := range before.Nodes {
 		previousNodes[n.ID] = n
@@ -372,9 +290,10 @@ func saveGraph(tx *gorm.DB, before, after domain.Document) error {
 		if n.InputRevision > 0 {
 			inputRevision = n.InputRevision
 		}
-		r := tx.Exec(`INSERT INTO canvas.node(id,document_id,title,node_type,node_action,ref_type,ref_id,config,x,y,width,height,parent_id,z_index,input_revision)
- VALUES(?,?,?,?,?,?,?,?::jsonb,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,config=excluded.config,x=excluded.x,y=excluded.y,width=excluded.width,height=excluded.height,parent_id=excluded.parent_id,z_index=excluded.z_index,input_revision=excluded.input_revision,is_delete=false,update_time=now()
- WHERE canvas.node.document_id=excluded.document_id AND canvas.node.node_type=excluded.node_type AND canvas.node.node_action=excluded.node_action AND canvas.node.node_action IN ('resource','tool','generate') AND canvas.node.ref_type IS NOT DISTINCT FROM excluded.ref_type AND canvas.node.ref_id IS NOT DISTINCT FROM excluded.ref_id AND canvas.node.last_operation_id IS NULL`, n.ID, after.ID, n.Title, n.NodeType, n.NodeAction, nullableText(n.RefType), n.RefID, string(config), n.X, n.Y, n.Width, n.Height, n.ParentID, n.ZIndex, inputRevision)
+		previous, existed := previousNodes[n.ID]
+		r := tx.Exec(`INSERT INTO canvas.node(id,document_id,title,node_type,node_action,ref_type,ref_id,config,x,y,width,height,parent_id,z_index,input_revision,content_version)
+ VALUES(?,?,?,?,?,?,?,?::jsonb,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,config=excluded.config,ref_type=excluded.ref_type,ref_id=excluded.ref_id,content_version=excluded.content_version,x=excluded.x,y=excluded.y,width=excluded.width,height=excluded.height,parent_id=excluded.parent_id,z_index=excluded.z_index,input_revision=excluded.input_revision,is_delete=false,update_time=now()
+ WHERE canvas.node.document_id=excluded.document_id AND canvas.node.node_type=excluded.node_type AND canvas.node.node_action=excluded.node_action AND canvas.node.node_action IN ('resource','tool','generate') AND (canvas.node.ref_type IS NOT DISTINCT FROM excluded.ref_type AND canvas.node.ref_id IS NOT DISTINCT FROM excluded.ref_id OR (? AND canvas.node.ref_type IS NOT DISTINCT FROM ? AND canvas.node.ref_id IS NOT DISTINCT FROM ?)) AND canvas.node.last_operation_id IS NULL`, n.ID, after.ID, n.Title, n.NodeType, n.NodeAction, nullableText(n.RefType), n.RefID, string(config), n.X, n.Y, n.Width, n.Height, n.ParentID, n.ZIndex, inputRevision, max(n.ContentVersion, 1), existed, nullableText(previous.RefType), previous.RefID)
 		if r.Error != nil {
 			return r.Error
 		}
@@ -667,7 +586,7 @@ func (s *Store) mutateDocument(ctx context.Context, a identityapp.Principal, id 
 		if doc.Revision != expected {
 			return &application.RevisionConflict{CurrentRevision: doc.Revision}
 		}
-		if doc.Revision >= math.MaxInt32 {
+		if doc.Revision == math.MaxInt64 {
 			return domain.ErrInvalidCommand
 		}
 		doc.Revision++
@@ -683,22 +602,12 @@ func (s *Store) mutateDocument(ctx context.Context, a identityapp.Principal, id 
 			}
 			*result.(*domain.Document) = doc
 		}
-		log, err := json.Marshal([]map[string]any{{"type": kind, "name": name}})
+		log, err := json.Marshal(collaborationLog{System: kind, Name: name, OriginalBase: doc.Revision - 1, OriginalOperations: []domain.Operation{}, Operations: []domain.Operation{}, Effects: []domain.Effect{}, Touches: []domain.FieldChange{}, MediaReferences: []uuid.UUID{}})
 		if err != nil {
 			return err
 		}
-		if doc.OperationVersion == 1 {
-			log, err = json.Marshal(collaborationLog{System: kind, Name: name, OriginalBase: doc.Revision - 1, OriginalOperations: []domain.Operation{}, Operations: []domain.Operation{}, Effects: []domain.Effect{}, Touches: []domain.FieldChange{}, MediaReferences: []uuid.UUID{}})
-			if err != nil {
-				return err
-			}
-			if err := tx.Exec(`INSERT INTO canvas.command_log(id,document_id,revision,commands,create_by,operation_version,op_id,base_revision) VALUES(?,?,?,?::jsonb,?,1,?,?)`, uuid.New(), id, doc.Revision, string(log), a.ID, uuid.New(), doc.Revision-1).Error; err != nil {
-				return err
-			}
-		} else {
-			if err := tx.Exec(`INSERT INTO canvas.command_log(id,document_id,revision,commands,create_by) VALUES(?,?,?,?::jsonb,?)`, uuid.New(), id, doc.Revision, string(log), a.ID).Error; err != nil {
-				return err
-			}
+		if err := tx.Exec(`INSERT INTO canvas.command_log(id,document_id,revision,commands,create_by,operation_version,op_id,base_revision) VALUES(?,?,?,?::jsonb,?,1,?,?)`, uuid.New(), id, doc.Revision, string(log), a.ID, uuid.New(), doc.Revision-1).Error; err != nil {
+			return err
 		}
 		if err := changed(tx, a, id, doc.ProjectID, doc.Revision); err != nil {
 			return err

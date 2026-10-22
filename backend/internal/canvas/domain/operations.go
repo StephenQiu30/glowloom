@@ -16,22 +16,24 @@ import (
 // Operation is the closed collaboration vocabulary. Paths address named fields
 // and stable collection identities, never arbitrary JSON paths or array indices.
 type Operation struct {
-	unknown        map[string]json.RawMessage
-	labelBase      *prompt.LabelState
-	labelOrder     []string
-	Type           string          `json:"type"`
-	NodeID         uuid.UUID       `json:"node_id,omitempty"`
-	Path           []string        `json:"path,omitempty"`
-	Value          json.RawMessage `json:"value,omitempty" swaggertype:"object"`
-	Expected       json.RawMessage `json:"expected,omitempty" swaggertype:"object"`
-	ExpectedExists *bool           `json:"expected_exists,omitempty"`
-	Context        json.RawMessage `json:"context,omitempty" swaggertype:"object"`
-	Unset          bool            `json:"unset,omitempty"`
-	Text           SequenceEdit    `json:"text,omitempty"`
-	ItemID         string          `json:"item_id,omitempty"`
-	BeforeID       string          `json:"before_id,omitempty"`
-	Node           *Node           `json:"node,omitempty"`
-	Edge           *Edge           `json:"edge,omitempty"`
+	unknown          map[string]json.RawMessage
+	labelBase        *prompt.LabelState
+	labelOrder       []string
+	Type             string          `json:"type"`
+	ExpectedMediaRef *MediaRef       `json:"expected_media_ref,omitempty"`
+	NewMediaRef      *MediaRef       `json:"new_media_ref,omitempty"`
+	NodeID           uuid.UUID       `json:"node_id,omitempty"`
+	Path             []string        `json:"path,omitempty"`
+	Value            json.RawMessage `json:"value,omitempty" swaggertype:"object"`
+	Expected         json.RawMessage `json:"expected,omitempty" swaggertype:"object"`
+	ExpectedExists   *bool           `json:"expected_exists,omitempty"`
+	Context          json.RawMessage `json:"context,omitempty" swaggertype:"object"`
+	Unset            bool            `json:"unset,omitempty"`
+	Text             SequenceEdit    `json:"text,omitempty"`
+	ItemID           string          `json:"item_id,omitempty"`
+	BeforeID         string          `json:"before_id,omitempty"`
+	Node             *Node           `json:"node,omitempty"`
+	Edge             *Edge           `json:"edge,omitempty"`
 }
 
 // OperationError classifies a deterministic business rejection.
@@ -349,6 +351,8 @@ func applyOperations(document Document, operations []Operation, final bool) (Ope
 		var change FieldChange
 		var err error
 		switch op.Type {
+		case "replace_media":
+			change, err = replaceMedia(&doc, op)
 		case "migrate_composer":
 			change, err = migrateComposer(&doc, op)
 		case "set", "text":
@@ -451,6 +455,12 @@ func pairOperations(base Document, a, b Operation) (Operation, Operation, error)
 		return a, b, nil
 	}
 	if a.Type == "noop" || b.Type == "noop" || a.NodeID != b.NodeID {
+		return a, b, nil
+	}
+	if a.Type == "replace_media" || b.Type == "replace_media" {
+		if a.Type == b.Type {
+			return a, b, operationError("media_conflict")
+		}
 		return a, b, nil
 	}
 	if structureOperation(a.Type) && b.Type == "restore_item" {

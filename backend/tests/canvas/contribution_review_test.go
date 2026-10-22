@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 
 	"github.com/google/uuid"
@@ -91,7 +93,7 @@ func TestCollaborationStructuralDeletionIntentSurvivesNoop(t *testing.T) {
 				}
 				send := func(base int64, key, undo string, ops ...domain.Operation) application.CollaborationReceipt {
 					t.Helper()
-					r, e := svc.Submit(t.Context(), actor, doc.ID, key, application.CollaborationInput{OperationVersion: 1, BaseRevision: base, UndoOf: undo, Operations: ops})
+					r, e := svc.Submit(t.Context(), actor, doc.ID, key, application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: base, UndoOf: undo, Operations: ops})
 					if e != nil {
 						t.Fatal(e)
 					}
@@ -126,7 +128,7 @@ func TestCollaborationStructuralDeletionIntentSurvivesNoop(t *testing.T) {
 					t.Fatal(r)
 				}
 				undoKey := uuid.NewString()
-				input := application.CollaborationInput{OperationVersion: 1, BaseRevision: 4, UndoOf: key, Operations: nil}
+				input := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 4, UndoOf: key, Operations: nil}
 				if r := send(4, undoKey, key); r.Code != "undo_conflict" || r.Status != "rejected" {
 					t.Fatal("tombstone resurrected", r)
 				}
@@ -150,7 +152,7 @@ func TestCollaborationInsertedRowConsumerRejectsCreateUndo(t *testing.T) {
 	}
 	send := func(base int64, key, undo string, ops ...domain.Operation) application.CollaborationReceipt {
 		t.Helper()
-		r, e := svc.Submit(t.Context(), actor, doc.ID, key, application.CollaborationInput{OperationVersion: 1, BaseRevision: base, UndoOf: undo, Operations: ops})
+		r, e := svc.Submit(t.Context(), actor, doc.ID, key, application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: base, UndoOf: undo, Operations: ops})
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -179,7 +181,7 @@ func TestCollaborationInsertedRowConsumerRejectsCreateUndo(t *testing.T) {
 	if r := send(4, undoKey, key); r.Code != "undo_conflict" {
 		t.Fatal(r)
 	}
-	r, e := application.NewCollaborationService(canvasStore(db)).Resolve(t.Context(), actor, doc.ID, undoKey, application.CollaborationInput{OperationVersion: 1, BaseRevision: 4, UndoOf: key, Operations: nil})
+	r, e := application.NewCollaborationService(canvasStore(db)).Resolve(t.Context(), actor, doc.ID, undoKey, application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 4, UndoOf: key, Operations: nil})
 	if e != nil || r == nil || r.Code != "undo_conflict" {
 		t.Fatal(r, e)
 	}

@@ -731,11 +731,12 @@ CREATE TABLE billing.reservation (
 
 CREATE TABLE canvas.command_log (
     op_id uuid,
-    base_revision integer,
+    client_id uuid,
+    base_revision bigint,
     operation_version integer DEFAULT 0 NOT NULL,
     id uuid NOT NULL,
     document_id uuid NOT NULL,
-    revision integer NOT NULL,
+    revision bigint NOT NULL,
     commands jsonb NOT NULL,
     create_by uuid,
     create_time timestamp with time zone DEFAULT now() NOT NULL,
@@ -748,12 +749,13 @@ CREATE INDEX canvas_operation_tombstones ON canvas.command_log USING gin(command
 CREATE UNIQUE INDEX canvas_operation_identity ON canvas.command_log(document_id,create_by,op_id) WHERE op_id IS NOT NULL;
 
 CREATE TABLE canvas.document (
-    operation_version integer DEFAULT 0 NOT NULL CHECK (operation_version IN (0,1)),
+    schema_version integer DEFAULT 1 NOT NULL CHECK (schema_version > 0),
+    operation_version integer DEFAULT 1 NOT NULL CHECK (operation_version IN (0,1)),
     id uuid NOT NULL,
     project_id uuid NOT NULL,
     name text NOT NULL,
     scope jsonb DEFAULT '{}'::jsonb NOT NULL,
-    revision integer DEFAULT 1 NOT NULL,
+    revision bigint DEFAULT 1 NOT NULL,
     viewport jsonb DEFAULT '{}'::jsonb NOT NULL,
     create_time timestamp with time zone DEFAULT now() NOT NULL,
     update_time timestamp with time zone DEFAULT now() NOT NULL,
@@ -776,6 +778,7 @@ CREATE TABLE canvas.edge (
 );
 
 CREATE TABLE canvas.node (
+    content_version bigint DEFAULT 1 NOT NULL CHECK (content_version > 0),
     id uuid NOT NULL,
     document_id uuid NOT NULL,
     node_type text NOT NULL,
@@ -852,6 +855,32 @@ CREATE TABLE canvas.save_receipt (
     CONSTRAINT save_receipt_response_body_check CHECK ((jsonb_typeof(response_body) = 'object'::text)),
     CONSTRAINT save_receipt_result_revision_check CHECK ((status='accepted' AND result_revision IS NOT NULL AND result_revision>1) OR (status='rejected' AND result_revision IS NULL))
 );
+
+-- Runtime writes may redact only the response payload after project retention
+-- expires. Active accepted/rejected receipts and their request identity are immutable.
+CREATE FUNCTION canvas.guard_save_receipt() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF (SELECT rolsuper FROM pg_roles WHERE rolname=current_user) THEN
+    IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+    RETURN NEW;
+  END IF;
+  IF TG_OP='UPDATE'
+     AND (to_jsonb(NEW)-'response_body')=(to_jsonb(OLD)-'response_body')
+     AND NEW.response_body='{"retention_expired":true}'::jsonb
+     AND EXISTS (
+       SELECT 1 FROM canvas.document d JOIN workspace.project p ON p.id=d.project_id
+       WHERE d.id=OLD.document_id AND p.is_delete AND p.purge_after<=statement_timestamp()
+     ) THEN
+    RETURN NEW;
+  END IF;
+  RAISE EXCEPTION 'canvas save receipts are immutable' USING ERRCODE='42501';
+END $$;
+
+CREATE TRIGGER canvas_save_receipt_immutable BEFORE UPDATE OR DELETE ON canvas.save_receipt
+FOR EACH ROW EXECUTE FUNCTION canvas.guard_save_receipt();
+
 
 CREATE TABLE catalog.capability (
     id uuid NOT NULL,
@@ -6517,6 +6546,6 @@ CREATE INDEX IF NOT EXISTS project_recycle_expiry ON workspace.project(purge_aft
 GRANT SELECT,INSERT,UPDATE ON workspace.project_retention_job TO glowloom_app;
 -- Only the internal retention transaction uses these; media entities and blobs are retained.
 GRANT DELETE ON canvas.edge,canvas.node TO glowloom_app;
-GRANT UPDATE ON canvas.save_receipt TO glowloom_app;
+GRANT UPDATE(response_body) ON canvas.save_receipt TO glowloom_app;
 GRANT DELETE ON workspace.prompt_draft TO glowloom_app;
 GRANT UPDATE ON workspace.prompt_draft_receipt TO glowloom_app;

@@ -1,59 +1,62 @@
 package canvas_test
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
-	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 )
 
-func TestEditorCanvasMetadataUsesOneOwnerAndKeepsInputRevision(t *testing.T) {
+func TestEditorCanvasUsesFiniteTextOperationsAndOneDraftOwner(t *testing.T) {
 	owner := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, p := seedCanvasActor(t, owner)
 	runtime := canvasDB(t, "GLOWLOOM_TEST_CANVAS_M1_RUNTIME_DSN")
-	service := application.NewService(canvasStore(runtime))
+	store := canvasStore(runtime)
+	service := canvasfixture.NewService(store)
 	doc, err := service.Create(t.Context(), actor, p, uuid.NewString(), application.CreateInput{Name: "Rich editor"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	draft, err := promptdomain.DecodeDraft([]byte(`{"schemaVersion":1,"document":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"original"}]}]},"references":[],"modelVersion":null,"mode":null,"params":{},"labelState":{"highWater":{"image":0,"video":0,"audio":0,"subject":0},"allocations":{}}}`))
+	draft, err := prompt.DecodeDraft([]byte(`{"schemaVersion":1,"document":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"original"}]}]},"references":[],"modelVersion":null,"mode":null,"params":{},"labelState":{"highWater":{"image":0,"video":0,"audio":0,"subject":0},"allocations":{}}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	node := draftNode(t, "image_generation")
 	node.Config.Draft = &domain.Draft{Composer: &draft}
-	added, err := service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{node}}}})
+	if _, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Nodes([]domain.Node{node})}); err != nil {
+		t.Fatal(err)
+	}
+	// label allocation is derived by typed reference operations, never an arbitrary config replacement.
+	if _, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{canvasfixture.Field(node.ID, []string{"config", "draft", "composer", "labelState"}, map[string]any{})}}); err == nil {
+		t.Fatal("arbitrary metadata replacement accepted")
+	}
+	// Replace only the text atom, retaining paragraph structure and editor metadata.
+	atoms, err := domain.PromptSequence(draft.Document)
 	if err != nil {
 		t.Fatal(err)
 	}
-	draft.LabelState.HighWater["image"] = 1
-	draft.LabelState.Allocations["removed"] = promptdomain.LabelAllocation{LabelKind: "image", Ordinal: 1}
-	config := domain.NodeConfig{Draft: &domain.Draft{Composer: &draft}}
-	changed, err := service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: added.Revision, Commands: []domain.Command{{Type: "UpdateNodeConfig", ID: node.ID, Config: &config}}})
-	if err != nil {
-		t.Fatal(err)
+	edit := domain.SequenceEdit{{Delete: 8}, {Insert: []domain.Atom{{Type: "text", Text: "edited"}}}}
+	if domain.SequenceLength(atoms) != 8 {
+		t.Fatal("missing paragraph sequence")
 	}
-	if changed.Revision != 3 || changed.Nodes[0].InputRevision != 1 || changed.Nodes[0].Config.Draft.Composer.LabelState.HighWater["image"] != 1 {
-		t.Fatal("metadata revision", changed)
+	updated, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "text", NodeID: node.ID, Path: []string{"config", "draft", "composer", "document"}, Text: edit}}})
+	if err != nil || updated.Revision != 3 || updated.Nodes[0].InputRevision != 2 {
+		t.Fatal(updated, err)
 	}
-	var versions int
-	if err := runtime.Raw(`SELECT count(*) FROM canvas.node_input WHERE node_id=?`, node.ID).Scan(&versions).Error; err != nil || versions != 1 {
-		t.Fatal("metadata created input version", versions, err)
+	var versions, independent int
+	if err := runtime.Raw(`SELECT count(*) FROM canvas.node_input WHERE node_id=?`, node.ID).Scan(&versions).Error; err != nil || versions != 2 {
+		t.Fatal(versions, err)
 	}
-	draft.Document.Content[0].Content[0].Text = "edited"
-	updated, err := service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 3, Commands: []domain.Command{{Type: "UpdateNodeConfig", ID: node.ID, Config: &config}}})
-	if err != nil || updated.Nodes[0].InputRevision != 2 {
-		t.Fatal("input revision", err)
-	}
-	legacy := draftNode(t, "image_generation").Config
-	if _, err := service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 4, Commands: []domain.Command{{Type: "UpdateNodeConfig", ID: node.ID, Config: &legacy}}}); err == nil {
-		t.Fatal("legacy overwrite accepted")
-	}
-	var independent int
 	if err := runtime.Raw(`SELECT count(*) FROM workspace.prompt_draft WHERE project_id=?`, p).Scan(&independent).Error; err != nil || independent != 0 {
-		t.Fatal("second owner", independent, err)
+		t.Fatal(independent, err)
+	}
+	body, _ := json.Marshal(updated.Nodes[0].Config.Draft.Composer.Document)
+	if string(body) == "null" {
+		t.Fatal("editor content lost")
 	}
 }

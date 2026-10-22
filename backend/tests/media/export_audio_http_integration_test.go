@@ -17,6 +17,8 @@ import (
 	"testing"
 	"time"
 
+	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.temporal.io/sdk/activity"
@@ -77,7 +79,7 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 		}
 	})
 	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx), nil) }
-	canvasService := canvasapp.NewService(mediaCanvasStore(db, mediaFactory))
+	canvasService := canvasfixture.NewService(mediaCanvasStore(db, mediaFactory))
 	doc, err := canvasService.Create(t.Context(), actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "Audio export actual fixture"})
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +89,7 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 	config.Clips[0].AssetID, config.Clips[0].DurationMS = &uploaded.Asset.ID, 400
 	config.Clips[0].SourceStartMS, config.Clips[0].FadeInMS, config.Clips[0].FadeOutMS = 100, 100, 100
 	node := canvasdomain.Node{ID: uuid.New(), Title: "Audio timeline", NodeType: "timeline", NodeAction: "tool", Config: canvasdomain.NodeConfig{Timeline: &config}}
-	saved, err := canvasService.Execute(t.Context(), actor, doc.ID, uuid.NewString(), canvasapp.CommandsInput{ExpectedRevision: doc.Revision, Commands: []canvasdomain.Command{{Type: "AddNodes", Nodes: []canvasdomain.Node{node}}}})
+	saved, err := canvasService.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{node}))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +251,7 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 	silentConfig.Tracks[0].Kind, silentConfig.Clips[0].Kind = "video", "video"
 	silentConfig.Clips[0].AssetID = &silentAsset.Asset.ID
 	silentNode := canvasdomain.Node{ID: uuid.New(), Title: "Silent extraction", NodeType: "timeline", NodeAction: "tool", Config: canvasdomain.NodeConfig{Timeline: &silentConfig}}
-	silentSaved, err := canvasService.Execute(t.Context(), actor, doc.ID, uuid.NewString(), canvasapp.CommandsInput{ExpectedRevision: saved.Revision, Commands: []canvasdomain.Command{{Type: "AddNodes", Nodes: []canvasdomain.Node{silentNode}}}})
+	silentSaved, err := canvasService.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: saved.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{silentNode}))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,7 +281,7 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 		cancelConfig.Clips[i] = canvasdomain.TimelineClip{ID: uuid.New(), TrackID: cancelConfig.Tracks[0].ID, Kind: "video", AssetID: &uploaded.Asset.ID, Title: "Cancellation source", StartMS: int64(i) * 600, DurationMS: 600, Volume: 1}
 	}
 	cancelNode := canvasdomain.Node{ID: uuid.New(), Title: "Cancel actual audio", NodeType: "timeline", NodeAction: "tool", Config: canvasdomain.NodeConfig{Timeline: &cancelConfig}}
-	cancelSaved, err := canvasService.Execute(t.Context(), actor, doc.ID, uuid.NewString(), canvasapp.CommandsInput{ExpectedRevision: silentSaved.Revision, Commands: []canvasdomain.Command{{Type: "AddNodes", Nodes: []canvasdomain.Node{cancelNode}}}})
+	cancelSaved, err := canvasService.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: silentSaved.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{cancelNode}))})
 	if err != nil {
 		t.Fatal(err)
 	}

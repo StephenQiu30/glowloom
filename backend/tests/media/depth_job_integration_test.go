@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.temporal.io/sdk/activity"
@@ -199,13 +201,13 @@ func TestDepthJobActualNativeHTTPPrivateReviewCanvas(t *testing.T) {
 		t.Fatal("actual permanent native receipt incomplete")
 	}
 	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx), nil) }
-	service := canvasapp.NewService(mediaCanvasStore(f.db, mediaFactory))
+	service := canvasfixture.NewService(mediaCanvasStore(f.db, mediaFactory))
 	doc, err := service.Get(t.Context(), f.actor, f.input.CanvasID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	node := canvasdomain.Node{ID: uuid.New(), NodeType: "video", NodeAction: "resource", RefType: "media_asset", RefID: rendered.AssetID, Title: "Actual depth"}
-	saved, err := service.Execute(t.Context(), f.actor, doc.ID, uuid.NewString(), canvasapp.CommandsInput{ExpectedRevision: doc.Revision, Commands: []canvasdomain.Command{{Type: "AddNodes", Nodes: []canvasdomain.Node{node}}}})
+	saved, err := service.Edit(t.Context(), f.actor, doc.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{node}))})
 	if err != nil {
 		t.Fatal("actual ready result canvas reference", err)
 	}

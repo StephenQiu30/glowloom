@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -58,14 +60,14 @@ func TestProjectCopyAtomicAdmissionCompleteGraphAndPublication(t *testing.T) {
 	lifecycleFixtureSQL(t, db, `INSERT INTO workspace.style_preset(id,org_id,owner_scope_id,name,style_type,prompt_fragment) VALUES(?,?,?,'组织风格','realistic','组织风格不引用财务')`, orgPreset, actor.OrgID, actor.ScopeID)
 	lifecycleFixtureSQL(t, db, `INSERT INTO workspace.style_preset(id,org_id,owner_scope_id,project_id,name,style_type,prompt_fragment,negative_prompt) VALUES(?,?,?,?,'项目风格','realistic','保持角色','不模糊')`, projectPreset, actor.OrgID, actor.ScopeID, project)
 	lifecycleFixtureSQL(t, db, `UPDATE workspace.project SET style_preset_id=?,description='完整描述',allow_overseas_models=true,default_models='{"image":"configured-image"}',aigc_mark_style='{"preset":"bottom_right","opacity":0.5}' WHERE id=?`, orgPreset, project)
-	canvas := canvasapp.NewService(workspaceCanvasStore(db, nil))
+	canvas := canvasfixture.NewService(workspaceCanvasStore(db, nil))
 	document, err := canvas.Create(ctx, actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "独立画布"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	nodeID := uuid.New()
 	text := "冻结内容"
-	original, err := canvas.Execute(ctx, actor, document.ID, uuid.NewString(), canvasapp.CommandsInput{ExpectedRevision: 1, Commands: []canvasdomain.Command{{Type: "AddNodes", Nodes: []canvasdomain.Node{{ID: nodeID, Title: "剧情", NodeType: "text", NodeAction: "resource", Config: canvasdomain.NodeConfig{Text: &text}}}}}})
+	original, err := canvas.Edit(ctx, actor, document.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{{ID: nodeID, Title: "剧情", NodeType: "text", NodeAction: "resource", Config: canvasdomain.NodeConfig{Text: &text}}}))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +109,7 @@ func TestProjectCopyAtomicAdmissionCompleteGraphAndPublication(t *testing.T) {
 		t.Fatal("empty genuine media set", err)
 	}
 	newText := "源随后编辑"
-	if _, err := canvas.Execute(ctx, actor, document.ID, uuid.NewString(), canvasapp.CommandsInput{ExpectedRevision: 2, Commands: []canvasdomain.Command{{Type: "UpdateNodeConfig", ID: nodeID, Config: &canvasdomain.NodeConfig{Text: &newText}}}}); err != nil {
+	if _, err := canvas.Edit(ctx, actor, document.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.TextSource(nodeID, text, newText))}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := projectCopyStore(db).CompleteCanvases(ctx, actor, job.ID, worker); err != nil {

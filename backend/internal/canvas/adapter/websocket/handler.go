@@ -1,7 +1,8 @@
-// Package websocket carries existing CAS canvas transactions over a live channel.
+// Package websocket carries ordered canvas operations and durable receipts.
 package websocket
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -39,7 +40,7 @@ func NewHandler(service *application.Service, authorize Authorize, origin string
 	return &Handler{service: service, authorize: authorize, origin: origin, watchers: make(map[uuid.UUID]map[chan struct{}]struct{})}
 }
 
-// WithCollaboration enables protocol 2 through an explicitly injected service.
+// WithCollaboration injects the sole editing service for protocol 3.
 func (h *Handler) WithCollaboration(service *application.CollaborationService) *Handler {
 	h.collaboration = service
 	return h
@@ -83,26 +84,30 @@ func (h *Handler) subscribe(id uuid.UUID) (<-chan struct{}, func()) {
 var errReadOnly = errors.New("canvas is currently read-only")
 
 type incoming struct {
-	Type            string          `json:"type"`
-	ProtocolVersion int             `json:"protocol_version"`
-	ScopeID         uuid.UUID       `json:"scope_id"`
-	CSRFToken       string          `json:"csrf_token"`
-	OpID            string          `json:"op_id"`
-	Body            json.RawMessage `json:"body"`
-	LastRevision    int64           `json:"last_revision"`
+	Type            string                `json:"type"`
+	ProtocolVersion int                   `json:"protocol_version"`
+	ClientID        uuid.UUID             `json:"client_id"`
+	ScopeID         uuid.UUID             `json:"scope_id"`
+	CSRFToken       string                `json:"csrf_token"`
+	OpID            string                `json:"op_id"`
+	Body            json.RawMessage       `json:"body"`
+	LastRevision    *application.Revision `json:"last_revision"`
 }
 type packet struct {
-	Type     string                            `json:"type"`
-	ActorID  uuid.UUID                         `json:"actor_id,omitempty"`
-	Receipt  *application.CollaborationReceipt `json:"receipt,omitempty"`
-	Changes  []application.CollaborationChange `json:"changes,omitempty"`
-	Revision int64                             `json:"revision,omitempty"`
-	Writable bool                              `json:"writable"`
-	OpID     string                            `json:"op_id,omitempty"`
-	Status   int                               `json:"status,omitempty"`
-	Code     string                            `json:"code,omitempty"`
-	Document *domain.Document                  `json:"document,omitempty"`
-	Result   *application.Result               `json:"result,omitempty"`
+	Type              string                   `json:"type"`
+	FromRevision      int64                    `json:"from_revision,omitempty,string"`
+	ToRevision        int64                    `json:"to_revision,omitempty,string"`
+	Retryable         bool                     `json:"retryable"`
+	ActorID           uuid.UUID                `json:"actor_id,omitempty"`
+	Receipt           *application.ReceiptDTO  `json:"receipt,omitempty"`
+	Changes           []application.ChangeDTO  `json:"changes,omitempty"`
+	Revision          int64                    `json:"revision,omitempty,string"`
+	Permissions       *application.Permissions `json:"permissions,omitempty"`
+	SupportedVersions []int                    `json:"supported_versions,omitempty"`
+	OpID              string                   `json:"op_id,omitempty"`
+	Status            int                      `json:"status,omitempty"`
+	Code              string                   `json:"code,omitempty"`
+	Document          *application.DocumentDTO `json:"document,omitempty"`
 }
 
 func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
@@ -137,8 +142,10 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 				return
 			}
 			var msg incoming
-			if kind != websocket.MessageText || json.Unmarshal(body, &msg) != nil {
-				return
+			decoder := json.NewDecoder(bytes.NewReader(body))
+			decoder.DisallowUnknownFields()
+			if kind != websocket.MessageText || !json.Valid(body) || decoder.Decode(&msg) != nil {
+				msg.Type = "invalid_message"
 			}
 			if msg.Type == "sync" {
 				select {
@@ -159,7 +166,14 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 	defer func() { cancel(); _ = conn.CloseNow(); <-readerDone }()
 	send := func(p packet) bool {
 		body, err := json.Marshal(p)
-		if err != nil || len(body) > 16<<20 {
+		if err != nil {
+			return false
+		}
+		if len(body) > 16<<20 {
+			body = []byte(`{"type":"error","status":413,"code":"canvas_capacity_exceeded","retryable":false}`)
+			writeCtx, stop := context.WithTimeout(ctx, 5*time.Second)
+			defer stop()
+			_ = conn.Write(writeCtx, websocket.MessageText, body)
 			return false
 		}
 		writeCtx, stop := context.WithTimeout(ctx, 5*time.Second)
@@ -168,7 +182,7 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 	}
 	fail := func(op string, err error) bool {
 		status, code := problem(err)
-		return send(packet{Type: "error", OpID: op, Status: status, Code: code}) && status != 401 && status != 403 && status != 404
+		return send(packet{Type: "error", OpID: op, Status: status, Code: code, Retryable: status == 503}) && status != 401 && status != 403 && status != 404
 	}
 	timer := time.NewTimer(10 * time.Second)
 	defer timer.Stop()
@@ -180,13 +194,21 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 		return
 	case join = <-messages:
 	}
-	if join.Type != "join" || (join.ProtocolVersion != 1 && join.ProtocolVersion != 2 || join.ProtocolVersion == 2 && h.collaboration == nil) || join.ScopeID == uuid.Nil || join.CSRFToken == "" {
+	if join.Type == "invalid_message" {
+		send(packet{Type: "error", Status: 422, Code: "invalid_message"})
+		return
+	}
+	if join.ProtocolVersion != application.ProtocolVersion {
+		send(packet{Type: "error", Status: 422, Code: "unsupported_protocol_version", SupportedVersions: []int{application.ProtocolVersion}})
+		return
+	}
+	if join.Type != "join" || h.collaboration == nil || join.LastRevision == nil || join.ClientID == uuid.Nil || join.ScopeID == uuid.Nil || join.CSRFToken == "" {
 		send(packet{Type: "error", Status: 422, Code: "invalid_join"})
 		return
 	}
 	wake, unsubscribe := h.subscribe(id)
 	defer unsubscribe()
-	revision := join.LastRevision
+	revision := int64(*join.LastRevision)
 	if revision < 0 {
 		return
 	}
@@ -209,11 +231,9 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 			fail("", err)
 			return false
 		}
-		if join.ProtocolVersion == 1 && doc.OperationVersion != 0 {
-			canWrite = false
-		}
 		actorID = actor.ID
-		if join.ProtocolVersion == 2 && revision > 0 {
+		canWrite = canWrite && doc.ReadOnlyReason == "" && doc.SchemaVersion == application.SchemaVersion
+		if revision > 0 {
 			if !syncBlocked && doc.Revision != revision {
 				changes, err := h.collaboration.Changes(opCtx, actor, id, revision)
 				if err != nil {
@@ -226,12 +246,32 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 					if !send(packet{Type: "resync_required", Code: "history_unavailable", Revision: doc.Revision}) {
 						return false
 					}
-				} else if !send(packet{Type: "changes", Revision: doc.Revision, Changes: changes, Writable: canWrite}) {
-					return false
+				} else {
+					// Changes owns its own consistent database head, which may be
+					// newer than Get. Advance only to the last delivered revision.
+					delivered := revision
+					for _, change := range changes {
+						if change.Revision != delivered+1 {
+							fail("", &domain.OperationError{Code: "history_unavailable"})
+							return false
+						}
+						delivered = change.Revision
+					}
+					publicChanges, err := application.Changes(changes)
+					if err != nil {
+						fail("", err)
+						return false
+					}
+					if !send(packet{Type: "changes", FromRevision: revision, ToRevision: delivered, Revision: delivered, Changes: publicChanges, Permissions: &application.Permissions{Read: true, Write: canWrite}}) {
+						return false
+					}
+					doc.Revision = delivered
 				}
 			}
 		} else if force || doc.Revision != revision || canWrite != writable {
-			if !send(packet{Type: "snapshot", Revision: doc.Revision, Document: &doc, Writable: canWrite}) {
+			snapshot := application.Snapshot(doc)
+			snapshot.Permissions.Write = canWrite
+			if !send(packet{Type: "snapshot", Revision: doc.Revision, Document: &snapshot, Permissions: &snapshot.Permissions}) {
 				return false
 			}
 		}
@@ -241,7 +281,7 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 		revision, writable = doc.Revision, canWrite
 		return true
 	}
-	if !syncHead(true) || !send(packet{Type: "ready", Revision: revision, Writable: writable, ActorID: actorID}) {
+	if !syncHead(true) || !send(packet{Type: "ready", Revision: revision, Permissions: &application.Permissions{Read: true, Write: writable}, ActorID: actorID}) {
 		return
 	}
 	tick := time.NewTicker(5 * time.Second)
@@ -265,7 +305,7 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 			if err != nil {
 				return
 			}
-			if !syncHead(false) || !send(packet{Type: "heartbeat", Revision: revision, Writable: writable}) {
+			if !syncHead(false) || !send(packet{Type: "heartbeat", Revision: revision, Permissions: &application.Permissions{Read: true, Write: writable}}) {
 				return
 			}
 		case msg := <-messages:
@@ -275,61 +315,7 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 				}
 				continue
 			}
-			if join.ProtocolVersion == 2 {
-				if !h.processCollaboration(ctx, authorized, id, msg, syncBlocked, send, fail) {
-					return
-				}
-				continue
-			}
-			var legacyBody application.CommandsInput
-			if json.Unmarshal(msg.Body, &legacyBody) != nil {
-				if !fail(msg.OpID, domain.ErrInvalidCommand) {
-					return
-				}
-				continue
-			}
-			opCtx, stop := context.WithTimeout(ctx, 10*time.Second)
-			actor, canWrite, err := authorized(opCtx)
-			var result *application.Result
-			if err == nil {
-				// Always resolve first: a committed save remains confirmable after archive.
-				result, err = h.service.Resolve(opCtx, actor, id, msg.OpID, legacyBody)
-				if err == nil && result == nil && msg.Type == "submit" {
-					if !canWrite {
-						err = errReadOnly
-					} else {
-						var saved application.Result
-						saved, err = h.service.Execute(opCtx, actor, id, msg.OpID, legacyBody)
-						if err == nil {
-							result = &saved
-							h.Notify(id)
-						}
-					}
-				}
-			}
-			stop()
-			if err != nil {
-				if !fail(msg.OpID, err) {
-					return
-				}
-				if errors.Is(err, errReadOnly) && !syncHead(true) {
-					return
-				}
-				continue
-			}
-			// Recheck before sending any private receipt, including durable replays.
-			authCtx, done := context.WithTimeout(ctx, 10*time.Second)
-			_, _, err = authorized(authCtx)
-			done()
-			if err != nil {
-				fail(msg.OpID, err)
-				return
-			}
-			if result == nil {
-				if !send(packet{Type: "not_found", OpID: msg.OpID}) {
-					return
-				}
-			} else if !send(packet{Type: "ack", OpID: msg.OpID, Revision: result.Revision, Result: result, Writable: canWrite}) {
+			if !h.processCollaboration(ctx, authorized, id, msg, syncBlocked || !writable, send, fail) {
 				return
 			}
 		}
@@ -337,10 +323,12 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 }
 
 func problem(err error) (int, string) {
-	var conflict *application.RevisionConflict
 	var rejection *domain.OperationError
 	switch {
 	case errors.As(err, &rejection):
+		if rejection.Code == "canvas_capacity_exceeded" {
+			return 413, rejection.Code
+		}
 		return 409, rejection.Code
 	case errors.Is(err, errReadOnly):
 		return 409, "canvas_read_only"
@@ -352,10 +340,8 @@ func problem(err error) (int, string) {
 		return 403, "forbidden"
 	case errors.Is(err, application.ErrNotFound), errors.Is(err, media.ErrNotFound):
 		return 404, "not_found"
-	case errors.As(err, &conflict):
-		return 409, "revision_conflict"
 	case errors.Is(err, application.ErrIdempotencyConflict):
-		return 409, "idempotency_key_reused"
+		return 409, "op_id_reused"
 	case errors.Is(err, domain.ErrGraphReadOnly):
 		return 422, "canvas_graph_read_only"
 	case errors.Is(err, domain.ErrUnsupportedCommand):

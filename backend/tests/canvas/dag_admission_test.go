@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
@@ -33,13 +35,13 @@ func TestDAGGetRetriesWholeSnapshotAfterConcurrentCommitAndBoundsRetries(t *test
 		t.Run(map[bool]string{false: "one concurrent commit", true: "bounded contention"}[continuous], func(t *testing.T) {
 			db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 			actor, project := seedCanvasActor(t, db)
-			writer := application.NewService(canvasStore(db))
+			writer := canvasfixture.NewService(canvasStore(db))
 			doc, err := writer.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "一致性读取"})
 			if err != nil {
 				t.Fatal(err)
 			}
 			node := resourceNode("text")
-			if _, err := writer.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{node}}}}); err != nil {
+			if _, err := writer.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{node}))}); err != nil {
 				t.Fatal(err)
 			}
 			calls := 0
@@ -48,7 +50,7 @@ func TestDAGGetRetriesWholeSnapshotAfterConcurrentCommitAndBoundsRetries(t *test
 				return saveBeforeReadAuthorization{ProjectAccess: mediawire.NewCanvasProjectAccess(tx), save: func() error {
 					calls++
 					if continuous || calls == 1 {
-						_, err := writer.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: revision, Commands: []domain.Command{{Type: "MoveNodes", Moves: []domain.Move{{ID: node.ID, X: 35}}}}})
+						_, err := writer.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: revision, Operations: canvasfixture.Concat(canvasfixture.Positions([]domain.Move{{ID: node.ID, X: 35}}))})
 						if err != nil {
 							return err
 						}
@@ -76,14 +78,14 @@ func TestDAGReadOnlyGraphCannotAdmitNewExecutionInputs(t *testing.T) {
 			db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 			actor, project := seedCanvasActor(t, db)
 			store := canvasStore(db)
-			service := application.NewService(store)
+			service := canvasfixture.NewService(store)
 			doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "只读图任务门禁"})
 			if err != nil {
 				t.Fatal(err)
 			}
 			timeline, audio := timelineNode(), resourceNode("audio")
 			audio.RefID = ptr(seedCanvasMedia(t, db, project, "audio"))
-			if _, err := service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{timeline, audio}}}}); err != nil {
+			if _, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{timeline, audio}))}); err != nil {
 				t.Fatal(err)
 			}
 			switch kind {

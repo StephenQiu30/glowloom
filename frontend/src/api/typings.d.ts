@@ -109,11 +109,6 @@ declare namespace API {
     expected_split_revision?: number;
   };
 
-  type applyCanvasCommandsParams = {
-    /** 画布UUID */
-    id: string;
-  };
-
   type ApplyConfigInput = {
     preview_hash?: string;
     request_id?: string;
@@ -339,19 +334,6 @@ declare namespace API {
     scope?: Record<string, any>;
   };
 
-  type CanvasDocument = {
-    edges?: Edge[];
-    id?: string;
-    name?: string;
-    nodes?: Node[];
-    operation_version?: number;
-    project_id?: string;
-    read_only_reason?: string;
-    revision?: number;
-    scope?: Record<string, any>;
-    viewport?: Viewport;
-  };
-
   type CanvasDraft = {
     aspect_ratio?: string;
     candidate_count?: number;
@@ -361,7 +343,7 @@ declare namespace API {
   };
 
   type CanvasListResponse = {
-    items?: CanvasDocument[];
+    items?: DocumentDTO[];
     next_cursor?: string;
   };
 
@@ -437,30 +419,6 @@ declare namespace API {
     definition?: CharacterDefinition;
     description?: string;
     name?: string;
-  };
-
-  type Command = {
-    config?: NodeConfig;
-    edges?: Edge[];
-    id?: string;
-    ids?: string[];
-    moves?: Move[];
-    names?: Name[];
-    nodes?: Node[];
-    parents?: Parent[];
-    sizes?: Size[];
-    type?: string;
-    viewport?: Viewport;
-    z_indices?: ZIndex[];
-  };
-
-  type CommandResult = {
-    ok?: boolean;
-  };
-
-  type CommandsInput = {
-    commands?: Command[];
-    expected_revision?: number;
   };
 
   type completeEmailChangeParams = {
@@ -882,8 +840,8 @@ declare namespace API {
     id: string;
   };
 
-  type DeleteInput = {
-    expected_revision?: number;
+  type DeleteDTO = {
+    expected_revision?: string;
   };
 
   type deleteProjectParams = {
@@ -891,10 +849,10 @@ declare namespace API {
     pid: string;
   };
 
-  type DeleteResult = {
+  type DeleteResultDTO = {
     deleted?: boolean;
     id?: string;
-    revision?: number;
+    revision?: string;
   };
 
   type deleteScriptSourceParams = {
@@ -1196,6 +1154,25 @@ declare namespace API {
     id: string;
     /** 凭据UUID */
     credential_id: string;
+  };
+
+  type Document = {
+    content?: Paragraph[];
+    type?: string;
+  };
+
+  type DocumentDTO = {
+    edges?: Edge[];
+    id?: string;
+    name?: string;
+    nodes?: NodeDTO[];
+    operation_version?: number;
+    permissions?: Permissions;
+    project_id?: string;
+    read_only_reason?: string;
+    revision?: string;
+    schema_version?: number;
+    scope?: Record<string, any>;
   };
 
   type downloadDocumentAssetParams = {
@@ -2573,6 +2550,10 @@ declare namespace API {
     sha256?: string;
   };
 
+  type MediaRef = {
+    asset_id?: string;
+  };
+
   type MediatoolCreateInput = {
     canvas_id?: string;
     node_id?: string;
@@ -2719,12 +2700,6 @@ declare namespace API {
 
   type Moderation = "provider" | "platform" | "both";
 
-  type Move = {
-    id?: string;
-    x?: number;
-    y?: number;
-  };
-
   type moveProjectToFolderParams = {
     /** 项目UUID */
     pid: string;
@@ -2739,17 +2714,26 @@ declare namespace API {
     status?: string;
   };
 
-  type Name = {
-    id?: string;
-    title?: string;
+  type NodeConfig = {
+    batch_table?: BatchTableConfig;
+    collapsed?: boolean;
+    director?: DirectorConfig;
+    draft?: CanvasDraft;
+    format?: string;
+    format_version?: number;
+    generation?: GenerationConfig;
+    text?: string;
+    timeline?: TimelineConfig;
   };
 
-  type Node = {
+  type NodeDTO = {
     config?: NodeConfig;
+    content_version?: string;
     height?: number;
     id?: string;
     input_revision?: number;
     last_operation_id?: string;
+    media_ref?: MediaRef;
     node_action?: string;
     node_type?: string;
     parent_id?: string;
@@ -2760,16 +2744,6 @@ declare namespace API {
     x?: number;
     y?: number;
     z_index?: number;
-  };
-
-  type NodeConfig = {
-    batch_table?: BatchTableConfig;
-    collapsed?: boolean;
-    director?: DirectorConfig;
-    draft?: CanvasDraft;
-    generation?: GenerationConfig;
-    text?: string;
-    timeline?: TimelineConfig;
   };
 
   type OperationStatus =
@@ -2846,11 +2820,6 @@ declare namespace API {
     type?: string;
   };
 
-  type Parent = {
-    id?: string;
-    parent_id?: string;
-  };
-
   type PasswordResetCompleteRequest = {
     confirm_password: string;
     password: string;
@@ -2859,6 +2828,11 @@ declare namespace API {
 
   type PasswordResetStartRequest = {
     email: string;
+  };
+
+  type Permissions = {
+    read?: boolean;
+    write?: boolean;
   };
 
   type PersonalUploadResult = {
@@ -3405,13 +3379,8 @@ declare namespace API {
     style_preset_id?: string;
   };
 
-  type PromptDocument = {
-    content?: Paragraph[];
-    type?: string;
-  };
-
   type PromptDraft = {
-    document?: PromptDocument;
+    document?: Document;
     labelState?: LabelState;
     mode?: string;
     modelVersion?: string;
@@ -3834,8 +3803,8 @@ declare namespace API {
     id: string;
   };
 
-  type RenameInput = {
-    expected_revision?: number;
+  type RenameDTO = {
+    expected_revision?: string;
     name?: string;
   };
 
@@ -3930,20 +3899,6 @@ declare namespace API {
   type restoreTeamParams = {
     /** Team ID */
     id: string;
-  };
-
-  type Result = {
-    edges?: Edge[];
-    id?: string;
-    name?: string;
-    nodes?: Node[];
-    operation_version?: number;
-    project_id?: string;
-    read_only_reason?: string;
-    results?: CommandResult[];
-    revision?: number;
-    scope?: Record<string, any>;
-    viewport?: Viewport;
   };
 
   type ResultRequest = {
@@ -4191,12 +4146,6 @@ declare namespace API {
     reason?: string;
     registration_enabled?: boolean;
     team_creation_enabled?: boolean;
-  };
-
-  type Size = {
-    height?: number;
-    id?: string;
-    width?: number;
   };
 
   type Source = {
@@ -5268,12 +5217,6 @@ declare namespace API {
     text?: string;
   };
 
-  type Viewport = {
-    x?: number;
-    y?: number;
-    zoom?: number;
-  };
-
   type VoiceChoice = {
     display_name?: string;
     model_key?: string;
@@ -5341,10 +5284,5 @@ declare namespace API {
     current_actor_id?: string;
     current_org_id?: string;
     state?: ProjectState;
-  };
-
-  type ZIndex = {
-    id?: string;
-    z_index?: number;
   };
 }

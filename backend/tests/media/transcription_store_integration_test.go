@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -44,13 +46,13 @@ func transcriptionStoreWithScope(db *gorm.DB, scopes pgmedia.ScopeAccessFactory)
 func transcriptionNode(t *testing.T, db *gorm.DB, actor identityapp.Principal, project, asset uuid.UUID, kind string) toolapp.TranscriptionCreateInput {
 	t.Helper()
 	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx), nil) }
-	service := canvasapp.NewService(mediaCanvasStore(db, mediaFactory))
+	service := canvasfixture.NewService(mediaCanvasStore(db, mediaFactory))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "Actual speech source"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	node := canvasdomain.Node{ID: uuid.New(), NodeType: kind, NodeAction: "resource", Title: "Speech source", RefType: "media_asset", RefID: &asset}
-	saved, err := service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), canvasapp.CommandsInput{ExpectedRevision: doc.Revision, Commands: []canvasdomain.Command{{Type: "AddNodes", Nodes: []canvasdomain.Node{node}}}})
+	saved, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{node}))})
 	if err != nil {
 		t.Fatal(err)
 	}

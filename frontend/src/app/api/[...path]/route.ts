@@ -492,15 +492,11 @@ async function proxy(
       : undefined) ??
     (/^sessions\/[0-9a-f-]{36}$/i.test(resource)
       ? ["DELETE"]
-      : /^canvases\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/commands$/i.test(
+      : /^(projects|canvases)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
             resource,
           )
-        ? ["POST"]
-        : /^(projects|canvases)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-              resource,
-            )
-          ? ["GET"]
-          : undefined);
+        ? ["GET"]
+        : undefined);
   if (!methods)
     return Response.json(
       { code: "not_found" },

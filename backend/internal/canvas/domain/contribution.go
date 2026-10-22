@@ -242,7 +242,7 @@ func UndoContribution(floor Document, history []ContributionBatch, target string
 	for _, row := range history[targetIndex+1:] {
 		for _, touch := range row.Touches {
 			for _, op := range inverse {
-				if op.Type == "set" && touch.NodeID == op.NodeID && operationsOverlap(op, Operation{Type: "set", Path: touch.Path}) {
+				if touch.NodeID == op.NodeID && (op.Type == "set" && operationsOverlap(op, Operation{Type: "set", Path: touch.Path}) || op.Type == "replace_media" && slices.Equal(touch.Path, []string{"media_ref"})) {
 					return nil, operationError("undo_conflict")
 				}
 			}

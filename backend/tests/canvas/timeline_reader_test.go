@@ -1,8 +1,11 @@
 package canvas_test
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
+
+	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -17,7 +20,7 @@ func TestTimelineReaderFreezesOwnedMediaAndRejectsStaleRevision(t *testing.T) {
 	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
 	store := canvasStore(database)
-	service := application.NewService(store)
+	service := canvasfixture.NewService(store)
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "导出冻结输入"})
 	if err != nil {
 		t.Fatal(err)
@@ -28,7 +31,7 @@ func TestTimelineReaderFreezesOwnedMediaAndRejectsStaleRevision(t *testing.T) {
 	timeline.Config.Timeline.Tracks[0].Kind = "image"
 	timeline.Config.Timeline.Clips[0].Kind = "image"
 	timeline.Config.Timeline.Clips[0].NodeID = &image.ID
-	result, err := service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: doc.Revision, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{image, timeline}}}})
+	result, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{image, timeline}))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,15 +63,22 @@ func TestTimelineReaderFreezesOwnedMediaAndRejectsStaleRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	timeline.Config.Timeline.Clips[0].Crop = &domain.TimelineCrop{X: 200, Y: 0, Width: 100, Height: 100}
-	result, err = service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: result.Revision, Commands: []domain.Command{{Type: "UpdateNodeConfig", ID: timeline.ID, Config: &timeline.Config}}})
+	result, err = service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: result.Revision, Operations: canvasfixture.Concat(timelineCropOperations(timeline))})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := reader.FreezeTimeline(t.Context(), actor, project, doc.ID, timeline.ID, result.Revision); !errors.Is(err, domain.ErrInvalidCommand) {
 		t.Fatalf("crop outside actual media dimensions accepted: %v", err)
 	}
+	oldCrop := *timeline.Config.Timeline.Clips[0].Crop
 	timeline.Config.Timeline.Clips[0].Crop.X = 100
-	result, err = service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: result.Revision, Commands: []domain.Command{{Type: "UpdateNodeConfig", ID: timeline.ID, Config: &timeline.Config}}})
+	result, err = service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: result.Revision, Operations: func() []domain.Operation {
+		ops := timelineCropOperations(timeline)
+		yes := true
+		ops[0].ExpectedExists = &yes
+		ops[0].Expected, _ = json.Marshal(map[string]any{"crop": oldCrop})
+		return ops
+	}()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,4 +117,13 @@ func TestTimelineReaderFreezesOwnedMediaAndRejectsStaleRevision(t *testing.T) {
 	if err == nil {
 		t.Fatal("unreviewed media accepted for export")
 	}
+}
+
+func timelineCropOperations(node domain.Node) []domain.Operation {
+	clip := node.Config.Timeline.Clips[0]
+	op := canvasfixture.Field(node.ID, []string{"config", "timeline", "clips", "@" + clip.ID.String(), "crop"}, map[string]any{"crop": clip.Crop})
+	op.Context, _ = json.Marshal(map[string]any{"node_id": clip.NodeID, "asset_id": clip.AssetID})
+	absent := false
+	op.ExpectedExists = &absent
+	return []domain.Operation{op}
 }

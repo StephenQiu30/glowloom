@@ -116,40 +116,22 @@ it("project rename permits PATCH only on an exact project UUID and retains its k
   expect(response.status).toBe(200);
   expect(fetcher.mock.calls[0][1].headers.get("Idempotency-Key")).toBe(key);
 });
-it("画布命令限定UUID和POST，透传同一请求正文与幂等键", async () => {
-  const fetcher = vi.fn().mockResolvedValue(new Response('{"revision":2}'));
+it("旧画布HTTP编辑入口被拒绝且不请求后端", async () => {
+  const fetcher = vi.fn();
   vi.stubGlobal("fetch", fetcher);
-  const path = "canvases/00000000-0000-4000-8000-000000000001/commands";
-  const body = '{"expected_revision":1,"commands":[]}';
-  const response = await POST(
-    new Request(`http://localhost/api/${path}`, {
-      method: "POST",
-      headers: { "Idempotency-Key": "00000000-0000-4000-8000-000000000002" },
-      body,
-    }),
-    context(path),
-  );
-  expect(response.status).toBe(200);
-  const [url, init] = fetcher.mock.calls[0];
-  expect(url.pathname).toBe(`/api/${path}`);
-  expect(new TextDecoder().decode(init.body)).toBe(body);
-  expect(init.headers.get("Idempotency-Key")).toBe(
-    "00000000-0000-4000-8000-000000000002",
-  );
-  fetcher.mockClear();
-  expect(
-    (await GET(new Request(`http://localhost/api/${path}`), context(path)))
-      .status,
-  ).toBe(405);
-  const invalid = "canvases/wrong/commands";
-  expect(
-    (
-      await POST(
-        new Request(`http://localhost/api/${invalid}`, { method: "POST" }),
-        context(invalid),
-      )
-    ).status,
-  ).toBe(404);
+  for (const path of [
+    "canvases/00000000-0000-4000-8000-000000000001/commands",
+    "canvases/wrong/commands",
+  ]) {
+    const response = await POST(
+      new Request(`http://localhost/api/${path}`, {
+        method: "POST",
+        body: '{"expected_revision":1,"commands":[]}',
+      }),
+      context(path),
+    );
+    expect(response.status).toBe(404);
+  }
   expect(fetcher).not.toHaveBeenCalled();
 });
 it("认证代理拒绝非注册资源且不发出上游请求", async () => {

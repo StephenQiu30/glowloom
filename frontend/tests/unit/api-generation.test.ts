@@ -71,6 +71,19 @@ it("所有 API 都可从 Swagger 重现，禁止手改、遗漏或额外接口�
         "utf8",
       ),
     );
+    const canvasDocument =
+      schema.definitions[
+        "github_com_StephenQiu30_glowloom-server_backend_internal_canvas_application.DocumentDTO"
+      ];
+    expect(canvasDocument.properties.revision.type).toBe("string");
+    expect(canvasDocument.properties.read_only_reason["x-nullable"]).toBe(true);
+    expect(canvasDocument.properties.schema_version.type).toBe("integer");
+    const canvasNode =
+      schema.definitions[
+        "github_com_StephenQiu30_glowloom-server_backend_internal_canvas_application.NodeDTO"
+      ];
+    expect(canvasNode.properties.content_version.type).toBe("string");
+    expect(canvasNode.properties.parent_id["x-nullable"]).toBe(true);
     for (const action of ["refresh", "upgrade"]) {
       const operation = schema.paths[`/api/session/${action}`].post;
       expect(operation.operationId).toBe(`${action}Session`);

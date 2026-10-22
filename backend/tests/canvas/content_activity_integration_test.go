@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
@@ -13,7 +15,7 @@ import (
 func TestContentActivityTracksPrimaryContentWithoutProjectCAS(t *testing.T) {
 	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, db)
-	service := application.NewService(canvasStore(db))
+	service := canvasfixture.NewService(canvasStore(db))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "主画布"})
 	if err != nil {
 		t.Fatal(err)
@@ -25,9 +27,9 @@ func TestContentActivityTracksPrimaryContentWithoutProjectCAS(t *testing.T) {
 	if err := db.Exec(`INSERT INTO workspace.project_activity(project_id,modified_at,basis) VALUES(?,?,'created')`, project, old).Error; err != nil {
 		t.Fatal(err)
 	}
-	view, err := service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{{Type: "SetViewport", Viewport: &domain.Viewport{X: 10, Y: 20, Zoom: 1}}}})
-	if err != nil {
-		t.Fatal(err)
+	_, err = service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat([]domain.Operation{{Type: "set_viewport"}})})
+	if !operationRejected(err, "invalid_operation") {
+		t.Fatal("viewport entered shared graph", err)
 	}
 	var activity struct {
 		ModifiedAt time.Time
@@ -45,9 +47,9 @@ func TestContentActivityTracksPrimaryContentWithoutProjectCAS(t *testing.T) {
 		t.Fatal("viewport changed recent content", activity)
 	}
 	text := "实际保存的中文"
-	input := application.CommandsInput{ExpectedRevision: view.Revision, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{{ID: uuid.New(), Title: "文字", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: &text}}}}}}
+	input := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{{ID: uuid.New(), Title: "文字", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: &text}}}))}
 	key := uuid.NewString()
-	if _, err := service.Execute(t.Context(), actor, doc.ID, key, input); err != nil {
+	if _, err := service.Edit(t.Context(), actor, doc.ID, key, input); err != nil {
 		t.Fatal(err)
 	}
 	read()
@@ -55,7 +57,7 @@ func TestContentActivityTracksPrimaryContentWithoutProjectCAS(t *testing.T) {
 		t.Fatalf("content activity/CAS: %+v", activity)
 	}
 	timestamp := activity.ModifiedAt
-	if _, err := service.Execute(t.Context(), actor, doc.ID, key, input); err != nil {
+	if _, err := service.Edit(t.Context(), actor, doc.ID, key, input); err != nil {
 		t.Fatal(err)
 	}
 	read()

@@ -41,9 +41,9 @@ func TestMainCanvasProjectsCurrentNameAndRejectsDirectMutation(t *testing.T) {
 	api.Use(func(c *gin.Context) { c.Set("principal", actor); c.Next() })
 	canvashttp.NewHandler(service).Register(api)
 	for _, method := range []string{"PATCH", "DELETE"} {
-		body := `{"name":"非法旁路","expected_revision":1}`
+		body := `{"name":"非法旁路","expected_revision":"1"}`
 		if method == "DELETE" {
-			body = `{"expected_revision":1}`
+			body = `{"expected_revision":"1"}`
 		}
 		request := httptest.NewRequestWithContext(t.Context(), method, "/api/canvases/"+doc.ID.String(), strings.NewReader(body))
 		request.Header.Set("Content-Type", "application/json")

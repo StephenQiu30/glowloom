@@ -41,18 +41,19 @@ func SocketAuthority(db *gorm.DB, auth *identityhttp.EmailAuthHandler) canvasliv
 			if found.RowsAffected != 1 {
 				return canvasapp.ErrNotFound
 			}
-			if _, err = scopewire.ProvideProjectContentAccess(tx).Authorize(ctx, actor, row.ProjectID, false); err != nil {
-				return socketScopeError(err)
-			}
+			// Request the strongest project lock first. Taking SHARE and then
+			// upgrading to UPDATE deadlocks with concurrent project writers.
 			_, err = scopewire.ProvideProjectContentAccess(tx).Authorize(ctx, actor, row.ProjectID, true)
-			if errors.Is(err, workspace.ErrScopeNotFound) || errors.Is(err, workspacedomain.ErrProjectStateConflict) || errors.Is(err, identity.ErrForbidden) {
+			if err == nil {
+				writable = true
 				return nil
 			}
-			if err != nil {
+			if !errors.Is(err, workspace.ErrScopeNotFound) && !errors.Is(err, workspacedomain.ErrProjectStateConflict) && !errors.Is(err, identity.ErrForbidden) {
 				return socketScopeError(err)
 			}
-			writable = true
-			return nil
+			// Archived/read-only access still needs its own positive read check.
+			_, err = scopewire.ProvideProjectContentAccess(tx).Authorize(ctx, actor, row.ProjectID, false)
+			return socketScopeError(err)
 		})
 		return actor, writable, err
 	}

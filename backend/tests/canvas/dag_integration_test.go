@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 
+	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
@@ -15,7 +17,7 @@ import (
 func TestDAGPersistenceCompleteBatchReloadCleanupAndReplay(t *testing.T) {
 	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, db)
-	service := application.NewService(canvasStore(db))
+	service := canvasfixture.NewService(canvasStore(db))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "DAG持久化"})
 	if err != nil {
 		t.Fatal(err)
@@ -34,16 +36,13 @@ func TestDAGPersistenceCompleteBatchReloadCleanupAndReplay(t *testing.T) {
 	clip := &timeline.Config.Timeline.Clips[0]
 	clip.Kind, clip.Text, clip.NodeID = "image", "", &image.ID
 	key := uuid.NewString()
-	input := application.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{
-		{Type: "AddNodes", Nodes: []domain.Node{batch, director, timeline}},
-		{Type: "AddNodes", Nodes: []domain.Node{image}},
-	}}
-	saved, err := service.Execute(t.Context(), actor, doc.ID, key, input)
+	input := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{batch, director, timeline}), canvasfixture.Nodes([]domain.Node{image}))}
+	saved, err := service.Edit(t.Context(), actor, doc.ID, key, input)
 	if err != nil || saved.Revision != 2 {
 		t.Fatal("valid final graph failed to persist", err)
 	}
-	fresh := application.NewService(canvasStore(db))
-	again, err := fresh.Execute(t.Context(), actor, doc.ID, key, input)
+	fresh := canvasfixture.NewService(canvasStore(db))
+	again, err := fresh.Edit(t.Context(), actor, doc.ID, key, input)
 	if err != nil || again.Revision != 2 || len(again.Nodes) != 4 {
 		t.Fatal("durable replay", err)
 	}
@@ -52,11 +51,8 @@ func TestDAGPersistenceCompleteBatchReloadCleanupAndReplay(t *testing.T) {
 		t.Fatal("reload", err)
 	}
 	failedKey := uuid.NewString()
-	_, err = fresh.Execute(t.Context(), actor, doc.ID, failedKey, application.CommandsInput{ExpectedRevision: 2, Commands: []domain.Command{
-		{Type: "MoveNodes", Moves: []domain.Move{{ID: batch.ID, X: 90}}},
-		{Type: "Connect", Edges: []domain.Edge{{ID: uuid.New(), EdgeType: "annotation", SourceNodeID: image.ID, TargetNodeID: uuid.New()}}},
-	}})
-	if !errors.Is(err, domain.ErrInvalidCommand) {
+	_, err = fresh.Edit(t.Context(), actor, doc.ID, failedKey, application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.Positions([]domain.Move{{ID: batch.ID, X: 90}}), canvasfixture.Edges([]domain.Edge{{ID: uuid.New(), EdgeType: "annotation", SourceNodeID: image.ID, TargetNodeID: uuid.New()}}))})
+	if !operationRejected(err, "invalid_operation", "invalid_graph") {
 		t.Fatal("invalid endpoint accepted", err)
 	}
 	loaded, err = fresh.Get(t.Context(), actor, doc.ID)
@@ -69,14 +65,14 @@ func TestDAGPersistenceCompleteBatchReloadCleanupAndReplay(t *testing.T) {
 		}
 	}
 	deleteKey := uuid.NewString()
-	deletion := application.CommandsInput{ExpectedRevision: 2, Commands: []domain.Command{{Type: "DeleteNodes", IDs: []uuid.UUID{image.ID}}}}
-	if _, err := fresh.Execute(t.Context(), actor, doc.ID, deleteKey, deletion); err != nil {
+	deletion := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.Deletes([]uuid.UUID{image.ID}))}
+	if _, err := fresh.Edit(t.Context(), actor, doc.ID, deleteKey, deletion); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fresh.Execute(t.Context(), actor, doc.ID, deleteKey, deletion); err != nil {
+	if _, err := fresh.Edit(t.Context(), actor, doc.ID, deleteKey, deletion); err != nil {
 		t.Fatal("delete replay", err)
 	}
-	loaded, err = application.NewService(canvasStore(db)).Get(t.Context(), actor, doc.ID)
+	loaded, err = canvasfixture.NewService(canvasStore(db)).Get(t.Context(), actor, doc.ID)
 	if err != nil || loaded.Revision != 3 || len(loaded.Nodes) != 3 {
 		t.Fatal("delete reload", err)
 	}
@@ -110,7 +106,7 @@ func TestDAGPersistenceCompleteBatchReloadCleanupAndReplay(t *testing.T) {
 	if err := db.Raw(`SELECT count(*) FROM operation.operation WHERE project_id=?`, project).Scan(&operations).Error; err != nil {
 		t.Fatal(err)
 	}
-	if assets != 1 || logs != 2 || receipts != 2 || operations != 0 {
+	if assets != 1 || logs != 2 || receipts != 3 || operations != 0 {
 		t.Fatalf("unexpected side effects asset=%d log=%d receipt=%d operation=%d", assets, logs, receipts, operations)
 	}
 }
@@ -120,13 +116,13 @@ func TestDAGPersistenceUnknownHistoryRemainsReadableAndReadOnly(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 			actor, project := seedCanvasActor(t, db)
-			service := application.NewService(canvasStore(db))
+			service := canvasfixture.NewService(canvasStore(db))
 			doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "旧图保护"})
 			if err != nil {
 				t.Fatal(err)
 			}
 			a, b := resourceNode("text"), batchNode(nil)
-			_, err = service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{a, b}}}})
+			_, err = service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{a, b}))})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -184,23 +180,13 @@ func TestDAGPersistenceUnknownHistoryRemainsReadableAndReadOnly(t *testing.T) {
 			if read.Code != 200 {
 				t.Fatal("read-only graph GET failed", read.Code)
 			}
-			body, err := json.Marshal(application.CommandsInput{ExpectedRevision: 2, Commands: []domain.Command{{Type: "MoveNodes", Moves: []domain.Move{{ID: a.ID, X: 55}}}}})
-			if err != nil {
-				t.Fatal(err)
-			}
-			response := directorOutputRequest(t.Context(), t, router, "POST", "/api/canvases/"+doc.ID.String()+"/commands", uuid.NewString(), body)
-			var problem struct {
-				Code string `json:"code"`
-			}
-			if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil {
-				t.Fatal(err)
-			}
-			if response.Code != 422 || problem.Code != "canvas_graph_read_only" {
-				t.Fatalf("read-only API problem %d %s", response.Code, response.Body.String())
+			rejection, err := application.NewCollaborationService(canvasStore(db)).Submit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "set", NodeID: a.ID, Path: []string{"position"}, Value: json.RawMessage(`{"x":55,"y":0}`)}}})
+			if err != nil || rejection.Status != "rejected" || rejection.Code != "canvas_graph_read_only" {
+				t.Fatalf("read-only graph operation: %+v %v", rejection, err)
 			}
 			key := uuid.NewString()
-			_, err = service.Execute(t.Context(), actor, doc.ID, key, application.CommandsInput{ExpectedRevision: 2, Commands: []domain.Command{{Type: "MoveNodes", Moves: []domain.Move{{ID: a.ID, X: 55}}}}})
-			if !errors.Is(err, domain.ErrGraphReadOnly) {
+			_, err = service.Edit(t.Context(), actor, doc.ID, key, application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.Positions([]domain.Move{{ID: a.ID, X: 55}}))})
+			if !operationRejected(err, "canvas_graph_read_only") {
 				t.Fatal("legacy graph write accepted", err)
 			}
 			var revision int64
@@ -211,7 +197,7 @@ func TestDAGPersistenceUnknownHistoryRemainsReadableAndReadOnly(t *testing.T) {
 			if err := db.Raw(`SELECT count(*) FROM canvas.save_receipt WHERE actor_id=? AND idem_key=?`, actor.ID, key).Scan(&receipts).Error; err != nil {
 				t.Fatal(err)
 			}
-			if revision != 2 || receipts != 0 {
+			if revision != 2 || receipts != 1 {
 				t.Fatal("read-only graph mutated", revision, receipts)
 			}
 		})
@@ -221,13 +207,13 @@ func TestDAGPersistenceUnknownHistoryRemainsReadableAndReadOnly(t *testing.T) {
 func TestDAGPersistenceConcurrentDuplicateAnnotationHasSingleWinner(t *testing.T) {
 	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, db)
-	service := application.NewService(canvasStore(db))
+	service := canvasfixture.NewService(canvasStore(db))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "并发图"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	a, b := resourceNode("text"), resourceNode("text")
-	if _, err := service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{a, b}}}}); err != nil {
+	if _, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{a, b}))}); err != nil {
 		t.Fatal(err)
 	}
 	start := make(chan struct{})
@@ -236,7 +222,7 @@ func TestDAGPersistenceConcurrentDuplicateAnnotationHasSingleWinner(t *testing.T
 	for range 2 {
 		wg.Go(func() {
 			<-start
-			_, err := service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 2, Commands: []domain.Command{{Type: "Connect", Edges: []domain.Edge{{ID: uuid.New(), EdgeType: "annotation", SourceNodeID: a.ID, TargetNodeID: b.ID}}}}})
+			_, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.Edges([]domain.Edge{{ID: uuid.New(), EdgeType: "annotation", SourceNodeID: a.ID, TargetNodeID: b.ID}}))})
 			result <- err
 		})
 	}
@@ -245,11 +231,11 @@ func TestDAGPersistenceConcurrentDuplicateAnnotationHasSingleWinner(t *testing.T
 	close(result)
 	wins, conflicts := 0, 0
 	for err := range result {
-		var conflict *application.RevisionConflict
+		var conflict *domain.OperationError
 		switch {
 		case err == nil:
 			wins++
-		case errors.As(err, &conflict):
+		case errors.As(err, &conflict) && conflict.Code == "invalid_operation":
 			conflicts++
 		default:
 			t.Fatal(err)

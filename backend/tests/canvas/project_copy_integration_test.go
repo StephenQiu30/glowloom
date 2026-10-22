@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -19,14 +21,14 @@ import (
 func TestProjectCopyCanvasPersistsFrozenGraphsAndHidesTarget(t *testing.T) {
 	database := canvasDB(t, "GLOWLOOM_TEST_PROJECT_COPY_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
-	service := application.NewService(canvasStore(database))
+	service := canvasfixture.NewService(canvasStore(database))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "复制源画布"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	node := resourceNode("text")
 	node.Config.Text = ptr("冻结的内容")
-	if _, err := service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{node}}}}); err != nil {
+	if _, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{node}))}); err != nil {
 		t.Fatal(err)
 	}
 	binding := application.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: uuid.New()}
@@ -44,7 +46,7 @@ func TestProjectCopyCanvasPersistsFrozenGraphsAndHidesTarget(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 2, Commands: []domain.Command{{Type: "UpdateNodeConfig", ID: node.ID, Config: &domain.NodeConfig{Text: ptr("源随后被编辑")}}}}); err != nil {
+	if _, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.TextSource(node.ID, *node.Config.Text, "源随后被编辑"))}); err != nil {
 		t.Fatal(err)
 	}
 	// No referenced media exists in this text-only graph; the reader remains an
@@ -107,7 +109,7 @@ func TestProjectCopyCanvasPersistsFrozenGraphsAndHidesTarget(t *testing.T) {
 	if err := database.Exec(`UPDATE workspace.project SET status='active' WHERE id=?`, binding.TargetProjectID).Error; err != nil {
 		t.Fatal(err)
 	}
-	fresh, err := application.NewService(canvasStore(database)).Get(t.Context(), actor, target.ID)
+	fresh, err := canvasfixture.NewService(canvasStore(database)).Get(t.Context(), actor, target.ID)
 	if err != nil || fresh.Revision != 1 || len(fresh.Nodes) != 1 || *fresh.Nodes[0].Config.Text != "冻结的内容" || fresh.Nodes[0].ID == node.ID {
 		t.Fatal("copied frozen graph not independently refreshable", fresh, err)
 	}
@@ -116,7 +118,7 @@ func TestProjectCopyCanvasPersistsFrozenGraphsAndHidesTarget(t *testing.T) {
 func TestProjectCopyCanvasRejectsUnknownConfigWithoutPartialSnapshot(t *testing.T) {
 	database := canvasDB(t, "GLOWLOOM_TEST_PROJECT_COPY_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
-	doc, err := application.NewService(canvasStore(database)).Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "未知来源配置"})
+	doc, err := canvasfixture.NewService(canvasStore(database)).Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "未知来源配置"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,9 +1,10 @@
-// Package http exposes resource canvas commands without business-generation capabilities.
+// Package http exposes authorized canvas snapshots and lifecycle actions.
 package http
 
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -30,8 +31,8 @@ func (h *Handler) WithNotification(notify func(uuid.UUID)) *Handler { h.notify =
 
 // ListResponse is the document-summary collection contract.
 type ListResponse struct {
-	Items      []domain.Document `json:"items"`
-	NextCursor *string           `json:"next_cursor"`
+	Items      []application.DocumentDTO `json:"items"`
+	NextCursor *string                   `json:"next_cursor"`
 }
 
 // Register installs the scoped endpoints in an workspace route group.
@@ -41,7 +42,6 @@ func (h *Handler) Register(group *gin.RouterGroup) {
 	group.GET("/canvases/:id", h.Get)
 	group.PATCH("/canvases/:id", h.Rename)
 	group.DELETE("/canvases/:id", h.Delete)
-	group.POST("/canvases/:id/commands", h.Commands)
 }
 
 // List reads canvas summaries.
@@ -66,7 +66,11 @@ func (h *Handler) List(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, ListResponse{Items: docs})
+	items := make([]application.DocumentDTO, 0, len(docs))
+	for _, doc := range docs {
+		items = append(items, application.Snapshot(doc))
+	}
+	c.JSON(200, ListResponse{Items: items})
 }
 
 // Create creates an empty project canvas.
@@ -78,7 +82,7 @@ func (h *Handler) List(c *gin.Context) {
 // @Param pid path string true "项目UUID"
 // @Param Idempotency-Key header string true "UUID"
 // @Param body body application.CreateInput true "画布名称与空scope"
-// @Success 201 {object} domain.Document
+// @Success 201 {object} application.DocumentDTO
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
 // @Failure 422 {object} httpapi.Problem
@@ -98,7 +102,7 @@ func (h *Handler) Create(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(201, doc)
+	c.JSON(201, application.Snapshot(doc))
 }
 
 // Get returns the current document graph.
@@ -107,7 +111,7 @@ func (h *Handler) Create(c *gin.Context) {
 // @Tags canvases
 // @Produce json
 // @Param id path string true "画布UUID"
-// @Success 200 {object} domain.Document
+// @Success 200 {object} application.DocumentDTO
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
 // @Failure 422 {object} httpapi.Problem
@@ -123,61 +127,27 @@ func (h *Handler) Get(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(200, doc)
+	c.JSON(200, application.Snapshot(doc))
 }
 
-// Commands atomically applies resource, layout, annotation and viewport edits.
-// @Summary 提交画布命令批次
-// @ID applyCanvasCommands
-// @Accept json
-// @Tags canvases
-// @Produce json
-// @Param id path string true "画布UUID"
-// @Param Idempotency-Key header string true "UUID"
-// @Param body body application.CommandsInput true "乐观版本与命令"
-// @Success 200 {object} application.Result
-// @Failure 403 {object} httpapi.Problem
-// @Failure 404 {object} httpapi.Problem
-// @Failure 409 {object} httpapi.Problem
-// @Failure 413 {object} httpapi.Problem
-// @Failure 422 {object} httpapi.Problem
-// @Failure 503 {object} httpapi.Problem
-// @Router /api/canvases/{id}/commands [post]
-func (h *Handler) Commands(c *gin.Context) {
-	id, ok := httpapi.PathUUID(c, "id")
-	if !ok {
-		return
-	}
-	var input application.CommandsInput
-	if !httpapi.Decode(c, &input) {
-		return
-	}
-	result, err := h.service.Execute(c.Request.Context(), identityhttp.Principal(c), id, c.GetHeader("Idempotency-Key"), input)
-	if err != nil {
-		writeError(c, err)
-		return
-	}
-	if h.notify != nil {
-		h.notify(id)
-	}
-	c.JSON(200, result)
-}
 func writeError(c *gin.Context, err error) {
 	var conflict *application.RevisionConflict
-	var commandError *domain.CommandError
-	var meta map[string]any
-	if errors.As(err, &commandError) {
-		meta = map[string]any{"command_index": commandError.Index}
-	}
+	var operationError *domain.OperationError
 	switch {
+	case errors.As(err, &operationError):
+		status := http.StatusConflict
+		if operationError.Code == "canvas_capacity_exceeded" {
+			status = http.StatusRequestEntityTooLarge
+		}
+		httpapi.WriteProblem(c, status, operationError.Code, nil)
 	case errors.Is(err, application.ErrMainCanvasManagedByProject):
 		httpapi.WriteProblem(c, 409, "main_canvas_managed_by_project", nil)
 	case errors.Is(err, application.ErrMainCanvasRequired):
 		httpapi.WriteProblem(c, 409, "main_canvas_required", nil)
 	case errors.As(err, &conflict):
-		httpapi.WriteProblem(c, http.StatusConflict, "revision_conflict", map[string]any{"current_revision": conflict.CurrentRevision})
+		httpapi.WriteProblem(c, http.StatusConflict, "revision_conflict", map[string]any{"current_revision": strconv.FormatInt(conflict.CurrentRevision, 10)})
 	case errors.Is(err, application.ErrNotFound), errors.Is(err, mediaapp.ErrNotFound):
-		httpapi.WriteProblem(c, 404, "not_found", meta)
+		httpapi.WriteProblem(c, 404, "not_found", nil)
 	case errors.Is(err, identityapp.ErrSessionInvalid):
 		httpapi.WriteProblem(c, http.StatusUnauthorized, "session_invalid", nil)
 	case errors.Is(err, identityapp.ErrForbidden):
@@ -185,11 +155,11 @@ func writeError(c *gin.Context, err error) {
 	case errors.Is(err, application.ErrIdempotencyConflict):
 		httpapi.WriteProblem(c, 409, "idempotency_key_reused", nil)
 	case errors.Is(err, domain.ErrGraphReadOnly):
-		httpapi.WriteProblem(c, 422, "canvas_graph_read_only", meta)
+		httpapi.WriteProblem(c, 422, "canvas_graph_read_only", nil)
 	case errors.Is(err, domain.ErrUnsupportedCommand):
-		httpapi.WriteProblem(c, 422, "unsupported_command", meta)
+		httpapi.WriteProblem(c, 422, "unsupported_command", nil)
 	case errors.Is(err, domain.ErrInvalidCommand):
-		httpapi.WriteProblem(c, 422, "invalid_request", meta)
+		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 	default:
 		httpapi.WriteProblem(c, 503, "dependency_unavailable", nil)
 	}
@@ -203,8 +173,8 @@ func writeError(c *gin.Context, err error) {
 // @Produce json
 // @Param id path string true "画布UUID"
 // @Param Idempotency-Key header string true "UUID"
-// @Param body body application.RenameInput true "当前修订与名称"
-// @Success 200 {object} domain.Document
+// @Param body body application.RenameDTO true "当前修订与名称"
+// @Success 200 {object} application.DocumentDTO
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
 // @Failure 409 {object} httpapi.Problem
@@ -216,11 +186,11 @@ func (h *Handler) Rename(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var input application.RenameInput
+	var input application.RenameDTO
 	if !httpapi.Decode(c, &input) {
 		return
 	}
-	result, err := h.service.Rename(c.Request.Context(), identityhttp.Principal(c), id, c.GetHeader("Idempotency-Key"), input)
+	result, err := h.service.Rename(c.Request.Context(), identityhttp.Principal(c), id, c.GetHeader("Idempotency-Key"), application.RenameInput{ExpectedRevision: int64(input.ExpectedRevision), Name: input.Name})
 	if err != nil {
 		writeError(c, err)
 		return
@@ -228,7 +198,7 @@ func (h *Handler) Rename(c *gin.Context) {
 	if h.notify != nil {
 		h.notify(id)
 	}
-	c.JSON(200, result)
+	c.JSON(200, application.Snapshot(result))
 }
 
 // Delete removes the canvas, retaining referenced media facts.
@@ -239,8 +209,8 @@ func (h *Handler) Rename(c *gin.Context) {
 // @Produce json
 // @Param id path string true "画布UUID"
 // @Param Idempotency-Key header string true "UUID"
-// @Param body body application.DeleteInput true "当前修订"
-// @Success 200 {object} application.DeleteResult
+// @Param body body application.DeleteDTO true "当前修订"
+// @Success 200 {object} application.DeleteResultDTO
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
 // @Failure 409 {object} httpapi.Problem
@@ -252,11 +222,11 @@ func (h *Handler) Delete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var input application.DeleteInput
+	var input application.DeleteDTO
 	if !httpapi.Decode(c, &input) {
 		return
 	}
-	result, err := h.service.Delete(c.Request.Context(), identityhttp.Principal(c), id, c.GetHeader("Idempotency-Key"), input)
+	result, err := h.service.Delete(c.Request.Context(), identityhttp.Principal(c), id, c.GetHeader("Idempotency-Key"), application.DeleteInput{ExpectedRevision: int64(input.ExpectedRevision)})
 	if err != nil {
 		writeError(c, err)
 		return
@@ -264,5 +234,5 @@ func (h *Handler) Delete(c *gin.Context) {
 	if h.notify != nil {
 		h.notify(id)
 	}
-	c.JSON(200, result)
+	c.JSON(200, application.DeleteResultDTO{ID: result.ID, Revision: application.Revision(result.Revision), Deleted: result.Deleted})
 }

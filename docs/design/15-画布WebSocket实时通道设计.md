@@ -36,6 +36,8 @@
 
 protocol_version用于报文兼容，operation_version用于操作语义，schema_version用于快照结构，三者分别校验。不支持的版本返回明确错误及受支持版本，不能降级为不安全的旧保存入口。各版本值在实现契约中统一注册；本文示例版本1是目标规范版本，不表示与现有版本1或2可直接兼容。上线须完成显式协商与切换测试。
 
+本次报文合同采用protocol_version=3、operation_version=1、schema_version=1，三个常量集中定义；join必须显式携带client_id和字符串last_revision。协议1、2不再接收编辑，unsupported_protocol_version返回supported_versions=[3]及retryable=false。新协议仅允许按原body查证已存在的旧OT回执（旧body不含client_id、revision为数字），不执行旧请求；client_id不作为账号或权限凭据。HTTP画布快照及生命周期revision同步使用十进制字符串，持久历史的内部表示不因传输升级重写。
+
 首次授权成功并完成同步后才可编辑。每次提交和投递私有变化前重新核对权限；归档变为只读，撤权停止新推送。授权结果不得在长连接内永久缓存。撤权后已被合法接收的数据无法由服务端收回，但后续私有消息不能继续发送。
 
 ### 7.2 消息合同
@@ -68,9 +70,10 @@ protocol_version用于报文兼容，operation_version用于操作语义，schem
     "base_revision": "12",
     "operations": [
       {
-        "type": "set_node_fields",
+        "type": "set",
         "node_id": "33333333-3333-4333-8333-333333333333",
-        "fields": { "position": { "x": 160, "y": 100 } }
+        "path": ["position"],
+        "value": { "x": 160, "y": 100 }
       }
     ]
   }
@@ -121,7 +124,7 @@ protocol_version用于报文兼容，operation_version用于操作语义，schem
 
 ### 7.6 背压与资源边界
 
-建议每连接上行消息不超过1MiB，本页待确认操作序列化总量不超过1MiB；服务端下行队列按条数及字节双限额，超限断开并要求补齐。快照超出消息预算时返回明确容量错误，不截断节点或静默漏发。图容量和消息预算必须一起测量，不允许“2000节点合法但永远无法加载”的组合。
+建议每连接上行消息不超过1MiB，本页待确认操作序列化总量不超过1MiB；服务端下行队列按条数及字节双限额，超限断开并要求补齐。完整文档JSON上限8MiB、下行单消息上限16MiB，与设计14的提交准入使用同一字节口径。快照超出预算时返回canvas_capacity_exceeded，不截断节点或静默漏发。图容量和消息预算必须一起验证，不允许“2000节点合法但永远无法加载”的组合。
 
 提交、join、授权、数据库操作均有独立超时与取消；关闭页面或切换文档释放连接、计时器和订阅。超时后结果仍可能未知，按原请求查证。日志仅含关联ID、revision和错误类别。
 

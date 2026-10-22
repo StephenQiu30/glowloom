@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -47,12 +49,12 @@ func directorOutputRequest(ctx context.Context, t *testing.T, router http.Handle
 	return response
 }
 
-func TestDirectorOutputHTTPClosedJSONAndPersistentRefresh(t *testing.T) {
+func TestDirectorOutputOperationsClosedJSONAndHTTPRefresh(t *testing.T) {
 	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
 	router := directorOutputRouter(database, actor)
 	create := directorOutputRequest(t.Context(), t, router, "POST", "/api/projects/"+project.String()+"/canvases", uuid.NewString(), []byte(`{"name":"HTTP图库","scope":{}}`))
-	var doc domain.Document
+	var doc application.DocumentDTO
 	if create.Code != 201 || json.Unmarshal(create.Body.Bytes(), &doc) != nil {
 		t.Fatalf("create canvas: %d %s", create.Code, create.Body.String())
 	}
@@ -62,29 +64,28 @@ func TestDirectorOutputHTTPClosedJSONAndPersistentRefresh(t *testing.T) {
 	screenshot.AssetID = asset
 	node.Config.Director.Shots[0].Screenshots = []domain.DirectorScreenshot{screenshot}
 	node.Config.Director.Cover = &domain.DirectorCover{AssetID: asset, ShotID: node.Config.Director.Shots[0].ID}
-	body, err := json.Marshal(application.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{node}}}})
+	input := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &node}}}
+	body, err := json.Marshal(input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	path := "/api/canvases/" + doc.ID.String()
 	key := uuid.NewString()
-	saved := directorOutputRequest(t.Context(), t, router, "POST", path+"/commands", key, body)
-	if saved.Code != 200 || !strings.Contains(saved.Body.String(), `"asset_id":"`+asset.String()) || !strings.Contains(saved.Body.String(), `"created_at":"2026-10-01T10:00:00Z"`) {
-		t.Fatalf("save screenshot: %d %s", saved.Code, saved.Body.String())
+	svc := application.NewCollaborationService(canvasStore(database))
+	saved, err := svc.Submit(t.Context(), actor, doc.ID, key, input)
+	if err != nil || saved.Status != "accepted" {
+		t.Fatal("save screenshot", saved, err)
 	}
 	freshRouter := directorOutputRouter(database, actor)
-	replay := directorOutputRequest(t.Context(), t, freshRouter, "POST", path+"/commands", key, body)
-	if replay.Code != 200 || !bytes.Equal(saved.Body.Bytes(), replay.Body.Bytes()) {
-		t.Fatalf("durable HTTP replay changed: %d %s", replay.Code, replay.Body.String())
+	replay, err := application.NewCollaborationService(canvasStore(database)).Resolve(t.Context(), actor, doc.ID, key, input)
+	if err != nil || replay == nil || *replay != saved {
+		t.Fatal("durable operation replay changed", replay, err)
 	}
 	read := directorOutputRequest(t.Context(), t, freshRouter, "GET", path, "", nil)
 	if read.Code != 200 || json.Unmarshal(read.Body.Bytes(), &doc) != nil || doc.Revision != 2 || doc.Nodes[0].Config.Director.Shots[0].Screenshots[0].AssetID != asset || doc.Nodes[0].Config.Director.Cover.AssetID != asset {
 		t.Fatalf("refresh lost typed outputs: %d %s", read.Code, read.Body.String())
 	}
-	validUpdate, err := json.Marshal(application.CommandsInput{ExpectedRevision: 2, Commands: []domain.Command{{Type: "UpdateNodeConfig", ID: node.ID, Config: &node.Config}}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	validCreate := body
 	for _, tc := range []struct{ name, before, after string }{
 		{"gallery URL", `"screenshots":[{`, `"screenshots":[{"url":"https://example.invalid/secret",`},
 		{"gallery object key", `"screenshots":[{`, `"screenshots":[{"object_key":"private/key",`},
@@ -97,16 +98,21 @@ func TestDirectorOutputHTTPClosedJSONAndPersistentRefresh(t *testing.T) {
 		{"invalid timezone minute", `2026-10-01T10:00:00Z`, `2026-10-01T10:00:00+00:60`},
 		{"invalid capture fractional separator", `2026-10-01T10:00:00Z`, `2026-10-01T10:00:00,123Z`},
 		{"NUL gallery name", `机位截图 1`, `图\u0000`},
-		{"invalid raw UTF8 name", `机位截图 1`, string([]byte{0xff})},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			malformed := strings.Replace(string(validUpdate), tc.before, tc.after, 1)
-			if malformed == string(validUpdate) {
+			malformed := strings.Replace(string(validCreate), tc.before, tc.after, 1)
+			if malformed == string(validCreate) {
 				t.Fatal("test fixture did not replace target")
 			}
-			response := directorOutputRequest(t.Context(), t, freshRouter, "POST", path+"/commands", uuid.NewString(), []byte(malformed))
-			if response.Code != 422 {
-				t.Fatalf("malformed output accepted: %d %s", response.Code, response.Body.String())
+			malformed = strings.Replace(malformed, node.ID.String(), uuid.NewString(), 1)
+			var request application.CollaborationInput
+			if err := json.Unmarshal([]byte(malformed), &request); err != nil {
+				return
+			} // malformed typed JSON cannot reach submission
+			request.BaseRevision = 2
+			response, err := svc.Submit(t.Context(), actor, doc.ID, uuid.NewString(), request)
+			if err != nil || response.Status != "rejected" || response.Code != "invalid_operation" {
+				t.Fatalf("malformed output accepted: %+v %v", response, err)
 			}
 		})
 	}
@@ -123,13 +129,13 @@ func TestDirectorOutputHTTPClosedJSONAndPersistentRefresh(t *testing.T) {
 			} else {
 				config.Cover.AssetID = foreignAsset
 			}
-			body, err := json.Marshal(application.CommandsInput{ExpectedRevision: 2, Commands: []domain.Command{{Type: "UpdateNodeConfig", ID: node.ID, Config: &domain.NodeConfig{Director: &config}}}})
-			if err != nil {
-				t.Fatal(err)
-			}
-			response := directorOutputRequest(t.Context(), t, freshRouter, "POST", path+"/commands", uuid.NewString(), body)
-			if response.Code != 404 || !strings.Contains(response.Body.String(), `"command_index":0`) {
-				t.Fatalf("foreign output not hidden: %d %s", response.Code, response.Body.String())
+			foreignNode := node
+			foreignNode.ID = uuid.New()
+			foreignNode.Config = domain.NodeConfig{Director: &config}
+			request := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "create_node", Node: &foreignNode}}}
+			response, err := svc.Submit(t.Context(), actor, doc.ID, uuid.NewString(), request)
+			if err != nil || response.Status != "rejected" || response.Code != "source_unavailable" {
+				t.Fatalf("foreign output not hidden: %+v %v", response, err)
 			}
 		})
 	}

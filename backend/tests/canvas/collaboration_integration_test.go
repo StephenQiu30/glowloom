@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
@@ -14,7 +16,7 @@ func TestCollaborationPersistsTransformsAndTerminalRejections(t *testing.T) {
 	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, p := seedCanvasActor(t, db)
 	store := canvasStore(db)
-	legacy := application.NewService(store)
+	legacy := canvasfixture.NewService(store)
 	svc := application.NewCollaborationService(store)
 	doc, err := legacy.Create(t.Context(), actor, p, uuid.NewString(), application.CreateInput{Name: "OT"})
 	if err != nil {
@@ -22,12 +24,12 @@ func TestCollaborationPersistsTransformsAndTerminalRejections(t *testing.T) {
 	}
 	n := resourceNode("text")
 	n.Config.Text = ptr("AB")
-	created, err := svc.Submit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}}})
+	created, err := svc.Submit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}}})
 	if err != nil || created.Status != "accepted" {
 		t.Fatal(created, err)
 	}
-	a := application.CollaborationInput{OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "text", NodeID: n.ID, Path: []string{"config", "text"}, Text: domain.SequenceEdit{{Insert: []domain.Atom{{Type: "text", Text: "X"}}}}}}}
-	b := application.CollaborationInput{OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "text", NodeID: n.ID, Path: []string{"config", "text"}, Text: domain.SequenceEdit{{Retain: 1}, {Delete: 1}}}}}
+	a := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "text", NodeID: n.ID, Path: []string{"config", "text"}, Text: domain.SequenceEdit{{Insert: []domain.Atom{{Type: "text", Text: "X"}}}}}}}
+	b := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "text", NodeID: n.ID, Path: []string{"config", "text"}, Text: domain.SequenceEdit{{Retain: 1}, {Delete: 1}}}}}
 	ar, err := svc.Submit(t.Context(), actor, doc.ID, uuid.NewString(), a)
 	if err != nil || ar.Status != "accepted" {
 		t.Fatal(ar, err)
@@ -64,16 +66,13 @@ func TestCollaborationPersistsTransformsAndTerminalRejections(t *testing.T) {
 	if err != nil || len(changes) != 2 || changes[0].Revision != 3 || changes[1].Revision != 4 {
 		t.Fatal(changes, err)
 	}
-	if _, err = legacy.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 4, Commands: []domain.Command{{Type: "RenameNodes", Names: []domain.Name{{ID: n.ID, Title: "old"}}}}}); err == nil {
-		t.Fatal("legacy write bypassed OT mode")
-	}
 }
 
 func TestCollaborationHistoryGapAndDeletedIdentityStayTerminal(t *testing.T) {
 	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, p := seedCanvasActor(t, db)
 	store := canvasStore(db)
-	legacy := application.NewService(store)
+	legacy := canvasfixture.NewService(store)
 	svc := application.NewCollaborationService(store)
 	doc, err := legacy.Create(t.Context(), actor, p, uuid.NewString(), application.CreateInput{Name: "OT tombstones"})
 	if err != nil {
@@ -82,7 +81,7 @@ func TestCollaborationHistoryGapAndDeletedIdentityStayTerminal(t *testing.T) {
 	n := resourceNode("text")
 	submit := func(base int64, ops ...domain.Operation) application.CollaborationReceipt {
 		t.Helper()
-		r, err := svc.Submit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{OperationVersion: 1, BaseRevision: base, Operations: ops})
+		r, err := svc.Submit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: base, Operations: ops})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -106,7 +105,7 @@ func TestCollaborationHistoryGapAndDeletedIdentityStayTerminal(t *testing.T) {
 	if err := db.Exec(`DELETE FROM canvas.command_log WHERE document_id=? AND revision=3`, doc.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	input := application.CollaborationInput{OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "delete_node", NodeID: n.ID}}}
+	input := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "delete_node", NodeID: n.ID}}}
 	key := uuid.NewString()
 	r, err := svc.Submit(t.Context(), actor, doc.ID, key, input)
 	if err != nil || r.Code != "history_unavailable" {
@@ -125,18 +124,18 @@ func TestCollaborationUndoKeepsOthersAndRejectsOverlappingDeletion(t *testing.T)
 			actor, p := seedCanvasActor(t, db)
 			store := canvasStore(db)
 			svc := application.NewCollaborationService(store)
-			doc, err := application.NewService(store).Create(t.Context(), actor, p, uuid.NewString(), application.CreateInput{Name: "contribution undo"})
+			doc, err := canvasfixture.NewService(store).Create(t.Context(), actor, p, uuid.NewString(), application.CreateInput{Name: "contribution undo"})
 			if err != nil {
 				t.Fatal(err)
 			}
 			n := resourceNode("text")
 			n.Config.Text = ptr("ABCDE")
-			create := application.CollaborationInput{OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}}}
+			create := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}}}
 			if r, err := svc.Submit(t.Context(), actor, doc.ID, uuid.NewString(), create); err != nil || r.Status != "accepted" {
 				t.Fatal(r, err)
 			}
 			target := uuid.NewString()
-			input := application.CollaborationInput{OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "text", NodeID: n.ID, Path: []string{"config", "text"}, Text: domain.SequenceEdit{{Retain: 1}, {Delete: 2}}}}}
+			input := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "text", NodeID: n.ID, Path: []string{"config", "text"}, Text: domain.SequenceEdit{{Retain: 1}, {Delete: 2}}}}}
 			if r, err := svc.Submit(t.Context(), actor, doc.ID, target, input); err != nil || r.Status != "accepted" {
 				t.Fatal(r, err)
 			}
@@ -148,7 +147,7 @@ func TestCollaborationUndoKeepsOthersAndRejectsOverlappingDeletion(t *testing.T)
 			if r, err := svc.Submit(t.Context(), actor, doc.ID, uuid.NewString(), input); err != nil || r.Status != "accepted" {
 				t.Fatal(r, err)
 			}
-			undo := application.CollaborationInput{OperationVersion: 1, BaseRevision: 4, UndoOf: target, Operations: []domain.Operation{}}
+			undo := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 4, UndoOf: target, Operations: []domain.Operation{}}
 			r, err := svc.Submit(t.Context(), actor, doc.ID, uuid.NewString(), undo)
 			if err != nil {
 				t.Fatal(err)
@@ -161,7 +160,7 @@ func TestCollaborationUndoKeepsOthersAndRejectsOverlappingDeletion(t *testing.T)
 				if r.Status != "accepted" {
 					t.Fatal("independent deletion made undo unavailable", r)
 				}
-				current, err := application.NewService(store).Get(t.Context(), actor, doc.ID)
+				current, err := canvasfixture.NewService(store).Get(t.Context(), actor, doc.ID)
 				if err != nil || *current.Nodes[0].Config.Text != "ABCE" {
 					t.Fatal("undo erased the other contribution", current, err)
 				}
@@ -175,7 +174,7 @@ func TestCollaborationUndoRestoresNodeRelationsAndStableCollections(t *testing.T
 	actor, p := seedCanvasActor(t, db)
 	store := canvasStore(db)
 	svc := application.NewCollaborationService(store)
-	doc, err := application.NewService(store).Create(t.Context(), actor, p, uuid.NewString(), application.CreateInput{Name: "structural undo"})
+	doc, err := canvasfixture.NewService(store).Create(t.Context(), actor, p, uuid.NewString(), application.CreateInput{Name: "structural undo"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +184,7 @@ func TestCollaborationUndoRestoresNodeRelationsAndStableCollections(t *testing.T
 	table := batchNode(nil)
 	submit := func(base int64, key string, ops []domain.Operation, undo string) application.CollaborationReceipt {
 		t.Helper()
-		r, err := svc.Submit(t.Context(), actor, doc.ID, key, application.CollaborationInput{OperationVersion: 1, BaseRevision: base, Operations: ops, UndoOf: undo})
+		r, err := svc.Submit(t.Context(), actor, doc.ID, key, application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: base, Operations: ops, UndoOf: undo})
 		if err != nil || r.Status != "accepted" {
 			t.Fatal(r, err)
 		}
@@ -196,7 +195,7 @@ func TestCollaborationUndoRestoresNodeRelationsAndStableCollections(t *testing.T
 	submit(2, deletion, []domain.Operation{{Type: "delete_node", NodeID: group.ID}}, "")
 	submit(3, uuid.NewString(), []domain.Operation{{Type: "set", NodeID: child.ID, Path: []string{"title"}, Value: raw(`"another title"`)}}, "")
 	submit(4, uuid.NewString(), []domain.Operation{}, deletion)
-	current, err := application.NewService(store).Get(t.Context(), actor, doc.ID)
+	current, err := canvasfixture.NewService(store).Get(t.Context(), actor, doc.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +209,7 @@ func TestCollaborationUndoRestoresNodeRelationsAndStableCollections(t *testing.T
 	insert := uuid.NewString()
 	submit(5, insert, []domain.Operation{{Type: "insert", NodeID: table.ID, Path: []string{"config", "batch_table", "rows"}, ItemID: row.ID.String(), Value: value}}, "")
 	submit(6, uuid.NewString(), []domain.Operation{}, insert)
-	current, err = application.NewService(store).Get(t.Context(), actor, doc.ID)
+	current, err = canvasfixture.NewService(store).Get(t.Context(), actor, doc.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,18 +224,18 @@ func TestCollaborationEphemeralIdentityAndMetadataRemainExplainable(t *testing.T
 	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, p := seedCanvasActor(t, db)
 	store := canvasStore(db)
-	legacy := application.NewService(store)
+	legacy := canvasfixture.NewService(store)
 	svc := application.NewCollaborationService(store)
 	doc, err := legacy.Create(t.Context(), actor, p, uuid.NewString(), application.CreateInput{Name: "identity"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	n := resourceNode("text")
-	r, err := svc.Submit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}, {Type: "delete_node", NodeID: n.ID}}})
+	r, err := svc.Submit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}, {Type: "delete_node", NodeID: n.ID}}})
 	if err != nil || r.Status != "accepted" {
 		t.Fatal(r, err)
 	}
-	r, err = svc.Submit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "create_node", Node: &n}}})
+	r, err = svc.Submit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "create_node", Node: &n}}})
 	if err != nil || r.Code != "id_conflict" {
 		t.Fatal("ephemeral ID reused", r, err)
 	}
@@ -254,14 +253,14 @@ func TestCollaborationRetainsMediaFromIntermediateOperations(t *testing.T) {
 	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, p := seedCanvasActor(t, db)
 	store := canvasStore(db)
-	doc, err := application.NewService(store).Create(t.Context(), actor, p, uuid.NewString(), application.CreateInput{Name: "intermediate media"})
+	doc, err := canvasfixture.NewService(store).Create(t.Context(), actor, p, uuid.NewString(), application.CreateInput{Name: "intermediate media"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	asset := seedCanvasMedia(t, db, p, "image")
 	n := resourceNode("image")
 	n.RefID = &asset
-	r, err := application.NewCollaborationService(store).Submit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}, {Type: "delete_node", NodeID: n.ID}}})
+	r, err := application.NewCollaborationService(store).Submit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}, {Type: "delete_node", NodeID: n.ID}}})
 	if err != nil || r.Status != "accepted" {
 		t.Fatal(r, err)
 	}
@@ -278,7 +277,7 @@ func TestCollaborationContributionOwnershipNoopAndRedo(t *testing.T) {
 			actor, p := seedCanvasActor(t, db)
 			store := canvasStore(db)
 			svc := application.NewCollaborationService(store)
-			doc, err := application.NewService(store).Create(t.Context(), actor, p, uuid.NewString(), application.CreateInput{Name: "ownership"})
+			doc, err := canvasfixture.NewService(store).Create(t.Context(), actor, p, uuid.NewString(), application.CreateInput{Name: "ownership"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -286,7 +285,7 @@ func TestCollaborationContributionOwnershipNoopAndRedo(t *testing.T) {
 			n.Config.Text = ptr("AB")
 			send := func(base int64, key, undo string, ops ...domain.Operation) application.CollaborationReceipt {
 				t.Helper()
-				r, err := svc.Submit(t.Context(), actor, doc.ID, key, application.CollaborationInput{OperationVersion: 1, BaseRevision: base, Operations: ops, UndoOf: undo})
+				r, err := svc.Submit(t.Context(), actor, doc.ID, key, application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: base, Operations: ops, UndoOf: undo})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -324,7 +323,7 @@ func TestCollaborationContributionOwnershipNoopAndRedo(t *testing.T) {
 			if r := send(4, uuid.NewString(), undo); r.Status != "accepted" {
 				t.Fatal("redo unavailable", r)
 			}
-			latest, err := application.NewService(store).Get(t.Context(), actor, doc.ID)
+			latest, err := canvasfixture.NewService(store).Get(t.Context(), actor, doc.ID)
 			if err != nil || *latest.Nodes[0].Config.Text != "XAB" {
 				t.Fatal(latest, err)
 			}
@@ -337,7 +336,7 @@ func TestCollaborationReferenceLabelsMentionsAndStaleBinding(t *testing.T) {
 	actor, p := seedCanvasActor(t, db)
 	store := canvasStore(db)
 	svc := application.NewCollaborationService(store)
-	doc, err := application.NewService(store).Create(t.Context(), actor, p, uuid.NewString(), application.CreateInput{Name: "references"})
+	doc, err := canvasfixture.NewService(store).Create(t.Context(), actor, p, uuid.NewString(), application.CreateInput{Name: "references"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -345,7 +344,7 @@ func TestCollaborationReferenceLabelsMentionsAndStaleBinding(t *testing.T) {
 	n.InputRevision = 0
 	send := func(base int64, key, undo string, ops ...domain.Operation) application.CollaborationReceipt {
 		t.Helper()
-		r, err := svc.Submit(t.Context(), actor, doc.ID, key, application.CollaborationInput{OperationVersion: 1, BaseRevision: base, Operations: ops, UndoOf: undo})
+		r, err := svc.Submit(t.Context(), actor, doc.ID, key, application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: base, Operations: ops, UndoOf: undo})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -372,7 +371,7 @@ func TestCollaborationReferenceLabelsMentionsAndStaleBinding(t *testing.T) {
 			t.Fatal(r)
 		}
 	}
-	loaded, err := application.NewService(store).Get(t.Context(), actor, doc.ID)
+	loaded, err := canvasfixture.NewService(store).Get(t.Context(), actor, doc.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -387,7 +386,7 @@ func TestCollaborationReferenceLabelsMentionsAndStaleBinding(t *testing.T) {
 	if r := send(5, uuid.NewString(), remove); r.Status != "accepted" {
 		t.Fatal("reference restore", r)
 	}
-	loaded, err = application.NewService(store).Get(t.Context(), actor, doc.ID)
+	loaded, err = canvasfixture.NewService(store).Get(t.Context(), actor, doc.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

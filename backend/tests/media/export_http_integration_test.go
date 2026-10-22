@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.temporal.io/sdk/activity"
@@ -98,7 +100,7 @@ func TestExportRealHTTPFrozenCanvasPrivateRenderingReviewAndDownload(t *testing.
 	})
 	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediaTestStore(tx), nil) }
 	canvasStore := mediaCanvasStore(db, mediaFactory)
-	canvasService := canvasapp.NewService(canvasStore)
+	canvasService := canvasfixture.NewService(canvasStore)
 	doc, err := canvasService.Create(t.Context(), actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "Export real fixture"})
 	if err != nil {
 		t.Fatal(err)
@@ -110,7 +112,7 @@ func TestExportRealHTTPFrozenCanvasPrivateRenderingReviewAndDownload(t *testing.
 	config.Tracks = append(config.Tracks, canvasdomain.TimelineTrack{ID: lane, Kind: "subtitle", Label: "Subtitle", Visible: true})
 	config.Clips = append(config.Clips, canvasdomain.TimelineClip{ID: uuid.New(), TrackID: lane, Kind: "subtitle", Title: "Subtitle", Text: "中文 AI\n实际导出", DurationMS: 200, Volume: 1})
 	node := canvasdomain.Node{ID: uuid.New(), Title: "Timeline", NodeType: "timeline", NodeAction: "tool", Config: canvasdomain.NodeConfig{Timeline: &config}}
-	saved, err := canvasService.Execute(t.Context(), actor, doc.ID, uuid.NewString(), canvasapp.CommandsInput{ExpectedRevision: doc.Revision, Commands: []canvasdomain.Command{{Type: "AddNodes", Nodes: []canvasdomain.Node{node}}}})
+	saved, err := canvasService.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{node}))})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -49,6 +49,12 @@ func strictCopyJSON(body []byte, target any) error {
 }
 
 func loadCopyDocument(tx *gorm.DB, row documentRow) (domain.Document, error) {
+	if row.SchemaVersion != application.SchemaVersion {
+		return domain.Document{}, domain.ErrUnsupportedProjectCopy
+	}
+	// The existing immutable copy payload predates public schema metadata. Check
+	// admission first, then preserve its hash representation for receipt replay.
+	row.SchemaVersion = 0
 	doc, err := row.document()
 	if err != nil {
 		return domain.Document{}, err
@@ -87,7 +93,7 @@ func (s *ProjectCopyStore) Freeze(ctx context.Context, actor identityapp.Princip
 		return application.ProjectCopySnapshot{}, err
 	}
 	var rows []documentRow
-	if err := tx.Raw(`SELECT id,project_id,name,scope,revision,viewport FROM canvas.document WHERE project_id=? AND NOT is_delete ORDER BY id LIMIT 257 FOR SHARE`, binding.SourceProjectID).Scan(&rows).Error; err != nil {
+	if err := tx.Raw(`SELECT id,project_id,name,scope,revision,viewport,schema_version FROM canvas.document WHERE project_id=? AND NOT is_delete ORDER BY id LIMIT 257 FOR SHARE`, binding.SourceProjectID).Scan(&rows).Error; err != nil {
 		return application.ProjectCopySnapshot{}, fmt.Errorf("freeze project canvases: %w", err)
 	}
 	if len(rows) > 256 {

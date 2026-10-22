@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 
+	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
@@ -17,7 +19,7 @@ import (
 func TestTranscriptionSourceFreezesFormalNodeAndLocksUntilOuterCommit(t *testing.T) {
 	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
-	service := application.NewService(canvasStore(database))
+	service := canvasfixture.NewService(canvasStore(database))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "真实转写输入"})
 	if err != nil {
 		t.Fatal(err)
@@ -25,7 +27,7 @@ func TestTranscriptionSourceFreezesFormalNodeAndLocksUntilOuterCommit(t *testing
 	node := resourceNode("video")
 	asset := seedCanvasMedia(t, database, project, "video")
 	node.RefID = &asset
-	saved, err := service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: doc.Revision, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{node}}}})
+	saved, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{node}))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +90,7 @@ func TestTranscriptionSourceFreezesFormalNodeAndLocksUntilOuterCommit(t *testing
 func TestTranscriptionSourceRejectsImageAndKindChangedAfterSave(t *testing.T) {
 	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
-	service := application.NewService(canvasStore(database))
+	service := canvasfixture.NewService(canvasStore(database))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "转写类型守卫"})
 	if err != nil {
 		t.Fatal(err)
@@ -96,7 +98,7 @@ func TestTranscriptionSourceRejectsImageAndKindChangedAfterSave(t *testing.T) {
 	image, audio := resourceNode("image"), resourceNode("audio")
 	imageID, audioID := seedCanvasMedia(t, database, project, "image"), seedCanvasMedia(t, database, project, "audio")
 	image.RefID, audio.RefID = &imageID, &audioID
-	saved, err := service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: doc.Revision, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{image, audio}}}})
+	saved, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{image, audio}))})
 	if err != nil {
 		t.Fatal(err)
 	}

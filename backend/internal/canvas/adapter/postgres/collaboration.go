@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -43,13 +44,25 @@ type collaborationRow struct {
 }
 
 func collaborationHash(id uuid.UUID, input application.CollaborationInput) (string, error) {
-	body, err := json.Marshal(input)
+	body, err := collaborationRequest(input)
 	if err != nil {
 		return "", err
 	}
-	return requestHash("collaboration/"+id.String(), body), nil
+	// RawMessage values retain nested key order. Decode with UseNumber before
+	// marshaling so insignificant object ordering does not change identity.
+	var value any
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	if err := decoder.Decode(&value); err != nil {
+		return "", err
+	}
+	canonical, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	return requestHash("collaboration/"+id.String(), canonical), nil
 }
-func collaborationReceipt(tx *gorm.DB, actor, document uuid.UUID, key, hash string) (*application.CollaborationReceipt, error) {
+func collaborationReceipt(tx *gorm.DB, actor, document uuid.UUID, key, hash, legacyHash string) (*application.CollaborationReceipt, error) {
 	var locked int
 	if err := tx.Raw(`SELECT 1 FROM pg_advisory_xact_lock(69360,hashtext(?))`, actor.String()+":"+key).Scan(&locked).Error; err != nil {
 		return nil, err
@@ -66,7 +79,7 @@ func collaborationReceipt(tx *gorm.DB, actor, document uuid.UUID, key, hash stri
 	if r.RowsAffected == 0 {
 		return nil, nil
 	}
-	if row.DocumentID != document || row.RequestHash != hash {
+	if row.DocumentID != document || row.RequestHash != hash && row.RequestHash != legacyHash {
 		return nil, application.ErrIdempotencyConflict
 	}
 	var receipt application.CollaborationReceipt
@@ -149,6 +162,9 @@ func collaborationBusinessCode(err error) string {
 // unknown, so resolving the exact original request is always safe.
 func (s *Store) SubmitCollaboration(ctx context.Context, a identity.Principal, id uuid.UUID, key string, input application.CollaborationInput) (application.CollaborationReceipt, error) {
 	var result application.CollaborationReceipt
+	if input.ClientID == uuid.Nil {
+		return result, domain.ErrInvalidCommand
+	}
 	hash, err := collaborationHash(id, input)
 	if err != nil {
 		return result, domain.ErrInvalidCommand
@@ -161,7 +177,8 @@ func (s *Store) SubmitCollaboration(ctx context.Context, a identity.Principal, i
 		if err := s.authorize(tx, a, p, true); err != nil {
 			return err
 		}
-		replay, err := collaborationReceipt(tx, a.ID, id, key, hash)
+		legacy, _ := collaborationRequest(input)
+		replay, err := collaborationReceipt(tx, a.ID, id, key, hash, requestHash("collaboration/"+id.String(), legacy))
 		if err != nil {
 			return err
 		}
@@ -183,7 +200,10 @@ func (s *Store) SubmitCollaboration(ctx context.Context, a identity.Principal, i
 			}
 			return err
 		}
-		if input.OperationVersion != 1 {
+		if doc.SchemaVersion != application.SchemaVersion {
+			return reject("schema_unsupported")
+		}
+		if input.OperationVersion != application.OperationVersion {
 			return reject("unsupported_operation_version")
 		}
 		if input.UndoOf != "" {
@@ -194,7 +214,7 @@ func (s *Store) SubmitCollaboration(ctx context.Context, a identity.Principal, i
 		} else if err := domain.ValidateWireOperations(input.Operations); err != nil {
 			return rejectError(err)
 		}
-		if doc.Revision >= math.MaxInt32 {
+		if doc.Revision == math.MaxInt64 {
 			return reject("revision_limit")
 		}
 		originalBase := input.BaseRevision
@@ -285,6 +305,13 @@ func (s *Store) SubmitCollaboration(ctx context.Context, a identity.Principal, i
 		updated := candidate.Document
 		updated.Revision++
 		updated.OperationVersion = 1
+		if err := advanceContentVersions(doc, &updated); err != nil {
+			return rejectError(err)
+		}
+		if err := domain.ValidateDocumentCapacity(updated); err != nil {
+			return rejectError(err)
+		}
+		candidate.Effects = domain.DocumentEffects(doc, updated)
 		if err := saveGraph(tx, doc, updated); err != nil {
 			var collision *identityConflict
 			if errors.As(err, &collision) {
@@ -339,7 +366,7 @@ func (s *Store) SubmitCollaboration(ctx context.Context, a identity.Principal, i
 			}
 			return reject("operation_too_large")
 		}
-		if err := tx.Exec(`INSERT INTO canvas.command_log(id,document_id,revision,commands,create_by,op_id,base_revision,operation_version) VALUES(?,?,?,?::jsonb,?,?,?,1)`, uuid.New(), id, updated.Revision, string(body), a.ID, key, input.BaseRevision).Error; err != nil {
+		if err := tx.Exec(`INSERT INTO canvas.command_log(id,document_id,revision,commands,create_by,op_id,base_revision,operation_version,client_id) VALUES(?,?,?,?::jsonb,?,?,?,1,?)`, uuid.New(), id, updated.Revision, string(body), a.ID, key, input.BaseRevision, input.ClientID).Error; err != nil {
 			return err
 		}
 		result = application.CollaborationReceipt{Status: "accepted", OpID: key, Revision: updated.Revision}
@@ -406,7 +433,8 @@ func (s *Store) ResolveCollaboration(ctx context.Context, a identity.Principal, 
 		if err := s.authorize(tx, a, p, false); err != nil {
 			return err
 		}
-		result, err = collaborationReceipt(tx, a.ID, id, key, hash)
+		legacy, _ := collaborationRequest(input)
+		result, err = collaborationReceipt(tx, a.ID, id, key, hash, requestHash("collaboration/"+id.String(), legacy))
 		return err
 	})
 	return result, err
@@ -474,4 +502,19 @@ func collaborationRetainedMedia(documents ...domain.Document) ([]uuid.UUID, erro
 		}
 	}
 	return refs, nil
+}
+
+// collaborationRequest preserves the exact pre-client-ID request identity for
+// read-only lookup of already committed operation-version-1 receipts.
+func collaborationRequest(input application.CollaborationInput) ([]byte, error) {
+	body, err := json.Marshal(input)
+	if err != nil || input.ClientID != uuid.Nil {
+		return body, err
+	}
+	return json.Marshal(struct {
+		OperationVersion int                `json:"operation_version"`
+		BaseRevision     int64              `json:"base_revision"`
+		Operations       []domain.Operation `json:"operations"`
+		UndoOf           string             `json:"undo_of,omitempty"`
+	}{input.OperationVersion, input.BaseRevision, input.Operations, input.UndoOf})
 }

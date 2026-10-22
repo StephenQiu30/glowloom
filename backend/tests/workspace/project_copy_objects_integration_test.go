@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -182,7 +184,7 @@ func seedProjectCopyContent(ctx context.Context, t *testing.T, db *gorm.DB, obje
 			}
 		}
 	})
-	canvas := canvasapp.NewService(workspaceCanvasStore(db, func(tx *gorm.DB) canvasapp.MediaReader { return ma.NewAssetQuery(workspaceMediaStore(tx), nil) }))
+	canvas := canvasfixture.NewService(workspaceCanvasStore(db, func(tx *gorm.DB) canvasapp.MediaReader { return ma.NewAssetQuery(workspaceMediaStore(tx), nil) }))
 	doc, err := canvas.Create(ctx, actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "全部媒体与导演"})
 	if err != nil {
 		t.Fatal(err)
@@ -197,7 +199,7 @@ func seedProjectCopyContent(ctx context.Context, t *testing.T, db *gorm.DB, obje
 	imageAsset := assets["image"]
 	director := cd.DirectorConfig{ID: uuid.New(), Version: 1, Title: "完整导演图库", Background: "#ffffff", EnvironmentIntensity: 1, ActiveShotID: shot, Objects: []cd.DirectorObject{}, Cameras: []cd.DirectorCamera{{ID: camera, Name: "摄影机", Transform: transform, Target: []float64{0, 1, 0}, FocalLength: 35, FOV: 54, Aperture: 2.8, FocusDistance: 5, Near: 0.1, Far: 100, Keyframes: []cd.DirectorKeyframe{}}}, Lights: []cd.DirectorLight{}, Shots: []cd.DirectorShot{{ID: shot, Name: "镜头", CameraID: camera, Duration: 1, FPS: 24, ShotSize: "medium", CameraMove: "static", Screenshots: []cd.DirectorScreenshot{{ID: uuid.New(), AssetID: imageAsset, Name: "保留图库", CreatedAt: time.Date(2026, 10, 1, 1, 0, 0, 0, time.UTC)}}}}, Cover: &cd.DirectorCover{AssetID: imageAsset, ShotID: shot}, Panorama: &cd.DirectorPanorama{AssetID: imageAsset}}
 	nodes = append(nodes, cd.Node{ID: uuid.New(), Title: "导演台", NodeType: "director", NodeAction: "tool", Config: cd.NodeConfig{Director: &director}})
-	if _, err := canvas.Execute(ctx, actor, doc.ID, uuid.NewString(), canvasapp.CommandsInput{ExpectedRevision: 1, Commands: []cd.Command{{Type: "AddNodes", Nodes: nodes}}}); err != nil {
+	if _, err := canvas.Edit(ctx, actor, doc.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes(nodes))}); err != nil {
 		t.Fatal("save actual complete source graph", err)
 	}
 	extra, err := canvas.Create(ctx, actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "时间轴"})
@@ -206,7 +208,7 @@ func seedProjectCopyContent(ctx context.Context, t *testing.T, db *gorm.DB, obje
 	}
 	track := uuid.New()
 	timeline := cd.TimelineConfig{Version: 1, AspectRatio: "16:9", FPS: 24, SubtitleStyle: cd.SubtitleStyle{FontSize: 24, Color: "#ffffff", Position: "bottom"}, Tracks: []cd.TimelineTrack{{ID: track, Kind: "image", Label: "画面", Visible: true}}, Clips: []cd.TimelineClip{{ID: uuid.New(), TrackID: track, Kind: "image", AssetID: &imageAsset, Title: "封面", DurationMS: 1000, Volume: 1}}}
-	if _, err := canvas.Execute(ctx, actor, extra.ID, uuid.NewString(), canvasapp.CommandsInput{ExpectedRevision: 1, Commands: []cd.Command{{Type: "AddNodes", Nodes: []cd.Node{{ID: uuid.New(), Title: "剪辑", NodeType: "timeline", NodeAction: "tool", Config: cd.NodeConfig{Timeline: &timeline}}}}}}); err != nil {
+	if _, err := canvas.Edit(ctx, actor, extra.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]cd.Node{{ID: uuid.New(), Title: "剪辑", NodeType: "timeline", NodeAction: "tool", Config: cd.NodeConfig{Timeline: &timeline}}}))}); err != nil {
 		t.Fatal(err)
 	}
 	return actor, project, assets, doc.ID
@@ -289,7 +291,7 @@ func TestProjectCopyRealCompletePrivateMediaAndIndependentRefresh(t *testing.T) 
 			}
 		}
 	}
-	canvas := canvasapp.NewService(workspaceCanvasStore(db, nil))
+	canvas := canvasfixture.NewService(workspaceCanvasStore(db, nil))
 	docs, err := canvas.List(ctx, actor, finished.TargetProjectID)
 	if err != nil || len(docs) != 2 {
 		t.Fatal("fresh complete canvas list", err)

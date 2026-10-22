@@ -47,7 +47,7 @@
 | 前端实现 | 在 frontend 执行 pnpm exec eslint .、pnpm exec prettier --check .、pnpm exec next typegen、pnpm exec tsc --noEmit、pnpm exec vitest run、pnpm exec next build；交互变化补浏览器验证 |
 | 文档     | Markdown 格式、相对链接与锚点、来源路径、需求/验收对应关系、陈述与源码一致；第三方许可原文保持不变                                                                                  |
 
-默认 CI 仅保留 backend、frontend 两个任务：后端执行静态检查、漏洞检查、Wire 生成一致性和一次 `go test -race -count=1 -v ./...`；前端执行 lint、类型检查、Vitest 和一次 Next.js 构建，并保留两端的测试目录检查。不构建 Docker 镜像，也不启动 PostgreSQL、Redis、Kafka、对象存储或 Temporal。依赖这些外部服务的测试缺少配置时按现有用例跳过；专项集成与功能验收按模块变更在相应环境执行，不属于每次提交的默认门禁，默认 CI 通过也不代表这些专项验收通过。
+默认 CI 仅保留 backend、frontend 两个任务：后端执行静态检查、漏洞检查、Wire 生成一致性和一次 `go test -race -count=1 -v ./...`；前端执行 lint、类型检查、Vitest 和一次 Next.js 构建，并保留两端的测试目录检查。不构建应用 Docker 镜像；后端任务启动隔离 PostgreSQL 18，按空库 schema 初始化并配置画布所有数据库测试及受限运行角色。画布数据库配置缺失直接失败，不允许跳过。Redis、Kafka、对象存储和 Temporal 的专项集成仍按模块变更在相应环境执行；默认 CI 通过不代表这些专项验收或生产可用性已经通过。
 
 验证范围与修改风险匹配。文档变更不需要重跑无关业务测试；UI/工程检查、隔离存储、真实邮件、实际数据库迁移和产品接受分别记录。缺少外部条件或未执行的检查不得报告通过。
 

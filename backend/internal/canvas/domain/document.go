@@ -22,14 +22,16 @@ var (
 
 // NodeConfig contains only user-editable, type-specific presentation data.
 type NodeConfig struct {
-	Draft      *Draft            `json:"draft,omitempty"`
-	Text       *string           `json:"text,omitempty"`
-	Collapsed  *bool             `json:"collapsed,omitempty"`
-	BatchTable *BatchTableConfig `json:"batch_table,omitempty"`
-	Timeline   *TimelineConfig   `json:"timeline,omitempty"`
-	Director   *DirectorConfig   `json:"director,omitempty"`
-	Generation *GenerationConfig `json:"generation,omitempty"`
-	unknown    json.RawMessage
+	Format        string            `json:"format,omitempty"`
+	FormatVersion int               `json:"format_version,omitempty"`
+	Draft         *Draft            `json:"draft,omitempty"`
+	Text          *string           `json:"text,omitempty"`
+	Collapsed     *bool             `json:"collapsed,omitempty"`
+	BatchTable    *BatchTableConfig `json:"batch_table,omitempty"`
+	Timeline      *TimelineConfig   `json:"timeline,omitempty"`
+	Director      *DirectorConfig   `json:"director,omitempty"`
+	Generation    *GenerationConfig `json:"generation,omitempty"`
+	unknown       json.RawMessage
 }
 
 // Viewport stores the document camera in world coordinates.
@@ -42,6 +44,7 @@ type Viewport struct {
 // Node is a resource or a protected business projection. Media identity is never a URL.
 type Node struct {
 	InputRevision   int64      `json:"input_revision,omitempty"`
+	ContentVersion  int64      `json:"content_version,omitempty,string" swaggertype:"string"`
 	ID              uuid.UUID  `json:"id"`
 	Title           string     `json:"title"`
 	NodeType        string     `json:"node_type"`
@@ -70,6 +73,8 @@ type Edge struct {
 
 // Document is the authoritative current graph.
 type Document struct {
+	SchemaVersion    int             `json:"schema_version,omitempty"`
+	Writable         bool            `json:"-"`
 	OperationVersion int             `json:"operation_version,omitempty"`
 	ReadOnlyReason   string          `json:"read_only_reason,omitempty"`
 	ID               uuid.UUID       `json:"id"`
@@ -139,56 +144,37 @@ type CommandError struct {
 func (e *CommandError) Error() string { return fmt.Sprintf("canvas command %d: %v", e.Index, e.Cause) }
 func (e *CommandError) Unwrap() error { return e.Cause }
 
-// InputSnapshot is an immutable draft input produced by a legacy command batch.
-// Legacy commands retain their existing per-step input revision contract.
+// InputSnapshot is the final immutable draft input of one accepted OT batch.
 type InputSnapshot struct {
 	NodeID   uuid.UUID
 	Revision int64
 	Draft    Draft
 }
 
-// Apply works on a private graph, leaving the input intact after any failure.
+// Apply evaluates a private graph for structural validation and project copy.
+// Shared edits and immutable input snapshots are owned by ApplyOperations.
 func Apply(document Document, commands []Command) (Document, error) {
-	doc, _, err := ApplyWithInputs(document, commands)
-	return doc, err
-}
-
-// ApplyWithInputs evaluates one batch once and captures its immutable inputs.
-// Input dependencies and group constraints apply to the final batch. Commands
-// such as Connect still require their target identities when they execute.
-func ApplyWithInputs(document Document, commands []Command) (Document, []InputSnapshot, error) {
 	if len(commands) < 1 || len(commands) > 100 {
-		return Document{}, nil, ErrInvalidCommand
+		return Document{}, ErrInvalidCommand
 	}
 	if err := ValidateGraph(document); err != nil {
-		return Document{}, nil, fmt.Errorf("%w: %w", ErrGraphReadOnly, err)
-	}
-	var inputs []InputSnapshot
-	previous := make(map[uuid.UUID]int64, len(document.Nodes))
-	for _, node := range document.Nodes {
-		previous[node.ID] = node.InputRevision
+		return Document{}, fmt.Errorf("%w: %w", ErrGraphReadOnly, err)
 	}
 	doc := document
 	doc.Nodes = slices.Clone(document.Nodes)
 	doc.Edges = slices.Clone(document.Edges)
-	for index, c := range commands {
-		if err := applyOne(&doc, c); err != nil {
-			return Document{}, nil, &CommandError{Index: index, Cause: err}
+	for index, command := range commands {
+		if err := applyOne(&doc, command); err != nil {
+			return Document{}, &CommandError{Index: index, Cause: err}
 		}
 		if len(doc.Nodes) > 2000 || len(doc.Edges) > 4000 {
-			return Document{}, nil, &CommandError{Index: index, Cause: ErrInvalidCommand}
-		}
-		for _, node := range doc.Nodes {
-			if IsDraft(node) && previous[node.ID] != node.InputRevision {
-				inputs = append(inputs, InputSnapshot{NodeID: node.ID, Revision: node.InputRevision, Draft: *node.Config.Draft})
-				previous[node.ID] = node.InputRevision
-			}
+			return Document{}, &CommandError{Index: index, Cause: ErrInvalidCommand}
 		}
 	}
 	if err := ValidateGraph(doc); err != nil {
-		return Document{}, nil, &CommandError{Index: len(commands) - 1, Cause: err}
+		return Document{}, &CommandError{Index: len(commands) - 1, Cause: err}
 	}
-	return doc, inputs, nil
+	return doc, nil
 }
 func applyOne(doc *Document, c Command) error {
 	kinds := []string{"AddNodes", "MoveNodes", "ResizeNodes", "UpdateNodeConfig", "RenameNodes", "DeleteNodes", "SetNodeParents", "SetNodeZIndex", "Connect", "Disconnect", "SetViewport"}
@@ -433,6 +419,9 @@ func validConfig(kind string, c NodeConfig) bool {
 	if len(c.unknown) != 0 {
 		return false
 	}
+	if kind != "text" && (c.Format != "" || c.FormatVersion != 0) {
+		return false
+	}
 	if kind == "image_generation" || kind == "video_generation" {
 		return c.Draft != nil && validDraft(*c.Draft) && c.Text == nil && c.Collapsed == nil && c.BatchTable == nil && c.Timeline == nil && c.Director == nil && c.Generation == nil
 	}
@@ -459,7 +448,7 @@ func validConfig(kind string, c NodeConfig) bool {
 	}
 	switch kind {
 	case "text":
-		return c.Text != nil && c.Collapsed == nil && utf8.ValidString(*c.Text) && utf8.RuneCountInString(*c.Text) <= 10000
+		return (c.Format == "" && c.FormatVersion == 0 || (c.Format == "plain" || c.Format == "markdown") && c.FormatVersion == 1) && c.Text != nil && c.Collapsed == nil && utf8.ValidString(*c.Text) && utf8.RuneCountInString(*c.Text) <= 10000
 	case "group":
 		return c.Text == nil && c.Collapsed != nil
 	case "image", "video", "audio", "model":

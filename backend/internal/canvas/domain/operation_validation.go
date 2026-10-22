@@ -24,8 +24,13 @@ func ValidateWireOperations(operations []Operation) error {
 }
 
 func validOperationShape(op Operation) error {
-	invalid := len(op.unknown) > 0
+	invalid := len(op.unknown) > 0 || op.Type != "replace_media" && (op.ExpectedMediaRef != nil || op.NewMediaRef != nil)
 	switch op.Type {
+	case "replace_media":
+		invalid = invalid || op.NodeID == uuid.Nil || op.ExpectedMediaRef == nil || op.NewMediaRef == nil || op.Path != nil || op.Value != nil || op.Expected != nil || op.ExpectedExists != nil || op.Context != nil || op.Node != nil || op.Edge != nil || op.Text != nil || op.Unset || op.ItemID != "" || op.BeforeID != ""
+		if op.ExpectedMediaRef != nil && op.NewMediaRef != nil {
+			invalid = invalid || op.ExpectedMediaRef.AssetID == uuid.Nil || op.NewMediaRef.AssetID == uuid.Nil
+		}
 	case "migrate_composer":
 		invalid = invalid || op.NodeID == uuid.Nil || op.Expected == nil || op.Path != nil || op.Value != nil || op.Node != nil || op.Edge != nil || op.Text != nil || op.Context != nil || op.Unset || op.ItemID != "" || op.BeforeID != "" || op.ExpectedExists != nil
 	case "noop":
@@ -54,6 +59,7 @@ func validOperationShape(op Operation) error {
 		invalid = invalid || op.Path != nil || op.Value != nil || op.Expected != nil || op.ExpectedExists != nil || op.Context != nil || op.Text != nil || op.Unset || op.ItemID != "" || op.BeforeID != ""
 		switch op.Type {
 		case "create_node", "restore_node":
+			invalid = invalid || op.Type == "create_node" && op.Node != nil && op.Node.ContentVersion != 0
 			invalid = invalid || op.Node == nil || op.Edge != nil || op.NodeID != uuid.Nil
 		case "connect", "restore_edge":
 			invalid = invalid || op.Edge == nil || op.Node != nil || op.NodeID != uuid.Nil
@@ -81,7 +87,7 @@ func (op *Operation) UnmarshalJSON(body []byte) error {
 	if err := json.Unmarshal(body, &fields); err != nil {
 		return err
 	}
-	for _, key := range []string{"type", "node_id", "path", "value", "expected", "expected_exists", "context", "unset", "text", "item_id", "before_id", "node", "edge"} {
+	for _, key := range []string{"type", "node_id", "path", "value", "expected", "expected_exists", "context", "unset", "text", "item_id", "before_id", "node", "edge", "expected_media_ref", "new_media_ref"} {
 		delete(fields, key)
 	}
 	*op = Operation(decoded)

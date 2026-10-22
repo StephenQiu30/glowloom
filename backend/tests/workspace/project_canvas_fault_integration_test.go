@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+
 	"github.com/google/uuid"
 
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
@@ -116,7 +118,7 @@ func TestProjectRenameAndCanvasSaveAvoidLockUpgrade(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	canvas := canvasapp.NewService(workspaceCanvasStore(db, nil))
+	canvas := canvasfixture.NewService(workspaceCanvasStore(db, nil))
 	name, text := "并发后的名称", "并发保存的文字"
 	patch := projectChange(project.ID, 1, "patch")
 	patch.Patch.Name = &name
@@ -131,7 +133,7 @@ func TestProjectRenameAndCanvasSaveAvoidLockUpgrade(t *testing.T) {
 	}()
 	go func() {
 		<-start
-		_, err := canvas.Execute(workCtx, actor, project.CanvasID, uuid.NewString(), canvasapp.CommandsInput{ExpectedRevision: 1, Commands: []canvasdomain.Command{{Type: "AddNodes", Nodes: []canvasdomain.Node{{ID: uuid.New(), Title: "并发文字", NodeType: "text", NodeAction: "resource", Config: canvasdomain.NodeConfig{Text: &text}}}}}})
+		_, err := canvas.Edit(workCtx, actor, project.CanvasID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{{ID: uuid.New(), Title: "并发文字", NodeType: "text", NodeAction: "resource", Config: canvasdomain.NodeConfig{Text: &text}}}))})
 		results <- err
 	}()
 	close(start)

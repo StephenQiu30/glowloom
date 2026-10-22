@@ -15,6 +15,25 @@ concurrency:
 jobs:
   backend:
     runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: glowloom_reference
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d glowloom_reference"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      GLOWLOOM_TEST_SCHEMA_DB_DSN: postgres://postgres@127.0.0.1:5432/schema_probe?sslmode=disable
+      GLOWLOOM_TEST_CANVAS_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_reference?sslmode=disable
+      GLOWLOOM_TEST_CANVAS_HTTP_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_reference?sslmode=disable
+      GLOWLOOM_TEST_PROJECT_COPY_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_reference?sslmode=disable
+      GLOWLOOM_TEST_CANVAS_M1_RUNTIME_DSN: postgres://canvas_test_runtime@127.0.0.1:5432/glowloom_reference?sslmode=disable&options=-c%20role%3Dglowloom_app
     defaults:
       run:
         working-directory: backend
@@ -44,6 +63,10 @@ jobs:
           git diff --exit-code -- internal/app/wire_gen.go
       - name: Install media probe tools
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Initialize isolated canvas database
+        run: |
+          psql "$GLOWLOOM_TEST_CANVAS_DB_DSN" -X -v ON_ERROR_STOP=1 -c 'CREATE ROLE glowloom_app NOLOGIN NOSUPERUSER' -c 'CREATE ROLE canvas_test_runtime LOGIN INHERIT NOSUPERUSER IN ROLE glowloom_app' -c 'CREATE DATABASE schema_probe'
+          psql "$GLOWLOOM_TEST_CANVAS_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
       - name: Run backend Race tests
         run: go test -race -count=1 -v ./...
 

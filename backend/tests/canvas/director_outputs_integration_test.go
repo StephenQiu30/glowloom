@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -22,7 +24,7 @@ import (
 func TestDirectorOutputsPersistAndRejectUnavailableImages(t *testing.T) {
 	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
-	service := application.NewService(canvasStore(database))
+	service := canvasfixture.NewService(canvasStore(database))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "导演台图库"})
 	if err != nil {
 		t.Fatal(err)
@@ -34,18 +36,18 @@ func TestDirectorOutputsPersistAndRejectUnavailableImages(t *testing.T) {
 	screenshot.AssetID = galleryAsset
 	node.Config.Director.Shots[0].Screenshots = []domain.DirectorScreenshot{screenshot}
 	node.Config.Director.Cover = &domain.DirectorCover{AssetID: coverAsset, ShotID: node.Config.Director.Shots[0].ID}
-	input := application.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{node}}}}
+	input := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{node}))}
 	key := uuid.NewString()
-	result, err := service.Execute(t.Context(), actor, doc.ID, key, input)
+	result, err := service.Edit(t.Context(), actor, doc.ID, key, input)
 	if err != nil || result.Revision != 2 {
 		t.Fatalf("persist ready images: %+v %v", result, err)
 	}
-	freshService := application.NewService(canvasStore(database))
+	freshService := canvasfixture.NewService(canvasStore(database))
 	current, err := freshService.Get(t.Context(), actor, doc.ID)
 	if err != nil || len(current.Nodes) != 1 || current.Nodes[0].Config.Director.Cover.AssetID != coverAsset || current.Nodes[0].Config.Director.Shots[0].Screenshots[0] != screenshot {
 		t.Fatalf("refresh lost output identities: %+v %v", current, err)
 	}
-	replayed, err := freshService.Execute(t.Context(), actor, doc.ID, key, input)
+	replayed, err := freshService.Edit(t.Context(), actor, doc.ID, key, input)
 	if err != nil || replayed.Revision != 2 {
 		t.Fatalf("persistent screenshot replay: %+v %v", replayed, err)
 	}
@@ -115,17 +117,14 @@ func TestDirectorOutputsPersistAndRejectUnavailableImages(t *testing.T) {
 					config.Shots[0].Screenshots = []domain.DirectorScreenshot{screenshot}
 					config.Cover = &domain.DirectorCover{AssetID: coverAsset, ShotID: config.Shots[0].ID}
 					if target == "gallery" {
+						config.Shots[0].Screenshots[0].ID = uuid.New()
 						config.Shots[0].Screenshots[0].AssetID = asset
 					} else {
 						config.Cover.AssetID = asset
 					}
 					failedKey := uuid.NewString()
-					_, err := freshService.Execute(t.Context(), actor, doc.ID, failedKey, application.CommandsInput{ExpectedRevision: 2, Commands: []domain.Command{
-						{Type: "MoveNodes", Moves: []domain.Move{{ID: node.ID, X: 100, Y: 100}}},
-						{Type: "UpdateNodeConfig", ID: node.ID, Config: &domain.NodeConfig{Director: &config}},
-					}})
-					var indexed *domain.CommandError
-					if !errors.Is(err, tc.invalid) || !errors.As(err, &indexed) || indexed.Index != 1 {
+					_, err := freshService.Edit(t.Context(), actor, doc.ID, failedKey, application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.Positions([]domain.Move{{ID: node.ID, X: 100, Y: 100}}), directorOutputOperations(current.Nodes[0], config))})
+					if !operationRejected(err, "source_unavailable", "invalid_operation") {
 						t.Fatalf("unavailable %s image accepted or wrong command index: %v", target, err)
 					}
 					after, err := freshService.Get(t.Context(), actor, doc.ID)
@@ -156,7 +155,7 @@ func TestDirectorOutputsPersistAndRejectUnavailableImages(t *testing.T) {
 func TestDirectorGalleryLinksSurviveResourceNodeDeletion(t *testing.T) {
 	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
-	service := application.NewService(canvasStore(database))
+	service := canvasfixture.NewService(canvasStore(database))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "稳定图库引用"})
 	if err != nil {
 		t.Fatal(err)
@@ -168,13 +167,13 @@ func TestDirectorGalleryLinksSurviveResourceNodeDeletion(t *testing.T) {
 	screenshot.AssetID = asset
 	node.Config.Director.Shots[0].Screenshots = []domain.DirectorScreenshot{screenshot}
 	node.Config.Director.Cover = &domain.DirectorCover{AssetID: asset, ShotID: node.Config.Director.Shots[0].ID}
-	if _, err := service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{image, node}}}}); err != nil {
+	if _, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{image, node}))}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 2, Commands: []domain.Command{{Type: "DeleteNodes", IDs: []uuid.UUID{image.ID}}}}); err != nil {
+	if _, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.Deletes([]uuid.UUID{image.ID}))}); err != nil {
 		t.Fatal(err)
 	}
-	current, err := application.NewService(canvasStore(database)).Get(t.Context(), actor, doc.ID)
+	current, err := canvasfixture.NewService(canvasStore(database)).Get(t.Context(), actor, doc.ID)
 	if err != nil || len(current.Nodes) != 1 || current.Nodes[0].Config.Director.Cover.AssetID != asset || current.Nodes[0].Config.Director.Shots[0].Screenshots[0].AssetID != asset {
 		t.Fatalf("source node deletion lost gallery links: %+v %v", current, err)
 	}
@@ -182,7 +181,7 @@ func TestDirectorGalleryLinksSurviveResourceNodeDeletion(t *testing.T) {
 	config.Shots = append([]domain.DirectorShot(nil), config.Shots...)
 	config.Shots[0].Screenshots = nil
 	config.Cover = nil
-	if _, err := service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 3, Commands: []domain.Command{{Type: "UpdateNodeConfig", ID: node.ID, Config: &domain.NodeConfig{Director: &config}}}}); err != nil {
+	if _, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 3, Operations: canvasfixture.Concat(directorOutputOperations(node, config))}); err != nil {
 		t.Fatal(err)
 	}
 	var removed bool
@@ -191,9 +190,8 @@ func TestDirectorGalleryLinksSurviveResourceNodeDeletion(t *testing.T) {
 	}
 	stale := config
 	stale.Cover = node.Config.Director.Cover
-	_, err = service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 3, Commands: []domain.Command{{Type: "UpdateNodeConfig", ID: node.ID, Config: &domain.NodeConfig{Director: &stale}}}})
-	var conflict *application.RevisionConflict
-	if !errors.As(err, &conflict) || conflict.CurrentRevision != 4 {
+	_, err = service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 3, Operations: canvasfixture.Concat(directorOutputOperations(node, stale))})
+	if !operationRejected(err, "field_conflict") {
 		t.Fatalf("stale capture overwrote current cover: %v", err)
 	}
 }
@@ -209,7 +207,7 @@ func TestDirectorOutputsHoldMediaEligibilityUntilCommit(t *testing.T) {
 			var workers sync.WaitGroup
 			var release sync.Once
 			defer func() { release.Do(func() { close(resume) }); cancel(); workers.Wait() }()
-			service := application.NewService(pgcanvas.NewScopedStore(database, func(tx *gorm.DB) application.MediaReader {
+			service := canvasfixture.NewService(pgcanvas.NewScopedStore(database, func(tx *gorm.DB) application.MediaReader {
 				return pausedMediaReference{reader: mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess), nil), read: read, resume: resume}
 			}, mediawire.NewCanvasProjectAccess))
 			doc, err := service.Create(ctx, actor, project, uuid.NewString(), application.CreateInput{Name: "截图授权事务"})
@@ -226,7 +224,7 @@ func TestDirectorOutputsHoldMediaEligibilityUntilCommit(t *testing.T) {
 			}
 			committed := make(chan error, 1)
 			workers.Go(func() {
-				_, err := service.Execute(ctx, actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{node}}}})
+				_, err := service.Edit(ctx, actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{node}))})
 				committed <- err
 			})
 			select {
@@ -287,4 +285,52 @@ func TestDirectorOutputsHoldMediaEligibilityUntilCommit(t *testing.T) {
 			}
 		})
 	}
+}
+
+func directorOutputOperations(node domain.Node, config domain.DirectorConfig) []domain.Operation {
+	var ops []domain.Operation
+	cover := canvasfixture.Field(node.ID, []string{"config", "director", "cover"}, map[string]any{"cover": config.Cover})
+	present := node.Config.Director.Cover != nil
+	cover.ExpectedExists = &present
+	if present {
+		cover.Expected, _ = json.Marshal(map[string]any{"cover": node.Config.Director.Cover})
+	}
+	if config.Cover == nil {
+		cover.Value = nil
+		cover.Unset = true
+	}
+	ops = append(ops, cover)
+	for _, shot := range config.Shots {
+		var before []domain.DirectorScreenshot
+		for _, old := range node.Config.Director.Shots {
+			if old.ID == shot.ID {
+				before = old.Screenshots
+			}
+		}
+		path := []string{"config", "director", "shots", "@" + shot.ID.String(), "screenshots"}
+		for _, old := range before {
+			found := false
+			for _, next := range shot.Screenshots {
+				if next.ID == old.ID {
+					found = true
+				}
+			}
+			if !found {
+				ops = append(ops, domain.Operation{Type: "remove", NodeID: node.ID, Path: path, ItemID: old.ID.String()})
+			}
+		}
+		for _, next := range shot.Screenshots {
+			found := false
+			for _, old := range before {
+				if next.ID == old.ID {
+					found = true
+				}
+			}
+			if !found {
+				value, _ := json.Marshal(next)
+				ops = append(ops, domain.Operation{Type: "insert", NodeID: node.ID, Path: path, ItemID: next.ID.String(), Value: value})
+			}
+		}
+	}
+	return ops
 }

@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 
+	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
@@ -26,7 +28,7 @@ func canvasDB(t *testing.T, key string) *gorm.DB {
 	t.Helper()
 	dsn := os.Getenv(key)
 	if dsn == "" {
-		t.Skip("set isolated " + key)
+		t.Fatal("required isolated PostgreSQL DSN is missing: " + key)
 	}
 	conn, err := db.Open(t.Context(), dsn, noop.NewTracerProvider())
 	if err != nil {
@@ -59,47 +61,48 @@ func seedCanvasActor(t *testing.T, database *gorm.DB) (identityapp.Principal, uu
 func TestCanvasPersistenceRevisionReplayRollbackAndRestore(t *testing.T) {
 	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
-	service := application.NewService(canvasStore(database))
+	service := canvasfixture.NewService(canvasStore(database))
 	key := uuid.NewString()
 	doc, err := service.Create(t.Context(), actor, project, key, application.CreateInput{Name: "备注"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	again, err := application.NewService(canvasStore(database)).Create(t.Context(), actor, project, key, application.CreateInput{Name: "备注"})
+	again, err := canvasfixture.NewService(canvasStore(database)).Create(t.Context(), actor, project, key, application.CreateInput{Name: "备注"})
 	if err != nil || again.ID != doc.ID {
 		t.Fatalf("persistent create replay: %+v %v", again, err)
 	}
 	n1, n2, e := uuid.New(), uuid.New(), uuid.New()
-	input := application.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{{ID: n1, Title: "备注", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: ptr("A")}}, {ID: n2, Title: "备注", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: ptr("B")}}}}, {Type: "Connect", Edges: []domain.Edge{{ID: e, EdgeType: "annotation", SourceNodeID: n1, TargetNodeID: n2}}}}}
+	input := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{{ID: n1, Title: "备注", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: ptr("A")}}, {ID: n2, Title: "备注", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: ptr("B")}}}), canvasfixture.Edges([]domain.Edge{{ID: e, EdgeType: "annotation", SourceNodeID: n1, TargetNodeID: n2}}))}
 	key = uuid.NewString()
-	result, err := service.Execute(t.Context(), actor, doc.ID, key, input)
+	result, err := service.Edit(t.Context(), actor, doc.ID, key, input)
 	if err != nil || result.Revision != 2 {
 		t.Fatalf("apply: %+v %v", result, err)
 	}
-	result, err = application.NewService(canvasStore(database)).Execute(t.Context(), actor, doc.ID, key, input)
+	result, err = canvasfixture.NewService(canvasStore(database)).Edit(t.Context(), actor, doc.ID, key, input)
 	if err != nil || result.Revision != 2 {
 		t.Fatalf("persistent command replay: %+v %v", result, err)
 	}
-	input.ExpectedRevision = 2
-	if _, err := service.Execute(t.Context(), actor, doc.ID, key, input); !errors.Is(err, application.ErrIdempotencyConflict) {
+	input.BaseRevision = 2
+	if _, err := service.Edit(t.Context(), actor, doc.ID, key, input); !errors.Is(err, application.ErrIdempotencyConflict) {
 		t.Fatalf("changed key body: %v", err)
 	}
-	_, err = service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 2, Commands: []domain.Command{{Type: "MoveNodes", Moves: []domain.Move{{ID: n1, X: 80}}}, {Type: "DeleteNodes", IDs: []uuid.UUID{uuid.New()}}}})
-	if !errors.Is(err, domain.ErrInvalidCommand) {
+	_, err = service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.Positions([]domain.Move{{ID: n1, X: 80}}), canvasfixture.Deletes([]uuid.UUID{uuid.New()}))})
+	if !operationRejected(err, "invalid_operation", "id_conflict") {
 		t.Fatalf("bad batch accepted: %v", err)
 	}
 	current, err := service.Get(t.Context(), actor, doc.ID)
 	if err != nil || current.Revision != 2 || current.Nodes[0].X != 0 {
 		t.Fatalf("partial write: %+v %v", current, err)
 	}
-	if _, err := service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 2, Commands: []domain.Command{{Type: "DeleteNodes", IDs: []uuid.UUID{n1}}}}); err != nil {
+	deleteKey := uuid.NewString()
+	if _, err := service.Edit(t.Context(), actor, doc.ID, deleteKey, application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.Deletes([]uuid.UUID{n1}))}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 3, Commands: input.Commands}); !errors.Is(err, domain.ErrInvalidCommand) {
+	if _, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 3, Operations: input.Operations}); !operationRejected(err, "invalid_operation", "id_conflict") {
 		t.Fatalf("duplicate existing node allowed: %v", err)
 	}
-	restore := application.CommandsInput{ExpectedRevision: 3, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{{ID: n1, Title: "备注", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: ptr("A")}}}}, {Type: "Connect", Edges: []domain.Edge{{ID: e, EdgeType: "annotation", SourceNodeID: n1, TargetNodeID: n2}}}}}
-	result, err = service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), restore)
+	restore := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 3, UndoOf: deleteKey}
+	result, err = service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), restore)
 	if err != nil || len(result.Nodes) != 2 || len(result.Edges) != 1 {
 		t.Fatalf("restore: %+v %v", result, err)
 	}
@@ -111,14 +114,14 @@ func TestCanvasPersistenceRevisionReplayRollbackAndRestore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = service.Execute(t.Context(), other, otherDoc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{{ID: n1, Title: "备注", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: ptr("")}}}}}})
-	if !errors.Is(err, application.ErrNotFound) {
+	_, err = service.Edit(t.Context(), other, otherDoc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{{ID: n1, Title: "备注", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: ptr("")}}}))})
+	if !operationRejected(err, "id_conflict") {
 		t.Fatalf("crossdocument UUID restored: %v", err)
 	}
 	if err := database.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Execute(t.Context(), actor, doc.ID, key, input); !errors.Is(err, identityapp.ErrSessionInvalid) {
+	if _, err := service.Edit(t.Context(), actor, doc.ID, key, input); !errors.Is(err, identityapp.ErrSessionInvalid) {
 		t.Fatalf("revoked actor replayed: %v", err)
 	}
 	var changes, audits, logs int64
@@ -130,10 +133,10 @@ func TestCanvasPersistenceRevisionReplayRollbackAndRestore(t *testing.T) {
 	}
 }
 
-func TestConcurrentCanvasCommandsAdvanceOneRevision(t *testing.T) {
+func TestConcurrentCanvasOperationsJointlyAdvanceRevisions(t *testing.T) {
 	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
-	service := application.NewService(canvasStore(database))
+	service := canvasfixture.NewService(canvasStore(database))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "Concurrent"})
 	if err != nil {
 		t.Fatal(err)
@@ -142,26 +145,22 @@ func TestConcurrentCanvasCommandsAdvanceOneRevision(t *testing.T) {
 	results := make(chan error, 2)
 	for range 2 {
 		wg.Go(func() {
-			_, err := service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{{Type: "SetViewport", Viewport: &domain.Viewport{Zoom: 1}}}})
+			_, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Nodes([]domain.Node{resourceNode("text")})})
 			results <- err
 		})
 	}
 	wg.Wait()
 	close(results)
-	ok, conflict := 0, 0
+	accepted := 0
 	for err := range results {
-		var revision *application.RevisionConflict
-		switch {
-		case err == nil:
-			ok++
-		case errors.As(err, &revision):
-			conflict++
-		default:
+		if err != nil {
 			t.Fatal(err)
 		}
+		accepted++
 	}
-	if ok != 1 || conflict != 1 {
-		t.Fatalf("success=%d conflict=%d", ok, conflict)
+	read, err := service.Get(t.Context(), actor, doc.ID)
+	if err != nil || accepted != 2 || read.Revision != 3 || len(read.Nodes) != 2 {
+		t.Fatal("independent OT contributions lost", read, err)
 	}
 }
 
@@ -169,4 +168,18 @@ func canvasStore(database *gorm.DB) *pgcanvas.Store {
 	return pgcanvas.NewScopedStore(database, func(tx *gorm.DB) application.MediaReader {
 		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess), nil)
 	}, mediawire.NewCanvasProjectAccess)
+}
+
+// operationRejected checks the stable terminal business code exposed by OT.
+func operationRejected(err error, codes ...string) bool {
+	var rejection *domain.OperationError
+	if !errors.As(err, &rejection) {
+		return false
+	}
+	for _, code := range codes {
+		if rejection.Code == code {
+			return true
+		}
+	}
+	return false
 }

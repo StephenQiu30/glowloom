@@ -9,6 +9,11 @@ import (
 
 func inverseStructure(before Document, op Operation) ([]Operation, error) {
 	switch op.Type {
+	case "replace_media":
+		if op.ExpectedMediaRef == nil || op.NewMediaRef == nil {
+			return nil, operationError("undo_unavailable")
+		}
+		return []Operation{{Type: "replace_media", NodeID: op.NodeID, ExpectedMediaRef: op.NewMediaRef, NewMediaRef: op.ExpectedMediaRef}}, nil
 	case "create_node", "restore_node":
 		if op.Node == nil {
 			return nil, operationError("undo_unavailable")

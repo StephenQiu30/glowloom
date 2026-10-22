@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
+
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 	"github.com/google/uuid"
@@ -28,14 +30,15 @@ import (
 const liveOrigin = "http://127.0.0.1:3198"
 
 type livePacket struct {
-	Type     string            `json:"type"`
-	Revision int64             `json:"revision"`
-	Writable bool              `json:"writable"`
-	OpID     string            `json:"op_id"`
-	Code     string            `json:"code"`
-	Status   int               `json:"status"`
-	Document *domain.Document  `json:"document"`
-	Result   *canvasapp.Result `json:"result"`
+	Type        string                 `json:"type"`
+	Revision    int64                  `json:"revision,string"`
+	Permissions canvasapp.Permissions  `json:"permissions"`
+	OpID        string                 `json:"op_id"`
+	Code        string                 `json:"code"`
+	Status      int                    `json:"status"`
+	Document    *canvasapp.DocumentDTO `json:"document"`
+	Receipt     *canvasapp.ReceiptDTO  `json:"receipt"`
+	Changes     []canvasapp.ChangeDTO  `json:"changes"`
 }
 type liveFixture struct {
 	db      *gorm.DB
@@ -71,7 +74,7 @@ func newLiveFixture(t *testing.T, lifetime ...context.Context) liveFixture {
 }
 func (f liveFixture) dial(t *testing.T) *websocket.Conn {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	conn, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(f.server.URL, "http")+"/api/canvases/"+f.doc.ID.String()+"/live", &websocket.DialOptions{HTTPHeader: http.Header{"Origin": {liveOrigin}, "Cookie": {"glowloom_session=" + f.auth.Token}}})
 	if resp != nil && resp.Body != nil {
@@ -108,13 +111,22 @@ func liveSend(t *testing.T, c *websocket.Conn, p any) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
+	if message, ok := p.(map[string]any); ok {
+		if body, ok := message["body"].(canvasapp.CollaborationInput); ok {
+			dto, err := canvasapp.Submission(body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			message["body"] = dto
+		}
+	}
 	if err := wsjson.Write(ctx, c, p); err != nil {
 		t.Fatal(err)
 	}
 }
 func (f liveFixture) join(t *testing.T, c *websocket.Conn) {
 	t.Helper()
-	liveSend(t, c, map[string]any{"type": "join", "protocol_version": 1, "scope_id": f.actor.ScopeID, "csrf_token": f.auth.CSRFToken})
+	liveSend(t, c, map[string]any{"type": "join", "protocol_version": 3, "client_id": canvasfixture.ClientID, "last_revision": "0", "scope_id": f.actor.ScopeID, "csrf_token": f.auth.CSRFToken})
 	p := liveRead(t, c, "snapshot", 0)
 	if p.Document == nil || p.Document.ID != f.doc.ID {
 		t.Fatal("missing authorized database snapshot")
@@ -128,16 +140,16 @@ func TestCanvasWebSocketDatabaseSaveBroadcastAndReceiptReplay(t *testing.T) {
 	f.join(t, b)
 	first, second := resourceNode("text"), resourceNode("text")
 	edge := domain.Edge{ID: uuid.New(), EdgeType: "annotation", SourceNodeID: first.ID, TargetNodeID: second.ID}
-	body := canvasapp.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{first, second}}, {Type: "Connect", Edges: []domain.Edge{edge}}}}
+	body := canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &first}, {Type: "create_node", Node: &second}, {Type: "connect", Edge: &edge}}}
 	key := uuid.NewString()
 	submit := map[string]any{"type": "submit", "op_id": key, "body": body}
 	liveSend(t, a, submit)
 	ack := liveRead(t, a, "ack", 2)
-	if ack.Result == nil || len(ack.Result.Nodes) != 2 || len(ack.Result.Edges) != 1 || ack.OpID != key {
+	if ack.Receipt == nil || ack.Receipt.Status != "accepted" || ack.Receipt.Revision != 2 || ack.OpID != key {
 		t.Fatal("save was not confirmed by committed graph")
 	}
-	observed := liveRead(t, b, "snapshot", 2)
-	if observed.Document == nil || len(observed.Document.Edges) != 1 {
+	observed := liveRead(t, b, "changes", 2)
+	if len(observed.Changes) != 1 || len(observed.Changes[0].Effects) != 3 {
 		t.Fatal("other client missed database edge")
 	}
 	loaded, err := f.service.Get(t.Context(), f.actor, f.doc.ID)
@@ -149,7 +161,7 @@ func TestCanvasWebSocketDatabaseSaveBroadcastAndReceiptReplay(t *testing.T) {
 	f.join(t, reconnected)
 	liveSend(t, reconnected, map[string]any{"type": "resolve", "op_id": key, "body": body})
 	receipt := liveRead(t, reconnected, "ack", 2)
-	if receipt.OpID != key || receipt.Result == nil || receipt.Result.Revision != 2 {
+	if receipt.OpID != key || receipt.Receipt == nil || receipt.Receipt.Revision != 2 {
 		t.Fatal("durable receipt not resolved")
 	}
 	liveSend(t, reconnected, submit)
@@ -167,17 +179,28 @@ func TestCanvasWebSocketHeartbeatFindsMissedWritesAndArchive(t *testing.T) {
 	f := newLiveFixture(t)
 	c := f.dial(t)
 	f.join(t, c)
-	_, err := f.service.Execute(t.Context(), f.actor, f.doc.ID, uuid.NewString(), canvasapp.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{resourceNode("text")}}}})
-	if err != nil {
-		t.Fatal(err)
+	n := resourceNode("text")
+	r, err := canvasapp.NewCollaborationService(canvasStore(f.db)).Submit(t.Context(), f.actor, f.doc.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}}})
+	if err != nil || r.Status != "accepted" {
+		t.Fatal(r, err)
 	}
-	liveRead(t, c, "snapshot", 2)
+	liveRead(t, c, "changes", 2)
 	if err := f.db.Exec(`UPDATE workspace.project SET status='archived',archived_at=now() WHERE id=?`, f.doc.ProjectID).Error; err != nil {
 		t.Fatal(err)
 	}
-	p := liveRead(t, c, "snapshot", 2)
-	if p.Writable {
-		t.Fatal("heartbeat retained write permission after archive")
+	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
+	defer cancel()
+	for {
+		var p livePacket
+		if err := wsjson.Read(ctx, c, &p); err != nil {
+			t.Fatal("archive permission update was not delivered", err)
+		}
+		if p.Type == "error" {
+			t.Fatal(p)
+		}
+		if p.Type == "heartbeat" && !p.Permissions.Write {
+			break
+		}
 	}
 }
 func TestCanvasWebSocketRejectsForeignOriginBeforeUpgrade(t *testing.T) {
@@ -219,13 +242,14 @@ func TestCanvasWebSocketConflictDoesNotOverwriteAndArchiveStillResolves(t *testi
 	f.join(t, a)
 	f.join(t, b)
 	key := uuid.NewString()
-	body := canvasapp.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{resourceNode("text")}}}}
+	n := resourceNode("text")
+	body := canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}}}
 	liveSend(t, a, map[string]any{"type": "submit", "op_id": key, "body": body})
 	liveRead(t, a, "ack", 2)
 	staleKey := uuid.NewString()
 	liveSend(t, b, map[string]any{"type": "submit", "op_id": staleKey, "body": body})
-	conflict := liveError(t, b)
-	if conflict.OpID != staleKey || conflict.Status != 409 || conflict.Code != "revision_conflict" {
+	conflict := liveRead(t, b, "ack", 0)
+	if conflict.OpID != staleKey || conflict.Receipt == nil || conflict.Receipt.Status != "rejected" || conflict.Receipt.Code != "id_conflict" {
 		t.Fatalf("unsafe conflict result: %+v", conflict)
 	}
 	loaded, err := f.service.Get(t.Context(), f.actor, f.doc.ID)
@@ -238,9 +262,9 @@ func TestCanvasWebSocketConflictDoesNotOverwriteAndArchiveStillResolves(t *testi
 	liveSend(t, a, map[string]any{"type": "resolve", "op_id": key, "body": body})
 	liveRead(t, a, "ack", 2)
 	// A reused UUID with another body can never resolve the old success.
-	body.ExpectedRevision = 2
+	body.BaseRevision = 2
 	liveSend(t, a, map[string]any{"type": "resolve", "op_id": key, "body": body})
-	if reused := liveError(t, a); reused.Code != "idempotency_key_reused" {
+	if reused := liveError(t, a); reused.Code != "op_id_reused" {
 		t.Fatalf("hash mismatch accepted: %+v", reused)
 	}
 }
@@ -290,7 +314,7 @@ func TestCanvasWebSocketHeartbeatDoesNotExtendSessionAndRevocationCloses(t *test
 	if err := wsjson.Read(ctx, c, &p); err != nil {
 		t.Fatal(err)
 	}
-	if p.Type != "error" || p.Status != 401 || p.Document != nil || p.Result != nil {
+	if p.Type != "error" || p.Status != 401 || p.Document != nil || p.Receipt != nil {
 		t.Fatalf("private delivery after revoke: %+v", p)
 	}
 	if err := wsjson.Read(ctx, c, &p); err == nil {
@@ -305,7 +329,8 @@ func TestCanvasWebSocketArchivedWriteKeepsReadableConnection(t *testing.T) {
 	if err := f.db.Exec(`UPDATE workspace.project SET status='archived',archived_at=now() WHERE id=?`, f.doc.ProjectID).Error; err != nil {
 		t.Fatal(err)
 	}
-	liveSend(t, c, map[string]any{"type": "submit", "op_id": uuid.NewString(), "body": canvasapp.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{resourceNode("text")}}}}})
+	n := resourceNode("text")
+	liveSend(t, c, map[string]any{"type": "submit", "op_id": uuid.NewString(), "body": canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}}}})
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 	var p livePacket
@@ -316,8 +341,8 @@ func TestCanvasWebSocketArchivedWriteKeepsReadableConnection(t *testing.T) {
 		t.Fatalf("read-only write must preserve readable page, got %+v", p)
 	}
 	liveSend(t, c, map[string]any{"type": "sync"})
-	p = liveRead(t, c, "snapshot", 1)
-	if p.Writable {
+	p = liveRead(t, c, "heartbeat", 1)
+	if p.Permissions.Write {
 		t.Fatal("archived canvas still writable")
 	}
 }

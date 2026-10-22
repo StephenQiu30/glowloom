@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
+
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
 
 	"github.com/google/uuid"
@@ -20,7 +22,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
@@ -121,7 +122,7 @@ func TestPublicCanvasAPIWithLocalPostgres(t *testing.T) {
 	if code != 201 {
 		t.Fatalf("create %d %s", code, body)
 	}
-	var doc domain.Document
+	var doc canvasapp.DocumentDTO
 	if err := json.Unmarshal(body, &doc); err != nil {
 		t.Fatal(err)
 	}
@@ -130,21 +131,8 @@ func TestPublicCanvasAPIWithLocalPostgres(t *testing.T) {
 		t.Fatalf("create replay %d %s", code, replayed)
 	}
 	path := "/api/canvases/" + doc.ID.String() + "/commands"
-	input := map[string]any{"expected_revision": 1, "commands": []map[string]any{{"type": "AddNodes", "nodes": []map[string]any{{"id": uuid.NewString(), "title": "文字", "node_type": "text", "node_action": "resource", "config": map[string]string{"text": "持久备注"}, "x": 0, "y": 0}}}}}
-	key = uuid.NewString()
-	code, body = request("POST", path, input, key, origin)
-	if code != 200 {
-		t.Fatalf("commands %d %s", code, body)
-	}
-	code, replayed = request("POST", path, input, key, origin)
-	if code != 200 || !bytes.Equal(body, replayed) {
-		t.Fatalf("command replay %d %s", code, replayed)
-	}
-	if code, body := request("POST", path, input, uuid.NewString(), origin); code != 409 || !bytes.Contains(body, []byte(`"current_revision":2`)) {
-		t.Fatalf("conflict %d %s", code, body)
-	}
-	if code, body := request("POST", path, map[string]any{"expected_revision": 2, "commands": []map[string]any{{"type": "RunNodes"}}}, uuid.NewString(), origin); code != 422 || !bytes.Contains(body, []byte(`"command_index":0`)) {
-		t.Fatalf("unsupported %d %s", code, body)
+	if code, _ := request("POST", path, map[string]any{"expected_revision": "1", "commands": []any{}}, uuid.NewString(), origin); code != 404 {
+		t.Fatalf("retired editing route remains available: %d", code)
 	}
 	if code, body := request("GET", "/swagger/doc.json", nil, "", ""); code != http.StatusNotFound {
 		t.Fatalf("removed swagger route %d %s", code, body)
@@ -153,16 +141,16 @@ func TestPublicCanvasAPIWithLocalPostgres(t *testing.T) {
 		t.Fatalf("missing route %d", code)
 	}
 	renameKey := uuid.NewString()
-	renameInput := map[string]any{"expected_revision": 2, "name": "HTTP正式画布"}
-	if code, body := request("PATCH", "/api/canvases/"+doc.ID.String(), renameInput, renameKey, origin); code != 200 || !bytes.Contains(body, []byte(`"revision":3`)) {
+	renameInput := map[string]any{"expected_revision": "1", "name": "HTTP正式画布"}
+	if code, body := request("PATCH", "/api/canvases/"+doc.ID.String(), renameInput, renameKey, origin); code != 200 || !bytes.Contains(body, []byte(`"revision":"2"`)) {
 		t.Fatalf("rename %d %s", code, body)
 	}
-	if code, body := request("PATCH", "/api/canvases/"+doc.ID.String(), renameInput, renameKey, origin); code != 200 || !bytes.Contains(body, []byte(`"revision":3`)) {
+	if code, body := request("PATCH", "/api/canvases/"+doc.ID.String(), renameInput, renameKey, origin); code != 200 || !bytes.Contains(body, []byte(`"revision":"2"`)) {
 		t.Fatalf("rename replay %d %s", code, body)
 	}
 	deleteKey := uuid.NewString()
 	for range 2 {
-		if code, body := request("DELETE", "/api/canvases/"+doc.ID.String(), map[string]any{"expected_revision": 3}, deleteKey, origin); code != 200 || !bytes.Contains(body, []byte(`"deleted":true`)) {
+		if code, body := request("DELETE", "/api/canvases/"+doc.ID.String(), map[string]any{"expected_revision": "2"}, deleteKey, origin); code != 200 || !bytes.Contains(body, []byte(`"deleted":true`)) {
 			t.Fatalf("delete %d %s", code, body)
 		}
 	}

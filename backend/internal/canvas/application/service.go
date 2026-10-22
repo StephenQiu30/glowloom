@@ -1,4 +1,4 @@
-// Package application coordinates authorized canvas document commands.
+// Package application coordinates authorized canvas documents and lifecycle actions.
 package application
 
 import (
@@ -33,23 +33,6 @@ type CreateInput struct {
 	Scope json.RawMessage `json:"scope" swaggertype:"object"`
 }
 
-// CommandsInput applies a single optimistic document transaction.
-type CommandsInput struct {
-	ExpectedRevision int64            `json:"expected_revision"`
-	Commands         []domain.Command `json:"commands"`
-}
-
-// CommandResult marks one atomically committed command.
-type CommandResult struct {
-	OK bool `json:"ok"`
-}
-
-// Result includes the authoritative document snapshot returned by commands.
-type Result struct {
-	domain.Document
-	Results []CommandResult `json:"results"`
-}
-
 // RenameInput renames a document at its current revision.
 type RenameInput struct {
 	ExpectedRevision int64  `json:"expected_revision"`
@@ -78,8 +61,6 @@ type Store interface {
 	List(context.Context, identityapp.Principal, uuid.UUID) ([]domain.Document, error)
 	Get(context.Context, identityapp.Principal, uuid.UUID) (domain.Document, error)
 	Create(context.Context, identityapp.Principal, uuid.UUID, string, CreateInput) (domain.Document, error)
-	Execute(context.Context, identityapp.Principal, uuid.UUID, string, CommandsInput) (Result, error)
-	Resolve(context.Context, identityapp.Principal, uuid.UUID, string, CommandsInput) (*Result, error)
 	Rename(context.Context, identityapp.Principal, uuid.UUID, string, RenameInput) (domain.Document, error)
 	Delete(context.Context, identityapp.Principal, uuid.UUID, string, DeleteInput) (DeleteResult, error)
 }
@@ -113,13 +94,6 @@ func (s *Service) Create(ctx context.Context, a identityapp.Principal, p uuid.UU
 	return s.store.Create(ctx, a, p, key, input)
 }
 
-// Execute validates the revision and batch bounds; the store applies it atomically.
-func (s *Service) Execute(ctx context.Context, a identityapp.Principal, id uuid.UUID, key string, input CommandsInput) (Result, error) {
-	if !validKey(key) || input.ExpectedRevision < 1 || len(input.Commands) < 1 || len(input.Commands) > 100 {
-		return Result{}, domain.ErrInvalidCommand
-	}
-	return s.store.Execute(ctx, a, id, key, input)
-}
 func validKey(key string) bool { id, err := uuid.Parse(key); return err == nil && id != uuid.Nil }
 
 // Rename validates bounded user-facing metadata before the optimistic transaction.
@@ -137,13 +111,4 @@ func (s *Service) Delete(ctx context.Context, a identityapp.Principal, id uuid.U
 		return DeleteResult{}, domain.ErrInvalidCommand
 	}
 	return s.store.Delete(ctx, a, id, key, input)
-}
-
-// Resolve checks the original durable receipt without executing or rebasing it.
-// A nil result means unknown, not a confirmed rejection.
-func (s *Service) Resolve(ctx context.Context, a identityapp.Principal, id uuid.UUID, key string, input CommandsInput) (*Result, error) {
-	if !validKey(key) || input.ExpectedRevision < 1 || len(input.Commands) < 1 || len(input.Commands) > 100 {
-		return nil, domain.ErrInvalidCommand
-	}
-	return s.store.Resolve(ctx, a, id, key, input)
 }
