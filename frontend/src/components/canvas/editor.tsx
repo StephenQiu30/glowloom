@@ -32,6 +32,7 @@ import {
   Grid2X2,
   Scaling,
   ImageIcon,
+  ArrowLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -73,12 +74,30 @@ import type {
   ViewportTransform,
 } from "./types";
 import type { CanvasBackgroundMode } from "./theme";
-export function CanvasEditor() {
+import Link from "next/link";
+import { UploadDialog } from "@/components/media/upload-dialog";
+export type CanvasService = {
+  document: CanvasDocument;
+  name: string;
+  projectID: string;
+  status: string;
+  writable: boolean;
+  undo: boolean;
+  redo: boolean;
+  commit: (
+    before: CanvasDocument,
+    after: CanvasDocument,
+  ) => Promise<CanvasDocument>;
+  history: (direction: "undo" | "redo") => Promise<CanvasDocument>;
+};
+export function CanvasEditor({ service }: { service?: CanvasService }) {
   const [availability, setAvailability] = useState({
     undo: false,
     redo: false,
   });
-  const [doc, setDoc] = useState<CanvasDocument>(emptyDocument);
+  const [doc, setDoc] = useState<CanvasDocument>(
+    service?.document ?? emptyDocument,
+  );
   const current = useRef(doc);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [tool, setTool] = useState<"select" | "pan">("select");
@@ -87,6 +106,16 @@ export function CanvasEditor() {
   const [size, setSize] = useState({ width: 1000, height: 700 });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [upload, setUpload] = useState<{
+    position: Position;
+    replace?: string;
+    file?: File;
+  } | null>(null);
+  const saving = useRef(false);
+  const serviceRef = useRef(service);
+  useEffect(() => {
+    serviceRef.current = service;
+  }, [service]);
   const [preview, setPreview] = useState<CanvasNodeData | null>(null);
   const [imageTool, setImageTool] = useState<{
     node: CanvasNodeData;
@@ -124,18 +153,67 @@ export function CanvasEditor() {
     setDoc(next);
   }, []);
   const remember = (before: CanvasDocument) => {
+    if (service) return;
     history.current.past = [...history.current.past.slice(-49), before];
     history.current.future = [];
     setAvailability({ undo: true, redo: false });
   };
+  const persist = async (before: CanvasDocument, next: CanvasDocument) => {
+    const remote = serviceRef.current;
+    if (!remote || saving.current) return;
+    saving.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const confirmed = await remote.commit(before, next);
+      if (mounted.current)
+        apply({ ...confirmed, viewport: current.current.viewport });
+    } catch (error) {
+      if (mounted.current) {
+        apply(before);
+        setError(error instanceof Error ? error.message : "修改未保存");
+      }
+    } finally {
+      saving.current = false;
+      if (mounted.current) setBusy(false);
+    }
+  };
   const commit = (graph: CanvasGraph) => {
+    if (service && (!service.writable || saving.current)) return;
+    const before = current.current;
     remember(current.current);
-    apply({
+    const next = {
       ...current.current,
       nodes: graph.nodes,
       connections: graph.connections,
-    });
+    };
+    apply(next);
+    if (service) void persist(before, next);
   };
+  useEffect(() => {
+    if (!service) return;
+    const synchronize = () => {
+      if (
+        saving.current ||
+        gesture.current ||
+        root.current?.querySelector("input:focus,textarea:focus")
+      )
+        return;
+      if (
+        current.current.serviceRevision !== service.document.serviceRevision ||
+        current.current.nodes.some(
+          (node) =>
+            node.metadata?.assetId &&
+            node.metadata.content !==
+              service.document.nodes.find((n) => n.id === node.id)?.metadata
+                ?.content,
+        )
+      )
+        apply({ ...service.document, viewport: current.current.viewport });
+    };
+    const timer = setInterval(synchronize, 200);
+    return () => clearInterval(timer);
+  }, [service, apply]);
   const viewportChange = useCallback(
     (viewport: ViewportTransform) => apply({ ...current.current, viewport }),
     [apply],
@@ -153,7 +231,13 @@ export function CanvasEditor() {
     );
     observer.observe(container);
     const leave = (event: BeforeUnloadEvent) => {
-      if (current.current.nodes.length) event.preventDefault();
+      if (
+        serviceRef.current
+          ? saving.current ||
+            Boolean(root.current?.querySelector("input:focus,textarea:focus"))
+          : current.current.nodes.length
+      )
+        event.preventDefault();
     };
     const releaseSpace = () => {
       spacePressed.current = false;
@@ -187,6 +271,10 @@ export function CanvasEditor() {
     setSelected(new Set(nodes.map((n) => n.id)));
   };
   const undo = () => {
+    if (service) {
+      void remoteHistory("undo");
+      return;
+    }
     const previous = history.current.past.pop();
     if (!previous) return;
     history.current.future.push(current.current);
@@ -195,12 +283,33 @@ export function CanvasEditor() {
     clearSelection();
   };
   const redo = () => {
+    if (service) {
+      void remoteHistory("redo");
+      return;
+    }
     const next = history.current.future.pop();
     if (!next) return;
     history.current.past.push(current.current);
     setAvailability({ undo: true, redo: !!history.current.future.length });
     apply(next);
     clearSelection();
+  };
+  const remoteHistory = async (direction: "undo" | "redo") => {
+    if (!service || !service.writable || saving.current) return;
+    saving.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const confirmed = await service.history(direction);
+      if (mounted.current)
+        apply({ ...confirmed, viewport: current.current.viewport });
+    } catch (error) {
+      if (mounted.current)
+        setError(error instanceof Error ? error.message : "历史操作失败");
+    } finally {
+      saving.current = false;
+      if (mounted.current) setBusy(false);
+    }
   };
   const remove = () => {
     if (selected.size) {
@@ -318,6 +427,7 @@ export function CanvasEditor() {
     );
   };
   const moveNode = (event: ReactPointerEvent, node: CanvasNodeData) => {
+    if (service && (!service.writable || saving.current)) return;
     if (tool === "pan" || spacePressed.current) return;
     const selection = event.shiftKey
       ? new Set(selected)
@@ -373,10 +483,12 @@ export function CanvasEditor() {
               : n,
           ),
         });
+        if (service) void persist(d, current.current);
       },
     );
   };
   const resizeNode = (event: ReactPointerEvent, node: CanvasNodeData) => {
+    if (service && (!service.writable || saving.current)) return;
     const d = current.current;
     const start = { x: event.clientX, y: event.clientY };
     let changed = false;
@@ -406,7 +518,10 @@ export function CanvasEditor() {
         });
       },
       () => {
-        if (changed) remember(d);
+        if (changed) {
+          remember(d);
+          if (service) void persist(d, current.current);
+        }
       },
     );
   };
@@ -469,6 +584,19 @@ export function CanvasEditor() {
   };
   const importMedia = async (list: File[], position = center()) => {
     if (!list.length || busy) return;
+    if (service) {
+      if (list.length !== 1) {
+        setError("请每次上传一个素材");
+        return;
+      }
+      setUpload({
+        position,
+        replace: replaceID.current ?? undefined,
+        file: list[0],
+      });
+      replaceID.current = null;
+      return;
+    }
     setBusy(true);
     setError("");
     const replace = replaceID.current;
@@ -514,7 +642,8 @@ export function CanvasEditor() {
       tabIndex={-1}
       className="relative h-dvh w-full overflow-hidden bg-background text-foreground outline-none"
       role="region"
-      aria-label="独立画布编辑器"
+      aria-label={service ? "项目画布编辑器" : "独立画布编辑器"}
+      inert={service && (busy || !service.writable) ? true : undefined}
       onKeyUp={(e) => {
         if (e.code === "Space") spacePressed.current = false;
       }}
@@ -670,11 +799,18 @@ export function CanvasEditor() {
           />
         )}
       </InfiniteCanvas>
-      <div className="absolute top-4 right-4 left-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-popover/95 p-2 shadow-sm">
+      <div className="absolute top-4 right-4 left-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-popover/95 p-2">
+        {service && (
+          <Button asChild variant="ghost" size="icon" aria-label="返回画布列表">
+            <Link href="/projects">
+              <ArrowLeft />
+            </Link>
+          </Button>
+        )}
         <div className="px-2">
-          <h1 className="text-sm font-medium">无限画布</h1>
+          <h1 className="text-sm font-medium">{service?.name ?? "无限画布"}</h1>
           <p className="text-xs text-muted-foreground">
-            独立编辑 · 内容仅在本页，离开前请导出
+            {service?.status ?? "独立编辑 · 内容仅在本页，离开前请导出"}
           </p>
         </div>
         <div className="flex items-center gap-1">
@@ -683,7 +819,7 @@ export function CanvasEditor() {
               label={"导入画布文件"}
               icon={<FolderOpen />}
               onClick={() => projectFile.current?.click()}
-              disabled={busy}
+              disabled={busy || Boolean(service)}
             />
           }
           {
@@ -706,7 +842,7 @@ export function CanvasEditor() {
               label={"撤销"}
               icon={<Undo2 />}
               onClick={undo}
-              disabled={!availability.undo}
+              disabled={service ? !service.undo : !availability.undo}
             />
           }
           {
@@ -714,7 +850,7 @@ export function CanvasEditor() {
               label={"重做"}
               icon={<Redo2 />}
               onClick={redo}
-              disabled={!availability.redo}
+              disabled={service ? !service.redo : !availability.redo}
             />
           }
         </div>
@@ -722,7 +858,7 @@ export function CanvasEditor() {
       <div
         role="toolbar"
         aria-label="画布工具"
-        className="absolute bottom-5 left-1/2 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-1 overflow-x-auto rounded-xl border bg-popover p-2 shadow-lg"
+        className="absolute bottom-5 left-1/2 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-1 overflow-x-auto rounded-xl bg-popover p-2"
       >
         <Button
           aria-label="选择工具"
@@ -839,21 +975,32 @@ export function CanvasEditor() {
             <>
               {
                 <ToolButton
-                  label={"裁剪图片"}
+                  label={
+                    service ? "裁剪图片（派生素材保存待接入）" : "裁剪图片"
+                  }
+                  disabled={Boolean(service)}
                   icon={<Crop />}
                   onClick={() => setImageTool({ node: single, mode: "crop" })}
                 />
               }
               {
                 <ToolButton
-                  label={"拆分图片"}
+                  label={
+                    service ? "拆分图片（派生素材保存待接入）" : "拆分图片"
+                  }
+                  disabled={Boolean(service)}
                   icon={<Grid2X2 />}
                   onClick={() => setImageTool({ node: single, mode: "split" })}
                 />
               }
               {
                 <ToolButton
-                  label={"调整图片像素"}
+                  label={
+                    service
+                      ? "调整图片像素（派生素材保存待接入）"
+                      : "调整图片像素"
+                  }
+                  disabled={Boolean(service)}
                   icon={<Scaling />}
                   onClick={() => setImageTool({ node: single, mode: "resize" })}
                 />
@@ -972,6 +1119,57 @@ export function CanvasEditor() {
           mode={imageTool.mode}
           onClose={() => setImageTool(null)}
           onResult={add}
+        />
+      )}
+      {upload && service && (
+        <UploadDialog
+          projectID={service.projectID}
+          initialFile={upload.file}
+          onClose={() => setUpload(null)}
+          onUploaded={(asset) => {
+            if (
+              !asset?.id ||
+              !["image", "video", "audio"].includes(asset.kind ?? "")
+            ) {
+              setError("素材已上传，但此类型暂不支持加入画布");
+              setUpload(null);
+              return;
+            }
+            const node = createNode(
+              asset.kind as "image" | "video" | "audio",
+              upload.position,
+            );
+            node.title = asset.file_name ?? node.title;
+            node.metadata = { assetId: asset.id, content: "" };
+            if (upload.replace) {
+              const previous = current.current.nodes.find(
+                (n) => n.id === upload.replace,
+              );
+              if (!previous || previous.type !== node.type) {
+                setError(
+                  "替换素材必须与原节点类型一致，已上传素材保留在项目中",
+                );
+                setUpload(null);
+                return;
+              }
+              commit({
+                ...current.current,
+                nodes: current.current.nodes.map((n) =>
+                  n.id === previous.id
+                    ? {
+                        ...previous,
+                        metadata: {
+                          ...previous.metadata,
+                          assetId: asset.id,
+                          content: "",
+                        },
+                      }
+                    : n,
+                ),
+              });
+            } else add([node]);
+            setUpload(null);
+          }}
         />
       )}
       <Dialog

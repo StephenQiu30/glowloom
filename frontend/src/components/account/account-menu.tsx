@@ -56,7 +56,7 @@ export function AccountMenu({
         <Button
           variant="ghost"
           size="icon-lg"
-          className="size-10 rounded-full max-md:size-11"
+          className="rounded-full max-md:size-11"
           aria-label="账号菜单"
           title={name}
         >
@@ -72,7 +72,7 @@ export function AccountMenu({
         <DropdownMenuGroup>
           <DropdownMenuLabel className="sr-only">当前账号</DropdownMenuLabel>
           <DropdownMenuItem asChild className="gap-3 px-2 py-3">
-            <Link href="/account" aria-label="账号设置">
+            <Link href="/account" aria-label="个人空间">
               <AccountAvatar size="lg" />
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="truncate font-medium" title={name}>
@@ -84,7 +84,7 @@ export function AccountMenu({
                 >
                   {accountName || "账号信息暂不可用"}
                 </span>
-                <span className="text-xs text-muted-foreground">账号设置</span>
+                <span className="text-xs text-muted-foreground">个人空间</span>
               </span>
               <ChevronRight data-icon="inline-end" />
             </Link>

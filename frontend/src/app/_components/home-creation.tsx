@@ -21,7 +21,13 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from "@/components/ui/input-group";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { HomePrompt } from "./home-prompt";
 
@@ -157,6 +163,28 @@ export function HomeCreation({
       onChange={(next) => void select(type, next)}
     />
   ) : null;
+  const typeControl = (
+    <Select
+      value={type}
+      disabled={locked || switching}
+      onValueChange={(value) => void select(value as CreationType)}
+    >
+      <SelectTrigger
+        aria-label="创作类型"
+        className="w-auto border-0 bg-transparent shadow-none"
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {creationTypes.map((item) => (
+          <SelectItem key={item.id} value={item.id}>
+            {item.label}
+            {!["image", "video"].includes(item.id) ? " · 暂未开放" : ""}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 
   return (
     <section className="creation-hero" aria-label="开始创作">
@@ -179,27 +207,9 @@ export function HomeCreation({
         <ToggleGroupItem value="canvas">画布</ToggleGroupItem>
       </ToggleGroup>
       <div hidden={mode !== "generate"}>
-        <Tabs
-          value={type}
-          onValueChange={(value) => void select(value as CreationType)}
-          activationMode="manual"
-          className="creation-tabs"
-        >
-          <div className="creation-tabs-scroll">
-            <TabsList variant="navigation" aria-label="创作类型">
-              {creationTypes.map((item) => (
-                <TabsTrigger
-                  key={item.id}
-                  value={item.id}
-                  disabled={locked || switching}
-                >
-                  {item.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </div>
+        <div className="creation-tabs mt-4">
           {/* One active panel, owned by the selected type; switching first flushes its saved draft. */}
-          <TabsContent value={type}>
+          <div>
             {workspace ? (
               <RichGeneration
                 key={`${workspace.project.id}/${workspace.type}`}
@@ -207,7 +217,12 @@ export function HomeCreation({
                 seed={workspace.seed}
                 draftID={workspace.draftID}
                 presentation="home"
-                headerActions={projectControl}
+                headerActions={
+                  <>
+                    {typeControl}
+                    {projectControl}
+                  </>
+                }
                 onLock={setLocked}
                 onDraftReady={(id) =>
                   drafts.current.set(
@@ -238,11 +253,12 @@ export function HomeCreation({
                       >
                         <Button
                           type="button"
-                          variant="outline"
+                          variant="secondary"
+                          size="icon"
+                          aria-label="添加参考素材"
                           onClick={prepare}
                         >
                           <Plus data-icon="inline-start" />
-                          添加参考
                         </Button>
                         <div className="ml-auto flex min-w-0 items-center gap-1">
                           {projectControl}
@@ -267,6 +283,7 @@ export function HomeCreation({
                         align="block-end"
                         className="creation-tools"
                       >
+                        {typeControl}
                         <Button type="button" variant="ghost" onClick={prepare}>
                           选择模型
                         </Button>
@@ -287,6 +304,7 @@ export function HomeCreation({
                         </span>
                         <Button
                           type="submit"
+                          size="icon"
                           disabled={supported && !prompt.trim()}
                           aria-label={
                             supported
@@ -294,8 +312,7 @@ export function HomeCreation({
                               : `${activeType.label}暂未开放`
                           }
                         >
-                          {supported ? "生成" : "暂未开放"}
-                          {supported && <ArrowUp data-icon="inline-end" />}
+                          <ArrowUp />
                         </Button>
                       </InputGroupAddon>
                     </InputGroup>
@@ -303,8 +320,8 @@ export function HomeCreation({
                 </FieldGroup>
               </form>
             )}
-          </TabsContent>
-        </Tabs>
+          </div>
+        </div>
       </div>
       <div
         hidden={mode !== "canvas"}

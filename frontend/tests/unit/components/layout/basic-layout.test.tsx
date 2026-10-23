@@ -1,7 +1,6 @@
 import { SpaceProvider } from "@/components/spaces/space-context";
 import { SessionProvider } from "@/components/auth/session";
 import {
-  waitFor,
   cleanup,
   act,
   fireEvent,
@@ -121,7 +120,7 @@ it("R6 主导航与画布入口指向真实路由，支持收起和展开", asyn
   fireEvent.click(screen.getByRole("button", { name: "展开导航" }));
   expect(screen.queryByRole("button", { name: "展开导航" })).toBeNull();
   const header = screen.getByRole("banner", { name: "页面顶栏" });
-  expect(within(header).getByText("创作首页")).toBeTruthy();
+  expect(within(header).getByRole("button", { name: "搜索灵感" })).toBeTruthy();
   expect(within(header).getByRole("button", { name: "账号菜单" })).toBeTruthy();
   expect(screen.queryByRole("combobox", { name: "当前创作空间" })).toBeNull();
   expect(screen.queryByRole("link", { name: "团队" })).toBeNull();
@@ -240,17 +239,13 @@ it("游客仅从顶栏登录，手机抽屉只展示导航，关闭认证后恢�
   expect(await screen.findByRole("button", { name: "切换主题" })).toBeTruthy();
   fireEvent.click(await screen.findByRole("button", { name: "打开导航" }));
   const navigation = screen.getByRole("dialog", { name: "导航" });
-  expect(
-    within(navigation).queryByRole("button", { name: "登录 / 注册" }),
-  ).toBeNull();
+  expect(within(navigation).queryByRole("button", { name: "登录" })).toBeNull();
   expect(within(navigation).queryByText("登录后保存你的创作")).toBeNull();
   fireEvent.click(within(navigation).getByRole("button", { name: "关闭导航" }));
   const login = within(
     screen.getByRole("banner", { name: "页面顶栏" }),
-  ).getByRole("button", { name: "登录 / 注册" });
-  expect(screen.getAllByRole("button", { name: "登录 / 注册" })).toHaveLength(
-    1,
-  );
+  ).getByRole("button", { name: "登录" });
+  expect(screen.getAllByRole("button", { name: "登录" })).toHaveLength(1);
   login.focus();
   fireEvent.click(login);
   expect(await screen.findByRole("dialog", { name: "登录织光" })).toBeTruthy();
@@ -275,19 +270,14 @@ it("手机顶栏保留主题与通知，积分入口不显示虚构会员促销"
     </BasicLayout>,
   );
   const header = await screen.findByRole("banner", { name: "页面顶栏" });
-  expect(within(header).getByText("主体库")).toBeTruthy();
+  expect(within(header).getByRole("button", { name: "搜索灵感" })).toBeTruthy();
   expect(within(header).getByRole("button", { name: "消息中心" })).toBeTruthy();
   expect(within(header).queryByRole("button", { name: "积分商城" })).toBeNull();
   expect(within(header).getByRole("button", { name: "账号菜单" })).toBeTruthy();
   expect(within(header).getByRole("button", { name: "切换主题" })).toBeTruthy();
   expect(within(header).queryByRole("button", { name: "更多操作" })).toBeNull();
   expect(within(header).queryByText("开通会员")).toBeNull();
-  fireEvent.click(within(header).getByRole("button", { name: "积分余额" }));
-  expect(await screen.findByText("积分服务暂未开放")).toBeTruthy();
-  fireEvent.click(screen.getByRole("link", { name: "积分总览" }));
-  await waitFor(() =>
-    expect(screen.queryByText("积分服务暂未开放")).toBeNull(),
-  );
+  expect(within(header).queryByRole("button", { name: "积分余额" })).toBeNull();
   fireEvent.click(within(header).getByRole("button", { name: "消息中心" }));
   expect(
     await screen.findByRole("dialog", { name: "消息中心暂未开放" }),
@@ -344,17 +334,11 @@ it("游客侧栏展开和收起均只保留顶栏登录入口", async () => {
   );
   await screen.findByText("公共探索");
   const header = screen.getByRole("banner", { name: "页面顶栏" });
-  expect(
-    within(header).getByRole("button", { name: "登录 / 注册" }),
-  ).toBeTruthy();
-  expect(screen.getAllByRole("button", { name: "登录 / 注册" })).toHaveLength(
-    1,
-  );
+  expect(within(header).getByRole("button", { name: "登录" })).toBeTruthy();
+  expect(screen.getAllByRole("button", { name: "登录" })).toHaveLength(1);
   expect(screen.queryByText("登录后保存你的创作")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "收起导航" }));
-  expect(screen.getAllByRole("button", { name: "登录 / 注册" })).toHaveLength(
-    1,
-  );
+  expect(screen.getAllByRole("button", { name: "登录" })).toHaveLength(1);
   expect(screen.getByRole("link", { name: "素材库" })).toBeTruthy();
 });
 

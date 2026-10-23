@@ -22,6 +22,7 @@ export type CanvasNodeData = {
     naturalWidth?: number;
     naturalHeight?: number;
     mimeType?: string;
+    assetId?: string;
   };
 };
 export type CanvasConnection = {
@@ -38,6 +39,7 @@ export type CanvasGraph = {
   connections: CanvasConnection[];
 };
 export type CanvasDocument = CanvasGraph & {
+  serviceRevision?: string;
   format: "glowloom-canvas";
   version: 1;
   viewport: ViewportTransform;

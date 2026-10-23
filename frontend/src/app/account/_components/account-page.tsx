@@ -39,9 +39,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from "@/components/ui/collapsible";
 import { Checkbox } from "@/components/ui/checkbox";
 
-export function Settings() {
+export function Settings({ embedded = false }: { embedded?: boolean }) {
   const formFieldId = useId();
 
   const session = useSession();
@@ -207,7 +212,7 @@ export function Settings() {
   }
   return (
     <>
-      <h1 className="text-2xl">账号设置</h1>
+      {!embedded ? <h1 className="text-2xl">账号设置</h1> : null}
       <div className="settings-layout">
         <nav className="settings-nav" aria-label="账号设置">
           {[
@@ -249,9 +254,6 @@ export function Settings() {
               )}
               action={{ label: "重新加载创作偏好", onClick: refresh }}
             />
-          ) : null}
-          {tab === "profile" && profile ? (
-            <EmailChange revision={profile.revision} onConflict={refresh} />
           ) : null}
           {tab === "profile" ? (
             profile ? (
@@ -316,6 +318,7 @@ export function Settings() {
                     </Field>
 
                     <Button
+                      className="w-fit self-end"
                       disabled={
                         pending ||
                         Array.from(name.trim()).length < 1 ||
@@ -326,6 +329,17 @@ export function Settings() {
                     </Button>
                   </FieldGroup>
                 </form>
+                <Collapsible className="mt-6 text-sm">
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost">更换邮箱</Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <EmailChange
+                      revision={profile.revision}
+                      onConflict={refresh}
+                    />
+                  </CollapsibleContent>
+                </Collapsible>
               </>
             ) : loadingBlocks.profile ? (
               <LoadingState>正在加载账号资料…</LoadingState>
@@ -375,6 +389,7 @@ export function Settings() {
                     </Field>
                     <p>保存不会覆盖已有草稿。</p>
                     <Button
+                      className="w-fit self-end"
                       disabled={
                         pending ||
                         !preferences ||

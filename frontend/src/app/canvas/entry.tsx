@@ -4,7 +4,9 @@ import dynamic from "next/dynamic";
 
 const Editor = dynamic(
   () =>
-    import("@/components/canvas/editor").then((module) => module.CanvasEditor),
+    import("@/components/canvas/service-workspace").then(
+      (module) => module.ServiceCanvasWorkspace,
+    ),
   {
     ssr: false,
     loading: () => (

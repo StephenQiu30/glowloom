@@ -102,7 +102,9 @@ export function BoundAvatar({
     <div ref={host}>
       <Avatar className="size-14">
         <AvatarImage src={url} alt={label} />
-        <AvatarFallback>头像</AvatarFallback>
+        <AvatarFallback>
+          {label === "头像" ? "织" : Array.from(label.trim())[0] || "织"}
+        </AvatarFallback>
       </Avatar>
       {error ? (
         <FeedbackToast

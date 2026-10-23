@@ -50,6 +50,40 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it("收藏预览中的素材后保持弹窗并更新操作状态", async () => {
+  const item = {
+    id: "33333333-3333-4333-8333-333333333333",
+    title: "预览测试",
+    kind: "image",
+    revision: 1,
+    favorite: false,
+    catalog_state: "active",
+    updated_at: "2026-10-23T00:00:00Z",
+  };
+  let saved = false;
+  vi.mocked(request).mockImplementation(async (url) => {
+    if (url.endsWith("/commands")) {
+      saved = true;
+      return {
+        ...emptyPage,
+        revision: 2,
+        items: [{ id: item.id, revision: 2 }],
+      };
+    }
+    return {
+      ...emptyPage,
+      revision: saved ? 2 : 1,
+      total: 1,
+      items: [{ ...item, revision: saved ? 2 : 1, favorite: saved }],
+    };
+  });
+  render(<AssetsPage />);
+  fireEvent.click(await screen.findByRole("button", { name: "查看 预览测试" }));
+  fireEvent.click(screen.getByRole("button", { name: "收藏" }));
+  await screen.findByRole("button", { name: "取消收藏" });
+  expect(screen.getByRole("dialog")).toBeTruthy();
+});
+
 it("未登录保持素材库首位，不读取私人接口，登录由已有弹窗处理", () => {
   state.session = null;
   render(<AssetsPage />);
@@ -58,19 +92,17 @@ it("未登录保持素材库首位，不读取私人接口，登录由已有弹�
       .getAllByRole("tab")
       .slice(0, 2)
       .map((t) => t.textContent),
-  ).toEqual(["素材库", "生成历史"]);
+  ).toEqual(["素材", "生成历史"]);
   expect(
-    screen.getByRole("tab", { name: "素材库" }).getAttribute("aria-selected"),
+    screen.getByRole("tab", { name: "素材" }).getAttribute("aria-selected"),
   ).toBe("true");
   expect(
-    screen.getByRole("tab", { name: "素材库" }).getAttribute("aria-controls"),
-  ).toBe(screen.getByRole("tabpanel", { name: "素材库" }).id);
+    screen.getByRole("tab", { name: "素材" }).getAttribute("aria-controls"),
+  ).toBe(screen.getByRole("tabpanel", { name: "素材" }).id);
   expect(screen.getByRole("radiogroup", { name: "素材类型" })).toBeTruthy();
   expect(request).not.toHaveBeenCalled();
   expect(
-    screen
-      .getByRole("button", { name: "上传素材上传" })
-      .hasAttribute("disabled"),
+    screen.getByRole("button", { name: "上传素材" }).hasAttribute("disabled"),
   ).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "登录 / 注册" }));
   expect(state.login).toHaveBeenCalledOnce();
@@ -131,19 +163,15 @@ it("拒绝跨账号回执并在接口返回401时回到登录引导", async () =
   expect(screen.queryByText("共 0 个素材")).toBeNull();
 });
 
-it("生成历史指向实际画布，不虚构跨项目记录", async () => {
+it("生成历史要求选择项目后读取，不虚构跨项目记录", async () => {
   render(<AssetsPage />);
   await screen.findByText("这里还没有素材");
   fireEvent.mouseDown(screen.getByRole("tab", { name: "生成历史" }), {
     button: 0,
     ctrlKey: false,
   });
-  expect(
-    (await screen.findByRole("link", { name: "查看我的画布" })).getAttribute(
-      "href",
-    ),
-  ).toBe("/projects");
-  expect(screen.queryByText("暂无生成历史")).toBeNull();
+  expect(await screen.findByText("选择项目，查看生成记录")).toBeTruthy();
+  expect(screen.queryByText("还没有生成记录")).toBeNull();
 });
 
 it("创建文件夹携带库版本和幂等键，成功后重新读取列表", async () => {

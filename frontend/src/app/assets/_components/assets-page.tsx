@@ -6,7 +6,7 @@ import {
   FieldDescription,
   FieldGroup,
 } from "@/components/ui/field";
-import Link from "next/link";
+import { GenerationHistory } from "@/components/media/generation-history";
 import { cn } from "cn";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -16,7 +16,6 @@ import {
   RotateCw,
   Download,
   ArrowLeft,
-  History,
 } from "lucide-react";
 import { PageLayout } from "@/components/layout/page-layout";
 import { useLoginDialog } from "@/components/layout/basic-layout";
@@ -189,7 +188,7 @@ function Library({
     setSaving(true);
     setWriteError("");
     try {
-      requireLibraryReceipt(
+      const receipt = requireLibraryReceipt(
         await applyMediaLibraryCommand(op.body, {
           headers: { "Idempotency-Key": op.key },
         }),
@@ -200,7 +199,24 @@ function Library({
       setConfirm(null);
       setFolderOpen(false);
       setFolderName("");
-      reload();
+      if (
+        op.body.action === "update_item" &&
+        detail &&
+        detail.id === op.body.item_id
+      ) {
+        const changed = receipt.items?.find((item) => item.id === detail.id);
+        if (changed && Number.isSafeInteger(changed.revision)) {
+          setDetail({
+            ...detail,
+            favorite: op.body.metadata?.favorite ?? detail.favorite,
+            revision: changed.revision!,
+          });
+          setLoading(true);
+          setError("");
+          setSelected([]);
+          setRetry((n) => n + 1);
+        } else reload();
+      } else reload();
     } catch (e) {
       setWriteError(mediaError(e));
       if (e instanceof RequestError && e.status >= 400 && e.status < 500) {
@@ -247,7 +263,6 @@ function Library({
       asChild
     >
       <section className="media-library" aria-label="素材库">
-        <h1 className="sr-only">素材库</h1>
         <LibraryToolbar
           filter={filter}
           onFilter={onFilter}
@@ -285,22 +300,7 @@ function Library({
               </EmptyContent>
             </Empty>
           ) : section === "history" ? (
-            <Empty className="library-login-state">
-              <EmptyHeader>
-                <EmptyMedia>
-                  <History aria-hidden="true" />
-                </EmptyMedia>
-                <EmptyTitle>在画布中查看生成记录</EmptyTitle>
-                <EmptyDescription>
-                  生成记录随所属画布保存，打开画布即可继续查看和创作。
-                </EmptyDescription>
-              </EmptyHeader>
-              <EmptyContent>
-                <Button asChild variant="outline" size="lg">
-                  <Link href="/projects">查看我的画布</Link>
-                </Button>
-              </EmptyContent>
-            </Empty>
+            <GenerationHistory />
           ) : (
             <>
               {writeError && (
@@ -560,7 +560,10 @@ function Library({
                             aria-label={`${item.favorite ? "取消收藏" : "收藏"} ${item.title}`}
                             aria-pressed={item.favorite}
                             disabled={
-                              saving || !!pendingOperation || filter.trash
+                              loading ||
+                              saving ||
+                              !!pendingOperation ||
+                              filter.trash
                             }
                             onClick={() => favorite(item)}
                           >

@@ -33,7 +33,7 @@ it("空列表保留数量选择器，同时禁止前后翻页", () => {
       onPageSizeChange={vi.fn()}
     />,
   );
-  expect(screen.getByRole("status").textContent).toContain("0 / 0");
+  expect(screen.getByRole("status").textContent).toContain("0 项");
   expect(
     screen.getByRole("combobox", { name: "素材分页每页数量" }),
   ).toHaveProperty("disabled", false);

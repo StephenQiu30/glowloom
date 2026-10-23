@@ -10,6 +10,7 @@ import {
 import { toast } from "sonner";
 import { Plus, Search, UserRound, MapPin, Box } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PageHeading } from "@/components/layout/page-heading";
 import {
   DataPagination,
   type PageSize,
@@ -58,6 +59,7 @@ export function SubjectList({
   onGenerate,
   filters,
   searchQuery,
+  pageTitle,
 }: {
   projectID: string;
   kind?: API.Kind;
@@ -66,6 +68,7 @@ export function SubjectList({
   onGenerate?: (s: Subject) => void;
   filters?: ReactNode;
   searchQuery?: string;
+  pageTitle?: string;
 }) {
   const [items, setItems] = useState<Subject[]>([]),
     [cursor, setCursor] = useState<string | undefined>(),
@@ -156,6 +159,12 @@ export function SubjectList({
     kind === "character" ? UserRound : kind === "location" ? MapPin : Box;
   return (
     <>
+      {pageTitle ? (
+        <PageHeading
+          title={pageTitle}
+          actions={<Button onClick={() => setCreate(true)}>新建主体</Button>}
+        />
+      ) : null}
       <div className="subject-toolbar">
         {searchQuery === undefined ? (
           <InputGroup className="subject-search">
@@ -202,10 +211,12 @@ export function SubjectList({
             已删除
           </Button>
         )}
-        <Button className="ml-auto" onClick={() => setCreate(true)}>
-          <Plus />
-          创建{kinds[kind]}
-        </Button>
+        {!pageTitle ? (
+          <Button className="ml-auto" onClick={() => setCreate(true)}>
+            <Plus />
+            创建{kinds[kind]}
+          </Button>
+        ) : null}
       </div>
       {error && (
         <FeedbackToast
@@ -255,7 +266,7 @@ export function SubjectList({
         </Empty>
       ) : (
         <div className="subject-grid">
-          {!deleted && !query && (
+          {!pageTitle && !deleted && !query && (
             <Button
               variant="tile"
               className="subject-create"

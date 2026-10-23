@@ -1,9 +1,10 @@
 "use client";
 import { Suspense, useState } from "react";
-import Link from "next/link";
+import { PageHeading } from "@/components/layout/page-heading";
+import { NewCanvasButton } from "@/components/projects/new-canvas-button";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageLayout } from "@/components/layout/page-layout";
-import { ProjectList } from "./project-list";
+import { ProjectList } from "@/components/projects/project-list";
 export function ProjectsPage() {
   return (
     <Suspense>
@@ -54,12 +55,10 @@ function ProjectsContent({
         label: "搜索画布",
       }}
     >
-      <nav className="workspace-tabs">
-        <Link href="/assets">生成历史</Link>
-        <Link href="/projects" aria-current="page">
-          画布
-        </Link>
-      </nav>
+      <PageHeading
+        title="我的画布"
+        actions={<NewCanvasButton>新建画布</NewCanvasButton>}
+      />
       <ProjectList
         key={`${query}:${filter}:${sort}`}
         query={query}

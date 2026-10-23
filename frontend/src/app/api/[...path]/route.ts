@@ -463,6 +463,16 @@ async function proxy(
                           : undefined;
   const boundedRoute = [
     {
+      pattern: `projects/${identityUUID}/copies`,
+      methods: ["GET", "POST"],
+      query: ["limit", "cursor"],
+    },
+    {
+      pattern: `project-copies/${identityUUID}`,
+      methods: ["GET"],
+      query: [] as string[],
+    },
+    {
       pattern: `projects/${identityUUID}`,
       methods: ["GET", "PATCH", "DELETE"],
       query: [] as string[],

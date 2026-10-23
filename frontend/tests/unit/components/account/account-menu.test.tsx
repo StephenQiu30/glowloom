@@ -54,7 +54,7 @@ it("展示当前账号摘要和真实入口，普通创作者不见管理入口"
   expect(screen.getByText(actor.display_name)).toBeTruthy();
   expect(screen.getByText(actor.email)).toBeTruthy();
   for (const [name, href] of [
-    ["账号设置", "/account"],
+    ["个人空间", "/account"],
     ["我的资产", "/assets"],
     ["我的画布", "/projects"],
     ["我的团队", "/teams"],

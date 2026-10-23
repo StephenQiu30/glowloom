@@ -28,19 +28,22 @@ export function UploadDialog({
   onClose,
   onUploaded,
   projectID,
+  initialFile,
 }: {
   onClose: () => void;
   onUploaded: (asset?: API.AssetSummary) => void;
   projectID?: string;
+  initialFile?: File;
 }) {
   const formFieldId = useId();
 
-  const [file, setFile] = useState<File | null>(null);
+  const [file, setFile] = useState<File | null>(initialFile ?? null);
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [done, setDone] = useState(false);
   const [unconfirmed, setUnconfirmed] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
   const key = useRef(crypto.randomUUID());
   const busy = useRef(false);
   const request = useRef<AbortController | null>(null);
@@ -51,6 +54,8 @@ export function UploadDialog({
     if (!f) return;
     setError(validateUpload(f));
     setFile(f);
+    setConfirmed(false);
+    setProgress(null);
     setDone(false);
     key.current = crypto.randomUUID();
   }
@@ -58,6 +63,7 @@ export function UploadDialog({
     if (!file || busy.current || !confirmed || validateUpload(file)) return;
     busy.current = true;
     setPending(true);
+    setProgress(null);
     setError("");
     const controller = new AbortController();
     request.current = controller;
@@ -65,6 +71,12 @@ export function UploadDialog({
       const sendOptions = {
         headers: { "Idempotency-Key": key.current },
         signal: controller.signal,
+        onUploadProgress: (event: { loaded: number; total?: number }) => {
+          if (!controller.signal.aborted && event.total)
+            setProgress(
+              Math.min(100, Math.round((event.loaded / event.total) * 100)),
+            );
+        },
       };
       const r = projectID
         ? await uploadMediaAsset(
@@ -76,10 +88,7 @@ export function UploadDialog({
         : await uploadPersonalMediaAsset(
             { local_review_confirmed: true },
             file,
-            {
-              headers: { "Idempotency-Key": key.current },
-              signal: controller.signal,
-            },
+            sendOptions,
           );
       if (
         !isProjectID(r.asset?.id) ||
@@ -137,13 +146,17 @@ export function UploadDialog({
               />
             </Field>
             <Button
-              variant="outline"
+              variant="secondary"
               className="h-auto min-h-40 flex-col gap-3 p-4 break-all whitespace-normal"
               disabled={pending || unconfirmed}
               onClick={() => input.current?.click()}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault();
+                if (e.dataTransfer.files.length > 1) {
+                  setError("请每次上传一个文件。");
+                  return;
+                }
                 choose(e.dataTransfer.files[0]);
               }}
             >
@@ -169,7 +182,15 @@ export function UploadDialog({
                 我已确认内容与使用权限，文件不包含需要另行授权的真人内容。
               </FieldLabel>
             </Field>
-            {pending && <LoadingState>正在上传并验证文件…</LoadingState>}
+            {pending && (
+              <LoadingState>
+                {progress === null
+                  ? "正在准备上传…"
+                  : progress < 100
+                    ? `正在上传 ${progress}%`
+                    : "上传完成，正在等待服务确认…"}
+              </LoadingState>
+            )}
             {error && <FeedbackToast message={error} />}
             {unconfirmed && (
               <FieldDescription>

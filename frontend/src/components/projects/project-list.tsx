@@ -3,10 +3,11 @@ import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { LoadingState } from "@/components/layout/loading-state";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Grid2X2, MoreHorizontal, Plus } from "lucide-react";
+import { Grid2X2, MoreHorizontal } from "lucide-react";
 import { useProjectPresentation } from "@/components/projects/project-presentation";
 import { subscribeProjectInvalidation } from "@/components/projects/project-presentation-store";
 import { ProjectRenameDialog } from "@/components/projects/project-rename-dialog";
+import { ProjectCopyDialog } from "@/components/projects/project-copy-dialog";
 import { useSpace } from "@/components/spaces/space-context";
 import {
   DropdownMenu,
@@ -36,7 +37,6 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { NewCanvasButton } from "@/components/projects/new-canvas-button";
 import { ProjectActionsDialog } from "@/components/projects/project-actions-dialog";
 import {
   canManageProject,
@@ -205,7 +205,7 @@ export function ProjectList({
                 <Button
                   key={action}
                   variant="outline"
-                  size="sm"
+                  size="default"
                   disabled={
                     loading ||
                     !!operation ||
@@ -221,7 +221,7 @@ export function ProjectList({
               ))}
               <Button
                 variant="ghost"
-                size="sm"
+                size="default"
                 disabled={!!operation}
                 onClick={() => {
                   setManaging(false);
@@ -244,7 +244,7 @@ export function ProjectList({
               <Button
                 key={value}
                 variant={filter === value ? "secondary" : "ghost"}
-                size="sm"
+                size="default"
                 aria-pressed={filter === value}
                 onClick={() => onFilterChange?.(value)}
               >
@@ -274,7 +274,7 @@ export function ProjectList({
             <Button
               className="ml-auto"
               variant="outline"
-              size="sm"
+              size="default"
               disabled={!writable || loading || selectable.length === 0}
               onClick={() => setManaging(true)}
             >
@@ -328,20 +328,6 @@ export function ProjectList({
         </Empty>
       )}
       <div className={view === "grid" ? "canvas-grid" : "flex flex-col gap-3"}>
-        {!query && filter === "active" && !managing && (
-          <article className="canvas-tile canvas-create-tile">
-            <NewCanvasButton
-              variant="ghost"
-              className="canvas-create-button"
-              aria-label="新建画布"
-            >
-              <span className="canvas-tile-preview">
-                <Plus size={28} />
-              </span>
-              <span className="canvas-create-label">新建画布</span>
-            </NewCanvasButton>
-          </article>
-        )}
         {page?.items.map((project) => (
           <ProjectCard
             key={project.id}
@@ -418,9 +404,10 @@ function ProjectCard({
   onAction: (action: ProjectAction) => void;
   actions: ProjectAction[];
 }) {
-  const { project } = useProjectPresentation(initial, false),
+  const { project, namespace } = useProjectPresentation(initial, false),
     space = useSpace();
   const [rename, setRename] = useState(false);
+  const [copy, setCopy] = useState(false);
   const canRename =
     project.status === "active" &&
     project.is_delete === false &&
@@ -520,6 +507,12 @@ function ProjectCard({
             >
               重命名画布
             </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!canRename}
+              onSelect={() => setCopy(true)}
+            >
+              复制画布
+            </DropdownMenuItem>
             {actions.map((action) => (
               <DropdownMenuItem
                 key={action}
@@ -537,6 +530,16 @@ function ProjectCard({
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
+      {copy && namespace && (
+        <ProjectCopyDialog
+          key={namespace}
+          project={project}
+          onClose={() => {
+            setCopy(false);
+            onCloseRename();
+          }}
+        />
+      )}
       <ProjectRenameDialog
         project={project}
         open={rename}

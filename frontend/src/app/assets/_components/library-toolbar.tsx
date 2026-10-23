@@ -9,6 +9,7 @@ import {
   Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PageHeading } from "@/components/layout/page-heading";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
@@ -71,45 +72,53 @@ export function LibraryToolbar({
   const inactive = disabled || locked || section !== "library";
   return (
     <>
-      <div className="library-primary-row">
+      <PageHeading
+        title="素材库"
+        actions={
+          <>
+            <Button
+              variant="ghost"
+              size="lg"
+              className="library-desktop-action"
+              disabled={inactive}
+              onClick={onBatch}
+              aria-pressed={batch}
+            >
+              <CheckSquare data-icon="inline-start" />
+              {batch ? "取消选择" : "批量操作"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="lg"
+              className="library-folder-action"
+              disabled={inactive || !canCreateFolder}
+              onClick={onFolder}
+            >
+              <FolderPlus data-icon="inline-start" />
+              新建文件夹
+            </Button>
+            <Button
+              size="lg"
+              aria-label="上传素材"
+              disabled={inactive}
+              onClick={onUpload}
+            >
+              <Upload data-icon="inline-start" />
+              <span className="library-upload-label">上传素材</span>
+              <span className="library-upload-short-label">上传</span>
+            </Button>
+          </>
+        }
+      />
+      <div className="library-filter-row">
         <TabsList variant="navigation" aria-label="素材来源">
           <TabsTrigger value="library" disabled={locked}>
-            素材库
+            素材
           </TabsTrigger>
           <TabsTrigger value="history" disabled={locked}>
             生成历史
           </TabsTrigger>
         </TabsList>
-        <div className="library-primary-actions">
-          <Button
-            variant="ghost"
-            size="lg"
-            className="library-desktop-action"
-            disabled={inactive}
-            onClick={onBatch}
-            aria-pressed={batch}
-          >
-            <CheckSquare data-icon="inline-start" />
-            {batch ? "取消选择" : "批量操作"}
-          </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            className="library-folder-action"
-            disabled={inactive || !canCreateFolder}
-            onClick={onFolder}
-          >
-            <FolderPlus data-icon="inline-start" />
-            新建文件夹
-          </Button>
-          <Button size="lg" disabled={inactive} onClick={onUpload}>
-            <Upload data-icon="inline-start" />
-            <span className="library-upload-label">上传素材</span>
-            <span className="library-upload-short-label">上传</span>
-          </Button>
-        </div>
-      </div>
-      <div className="library-filter-row">
         <ToggleGroup
           type="single"
           value={filter.kind}

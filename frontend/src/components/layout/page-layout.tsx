@@ -12,6 +12,7 @@ import {
 import { cn } from "cn";
 import type { PageSearch } from "./product-search";
 import type { Screen } from "./routes";
+import { ProductFooter } from "./product-footer";
 
 export type PageOptions = {
   owner: symbol;
@@ -54,6 +55,7 @@ export function PageLayout({
       className={cn("product-page", !fullBleed && "workspace-page")}
     >
       {children}
+      <ProductFooter />
     </div>
   );
 }

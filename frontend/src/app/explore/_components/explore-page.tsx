@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { PageLayout } from "@/components/layout/page-layout";
+import { PageHeading } from "@/components/layout/page-heading";
 import { InspirationGallery } from "@/components/inspiration/gallery";
 
 export function ExplorePage({ initialQuery = "" }: { initialQuery?: string }) {
@@ -18,7 +19,7 @@ export function ExplorePage({ initialQuery = "" }: { initialQuery?: string }) {
         label: "搜索作品",
       }}
     >
-      <h1 className="sr-only">探索创作灵感</h1>
+      <PageHeading title="探索" />
       <InspirationGallery showUpdates={false} searchQuery={query} />
     </PageLayout>
   );

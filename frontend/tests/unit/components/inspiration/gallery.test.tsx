@@ -15,10 +15,12 @@ it("returns focus to the exact card that opened the preview", async () => {
   expect(
     screen.getByRole("tab", { name: "精选" }).getAttribute("aria-controls"),
   ).toBe(screen.getByRole("tabpanel", { name: "精选" }).id);
-  const card = screen.getByRole("button", { name: /^光影之间/ });
+  const card = screen.getByRole("button", { name: /^声色之间的产品灵感/ });
   card.focus();
   fireEvent.click(card);
-  expect(await screen.findByRole("dialog", { name: "光影之间" })).toBeTruthy();
+  expect(
+    await screen.findByRole("dialog", { name: "声色之间的产品灵感" }),
+  ).toBeTruthy();
   fireEvent.keyDown(document, { key: "Escape" });
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   await waitFor(() => expect(document.activeElement).toBe(card));

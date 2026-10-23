@@ -196,7 +196,7 @@ export function SubjectEditor({
         }}
       >
         <DialogContent
-          className="subject-editor sm:max-w-[560px]"
+          className="subject-editor"
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => {
             e.preventDefault();

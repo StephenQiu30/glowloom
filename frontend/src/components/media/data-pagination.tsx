@@ -79,12 +79,18 @@ export function DataPagination({
       </Field>
       <span className="data-pagination-status" role="status">
         <span aria-hidden="true">
-          {pages === undefined ? `第 ${current} 页` : `${current} / ${pages}`}
+          {pages === 0
+            ? "0 项"
+            : pages === undefined
+              ? `第 ${current} 页`
+              : `${current} / ${pages}`}
         </span>
         <span className="sr-only">
-          {pages === undefined
-            ? `第 ${current} 页`
-            : `共 ${total} 项，第 ${current} 页，共 ${pages} 页`}
+          {pages === 0
+            ? "暂无结果"
+            : pages === undefined
+              ? `第 ${current} 页`
+              : `共 ${total} 项，第 ${current} 页，共 ${pages} 页`}
         </span>
       </span>
       <PaginationContent className="gap-2">

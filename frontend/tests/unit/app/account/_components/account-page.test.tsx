@@ -89,7 +89,9 @@ it("profile saved state requires server readback and preserves explicit missing 
     }),
   );
   expect(screen.getByRole("region", { name: "编辑头像" })).toBeTruthy();
-  expect(screen.getByRole("region", { name: "更换邮箱" })).toBeTruthy();
+  expect(screen.queryByRole("region", { name: "更换邮箱" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "更换邮箱" }));
+  expect(await screen.findByRole("region", { name: "更换邮箱" })).toBeTruthy();
 });
 it("profile conflict preserves unsaved intent and offers reload", async () => {
   const original = vi.mocked(request).getMockImplementation()!;

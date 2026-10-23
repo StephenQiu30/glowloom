@@ -1,10 +1,8 @@
 "use client";
 import Image from "next/image";
-import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { Search } from "lucide-react";
 import { cn } from "cn";
-import { BrandMark } from "@/components/brand/brand";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -110,24 +108,9 @@ const homeWorks = [
   { ...works[0], title: "声色之间的产品灵感" },
   { ...works[2], title: "夏日香氛 · 光的形状" },
   { ...works[1], title: "想象之外，自有故事" },
+  { ...works[3], title: "山野公路 · 晨光旅程" },
 ];
-const updates = [
-  {
-    src: "amber-perfume.png",
-    title: "光影之间",
-    caption: "精选创作 · 夏日香氛",
-  },
-  {
-    src: "cobalt-headphones.png",
-    title: "声色之间",
-    caption: "产品质感 · 色彩与材质",
-  },
-  {
-    src: "moonlight-whale.png",
-    title: "云海鲸歌",
-    caption: "动画画面 · 从想象开始",
-  },
-];
+
 type Preview = { src: string; title: string };
 function InspirationPreview({
   item,
@@ -199,42 +182,6 @@ export function InspirationGallery({
       {showUpdates && (
         <>
           <h2>创作精选</h2>
-          <section className="updates-strip" aria-label="创作精选">
-            {updates.map((item) => (
-              <InspirationPreview key={item.title} item={item}>
-                <Button
-                  variant="ghost"
-                  className="feature-entry h-auto p-0 whitespace-normal"
-                >
-                  <Card variant="feature" className="w-full">
-                    <CardContent>
-                      <Image
-                        src={`/design/reference/${item.src}`}
-                        alt={item.title}
-                        fill
-                        sizes="(max-width: 767px) 308px, (min-width: 1700px) 25vw, 273px"
-                      />
-                    </CardContent>
-                    <CardHeader>
-                      <CardTitle>{item.title}</CardTitle>
-                      <CardDescription>{item.caption}</CardDescription>
-                    </CardHeader>
-                  </Card>
-                </Button>
-              </InspirationPreview>
-            ))}
-            <Link href="/projects" className="feature-entry">
-              <Card variant="feature" data-feature="start">
-                <CardContent>
-                  <BrandMark monochrome />
-                </CardContent>
-                <CardHeader>
-                  <CardTitle>从灵感，到作品</CardTitle>
-                  <CardDescription>织光 Glowloom · 开启创作</CardDescription>
-                </CardHeader>
-              </Card>
-            </Link>
-          </section>
         </>
       )}
       <Tabs value={category} onValueChange={setCategory} className="gap-0">

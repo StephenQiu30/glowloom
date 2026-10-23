@@ -1,5 +1,8 @@
 "use client";
 import { NewCanvasButton } from "@/components/projects/new-canvas-button";
+import { useOptionalSession } from "@/components/auth/session";
+import { useSpace } from "@/components/spaces/space-context";
+import { RecentCanvases } from "./recent-canvases";
 
 import Link from "next/link";
 import type { ComponentProps } from "react";
@@ -60,7 +63,7 @@ function PrimaryNavigation({ screen }: { screen: string }) {
               asChild
               isActive={screen === id}
               tooltip={label}
-              className="group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:p-0!"
+              className="group-data-[collapsible=icon]:size-9! group-data-[collapsible=icon]:p-0!"
             >
               <Link
                 href={href}
@@ -89,6 +92,8 @@ export function ProductSider({
   >["onMobileCloseAutoFocus"];
 }) {
   const { open, isMobile, toggleSidebar, setOpenMobile } = useSidebar();
+  const session = useOptionalSession();
+  const { selected: space, pending: scopePending } = useSpace();
   const compact = !open && !isMobile;
   const toggleLabel = isMobile ? "关闭导航" : open ? "收起导航" : "展开导航";
   const ToggleIcon = isMobile ? X : open ? PanelLeftClose : PanelLeftOpen;
@@ -109,11 +114,10 @@ export function ProductSider({
             className="product-brand"
             onClick={closeMobile}
           >
-            <BrandMark />
+            <BrandMark monochrome />
             {!compact && (
               <>
-                <span>织光</span>
-                <small>Glowloom</small>
+                <span>织光 Glowloom</span>
               </>
             )}
           </Link>
@@ -122,7 +126,7 @@ export function ProductSider({
           <TooltipTrigger asChild>
             <Button
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               className="sidebar-toggle"
               aria-label={toggleLabel}
               aria-expanded={isMobile ? true : open}
@@ -160,7 +164,7 @@ export function ProductSider({
                   <SidebarMenuButton
                     asChild
                     tooltip="新建创作"
-                    className="group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:p-0!"
+                    className="group-data-[collapsible=icon]:size-9! group-data-[collapsible=icon]:p-0!"
                   >
                     <Link href="/" aria-label="新建创作" onClick={closeMobile}>
                       <MessageSquarePlus />
@@ -171,7 +175,9 @@ export function ProductSider({
               </SidebarMenu>
             ) : (
               <Empty className="sidebar-history-empty">
-                <EmptyDescription>暂无历史对话</EmptyDescription>
+                <EmptyDescription>
+                  {session ? "对话功能待开放" : "登录后查看最近创作"}
+                </EmptyDescription>
               </Empty>
             )}
           </SidebarGroupContent>
@@ -179,7 +185,15 @@ export function ProductSider({
         <SidebarGroup className="sidebar-history">
           {!compact && (
             <>
-              <SidebarGroupLabel>画布</SidebarGroupLabel>
+              <SidebarGroupLabel asChild>
+                <Link
+                  href="/projects"
+                  aria-label="查看我的画布"
+                  onClick={closeMobile}
+                >
+                  画布
+                </Link>
+              </SidebarGroupLabel>
               <SidebarGroupAction asChild>
                 <NewCanvasButton
                   variant="ghost"
@@ -193,26 +207,33 @@ export function ProductSider({
             </>
           )}
           <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  className="group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:p-0!"
-                  asChild
-                  tooltip="我的画布"
-                  isActive={screen === "projects" || screen === "canvas"}
-                >
-                  <Link
-                    href="/projects"
-                    aria-label="查看我的画布"
-                    aria-current={screen === "projects" ? "page" : undefined}
-                    onClick={closeMobile}
+            {!compact && session && space && !scopePending ? (
+              <RecentCanvases
+                key={`${session.actor.id}/${space.id}`}
+                onNavigate={closeMobile}
+              />
+            ) : compact ? (
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    className="group-data-[collapsible=icon]:size-9! group-data-[collapsible=icon]:p-0!"
+                    asChild
+                    tooltip="我的画布"
+                    isActive={screen === "projects" || screen === "canvas"}
                   >
-                    <LayoutDashboard />
-                    <span>查看我的画布</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
+                    <Link
+                      href="/projects"
+                      aria-label="查看我的画布"
+                      aria-current={screen === "projects" ? "page" : undefined}
+                      onClick={closeMobile}
+                    >
+                      <LayoutDashboard />
+                      <span>画布</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            ) : null}
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

@@ -952,3 +952,54 @@ it("回收核验只透传include_expired，不接受浏览器指定范围", asyn
   expect(upstream.searchParams.get("include_expired")).toBe("true");
   expect(upstream.searchParams.has("owner_scope_id")).toBe(false);
 });
+
+it("复制接口受限透传原幂等键和回执，拒绝额外查询及非法标识", async () => {
+  const id = "00000000-0000-4000-8000-000000000001";
+  const fetcher = vi
+    .fn()
+    .mockImplementation(async () => Response.json({ id }, { status: 202 }));
+  vi.stubGlobal("fetch", fetcher);
+  const path = `projects/${id}/copies`;
+  const body = JSON.stringify({ expected_revision: 7, target_name: "副本" });
+  const result = await POST(
+    new Request(`http://localhost/api/${path}`, {
+      method: "POST",
+      body,
+      headers: {
+        "Idempotency-Key": "original-copy-key",
+        "X-Creation-Scope": "personal",
+      },
+    }),
+    context(path),
+  );
+  expect(result.status).toBe(202);
+  expect(fetcher.mock.calls[0][1].headers.get("Idempotency-Key")).toBe(
+    "original-copy-key",
+  );
+  expect(
+    await (
+      await GET(
+        new Request(`http://localhost/api/project-copies/${id}`),
+        context(`project-copies/${id}`),
+      )
+    ).json(),
+  ).toEqual({ id });
+  fetcher.mockClear();
+  expect(
+    (
+      await GET(
+        new Request(`http://localhost/api/${path}?host=evil`),
+        context(path),
+      )
+    ).status,
+  ).toBe(422);
+  expect(
+    (
+      await GET(
+        new Request("http://localhost/api/project-copies/wrong"),
+        context("project-copies/wrong"),
+      )
+    ).status,
+  ).toBe(404);
+  expect(fetcher).not.toHaveBeenCalled();
+});

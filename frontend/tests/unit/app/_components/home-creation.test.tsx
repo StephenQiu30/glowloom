@@ -77,26 +77,26 @@ beforeEach(() => {
   state.login.mockReset();
 });
 afterEach(cleanup);
-function tab(name: string) {
-  fireEvent.mouseDown(screen.getByRole("tab", { name }), {
-    button: 0,
-    ctrlKey: false,
+async function tab(name: string) {
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "创作类型" }), {
+    key: "ArrowDown",
   });
+  fireEvent.click(
+    await screen.findByRole("option", { name: new RegExp(name) }),
+  );
 }
 
-it("保留七类Tab，游客切换输入不丢失且没有推荐技能行", async () => {
+it("使用紧凑类型菜单，游客切换输入不丢失且没有推荐技能行", async () => {
   render(<Page />);
-  expect(screen.getAllByRole("tab")).toHaveLength(7);
+  expect(screen.getByRole("combobox", { name: "创作类型" })).toBeTruthy();
   fireEvent.paste(await screen.findByLabelText("创作提示词"), {
     clipboardData: { files: [], getData: () => "保留这段想法" },
   });
-  tab("视频生成");
+  await tab("视频生成");
   await waitFor(() =>
     expect(
-      screen
-        .getByRole("tab", { name: "视频生成" })
-        .getAttribute("aria-selected"),
-    ).toBe("true"),
+      screen.getByRole("combobox", { name: "创作类型" }).textContent,
+    ).toContain("视频生成"),
   );
   expect(screen.getByLabelText("创作提示词")).toHaveProperty(
     "textContent",
@@ -110,7 +110,7 @@ it("保留七类Tab，游客切换输入不丢失且没有推荐技能行", asyn
 
 it("未接入类型直接解释未开放状态，不要求先登录或提交生成", async () => {
   render(<Page />);
-  tab("音乐生成");
+  await tab("音乐生成");
   fireEvent.click(
     await screen.findByRole("button", { name: "音乐生成暂未开放" }),
   );
@@ -125,14 +125,14 @@ it("保存未确认禁止切换，确认后按类型恢复原草稿指针", asyn
   fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
   await screen.findByText("image 富文本编辑器");
   state.save.mockResolvedValue(false);
-  tab("视频生成");
+  await tab("视频生成");
   await waitFor(() => expect(state.save).toHaveBeenCalledOnce());
   expect(screen.getByText("image 富文本编辑器")).toBeTruthy();
   expect(state.opened).toHaveLength(1);
   state.save.mockResolvedValue(true);
-  tab("视频生成");
+  await tab("视频生成");
   await screen.findByText("video 富文本编辑器");
-  tab("图片生成");
+  await tab("图片生成");
   await screen.findByText("image 富文本编辑器");
   expect(state.opened.at(-1)).toEqual({
     capability: "image",
@@ -145,7 +145,7 @@ it("报价冻结期间不能切换类型、项目或工作模式", async () => {
   render(<Page />);
   fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
   fireEvent.click(await screen.findByRole("button", { name: "冻结报价" }));
-  expect(screen.getByRole("tab", { name: "视频生成" })).toHaveProperty(
+  expect(screen.getByRole("combobox", { name: "创作类型" })).toHaveProperty(
     "disabled",
     true,
   );
