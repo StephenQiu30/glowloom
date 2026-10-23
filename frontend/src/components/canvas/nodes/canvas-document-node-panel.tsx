@@ -1,26 +1,11 @@
 "use client";
 import { useRef, useState } from "react";
 import { useCopyText } from "@/components/canvas/runtime/hooks/use-copy-text";
-import {
-  ArrowUp,
-  LoaderCircle,
-  Maximize2,
-  Minimize2,
-  Upload,
-  X,
-} from "lucide-react";
+import { ArrowUp, LoaderCircle, Maximize2, Upload, X } from "lucide-react";
 import { notifyError } from "@/components/canvas/runtime/components/feedback/error-notification";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field, FieldLabel } from "@/components/ui/field";
-import {
-  Dialog,
-  DialogContent,
-  DialogClose,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   CanvasAgentParameters,
   defaultCanvasAgent,
@@ -45,8 +30,6 @@ import { replaceCanvasNodeAsset } from "../lib/canvas-asset-replacement";
 import { CanvasNodeReferenceBar } from "./canvas-node-reference-bar";
 import type { CanvasResourceReference } from "../lib/canvas-resource-references";
 import { useCanvasReferencePreviews } from "../hooks/use-canvas-reference-previews";
-import { cn } from "@/lib/utils";
-import { isImeComposing } from "@/components/canvas/runtime/lib/keyboard-event";
 import type { CanvasDocumentIntegration } from "../types/canvas-document-integration";
 import { completedGenerationStates } from "../lib/canvas-generation-projection";
 import { CanvasGenerationParameters } from "../parameters/canvas-generation-parameters";
@@ -159,44 +142,6 @@ export function CanvasDocumentNodePanel({
       }
     />
   );
-  const promptEditor = (inDialog = false) => (
-    <RichTextInput
-      collaboration={collaboration}
-      aria-label={node.type === "text" ? "文字内容" : "画面描述"}
-      className={cn(
-        "canvas-prompt-input",
-        inDialog && "canvas-prompt-expanded",
-      )}
-      placeholder={
-        node.type === "text"
-          ? "输入故事想法，或 @ 引用已连接的内容"
-          : "描述画面，或 @ 引用已连接的素材"
-      }
-      references={previews.references.filter((reference) => reference.active)}
-      value={
-        node.type === "text"
-          ? (node.metadata?.content ?? "")
-          : (node.metadata?.prompt ?? "")
-      }
-      document={node.metadata?.richText}
-      submitShortcut="mod-enter"
-      autoFocus={inDialog}
-      onSubmit={inDialog ? undefined : generate}
-      onChange={(_text, richText) =>
-        onChange({
-          ...node,
-          documentData: { ...source, textDocument: richText },
-          metadata: {
-            ...node.metadata,
-            richText,
-            ...(node.type === "text"
-              ? { content: documentText(richText.content) }
-              : { prompt: documentText(richText.content) }),
-          },
-        })
-      }
-    />
-  );
   const generationControls = (
     <div className="canvas-prompt-controls">
       <div className="canvas-prompt-parameters">
@@ -305,6 +250,51 @@ export function CanvasDocumentNodePanel({
         </Button>
       )}
     </div>
+  );
+  const promptEditor = (
+    <RichTextInput
+      key={node.id}
+      collaboration={collaboration}
+      documentMode={node.type === "text"}
+      documentTitle={node.title}
+      aria-label={node.type === "text" ? "文字内容" : "画面描述"}
+      className="canvas-prompt-input"
+      expandedView={{
+        open: expanded,
+        onOpenChange: setExpanded,
+        header: referenceBar(true),
+        footer: generationControls,
+        onCloseAutoFocus: () =>
+          expandButtonRef.current?.focus({ preventScroll: true }),
+      }}
+      placeholder={
+        node.type === "text"
+          ? "输入故事想法，或 @ 引用已连接的内容"
+          : "描述画面，或 @ 引用已连接的素材"
+      }
+      references={previews.references.filter((reference) => reference.active)}
+      value={
+        node.type === "text"
+          ? (node.metadata?.content ?? "")
+          : (node.metadata?.prompt ?? "")
+      }
+      document={node.metadata?.richText}
+      submitShortcut="mod-enter"
+      onSubmit={generate}
+      onChange={(_text, richText) =>
+        onChange({
+          ...node,
+          documentData: { ...source, textDocument: richText },
+          metadata: {
+            ...node.metadata,
+            richText,
+            ...(node.type === "text"
+              ? { content: documentText(richText.content) }
+              : { prompt: documentText(richText.content) }),
+          },
+        })
+      }
+    />
   );
   return (
     <div
@@ -426,7 +416,7 @@ export function CanvasDocumentNodePanel({
           )}
         </div>
       ) : (
-        promptEditor()
+        promptEditor
       )}
       {agent && parameters?.agent && (
         <CanvasAgentParameters
@@ -438,7 +428,7 @@ export function CanvasDocumentNodePanel({
           }
         />
       )}
-      {generationControls}
+      {!expanded && generationControls}
       {node.type === "text" &&
         run &&
         ["UNCONFIRMED", "SUBMISSION_UNKNOWN", "ARCHIVE_FAILED"].includes(
@@ -478,42 +468,6 @@ export function CanvasDocumentNodePanel({
           </p>
         </section>
       )}
-      <Dialog open={expanded} onOpenChange={setExpanded}>
-        <DialogContent
-          className="canvas-composer-dialog max-h-dialog w-full overflow-hidden"
-          showCloseButton={false}
-          data-canvas-no-zoom
-          onOpenAutoFocus={(event) => event.preventDefault()}
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            expandButtonRef.current?.focus({ preventScroll: true });
-          }}
-          onEscapeKeyDown={(event) => {
-            if (isImeComposing(event)) event.preventDefault();
-            event.stopPropagation();
-          }}
-        >
-          <DialogHeader className="sr-only">
-            <DialogTitle>编辑提示词</DialogTitle>
-            <DialogDescription className="sr-only">
-              编辑当前节点的描述及引用内容。
-            </DialogDescription>
-          </DialogHeader>
-          {referenceBar(true)}
-          {promptEditor(true)}
-          {generationControls}
-          <DialogClose asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="absolute top-2 right-2"
-              aria-label="收起编辑"
-            >
-              <Minimize2 />
-            </Button>
-          </DialogClose>
-        </DialogContent>
-      </Dialog>
       <AssetPickerModal
         projectId={projectId}
         open={picker !== null}

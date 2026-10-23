@@ -14,7 +14,9 @@ FROM deps AS dev
 ENV NODE_ENV=development
 COPY frontend/ .
 EXPOSE 3000
-CMD ["pnpm", "exec", "next", "dev", "--hostname", "0.0.0.0", "--port", "3000"]
+# Named node_modules volumes outlive images. Refresh file: packages from the
+# mounted source before Next resolves their exports, without changing the lockfile.
+CMD ["sh", "-c", "pnpm install --frozen-lockfile && exec pnpm exec next dev --hostname 0.0.0.0 --port 3000"]
 
 FROM base AS build
 # Next persists external Upgrade rewrites in its build manifest.

@@ -73,15 +73,15 @@ export function CanvasNodeReferenceBar({
         <Button
           variant="secondary"
           size="xs"
-          className="h-7 rounded-full"
+          className="canvas-reference-add"
           type="button"
           aria-label="添加参考"
           title="从画布选择参考节点"
           disabled={!onStartSelection}
           onClick={() => onStartSelection?.(nodeId)}
         >
-          <Plus data-icon="inline-start" />
-          参考
+          <Plus aria-hidden="true" />
+          <span className="sr-only">参考</span>
         </Button>
         {tools}
       </div>
@@ -159,7 +159,7 @@ function ReferenceItem({
               <Button
                 variant="secondary"
                 aria-label={`预览参考 ${node.title}`}
-                className="relative size-12 overflow-hidden p-0"
+                className="canvas-reference-thumbnail relative size-14 overflow-hidden p-0"
               >
                 <span className="canvas-reference-preview grid size-full place-items-center overflow-hidden rounded-lg">
                   {kind === "image" && thumbnail ? (

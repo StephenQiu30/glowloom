@@ -13,14 +13,7 @@ import useSWR from "swr";
 import * as api from "@/components/canvas/runtime/api/generationBffController";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectGroup,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useAccount } from "@/components/canvas/runtime/components/account/account-provider";
 import { accountScope } from "@/components/canvas/runtime/store/account-slice";
 import { useErrorNotification } from "@/components/canvas/runtime/components/feedback/error-notification";
@@ -270,16 +263,22 @@ export function CanvasGenerationParameters({
         side="top"
         align="start"
         aria-label="生成参数设置"
-        className="w-72 max-w-[calc(100vw-2rem)]"
+        className="canvas-generation-popover"
         data-canvas-no-zoom
+        data-canvas-shortcuts-ignore
+        onPointerDown={(event) => event.stopPropagation()}
+        onMouseDown={(event) => event.stopPropagation()}
         onEscapeKeyDown={(event) => event.stopPropagation()}
       >
-        {!options.data && (
+        {(!options.data || catalog.error) && (
           <Button
             variant="ghost"
             size="sm"
-            disabled={options.isLoading}
-            onClick={() => void options.mutate()}
+            disabled={options.isLoading || catalog.isLoading}
+            onClick={() => {
+              void options.mutate();
+              void catalog.mutate();
+            }}
           >
             {options.isLoading ? "正在加载参数…" : "重试"}
           </Button>
@@ -289,48 +288,57 @@ export function CanvasGenerationParameters({
             {type === "video" && !selectedModel
               ? catalog.error
                 ? "模型能力读取失败，请重试"
-                : "正在读取模型能力…"
+                : catalog.isLoading
+                  ? "正在读取模型能力…"
+                  : "请先选择可用模型"
               : "暂无可调整参数"}
           </p>
         )}
-        <FieldGroup className="gap-3">
+        <FieldGroup className="gap-5">
           {fields.map((field) => (
             <Field key={field.key}>
-              <FieldLabel htmlFor={`${prefix}-${field.key}`}>
+              <FieldLabel id={`${prefix}-${field.key}`}>
                 {field.label}
               </FieldLabel>
-              <Select
+              <ToggleGroup
+                type="single"
                 value={fieldValue(field)}
-                disabled={
-                  type === "image" && (!selectedModel || !!catalog.error)
-                }
-                onValueChange={(value) => changeField(field, value)}
+                disabled={!selectedModel || !!catalog.error}
+                aria-labelledby={`${prefix}-${field.key}`}
+                className="canvas-parameter-options"
+                data-ratio={/ratio/i.test(field.key ?? "")}
+                onValueChange={(value) => {
+                  if (value) changeField(field, value);
+                }}
               >
-                <SelectTrigger
-                  id={`${prefix}-${field.key}`}
-                  aria-label={field.label}
-                  className="w-full"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent
-                  onEscapeKeyDown={(event) => event.stopPropagation()}
-                >
-                  <SelectGroup>
-                    {fieldValue(field) &&
-                      !field.values?.includes(fieldValue(field)) && (
-                        <SelectItem value={fieldValue(field)} disabled>
-                          {displayValue(fieldValue(field))}
-                        </SelectItem>
-                      )}
-                    {(field.values ?? []).map((value) => (
-                      <SelectItem key={value} value={value}>
-                        {displayValue(value)}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
+                {fieldValue(field) &&
+                  !field.values?.includes(fieldValue(field)) && (
+                    <ToggleGroupItem value={fieldValue(field)} disabled>
+                      {displayValue(fieldValue(field))}
+                    </ToggleGroupItem>
+                  )}
+                {(field.values ?? []).map((value) => (
+                  <ToggleGroupItem
+                    key={value}
+                    value={value}
+                    disabled={
+                      field.key === "imageRatio" &&
+                      !imageSizeForRatio(imageSize.size, value)
+                    }
+                    aria-label={`${field.label} ${displayValue(value)}`}
+                    className={
+                      /ratio/i.test(field.key ?? "")
+                        ? "canvas-ratio-option"
+                        : undefined
+                    }
+                  >
+                    {/ratio/i.test(field.key ?? "") && (
+                      <RatioPreview value={value} />
+                    )}
+                    {displayValue(value)}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
             </Field>
           ))}
         </FieldGroup>
@@ -341,5 +349,20 @@ export function CanvasGenerationParameters({
         )}
       </PopoverContent>
     </Popover>
+  );
+}
+
+function RatioPreview({ value }: { value: string }) {
+  const [width, height] = value.split(":").map(Number);
+  const valid = width > 0 && height > 0;
+  return (
+    <span className="canvas-ratio-preview" aria-hidden="true">
+      <span
+        style={{
+          width: valid ? (18 * width) / Math.max(width, height) : 18,
+          height: valid ? (18 * height) / Math.max(width, height) : 18,
+        }}
+      />
+    </span>
   );
 }

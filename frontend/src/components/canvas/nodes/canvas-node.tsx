@@ -1060,7 +1060,7 @@ function TextContent({
   const primaryTextId = node.metadata?.primaryTextId || texts[0]?.id;
   const primaryText = texts.find((text) => text.id === primaryTextId);
   const content = primaryText?.content || node.metadata?.content || "";
-  const paddingClass = isBatchRoot ? "px-4 pb-4 pt-14" : "p-4";
+  const paddingClass = isBatchRoot ? "px-6 pb-6 pt-14" : "p-6";
 
   const boundReferences = useBoundReferences(node);
   return (
@@ -1097,6 +1097,7 @@ function TextContent({
             document={primaryText?.richText ?? node.metadata?.richText}
             documentMode
             floatingToolbar
+            documentTitle={node.title}
             autoFocus
             references={[
               ...mentionReferences.filter((reference) => reference.active),

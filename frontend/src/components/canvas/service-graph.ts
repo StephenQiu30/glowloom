@@ -76,7 +76,9 @@ export function serviceGraph(
         zIndex: node.z_index ?? 0,
         parentId: node.parent_id,
         collapsed: node.config?.collapsed,
-        ...(node.node_type === "text" ? { textDocument: richText } : {}),
+        ...(node.node_type === "text" || editor?.document
+          ? { textDocument: richText }
+          : {}),
         parameters: (editor?.parameters as
           CanvasContract.CanvasNodeParametersDTO | undefined) ?? {
           mode: node.node_action === "generate" ? "GENERATE" : "MANUAL",

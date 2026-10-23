@@ -57,6 +57,10 @@ export async function request<T>(
   options: RequestOptions = {},
 ): Promise<T> {
   const path = url.replace(/^\/api(?=\/)/, "");
+  // Generated clients spread options after their translated query. Keep only
+  // transport options here so imported params cannot erase the project scope.
+  const transportOptions = { ...options };
+  delete transportOptions.params;
   let data: unknown;
   if (path === "/account/session") {
     const session = await getSession(options);
@@ -78,7 +82,7 @@ export async function request<T>(
         capability: `${capability}.generate`,
         limit: 200,
       },
-      options,
+      transportOptions,
     );
     data = (page.items ?? []).map(modelView);
   } else if (path === "/generation/options") {
@@ -89,7 +93,7 @@ export async function request<T>(
         capability: `${capability}.generate`,
         limit: 200,
       },
-      options,
+      transportOptions,
     );
     const fields = new Map<string, CanvasContract.Parameter>();
     for (const model of page.items ?? [])
@@ -120,7 +124,7 @@ export async function request<T>(
     const id = String(options.params?.fileId ?? "");
     const preview = await getMediaPreview(
       { pid: projectID(options), asset_id: id },
-      options,
+      transportOptions,
     );
     data = {
       ...preview.asset,

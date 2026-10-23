@@ -26,7 +26,9 @@ import {
   Italic,
   Underline,
   Strikethrough,
-  Heading2,
+  ChevronDown,
+  Ellipsis,
+  X,
   List,
   ListOrdered,
   Quote,
@@ -34,7 +36,6 @@ import {
   Redo2,
   Maximize2,
   Download,
-  Upload,
   AtSign,
   FileText,
   ImageIcon,
@@ -57,6 +58,14 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Toggle } from "@/components/ui/toggle";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -417,7 +426,12 @@ export function RichTextEditor({ rootRef, ...props }: RichTextInputProps) {
   const latest = useRef({ ...props });
   const lastEmitted = useRef(props.value);
   const lastDocument = useRef<RichTextDocument | undefined>(props.document);
-  const [expanded, setExpanded] = useState(false);
+  const [localExpanded, setLocalExpanded] = useState(false);
+  const expanded = props.expandedView?.open ?? localExpanded;
+  const setExpanded = (open: boolean) => {
+    if (props.expandedView) props.expandedView.onOpenChange(open);
+    else setLocalExpanded(open);
+  };
   const expandedRef = useRef(false);
   const [menu, setMenu] = useState<MentionMenu | null>(null);
   const menuRef = useRef<MentionMenu | null>(null);
@@ -482,7 +496,9 @@ export function RichTextEditor({ rootRef, ...props }: RichTextInputProps) {
             return false;
           if (event.key === "Escape") {
             if (expandedRef.current) {
-              setExpanded(false);
+              if (latest.current.expandedView)
+                latest.current.expandedView.onOpenChange(false);
+              else setLocalExpanded(false);
               return true;
             }
             if (latest.current.onEscape) {
@@ -577,7 +593,7 @@ export function RichTextEditor({ rootRef, ...props }: RichTextInputProps) {
       props.value === lastEmitted.current &&
       (!props.document ||
         props.document === lastDocument.current ||
-        JSON.stringify(content) === JSON.stringify(editor.getJSON()))
+        editor.schema.nodeFromJSON(content).eq(editor.state.doc))
     )
       return;
     const selection = editor.state.selection;
@@ -679,13 +695,22 @@ export function RichTextEditor({ rootRef, ...props }: RichTextInputProps) {
           <Dialog open={expanded} onOpenChange={setExpanded}>
             <DialogContent
               data-rich-text-floating
-              className="dialog-canvas rich-text-dialog flex flex-col"
+              className={
+                props.documentMode
+                  ? "canvas-document-fullscreen top-0 left-0 translate-x-0 translate-y-0"
+                  : "canvas-composer-dialog canvas-expanded-prompt"
+              }
+              showCloseButton={false}
+              data-canvas-no-zoom
+              data-canvas-shortcuts-ignore
               onEscapeKeyDown={(event) => {
                 if (editor?.view.composing || isImeComposing(event))
                   event.preventDefault();
                 event.stopPropagation();
               }}
               onPointerDown={(event) => event.stopPropagation()}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
               onWheel={(event) => event.stopPropagation()}
               onKeyDown={(event) => {
                 event.stopPropagation();
@@ -701,23 +726,73 @@ export function RichTextEditor({ rootRef, ...props }: RichTextInputProps) {
               }}
               onOpenAutoFocus={(event) => {
                 event.preventDefault();
-                requestAnimationFrame(() => editor?.commands.focus());
+                requestAnimationFrame(() => {
+                  if (editor && !editor.isDestroyed) editor.commands.focus();
+                });
               }}
               onCloseAutoFocus={(event) => {
                 event.preventDefault();
-                requestAnimationFrame(() => editor?.commands.focus());
+                requestAnimationFrame(() => {
+                  if (props.expandedView?.onCloseAutoFocus)
+                    props.expandedView.onCloseAutoFocus();
+                  else if (editor && !editor.isDestroyed)
+                    editor.commands.focus();
+                });
               }}
             >
-              <DialogHeader>
-                <DialogTitle>编辑文档</DialogTitle>
+              <DialogHeader className="sr-only">
+                <DialogTitle>
+                  {props.documentMode ? "编辑文档" : "编辑提示词"}
+                </DialogTitle>
                 <DialogDescription>
-                  修改同步到当前画布草稿，可导出结构化文档保留格式。
+                  编辑当前节点内容及引用，关闭后保留修改。
                 </DialogDescription>
               </DialogHeader>
+              {props.documentMode ? (
+                <div className="canvas-document-header">
+                  <span className="truncate">
+                    {props.documentTitle || "文本"}.json
+                  </span>
+                  <div className="ml-auto flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon-lg"
+                      aria-label="下载文档"
+                      onClick={() =>
+                        editor &&
+                        void downloadDocument(editor, props.documentTitle)
+                      }
+                    >
+                      <Download />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-lg"
+                      aria-label="关闭文档编辑"
+                      onClick={() => setExpanded(false)}
+                    >
+                      <X />
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="canvas-prompt-header">
+                  {props.expandedView?.header}
+                  <Button
+                    variant="ghost"
+                    size="icon-lg"
+                    aria-label="收起编辑"
+                    onClick={() => setExpanded(false)}
+                  >
+                    <Maximize2 />
+                  </Button>
+                </div>
+              )}
               {expanded ? (
                 <>
                   {toolbar}
-                  {content}
+                  <div className="canvas-expanded-body">{content}</div>
+                  {props.expandedView?.footer}
                 </>
               ) : null}
             </DialogContent>
@@ -853,7 +928,9 @@ function EditorToolbar({
       italic: current.isActive("italic"),
       underline: current.isActive("underline"),
       strike: current.isActive("strike"),
-      heading: current.isActive("heading", { level: 2 }),
+      heading: current.isActive("heading")
+        ? String(current.getAttributes("heading").level)
+        : "paragraph",
       bullet: current.isActive("bulletList"),
       ordered: current.isActive("orderedList"),
       quote: current.isActive("blockquote"),
@@ -887,12 +964,6 @@ function EditorToolbar({
       run: () => editor.chain().focus().toggleStrike().run(),
     },
     {
-      label: "二级标题",
-      Icon: Heading2,
-      active: state.heading,
-      run: () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
-    },
-    {
       label: "无序列表",
       Icon: List,
       active: state.bullet,
@@ -911,6 +982,15 @@ function EditorToolbar({
       run: () => editor.chain().focus().toggleBlockquote().run(),
     },
   ];
+  const orderedTools = [
+    "无序列表",
+    "有序列表",
+    "引用",
+    "加粗",
+    "删除线",
+    "斜体",
+    "下划线",
+  ];
   return (
     <div
       className="rich-text-toolbar"
@@ -918,20 +998,80 @@ function EditorToolbar({
       aria-label="文档格式"
       onMouseDown={(event) => event.preventDefault()}
     >
-      {tools.map(({ label, Icon, active, run }) => (
-        <Toggle
-          key={label}
-          type="button"
-          size="sm"
-          pressed={active}
-          disabled={disabled}
-          aria-label={label}
-          title={label}
-          onPressedChange={run}
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            className="rich-text-style-trigger"
+            disabled={disabled}
+            aria-label="文本样式"
+            title="文本样式"
+          >
+            {state.heading === "paragraph" ? "正文" : `标题 ${state.heading}`}
+            <ChevronDown />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          className="canvas-text-style-menu"
+          align="start"
+          data-rich-text-floating
+          data-canvas-shortcuts-ignore
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            editor.commands.focus();
+          }}
+          onEscapeKeyDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
         >
-          <Icon aria-hidden="true" />
-        </Toggle>
-      ))}
+          <DropdownMenuRadioGroup
+            value={state.heading}
+            onValueChange={(value) => {
+              if (value === "paragraph")
+                editor.chain().focus().setParagraph().run();
+              else
+                editor
+                  .chain()
+                  .focus()
+                  .setHeading({ level: Number(value) as 1 | 2 | 3 })
+                  .run();
+            }}
+          >
+            <DropdownMenuRadioItem value="paragraph">
+              正文
+            </DropdownMenuRadioItem>
+            {([1, 2, 3] as const).map((level) => (
+              <DropdownMenuRadioItem
+                key={level}
+                value={String(level)}
+                data-heading={level}
+              >
+                标题 {level}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {tools
+        .sort(
+          (a, b) =>
+            orderedTools.indexOf(a.label) - orderedTools.indexOf(b.label),
+        )
+        .map(({ label, Icon, active, run }) => (
+          <Toggle
+            key={label}
+            type="button"
+            size="sm"
+            pressed={active}
+            disabled={disabled}
+            aria-label={label}
+            title={label}
+            onPressedChange={run}
+          >
+            <Icon aria-hidden="true" />
+          </Toggle>
+        ))}
       <Button
         type="button"
         variant="ghost"
@@ -1008,45 +1148,41 @@ function EditorToolbar({
         disabled={disabled}
         onChange={(event) => void importDocument(event.target.files?.[0])}
       />
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="导入结构化文档"
-        title="导入结构化文档"
-        disabled={disabled}
-        onClick={() => importInput.current?.click()}
-      >
-        <Upload />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="导出结构化文档"
-        title="导出结构化文档"
-        onClick={async () => {
-          const { saveAs } = await import("file-saver");
-          saveAs(
-            new Blob(
-              [
-                JSON.stringify(
-                  parseRichTextDocument({
-                    schemaVersion: 1,
-                    content: editor.getJSON(),
-                  }),
-                  null,
-                  2,
-                ),
-              ],
-              { type: "application/json" },
-            ),
-            "文档.json",
-          );
-        }}
-      >
-        <Download />
-      </Button>
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="更多文档操作"
+            title="更多文档操作"
+          >
+            <Ellipsis />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="end"
+          data-rich-text-floating
+          data-canvas-shortcuts-ignore
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            editor.commands.focus();
+          }}
+          onEscapeKeyDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <DropdownMenuItem
+            disabled={disabled}
+            onSelect={() => importInput.current?.click()}
+          >
+            导入结构化文档
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void downloadDocument(editor)}>
+            导出结构化文档
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       {onExpand ? (
         <Button
           type="button"
@@ -1060,5 +1196,17 @@ function EditorToolbar({
         </Button>
       ) : null}
     </div>
+  );
+}
+
+async function downloadDocument(editor: Editor, title = "文本") {
+  const document = parseRichTextDocument({
+    schemaVersion: 1,
+    content: persistentRichText(editor.getJSON()),
+  });
+  const { saveAs } = await import("file-saver");
+  saveAs(
+    new Blob([JSON.stringify(document, null, 2)], { type: "application/json" }),
+    `${title.replace(/[\\/:*?"<>|]/g, "_")}.json`,
   );
 }

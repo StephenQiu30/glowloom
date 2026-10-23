@@ -1014,3 +1014,215 @@
 .canvas-brand .brand-mark {
   --brand-size: 24px;
 }
+
+/* Canvas editor overlays share the same document session as inline editing. */
+@layer utilities {
+  .canvas-document-toolbar {
+    padding: 0;
+  }
+  .canvas-document-toolbar .rich-text-toolbar,
+  .canvas-document-fullscreen > .rich-text-toolbar {
+    gap: 4px;
+    padding: 4px 8px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--popover);
+    flex-wrap: nowrap;
+  }
+  .canvas-document-toolbar .rich-text-toolbar button,
+  .canvas-document-fullscreen > .rich-text-toolbar button {
+    min-width: 36px;
+    height: 36px;
+  }
+  .canvas-text-style-menu {
+    width: 200px;
+    padding: 6px;
+    border-radius: 12px;
+  }
+  .canvas-text-style-menu [role="menuitemradio"] {
+    min-height: 38px;
+  }
+  .canvas-text-style-menu [data-heading="1"] {
+    font-size: 20px;
+  }
+  .canvas-text-style-menu [data-heading="2"] {
+    font-size: 18px;
+  }
+  .canvas-text-style-menu [data-heading="3"] {
+    font-size: 16px;
+  }
+  .rich-text-editor[data-document-mode="true"] .rich-text-surface {
+    padding: 24px;
+  }
+  .canvas-document-fullscreen {
+    inset: 0;
+    width: 100dvw;
+    height: 100dvh;
+    max-width: none;
+    max-height: none;
+    transform: none;
+    translate: none;
+    animation: none;
+    border: 0;
+    border-radius: 0;
+    padding: 0 24px 72px;
+    gap: 12px;
+    grid-template-rows: 64px 44px minmax(0, 1fr);
+    background: var(--background);
+  }
+  .canvas-document-header {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: 16px;
+  }
+  .canvas-document-fullscreen > .rich-text-toolbar {
+    justify-self: center;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  .canvas-document-fullscreen > .rich-text-toolbar > * {
+    flex-shrink: 0;
+  }
+  .canvas-expanded-body {
+    display: flex;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .canvas-document-fullscreen .canvas-expanded-body {
+    justify-self: center;
+    width: min(1120px, 100%);
+    border-radius: 12px;
+    background: var(--card);
+  }
+  .canvas-document-fullscreen .rich-text-surface {
+    min-height: 100%;
+    padding: 24px clamp(24px, 11vw, 160px);
+  }
+  .canvas-expanded-prompt {
+    width: min(1000px, calc(100dvw - 32px));
+    max-width: none;
+    height: min(580px, calc(100dvh - 32px));
+    max-height: none;
+    padding: 20px;
+    gap: 16px;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    border-radius: 12px;
+    background: var(--popover);
+  }
+  .canvas-expanded-prompt .canvas-prompt-header {
+    padding: 0;
+    align-items: flex-start;
+  }
+  .canvas-expanded-prompt .canvas-prompt-controls {
+    padding: 0;
+  }
+  .canvas-expanded-prompt .rich-text-surface {
+    min-height: 100%;
+    padding: 4px;
+  }
+  .canvas-generation-popover {
+    width: 336px;
+    max-width: calc(100dvw - 32px);
+    max-height: var(--radix-popover-content-available-height);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 16px;
+    border-radius: 16px;
+  }
+  .canvas-generation-popover [data-slot="field-label"] {
+    font-size: 13px;
+    color: var(--muted-foreground);
+  }
+  .canvas-parameter-options {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 10px;
+    background: var(--muted);
+  }
+  .canvas-parameter-options > button {
+    flex: 1 0 38px;
+    min-width: 0;
+    height: 36px;
+    padding: 4px;
+    font-size: 13px;
+    border-radius: 8px;
+  }
+  .canvas-parameter-options > button[data-state="on"] {
+    background: color-mix(in srgb, var(--foreground) 10%, transparent);
+  }
+  .canvas-parameter-options > .canvas-ratio-option {
+    height: 56px;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .canvas-ratio-preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+  }
+  .canvas-ratio-preview > span {
+    display: block;
+    border: 1px solid currentColor;
+    border-radius: 2px;
+  }
+  @media (max-width: 640px), (max-height: 500px) {
+    .canvas-document-fullscreen {
+      padding: 0 12px 12px;
+      gap: 8px;
+      grid-template-rows: 48px 44px minmax(0, 1fr);
+    }
+    .canvas-document-fullscreen .rich-text-surface {
+      padding: 20px;
+    }
+    .canvas-expanded-prompt {
+      padding: 12px;
+      gap: 8px;
+    }
+  }
+}
+
+@layer utilities {
+  .canvas-reference-bar {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+  .canvas-reference-add {
+    width: 56px;
+    height: 56px;
+    padding: 0;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: transparent;
+  }
+  .canvas-reference-add svg {
+    width: 20px;
+    height: 20px;
+  }
+  .canvas-reference-list {
+    gap: 8px;
+    padding: 0 4px 4px 0;
+  }
+  .canvas-parameter-options[data-ratio="true"] {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+@layer utilities {
+  .canvas-document-toolbar .rich-text-toolbar,
+  .canvas-document-fullscreen > .rich-text-toolbar {
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  .canvas-document-toolbar .rich-text-toolbar::-webkit-scrollbar,
+  .canvas-document-fullscreen > .rich-text-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+}

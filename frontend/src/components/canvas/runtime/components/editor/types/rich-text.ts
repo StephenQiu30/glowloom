@@ -1,5 +1,5 @@
 import type { JSONContent } from "@tiptap/core";
-import type { CSSProperties, Ref } from "react";
+import type { CSSProperties, ReactNode, Ref } from "react";
 import type { NodeTextBinding } from "@glowloom/canvas-collab/model";
 
 export type RichTextDocument = {
@@ -27,6 +27,14 @@ export type RichTextInputProps = {
   references?: RichTextReference[];
   documentMode?: boolean;
   floatingToolbar?: boolean;
+  documentTitle?: string;
+  expandedView?: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    header?: ReactNode;
+    footer?: ReactNode;
+    onCloseAutoFocus?: () => void;
+  };
   disabled?: boolean;
   required?: boolean;
   maxLength?: number;

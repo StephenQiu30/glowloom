@@ -6,6 +6,8 @@ import {
   richTextConfig,
 } from "@/components/canvas/service-graph";
 import { emptyPromptDraft } from "@/components/generation/prompt-document";
+import { rebaseCanvas } from "@/components/canvas/autosave-session";
+import { textToDocument } from "@/components/canvas/runtime/components/editor/lib/rich-text-document";
 const canvas = "11111111-1111-4111-8111-111111111111",
   project = "22222222-2222-4222-8222-222222222222",
   node = "33333333-3333-4333-8333-333333333333";
@@ -34,6 +36,45 @@ function document(): API.DocumentDTO {
   };
 }
 describe("正式画布服务接线", () => {
+  it.each(["image", "video"])(
+    "preserves %s prompt documents when typing continues across a save receipt",
+    (type) => {
+      const dto = document();
+      dto.nodes![0] = { ...dto.nodes![0], node_type: type, config: {} };
+      const before = serviceGraph(dto, canvas, project);
+      const first = structuredClone(before);
+      const firstText = {
+        schemaVersion: 1 as const,
+        content: textToDocument("第一笔"),
+      };
+      first.nodes[0].metadata = {
+        ...first.nodes[0].metadata,
+        prompt: "第一笔",
+        richText: firstText,
+      };
+      first.nodes[0].documentData!.textDocument = firstText;
+      const second = structuredClone(first);
+      const secondText = {
+        schemaVersion: 1 as const,
+        content: textToDocument("第一笔继续输入"),
+      };
+      second.nodes[0].metadata = {
+        ...second.nodes[0].metadata,
+        prompt: "第一笔继续输入",
+        richText: secondText,
+      };
+      second.nodes[0].documentData!.textDocument = secondText;
+      const op = serviceGraphOperations(before, first).find(
+        (op) => Array.isArray(op.path) && op.path.join(".") === "config.editor",
+      )!;
+      dto.nodes![0].config!.editor = JSON.parse(JSON.stringify(op.value));
+      const receipt = serviceGraph(dto, canvas, project);
+      const merged = rebaseCanvas(first, second, receipt);
+      expect(merged.nodes[0].documentData!.textDocument).toEqual(secondText);
+      expect(merged.nodes[0].metadata!.richText).toEqual(secondText);
+      expect(serviceGraphOperations(receipt, merged)).toHaveLength(1);
+    },
+  );
   it("creates nodes with service-compatible UUIDs", () => {
     const created = createCanvasNode("text", { x: 10, y: 20 });
     expect(created.id).toMatch(
