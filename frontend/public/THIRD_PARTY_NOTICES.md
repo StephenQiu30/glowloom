@@ -2,6 +2,12 @@
 
 本文保留当前及历史实现的来源、修改和版权追溯。下节为当前画布适配；其他历史前端能力与旧路径已移除，不属于当前浮光页面的实现或需求；原始许可文本继续保留。
 
+## Lucky 画布能力适配（2026-10-23）
+
+固定源码为本地 Lucky 提交 `33b51b0e718918ada4239835e92a166a303cbafa`，继承其画布第三方声明；完整许可与传递来源随应用保存在 [Lucky 画布许可](/licenses/canvas-sources.md)。
+
+从 `frontend/src/components/canvas` 的 viewport、wheel、node-drag、connection-geometry、view-state、image-editor-viewport、crop/split/upscale dialogs 迁入 `frontend/src/components/canvas` 同职责模块。改写为本项目 UUID、类型、shadcn、主题、视图身份隔离、取消处理、正式素材上传与 Go/OT 持久回执；不复制 Lucky 的账户、业务接口、环境配置或 Yjs 服务。本声明只覆盖实际迁入代码，不代表完整画布或多人协作已经验收。
+
 ## 当前BeefTV画布适配（2026-10-09）
 
 固定来源：[glanderness/BeefTV `a2196d32782be6090beb003590ce11a956a423e1`](https://github.com/glanderness/BeefTV/tree/a2196d32782be6090beb003590ce11a956a423e1)，MIT。版权为2026 @beefnoode、BeefTV contributors、basketikun和ddcat。[完整许可](/licenses/beeftv.txt)与[上游NOTICE](/licenses/beeftv-notice.txt)随应用分发；NOTICE包含Infinite Canvas派生来源及其重许可说明。

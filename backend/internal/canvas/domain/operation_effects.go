@@ -121,6 +121,13 @@ func DocumentEffects(before, after Document) []Effect {
 				result = append(result, e)
 				continue
 			}
+			if entity == "edge" {
+				e.Before, e.After = effectJSON(b), effectJSON(a)
+				if !equalJSON(e.Before, e.After) {
+					result = append(result, e)
+				}
+				continue
+			}
 			var bo, ao any
 			decode := func(value any, target *any) {
 				d := json.NewDecoder(bytes.NewReader(effectJSON(value)))

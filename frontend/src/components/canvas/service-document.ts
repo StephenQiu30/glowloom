@@ -1,3 +1,4 @@
+import { textConfig, validateCanvasComposer } from "./text-content";
 import { isProjectID } from "@/components/projects/project";
 import { emptyDocument } from "./document";
 import type {
@@ -17,6 +18,7 @@ export type Effect = {
   after?: unknown;
 };
 export type Change = { revision: string; effects: Effect[]; op_id?: string };
+export class UnsupportedCanvasContentError extends Error {}
 export function revision(value: unknown): string {
   if (
     typeof value !== "string" ||
@@ -50,9 +52,12 @@ export function fromServiceDocument(
       n.node_action !== "resource" ||
       n.last_operation_id ||
       (type === "text" &&
-        (n.config?.format !== "plain" || n.config?.format_version !== 1))
+        (!["plain", "tiptap"].includes(n.config?.format ?? "") ||
+          n.config?.format_version !== 1))
     )
-      throw new Error("此画布包含尚未适配的业务节点，原数据已保留");
+      throw new UnsupportedCanvasContentError(
+        "此画布包含尚未适配的业务节点，原数据已保留",
+      );
     if (
       ![n.x, n.y, n.width, n.height].every(
         (v) => typeof v === "number" && Number.isFinite(v),
@@ -69,10 +74,22 @@ export function fromServiceDocument(
     if (
       Object.keys(n.config ?? {}).some(
         (key) =>
-          !["text", "format", "format_version", "collapsed"].includes(key),
+          ![
+            "text",
+            "composer",
+            "format",
+            "format_version",
+            "collapsed",
+          ].includes(key),
       )
     )
-      throw new Error("节点配置尚未适配，原数据已保留");
+      throw new UnsupportedCanvasContentError("节点配置尚未适配，原数据已保留");
+    const composer: unknown = n.config?.composer;
+    if (type === "text" && n.config?.format === "tiptap") {
+      validateCanvasComposer(composer);
+      if (n.config.text !== undefined)
+        throw new Error("文本配置包含两个内容来源");
+    } else if (composer !== undefined) throw new Error("节点引用格式无效");
     return {
       id: n.id,
       type,
@@ -82,7 +99,16 @@ export function fromServiceDocument(
       height: n.height!,
       metadata: {
         content: type === "text" ? (n.config?.text ?? "") : "",
+        ...(type === "text" && n.config?.format === "tiptap"
+          ? {
+              composer:
+                composer as import("@/components/generation/prompt-document").PromptDraft,
+            }
+          : {}),
         groupId: n.parent_id ?? undefined,
+        ...(type === "group"
+          ? { collapsed: n.config?.collapsed ?? false }
+          : {}),
         assetId: n.media_ref?.asset_id,
       },
     };
@@ -102,7 +128,7 @@ export function fromServiceDocument(
       !ids.has(e.source_node_id!) ||
       !ids.has(e.target_node_id!)
     )
-      throw new Error("画布包含尚未适配的关系");
+      throw new UnsupportedCanvasContentError("画布包含尚未适配的关系");
     return {
       id: e.id,
       fromNodeId: e.source_node_id!,
@@ -115,6 +141,35 @@ export function fromServiceDocument(
     nodes,
     connections,
   };
+}
+
+/** A full read-only snapshot never becomes the editable graph or a save payload. */
+export function validateHistoricalSnapshot(dto: API.DocumentDTO) {
+  const ids = new Set<string>();
+  for (const node of dto.nodes ?? []) {
+    if (
+      !isProjectID(node.id) ||
+      ids.has(node.id) ||
+      ![node.x, node.y, node.width, node.height].every(
+        (v) => typeof v === "number" && Number.isFinite(v),
+      ) ||
+      node.width! <= 0 ||
+      node.height! <= 0
+    )
+      throw new Error("画布节点身份或尺寸无效");
+    ids.add(node.id);
+  }
+  const edgeIDs = new Set<string>();
+  for (const edge of dto.edges ?? []) {
+    if (
+      !isProjectID(edge.id) ||
+      edgeIDs.has(edge.id) ||
+      !ids.has(edge.source_node_id!) ||
+      !ids.has(edge.target_node_id!)
+    )
+      throw new Error("画布关系无效");
+    edgeIDs.add(edge.id);
+  }
 }
 
 /** Minimal contiguous edit in UTF-16 units; never splits surrogate pairs. */
@@ -156,12 +211,10 @@ function nodeDTO(n: CanvasNodeData) {
     z_index: n.type === "group" ? 0 : 1,
     config:
       n.type === "text"
-        ? {
-            text: n.metadata?.content ?? "",
-            format: "plain",
-            format_version: 1,
-          }
-        : {},
+        ? textConfig(n)
+        : n.type === "group"
+          ? { collapsed: n.metadata?.collapsed ?? false }
+          : {},
     ...(media ? { media_ref: { asset_id: n.metadata!.assetId } } : {}),
   };
 }
@@ -201,7 +254,25 @@ export function graphOperations(
       set(["size"], { width: n.width, height: n.height });
     if (n.metadata?.groupId !== previous.metadata?.groupId)
       set(["parent_id"], n.metadata?.groupId ?? null);
-    if (n.type === "text" && n.metadata?.content !== previous.metadata?.content)
+    if (
+      n.type === "text" &&
+      (n.metadata?.composer || previous.metadata?.composer)
+    ) {
+      const expected = textConfig(previous),
+        value = textConfig(n);
+      if (JSON.stringify(expected) !== JSON.stringify(value))
+        operations.push({
+          type: "set",
+          node_id: n.id,
+          path: ["config", "text_content"],
+          expected_exists: true,
+          expected,
+          value,
+        });
+    } else if (
+      n.type === "text" &&
+      n.metadata?.content !== previous.metadata?.content
+    )
       operations.push({
         type: "text",
         node_id: n.id,

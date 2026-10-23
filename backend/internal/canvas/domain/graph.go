@@ -28,11 +28,11 @@ func ValidateGraph(doc Document) error {
 			return fmt.Errorf("%w: unknown node configuration", ErrUnsupportedCommand)
 		}
 		switch node.NodeType {
-		case "text", "group", "image", "video", "audio", "model", "image_generation", "video_generation", "batch_table", "timeline", "director", "generation":
+		case "config", "text", "group", "image", "video", "audio", "model", "image_generation", "video_generation", "batch_table", "timeline", "director", "generation":
 		default:
 			return fmt.Errorf("%w: unknown node type", ErrUnsupportedCommand)
 		}
-		if !validConfig(node.NodeType, node.Config) {
+		if !validConfig(node.NodeType, node.Config) || !validEditorFiles(node) {
 			return ErrInvalidCommand
 		}
 	}
@@ -40,19 +40,22 @@ func ValidateGraph(doc Document) error {
 		return ErrInvalidCommand
 	}
 	ids := make(map[uuid.UUID]bool, len(doc.Edges))
-	relations := make(map[[2]uuid.UUID]bool, len(doc.Edges))
+	relations := make(map[string]bool, len(doc.Edges))
 	for _, edge := range doc.Edges {
 		if !annotation(edge) {
 			return fmt.Errorf("%w: unclassified stored relation", ErrUnsupportedCommand)
 		}
 		_, sourceOK := nodes[edge.SourceNodeID]
 		_, targetOK := nodes[edge.TargetNodeID]
-		pair := [2]uuid.UUID{edge.SourceNodeID, edge.TargetNodeID}
+		pair := edge.SourceNodeID.String() + "/" + edge.TargetNodeID.String() + "/" + string(edge.Binding)
 		if edge.ID == uuid.Nil || ids[edge.ID] || !sourceOK || !targetOK || edge.SourceNodeID == edge.TargetNodeID || relations[pair] {
 			return ErrInvalidCommand
 		}
 		ids[edge.ID] = true
 		relations[pair] = true
+	}
+	if err := validateEditorConnections(doc); err != nil {
+		return err
 	}
 	return validateInputDAG(doc.Nodes)
 }

@@ -50,7 +50,7 @@ export function ReferenceMentionMenu({
 }: {
   session: ComposerSession;
   draft: PromptDraft;
-  sources?: (CanvasReferenceSource & { edgeID: string })[];
+  sources?: CanvasReferenceSource[];
   query: string;
   busy: boolean;
   disabled: boolean;

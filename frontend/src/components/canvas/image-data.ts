@@ -228,6 +228,7 @@ function drawResizeCanvas(
 function loadImage(dataUrl: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
+    image.crossOrigin = "anonymous";
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error("图片无法解码"));
     image.src = dataUrl;

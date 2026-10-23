@@ -264,7 +264,8 @@ func Changes(changes []CollaborationChange) ([]ChangeDTO, error) {
 			effect.Before = nil
 			effect.BeforeExists = false
 			if effect.Entity == "node" {
-				if len(effect.Path) == 0 && effect.AfterExists {
+				switch {
+				case len(effect.Path) == 0 && effect.AfterExists:
 					var node domain.Node
 					if err := json.Unmarshal(effect.After, &node); err != nil {
 						return nil, err
@@ -274,7 +275,9 @@ func Changes(changes []CollaborationChange) ([]ChangeDTO, error) {
 						return nil, err
 					}
 					effect.After = body
-				} else if len(effect.Path) == 1 && effect.Path[0] == "ref_id" {
+				case len(effect.Path) == 1 && effect.Path[0] == "ref_type":
+					continue // Internal media discriminator; public content identity is media_ref.
+				case len(effect.Path) == 1 && effect.Path[0] == "ref_id":
 					effect.Path = []string{"media_ref", "asset_id"}
 				}
 			}

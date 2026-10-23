@@ -136,6 +136,10 @@ func fieldValue(parent map[string]any, key string, rule fieldPolicy) (json.RawMe
 				group[member] = value
 			}
 		}
+		// Legacy plain nodes are normalized at the public DTO boundary.
+		if key == "text_content" && group["format"] == nil && group["text"] != nil {
+			group["format"], group["format_version"] = "plain", 1
+		}
 		value, exists = group, !rule.optional || len(group) > 0
 	}
 	if !exists {
@@ -292,6 +296,11 @@ func applyField(document *Document, op Operation) (FieldChange, error) {
 	if err := normalizeBinding(object, op); err != nil {
 		return FieldChange{}, err
 	}
+	if len(op.Path) == 2 && op.Path[0] == "config" && key == "text_content" {
+		if err := retainTextLabels(parent, before); err != nil {
+			return FieldChange{}, err
+		}
+	}
 	after, afterExists := fieldValue(parent, key, rule)
 	body, _ := json.Marshal(object)
 	var node Node
@@ -359,7 +368,7 @@ func applyOperations(document Document, operations []Operation, final bool) (Ope
 			change, err = applyField(&doc, op)
 		case "insert", "restore_item", "remove", "move":
 			change, err = applyCollection(&doc, op)
-		case "create_node", "restore_node", "delete_node", "connect", "restore_edge", "disconnect":
+		case "set_edge", "create_node", "restore_node", "delete_node", "connect", "restore_edge", "disconnect":
 			err = applyStructure(&doc, op)
 		default:
 			err = operationError("unsupported_operation")
@@ -427,6 +436,11 @@ func applyOperations(document Document, operations []Operation, final bool) (Ope
 }
 
 func pairOperations(base Document, a, b Operation) (Operation, Operation, error) {
+	if a.Type == "set_edge" || b.Type == "set_edge" {
+		if a.NodeID == b.NodeID {
+			return a, b, operationError("edge_conflict")
+		}
+	}
 	if a.Type == "delete_node" && operationUsesNode(b, a.NodeID) {
 		if b.Type == "delete_node" && b.NodeID == a.NodeID {
 			return a, Operation{Type: "noop"}, nil
@@ -451,7 +465,7 @@ func pairOperations(base Document, a, b Operation) (Operation, Operation, error)
 	if a.Type == "disconnect" && b.Type == "disconnect" && a.NodeID == b.NodeID {
 		return a, Operation{Type: "noop"}, nil
 	}
-	if a.Type == "create_node" || b.Type == "create_node" || a.Type == "restore_node" || b.Type == "restore_node" || a.Type == "restore_edge" || b.Type == "restore_edge" || a.Type == "connect" || b.Type == "connect" || a.Type == "disconnect" || b.Type == "disconnect" {
+	if a.Type == "set_edge" || b.Type == "set_edge" || a.Type == "create_node" || b.Type == "create_node" || a.Type == "restore_node" || b.Type == "restore_node" || a.Type == "restore_edge" || b.Type == "restore_edge" || a.Type == "connect" || b.Type == "connect" || a.Type == "disconnect" || b.Type == "disconnect" {
 		return a, b, nil
 	}
 	if a.Type == "noop" || b.Type == "noop" || a.NodeID != b.NodeID {

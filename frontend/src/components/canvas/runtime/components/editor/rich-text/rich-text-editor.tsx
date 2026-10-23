@@ -1,0 +1,994 @@
+"use client";
+
+import { Node, Extension, type Editor } from "@tiptap/core";
+import Mention, { type MentionOptions } from "@tiptap/extension-mention";
+import Placeholder from "@tiptap/extension-placeholder";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { history } from "@tiptap/pm/history";
+import { DOMParser as ProseMirrorDOMParser } from "@tiptap/pm/model";
+import type { NodeTextBinding } from "@glowloom/canvas-collab/model";
+import {
+  EditorContent,
+  NodeViewWrapper,
+  ReactNodeViewRenderer,
+  useEditor,
+  useEditorState,
+  type NodeViewProps,
+} from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Collaboration from "@tiptap/extension-collaboration";
+import { ySyncPluginKey } from "@tiptap/y-tiptap";
+import { persistentRichText } from "@glowloom/canvas-collab/rich-text";
+import type { XmlFragment } from "yjs";
+import { exitSuggestion, type SuggestionProps } from "@tiptap/suggestion";
+import {
+  Bold,
+  Italic,
+  Heading2,
+  List,
+  ListOrdered,
+  Quote,
+  Undo2,
+  Redo2,
+  Maximize2,
+  Download,
+  Upload,
+  AtSign,
+  FileText,
+  ImageIcon,
+  Video,
+  Music2,
+  Group,
+} from "lucide-react";
+import {
+  useCallback,
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Toggle } from "@/components/ui/toggle";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { MediaPreview } from "@/components/canvas/runtime/components/generation/workspace/media-preview";
+import { PreviewImage } from "@/components/canvas/runtime/components/media/preview-image";
+import {
+  isImeComposing,
+  isPlainEnterKey,
+} from "@/components/canvas/runtime/lib/keyboard-event";
+import { cn } from "@/lib/utils";
+import {
+  documentForText,
+  documentText,
+  parseRichTextDocument,
+  referenceToken,
+  textToDocument,
+} from "../lib/rich-text-document";
+import type {
+  RichTextDocument,
+  RichTextInputProps,
+  RichTextReference,
+} from "../types/rich-text";
+
+type MentionMenu = {
+  items: RichTextReference[];
+  rect: DOMRect | null;
+  select: (reference: RichTextReference) => void;
+  active: number;
+};
+
+const emptyReferences: RichTextReference[] = [];
+const ReferenceContext = createContext<RichTextReference[]>(emptyReferences);
+
+function ReferenceChip({ node }: NodeViewProps) {
+  const references = useContext(ReferenceContext);
+  const reference = references.find(
+    (item) => item.id === String(node.attrs.id ?? node.attrs.referenceId),
+  );
+  const [preview, setPreview] = useState(false);
+  const label = reference?.label ?? String(node.attrs.label ?? "素材引用");
+  return (
+    <NodeViewWrapper
+      as="span"
+      data-type="mention"
+      data-id={node.attrs.id ?? undefined}
+      data-label={node.attrs.label ?? undefined}
+      {...{ token: node.attrs.token ?? undefined }}
+      contentEditable={false}
+      className="rich-text-reference"
+    >
+      <Button
+        variant="secondary"
+        size="sm"
+        type="button"
+        className="rich-text-reference-button"
+        aria-label={
+          reference?.kind === "image" && reference.previewUrl
+            ? `预览引用：${reference.title}`
+            : `引用：${reference?.title ?? label}`
+        }
+        onClick={() => {
+          if (reference?.kind === "image" && reference.previewUrl)
+            setPreview(true);
+        }}
+      >
+        {reference?.kind === "image" && reference.previewUrl ? (
+          <PreviewImage
+            src={reference.previewUrl}
+            alt=""
+            className="size-6 rounded object-cover"
+          />
+        ) : (
+          <ReferenceIcon kind={reference?.kind ?? "text"} />
+        )}
+        <span className="truncate">{label}</span>
+      </Button>
+      {preview && reference?.previewUrl ? (
+        <MediaPreview
+          src={reference.previewUrl}
+          alt={reference.title}
+          open
+          onOpenChange={setPreview}
+          style={{ display: "none" }}
+        />
+      ) : null}
+    </NodeViewWrapper>
+  );
+}
+
+function ReferenceIcon({ kind }: { kind: RichTextReference["kind"] }) {
+  const Icon =
+    kind === "image"
+      ? ImageIcon
+      : kind === "video"
+        ? Video
+        : kind === "audio"
+          ? Music2
+          : kind === "group"
+            ? Group
+            : FileText;
+  return <Icon aria-hidden="true" className="size-4 shrink-0" />;
+}
+
+function createEditorExtensions({
+  documentMode,
+  collaborationFragment,
+  mentionKey,
+  readProps,
+  readMenu,
+  updateMenu,
+}: {
+  documentMode?: boolean;
+  collaborationFragment?: XmlFragment;
+  mentionKey: PluginKey;
+  readProps: () => RichTextInputProps;
+  readMenu: () => MentionMenu | null;
+  updateMenu: (menu: MentionMenu | null) => void;
+}) {
+  let blockedLength = false;
+  return [
+    Node.create({
+      name: "reference",
+      group: "inline",
+      inline: true,
+      atom: true,
+      addAttributes() {
+        return { referenceId: { default: null } };
+      },
+      parseHTML() {
+        return [
+          {
+            tag: "span[data-reference-id]",
+            getAttrs: (element) => ({
+              referenceId: element.getAttribute("data-reference-id"),
+            }),
+          },
+        ];
+      },
+      renderHTML({ node }) {
+        return [
+          "span",
+          { "data-reference-id": node.attrs.referenceId },
+          "[引用]",
+        ];
+      },
+      renderText() {
+        return "[引用]";
+      },
+      addNodeView() {
+        return ReactNodeViewRenderer(ReferenceChip);
+      },
+    }),
+    StarterKit.configure({
+      undoRedo: collaborationFragment ? false : {},
+      heading: documentMode ? { levels: [1, 2, 3] } : false,
+      bold: documentMode ? {} : false,
+      italic: documentMode ? {} : false,
+      underline: documentMode ? {} : false,
+      strike: documentMode ? {} : false,
+      bulletList: documentMode ? {} : false,
+      orderedList: documentMode ? {} : false,
+      listItem: documentMode ? {} : false,
+      listKeymap: documentMode ? {} : false,
+      blockquote: documentMode ? {} : false,
+      code: documentMode ? {} : false,
+      codeBlock: documentMode ? {} : false,
+      horizontalRule: documentMode ? {} : false,
+      link: documentMode
+        ? { openOnClick: false, protocols: ["https", "http"] }
+        : false,
+    }),
+    ...(collaborationFragment
+      ? [Collaboration.configure({ fragment: collaborationFragment })]
+      : []),
+    Placeholder.configure({
+      placeholder: () => readProps().placeholder ?? "请输入内容…",
+    }),
+    Mention.extend<MentionOptions<RichTextReference, RichTextReference>>({
+      addAttributes() {
+        return { ...this.parent?.(), token: { default: null } };
+      },
+      addNodeView() {
+        return ReactNodeViewRenderer(ReferenceChip);
+      },
+    }).configure({
+      HTMLAttributes: { class: "rich-text-mention" },
+      deleteTriggerWithBackspace: true,
+      renderText: ({ node }) =>
+        String(node.attrs.token ?? node.attrs.label ?? ""),
+      suggestion: {
+        pluginKey: mentionKey,
+        items: ({ query }: { query: string }) =>
+          (readProps().references ?? emptyReferences)
+            .filter((r) =>
+              `${r.label} ${r.title} ${r.text ?? ""}`
+                .toLowerCase()
+                .includes(query.toLowerCase()),
+            )
+            .slice(0, 20),
+        command: ({
+          editor: activeEditor,
+          range,
+          props: item,
+        }: {
+          editor: Editor;
+          range: { from: number; to: number };
+          props: RichTextReference;
+        }) => {
+          activeEditor
+            .chain()
+            .focus()
+            .insertContentAt(range, [
+              {
+                type: "mention",
+                attrs: {
+                  id: item.id,
+                  label: item.label,
+                  token: referenceToken(item),
+                },
+              },
+              { type: "text", text: " " },
+            ])
+            .run();
+        },
+        render: () => {
+          const update = (
+            state: SuggestionProps<RichTextReference, RichTextReference>,
+          ) =>
+            updateMenu(
+              state.items.length
+                ? {
+                    items: state.items,
+                    rect: state.clientRect?.() ?? null,
+                    select: state.command,
+                    active: 0,
+                  }
+                : null,
+            );
+          return {
+            onStart: update,
+            onUpdate: update,
+            onExit: () => updateMenu(null),
+            onKeyDown: ({ event, view }) => {
+              if (isImeComposing(event)) return false;
+              const current = readMenu();
+              if (!current) return false;
+              if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                updateMenu({
+                  ...current,
+                  active:
+                    (current.active +
+                      (event.key === "ArrowDown" ? 1 : -1) +
+                      current.items.length) %
+                    current.items.length,
+                });
+                return true;
+              }
+              if (event.key === "Enter" || event.key === "Tab") {
+                current.select(current.items[current.active]);
+                return true;
+              }
+              if (event.key === "Escape") {
+                exitSuggestion(view, mentionKey);
+                return true;
+              }
+              return false;
+            },
+          };
+        },
+      },
+    }),
+    Extension.create({
+      name: "glowloom-content-limit",
+      addProseMirrorPlugins() {
+        return [
+          new Plugin({
+            filterTransaction(transaction, state) {
+              if (
+                readProps().collaboration &&
+                transaction.getMeta(ySyncPluginKey)?.isChangeOrigin
+              )
+                return true;
+              const max = readProps().maxLength;
+              const length = documentText(transaction.doc.toJSON()).length;
+              if (
+                transaction.docChanged &&
+                max &&
+                length > max &&
+                length > documentText(state.doc.toJSON()).length
+              ) {
+                if (!blockedLength) {
+                  blockedLength = true;
+                  queueMicrotask(() => toast.error(`内容最多 ${max} 个字符`));
+                }
+                return false;
+              }
+              blockedLength = false;
+              return true;
+            },
+          }),
+        ];
+      },
+    }),
+  ];
+}
+
+function readEditorDraft(
+  editor: Editor | null,
+  binding: NodeTextBinding | undefined,
+  force = false,
+) {
+  if (!editor || editor.isDestroyed || !binding?.protectDraft) return null;
+  const contentDOM = editor.view.dom.cloneNode(true) as HTMLElement;
+  // ProseMirror adds this caret padding after empty blocks and real breaks.
+  // It belongs to the view; parsing it as content creates a permanent draft.
+  contentDOM
+    .querySelectorAll("br.ProseMirror-trailingBreak")
+    .forEach((node) => node.remove());
+  const content = persistentRichText(
+    ProseMirrorDOMParser.fromSchema(editor.schema)
+      .parse(contentDOM, { preserveWhitespace: "full" })
+      .toJSON(),
+  );
+  if (
+    force ||
+    editor.view.composing ||
+    binding.isAttached?.() === false ||
+    JSON.stringify(content) !==
+      JSON.stringify(persistentRichText(editor.getJSON()))
+  )
+    return parseRichTextDocument({ schemaVersion: 1, content });
+  return null;
+}
+
+export function RichTextEditor({ rootRef, ...props }: RichTextInputProps) {
+  const editorInstance = useRef<Editor | null>(null);
+  const latest = useRef({ ...props });
+  const lastEmitted = useRef(props.value);
+  const lastDocument = useRef<RichTextDocument | undefined>(props.document);
+  const [expanded, setExpanded] = useState(false);
+  const expandedRef = useRef(false);
+  const [menu, setMenu] = useState<MentionMenu | null>(null);
+  const menuRef = useRef<MentionMenu | null>(null);
+  const readProps = useCallback(() => latest.current, []);
+  const readMenu = useCallback(() => menuRef.current, []);
+  const mentionKey = useMemo(() => new PluginKey("glowloom-reference"), []);
+  useLayoutEffect(() => {
+    latest.current = { ...props };
+    expandedRef.current = expanded;
+  }, [props, expanded]);
+
+  const updateMenu = useCallback((next: MentionMenu | null) => {
+    menuRef.current = next;
+    setMenu(next);
+  }, []);
+
+  const extensions = useMemo(
+    // Tiptap invokes the supplied readers from plugin events, after render.
+    // eslint-disable-next-line react-hooks/refs
+    () =>
+      createEditorExtensions({
+        documentMode: props.collaboration?.fragment ? true : props.documentMode,
+        collaborationFragment: props.collaboration?.fragment,
+        mentionKey,
+        readProps,
+        readMenu,
+        updateMenu,
+      }),
+    [
+      props.documentMode,
+      props.collaboration?.fragment,
+      mentionKey,
+      updateMenu,
+      readProps,
+      readMenu,
+    ],
+  );
+
+  const editor = useEditor(
+    {
+      extensions,
+      content: props.collaboration?.fragment
+        ? undefined
+        : documentForText(props.value, props.document, props.references),
+      immediatelyRender: false,
+      shouldRerenderOnTransaction: false,
+      editable: !props.disabled,
+      autofocus: props.autoFocus ? "end" : false,
+      editorProps: {
+        attributes: {
+          id: props.id ?? "",
+          class: "rich-text-surface thin-scrollbar",
+          role: "textbox",
+          "aria-multiline": "true",
+          "aria-label": props["aria-label"] ?? props.placeholder ?? "文字内容",
+          "aria-invalid": String(Boolean(props["aria-invalid"])),
+          "aria-required": String(Boolean(props.required)),
+          "aria-disabled": String(Boolean(props.disabled)),
+        },
+        handleKeyDown: (view, event) => {
+          if (view.composing || isImeComposing(event) || menuRef.current)
+            return false;
+          if (event.key === "Escape") {
+            if (expandedRef.current) {
+              setExpanded(false);
+              return true;
+            }
+            if (latest.current.onEscape) {
+              latest.current.onEscape();
+              return true;
+            }
+          }
+          const submitKey =
+            latest.current.submitShortcut === "mod-enter"
+              ? event.key === "Enter" &&
+                (event.ctrlKey || event.metaKey) &&
+                !event.shiftKey &&
+                !event.altKey
+              : isPlainEnterKey(event);
+          if (latest.current.onSubmit && submitKey) {
+            if (!event.repeat) latest.current.onSubmit();
+            return true;
+          }
+          return false;
+        },
+        handlePaste: (_view, event) => {
+          if (latest.current.documentMode) return false;
+          const plain = event.clipboardData?.getData("text/plain");
+          if (plain === undefined) return false;
+          editorInstance.current?.commands.insertContent(
+            textToDocument(plain, latest.current.references).content ?? [],
+          );
+          return true;
+        },
+      },
+      onUpdate: ({ editor: activeEditor, transaction }) => {
+        const binding = latest.current.collaboration;
+        if (binding?.isAttached?.() === false) {
+          if (!transaction.getMeta(ySyncPluginKey)?.isChangeOrigin)
+            binding.protectDraft?.(
+              readEditorDraft(activeEditor, binding, true),
+            );
+          return;
+        }
+        if (
+          latest.current.collaboration &&
+          !transaction.getMeta(ySyncPluginKey)?.isChangeOrigin
+        ) {
+          binding?.protectDraft?.(readEditorDraft(activeEditor, binding));
+          if (binding?.markChanged() === false) return;
+        }
+        const document = parseRichTextDocument({
+          schemaVersion: 1,
+          content: persistentRichText(activeEditor.getJSON()),
+        });
+        const value = documentText(document.content);
+        lastEmitted.current = value;
+        lastDocument.current = document;
+        latest.current.onChange(value, document);
+      },
+    },
+    [props.collaboration?.fragment],
+  );
+
+  useLayoutEffect(() => {
+    editorInstance.current = editor;
+    return () => {
+      editorInstance.current = null;
+    };
+  }, [editor]);
+
+  useLayoutEffect(() => {
+    const binding = props.collaboration;
+    if (!editor || !binding?.protectDraft) return;
+    const read = () => readEditorDraft(editor, binding);
+    const unregister = binding.registerDraftReader?.(read);
+    return () => {
+      binding.protectDraft?.(read());
+      unregister?.();
+    };
+  }, [editor, props.collaboration]);
+
+  useEffect(() => {
+    if (!editor) return;
+    editor.setEditable(!props.disabled, false);
+  }, [editor, props.disabled]);
+
+  useLayoutEffect(() => {
+    if (!editor || editor.view.composing || props.collaboration?.fragment)
+      return;
+    const content = documentForText(
+      props.value,
+      props.document,
+      props.references,
+    );
+    if (
+      props.value === lastEmitted.current &&
+      (!props.document ||
+        props.document === lastDocument.current ||
+        JSON.stringify(content) === JSON.stringify(editor.getJSON()))
+    )
+      return;
+    const selection = editor.state.selection;
+    editor.commands.setContent(content, { emitUpdate: false });
+    // Whole-field remote updates cannot share the prior local text undo stack.
+    editor.unregisterPlugin("history");
+    editor.registerPlugin(history());
+    if (editor.isFocused)
+      editor.commands.setTextSelection(
+        Math.min(selection.from, editor.state.doc.content.size),
+      );
+    lastEmitted.current = props.value;
+    lastDocument.current = props.document;
+  }, [
+    editor,
+    props.value,
+    props.document,
+    props.references,
+    props.collaboration?.fragment,
+  ]);
+
+  const content = editor ? (
+    <ReferenceContext value={props.references ?? emptyReferences}>
+      <EditorContent editor={editor} className="rich-text-content" />
+    </ReferenceContext>
+  ) : null;
+  const toolbar =
+    editor && props.documentMode ? (
+      <EditorToolbar
+        editor={editor}
+        disabled={props.disabled}
+        references={props.references ?? emptyReferences}
+        onExpand={expanded ? undefined : () => setExpanded(true)}
+      />
+    ) : null;
+  return (
+    <div
+      ref={rootRef}
+      data-rich-text-scope
+      data-editor-engine="tiptap"
+      data-canvas-no-zoom
+      data-canvas-shortcuts-ignore
+      data-document-mode={Boolean(props.documentMode)}
+      onInputCapture={() =>
+        props.collaboration?.protectDraft?.(
+          readEditorDraft(editor, props.collaboration),
+        )
+      }
+      onCompositionStartCapture={() =>
+        props.collaboration?.protectDraft?.(
+          readEditorDraft(editor, props.collaboration, true),
+        )
+      }
+      onCompositionEndCapture={() => {
+        const binding = props.collaboration;
+        binding?.protectDraft?.(readEditorDraft(editor, binding, true));
+        queueMicrotask(() => {
+          if (editor && !editor.isDestroyed)
+            binding?.protectDraft?.(readEditorDraft(editor, binding));
+        });
+      }}
+      className={cn("rich-text-editor", props.className)}
+      style={props.style}
+      onPointerDown={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
+      onWheel={(event) => event.stopPropagation()}
+      onKeyDown={(event) => {
+        if (
+          event.key === "Escape" &&
+          props.documentMode &&
+          !expanded &&
+          !editor?.view.composing &&
+          !isImeComposing(event.nativeEvent) &&
+          !event.defaultPrevented
+        ) {
+          event.preventDefault();
+          props.onEscape?.();
+        }
+        if (event.key !== "Escape" || props.documentMode)
+          event.stopPropagation();
+      }}
+    >
+      {!expanded ? (
+        <>
+          {toolbar}
+          {content}
+        </>
+      ) : (
+        <p className="p-3 text-sm text-muted-foreground">正在展开编辑文档</p>
+      )}
+      <Dialog open={expanded} onOpenChange={setExpanded}>
+        <DialogContent
+          data-rich-text-floating
+          className="dialog-canvas rich-text-dialog flex flex-col"
+          onEscapeKeyDown={(event) => {
+            if (editor?.view.composing || isImeComposing(event))
+              event.preventDefault();
+            event.stopPropagation();
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onWheel={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            event.stopPropagation();
+            if (
+              event.key === "Escape" &&
+              !event.defaultPrevented &&
+              !editor?.view.composing &&
+              !isImeComposing(event.nativeEvent)
+            ) {
+              event.preventDefault();
+              setExpanded(false);
+            }
+          }}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            requestAnimationFrame(() => editor?.commands.focus());
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            requestAnimationFrame(() => editor?.commands.focus());
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>编辑文档</DialogTitle>
+            <DialogDescription>
+              修改同步到当前画布草稿，可导出结构化文档保留格式。
+            </DialogDescription>
+          </DialogHeader>
+          {expanded ? (
+            <>
+              {toolbar}
+              {content}
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+      {menu && editor
+        ? createPortal(
+            <Popover
+              open
+              onOpenChange={(open) => {
+                if (!open) {
+                  exitSuggestion(editor.view, mentionKey);
+                  updateMenu(null);
+                }
+              }}
+            >
+              <PopoverAnchor asChild>
+                <span
+                  className="fixed size-px"
+                  style={{
+                    left: menu.rect?.left ?? 0,
+                    top: menu.rect?.bottom ?? 0,
+                  }}
+                />
+              </PopoverAnchor>
+              <PopoverContent
+                data-rich-text-floating
+                aria-label="选择素材引用"
+                className="rich-text-suggestions"
+                onEscapeKeyDown={(event) => {
+                  if (editor.view.composing || isImeComposing(event))
+                    event.preventDefault();
+                  event.stopPropagation();
+                }}
+                sideOffset={4}
+                align="start"
+                onOpenAutoFocus={(event) => event.preventDefault()}
+                onCloseAutoFocus={(event) => event.preventDefault()}
+              >
+                {menu.items.map((reference, index) => (
+                  <Button
+                    key={reference.id}
+                    type="button"
+                    variant={index === menu.active ? "secondary" : "ghost"}
+                    className="h-auto w-full justify-start gap-2 p-2 text-left"
+                    aria-current={index === menu.active ? "true" : undefined}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => menu.select(reference)}
+                  >
+                    <ReferenceIcon kind={reference.kind} />
+                    <span className="min-w-0">
+                      <span className="block truncate">{reference.label}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {reference.title}
+                      </span>
+                    </span>
+                  </Button>
+                ))}
+              </PopoverContent>
+            </Popover>,
+            document.body,
+          )
+        : null}
+    </div>
+  );
+}
+
+function EditorToolbar({
+  editor,
+  disabled,
+  references,
+  onExpand,
+}: {
+  editor: Editor;
+  disabled?: boolean;
+  references: RichTextReference[];
+  onExpand?: () => void;
+}) {
+  const importInput = useRef<HTMLInputElement>(null);
+  const importDocument = async (file?: File) => {
+    if (!file) return;
+    try {
+      if (file.size > 1024 * 1024) throw new Error("文档不能超过 1 MiB");
+      const document = parseRichTextDocument(JSON.parse(await file.text()));
+      editor.commands.setContent(document.content, {
+        errorOnInvalidContent: true,
+      });
+      editor.commands.focus("end");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "无法读取文档");
+    } finally {
+      if (importInput.current) importInput.current.value = "";
+    }
+  };
+  const state = useEditorState({
+    editor,
+    selector: ({ editor: current }) => ({
+      bold: current.isActive("bold"),
+      italic: current.isActive("italic"),
+      heading: current.isActive("heading", { level: 2 }),
+      bullet: current.isActive("bulletList"),
+      ordered: current.isActive("orderedList"),
+      quote: current.isActive("blockquote"),
+      undo: current.can().undo(),
+      redo: current.can().redo(),
+    }),
+  });
+  const tools = [
+    {
+      label: "加粗",
+      Icon: Bold,
+      active: state.bold,
+      run: () => editor.chain().focus().toggleBold().run(),
+    },
+    {
+      label: "斜体",
+      Icon: Italic,
+      active: state.italic,
+      run: () => editor.chain().focus().toggleItalic().run(),
+    },
+    {
+      label: "二级标题",
+      Icon: Heading2,
+      active: state.heading,
+      run: () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
+    },
+    {
+      label: "无序列表",
+      Icon: List,
+      active: state.bullet,
+      run: () => editor.chain().focus().toggleBulletList().run(),
+    },
+    {
+      label: "有序列表",
+      Icon: ListOrdered,
+      active: state.ordered,
+      run: () => editor.chain().focus().toggleOrderedList().run(),
+    },
+    {
+      label: "引用",
+      Icon: Quote,
+      active: state.quote,
+      run: () => editor.chain().focus().toggleBlockquote().run(),
+    },
+  ];
+  return (
+    <div
+      className="rich-text-toolbar"
+      role="toolbar"
+      aria-label="文档格式"
+      onMouseDown={(event) => event.preventDefault()}
+    >
+      {tools.map(({ label, Icon, active, run }) => (
+        <Toggle
+          key={label}
+          type="button"
+          size="sm"
+          pressed={active}
+          disabled={disabled}
+          aria-label={label}
+          title={label}
+          onPressedChange={run}
+        >
+          <Icon aria-hidden="true" />
+        </Toggle>
+      ))}
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label="撤销文字编辑"
+        title="撤销文字编辑"
+        disabled={disabled || !state.undo}
+        onClick={() => editor.chain().focus().undo().run()}
+      >
+        <Undo2 />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label="重做文字编辑"
+        title="重做文字编辑"
+        disabled={disabled || !state.redo}
+        onClick={() => editor.chain().focus().redo().run()}
+      >
+        <Redo2 />
+      </Button>
+      {references.length ? (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              disabled={disabled}
+              aria-label="插入素材引用"
+              title="插入素材引用"
+            >
+              <AtSign />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            data-rich-text-floating
+            className="rich-text-suggestions"
+            aria-label="文档素材引用"
+          >
+            {references.map((r) => (
+              <Button
+                key={r.id}
+                variant="ghost"
+                className="w-full justify-start"
+                onClick={() =>
+                  editor
+                    .chain()
+                    .focus()
+                    .insertContent({
+                      type: "mention",
+                      attrs: {
+                        id: r.id,
+                        label: r.label,
+                        token: referenceToken(r),
+                      },
+                    })
+                    .run()
+                }
+              >
+                {r.label}
+              </Button>
+            ))}
+          </PopoverContent>
+        </Popover>
+      ) : null}
+      <Input
+        ref={importInput}
+        type="file"
+        accept=".json,application/json"
+        className="hidden"
+        aria-label="选择结构化文档"
+        disabled={disabled}
+        onChange={(event) => void importDocument(event.target.files?.[0])}
+      />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label="导入结构化文档"
+        title="导入结构化文档"
+        disabled={disabled}
+        onClick={() => importInput.current?.click()}
+      >
+        <Upload />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label="导出结构化文档"
+        title="导出结构化文档"
+        onClick={async () => {
+          const { saveAs } = await import("file-saver");
+          saveAs(
+            new Blob(
+              [
+                JSON.stringify(
+                  parseRichTextDocument({
+                    schemaVersion: 1,
+                    content: editor.getJSON(),
+                  }),
+                  null,
+                  2,
+                ),
+              ],
+              { type: "application/json" },
+            ),
+            "文档.json",
+          );
+        }}
+      >
+        <Download />
+      </Button>
+      {onExpand ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="展开文档编辑"
+          title="展开文档编辑"
+          onClick={onExpand}
+        >
+          <Maximize2 />
+        </Button>
+      ) : null}
+    </div>
+  );
+}

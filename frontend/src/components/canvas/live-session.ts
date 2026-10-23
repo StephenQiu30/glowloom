@@ -46,12 +46,16 @@ export type LiveStatus =
 export class CanvasLiveSession {
   private socket: WebSocket | null = null;
   private stopped = false;
+  private disposed = false;
   private timer?: ReturnType<typeof setTimeout>;
   private deadline?: ReturnType<typeof setTimeout>;
   private receiptDeadline?: ReturnType<typeof setTimeout>;
   private pending?: Pending;
   private baseline?: API.DocumentDTO;
   private ready = false;
+  private renewal?: AbortController;
+  private needsRenewal = false;
+  private renewalAttempts = 0;
   private failures = 0;
   private lastFailure = "";
   readonly clientID = crypto.randomUUID();
@@ -61,13 +65,14 @@ export class CanvasLiveSession {
       actorID: string;
       scopeID: string;
       csrf: () => string | null;
+      renewSession?: (signal: AbortSignal) => Promise<void>;
       snapshot: (document: API.DocumentDTO) => void;
       status: (status: LiveStatus, message?: string) => void;
       socket?: (url: string) => WebSocket;
     },
   ) {}
   start() {
-    if (this.stopped) return;
+    if (this.stopped || this.renewal) return;
     this.ready = false;
     this.config.status(this.pending ? "unconfirmed" : "connecting");
     const url = new URL(
@@ -77,7 +82,8 @@ export class CanvasLiveSession {
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
     const socket = this.config.socket?.(url.href) ?? new WebSocket(url);
     this.socket = socket;
-    socket.onopen = () =>
+    socket.onopen = () => {
+      if (this.stopped || this.socket !== socket) return;
       this.send({
         type: "join",
         protocol_version: 3,
@@ -86,6 +92,7 @@ export class CanvasLiveSession {
         csrf_token: this.config.csrf(),
         last_revision: "0",
       });
+    };
     socket.onmessage = (event) => {
       if (this.stopped || this.socket !== socket) return;
       try {
@@ -110,8 +117,44 @@ export class CanvasLiveSession {
       );
       this.timer = setTimeout(() => this.start(), 2000);
     };
-    socket.onerror = () => socket.close();
+    socket.onerror = () => {
+      if (!this.stopped && this.socket === socket) socket.close();
+    };
     this.armDeadline();
+  }
+  /** Access cookies are bound at Upgrade; renewal must create a fresh socket. */
+  private async renewAndReconnect() {
+    if (this.disposed || this.renewal) return;
+    if (!this.config.renewSession) {
+      this.halt("登录授权已过期，请重新登录后恢复画布");
+      return;
+    }
+    this.ready = false;
+    clearTimeout(this.timer);
+    clearTimeout(this.deadline);
+    clearTimeout(this.receiptDeadline);
+    const socket = this.socket;
+    this.socket = null;
+    socket?.close();
+    const controller = new AbortController();
+    this.renewal = controller;
+    ++this.renewalAttempts;
+    this.config.status(
+      this.pending ? "unconfirmed" : "connecting",
+      "正在续期登录并恢复画布，当前修改已保留",
+    );
+    try {
+      await this.config.renewSession(controller.signal);
+      if (controller.signal.aborted || this.disposed) return;
+      this.renewal = undefined;
+      this.needsRenewal = false;
+      this.start();
+    } catch {
+      if (!controller.signal.aborted && !this.disposed)
+        this.halt("登录续期未完成，当前修改已保留，请重试连接");
+    } finally {
+      if (this.renewal === controller) this.renewal = undefined;
+    }
   }
   private send(value: unknown) {
     if (this.socket?.readyState === WebSocket.OPEN)
@@ -133,6 +176,13 @@ export class CanvasLiveSession {
   private receive(packet: Packet) {
     this.armDeadline();
     if (packet.type === "error") {
+      if (packet.status === 401 && packet.code === "access_expired") {
+        this.needsRenewal = true;
+        if (this.renewalAttempts >= 1) {
+          this.halt("登录续期后仍未恢复画布授权，请重试或重新登录");
+        } else void this.renewAndReconnect();
+        return;
+      }
       if (packet.retryable) {
         this.lastFailure = packet.code ?? "service_unavailable";
         this.socket?.close();
@@ -174,9 +224,11 @@ export class CanvasLiveSession {
       )
         throw new Error("画布会话身份不匹配");
       this.ready = true;
+      this.renewalAttempts = 0;
       this.failures = 0;
       this.lastFailure = "";
       this.baseline.permissions = packet.permissions;
+      this.finish();
       if (this.pending) {
         this.send({
           type: "resolve",
@@ -206,14 +258,14 @@ export class CanvasLiveSession {
       this.finish();
     } else if (packet.type === "heartbeat" && this.baseline) {
       if (packet.permissions) this.baseline.permissions = packet.permissions;
-      if (!packet.permissions?.write && !this.pending)
-        this.config.status("readonly");
+      if (this.ready && packet.permissions && !this.pending)
+        this.config.status(packet.permissions.write ? "ready" : "readonly");
     }
   }
   private finish() {
     const p = this.pending,
       baseline = this.baseline;
-    if (!p?.receipt || !baseline) return;
+    if (!this.ready || !p?.receipt || !baseline) return;
     if (p.receipt.status === "rejected") {
       clearTimeout(this.receiptDeadline);
       this.pending = undefined;
@@ -257,7 +309,25 @@ export class CanvasLiveSession {
   get unresolved() {
     return Boolean(this.pending);
   }
+  /** Retry the same page session, retaining client ID, op ID, body and promise. */
+  retry() {
+    if (this.disposed || this.renewal) return;
+    clearTimeout(this.timer);
+    clearTimeout(this.deadline);
+    clearTimeout(this.receiptDeadline);
+    const socket = this.socket;
+    this.socket = null;
+    socket?.close();
+    this.stopped = false;
+    this.failures = 0;
+    this.lastFailure = "";
+    this.renewalAttempts = 0;
+    if (this.needsRenewal) void this.renewAndReconnect();
+    else this.start();
+  }
   stop() {
+    this.disposed = true;
+    this.renewal?.abort();
     this.stopped = true;
     this.ready = false;
     clearTimeout(this.timer);

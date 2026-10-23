@@ -5,12 +5,14 @@ RUN corepack enable
 WORKDIR /app
 
 FROM base AS deps
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
+COPY canvas-collab/package.json /canvas-collab/package.json
+COPY canvas-collab/src /canvas-collab/src
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS dev
 ENV NODE_ENV=development
-COPY . .
+COPY frontend/ .
 EXPOSE 3000
 CMD ["pnpm", "exec", "next", "dev", "--hostname", "0.0.0.0", "--port", "3000"]
 
@@ -18,7 +20,8 @@ FROM base AS build
 # Next persists external Upgrade rewrites in its build manifest.
 ARG GLOWLOOM_BACKEND_ORIGIN
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY --from=deps /canvas-collab /canvas-collab
+COPY frontend/ .
 RUN test -n "$GLOWLOOM_BACKEND_ORIGIN" && pnpm exec next build
 
 FROM node:24.21.0-bookworm-slim

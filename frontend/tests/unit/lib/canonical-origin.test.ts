@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { afterEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { canonicalNavigation } from "@/lib/canonical-origin";
@@ -159,3 +160,43 @@ it("legacy public origin remains readable while canonical keys take precedence",
   vi.stubEnv("GLOWLOOM_PUBLIC_ORIGIN", "");
   expect(proxy(request).status).toBe(503);
 });
+
+const composeOrigins = [
+  ...readFileSync("../docker-compose.yml", "utf8").matchAll(
+    /GLOWLOOM_PUBLIC_ORIGIN: "([^"\n]+)"/g,
+  ),
+].map((match) => match[1]);
+it("default Compose keeps frontend and backend on the actual localhost entry point", () => {
+  expect(composeOrigins).toEqual([
+    "http://localhost:1122",
+    "http://localhost:1122",
+  ]);
+});
+it.each(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"])(
+  "actual Compose origin serves localhost %s directly",
+  (method) => {
+    vi.stubEnv("GLOWLOOM_PUBLIC_ORIGIN", composeOrigins[0]);
+    const result = proxy(
+      new NextRequest("http://0.0.0.0:3000/api/session", {
+        method,
+        headers: {
+          host: "localhost:1122",
+          origin: "http://localhost:1122",
+          "x-forwarded-host": "evil.test",
+        },
+      }),
+    );
+    expect(result.headers.get("x-middleware-next")).toBe("1");
+    expect(result.headers.get("location")).toBeNull();
+  },
+);
+it.each(["localhost:1123", "localhost:1122.evil.test", "evil.test"])(
+  "actual Compose rejects untrusted Host %s",
+  (host) => {
+    vi.stubEnv("GLOWLOOM_PUBLIC_ORIGIN", composeOrigins[0]);
+    expect(
+      proxy(new NextRequest("http://0.0.0.0:3000/", { headers: { host } }))
+        .status,
+    ).toBe(400);
+  },
+);

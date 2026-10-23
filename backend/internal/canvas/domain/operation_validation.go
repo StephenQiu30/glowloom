@@ -26,10 +26,15 @@ func ValidateWireOperations(operations []Operation) error {
 func validOperationShape(op Operation) error {
 	invalid := len(op.unknown) > 0 || op.Type != "replace_media" && (op.ExpectedMediaRef != nil || op.NewMediaRef != nil)
 	switch op.Type {
+	case "set_edge":
+		invalid = invalid || op.Edge == nil || op.NodeID == uuid.Nil || op.Expected == nil || op.Path != nil || op.Value != nil || op.ExpectedExists != nil || op.Context != nil || op.Node != nil || op.Text != nil || op.Unset || op.ItemID != "" || op.BeforeID != ""
+		if op.Edge != nil {
+			invalid = invalid || op.Edge.ID != op.NodeID
+		}
 	case "replace_media":
 		invalid = invalid || op.NodeID == uuid.Nil || op.ExpectedMediaRef == nil || op.NewMediaRef == nil || op.Path != nil || op.Value != nil || op.Expected != nil || op.ExpectedExists != nil || op.Context != nil || op.Node != nil || op.Edge != nil || op.Text != nil || op.Unset || op.ItemID != "" || op.BeforeID != ""
 		if op.ExpectedMediaRef != nil && op.NewMediaRef != nil {
-			invalid = invalid || op.ExpectedMediaRef.AssetID == uuid.Nil || op.NewMediaRef.AssetID == uuid.Nil
+			invalid = invalid || (op.ExpectedMediaRef.AssetID == uuid.Nil) != op.ExpectedMediaRef.Empty || (op.NewMediaRef.AssetID == uuid.Nil) != op.NewMediaRef.Empty
 		}
 	case "migrate_composer":
 		invalid = invalid || op.NodeID == uuid.Nil || op.Expected == nil || op.Path != nil || op.Value != nil || op.Node != nil || op.Edge != nil || op.Text != nil || op.Context != nil || op.Unset || op.ItemID != "" || op.BeforeID != "" || op.ExpectedExists != nil

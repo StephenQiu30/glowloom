@@ -1,0 +1,56 @@
+{
+  "name": "@glowloom/canvas-collab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "packageManager": "pnpm@12.4.2",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "check": "prettier --check src tests package.json"
+  },
+  "dependencies": {
+    "@tiptap/core": "3.32.0",
+    "@tiptap/extension-mention": "3.32.0",
+    "@tiptap/pm": "3.32.0",
+    "@tiptap/starter-kit": "3.32.0",
+    "@tiptap/y-tiptap": "3.0.10",
+    "yjs": "13.6.33"
+  },
+  "devDependencies": {
+    "@tiptap/extension-collaboration": "3.32.0",
+    "happy-dom": "20.14.5",
+    "prettier": "3.9.9"
+  },
+  "exports": {
+    "./recovery": {
+      "types": "./src/recovery.d.mts",
+      "default": "./src/recovery.mjs"
+    },
+    "./session": {
+      "types": "./src/session.d.mts",
+      "default": "./src/session.mjs"
+    },
+    "./journal": {
+      "types": "./src/journal.d.mts",
+      "default": "./src/journal.mjs"
+    },
+    "./wire": {
+      "types": "./src/wire.d.mts",
+      "default": "./src/wire.mjs"
+    },
+    "./model": {
+      "types": "./src/model.d.mts",
+      "default": "./src/model.mjs"
+    },
+    "./rich-text": {
+      "types": "./src/rich-text-schema.d.mts",
+      "default": "./src/rich-text-schema.mjs"
+    }
+  },
+  "files": [
+    "src"
+  ]
+}

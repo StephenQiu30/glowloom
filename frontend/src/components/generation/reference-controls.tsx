@@ -718,6 +718,7 @@ export function ReferenceControls({
                   projectID={projectID}
                   id={ref.source.sourceId}
                   kind={ref.mediaKind}
+                  interactive
                 />
               </div>
             )}
@@ -1151,17 +1152,18 @@ export function ReferenceControls({
                         <Button
                           type="button"
                           variant="outline"
-                          className="relative h-14 w-16 shrink-0 flex-col gap-1 overflow-hidden"
+                          className="relative h-16 w-16 shrink-0 flex-col gap-1 overflow-hidden"
                           aria-label={`查看${displayLabel(ref.id)}详情`}
                         >
                           {authorized &&
                           ref.source.kind === "media" &&
-                          ref.mediaKind === "image" ? (
+                          ref.mediaKind !== "audio" ? (
                             <span className="absolute inset-0">
                               <ProjectMediaPreview
                                 projectID={projectID}
                                 id={ref.source.sourceId}
                                 kind={ref.mediaKind}
+                                compact
                               />
                             </span>
                           ) : (
@@ -1170,6 +1172,11 @@ export function ReferenceControls({
                           <Badge variant="secondary" className="relative">
                             {displayLabel(ref.id)}
                           </Badge>
+                          {ref.source.kind === "pending_upload" ? (
+                            <span className="relative text-[10px] text-muted-foreground">
+                              待上传
+                            </span>
+                          ) : null}
                           {automatic ? (
                             <Badge
                               variant="secondary"
@@ -1321,7 +1328,7 @@ export function ReferenceControls({
                 <ReferenceMentionMenu
                   session={session}
                   draft={draft}
-                  sources={incomingSources}
+                  sources={incomingSources ?? canvasSources}
                   query={mention ? search : ""}
                   busy={!!readingSource}
                   disabled={disabled}

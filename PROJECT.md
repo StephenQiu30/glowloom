@@ -36,7 +36,7 @@
 - `backend/db/schema.sql` 是唯一的数据库结构定义。它只用于空业务库；禁止对已有业务库重放、重建或清理数据。邮箱与身份引用保护见[用户系统设计](docs/design/01-用户系统总体设计.md#81-d6-迁移与切换)。
 - 浏览器请求经同站代理；服务端 `GLOWLOOM_BACKEND_ORIGIN` 不进入浏览器。凭据不进入文档、日志、前端包或提交。
 - 默认本地工程验证不发起真实收费生成；fixture、协议握手或页面成功不能代替真实供应商验收。模型可用性以实际配置和适配能力为准。
-- 本地 namespace 显式准备，不由应用自动创建；Go 工具链与依赖版本以 go.mod、Dockerfile 为准。开发环境直接使用 `docker compose up -d --build` 启动或更新，只更新后端时追加 `backend`，不新增启动脚本。开发后端每次启动都从只读挂载的当前源码编译，编译失败即停止，不运行旧程序；构建缓存使用独立开发卷。纯 Go 源码更新也可 `docker compose restart backend`，运行中不会自动热重载；依赖、Dockerfile、入口或 Compose 配置更新须重新构建并更新容器。生产镜像仍在构建阶段编译。不把修改文档解释为重启服务授权。
+- 本地 namespace 显式准备，不由应用自动创建；Go 工具链与依赖版本以 go.mod、Dockerfile 为准。默认 `docker-compose.yml` 只启动 `frontend`、`backend`，开发环境直接使用 `docker compose up -d --build --no-deps frontend backend` 启动或更新，只更新后端时使用 `docker compose up -d --build --no-deps backend`，不新增启动脚本。宿主访问端口固定为前端 `127.0.0.1:1122`、后端 `127.0.0.1:1123`；两端浏览器 Origin 固定为 `http://localhost:1122`，旧端口及 Origin 环境变量不覆盖默认开发栈。容器内部仍使用前端3000、API代理18080、API8080、worker8081和relay8082，worker/relay健康端口不发布到宿主。数据库等依赖复用现有服务，数据库端口保持原配置；应用端口被占用时，先协调端口冲突。`docker-compose-env.yml` 和 `docker-compose-prod.yml` 为独立配置，不参与默认启动。开发后端每次启动都从只读挂载的当前源码编译，编译失败即停止，不运行旧程序；构建缓存使用独立开发卷。纯 Go 源码更新也可 `docker compose restart backend`，运行中不会自动热重载；依赖、Dockerfile、入口或 Compose 配置更新须重新构建并更新容器。生产镜像仍在构建阶段编译。不把修改文档解释为重启服务授权。
 - API 生成使用上述 package.json 命令组织标准工具；其他检查使用现有工具直接命令，不新增 shell 脚本或 Makefile。
 
 ## 4. 质量门禁

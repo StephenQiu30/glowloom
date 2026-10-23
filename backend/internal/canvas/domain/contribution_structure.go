@@ -9,6 +9,13 @@ import (
 
 func inverseStructure(before Document, op Operation) ([]Operation, error) {
 	switch op.Type {
+	case "set_edge":
+		for _, edge := range before.Edges {
+			if edge.ID == op.NodeID {
+				return []Operation{{Type: "set_edge", NodeID: op.NodeID, Edge: &edge, Expected: effectJSON(op.Edge)}}, nil
+			}
+		}
+		return nil, operationError("undo_unavailable")
 	case "replace_media":
 		if op.ExpectedMediaRef == nil || op.NewMediaRef == nil {
 			return nil, operationError("undo_unavailable")

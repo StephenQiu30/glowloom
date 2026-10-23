@@ -118,7 +118,7 @@ export function Minimap({
 
   return (
     <div
-      className="absolute bottom-24 left-6 z-50 overflow-hidden rounded-lg border shadow-2xl backdrop-blur-sm"
+      className="absolute bottom-16 left-3 z-10 overflow-hidden rounded-lg border shadow-2xl backdrop-blur-sm"
       style={{
         width,
         height,

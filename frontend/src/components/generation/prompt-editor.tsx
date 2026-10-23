@@ -24,6 +24,7 @@ export function PromptEditor({
   placeholder,
   className,
   inputGroup = false,
+  editable = true,
   label = "创作提示词",
   ...options
 }: ComposerOptions & {
@@ -35,6 +36,7 @@ export function PromptEditor({
   placeholder?: string;
   className?: string;
   inputGroup?: boolean;
+  editable?: boolean;
   label?: string;
 }) {
   const editorOptions = composerEditorOptions(options);
@@ -51,6 +53,7 @@ export function PromptEditor({
       ...(className === undefined ? {} : { class: className }),
       ...(inputGroup ? { "data-slot": "input-group-control" } : {}),
     },
+    editable,
   );
   useEffect(() => {
     if (!editor) return;

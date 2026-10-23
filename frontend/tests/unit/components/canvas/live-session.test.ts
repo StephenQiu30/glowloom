@@ -18,7 +18,10 @@ class Socket {
   }
 }
 afterEach(() => vi.useRealTimers());
-function setup() {
+function setup(
+  renewSession?: (signal: AbortSignal) => Promise<void>,
+  csrf = () => "csrf",
+) {
   vi.useFakeTimers();
   const sockets: Socket[] = [],
     snapshot = vi.fn(),
@@ -27,7 +30,8 @@ function setup() {
     canvasID: "canvas",
     actorID: "actor",
     scopeID: "space",
-    csrf: () => "csrf",
+    csrf,
+    renewSession,
     snapshot,
     status,
     socket: () => {
@@ -60,6 +64,166 @@ function setup() {
   return { sockets, snapshot, status, session, join };
 }
 describe("durable canvas session", () => {
+  it("renews expired authorization then resolves the original pending save", async () => {
+    let proof = "original-proof";
+    const renew = vi.fn(async () => {
+      proof = "renewed-proof";
+    });
+    const { session, sockets, join, status, snapshot } = setup(
+      renew,
+      () => proof,
+    );
+    const saved = session.submit([{ type: "set", node_id: "n" }]);
+    const original = sockets[0].sent.at(-1)!;
+    const reads = snapshot.mock.calls.length;
+    sockets[0].receive({
+      type: "error",
+      status: 401,
+      code: "access_expired",
+      retryable: false,
+    });
+    await Promise.resolve();
+    expect(renew).toHaveBeenCalledOnce();
+    expect(sockets).toHaveLength(2);
+    join(sockets[1], "2");
+    expect(sockets[1].sent[0]).toMatchObject({
+      type: "join",
+      csrf_token: "renewed-proof",
+      scope_id: "space",
+      client_id: session.clientID,
+    });
+    expect(snapshot).toHaveBeenCalledTimes(reads);
+    expect(status.mock.calls.at(-1)?.[0]).not.toBe("ready");
+    expect(sockets[1].sent.at(-1)).toEqual({ ...original, type: "resolve" });
+    sockets[1].receive({
+      type: "ack",
+      receipt: { op_id: original.op_id, status: "accepted", revision: "2" },
+    });
+    await expect(saved).resolves.toBe(original.op_id);
+    session.stop();
+  });
+  it("bounds unsuccessful renewal handshakes and permits explicit recovery", async () => {
+    const renew = vi.fn().mockResolvedValue(undefined);
+    const { session, sockets, status } = setup(renew);
+    const expired = { type: "error", status: 401, code: "access_expired" };
+    sockets[0].receive(expired);
+    await Promise.resolve();
+    expect(sockets).toHaveLength(2);
+    sockets[1].receive(expired);
+    await Promise.resolve();
+    expect(renew).toHaveBeenCalledOnce();
+    expect(status.mock.calls.at(-1)?.[0]).toBe("error");
+    session.retry();
+    await Promise.resolve();
+    expect(renew).toHaveBeenCalledTimes(2);
+    expect(sockets).toHaveLength(3);
+    session.stop();
+  });
+  it("does not reconnect after closing while renewal is pending", async () => {
+    let finish!: () => void;
+    const renew = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { session, sockets } = setup(renew);
+    sockets[0].receive({ type: "error", status: 401, code: "access_expired" });
+    expect(renew).toHaveBeenCalledOnce();
+    session.stop();
+    finish();
+    await Promise.resolve();
+    expect(sockets).toHaveLength(1);
+  });
+  it("retains failed renewal for manual retry without treating revoked access as expiry", async () => {
+    const renew = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValue(undefined);
+    const { session, sockets, status, join } = setup(renew);
+    sockets[0].receive({ type: "error", status: 401, code: "access_expired" });
+    await Promise.resolve();
+    expect(renew).toHaveBeenCalledOnce();
+    expect(status.mock.calls.at(-1)?.[0]).toBe("error");
+    session.retry();
+    await Promise.resolve();
+    expect(sockets).toHaveLength(2);
+    join(sockets[1]);
+    sockets[1].receive({ type: "error", status: 403, code: "forbidden" });
+    expect(renew).toHaveBeenCalledTimes(2);
+    expect(status.mock.calls.at(-1)?.[0]).toBe("error");
+    session.stop();
+  });
+
+  it("manual recovery preserves the original request after automatic retries stop", async () => {
+    const { session, sockets, join, status } = setup();
+    const promise = session.submit([{ type: "set", node_id: "n" }]);
+    const original = sockets[0].sent.at(-1)!;
+    for (let i = 0; i < 3; i++) {
+      sockets[i].close();
+      vi.advanceTimersByTime(2000);
+    }
+    expect(status).toHaveBeenLastCalledWith("unconfirmed", expect.any(String));
+    session.retry();
+    join(sockets[3], "2");
+    expect(sockets[3].sent.at(-1)).toEqual({ ...original, type: "resolve" });
+    sockets[3].receive({
+      type: "ack",
+      receipt: { op_id: original.op_id, status: "accepted", revision: "2" },
+    });
+    await expect(promise).resolves.toBe(original.op_id);
+    session.stop();
+    session.retry();
+    expect(sockets).toHaveLength(4);
+  });
+  it("a reconnect snapshot cannot announce saved before the new connection is authorized", async () => {
+    const { session, sockets, status } = setup();
+    const promise = session.submit([{ type: "set" }]);
+    const id = sockets[0].sent.at(-1)!.op_id;
+    sockets[0].receive({
+      type: "ack",
+      receipt: { op_id: id, status: "accepted", revision: "2" },
+    });
+    sockets[0].close();
+    vi.advanceTimersByTime(2000);
+    sockets[1].receive({
+      type: "snapshot",
+      document: {
+        id: "canvas",
+        revision: "2",
+        nodes: [],
+        edges: [],
+        permissions: { read: true, write: true },
+      },
+    });
+    expect(session.unresolved).toBe(true);
+    expect(status.mock.calls.at(-1)?.[0]).toBe("unconfirmed");
+    sockets[1].receive({
+      type: "ready",
+      actor_id: "actor",
+      revision: "2",
+      permissions: { read: true, write: false },
+    });
+    await expect(promise).resolves.toBe(id);
+    expect(status).toHaveBeenLastCalledWith("readonly");
+    session.stop();
+  });
+  it("heartbeat permissions can restore editing and absent permissions do not revoke it", () => {
+    const { session, sockets, status } = setup();
+    sockets[0].receive({
+      type: "heartbeat",
+      permissions: { read: true, write: false },
+    });
+    expect(status).toHaveBeenLastCalledWith("readonly");
+    sockets[0].receive({
+      type: "heartbeat",
+      permissions: { read: true, write: true },
+    });
+    expect(status).toHaveBeenLastCalledWith("ready");
+    sockets[0].receive({ type: "heartbeat" });
+    expect(status).toHaveBeenLastCalledWith("ready");
+    session.stop();
+  });
   it("accepts the service's omitted zero revision and completes receipt-before-snapshot", async () => {
     const { session, sockets, status } = setup();
     sockets[0].receive({

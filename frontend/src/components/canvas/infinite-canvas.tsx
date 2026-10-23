@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 
 import { theme, type CanvasBackgroundMode } from "./theme";
+import { canvasWheelViewport } from "./wheel";
 
 import type { ViewportTransform } from "./types";
 
@@ -24,7 +25,7 @@ export function InfiniteCanvas({
   containerRef,
   viewport,
   tool,
-  backgroundMode = "lines",
+  backgroundMode = "dots",
   onViewportChange,
   onCanvasMouseDown,
   onCanvasDeselect,
@@ -35,6 +36,8 @@ export function InfiniteCanvas({
 }: InfiniteCanvasProps) {
   const panState = useRef({
     isPanning: false,
+    pointerId: -1,
+    initialK: 1,
     startX: 0,
     startY: 0,
     initialX: 0,
@@ -42,16 +45,11 @@ export function InfiniteCanvas({
     hasMoved: false,
     startedOnBackground: false,
   });
-  const scaleRef = useRef(viewport.k);
   const frameRef = useRef<number | null>(null);
   const nextViewportRef = useRef<ViewportTransform | null>(null);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [isControlPressed, setIsControlPressed] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
-
-  useEffect(() => {
-    scaleRef.current = viewport.k;
-  }, [viewport.k]);
 
   useEffect(
     () => () => {
@@ -69,7 +67,9 @@ export function InfiniteCanvas({
         event.target instanceof HTMLInputElement ||
         event.target instanceof HTMLTextAreaElement ||
         event.target instanceof HTMLSelectElement ||
-        target?.closest("[contenteditable='true']")
+        target?.closest(
+          "[contenteditable='true'],button,[role=menu],[role=listbox],[role=dialog]",
+        )
       )
         return;
       event.preventDefault();
@@ -83,7 +83,9 @@ export function InfiniteCanvas({
           event.target instanceof HTMLInputElement ||
           event.target instanceof HTMLTextAreaElement ||
           event.target instanceof HTMLSelectElement ||
-          target?.closest("[contenteditable='true']")
+          target?.closest(
+            "[contenteditable='true'],button,[role=menu],[role=listbox],[role=dialog]",
+          )
         ))
           event.preventDefault();
         setIsSpacePressed(false);
@@ -94,9 +96,6 @@ export function InfiniteCanvas({
     const handleBlur = () => {
       setIsSpacePressed(false);
       setIsControlPressed(false);
-      panState.current.isPanning = false;
-      setIsPanning(false);
-      document.body.style.cursor = "";
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -110,28 +109,24 @@ export function InfiniteCanvas({
   }, []);
 
   const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (panState.current.isPanning) return;
     const target = event.target instanceof Element ? event.target : null;
     if (target?.closest("[data-canvas-no-zoom]")) return;
 
-    const delta = -event.deltaY;
-    const factor = Math.pow(1.1, delta / 100);
-    const newScale = Math.min(Math.max(viewport.k * factor, 0.05), 5);
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
-
-    const mouseX = event.clientX - rect.left;
-    const mouseY = event.clientY - rect.top;
-    const worldX = (mouseX - viewport.x) / viewport.k;
-    const worldY = (mouseY - viewport.y) / viewport.k;
-
-    onViewportChange({
-      x: mouseX - worldX * newScale,
-      y: mouseY - worldY * newScale,
-      k: newScale,
-    });
+    onViewportChange(
+      canvasWheelViewport(
+        viewport,
+        event,
+        { x: event.clientX - rect.left, y: event.clientY - rect.top },
+        rect.height,
+      ),
+    );
   };
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (panState.current.isPanning) return;
     const target = event.target instanceof Element ? event.target : null;
     if (target?.closest("[data-canvas-no-zoom]")) return;
     if (target?.closest("[data-connection-create-menu]")) return;
@@ -152,6 +147,8 @@ export function InfiniteCanvas({
       event.currentTarget.setPointerCapture(event.pointerId);
       panState.current = {
         isPanning: true,
+        pointerId: event.pointerId,
+        initialK: viewport.k,
         startX: event.clientX,
         startY: event.clientY,
         initialX: viewport.x,
@@ -183,48 +180,75 @@ export function InfiniteCanvas({
   };
 
   useEffect(() => {
+    const clearFrame = () => {
+      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+      nextViewportRef.current = null;
+    };
+    const position = (event: PointerEvent) => {
+      const pan = panState.current;
+      const dx = event.clientX - pan.startX;
+      const dy = event.clientY - pan.startY;
+      pan.hasMoved ||= Math.abs(dx) > 3 || Math.abs(dy) > 3;
+      return { x: pan.initialX + dx, y: pan.initialY + dy, k: pan.initialK };
+    };
     const handlePointerMove = (event: PointerEvent) => {
-      if (!panState.current.isPanning) return;
-
-      const dx = event.clientX - panState.current.startX;
-      const dy = event.clientY - panState.current.startY;
-      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-        panState.current.hasMoved = true;
-      }
-
-      nextViewportRef.current = {
-        x: panState.current.initialX + dx,
-        y: panState.current.initialY + dy,
-        k: scaleRef.current,
-      };
-      if (frameRef.current) return;
+      if (
+        !panState.current.isPanning ||
+        event.pointerId !== panState.current.pointerId
+      )
+        return;
+      nextViewportRef.current = position(event);
+      if (frameRef.current !== null) return;
       frameRef.current = requestAnimationFrame(() => {
         frameRef.current = null;
         if (nextViewportRef.current) onViewportChange(nextViewportRef.current);
       });
     };
-
-    const handlePointerUp = () => {
-      if (!panState.current.isPanning) return;
-
-      if (!panState.current.hasMoved && panState.current.startedOnBackground) {
-        onCanvasDeselect?.();
-      }
-      panState.current.isPanning = false;
+    const finish = (event?: PointerEvent) => {
+      const pan = panState.current;
+      if (!pan.isPanning || (event && event.pointerId !== pan.pointerId))
+        return;
+      const next =
+        event?.type === "pointerup"
+          ? position(event)
+          : { x: pan.initialX, y: pan.initialY, k: pan.initialK };
+      clearFrame();
+      pan.isPanning = false;
+      const container = containerRef.current;
+      if (container?.hasPointerCapture?.(pan.pointerId))
+        container.releasePointerCapture(pan.pointerId);
       setIsPanning(false);
       document.body.style.cursor = "";
+      onViewportChange(next);
+      if (
+        event?.type === "pointerup" &&
+        !pan.hasMoved &&
+        pan.startedOnBackground
+      )
+        onCanvasDeselect?.();
     };
-
+    const cancel = () => finish();
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.isComposing) finish();
+    };
     window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
-    window.addEventListener("pointercancel", handlePointerUp);
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
+    window.addEventListener("lostpointercapture", finish);
+    window.addEventListener("blur", cancel);
+    window.addEventListener("keydown", escape);
     return () => {
+      clearFrame();
       window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-      window.removeEventListener("pointercancel", handlePointerUp);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+      window.removeEventListener("lostpointercapture", finish);
+      window.removeEventListener("blur", cancel);
+      window.removeEventListener("keydown", escape);
       document.body.style.cursor = "";
     };
-  }, [onCanvasDeselect, onViewportChange]);
+  }, [containerRef, onCanvasDeselect, onViewportChange]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -289,10 +313,10 @@ function CanvasGrid({
 }) {
   if (mode === "blank") return null;
 
-  const gridSize = 48 * viewport.k;
+  const gridSize = 20 * viewport.k;
   const x = viewport.x % gridSize;
   const y = viewport.y % gridSize;
-  const dotSize = viewport.k < 0.12 ? 0.8 : 1.15;
+  const dotSize = 0.6;
   const backgroundImage =
     mode === "dots"
       ? `radial-gradient(circle, ${theme.canvas.dot} ${dotSize}px, transparent ${dotSize + 0.2}px)`
@@ -300,7 +324,7 @@ function CanvasGrid({
 
   return (
     <div
-      className="pointer-events-none absolute inset-0 opacity-40"
+      className="pointer-events-none absolute inset-0 opacity-15"
       style={{
         backgroundImage,
         backgroundSize: `${gridSize}px ${gridSize}px`,

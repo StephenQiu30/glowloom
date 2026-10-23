@@ -3,6 +3,7 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
 
 import { theme } from "./theme";
+import { canvasConnectionGeometry } from "./connection-geometry";
 
 import type {
   CanvasConnection,
@@ -30,12 +31,13 @@ export function ConnectionPath({
   const startY = from.position.y + from.height / 2;
   const endX = to.position.x;
   const endY = to.position.y + to.height / 2;
-  const dx = Math.abs(endX - startX);
-  const curvature = Math.max(dx * 0.5, 50);
-  const pathD = `M ${startX} ${startY} C ${startX + curvature} ${startY}, ${endX - curvature} ${endY}, ${endX} ${endY}`;
+  const { path: pathD } = canvasConnectionGeometry(
+    { x: startX, y: startY },
+    { x: endX, y: endY },
+  );
 
   return (
-    <g>
+    <g data-canvas-edge-id={connection.id}>
       <path
         data-connection-id={connection.id}
         d={pathD}
@@ -110,8 +112,10 @@ export function ActiveConnectionPath({
     handle.handleType === "source" && target
       ? target.position.y + target.height / 2
       : endY;
-  const distance = Math.abs(snappedEndX - snappedStartX);
-  const pathD = `M ${snappedStartX} ${snappedStartY} C ${snappedStartX + distance * 0.5} ${snappedStartY}, ${snappedEndX - distance * 0.5} ${snappedEndY}, ${snappedEndX} ${snappedEndY}`;
+  const { path: pathD } = canvasConnectionGeometry(
+    { x: snappedStartX, y: snappedStartY },
+    { x: snappedEndX, y: snappedEndY },
+  );
 
   return (
     <path

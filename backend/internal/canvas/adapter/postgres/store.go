@@ -322,7 +322,14 @@ func saveGraph(tx *gorm.DB, before, after domain.Document) error {
 		if e.EdgeType != "annotation" {
 			continue
 		}
-		r := tx.Exec(`INSERT INTO canvas.edge(id,document_id,edge_type,source_node_id,target_node_id) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET source_node_id=excluded.source_node_id,target_node_id=excluded.target_node_id,is_delete=false,update_time=now() WHERE canvas.edge.document_id=excluded.document_id AND canvas.edge.edge_type='annotation' AND canvas.edge.role IS NULL AND canvas.edge.binding IS NULL`, e.ID, after.ID, e.EdgeType, e.SourceNodeID, e.TargetNodeID)
+		previous, existed := previousEdges[e.ID]
+		binding := func(raw json.RawMessage) any {
+			if len(raw) == 0 {
+				return nil
+			}
+			return string(raw)
+		}
+		r := tx.Exec(`INSERT INTO canvas.edge(id,document_id,edge_type,source_node_id,target_node_id,binding) VALUES(?,?,?,?,?,?::jsonb) ON CONFLICT(id) DO UPDATE SET source_node_id=excluded.source_node_id,target_node_id=excluded.target_node_id,binding=excluded.binding,is_delete=false,update_time=now() WHERE canvas.edge.document_id=excluded.document_id AND canvas.edge.edge_type='annotation' AND canvas.edge.role IS NULL AND (canvas.edge.binding IS NULL OR (? AND canvas.edge.binding IS NOT DISTINCT FROM ?::jsonb))`, e.ID, after.ID, e.EdgeType, e.SourceNodeID, e.TargetNodeID, binding(e.Binding), existed, binding(previous.Binding))
 		if r.Error != nil {
 			return r.Error
 		}
@@ -511,6 +518,23 @@ func (s *Store) checkMediaReferences(ctx context.Context, tx *gorm.DB, a identit
 			}
 		}
 		for _, n := range c.Nodes {
+			if editor := n.Config.Editor; editor != nil {
+				for _, ref := range editor.Files {
+					kind := n.NodeType
+					if kind == "image_generation" {
+						kind = "image"
+					}
+					if kind == "video_generation" {
+						kind = "video"
+					}
+					if ref.Purpose == "LAST_FRAME" {
+						kind = "image"
+					}
+					if err := check(ref.FileID, kind, index); err != nil {
+						return err
+					}
+				}
+			}
 			if err := checkGeneration(n.Config.Generation, index); err != nil {
 				return err
 			}
@@ -523,7 +547,14 @@ func (s *Store) checkMediaReferences(ctx context.Context, tx *gorm.DB, a identit
 			if n.RefType != "media_asset" || n.RefID == nil {
 				continue
 			}
-			if err := check(*n.RefID, n.NodeType, index); err != nil {
+			kind := n.NodeType
+			if kind == "image_generation" {
+				kind = "image"
+			}
+			if kind == "video_generation" {
+				kind = "video"
+			}
+			if err := check(*n.RefID, kind, index); err != nil {
 				return err
 			}
 		}

@@ -9,6 +9,7 @@ import (
 
 // MediaRef identifies immutable uploaded content; preview URLs are not identity.
 type MediaRef struct {
+	Empty   bool      `json:"empty,omitempty"`
 	AssetID uuid.UUID `json:"asset_id"`
 }
 
@@ -31,14 +32,27 @@ func replaceMedia(document *Document, op Operation) (FieldChange, error) {
 		return FieldChange{}, operationError("target_not_found")
 	}
 	node := &document.Nodes[index]
-	if !editable(*node) || node.RefType != "media_asset" || node.RefID == nil || (node.NodeType != "image" && node.NodeType != "video" && node.NodeType != "audio") {
+	if !editable(*node) || (editorNodeType(*node) != "image" && editorNodeType(*node) != "video" && editorNodeType(*node) != "audio") {
 		return FieldChange{}, operationError("protected_target")
 	}
-	if *node.RefID != op.ExpectedMediaRef.AssetID {
+	empty := node.RefID == nil
+	if empty && node.Config.Editor == nil {
+		return FieldChange{}, operationError("protected_target")
+	}
+	if empty != op.ExpectedMediaRef.Empty || !empty && *node.RefID != op.ExpectedMediaRef.AssetID {
 		return FieldChange{}, operationError("media_conflict")
 	}
 	before := effectJSON(op.ExpectedMediaRef)
 	asset := op.NewMediaRef.AssetID
-	node.RefID = &asset
+	if op.NewMediaRef.Empty {
+		if node.Config.Editor == nil {
+			return FieldChange{}, operationError("protected_target")
+		}
+		node.RefID = nil
+		node.RefType = ""
+	} else {
+		node.RefID = &asset
+		node.RefType = "media_asset"
+	}
 	return FieldChange{NodeID: node.ID, Path: []string{"media_ref"}, Before: before, After: effectJSON(op.NewMediaRef), BeforeExists: true, AfterExists: true}, nil
 }

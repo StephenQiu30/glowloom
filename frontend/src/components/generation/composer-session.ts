@@ -413,7 +413,8 @@ function referenceToken(
         const dom = document.createElement("span");
         dom.setAttribute("data-prompt-reference", "");
         dom.contentEditable = "false";
-        dom.className = "rounded bg-muted px-1 text-foreground";
+        dom.className =
+          "inline-flex h-6 items-center rounded-md border bg-muted px-1.5 align-middle text-sm text-foreground";
         const update = (
           current: PMNode,
           currentDecorations: readonly PMDecoration[],
@@ -442,7 +443,8 @@ function referenceToken(
         {
           "data-prompt-reference": "",
           contenteditable: "false",
-          class: "rounded bg-muted px-1 text-foreground",
+          class:
+            "inline-flex h-6 items-center rounded-md border bg-muted px-1.5 align-middle text-sm text-foreground",
         },
         display(
           node.attrs.referenceId,

@@ -291,6 +291,11 @@ func (s *Store) SubmitCollaboration(ctx context.Context, a identity.Principal, i
 			return rejectError(err)
 		}
 		for _, n := range sourceNodes {
+			if n.Config.Composer != nil {
+				if err := pgprompt.ValidateDraftSources(tx, a, p, *n.Config.Composer, false); err != nil {
+					return rejectError(err)
+				}
+			}
 			if domain.IsDraft(n) && n.Config.Draft.Composer != nil {
 				if err := pgprompt.ValidateDraftSources(tx, a, p, *n.Config.Draft.Composer, false); err != nil {
 					return rejectError(err)

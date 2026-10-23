@@ -99,4 +99,21 @@
 
 存量上线仍须备份及增量核对schema_version、client_id、文档/日志bigint修订、operation_version默认值，以及第7.3节的content_version与回执保护；schema.sql只用于空库。本轮未执行业务库升级、组件业务接线或部署。
 
+### 7.5 本地存量画布增量升级（2026-10-23）
+
+用户报告真实画布 `dependency_unavailable`。只读检查本地 `glowloom` PostgreSQL 18.4 确认缺少 `canvas.document.schema_version`、`canvas.node.content_version`、`canvas.command_log.client_id`；文档与日志revision/base_revision仍为integer，文档operation_version默认值仍为0，回执保护触发器缺失且运行角色拥有整表UPDATE。
+
+处理与验证：
+
+1. 对本地库执行完整custom-format备份，保存到权限0700的本机私有目录；没有打印DSN、密钥或备份数据。备份在无网络的隔离PostgreSQL 18 Docker容器中成功恢复。
+2. 另建空参考库，仅对空库执行schema.sql；比较全部canvas表的列、默认值、约束、索引与权限，依据差异编写[canvas_protocol_incremental.sql](../../backend/db/canvas_protocol_incremental.sql)。脚本只新增字段、扩展修订号类型、设置新文档默认值并保护回执。旧operation_version、历史client身份、业务节点和回执内容不重写。
+3. 在恢复副本执行增量并与参考结构核对；逐表行数和原有JSON值摘要一致，覆盖document/node/edge/command_log/node_input/save_receipt及两张复制表。事务ROLLBACK、重复执行、受限角色禁止改写回执均通过。
+4. 暂停Docker后端，在本地库以`psql --single-transaction -v ON_ERROR_STOP=1`执行增量；lock_timeout为5秒，statement_timeout为60秒，失败整笔回滚。随后通过Docker Compose启动后端并等待healthy。没有对存量库重放schema.sql。
+5. 用户原Chrome登录会话的目标画布已实际读取：项目素材、历史图片生成节点、正文引用与连线均显示。该画布含本轮编辑器未支持的业务节点，因此只读展示，不修改图、不启动写入会话。
+6. 升级后的本地库再次与备份恢复副本逐表核验，统一UTC时区和C排序后摘要一致：document 15、node 43、command_log 276、edge 14、node_input 41、save_receipt 275，两张复制表均为0。新增版本字段以外的原有值没有变化；隔离验证容器随后清理，私有备份保留。
+
+应用统一用默认Docker Compose启动，基础依赖按用户确认保持现有服务。验证中发现前端开发缓存的API路由404，已保留旧缓存目录并重新编译；真实代理与页面随后恢复。健康检查不代替业务数据验证。
+
+范围：本地存量库及目标画布只读恢复。未验证普通画布真实写入/撤销/多端，未实施历史生成节点编辑或其他环境升级，未提交或推送。数据库升级成功不等于完整画布能力已接受。
+
 [返回 Plan 导航](00-Plan导航.md)

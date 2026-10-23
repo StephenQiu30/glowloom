@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { ContentState } from "@/components/layout/content-state";
 
 const Editor = dynamic(
   () =>
@@ -10,9 +11,12 @@ const Editor = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div role="status" className="flex h-dvh items-center justify-center">
-        正在打开画布…
-      </div>
+      <ContentState
+        className="h-dvh"
+        state="loading"
+        title="正在打开画布"
+        description="正在连接你的创作空间。"
+      />
     ),
   },
 );

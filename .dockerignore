@@ -1,0 +1,12 @@
+**
+!frontend/
+!frontend/**
+!canvas-collab/
+!canvas-collab/package.json
+!canvas-collab/src/
+!canvas-collab/src/**
+**/node_modules
+**/.next
+**/.env*
+**/coverage
+**/.git

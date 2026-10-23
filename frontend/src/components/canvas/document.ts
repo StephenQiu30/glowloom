@@ -1,3 +1,4 @@
+import { validateCanvasComposer } from "./text-content";
 import type {
   CanvasDocument,
   CanvasGraph,
@@ -7,7 +8,7 @@ import type {
 } from "./types";
 
 const specs = {
-  text: [340, 240, "文本"],
+  text: [320, 320, "文本"],
   image: [340, 240, "图片"],
   video: [420, 236, "视频"],
   audio: [340, 120, "音频"],
@@ -124,6 +125,11 @@ export function parseDocument(text: string): CanvasDocument {
     if (n.metadata !== undefined) {
       if (!record(n.metadata)) throw new Error("素材信息无效");
       const m = n.metadata;
+      if (m.composer !== undefined) {
+        if (n.type !== "text") throw new Error("只有文本节点可以保存引用正文");
+        validateCanvasComposer(m.composer);
+        if (m.content) throw new Error("文本节点包含两个内容来源");
+      }
       if (m.content !== undefined && typeof m.content !== "string")
         throw new Error("节点内容无效");
       if (m.groupId !== undefined && typeof m.groupId !== "string")

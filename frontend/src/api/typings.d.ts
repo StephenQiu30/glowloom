@@ -1259,6 +1259,43 @@ declare namespace API {
     target_node_id?: string;
   };
 
+  type EditorAgent = {
+    goal?: string;
+    maxRounds?: number;
+    maxTools?: number;
+    parallelism?: number;
+    profile?: string;
+  };
+
+  type EditorConfig = {
+    document?: Record<string, any>;
+    files?: EditorFileReference[];
+    metadata?: Record<string, any>;
+    parameters?: EditorParameters;
+    schemaVersion?: number;
+  };
+
+  type EditorFileReference = {
+    fileId?: string;
+    purpose?: string;
+    referenceKey?: string;
+    version?: string;
+  };
+
+  type EditorModelSelection = {
+    connectionId?: string;
+    modelId?: string;
+  };
+
+  type EditorParameters = {
+    agent?: EditorAgent;
+    mode?: string;
+    modelParameterSchemaId?: string;
+    modelParameters?: Record<string, any>;
+    modelSelection?: EditorModelSelection;
+    values?: Record<string, any>;
+  };
+
   type EditorQuote = {
     available_micros?: number;
     compiler_version?: string;
@@ -2552,6 +2589,7 @@ declare namespace API {
 
   type MediaRef = {
     asset_id?: string;
+    empty?: boolean;
   };
 
   type MediatoolCreateInput = {
@@ -2717,11 +2755,14 @@ declare namespace API {
   type NodeConfig = {
     batch_table?: BatchTableConfig;
     collapsed?: boolean;
+    composer?: PromptDraft;
     director?: DirectorConfig;
     draft?: CanvasDraft;
+    editor?: EditorConfig;
     format?: string;
     format_version?: number;
     generation?: GenerationConfig;
+    rich_text?: Record<string, any>;
     text?: string;
     timeline?: TimelineConfig;
   };

@@ -1,12 +1,14 @@
 # Development application stack; existing host middleware retains its data.
-# Start/update applications: docker compose up -d --build
+# Start/update only applications: docker compose up -d --build --no-deps frontend backend
+# Fixed host ports: frontend 1122, backend 1123. Resolve host conflicts before starting.
 name: glowloom
 
 services:
   frontend:
     container_name: glowloom-frontend
     build:
-      context: ./frontend
+      context: .
+      dockerfile: frontend/Dockerfile
       target: dev
     image: glowloom/frontend:latest
     init: true
@@ -14,10 +16,12 @@ services:
     environment:
       NEXT_TELEMETRY_DISABLED: "1"
       GLOWLOOM_BACKEND_ORIGIN: "http://backend:18080"
-      GLOWLOOM_PUBLIC_ORIGIN: ${GLOWLOOM_PUBLIC_ORIGIN-${LV_PUBLIC_ORIGIN:-http://127.0.0.1:${GLOWLOOM_FRONTEND_PORT-${LV_FRONTEND_PORT:-3200}}}}
+      GLOWLOOM_PUBLIC_ORIGIN: "http://localhost:1122"
       NODE_OPTIONS: "--max-old-space-size=2048"
     volumes:
       - ./frontend/src:/app/src:ro
+      - ./canvas-collab/src:/canvas-collab/src:ro
+      - ./canvas-collab/package.json:/canvas-collab/package.json:ro
       - ./frontend/public:/app/public:ro
       - ./frontend/next.config.ts:/app/next.config.ts:ro
       - ./frontend/tsconfig.json:/app/tsconfig.json:ro
@@ -30,7 +34,7 @@ services:
       - frontend-modules:/app/node_modules
       - frontend-next:/app/.next
     ports:
-      - "127.0.0.1:${GLOWLOOM_FRONTEND_PORT-${LV_FRONTEND_PORT:-3200}}:3000"
+      - "127.0.0.1:1122:3000"
     healthcheck:
       test:
         [
@@ -83,7 +87,7 @@ services:
       GLOWLOOM_MEDIA_RESULT_ALLOWED_ORIGINS: ${GLOWLOOM_MEDIA_RESULT_ALLOWED_ORIGINS-${LV_MEDIA_RESULT_ALLOWED_ORIGINS:-}}
       GLOWLOOM_MEDIA_ALLOW_TEST_LOOPBACK_TLS: ${GLOWLOOM_MEDIA_ALLOW_TEST_LOOPBACK_TLS-${LV_MEDIA_ALLOW_TEST_LOOPBACK_TLS:-false}}
       GLOWLOOM_HTTP_ADDR: "127.0.0.1:8080"
-      GLOWLOOM_PUBLIC_ORIGIN: ${GLOWLOOM_PUBLIC_ORIGIN-${LV_PUBLIC_ORIGIN:-http://127.0.0.1:${GLOWLOOM_FRONTEND_PORT-${LV_FRONTEND_PORT:-3200}}}}
+      GLOWLOOM_PUBLIC_ORIGIN: "http://localhost:1122"
       GLOWLOOM_IDENTITY_SESSION_V2_ENABLED: ${GLOWLOOM_IDENTITY_SESSION_V2_ENABLED-${LV_IDENTITY_SESSION_V2_ENABLED:-false}}
       GLOWLOOM_IDENTITY_LEGACY_UPGRADE_UNTIL: ${GLOWLOOM_IDENTITY_LEGACY_UPGRADE_UNTIL-${LV_IDENTITY_LEGACY_UPGRADE_UNTIL:-}}
       GLOWLOOM_IDENTITY_KEY: ${GLOWLOOM_IDENTITY_KEY-${LV_IDENTITY_KEY:?Set GLOWLOOM_IDENTITY_KEY JSON in .env}}
@@ -115,10 +119,7 @@ services:
       GLOWLOOM_OBJECT_STORAGE_REGION: ${GLOWLOOM_OBJECT_STORAGE_REGION-${LV_OBJECT_STORAGE_REGION:-}}
       GLOWLOOM_OTEL_ENDPOINT: ${GLOWLOOM_OTEL_ENDPOINT-${LV_OTEL_ENDPOINT:-}}
     ports:
-      - "127.0.0.1:${GLOWLOOM_BACKEND_PORT-${LV_BACKEND_PORT:-8080}}:18080"
-
-      - "127.0.0.1:${GLOWLOOM_WORKER_HEALTH_PORT-${LV_WORKER_HEALTH_PORT:-8081}}:8081"
-      - "127.0.0.1:${GLOWLOOM_RELAY_HEALTH_PORT-${LV_RELAY_HEALTH_PORT:-8082}}:8082"
+      - "127.0.0.1:1123:18080"
 
 volumes:
   backend-go-build:

@@ -22,11 +22,26 @@
 Docker 开发环境直接在仓库根目录执行标准 Compose 命令：
 
 ```sh
-docker compose up -d --build          # 启动或更新前后端
-docker compose up -d --build backend  # 仅启动或更新后端
+docker compose up -d --build --no-deps frontend backend  # 仅启动或更新前后端
+docker compose up -d --build --no-deps backend           # 仅启动或更新后端
 ```
 
-现有依赖服务、Temporal namespace、身份密钥及 `.env` 须提前准备；Compose 复用这些资源，不执行数据库迁移。启动后使用 `docker compose ps` 查看状态，使用 `docker compose logs --tail=100 backend` 排查编译或启动错误。
+默认 `docker-compose.yml` 只包含 `frontend`、`backend` 两个应用服务，后端在同一容器运行 API、worker、relay。访问地址固定如下，旧 `GLOWLOOM_FRONTEND_PORT`、`GLOWLOOM_BACKEND_PORT` 及 `LV_*` 端口变量不覆盖默认开发栈：
+
+应用服务统一通过上述 Docker Compose 命令启动和管理，不另开宿主机 Next 或 Go 服务。PostgreSQL、Redis、Kafka、Temporal 和对象存储继续复用现有基础依赖。
+
+| 服务 | 宿主访问地址            | 容器内部端口             |
+| ---- | ----------------------- | ------------------------ |
+| 前端 | <http://localhost:1122> | 3000                     |
+| 后端 | <http://127.0.0.1:1123> | 18080（代理至 API 8080） |
+
+两端的浏览器 Origin 同步固定为 `http://localhost:1122`，忽略 `.env` 中旧的 Origin，避免端口切换后登录或写入被 Origin 校验拒绝。worker/relay 健康检查在容器内执行，不额外开放宿主端口。
+
+现有依赖服务、Temporal namespace、身份密钥及 `.env` 须提前准备；Compose 复用这些资源，不执行数据库迁移。`docker-compose-env.yml` 和 `docker-compose-prod.yml` 是独立的依赖及生产配置，不参与上述默认启动。
+
+旧画布库须先按[画布增量升级记录](docs/plan/17-画布数据库持久化与DAG实施计划.md#75-本地存量画布增量升级2026-10-23)核对、备份并演练，再由结构所有者执行 `backend/db/canvas_protocol_incremental.sql`。不得对存量库重放 `schema.sql`。容器健康不代表业务表已升级，仍需验证真实画布读取。
+
+启动前确认1122和1123未被占用：`lsof -nP -iTCP:1122 -iTCP:1123 -sTCP:LISTEN`。若被其他进程占用，应先协调端口冲突，再启动应用。启动后使用 `docker compose ps` 查看状态，使用 `docker compose logs --tail=100 backend` 排查编译或启动错误；可分别请求前端、后端的 `/healthz` 检查访问链路。
 
 身份与会话密钥由 `.env` 直接注入，配置名及格式见 `.env.example`：`GLOWLOOM_IDENTITY_KEY`、`GLOWLOOM_IDENTITY_JWT_PRIVATE_KEY`、`GLOWLOOM_IDENTITY_JWT_VERIFY_KEYS`、`GLOWLOOM_IDENTITY_JWT_ACTIVE_KID`、`GLOWLOOM_IDENTITY_REFRESH_RECEIPT_KEY`。JWT 私钥使用 Base64 PEM，验证映射为 KID 到 Base64 公钥 PEM 的 JSON，回执密钥为独立32字节 Base64值；运行时不加载独立密钥文件或 Compose secret 挂载。已有密钥不得随启动重新生成，缺失密钥按恢复授权处理，身份主密钥必须保留。
 

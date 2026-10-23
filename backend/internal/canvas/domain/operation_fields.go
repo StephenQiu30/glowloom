@@ -3,6 +3,8 @@ package domain
 import "strings"
 
 var operationFields = map[string]fieldPolicy{
+	"config.editor":                  {kind: "set", cas: true, optional: true},
+	"config.text_content":            {kind: "set", group: []string{"text", "composer", "format", "format_version", "rich_text"}, cas: true},
 	"title":                          {kind: "set"},
 	"z_index":                        {kind: "set"},
 	"parent_id":                      {kind: "set"},

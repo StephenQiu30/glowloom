@@ -1,3 +1,4 @@
+import type { PromptDraft } from "@/components/generation/prompt-document";
 // Editing subset of basketikun/infinite-canvas's canvas model (MIT).
 export const CanvasNodeType = {
   Text: "text",
@@ -18,7 +19,9 @@ export type CanvasNodeData = {
   height: number;
   metadata?: {
     content?: string;
+    composer?: PromptDraft;
     groupId?: string;
+    collapsed?: boolean;
     naturalWidth?: number;
     naturalHeight?: number;
     mimeType?: string;

@@ -13,6 +13,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 )
 
 const (
@@ -209,8 +210,20 @@ func configMediaReferences(config domain.NodeConfig) ([]uuid.UUID, error) {
 		return nil, domain.ErrUnsupportedCommand
 	}
 	var ids []uuid.UUID
-	if config.Draft != nil && config.Draft.Composer != nil {
-		for _, ref := range config.Draft.Composer.References {
+	if config.Editor != nil {
+		for _, ref := range config.Editor.Files {
+			ids = append(ids, ref.FileID)
+		}
+	}
+	composers := []*promptdomain.Draft{config.Composer}
+	if config.Draft != nil {
+		composers = append(composers, config.Draft.Composer)
+	}
+	for _, composer := range composers {
+		if composer == nil {
+			continue
+		}
+		for _, ref := range composer.References {
 			sources := ref.Source.Media
 			if ref.Source.Kind == "media" {
 				id, err := uuid.Parse(ref.Source.SourceID)

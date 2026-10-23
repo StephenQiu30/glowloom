@@ -14,6 +14,7 @@ type PreviewProps = {
   large?: boolean;
   fit?: "contain" | "cover";
   interactive?: boolean;
+  compact?: boolean;
 };
 export function ProjectMediaPreview(props: PreviewProps) {
   return (
@@ -30,6 +31,7 @@ function MediaPreview({
   large = false,
   fit = large ? "contain" : "cover",
   interactive = large,
+  compact = false,
 }: PreviewProps) {
   const [url, setURL] = useState(""),
     [failed, setFailed] = useState(false),
@@ -59,9 +61,12 @@ function MediaPreview({
   }, [projectID, id, retry]);
   if (failed)
     return (
-      <span className="media-unavailable">
-        <ImageIcon />
-        <span>预览暂时不可用</span>
+      <span
+        className="media-unavailable flex h-full items-center justify-center gap-2 text-xs text-muted-foreground"
+        title="预览暂时不可用"
+      >
+        <ImageIcon className="size-4 shrink-0" />
+        <span className={compact ? "sr-only" : undefined}>预览暂时不可用</span>
         {large && (
           <Button
             variant="ghost"
@@ -78,8 +83,14 @@ function MediaPreview({
     );
   if (!url)
     return (
-      <span className="media-unavailable" role="status">
-        正在读取预览…
+      <span
+        className="media-unavailable flex h-full items-center justify-center"
+        role="status"
+      >
+        {compact ? (
+          <ImageIcon className="size-4 animate-pulse text-muted-foreground" />
+        ) : null}
+        <span className={compact ? "sr-only" : undefined}>正在读取预览…</span>
       </span>
     );
   if (kind === "video")

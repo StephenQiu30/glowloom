@@ -97,6 +97,25 @@ func operationsOverlap(a, b Operation) bool {
 }
 func applyStructure(doc *Document, op Operation) error {
 	switch op.Type {
+	case "set_edge":
+		index := slices.IndexFunc(doc.Edges, func(edge Edge) bool { return edge.ID == op.NodeID })
+		if index < 0 {
+			return operationError("target_not_found")
+		}
+		if op.Edge == nil || !annotation(doc.Edges[index]) || !annotation(*op.Edge) {
+			return operationError("protected_reference")
+		}
+		if !equalJSON(effectJSON(doc.Edges[index]), op.Expected) {
+			return operationError("edge_conflict")
+		}
+		for _, id := range []uuid.UUID{doc.Edges[index].SourceNodeID, doc.Edges[index].TargetNodeID, op.Edge.SourceNodeID, op.Edge.TargetNodeID} {
+			i := nodeIndex(doc, id)
+			if i < 0 || !editable(doc.Nodes[i]) {
+				return operationError("protected_reference")
+			}
+		}
+		doc.Edges[index] = *op.Edge
+		return nil
 	case "restore_node":
 		if op.Node == nil || !editable(*op.Node) || nodeIndex(doc, op.Node.ID) >= 0 {
 			return operationError("undo_conflict")

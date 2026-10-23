@@ -1,0 +1,20 @@
+/** 与设计 09 长连接合同及 CanvasConnectionContract 对齐。心跳间隔优先采用 OPEN 回执。 */
+export const canvasConnectionContract = {
+  maxMessageBytes: 1024 * 1024,
+  heartbeatIntervalMillis: 15_000,
+  ackTimeoutMillis: 15_000,
+  retryBaseMillis: 1000,
+  retryMaxMillis: 15_000,
+  sessionCloseCode: 1008,
+  oversizeCloseCode: 1009,
+  protocolCloseCode: 1002,
+  maxPendingRequests: 8,
+  maxProtocolFailures: 3,
+  protocolCooldownMillis: 60_000,
+  healthyHeartbeatsToReset: 3,
+  open: "OPEN",
+  ready: "READY",
+  heartbeat: "HEARTBEAT",
+  heartbeatAck: "HEARTBEAT_ACK",
+  heartbeatInterval: "heartbeatIntervalMillis",
+} as const;

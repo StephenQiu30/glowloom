@@ -11,6 +11,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 )
 
 var (
@@ -22,15 +24,18 @@ var (
 
 // NodeConfig contains only user-editable, type-specific presentation data.
 type NodeConfig struct {
-	Format        string            `json:"format,omitempty"`
-	FormatVersion int               `json:"format_version,omitempty"`
-	Draft         *Draft            `json:"draft,omitempty"`
-	Text          *string           `json:"text,omitempty"`
-	Collapsed     *bool             `json:"collapsed,omitempty"`
-	BatchTable    *BatchTableConfig `json:"batch_table,omitempty"`
-	Timeline      *TimelineConfig   `json:"timeline,omitempty"`
-	Director      *DirectorConfig   `json:"director,omitempty"`
-	Generation    *GenerationConfig `json:"generation,omitempty"`
+	Editor        *EditorConfig       `json:"editor,omitempty"`
+	RichText      json.RawMessage     `json:"rich_text,omitempty" swaggertype:"object"`
+	Composer      *promptdomain.Draft `json:"composer,omitempty"`
+	Format        string              `json:"format,omitempty"`
+	FormatVersion int                 `json:"format_version,omitempty"`
+	Draft         *Draft              `json:"draft,omitempty"`
+	Text          *string             `json:"text,omitempty"`
+	Collapsed     *bool               `json:"collapsed,omitempty"`
+	BatchTable    *BatchTableConfig   `json:"batch_table,omitempty"`
+	Timeline      *TimelineConfig     `json:"timeline,omitempty"`
+	Director      *DirectorConfig     `json:"director,omitempty"`
+	Generation    *GenerationConfig   `json:"generation,omitempty"`
 	unknown       json.RawMessage
 }
 
@@ -395,7 +400,7 @@ func editable(n Node) bool {
 		return false
 	}
 	if IsDraft(n) {
-		return n.NodeAction == "generate" && n.RefType == "" && n.RefID == nil
+		return n.NodeAction == "generate" && (n.RefType == "" && n.RefID == nil || n.Config.Editor != nil && n.RefType == "media_asset" && n.RefID != nil && *n.RefID != uuid.Nil)
 	}
 	if n.NodeType == "batch_table" || n.NodeType == "timeline" || n.NodeType == "director" || n.NodeType == "generation" {
 		return n.NodeAction == "tool" && n.RefType == "" && n.RefID == nil
@@ -404,22 +409,22 @@ func editable(n Node) bool {
 		return false
 	}
 	switch n.NodeType {
-	case "text", "group":
+	case "text", "group", "config":
 		return n.RefType == "" && n.RefID == nil
 	case "image", "video", "audio", "model":
-		return n.RefType == "media_asset" && n.RefID != nil && *n.RefID != uuid.Nil
+		return n.RefType == "media_asset" && n.RefID != nil && *n.RefID != uuid.Nil || n.Config.Editor != nil && n.RefType == "" && n.RefID == nil
 	default:
 		return false
 	}
 }
 func annotation(e Edge) bool {
-	return e.EdgeType == "annotation" && e.Role == "" && len(e.Binding) == 0
+	return e.EdgeType == "annotation" && e.Role == "" && (len(e.Binding) == 0 || validEditorConnection(e.Binding))
 }
 func validConfig(kind string, c NodeConfig) bool {
-	if len(c.unknown) != 0 {
+	if !validEditor(c.Editor) || len(c.unknown) != 0 || (len(c.RichText) > 0 && (kind != "text" || c.Composer == nil || !validRichText(c.RichText, c.Composer))) {
 		return false
 	}
-	if kind != "text" && (c.Format != "" || c.FormatVersion != 0) {
+	if kind != "text" && (c.Composer != nil || c.Format != "" || c.FormatVersion != 0) {
 		return false
 	}
 	if kind == "image_generation" || kind == "video_generation" {
@@ -448,9 +453,14 @@ func validConfig(kind string, c NodeConfig) bool {
 	}
 	switch kind {
 	case "text":
+		if c.Composer != nil {
+			return c.Format == "tiptap" && c.FormatVersion == 1 && c.Text == nil && c.Collapsed == nil && c.Composer.Validate() == nil && c.Composer.ModelVersion == nil && c.Composer.Mode == nil && len(c.Composer.Params) == 0
+		}
 		return (c.Format == "" && c.FormatVersion == 0 || (c.Format == "plain" || c.Format == "markdown") && c.FormatVersion == 1) && c.Text != nil && c.Collapsed == nil && utf8.ValidString(*c.Text) && utf8.RuneCountInString(*c.Text) <= 10000
 	case "group":
 		return c.Text == nil && c.Collapsed != nil
+	case "config":
+		return c.Editor != nil && c.Text == nil && c.Collapsed == nil
 	case "image", "video", "audio", "model":
 		return c.Text == nil && c.Collapsed == nil
 	default:
