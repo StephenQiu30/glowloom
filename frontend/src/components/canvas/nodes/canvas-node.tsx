@@ -29,6 +29,8 @@ import {
   Copy,
   Download,
   FileText,
+  Type,
+  Play,
   Group,
   Image as ImageIcon,
   Music2,
@@ -504,6 +506,7 @@ export const CanvasNode = React.memo(function CanvasNode({
             data-node-id={data.id}
             data-node-type={data.type}
             data-node-selected={isSelected}
+            data-node-editing={isEditingContent}
             className={cn(
               "node-element group/node absolute flex flex-col transition-shadow duration-200 select-none",
               isGroup ? "z-[5]" : isSelected ? "z-50" : "z-10",
@@ -538,7 +541,7 @@ export const CanvasNode = React.memo(function CanvasNode({
           >
             {!referenceSelectionState && (
               <div
-                className="canvas-node-heading absolute top-[-32px] left-0 z-[65] max-w-canvas-dialog"
+                className="canvas-node-heading absolute top-[-28px] left-0 z-[65] max-w-canvas-dialog"
                 onMouseDown={(event) => {
                   event.stopPropagation();
                   if (!isEditingTitle) onMouseDown(event, data.id);
@@ -592,6 +595,8 @@ export const CanvasNode = React.memo(function CanvasNode({
                       <Video />
                     ) : data.type === CanvasNodeType.Audio ? (
                       <AudioLines />
+                    ) : data.type === CanvasNodeType.Text ? (
+                      <Type />
                     ) : (
                       <FileText />
                     )}
@@ -1091,6 +1096,7 @@ function TextContent({
             value={content}
             document={primaryText?.richText ?? node.metadata?.richText}
             documentMode
+            floatingToolbar
             autoFocus
             references={[
               ...mentionReferences.filter((reference) => reference.active),
@@ -1254,9 +1260,15 @@ function ImageNodeContent(props: NodeContentRendererProps) {
 }
 
 function EmptyNodeContent({ type }: { type: string }) {
+  if (type === CanvasNodeType.Text)
+    return (
+      <div className="h-full w-full p-4 text-sm text-muted-foreground">
+        双击编辑文本
+      </div>
+    );
   const Icon =
     type === CanvasNodeType.Video
-      ? Video
+      ? Play
       : type === CanvasNodeType.Audio
         ? AudioLines
         : type === CanvasNodeType.Text
@@ -1268,7 +1280,9 @@ function EmptyNodeContent({ type }: { type: string }) {
         <EmptyMedia variant="icon">
           <Icon />
         </EmptyMedia>
-        <EmptyDescription>
+        <EmptyDescription
+          className={type === CanvasNodeType.Audio ? undefined : "sr-only"}
+        >
           {type === CanvasNodeType.Text
             ? "双击输入故事大纲，或选中节点生成分镜脚本"
             : type === CanvasNodeType.Audio
@@ -1764,8 +1778,8 @@ function ConnectionHandleDot({
     <div
       data-canvas-no-pan
       className={cn(
-        "absolute top-1/2 z-30 flex size-12 -translate-y-1/2 cursor-crosshair items-center justify-center transition-opacity duration-150",
-        side === "left" ? "-left-6" : "-right-6",
+        "absolute top-1/2 z-30 flex size-11 -translate-y-1/2 cursor-crosshair items-center justify-center transition-opacity duration-150",
+        side === "left" ? "-left-[22px]" : "-right-[22px]",
         visible
           ? "pointer-events-auto opacity-100"
           : "pointer-events-none opacity-0",

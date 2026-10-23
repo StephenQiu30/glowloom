@@ -39,7 +39,7 @@
   --spacing-canvas-launch: 12.25rem;
   --spacing-canvas-launch-row: 64.25rem;
   --spacing-canvas-launch-height: 3.5rem;
-  --spacing-canvas-composer: min(41.25rem, calc(100dvw - 2rem));
+  --spacing-canvas-composer: min(42.5rem, calc(100dvw - 2rem));
   --spacing-canvas-prompt: 4.625rem;
   --spacing-canvas-menu: 13rem;
 }
@@ -110,15 +110,14 @@
   }
   .canvas-chrome-panel,
   .canvas-viewport-controls {
-    padding: 0.25rem;
-    border: 1px solid var(--border);
-    border-radius: 0.625rem;
-    background: var(--card);
+    padding: 0;
+    border: 0;
+    background: transparent;
   }
   .canvas-brand {
-    height: 2rem;
-    gap: 0.5rem;
-    padding-inline: 0.375rem;
+    height: 2.75rem;
+    width: 2.75rem;
+    padding: 0;
   }
   .canvas-brand-mark {
     display: block;
@@ -135,12 +134,12 @@
   .canvas-project-trigger {
     height: 2rem;
     min-width: 0;
-    max-width: 12rem;
+    max-width: min(28rem, 35vw);
     gap: 0.5rem;
   }
   .canvas-topbar > :first-child {
-    padding-block: 3px;
-    max-width: min(50%, 28rem);
+    min-width: 0;
+    max-width: 50%;
   }
   .canvas-status-panel {
     flex-shrink: 0;
@@ -148,8 +147,8 @@
     border: 0;
   }
   .canvas-brand .brand-mark {
-    width: 1rem;
-    height: 1rem;
+    width: 1.5rem;
+    height: 1.5rem;
   }
   .canvas-start-content [data-slot="empty-description"] {
     font-size: 0.875rem;
@@ -172,22 +171,84 @@
     border-color: var(--border);
     background: var(--card);
   }
+  .canvas-action-dock {
+    top: 50%;
+    left: 0.75rem;
+    transform: translateY(-50%);
+    max-height: calc(100dvh - 9rem);
+    overflow-y: auto;
+    scrollbar-width: none;
+    border-radius: 1rem;
+  }
   .canvas-dock-surface {
-    min-width: 0;
-    width: max-content;
-    max-width: 100%;
-    height: 3rem;
-    padding-inline: 0.5rem;
+    width: 3rem;
+    padding: 0.25rem 0;
     gap: 0.25rem;
     border: 1px solid var(--border);
-    border-radius: 0.875rem;
+    border-radius: 1rem;
     background: var(--popover);
   }
+  .canvas-dock-surface button {
+    width: 2.75rem;
+    height: 2.75rem;
+    flex-shrink: 0;
+    border-radius: 0.5rem;
+  }
+  .canvas-dock-surface button svg,
+  .canvas-header-actions :is(button, a) svg,
+  .canvas-viewport-controls button svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
   .canvas-view-settings {
-    display: none;
+    display: block;
   }
   .canvas-dock-options {
     gap: 0.25rem;
+  }
+  .canvas-topbar {
+    padding-right: 5.75rem;
+  }
+  .canvas-status-panel {
+    color: var(--muted-foreground);
+  }
+  .canvas-viewport-controls button {
+    min-height: 2.75rem;
+  }
+  @media (max-width: 640px) {
+    .canvas-topbar {
+      flex-wrap: wrap;
+    }
+    .canvas-topbar > :first-child {
+      max-width: calc(100% - 6rem);
+    }
+    .canvas-project-trigger {
+      max-width: 100%;
+      padding-inline: 0.25rem;
+    }
+    .canvas-status-panel {
+      position: absolute;
+      top: 3rem;
+      left: 0;
+      max-width: calc(100dvw - 1.5rem);
+    }
+    .canvas-status-panel > div {
+      flex-wrap: wrap;
+    }
+    .canvas-header-actions {
+      margin-left: auto;
+    }
+    .canvas-header-actions > :is(button, a) {
+      width: 2.75rem;
+      padding: 0;
+    }
+    .canvas-viewport-controls {
+      left: 0.5rem;
+      gap: 0.125rem;
+    }
+    .canvas-dock-options {
+      right: 0.5rem;
+    }
   }
   .canvas-design-panel[data-slot="dialog-content"] {
     display: flex;
@@ -446,7 +507,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.625rem;
-    padding: 0.75rem;
+    padding: 1rem;
     border-radius: inherit;
   }
   .canvas-prompt-header {
@@ -549,8 +610,8 @@
   }
   .canvas-reference-item {
     position: relative;
-    width: 3rem;
-    height: 3rem;
+    width: 3.5rem;
+    height: 3.5rem;
     flex-shrink: 0;
   }
   .canvas-reference-preview {
@@ -604,14 +665,14 @@
     background: var(--popover);
   }
   .canvas-node-placeholder [data-slot="empty-icon"] {
-    width: 3.5rem;
-    height: 3.5rem;
+    width: 1.5rem;
+    height: 1.5rem;
     background: transparent;
     opacity: 0.35;
   }
   .canvas-node-placeholder [data-slot="empty-icon"] svg {
-    width: 3.5rem;
-    height: 3.5rem;
+    width: 1.5rem;
+    height: 1.5rem;
   }
   .canvas-node-placeholder [data-slot="empty-description"] {
     font-size: 0.8125rem;
@@ -645,10 +706,10 @@
     font-weight: 400;
   }
   .canvas-node-title[data-slot="button"] {
-    height: 1.5rem;
+    height: 1.25rem;
     gap: 0.375rem;
     color: var(--muted-foreground);
-    font-size: 0.75rem;
+    font-size: 0.875rem;
     font-weight: 400;
   }
   .canvas-node-title svg {
@@ -656,8 +717,8 @@
     height: 0.875rem;
   }
   .canvas-node-port[data-slot="button"] {
-    width: 1.25rem;
-    height: 1.25rem;
+    width: 1.75rem;
+    height: 1.75rem;
     padding: 0;
     border-radius: 50%;
     color: var(--muted-foreground);
@@ -890,12 +951,16 @@
 }
 @layer utilities {
   .canvas-zoom-menu {
-    width: 14.75rem;
+    width: 12.5rem;
     max-width: calc(100vw - 2rem);
     padding: 1rem;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0;
+    padding: 0.5rem;
+  }
+  .canvas-zoom-menu > [data-slot="button"] {
+    height: 2.5rem;
   }
 }
 .canvas-workspace {
@@ -928,4 +993,24 @@
   --node-audio: var(--foreground);
   --node-config: var(--foreground);
   --node-group: var(--muted-foreground);
+}
+
+@layer utilities {
+  .canvas-document-toolbar .rich-text-toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    border: 0;
+    background: transparent;
+    padding: 0;
+  }
+  .canvas-document-toolbar .rich-text-toolbar > * {
+    flex-shrink: 0;
+  }
+  .canvas-workspace:has([data-node-editing="true"]) [aria-label="节点工具栏"] {
+    display: none;
+  }
+}
+
+.canvas-brand .brand-mark {
+  --brand-size: 24px;
 }

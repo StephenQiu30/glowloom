@@ -11,17 +11,17 @@ type CanvasNodeSpec = {
 
 export const NODE_DEFAULT_SIZE = {
   [CanvasNodeType.Image]: {
-    width: 624,
-    height: 352,
+    width: 320,
+    height: 180,
     get title() {
       return "图片";
     },
   },
   [CanvasNodeType.Text]: {
-    width: 624,
-    height: 352,
+    width: 320,
+    height: 320,
     get title() {
-      return "剧本";
+      return "文本";
     },
   },
   [CanvasNodeType.Config]: {
@@ -32,14 +32,14 @@ export const NODE_DEFAULT_SIZE = {
     },
   },
   [CanvasNodeType.Video]: {
-    width: 624,
-    height: 352,
+    width: 320,
+    height: 180,
     get title() {
       return "视频";
     },
   },
   [CanvasNodeType.Audio]: {
-    width: 624,
+    width: 320,
     height: 180,
     get title() {
       return "音频";
@@ -59,16 +59,16 @@ export const NODE_DEFAULT_SIZE = {
 
 export const NODE_SPECS = {
   [CanvasNodeType.Image]: {
-    width: 624,
-    height: 352,
+    width: 320,
+    height: 180,
     get title() {
       return NODE_DEFAULT_SIZE[CanvasNodeType.Image].title;
     },
     metadata: { content: "", status: "idle" },
   },
   [CanvasNodeType.Text]: {
-    width: 624,
-    height: 352,
+    width: 320,
+    height: 320,
     get title() {
       return NODE_DEFAULT_SIZE[CanvasNodeType.Text].title;
     },
@@ -83,15 +83,15 @@ export const NODE_SPECS = {
     metadata: { content: "", status: "idle", generationMode: "image" },
   },
   [CanvasNodeType.Video]: {
-    width: 624,
-    height: 352,
+    width: 320,
+    height: 180,
     get title() {
       return NODE_DEFAULT_SIZE[CanvasNodeType.Video].title;
     },
     metadata: { content: "", status: "idle" },
   },
   [CanvasNodeType.Audio]: {
-    width: 624,
+    width: 320,
     height: 180,
     get title() {
       return NODE_DEFAULT_SIZE[CanvasNodeType.Audio].title;

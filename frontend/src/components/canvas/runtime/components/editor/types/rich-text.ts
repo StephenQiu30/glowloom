@@ -26,6 +26,7 @@ export type RichTextInputProps = {
   acceptDocument?: (document: RichTextDocument) => boolean;
   references?: RichTextReference[];
   documentMode?: boolean;
+  floatingToolbar?: boolean;
   disabled?: boolean;
   required?: boolean;
   maxLength?: number;

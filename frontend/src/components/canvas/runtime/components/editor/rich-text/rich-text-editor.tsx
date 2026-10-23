@@ -24,6 +24,8 @@ import { exitSuggestion, type SuggestionProps } from "@tiptap/suggestion";
 import {
   Bold,
   Italic,
+  Underline,
+  Strikethrough,
   Heading2,
   List,
   ListOrdered,
@@ -616,165 +618,204 @@ export function RichTextEditor({ rootRef, ...props }: RichTextInputProps) {
       />
     ) : null;
   return (
-    <div
-      ref={rootRef}
-      data-rich-text-scope
-      data-editor-engine="tiptap"
-      data-canvas-no-zoom
-      data-canvas-shortcuts-ignore
-      data-document-mode={Boolean(props.documentMode)}
-      onInputCapture={() =>
-        props.collaboration?.protectDraft?.(
-          readEditorDraft(editor, props.collaboration),
-        )
-      }
-      onCompositionStartCapture={() =>
-        props.collaboration?.protectDraft?.(
-          readEditorDraft(editor, props.collaboration, true),
-        )
-      }
-      onCompositionEndCapture={() => {
-        const binding = props.collaboration;
-        binding?.protectDraft?.(readEditorDraft(editor, binding, true));
-        queueMicrotask(() => {
-          if (editor && !editor.isDestroyed)
-            binding?.protectDraft?.(readEditorDraft(editor, binding));
-        });
-      }}
-      className={cn("rich-text-editor", props.className)}
-      style={props.style}
-      onPointerDown={(event) => event.stopPropagation()}
-      onMouseDown={(event) => event.stopPropagation()}
-      onWheel={(event) => event.stopPropagation()}
-      onKeyDown={(event) => {
-        if (
-          event.key === "Escape" &&
-          props.documentMode &&
-          !expanded &&
-          !editor?.view.composing &&
-          !isImeComposing(event.nativeEvent) &&
-          !event.defaultPrevented
-        ) {
-          event.preventDefault();
-          props.onEscape?.();
-        }
-        if (event.key !== "Escape" || props.documentMode)
-          event.stopPropagation();
-      }}
-    >
-      {!expanded ? (
-        <>
-          {toolbar}
-          {content}
-        </>
-      ) : (
-        <p className="p-3 text-sm text-muted-foreground">正在展开编辑文档</p>
-      )}
-      <Dialog open={expanded} onOpenChange={setExpanded}>
-        <DialogContent
-          data-rich-text-floating
-          className="dialog-canvas rich-text-dialog flex flex-col"
-          onEscapeKeyDown={(event) => {
-            if (editor?.view.composing || isImeComposing(event))
-              event.preventDefault();
-            event.stopPropagation();
+    <Popover open={Boolean(props.floatingToolbar && toolbar && !expanded)}>
+      <PopoverAnchor asChild>
+        <div
+          ref={rootRef}
+          data-rich-text-scope
+          data-editor-engine="tiptap"
+          data-canvas-no-zoom
+          data-canvas-shortcuts-ignore
+          data-document-mode={Boolean(props.documentMode)}
+          onInputCapture={() =>
+            props.collaboration?.protectDraft?.(
+              readEditorDraft(editor, props.collaboration),
+            )
+          }
+          onCompositionStartCapture={() =>
+            props.collaboration?.protectDraft?.(
+              readEditorDraft(editor, props.collaboration, true),
+            )
+          }
+          onCompositionEndCapture={() => {
+            const binding = props.collaboration;
+            binding?.protectDraft?.(readEditorDraft(editor, binding, true));
+            queueMicrotask(() => {
+              if (editor && !editor.isDestroyed)
+                binding?.protectDraft?.(readEditorDraft(editor, binding));
+            });
           }}
+          className={cn("rich-text-editor", props.className)}
+          style={props.style}
           onPointerDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => event.stopPropagation()}
           onWheel={(event) => event.stopPropagation()}
           onKeyDown={(event) => {
-            event.stopPropagation();
             if (
               event.key === "Escape" &&
-              !event.defaultPrevented &&
+              props.documentMode &&
+              !expanded &&
               !editor?.view.composing &&
-              !isImeComposing(event.nativeEvent)
+              !isImeComposing(event.nativeEvent) &&
+              !event.defaultPrevented
             ) {
               event.preventDefault();
-              setExpanded(false);
+              props.onEscape?.();
             }
-          }}
-          onOpenAutoFocus={(event) => {
-            event.preventDefault();
-            requestAnimationFrame(() => editor?.commands.focus());
-          }}
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            requestAnimationFrame(() => editor?.commands.focus());
+            if (event.key !== "Escape" || props.documentMode)
+              event.stopPropagation();
           }}
         >
-          <DialogHeader>
-            <DialogTitle>编辑文档</DialogTitle>
-            <DialogDescription>
-              修改同步到当前画布草稿，可导出结构化文档保留格式。
-            </DialogDescription>
-          </DialogHeader>
-          {expanded ? (
+          {!expanded ? (
             <>
-              {toolbar}
+              {props.floatingToolbar ? null : toolbar}
               {content}
             </>
-          ) : null}
-        </DialogContent>
-      </Dialog>
-      {menu && editor
-        ? createPortal(
-            <Popover
-              open
-              onOpenChange={(open) => {
-                if (!open) {
-                  exitSuggestion(editor.view, mentionKey);
-                  updateMenu(null);
+          ) : (
+            <p className="p-3 text-sm text-muted-foreground">
+              正在展开编辑文档
+            </p>
+          )}
+          <Dialog open={expanded} onOpenChange={setExpanded}>
+            <DialogContent
+              data-rich-text-floating
+              className="dialog-canvas rich-text-dialog flex flex-col"
+              onEscapeKeyDown={(event) => {
+                if (editor?.view.composing || isImeComposing(event))
+                  event.preventDefault();
+                event.stopPropagation();
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+              onWheel={(event) => event.stopPropagation()}
+              onKeyDown={(event) => {
+                event.stopPropagation();
+                if (
+                  event.key === "Escape" &&
+                  !event.defaultPrevented &&
+                  !editor?.view.composing &&
+                  !isImeComposing(event.nativeEvent)
+                ) {
+                  event.preventDefault();
+                  setExpanded(false);
                 }
               }}
+              onOpenAutoFocus={(event) => {
+                event.preventDefault();
+                requestAnimationFrame(() => editor?.commands.focus());
+              }}
+              onCloseAutoFocus={(event) => {
+                event.preventDefault();
+                requestAnimationFrame(() => editor?.commands.focus());
+              }}
             >
-              <PopoverAnchor asChild>
-                <span
-                  className="fixed size-px"
-                  style={{
-                    left: menu.rect?.left ?? 0,
-                    top: menu.rect?.bottom ?? 0,
+              <DialogHeader>
+                <DialogTitle>编辑文档</DialogTitle>
+                <DialogDescription>
+                  修改同步到当前画布草稿，可导出结构化文档保留格式。
+                </DialogDescription>
+              </DialogHeader>
+              {expanded ? (
+                <>
+                  {toolbar}
+                  {content}
+                </>
+              ) : null}
+            </DialogContent>
+          </Dialog>
+          {menu && editor
+            ? createPortal(
+                <Popover
+                  open
+                  onOpenChange={(open) => {
+                    if (!open) {
+                      exitSuggestion(editor.view, mentionKey);
+                      updateMenu(null);
+                    }
                   }}
-                />
-              </PopoverAnchor>
-              <PopoverContent
-                data-rich-text-floating
-                aria-label="选择素材引用"
-                className="rich-text-suggestions"
-                onEscapeKeyDown={(event) => {
-                  if (editor.view.composing || isImeComposing(event))
-                    event.preventDefault();
-                  event.stopPropagation();
-                }}
-                sideOffset={4}
-                align="start"
-                onOpenAutoFocus={(event) => event.preventDefault()}
-                onCloseAutoFocus={(event) => event.preventDefault()}
-              >
-                {menu.items.map((reference, index) => (
-                  <Button
-                    key={reference.id}
-                    type="button"
-                    variant={index === menu.active ? "secondary" : "ghost"}
-                    className="h-auto w-full justify-start gap-2 p-2 text-left"
-                    aria-current={index === menu.active ? "true" : undefined}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => menu.select(reference)}
+                >
+                  <PopoverAnchor asChild>
+                    <span
+                      className="fixed size-px"
+                      style={{
+                        left: menu.rect?.left ?? 0,
+                        top: menu.rect?.bottom ?? 0,
+                      }}
+                    />
+                  </PopoverAnchor>
+                  <PopoverContent
+                    data-rich-text-floating
+                    aria-label="选择素材引用"
+                    className="rich-text-suggestions"
+                    onEscapeKeyDown={(event) => {
+                      if (editor.view.composing || isImeComposing(event))
+                        event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                    sideOffset={4}
+                    align="start"
+                    onOpenAutoFocus={(event) => event.preventDefault()}
+                    onCloseAutoFocus={(event) => event.preventDefault()}
                   >
-                    <ReferenceIcon kind={reference.kind} />
-                    <span className="min-w-0">
-                      <span className="block truncate">{reference.label}</span>
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {reference.title}
-                      </span>
-                    </span>
-                  </Button>
-                ))}
-              </PopoverContent>
-            </Popover>,
-            document.body,
-          )
-        : null}
-    </div>
+                    {menu.items.map((reference, index) => (
+                      <Button
+                        key={reference.id}
+                        type="button"
+                        variant={index === menu.active ? "secondary" : "ghost"}
+                        className="h-auto w-full justify-start gap-2 p-2 text-left"
+                        aria-current={
+                          index === menu.active ? "true" : undefined
+                        }
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => menu.select(reference)}
+                      >
+                        <ReferenceIcon kind={reference.kind} />
+                        <span className="min-w-0">
+                          <span className="block truncate">
+                            {reference.label}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {reference.title}
+                          </span>
+                        </span>
+                      </Button>
+                    ))}
+                  </PopoverContent>
+                </Popover>,
+                document.body,
+              )
+            : null}
+        </div>
+      </PopoverAnchor>
+      {props.floatingToolbar && !expanded ? (
+        <PopoverContent
+          side="top"
+          align="center"
+          sideOffset={52}
+          collisionPadding={16}
+          sticky="always"
+          hideWhenDetached
+          className="canvas-document-toolbar w-max max-w-[calc(100dvw-2rem)] p-1"
+          data-rich-text-floating
+          data-canvas-no-zoom
+          data-canvas-shortcuts-ignore
+          onOpenAutoFocus={(event) => event.preventDefault()}
+          onCloseAutoFocus={(event) => event.preventDefault()}
+          onInteractOutside={(event) => event.preventDefault()}
+          onEscapeKeyDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!editor?.view.composing && !isImeComposing(event))
+              props.onEscape?.();
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          {toolbar}
+        </PopoverContent>
+      ) : null}
+    </Popover>
   );
 }
 
@@ -810,6 +851,8 @@ function EditorToolbar({
     selector: ({ editor: current }) => ({
       bold: current.isActive("bold"),
       italic: current.isActive("italic"),
+      underline: current.isActive("underline"),
+      strike: current.isActive("strike"),
       heading: current.isActive("heading", { level: 2 }),
       bullet: current.isActive("bulletList"),
       ordered: current.isActive("orderedList"),
@@ -830,6 +873,18 @@ function EditorToolbar({
       Icon: Italic,
       active: state.italic,
       run: () => editor.chain().focus().toggleItalic().run(),
+    },
+    {
+      label: "下划线",
+      Icon: Underline,
+      active: state.underline,
+      run: () => editor.chain().focus().toggleUnderline().run(),
+    },
+    {
+      label: "删除线",
+      Icon: Strikethrough,
+      active: state.strike,
+      run: () => editor.chain().focus().toggleStrike().run(),
     },
     {
       label: "二级标题",

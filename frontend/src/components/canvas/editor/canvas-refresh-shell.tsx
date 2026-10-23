@@ -12,50 +12,31 @@ export function CanvasRefreshShell() {
         style={{
           backgroundImage:
             "radial-gradient(circle, var(--border) 1px, transparent 1px)",
-          backgroundSize: "28px 28px",
+          backgroundSize: "20px 20px",
         }}
       />
-
       <div
-        className="absolute bottom-5 left-1/2 z-50 flex h-14 -translate-x-1/2 items-center gap-1 rounded-xl border px-2 shadow-lg backdrop-blur"
-        style={{
-          background: "var(--background)",
-          borderColor: "var(--border)",
-        }}
+        className="absolute top-3 left-3 flex h-11 items-center gap-3"
         aria-hidden="true"
       >
-        {Array.from({ length: 7 }).map((_, index) => (
-          <Skeleton key={index} className="size-8" />
+        <Skeleton className="size-6" />
+        <Skeleton className="h-5 w-36" />
+      </div>
+      <div
+        className="absolute top-1/2 left-3 flex max-h-[calc(100dvh-9rem)] w-12 -translate-y-1/2 flex-col items-center gap-3 overflow-hidden rounded-2xl border bg-popover py-3"
+        aria-hidden="true"
+      >
+        {Array.from({ length: 8 }).map((_, index) => (
+          <Skeleton key={index} className="size-8 shrink-0" />
         ))}
       </div>
-
       <div
-        className="absolute bottom-24 left-6 z-50 h-40 w-canvas-menu rounded-lg border shadow-2xl backdrop-blur-sm"
-        style={{
-          background: "var(--background)",
-          borderColor: "var(--border)",
-        }}
+        className="absolute bottom-3 left-4 flex h-11 items-center gap-2"
         aria-hidden="true"
       >
-        <Skeleton className="absolute top-7 left-7 h-5 w-12" />
-        <Skeleton className="absolute top-16 left-28 h-6 w-16" />
-        <Skeleton className="absolute bottom-7 left-16 h-8 w-20" />
-        <div className="absolute inset-5 rounded border border-current opacity-15" />
-      </div>
-
-      <div
-        className="w-image-dialog absolute bottom-5 left-5 z-50 flex h-14 items-center gap-2 rounded-xl border px-2 shadow-lg backdrop-blur"
-        style={{
-          background: "var(--background)",
-          borderColor: "var(--border)",
-        }}
-        aria-hidden="true"
-      >
-        <Skeleton className="size-8" />
-        <Skeleton className="size-8" />
-        <Skeleton className="h-1 flex-1" />
-        <Skeleton className="h-4 w-10" />
-        <Skeleton className="size-8" />
+        <Skeleton className="size-9" />
+        <Skeleton className="size-9" />
+        <Skeleton className="h-5 w-16" />
       </div>
     </section>
   );

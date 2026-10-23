@@ -5694,7 +5694,7 @@ function InfiniteCanvasPage({
           ) : null}
         </InfiniteCanvas>
 
-        {!nodes.length ? <CanvasEmptyState onCreate={createNode} /> : null}
+        {!nodes.length ? <CanvasEmptyState /> : null}
 
         <CanvasNodeHoverToolbar
           canvasSize={size}
@@ -5788,6 +5788,7 @@ function InfiniteCanvasPage({
         ) : null}
 
         <CanvasToolbar
+          canEdit={!documentIntegration?.frozen}
           selectedCount={selectedNodeIds.size}
           canvasTool={canvasTool}
           canUndo={documentIntegration?.undo?.canUndo ?? historyState.canUndo}
@@ -5815,6 +5816,8 @@ function InfiniteCanvasPage({
         ) : null}
 
         <CanvasZoomControls
+          canvasTool={canvasTool}
+          onCanvasToolChange={setCanvasTool}
           scale={viewport.k}
           onScaleChange={setZoomScale}
           onFit={resetViewport}

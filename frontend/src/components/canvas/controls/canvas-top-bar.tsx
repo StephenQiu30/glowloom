@@ -10,16 +10,23 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
+  TooltipProvider,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ChevronDown, Pencil, FolderOpen, History } from "lucide-react";
-import { productBrand } from "@/components/canvas/runtime/lib/brand";
+import { useCanvasSidePanelStore } from "../store/use-canvas-side-panel-store";
+import { CanvasHistoryDialog } from "../history/canvas-history-dialog";
+import { toast } from "sonner";
+import { Search, UserRound, Link2 } from "lucide-react";
+import Link from "next/link";
 import { BrandMark } from "@/components/canvas/runtime/components/layout/shell/brand-mark";
 
 export function CanvasTopBar({
   title,
   onRenameProject,
+  onExportProject,
+  exportingProject,
   onHome,
   onProjects,
   onCreateProject,
@@ -58,143 +65,224 @@ export function CanvasTopBar({
   projectCanvas?: boolean;
   projectPath?: string;
 }) {
+  const openPanel = useCanvasSidePanelStore((state) => state.openPanel);
+  const setPanelTab = useCanvasSidePanelStore((state) => state.setTab);
   return (
-    <div
-      data-canvas-no-zoom
-      className="canvas-topbar pointer-events-none absolute inset-x-2 top-2 z-50 flex items-start justify-between gap-3"
-    >
-      <div className="canvas-chrome-panel pointer-events-auto flex min-w-0 items-center gap-1">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="canvas-brand"
-              aria-label="打开导航菜单"
+    <TooltipProvider>
+      <div
+        data-canvas-no-zoom
+        className="canvas-topbar pointer-events-none absolute inset-x-3 top-2.5 z-50 flex items-center justify-between gap-2"
+      >
+        <div className="canvas-chrome-panel pointer-events-auto flex min-w-0 items-center gap-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="canvas-brand"
+                aria-label="打开导航菜单"
+              >
+                <BrandMark />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              sideOffset={8}
+              className="w-canvas-menu"
+              data-canvas-no-zoom
             >
-              <BrandMark />
-              <span className="canvas-brand-word">{productBrand.name}</span>
-              <ChevronDown data-icon="inline-end" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            sideOffset={8}
-            className="w-canvas-menu"
-            data-canvas-no-zoom
-          >
-            <DropdownMenuGroup>
-              <DropdownMenuItem className="h-10 px-3" onSelect={onHome}>
-                回到主页
-              </DropdownMenuItem>
-              <DropdownMenuItem className="h-10 px-3" onSelect={onProjects}>
-                全部项目
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            {(!projectCanvas || canDeleteCanvas) && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  {!projectCanvas && (
-                    <DropdownMenuItem
-                      className="h-10 px-3"
-                      onSelect={onCreateProject}
-                    >
-                      新建画布
-                    </DropdownMenuItem>
-                  )}
-                  {canDeleteCanvas && (
-                    <DropdownMenuItem
-                      className="h-10 px-3"
-                      variant="destructive"
-                      onSelect={onDeleteProject}
-                    >
-                      删除当前画布
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuGroup>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="canvas-project-trigger"
-              aria-label="打开画布菜单"
+              <DropdownMenuGroup>
+                <DropdownMenuItem className="h-10 px-3" onSelect={onHome}>
+                  回到主页
+                </DropdownMenuItem>
+                <DropdownMenuItem className="h-10 px-3" onSelect={onProjects}>
+                  全部项目
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              {(!projectCanvas || canDeleteCanvas) && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    {!projectCanvas && (
+                      <DropdownMenuItem
+                        className="h-10 px-3"
+                        onSelect={onCreateProject}
+                      >
+                        新建画布
+                      </DropdownMenuItem>
+                    )}
+                    {canDeleteCanvas && (
+                      <DropdownMenuItem
+                        className="h-10 px-3"
+                        variant="destructive"
+                        onSelect={onDeleteProject}
+                      >
+                        删除当前画布
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuGroup>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="canvas-project-trigger"
+                aria-label="打开画布菜单"
+              >
+                <ChevronDown data-icon="inline-start" />
+                <span className="truncate">{title}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              sideOffset={8}
+              className="w-canvas-menu"
+              data-canvas-no-zoom
             >
-              <span className="truncate">{title}</span>
-              <ChevronDown data-icon="inline-end" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            sideOffset={8}
-            className="w-canvas-menu"
-            data-canvas-no-zoom
-          >
-            {projectPath && (
-              <DropdownMenuLabel className="text-xs font-normal break-words whitespace-normal">
-                所属项目：{projectPath}
-              </DropdownMenuLabel>
-            )}
-            <DropdownMenuGroup>
-              {onProjectCanvases && (
+              {projectPath && (
+                <DropdownMenuLabel className="text-xs font-normal break-words whitespace-normal">
+                  所属项目：{projectPath}
+                </DropdownMenuLabel>
+              )}
+              <DropdownMenuGroup>
+                {onProjectCanvases && (
+                  <DropdownMenuItem
+                    className="h-9"
+                    disabled={!canSwitchCanvas}
+                    onSelect={onProjectCanvases}
+                  >
+                    <FolderOpen />
+                    返回所属项目
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem className="h-9" onSelect={onRenameProject}>
+                  <Pencil />
+                  重命名画布
+                </DropdownMenuItem>
+                {onVersionHistory && (
+                  <DropdownMenuItem className="h-9" onSelect={onVersionHistory}>
+                    <History />
+                    版本历史
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   className="h-9"
-                  disabled={!canSwitchCanvas}
-                  onSelect={onProjectCanvases}
+                  disabled={exportingProject}
+                  onSelect={onExportProject}
                 >
-                  <FolderOpen />
-                  返回所属项目
+                  导出画布
                 </DropdownMenuItem>
-              )}
-              <DropdownMenuItem className="h-9" onSelect={onRenameProject}>
-                <Pencil />
-                重命名画布
-              </DropdownMenuItem>
-              {onVersionHistory && (
-                <DropdownMenuItem className="h-9" onSelect={onVersionHistory}>
-                  <History />
-                  版本历史
-                </DropdownMenuItem>
-              )}
-              {onCreatePersonalProject && (
-                <DropdownMenuItem
-                  className="h-9"
-                  onSelect={onCreatePersonalProject}
-                >
-                  <FolderOpen />
-                  建立个人项目
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-      <div className="canvas-chrome-panel canvas-status-panel pointer-events-auto flex items-center gap-1">
-        {workflowControl}
-        {saveControl === undefined ? (
+                {onCreatePersonalProject && (
+                  <DropdownMenuItem
+                    className="h-9"
+                    onSelect={onCreatePersonalProject}
+                  >
+                    <FolderOpen />
+                    建立个人项目
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <div className="canvas-header-actions pointer-events-auto flex items-center gap-1">
+          <div className="canvas-status-panel flex items-center gap-1">
+            {workflowControl}
+            {saveControl === undefined ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    role="status"
+                    tabIndex={0}
+                    className="canvas-save-status shrink-0 px-1.5 text-xs text-muted-foreground"
+                  >
+                    节点未保存
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  节点编辑仅在当前页面预览，离开会丢失。
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              saveControl
+            )}
+          </div>
           <Tooltip>
             <TooltipTrigger asChild>
-              <span
-                role="status"
-                tabIndex={0}
-                className="canvas-save-status shrink-0 px-1.5 text-xs text-muted-foreground"
+              <Button
+                variant="ghost"
+                size="icon-lg"
+                aria-label="搜索画布"
+                onClick={() => {
+                  setPanelTab("canvas");
+                  openPanel();
+                }}
               >
-                节点未保存
-              </span>
+                <Search />
+              </Button>
             </TooltipTrigger>
-            <TooltipContent side="bottom">
-              节点编辑仅在当前页面预览，离开会丢失。
-            </TooltipContent>
+            <TooltipContent>搜索画布</TooltipContent>
           </Tooltip>
-        ) : (
-          saveControl
-        )}
+          {onVersionHistory ? (
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              aria-label="版本历史"
+              onClick={onVersionHistory}
+            >
+              <History />
+            </Button>
+          ) : (
+            <CanvasHistoryDialog>
+              <Button variant="ghost" size="icon-lg" aria-label="生成历史">
+                <History />
+              </Button>
+            </CanvasHistoryDialog>
+          )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="复制画布链接"
+                onClick={() => {
+                  void navigator.clipboard
+                    .writeText(window.location.href)
+                    .then(() =>
+                      toast.success("画布链接已复制，仅有访问权限的成员可打开"),
+                    )
+                    .catch(() =>
+                      toast.error("复制失败，请从浏览器地址栏复制链接"),
+                    );
+                }}
+              >
+                <span className="hidden sm:inline">分享</span>
+                <Link2 className="sm:hidden" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>复制画布链接，保留现有访问权限</TooltipContent>
+          </Tooltip>
+          <Button
+            variant="ghost"
+            size="icon-lg"
+            aria-label="账号设置"
+            disabled={!canSwitchCanvas}
+            asChild={canSwitchCanvas}
+          >
+            {canSwitchCanvas ? (
+              <Link href="/account">
+                <UserRound />
+              </Link>
+            ) : (
+              <UserRound />
+            )}
+          </Button>
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }

@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { CanvasHistoryDialog } from "../history/canvas-history-dialog";
 import { CanvasGuideDialog } from "./canvas-guide-dialog";
-import { CanvasModeMenu } from "@/components/canvas/controls/canvas-mode-menu";
+import { useCanvasSidePanelStore } from "../store/use-canvas-side-panel-store";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +33,10 @@ import {
 } from "@/components/canvas/lib/node-registry";
 import { useThemeStore } from "@/components/canvas/runtime/store/use-theme-store";
 import {
+  Sparkles,
+  Box,
+  Contact,
+  Folder,
   Eraser,
   History,
   Keyboard,
@@ -48,8 +52,8 @@ import {
 import { useState } from "react";
 
 export function CanvasToolbar({
+  canEdit = true,
   selectedCount,
-  canvasTool,
   canUndo,
   canRedo,
   backgroundMode,
@@ -60,10 +64,10 @@ export function CanvasToolbar({
   onUpload,
   onDelete,
   onClear,
-  onCanvasToolChange,
   onBackgroundModeChange,
   onShowImageInfoChange,
 }: {
+  canEdit?: boolean;
   selectedCount: number;
   canvasTool: "select" | "pan";
   canUndo: boolean;
@@ -81,6 +85,8 @@ export function CanvasToolbar({
   onShowImageInfoChange: (show: boolean) => void;
 }) {
   const [createOpen, setCreateOpen] = useState(false);
+  const openPanel = useCanvasSidePanelStore((state) => state.openPanel);
+  const setPanelTab = useCanvasSidePanelStore((state) => state.setTab);
   const colorTheme = useThemeStore((state) => state.theme);
   const setTheme = useThemeStore((state) => state.setTheme);
   const theme = canvasThemes[colorTheme];
@@ -93,21 +99,103 @@ export function CanvasToolbar({
     <>
       <div
         data-canvas-no-zoom
-        className="canvas-action-dock max-w-node-label absolute bottom-2 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2"
+        className="canvas-action-dock absolute z-50"
         aria-label="画布工具栏"
       >
         <div
-          className="canvas-dock-surface flex items-center"
+          className="canvas-dock-surface flex flex-col items-center"
           style={{
             background: theme.toolbar.panel,
             borderColor: theme.toolbar.border,
           }}
         >
+          {definitions
+            .filter((item) =>
+              ["text", "image", "video", "audio"].includes(item.type),
+            )
+            .sort(
+              (a, b) =>
+                ["text", "image", "video", "audio"].indexOf(a.type) -
+                ["text", "image", "video", "audio"].indexOf(b.type),
+            )
+            .map((definition) => (
+              <Tooltip key={definition.type}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-lg"
+                    aria-label={`添加${definition.title}节点`}
+                    disabled={!canEdit}
+                    onClick={() => onCreateNode(definition.type)}
+                  >
+                    {definition.icon}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">{definition.title}</TooltipContent>
+              </Tooltip>
+            ))}
+          {[
+            { label: "主体", icon: Contact },
+            { label: "3D 导演", icon: Box },
+          ].map(({ label, icon: Icon }) => (
+            <Tooltip key={label}>
+              <TooltipTrigger asChild>
+                <span tabIndex={0} aria-label={`${label}暂不可用`}>
+                  <Button
+                    variant="ghost"
+                    size="icon-lg"
+                    disabled
+                    aria-label={label}
+                  >
+                    <Icon />
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="right">{label}暂不可用</TooltipContent>
+            </Tooltip>
+          ))}
+          <Separator className="my-1 max-w-8" />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-lg"
+                aria-label="资产管理"
+                data-canvas-side-panel-trigger
+                onClick={() => {
+                  setPanelTab("assets");
+                  openPanel();
+                }}
+              >
+                <Folder />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">从资产库添加</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-lg"
+                aria-label="本地上传"
+                disabled={!canEdit}
+                onClick={onUpload}
+              >
+                <Upload />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">本地上传</TooltipContent>
+          </Tooltip>
           <Popover open={createOpen} onOpenChange={setCreateOpen}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <PopoverTrigger asChild>
-                  <Button size="icon-lg" aria-label="添加节点">
+                  <Button
+                    variant="ghost"
+                    size="icon-lg"
+                    aria-label="添加节点"
+                    disabled={!canEdit}
+                  >
                     <Plus />
                   </Button>
                 </PopoverTrigger>
@@ -115,7 +203,7 @@ export function CanvasToolbar({
               <TooltipContent side="top">添加节点</TooltipContent>
             </Tooltip>
             <PopoverContent
-              side="top"
+              side="right"
               align="start"
               sideOffset={12}
               className="max-h-menu w-64 overflow-y-auto"
@@ -152,51 +240,11 @@ export function CanvasToolbar({
               </Button>
             </PopoverContent>
           </Popover>
-          <CanvasModeMenu value={canvasTool} onChange={onCanvasToolChange} />
-          {[
-            { label: "撤销", icon: Undo2, action: onUndo, enabled: canUndo },
-            { label: "重做", icon: Redo2, action: onRedo, enabled: canRedo },
-          ].map(({ label, icon: Icon, action, enabled }) => (
-            <Tooltip key={label}>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-lg"
-                  aria-label={label}
-                  onClick={action}
-                  disabled={!enabled}
-                >
-                  <Icon />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">{label}</TooltipContent>
-            </Tooltip>
-          ))}
-          <CanvasHistoryDialog>
-            <Button
-              variant="ghost"
-              size="icon-lg"
-              aria-label="生成历史"
-              title="生成历史"
-            >
-              <History />
-            </Button>
-          </CanvasHistoryDialog>
-          <CanvasGuideDialog kind="shortcuts">
-            <Button
-              variant="ghost"
-              size="icon-lg"
-              aria-label="快捷键"
-              title="快捷键"
-            >
-              <Keyboard />
-            </Button>
-          </CanvasGuideDialog>
         </div>
       </div>
       <div
         data-canvas-no-zoom
-        className="canvas-dock-options absolute right-4 bottom-4 z-50 flex items-center"
+        className="canvas-dock-options absolute top-2.5 right-3 z-50 flex items-center"
       >
         <Popover>
           <PopoverTrigger asChild>
@@ -215,6 +263,57 @@ export function CanvasToolbar({
             className="w-64"
             data-canvas-no-zoom
           >
+            <div className="mb-3 flex flex-wrap items-center gap-1">
+              {[
+                {
+                  label: "撤销",
+                  icon: Undo2,
+                  action: onUndo,
+                  enabled: canUndo,
+                },
+                {
+                  label: "重做",
+                  icon: Redo2,
+                  action: onRedo,
+                  enabled: canRedo,
+                },
+              ].map(({ label, icon: Icon, action, enabled }) => (
+                <Tooltip key={label}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-lg"
+                      aria-label={label}
+                      onClick={action}
+                      disabled={!enabled}
+                    >
+                      <Icon />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">{label}</TooltipContent>
+                </Tooltip>
+              ))}
+              <CanvasHistoryDialog>
+                <Button
+                  variant="ghost"
+                  size="icon-lg"
+                  aria-label="生成历史"
+                  title="生成历史"
+                >
+                  <History />
+                </Button>
+              </CanvasHistoryDialog>
+              <CanvasGuideDialog kind="shortcuts">
+                <Button
+                  variant="ghost"
+                  size="icon-lg"
+                  aria-label="快捷键"
+                  title="快捷键"
+                >
+                  <Keyboard />
+                </Button>
+              </CanvasGuideDialog>
+            </div>
             <FieldGroup>
               <Field>
                 <FieldLabel className="sr-only">主题</FieldLabel>
@@ -270,19 +369,40 @@ export function CanvasToolbar({
             <DropdownMenuGroup>
               <DropdownMenuItem
                 variant="destructive"
-                disabled={!selectedCount}
+                disabled={!canEdit || !selectedCount}
                 onSelect={onDelete}
               >
                 <Trash2 />
                 删除选中
               </DropdownMenuItem>
-              <DropdownMenuItem variant="destructive" onSelect={onClear}>
+              <DropdownMenuItem
+                variant="destructive"
+                disabled={!canEdit}
+                onSelect={onClear}
+              >
                 <Eraser />
                 清空画布
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
+      </div>
+      <div className="absolute right-3 bottom-3 z-50" data-canvas-no-zoom>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span tabIndex={0} aria-label="AI 对话暂不可用">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled
+                className="rounded-full"
+              >
+                <Sparkles />与 AI 对话
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top">AI 对话暂不可用</TooltipContent>
+        </Tooltip>
       </div>
     </>
   );

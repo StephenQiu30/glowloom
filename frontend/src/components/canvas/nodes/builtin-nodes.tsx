@@ -1,5 +1,5 @@
 import {
-  FileText,
+  Type,
   Group,
   Image as ImageIcon,
   AudioLines,
@@ -44,7 +44,7 @@ const BUILTIN_DEFINITIONS: CanvasNodeDefinition[] = [
   {
     type: CanvasNodeType.Text,
     title: "文本",
-    icon: <FileText className={iconClass} />,
+    icon: <Type className={iconClass} />,
     minimapColor: undefined,
     resource: builtinResource,
   },

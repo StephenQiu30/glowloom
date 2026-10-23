@@ -1,3 +1,4 @@
+import { CanvasModeMenu } from "./canvas-mode-menu";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -19,21 +20,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  Map,
-  Focus,
-  Magnet,
-  Minus,
-  Plus,
-  Workflow,
-  PanelLeft,
-  X,
-  Settings2,
-} from "lucide-react";
-import { useCanvasSidePanelStore } from "../store/use-canvas-side-panel-store";
+import { PanelTop, Link2, Focus, Minus, Plus, Settings2 } from "lucide-react";
 import { useState } from "react";
 
 export function CanvasZoomControls({
+  canvasTool = "select",
+  onCanvasToolChange,
   scale,
   onScaleChange,
   onFit,
@@ -45,6 +37,8 @@ export function CanvasZoomControls({
   snapToGrid,
   onToggleSnap,
 }: {
+  canvasTool?: "select" | "pan";
+  onCanvasToolChange?: (tool: "select" | "pan") => void;
   scale: number;
   onScaleChange: (scale: number) => void;
   onFit: () => void;
@@ -57,45 +51,29 @@ export function CanvasZoomControls({
   onToggleSnap: () => void;
 }) {
   const [zoomOpen, setZoomOpen] = useState(false);
-  const togglePanel = useCanvasSidePanelStore((state) => state.togglePanel);
-  const panelOpen = useCanvasSidePanelStore((state) => state.panelOpen);
   const percent = Math.round(scale * 100);
   return (
     <div
       data-canvas-no-zoom
-      className="canvas-viewport-controls absolute bottom-20 left-4 z-50 flex items-center gap-1 xl:bottom-4 2xl:bottom-4"
+      className="canvas-viewport-controls absolute bottom-3 left-4 z-50 flex items-center gap-2"
       aria-label="画布视图控制"
     >
-      <Button
-        variant="ghost"
-        size="sm"
-        aria-pressed={panelOpen}
-        onClick={togglePanel}
-        data-canvas-side-panel-trigger=""
-      >
-        <PanelLeft />
-        资产管理
-      </Button>
+      {onCanvasToolChange && (
+        <CanvasModeMenu value={canvasTool} onChange={onCanvasToolChange} />
+      )}
       <div className="canvas-view-shortcuts flex items-center gap-1">
         {[
-          { label: "适合屏幕", icon: Focus, onClick: onFit },
           {
             label: "小地图",
-            icon: Map,
+            icon: PanelTop,
             onClick: onToggleMiniMap,
             pressed: isMiniMapOpen,
           },
           {
             label: "显示连线",
-            icon: Workflow,
+            icon: Link2,
             onClick: onToggleConnections,
             pressed: showConnections,
-          },
-          {
-            label: "网格吸附",
-            icon: Magnet,
-            onClick: onToggleSnap,
-            pressed: snapToGrid,
           },
         ].map(({ label, icon: Icon, onClick, pressed }) => (
           <Tooltip key={label}>
@@ -139,32 +117,26 @@ export function CanvasZoomControls({
           data-canvas-view-control
           data-canvas-no-zoom
         >
-          <div className="flex items-center justify-between gap-3">
-            <PopoverTitle>缩放</PopoverTitle>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="关闭缩放菜单"
-              onClick={() => setZoomOpen(false)}
-            >
-              <X />
-            </Button>
-          </div>
+          <PopoverTitle className="sr-only">缩放</PopoverTitle>
           {[
             {
-              label: "放大",
+              label: "放大视图",
               icon: Plus,
               action: () => onScaleChange(scale * 1.1),
             },
             {
-              label: "缩小",
+              label: "缩小视图",
               icon: Minus,
               action: () => onScaleChange(scale / 1.1),
             },
-            { label: "100%", icon: Focus, action: () => onScaleChange(1) },
             { label: "适应画布", icon: Focus, action: onFit },
-            { label: "适应所选", icon: Focus, action: onFitSelection },
-          ].map(({ label, icon: Icon, action }) => (
+            { label: "缩放至选中项", icon: Focus, action: onFitSelection },
+            ...[0.5, 1, 2].map((value) => ({
+              label: `缩放至${value * 100}%`,
+              icon: Focus,
+              action: () => onScaleChange(value),
+            })),
+          ].map(({ label, action }) => (
             <Button
               key={label}
               variant="ghost"
@@ -175,7 +147,6 @@ export function CanvasZoomControls({
                 setZoomOpen(false);
               }}
             >
-              <Icon />
               {label}
             </Button>
           ))}

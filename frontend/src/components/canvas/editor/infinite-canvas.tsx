@@ -356,8 +356,7 @@ function CanvasGrid({
   const theme = canvasThemes[useThemeStore((state) => state.theme)];
   if (mode === "blank") return null;
 
-  const baseSize =
-    (mode === "dots" ? CANVAS_GRID_SIZE / 2 : CANVAS_GRID_SIZE) * viewport.k;
+  const baseSize = (mode === "dots" ? 20 : CANVAS_GRID_SIZE) * viewport.k;
   // Skip minor grid marks when zoomed out so the canvas stays legible instead of forming a moiré pattern.
   const gridSize =
     baseSize * Math.pow(2, Math.max(0, Math.ceil(Math.log2(12 / baseSize))));
