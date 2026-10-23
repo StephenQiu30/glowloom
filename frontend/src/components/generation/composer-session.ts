@@ -478,8 +478,6 @@ function collaborationOptions(
   )?.options.collaboration as ComposerCollaboration | undefined;
 }
 export type ComposerOptions = {
-  plainTextOnly?: boolean;
-  maxPlainLength?: number;
   collaboration?: ComposerCollaboration;
   contextKey: string;
   replicaId: string;
@@ -543,20 +541,6 @@ export function composerEditorOptions(
           filterTransaction(tr, state) {
             if (!tr.docChanged && !tr.getMeta(sessionKey)?.intent) return true;
             const previous = stateOf(state);
-            if (options.plainTextOnly) {
-              let reference = false;
-              tr.doc.descendants((node) => {
-                if (node.type.name === "reference") reference = true;
-              });
-              if (
-                reference ||
-                (options.maxPlainLength !== undefined &&
-                  Array.from(
-                    tr.doc.textBetween(0, tr.doc.content.size, "\n", "\n"),
-                  ).length > options.maxPlainLength)
-              )
-                return false;
-            }
             try {
               validatePromptDraft(
                 frameDraft(

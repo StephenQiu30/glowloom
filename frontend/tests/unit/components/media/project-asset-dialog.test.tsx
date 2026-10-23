@@ -1,4 +1,4 @@
-import { render, findFeedback } from "../../../../feedback";
+import { render, findFeedback } from "../../../feedback";
 import {
   act,
   cleanup,
@@ -7,7 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { ProjectAssetDialog as CanvasMaterialDialog } from "@/components/media/project-asset-dialog";
+import { ProjectAssetDialog } from "@/components/media/project-asset-dialog";
 const api = vi.hoisted(() => ({
   list: vi.fn(),
   preview: vi.fn(),
@@ -53,7 +53,7 @@ it("单选参考上传同类素材时替换原选择，异类上传不改变参�
   api.list.mockResolvedValue({ items: [a, b] });
   const add = vi.fn();
   render(
-    <CanvasMaterialDialog
+    <ProjectAssetDialog
       projectID={pid}
       reference
       initialKind="image"
@@ -86,7 +86,7 @@ it("多选、搜索与分页保留已选资源身份，确认前不写入画布"
     .mockResolvedValue({ items: [a, b] });
   const add = vi.fn();
   render(
-    <CanvasMaterialDialog
+    <ProjectAssetDialog
       projectID={pid}
       onClose={vi.fn()}
       onAdd={add}
@@ -122,7 +122,7 @@ it("跨项目回执不进入可选素材，重新读取可恢复", async () => {
     .mockResolvedValueOnce({ items: [{ ...a, project_id: a.id }] })
     .mockResolvedValueOnce({ items: [a] });
   render(
-    <CanvasMaterialDialog
+    <ProjectAssetDialog
       projectID={pid}
       onClose={vi.fn()}
       onAdd={vi.fn()}
@@ -145,7 +145,7 @@ it("关闭弹窗中止读取，迟到回执不能继续更新弹窗", async () =
       }),
   );
   const view = render(
-    <CanvasMaterialDialog
+    <ProjectAssetDialog
       projectID={pid}
       onClose={vi.fn()}
       onAdd={vi.fn()}
@@ -162,7 +162,7 @@ it("关闭弹窗中止读取，迟到回执不能继续更新弹窗", async () =
 it("真实空列表和已加载素材搜索无结果具有不同提示", async () => {
   api.list.mockResolvedValue({ items: [a] });
   render(
-    <CanvasMaterialDialog
+    <ProjectAssetDialog
       projectID={pid}
       onClose={vi.fn()}
       onAdd={vi.fn()}
@@ -182,7 +182,7 @@ it("真实空列表和已加载素材搜索无结果具有不同提示", async (
 it("真实空分页的 null 游标显示空态而非回执错误", async () => {
   api.list.mockResolvedValue({ items: [], next_cursor: null });
   render(
-    <CanvasMaterialDialog
+    <ProjectAssetDialog
       projectID={pid}
       onClose={vi.fn()}
       onAdd={vi.fn()}
@@ -200,7 +200,7 @@ it("搜索会遍历项目后续分页，选中项不受关键词影响", async (
     ),
   );
   render(
-    <CanvasMaterialDialog projectID={pid} onClose={vi.fn()} onAdd={vi.fn()} />,
+    <ProjectAssetDialog projectID={pid} onClose={vi.fn()} onAdd={vi.fn()} />,
   );
   fireEvent.click(
     await screen.findByRole("button", { name: "选择素材 海边香氛.png" }),
@@ -219,9 +219,7 @@ it("确认核验失败保留选择且不调用添加", async () => {
   api.list.mockResolvedValue({ items: [a] });
   api.preview.mockRejectedValue(new Error("素材不可用"));
   const add = vi.fn();
-  render(
-    <CanvasMaterialDialog projectID={pid} onClose={vi.fn()} onAdd={add} />,
-  );
+  render(<ProjectAssetDialog projectID={pid} onClose={vi.fn()} onAdd={add} />);
   fireEvent.click(
     await screen.findByRole("button", { name: "选择素材 海边香氛.png" }),
   );

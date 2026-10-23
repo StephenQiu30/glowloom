@@ -27,7 +27,10 @@ function media(id: string, role = "reference_image"): ReferenceBinding {
     source: { kind: "media", sourceId: "asset-1", sourceVersion: "v1" },
   };
 }
-afterEach(() => editors.splice(0).forEach((e) => e.destroy()));
+afterEach(() => {
+  editors.splice(0).forEach((e) => e.destroy());
+  vi.useRealTimers();
+});
 
 describe("E0 完整意图与单一历史", () => {
   it("重复提及复用绑定，不同角色保留；整组移除可一次撤销", () => {
@@ -573,4 +576,39 @@ it("records a negative-prompt edit with the native input range", () => {
     text: "",
   });
   expect(session.snapshot().draft.params.negative_prompt).toBe("aa");
+});
+
+it("unmount before composition settlement releases global composition", () => {
+  vi.useFakeTimers();
+  const events: boolean[] = [];
+  const editor = new Editor(
+    composerEditorOptions({
+      contextKey: "review",
+      replicaId: "review",
+      draft: emptyPromptDraft(),
+      collaboration: {
+        history: { undo: () => false, redo: () => false },
+        pendingReference: () => false,
+        composition: (active) => events.push(active),
+      },
+    }),
+  );
+  editors.push(editor);
+  // Invoke actual ProseMirror DOM handlers in browser event order; destruction
+  // before the 0ms settlement is the ordinary React unmount race.
+  for (const plugin of editor.state.plugins)
+    plugin.props.handleDOMEvents?.compositionstart?.call(
+      plugin,
+      editor.view,
+      new CompositionEvent("compositionstart"),
+    );
+  for (const plugin of editor.state.plugins)
+    plugin.props.handleDOMEvents?.compositionend?.call(
+      plugin,
+      editor.view,
+      new CompositionEvent("compositionend"),
+    );
+  editor.destroy();
+  vi.runAllTimers();
+  expect(events.at(-1)).toBe(false);
 });

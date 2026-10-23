@@ -4,8 +4,6 @@ import {
   CanvasNodeType,
   type CanvasConnection,
   type CanvasNodeData,
-  type ConnectionHandle,
-  type ViewportTransform,
 } from "./types";
 
 export function nodeBounds(nodes: CanvasNodeData[]) {
@@ -54,48 +52,6 @@ export function findGroupDropTarget(
   return null;
 }
 
-export function snapNodesIntoGroup(
-  movedIds: Set<string>,
-  nodes: CanvasNodeData[],
-  group: CanvasNodeData,
-) {
-  const movingNodes = nodes.filter(
-    (node) => movedIds.has(node.id) && node.type !== CanvasNodeType.Group,
-  );
-  if (!movingNodes.length) return nodes;
-  const pad = 24;
-  const bounds = nodeBounds(movingNodes);
-  const left = group.position.x + pad;
-  const top = group.position.y + pad;
-  const right = group.position.x + group.width - pad;
-  const bottom = group.position.y + group.height - pad;
-  const dx =
-    bounds.right - bounds.left > right - left
-      ? left - bounds.left
-      : bounds.left < left
-        ? left - bounds.left
-        : bounds.right > right
-          ? right - bounds.right
-          : 0;
-  const dy =
-    bounds.bottom - bounds.top > bottom - top
-      ? top - bounds.top
-      : bounds.top < top
-        ? top - bounds.top
-        : bounds.bottom > bottom
-          ? bottom - bounds.bottom
-          : 0;
-  return nodes.map((node) => {
-    if (!movedIds.has(node.id) || node.type === CanvasNodeType.Group)
-      return node;
-    return {
-      ...node,
-      position: { x: node.position.x + dx, y: node.position.y + dy },
-      metadata: { ...node.metadata, groupId: group.id },
-    };
-  });
-}
-
 export const GROUP_WRAP_PADDING = 24;
 export const GROUP_WRAP_TOP_PADDING = 52;
 
@@ -132,27 +88,6 @@ export function getGroupWrapRect(members: CanvasNodeData[]) {
     height:
       bounds.bottom - bounds.top + GROUP_WRAP_TOP_PADDING + GROUP_WRAP_PADDING,
   };
-}
-
-export function canGroupSelectedNodes(
-  selectedIds: Set<string>,
-  nodes: CanvasNodeData[],
-) {
-  const members = collectGroupMemberNodes(selectedIds, nodes);
-  if (members.length < 2) return false;
-  const groupId = members[0].metadata?.groupId;
-  return !groupId || members.some((node) => node.metadata?.groupId !== groupId);
-}
-
-export function canUngroupSelectedNodes(
-  selectedIds: Set<string>,
-  nodes: CanvasNodeData[],
-) {
-  return nodes.some(
-    (node) =>
-      selectedIds.has(node.id) &&
-      (node.type === CanvasNodeType.Group || Boolean(node.metadata?.groupId)),
-  );
 }
 
 function emptyGroupIds(nodes: CanvasNodeData[], keepId?: string) {
@@ -272,19 +207,6 @@ export function findContainingGroupId(
   return undefined;
 }
 
-export function getConnectionTargetAnchor(
-  node: CanvasNodeData,
-  current: ConnectionHandle,
-) {
-  return {
-    x:
-      current.handleType === "source"
-        ? node.position.x
-        : node.position.x + node.width,
-    y: node.position.y + node.height / 2,
-  };
-}
-
 export function normalizeConnection(
   firstNodeId: string,
   secondNodeId: string,
@@ -299,47 +221,4 @@ export function normalizeConnection(
   return firstHandleType === "target"
     ? { fromNodeId: second.id, toNodeId: first.id }
     : { fromNodeId: first.id, toNodeId: second.id };
-}
-
-export type FocusFrame = {
-  // Screen-space room taken above/below the node by open overlays (hover toolbar, prompt panel), gaps included.
-  above?: number;
-  below?: number;
-  // Fixed chrome covering the bottom edge of the canvas (dock), excluded from the usable area.
-  bottomInset?: number;
-};
-
-// Viewport that centers the node (plus any open overlay above/below) in the usable canvas area, zoomed so the
-// whole thing fits (the node itself is kept within 60% of the viewport). When an overlay is open below the node,
-// the remaining space is split 3:1 so the panel sits closer to the bottom dock (half the usual bottom gap).
-export function focusViewportForNode(
-  node: Pick<CanvasNodeData, "position" | "width" | "height">,
-  size: { width: number; height: number },
-  frame: FocusFrame = {},
-): ViewportTransform {
-  const above = frame.above ?? 0;
-  const below = frame.below ?? 0;
-  const usableBottom = Math.max(0, size.height - (frame.bottomInset ?? 0));
-  const nodeCenterX = node.position.x + node.width / 2;
-  const nodeCenterY = node.position.y + node.height / 2;
-  const verticalRoom = usableBottom * 0.92 - above - below;
-  const k = Math.min(
-    Math.max(
-      Math.min(
-        (size.width * 0.6) / node.width,
-        (size.height * 0.6) / node.height,
-        verticalRoom / node.height,
-      ),
-      0.05,
-    ),
-    1,
-  );
-  const groupHeight = above + node.height * k + below;
-  const slack = usableBottom - groupHeight;
-  const groupTop = slack * (below > 0 && slack > 0 ? 0.75 : 0.5);
-  return {
-    x: size.width / 2 - nodeCenterX * k,
-    y: groupTop + groupHeight / 2 - nodeCenterY * k - (below - above) / 2,
-    k,
-  };
 }
