@@ -1,5 +1,11 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { listProjectOperations } from "@/api/operations";
 import { RequestError } from "@/lib/request";
 import { useOptionalSession } from "@/components/auth/session";
@@ -30,22 +36,36 @@ function HistoryScope() {
   const [project, setProject] = useState<Project | null>(null);
   return (
     <section aria-label="生成记录" className="grid gap-6">
-      <div className="page-toolbar">
-        <ProjectPicker value={project} onChange={setProject} compact />
-      </div>
       {project ? (
-        <HistoryList key={project.id} projectID={project.id} />
+        <HistoryList
+          key={project.id}
+          projectID={project.id}
+          picker={
+            <ProjectPicker value={project} onChange={setProject} compact />
+          }
+        />
       ) : (
-        <Empty className="min-h-64">
-          <EmptyHeader>
-            <EmptyTitle>选择项目，查看生成记录</EmptyTitle>
-          </EmptyHeader>
-        </Empty>
+        <>
+          <div className="page-toolbar">
+            <ProjectPicker value={project} onChange={setProject} compact />
+          </div>
+          <Empty className="min-h-64">
+            <EmptyHeader>
+              <EmptyTitle>选择项目，查看生成记录</EmptyTitle>
+            </EmptyHeader>
+          </Empty>
+        </>
       )}
     </section>
   );
 }
-function HistoryList({ projectID }: { projectID: string }) {
+function HistoryList({
+  projectID,
+  picker,
+}: {
+  projectID: string;
+  picker: ReactNode;
+}) {
   const [items, setItems] = useState<API.TaskSummary[]>([]);
   const [cursor, setCursor] = useState<string>();
   const [pending, setPending] = useState(true);
@@ -100,7 +120,8 @@ function HistoryList({ projectID }: { projectID: string }) {
   }, [load]);
   return (
     <>
-      <div className="flex justify-end">
+      <div className="page-toolbar justify-between">
+        {picker}
         <Button variant="ghost" disabled={pending} onClick={() => void load()}>
           刷新记录
         </Button>
