@@ -33,6 +33,7 @@ function Workspace({
     graph: CanvasEditorState;
   } | null>(null);
   const [status, setStatus] = useState<LiveStatus>("connecting");
+  const [access, setAccess] = useState({ edit: false, submit: false });
   const [message, setMessage] = useState("");
   const [attempt, setAttempt] = useState(0);
   const [history, setHistory] = useState<{ undo: string[]; redo: string[] }>({
@@ -63,8 +64,15 @@ function Workspace({
           setSnapshot(value);
         }
       },
+      revoked() {
+        if (!active) return;
+        latest.current = null;
+        setSnapshot(null);
+        setHistory({ undo: [], redo: [] });
+      },
       status(value, reason) {
         if (active) {
+          setAccess({ edit: connection.canEdit, submit: connection.canSubmit });
           setStatus(value);
           setMessage(reason ?? "");
         }
@@ -93,8 +101,8 @@ function Workspace({
   }, [canvasID, projectID, actorID, scopeID, attempt]);
   const labels: Record<LiveStatus, string> = {
     connecting: "正在连接",
-    ready: "已保存",
-    saving: "正在保存",
+    ready: "已连接",
+    saving: "已连接",
     unconfirmed: "保存结果未确认",
     readonly: "只读",
     error: "连接不可用",
@@ -125,15 +133,16 @@ function Workspace({
             revision: snapshot.dto.revision!,
             name: snapshot.dto.name ?? "未命名画布",
             status: labels[status],
-            writable:
-              status === "ready" && snapshot.dto.permissions?.write === true,
+            writable: access.edit,
+            canSubmit: access.submit,
             viewStateKey: canvasViewKey(actorID, scopeID, projectID, canvasID),
-            commit: async (operations, revision) => {
+            commit: async (operations, revision, strictBase) => {
               if (!client.current) throw new Error("画布连接尚未就绪");
               const id = await client.current.submit(
                 operations,
                 undefined,
                 revision,
+                strictBase,
               );
               setHistory((current) => ({
                 undo: [...current.undo.slice(-49), id],

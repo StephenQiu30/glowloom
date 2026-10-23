@@ -23,6 +23,7 @@ export type RichTextInputProps = {
   value: string;
   document?: RichTextDocument;
   onChange: (value: string, document: RichTextDocument) => void;
+  acceptDocument?: (document: RichTextDocument) => boolean;
   references?: RichTextReference[];
   documentMode?: boolean;
   disabled?: boolean;

@@ -32,6 +32,7 @@ export type CanvasDocumentIntegration = {
   ) => ReactNode;
   canNavigate: boolean;
   frozen: boolean;
+  admit?: (state: CanvasEditorState) => boolean;
   onChange: (state: CanvasEditorState, stable: boolean) => void;
   pendingForms?: CanvasPendingForms;
   onPendingForm?: (

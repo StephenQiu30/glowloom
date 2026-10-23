@@ -21,6 +21,7 @@ afterEach(() => vi.useRealTimers());
 function setup(
   renewSession?: (signal: AbortSignal) => Promise<void>,
   csrf = () => "csrf",
+  revoked = vi.fn(),
 ) {
   vi.useFakeTimers();
   const sockets: Socket[] = [],
@@ -34,6 +35,7 @@ function setup(
     renewSession,
     snapshot,
     status,
+    revoked,
     socket: () => {
       const socket = new Socket();
       sockets.push(socket);
@@ -64,6 +66,101 @@ function setup(
   return { sockets, snapshot, status, session, join };
 }
 describe("durable canvas session", () => {
+  it("keeps the reviewed revision fence in the original body when resolving a lost receipt", () => {
+    const { session, sockets } = setup();
+    void session
+      .submit([{ type: "rename", name: "reviewed" }], undefined, "1", true)
+      .catch(() => {});
+    const submit = sockets[0].sent.find((packet) => packet.type === "submit")!;
+    expect(submit.body).toMatchObject({
+      strict_base: true,
+      base_revision: "1",
+    });
+    sockets[0].receive({
+      type: "heartbeat",
+      permissions: { read: true, write: true },
+    });
+    const resolve = sockets[0].sent.find(
+      (packet) => packet.type === "resolve",
+    )!;
+    expect(resolve.op_id).toBe(submit.op_id);
+    expect(resolve.body).toEqual(submit.body);
+    session.stop();
+  });
+  it("restarts exhausted reconnects on the browser online event and removes its listener on stop", () => {
+    const { session, sockets, join } = setup();
+    sockets[0].close();
+    vi.advanceTimersByTime(2000);
+    sockets[1].close();
+    vi.advanceTimersByTime(2000);
+    sockets[2].close();
+    window.dispatchEvent(new Event("online"));
+    expect(sockets).toHaveLength(4);
+    join(sockets[3]);
+    expect(session.canSubmit).toBe(true);
+    session.stop();
+    window.dispatchEvent(new Event("online"));
+    expect(sockets).toHaveLength(4);
+  });
+  it("updates revoked write access while an original submission is still unresolved", () => {
+    const { session, sockets, status } = setup();
+    void session.submit([{ type: "set", node_id: "n" }]).catch(() => {});
+    status.mockClear();
+    sockets[0].receive({
+      type: "heartbeat",
+      permissions: { read: true, write: false },
+    });
+    expect(session.canEdit).toBe(false);
+    expect(status).toHaveBeenCalled();
+    expect(session.unresolved).toBe(true);
+    session.stop();
+  });
+  it("releases private content after loss of read access and never retries its pending write", async () => {
+    const revoked = vi.fn();
+    const { session, sockets } = setup(undefined, () => "csrf", revoked);
+    const result = session.submit([{ type: "set", node_id: "n" }]);
+    const rejected = expect(result).rejects.toThrow("访问权限");
+    sockets[0].receive({ type: "error", status: 403, code: "forbidden" });
+    await rejected;
+    expect(revoked).toHaveBeenCalledOnce();
+    expect(session.unresolved).toBe(false);
+    window.dispatchEvent(new Event("online"));
+    expect(sockets).toHaveLength(1);
+    session.stop();
+  });
+  it("uses server heartbeats to resolve a lost ACK without a new submit", async () => {
+    const { session, sockets } = setup();
+    const promise = session.submit([{ type: "set", node_id: "n" }]);
+    const original = sockets[0].sent.at(-1)!;
+    sockets[0].receive({
+      type: "heartbeat",
+      permissions: { read: true, write: true },
+    });
+    expect(sockets[0].sent.at(-1)).toEqual({ ...original, type: "resolve" });
+    expect(session.unresolved).toBe(true);
+    sockets[0].receive({
+      type: "changes",
+      from_revision: "1",
+      to_revision: "2",
+      changes: [{ revision: "2", effects: [] }],
+    });
+    sockets[0].receive({
+      type: "ack",
+      receipt: { op_id: original.op_id, status: "accepted", revision: "2" },
+    });
+    await expect(promise).resolves.toBe(original.op_id);
+    session.stop();
+  });
+
+  it("keeps edit permission across a temporary disconnection but cannot send", () => {
+    const { session, sockets } = setup();
+    expect(session.canEdit).toBe(true);
+    sockets[0].close();
+    expect(session.canEdit).toBe(true);
+    expect(session.canSubmit).toBe(false);
+    session.stop();
+  });
+
   it("renews expired authorization then resolves the original pending save", async () => {
     let proof = "original-proof";
     const renew = vi.fn(async () => {

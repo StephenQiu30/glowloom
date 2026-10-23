@@ -168,6 +168,8 @@ function ReferenceIcon({ kind }: { kind: RichTextReference["kind"] }) {
   return <Icon aria-hidden="true" className="size-4 shrink-0" />;
 }
 
+const authoritativeDocument = new PluginKey("glowloom-authoritative-document");
+
 function createEditorExtensions({
   documentMode,
   collaborationFragment,
@@ -342,11 +344,20 @@ function createEditorExtensions({
         return [
           new Plugin({
             filterTransaction(transaction, state) {
+              if (transaction.getMeta(authoritativeDocument)) return true;
               if (
                 readProps().collaboration &&
                 transaction.getMeta(ySyncPluginKey)?.isChangeOrigin
               )
                 return true;
+              if (
+                transaction.docChanged &&
+                readProps().acceptDocument?.({
+                  schemaVersion: 1,
+                  content: transaction.doc.toJSON(),
+                }) === false
+              )
+                return false;
               const max = readProps().maxLength;
               const length = documentText(transaction.doc.toJSON()).length;
               if (
@@ -568,7 +579,11 @@ export function RichTextEditor({ rootRef, ...props }: RichTextInputProps) {
     )
       return;
     const selection = editor.state.selection;
-    editor.commands.setContent(content, { emitUpdate: false });
+    editor
+      .chain()
+      .setMeta(authoritativeDocument, true)
+      .setContent(content, { emitUpdate: false })
+      .run();
     // Whole-field remote updates cannot share the prior local text undo stack.
     editor.unregisterPlugin("history");
     editor.registerPlugin(history());

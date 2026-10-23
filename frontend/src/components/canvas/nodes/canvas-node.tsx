@@ -75,6 +75,7 @@ import type {
   CanvasPluginHost,
 } from "@/components/canvas/types/canvas-plugin";
 import { RichTextInput } from "@/components/canvas/runtime/components/editor/rich-text/rich-text-input";
+import { documentText } from "@/components/canvas/runtime/components/editor/lib/rich-text-document";
 import { RichTextContent } from "@/components/canvas/runtime/components/editor/rich-text/rich-text-content";
 import type { RichTextDocument } from "@/components/canvas/runtime/components/editor/types/rich-text";
 
@@ -82,6 +83,8 @@ type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 const selectionBlue = "var(--ring)";
 
 type CanvasNodeProps = {
+  readOnly?: boolean;
+  acceptContent?: (value: string, document: RichTextDocument) => boolean;
   collaboration?: import("@glowloom/canvas-collab/model").NodeTextBinding;
   data: CanvasNodeData;
   scale: number;
@@ -146,6 +149,8 @@ type CanvasNodeProps = {
 };
 
 type NodeContentRendererProps = {
+  readOnly?: boolean;
+  acceptContent?: (value: string, document: RichTextDocument) => boolean;
   collaboration?: import("@glowloom/canvas-collab/model").NodeTextBinding;
   node: CanvasNodeData;
   theme: (typeof canvasThemes)[keyof typeof canvasThemes];
@@ -176,6 +181,8 @@ type NodeContentRendererProps = {
 };
 
 export const CanvasNode = React.memo(function CanvasNode({
+  readOnly = false,
+  acceptContent,
   collaboration,
   data,
   scale,
@@ -543,9 +550,13 @@ export const CanvasNode = React.memo(function CanvasNode({
                     aria-label="节点名称"
                     ref={titleInputRef}
                     value={titleDraft}
+                    disabled={readOnly}
                     maxLength={64}
                     className="h-6 max-w-full border-0 border-b border-dashed px-0 outline-none"
-                    onChange={(event) => setTitleDraft(event.target.value)}
+                    onChange={(event) => {
+                      setTitleDraft(event.target.value);
+                      onTitleChange(data.id, event.target.value);
+                    }}
                     onBlur={finishTitleEditing}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") finishTitleEditing();
@@ -562,14 +573,17 @@ export const CanvasNode = React.memo(function CanvasNode({
                     className="canvas-node-title max-w-full justify-start px-0"
                     title="双击或按 Enter 修改节点名称"
                     onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === "F2") {
+                      if (
+                        !readOnly &&
+                        (event.key === "Enter" || event.key === "F2")
+                      ) {
                         event.preventDefault();
                         setIsEditingTitle(true);
                       }
                     }}
                     onDoubleClick={(event) => {
                       event.stopPropagation();
-                      setIsEditingTitle(true);
+                      if (!readOnly) setIsEditingTitle(true);
                     }}
                   >
                     {data.type === CanvasNodeType.Image ? (
@@ -632,7 +646,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                   event.stopPropagation();
                   return;
                 }
-                if (definition?.onDoubleClick && pluginContext) {
+                if (!readOnly && definition?.onDoubleClick && pluginContext) {
                   if (definition.onDoubleClick(pluginContext))
                     event.stopPropagation();
                   return;
@@ -642,7 +656,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                   onViewImage?.(data);
                   return;
                 }
-                if (data.type !== CanvasNodeType.Text) return;
+                if (readOnly || data.type !== CanvasNodeType.Text) return;
                 event.stopPropagation();
                 onPanelClose?.(data.id);
                 setIsEditingContent(true);
@@ -664,6 +678,7 @@ export const CanvasNode = React.memo(function CanvasNode({
               }
               onKeyDown={(event) => {
                 if (
+                  !readOnly &&
                   data.type === CanvasNodeType.Text &&
                   !isEditingContent &&
                   (event.key === "Enter" || event.key === " ")
@@ -692,6 +707,8 @@ export const CanvasNode = React.memo(function CanvasNode({
                 }
               >
                 <NodeContent
+                  readOnly={readOnly}
+                  acceptContent={acceptContent}
                   collaboration={collaboration}
                   node={data}
                   theme={theme}
@@ -1011,6 +1028,8 @@ function MissingPluginContent({
 }
 
 function TextContent({
+  readOnly,
+  acceptContent,
   collaboration,
   node,
   theme,
@@ -1057,6 +1076,13 @@ function TextContent({
       <div className="flex h-full w-full flex-col overflow-hidden rounded-xl">
         {isEditingContent ? (
           <RichTextInput
+            acceptDocument={
+              acceptContent
+                ? (document) =>
+                    acceptContent(documentText(document.content), document)
+                : undefined
+            }
+            disabled={readOnly}
             collaboration={collaboration}
             rootRef={textareaRef}
             aria-label="文本节点内容"

@@ -119,6 +119,7 @@ func Snapshot(doc domain.Document) DocumentDTO {
 // SubmissionDTO is the protocol-3 request. Raw operations retain rejected fields
 // in request identity; node conversion is the only transport/storage mapping.
 type SubmissionDTO struct {
+	StrictBase       bool              `json:"strict_base,omitempty"`
 	ClientID         uuid.UUID         `json:"client_id"`
 	OperationVersion int               `json:"operation_version"`
 	BaseRevision     Revision          `json:"base_revision" swaggertype:"string"`
@@ -137,7 +138,7 @@ func DecodeSubmission(body []byte) (CollaborationInput, error) {
 	if err := decoder.Decode(&dto); err != nil {
 		return CollaborationInput{}, domain.ErrInvalidCommand
 	}
-	input := CollaborationInput{ClientID: dto.ClientID, OperationVersion: dto.OperationVersion, BaseRevision: int64(dto.BaseRevision), UndoOf: dto.UndoOf}
+	input := CollaborationInput{StrictBase: dto.StrictBase, ClientID: dto.ClientID, OperationVersion: dto.OperationVersion, BaseRevision: int64(dto.BaseRevision), UndoOf: dto.UndoOf}
 	for _, raw := range dto.Operations {
 		var fields map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &fields); err != nil {
@@ -197,7 +198,7 @@ func DecodeSubmission(body []byte) (CollaborationInput, error) {
 
 // Submission serializes a request using the same DTO as the public protocol.
 func Submission(input CollaborationInput) (SubmissionDTO, error) {
-	dto := SubmissionDTO{ClientID: input.ClientID, OperationVersion: input.OperationVersion, BaseRevision: Revision(input.BaseRevision), UndoOf: input.UndoOf}
+	dto := SubmissionDTO{StrictBase: input.StrictBase, ClientID: input.ClientID, OperationVersion: input.OperationVersion, BaseRevision: Revision(input.BaseRevision), UndoOf: input.UndoOf}
 	for _, op := range input.Operations {
 		body, err := publicOperation(op)
 		if err != nil {

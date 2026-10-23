@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
-  render,
+  render as renderTesting,
   screen,
   fireEvent,
   waitFor,
@@ -12,6 +12,9 @@ import {
 } from "@/components/canvas/editor";
 import { serviceGraph } from "@/components/canvas/service-graph";
 import type { CanvasDocumentIntegration } from "@/components/canvas/types/canvas-document-integration";
+import { TooltipProvider } from "@/components/ui/tooltip";
+const render = (ui: Parameters<typeof renderTesting>[0]) =>
+  renderTesting(ui, { wrapper: TooltipProvider });
 vi.mock("@/components/canvas/editor/canvas-editor", () => ({
   default: ({
     documentIntegration: integration,
@@ -103,6 +106,7 @@ afterEach(cleanup);
 describe("正式画布保存", () => {
   it("keeps a dirty draft and its original baseline across expired-connection recovery", async () => {
     const value = service();
+    value.canSubmit = false;
     const view = render(<CanvasEditor service={value} />);
     fireEvent.click(screen.getByText("修改节点"));
     view.rerender(
@@ -110,21 +114,19 @@ describe("正式画布保存", () => {
         service={{ ...value, writable: false, status: "正在续期" }}
       />,
     );
-    expect(
-      screen.getByRole("button", { name: /^保存$/ }).hasAttribute("disabled"),
-    ).toBe(true);
+    expect(value.commit).not.toHaveBeenCalled();
     expect(screen.getByText("有未保存修改")).toBeTruthy();
     view.rerender(
       <CanvasEditor
         service={{
           ...value,
           revision: "6",
+          canSubmit: true,
           document: structuredClone(value.document),
           status: "已保存",
         }}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /^保存$/ }));
     await waitFor(() =>
       expect(value.commit).toHaveBeenCalledWith(
         expect.arrayContaining([
@@ -135,7 +137,7 @@ describe("正式画布保存", () => {
             value: "修改后的标题",
           },
         ]),
-        "5",
+        "6",
       ),
     );
     await waitFor(() => expect(screen.queryByText("有未保存修改")).toBeNull());
@@ -145,8 +147,6 @@ describe("正式画布保存", () => {
     const value = service();
     render(<CanvasEditor service={value} />);
     fireEvent.click(screen.getByText("修改节点"));
-    expect(screen.getByText("有未保存修改")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /^保存$/ }));
     await waitFor(() =>
       expect(value.commit).toHaveBeenCalledWith(
         [
@@ -161,14 +161,14 @@ describe("正式画布保存", () => {
       ),
     );
     await waitFor(() => expect(screen.getByText("修改后的标题")).toBeTruthy());
-    expect(
-      screen.getByRole("button", { name: /^保存$/ }).hasAttribute("disabled"),
-    ).toBe(true);
+    expect(screen.queryByRole("button", { name: /^保存$/ })).toBeNull();
   });
   it("keeps the original base revision while a remote snapshot arrives during a local edit", async () => {
     const value = service();
+    vi.mocked(value.commit).mockImplementationOnce(() => new Promise(() => {}));
     const view = render(<CanvasEditor service={value} />);
     fireEvent.click(screen.getByText("修改节点"));
+    await waitFor(() => expect(value.commit).toHaveBeenCalledOnce());
     view.rerender(
       <CanvasEditor
         service={{
@@ -184,22 +184,24 @@ describe("正式画布保存", () => {
         }}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /^保存$/ }));
     await waitFor(() =>
       expect(value.commit).toHaveBeenCalledWith(expect.any(Array), "5"),
     );
   });
-  it("retains unsaved changes and permits retry after a rejected commit", async () => {
+  it("retains a rejected draft without an automatic overwrite retry", async () => {
     const value = service();
     vi.mocked(value.commit).mockRejectedValueOnce(new Error("保存冲突"));
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<CanvasEditor service={value} />);
     fireEvent.click(screen.getByText("修改节点"));
-    fireEvent.click(screen.getByRole("button", { name: /^保存$/ }));
     await waitFor(() =>
       expect(screen.getByRole("alert").textContent).toBe("保存冲突"),
     );
-    expect(screen.getByText("有未保存修改")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /^保存$/ }));
-    await waitFor(() => expect(value.commit).toHaveBeenCalledTimes(2));
+    expect(screen.getByText("输入已保留，需处理")).toBeTruthy();
+    expect(value.commit).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "采用服务器版本" }));
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    expect(value.commit).toHaveBeenCalledOnce();
+    confirm.mockRestore();
   });
 });

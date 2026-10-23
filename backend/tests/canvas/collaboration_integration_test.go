@@ -410,3 +410,68 @@ func TestCollaborationReferenceLabelsMentionsAndStaleBinding(t *testing.T) {
 		t.Fatal("old callback rebound restored reference", r)
 	}
 }
+
+func TestReviewedRecoveryCannotOverwriteAnUnreviewedHead(t *testing.T) {
+	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
+	actor, project := seedCanvasActor(t, database)
+	store := canvasStore(database)
+	legacy := canvasfixture.NewService(store)
+	service := application.NewCollaborationService(store)
+	doc, err := legacy.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "Reviewed recovery"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	node := resourceNode("text")
+	created, err := service.Submit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &node}}})
+	if err != nil || created.Status != "accepted" {
+		t.Fatal(created, err)
+	}
+	recovery := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, StrictBase: true, Operations: []domain.Operation{{Type: "set", NodeID: node.ID, Path: []string{"title"}, Value: json.RawMessage(`"reviewed local title"`)}}}
+	wire, err := application.Submission(recovery)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(wire)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := application.DecodeSubmission(body)
+	if err != nil || !decoded.StrictBase {
+		t.Fatal("strict recovery flag lost on wire", err)
+	}
+	peer := recovery
+	peer.StrictBase = false
+	peer.ClientID = uuid.New()
+	peer.Operations = []domain.Operation{{Type: "set", NodeID: node.ID, Path: []string{"title"}, Value: json.RawMessage(`"unreviewed peer title"`)}}
+	changed, err := service.Submit(t.Context(), actor, doc.ID, uuid.NewString(), peer)
+	if err != nil || changed.Status != "accepted" {
+		t.Fatal(changed, err)
+	}
+	key := uuid.NewString()
+	rejected, err := service.Submit(t.Context(), actor, doc.ID, key, recovery)
+	if err != nil || rejected.Status != "rejected" || rejected.Code != "review_stale" {
+		t.Fatal("unreviewed head overwritten", rejected, err)
+	}
+	loaded, err := legacy.Get(t.Context(), actor, doc.ID)
+	if err != nil || loaded.Revision != changed.Revision || loaded.Nodes[0].Title != "unreviewed peer title" {
+		t.Fatal("rejection mutated graph", loaded, err)
+	}
+	replay, err := application.NewCollaborationService(canvasStore(database)).Resolve(t.Context(), actor, doc.ID, key, recovery)
+	if err != nil || replay == nil || *replay != rejected {
+		t.Fatal("lost terminal rejection", replay, err)
+	}
+	altered := recovery
+	altered.StrictBase = false
+	if _, err := service.Resolve(t.Context(), actor, doc.ID, key, altered); err == nil {
+		t.Fatal("changed recovery policy reused original identity")
+	}
+	recovery.BaseRevision = changed.Revision
+	accepted, err := service.Submit(t.Context(), actor, doc.ID, uuid.NewString(), recovery)
+	if err != nil || accepted.Status != "accepted" {
+		t.Fatal(accepted, err)
+	}
+	replay, err = service.Resolve(t.Context(), actor, doc.ID, accepted.OpID, recovery)
+	if err != nil || replay == nil || *replay != accepted {
+		t.Fatal("accepted receipt did not replay", replay, err)
+	}
+}

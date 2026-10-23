@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { Provider } from "react-redux";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
@@ -8,12 +8,15 @@ import { AppFeedbackProvider } from "./runtime/components/feedback/app-feedback-
 import CanvasPage from "./editor/canvas-editor";
 import { CanvasTopBar } from "./controls/canvas-top-bar";
 import type { CanvasEditorState } from "./lib/canvas-document-adapter";
-import { serviceGraphOperations } from "./service-graph";
+import { CanvasRecoveryDialog } from "./recovery-dialog";
+import {
+  CanvasAutosaveSession,
+  type CanvasRecoveryReview,
+} from "./autosave-session";
 import { Button } from "@/components/ui/button";
 import { renameCanvas } from "@/api/canvases";
 import type { Operation } from "./service-document";
 import { getSession } from "@/api/identity";
-import { publishCanvasMedia, type CanvasMediaReceipt } from "./publish-media";
 import { revokeSession, useOptionalSession } from "@/components/auth/session";
 import { CanvasAccountContext } from "./runtime/components/account/account-provider";
 import { CanvasMediaContext } from "./lib/canvas-media-context";
@@ -26,10 +29,12 @@ export type ProductionCanvasService = {
   name: string;
   status: string;
   writable: boolean;
+  canSubmit?: boolean;
   viewStateKey: string;
   commit: (
     operations: Operation[],
     revision: string,
+    strictBase?: boolean,
   ) => Promise<{ document: CanvasEditorState; revision: string }>;
   undo: {
     canUndo: boolean;
@@ -39,80 +44,49 @@ export type ProductionCanvasService = {
   };
 };
 function Editor({ service }: { service: ProductionCanvasService }) {
-  const [state, setState] = useState(service.document);
+  const [review, setReview] = useState<CanvasRecoveryReview | null>(null);
   const [name, setName] = useState(service.name);
-  const [dirty, setDirty] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const draft = useRef(service.document);
-  const accepted = useRef(service.document);
-  const pending = useRef(false);
-  const baseRevision = useRef(service.revision);
-  const receipts = useRef(new Map<string, CanvasMediaReceipt>());
-  const upload = useRef<AbortController | null>(null);
-  useEffect(() => () => upload.current?.abort(), []);
-  const [error, setError] = useState("");
+  const [queue] = useState(() => new CanvasAutosaveSession(service));
+  const saving = useSyncExternalStore(
+    queue.subscribe,
+    queue.getSnapshot,
+    queue.getSnapshot,
+  );
   useEffect(() => {
-    if (!pending.current) {
-      accepted.current = service.document;
-      baseRevision.current = service.revision;
-      setState(service.document);
-      draft.current = service.document;
-    }
-  }, [service.document, service.revision]);
-  const change = useCallback((next: CanvasEditorState) => {
-    draft.current = next;
-    try {
-      const changed = serviceGraphOperations(accepted.current, next).length > 0;
-      pending.current = changed;
-      setDirty(changed);
-      setError("");
-    } catch {
-      pending.current = true;
-      setDirty(true);
-      setError("");
-    }
-  }, []);
-  async function save() {
-    if (saving || !service.writable) return;
-    setSaving(true);
-    setError("");
-    try {
-      const abort = new AbortController();
-      upload.current = abort;
-      const published = await publishCanvasMedia(
-        draft.current,
-        service.projectID,
-        receipts.current,
-        abort.signal,
-      );
-      draft.current = published;
-      const operations = serviceGraphOperations(accepted.current, published);
-      if (operations.length) {
-        const saved = await service.commit(operations, baseRevision.current);
-        accepted.current = saved.document;
-        baseRevision.current = saved.revision;
-        draft.current = saved.document;
-        setState(saved.document);
-      }
-      pending.current = false;
-      setDirty(false);
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "保存未完成，修改仍在本页",
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
+    queue.activate();
+    return () => queue.dispose();
+  }, [queue]);
   useEffect(() => {
-    if (!dirty) return;
+    queue.receive(
+      service.document,
+      service.revision,
+      service.writable,
+      service.canSubmit ?? service.writable,
+    );
+  }, [
+    queue,
+    service.document,
+    service.revision,
+    service.writable,
+    service.canSubmit,
+  ]);
+  useEffect(() => {
+    if (!saving.dirty) return;
     const protect = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", protect);
     return () => window.removeEventListener("beforeunload", protect);
-  }, [dirty]);
+  }, [saving.dirty]);
+  const labels = {
+    saved: "已保存",
+    editing: "正在编辑，尚未保存",
+    waiting: "有未保存修改",
+    saving: "等待保存确认",
+    uploading: "素材待处理",
+    recovery: "输入已保留，需处理",
+  };
   return (
     <CanvasMediaContext.Provider
       value={{
@@ -125,7 +99,7 @@ function Editor({ service }: { service: ProductionCanvasService }) {
         <CanvasPage
           documentIntegration={{
             projectId: service.projectID,
-            initialState: state,
+            initialState: saving.replacement,
             viewStateKey: service.viewStateKey,
             mediaContext: {
               canvasId: service.canvasID,
@@ -133,18 +107,26 @@ function Editor({ service }: { service: ProductionCanvasService }) {
               projectId: service.projectID,
             },
             mediaEnabled: true,
-            canNavigate: !dirty && !saving,
-            frozen: !service.writable || saving,
-            onChange: change,
-            undo: dirty ? undefined : service.undo,
+            canNavigate: !saving.dirty,
+            frozen: !saving.writable,
+            admit: (next) => {
+              if (queue.canAccept(next)) return true;
+              toast.error("暂时无法接纳这次编辑，请等待已有修改保存后再试。", {
+                id: "canvas-admission",
+              });
+              return false;
+            },
+            onChange: (next, stable) => queue.edit(next, stable),
+            undo: saving.dirty ? undefined : service.undo,
             toolbar: (controls) => (
               <CanvasTopBar
                 {...controls}
                 title={name}
                 canDeleteCanvas={false}
-                canSwitchCanvas={!dirty && !saving}
+                canSwitchCanvas={!saving.dirty}
                 onDeleteProject={() => {}}
                 onRenameProject={() => {
+                  if (!saving.writable) return;
                   const next = window.prompt("画布名称", name)?.trim();
                   if (!next || next === name) return;
                   void renameCanvas({ id: service.canvasID }, { name: next })
@@ -158,31 +140,79 @@ function Editor({ service }: { service: ProductionCanvasService }) {
                 saveControl={
                   <div className="flex items-center gap-2">
                     <span role="status" className="text-xs">
-                      {saving
-                        ? "正在保存"
-                        : dirty
-                          ? "有未保存修改"
-                          : service.status}
+                      {labels[saving.phase]}
                     </span>
-                    <Button
-                      size="sm"
-                      disabled={!dirty || saving || !service.writable}
-                      onClick={() => void save()}
-                    >
-                      保存
-                    </Button>
+                    <span className="text-xs text-muted-foreground">
+                      {service.status}
+                    </span>
+                    {saving.phase === "uploading" && saving.error && (
+                      <Button size="sm" onClick={() => queue.retry()}>
+                        重试素材
+                      </Button>
+                    )}
+                    {saving.phase === "recovery" && (
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          try {
+                            setReview(queue.reviewRecovery());
+                          } catch (cause) {
+                            toast.error(
+                              cause instanceof Error
+                                ? cause.message
+                                : "无法重新应用，请保留本页输入",
+                            );
+                          }
+                        }}
+                      >
+                        查看差异
+                      </Button>
+                    )}
+                    {saving.phase === "recovery" && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              "放弃本页未确认输入，并采用服务器已接受的内容？",
+                            )
+                          )
+                            queue.useAccepted();
+                        }}
+                      >
+                        采用服务器版本
+                      </Button>
+                    )}
                   </div>
                 }
               />
             ),
           }}
         />
-        {error && (
+        {review && (
+          <CanvasRecoveryDialog
+            review={review}
+            onClose={() => setReview(null)}
+            onApply={() => {
+              try {
+                queue.applyRecovery(review);
+                setReview(null);
+              } catch (cause) {
+                setReview(null);
+                toast.error(
+                  cause instanceof Error ? cause.message : "恢复未完成",
+                );
+              }
+            }}
+          />
+        )}
+        {saving.error && (
           <div
             role="alert"
             className="text-destructive-foreground absolute top-16 right-4 z-50 max-w-sm rounded-lg bg-destructive p-3 text-sm"
           >
-            {error}
+            {saving.error}
           </div>
         )}
       </div>

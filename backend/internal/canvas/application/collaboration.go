@@ -11,6 +11,8 @@ import (
 
 // CollaborationInput is one immutable, causally ordered atomic batch.
 type CollaborationInput struct {
+	// StrictBase fences an explicitly reviewed recovery against a newer durable head.
+	StrictBase       bool               `json:"strict_base,omitempty"`
 	ClientID         uuid.UUID          `json:"client_id,omitempty"`
 	OperationVersion int                `json:"operation_version"`
 	BaseRevision     int64              `json:"base_revision"`

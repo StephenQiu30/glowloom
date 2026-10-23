@@ -206,6 +206,9 @@ func (s *Store) SubmitCollaboration(ctx context.Context, a identity.Principal, i
 		if input.OperationVersion != application.OperationVersion {
 			return reject("unsupported_operation_version")
 		}
+		if input.StrictBase && input.BaseRevision != doc.Revision {
+			return reject("review_stale")
+		}
 		if input.UndoOf != "" {
 			undoID, err := uuid.Parse(input.UndoOf)
 			if err != nil || undoID == uuid.Nil || len(input.Operations) != 0 {

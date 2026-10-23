@@ -12,6 +12,7 @@ type Receipt = {
   code?: string;
 };
 export type Submission = {
+  strict_base?: true;
   client_id: string;
   operation_version: 1;
   base_revision: string;
@@ -53,6 +54,8 @@ export class CanvasLiveSession {
   private pending?: Pending;
   private baseline?: API.DocumentDTO;
   private ready = false;
+  private authorized = false;
+  private denied = false;
   private renewal?: AbortController;
   private needsRenewal = false;
   private renewalAttempts = 0;
@@ -67,12 +70,23 @@ export class CanvasLiveSession {
       csrf: () => string | null;
       renewSession?: (signal: AbortSignal) => Promise<void>;
       snapshot: (document: API.DocumentDTO) => void;
+      revoked?: () => void;
       status: (status: LiveStatus, message?: string) => void;
       socket?: (url: string) => WebSocket;
     },
   ) {}
+  private online = () => {
+    if (!this.ready && !this.denied && !this.disposed) this.retry();
+  };
+  private pageRestored = (event: PageTransitionEvent) => {
+    if (!event.persisted || this.disposed) return;
+    this.authorized = false;
+    this.retry();
+  };
   start() {
-    if (this.stopped || this.renewal) return;
+    if (this.stopped || this.disposed || this.renewal) return;
+    window.addEventListener("online", this.online);
+    window.addEventListener("pageshow", this.pageRestored);
     this.ready = false;
     this.config.status(this.pending ? "unconfirmed" : "connecting");
     const url = new URL(
@@ -188,6 +202,13 @@ export class CanvasLiveSession {
         this.socket?.close();
         return;
       }
+      this.denied = true;
+      if ([401, 403, 404].includes(packet.status ?? 0)) {
+        this.baseline = undefined;
+        this.pending?.reject(new Error("画布访问权限已失效"));
+        this.pending = undefined;
+        this.config.revoked?.();
+      }
       this.halt(`画布服务拒绝请求：${packet.code ?? "unknown"}`);
       return;
     }
@@ -224,6 +245,8 @@ export class CanvasLiveSession {
       )
         throw new Error("画布会话身份不匹配");
       this.ready = true;
+      this.authorized = true;
+      this.denied = false;
       this.renewalAttempts = 0;
       this.failures = 0;
       this.lastFailure = "";
@@ -253,13 +276,27 @@ export class CanvasLiveSession {
         body: this.pending.body,
       });
     } else if (packet.type === "ack") {
+      if (this.baseline && packet.permissions)
+        this.baseline.permissions = packet.permissions;
       if (!this.pending || packet.receipt?.op_id !== this.pending.id) return;
       this.pending.receipt = packet.receipt;
       this.finish();
     } else if (packet.type === "heartbeat" && this.baseline) {
       if (packet.permissions) this.baseline.permissions = packet.permissions;
-      if (this.ready && packet.permissions && !this.pending)
-        this.config.status(packet.permissions.write ? "ready" : "readonly");
+      if (this.ready && this.pending)
+        this.send({
+          type: "resolve",
+          op_id: this.pending.id,
+          body: this.pending.body,
+        });
+      if (this.ready && packet.permissions)
+        this.config.status(
+          this.pending
+            ? "saving"
+            : packet.permissions.write
+              ? "ready"
+              : "readonly",
+        );
     }
   }
   private finish() {
@@ -289,14 +326,18 @@ export class CanvasLiveSession {
     operations: Operation[],
     undoOf?: string,
     baseRevision?: string,
+    strictBase?: boolean,
   ): Promise<string> {
     if (!this.ready || this.pending || !this.baseline?.permissions?.write)
       return Promise.reject(new Error("画布尚未就绪，请等待同步完成"));
     const body: Submission = {
+      ...(strictBase ? { strict_base: true as const } : {}),
       client_id: this.clientID,
       operation_version: 1,
       base_revision: revision(baseRevision ?? this.baseline.revision),
-      ...(undoOf ? { undo_of: undoOf } : { operations }),
+      ...(undoOf
+        ? { undo_of: undoOf }
+        : { operations: structuredClone(operations) }),
     };
     return new Promise((resolve, reject) => {
       this.pending = { id: crypto.randomUUID(), body, resolve, reject };
@@ -305,6 +346,18 @@ export class CanvasLiveSession {
       this.receiptDeadline = setTimeout(() => this.socket?.close(), 15000);
       this.armDeadline();
     });
+  }
+  get canEdit() {
+    return (
+      !this.disposed &&
+      this.authorized &&
+      !this.denied &&
+      !this.needsRenewal &&
+      this.baseline?.permissions?.write === true
+    );
+  }
+  get canSubmit() {
+    return this.canEdit && this.ready && !this.pending && !this.stopped;
   }
   get unresolved() {
     return Boolean(this.pending);
@@ -327,6 +380,8 @@ export class CanvasLiveSession {
   }
   stop() {
     this.disposed = true;
+    window.removeEventListener("online", this.online);
+    window.removeEventListener("pageshow", this.pageRestored);
     this.renewal?.abort();
     this.stopped = true;
     this.ready = false;
