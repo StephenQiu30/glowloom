@@ -1226,3 +1226,29 @@
     display: none;
   }
 }
+
+@layer utilities {
+  .canvas-node-composer .canvas-prompt-panel {
+    max-height: min(
+      calc(100dvh - 11rem),
+      var(--radix-popover-content-available-height)
+    );
+    overflow: hidden;
+  }
+  .canvas-node-composer .canvas-prompt-header,
+  .canvas-node-composer .canvas-prompt-controls {
+    flex-shrink: 0;
+  }
+  .canvas-node-composer .canvas-prompt-input {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .canvas-node-composer .canvas-prompt-input .rich-text-content {
+    max-height: 9rem;
+    overflow: visible;
+  }
+  .canvas-node-composer .canvas-prompt-input .rich-text-surface {
+    min-height: 3rem;
+  }
+}

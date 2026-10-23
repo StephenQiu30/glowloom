@@ -1,3 +1,9 @@
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { isFixedCanvasMedia } from "../lib/canvas-media-source";
 import { useAppFeedback } from "@/components/canvas/runtime/components/feedback/app-feedback-provider";
 import { Button } from "@/components/ui/button";
@@ -22,6 +28,7 @@ import {
   Image as ImageIcon,
   Info,
   MessageSquare,
+  Maximize2,
   Minus,
   Music2,
   Plus,
@@ -61,7 +68,6 @@ import {
 } from "../parameters/canvas-image-toolbar-settings-modal";
 import {
   buildImageToolbarTools,
-  defaultImageQuickToolIds,
   type ImageQuickToolId,
 } from "../lib/canvas-image-toolbar-tools";
 
@@ -137,14 +143,15 @@ export function CanvasNodeHoverToolbar({
   const theme = canvasThemes[useThemeStore((state) => state.theme)];
   const [quickImageToolIds, setQuickImageToolIds] = useState<
     ImageQuickToolId[]
-  >(defaultImageQuickToolIds);
+  >(["view", "download"]);
   const [showImageToolLabels, setShowImageToolLabels] = useState(false);
   const [draftImageToolIds, setDraftImageToolIds] = useState<
     ImageQuickToolId[]
-  >(defaultImageQuickToolIds);
+  >(["view", "download"]);
   const [draftShowImageToolLabels, setDraftShowImageToolLabels] =
     useState(false);
   const [imageToolSettingsOpen, setImageToolSettingsOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const { message } = useAppFeedback();
   const copyText = useCopyText();
   const [toolbarSize, setToolbarSize] = useState({ width: 0, height: 48 });
@@ -184,7 +191,7 @@ export function CanvasNodeHoverToolbar({
   const top = Math.max(
     toolbarSize.height + 8,
     Math.min(
-      viewport.y + node.position.y * viewport.k - 14,
+      viewport.y + node.position.y * viewport.k - 44,
       canvasSize.height - 8,
     ),
   );
@@ -206,7 +213,6 @@ export function CanvasNodeHoverToolbar({
     Boolean(node.metadata?.videoTaskId) &&
     !hasVideo &&
     node.metadata?.status !== "loading";
-  const quickImageToolIdSet = new Set(quickImageToolIds);
   const copyImagePrompt = (target: CanvasNodeData) => {
     const prompt = target.metadata?.prompt?.trim();
     if (!prompt) {
@@ -409,10 +415,37 @@ export function CanvasNodeHoverToolbar({
       : []),
   ];
   const toolbarTools = hasImage
-    ? [...baseToolbarTools, ...nodeToolbarTools].filter((tool) =>
-        quickImageToolIdSet.has(tool.id as ImageQuickToolId),
+    ? quickImageToolIds.flatMap((id) =>
+        [...baseToolbarTools, ...nodeToolbarTools].filter(
+          (tool) => tool.id === id,
+        ),
       )
     : [...baseToolbarTools, ...nodeToolbarTools, ...extraTools];
+  const primaryTools = hasImage
+    ? toolbarTools
+    : hasVideo
+      ? [
+          {
+            id: "preview",
+            title: hasVideo ? "预览视频" : "预览图片",
+            label: "预览",
+            icon: <Maximize2 className="size-4" />,
+            onClick: () => onViewImage(node),
+          },
+          ...toolbarTools.filter((tool) => tool.id === "download"),
+        ]
+      : toolbarTools.filter(
+          (tool) => !["info", "delete", "saveAsset"].includes(tool.id),
+        );
+  const moreTools = [
+    ...baseToolbarTools,
+    ...nodeToolbarTools,
+    ...extraTools,
+  ].filter(
+    (tool) =>
+      !primaryTools.some((primary) => primary.id === tool.id) &&
+      tool.id !== "view",
+  );
   const selectableImageToolbarTools = [
     ...baseToolbarTools,
     ...nodeToolbarTools,
@@ -450,7 +483,7 @@ export function CanvasNodeHoverToolbar({
         ref={measureToolbar}
         role="toolbar"
         aria-label="节点工具栏"
-        className="shadow-overlay absolute z-[70] flex min-h-12 w-max -translate-x-1/2 -translate-y-full flex-wrap items-center overflow-visible rounded-xl border text-sm"
+        className="shadow-overlay absolute z-[70] flex min-h-11 w-max -translate-x-1/2 -translate-y-full flex-wrap items-center overflow-visible rounded-xl border text-sm"
         style={{
           left,
           top,
@@ -461,39 +494,60 @@ export function CanvasNodeHoverToolbar({
         }}
         onMouseEnter={() => onKeep(node.id)}
         onMouseLeave={() => {
-          if (!imageToolSettingsOpen) onLeave();
+          if (!imageToolSettingsOpen && !moreOpen) onLeave();
         }}
         onMouseDown={(event) => event.stopPropagation()}
         onPointerDown={(event) => event.stopPropagation()}
       >
-        {fixedMedia && onRemoveAsset ? (
-          <ToolbarAction
-            id="removeAsset"
-            title="移除素材"
-            label="移除素材"
-            icon={<X className="size-4" />}
-            onClick={() => onRemoveAsset(node)}
-            showLabel={false}
-          />
-        ) : null}
-        {toolbarTools.map((tool) => (
+        {primaryTools.map((tool) => (
           <ToolbarAction
             key={tool.id}
             {...tool}
             showLabel={isImage && showImageToolLabels}
           />
         ))}
-        {hasImage ? (
-          <ToolbarAction
-            id="more"
-            title={"配置快捷工具"}
-            label={"更多"}
-            icon={<Ellipsis className="size-4" />}
-            active={imageToolSettingsOpen}
-            onClick={openImageToolSettings}
-            showLabel={showImageToolLabels}
-          />
-        ) : null}
+        <DropdownMenu
+          open={moreOpen}
+          onOpenChange={(open) => {
+            setMoreOpen(open);
+            if (open) onKeep(node.id);
+          }}
+        >
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" aria-label="更多节点操作">
+              <Ellipsis />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            className="z-[80] w-52"
+            align="end"
+            data-canvas-no-zoom
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            {moreTools.map((tool) => (
+              <DropdownMenuItem
+                key={tool.id}
+                variant={tool.danger ? "destructive" : undefined}
+                onSelect={tool.onClick}
+              >
+                {tool.icon}
+                {tool.title}
+              </DropdownMenuItem>
+            ))}
+            {fixedMedia && onRemoveAsset && (
+              <DropdownMenuItem onSelect={() => onRemoveAsset(node)}>
+                <X />
+                移除素材
+              </DropdownMenuItem>
+            )}
+            {hasImage && (
+              <DropdownMenuItem onSelect={openImageToolSettings}>
+                <Settings2 />
+                配置快捷工具
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       {hasImage ? (
         <ImageToolSettingsModal

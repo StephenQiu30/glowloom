@@ -684,7 +684,7 @@ export function RichTextEditor({ rootRef, ...props }: RichTextInputProps) {
         >
           {!expanded ? (
             <>
-              {props.floatingToolbar ? null : toolbar}
+              {props.floatingToolbar || props.compactToolbar ? null : toolbar}
               {content}
             </>
           ) : (

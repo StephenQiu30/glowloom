@@ -229,3 +229,51 @@ it("retains undo when a save receipt reorders equivalent document fields", async
   });
   expect(editor.getJSON().content?.[0].type).toBe("paragraph");
 });
+
+it("紧凑画布面板隐藏格式栏但保留标题下划线，展开复用原编辑器", async () => {
+  function Compact() {
+    const [open, setOpen] = useState(false);
+    return (
+      <>
+        <button onClick={() => setOpen(true)}>展开验收</button>
+        <RichTextEditor
+          value="标题"
+          documentMode
+          compactToolbar
+          onChange={vi.fn()}
+          expandedView={{ open, onOpenChange: setOpen }}
+          document={{
+            schemaVersion: 1,
+            content: {
+              type: "doc",
+              content: [
+                {
+                  type: "heading",
+                  attrs: { level: 2 },
+                  content: [
+                    {
+                      type: "text",
+                      text: "标题",
+                      marks: [{ type: "underline" }],
+                    },
+                  ],
+                },
+              ],
+            },
+          }}
+        />
+      </>
+    );
+  }
+  render(<Compact />);
+  await waitFor(() => expect(state.editor).not.toBeNull());
+  const original = state.editor;
+  expect(screen.queryByRole("toolbar", { name: "文档格式" })).toBeNull();
+  expect(
+    state.editor!.getJSON().content?.[0].content?.[0].marks,
+  ).toContainEqual({ type: "underline" });
+  fireEvent.click(screen.getByRole("button", { name: "展开验收" }));
+  expect(await screen.findByRole("toolbar", { name: "文档格式" })).toBeTruthy();
+  expect(state.editor).toBe(original);
+  expect(screen.getAllByRole("textbox")).toHaveLength(1);
+});

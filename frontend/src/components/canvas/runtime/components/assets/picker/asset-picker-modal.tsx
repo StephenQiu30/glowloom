@@ -1,4 +1,6 @@
 "use client";
+import { useEffect, useRef } from "react";
+import { getScopeGeneration, getSessionGeneration } from "@/lib/request";
 import {
   Dialog,
   DialogContent,
@@ -6,7 +8,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { LibraryPickerContent } from "./library-picker-content";
+import {
+  LibraryPickerContent,
+  canvasAssetPayload,
+} from "./library-picker-content";
+import { ProjectAssetDialog } from "@/components/media/project-asset-dialog";
 type FixedReference = {
   fileId?: string;
   fileVersion?: string;
@@ -35,6 +41,7 @@ type Props = {
   projectId?: string;
   open: boolean;
   defaultTab?: string;
+  initialUpload?: boolean;
   kinds?: readonly string[];
   onInsert: (payload: InsertAssetPayload) => void;
   onClose: () => void;
@@ -44,6 +51,7 @@ type Props = {
 };
 export function AssetPickerModal({
   open,
+  initialUpload,
   projectId,
   onInsert,
   onClose,
@@ -52,6 +60,43 @@ export function AssetPickerModal({
   sourceFiles,
   onSourceFilesComplete,
 }: Props) {
+  const request = useRef<AbortController | null>(null);
+  useEffect(() => () => request.current?.abort(), [open, projectId]);
+  if (!open) return null;
+  if (projectId && !sourceFile && !sourceFiles?.length) {
+    return (
+      <ProjectAssetDialog
+        projectID={projectId}
+        initialKind={kinds?.[0] ?? "image"}
+        allowedKinds={kinds ?? ["image", "video", "audio"]}
+        selectionLimit={kinds ? 1 : undefined}
+        confirmLabel={kinds ? "替换素材" : undefined}
+        initialUpload={initialUpload}
+        canvasPresentation
+        onClose={onClose}
+        onAdd={async (assets) => {
+          request.current?.abort();
+          const controller = new AbortController();
+          request.current = controller;
+          const scope = getScopeGeneration();
+          const session = getSessionGeneration();
+          const payloads = await Promise.all(
+            assets.map((asset) =>
+              canvasAssetPayload(projectId, asset, controller.signal),
+            ),
+          );
+          if (
+            controller.signal.aborted ||
+            scope !== getScopeGeneration() ||
+            session !== getSessionGeneration()
+          )
+            return;
+          payloads.forEach((payload) => onInsert(payload));
+          onClose();
+        }}
+      />
+    );
+  }
   return (
     <Dialog
       open={open}

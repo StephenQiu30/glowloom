@@ -27,6 +27,7 @@ export type RichTextInputProps = {
   references?: RichTextReference[];
   documentMode?: boolean;
   floatingToolbar?: boolean;
+  compactToolbar?: boolean;
   documentTitle?: string;
   expandedView?: {
     open: boolean;

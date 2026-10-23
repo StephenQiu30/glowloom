@@ -256,6 +256,7 @@ export function CanvasDocumentNodePanel({
       key={node.id}
       collaboration={collaboration}
       documentMode={node.type === "text"}
+      compactToolbar
       documentTitle={node.title}
       aria-label={node.type === "text" ? "文字内容" : "画面描述"}
       className="canvas-prompt-input"

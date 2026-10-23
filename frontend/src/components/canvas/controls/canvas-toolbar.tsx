@@ -1,7 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { CanvasHistoryDialog } from "../history/canvas-history-dialog";
 import { CanvasGuideDialog } from "./canvas-guide-dialog";
-import { useCanvasSidePanelStore } from "../store/use-canvas-side-panel-store";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -62,6 +61,7 @@ export function CanvasToolbar({
   onUndo,
   onRedo,
   onUpload,
+  onBrowseAssets,
   onDelete,
   onClear,
   onBackgroundModeChange,
@@ -78,6 +78,7 @@ export function CanvasToolbar({
   onUndo: () => void;
   onRedo: () => void;
   onUpload: () => void;
+  onBrowseAssets: () => void;
   onDelete: () => void;
   onClear: () => void;
   onCanvasToolChange: (tool: "select" | "pan") => void;
@@ -85,8 +86,6 @@ export function CanvasToolbar({
   onShowImageInfoChange: (show: boolean) => void;
 }) {
   const [createOpen, setCreateOpen] = useState(false);
-  const openPanel = useCanvasSidePanelStore((state) => state.openPanel);
-  const setPanelTab = useCanvasSidePanelStore((state) => state.setTab);
   const colorTheme = useThemeStore((state) => state.theme);
   const setTheme = useThemeStore((state) => state.setTheme);
   const theme = canvasThemes[colorTheme];
@@ -161,11 +160,8 @@ export function CanvasToolbar({
                 variant="ghost"
                 size="icon-lg"
                 aria-label="资产管理"
-                data-canvas-side-panel-trigger
-                onClick={() => {
-                  setPanelTab("assets");
-                  openPanel();
-                }}
+                disabled={!canEdit}
+                onClick={onBrowseAssets}
               >
                 <Folder />
               </Button>

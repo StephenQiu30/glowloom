@@ -519,6 +519,7 @@ function InfiniteCanvasPage({
   snapToGridRef.current = snapToGrid;
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [assetPickerOpen, setAssetPickerOpen] = useState(false);
+  const [assetUploadOpen, setAssetUploadOpen] = useState(false);
   const [assetTarget, setAssetTarget] = useState<
     Pick<CanvasNodeData, "id" | "type"> | undefined
   >();
@@ -3430,6 +3431,7 @@ function InfiniteCanvasPage({
   );
 
   const handleUploadRequest = useCallback((node?: CanvasNodeData) => {
+    setAssetUploadOpen(false);
     setAssetTarget(node ? { id: node.id, type: node.type } : undefined);
     setSourceFile(undefined);
     setSourceFiles([]);
@@ -5798,7 +5800,11 @@ function InfiniteCanvasPage({
           onCreateNode={createNode}
           onUndo={undoCanvas}
           onRedo={redoCanvas}
-          onUpload={() => handleUploadRequest()}
+          onBrowseAssets={() => handleUploadRequest()}
+          onUpload={() => {
+            handleUploadRequest();
+            setAssetUploadOpen(true);
+          }}
           onDelete={() => deleteNodes(new Set(selectedNodeIds))}
           onClear={() => setClearConfirmOpen(true)}
           onCanvasToolChange={setCanvasTool}
@@ -5976,13 +5982,24 @@ function InfiniteCanvasPage({
         >
           <DialogContent className="max-h-dialog dialog-canvas overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{"图片详情"}</DialogTitle>
+              <DialogTitle>
+                {previewNode?.type === "video" ? "视频详情" : "图片详情"}
+              </DialogTitle>
               <DialogDescription className="sr-only">
-                查看当前图片节点的预览内容。
+                查看当前媒体节点的预览内容。
               </DialogDescription>
             </DialogHeader>
             <div className="max-h-media-sheet flex items-center justify-center">
-              {previewContent ? (
+              {previewContent && previewNode?.type === "video" ? (
+                <video
+                  src={previewContent}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  aria-label={previewNode.title || "视频预览"}
+                  className="max-h-media-sheet max-w-full rounded-xl object-contain"
+                />
+              ) : previewContent ? (
                 <PreviewImage
                   src={previewContent}
                   alt={previewNode?.title || "图片"}
@@ -6102,6 +6119,7 @@ function InfiniteCanvasPage({
         <AssetPickerModal
           projectId={documentIntegration?.projectId}
           open={assetPickerOpen}
+          initialUpload={assetUploadOpen}
           kinds={assetTarget ? [assetTarget.type] : undefined}
           onInsert={(asset) => handleAssetInsert(asset, sourceFiles.length > 1)}
           onSourceFilesComplete={() => {

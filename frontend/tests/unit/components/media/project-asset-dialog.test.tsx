@@ -230,3 +230,30 @@ it("确认核验失败保留选择且不调用添加", async () => {
   expect(add).not.toHaveBeenCalled();
   expect(screen.getByText("已选择 1 个素材（最多 24 个）")).toBeTruthy();
 });
+
+it("画布替换只列出允许类型，单选新素材替换旧选择", async () => {
+  api.list.mockResolvedValue({ items: [a, b] });
+  const add = vi.fn();
+  render(
+    <ProjectAssetDialog
+      projectID={pid}
+      allowedKinds={["image"]}
+      selectionLimit={1}
+      canvasPresentation
+      onClose={vi.fn()}
+      onAdd={add}
+    />,
+  );
+  expect(screen.queryByRole("radio", { name: "视频" })).toBeNull();
+  fireEvent.click(
+    await screen.findByRole("button", { name: "选择素材 海边香氛.png" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "选择素材 蓝蝶.png" }));
+  expect(
+    screen
+      .getByRole("button", { name: "选择素材 海边香氛.png" })
+      .getAttribute("aria-pressed"),
+  ).toBe("false");
+  fireEvent.click(screen.getByRole("button", { name: "添加到画布" }));
+  await waitFor(() => expect(add).toHaveBeenCalledExactlyOnceWith([b]));
+});

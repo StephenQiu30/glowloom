@@ -80,6 +80,11 @@ export function ProjectAssetDialog({
   onAdd,
   onSubject,
   reference = false,
+  allowedKinds,
+  selectionLimit,
+  confirmLabel,
+  canvasPresentation = false,
+  initialUpload = false,
 }: {
   projectID: string;
   initialTab?: "assets" | "subjects";
@@ -87,9 +92,14 @@ export function ProjectAssetDialog({
   onClose: () => void;
   onAdd: (assets: API.AssetSummary[]) => void | Promise<void>;
   reference?: boolean;
+  allowedKinds?: readonly string[];
+  selectionLimit?: number;
+  confirmLabel?: string;
+  canvasPresentation?: boolean;
+  initialUpload?: boolean;
   onSubject?: (subject: Subject) => void;
 }) {
-  const limit = reference ? 1 : 24;
+  const limit = reference ? 1 : (selectionLimit ?? 24);
   const [query, setQuery] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState("");
@@ -101,13 +111,13 @@ export function ProjectAssetDialog({
   const [subjectKind, setSubjectKind] = useState<API.Kind>("character");
   const [selected, setSelected] = useState<API.AssetSummary[]>([]);
   const [subject, setSubject] = useState<Subject | null>(null);
-  const [upload, setUpload] = useState(false);
+  const [upload, setUpload] = useState(initialUpload);
   const [revision, setRevision] = useState(0);
   function toggle(asset: API.AssetSummary) {
     setSelected((items) =>
       items.some((i) => i.id === asset.id)
         ? items.filter((i) => i.id !== asset.id)
-        : reference
+        : limit === 1
           ? [asset]
           : items.length < limit
             ? [...items, asset]
@@ -125,6 +135,7 @@ export function ProjectAssetDialog({
         <DialogContent
           showCloseButton={!confirming}
           className="canvas-material-dialog sm:max-w-[800px]"
+          data-canvas-picker={canvasPresentation || undefined}
         >
           <DialogHeader className="sr-only">
             <DialogTitle>{reference ? "选择参考素材" : "资产库"}</DialogTitle>
@@ -153,7 +164,11 @@ export function ProjectAssetDialog({
                   aria-label="素材类型"
                 >
                   {mediaKinds
-                    .filter((k) => !reference || k.value === initialKind)
+                    .filter(
+                      (k) =>
+                        (!reference || k.value === initialKind) &&
+                        (!allowedKinds || allowedKinds.includes(k.value)),
+                    )
                     .map(({ value, label, icon: Icon }) => (
                       <ToggleGroupItem key={value} value={value}>
                         <Icon data-icon="inline-start" />
@@ -218,6 +233,7 @@ export function ProjectAssetDialog({
                 onToggle={toggle}
                 query={query}
                 limit={limit}
+                canvasPresentation={canvasPresentation}
                 onSelectPage={(items) =>
                   setSelected((previous) =>
                     [
@@ -346,7 +362,7 @@ export function ProjectAssetDialog({
                 : tab === "assets"
                   ? reference
                     ? "添加为参考"
-                    : "添加到画布"
+                    : (confirmLabel ?? "添加到画布")
                   : "用主体创作"}
             </Button>
           </DialogFooter>
@@ -363,7 +379,10 @@ export function ProjectAssetDialog({
               asset &&
               ["image", "video", "audio", "model"].includes(asset.kind ?? "")
             ) {
-              if (reference && asset.kind !== initialKind) {
+              if (
+                (reference && asset.kind !== initialKind) ||
+                (allowedKinds && !allowedKinds.includes(asset.kind ?? ""))
+              ) {
                 setConfirmError(
                   "素材已上传到项目，但类型与当前参考不符，请选择对应类型的素材。",
                 );
@@ -373,7 +392,7 @@ export function ProjectAssetDialog({
               setQuery("");
               setKind(asset.kind!);
               setSelected((items) =>
-                reference
+                limit === 1
                   ? [asset]
                   : items.length < limit &&
                       !items.some((i) => i.id === asset.id)
@@ -396,6 +415,7 @@ function MaterialList({
   query,
   onSelectPage,
   limit,
+  canvasPresentation,
 }: {
   projectID: string;
   kind: string;
@@ -403,6 +423,7 @@ function MaterialList({
   onToggle: (asset: API.AssetSummary) => void;
   query: string;
   limit: number;
+  canvasPresentation?: boolean;
   onSelectPage: (assets: API.AssetSummary[]) => void;
 }) {
   const [items, setItems] = useState<API.AssetSummary[]>([]);
@@ -572,6 +593,7 @@ function MaterialList({
                           projectID={projectID}
                           id={a.id!}
                           kind={kind}
+                          fit={canvasPresentation ? "contain" : undefined}
                         />
                       ) : (
                         <Icon />

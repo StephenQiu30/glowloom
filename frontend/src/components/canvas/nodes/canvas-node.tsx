@@ -1,3 +1,4 @@
+import { CanvasVideoPlayer } from "./canvas-video-player";
 import { useBoundReferences } from "../hooks/use-bound-references";
 import { cn } from "@/lib/utils";
 import { isImeComposing } from "@/components/canvas/runtime/lib/keyboard-event";
@@ -837,7 +838,7 @@ export const CanvasNode = React.memo(function CanvasNode({
           <PopoverContent
             className="canvas-node-composer"
             style={{
-              width: "min(660px, calc(100dvw - 32px))",
+              width: "min(680px, calc(100dvw - 32px))",
             }}
             side="bottom"
             align="center"
@@ -1302,39 +1303,9 @@ function EmptyImageContent() {
 }
 
 function VideoNodeContent({ node }: NodeContentRendererProps) {
-  const resume = useRef<{
-    source: string;
-    time: number;
-    paused: boolean;
-  } | null>(null);
-  const output = JSON.stringify(node.metadata?.generationOutput);
   if (!node.metadata?.content)
     return <EmptyNodeContent type={CanvasNodeType.Video} />;
-  return (
-    <video
-      src={node.metadata.content}
-      controls
-      className="bg-media-backdrop h-full w-full rounded-xl object-contain"
-      data-canvas-video={node.id}
-      data-canvas-no-zoom
-      onError={(event) => {
-        resume.current = {
-          source: output,
-          time: event.currentTarget.currentTime,
-          paused: event.currentTarget.paused,
-        };
-      }}
-      onLoadedMetadata={(event) => {
-        const previous = resume.current;
-        resume.current = null;
-        if (!previous || previous.source !== output) return;
-        const video = event.currentTarget;
-        if (Number.isFinite(video.duration))
-          video.currentTime = Math.min(previous.time, video.duration);
-        if (!previous.paused) void video.play().catch(() => {});
-      }}
-    />
-  );
+  return <CanvasVideoPlayer node={node} />;
 }
 
 function AudioNodeContent({ node, theme }: NodeContentRendererProps) {
