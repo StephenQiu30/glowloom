@@ -1,13 +1,11 @@
 "use client";
+import { ContentState } from "@/components/layout/content-state";
+import { readErrorMessage } from "@/lib/read-error";
 
 import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { listProjectOperations } from "@/api/operations";
-import {
-  requireTask,
-  taskLabels,
-  flowError,
-} from "@/components/generation/contracts";
+import { requireTask, taskLabels } from "@/components/generation/contracts";
 import { TaskDetail } from "@/components/generation/generation-dialog";
 import { CanvasMediaContext } from "../lib/canvas-media-context";
 import { isProjectID } from "@/components/projects/project";
@@ -60,7 +58,12 @@ export function CanvasHistoryDialog({ children }: { children: ReactNode }) {
               close={() => setOpen(false)}
             />
           ) : (
-            <p role="alert">缺少画布上下文，无法读取生成历史。</p>
+            <ContentState
+              className="min-h-40"
+              state="error"
+              title="无法读取生成历史"
+              description="请重新打开画布后重试。"
+            />
           ))}
       </PopoverContent>
     </Popover>
@@ -187,7 +190,7 @@ function HistoryList({
       ]);
       setCursor(page.next_cursor || undefined);
     } catch (cause) {
-      if (!controller.signal.aborted) setError(flowError(cause));
+      if (!controller.signal.aborted) setError(readErrorMessage(cause));
     } finally {
       if (!controller.signal.aborted) setPending(false);
     }
@@ -210,22 +213,22 @@ function HistoryList({
         data-canvas-wheel-scroll
       >
         {pending && (
-          <p
-            role="status"
-            className="p-4 text-center text-sm text-muted-foreground"
-          >
-            正在读取历史…
-          </p>
+          <ContentState
+            className="min-h-40"
+            state="loading"
+            title="正在读取历史"
+          />
         )}
         {error && (
-          <p role="alert" className="p-4 text-sm text-destructive">
-            {error}
-          </p>
+          <ContentState
+            className="min-h-40"
+            state="error"
+            title="生成历史暂时无法读取"
+            description={error}
+          />
         )}
         {!pending && !error && !items.length && (
-          <p className="py-12 text-center text-sm text-muted-foreground">
-            暂无生成历史
-          </p>
+          <ContentState className="min-h-40" title="暂无生成历史" />
         )}
         {items.map((item) => (
           <Button

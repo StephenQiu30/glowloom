@@ -3,8 +3,13 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { CanvasYjsLiveSession } from "./yjs-live-session";
 import { CanvasParticipants } from "./canvas-participants";
-import { YjsPresence } from "./yjs-presence";
 import { SpaceSwitcher } from "@/components/spaces/space-context";
+import { YjsPresence } from "./yjs-presence";
+import {
+  CanvasConnectionState,
+  canvasConnectionMessage,
+} from "./connection-state";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CanvasProviders } from "./editor";
 import CanvasPage from "./editor/canvas-editor";
 import { CanvasTopBar } from "./controls/canvas-top-bar";
@@ -90,11 +95,11 @@ function CollaborativeEditor({
   }, [view.dirty]);
   if (!view.document || !view.dto)
     return (
-      <div role="status" className="grid h-dvh place-items-center">
-        {view.message || "正在连接画布"}
-        <SpaceSwitcher />
-        <Button onClick={client.retry}>重新连接</Button>
-      </div>
+      <CanvasConnectionState
+        message={view.message}
+        onRetry={client.retry}
+        scopeControl={<SpaceSwitcher compact />}
+      />
     );
   return (
     <CanvasMediaContext.Provider
@@ -177,15 +182,14 @@ function CollaborativeEditor({
           }}
         />
         {view.message && (
-          <div
-            role="alert"
-            className="absolute bottom-16 left-1/2 z-50 flex max-w-xl -translate-x-1/2 items-center gap-3 rounded-lg bg-popover p-3 shadow"
-          >
-            <span>{view.message}</span>
+          <Alert className="absolute bottom-16 left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 flex-wrap items-center justify-between gap-3 border-0 bg-popover p-4 shadow-sm">
+            <AlertDescription className="min-w-0 flex-1">
+              {canvasConnectionMessage(view.message)}
+            </AlertDescription>
             <Button variant="secondary" onClick={client.retry}>
               重新连接并查证
             </Button>
-          </div>
+          </Alert>
         )}
         <Dialog
           open={rename !== null}

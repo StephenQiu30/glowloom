@@ -13,12 +13,8 @@ import {
 import { subjectText } from "@/components/subjects/contracts";
 import { kinds } from "@/components/subjects/contracts";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import {
-  Empty,
-  EmptyHeader,
-  EmptyTitle,
-  EmptyDescription,
-} from "@/components/ui/empty";
+import { ContentState } from "@/components/layout/content-state";
+import { FolderOpen } from "lucide-react";
 export function SubjectsPage() {
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
@@ -85,14 +81,11 @@ export function SubjectsPage() {
           <div className="page-toolbar">
             <ProjectPicker value={project} onChange={setProject} compact />
           </div>
-          <Empty className="min-h-80">
-            <EmptyHeader>
-              <EmptyTitle>选择项目，查看你的主体</EmptyTitle>
-              <EmptyDescription>
-                主体与参考素材保存在所属项目中。
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
+          <ContentState
+            icon={FolderOpen}
+            title="选择项目，查看你的主体"
+            description="主体与参考素材保存在所属项目中。"
+          />
         </>
       )}
       {generation && (

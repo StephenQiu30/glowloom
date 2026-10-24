@@ -21,7 +21,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { ContentState } from "@/components/layout/content-state";
+import { Heart } from "lucide-react";
 
 export function FavoriteAssets() {
   const { actor } = useSession();
@@ -63,25 +64,23 @@ export function FavoriteAssets() {
   }, [actor.id, key, page, size]);
   if (error)
     return (
-      <div role="alert" className="flex items-center gap-2">
-        {error}
-        <Button
-          variant="ghost"
-          onClick={() => {
-            setError("");
-            setRetry((n) => n + 1);
-          }}
-        >
-          重试
-        </Button>
-      </div>
+      <ContentState
+        state="error"
+        title="收藏暂时无法读取"
+        description="请稍后重试。"
+        actions={
+          <Button
+            onClick={() => {
+              setError("");
+              setRetry((n) => n + 1);
+            }}
+          >
+            重试
+          </Button>
+        }
+      />
     );
-  if (!data)
-    return (
-      <p role="status" className="py-12 text-sm text-muted-foreground">
-        正在读取收藏…
-      </p>
-    );
+  if (!data) return <ContentState state="loading" title="正在读取收藏" />;
   return (
     <>
       {data.items.length ? (
@@ -101,11 +100,11 @@ export function FavoriteAssets() {
           ))}
         </div>
       ) : (
-        <Empty className="min-h-80">
-          <EmptyHeader>
-            <EmptyTitle>暂无收藏</EmptyTitle>
-          </EmptyHeader>
-        </Empty>
+        <ContentState
+          icon={Heart}
+          title="暂无收藏"
+          description="收藏的素材会保留在这里。"
+        />
       )}
       <DataPagination
         label="收藏分页"

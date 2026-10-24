@@ -17,10 +17,12 @@ it.each(["membership", "recharge"] as const)(
   "%s 没有伪造可购买套餐或支付动作",
   (section) => {
     render(<BillingView section={section} />);
-    expect(screen.getByRole("button", { name: "暂未开放" })).toHaveProperty(
-      "disabled",
-      true,
-    );
+    expect(screen.queryByRole("button", { name: "暂未开放" })).toBeNull();
+    expect(
+      screen.getByRole("heading", {
+        name: section === "membership" ? "会员计划即将上线" : "充值即将开放",
+      }),
+    ).toBeTruthy();
     expect(
       screen.getByRole("link", { name: "返回积分总览" }).getAttribute("href"),
     ).toBe("/billing");

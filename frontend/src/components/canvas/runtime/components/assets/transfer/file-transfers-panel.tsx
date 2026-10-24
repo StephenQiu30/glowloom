@@ -1,4 +1,5 @@
 "use client";
+import { ContentState } from "@/components/layout/content-state";
 import { uploadGrantedPart } from "@/components/canvas/runtime/lib/media/granted-transfer";
 import { uploadTarget } from "../lib/asset-upload-target";
 import { waitForFileTransfer } from "@/components/canvas/runtime/lib/online-projections";
@@ -152,7 +153,11 @@ export function FileTransfersPanel({
       }
     >
       {!ready ? (
-        <p role="status">正在读取账户…</p>
+        <ContentState
+          className="min-h-40"
+          state="loading"
+          title="正在读取账户"
+        />
       ) : account ? (
         <TransferContent
           key={String(account.id)}
@@ -164,9 +169,11 @@ export function FileTransfersPanel({
           zipImports={zipImports}
         />
       ) : (
-        <Button size="lg" className="h-10 px-6" onClick={() => openAuth()}>
-          登录后上传文件
-        </Button>
+        <ContentState
+          className="min-h-40"
+          title="登录后上传文件"
+          actions={<Button onClick={() => openAuth()}>登录</Button>}
+        />
       )}
     </section>
   );
@@ -653,17 +660,26 @@ function TransferContent({
             </div>
           </div>
           {files.isLoading || zipImports?.isLoading ? (
-            <p role="status" className="flex items-center gap-2">
-              <Spinner aria-hidden="true" />
-              正在读取文件…
-            </p>
+            <ContentState state="loading" title="正在读取上传记录" />
           ) : files.error || zipImports?.error ? (
-            <Empty>
-              <EmptyHeader>
-                <EmptyTitle>上传记录暂不可读取</EmptyTitle>
-                <EmptyDescription>刷新记录后继续查看文件。</EmptyDescription>
-              </EmptyHeader>
-            </Empty>
+            <ContentState
+              state="error"
+              title="上传记录暂时无法读取"
+              description="请重试读取上传记录。"
+              actions={
+                <Button
+                  disabled={files.isValidating || zipImports?.isValidating}
+                  onClick={() => {
+                    void files.mutate();
+                    void zipImports?.refresh();
+                  }}
+                >
+                  {files.isValidating || zipImports?.isValidating
+                    ? "正在重试…"
+                    : "重试"}
+                </Button>
+              }
+            />
           ) : !visibleFiles.length && !zipImports?.items.length ? (
             <Empty className="min-h-72">
               <EmptyHeader>

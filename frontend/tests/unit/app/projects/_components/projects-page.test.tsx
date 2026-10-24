@@ -274,7 +274,8 @@ it("列表加载失败不显示示例项目，名称搜索与真实最近修改�
     .mockRejectedValueOnce(new Error("offline"))
     .mockResolvedValue({ items: [project], next_cursor: null });
   page();
-  await findFeedback();
+  expect(await screen.findByRole("alert")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "重试读取" })).toBeTruthy();
   expect(screen.queryByText("雾港来信")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "搜索画布" }));
   fireEvent.change(await screen.findByRole("combobox", { name: "搜索画布" }), {

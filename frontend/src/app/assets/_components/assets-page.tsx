@@ -6,6 +6,8 @@ import {
   FieldDescription,
   FieldGroup,
 } from "@/components/ui/field";
+import { ContentState } from "@/components/layout/content-state";
+import { readErrorMessage } from "@/lib/read-error";
 import { GenerationHistory } from "@/components/media/generation-history";
 import { cn } from "cn";
 import { useEffect, useRef, useState } from "react";
@@ -161,7 +163,7 @@ function Library({
           setPage(null);
           if (e instanceof RequestError && e.status === 401)
             setAuthRequired(true);
-          else setError(mediaError(e));
+          else setError(readErrorMessage(e));
         }
       })
       .finally(() => {
@@ -479,38 +481,32 @@ function Library({
                   ))}
                 </ItemGroup>
               ) : error ? (
-                <Empty className="library-login-state">
-                  <FeedbackToast message={error} />
-                  <EmptyHeader>
-                    <EmptyTitle>无法读取素材</EmptyTitle>
-                    <EmptyDescription>请重试读取。</EmptyDescription>
-                  </EmptyHeader>
-                  <Button variant="outline" onClick={reload}>
-                    重试读取素材
-                  </Button>
-                </Empty>
+                <ContentState
+                  className="library-login-state"
+                  state="error"
+                  title="无法读取素材"
+                  description={error}
+                  actions={<Button onClick={reload}>重试读取素材</Button>}
+                />
               ) : page?.items.length === 0 ? (
-                <Empty className="library-login-state">
-                  <EmptyHeader>
-                    <EmptyMedia variant="icon">
-                      <Folder />
-                    </EmptyMedia>
-                    <EmptyTitle>
-                      {filter.search
-                        ? "没有匹配的素材"
-                        : filter.trash
-                          ? "回收站为空"
-                          : "这里还没有素材"}
-                    </EmptyTitle>
-                    <EmptyDescription>
-                      {filter.search
-                        ? "试试其他关键词，或调整筛选条件。"
-                        : filter.trash
-                          ? "移入回收站的素材会显示在这里。"
-                          : "上传素材，开始积累你的创作灵感。"}
-                    </EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
+                <ContentState
+                  className="library-login-state"
+                  icon={Folder}
+                  title={
+                    filter.search
+                      ? "没有匹配的素材"
+                      : filter.trash
+                        ? "回收站为空"
+                        : "这里还没有素材"
+                  }
+                  description={
+                    filter.search
+                      ? "试试其他关键词，或调整筛选条件。"
+                      : filter.trash
+                        ? "移入回收站的素材会显示在这里。"
+                        : "上传素材，开始积累你的创作灵感。"
+                  }
+                />
               ) : (
                 <ItemGroup className="asset-grid">
                   {page?.items.map((item) => (

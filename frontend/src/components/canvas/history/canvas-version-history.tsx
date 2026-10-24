@@ -1,4 +1,5 @@
 "use client";
+import { ContentState } from "@/components/layout/content-state";
 import { useState } from "react";
 import useSWR from "swr";
 import { useCanvasHistory } from "../hooks/use-canvas-history";
@@ -117,19 +118,29 @@ function CanvasVersionHistorySession({
               <p className="text-sm text-muted-foreground">
                 当前版本 {String(document.revision)}
               </p>
-              {history.isLoading && <p role="status">正在读取版本历史</p>}
+              {history.isLoading && (
+                <ContentState
+                  className="min-h-40"
+                  state="loading"
+                  title="正在读取版本历史"
+                />
+              )}
               {history.error && (
-                <div className="space-y-2" role="status">
-                  <p>版本历史暂不可读取。</p>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      restart();
-                    }}
-                  >
-                    重新读取历史
-                  </Button>
-                </div>
+                <ContentState
+                  className="min-h-40"
+                  state="error"
+                  title="版本历史暂不可读取"
+                  actions={
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        restart();
+                      }}
+                    >
+                      重新读取历史
+                    </Button>
+                  }
+                />
               )}
               {history.data?.records.map((version) => (
                 <Button
@@ -154,11 +165,15 @@ function CanvasVersionHistorySession({
                   <span className="truncate">{version.title}</span>
                 </Button>
               ))}
-              {history.data?.records.length === 0 && (
-                <p className="text-muted-foreground">
-                  暂无历史，下次修改会自动保留当前内容。
-                </p>
-              )}
+              {!history.isLoading &&
+                !history.error &&
+                history.data?.records.length === 0 && (
+                  <ContentState
+                    className="min-h-40"
+                    title="暂无版本历史"
+                    description="下次修改会自动保留当前内容。"
+                  />
+                )}
               <div className="flex gap-2">
                 <Button
                   variant="outline"
@@ -180,13 +195,26 @@ function CanvasVersionHistorySession({
             </div>
             <div className="min-w-0 space-y-4">
               {!selectedId && (
-                <p className="text-muted-foreground">选择一个版本预览内容</p>
+                <ContentState className="min-h-40" title="选择版本，预览内容" />
               )}
-              {preview.isLoading && <p role="status">正在加载只读预览</p>}
+              {preview.isLoading && (
+                <ContentState
+                  className="min-h-40"
+                  state="loading"
+                  title="正在加载只读预览"
+                />
+              )}
               {preview.error && (
-                <Button variant="outline" onClick={() => void preview.mutate()}>
-                  重新读取预览
-                </Button>
+                <ContentState
+                  className="min-h-40"
+                  state="error"
+                  title="预览暂时无法读取"
+                  actions={
+                    <Button onClick={() => void preview.mutate()}>
+                      重新读取预览
+                    </Button>
+                  }
+                />
               )}
               {selected && (
                 <>

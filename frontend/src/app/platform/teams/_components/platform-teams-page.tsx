@@ -1,4 +1,6 @@
 "use client";
+import { ContentState } from "@/components/layout/content-state";
+import { readErrorMessage } from "@/lib/read-error";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { PlatformTeamInvitations } from "./platform-team-invitations";
 import { FieldLabel } from "@/components/ui/field";
@@ -70,7 +72,7 @@ export function PlatformTeamsPage() {
         if (!c.signal.aborted) {
           setPage(null);
           clearDetail();
-          setError(authErrorMessage(e));
+          setError(readErrorMessage(e));
         }
       });
     return () => c.abort();
@@ -115,6 +117,7 @@ export function PlatformTeamsPage() {
             if (typeof v === "string" && v.trim())
               f[k] = k === "governance_blocked" ? v === "true" : v.trim();
           setPage(null);
+          setError("");
           clearDetail();
           setFilters(f);
         }}
@@ -157,7 +160,23 @@ export function PlatformTeamsPage() {
         </FieldLabel>
         <Button disabled={pending}>查询团队</Button>
       </form>
-      {error ? (
+      {error && !page ? (
+        <ContentState
+          state="error"
+          title="团队目录暂时无法读取"
+          description={error}
+          actions={
+            <Button
+              onClick={() => {
+                setError("");
+                setReload((n) => n + 1);
+              }}
+            >
+              重试
+            </Button>
+          }
+        />
+      ) : error ? (
         <FeedbackToast
           message={error}
           action={{
@@ -169,8 +188,12 @@ export function PlatformTeamsPage() {
           }}
         />
       ) : null}
-      {page?.items?.length === 0 ? <p>没有符合条件的团队。</p> : null}
-      {!page && !error ? <p role="status">正在读取团队…</p> : null}
+      {page?.items?.length === 0 ? (
+        <ContentState title="没有符合条件的团队" />
+      ) : null}
+      {!page && !error ? (
+        <ContentState state="loading" title="正在读取团队" />
+      ) : null}
       <div className="grid gap-3">
         {page?.items?.map((t) => (
           <Button

@@ -1,4 +1,5 @@
 "use client";
+import { ContentState } from "@/components/layout/content-state";
 import { useEffect, useRef, useState } from "react";
 import { ProjectAssetDialog } from "@/components/media/project-asset-dialog";
 import { Input } from "@/components/ui/input";
@@ -129,7 +130,15 @@ export function LibraryPickerContent({
       if (!abort.signal.aborted) setBusy(false);
     }
   }
-  if (!projectId) return <p role="alert">缺少项目上下文，无法读取素材。</p>;
+  if (!projectId)
+    return (
+      <ContentState
+        className="min-h-40"
+        state="error"
+        title="无法读取素材"
+        description="请从所属项目重新打开画布。"
+      />
+    );
   return (
     <div className="flex min-h-40 flex-col items-start gap-3 p-3">
       <p className="text-sm text-muted-foreground">

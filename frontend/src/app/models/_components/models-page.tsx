@@ -1,13 +1,7 @@
 "use client";
-import {
-  Empty,
-  EmptyHeader,
-  EmptyTitle,
-  EmptyDescription,
-} from "@/components/ui/empty";
+import { readErrorMessage } from "@/lib/read-error";
+import { ContentState } from "@/components/layout/content-state";
 
-import { FeedbackToast } from "@/components/feedback/feedback-toast";
-import { LoadingState } from "@/components/layout/loading-state";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import {
   NativeSelect,
@@ -26,7 +20,6 @@ import {
   createAdminModel,
 } from "@/api/settings";
 import {
-  catalogMessage,
   MutationStatus,
   useCatalogMutation,
   zeroID,
@@ -76,7 +69,7 @@ export function ModelsPage({
       })
       .catch((e) => {
         if (!abort.signal.aborted) {
-          setError(catalogMessage(e));
+          setError(readErrorMessage(e));
           setLoading(false);
         }
       });
@@ -93,12 +86,11 @@ export function ModelsPage({
   );
   if (session.actor.platform_role !== "platform_admin")
     return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyTitle>暂无访问权限</EmptyTitle>
-          <EmptyDescription>此页面仅向平台管理员开放。</EmptyDescription>
-        </EmptyHeader>
-      </Empty>
+      <ContentState
+        state="error"
+        title="暂无访问权限"
+        description="此页面仅向平台管理员开放。"
+      />
     );
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
@@ -113,7 +105,24 @@ export function ModelsPage({
           <Link href="/providers">管理平台连接</Link>
         </Button>
       </header>
-      {error ? <FeedbackToast message={error} /> : null}
+      {error ? (
+        <ContentState
+          state="error"
+          title="模型暂时无法读取"
+          description={error}
+          actions={
+            <Button
+              onClick={() => {
+                setError("");
+                setLoading(true);
+                setRefresh((v) => v + 1);
+              }}
+            >
+              重试
+            </Button>
+          }
+        />
+      ) : null}
       <form
         onSubmit={async (event) => {
           event.preventDefault();
@@ -210,74 +219,82 @@ export function ModelsPage({
               placeholder="例如 creative-video"
             />
           </Field>
-          <Button className="w-fit" disabled={mutation.busy || !providerID}>
+          <Button
+            className="w-fit"
+            disabled={mutation.busy || loading || !!error || !providerID}
+          >
             创建模型草稿
           </Button>
         </FieldGroup>
       </form>
       <MutationStatus mutation={mutation} />
-      {loading ? <LoadingState>正在加载模型…</LoadingState> : null}
-      <div className="grid items-start gap-4 lg:grid-cols-[16rem_1fr]">
-        <section className="min-w-0 space-y-2" aria-label="模型列表">
-          {initialProvider ? (
-            <p className="text-xs text-muted-foreground">
-              当前连接的已加载模型。<Link href="/models">查看全部模型</Link>
-            </p>
-          ) : null}
-          {!loading &&
-          !models.filter(
-            (m) => !initialProvider || m.provider_id === initialProvider,
-          ).length ? (
-            <p className="text-sm text-muted-foreground">
-              {initialProvider
-                ? "本页没有此连接的模型，可继续翻页或查看全部。"
-                : "还没有模型，请先添加一个。"}
-            </p>
-          ) : null}
-          {models
-            .filter(
+      {loading ? <ContentState state="loading" title="正在读取模型" /> : null}
+      {!loading && !error && (
+        <div className="grid items-start gap-4 lg:grid-cols-[16rem_1fr]">
+          <section className="min-w-0 space-y-2" aria-label="模型列表">
+            {initialProvider ? (
+              <p className="text-xs text-muted-foreground">
+                当前连接的已加载模型。<Link href="/models">查看全部模型</Link>
+              </p>
+            ) : null}
+            {!loading &&
+            !error &&
+            !models.filter(
               (m) => !initialProvider || m.provider_id === initialProvider,
-            )
-            .map((m) => (
-              <Button
-                key={m.id}
-                variant={selected === m.id ? "secondary" : "outline"}
-                className="h-auto w-full flex-col items-start gap-1 p-3 text-left whitespace-normal"
-                onClick={() => setSelected(m.id ?? "")}
-              >
-                <span className="break-all">{m.display_name}</span>
-                <span className="text-xs text-muted-foreground">
-                  {m.capability} ·{" "}
-                  {m.status === "active" ? "已启用" : "草稿 / 已停用"}
-                </span>
-              </Button>
-            ))}
-          <div className="flex flex-wrap gap-2">
-            {cursor ? (
-              <Button variant="outline" onClick={() => setCursor("")}>
-                回到首页
-              </Button>
+            ).length ? (
+              <ContentState
+                className="min-h-40"
+                title={initialProvider ? "本页没有此连接的模型" : "还没有模型"}
+                description={
+                  initialProvider
+                    ? "继续翻页或查看全部模型。"
+                    : "添加模型后会显示在这里。"
+                }
+              />
             ) : null}
-            {next ? (
-              <Button variant="outline" onClick={() => setCursor(next)}>
-                下一页
-              </Button>
-            ) : null}
-          </div>
-        </section>
-        {selected ? (
-          <ModelDetail
-            key={`${selected}:${refresh}`}
-            id={selected}
-            capabilities={capabilities}
-            onSaved={saved}
-          />
-        ) : (
-          <p className="rounded-xl border p-6 text-sm text-muted-foreground">
-            选择一个模型，配置上游模型 ID、参数、价格和发布版本。
-          </p>
-        )}
-      </div>
+            {models
+              .filter(
+                (m) => !initialProvider || m.provider_id === initialProvider,
+              )
+              .map((m) => (
+                <Button
+                  key={m.id}
+                  variant={selected === m.id ? "secondary" : "outline"}
+                  className="h-auto w-full flex-col items-start gap-1 p-3 text-left whitespace-normal"
+                  onClick={() => setSelected(m.id ?? "")}
+                >
+                  <span className="break-all">{m.display_name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {m.capability} ·{" "}
+                    {m.status === "active" ? "已启用" : "草稿 / 已停用"}
+                  </span>
+                </Button>
+              ))}
+            <div className="flex flex-wrap gap-2">
+              {cursor ? (
+                <Button variant="outline" onClick={() => setCursor("")}>
+                  回到首页
+                </Button>
+              ) : null}
+              {next ? (
+                <Button variant="outline" onClick={() => setCursor(next)}>
+                  下一页
+                </Button>
+              ) : null}
+            </div>
+          </section>
+          {selected ? (
+            <ModelDetail
+              key={`${selected}:${refresh}`}
+              id={selected}
+              capabilities={capabilities}
+              onSaved={saved}
+            />
+          ) : (
+            <ContentState title="选择模型，查看配置" />
+          )}
+        </div>
+      )}
     </div>
   );
 }

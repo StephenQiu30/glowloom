@@ -139,7 +139,9 @@ it("revocation refreshes directory and security activity contains no private pay
       expect.objectContaining({ method: "POST" }),
     ),
   );
-  expect(await screen.findByText("暂无安全活动。")).toBeTruthy();
+  expect(
+    await screen.findByRole("heading", { name: "暂无安全活动" }),
+  ).toBeTruthy();
 });
 
 it("security event failure cannot block loaded profile or leave loading visible", async () => {
@@ -156,7 +158,9 @@ it("security event failure cannot block loaded profile or leave loading visible"
   );
   expect(screen.queryByText("正在加载账号资料…")).toBeNull();
   fireEvent.click(screen.getByText("密码与会话"));
-  expect(await screen.findByText(/安全活动读取失败/)).toBeTruthy();
+  expect(
+    await screen.findByRole("heading", { name: "安全活动暂时无法读取" }),
+  ).toBeTruthy();
 });
 
 it("清除头像经生成客户端传送 HTTP null 并以本人读回结果更新绑定", async () => {
@@ -192,5 +196,39 @@ it("清除头像经生成客户端传送 HTTP null 并以本人读回结果更�
     expect.objectContaining({
       actor: expect.objectContaining({ avatar_asset_id: "", revision: "2" }),
     }),
+  );
+});
+
+it("profile read error stays in the dialog and retry replaces it with loading", async () => {
+  const original = vi.mocked(request).getMockImplementation()!;
+  let release: ((value: unknown) => void) | undefined;
+  let attempts = 0;
+  vi.mocked(request).mockImplementation(async (url, options) => {
+    if (url === "/api/me") {
+      attempts += 1;
+      if (attempts === 1) throw new RequestError("dependency_unavailable", 503);
+      return new Promise((resolve) => {
+        release = resolve;
+      });
+    }
+    return original(url, options);
+  });
+  render(<Settings />);
+  expect(await screen.findByRole("alert")).toHaveProperty(
+    "textContent",
+    expect.stringContaining("个人资料暂时无法读取"),
+  );
+  expect(screen.queryByText("dependency_unavailable")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "重试" }));
+  expect(await screen.findByRole("status")).toHaveProperty(
+    "textContent",
+    expect.stringContaining("正在读取个人资料"),
+  );
+  expect(screen.queryByRole("alert")).toBeNull();
+  await waitFor(() => expect(release).toBeTypeOf("function"));
+  release!(profile);
+  expect(await screen.findByLabelText("显示名")).toHaveProperty(
+    "value",
+    "Alice",
   );
 });

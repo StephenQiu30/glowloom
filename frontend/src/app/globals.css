@@ -1251,11 +1251,11 @@ button:not(:disabled),
   padding: 28px;
   min-height: 420px;
 }
-.settings-card h2 {
+.settings-card > h2 {
   font-size: 20px;
   margin-bottom: 12px;
 }
-.settings-card p {
+.settings-card > p {
   color: var(--muted-foreground);
   font-size: 13px;
   line-height: 1.8;

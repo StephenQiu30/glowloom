@@ -16,13 +16,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Empty,
-  EmptyHeader,
-  EmptyTitle,
-  EmptyDescription,
-  EmptyContent,
-} from "@/components/ui/empty";
+import { ContentState } from "@/components/layout/content-state";
 
 const Settings = dynamic(() =>
   import("./account-page").then((m) => m.Settings),
@@ -75,38 +69,26 @@ export function PersonalSpace() {
             <TabsTrigger value="canvases">画布</TabsTrigger>
           </TabsList>
           <TabsContent value="works">
-            <Empty className="min-h-80">
-              <EmptyHeader>
-                <EmptyTitle>作品发布暂未开放</EmptyTitle>
-                <EmptyDescription>
-                  已保存的创作可在素材库和画布中继续编辑。
-                </EmptyDescription>
-              </EmptyHeader>
-              <EmptyContent>
+            <ContentState
+              title="作品发布暂未开放"
+              description="已保存的创作可在素材库和画布中继续编辑。"
+              actions={
                 <Button asChild variant="secondary">
                   <Link href="/">开始创作</Link>
                 </Button>
-              </EmptyContent>
-            </Empty>
+              }
+            />
           </TabsContent>
           <TabsContent value="favorites">
             <Suspense
-              fallback={
-                <p role="status" className="text-sm text-muted-foreground">
-                  正在读取收藏…
-                </p>
-              }
+              fallback={<ContentState state="loading" title="正在读取收藏" />}
             >
               <FavoriteAssets key={actor.id} />
             </Suspense>
           </TabsContent>
           <TabsContent value="canvases">
             <Suspense
-              fallback={
-                <p role="status" className="text-sm text-muted-foreground">
-                  正在读取画布…
-                </p>
-              }
+              fallback={<ContentState state="loading" title="正在读取画布" />}
             >
               <ProjectList
                 key={`${filter}/${sort}`}
@@ -127,7 +109,15 @@ export function PersonalSpace() {
           <DialogDescription className="sr-only">
             管理个人资料、安全与创作偏好
           </DialogDescription>
-          <Suspense fallback={<p role="status">正在读取设置…</p>}>
+          <Suspense
+            fallback={
+              <ContentState
+                className="min-h-40"
+                state="loading"
+                title="正在读取设置"
+              />
+            }
+          >
             <Settings embedded />
           </Suspense>
         </DialogContent>

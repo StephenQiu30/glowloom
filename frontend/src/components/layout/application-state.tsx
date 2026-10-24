@@ -1,3 +1,4 @@
+import { CircleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { Brand } from "@/components/brand/brand";
 import {
@@ -5,6 +6,7 @@ import {
   EmptyContent,
   EmptyDescription,
   EmptyHeader,
+  EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
 import { LoadingState } from "./loading-state";
@@ -23,14 +25,21 @@ export function ApplicationState({
     <main className="application-state">
       <div className="application-state-content">
         <Brand wordmark />
-        <Empty>
+        <Empty role="alert">
           <EmptyHeader>
+            <EmptyMedia variant="icon" aria-hidden="true">
+              <CircleAlert />
+            </EmptyMedia>
             <EmptyTitle>
               <h1>{title}</h1>
             </EmptyTitle>
             <EmptyDescription>{description}</EmptyDescription>
           </EmptyHeader>
-          {children ? <EmptyContent>{children}</EmptyContent> : null}
+          {children ? (
+            <EmptyContent className="flex-row flex-wrap justify-center gap-2">
+              {children}
+            </EmptyContent>
+          ) : null}
         </Empty>
       </div>
     </main>

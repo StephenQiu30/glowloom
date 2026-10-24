@@ -12,14 +12,12 @@ import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
 import { ProjectPicker } from "@/components/projects/project-picker";
 import type { Project } from "@/components/projects/project";
-import {
-  requireTask,
-  taskLabels,
-  flowError,
-} from "@/components/generation/contracts";
+import { requireTask, taskLabels } from "@/components/generation/contracts";
 import { TaskDetail } from "@/components/generation/generation-dialog";
 import { Button } from "@/components/ui/button";
-import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { ContentState } from "@/components/layout/content-state";
+import { readErrorMessage } from "@/lib/read-error";
+import { FolderOpen, History } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -49,11 +47,7 @@ function HistoryScope() {
           <div className="page-toolbar">
             <ProjectPicker value={project} onChange={setProject} compact />
           </div>
-          <Empty className="min-h-64">
-            <EmptyHeader>
-              <EmptyTitle>选择项目，查看生成记录</EmptyTitle>
-            </EmptyHeader>
-          </Empty>
+          <ContentState icon={FolderOpen} title="选择项目，查看生成记录" />
         </>
       )}
     </section>
@@ -100,7 +94,7 @@ function HistoryList({
         });
         setCursor(result.next_cursor || undefined);
       } catch (reason) {
-        if (!controller.signal.aborted) setError(flowError(reason));
+        if (!controller.signal.aborted) setError(readErrorMessage(reason));
       } finally {
         if (!controller.signal.aborted) setPending(false);
       }
@@ -127,27 +121,27 @@ function HistoryList({
         </Button>
       </div>
       {error && (
-        <div role="alert" className="flex items-center gap-3 text-sm">
-          <span>{error}</span>
-          <Button
-            variant="secondary"
-            onClick={() => void load(requestedCursor.current)}
-          >
-            重试读取
-          </Button>
-        </div>
+        <ContentState
+          state="error"
+          title="暂时无法读取生成记录"
+          description={error}
+          actions={
+            <Button
+              disabled={pending}
+              onClick={() => void load(requestedCursor.current)}
+            >
+              重试读取
+            </Button>
+          }
+        />
       )}
-      {pending && (
-        <p role="status" className="text-sm text-muted-foreground">
-          正在读取生成记录…
-        </p>
-      )}
+      {pending && <ContentState state="loading" title="正在读取生成记录" />}
       {!pending && !error && !items.length && (
-        <Empty className="min-h-64">
-          <EmptyHeader>
-            <EmptyTitle>还没有生成记录</EmptyTitle>
-          </EmptyHeader>
-        </Empty>
+        <ContentState
+          icon={History}
+          title="还没有生成记录"
+          description="在这个项目中开始创作后，记录会显示在这里。"
+        />
       )}
       <div className="grid gap-2">
         {items.map((item) => (

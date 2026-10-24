@@ -1,4 +1,6 @@
 "use client";
+import { ContentState } from "@/components/layout/content-state";
+import { readErrorMessage } from "@/lib/read-error";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { FieldLabel } from "@/components/ui/field";
 import { useEffect, useState } from "react";
@@ -37,13 +39,23 @@ export function GovernanceLists({
   const [invites, setInvites] = useState<API.InvitationListPage | null>(null);
   const [proposals, setProposals] = useState<API.ProposalListPage | null>(null);
   const [error, setError] = useState("");
+  const [inviteError, setInviteError] = useState("");
+  const [proposalError, setProposalError] = useState("");
+  const [retry, setRetry] = useState(0);
+  function retryRead() {
+    setInvites(null);
+    setProposals(null);
+    setInviteError("");
+    setProposalError("");
+    setRetry((n) => n + 1);
+  }
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("member");
   const [status, setStatus] = useState("");
   const [proposalStatus, setProposalStatus] = useState("");
   const [pending, setPending] = useState(false);
   const read = useReadBoundary(
-    `${teamID}:${reload}:${status}:${proposalStatus}`,
+    `${teamID}:${reload}:${status}:${proposalStatus}:${retry}`,
   );
   useEffect(() => {
     const c = new AbortController();
@@ -62,19 +74,23 @@ export function GovernanceLists({
         : platformProposals(proposalFilter, opts),
     ]).then(([i, p]) => {
       if (c.signal.aborted) return;
-      if (i.status === "fulfilled") setInvites(i.value);
-      else {
+      if (i.status === "fulfilled") {
+        setInvites(i.value);
+        setInviteError("");
+      } else {
         setInvites(null);
-        setError(authErrorMessage(i.reason));
+        setInviteError(readErrorMessage(i.reason));
       }
-      if (p.status === "fulfilled") setProposals(p.value);
-      else {
+      if (p.status === "fulfilled") {
+        setProposals(p.value);
+        setProposalError("");
+      } else {
         setProposals(null);
-        setError(authErrorMessage(p.reason));
+        setProposalError(readErrorMessage(p.reason));
       }
     });
     return () => c.abort();
-  }, [teamID, reload, status, proposalStatus]);
+  }, [teamID, reload, status, proposalStatus, retry]);
   return (
     <section className="grid gap-4">
       <h2>{teamID ? "团队邀请与转交" : "账号邀请与平台授权"}</h2>
@@ -129,6 +145,8 @@ export function GovernanceLists({
         onChange={(e) => {
           setInvites(null);
           setProposals(null);
+          setInviteError("");
+          setProposalError("");
           setStatus(e.target.value);
         }}
       >
@@ -140,7 +158,23 @@ export function GovernanceLists({
         ))}
       </NativeSelect>
       {error ? <FeedbackToast message={error} /> : null}
-      {invites?.items?.length === 0 ? <p>暂无邀请。</p> : null}
+      {inviteError ? (
+        <ContentState
+          className="min-h-40"
+          state="error"
+          title="邀请暂时无法读取"
+          description={inviteError}
+          actions={<Button onClick={retryRead}>重试读取邀请</Button>}
+        />
+      ) : !invites ? (
+        <ContentState
+          className="min-h-40"
+          state="loading"
+          title="正在读取邀请"
+        />
+      ) : invites.items?.length === 0 ? (
+        <ContentState className="min-h-40" title="暂无邀请" />
+      ) : null}
       {invites?.items?.map((i) => (
         <article key={i.id} className="grid gap-2 rounded-xl border p-4">
           <p className="break-all">
@@ -231,6 +265,7 @@ export function GovernanceLists({
         value={proposalStatus}
         onChange={(e) => {
           setProposals(null);
+          setProposalError("");
           setProposalStatus(e.target.value);
         }}
       >
@@ -243,7 +278,23 @@ export function GovernanceLists({
           ),
         )}
       </NativeSelect>
-      {proposals?.items?.length === 0 ? <p>暂无管理授权提议。</p> : null}
+      {proposalError ? (
+        <ContentState
+          className="min-h-40"
+          state="error"
+          title="授权提议暂时无法读取"
+          description={proposalError}
+          actions={<Button onClick={retryRead}>重试读取授权</Button>}
+        />
+      ) : !proposals ? (
+        <ContentState
+          className="min-h-40"
+          state="loading"
+          title="正在读取授权提议"
+        />
+      ) : proposals.items?.length === 0 ? (
+        <ContentState className="min-h-40" title="暂无管理授权提议" />
+      ) : null}
       {proposals?.items?.map((p) => (
         <article key={p.id} className="rounded-xl border p-4">
           <p className="break-all">

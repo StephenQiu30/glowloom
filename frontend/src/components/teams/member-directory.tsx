@@ -1,4 +1,5 @@
 "use client";
+import { ContentState } from "@/components/layout/content-state";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { DirectoryTools } from "@/components/directory/directory-tools";
 import { useEffect, useState } from "react";
@@ -212,9 +213,43 @@ export function MemberDirectory({
           目录读取时间：{new Date(page.as_of).toLocaleString()}
         </p>
       ) : null}
-      {pending ? <p role="status">正在读取成员…</p> : null}
-      {error ? <FeedbackToast message={error} /> : null}
-      {page?.items.length === 0 ? <p>没有符合条件的成员。</p> : null}
+      {pending ? (
+        <ContentState
+          className="min-h-40"
+          state="loading"
+          title="正在读取成员"
+        />
+      ) : null}
+      {error ? (
+        !page ? (
+          <ContentState
+            className="min-h-40"
+            state="error"
+            title="成员暂时无法读取"
+            description={error}
+            actions={
+              <Button
+                onClick={() => {
+                  setError("");
+                  setPending(true);
+                  setFilter((current) => ({ ...current }));
+                }}
+              >
+                重新读取
+              </Button>
+            }
+          />
+        ) : (
+          <FeedbackToast message={error} />
+        )
+      ) : null}
+      {page?.items.length === 0 ? (
+        <ContentState
+          className="min-h-40"
+          title="没有符合条件的成员"
+          description="尝试调整搜索或筛选条件。"
+        />
+      ) : null}
       {page?.items.map((m) => (
         <article
           key={m.user_id}

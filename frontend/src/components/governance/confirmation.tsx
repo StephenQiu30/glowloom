@@ -101,7 +101,7 @@ export function Confirmation({
           }}
         >
           {action?.reason ? (
-            <FieldLabel className="grid gap-2">
+            <FieldLabel className="grid w-full gap-2">
               操作原因
               <Textarea
                 required
@@ -114,7 +114,7 @@ export function Confirmation({
             </FieldLabel>
           ) : null}
           {action?.password !== false ? (
-            <FieldLabel className="grid gap-2">
+            <FieldLabel className="grid w-full gap-2">
               当前密码
               <Input
                 type="password"
@@ -127,7 +127,15 @@ export function Confirmation({
             </FieldLabel>
           ) : null}
           {error ? <FeedbackToast message={error} /> : null}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={pending}
+              onClick={onClose}
+            >
+              取消
+            </Button>
             <Button
               disabled={
                 conflicted ||
@@ -137,14 +145,6 @@ export function Confirmation({
               }
             >
               {pending ? "正在确认…" : "确认操作"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={pending}
-              onClick={onClose}
-            >
-              取消
             </Button>
           </div>
         </form>

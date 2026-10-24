@@ -1,5 +1,6 @@
 "use client";
-import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import { ContentState } from "@/components/layout/content-state";
+import { readErrorMessage } from "@/lib/read-error";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FieldLabel } from "@/components/ui/field";
 import { useEffect, useState } from "react";
@@ -8,7 +9,6 @@ import {
   Confirmation,
   type ConfirmAction,
 } from "@/components/governance/confirmation";
-import { authErrorMessage } from "@/components/auth/contracts";
 import { Button } from "@/components/ui/button";
 export function PlatformSettingsPage() {
   const [settings, setSettings] = useState<API.PlatformSettings | null>(null);
@@ -29,7 +29,7 @@ export function PlatformSettingsPage() {
         }
       })
       .catch((e) => {
-        if (!c.signal.aborted) setError(authErrorMessage(e));
+        if (!c.signal.aborted) setError(readErrorMessage(e));
       });
     return () => c.abort();
   }, [reload]);
@@ -37,18 +37,24 @@ export function PlatformSettingsPage() {
     <div className="mx-auto grid w-full max-w-2xl gap-4 p-4">
       <h1 className="text-2xl">平台设置</h1>
       {error ? (
-        <FeedbackToast
-          message={error}
-          action={{
-            label: "重新读取设置",
-            onClick: () => {
-              setError("");
-              setReload((n) => n + 1);
-            },
-          }}
+        <ContentState
+          state="error"
+          title="平台设置暂时无法读取"
+          description={error}
+          actions={
+            <Button
+              onClick={() => {
+                setError("");
+                setSettings(null);
+                setReload((n) => n + 1);
+              }}
+            >
+              重试
+            </Button>
+          }
         />
       ) : null}
-      {settings ? (
+      {settings && !error ? (
         <form
           className="grid gap-4"
           onSubmit={(e) => {
@@ -88,7 +94,7 @@ export function PlatformSettingsPage() {
           <Button>保存平台设置</Button>
         </form>
       ) : !error ? (
-        <p role="status">正在读取平台设置…</p>
+        <ContentState state="loading" title="正在读取平台设置" />
       ) : null}
       <Confirmation
         key={action?.title ?? "closed"}

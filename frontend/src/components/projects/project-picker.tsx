@@ -1,14 +1,11 @@
 "use client";
-import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import { ContentState } from "@/components/layout/content-state";
+import { readErrorMessage } from "@/lib/read-error";
 import { useEffect, useState, useId } from "react";
 import { Folder, Search } from "lucide-react";
 import Link from "next/link";
 import { listProjects } from "@/api/projects";
-import {
-  requireProjectList,
-  type Project,
-  projectErrorMessage,
-} from "./project";
+import { requireProjectList, type Project } from "./project";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import {
@@ -70,7 +67,7 @@ export function ProjectPicker({
         }
       })
       .catch((e) => {
-        if (!c.signal.aborted) setError(projectErrorMessage(e));
+        if (!c.signal.aborted) setError(readErrorMessage(e));
       })
       .finally(() => {
         if (!c.signal.aborted) setLoading(false);
@@ -90,7 +87,7 @@ export function ProjectPicker({
       ]);
       setCursor(p.next_cursor);
     } catch (e) {
-      setError(projectErrorMessage(e));
+      setError(readErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -135,6 +132,7 @@ export function ProjectPicker({
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            setError("");
             setLoading(true);
             setQuery(search.trim());
             setRetry((n) => n + 1);
@@ -169,22 +167,40 @@ export function ProjectPicker({
           更多项目
         </Button>
       )}
-      {error ? (
-        <FeedbackToast
-          message={error}
-          action={{
-            label: "重新读取",
-            onClick: () => {
-              setError("");
-              setLoading(true);
-              setRetry((n) => n + 1);
-            },
-          }}
+      {loading ? (
+        <ContentState
+          className="min-h-40"
+          state="loading"
+          title="正在读取项目"
         />
-      ) : !loading && items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          没有匹配的项目。<Link href="/projects">创建项目</Link>
-        </p>
+      ) : error ? (
+        <ContentState
+          className="min-h-40"
+          state="error"
+          title="项目暂时无法读取"
+          description={error}
+          actions={
+            <Button
+              onClick={() => {
+                setError("");
+                setLoading(true);
+                setRetry((n) => n + 1);
+              }}
+            >
+              重试
+            </Button>
+          }
+        />
+      ) : items.length === 0 ? (
+        <ContentState
+          className="min-h-40"
+          title="没有匹配的项目"
+          actions={
+            <Button variant="secondary" asChild>
+              <Link href="/projects">查看画布</Link>
+            </Button>
+          }
+        />
       ) : null}
     </FieldGroup>
   );

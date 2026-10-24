@@ -16,12 +16,7 @@ import {
   InputGroupInput,
   InputGroupAddon,
 } from "@/components/ui/input-group";
-import {
-  Empty,
-  EmptyHeader,
-  EmptyTitle,
-  EmptyDescription,
-} from "@/components/ui/empty";
+import { ContentState } from "@/components/layout/content-state";
 import {
   Dialog,
   DialogContent,
@@ -282,12 +277,10 @@ export function InspirationGallery({
             ))}
           </div>
           {!matches.length && (
-            <Empty className="min-h-72">
-              <EmptyHeader>
-                <EmptyTitle>没有匹配的灵感</EmptyTitle>
-                <EmptyDescription>试试其他分类或关键词。</EmptyDescription>
-              </EmptyHeader>
-            </Empty>
+            <ContentState
+              title="没有匹配的灵感"
+              description="试试其他分类或关键词。"
+            />
           )}
           <p className="source-caption">
             {showUpdates

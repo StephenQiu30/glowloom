@@ -50,6 +50,7 @@ export function PageEmpty({
   heading,
   icon,
   headerAction = true,
+  state = "empty",
 }: {
   title: string;
   description: string;
@@ -57,6 +58,7 @@ export function PageEmpty({
   heading?: string;
   icon?: ReactNode;
   headerAction?: boolean;
+  state?: "empty" | "error";
 }) {
   return (
     <section
@@ -75,15 +77,18 @@ export function PageEmpty({
           )}
         </PageHeader>
       )}
-      <Empty>
+      <Empty
+        className="min-h-72"
+        role={state === "error" ? "alert" : undefined}
+      >
         <EmptyHeader>
-          <EmptyMedia variant={heading ? "default" : "icon"}>
+          <EmptyMedia variant="icon" aria-hidden="true">
             {icon ?? <FileQuestion />}
           </EmptyMedia>
           <EmptyTitle>{title}</EmptyTitle>
           <EmptyDescription>{description}</EmptyDescription>
         </EmptyHeader>
-        <EmptyContent>
+        <EmptyContent className="flex-row flex-wrap justify-center gap-2">
           {children ?? (
             <Button asChild variant="outline">
               <Link href="/">
@@ -112,9 +117,10 @@ export function PageError({
     <PageEmpty
       heading={route.title}
       headerAction={false}
+      state="error"
       icon={<CircleAlert />}
       title="暂时无法显示此页面"
-      description="请重新加载内容；你的账号与已保存项目不受影响。"
+      description="请重新加载内容，或返回工作台。"
     >
       <Button onClick={reset}>重新加载</Button>
       <Button asChild variant="outline">

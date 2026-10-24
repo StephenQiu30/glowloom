@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PageLayout } from "@/components/layout/page-layout";
-import { ProductFooter } from "@/components/layout/product-footer";
+import { ContentState } from "@/components/layout/content-state";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,12 +11,6 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import {
-  Empty,
-  EmptyHeader,
-  EmptyTitle,
-  EmptyDescription,
-} from "@/components/ui/empty";
 
 const sections = {
   overview: {
@@ -49,25 +43,19 @@ function BillingAvailability({
 }) {
   const member = section === "membership";
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{member ? "会员计划即将上线" : "充值即将开放"}</CardTitle>
-        <CardDescription>
-          {member
-            ? "套餐价格、赠送积分与权益将在开放时公布。"
-            : "充值套餐尚未发布。开放后可在这里查看积分数量、价格与有效期。"}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <p>暂未开放</p>
-      </CardContent>
-      <CardFooter className="flex-wrap gap-3">
-        <Button disabled>暂未开放</Button>
-        <Button variant="outline" asChild>
+    <ContentState
+      title={member ? "会员计划即将上线" : "充值即将开放"}
+      description={
+        member
+          ? "套餐价格与权益将在开放时公布。"
+          : "积分套餐尚未发布，开放后可在这里充值。"
+      }
+      actions={
+        <Button variant="secondary" asChild>
           <Link href="/billing">返回积分总览</Link>
         </Button>
-      </CardFooter>
-    </Card>
+      }
+    />
   );
 }
 
@@ -114,7 +102,7 @@ export function BillingView({ section = "overview" }: { section?: Section }) {
                     </Card>
                   ))}
                 </div>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-2">
                   <Button asChild>
                     <Link href="/billing/recharge">充值积分</Link>
                   </Button>
@@ -152,20 +140,13 @@ export function BillingView({ section = "overview" }: { section?: Section }) {
                 </Card>
               </>
             ) : section === "transactions" ? (
-              <Empty className="min-h-80">
-                <EmptyHeader>
-                  <EmptyTitle>积分明细暂未开放</EmptyTitle>
-                  <EmptyDescription>
-                    开放后可在这里查询积分预占、结算与返还记录。
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
+              <ContentState
+                title="积分明细暂未开放"
+                description="开放后可查询积分预占、结算与返还记录。"
+              />
             ) : (
               <BillingAvailability section={section} />
             )}
-            {section === "membership" || section === "recharge" ? (
-              <ProductFooter />
-            ) : null}
           </TabsContent>
         </Tabs>
       </section>

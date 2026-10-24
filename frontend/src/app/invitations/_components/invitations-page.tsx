@@ -1,4 +1,6 @@
 "use client";
+import { readErrorMessage } from "@/lib/read-error";
+import { ContentState } from "@/components/layout/content-state";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -31,9 +33,20 @@ export function InvitationsPage() {
   const [preview, setPreview] = useState<API.InvitationPreview | null>(null);
   const [proposals, setProposals] = useState<API.ProposalListPage | null>(null);
   const [error, setError] = useState("");
+  const [previewError, setPreviewError] = useState("");
+  const [proposalsError, setProposalsError] = useState("");
+  const [previewPending, setPreviewPending] = useState(true);
+  const [proposalsPending, setProposalsPending] = useState(true);
   const [notice, setNotice] = useState("");
   const [action, setAction] = useState<ConfirmAction | null>(null);
   const [retry, setRetry] = useState(0);
+  function reloadReads() {
+    setPreviewPending(true);
+    setProposalsPending(true);
+    setPreviewError("");
+    setProposalsError("");
+    setRetry((n) => n + 1);
+  }
   const parsed = useRef(false);
   const read = useReadBoundary(`${session?.actor.id}:${retry}`);
   useEffect(() => {
@@ -52,21 +65,28 @@ export function InvitationsPage() {
       .catch((e) => {
         if (!c.signal.aborted) {
           setPreview(null);
-          setError(authErrorMessage(e));
+          setPreviewError(readErrorMessage(e));
         }
+      })
+      .finally(() => {
+        if (!c.signal.aborted) setPreviewPending(false);
       });
     return () => c.abort();
   }, [token, retry]);
   useEffect(() => {
     const c = new AbortController();
-    if (session?.actor.id)
+    if (session?.actor.id) {
       myProposals({ limit: 50 }, { signal: c.signal })
         .then((p) => {
           if (!c.signal.aborted) setProposals(p);
         })
         .catch((e) => {
-          if (!c.signal.aborted) setError(authErrorMessage(e));
+          if (!c.signal.aborted) setProposalsError(readErrorMessage(e));
+        })
+        .finally(() => {
+          if (!c.signal.aborted) setProposalsPending(false);
         });
+    }
     return () => c.abort();
   }, [session?.actor.id, retry]);
   return (
@@ -80,12 +100,36 @@ export function InvitationsPage() {
             label: "重新读取",
             onClick: () => {
               setError("");
-              setRetry((n) => n + 1);
+              reloadReads();
             },
           }}
         />
       ) : null}
-      {preview ? (
+      {token && previewPending ? (
+        <ContentState
+          className="min-h-40"
+          state="loading"
+          title="正在读取邀请"
+        />
+      ) : previewError ? (
+        <ContentState
+          className="min-h-40"
+          state="error"
+          title="邀请暂时无法读取"
+          description={previewError}
+          actions={
+            <Button
+              onClick={() => {
+                setPreviewPending(true);
+                setPreviewError("");
+                reloadReads();
+              }}
+            >
+              重试读取邀请
+            </Button>
+          }
+        />
+      ) : preview ? (
         <section className="grid gap-3 rounded-xl border p-4">
           <h2>收到邀请</h2>
           <p>
@@ -153,45 +197,77 @@ export function InvitationsPage() {
           </Button>
         </section>
       ) : !token ? (
-        <p>请打开邮件中的邀请链接。邀请令牌不会保存在浏览器存储中。</p>
+        <ContentState
+          className="min-h-40"
+          title="暂无待处理邀请"
+          description="打开邮件中的邀请链接后，在这里确认。"
+        />
       ) : null}
       {session ? (
         <section className="grid gap-3">
           <h2>待您确认的管理授权</h2>
-          {proposals?.items?.length === 0 ? <p>暂无授权提议。</p> : null}
-          {proposals?.items?.map((p) => (
-            <article key={p.id} className="grid gap-2 rounded-xl border p-4">
-              <p>
-                {p.kind} · {p.status} · {p.reason}
-              </p>
-              <p>有效期至 {p.expires_at}</p>
-              {p.status === "pending" ? (
-                <div className="flex gap-2">
-                  {[true, false].map((accept) => (
-                    <Button
-                      key={String(accept)}
-                      onClick={() =>
-                        setAction({
-                          title: accept ? "接受管理授权" : "拒绝管理授权",
-                          effect:
-                            "接受后获得提议对应的管理职责。团队权限与平台权限分别生效。",
-                          run: (_r, signal) =>
-                            (accept ? acceptProposal : declineProposal)(
-                              { id: p.id! },
-                              { expected_revision: p.revision },
-                              { signal },
-                            ),
-                        })
-                      }
-                    >
-                      {accept ? "接受授权" : "拒绝授权"}
-                    </Button>
-                  ))}
-                </div>
-              ) : null}
-            </article>
-          ))}
-          {proposals?.next_cursor ? (
+          {proposalsPending ? (
+            <ContentState
+              className="min-h-40"
+              state="loading"
+              title="正在读取授权提议"
+            />
+          ) : proposalsError ? (
+            <ContentState
+              className="min-h-40"
+              state="error"
+              title="授权提议暂时无法读取"
+              description={proposalsError}
+              actions={
+                <Button
+                  onClick={() => {
+                    setProposalsPending(true);
+                    setProposalsError("");
+                    reloadReads();
+                  }}
+                >
+                  重试读取授权
+                </Button>
+              }
+            />
+          ) : proposals?.items?.length === 0 ? (
+            <ContentState className="min-h-40" title="暂无授权提议" />
+          ) : null}
+          {!proposalsPending &&
+            !proposalsError &&
+            proposals?.items?.map((p) => (
+              <article key={p.id} className="grid gap-2 rounded-xl border p-4">
+                <p>
+                  {p.kind} · {p.status} · {p.reason}
+                </p>
+                <p>有效期至 {p.expires_at}</p>
+                {p.status === "pending" ? (
+                  <div className="flex gap-2">
+                    {[true, false].map((accept) => (
+                      <Button
+                        key={String(accept)}
+                        onClick={() =>
+                          setAction({
+                            title: accept ? "接受管理授权" : "拒绝管理授权",
+                            effect:
+                              "接受后获得提议对应的管理职责。团队权限与平台权限分别生效。",
+                            run: (_r, signal) =>
+                              (accept ? acceptProposal : declineProposal)(
+                                { id: p.id! },
+                                { expected_revision: p.revision },
+                                { signal },
+                              ),
+                          })
+                        }
+                      >
+                        {accept ? "接受授权" : "拒绝授权"}
+                      </Button>
+                    ))}
+                  </div>
+                ) : null}
+              </article>
+            ))}
+          {!proposalsPending && !proposalsError && proposals?.next_cursor ? (
             <Button
               variant="outline"
               onClick={async () => {
@@ -225,7 +301,7 @@ export function InvitationsPage() {
         key={action?.title ?? "closed"}
         action={action}
         onClose={() => setAction(null)}
-        onDone={() => setRetry((n) => n + 1)}
+        onDone={reloadReads}
       />
     </div>
   );

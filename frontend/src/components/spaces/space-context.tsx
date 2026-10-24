@@ -1,12 +1,7 @@
 "use client";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { PageLoading } from "@/components/layout/loading-state";
-import {
-  Empty,
-  EmptyHeader,
-  EmptyTitle,
-  EmptyContent,
-} from "@/components/ui/empty";
+import { ContentState } from "@/components/layout/content-state";
 import { Button } from "@/components/ui/button";
 import {
   createContext,
@@ -169,16 +164,12 @@ export function SpaceProvider({
         session &&
         (!selected || selectedActor !== session.actor.id) ? (
           error && !pending ? (
-            <Empty>
-              <EmptyHeader>
-                <EmptyTitle>暂时无法打开空间</EmptyTitle>
-              </EmptyHeader>
-              <EmptyContent>
-                <Button variant="outline" onClick={() => void load()}>
-                  重试
-                </Button>
-              </EmptyContent>
-            </Empty>
+            <ContentState
+              state="error"
+              title="暂时无法打开空间"
+              description={error}
+              actions={<Button onClick={() => void load()}>重试</Button>}
+            />
           ) : (
             <PageLoading message="正在加载…" />
           )
@@ -196,20 +187,16 @@ export function SpaceGate({ children }: { children: ReactNode }) {
   if (!session || space.selected) return children;
   if (space.error && !space.pending)
     return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyTitle>暂时无法打开空间</EmptyTitle>
-        </EmptyHeader>
-        <EmptyContent>
-          <Button variant="outline" onClick={() => void space.refresh()}>
-            重试
-          </Button>
-        </EmptyContent>
-      </Empty>
+      <ContentState
+        state="error"
+        title="暂时无法打开空间"
+        description={space.error}
+        actions={<Button onClick={() => void space.refresh()}>重试</Button>}
+      />
     );
   return <PageLoading message="正在确认创作归属…" />;
 }
-export function SpaceSwitcher() {
+export function SpaceSwitcher({ compact = false }: { compact?: boolean }) {
   const { spaces, selected, pending, select } = useSpace();
   const session = useOptionalSession();
   if (!session) return null;
@@ -232,12 +219,16 @@ export function SpaceSwitcher() {
           </NativeSelectOption>
         ))}
       </NativeSelect>
-      <Link href="/teams" className="text-sm underline">
-        团队
-      </Link>
-      <Link href="/invitations" className="text-sm underline">
-        邀请与授权
-      </Link>
+      {!compact && (
+        <>
+          <Link href="/teams" className="text-sm underline">
+            团队
+          </Link>
+          <Link href="/invitations" className="text-sm underline">
+            邀请与授权
+          </Link>
+        </>
+      )}
     </div>
   );
 }

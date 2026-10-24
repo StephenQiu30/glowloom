@@ -110,7 +110,7 @@ it("加载失败显示恢复入口，不伪装成空连接", async () => {
   api.role = "platform_admin";
   api.providers.mockRejectedValue(new Error("暂不可用"));
   render(<ProvidersPage />);
-  await screen.findByRole("button", { name: "重新加载" });
+  await screen.findByRole("button", { name: "重试" });
   expect(screen.queryByText("还没有连接")).toBeNull();
 });
 

@@ -1,4 +1,5 @@
 "use client";
+import { ContentState } from "@/components/layout/content-state";
 import { useState, type ReactNode } from "react";
 import type { JSONContent } from "@tiptap/core";
 import {
@@ -71,9 +72,28 @@ export function YjsVersionHistory({
               恢复会创建新的版本，保留现有历史。画布名称与已分配引用编号保留当前值。
             </DialogDescription>
           </DialogHeader>
-          {error && <p role="alert">{error}</p>}
+          {error && (
+            <ContentState
+              className="min-h-40"
+              state="error"
+              title="版本历史暂不可用"
+              description={error}
+            />
+          )}
           {busy && (
-            <p role="status">正在处理；如连接中断，将查证原操作结果。</p>
+            <ContentState
+              className="min-h-40"
+              state="loading"
+              title="正在处理"
+              description="如连接中断，将查证原操作结果。"
+            />
+          )}
+          {!busy && !error && versions.length === 0 && (
+            <ContentState
+              className="min-h-40"
+              title="暂无版本历史"
+              description="后续保存的版本会显示在这里。"
+            />
           )}
           <div className="flex flex-wrap gap-2">
             {versions.map((version) => (

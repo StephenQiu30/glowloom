@@ -1,4 +1,6 @@
 "use client";
+import { readErrorMessage } from "@/lib/read-error";
+import { ContentState } from "@/components/layout/content-state";
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -59,13 +61,7 @@ import {
   CardDescription,
   CardFooter,
 } from "@/components/ui/card";
-import {
-  Empty,
-  EmptyHeader,
-  EmptyTitle,
-  EmptyDescription,
-  EmptyContent,
-} from "@/components/ui/empty";
+
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   exportProviderPreset,
@@ -96,17 +92,11 @@ export function ProvidersPage(props: ProvidersPageProps) {
   const session = useSession();
   if (session.actor.platform_role !== "platform_admin") {
     return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyTitle>暂无访问权限</EmptyTitle>
-          <EmptyDescription>此页面仅向平台管理员开放。</EmptyDescription>
-        </EmptyHeader>
-        <EmptyContent>
-          <Button asChild variant="outline">
-            <Link href="/">返回创作</Link>
-          </Button>
-        </EmptyContent>
-      </Empty>
+      <ContentState
+        state="error"
+        title="暂无访问权限"
+        description="此页面仅向平台管理员开放。"
+      />
     );
   }
   return <ProviderAdministration key={session.actor.id} {...props} />;
@@ -182,7 +172,7 @@ function ProviderAdministration({
       })
       .catch((error) => {
         if (!controller.signal.aborted) {
-          setError(catalogMessage(error));
+          setError(readErrorMessage(error));
           setLoading(false);
         }
       });
@@ -305,7 +295,6 @@ function ProviderAdministration({
       {mutation.message || mutation.pending ? (
         <MutationStatus mutation={mutation} />
       ) : null}
-      {error ? <FeedbackToast message={error} /> : null}
       {feedback ? <FeedbackToast message={feedback} /> : null}
       {pendingCreate.pending || pendingKey.pending ? (
         <div className="flex flex-wrap items-center gap-3">
@@ -326,16 +315,12 @@ function ProviderAdministration({
           ))}
         </div>
       ) : error ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>暂时无法加载</EmptyTitle>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button variant="outline" onClick={retry}>
-              重新加载
-            </Button>
-          </EmptyContent>
-        </Empty>
+        <ContentState
+          state="error"
+          title="服务连接暂时无法读取"
+          description={error}
+          actions={<Button onClick={retry}>重试</Button>}
+        />
       ) : (
         <>
           <section aria-label="已添加的服务" className="flex flex-col gap-4">
@@ -359,28 +344,17 @@ function ProviderAdministration({
                 }
               />
             ) : (
-              <Empty>
-                <EmptyHeader>
-                  <EmptyTitle>
-                    {query ? "没有匹配的连接" : "还没有连接"}
-                  </EmptyTitle>
-                  <EmptyDescription>
-                    {query
-                      ? "试试其他关键词。"
-                      : "选择平台预设，添加 API Key。"}
-                  </EmptyDescription>
-                </EmptyHeader>
-                {!query ? (
-                  <EmptyContent>
-                    <Button
-                      onClick={() => openConnect(true)}
-                      className="max-md:h-11"
-                    >
-                      接入服务
-                    </Button>
-                  </EmptyContent>
-                ) : null}
-              </Empty>
+              <ContentState
+                title={query ? "没有匹配的连接" : "还没有连接"}
+                description={
+                  query ? "试试其他关键词。" : "选择平台预设，添加 API Key。"
+                }
+                actions={
+                  !query ? (
+                    <Button onClick={() => openConnect(true)}>接入服务</Button>
+                  ) : undefined
+                }
+              />
             )}
           </section>
           <Collapsible
@@ -530,11 +504,7 @@ function ProviderAdministration({
                 })}
               </div>
               {!visiblePresets.length ? (
-                <Empty>
-                  <EmptyHeader>
-                    <EmptyTitle>没有匹配的预设</EmptyTitle>
-                  </EmptyHeader>
-                </Empty>
+                <ContentState title="没有匹配的预设" />
               ) : null}
             </CollapsibleContent>
           </Collapsible>

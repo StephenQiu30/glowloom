@@ -1,4 +1,6 @@
 "use client";
+import { ContentState } from "@/components/layout/content-state";
+import { readErrorMessage } from "@/lib/read-error";
 
 import type { Transaction } from "@tiptap/pm/state";
 import type { ComposerCollaboration } from "./composer-session";
@@ -348,7 +350,7 @@ export function RichGeneration(props: Props) {
           setError("");
         }
       } catch (error) {
-        if (active) setError(errorText(error));
+        if (active) setError(readErrorMessage(error));
       }
     }
     void boot();
@@ -361,17 +363,22 @@ export function RichGeneration(props: Props) {
   }, [props.projectID, opened, retry, bootKey]);
   if (!ready)
     return error ? (
-      <Empty className="min-h-52">
-        <EmptyHeader>
-          <EmptyTitle>编辑器暂时无法加载</EmptyTitle>
-          <EmptyDescription>{error}</EmptyDescription>
-        </EmptyHeader>
-        <EmptyContent>
-          <Button variant="outline" onClick={() => setRetry((n) => n + 1)}>
+      <ContentState
+        className="min-h-52"
+        state="error"
+        title="编辑器暂时无法加载"
+        description={error}
+        actions={
+          <Button
+            onClick={() => {
+              setError("");
+              setRetry((n) => n + 1);
+            }}
+          >
             重试
           </Button>
-        </EmptyContent>
-      </Empty>
+        }
+      />
     ) : (
       <div
         role="status"

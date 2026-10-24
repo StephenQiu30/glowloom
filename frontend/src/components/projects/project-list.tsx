@@ -1,9 +1,9 @@
 "use client";
-import { FeedbackToast } from "@/components/feedback/feedback-toast";
-import { LoadingState } from "@/components/layout/loading-state";
+import { ContentState } from "@/components/layout/content-state";
+import { readErrorMessage } from "@/lib/read-error";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Grid2X2, MoreHorizontal } from "lucide-react";
+import { Grid2X2, MoreHorizontal, PanelsTopLeft } from "lucide-react";
 import { useProjectPresentation } from "@/components/projects/project-presentation";
 import { subscribeProjectInvalidation } from "@/components/projects/project-presentation-store";
 import { ProjectRenameDialog } from "@/components/projects/project-rename-dialog";
@@ -21,12 +21,7 @@ import {
   DataPagination,
   type PageSize,
 } from "@/components/media/data-pagination";
-import {
-  Empty,
-  EmptyHeader,
-  EmptyTitle,
-  EmptyDescription,
-} from "@/components/ui/empty";
+
 import {
   Select,
   SelectTrigger,
@@ -46,7 +41,6 @@ import {
 import { listProjects } from "@/api/projects";
 import {
   canvasHref,
-  projectErrorMessage,
   requireProjectList,
   type Project,
 } from "@/components/projects/project";
@@ -135,7 +129,7 @@ export function ProjectList({
         if (!controller.signal.aborted) setPage(result);
       })
       .catch((e: unknown) => {
-        if (!controller.signal.aborted) setError(projectErrorMessage(e));
+        if (!controller.signal.aborted) setError(readErrorMessage(e));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -284,48 +278,47 @@ export function ProjectList({
         )}
       </div>
       {loading && !page && (
-        <LoadingState className="py-10 text-muted-foreground">
-          正在读取画布…
-        </LoadingState>
+        <ContentState state="loading" title="正在读取画布" />
       )}
       {error && (
-        <FeedbackToast
-          message={error}
-          action={
-            loading
-              ? undefined
-              : {
-                  label: "重试读取",
-                  onClick: () => {
-                    setError("");
-                    setLoading(true);
-                    setRetry((n) => n + 1);
-                  },
-                }
+        <ContentState
+          state="error"
+          title="暂时无法读取画布"
+          description={error}
+          actions={
+            <Button
+              disabled={loading}
+              onClick={() => {
+                setError("");
+                setLoading(true);
+                setRetry((n) => n + 1);
+              }}
+            >
+              重试读取
+            </Button>
           }
         />
       )}
-      {page?.items.length === 0 && (
-        <Empty className="min-h-80">
-          <EmptyHeader>
-            <EmptyTitle>
-              {query
-                ? "没有匹配的画布"
-                : filter === "archived"
-                  ? "没有已归档的画布"
-                  : filter === "deleted"
-                    ? "回收站为空"
-                    : "还没有画布"}
-            </EmptyTitle>
-            <EmptyDescription>
-              {query
-                ? "试试其他名称。"
-                : filter === "active"
-                  ? "创建第一个空白画布，进入你的画布。"
-                  : "画布状态变化后会显示在这里。"}
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+      {!error && !loading && page?.items.length === 0 && (
+        <ContentState
+          icon={PanelsTopLeft}
+          title={
+            query
+              ? "没有匹配的画布"
+              : filter === "archived"
+                ? "没有已归档的画布"
+                : filter === "deleted"
+                  ? "回收站为空"
+                  : "还没有画布"
+          }
+          description={
+            query
+              ? "试试其他名称。"
+              : filter === "active"
+                ? "创建第一个空白画布，进入你的画布。"
+                : "画布状态变化后会显示在这里。"
+          }
+        />
       )}
       <div className={view === "grid" ? "canvas-grid" : "flex flex-col gap-3"}>
         {page?.items.map((project) => (

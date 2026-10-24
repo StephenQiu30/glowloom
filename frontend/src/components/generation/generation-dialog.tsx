@@ -1,4 +1,5 @@
 "use client";
+import { ContentState } from "@/components/layout/content-state";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import {
   Collapsible,
@@ -20,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { ProjectPicker } from "@/components/projects/project-picker";
 import { type Project } from "@/components/projects/project";
 import { ProjectMediaPreview } from "@/components/media/project-media";
+import { readErrorMessage } from "@/lib/read-error";
 import { RequestError } from "@/lib/request";
 import {
   getOperation,
@@ -142,9 +144,7 @@ export function GenerationDialog({
             }}
           />
         ) : (
-          <div className="empty-state">
-            <p>先选择一个项目，继续这次创作。</p>
-          </div>
+          <ContentState className="min-h-40" title="选择项目，继续创作" />
         )}
       </DialogContent>
     </Dialog>
@@ -241,7 +241,7 @@ function TaskHistory({
       setCursor(r.next_cursor);
       setOpen(true);
     } catch (e) {
-      setError(flowError(e));
+      setError(readErrorMessage(e));
     } finally {
       setPending(false);
     }
@@ -252,8 +252,22 @@ function TaskHistory({
         <History />
         {pending ? "正在读取…" : "查看生成历史"}
       </Button>
-      {error && <FeedbackToast message={error} />}
-      {open && (
+      {pending ? (
+        <ContentState
+          className="min-h-40"
+          state="loading"
+          title="正在读取生成历史"
+        />
+      ) : error ? (
+        <ContentState
+          className="min-h-40"
+          state="error"
+          title="生成历史暂时无法读取"
+          description={error}
+          actions={<Button onClick={() => void load()}>重试</Button>}
+        />
+      ) : null}
+      {open && !pending && !error && (
         <>
           <div className="task-list">
             {items.map((t) => (
@@ -273,7 +287,11 @@ function TaskHistory({
             ))}
           </div>
           {items.length === 0 && (
-            <p>还没有生成任务。提交后的任务会保留在这里。</p>
+            <ContentState
+              className="min-h-40"
+              title="暂无生成任务"
+              description="提交后的任务会保留在这里。"
+            />
           )}
           {cursor && (
             <Button

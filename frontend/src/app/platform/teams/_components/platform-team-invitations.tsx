@@ -1,4 +1,6 @@
 "use client";
+import { ContentState } from "@/components/layout/content-state";
+import { readErrorMessage } from "@/lib/read-error";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useEffect, useState } from "react";
 import {
@@ -26,7 +28,8 @@ export function PlatformTeamInvitations({
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
-  const read = useReadBoundary(`${teamID}:${status}:${reload}`);
+  const [retry, setRetry] = useState(0);
+  const read = useReadBoundary(`${teamID}:${status}:${reload}:${retry}`);
   useEffect(() => {
     const c = new AbortController();
     listPlatformTeamInvitations(
@@ -42,11 +45,11 @@ export function PlatformTeamInvitations({
       .catch((e) => {
         if (!c.signal.aborted) {
           setPage(null);
-          setError(authErrorMessage(e));
+          setError(readErrorMessage(e));
         }
       });
     return () => c.abort();
-  }, [teamID, status, reload]);
+  }, [teamID, status, reload, retry]);
   return (
     <section className="grid gap-3" aria-label="团队历史邀请">
       <h3>团队历史邀请</h3>
@@ -55,6 +58,7 @@ export function PlatformTeamInvitations({
         value={status}
         onChange={(e) => {
           setPage(null);
+          setError("");
           setStatus(e.target.value);
         }}
       >
@@ -75,12 +79,35 @@ export function PlatformTeamInvitations({
           </NativeSelectOption>
         ))}
       </NativeSelect>
-      {error ? (
+      {error && !page ? (
+        <ContentState
+          className="min-h-40"
+          state="error"
+          title="历史邀请暂时无法读取"
+          description={error}
+          actions={
+            <Button
+              onClick={() => {
+                setError("");
+                setRetry((n) => n + 1);
+              }}
+            >
+              重试
+            </Button>
+          }
+        />
+      ) : error ? (
         <FeedbackToast message={error} />
       ) : !page ? (
-        <p role="status">正在读取历史邀请…</p>
+        <ContentState
+          className="min-h-40"
+          state="loading"
+          title="正在读取历史邀请"
+        />
       ) : null}
-      {page?.items?.length === 0 ? <p>暂无历史邀请。</p> : null}
+      {page?.items?.length === 0 ? (
+        <ContentState className="min-h-40" title="暂无历史邀请" />
+      ) : null}
       {page?.items?.map((i) => (
         <article key={i.id} className="grid gap-2 rounded-xl border p-3">
           <p className="break-all">

@@ -1,6 +1,7 @@
 "use client";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
-import { LoadingState } from "@/components/layout/loading-state";
+import { ContentState } from "@/components/layout/content-state";
+import { readErrorMessage } from "@/lib/read-error";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import {
@@ -99,7 +100,7 @@ export function Settings({ embedded = false }: { embedded?: boolean }) {
           if (!controller.signal.aborted)
             setBlockErrors((current) => ({
               ...current,
-              [block]: authErrorMessage(reason),
+              [block]: readErrorMessage(reason),
             }));
         })
         .finally(() => {
@@ -241,22 +242,22 @@ export function Settings({ embedded = false }: { embedded?: boolean }) {
             />
           ) : null}
           {notice ? <FeedbackToast message={notice} tone="info" /> : null}
-          {tab === "profile" && blockErrors.profile ? (
-            <FeedbackToast
-              message={["个人资料读取失败：", blockErrors.profile].join(" ")}
-              action={{ label: "重新加载个人资料", onClick: refresh }}
-            />
-          ) : null}
-          {tab === "preferences" && blockErrors.preferences ? (
-            <FeedbackToast
-              message={["创作偏好读取失败：", blockErrors.preferences].join(
-                " ",
-              )}
-              action={{ label: "重新加载创作偏好", onClick: refresh }}
-            />
-          ) : null}
           {tab === "profile" ? (
-            profile ? (
+            loadingBlocks.profile ? (
+              <ContentState
+                className="min-h-40"
+                state="loading"
+                title="正在读取个人资料"
+              />
+            ) : blockErrors.profile ? (
+              <ContentState
+                className="min-h-40"
+                state="error"
+                title="个人资料暂时无法读取"
+                description={blockErrors.profile}
+                actions={<Button onClick={refresh}>重试</Button>}
+              />
+            ) : profile ? (
               <>
                 <h2>个人资料</h2>
                 <AvatarEditor
@@ -341,11 +342,23 @@ export function Settings({ embedded = false }: { embedded?: boolean }) {
                   </CollapsibleContent>
                 </Collapsible>
               </>
-            ) : loadingBlocks.profile ? (
-              <LoadingState>正在加载账号资料…</LoadingState>
             ) : null
           ) : tab === "preferences" ? (
-            preferences ? (
+            loadingBlocks.preferences ? (
+              <ContentState
+                className="min-h-40"
+                state="loading"
+                title="正在读取创作偏好"
+              />
+            ) : blockErrors.preferences ? (
+              <ContentState
+                className="min-h-40"
+                state="error"
+                title="创作偏好暂时无法读取"
+                description={blockErrors.preferences}
+                actions={<Button onClick={refresh}>重试</Button>}
+              />
+            ) : preferences ? (
               <>
                 <h2>创作偏好</h2>
                 <form
@@ -401,8 +414,6 @@ export function Settings({ embedded = false }: { embedded?: boolean }) {
                   </FieldGroup>
                 </form>
               </>
-            ) : loadingBlocks.preferences ? (
-              <LoadingState>正在加载创作偏好…</LoadingState>
             ) : null
           ) : tab === "security" ? (
             <>
@@ -413,46 +424,64 @@ export function Settings({ embedded = false }: { embedded?: boolean }) {
               <p>修改密码保留当前设备并退出其他设备。</p>
               <h3 className="mt-6">登录设备</h3>
               {loadingBlocks.sessions ? (
-                <LoadingState>正在读取设备…</LoadingState>
+                <ContentState
+                  className="min-h-40"
+                  state="loading"
+                  title="正在读取登录设备"
+                />
               ) : blockErrors.sessions ? (
-                <FeedbackToast
-                  message={["设备读取失败：", blockErrors.sessions].join(" ")}
-                  action={{ label: "重试读取设备", onClick: refresh }}
+                <ContentState
+                  className="min-h-40"
+                  state="error"
+                  title="登录设备暂时无法读取"
+                  description={blockErrors.sessions}
+                  actions={<Button onClick={refresh}>重试读取设备</Button>}
                 />
               ) : sessions.length === 0 ? (
-                <p>暂无登录设备。</p>
+                <ContentState className="min-h-40" title="暂无登录设备" />
               ) : null}
-              {sessions.map((item) => (
-                <div className="my-3 rounded-lg border p-4" key={item.id}>
-                  <p>
-                    {item.current ? "当前设备 · " : ""}
-                    {item.device_summary || "设备摘要不可用"}
-                  </p>
-                  <p>
-                    最近活跃：
-                    {new Date(item.last_active_at).toLocaleString("zh-CN")}
-                  </p>
-                  <Button
-                    variant="outline"
-                    disabled={pending}
-                    onClick={() =>
-                      void run(async (signal) => {
-                        if (item.id === session.session_id) {
-                          await revokeSession(session);
-                          return;
-                        }
-                        await deleteSession({ id: item.id }, { signal });
-                        if (!signal.aborted) refresh();
-                      })
-                    }
+              {!loadingBlocks.sessions &&
+                !blockErrors.sessions &&
+                sessions.map((item) => (
+                  <div
+                    className="my-3 grid gap-2 rounded-lg bg-muted/50 p-4"
+                    key={item.id}
                   >
-                    退出此设备
-                  </Button>
-                </div>
-              ))}
+                    <p>
+                      {item.current ? "当前设备 · " : ""}
+                      {item.device_summary || "设备摘要不可用"}
+                    </p>
+                    <p>
+                      最近活跃：
+                      {new Date(item.last_active_at).toLocaleString("zh-CN")}
+                    </p>
+                    <Button
+                      className="w-fit justify-self-end"
+                      variant="secondary"
+                      disabled={pending}
+                      onClick={() =>
+                        void run(async (signal) => {
+                          if (item.id === session.session_id) {
+                            await revokeSession(session);
+                            return;
+                          }
+                          await deleteSession({ id: item.id }, { signal });
+                          if (!signal.aborted) refresh();
+                        })
+                      }
+                    >
+                      退出此设备
+                    </Button>
+                  </div>
+                ))}
               <Button
                 variant="outline"
-                disabled={pending}
+                disabled={
+                  pending ||
+                  loadingBlocks.sessions ||
+                  !!blockErrors.sessions ||
+                  sessions.length === 0
+                }
                 onClick={() =>
                   void run(async (signal) => {
                     await revokeOtherSessions({ signal });
@@ -464,15 +493,23 @@ export function Settings({ embedded = false }: { embedded?: boolean }) {
               </Button>
               <h3 className="mt-6">本人安全活动</h3>
               {loadingBlocks.events ? (
-                <LoadingState>正在读取安全活动…</LoadingState>
+                <ContentState
+                  className="min-h-40"
+                  state="loading"
+                  title="正在读取安全活动"
+                />
               ) : blockErrors.events ? (
-                <FeedbackToast
-                  message={["安全活动读取失败：", blockErrors.events].join(" ")}
-                  action={{ label: "重试安全活动", onClick: refresh }}
+                <ContentState
+                  className="min-h-40"
+                  state="error"
+                  title="安全活动暂时无法读取"
+                  description={blockErrors.events}
+                  actions={<Button onClick={refresh}>重试安全活动</Button>}
                 />
               ) : null}
-              {events?.items.length === 0 ? (
-                <p>暂无安全活动。</p>
+              {loadingBlocks.events || blockErrors.events ? null : events?.items
+                  .length === 0 ? (
+                <ContentState className="min-h-40" title="暂无安全活动" />
               ) : (
                 events?.items.map((item) => (
                   <p key={item.id} className="my-2 text-sm">
@@ -481,7 +518,9 @@ export function Settings({ embedded = false }: { embedded?: boolean }) {
                   </p>
                 ))
               )}
-              {events?.next_cursor ? (
+              {!loadingBlocks.events &&
+              !blockErrors.events &&
+              events?.next_cursor ? (
                 <Button
                   variant="outline"
                   disabled={pending}

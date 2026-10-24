@@ -1,4 +1,5 @@
 "use client";
+import { ContentState } from "@/components/layout/content-state";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { FieldLabel } from "@/components/ui/field";
 import { useRef, useState } from "react";
@@ -34,7 +35,10 @@ export function TeamsPage() {
             </Link>
           ))}
         {!spaces.some((s) => s.kind === "team") ? (
-          <p>您尚未加入团队。</p>
+          <ContentState
+            title="尚未加入团队"
+            description="创建团队，或接受邀请后开始协作。"
+          />
         ) : null}
       </div>
       <form

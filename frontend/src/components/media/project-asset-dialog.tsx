@@ -1,5 +1,6 @@
 "use client";
-import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import { ContentState } from "@/components/layout/content-state";
+import { readErrorMessage } from "@/lib/read-error";
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -42,13 +43,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
+
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { getMediaPreview, listMediaAssets } from "@/api/media";
@@ -61,7 +56,6 @@ import {
   getSessionGeneration,
   RequestError,
 } from "@/lib/request";
-import { flowError } from "@/components/generation/contracts";
 import "./project-asset-dialog.css";
 import { isProjectID } from "@/components/projects/project";
 
@@ -490,7 +484,7 @@ function MaterialList({
             setError("");
           })
           .catch((e) => {
-            if (!controller.signal.aborted) setError(flowError(e));
+            if (!controller.signal.aborted) setError(readErrorMessage(e));
           })
           .finally(() => {
             if (!controller.signal.aborted) setLoading(false);
@@ -528,7 +522,7 @@ function MaterialList({
       ]);
       setCursor(page.next_cursor);
     } catch (e) {
-      if (!controller.signal.aborted) setError(flowError(e));
+      if (!controller.signal.aborted) setError(readErrorMessage(e));
     } finally {
       busy.current = false;
       if (!controller.signal.aborted) setLoading(false);
@@ -548,7 +542,9 @@ function MaterialList({
             ? query
               ? "正在搜索当前项目…"
               : "正在读取素材…"
-            : `${filtered.length} 个结果`}
+            : error
+              ? "读取未完成"
+              : `${filtered.length} 个结果`}
         </span>
         {limit > 1 && (
           <Button
@@ -562,17 +558,22 @@ function MaterialList({
         )}
       </div>
       <div className="canvas-material-content" data-canvas-wheel-scroll>
-        {error && (
-          <FeedbackToast
-            message={error}
-            action={{
-              label: "重新读取",
-              onClick: () => {
-                setError("");
-                setLoading(true);
-                setRetry((v) => v + 1);
-              },
-            }}
+        {error && !loading && (
+          <ContentState
+            state="error"
+            title="素材暂时无法读取"
+            description={error}
+            actions={
+              <Button
+                onClick={() => {
+                  setError("");
+                  setLoading(true);
+                  setRetry((v) => v + 1);
+                }}
+              >
+                重试
+              </Button>
+            }
           />
         )}
         <div className="canvas-material-grid">
@@ -630,21 +631,15 @@ function MaterialList({
             ))}
         </div>
         {!loading && !error && !filtered.length && (
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <FolderOpen />
-              </EmptyMedia>
-              <EmptyTitle>
-                {query ? "没有匹配的素材" : "当前项目暂无此类素材"}
-              </EmptyTitle>
-              <EmptyDescription>
-                {query
-                  ? "换个关键词，或清除搜索查看全部素材。"
-                  : "上传素材后，即可添加到画布。"}
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
+          <ContentState
+            icon={FolderOpen}
+            title={query ? "没有匹配的素材" : "当前项目暂无此类素材"}
+            description={
+              query
+                ? "换个关键词，或清除搜索查看全部素材。"
+                : "上传素材后，即可添加到画布。"
+            }
+          />
         )}
         {cursor && (
           <Button

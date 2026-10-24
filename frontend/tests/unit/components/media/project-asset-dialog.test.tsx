@@ -1,4 +1,4 @@
-import { render, findFeedback } from "../../../feedback";
+import { render } from "../../../feedback";
 import {
   act,
   cleanup,
@@ -129,11 +129,14 @@ it("跨项目回执不进入可选素材，重新读取可恢复", async () => {
       onSubject={vi.fn()}
     />,
   );
-  await findFeedback();
+  expect(await screen.findByRole("alert")).toHaveProperty(
+    "textContent",
+    expect.stringContaining("素材暂时无法读取"),
+  );
   expect(
     screen.queryByRole("button", { name: "选择素材 海边香氛.png" }),
   ).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "重新读取" }));
+  fireEvent.click(screen.getByRole("button", { name: "重试" }));
   await screen.findByRole("button", { name: "选择素材 海边香氛.png" });
 });
 it("关闭弹窗中止读取，迟到回执不能继续更新弹窗", async () => {

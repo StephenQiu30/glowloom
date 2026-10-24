@@ -1,4 +1,4 @@
-import { render, findFeedback } from "../../../../feedback";
+import { render } from "../../../../feedback";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { UserDirectory } from "@/app/users/_components/users-page";
@@ -75,12 +75,14 @@ it("permission loss clears private directory while retaining retry", async () =>
   render(<UserDirectory />);
   await screen.findByText("private@example.com");
   fireEvent.click(screen.getByText("刷新"));
-  await findFeedback();
+  await screen.findByRole("heading", { name: "暂无访问权限" });
   expect(screen.queryByText("private@example.com")).toBeNull();
   expect(screen.getByText("刷新")).toBeTruthy();
 });
 it("empty platform directory reports no invented users", async () => {
   vi.mocked(request).mockResolvedValue({ items: [], next_cursor: null });
   render(<UserDirectory />);
-  expect(await screen.findByText("没有匹配的用户。")).toBeTruthy();
+  expect(
+    await screen.findByRole("heading", { name: "没有匹配的用户" }),
+  ).toBeTruthy();
 });

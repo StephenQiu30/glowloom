@@ -1,14 +1,7 @@
 "use client";
-import { FolderOpen } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
+import { ContentState } from "@/components/layout/content-state";
 
 export function ProjectReadEmpty({
   onRetry,
@@ -20,24 +13,19 @@ export function ProjectReadEmpty({
   canvas?: boolean;
 }) {
   return (
-    <Empty className="min-h-40 py-6" aria-busy={retrying}>
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <FolderOpen />
-        </EmptyMedia>
-        <EmptyTitle>
-          {canvas ? "暂无可展示的画布" : "暂无可展示的项目"}
-        </EmptyTitle>
-        <EmptyDescription>
-          重新读取{canvas ? "画布" : "项目"}，或稍后再试。
-        </EmptyDescription>
-      </EmptyHeader>
-      <EmptyContent>
+    <ContentState
+      className="min-h-40 py-6"
+      state={retrying ? "loading" : "error"}
+      title={
+        retrying ? "正在读取" : canvas ? "画布暂时无法读取" : "项目暂时无法读取"
+      }
+      description="请重新读取，或稍后再试。"
+      actions={
         <Button variant="outline" disabled={retrying} onClick={onRetry}>
           {retrying ? "正在读取" : "重新读取"}
         </Button>
-      </EmptyContent>
-    </Empty>
+      }
+    />
   );
 }
 

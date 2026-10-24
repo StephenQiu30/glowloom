@@ -1,4 +1,5 @@
 "use client";
+import { ContentState } from "@/components/layout/content-state";
 import { useEffect, useState } from "react";
 import { getPlatformSecurityEvents } from "@/api/identity";
 import { SessionGate } from "@/components/auth/session";
@@ -38,17 +39,39 @@ function Events() {
       <PageHeading
         title="审计日志"
         actions={
-          <Button variant="secondary" onClick={() => setAttempt((n) => n + 1)}>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setError(false);
+              setData(null);
+              setAttempt((n) => n + 1);
+            }}
+          >
             刷新
           </Button>
         }
       />
       {error ? (
-        <p role="alert">无法读取审计日志，请检查权限后重试。</p>
+        <ContentState
+          state="error"
+          title="审计日志暂时无法读取"
+          description="请检查访问权限后重试。"
+          actions={
+            <Button
+              onClick={() => {
+                setError(false);
+                setData(null);
+                setAttempt((n) => n + 1);
+              }}
+            >
+              重试
+            </Button>
+          }
+        />
       ) : !data ? (
-        <p role="status">正在读取…</p>
+        <ContentState state="loading" title="正在读取审计日志" />
       ) : !data.items.length ? (
-        <p className="py-16 text-center text-muted-foreground">暂无记录</p>
+        <ContentState title="暂无审计记录" />
       ) : (
         <Table>
           <TableHeader>

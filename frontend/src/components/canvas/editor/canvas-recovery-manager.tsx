@@ -1,5 +1,6 @@
 "use client";
 
+import { ContentState } from "@/components/layout/content-state";
 import { useEffect, useRef, useState } from "react";
 import { useAccount } from "@/components/canvas/runtime/components/account/account-provider";
 import { Button } from "@/components/ui/button";
@@ -112,9 +113,19 @@ function RecoveryManager({ actorKey }: { actorKey: string }) {
             </DialogDescription>
           </DialogHeader>
           {loading ? (
-            <p role="status">正在读取页面内存记录</p>
+            <ContentState
+              className="min-h-40"
+              state="loading"
+              title="正在读取页面内存记录"
+            />
           ) : failed ? (
-            <Button onClick={() => void read()}>重试读取页面内存记录</Button>
+            <ContentState
+              className="min-h-40"
+              state="error"
+              title="恢复记录暂时无法读取"
+              description="请重试读取；尚未确认的恢复记录不会被清除。"
+              actions={<Button onClick={() => void read()}>重试</Button>}
+            />
           ) : (
             <div className="grid max-h-80 gap-4 overflow-y-auto">
               <p role="status">
@@ -127,7 +138,12 @@ function RecoveryManager({ actorKey }: { actorKey: string }) {
                 ).toFixed(2)}{" "}
                 / 64 MiB
               </p>
-              {usage.length === 0 && <p>没有页面内存恢复记录</p>}
+              {usage.length === 0 && (
+                <ContentState
+                  className="min-h-40"
+                  title="没有页面内存恢复记录"
+                />
+              )}
               {usage.map((value) => (
                 <div key={value.canvasId} className="grid gap-2">
                   <p>画布 {value.canvasId}</p>

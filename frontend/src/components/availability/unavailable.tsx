@@ -1,3 +1,4 @@
+import { ContentState } from "@/components/layout/content-state";
 import { CircleHelp } from "lucide-react";
 import {
   Dialog,
@@ -39,10 +40,6 @@ export function UnavailableState({
   description: string;
 }) {
   return (
-    <div className="empty-state">
-      <CircleHelp className="size-9" strokeWidth={1.3} />
-      <h2>{title}</h2>
-      <p>{description}</p>
-    </div>
+    <ContentState icon={CircleHelp} title={title} description={description} />
   );
 }

@@ -1,5 +1,6 @@
 "use client";
-import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import { ContentState } from "@/components/layout/content-state";
+import { readErrorMessage } from "@/lib/read-error";
 import {
   useCallback,
   useEffect,
@@ -29,18 +30,10 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Empty,
-  EmptyHeader,
-  EmptyTitle,
-  EmptyDescription,
-  EmptyMedia,
-  EmptyContent,
-} from "@/components/ui/empty";
+
 import { listBibleEntries, getBibleEntry } from "@/api/bible";
 import { ProjectMediaPreview } from "@/components/media/project-media";
 import { RequestError } from "@/lib/request";
-import { flowError } from "@/components/generation/contracts";
 import { isProjectID } from "@/components/projects/project";
 import {
   kinds,
@@ -132,7 +125,7 @@ export function SubjectList({
         }
       })
       .catch((e) => {
-        if (!c.signal.aborted) setError(flowError(e));
+        if (!c.signal.aborted) setError(readErrorMessage(e));
       })
       .finally(() => {
         if (!c.signal.aborted) setLoading(false);
@@ -219,16 +212,22 @@ export function SubjectList({
         ) : null}
       </div>
       {error && (
-        <FeedbackToast
-          message={error}
-          action={{
-            label: "重试读取",
-            onClick: () => {
-              setError("");
-              setLoading(true);
-              setRetry((n) => n + 1);
-            },
-          }}
+        <ContentState
+          state="error"
+          title="暂时无法读取主体"
+          description={error}
+          actions={
+            <Button
+              disabled={loading}
+              onClick={() => {
+                setError("");
+                setLoading(true);
+                setRetry((n) => n + 1);
+              }}
+            >
+              重试读取
+            </Button>
+          }
         />
       )}
       {loading && items.length === 0 ? (
@@ -238,33 +237,31 @@ export function SubjectList({
           ))}
         </div>
       ) : shown.length === 0 && !error ? (
-        <Empty className="min-h-80">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Icon />
-            </EmptyMedia>
-            <EmptyTitle>
-              {query
-                ? "没有匹配的主体"
-                : deleted
-                  ? "没有已删除的主体"
-                  : "还没有" + kinds[kind] + "主体"}
-            </EmptyTitle>
-            <EmptyDescription>
-              {query
-                ? "换个关键词，或翻页查看其他主体。"
-                : "添加参考与描述，在创作中保持一致。"}
-            </EmptyDescription>
-          </EmptyHeader>
-          {!query && !deleted && (
-            <EmptyContent>
-              <Button variant="outline" onClick={() => setCreate(true)}>
+        <ContentState
+          icon={Icon}
+          title={
+            query
+              ? "没有匹配的主体"
+              : deleted
+                ? "没有已删除的主体"
+                : "还没有" + kinds[kind] + "主体"
+          }
+          description={
+            query
+              ? "换个关键词，或翻页查看其他主体。"
+              : deleted
+                ? undefined
+                : "添加参考与描述，在创作中保持一致。"
+          }
+          actions={
+            !query && !deleted ? (
+              <Button variant="secondary" onClick={() => setCreate(true)}>
                 创建第一个{kinds[kind]}
               </Button>
-            </EmptyContent>
-          )}
-        </Empty>
-      ) : (
+            ) : undefined
+          }
+        />
+      ) : error && shown.length === 0 ? null : (
         <div className="subject-grid">
           {!pageTitle && !deleted && !query && (
             <Button

@@ -1,4 +1,5 @@
 "use client";
+import { ContentState } from "@/components/layout/content-state";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import Link from "next/link";
 import { DirectoryTools } from "@/components/directory/directory-tools";
@@ -281,7 +282,30 @@ export function UserDirectory() {
           刷新
         </Button>
       </form>
-      {error ? <FeedbackToast message={error} /> : null}
+      {error ? (
+        !page ? (
+          <ContentState
+            state="error"
+            title={forbidden ? "暂无访问权限" : "用户目录暂时无法读取"}
+            description={error}
+            actions={
+              <Button
+                disabled={pending}
+                onClick={() => {
+                  setError("");
+                  setPending(true);
+                  setForbidden(false);
+                  setRetry((n) => n + 1);
+                }}
+              >
+                重新读取
+              </Button>
+            }
+          />
+        ) : (
+          <FeedbackToast message={error} />
+        )
+      ) : null}
       {pending && !page ? <LoadingState>正在读取用户…</LoadingState> : null}
       <Button
         variant="outline"
@@ -346,7 +370,10 @@ export function UserDirectory() {
             </TableBody>
           </Table>
           {page.items.length === 0 ? (
-            <p className="empty-state">没有匹配的用户。</p>
+            <ContentState
+              title="没有匹配的用户"
+              description="尝试调整搜索或筛选条件。"
+            />
           ) : null}
         </div>
       ) : null}

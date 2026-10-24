@@ -3,7 +3,7 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { StrictMode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { InvitationsPage } from "@/app/invitations/_components/invitations-page";
-import { request } from "@/lib/request";
+import { request, RequestError } from "@/lib/request";
 import { clearInvitation } from "@/components/auth/invitation-continuity";
 const state = vi.hoisted(() => ({
   session: null as { actor: { id: string } } | null,
@@ -70,4 +70,24 @@ it("已登录用户也必须显式确认邀请，接受后清除令牌", async (
     ),
   );
   await screen.findByText("邀请已接受。");
+});
+
+it("failed invitation preview persists with retry and never appears as empty", async () => {
+  window.history.replaceState(null, "", `/invitations#token=${"b".repeat(43)}`);
+  vi.mocked(request)
+    .mockRejectedValueOnce(new RequestError("forbidden", 403))
+    .mockResolvedValue({
+      kind: "team",
+      team_id: "team-id",
+      team_role: "member",
+    });
+  render(<InvitationsPage />);
+  expect(await screen.findByRole("alert")).toHaveProperty(
+    "textContent",
+    expect.stringContaining("没有访问权限"),
+  );
+  expect(screen.queryByText("暂无待处理邀请")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "重试读取邀请" }));
+  expect(await screen.findByText("收到邀请")).toBeTruthy();
+  expect(screen.queryByRole("alert")).toBeNull();
 });
