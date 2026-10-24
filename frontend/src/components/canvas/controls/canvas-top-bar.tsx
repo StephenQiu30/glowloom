@@ -71,14 +71,14 @@ export function CanvasTopBar({
     <TooltipProvider>
       <div
         data-canvas-no-zoom
-        className="canvas-topbar pointer-events-none absolute inset-x-3 top-2.5 z-50 flex items-center justify-between gap-2"
+        className="canvas-topbar flex min-w-0 flex-1 items-center justify-between gap-2"
       >
         <div className="canvas-chrome-panel pointer-events-auto flex min-w-0 items-center gap-1">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                size="sm"
+                size="default"
                 className="canvas-brand"
                 aria-label="打开导航菜单"
               >
@@ -129,7 +129,7 @@ export function CanvasTopBar({
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                size="sm"
+                size="default"
                 className="canvas-project-trigger"
                 aria-label="打开画布菜单"
               >
@@ -217,6 +217,7 @@ export function CanvasTopBar({
                 variant="ghost"
                 size="icon-lg"
                 aria-label="搜索画布"
+                data-canvas-side-panel-trigger
                 onClick={() => {
                   setPanelTab("canvas");
                   openPanel();
@@ -247,7 +248,7 @@ export function CanvasTopBar({
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                size="sm"
+                size="default"
                 aria-label="复制画布链接"
                 onClick={() => {
                   void navigator.clipboard

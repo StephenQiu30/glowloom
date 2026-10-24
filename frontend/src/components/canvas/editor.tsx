@@ -8,7 +8,7 @@ import {
 import { Provider } from "react-redux";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
-import { makeAppStore } from "./runtime/store/app-store";
+import { makeAppStore, themeActions } from "./runtime/store/app-store";
 import { AppFeedbackProvider } from "./runtime/components/feedback/app-feedback-provider";
 import CanvasPage from "./editor/canvas-editor";
 import { CanvasTopBar } from "./controls/canvas-top-bar";
@@ -236,6 +236,11 @@ export function CanvasProviders({ children }: { children: ReactNode }) {
   const [store] = useState(() =>
     makeAppStore(resolvedTheme === "dark" ? "dark" : "light"),
   );
+  useEffect(() => {
+    if (resolvedTheme === "light" || resolvedTheme === "dark") {
+      store.dispatch(themeActions.setTheme(resolvedTheme));
+    }
+  }, [resolvedTheme, store]);
   return (
     <Provider store={store}>
       <CanvasAccountContext.Provider

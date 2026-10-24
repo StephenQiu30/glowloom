@@ -166,7 +166,7 @@ export function CanvasSidePanel({
       }}
       className="flex min-h-0 flex-1 flex-col gap-2"
     >
-      <div className="flex shrink-0 items-center gap-2 px-4 pt-3">
+      <div className="canvas-panel-header flex min-h-17 shrink-0 items-center gap-2 px-3 py-3">
         <TabsList className="flex-1">
           <TabsTrigger value="canvas">画布</TabsTrigger>
           <TabsTrigger value="assets">资产</TabsTrigger>
@@ -174,7 +174,7 @@ export function CanvasSidePanel({
         {!isMobile ? (
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="icon-lg"
             aria-label="收起资产管理"
             onClick={closePanel}
           >

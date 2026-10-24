@@ -5429,37 +5429,6 @@ function InfiniteCanvasPage({
         }}
         onPointerLeave={() => documentIntegration?.onCursor?.(null)}
       >
-        {documentIntegration ? (
-          documentIntegration.toolbar({
-            canUndo: documentIntegration.undo?.canUndo ?? historyState.canUndo,
-            canRedo: documentIntegration.undo?.canRedo ?? historyState.canRedo,
-            onHome: () => navigate("/"),
-            onProjects: () => navigate(workspaceRoutes.projects.href),
-            onCreateProject: createAndOpenProject,
-            onExportProject: exportCurrentProject,
-            onImportImage: () => handleUploadRequest(),
-            onUndo: undoCanvas,
-            onRedo: redoCanvas,
-          })
-        ) : (
-          <CanvasTopBar
-            title={currentProject?.title || "未命名画布"}
-            onRenameProject={() => {
-              message.info("请从项目空间打开已保存的画布");
-            }}
-            canUndo={historyState.canUndo}
-            canRedo={historyState.canRedo}
-            onHome={() => navigate("/")}
-            onProjects={() => navigate(workspaceRoutes.projects.href)}
-            onCreateProject={createAndOpenProject}
-            onDeleteProject={deleteCurrentProject}
-            onExportProject={exportCurrentProject}
-            onImportImage={() => handleUploadRequest()}
-            onUndo={undoCanvas}
-            onRedo={redoCanvas}
-          />
-        )}
-
         <InfiniteCanvas
           containerRef={containerRef}
           viewport={viewport}
@@ -5823,6 +5792,72 @@ function InfiniteCanvasPage({
         ) : null}
 
         <CanvasToolbar
+          header={
+            documentIntegration ? (
+              documentIntegration.toolbar({
+                canUndo:
+                  documentIntegration.undo?.canUndo ?? historyState.canUndo,
+                canRedo:
+                  documentIntegration.undo?.canRedo ?? historyState.canRedo,
+                onHome: () => navigate("/"),
+                onProjects: () => navigate(workspaceRoutes.projects.href),
+                onCreateProject: createAndOpenProject,
+                onExportProject: exportCurrentProject,
+                onImportImage: () => handleUploadRequest(),
+                onUndo: undoCanvas,
+                onRedo: redoCanvas,
+              })
+            ) : (
+              <CanvasTopBar
+                title={currentProject?.title || "未命名画布"}
+                onRenameProject={() => {
+                  message.info("请从项目空间打开已保存的画布");
+                }}
+                canUndo={historyState.canUndo}
+                canRedo={historyState.canRedo}
+                onHome={() => navigate("/")}
+                onProjects={() => navigate(workspaceRoutes.projects.href)}
+                onCreateProject={createAndOpenProject}
+                onDeleteProject={deleteCurrentProject}
+                onExportProject={exportCurrentProject}
+                onImportImage={() => handleUploadRequest()}
+                onUndo={undoCanvas}
+                onRedo={redoCanvas}
+              />
+            )
+          }
+          viewControls={
+            <CanvasZoomControls
+              canvasTool={canvasTool}
+              onCanvasToolChange={setCanvasTool}
+              scale={viewport.k}
+              onScaleChange={setZoomScale}
+              onFit={resetViewport}
+              onFitSelection={
+                selectedNodeIds.size
+                  ? () => {
+                      if (focusAnimRef.current)
+                        cancelAnimationFrame(focusAnimRef.current);
+                      setViewport(
+                        fitCanvasNodes(
+                          nodesRef.current.filter((node) =>
+                            selectedNodeIds.has(node.id),
+                          ),
+                          size,
+                        ),
+                      );
+                      setContextMenu(null);
+                    }
+                  : undefined
+              }
+              isMiniMapOpen={isMiniMapOpen}
+              onToggleMiniMap={() => setIsMiniMapOpen(!isMiniMapOpen)}
+              showConnections={showConnections}
+              onToggleConnections={() => setShowConnections(!showConnections)}
+              snapToGrid={snapToGrid}
+              onToggleSnap={() => setSnapToGrid(!snapToGrid)}
+            />
+          }
           canEdit={!documentIntegration?.frozen}
           selectedCount={selectedNodeIds.size}
           canvasTool={canvasTool}
@@ -5853,37 +5888,6 @@ function InfiniteCanvasPage({
             onViewportChange={setViewport}
           />
         ) : null}
-
-        <CanvasZoomControls
-          canvasTool={canvasTool}
-          onCanvasToolChange={setCanvasTool}
-          scale={viewport.k}
-          onScaleChange={setZoomScale}
-          onFit={resetViewport}
-          onFitSelection={
-            selectedNodeIds.size
-              ? () => {
-                  if (focusAnimRef.current)
-                    cancelAnimationFrame(focusAnimRef.current);
-                  setViewport(
-                    fitCanvasNodes(
-                      nodesRef.current.filter((node) =>
-                        selectedNodeIds.has(node.id),
-                      ),
-                      size,
-                    ),
-                  );
-                  setContextMenu(null);
-                }
-              : undefined
-          }
-          isMiniMapOpen={isMiniMapOpen}
-          onToggleMiniMap={() => setIsMiniMapOpen(!isMiniMapOpen)}
-          showConnections={showConnections}
-          onToggleConnections={() => setShowConnections(!showConnections)}
-          snapToGrid={snapToGrid}
-          onToggleSnap={() => setSnapToGrid(!snapToGrid)}
-        />
 
         {contextMenu ? (
           <CanvasNodeContextMenu

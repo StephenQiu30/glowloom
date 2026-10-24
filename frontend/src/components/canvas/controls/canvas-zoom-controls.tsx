@@ -46,7 +46,7 @@ export function CanvasZoomControls({
   return (
     <div
       data-canvas-no-zoom
-      className="canvas-viewport-controls absolute bottom-3 left-4 z-50 flex items-center gap-2"
+      className="canvas-viewport-controls flex min-w-0 items-center gap-1"
       aria-label="画布视图控制"
     >
       {onCanvasToolChange && (
@@ -93,8 +93,8 @@ export function CanvasZoomControls({
         <PopoverTrigger asChild>
           <Button
             variant="ghost"
-            size="sm"
-            className="min-w-16 tabular-nums"
+            size="default"
+            className="min-w-16"
             aria-label={`缩放选项，当前 ${percent}%`}
             data-canvas-view-control
           >

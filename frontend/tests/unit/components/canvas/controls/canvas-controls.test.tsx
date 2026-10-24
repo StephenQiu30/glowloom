@@ -1,6 +1,13 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ThemeProvider } from "next-themes";
 import { CanvasToolbar } from "@/components/canvas/controls/canvas-toolbar";
 import { CanvasZoomControls } from "@/components/canvas/controls/canvas-zoom-controls";
 
@@ -17,7 +24,13 @@ vi.mock("@/components/canvas/runtime/store/use-theme-store", () => ({
     select: (state: { theme: "dark"; setTheme: () => void }) => unknown,
   ) => select({ theme: "dark", setTheme: vi.fn() }),
 }));
-afterEach(cleanup);
+vi.mock("@/components/auth/session", () => ({
+  useOptionalSession: () => null,
+}));
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
 
 it("合并画布入口后保留撤销、配置节点和只读限制", () => {
   const create = vi.fn();
@@ -92,4 +105,55 @@ it("缩放菜单保留吸附开关和适应画布，移除重复视图菜单", (
   expect(snap).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByRole("button", { name: "适应画布" }));
   expect(fit).toHaveBeenCalledOnce();
+});
+
+it("统一布局内直接提供可持久化的主题菜单", async () => {
+  const { unmount } = render(
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+      <TooltipProvider>
+        <CanvasToolbar
+          header={<div>画布标题</div>}
+          viewControls={<div>视图控制</div>}
+          selectedCount={0}
+          canvasTool="select"
+          canUndo={false}
+          canRedo={false}
+          backgroundMode="dots"
+          showImageInfo={false}
+          onCreateNode={vi.fn()}
+          onUndo={vi.fn()}
+          onRedo={vi.fn()}
+          onUpload={vi.fn()}
+          onBrowseAssets={vi.fn()}
+          onDelete={vi.fn()}
+          onClear={vi.fn()}
+          onCanvasToolChange={vi.fn()}
+          onBackgroundModeChange={vi.fn()}
+          onShowImageInfoChange={vi.fn()}
+        />
+      </TooltipProvider>
+    </ThemeProvider>,
+  );
+  const toggle = screen.getByRole("button", { name: "切换主题" });
+  const layout = toggle.closest("[data-canvas-controls]");
+  expect(layout?.contains(screen.getByText("画布标题"))).toBe(true);
+  expect(layout?.contains(screen.getByText("视图控制"))).toBe(true);
+  expect(
+    layout?.contains(screen.getByRole("button", { name: "添加文本节点" })),
+  ).toBe(true);
+  fireEvent.keyDown(toggle, { key: "ArrowDown" });
+  fireEvent.click(await screen.findByRole("menuitemradio", { name: "浅色" }));
+  await waitFor(() =>
+    expect(document.documentElement.classList.contains("light")).toBe(true),
+  );
+  expect(localStorage.getItem("theme")).toBe("light");
+  unmount();
+  render(
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+      <div>重开</div>
+    </ThemeProvider>,
+  );
+  await waitFor(() =>
+    expect(document.documentElement.classList.contains("light")).toBe(true),
+  );
 });
