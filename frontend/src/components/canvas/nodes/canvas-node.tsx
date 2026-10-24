@@ -872,7 +872,7 @@ export const CanvasNode = React.memo(function CanvasNode({
             side="bottom"
             align="center"
             sideOffset={16}
-            collisionPadding={{ top: 80, right: 16, bottom: 96, left: 16 }}
+            collisionPadding={{ top: 64, right: 16, bottom: 16, left: 16 }}
             updatePositionStrategy="always"
             onEscapeKeyDown={(event) => {
               if (isImeComposing(event)) event.preventDefault();
@@ -1080,7 +1080,7 @@ function TextContent({
   const fontSize = node.metadata?.fontSize || 14;
   const textStyle = {
     fontSize: `${fontSize}px`,
-    lineHeight: `${Math.round(fontSize * 1.65)}px`,
+    lineHeight: `${Math.round(fontSize * (22 / 14))}px`,
     color: theme.node.text,
     boxSizing: "border-box",
   } as React.CSSProperties;
@@ -1090,7 +1090,7 @@ function TextContent({
   const primaryTextId = node.metadata?.primaryTextId || texts[0]?.id;
   const primaryText = texts.find((text) => text.id === primaryTextId);
   const content = primaryText?.content || node.metadata?.content || "";
-  const paddingClass = isBatchRoot ? "px-6 pb-6 pt-14" : "p-6";
+  const paddingClass = isBatchRoot ? "px-6 pb-5 pt-14" : "px-6 py-5";
 
   const boundReferences = useBoundReferences(node);
   return (

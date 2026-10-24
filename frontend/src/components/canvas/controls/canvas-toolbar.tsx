@@ -1,13 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { CanvasHistoryDialog } from "../history/canvas-history-dialog";
 import { CanvasGuideDialog } from "./canvas-guide-dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import {
   Popover,
@@ -37,18 +29,14 @@ import {
   Contact,
   Folder,
   Eraser,
-  History,
   Keyboard,
   Info,
   MoreHorizontal,
-  Palette,
-  Plus,
   Redo2,
   Trash2,
   Undo2,
   Upload,
 } from "lucide-react";
-import { useState } from "react";
 
 export function CanvasToolbar({
   canEdit = true,
@@ -85,7 +73,6 @@ export function CanvasToolbar({
   onBackgroundModeChange: (mode: CanvasBackgroundMode) => void;
   onShowImageInfoChange: (show: boolean) => void;
 }) {
-  const [createOpen, setCreateOpen] = useState(false);
   const colorTheme = useThemeStore((state) => state.theme);
   const setTheme = useThemeStore((state) => state.setTheme);
   const theme = canvasThemes[colorTheme];
@@ -182,60 +169,6 @@ export function CanvasToolbar({
             </TooltipTrigger>
             <TooltipContent side="right">本地上传</TooltipContent>
           </Tooltip>
-          <Popover open={createOpen} onOpenChange={setCreateOpen}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-lg"
-                    aria-label="添加节点"
-                    disabled={!canEdit}
-                  >
-                    <Plus />
-                  </Button>
-                </PopoverTrigger>
-              </TooltipTrigger>
-              <TooltipContent side="top">添加节点</TooltipContent>
-            </Tooltip>
-            <PopoverContent
-              side="right"
-              align="start"
-              sideOffset={12}
-              className="max-h-menu w-64 overflow-y-auto"
-              data-canvas-no-zoom
-            >
-              <p className="mb-3 text-sm font-medium">添加节点</p>
-              <div className="grid grid-cols-2 gap-1">
-                {definitions.map((definition) => (
-                  <Button
-                    key={definition.type}
-                    variant="ghost"
-                    className="justify-start"
-                    onClick={() => {
-                      onCreateNode(definition.type);
-                      setCreateOpen(false);
-                    }}
-                  >
-                    {definition.icon}
-                    {definition.title}
-                  </Button>
-                ))}
-              </div>
-              <Separator className="my-3" />
-              <Button
-                variant="ghost"
-                className="w-full justify-start"
-                onClick={() => {
-                  onUpload();
-                  setCreateOpen(false);
-                }}
-              >
-                <Upload />
-                上传图片、视频或音频
-              </Button>
-            </PopoverContent>
-          </Popover>
         </div>
       </div>
       <div
@@ -247,15 +180,16 @@ export function CanvasToolbar({
             <Button
               variant="ghost"
               size="icon-lg"
-              aria-label="画布外观"
-              title="画布外观"
+              aria-label="更多画布操作"
+              title="更多画布操作"
             >
-              <Palette />
+              <MoreHorizontal />
             </Button>
           </PopoverTrigger>
           <PopoverContent
-            side="top"
-            sideOffset={12}
+            side="bottom"
+            align="end"
+            sideOffset={8}
             className="w-64"
             data-canvas-no-zoom
           >
@@ -289,16 +223,7 @@ export function CanvasToolbar({
                   <TooltipContent side="top">{label}</TooltipContent>
                 </Tooltip>
               ))}
-              <CanvasHistoryDialog>
-                <Button
-                  variant="ghost"
-                  size="icon-lg"
-                  aria-label="生成历史"
-                  title="生成历史"
-                >
-                  <History />
-                </Button>
-              </CanvasHistoryDialog>
+
               <CanvasGuideDialog kind="shortcuts">
                 <Button
                   variant="ghost"
@@ -353,35 +278,43 @@ export function CanvasToolbar({
                 />
               </Field>
             </FieldGroup>
+            <Separator className="my-3" />
+            {definitions
+              .filter(
+                (item) =>
+                  !["text", "image", "video", "audio"].includes(item.type),
+              )
+              .map((definition) => (
+                <Button
+                  key={definition.type}
+                  variant="ghost"
+                  className="w-full justify-start"
+                  disabled={!canEdit}
+                  onClick={() => onCreateNode(definition.type)}
+                >
+                  {definition.icon}添加{definition.title}节点
+                </Button>
+              ))}
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-destructive"
+              disabled={!canEdit || !selectedCount}
+              onClick={onDelete}
+            >
+              <Trash2 />
+              删除选中
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-destructive"
+              disabled={!canEdit}
+              onClick={onClear}
+            >
+              <Eraser />
+              清空画布
+            </Button>
           </PopoverContent>
         </Popover>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-lg" aria-label="更多画布操作">
-              <MoreHorizontal />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="end">
-            <DropdownMenuGroup>
-              <DropdownMenuItem
-                variant="destructive"
-                disabled={!canEdit || !selectedCount}
-                onSelect={onDelete}
-              >
-                <Trash2 />
-                删除选中
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                variant="destructive"
-                disabled={!canEdit}
-                onSelect={onClear}
-              >
-                <Eraser />
-                清空画布
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
       <div className="absolute right-3 bottom-3 z-50" data-canvas-no-zoom>
         <Tooltip>

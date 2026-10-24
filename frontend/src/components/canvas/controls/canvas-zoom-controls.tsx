@@ -1,13 +1,4 @@
 import { CanvasModeMenu } from "./canvas-mode-menu";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuCheckboxItem,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -20,7 +11,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { PanelTop, Link2, Focus, Minus, Plus, Settings2 } from "lucide-react";
+import { PanelTop, Link2, Focus, Minus, Plus, Check } from "lucide-react";
 import { useState } from "react";
 
 export function CanvasZoomControls({
@@ -150,51 +141,16 @@ export function CanvasZoomControls({
               {label}
             </Button>
           ))}
+          <Button
+            variant="ghost"
+            className="w-full justify-between"
+            aria-pressed={snapToGrid}
+            onClick={onToggleSnap}
+          >
+            网格吸附{snapToGrid && <Check aria-hidden="true" />}
+          </Button>
         </PopoverContent>
       </Popover>
-      <div className="canvas-view-settings">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-lg" aria-label="视图设置">
-              <Settings2 />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            side="top"
-            align="start"
-            className="w-60"
-            data-canvas-no-zoom
-          >
-            <DropdownMenuGroup>
-              <DropdownMenuItem onSelect={onFit}>
-                <Focus />
-                适合屏幕
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuCheckboxItem
-                checked={isMiniMapOpen}
-                onCheckedChange={onToggleMiniMap}
-              >
-                小地图
-              </DropdownMenuCheckboxItem>
-              <DropdownMenuCheckboxItem
-                checked={showConnections}
-                onCheckedChange={onToggleConnections}
-              >
-                显示连线
-              </DropdownMenuCheckboxItem>
-              <DropdownMenuCheckboxItem
-                checked={snapToGrid}
-                onCheckedChange={onToggleSnap}
-              >
-                网格吸附
-              </DropdownMenuCheckboxItem>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
     </div>
   );
 }

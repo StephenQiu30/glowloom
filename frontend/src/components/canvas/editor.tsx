@@ -147,7 +147,13 @@ function Editor({ service }: { service: ProductionCanvasService }) {
                     <span role="status" className="text-xs">
                       {labels[saving.phase]}
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span
+                      className={
+                        service.status === "已连接"
+                          ? "sr-only"
+                          : "text-xs text-muted-foreground"
+                      }
+                    >
                       {service.status}
                     </span>
                     {saving.phase === "uploading" && saving.error && (

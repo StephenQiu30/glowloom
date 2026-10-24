@@ -27,7 +27,7 @@ import {
   Underline,
   Strikethrough,
   ChevronDown,
-  Ellipsis,
+  Type,
   X,
   List,
   ListOrdered,
@@ -1009,7 +1009,10 @@ function EditorToolbar({
             aria-label="文本样式"
             title="文本样式"
           >
-            {state.heading === "paragraph" ? "正文" : `标题 ${state.heading}`}
+            <Type aria-hidden="true" />
+            <span className="sr-only">
+              {state.heading === "paragraph" ? "正文" : `标题 ${state.heading}`}
+            </span>
             <ChevronDown />
           </Button>
         </DropdownMenuTrigger>
@@ -1053,6 +1056,15 @@ function EditorToolbar({
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
+          <DropdownMenuItem
+            disabled={disabled}
+            onSelect={() => importInput.current?.click()}
+          >
+            导入结构化文档
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void downloadDocument(editor)}>
+            导出结构化文档
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       {tools
@@ -1150,41 +1162,7 @@ function EditorToolbar({
         disabled={disabled}
         onChange={(event) => void importDocument(event.target.files?.[0])}
       />
-      <DropdownMenu modal={false}>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="更多文档操作"
-            title="更多文档操作"
-          >
-            <Ellipsis />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="end"
-          data-rich-text-floating
-          data-canvas-shortcuts-ignore
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            editor.commands.focus();
-          }}
-          onEscapeKeyDown={(event) => event.stopPropagation()}
-          onPointerDown={(event) => event.stopPropagation()}
-          onMouseDown={(event) => event.stopPropagation()}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <DropdownMenuItem
-            disabled={disabled}
-            onSelect={() => importInput.current?.click()}
-          >
-            导入结构化文档
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => void downloadDocument(editor)}>
-            导出结构化文档
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+
       {onExpand ? (
         <Button
           type="button"

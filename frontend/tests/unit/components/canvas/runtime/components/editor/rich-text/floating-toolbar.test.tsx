@@ -277,3 +277,24 @@ it("紧凑画布面板隐藏格式栏但保留标题下划线，展开复用原�
   expect(state.editor).toBe(original);
   expect(screen.getAllByRole("textbox")).toHaveLength(1);
 });
+
+it("文本样式菜单集中导入导出，同时保留格式编辑", async () => {
+  render(
+    <RichTextEditor
+      value="菜单验收"
+      documentMode
+      floatingToolbar
+      onChange={vi.fn()}
+    />,
+  );
+  await waitFor(() => expect(state.editor).not.toBeNull());
+  expect(screen.queryByTitle("更多文档操作")).toBeNull();
+  fireEvent.keyDown(await screen.findByTitle("文本样式"), { key: "ArrowDown" });
+  expect(screen.getByRole("menuitem", { name: "导入结构化文档" })).toBeTruthy();
+  expect(screen.getByRole("menuitem", { name: "导出结构化文档" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("menuitemradio", { name: "标题 2" }));
+  expect(state.editor!.getJSON().content?.[0]).toMatchObject({
+    type: "heading",
+    attrs: { level: 2 },
+  });
+});

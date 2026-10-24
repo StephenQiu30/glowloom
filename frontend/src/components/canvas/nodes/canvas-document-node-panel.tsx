@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import { useCopyText } from "@/components/canvas/runtime/hooks/use-copy-text";
-import { ArrowUp, LoaderCircle, Maximize2, Upload, X } from "lucide-react";
+import { ArrowUp, LoaderCircle, Maximize2, X } from "lucide-react";
 import { notifyError } from "@/components/canvas/runtime/components/feedback/error-notification";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,13 +20,8 @@ import {
 } from "@/components/ui/select";
 import { RichTextInput } from "@/components/canvas/runtime/components/editor/rich-text/rich-text-input";
 import { documentText } from "@/components/canvas/runtime/components/editor/lib/rich-text-document";
-import {
-  AssetPickerModal,
-  type InsertAssetPayload,
-} from "@/components/canvas/runtime/components/assets/picker/asset-picker-modal";
 import type { CanvasNodeData } from "../types/canvas";
 import { toCanvasGraph } from "../lib/canvas-document-adapter";
-import { replaceCanvasNodeAsset } from "../lib/canvas-asset-replacement";
 import { CanvasNodeReferenceBar } from "./canvas-node-reference-bar";
 import type { CanvasResourceReference } from "../lib/canvas-resource-references";
 import { useCanvasReferencePreviews } from "../hooks/use-canvas-reference-previews";
@@ -37,7 +32,6 @@ import { CanvasConfigParameterDialog } from "../parameters/canvas-config-paramet
 import type { CanvasPendingForms } from "../types/canvas-recovery";
 
 export function CanvasDocumentNodePanel({
-  projectId,
   node,
   onChange,
   onClose,
@@ -69,7 +63,6 @@ export function CanvasDocumentNodePanel({
   onPendingForm?: (form: CanvasPendingForms[string] | undefined) => void;
   collaboration?: import("@glowloom/canvas-collab/model").NodeTextBinding;
 }) {
-  const [picker, setPicker] = useState<"CONTENT" | null>(null);
   const previews = useCanvasReferencePreviews(mentionReferences);
   const copyText = useCopyText();
   const [expanded, setExpanded] = useState(false);
@@ -110,22 +103,6 @@ export function CanvasDocumentNodePanel({
   };
   const patch = (change: Partial<CanvasContract.CanvasDocumentNodeDTO>) =>
     onChange({ ...node, documentData: { ...source, ...change } });
-  const insert = (asset: InsertAssetPayload) => {
-    if (
-      asset.kind === "text" ||
-      asset.kind !== node.type ||
-      !asset.fileId ||
-      !asset.fileVersion
-    ) {
-      notifyError(
-        new Error("请选择与节点类型一致的已上传素材"),
-        "素材选择未完成",
-      );
-      return;
-    }
-    onChange(replaceCanvasNodeAsset(node, asset));
-    setPicker(null);
-  };
   const referenceBar = (inDialog = false) => (
     <CanvasNodeReferenceBar
       nodeId={node.id}
@@ -190,30 +167,21 @@ export function CanvasDocumentNodePanel({
             }
           />
         )}
-        {["image", "video"].includes(node.type) && generatorVisible && (
-          <CanvasGenerationParameters
-            type={node.type}
-            parameters={parameters}
-            hasReferences={
-              connectedNodes.length > 0 ||
-              !!source.fileReferences?.some((reference) =>
-                reference.purpose?.startsWith("REFERENCE_"),
-              )
-            }
-            onChange={(parameters) => patch({ parameters })}
-          />
-        )}
-        {["image", "video", "audio"].includes(node.type) && (
-          <Button
-            variant="ghost"
-            size="icon-lg"
-            aria-label="添加素材"
-            title="添加素材"
-            onClick={() => setPicker("CONTENT")}
-          >
-            <Upload />
-          </Button>
-        )}
+        {["image", "video"].includes(node.type) &&
+          selected &&
+          generatorVisible && (
+            <CanvasGenerationParameters
+              type={node.type}
+              parameters={parameters}
+              hasReferences={
+                connectedNodes.length > 0 ||
+                !!source.fileReferences?.some((reference) =>
+                  reference.purpose?.startsWith("REFERENCE_"),
+                )
+              }
+              onChange={(parameters) => patch({ parameters })}
+            />
+          )}
       </div>
       {supported && (processing || generatorVisible) && (
         <Button
@@ -270,8 +238,10 @@ export function CanvasDocumentNodePanel({
       }}
       placeholder={
         node.type === "text"
-          ? "输入故事想法，或 @ 引用已连接的内容"
-          : "描述画面，或 @ 引用已连接的素材"
+          ? "输入文字，或 @ 引用已连接的参考素材"
+          : node.type === "video"
+            ? "上传参考图、输入文字或 @ 引用素材，描述你想生成的视频"
+            : "描述你的想法，或添加参考素材"
       }
       references={previews.references.filter((reference) => reference.active)}
       value={
@@ -469,13 +439,6 @@ export function CanvasDocumentNodePanel({
           </p>
         </section>
       )}
-      <AssetPickerModal
-        projectId={projectId}
-        open={picker !== null}
-        kinds={[node.type]}
-        onClose={() => setPicker(null)}
-        onInsert={insert}
-      />
     </div>
   );
 }

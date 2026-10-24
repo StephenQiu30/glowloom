@@ -11,7 +11,6 @@ import {
   notifyError,
   useErrorNotification,
 } from "@/components/canvas/runtime/components/feedback/error-notification";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -115,6 +114,10 @@ export function CanvasModelSelect({
         disabled={!enabled}
         value={value}
         onValueChange={(next) => {
+          if (next === "refresh-models") {
+            void retry();
+            return;
+          }
           const model = rows.find((row) => modelKey(row) === next);
           if (model?.connectionId != null && model.modelId)
             onSelect({
@@ -151,20 +154,17 @@ export function CanvasModelSelect({
               </SelectItem>
             )}
           </SelectGroup>
+          {enabled && (catalog.error || catalog.data?.length === 0) && (
+            <SelectItem
+              value="refresh-models"
+              disabled={refreshing || catalog.isValidating}
+            >
+              <RefreshCw aria-hidden="true" />
+              重新读取模型
+            </SelectItem>
+          )}
         </SelectContent>
       </Select>
-      {enabled && (catalog.error || catalog.data?.length === 0) && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label="重新读取模型"
-          disabled={refreshing || catalog.isValidating}
-          onClick={() => void retry()}
-        >
-          <RefreshCw />
-        </Button>
-      )}
       {showStatus && (
         <p id={statusId} role="status" className="sr-only">
           {status}
