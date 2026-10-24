@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as Y from "yjs";
 import { randomUUID } from "node:crypto";
-import { computeCandidate } from "../src/service-runtime.mjs";
+import { computeCandidate, decodeBinary } from "../src/service-runtime.mjs";
 import { runtimeServer } from "../src/server.mjs";
 import { digest } from "../src/admission.mjs";
 import { applyCanvasChanges, readCanvasDocument } from "../src/model.mjs";
@@ -27,6 +27,27 @@ const request = () => {
     document,
   };
 };
+test("bounded binary decoding handles multi-megabyte states without regex stack overflow and rejects noncanonical base64", () => {
+  const bytes = Buffer.alloc(7 * 1024 * 1024, 173);
+  const encoded = bytes.toString("base64");
+  assert.deepEqual(decodeBinary(encoded, 8 * 1024 * 1024), bytes);
+  for (const invalid of [
+    encoded + "=",
+    encoded + "\n",
+    "YQ",
+    "YR==",
+    "====",
+    "-_==",
+  ])
+    assert.throws(
+      () => decodeBinary(invalid, 8 * 1024 * 1024),
+      /INVALID_UPDATE/,
+    );
+  assert.throws(
+    () => decodeBinary(encoded, bytes.length - 1),
+    /INVALID_UPDATE/,
+  );
+});
 test("stateless prepare binds isolated candidate to exact authority, rejects unknown roots without contaminating the baseline", async () => {
   const req = request(),
     initial = await computeCandidate("initialize", req),

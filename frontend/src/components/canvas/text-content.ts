@@ -40,7 +40,7 @@ export function textConfig(node: CanvasNodeData) {
   };
 }
 
-/** Keep existing plain text OT until this node actually owns reference metadata. */
+/** Preserve plain text projection until this node owns reference metadata. */
 export function withTextDraft(
   node: CanvasNodeData,
   draft: PromptDraft,

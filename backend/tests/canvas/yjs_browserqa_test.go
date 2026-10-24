@@ -27,6 +27,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
@@ -39,7 +40,11 @@ func TestYjsBrowserFixture(t *testing.T) {
 		t.Fatal("explicit fixture output directory required")
 	}
 	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
-	cfg := identityfixture.Configure(t, config.Config{Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://[::1]:1126", CanvasRuntimeURL: os.Getenv("GLOWLOOM_CANVAS_RUNTIME_URL"), CanvasRuntimeToken: os.Getenv("GLOWLOOM_COLLAB_RUNTIME_TOKEN")})
+	origin := os.Getenv("GLOWLOOM_BROWSER_QA_ORIGIN")
+	if origin == "" {
+		origin = "http://[::1]:1126"
+	}
+	cfg := identityfixture.Configure(t, config.Config{Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: origin, CanvasRuntimeURL: os.Getenv("GLOWLOOM_CANVAS_RUNTIME_URL"), CanvasRuntimeToken: os.Getenv("GLOWLOOM_COLLAB_RUNTIME_TOKEN")})
 	if cfg.CanvasRuntimeURL == "" || len(cfg.CanvasRuntimeToken) < 32 {
 		t.Fatal("private QA runtime required")
 	}
@@ -87,7 +92,7 @@ func TestYjsBrowserFixture(t *testing.T) {
 	if os.Getenv("GLOWLOOM_BROWSER_QA_ADMIN_COPY") == "true" {
 		text.Config.Editor = &domain.EditorConfig{SchemaVersion: 1, Parameters: &domain.EditorParameters{Mode: "MANUAL"}}
 	}
-	_, err = canvas.NewCollaborationService(store).Submit(t.Context(), actor, document.ID, uuid.NewString(), canvas.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &text}, {Type: "create_node", Node: &sourceA}, {Type: "create_node", Node: &sourceB}}})
+	_, err = canvasfixture.NewLegacySeeder(database, store).Submit(t.Context(), actor, document.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &text}, {Type: "create_node", Node: &sourceA}, {Type: "create_node", Node: &sourceB}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +136,17 @@ func TestYjsBrowserFixture(t *testing.T) {
 		}
 		startAdminCopyBrowserWorkers(t, life, database, cfg, project)
 	}
-	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, database, nil, identityruntime.SessionDependencies{}, life)
+	var storage *objectstorage.Client
+	if os.Getenv("GLOWLOOM_BROWSER_QA_MEDIA") == "true" {
+		storage, err = objectstorage.Open(os.Getenv("GLOWLOOM_OBJECT_STORAGE_ENDPOINT"), os.Getenv("GLOWLOOM_OBJECT_STORAGE_BUCKET"), os.Getenv("GLOWLOOM_OBJECT_STORAGE_ACCESS_KEY"), os.Getenv("GLOWLOOM_OBJECT_STORAGE_SECRET_KEY"), "us-east-1")
+		if err != nil {
+			t.Fatal("isolated QA object storage configuration unavailable")
+		}
+		if err := storage.Ping(t.Context()); err != nil {
+			t.Fatal("isolated QA object storage unavailable")
+		}
+	}
+	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), cfg, database, storage, identityruntime.SessionDependencies{}, life)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +157,7 @@ func TestYjsBrowserFixture(t *testing.T) {
 				index = 1
 			}
 			http.SetCookie(w, &http.Cookie{Name: "glowloom_session", Value: accounts[index].Token, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
-			http.Redirect(w, r, "http://[::1]:1126/projects", http.StatusSeeOther)
+			http.Redirect(w, r, origin+"/projects", http.StatusSeeOther)
 			return
 		}
 		router.ServeHTTP(w, r)
@@ -151,7 +166,7 @@ func TestYjsBrowserFixture(t *testing.T) {
 	if address == "" {
 		address = "127.0.0.1:1125"
 	}
-	listener, err := net.Listen("tcp", address)
+	listener, err := (&net.ListenConfig{}).Listen(life, "tcp", address)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +175,7 @@ func TestYjsBrowserFixture(t *testing.T) {
 	server.Listener = listener
 	server.Start()
 	defer server.Close()
-	manifest, _ := json.MarshalIndent(map[string]any{"canvasID": document.ID, "projectID": project, "scopeID": scope, "teamID": team, "nodeID": text.ID, "actors": []uuid.UUID{accounts[0].User.ID, accounts[1].User.ID}, "url": "http://[::1]:1126/canvas?project_id=" + project.String() + "&canvas_id=" + document.ID.String()}, "", "  ")
+	manifest, _ := json.MarshalIndent(map[string]any{"canvasID": document.ID, "projectID": project, "scopeID": scope, "teamID": team, "nodeID": text.ID, "actors": []uuid.UUID{accounts[0].User.ID, accounts[1].User.ID}, "url": origin + "/canvas?project_id=" + project.String() + "&canvas_id=" + document.ID.String()}, "", "  ")
 	if err := os.WriteFile(filepath.Join(output, "browser-fixture.json"), manifest, 0600); err != nil {
 		t.Fatal(err)
 	}

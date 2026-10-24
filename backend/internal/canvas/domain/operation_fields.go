@@ -3,6 +3,11 @@ package domain
 import "strings"
 
 var operationFields = map[string]fieldPolicy{
+	"config.draft":                   {kind: "set", group: []string{"draft"}, cas: true},
+	"config.generation":              {kind: "set", group: []string{"generation"}, cas: true},
+	"config.batch_table":             {kind: "set", group: []string{"batch_table"}, cas: true},
+	"config.timeline":                {kind: "set", group: []string{"timeline"}, cas: true},
+	"config.director":                {kind: "set", group: []string{"director"}, cas: true},
 	"config.editor":                  {kind: "set", cas: true, optional: true},
 	"config.text_content":            {kind: "set", group: []string{"text", "composer", "format", "format_version", "rich_text"}, cas: true},
 	"title":                          {kind: "set"},

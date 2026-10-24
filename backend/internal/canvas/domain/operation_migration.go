@@ -37,6 +37,3 @@ func migrateComposer(document *Document, op Operation) (FieldChange, error) {
 	after, _ := json.Marshal(n.Config.Draft)
 	return FieldChange{NodeID: n.ID, Path: []string{"config", "draft"}, Before: before, After: after, BeforeExists: true, AfterExists: true}, nil
 }
-func draftOperation(op Operation) bool {
-	return op.Type == "migrate_composer" || len(op.Path) >= 2 && op.Path[0] == "config" && op.Path[1] == "draft"
-}

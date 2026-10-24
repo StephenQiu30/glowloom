@@ -128,7 +128,7 @@ func (s *Store) InitializeYjs(ctx context.Context, a identity.Principal, base ap
 		if row.DocumentID != uuid.Nil || application.Revision(doc.Revision) != base.Document.Revision {
 			return application.ErrYjsContention
 		}
-		ops, err := application.YjsProjectionOperations(doc, candidate.Projection, uuid.New())
+		ops, err := application.YjsProjectionOperations(doc, candidate.Projection)
 		if err != nil || len(ops) > 0 || candidate.Projection.Name != doc.Name {
 			return fmt.Errorf("initial collaboration projection differs from source")
 		}
@@ -217,16 +217,13 @@ func (s *Store) CommitYjs(ctx context.Context, a identity.Principal, base applic
 				return reject("MAIN_CANVAS_MANAGED_BY_PROJECT")
 			}
 		}
-		operations, err := application.YjsProjectionOperations(doc, candidate.Projection, input.SessionID)
-		undoOf := ""
-		if candidate.Transition != nil {
-			undoOf, err = yjsRestoration(tx, a.ID, doc, row, candidate)
-			if err == nil {
-				operations = []domain.Operation{{Type: "noop"}}
-			}
+		operations, err := application.YjsProjectionOperations(doc, candidate.Projection)
+		restore := candidate.Transition != nil
+		if restore {
+			operations, err = yjsRestoration(tx, a.ID, doc, row, candidate)
 		}
 		if err != nil {
-			code := collaborationBusinessCode(err)
+			code := projectionBusinessCode(err)
 			if code == "" {
 				code = "INVALID_PROJECTION"
 			}
@@ -246,25 +243,22 @@ func (s *Store) CommitYjs(ctx context.Context, a identity.Principal, base applic
 		}
 		revision := doc.Revision
 		if len(operations) > 0 {
+			if err := tx.SavePoint("yjs_projection").Error; err != nil {
+				return err
+			}
 			if err := tx.Exec(`SELECT set_config('glowloom.yjs_document_id',?,true)`, id.String()).Error; err != nil {
 				return err
 			}
-			nested := *s
-			nested.db = tx
-			key := uuid.NewSHA1(input.UpdateID, []byte(a.ID.String()+input.SessionID.String()+input.Epoch.String())).String()
-			submission := application.CollaborationInput{ClientID: input.SessionID, OperationVersion: 1, BaseRevision: doc.Revision, StrictBase: true, Operations: operations}
-			if undoOf != "" {
-				submission.Operations = nil
-				submission.UndoOf = undoOf
-			}
-			receipt, err := nested.SubmitCollaboration(ctx, a, id, key, submission)
+			revision, err = s.persistYjsProjection(ctx, tx, a, doc, input, operations, restore)
 			if err != nil {
+				if code := projectionBusinessCode(err); code != "" {
+					if rollback := tx.RollbackTo("yjs_projection").Error; rollback != nil {
+						return rollback
+					}
+					return reject(code)
+				}
 				return err
 			}
-			if receipt.Status != "accepted" {
-				return reject(receipt.Code)
-			}
-			revision = receipt.Revision
 		}
 		if candidate.Projection.Name != doc.Name {
 			if err := tx.Exec(`SELECT set_config('glowloom.yjs_document_id',?,true)`, id.String()).Error; err != nil {
@@ -288,8 +282,7 @@ func (s *Store) CommitYjs(ctx context.Context, a identity.Principal, base applic
 			if err := tx.Exec(`INSERT INTO canvas.collab_update(document_id,epoch,commit_seq,content_revision,actor_id,session_id,update_id,payload_hash,update_bytes) VALUES(?,?,?,?,?,?,?,?,?)`, id, input.Epoch, seq, revision, a.ID, input.SessionID, input.UpdateID, input.PayloadHash, candidate.AppliedUpdate).Error; err != nil {
 				return err
 			}
-			payload, _ := json.Marshal(map[string]any{"document_id": id, "epoch": input.Epoch, "commit_seq": fmt.Sprint(seq), "revision": fmt.Sprint(revision)})
-			if err := tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,'glowloom.canvas.collaboration_committed.v1',?,?::jsonb)`, uuid.New(), id.String(), string(payload)).Error; err != nil {
+			if err := collaborationCommitted(tx, a, id, doc.ProjectID, input.Epoch, seq, revision); err != nil {
 				return err
 			}
 		}

@@ -58,7 +58,7 @@ func TestCanvasReplaceMediaPreservesIdentityVersionEdgesAndUndo(t *testing.T) {
 			db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 			actor, project := seedCanvasActor(t, db)
 			store := canvasStore(db)
-			svc := application.NewCollaborationService(store)
+			svc := canvasfixture.NewEditService(store)
 			read := application.NewService(store)
 			doc, err := read.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "replace media"})
 			if err != nil {
@@ -68,9 +68,9 @@ func TestCanvasReplaceMediaPreservesIdentityVersionEdgesAndUndo(t *testing.T) {
 			n, other := resourceNode(kind), resourceNode("text")
 			n.RefID = &old
 			edge := domain.Edge{ID: uuid.New(), EdgeType: "annotation", SourceNodeID: n.ID, TargetNodeID: other.ID}
-			submit := func(base int64, key string, ops []domain.Operation, undo string) application.CollaborationReceipt {
+			submit := func(base int64, key string, ops []domain.Operation, undo string) canvasfixture.EditReceipt {
 				t.Helper()
-				r, e := svc.Submit(t.Context(), actor, doc.ID, key, application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: base, Operations: ops, UndoOf: undo})
+				r, e := svc.Submit(t.Context(), actor, doc.ID, key, canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: base, Operations: ops, UndoOf: undo})
 				if e != nil {
 					t.Fatal(e)
 				}
@@ -124,7 +124,7 @@ func TestCanvasReplaceMediaRejectsUnauthorizedAndWrongKindAtomically(t *testing.
 	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, p := seedCanvasActor(t, db)
 	store := canvasStore(db)
-	svc := application.NewCollaborationService(store)
+	svc := canvasfixture.NewEditService(store)
 	read := application.NewService(store)
 	doc, err := read.Create(t.Context(), actor, p, uuid.NewString(), application.CreateInput{Name: "replace rejection"})
 	if err != nil {
@@ -133,7 +133,7 @@ func TestCanvasReplaceMediaRejectsUnauthorizedAndWrongKindAtomically(t *testing.
 	old := seedCanvasMedia(t, db, p, "image")
 	n := resourceNode("image")
 	n.RefID = &old
-	r, err := svc.Submit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}}})
+	r, err := svc.Submit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}}})
 	if err != nil || r.Status != "accepted" {
 		t.Fatal(r, err)
 	}
@@ -147,7 +147,7 @@ func TestCanvasReplaceMediaRejectsUnauthorizedAndWrongKindAtomically(t *testing.
 		{uuid.New(), "source_unavailable"},
 	} {
 		asset := test.asset
-		input := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "set", NodeID: n.ID, Path: []string{"title"}, Value: json.RawMessage(`"must roll back"`)}, mediaReplacement(t, n.ID, old, asset)}}
+		input := canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "set", NodeID: n.ID, Path: []string{"title"}, Value: json.RawMessage(`"must roll back"`)}, mediaReplacement(t, n.ID, old, asset)}}
 		key := uuid.NewString()
 		r, err := svc.Submit(t.Context(), actor, doc.ID, key, input)
 		if err != nil || r.Status != "rejected" || r.Code != test.code {
@@ -166,13 +166,13 @@ func TestCanvasReplaceMediaRejectsUnauthorizedAndWrongKindAtomically(t *testing.
 
 func TestCanvasCollaborationHashIgnoresNestedJSONKeyOrder(t *testing.T) {
 	f := newLiveFixture(t)
-	svc := application.NewCollaborationService(canvasStore(f.db))
+	svc := canvasfixture.NewEditService(canvasStore(f.db))
 	n := resourceNode("text")
-	r, err := svc.Submit(t.Context(), f.actor, f.doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}}})
+	r, err := svc.Submit(t.Context(), f.actor, f.doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}}})
 	if err != nil || r.Status != "accepted" {
 		t.Fatal(r, err)
 	}
-	input := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "set", NodeID: n.ID, Path: []string{"position"}, Value: json.RawMessage(`{"x":10,"y":20}`)}}}
+	input := canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "set", NodeID: n.ID, Path: []string{"position"}, Value: json.RawMessage(`{"x":10,"y":20}`)}}}
 	key := uuid.NewString()
 	r, err = svc.Submit(t.Context(), f.actor, f.doc.ID, key, input)
 	if err != nil || r.Status != "accepted" {
@@ -187,23 +187,23 @@ func TestCanvasCollaborationHashIgnoresNestedJSONKeyOrder(t *testing.T) {
 
 func TestCanvasReplaceMediaReceiptFailureRollsBackAndOriginalRequestRetries(t *testing.T) {
 	f := newLiveFixture(t)
-	svc := application.NewCollaborationService(canvasStore(f.db))
+	svc := canvasfixture.NewEditService(canvasStore(f.db))
 	old, next := seedCanvasMedia(t, f.db, f.doc.ProjectID, "image"), seedCanvasMedia(t, f.db, f.doc.ProjectID, "image")
 	n := resourceNode("image")
 	n.RefID = &old
-	r, err := svc.Submit(t.Context(), f.actor, f.doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}}})
+	r, err := svc.Submit(t.Context(), f.actor, f.doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}}})
 	if err != nil || r.Status != "accepted" {
 		t.Fatal(r, err)
 	}
 	key := uuid.NewString()
-	input := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{mediaReplacement(t, n.ID, old, next)}}
+	input := canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{mediaReplacement(t, n.ID, old, next)}}
 	trigger := "replace_receipt_" + uuid.NewString()[:8]
-	ddl := `CREATE FUNCTION canvas.` + trigger + `() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.document_id='` + f.doc.ID.String() + `' AND NEW.idem_key='` + key + `' THEN RAISE EXCEPTION 'injected receipt write failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER ` + trigger + ` BEFORE INSERT ON canvas.save_receipt FOR EACH ROW EXECUTE FUNCTION canvas.` + trigger + `()`
+	ddl := `CREATE FUNCTION canvas.` + trigger + `() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.document_id='` + f.doc.ID.String() + `' AND NEW.update_id='` + key + `' THEN RAISE EXCEPTION 'injected receipt write failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER ` + trigger + ` BEFORE INSERT ON canvas.collab_receipt FOR EACH ROW EXECUTE FUNCTION canvas.` + trigger + `()`
 	if err := f.db.Exec(ddl).Error; err != nil {
 		t.Fatal(err)
 	}
 	cleanup := func() error {
-		return f.db.Exec(`DROP TRIGGER IF EXISTS ` + trigger + ` ON canvas.save_receipt; DROP FUNCTION IF EXISTS canvas.` + trigger + `()`).Error
+		return f.db.Exec(`DROP TRIGGER IF EXISTS ` + trigger + ` ON canvas.collab_receipt; DROP FUNCTION IF EXISTS canvas.` + trigger + `()`).Error
 	}
 	t.Cleanup(func() {
 		if err := cleanup(); err != nil {
@@ -235,24 +235,24 @@ func TestCanvasReplaceMediaReceiptFailureRollsBackAndOriginalRequestRetries(t *t
 
 func TestCanvasConcurrentMediaReplacementHasOneWinner(t *testing.T) {
 	f := newLiveFixture(t)
-	svc := application.NewCollaborationService(canvasStore(f.db))
+	svc := canvasfixture.NewEditService(canvasStore(f.db))
 	old := seedCanvasMedia(t, f.db, f.doc.ProjectID, "image")
 	next := []uuid.UUID{seedCanvasMedia(t, f.db, f.doc.ProjectID, "image"), seedCanvasMedia(t, f.db, f.doc.ProjectID, "image")}
 	n := resourceNode("image")
 	n.RefID = &old
-	r, err := svc.Submit(t.Context(), f.actor, f.doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}}})
+	r, err := svc.Submit(t.Context(), f.actor, f.doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}}})
 	if err != nil || r.Status != "accepted" {
 		t.Fatal(r, err)
 	}
 	type outcome struct {
-		receipt application.CollaborationReceipt
+		receipt canvasfixture.EditReceipt
 		err     error
 	}
 	results := make(chan outcome, 2)
 	start := make(chan struct{})
 	var workers sync.WaitGroup
 	for _, asset := range next {
-		input := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{mediaReplacement(t, n.ID, old, asset)}}
+		input := canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{mediaReplacement(t, n.ID, old, asset)}}
 		workers.Go(func() {
 			<-start
 			r, err := svc.Submit(t.Context(), f.actor, f.doc.ID, uuid.NewString(), input)

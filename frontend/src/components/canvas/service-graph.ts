@@ -13,11 +13,7 @@ import {
   type PromptInline,
 } from "@/components/generation/prompt-document";
 import { isProjectID } from "@/components/projects/project";
-import {
-  revision,
-  type Operation,
-  validateHistoricalSnapshot,
-} from "./service-document";
+import { revision, validateHistoricalSnapshot } from "./service-document";
 
 export function serviceGraph(
   dto: API.DocumentDTO,
@@ -289,11 +285,14 @@ function serviceEdge(
       : {}),
   };
 }
-export function serviceGraphOperations(
+type ProjectionDifference = Record<string, unknown> & { type: string };
+
+// Private local projection conversion. Never transmitted or rebased as operations.
+function projectionDifferences(
   before: CanvasEditorState,
   after: CanvasEditorState,
-): Operation[] {
-  const result: Operation[] = [];
+): ProjectionDifference[] {
+  const result: ProjectionDifference[] = [];
   const old = new Map(before.nodes.map((n) => [n.id, n]));
   const next = new Map(after.nodes.map((n) => [n.id, n]));
   for (const e of before.connections)
@@ -450,13 +449,12 @@ export function serviceGraphOperations(
   return result;
 }
 
-/** Local editor intent only; Go revalidates the resulting Yjs projection. */
 export function serviceDocumentFromEditor(
   base: API.DocumentDTO,
   state: CanvasEditorState,
 ): API.DocumentDTO {
   const next = structuredClone(base);
-  const operations = serviceGraphOperations(
+  const operations = projectionDifferences(
     serviceGraph(base, base.id!, base.project_id!),
     state,
   );

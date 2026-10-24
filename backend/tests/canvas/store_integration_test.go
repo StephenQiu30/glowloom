@@ -72,7 +72,7 @@ func TestCanvasPersistenceRevisionReplayRollbackAndRestore(t *testing.T) {
 		t.Fatalf("persistent create replay: %+v %v", again, err)
 	}
 	n1, n2, e := uuid.New(), uuid.New(), uuid.New()
-	input := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{{ID: n1, Title: "备注", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: ptr("A")}}, {ID: n2, Title: "备注", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: ptr("B")}}}), canvasfixture.Edges([]domain.Edge{{ID: e, EdgeType: "annotation", SourceNodeID: n1, TargetNodeID: n2}}))}
+	input := canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{{ID: n1, Title: "备注", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: ptr("A")}}, {ID: n2, Title: "备注", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: ptr("B")}}}), canvasfixture.Edges([]domain.Edge{{ID: e, EdgeType: "annotation", SourceNodeID: n1, TargetNodeID: n2}}))}
 	key = uuid.NewString()
 	result, err := service.Edit(t.Context(), actor, doc.ID, key, input)
 	if err != nil || result.Revision != 2 {
@@ -86,7 +86,7 @@ func TestCanvasPersistenceRevisionReplayRollbackAndRestore(t *testing.T) {
 	if _, err := service.Edit(t.Context(), actor, doc.ID, key, input); !errors.Is(err, application.ErrIdempotencyConflict) {
 		t.Fatalf("changed key body: %v", err)
 	}
-	_, err = service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.Positions([]domain.Move{{ID: n1, X: 80}}), canvasfixture.Deletes([]uuid.UUID{uuid.New()}))})
+	_, err = service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.Positions([]domain.Move{{ID: n1, X: 80}}), canvasfixture.Deletes([]uuid.UUID{uuid.New()}))})
 	if !operationRejected(err, "invalid_operation", "id_conflict") {
 		t.Fatalf("bad batch accepted: %v", err)
 	}
@@ -95,13 +95,13 @@ func TestCanvasPersistenceRevisionReplayRollbackAndRestore(t *testing.T) {
 		t.Fatalf("partial write: %+v %v", current, err)
 	}
 	deleteKey := uuid.NewString()
-	if _, err := service.Edit(t.Context(), actor, doc.ID, deleteKey, application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.Deletes([]uuid.UUID{n1}))}); err != nil {
+	if _, err := service.Edit(t.Context(), actor, doc.ID, deleteKey, canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.Deletes([]uuid.UUID{n1}))}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 3, Operations: input.Operations}); !operationRejected(err, "invalid_operation", "id_conflict") {
+	if _, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 3, Operations: input.Operations}); !operationRejected(err, "invalid_operation", "id_conflict") {
 		t.Fatalf("duplicate existing node allowed: %v", err)
 	}
-	restore := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 3, UndoOf: deleteKey}
+	restore := canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 3, UndoOf: deleteKey}
 	result, err = service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), restore)
 	if err != nil || len(result.Nodes) != 2 || len(result.Edges) != 1 {
 		t.Fatalf("restore: %+v %v", result, err)
@@ -114,7 +114,7 @@ func TestCanvasPersistenceRevisionReplayRollbackAndRestore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = service.Edit(t.Context(), other, otherDoc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{{ID: n1, Title: "备注", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: ptr("")}}}))})
+	_, err = service.Edit(t.Context(), other, otherDoc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{{ID: n1, Title: "备注", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: ptr("")}}}))})
 	if !operationRejected(err, "id_conflict") {
 		t.Fatalf("crossdocument UUID restored: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestConcurrentCanvasOperationsJointlyAdvanceRevisions(t *testing.T) {
 	results := make(chan error, 2)
 	for range 2 {
 		wg.Go(func() {
-			_, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Nodes([]domain.Node{resourceNode("text")})})
+			_, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Nodes([]domain.Node{resourceNode("text")})})
 			results <- err
 		})
 	}
@@ -160,7 +160,7 @@ func TestConcurrentCanvasOperationsJointlyAdvanceRevisions(t *testing.T) {
 	}
 	read, err := service.Get(t.Context(), actor, doc.ID)
 	if err != nil || accepted != 2 || read.Revision != 3 || len(read.Nodes) != 2 {
-		t.Fatal("independent OT contributions lost", read, err)
+		t.Fatal("independent Yjs fixture edits lost", read, err)
 	}
 }
 
@@ -170,7 +170,7 @@ func canvasStore(database *gorm.DB) *pgcanvas.Store {
 	}, mediawire.NewCanvasProjectAccess)
 }
 
-// operationRejected checks the stable terminal business code exposed by OT.
+// operationRejected checks the stable terminal business code exposed by Yjs projection admission.
 func operationRejected(err error, codes ...string) bool {
 	var rejection *domain.OperationError
 	if !errors.As(err, &rejection) {

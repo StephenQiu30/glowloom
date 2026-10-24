@@ -112,7 +112,7 @@ func TestExportRealHTTPFrozenCanvasPrivateRenderingReviewAndDownload(t *testing.
 	config.Tracks = append(config.Tracks, canvasdomain.TimelineTrack{ID: lane, Kind: "subtitle", Label: "Subtitle", Visible: true})
 	config.Clips = append(config.Clips, canvasdomain.TimelineClip{ID: uuid.New(), TrackID: lane, Kind: "subtitle", Title: "Subtitle", Text: "中文 AI\n实际导出", DurationMS: 200, Volume: 1})
 	node := canvasdomain.Node{ID: uuid.New(), Title: "Timeline", NodeType: "timeline", NodeAction: "tool", Config: canvasdomain.NodeConfig{Timeline: &config}}
-	saved, err := canvasService.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{node}))})
+	saved, err := canvasService.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{node}))})
 	if err != nil {
 		t.Fatal(err)
 	}

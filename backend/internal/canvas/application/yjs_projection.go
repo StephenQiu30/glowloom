@@ -32,7 +32,7 @@ func pickFields(m map[string]any, keys ...string) map[string]any {
 
 // YjsProjectionOperations translates only the accepted editing surface. Applying
 // the result must reconstruct every candidate field; unsupported changes fail closed.
-func YjsProjectionOperations(before domain.Document, after DocumentDTO, client uuid.UUID) ([]domain.Operation, error) {
+func YjsProjectionOperations(before domain.Document, after DocumentDTO) ([]domain.Operation, error) {
 	if after.ID != before.ID || after.ProjectID != before.ProjectID || after.SchemaVersion != SchemaVersion || after.OperationVersion != OperationVersion || after.Revision != Revision(before.Revision) {
 		return nil, fmt.Errorf("invalid projection identity")
 	}
@@ -113,6 +113,9 @@ func YjsProjectionOperations(before domain.Document, after DocumentDTO, client u
 		set([]string{"position"}, pickFields(a, "x", "y"), pickFields(b, "x", "y"), false, true)
 		set([]string{"size"}, pickFields(a, "width", "height"), pickFields(b, "width", "height"), false, true)
 		ac, bc := jsonObject(old.Config), jsonObject(n.Config)
+		for _, key := range []string{"draft", "generation", "batch_table", "timeline", "director"} {
+			set([]string{"config", key}, pickFields(ac, key), pickFields(bc, key), true, true)
+		}
 		set([]string{"config", "collapsed"}, ac["collapsed"], bc["collapsed"], false, true)
 		_, present := ac["editor"]
 		set([]string{"config", "editor"}, ac["editor"], bc["editor"], true, present)
@@ -157,19 +160,18 @@ func YjsProjectionOperations(before domain.Document, after DocumentDTO, client u
 		}
 		return []domain.Operation{}, nil
 	}
-	body, _ := json.Marshal(SubmissionDTO{ClientID: client, OperationVersion: 1, BaseRevision: Revision(before.Revision), Operations: raw})
-	input, err := DecodeSubmission(body)
+	operations, err := decodeProjectionOperations(raw)
 	if err != nil {
 		return nil, err
 	}
-	applied, err := domain.ApplyOperations(before, input.Operations)
+	applied, err := domain.ApplyOperations(before, operations)
 	if err != nil {
 		return nil, err
 	}
 	if !sameProjection(Snapshot(applied.Document), after) {
 		return nil, domain.ErrUnsupportedCommand
 	}
-	return input.Operations, nil
+	return operations, nil
 }
 func sameProjection(a, b DocumentDTO) bool {
 	if len(a.Nodes) != len(b.Nodes) || len(a.Edges) != len(b.Edges) {
@@ -181,7 +183,7 @@ func sameProjection(a, b DocumentDTO) bool {
 	}
 	for _, n := range b.Nodes {
 		old, ok := nodes[n.ID]
-		if !ok || !reflect.DeepEqual(jsonObject(old), jsonObject(n)) {
+		if !ok || !equalNodeProjection(old, n) {
 			return false
 		}
 	}
@@ -196,4 +198,12 @@ func sameProjection(a, b DocumentDTO) bool {
 		}
 	}
 	return true
+}
+
+// Input/content versions are derived by the accepting transaction. The runtime
+// retains the baseline versions, never chooses their next values.
+func equalNodeProjection(a, b NodeDTO) bool {
+	a.InputRevision = b.InputRevision
+	a.ContentVersion = b.ContentVersion
+	return reflect.DeepEqual(jsonObject(a), jsonObject(b))
 }

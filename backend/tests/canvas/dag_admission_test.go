@@ -41,7 +41,7 @@ func TestDAGGetRetriesWholeSnapshotAfterConcurrentCommitAndBoundsRetries(t *test
 				t.Fatal(err)
 			}
 			node := resourceNode("text")
-			if _, err := writer.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{node}))}); err != nil {
+			if _, err := writer.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{node}))}); err != nil {
 				t.Fatal(err)
 			}
 			calls := 0
@@ -50,7 +50,7 @@ func TestDAGGetRetriesWholeSnapshotAfterConcurrentCommitAndBoundsRetries(t *test
 				return saveBeforeReadAuthorization{ProjectAccess: mediawire.NewCanvasProjectAccess(tx), save: func() error {
 					calls++
 					if continuous || calls == 1 {
-						_, err := writer.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: revision, Operations: canvasfixture.Concat(canvasfixture.Positions([]domain.Move{{ID: node.ID, X: 35}}))})
+						_, err := writer.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: revision, Operations: canvasfixture.Concat(canvasfixture.Positions([]domain.Move{{ID: node.ID, X: float64(35 * calls)}}))})
 						if err != nil {
 							return err
 						}
@@ -85,7 +85,7 @@ func TestDAGReadOnlyGraphCannotAdmitNewExecutionInputs(t *testing.T) {
 			}
 			timeline, audio := timelineNode(), resourceNode("audio")
 			audio.RefID = ptr(seedCanvasMedia(t, db, project, "audio"))
-			if _, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{timeline, audio}))}); err != nil {
+			if _, err := canvasfixture.NewLegacySeeder(db, canvasStore(db)).Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{timeline, audio}))}); err != nil {
 				t.Fatal(err)
 			}
 			switch kind {
@@ -110,7 +110,7 @@ func TestDAGReadOnlyGraphCannotAdmitNewExecutionInputs(t *testing.T) {
 				t.Fatal("source admitted from protected graph", err)
 			}
 			var revision, logs, receipts, operations int64
-			for query, dest := range map[string]*int64{`SELECT revision FROM canvas.document WHERE id=?`: &revision, `SELECT count(*) FROM canvas.command_log WHERE document_id=?`: &logs, `SELECT count(*) FROM canvas.save_receipt WHERE document_id=?`: &receipts} {
+			for query, dest := range map[string]*int64{`SELECT revision FROM canvas.document WHERE id=?`: &revision, `SELECT count(*) FROM canvas.command_log WHERE document_id=?`: &logs, `SELECT count(*) FROM canvas.collab_receipt WHERE document_id=?`: &receipts} {
 				if err := db.Raw(query, doc.ID).Scan(dest).Error; err != nil {
 					t.Fatal(err)
 				}
@@ -118,7 +118,7 @@ func TestDAGReadOnlyGraphCannotAdmitNewExecutionInputs(t *testing.T) {
 			if err := db.Raw(`SELECT count(*) FROM operation.operation WHERE project_id=?`, project).Scan(&operations).Error; err != nil {
 				t.Fatal(err)
 			}
-			if revision != 2 || logs != 1 || receipts != 1 || operations != 0 {
+			if revision != 2 || logs != 0 || receipts != 0 || operations != 0 {
 				t.Fatal("admission changed graph or created work", revision, logs, receipts, operations)
 			}
 		})

@@ -2,11 +2,9 @@ import { describe, it, expect } from "vitest";
 import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
 import {
   serviceGraph,
-  serviceGraphOperations,
+  serviceDocumentFromEditor,
   richTextConfig,
 } from "@/components/canvas/service-graph";
-import { emptyPromptDraft } from "@/components/generation/prompt-document";
-import { rebaseCanvas } from "@/components/canvas/autosave-session";
 import { textToDocument } from "@/components/canvas/runtime/components/editor/lib/rich-text-document";
 const canvas = "11111111-1111-4111-8111-111111111111",
   project = "22222222-2222-4222-8222-222222222222",
@@ -15,7 +13,7 @@ function document(): API.DocumentDTO {
   return {
     id: canvas,
     project_id: project,
-    revision: "5",
+    revision: "9007199254740993",
     schema_version: 1,
     operation_version: 1,
     permissions: { read: true, write: true },
@@ -29,287 +27,21 @@ function document(): API.DocumentDTO {
         y: 20,
         width: 320,
         height: 200,
+
         config: { format: "plain", format_version: 1, text: "原文" },
       },
     ],
     edges: [],
   };
 }
-describe("正式画布服务接线", () => {
-  it("媒体默认锁定比例，显式自由比例在服务回执后保留", () => {
+describe("Yjs editor projection boundary", () => {
+  it("roundtrips without changing protected state or bigint revision", () => {
     const dto = document();
-    dto.nodes![0] = { ...dto.nodes![0], node_type: "image", config: {} };
     expect(
-      serviceGraph(dto, canvas, project).nodes[0].metadata?.freeResize,
-    ).toBe(false);
-    dto.nodes![0].config = {
-      editor: { schemaVersion: 1, metadata: { freeResize: true } },
-    };
-    expect(
-      serviceGraph(dto, canvas, project).nodes[0].metadata?.freeResize,
-    ).toBe(true);
+      serviceDocumentFromEditor(dto, serviceGraph(dto, canvas, project)),
+    ).toEqual(dto);
   });
-
-  it.each(["image", "video"])(
-    "preserves %s prompt documents when typing continues across a save receipt",
-    (type) => {
-      const dto = document();
-      dto.nodes![0] = { ...dto.nodes![0], node_type: type, config: {} };
-      const before = serviceGraph(dto, canvas, project);
-      const first = structuredClone(before);
-      const firstText = {
-        schemaVersion: 1 as const,
-        content: textToDocument("第一笔"),
-      };
-      first.nodes[0].metadata = {
-        ...first.nodes[0].metadata,
-        prompt: "第一笔",
-        richText: firstText,
-      };
-      first.nodes[0].documentData!.textDocument = firstText;
-      const second = structuredClone(first);
-      const secondText = {
-        schemaVersion: 1 as const,
-        content: textToDocument("第一笔继续输入"),
-      };
-      second.nodes[0].metadata = {
-        ...second.nodes[0].metadata,
-        prompt: "第一笔继续输入",
-        richText: secondText,
-      };
-      second.nodes[0].documentData!.textDocument = secondText;
-      const op = serviceGraphOperations(before, first).find(
-        (op) => Array.isArray(op.path) && op.path.join(".") === "config.editor",
-      )!;
-      dto.nodes![0].config!.editor = JSON.parse(JSON.stringify(op.value));
-      const receipt = serviceGraph(dto, canvas, project);
-      const merged = rebaseCanvas(first, second, receipt);
-      expect(merged.nodes[0].documentData!.textDocument).toEqual(secondText);
-      expect(merged.nodes[0].metadata!.richText).toEqual(secondText);
-      expect(serviceGraphOperations(receipt, merged)).toHaveLength(1);
-    },
-  );
-  it("creates nodes with service-compatible UUIDs", () => {
-    const created = createCanvasNode("text", { x: 10, y: 20 });
-    expect(created.id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
-    );
-  });
-  it("saves parameters with an exact baseline and restores them on reopen", () => {
-    const dto = document();
-    const before = serviceGraph(dto, canvas, project);
-    const after = structuredClone(before);
-    after.nodes[0].metadata!.fontSize = 28;
-    after.nodes[0].documentData!.parameters = {
-      mode: "GENERATE",
-      modelSelection: { connectionId: project, modelId: "image-model" },
-      modelParameters: { size: "1024x1024", count: 2 },
-    };
-    const ops = serviceGraphOperations(before, after);
-    expect(ops).toHaveLength(1);
-    expect(ops[0]).toMatchObject({
-      type: "set",
-      path: ["config", "editor"],
-      expected_exists: false,
-    });
-    dto.nodes![0].config!.editor = ops[0].value as API.EditorConfig;
-    const reopened = serviceGraph(
-      JSON.parse(JSON.stringify(dto)),
-      canvas,
-      project,
-    );
-    expect(reopened.nodes[0].metadata!.fontSize).toBe(28);
-    expect(reopened.nodes[0].documentData!.parameters).toEqual(
-      after.nodes[0].documentData!.parameters,
-    );
-    expect(serviceGraphOperations(reopened, structuredClone(reopened))).toEqual(
-      [],
-    );
-  });
-  it("replaces media with original asset CAS and preserves stable reference keys", () => {
-    const dto = document();
-    dto.nodes![0] = {
-      ...dto.nodes![0],
-      node_type: "image",
-      config: {},
-      media_ref: { asset_id: project },
-      content_version: "1",
-    };
-    const before = serviceGraph(dto, canvas, project),
-      after = structuredClone(before);
-    after.nodes[0].documentData!.fileReferences![0].fileId = canvas;
-    after.nodes[0].documentData!.fileReferences![0].version = "2";
-    const ops = serviceGraphOperations(before, after);
-    expect(ops).toContainEqual({
-      type: "replace_media",
-      node_id: node,
-      expected_media_ref: { asset_id: project },
-      new_media_ref: { asset_id: canvas },
-    });
-    const editor = ops.find((op) => op.path?.toString() === "config,editor")!
-      .value as API.EditorConfig;
-    dto.nodes![0].config!.editor = editor;
-    dto.nodes![0].media_ref = { asset_id: canvas };
-    const reopened = serviceGraph(dto, canvas, project);
-    expect(reopened.nodes[0].documentData!.fileReferences).toEqual(
-      after.nodes[0].documentData!.fileReferences,
-    );
-  });
-  it("preserves typed connection ports, bindings and identity when edited", () => {
-    const dto = document();
-    dto.nodes!.push({ ...dto.nodes![0], id: project });
-    const before = serviceGraph(dto, canvas, project),
-      after = structuredClone(before);
-    const connection = {
-      id: canvas,
-      fromNodeId: node,
-      toNodeId: project,
-      documentData: {
-        id: canvas,
-        fromNodeId: node,
-        toNodeId: project,
-        fromPortId: "text",
-        toPortId: "prompt",
-        purpose: "PROMPT",
-        order: 0,
-        binding: { kind: "NODE_VALUE" },
-      },
-    };
-    after.connections.push(connection);
-    const ops = serviceGraphOperations(before, after);
-    const edge = ops.find((op) => op.type === "connect")!.edge as NonNullable<
-      API.DocumentDTO["edges"]
-    >[number];
-    expect(edge.binding).toMatchObject({
-      schemaVersion: 1,
-      fromPortId: "text",
-      toPortId: "prompt",
-      binding: { kind: "NODE_VALUE" },
-    });
-    dto.edges = [edge];
-    const reopened = serviceGraph(dto, canvas, project);
-    expect(reopened.connections[0].documentData).toEqual(
-      connection.documentData,
-    );
-    const changed = structuredClone(reopened);
-    changed.connections[0].documentData!.order = 3;
-    expect(serviceGraphOperations(reopened, changed)[0]).toMatchObject({
-      type: "set_edge",
-      node_id: canvas,
-      expected: edge,
-    });
-  });
-  it("marks local media replacement as pending until the uploaded identity is available", () => {
-    const dto = document();
-    dto.nodes![0] = {
-      ...dto.nodes![0],
-      node_type: "image",
-      config: {},
-      media_ref: { asset_id: project },
-      content_version: "1",
-    };
-    const before = serviceGraph(dto, canvas, project),
-      after = structuredClone(before);
-    after.nodes[0].metadata!.content = "blob:replacement";
-    expect(() => serviceGraphOperations(before, after)).toThrow("上传后保存");
-    after.nodes[0].documentData!.fileReferences![0].fileId = canvas;
-    expect(
-      serviceGraphOperations(before, after).some(
-        (op) => op.type === "replace_media",
-      ),
-    ).toBe(true);
-  });
-  it("persists layer changes", () => {
-    const before = serviceGraph(document(), canvas, project);
-    const after = structuredClone(before);
-    after.nodes[0].documentData!.zIndex = 8;
-    expect(serviceGraphOperations(before, after)).toEqual([
-      { type: "set", node_id: node, path: ["z_index"], value: 8 },
-    ]);
-  });
-  it("uses UUID identity and rejects another canvas", () => {
-    expect(() => serviceGraph(document(), project, canvas)).toThrow("身份");
-  });
-  it("preserves headings, formatting, duplicate references and label allocations on reopen", () => {
-    const dto = document();
-    const composer = emptyPromptDraft();
-    composer.references = [
-      {
-        id: "ref-a",
-        source: { kind: "media", sourceId: project, sourceVersion: "1" },
-        bindingGeneration: 1,
-        mediaKind: "image",
-        role: "reference_image",
-        order: 0,
-      },
-    ];
-    composer.labelState = {
-      highWater: { image: 4, video: 0, audio: 0, subject: 0 },
-      allocations: { "ref-a": { labelKind: "image", ordinal: 4 } },
-    };
-    composer.document.content = [
-      {
-        type: "paragraph",
-        content: [
-          { type: "reference", attrs: { referenceId: "ref-a" } },
-          { type: "reference", attrs: { referenceId: "ref-a" } },
-        ],
-      },
-    ];
-    dto.nodes![0].config = {
-      format: "tiptap",
-      format_version: 1,
-      composer: composer as unknown as API.PromptDraft,
-    };
-    const before = serviceGraph(dto, canvas, project),
-      after = structuredClone(before);
-    after.nodes[0].metadata!.richText = {
-      schemaVersion: 1,
-      content: {
-        type: "doc",
-        content: [
-          {
-            type: "heading",
-            attrs: { level: 2 },
-            content: [
-              { type: "text", text: "更新", marks: [{ type: "bold" }] },
-              { type: "reference", attrs: { referenceId: "ref-a" } },
-              { type: "reference", attrs: { referenceId: "ref-a" } },
-            ],
-          },
-        ],
-      },
-    };
-    const ops = serviceGraphOperations(before, after);
-    expect(ops).toHaveLength(1);
-    expect(ops[0]).toMatchObject({
-      type: "set",
-      path: ["config", "text_content"],
-      expected_exists: true,
-    });
-    const saved = ops[0].value as API.NodeConfig;
-    expect(saved.composer!.labelState).toEqual(composer.labelState);
-    expect(saved.composer!.references).toEqual(composer.references);
-    dto.nodes![0].config = saved;
-    const reopened = serviceGraph(
-      JSON.parse(JSON.stringify(dto)),
-      canvas,
-      project,
-    );
-    expect(reopened.nodes[0].metadata!.richText).toEqual(
-      after.nodes[0].metadata!.richText,
-    );
-    expect(serviceGraphOperations(reopened, structuredClone(reopened))).toEqual(
-      [],
-    );
-  });
-  it("does not persist camera or preview URLs", () => {
-    const before = serviceGraph(document(), canvas, project),
-      after = structuredClone(before);
-    after.viewport = { x: 100, y: 200, k: 2 };
-    expect(serviceGraphOperations(before, after)).toEqual([]);
-  });
-  it("preserves protected business fields when moving existing nodes", () => {
+  it("retains protected fields while moving and resizing", () => {
     const dto = document();
     dto.nodes![0] = {
       ...dto.nodes![0],
@@ -317,22 +49,114 @@ describe("正式画布服务接线", () => {
       node_action: "tool",
       config: { generation: { prompt: "原始配置" } },
     };
-    const before = serviceGraph(dto, canvas, project),
-      after = structuredClone(before);
-    after.nodes[0].position = { x: 88, y: 99 };
-    expect(serviceGraphOperations(before, after)).toEqual([
-      {
-        type: "set",
-        node_id: node,
-        path: ["position"],
-        value: { x: 88, y: 99 },
-      },
-    ]);
-    expect(after.nodes[0].serviceData!.config).toEqual(dto.nodes![0].config);
+    const state = serviceGraph(dto, canvas, project);
+    state.nodes[0].position = { x: 88, y: 99 };
+    state.nodes[0].width = 640;
+    const projected = serviceDocumentFromEditor(dto, state);
+    expect(projected.nodes![0]).toEqual({
+      ...dto.nodes![0],
+      x: 88,
+      y: 99,
+      width: 640,
+    });
+    expect(dto.nodes![0].x).toBe(10);
   });
-  it("rejects a missing reference binding rather than flattening the atom", () => {
-    const state = serviceGraph(document(), canvas, project);
-    state.nodes[0].metadata!.richText = {
+  it("does not share the camera or temporary preview URL", () => {
+    const dto = document();
+    const state = serviceGraph(dto, canvas, project);
+    state.viewport = { x: 100, y: 200, k: 2 };
+    expect(serviceDocumentFromEditor(dto, state)).toEqual(dto);
+  });
+  it.each(["image", "video", "audio"])(
+    "preserves %s upload identity and dimensions",
+    (type) => {
+      const dto = document();
+      dto.nodes![0] = { ...dto.nodes![0], node_type: type, config: {} };
+      const state = serviceGraph(dto, canvas, project);
+      state.nodes[0].documentData!.fileReferences = [
+        {
+          fileId: project,
+          purpose: "CONTENT",
+          referenceKey: "content",
+          version: "1",
+        },
+      ];
+      state.nodes[0].width = 480;
+      state.nodes[0].height = 270;
+      const projection = serviceDocumentFromEditor(dto, state);
+      expect(projection.nodes![0]).toMatchObject({
+        media_ref: { asset_id: project },
+        width: 480,
+        height: 270,
+      });
+      const reopened = serviceGraph(projection, canvas, project);
+      expect(reopened.nodes[0].width).toBe(480);
+      expect(reopened.nodes[0].height).toBe(270);
+      expect(serviceDocumentFromEditor(projection, reopened)).toEqual(
+        projection,
+      );
+    },
+  );
+  it("refuses unuploaded business bytes", () => {
+    const dto = document();
+    dto.nodes![0] = { ...dto.nodes![0], node_type: "image", config: {} };
+    const state = serviceGraph(dto, canvas, project);
+    state.nodes[0].metadata!.content = "blob:pending";
+    expect(() => serviceDocumentFromEditor(dto, state)).toThrow("上传后保存");
+  });
+  it("keeps explicit free resize after reopening", () => {
+    const dto = document();
+    dto.nodes![0] = { ...dto.nodes![0], node_type: "image", config: {} };
+    expect(
+      serviceGraph(dto, canvas, project).nodes[0].metadata?.freeResize,
+    ).toBe(false);
+    const state = serviceGraph(dto, canvas, project);
+    state.nodes[0].metadata!.freeResize = true;
+    expect(
+      serviceGraph(serviceDocumentFromEditor(dto, state), canvas, project)
+        .nodes[0].metadata!.freeResize,
+    ).toBe(true);
+  });
+  it.each(["image", "video"])(
+    "keeps continued %s rich input when projecting",
+    (type) => {
+      const dto = document();
+      dto.nodes![0] = { ...dto.nodes![0], node_type: type, config: {} };
+      const state = serviceGraph(dto, canvas, project);
+      const text = {
+        schemaVersion: 1 as const,
+        content: textToDocument("中文😀继续输入"),
+      };
+      state.nodes[0].metadata = {
+        ...state.nodes[0].metadata,
+        prompt: "中文😀继续输入",
+        richText: text,
+      };
+      state.nodes[0].documentData!.textDocument = text;
+      const result = serviceDocumentFromEditor(dto, state);
+      expect(
+        serviceGraph(result, canvas, project).nodes[0].documentData!
+          .textDocument,
+      ).toEqual(text);
+    },
+  );
+  it("uses stable UUIDs for new nodes and removes deleted nodes", () => {
+    const dto = document();
+    const state = serviceGraph(dto, canvas, project);
+    const created = createCanvasNode("text", { x: 30, y: 40 });
+    expect(created.id).toMatch(/^[0-9a-f-]{36}$/);
+    state.nodes = [created];
+    const next = serviceDocumentFromEditor(dto, state);
+    expect(next.nodes).toHaveLength(1);
+    expect(next.nodes![0].id).toBe(created.id);
+  });
+  it("rejects type mutation and missing reference bindings", () => {
+    const dto = document();
+    const state = serviceGraph(dto, canvas, project);
+    state.nodes[0].type = "image";
+    expect(() => serviceDocumentFromEditor(dto, state)).toThrow("类型");
+    const text = serviceGraph(dto, canvas, project).nodes[0];
+    text.metadata!.richText = {
       schemaVersion: 1,
       content: {
         type: "doc",
@@ -344,6 +168,6 @@ describe("正式画布服务接线", () => {
         ],
       },
     };
-    expect(() => richTextConfig(state.nodes[0])).toThrow();
+    expect(() => richTextConfig(text)).toThrow();
   });
 });

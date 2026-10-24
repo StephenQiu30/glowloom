@@ -19,7 +19,6 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 func seedCanvasMedia(t *testing.T, db *gorm.DB, project uuid.UUID, kind string) uuid.UUID {
@@ -75,7 +74,7 @@ func TestMediaReferenceRemainsLockedUntilCanvasCommit(t *testing.T) {
 	node.RefID = &asset
 	committed := make(chan error, 1)
 	workers.Go(func() {
-		_, err := service.Edit(ctx, actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{node}))})
+		_, err := service.Edit(ctx, actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{node}))})
 		committed <- err
 	})
 	select {
@@ -123,7 +122,7 @@ func TestResourcePersistenceScopesMediaAndSoftDeleteReplay(t *testing.T) {
 	image.RefID = &asset
 	group := resourceNode("group")
 	text := resourceNode("text")
-	input := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{group, text, image}), canvasfixture.Parents([]domain.Parent{{ID: text.ID, ParentID: &group.ID}, {ID: image.ID, ParentID: &group.ID}}), canvasfixture.Sizes([]domain.Size{{ID: group.ID, Width: 5000, Height: 8000}}))}
+	input := canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{group, text, image}), canvasfixture.Parents([]domain.Parent{{ID: text.ID, ParentID: &group.ID}, {ID: image.ID, ParentID: &group.ID}}), canvasfixture.Sizes([]domain.Size{{ID: group.ID, Width: 5000, Height: 8000}}))}
 	result, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), input)
 	if err != nil || result.Revision != 2 {
 		t.Fatalf("resource commit %v", err)
@@ -136,7 +135,7 @@ func TestResourcePersistenceScopesMediaAndSoftDeleteReplay(t *testing.T) {
 	foreign := seedCanvasMedia(t, database, foreignProject, "image")
 	bad := resourceNode("image")
 	bad.RefID = &foreign
-	_, err = service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.Positions([]domain.Move{{ID: text.ID, X: 99}}), canvasfixture.Nodes([]domain.Node{bad}))})
+	_, err = service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.Positions([]domain.Move{{ID: text.ID, X: 99}}), canvasfixture.Nodes([]domain.Node{bad}))})
 	if !operationRejected(err, "source_unavailable") {
 		t.Fatalf("foreign media %v", err)
 	}
@@ -190,7 +189,7 @@ func TestResourceGroupRestoreAndParentValidationOnPostgres(t *testing.T) {
 	child.X, child.Y = 120, 240
 	parents := []domain.Parent{{ID: child.ID, ParentID: &group.ID}, {ID: nested.ID, ParentID: &group.ID}}
 	key := uuid.NewString()
-	input := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{group, nested, child}), canvasfixture.Parents(parents))}
+	input := canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{group, nested, child}), canvasfixture.Parents(parents))}
 	if _, err := service.Edit(t.Context(), actor, doc.ID, key, input); err != nil {
 		t.Fatal(err)
 	}
@@ -199,13 +198,13 @@ func TestResourceGroupRestoreAndParentValidationOnPostgres(t *testing.T) {
 		{{ID: group.ID, ParentID: &nested.ID}},
 		{{ID: child.ID, ParentID: &child.ID}},
 	} {
-		_, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.Positions([]domain.Move{{ID: child.ID, X: 999, Y: 999}}), canvasfixture.Parents(invalidParents))})
+		_, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.Positions([]domain.Move{{ID: child.ID, X: 999, Y: 999}}), canvasfixture.Parents(invalidParents))})
 		if !operationRejected(err, "invalid_operation") {
 			t.Fatalf("invalid parent batch accepted: %v", err)
 		}
 	}
 	deleteKey := uuid.NewString()
-	result, err := service.Edit(t.Context(), actor, doc.ID, deleteKey, application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.Deletes([]uuid.UUID{group.ID}))})
+	result, err := service.Edit(t.Context(), actor, doc.ID, deleteKey, canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.Deletes([]uuid.UUID{group.ID}))})
 	if err != nil || result.Revision != 3 || len(result.Nodes) != 2 {
 		t.Fatalf("group removal: %+v %v", result, err)
 	}
@@ -214,7 +213,7 @@ func TestResourceGroupRestoreAndParentValidationOnPostgres(t *testing.T) {
 			t.Fatalf("group removal changed child world coordinates: %+v", n)
 		}
 	}
-	result, err = service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 3, UndoOf: deleteKey})
+	result, err = service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 3, UndoOf: deleteKey})
 	if err != nil || result.Revision != 4 {
 		t.Fatalf("restore group and parents atomically: %v", err)
 	}
@@ -233,8 +232,8 @@ func TestResourceGroupRestoreAndParentValidationOnPostgres(t *testing.T) {
 	if _, err := service.Get(t.Context(), actor, doc.ID); err != nil {
 		t.Fatalf("archived project should remain readable: %v", err)
 	}
-	if _, err := service.Edit(t.Context(), actor, doc.ID, key, input); !errors.Is(err, mediadomain.ErrMediaStateConflict) {
-		t.Fatalf("archived project replay bypassed current write access: %v", err)
+	if _, err := service.Edit(t.Context(), actor, doc.ID, key, input); err != nil {
+		t.Fatalf("archived project must still resolve an already accepted update: %v", err)
 	}
 }
 
@@ -248,7 +247,7 @@ func TestResourceWithOperationBindingRejectsEditsWithoutFalseSavedRevision(t *te
 	}
 	node, group := resourceNode("text"), resourceNode("group")
 	node.ParentID = &group.ID
-	if _, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{group, node}))}); err != nil {
+	if _, err := canvasfixture.NewLegacySeeder(database, canvasStore(database)).Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{group, node}))}); err != nil {
 		t.Fatal(err)
 	}
 	// This is legal under the published schema and represents a pre-existing
@@ -267,7 +266,7 @@ func TestResourceWithOperationBindingRejectsEditsWithoutFalseSavedRevision(t *te
 		{Type: "delete_node", NodeID: group.ID},
 	} {
 		t.Run(command.Type, func(t *testing.T) {
-			_, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{command}})
+			_, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{command}})
 			if !operationRejected(err, "protected_target") {
 				t.Fatalf("protected command reported saved: %v", err)
 			}
@@ -282,7 +281,7 @@ func TestResourceWithOperationBindingRejectsEditsWithoutFalseSavedRevision(t *te
 			}
 		})
 	}
-	_, err = service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "set_viewport"}}})
+	_, err = service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "set_viewport"}}})
 	if err == nil {
 		t.Fatal("session viewport entered shared graph")
 	}

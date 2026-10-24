@@ -207,7 +207,7 @@ func TestDepthJobActualNativeHTTPPrivateReviewCanvas(t *testing.T) {
 		t.Fatal(err)
 	}
 	node := canvasdomain.Node{ID: uuid.New(), NodeType: "video", NodeAction: "resource", RefType: "media_asset", RefID: rendered.AssetID, Title: "Actual depth"}
-	saved, err := service.Edit(t.Context(), f.actor, doc.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{node}))})
+	saved, err := service.Edit(t.Context(), f.actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{node}))})
 	if err != nil {
 		t.Fatal("actual ready result canvas reference", err)
 	}

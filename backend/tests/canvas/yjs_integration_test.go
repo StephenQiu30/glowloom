@@ -73,7 +73,7 @@ func TestYjsRuntimeAtomicAcceptanceConcurrentTextAndRecovery(t *testing.T) {
 	}
 	node := resourceNode("text")
 	node.Config.Text = ptr("AB中文😀")
-	_, err = canvas.NewCollaborationService(store).Submit(t.Context(), actor, doc.ID, uuid.NewString(), canvas.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &node}}})
+	_, err = canvasfixture.NewLegacySeeder(database, store).Submit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &node}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestYjsRuntimeAtomicAcceptanceConcurrentTextAndRecovery(t *testing.T) {
 	if count != 2 {
 		t.Fatalf("atomic events %d", count)
 	}
-	_, err = canvas.NewCollaborationService(store).Submit(t.Context(), actor, doc.ID, uuid.NewString(), canvas.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: int64(after.Document.Revision), Operations: []domain.Operation{{Type: "set", NodeID: node.ID, Path: []string{"title"}, Value: json.RawMessage(`"legacy"`)}}})
+	_, err = canvasfixture.NewLegacySeeder(database, store).Submit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: int64(after.Document.Revision), Operations: []domain.Operation{{Type: "set", NodeID: node.ID, Path: []string{"title"}, Value: json.RawMessage(`"legacy"`)}}})
 	if err == nil {
 		t.Fatal("legacy writer bypassed fence")
 	}
@@ -235,7 +235,7 @@ func TestYjsReceiptFailureRollsBackProjectionBinaryLogAndOutbox(t *testing.T) {
 	}
 	node := resourceNode("text")
 	node.Config.Text = ptr("AB")
-	_, err = canvas.NewCollaborationService(store).Submit(t.Context(), actor, doc.ID, uuid.NewString(), canvas.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &node}}})
+	_, err = canvasfixture.NewLegacySeeder(database, store).Submit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &node}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +285,7 @@ func TestYjsConcurrentDuplicateEdgesRejectWithoutBinaryContamination(t *testing.
 	a, b := resourceNode("text"), resourceNode("text")
 	a.Config.Text = ptr("A")
 	b.Config.Text = ptr("B")
-	_, err = canvas.NewCollaborationService(store).Submit(t.Context(), actor, doc.ID, uuid.NewString(), canvas.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &a}, {Type: "create_node", Node: &b}}})
+	_, err = canvasfixture.NewLegacySeeder(db, store).Submit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &a}, {Type: "create_node", Node: &b}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -338,7 +338,7 @@ func TestYjsStableIdentityRestorationAuthorAndOldLifetimeFence(t *testing.T) {
 	}
 	node := resourceNode("text")
 	node.Config.Text = ptr("AB")
-	if _, err = canvas.NewCollaborationService(store).Submit(t.Context(), actor, document.ID, uuid.NewString(), canvas.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &node}}}); err != nil {
+	if _, err = canvasfixture.NewLegacySeeder(database, store).Submit(t.Context(), actor, document.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &node}}}); err != nil {
 		t.Fatal(err)
 	}
 	service := canvas.NewYjsService(store, yjsRuntime(t))
@@ -401,7 +401,7 @@ func TestYjsHistoryRestorationNewEpochReceiptAndOldUpdateFence(t *testing.T) {
 	}
 	node := resourceNode("text")
 	node.Config.Text = ptr("AB")
-	if _, err = canvas.NewCollaborationService(store).Submit(t.Context(), actor, doc.ID, uuid.NewString(), canvas.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &node}}}); err != nil {
+	if _, err = canvasfixture.NewLegacySeeder(database, store).Submit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &node}}}); err != nil {
 		t.Fatal(err)
 	}
 	service := canvas.NewYjsService(store, yjsRuntime(t))
@@ -500,7 +500,7 @@ func TestYjsConcurrentReferenceAllocationsSurviveHistoryRestore(t *testing.T) {
 	}
 	node := resourceNode("text")
 	node.Config.Text = ptr("AB")
-	if _, err = canvas.NewCollaborationService(store).Submit(t.Context(), actor, doc.ID, uuid.NewString(), canvas.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &node}}}); err != nil {
+	if _, err = canvasfixture.NewLegacySeeder(database, store).Submit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &node}}}); err != nil {
 		t.Fatal(err)
 	}
 	service := canvas.NewYjsService(store, yjsRuntime(t))
@@ -557,7 +557,7 @@ func TestYjsRestorationCannotReplayAnotherActorsDeletion(t *testing.T) {
 	target := resourceNode("text")
 	target.Config.Text = ptr("target")
 	edge := domain.Edge{ID: uuid.New(), EdgeType: "annotation", SourceNodeID: sourceID, TargetNodeID: target.ID, Binding: json.RawMessage(`{"schemaVersion":1,"fromPortId":"text","toPortId":"prompt","purpose":"PROMPT","order":0,"binding":{"kind":"NODE_VALUE"}}`)}
-	linked, err := canvas.NewCollaborationService(canvasStore(first.db)).Submit(t.Context(), first.actor, first.doc.ID, uuid.NewString(), canvas.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "create_node", Node: &target}, {Type: "connect", Edge: &edge}}})
+	linked, err := canvasfixture.NewLegacySeeder(first.db, canvasStore(first.db)).Submit(t.Context(), first.actor, first.doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "create_node", Node: &target}, {Type: "connect", Edge: &edge}}})
 	if err != nil || linked.Status != "accepted" {
 		t.Fatal(linked, err)
 	}
@@ -647,7 +647,7 @@ func TestYjsExperimentalStateUpgradeAndConcurrentFirstParameters(t *testing.T) {
 	}
 	n := resourceNode("text")
 	n.Config.Text = ptr("保留中文🌏")
-	if _, err = canvas.NewCollaborationService(store).Submit(t.Context(), actor, doc.ID, uuid.NewString(), canvas.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}}}); err != nil {
+	if _, err = canvasfixture.NewLegacySeeder(db, store).Submit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}}}); err != nil {
 		t.Fatal(err)
 	}
 	service := canvas.NewYjsService(store, yjsRuntime(t))

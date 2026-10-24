@@ -19,22 +19,22 @@ func TestTextComposerPostgresReopenUndoRedoSourceGuard(t *testing.T) {
 	runtime := canvasDB(t, "GLOWLOOM_TEST_CANVAS_M1_RUNTIME_DSN")
 	store := canvasStore(runtime)
 	read := application.NewService(store)
-	write := application.NewCollaborationService(store)
+	write := canvasfixture.NewEditService(store)
 	doc, err := read.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "Tiptap text references"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	submit := func(base int64, key string, ops []domain.Operation, undo string) application.CollaborationReceipt {
+	submit := func(base int64, key string, ops []domain.Operation, undo string) canvasfixture.EditReceipt {
 		t.Helper()
-		r, err := write.Submit(t.Context(), actor, doc.ID, key, application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: base, Operations: ops, UndoOf: undo})
+		r, err := write.Submit(t.Context(), actor, doc.ID, key, canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: base, Operations: ops, UndoOf: undo})
 		if err != nil {
 			t.Fatal(err)
 		}
 		return r
 	}
 	node := resourceNode("text")
-	if r := submit(1, uuid.NewString(), []domain.Operation{{Type: "create_node", Node: &node}}, ""); r.Status != "accepted" {
-		t.Fatal(r)
+	if _, err := canvasfixture.NewLegacySeeder(owner, store).Submit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{Operations: canvasfixture.Nodes([]domain.Node{node})}); err != nil {
+		t.Fatal(err)
 	}
 	draft, err := prompt.DecodeDraft([]byte(textComposerJSON))
 	if err != nil {
@@ -59,6 +59,11 @@ func TestTextComposerPostgresReopenUndoRedoSourceGuard(t *testing.T) {
 	key := uuid.NewString()
 	if r := submit(2, key, []domain.Operation{op}, ""); r.Status != "accepted" {
 		t.Fatalf("save: %+v", r)
+	}
+	// Yjs authority allocates ordinals, ignoring client-proposed display counters.
+	for _, kind := range []string{"image", "video", "audio"} {
+		draft.LabelState.HighWater[kind] = 1
+		draft.LabelState.Allocations["reference-"+kind] = prompt.LabelAllocation{LabelKind: kind, Ordinal: 1}
 	}
 	reopened, err := application.NewService(canvasStore(runtime)).Get(t.Context(), actor, doc.ID)
 	if err != nil || len(reopened.Nodes) != 1 || !reflect.DeepEqual(reopened.Nodes[0].Config.Composer, &draft) {

@@ -149,7 +149,7 @@ type CommandError struct {
 func (e *CommandError) Error() string { return fmt.Sprintf("canvas command %d: %v", e.Index, e.Cause) }
 func (e *CommandError) Unwrap() error { return e.Cause }
 
-// InputSnapshot is the final immutable draft input of one accepted OT batch.
+// InputSnapshot is the final immutable draft input of one accepted Yjs projection.
 type InputSnapshot struct {
 	NodeID   uuid.UUID
 	Revision int64

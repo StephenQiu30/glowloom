@@ -53,6 +53,13 @@ func (h *Handler) serveYjs(ctx context.Context, request *http.Request, conn *web
 			return false
 		}
 		state.Document.Permissions.Write = state.Document.Permissions.Write && writeAllowed
+		if len(state.State) == 0 && state.Document.Permissions.Write {
+			state, err = h.yjs.Initialize(ctx, actor, id, state.Document.Revision)
+			if err != nil {
+				fail("", err)
+				return false
+			}
+		}
 		if len(state.State) == 0 {
 			return send(packet{Type: "yjs_migration_required", YjsState: &state, ActorID: actor.ID})
 		}

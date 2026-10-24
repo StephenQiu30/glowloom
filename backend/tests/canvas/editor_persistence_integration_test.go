@@ -15,14 +15,14 @@ func TestEditorCompleteGraphDurableRoundTrip(t *testing.T) {
 	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, db)
 	store := canvasStore(db)
-	write, read := application.NewCollaborationService(store), application.NewService(store)
+	write, read := canvasfixture.NewEditService(store), application.NewService(store)
 	doc, err := read.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "完整保存验证"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	submit := func(base int64, ops []domain.Operation, undo string) application.CollaborationReceipt {
+	submit := func(base int64, ops []domain.Operation, undo string) canvasfixture.EditReceipt {
 		t.Helper()
-		r, e := write.Submit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: base, Operations: ops, UndoOf: undo})
+		r, e := write.Submit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: base, Operations: ops, UndoOf: undo})
 		if e != nil || r.Status != "accepted" {
 			t.Fatalf("save: %+v %v", r, e)
 		}
@@ -32,7 +32,7 @@ func TestEditorCompleteGraphDurableRoundTrip(t *testing.T) {
 	old, next := seedCanvasMedia(t, db, project, "image"), seedCanvasMedia(t, db, project, "image")
 	image.RefID = &old
 	image.Config.Editor = &domain.EditorConfig{SchemaVersion: 1, Parameters: &domain.EditorParameters{Mode: "MANUAL"}, Files: []domain.EditorFileReference{{ReferenceKey: "stable-reference", FileID: old, Version: "1", Purpose: "CONTENT"}}}
-	text.Config.Editor = &domain.EditorConfig{SchemaVersion: 1, Parameters: &domain.EditorParameters{Mode: "GENERATE", ModelSelection: &domain.EditorModelSelection{ConnectionID: "provider", ModelID: "model"}, ModelParameters: map[string]json.RawMessage{"temperature": raw(`0.7`)}}, Metadata: map[string]json.RawMessage{"fontSize": raw(`28`)}}
+	text.Config.Editor = &domain.EditorConfig{SchemaVersion: 1, Parameters: &domain.EditorParameters{Mode: "GENERATE", ModelSelection: &domain.EditorModelSelection{ConnectionID: "10000000-0000-4000-8000-000000000011", ModelID: "model"}, ModelParameters: map[string]json.RawMessage{"temperature": raw(`0.7`)}}, Metadata: map[string]json.RawMessage{"fontSize": raw(`28`)}}
 	config.Config.Editor = &domain.EditorConfig{SchemaVersion: 1, Parameters: &domain.EditorParameters{Values: map[string]json.RawMessage{"quality": raw(`"high"`)}}}
 	edge := domain.Edge{ID: uuid.New(), EdgeType: "annotation", SourceNodeID: image.ID, TargetNodeID: text.ID, Binding: raw(`{"schemaVersion":1,"fromPortId":"image","toPortId":"reference_images","purpose":"REFERENCE_IMAGE","order":0,"binding":{"kind":"FILE_REFERENCE","referenceKey":"stable-reference"}}`)}
 	settings := domain.Edge{ID: uuid.New(), EdgeType: "annotation", SourceNodeID: config.ID, TargetNodeID: text.ID, Binding: raw(`{"schemaVersion":1,"fromPortId":"settings","toPortId":"settings","purpose":"SETTINGS","order":0,"binding":{"kind":"NODE_VALUE"}}`)}
@@ -52,7 +52,7 @@ func TestEditorCompleteGraphDurableRoundTrip(t *testing.T) {
 	guarded.Files = append(append([]domain.EditorFileReference{}, guarded.Files...), domain.EditorFileReference{ReferenceKey: "foreign", FileID: foreign, Version: "1", Purpose: "CONTENT"})
 	guardedValue, _ := json.Marshal(guarded)
 	guardedExpected, _ := json.Marshal(image.Config.Editor)
-	rejected, rejectErr := write.Submit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "set", NodeID: image.ID, Path: []string{"config", "editor"}, ExpectedExists: ptr(true), Expected: guardedExpected, Value: guardedValue}}})
+	rejected, rejectErr := write.Submit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "set", NodeID: image.ID, Path: []string{"config", "editor"}, ExpectedExists: ptr(true), Expected: guardedExpected, Value: guardedValue}}})
 	if rejectErr != nil || rejected.Status != "rejected" {
 		t.Fatalf("foreign secondary file accepted: %+v %v", rejected, rejectErr)
 	}

@@ -27,7 +27,7 @@ func TestContentActivityTracksPrimaryContentWithoutProjectCAS(t *testing.T) {
 	if err := db.Exec(`INSERT INTO workspace.project_activity(project_id,modified_at,basis) VALUES(?,?,'created')`, project, old).Error; err != nil {
 		t.Fatal(err)
 	}
-	_, err = service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat([]domain.Operation{{Type: "set_viewport"}})})
+	_, err = service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat([]domain.Operation{{Type: "set_viewport"}})})
 	if !operationRejected(err, "invalid_operation") {
 		t.Fatal("viewport entered shared graph", err)
 	}
@@ -47,7 +47,7 @@ func TestContentActivityTracksPrimaryContentWithoutProjectCAS(t *testing.T) {
 		t.Fatal("viewport changed recent content", activity)
 	}
 	text := "实际保存的中文"
-	input := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{{ID: uuid.New(), Title: "文字", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: &text}}}))}
+	input := canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{{ID: uuid.New(), Title: "文字", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: &text}}}))}
 	key := uuid.NewString()
 	if _, err := service.Edit(t.Context(), actor, doc.ID, key, input); err != nil {
 		t.Fatal(err)

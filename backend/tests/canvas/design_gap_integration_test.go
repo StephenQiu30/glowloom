@@ -3,8 +3,8 @@ package canvas_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 
@@ -15,15 +15,11 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	live "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/websocket"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func TestCanvasHTTPCommandRouteRemoved(t *testing.T) {
@@ -65,80 +61,6 @@ func TestCanvasLegacySocketProtocolRejected(t *testing.T) {
 	}
 }
 
-// A real commit between Get and Changes makes the feed advance past the earlier
-// metadata read. The cursor and every envelope must describe delivered changes.
-type commitAfterGet struct {
-	application.Store
-	after func(context.Context, domain.Document)
-}
-
-func (s commitAfterGet) Get(ctx context.Context, a identity.Principal, id uuid.UUID) (domain.Document, error) {
-	d, err := s.Store.Get(ctx, a, id)
-	if err == nil {
-		s.after(ctx, d)
-	}
-	return d, err
-}
-
-func TestCanvasChangesWatermarkMatchesConcurrentCommit(t *testing.T) {
-	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
-	actor, project := seedCanvasActor(t, db)
-	store := canvasStore(db)
-	svc := application.NewCollaborationService(store)
-	doc, err := application.NewService(store).Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "watermark"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	commit := func(ctx context.Context, base int64) {
-		n := resourceNode("text")
-		receipt, e := svc.Submit(ctx, actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: base, Operations: []domain.Operation{{Type: "create_node", Node: &n}}})
-		if e != nil || receipt.Status != "accepted" {
-			t.Errorf("concurrent commit: %+v %v", receipt, e)
-		}
-	}
-	commit(t.Context(), 1)
-	getter := commitAfterGet{Store: store, after: func(ctx context.Context, d domain.Document) {
-		if d.Revision == 2 {
-			commit(ctx, 2)
-		}
-	}}
-	handler := live.NewHandler(application.NewService(getter), func(context.Context, *http.Request, uuid.UUID, uuid.UUID, string) (identity.Principal, bool, error) {
-		return actor, true, nil
-	}, liveOrigin).WithCollaboration(svc)
-	router := gin.New()
-	handler.Register(t.Context(), router.Group("/api"))
-	server := httptest.NewServer(router)
-	defer server.Close()
-	conn, resp, err := websocket.Dial(t.Context(), "ws"+strings.TrimPrefix(server.URL, "http")+"/api/canvases/"+doc.ID.String()+"/live", &websocket.DialOptions{HTTPHeader: http.Header{"Origin": {liveOrigin}}})
-	if resp != nil && resp.Body != nil {
-		defer func() { _ = resp.Body.Close() }()
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = conn.CloseNow() }()
-	liveSend(t, conn, map[string]any{"type": "join", "protocol_version": 3, "client_id": canvasfixture.ClientID, "last_revision": "1", "scope_id": actor.ScopeID, "csrf_token": "test"})
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	var packet struct {
-		Type     string                  `json:"type"`
-		Revision int64                   `json:"revision,string"`
-		From     int64                   `json:"from_revision,string"`
-		To       int64                   `json:"to_revision,string"`
-		Changes  []application.ChangeDTO `json:"changes"`
-	}
-	if err := wsjson.Read(ctx, conn, &packet); err != nil {
-		t.Fatal(err)
-	}
-	if packet.Type != "changes" || len(packet.Changes) != 2 || packet.Revision != 3 || packet.From != 1 || packet.To != 3 {
-		t.Fatalf("feed watermark does not match delivered range: %+v", packet)
-	}
-	ready := liveRead(t, conn, "ready", 3)
-	if ready.Revision != 3 {
-		t.Fatalf("ready lost delivered cursor: %+v", ready)
-	}
-}
-
 func TestCanvasOversizedGraphRejectedBeforeSaveAndReportedOnLoad(t *testing.T) {
 	f := newLiveFixture(t)
 	// Model an existing large document. A new edit must not be accepted into an
@@ -150,23 +72,23 @@ func TestCanvasOversizedGraphRejectedBeforeSaveAndReportedOnLoad(t *testing.T) {
 	if err := f.db.Raw(`SELECT id FROM canvas.node WHERE document_id=? LIMIT 1`, f.doc.ID).Scan(&row).Error; err != nil {
 		t.Fatal(err)
 	}
-	svc := application.NewCollaborationService(canvasStore(f.db))
-	key := uuid.NewString()
-	input := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "set", NodeID: row.ID, Path: []string{"title"}, Value: json.RawMessage(`"changed"`)}}}
-	receipt, err := svc.Submit(t.Context(), f.actor, f.doc.ID, key, input)
-	if err != nil || receipt.Status != "rejected" || receipt.Code != "canvas_capacity_exceeded" {
-		t.Fatalf("unloadable graph accepted: %+v %v", receipt, err)
+	shared := application.NewYjsService(canvasStore(f.db), yjsRuntime(t))
+	_, err := shared.Initialize(t.Context(), f.actor, f.doc.ID, 1)
+	var rejection *domain.OperationError
+	if !errors.As(err, &rejection) || rejection.Code != "canvas_capacity_exceeded" {
+		t.Fatalf("oversized migration: %v", err)
+	}
+	var changed int64
+	if err := f.db.Raw(`SELECT (SELECT count(*) FROM canvas.collab_document WHERE document_id=?)+(SELECT count(*) FROM canvas.collab_receipt WHERE document_id=?)`, f.doc.ID, f.doc.ID).Scan(&changed).Error; err != nil || changed != 0 {
+		t.Fatal("rejected migration wrote state", changed, err)
 	}
 	var revision int64
-	if err := f.db.Raw(`SELECT revision FROM canvas.document WHERE id=?`, f.doc.ID).Scan(&revision).Error; err != nil || revision != 1 {
-		t.Fatalf("capacity rejection changed revision: %d %v", revision, err)
-	}
-	resolved, err := svc.Resolve(t.Context(), f.actor, f.doc.ID, key, input)
-	if err != nil || resolved == nil || resolved.Code != receipt.Code {
-		t.Fatalf("capacity rejection lost: %+v %v", resolved, err)
+	f.db.Raw(`SELECT revision FROM canvas.document WHERE id=?`, f.doc.ID).Scan(&revision)
+	if revision != 1 {
+		t.Fatal("rejected migration changed revision", revision)
 	}
 	conn := f.dial(t)
-	liveSend(t, conn, map[string]any{"type": "join", "protocol_version": 3, "client_id": canvasfixture.ClientID, "last_revision": "0", "scope_id": f.actor.ScopeID, "csrf_token": f.auth.CSRFToken})
+	liveSend(t, conn, map[string]any{"type": "join", "protocol_version": 4, "client_id": canvasfixture.ClientID, "scope_id": f.actor.ScopeID, "csrf_token": f.auth.CSRFToken})
 	p := liveError(t, conn)
 	if p.Code != "canvas_capacity_exceeded" {
 		t.Fatalf("oversized snapshot not explained: %+v", p)
@@ -175,10 +97,10 @@ func TestCanvasOversizedGraphRejectedBeforeSaveAndReportedOnLoad(t *testing.T) {
 
 func TestCanvasAcceptedCapacityBoundaryReopensOverWebSocket(t *testing.T) {
 	f := newLiveFixture(t)
-	if err := f.db.Exec(`INSERT INTO canvas.node(id,document_id,title,node_type,node_action,config,x,y) SELECT gen_random_uuid(),?,'boundary','text','resource',jsonb_build_object('text',repeat('x',10000)),0,0 FROM generate_series(1,750)`, f.doc.ID).Error; err != nil {
+	if err := f.db.Exec(`INSERT INTO canvas.node(id,document_id,title,node_type,node_action,config,x,y) SELECT gen_random_uuid(),?,'boundary','text','resource',jsonb_build_object('text',repeat('x',10000)),0,0 FROM generate_series(1,625)`, f.doc.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	svc := application.NewCollaborationService(canvasStore(f.db))
+	svc := canvasfixture.NewEditService(canvasStore(f.db))
 	revision := int64(1)
 	rejected := false
 	for range 20 {
@@ -188,12 +110,12 @@ func TestCanvasAcceptedCapacityBoundaryReopensOverWebSocket(t *testing.T) {
 			n.Config.Text = ptr(strings.Repeat("中", 3300))
 			ops[i] = domain.Operation{Type: "create_node", Node: &n}
 		}
-		r, err := svc.Submit(t.Context(), f.actor, f.doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: revision, Operations: ops})
+		r, err := svc.Submit(t.Context(), f.actor, f.doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: revision, Operations: ops})
 		if err != nil {
 			t.Fatal(err)
 		}
 		if r.Status == "rejected" {
-			if r.Code != "canvas_capacity_exceeded" {
+			if r.Code != "STATE_TOO_LARGE" && r.Code != "canvas_capacity_exceeded" {
 				t.Fatalf("wrong budget rejection: %+v", r)
 			}
 			rejected = true
@@ -217,12 +139,11 @@ func TestCanvasAcceptedCapacityBoundaryReopensOverWebSocket(t *testing.T) {
 	}
 	conn := f.dial(t)
 	conn.SetReadLimit(16 << 20)
-	liveSend(t, conn, map[string]any{"type": "join", "protocol_version": 3, "client_id": canvasfixture.ClientID, "last_revision": "0", "scope_id": f.actor.ScopeID, "csrf_token": f.auth.CSRFToken})
-	p := liveRead(t, conn, "snapshot", revision)
-	if p.Document == nil || len(p.Document.Nodes) != len(loaded.Nodes) || p.Revision != revision {
-		t.Fatal("accepted boundary snapshot did not reopen intact")
+	liveSend(t, conn, map[string]any{"type": "join", "protocol_version": 4, "client_id": canvasfixture.ClientID, "scope_id": f.actor.ScopeID, "csrf_token": f.auth.CSRFToken})
+	packet := readYjsUntil(t, conn, func(p yjsPacket) bool { return p.Type == "yjs_snapshot" })
+	if len(packet.State.Document.Nodes) != len(loaded.Nodes) || int64(packet.State.Document.Revision) != revision {
+		t.Fatal("accepted Yjs boundary did not reopen intact")
 	}
-	liveRead(t, conn, "ready", revision)
 }
 
 // A concurrent project transaction already has a SHARE lock and then updates
@@ -254,12 +175,10 @@ func TestCanvasSocketAuthorityDoesNotUpgradeSharedProjectLocks(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		if err := f.db.Callback().Row().Remove("test:canvas-authority-barrier"); err != nil {
-			t.Error(err)
-		}
-	})
-	liveSend(t, conn, map[string]any{"type": "join", "protocol_version": 3, "client_id": canvasfixture.ClientID, "last_revision": "0", "scope_id": f.actor.ScopeID, "csrf_token": f.auth.CSRFToken})
+	// This callback belongs to the fixture's dedicated Gorm handle, which is
+	// closed by canvasDB cleanup. Removing callbacks while a socket is finishing
+	// an authorization read races Gorm's callback list; leave it with the handle.
+	liveSend(t, conn, map[string]any{"type": "join", "protocol_version": 4, "client_id": canvasfixture.ClientID, "scope_id": f.actor.ScopeID, "csrf_token": f.auth.CSRFToken})
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	select {
@@ -285,6 +204,5 @@ func TestCanvasSocketAuthorityDoesNotUpgradeSharedProjectLocks(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
 	}
-	liveRead(t, conn, "snapshot", 1)
-	liveRead(t, conn, "ready", 1)
+	readYjsUntil(t, conn, func(p yjsPacket) bool { return p.Type == "yjs_snapshot" })
 }

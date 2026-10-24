@@ -452,7 +452,7 @@ func TestProjectLifecycleOperationAndExportAdmissionLocks(t *testing.T) {
 		}
 		track, node := uuid.New(), uuid.New()
 		config := canvasdomain.TimelineConfig{Version: 1, AspectRatio: "16:9", FPS: 30, Tracks: []canvasdomain.TimelineTrack{{ID: track, Kind: "text", Label: "文本", Visible: true}}, Clips: []canvasdomain.TimelineClip{{ID: uuid.New(), TrackID: track, Kind: "text", Title: "文本", Text: "合成锁证据", DurationMS: 1000, Volume: 1}}, SubtitleStyle: canvasdomain.SubtitleStyle{FontSize: 32, Color: "#ffffff", Position: "bottom"}}
-		saved, err := canvas.Edit(ctx, actor, doc.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{{ID: node, Title: "时间线", NodeType: "timeline", NodeAction: "tool", Config: canvasdomain.NodeConfig{Timeline: &config}}}))})
+		saved, err := canvas.Edit(ctx, actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{{ID: node, Title: "时间线", NodeType: "timeline", NodeAction: "tool", Config: canvasdomain.NodeConfig{Timeline: &config}}}))})
 		if err != nil {
 			t.Fatal(err)
 		}

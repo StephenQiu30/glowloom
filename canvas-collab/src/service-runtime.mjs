@@ -13,13 +13,22 @@ const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/;
 const decimal = /^(0|[1-9][0-9]{0,18})$/;
 const failure = (code) =>
   Object.assign(new Error(code), { code, definitive: true });
+// The transport carries the binary as base64 together with its public projection.
+// Reserve 1 MiB for bindings, the accepted delta and control envelopes.
+function requireSnapshotCapacity(state, projection) {
+  if (
+    state.byteLength > 8 * 1024 * 1024 ||
+    Math.ceil(state.byteLength / 3) * 4 +
+      Buffer.byteLength(JSON.stringify(projection)) >
+      15 * 1024 * 1024
+  )
+    throw failure("STATE_TOO_LARGE");
+}
 export function decodeBinary(value, limit) {
   if (
     typeof value !== "string" ||
     value.length > Math.ceil(limit / 3) * 4 ||
-    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
-      value,
-    )
+    /[^A-Za-z0-9+/=]/.test(value)
   )
     throw failure("INVALID_UPDATE");
   const bytes = Buffer.from(value, "base64");
@@ -109,6 +118,7 @@ export async function computeCandidate(action, request) {
         state = Y.encodeStateAsUpdate(doc);
       if (state.byteLength > 8 * 1024 * 1024) throw failure("STATE_TOO_LARGE");
       const projection = serviceProjection(snapshot, request.document);
+      requireSnapshotCapacity(state, projection);
       if (canonicalJson(projection) !== canonicalJson(request.document))
         throw failure("MIGRATION_NOT_LOSSLESS");
       return {
@@ -165,6 +175,10 @@ export async function computeCandidate(action, request) {
         update: state,
       }),
       commit: async (_scope, candidate) => {
+        requireSnapshotCapacity(
+          candidate.state,
+          serviceProjection(candidate.graph, projectionBase),
+        );
         const appliedUpdate = Y.diffUpdate(
           candidate.state,
           Y.encodeStateVectorFromUpdate(state),
@@ -200,7 +214,19 @@ function normalizeReferenceLabels(doc, base, transition) {
     base.nodes.map((n) => [n.id, n.config?.composer?.labelState]),
   );
   for (const node of readCanvasDocument(doc).graph.nodes) {
-    if (!node.references || transition?.nodes.includes(node.id)) continue;
+    if (transition?.nodes.includes(node.id)) continue;
+    if (!node.references) {
+      if (!previous.has(node.id) || !previous.get(node.id)) continue;
+      // Undoing the first promotion may remove the registry container marker.
+      // Keep an empty registry and its accepted label tombstones in Yjs itself.
+      doc
+        .getMap("canvas")
+        .get("nodes")
+        .get(node.id)
+        .get("data")
+        .set("referencesPresent", true);
+      node.references = [];
+    }
     const labels = structuredClone(
       previous.get(node.id) ?? {
         highWater: { image: 0, video: 0, audio: 0, subject: 0 },
@@ -226,7 +252,7 @@ function normalizeReferenceLabels(doc, base, transition) {
         });
       }
     }
-    if (canonicalJson(labels) !== canonicalJson(node.labelState))
+    if (canonicalJson(labels) !== canonicalJson(node.labelState ?? {}))
       doc
         .getMap("canvas")
         .get("nodes")

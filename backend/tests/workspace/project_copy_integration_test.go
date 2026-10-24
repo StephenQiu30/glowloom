@@ -68,7 +68,8 @@ func TestProjectCopyAtomicAdmissionCompleteGraphAndPublication(t *testing.T) {
 	lifecycleFixtureSQL(t, db, `UPDATE workspace.project SET initial_canvas_id=? WHERE id=?`, document.ID, project)
 	nodeID := uuid.New()
 	text := "冻结内容"
-	original, err := canvas.Edit(ctx, actor, document.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{{ID: nodeID, Title: "剧情", NodeType: "text", NodeAction: "resource", Config: canvasdomain.NodeConfig{Text: &text}}}))})
+	// Exercise copying a historical plain-text graph before its first Yjs join.
+	original, err := canvasfixture.NewLegacySeeder(db, workspaceCanvasStore(db, nil)).Edit(ctx, actor, document.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{{ID: nodeID, Title: "剧情", NodeType: "text", NodeAction: "resource", Config: canvasdomain.NodeConfig{Text: &text}}}))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +111,7 @@ func TestProjectCopyAtomicAdmissionCompleteGraphAndPublication(t *testing.T) {
 		t.Fatal("empty genuine media set", err)
 	}
 	newText := "源随后编辑"
-	if _, err := canvas.Edit(ctx, actor, document.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.TextSource(nodeID, text, newText))}); err != nil {
+	if _, err := canvas.Edit(ctx, actor, document.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.TextSource(nodeID, text, newText))}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := projectCopyStore(db).CompleteCanvases(ctx, actor, job.ID, worker); err != nil {

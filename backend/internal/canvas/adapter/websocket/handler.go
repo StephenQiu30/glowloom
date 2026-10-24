@@ -1,4 +1,4 @@
-// Package websocket carries ordered canvas operations and durable receipts.
+// Package websocket carries Yjs updates and durable receipts.
 package websocket
 
 import (
@@ -27,25 +27,17 @@ type Authorize func(context.Context, *http.Request, uuid.UUID, uuid.UUID, string
 
 // Handler owns only bounded connection notification hints, never document data.
 type Handler struct {
-	presence      map[uuid.UUID]*presenceRoom
-	service       *application.Service
-	collaboration *application.CollaborationService
-	yjs           *application.YjsService
-	authorize     Authorize
-	origin        string
-	mu            sync.Mutex
-	watchers      map[uuid.UUID]map[chan struct{}]struct{}
+	presence  map[uuid.UUID]*presenceRoom
+	yjs       *application.YjsService
+	authorize Authorize
+	origin    string
+	mu        sync.Mutex
+	watchers  map[uuid.UUID]map[chan struct{}]struct{}
 }
 
 // NewHandler injects the existing application and current session authority.
-func NewHandler(service *application.Service, authorize Authorize, origin string) *Handler {
-	return &Handler{service: service, authorize: authorize, origin: origin, watchers: make(map[uuid.UUID]map[chan struct{}]struct{})}
-}
-
-// WithCollaboration injects the sole editing service for protocol 3.
-func (h *Handler) WithCollaboration(service *application.CollaborationService) *Handler {
-	h.collaboration = service
-	return h
+func NewHandler(authorize Authorize, origin string) *Handler {
+	return &Handler{authorize: authorize, origin: origin, watchers: make(map[uuid.UUID]map[chan struct{}]struct{})}
 }
 
 // Register binds socket lifetimes to the API role rather than hijacked requests.
@@ -86,14 +78,13 @@ func (h *Handler) subscribe(id uuid.UUID) (<-chan struct{}, func()) {
 var errReadOnly = errors.New("canvas is currently read-only")
 
 type incoming struct {
-	Type            string                `json:"type"`
-	ProtocolVersion int                   `json:"protocol_version"`
-	ClientID        uuid.UUID             `json:"client_id"`
-	ScopeID         uuid.UUID             `json:"scope_id"`
-	CSRFToken       string                `json:"csrf_token"`
-	OpID            string                `json:"op_id"`
-	Body            json.RawMessage       `json:"body"`
-	LastRevision    *application.Revision `json:"last_revision"`
+	Type            string          `json:"type"`
+	ProtocolVersion int             `json:"protocol_version"`
+	ClientID        uuid.UUID       `json:"client_id"`
+	ScopeID         uuid.UUID       `json:"scope_id"`
+	CSRFToken       string          `json:"csrf_token"`
+	OpID            string          `json:"op_id"`
+	Body            json.RawMessage `json:"body"`
 }
 type packet struct {
 	Presence          []Presence                    `json:"presence,omitempty"`
@@ -102,12 +93,8 @@ type packet struct {
 	YjsState          *application.YjsState         `json:"yjs_state,omitempty"`
 	YjsReceipt        *application.YjsReceipt       `json:"yjs_receipt,omitempty"`
 	Type              string                        `json:"type"`
-	FromRevision      int64                         `json:"from_revision,omitempty,string"`
-	ToRevision        int64                         `json:"to_revision,omitempty,string"`
 	Retryable         bool                          `json:"retryable"`
 	ActorID           uuid.UUID                     `json:"actor_id,omitempty"`
-	Receipt           *application.ReceiptDTO       `json:"receipt,omitempty"`
-	Changes           []application.ChangeDTO       `json:"changes,omitempty"`
 	Revision          int64                         `json:"revision,omitempty,string"`
 	Permissions       *application.Permissions      `json:"permissions,omitempty"`
 	SupportedVersions []int                         `json:"supported_versions,omitempty"`
@@ -187,10 +174,6 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 		defer stop()
 		return conn.Write(writeCtx, websocket.MessageText, body) == nil
 	}
-	fail := func(op string, err error) bool {
-		status, code := problem(err)
-		return send(packet{Type: "error", OpID: op, Status: status, Code: code, Retryable: status == 503}) && status != 401 && status != 403 && status != 404
-	}
 	timer := time.NewTimer(10 * time.Second)
 	defer timer.Stop()
 	var join incoming
@@ -205,148 +188,26 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 		send(packet{Type: "error", Status: 422, Code: "invalid_message"})
 		return
 	}
-	if join.ProtocolVersion == 4 && h.yjs != nil {
-		h.serveYjs(ctx, c.Request, conn, id, join, messages, syncRequests, send)
-		return
-	}
 	if join.ProtocolVersion != application.ProtocolVersion {
 		send(packet{Type: "error", Status: 422, Code: "unsupported_protocol_version", SupportedVersions: []int{application.ProtocolVersion}})
 		return
 	}
-	if join.Type != "join" || h.collaboration == nil || join.LastRevision == nil || join.ClientID == uuid.Nil || join.ScopeID == uuid.Nil || join.CSRFToken == "" {
-		send(packet{Type: "error", Status: 422, Code: "invalid_join"})
+	if h.yjs == nil {
+		send(packet{Type: "error", Status: 503, Code: "collaboration_unavailable", Retryable: true})
 		return
 	}
-	wake, unsubscribe := h.subscribe(id)
-	defer unsubscribe()
-	revision := int64(*join.LastRevision)
-	if revision < 0 {
-		return
-	}
-	var actorID uuid.UUID
-	syncBlocked := false
-	var writable bool
-	authorized := func(opCtx context.Context) (identity.Principal, bool, error) {
-		return h.authorize(opCtx, c.Request, id, join.ScopeID, join.CSRFToken)
-	}
-	syncHead := func(force bool) bool {
-		opCtx, stop := context.WithTimeout(ctx, 10*time.Second)
-		defer stop()
-		actor, canWrite, err := authorized(opCtx)
-		if err != nil {
-			fail("", err)
-			return false
-		}
-		if h.yjs != nil {
-			shared, err := h.yjs.Load(opCtx, actor, id)
-			if err != nil {
-				fail("", err)
-				return false
-			}
-			if len(shared.State) > 0 {
-				send(packet{Type: "error", Status: 409, Code: "collaboration_upgrade_required", SupportedVersions: []int{4}})
-				return false
-			}
-		}
-		doc, err := h.service.Get(opCtx, actor, id)
-		if err != nil {
-			fail("", err)
-			return false
-		}
-		actorID = actor.ID
-		canWrite = canWrite && doc.ReadOnlyReason == "" && doc.SchemaVersion == application.SchemaVersion
-		if revision > 0 {
-			if !syncBlocked && doc.Revision != revision {
-				changes, err := h.collaboration.Changes(opCtx, actor, id, revision)
-				if err != nil {
-					var rejection *domain.OperationError
-					if !errors.As(err, &rejection) || rejection.Code != "history_unavailable" {
-						fail("", err)
-						return false
-					}
-					syncBlocked = true
-					if !send(packet{Type: "resync_required", Code: "history_unavailable", Revision: doc.Revision}) {
-						return false
-					}
-				} else {
-					// Changes owns its own consistent database head, which may be
-					// newer than Get. Advance only to the last delivered revision.
-					delivered := revision
-					for _, change := range changes {
-						if change.Revision != delivered+1 {
-							fail("", &domain.OperationError{Code: "history_unavailable"})
-							return false
-						}
-						delivered = change.Revision
-					}
-					publicChanges, err := application.Changes(changes)
-					if err != nil {
-						fail("", err)
-						return false
-					}
-					if !send(packet{Type: "changes", FromRevision: revision, ToRevision: delivered, Revision: delivered, Changes: publicChanges, Permissions: &application.Permissions{Read: true, Write: canWrite}}) {
-						return false
-					}
-					doc.Revision = delivered
-				}
-			}
-		} else if force || doc.Revision != revision || canWrite != writable {
-			snapshot := application.Snapshot(doc)
-			snapshot.Permissions.Write = canWrite
-			if !send(packet{Type: "snapshot", Revision: doc.Revision, Document: &snapshot, Permissions: &snapshot.Permissions}) {
-				return false
-			}
-		}
-		if syncBlocked {
-			canWrite = false
-		}
-		revision, writable = doc.Revision, canWrite
-		return true
-	}
-	if !syncHead(true) || !send(packet{Type: "ready", Revision: revision, Permissions: &application.Permissions{Read: true, Write: writable}, ActorID: actorID}) {
-		return
-	}
-	tick := time.NewTicker(5 * time.Second)
-	defer tick.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-syncRequests:
-			if !syncHead(true) {
-				return
-			}
-		case <-wake:
-			if !syncHead(false) {
-				return
-			}
-		case <-tick.C:
-			pingCtx, stop := context.WithTimeout(ctx, 5*time.Second)
-			err := conn.Ping(pingCtx)
-			stop()
-			if err != nil {
-				return
-			}
-			if !syncHead(false) || !send(packet{Type: "heartbeat", Revision: revision, Permissions: &application.Permissions{Read: true, Write: writable}}) {
-				return
-			}
-		case msg := <-messages:
-			if msg.Type != "submit" && msg.Type != "resolve" {
-				if !send(packet{Type: "error", Status: 422, Code: "invalid_message"}) {
-					return
-				}
-				continue
-			}
-			if !h.processCollaboration(ctx, authorized, id, msg, syncBlocked || !writable, send, fail) {
-				return
-			}
-		}
-	}
+	h.serveYjs(ctx, c.Request, conn, id, join, messages, syncRequests, send)
 }
 
 func problem(err error) (int, string) {
 	var rejection *domain.OperationError
+	var runtimeRejection *application.YjsRejection
 	switch {
+	case errors.As(err, &runtimeRejection):
+		if runtimeRejection.Code == "STATE_TOO_LARGE" {
+			return 413, "canvas_capacity_exceeded"
+		}
+		return 422, runtimeRejection.Code
 	case errors.As(err, &rejection):
 		if rejection.Code == "canvas_capacity_exceeded" {
 			return 413, rejection.Code

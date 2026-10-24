@@ -12,7 +12,6 @@ import (
 
 	"github.com/google/uuid"
 
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
@@ -133,7 +132,7 @@ func TestProjectRenameAndCanvasSaveAvoidLockUpgrade(t *testing.T) {
 	}()
 	go func() {
 		<-start
-		_, err := canvas.Edit(workCtx, actor, project.CanvasID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{{ID: uuid.New(), Title: "并发文字", NodeType: "text", NodeAction: "resource", Config: canvasdomain.NodeConfig{Text: &text}}}))})
+		_, err := canvas.Edit(workCtx, actor, project.CanvasID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{{ID: uuid.New(), Title: "并发文字", NodeType: "text", NodeAction: "resource", Config: canvasdomain.NodeConfig{Text: &text}}}))})
 		results <- err
 	}()
 	close(start)

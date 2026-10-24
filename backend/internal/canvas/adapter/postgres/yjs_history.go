@@ -232,11 +232,11 @@ func (s *Store) CommitYjsRestore(ctx context.Context, a identity.Principal, base
 			return err
 		}
 		effects := domain.DocumentEffects(current, target)
-		refs, err := collaborationRetainedMedia(current, target)
+		refs, err := projectionRetainedMedia(current, target)
 		if err != nil {
 			return err
 		}
-		log := collaborationLog{System: "yjs_history_restore", OriginalBase: current.Revision, OriginalOperations: []domain.Operation{}, Operations: []domain.Operation{}, Effects: effects, MediaReferences: refs}
+		log := projectionLog{System: "yjs_history_restore", OriginalBase: current.Revision, Operations: []domain.Operation{}, Effects: effects, MediaReferences: refs}
 		body, err := json.Marshal(log)
 		if err != nil {
 			return err
@@ -255,7 +255,7 @@ func (s *Store) CommitYjsRestore(ctx context.Context, a identity.Principal, base
 		if err = tx.Exec(`INSERT INTO canvas.collab_control_receipt(document_id,actor_id,session_id,command_id,request_hash,response_body) VALUES(?,?,?,?,?,?::jsonb)`, id, a.ID, input.SessionID, input.ID, restoreHash(input), string(body)).Error; err != nil {
 			return err
 		}
-		return tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?,'glowloom.canvas.collaboration_committed.v1',?,?::jsonb)`, uuid.New(), id.String(), string(body)).Error
+		return collaborationCommitted(tx, a, id, p, candidate.Epoch, 0, target.Revision)
 	})
 	return result, err
 }

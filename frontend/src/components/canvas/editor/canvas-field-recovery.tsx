@@ -17,6 +17,7 @@ const names: Record<string, string> = {
   parameters: "模型与参数",
   textDocument: "正文",
   fileReferences: "文件引用",
+  native: "素材与节点配置",
   entity: "节点或连线",
   form: "未应用参数",
 };

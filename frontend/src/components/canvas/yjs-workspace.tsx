@@ -156,9 +156,9 @@ function CollaborativeEditor({
                       {view.phase}
                     </span>
                     {view.migration && (
-                      <Button size="sm" onClick={client.initialize}>
-                        启用多人协作
-                      </Button>
+                      <span className="text-xs text-muted-foreground">
+                        等待具有编辑权限的成员初始化画布
+                      </span>
                     )}
                     {view.recovery.map((source) => (
                       <Button
@@ -268,7 +268,13 @@ function CollaborativeEditor({
                       ? "名称"
                       : field.field === "entity"
                         ? "节点"
-                        : "编辑内容"}
+                        : field.field === "native"
+                          ? "素材与节点配置"
+                          : field.field === "size"
+                            ? "尺寸"
+                            : field.field === "placement"
+                              ? "位置与分组"
+                              : "编辑内容"}
                 </span>
                 {field.copyRequired && (
                   <p className="text-sm text-muted-foreground">

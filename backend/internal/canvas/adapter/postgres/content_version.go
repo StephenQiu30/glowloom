@@ -10,7 +10,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 )
 
-// Versions belong to accepted content, not layout changes or OT simulations.
+// Versions belong to accepted content, not layout changes or candidate evaluation.
 // Effects include these increments so replay and undo can reconstruct any base.
 func advanceContentVersions(before domain.Document, after *domain.Document) error {
 	previous := make(map[uuid.UUID]domain.Node, len(before.Nodes))

@@ -111,7 +111,8 @@ it("迟到解码在手势结束后调整，重复解码不重复提交", () => {
 });
 
 it("保存回执不能清空同版本文件的已加载预览", async () => {
-  const { rebaseCanvas } = await import("@/components/canvas/autosave-session");
+  const { retainCanvasMediaPreviews } =
+    await import("@/components/canvas/lib/canvas-media-continuity");
   const graph = {
     nodes: [node()],
     connections: [],
@@ -122,7 +123,10 @@ it("保存回执不能清空同版本文件的已加载预览", async () => {
   const receipt = structuredClone(graph);
   receipt.nodes[0].position.x += 50;
   receipt.nodes[0].metadata!.content = "";
-  const result = rebaseCanvas(graph, graph, receipt);
+  const result = {
+    ...receipt,
+    nodes: retainCanvasMediaPreviews(graph.nodes, receipt.nodes),
+  };
   expect(result.nodes[0].metadata?.content).toBe("/image.png");
   expect(result.nodes[0].position.x).toBe(60);
 });
@@ -182,22 +186,35 @@ it("移除、删除、新节点及跨类型不会复活旧媒体，已给出新�
   expect(retainCanvasMediaPreviews([node()], [])).toEqual([]);
 });
 it("临时预览和自然尺寸不形成业务写入", async () => {
-  const { serviceGraphOperations } =
+  const { serviceGraph, serviceDocumentFromEditor } =
     await import("@/components/canvas/service-graph");
-  const before = node();
-  before.id = "11111111-1111-4111-8111-111111111111";
-  const graph = {
-    nodes: [before],
-    connections: [],
-    viewport: { x: 0, y: 0, k: 1 },
-    backgroundMode: "dots" as const,
-    showImageInfo: false,
+  const dto: API.DocumentDTO = {
+    id: "11111111-1111-4111-8111-111111111111",
+    project_id: "22222222-2222-4222-8222-222222222222",
+    revision: "1",
+    schema_version: 1,
+    operation_version: 1,
+    permissions: { read: true, write: true },
+    nodes: [
+      {
+        id: "33333333-3333-4333-8333-333333333333",
+        node_type: "image",
+        node_action: "resource",
+        title: "图片",
+        width: 320,
+        height: 180,
+        x: 10,
+        y: 20,
+        config: {},
+      },
+    ],
+    edges: [],
   };
-  const after = structuredClone(graph);
+  const after = serviceGraph(dto, dto.id!, dto.project_id!);
   after.nodes[0].metadata!.content = "https://media.test/signed-preview";
   after.nodes[0].metadata!.naturalWidth = 640;
   after.nodes[0].metadata!.naturalHeight = 360;
-  expect(serviceGraphOperations(graph, after)).toEqual([]);
+  expect(serviceDocumentFromEditor(dto, after)).toEqual(dto);
 });
 
 it("用户显式自由比例不被解码重置，替换素材则重新匹配比例", () => {
@@ -226,7 +243,8 @@ it("用户显式自由比例不被解码重置，替换素材则重新匹配比�
 });
 
 it("已加载预览与纯服务端草稿之间替换素材，不把临时URL和解码尺寸当成并发业务冲突", async () => {
-  const { rebaseCanvas } = await import("@/components/canvas/autosave-session");
+  const { retainCanvasMediaPreviews } =
+    await import("@/components/canvas/lib/canvas-media-continuity");
   const graph = {
     nodes: [node()],
     connections: [],
@@ -246,18 +264,17 @@ it("已加载预览与纯服务端草稿之间替换素材，不把临时URL和�
     width: 360,
     height: 640,
   });
-  const result = rebaseCanvas(
-    graph,
-    { ...graph, nodes: [replacement] },
-    authority,
-  );
+  const result = {
+    nodes: retainCanvasMediaPreviews(authority.nodes, [replacement]),
+  };
   expect(result.nodes[0].metadata?.content).toBe("/new.png");
   expect(result.nodes[0].documentData?.fileReferences?.[0].fileId).toBe("new");
   expect(result.nodes[0].width).toBe(180);
 });
 
-it("临时预览被排除后，真正的并发素材替换仍拒绝自动覆盖", async () => {
-  const { rebaseCanvas } = await import("@/components/canvas/autosave-session");
+it("Yjs已确认另一素材身份时，不把旧预览覆盖回去", async () => {
+  const { retainCanvasMediaPreviews } =
+    await import("@/components/canvas/lib/canvas-media-continuity");
   const graph = {
     nodes: [node()],
     connections: [],
@@ -279,7 +296,10 @@ it("临时预览被排除后，真正的并发素材替换仍拒绝自动覆盖"
       }),
     ],
   });
-  expect(() => rebaseCanvas(graph, replace("mine"), replace("theirs"))).toThrow(
-    "远端已修改",
+  const result = retainCanvasMediaPreviews(
+    replace("mine").nodes,
+    replace("theirs").nodes,
   );
+  expect(result[0].documentData!.fileReferences![0].fileId).toBe("theirs");
+  expect(result[0].metadata!.content).toBe("/theirs.png");
 });

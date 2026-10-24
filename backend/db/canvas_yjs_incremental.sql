@@ -1,5 +1,5 @@
 -- Rehearse on an isolated copy, then run as schema owner in one transaction.
--- This installs capability only; documents require an explicit revision-fenced migration.
+-- This installs capability only; the first writable Yjs join initializes each document behind a revision fence.
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '60s';
 CREATE TABLE IF NOT EXISTS canvas.collab_document (

@@ -363,7 +363,11 @@ export class CanvasYjsLiveSession {
       this.setPeers([]);
       clearTimeout(this.deadline);
       this.rejectRPC(problem("连接中断，原提交等待查证"));
-      this.emit();
+      this.emit(
+        !this.view.document && !this.view.message
+          ? { message: "连接已中断，正在尝试重新连接。" }
+          : {},
+      );
       this.scheduleReconnect();
     };
     this.armDeadline();
@@ -442,6 +446,7 @@ export class CanvasYjsLiveSession {
             return receipt;
           }),
         query: (update) => this.rpc("yjs_resolve", update),
+        confirmedSnapshot: (receipt) => this.confirmedSnapshot(receipt),
       },
       changed: this.changed,
       recovery,
@@ -715,8 +720,12 @@ export class CanvasYjsLiveSession {
     try {
       await session.flush({ queryOnly: !this.permitted });
       completed = true;
-      if (!this.disposed && this.session === session)
+      if (!this.disposed && this.session === session) {
         this.emit({ message: "" });
+        // Accepted bytes can still lose a single-value intent. Request the
+        // recovery baseline immediately, even if no peer makes another edit.
+        if (session.sealed) this.socket?.send(JSON.stringify({ type: "sync" }));
+      }
     } catch (cause) {
       if (!this.disposed && this.session === session) {
         this.emit({
@@ -1015,6 +1024,30 @@ export class CanvasYjsLiveSession {
     if (!result.document) throw problem("Version unavailable");
     return result.document;
   }
+  private async confirmedSnapshot(receipt: DurableReceipt) {
+    // A later snapshot may overtake the original ACK. Only the immutable
+    // accepted revision can prove whether its single-value intent prevailed.
+    if (!/^(0|[1-9]\d*)$/.test(receipt.contentRevision))
+      throw problem("原提交版本无效");
+    const revision = BigInt(receipt.contentRevision);
+    if (revision >= BigInt("9223372036854775807"))
+      throw problem("原提交历史版本暂不可查证");
+    const versions = await this.versions(String(revision + BigInt(1)));
+    const original = versions.find(
+      (version) =>
+        version.epoch === receipt.epoch &&
+        version.revision === receipt.contentRevision,
+    );
+    if (!original) throw problem("原提交历史版本不可用");
+    const document = await this.version(original.id);
+    if (
+      document.id !== this.config.canvasID ||
+      document.project_id !== this.config.projectID ||
+      document.revision !== receipt.contentRevision
+    )
+      throw problem("原提交历史版本身份不符");
+    return serviceSnapshot(asShared(document));
+  }
   async restoreVersion(versionId: string, reviewSeq: string) {
     if (
       this.view.dirty ||
@@ -1030,6 +1063,7 @@ export class CanvasYjsLiveSession {
     );
   }
   retry = () => {
+    if (!this.view.document) this.emit({ message: "", phase: "正在连接" });
     this.uploadErrors.clear();
     if (this.draft) this.change(this.draft, !this.gesture);
     if (!this.online) this.resume();

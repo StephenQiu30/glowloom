@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -16,7 +17,7 @@ import (
 // ErrYjsContention asks callers to re-read the durable fence.
 var ErrYjsContention = errors.New("collaboration baseline changed")
 
-// ErrYjsNotEnabled requires an explicit per-document migration.
+// ErrYjsNotEnabled requires a revision-fenced document initialization.
 var ErrYjsNotEnabled = errors.New("collaboration migration required")
 
 // YjsBinding binds an isolated computation to a durable document baseline.
@@ -129,6 +130,16 @@ func (s *YjsService) Initialize(ctx context.Context, a identity.Principal, id uu
 	}
 	if base.Document.Revision != revision {
 		return YjsState{}, ErrYjsContention
+	}
+	if !base.Document.Permissions.Write {
+		return YjsState{}, domain.ErrGraphReadOnly
+	}
+	body, err := json.Marshal(base.Document)
+	if err != nil {
+		return YjsState{}, err
+	}
+	if len(body) > domain.MaxDocumentBytes {
+		return YjsState{}, &domain.OperationError{Code: "canvas_capacity_exceeded"}
 	}
 	base.Epoch = uuid.New()
 	base.WriterTerm = 1

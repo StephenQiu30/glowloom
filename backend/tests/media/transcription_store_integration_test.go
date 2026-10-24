@@ -52,7 +52,7 @@ func transcriptionNode(t *testing.T, db *gorm.DB, actor identityapp.Principal, p
 		t.Fatal(err)
 	}
 	node := canvasdomain.Node{ID: uuid.New(), NodeType: kind, NodeAction: "resource", Title: "Speech source", RefType: "media_asset", RefID: &asset}
-	saved, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{node}))})
+	saved, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{node}))})
 	if err != nil {
 		t.Fatal(err)
 	}

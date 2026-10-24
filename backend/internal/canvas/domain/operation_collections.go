@@ -30,71 +30,7 @@ func itemIdentity(object map[string]any) string {
 func collectionIndex(items []any, id string) int {
 	return slices.IndexFunc(items, func(item any) bool { object, ok := item.(map[string]any); return ok && itemIdentity(object) == id })
 }
-func insertionOperation(kind string) bool { return kind == "insert" || kind == "restore_item" }
-func structureOperation(kind string) bool {
-	return insertionOperation(kind) || kind == "remove" || kind == "move"
-}
-func operationTargetsItem(op, change Operation) bool {
-	return len(op.Path) > len(change.Path) && slices.Equal(op.Path[:len(change.Path)], change.Path) && op.Path[len(change.Path)] == "@"+change.ItemID
-}
-func operationUsesNode(op Operation, id uuid.UUID) bool {
-	if op.NodeID == id || op.Edge != nil && (op.Edge.SourceNodeID == id || op.Edge.TargetNodeID == id) {
-		return true
-	}
-	if op.Node != nil {
-		used := op.Node.ID == id || op.Node.ParentID != nil && *op.Node.ParentID == id
-		inputSources(*op.Node, func(source uuid.UUID) { used = used || source == id })
-		if used {
-			return true
-		}
-	}
-	if op.Type == "set" && (slices.Equal(op.Path, []string{"parent_id"}) || isBatchSlot(op.Path)) {
-		var source uuid.UUID
-		return json.Unmarshal(op.Value, &source) == nil && source == id
-	}
-	if insertionOperation(op.Type) && slices.Equal(op.Path, []string{"config", "batch_table", "rows"}) {
-		var row struct {
-			InputNodeIDs []*uuid.UUID `json:"input_node_ids"`
-		}
-		if json.Unmarshal(op.Value, &row) == nil {
-			return slices.ContainsFunc(row.InputNodeIDs, func(source *uuid.UUID) bool { return source != nil && *source == id })
-		}
-	}
-	// These are the only value containers in the finite vocabulary that introduce
-	// a graph source premise. Asset and subject UUIDs are separate identities.
-	if len(op.Path) >= 3 && (slices.Equal(op.Path[:3], []string{"config", "timeline", "clips"}) || slices.Equal(op.Path[:3], []string{"config", "director", "objects"})) {
-		var source struct {
-			NodeID       *uuid.UUID `json:"node_id"`
-			SourceNodeID *uuid.UUID `json:"source_node_id"`
-		}
-		if json.Unmarshal(op.Value, &source) == nil {
-			return source.NodeID != nil && *source.NodeID == id || source.SourceNodeID != nil && *source.SourceNodeID == id
-		}
-	}
-	return false
-}
-func operationsOverlap(a, b Operation) bool {
-	paths := func(op Operation) [][]string {
-		r, _ := policy(op.Path)
-		if len(r.group) == 0 {
-			return [][]string{op.Path}
-		}
-		result := make([][]string, 0, len(r.group))
-		for _, key := range r.group {
-			result = append(result, append(slices.Clone(op.Path[:len(op.Path)-1]), key))
-		}
-		return result
-	}
-	for _, x := range paths(a) {
-		for _, y := range paths(b) {
-			n := min(len(x), len(y))
-			if slices.Equal(x[:n], y[:n]) {
-				return true
-			}
-		}
-	}
-	return false
-}
+
 func applyStructure(doc *Document, op Operation) error {
 	switch op.Type {
 	case "set_edge":

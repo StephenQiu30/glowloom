@@ -319,7 +319,7 @@ func coordinatedContentFixture(t *testing.T, db, owner *gorm.DB, objects *object
 		t.Fatal(e)
 	}
 	text := "剧情😀"
-	if _, e := canvas.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{{ID: uuid.New(), Title: "原件资源", NodeType: "image", NodeAction: "resource", RefType: "media_asset", RefID: &imageID}, {ID: uuid.New(), Title: "剧情", NodeType: "text", NodeAction: "resource", Config: canvasdomain.NodeConfig{Text: &text}}}))}); e != nil {
+	if _, e := canvas.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{{ID: uuid.New(), Title: "原件资源", NodeType: "image", NodeAction: "resource", RefType: "media_asset", RefID: &imageID}, {ID: uuid.New(), Title: "剧情", NodeType: "text", NodeAction: "resource", Config: canvasdomain.NodeConfig{Text: &text}}}))}); e != nil {
 		t.Fatal(e)
 	}
 	return coordinatedContent{actor: actor, project: p, character: first.EntryID, pinnedVersion: voice.VersionID, canvas: doc.ID, image: imageID, audio: audioID}

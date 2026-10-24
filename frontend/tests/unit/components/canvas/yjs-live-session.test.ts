@@ -526,3 +526,177 @@ it("does not retry renewal when current account authority is denied", async () =
     vi.useRealTimers();
   }
 });
+
+async function acknowledgeAfterLaterSnapshot(lostOriginal = false) {
+  const fixture = setup();
+  const { client, sockets, state, actorID, nodeID } = fixture;
+  await vi.waitFor(() => expect(client.getSnapshot().document).not.toBeNull());
+  const draft = structuredClone(client.getSnapshot().document!);
+  draft.nodes[0].title = "本人的已接受标题";
+  client.change(draft, true);
+  await vi.waitFor(() =>
+    expect(sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(true),
+  );
+  const request = sockets[0].sent.find((p) => p.type === "yjs_submit")!;
+  const frozen = request.body as {
+    update: string;
+    updateId: string;
+    payloadHash: string;
+  };
+  const server = new Y.Doc();
+  Y.applyUpdate(server, Buffer.from(state.state, "base64"));
+  Y.applyUpdate(server, Buffer.from(frozen.update, "base64"));
+  const node = (
+    server.getMap("canvas").get("nodes") as Y.Map<Y.Map<unknown>>
+  ).get(nodeID)!;
+  if (lostOriginal)
+    (node.get("data") as Y.Map<unknown>).set("title", "同时编辑胜出的标题");
+  const accepted = {
+    ...serviceProjection(
+      readCanvasDocument(server),
+      state.document as unknown as ServiceDocument,
+    ),
+    revision: "2",
+  } as unknown as API.DocumentDTO;
+  (node.get("data") as Y.Map<unknown>).set("title", "后来协作者的标题");
+  const latest = {
+    type: "yjs_snapshot",
+    actor_id: actorID,
+    yjs_state: {
+      ...state,
+      commitSeq: "2",
+      state: Buffer.from(Y.encodeStateAsUpdate(server)).toString("base64"),
+      document: {
+        ...serviceProjection(
+          readCanvasDocument(server),
+          state.document as unknown as ServiceDocument,
+        ),
+        revision: "3",
+      },
+    },
+  };
+  sockets[0].receive(latest);
+  sockets[0].receive({
+    type: "yjs_ack",
+    op_id: frozen.updateId,
+    yjs_receipt: {
+      ...frozen,
+      status: "accepted",
+      effect: "VISIBLE_CHANGE",
+      epoch: state.epoch,
+      commitSeq: "1",
+      contentRevision: "2",
+      graphHash: "b".repeat(64),
+    },
+  });
+  server.destroy();
+  await vi.waitFor(() =>
+    expect(sockets[0].sent.some((p) => p.type === "yjs_history")).toBe(true),
+  );
+  const history = sockets[0].sent.find((p) => p.type === "yjs_history")!;
+  expect(history.body).toEqual({ before: "3" });
+  const recover = async () => {
+    await vi.waitFor(() =>
+      expect(sockets[0].sent.some((p) => p.type === "sync")).toBe(true),
+    );
+    sockets[0].receive(latest);
+    await vi.waitFor(() =>
+      expect(client.getSnapshot().recovery).toHaveLength(1),
+    );
+    expect(sockets[0].sent.filter((p) => p.type === "sync")).toHaveLength(1);
+  };
+  return { ...fixture, accepted, history, recover };
+}
+
+it.each([false, true])(
+  "proves the original accepted revision when a later snapshot overtakes its ACK; losing intent=%s",
+  async (lostOriginal) => {
+    const { client, sockets, state, accepted, history, recover } =
+      await acknowledgeAfterLaterSnapshot(lostOriginal);
+    const versionID = crypto.randomUUID();
+    sockets[0].receive({
+      type: "yjs_history",
+      op_id: history.op_id,
+      yjs_versions: [{ id: versionID, epoch: state.epoch, revision: "2" }],
+    });
+    await vi.waitFor(() =>
+      expect(sockets[0].sent.some((p) => p.type === "yjs_version")).toBe(true),
+    );
+    const version = sockets[0].sent.find((p) => p.type === "yjs_version")!;
+    expect(version.body).toEqual({ id: versionID });
+    sockets[0].receive({
+      type: "yjs_version",
+      op_id: version.op_id,
+      document: accepted,
+    });
+    await vi.waitFor(() =>
+      expect(client.getSnapshot().phase).toBe(
+        lostOriginal ? "输入已保留，需处理" : "已保存",
+      ),
+    );
+    expect(client.getSnapshot().document!.nodes[0].title).toBe(
+      "后来协作者的标题",
+    );
+    expect(client.getSnapshot().dirty).toBe(lostOriginal);
+    if (lostOriginal) {
+      await recover();
+      expect(client.getSnapshot().recovery[0].fields[0].after.value).toBe(
+        "本人的已接受标题",
+      );
+    } else expect(client.getSnapshot().recovery).toEqual([]);
+    expect(sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
+      1,
+    );
+  },
+);
+
+it.each(["missing", "epoch", "document", "revision"])(
+  "does not substitute the latest state for an unavailable or mismatched original history: %s",
+  async (mismatch) => {
+    const { client, sockets, state, accepted, history, recover } =
+      await acknowledgeAfterLaterSnapshot();
+    sockets[0].receive({
+      type: "yjs_history",
+      op_id: history.op_id,
+      yjs_versions:
+        mismatch === "missing"
+          ? []
+          : [
+              {
+                id: crypto.randomUUID(),
+                epoch: mismatch === "epoch" ? crypto.randomUUID() : state.epoch,
+                revision: "2",
+              },
+            ],
+    });
+    if (mismatch === "document" || mismatch === "revision") {
+      await vi.waitFor(() =>
+        expect(sockets[0].sent.some((p) => p.type === "yjs_version")).toBe(
+          true,
+        ),
+      );
+      const version = sockets[0].sent.find((p) => p.type === "yjs_version")!;
+      sockets[0].receive({
+        type: "yjs_version",
+        op_id: version.op_id,
+        document: {
+          ...accepted,
+          ...(mismatch === "document"
+            ? { id: crypto.randomUUID() }
+            : { revision: "3" }),
+        },
+      });
+    }
+    await vi.waitFor(() =>
+      expect(client.getSnapshot().phase).toBe("输入已保留，需处理"),
+    );
+    expect(client.getSnapshot().dirty).toBe(true);
+    await recover();
+    expect(client.getSnapshot().recovery[0].fields[0].after.value).toBe(
+      "本人的已接受标题",
+    );
+    expect(sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
+      1,
+    );
+  },
+);

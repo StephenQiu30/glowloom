@@ -64,20 +64,20 @@ func TestDirectorOutputOperationsClosedJSONAndHTTPRefresh(t *testing.T) {
 	screenshot.AssetID = asset
 	node.Config.Director.Shots[0].Screenshots = []domain.DirectorScreenshot{screenshot}
 	node.Config.Director.Cover = &domain.DirectorCover{AssetID: asset, ShotID: node.Config.Director.Shots[0].ID}
-	input := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &node}}}
+	input := canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &node}}}
 	body, err := json.Marshal(input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	path := "/api/canvases/" + doc.ID.String()
 	key := uuid.NewString()
-	svc := application.NewCollaborationService(canvasStore(database))
+	svc := canvasfixture.NewEditService(canvasStore(database))
 	saved, err := svc.Submit(t.Context(), actor, doc.ID, key, input)
 	if err != nil || saved.Status != "accepted" {
 		t.Fatal("save screenshot", saved, err)
 	}
 	freshRouter := directorOutputRouter(database, actor)
-	replay, err := application.NewCollaborationService(canvasStore(database)).Resolve(t.Context(), actor, doc.ID, key, input)
+	replay, err := canvasfixture.NewEditService(canvasStore(database)).Resolve(t.Context(), actor, doc.ID, key, input)
 	if err != nil || replay == nil || *replay != saved {
 		t.Fatal("durable operation replay changed", replay, err)
 	}
@@ -105,7 +105,7 @@ func TestDirectorOutputOperationsClosedJSONAndHTTPRefresh(t *testing.T) {
 				t.Fatal("test fixture did not replace target")
 			}
 			malformed = strings.Replace(malformed, node.ID.String(), uuid.NewString(), 1)
-			var request application.CollaborationInput
+			var request canvasfixture.EditInput
 			if err := json.Unmarshal([]byte(malformed), &request); err != nil {
 				return
 			} // malformed typed JSON cannot reach submission
@@ -132,7 +132,7 @@ func TestDirectorOutputOperationsClosedJSONAndHTTPRefresh(t *testing.T) {
 			foreignNode := node
 			foreignNode.ID = uuid.New()
 			foreignNode.Config = domain.NodeConfig{Director: &config}
-			request := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "create_node", Node: &foreignNode}}}
+			request := canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "create_node", Node: &foreignNode}}}
 			response, err := svc.Submit(t.Context(), actor, doc.ID, uuid.NewString(), request)
 			if err != nil || response.Status != "rejected" || response.Code != "source_unavailable" {
 				t.Fatalf("foreign output not hidden: %+v %v", response, err)

@@ -102,7 +102,7 @@ func (g *MediaReferenceGuard) HasMediaReferences(ctx context.Context, actor iden
 	}
 	for _, log := range logs {
 		if log.OperationVersion == 1 {
-			var entry collaborationLog
+			var entry projectionLog
 			if err := decodeReferenceJSON(log.Commands, &entry); err != nil || entry.MediaReferences == nil {
 				return false, domain.ErrInvalidCommand
 			}

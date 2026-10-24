@@ -11,9 +11,9 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 )
 
-// Versions are independent: protocol 3 introduces string revisions and client identity.
+// Versions are independent: protocol 4 exclusively carries Yjs updates.
 const (
-	ProtocolVersion  = 3
+	ProtocolVersion  = 4
 	OperationVersion = 1
 	SchemaVersion    = 1
 )
@@ -116,55 +116,36 @@ func Snapshot(doc domain.Document) DocumentDTO {
 	return DocumentDTO{ID: doc.ID, ProjectID: doc.ProjectID, Name: doc.Name, Scope: doc.Scope, SchemaVersion: doc.SchemaVersion, OperationVersion: OperationVersion, Revision: Revision(doc.Revision), Permissions: Permissions{Read: true, Write: doc.Writable && reason == nil}, ReadOnlyReason: reason, Nodes: nodes, Edges: doc.Edges}
 }
 
-// SubmissionDTO is the protocol-3 request. Raw operations retain rejected fields
-// in request identity; node conversion is the only transport/storage mapping.
-type SubmissionDTO struct {
-	StrictBase       bool              `json:"strict_base,omitempty"`
-	ClientID         uuid.UUID         `json:"client_id"`
-	OperationVersion int               `json:"operation_version"`
-	BaseRevision     Revision          `json:"base_revision" swaggertype:"string"`
-	Operations       []json.RawMessage `json:"operations,omitempty"`
-	UndoOf           string            `json:"undo_of,omitempty"`
-}
-
-// DecodeSubmission rejects unknown envelope fields and legacy media aliases.
-func DecodeSubmission(body []byte) (CollaborationInput, error) {
-	var dto SubmissionDTO
-	if !json.Valid(body) {
-		return CollaborationInput{}, domain.ErrInvalidCommand
-	}
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&dto); err != nil {
-		return CollaborationInput{}, domain.ErrInvalidCommand
-	}
-	input := CollaborationInput{StrictBase: dto.StrictBase, ClientID: dto.ClientID, OperationVersion: dto.OperationVersion, BaseRevision: int64(dto.BaseRevision), UndoOf: dto.UndoOf}
-	for _, raw := range dto.Operations {
+// decodeProjectionOperations maps trusted runtime projection differences to the
+// domain admission vocabulary. This is not exposed as an editing protocol.
+func decodeProjectionOperations(rawOperations []json.RawMessage) ([]domain.Operation, error) {
+	var operations []domain.Operation
+	for _, raw := range rawOperations {
 		var fields map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &fields); err != nil {
-			return CollaborationInput{}, domain.ErrInvalidCommand
+			return nil, domain.ErrInvalidCommand
 		}
 		var node *domain.Node
 		if value, ok := fields["node"]; ok {
 			var nodeFields map[string]json.RawMessage
 			if json.Unmarshal(value, &nodeFields) != nil || nodeFields == nil {
-				return CollaborationInput{}, domain.ErrInvalidCommand
+				return nil, domain.ErrInvalidCommand
 			}
 			if _, present := nodeFields["ref_type"]; present {
-				return CollaborationInput{}, domain.ErrInvalidCommand
+				return nil, domain.ErrInvalidCommand
 			}
 			if _, present := nodeFields["ref_id"]; present {
-				return CollaborationInput{}, domain.ErrInvalidCommand
+				return nil, domain.ErrInvalidCommand
 			}
 
 			var n NodeDTO
 			decoder := json.NewDecoder(bytes.NewReader(value))
 			decoder.DisallowUnknownFields()
 			if err := decoder.Decode(&n); err != nil {
-				return CollaborationInput{}, domain.ErrInvalidCommand
+				return nil, domain.ErrInvalidCommand
 			}
 			if n.MediaRef != nil && (n.MediaRef.AssetID == uuid.Nil) {
-				return CollaborationInput{}, domain.ErrInvalidCommand
+				return nil, domain.ErrInvalidCommand
 			}
 			node = &domain.Node{ID: n.ID, Title: n.Title, NodeType: n.NodeType, NodeAction: n.NodeAction, Config: n.Config, X: n.X, Y: n.Y, Width: n.Width, Height: n.Height, ParentID: n.ParentID, ZIndex: n.ZIndex, ContentVersion: int64(n.ContentVersion), InputRevision: n.InputRevision, LastOperationID: n.LastOperationID}
 			if n.MediaRef != nil {
@@ -180,113 +161,17 @@ func DecodeSubmission(body []byte) (CollaborationInput, error) {
 			decoder := json.NewDecoder(bytes.NewReader(edge))
 			decoder.DisallowUnknownFields()
 			if err := decoder.Decode(&decoded); err != nil {
-				return CollaborationInput{}, domain.ErrInvalidCommand
+				return nil, domain.ErrInvalidCommand
 			}
 		}
 		var operation domain.Operation
 		if err := json.Unmarshal(raw, &operation); err != nil {
-			return CollaborationInput{}, domain.ErrInvalidCommand
+			return nil, domain.ErrInvalidCommand
 		}
 		operation.Node = node
-		input.Operations = append(input.Operations, operation)
+		operations = append(operations, operation)
 	}
-	if dto.ClientID == uuid.Nil || dto.BaseRevision < 1 || dto.OperationVersion == 0 {
-		return CollaborationInput{}, domain.ErrInvalidCommand
-	}
-	return input, nil
-}
-
-// Submission serializes a request using the same DTO as the public protocol.
-func Submission(input CollaborationInput) (SubmissionDTO, error) {
-	dto := SubmissionDTO{StrictBase: input.StrictBase, ClientID: input.ClientID, OperationVersion: input.OperationVersion, BaseRevision: Revision(input.BaseRevision), UndoOf: input.UndoOf}
-	for _, op := range input.Operations {
-		body, err := publicOperation(op)
-		if err != nil {
-			return SubmissionDTO{}, err
-		}
-		dto.Operations = append(dto.Operations, body)
-	}
-	return dto, nil
-}
-func publicOperation(op domain.Operation) (json.RawMessage, error) {
-	body, err := json.Marshal(op)
-	if err != nil {
-		return nil, err
-	}
-	if op.Node == nil {
-		return body, nil
-	}
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(body, &fields); err != nil {
-		return nil, err
-	}
-	fields["node"], err = json.Marshal(nodeDTO(*op.Node))
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(fields)
-}
-
-// ReceiptDTO never serializes a revision as a JavaScript number.
-type ReceiptDTO struct {
-	Status   string   `json:"status"`
-	OpID     string   `json:"op_id"`
-	Revision Revision `json:"revision,omitempty" swaggertype:"string"`
-	Code     string   `json:"code,omitempty"`
-}
-
-// Receipt maps a durable outcome to the public protocol.
-func Receipt(receipt CollaborationReceipt) ReceiptDTO {
-	return ReceiptDTO{Status: receipt.Status, OpID: receipt.OpID, Revision: Revision(receipt.Revision), Code: receipt.Code}
-}
-
-// ChangeDTO carries public effects only; private before-images stay in storage.
-type ChangeDTO struct {
-	Revision   Revision          `json:"revision" swaggertype:"string"`
-	ActorID    uuid.UUID         `json:"actor_id"`
-	OpID       string            `json:"op_id"`
-	Operations []json.RawMessage `json:"operations"`
-	Effects    []domain.Effect   `json:"effects"`
-}
-
-// Changes maps ordered effects without private preimages.
-func Changes(changes []CollaborationChange) ([]ChangeDTO, error) {
-	result := make([]ChangeDTO, 0, len(changes))
-	for _, change := range changes {
-		dto := ChangeDTO{Revision: Revision(change.Revision), ActorID: change.ActorID, OpID: change.OpID, Effects: make([]domain.Effect, 0, len(change.Effects)), Operations: make([]json.RawMessage, 0, len(change.Operations))}
-		for _, op := range change.Operations {
-			body, err := publicOperation(op)
-			if err != nil {
-				return nil, err
-			}
-			dto.Operations = append(dto.Operations, body)
-		}
-		for _, effect := range change.Effects {
-			effect.Before = nil
-			effect.BeforeExists = false
-			if effect.Entity == "node" {
-				switch {
-				case len(effect.Path) == 0 && effect.AfterExists:
-					var node domain.Node
-					if err := json.Unmarshal(effect.After, &node); err != nil {
-						return nil, err
-					}
-					body, err := json.Marshal(nodeDTO(node))
-					if err != nil {
-						return nil, err
-					}
-					effect.After = body
-				case len(effect.Path) == 1 && effect.Path[0] == "ref_type":
-					continue // Internal media discriminator; public content identity is media_ref.
-				case len(effect.Path) == 1 && effect.Path[0] == "ref_id":
-					effect.Path = []string{"media_ref", "asset_id"}
-				}
-			}
-			dto.Effects = append(dto.Effects, effect)
-		}
-		result = append(result, dto)
-	}
-	return result, nil
+	return operations, nil
 }
 
 // RenameDTO and DeleteDTO keep lifecycle wire revisions separate from durable

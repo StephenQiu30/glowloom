@@ -6,7 +6,7 @@
 
 固定源码为本地 Lucky 提交 `33b51b0e718918ada4239835e92a166a303cbafa`，继承其画布第三方声明；完整许可与传递来源随应用保存在 [Lucky 画布许可](/licenses/canvas-sources.md)。
 
-从 `frontend/src/components/canvas` 的 viewport、wheel、node-drag、connection-geometry、view-state、image-editor-viewport、crop/split/upscale dialogs 迁入 `frontend/src/components/canvas` 同职责模块。改写为本项目 UUID、类型、shadcn、主题、视图身份隔离、取消处理、正式素材上传与 Go/OT 持久回执；不复制 Lucky 的账户、业务接口、环境配置或 Yjs 服务。本声明只覆盖实际迁入代码，不代表完整画布或多人协作已经验收。
+从 `frontend/src/components/canvas` 的 viewport、wheel、node-drag、connection-geometry、view-state、image-editor-viewport、crop/split/upscale dialogs 迁入 `frontend/src/components/canvas` 同职责模块。改写为本项目 UUID、类型、shadcn、主题、视图身份隔离、取消处理、正式素材上传与 Yjs/Go 持久回执；不复制 Lucky 的账户、业务接口、环境配置或 Yjs 服务。本声明只覆盖实际迁入代码，不代表完整画布或多人协作已经验收。
 
 ## 当前BeefTV画布适配（2026-10-09）
 

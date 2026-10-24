@@ -25,7 +25,7 @@ func TestToolConfigurationsSurviveDatabaseReloadAndIdempotentReplay(t *testing.T
 		t.Fatal(err)
 	}
 	batch, director, generation := batchNode(nil), directorNode(), generationNode()
-	input := application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{batch, director, generation}))}
+	input := canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{batch, director, generation}))}
 	key := uuid.NewString()
 	first, err := service.Edit(t.Context(), actor, doc.ID, key, input)
 	if err != nil {

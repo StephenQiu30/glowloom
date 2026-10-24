@@ -102,7 +102,7 @@ func TestHistoricalCopyPrimaryRepairPreservesContentAndReceipts(t *testing.T) {
 	}
 	canvas := canvasfixture.NewService(workspaceCanvasStore(db, nil))
 	text := "副本完成后用户继续编辑"
-	before, err := canvas.Edit(ctx, actor, selected.TargetDocumentID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: selected.Revision, Operations: canvasfixture.Nodes([]canvasdomain.Node{{ID: uuid.New(), Title: "继续创作", NodeType: "text", NodeAction: "resource", Config: canvasdomain.NodeConfig{Text: &text}}})})
+	before, err := canvas.Edit(ctx, actor, selected.TargetDocumentID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: selected.Revision, Operations: canvasfixture.Nodes([]canvasdomain.Node{{ID: uuid.New(), Title: "继续创作", NodeType: "text", NodeAction: "resource", Config: canvasdomain.NodeConfig{Text: &text}}})})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,7 +288,7 @@ func TestHistoricalCopyPrimaryRepairPreservesYjsRecovery(t *testing.T) {
 	canvas := canvasfixture.NewService(workspaceCanvasStore(db, nil))
 	node := uuid.New()
 	text := "恢复前"
-	edited, err := canvas.Edit(ctx, actor, candidate.TargetDocumentID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: candidate.Revision, Operations: canvasfixture.Nodes([]canvasdomain.Node{{ID: node, Title: "保留协作", NodeType: "text", NodeAction: "resource", Config: canvasdomain.NodeConfig{Text: &text}}})})
+	edited, err := canvas.Edit(ctx, actor, candidate.TargetDocumentID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: candidate.Revision, Operations: canvasfixture.Nodes([]canvasdomain.Node{{ID: node, Title: "保留协作", NodeType: "text", NodeAction: "resource", Config: canvasdomain.NodeConfig{Text: &text}}})})
 	if err != nil {
 		t.Fatal(err)
 	}

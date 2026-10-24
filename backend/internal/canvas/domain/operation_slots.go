@@ -48,21 +48,3 @@ func applyBatchSlot(doc *Document, index int, object map[string]any, op Operatio
 	doc.Nodes[index] = node
 	return FieldChange{NodeID: op.NodeID, Path: slices.Clone(op.Path), Before: before, After: after, BeforeExists: true, AfterExists: true}, nil
 }
-
-func batchSlotValue(object map[string]any, path []string) (json.RawMessage, error) {
-	parent, key, err := fieldContainer(object, path[:5])
-	if err != nil {
-		return nil, err
-	}
-	table, _, err := fieldContainer(object, []string{"config", "batch_table", "reference_columns"})
-	if err != nil {
-		return nil, err
-	}
-	columns, _ := table["reference_columns"].([]any)
-	column := collectionIndex(columns, strings.TrimPrefix(path[5], "@"))
-	slots, _ := parent[key].([]any)
-	if column < 0 || column >= len(slots) {
-		return nil, operationError("target_not_found")
-	}
-	return effectJSON(slots[column]), nil
-}

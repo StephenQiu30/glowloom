@@ -19,6 +19,9 @@ const fields = [
   "parameters",
   "textDocument",
   "fileReferences",
+  // The formal Go DTO stores fixed media/configuration in one shared native
+  // value. Keep its semantic intent at the same atomic boundary for recovery.
+  "native",
 ];
 const nodeMap = (snapshot) =>
   new Map(snapshot.graph.nodes.map((node) => [node.id, node]));

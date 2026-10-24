@@ -89,7 +89,7 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 	config.Clips[0].AssetID, config.Clips[0].DurationMS = &uploaded.Asset.ID, 400
 	config.Clips[0].SourceStartMS, config.Clips[0].FadeInMS, config.Clips[0].FadeOutMS = 100, 100, 100
 	node := canvasdomain.Node{ID: uuid.New(), Title: "Audio timeline", NodeType: "timeline", NodeAction: "tool", Config: canvasdomain.NodeConfig{Timeline: &config}}
-	saved, err := canvasService.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{node}))})
+	saved, err := canvasService.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{node}))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +251,7 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 	silentConfig.Tracks[0].Kind, silentConfig.Clips[0].Kind = "video", "video"
 	silentConfig.Clips[0].AssetID = &silentAsset.Asset.ID
 	silentNode := canvasdomain.Node{ID: uuid.New(), Title: "Silent extraction", NodeType: "timeline", NodeAction: "tool", Config: canvasdomain.NodeConfig{Timeline: &silentConfig}}
-	silentSaved, err := canvasService.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: saved.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{silentNode}))})
+	silentSaved, err := canvasService.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: saved.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{silentNode}))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,7 +281,7 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 		cancelConfig.Clips[i] = canvasdomain.TimelineClip{ID: uuid.New(), TrackID: cancelConfig.Tracks[0].ID, Kind: "video", AssetID: &uploaded.Asset.ID, Title: "Cancellation source", StartMS: int64(i) * 600, DurationMS: 600, Volume: 1}
 	}
 	cancelNode := canvasdomain.Node{ID: uuid.New(), Title: "Cancel actual audio", NodeType: "timeline", NodeAction: "tool", Config: canvasdomain.NodeConfig{Timeline: &cancelConfig}}
-	cancelSaved, err := canvasService.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: silentSaved.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{cancelNode}))})
+	cancelSaved, err := canvasService.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: silentSaved.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{cancelNode}))})
 	if err != nil {
 		t.Fatal(err)
 	}

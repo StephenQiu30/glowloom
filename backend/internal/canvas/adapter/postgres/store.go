@@ -628,6 +628,11 @@ func (s *Store) mutateDocument(ctx context.Context, a identityapp.Principal, id 
 		}
 		doc.Revision++
 		if remove {
+			// Lifecycle deletion is authorized under the same locked revision. It
+			// makes the room inaccessible; it does not edit shared graph content.
+			if err := tx.Exec(`SELECT set_config('glowloom.yjs_document_id',?,true)`, id.String()).Error; err != nil {
+				return err
+			}
 			if err := tx.Exec(`UPDATE canvas.document SET is_delete=true,revision=?,update_time=now() WHERE id=?`, doc.Revision, id).Error; err != nil {
 				return err
 			}
@@ -639,7 +644,7 @@ func (s *Store) mutateDocument(ctx context.Context, a identityapp.Principal, id 
 			}
 			*result.(*domain.Document) = doc
 		}
-		log, err := json.Marshal(collaborationLog{System: kind, Name: name, OriginalBase: doc.Revision - 1, OriginalOperations: []domain.Operation{}, Operations: []domain.Operation{}, Effects: []domain.Effect{}, Touches: []domain.FieldChange{}, MediaReferences: []uuid.UUID{}})
+		log, err := json.Marshal(projectionLog{System: kind, Name: name, OriginalBase: doc.Revision - 1, Operations: []domain.Operation{}, Effects: []domain.Effect{}, Touches: []domain.FieldChange{}, MediaReferences: []uuid.UUID{}})
 		if err != nil {
 			return err
 		}

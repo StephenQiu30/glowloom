@@ -31,7 +31,7 @@ func TestTimelineReaderFreezesOwnedMediaAndRejectsStaleRevision(t *testing.T) {
 	timeline.Config.Timeline.Tracks[0].Kind = "image"
 	timeline.Config.Timeline.Clips[0].Kind = "image"
 	timeline.Config.Timeline.Clips[0].NodeID = &image.ID
-	result, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{image, timeline}))})
+	result, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{image, timeline}))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestTimelineReaderFreezesOwnedMediaAndRejectsStaleRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	timeline.Config.Timeline.Clips[0].Crop = &domain.TimelineCrop{X: 200, Y: 0, Width: 100, Height: 100}
-	result, err = service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: result.Revision, Operations: canvasfixture.Concat(timelineCropOperations(timeline))})
+	result, err = service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: result.Revision, Operations: canvasfixture.Concat(timelineCropOperations(timeline))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestTimelineReaderFreezesOwnedMediaAndRejectsStaleRevision(t *testing.T) {
 	}
 	oldCrop := *timeline.Config.Timeline.Clips[0].Crop
 	timeline.Config.Timeline.Clips[0].Crop.X = 100
-	result, err = service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: result.Revision, Operations: func() []domain.Operation {
+	result, err = service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: result.Revision, Operations: func() []domain.Operation {
 		ops := timelineCropOperations(timeline)
 		yes := true
 		ops[0].ExpectedExists = &yes

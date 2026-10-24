@@ -28,7 +28,7 @@ func TestProjectCopyCanvasPersistsFrozenGraphsAndHidesTarget(t *testing.T) {
 	}
 	node := resourceNode("text")
 	node.Config.Text = ptr("冻结的内容")
-	if _, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{node}))}); err != nil {
+	if _, err := canvasfixture.NewLegacySeeder(database, canvasStore(database)).Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]domain.Node{node}))}); err != nil {
 		t.Fatal(err)
 	}
 	binding := application.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: uuid.New()}
@@ -46,7 +46,7 @@ func TestProjectCopyCanvasPersistsFrozenGraphsAndHidesTarget(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.TextSource(node.ID, *node.Config.Text, "源随后被编辑"))}); err != nil {
+	if _, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: canvasfixture.Concat(canvasfixture.TextSource(node.ID, *node.Config.Text, "源随后被编辑"))}); err != nil {
 		t.Fatal(err)
 	}
 	// No referenced media exists in this text-only graph; the reader remains an

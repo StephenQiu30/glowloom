@@ -28,11 +28,11 @@ func TestEditorCanvasUsesFiniteTextOperationsAndOneDraftOwner(t *testing.T) {
 	}
 	node := draftNode(t, "image_generation")
 	node.Config.Draft = &domain.Draft{Composer: &draft}
-	if _, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Nodes([]domain.Node{node})}); err != nil {
+	if _, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Nodes([]domain.Node{node})}); err != nil {
 		t.Fatal(err)
 	}
 	// label allocation is derived by typed reference operations, never an arbitrary config replacement.
-	if _, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{canvasfixture.Field(node.ID, []string{"config", "draft", "composer", "labelState"}, map[string]any{})}}); err == nil {
+	if _, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{canvasfixture.Field(node.ID, []string{"config", "draft", "composer", "labelState"}, map[string]any{})}}); err == nil {
 		t.Fatal("arbitrary metadata replacement accepted")
 	}
 	// Replace only the text atom, retaining paragraph structure and editor metadata.
@@ -44,7 +44,7 @@ func TestEditorCanvasUsesFiniteTextOperationsAndOneDraftOwner(t *testing.T) {
 	if domain.SequenceLength(atoms) != 8 {
 		t.Fatal("missing paragraph sequence")
 	}
-	updated, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), application.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "text", NodeID: node.ID, Path: []string{"config", "draft", "composer", "document"}, Text: edit}}})
+	updated, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 2, Operations: []domain.Operation{{Type: "text", NodeID: node.ID, Path: []string{"config", "draft", "composer", "document"}, Text: edit}}})
 	if err != nil || updated.Revision != 3 || updated.Nodes[0].InputRevision != 2 {
 		t.Fatal(updated, err)
 	}

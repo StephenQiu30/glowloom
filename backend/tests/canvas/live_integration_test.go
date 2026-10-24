@@ -2,6 +2,7 @@ package canvas_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -30,15 +31,15 @@ import (
 const liveOrigin = "http://127.0.0.1:3198"
 
 type livePacket struct {
-	Type        string                 `json:"type"`
-	Revision    int64                  `json:"revision,string"`
-	Permissions canvasapp.Permissions  `json:"permissions"`
-	OpID        string                 `json:"op_id"`
-	Code        string                 `json:"code"`
-	Status      int                    `json:"status"`
-	Document    *canvasapp.DocumentDTO `json:"document"`
-	Receipt     *canvasapp.ReceiptDTO  `json:"receipt"`
-	Changes     []canvasapp.ChangeDTO  `json:"changes"`
+	Type        string                     `json:"type"`
+	Revision    int64                      `json:"revision,string"`
+	Permissions canvasapp.Permissions      `json:"permissions"`
+	OpID        string                     `json:"op_id"`
+	Code        string                     `json:"code"`
+	Status      int                        `json:"status"`
+	Document    *canvasapp.DocumentDTO     `json:"document"`
+	Receipt     *canvasfixture.EditReceipt `json:"receipt"`
+	Changes     []json.RawMessage          `json:"changes"`
 }
 type liveFixture struct {
 	db      *gorm.DB
@@ -53,6 +54,8 @@ func newLiveFixture(t *testing.T, lifetime ...context.Context) liveFixture {
 	t.Helper()
 	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	cfg := identityfixture.Configure(t, config.Config{Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: liveOrigin})
+	cfg.CanvasRuntimeURL = yjsRuntimeAddress(t)
+	cfg.CanvasRuntimeToken = "isolated-test-runtime-token-32-bytes"
 	auth := identityfixture.Create(t, db, cfg, "WS fixture", "WS fixture-only password!")
 	actor := identity.Principal{ID: auth.User.ID, OrgID: auth.User.OrgID, SessionID: auth.Session.ID, CredentialEpoch: auth.User.SessionEpoch, PlatformEpoch: auth.User.PlatformEpoch, PlatformRole: auth.User.PlatformRole, ScopeID: identityfixture.Scope(t, db, auth.User.ID)}
 	project := uuid.New()
@@ -111,111 +114,8 @@ func liveSend(t *testing.T, c *websocket.Conn, p any) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
-	if message, ok := p.(map[string]any); ok {
-		if body, ok := message["body"].(canvasapp.CollaborationInput); ok {
-			dto, err := canvasapp.Submission(body)
-			if err != nil {
-				t.Fatal(err)
-			}
-			message["body"] = dto
-		}
-	}
 	if err := wsjson.Write(ctx, c, p); err != nil {
 		t.Fatal(err)
-	}
-}
-func (f liveFixture) join(t *testing.T, c *websocket.Conn) {
-	t.Helper()
-	liveSend(t, c, map[string]any{"type": "join", "protocol_version": 3, "client_id": canvasfixture.ClientID, "last_revision": "0", "scope_id": f.actor.ScopeID, "csrf_token": f.auth.CSRFToken})
-	p := liveRead(t, c, "snapshot", 0)
-	if p.Document == nil || p.Document.ID != f.doc.ID {
-		t.Fatal("missing authorized database snapshot")
-	}
-	liveRead(t, c, "ready", p.Revision)
-}
-func TestCanvasWebSocketDatabaseSaveBroadcastAndReceiptReplay(t *testing.T) {
-	f := newLiveFixture(t)
-	a, b := f.dial(t), f.dial(t)
-	f.join(t, a)
-	f.join(t, b)
-	first, second := resourceNode("text"), resourceNode("text")
-	edge := domain.Edge{ID: uuid.New(), EdgeType: "annotation", SourceNodeID: first.ID, TargetNodeID: second.ID}
-	body := canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &first}, {Type: "create_node", Node: &second}, {Type: "connect", Edge: &edge}}}
-	key := uuid.NewString()
-	submit := map[string]any{"type": "submit", "op_id": key, "body": body}
-	liveSend(t, a, submit)
-	ack := liveRead(t, a, "ack", 2)
-	if ack.Receipt == nil || ack.Receipt.Status != "accepted" || ack.Receipt.Revision != 2 || ack.OpID != key {
-		t.Fatal("save was not confirmed by committed graph")
-	}
-	observed := liveRead(t, b, "changes", 2)
-	if len(observed.Changes) != 1 || len(observed.Changes[0].Effects) != 3 {
-		t.Fatal("other client missed database edge")
-	}
-	loaded, err := f.service.Get(t.Context(), f.actor, f.doc.ID)
-	if err != nil || loaded.Revision != 2 || len(loaded.Edges) != 1 {
-		t.Fatal("DB reload mismatch", err)
-	}
-	_ = a.CloseNow()
-	reconnected := f.dial(t)
-	f.join(t, reconnected)
-	liveSend(t, reconnected, map[string]any{"type": "resolve", "op_id": key, "body": body})
-	receipt := liveRead(t, reconnected, "ack", 2)
-	if receipt.OpID != key || receipt.Receipt == nil || receipt.Receipt.Revision != 2 {
-		t.Fatal("durable receipt not resolved")
-	}
-	liveSend(t, reconnected, submit)
-	liveRead(t, reconnected, "ack", 2)
-	loaded, err = f.service.Get(t.Context(), f.actor, f.doc.ID)
-	if err != nil || loaded.Revision != 2 {
-		t.Fatal("replay duplicated a revision", err)
-	}
-	var count int64
-	if err := f.db.Raw(`SELECT count(*) FROM canvas.save_receipt WHERE document_id=?`, f.doc.ID).Scan(&count).Error; err != nil || count != 1 {
-		t.Fatal("not exactly one durable receipt", err)
-	}
-}
-func TestCanvasWebSocketHeartbeatFindsMissedWritesAndArchive(t *testing.T) {
-	f := newLiveFixture(t)
-	c := f.dial(t)
-	f.join(t, c)
-	n := resourceNode("text")
-	r, err := canvasapp.NewCollaborationService(canvasStore(f.db)).Submit(t.Context(), f.actor, f.doc.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}}})
-	if err != nil || r.Status != "accepted" {
-		t.Fatal(r, err)
-	}
-	liveRead(t, c, "changes", 2)
-	if err := f.db.Exec(`UPDATE workspace.project SET status='archived',archived_at=now() WHERE id=?`, f.doc.ProjectID).Error; err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
-	defer cancel()
-	for {
-		var p livePacket
-		if err := wsjson.Read(ctx, c, &p); err != nil {
-			t.Fatal("archive permission update was not delivered", err)
-		}
-		if p.Type == "error" {
-			t.Fatal(p)
-		}
-		if p.Type == "heartbeat" && !p.Permissions.Write {
-			break
-		}
-	}
-}
-func TestCanvasWebSocketRejectsForeignOriginBeforeUpgrade(t *testing.T) {
-	f := newLiveFixture(t)
-	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
-	defer cancel()
-	conn, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(f.server.URL, "http")+fmt.Sprintf("/api/canvases/%s/live", f.doc.ID), &websocket.DialOptions{HTTPHeader: http.Header{"Origin": {"http://foreign.invalid"}, "Cookie": {"glowloom_session=" + f.auth.Token}}})
-	if resp != nil && resp.Body != nil {
-		defer func() { _ = resp.Body.Close() }()
-	}
-	if conn != nil {
-		_ = conn.CloseNow()
-	}
-	if err == nil || resp == nil || resp.StatusCode != 403 {
-		t.Fatalf("foreign origin upgrade was not rejected: %v", err)
 	}
 }
 
@@ -236,43 +136,28 @@ func liveError(t *testing.T, c *websocket.Conn) livePacket {
 	}
 }
 
-func TestCanvasWebSocketConflictDoesNotOverwriteAndArchiveStillResolves(t *testing.T) {
+func TestCanvasWebSocketRejectsForeignOriginBeforeUpgrade(t *testing.T) {
 	f := newLiveFixture(t)
-	a, b := f.dial(t), f.dial(t)
-	f.join(t, a)
-	f.join(t, b)
-	key := uuid.NewString()
-	n := resourceNode("text")
-	body := canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}}}
-	liveSend(t, a, map[string]any{"type": "submit", "op_id": key, "body": body})
-	liveRead(t, a, "ack", 2)
-	staleKey := uuid.NewString()
-	liveSend(t, b, map[string]any{"type": "submit", "op_id": staleKey, "body": body})
-	conflict := liveRead(t, b, "ack", 0)
-	if conflict.OpID != staleKey || conflict.Receipt == nil || conflict.Receipt.Status != "rejected" || conflict.Receipt.Code != "id_conflict" {
-		t.Fatalf("unsafe conflict result: %+v", conflict)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	conn, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(f.server.URL, "http")+fmt.Sprintf("/api/canvases/%s/live", f.doc.ID), &websocket.DialOptions{HTTPHeader: http.Header{"Origin": {"http://foreign.invalid"}, "Cookie": {"glowloom_session=" + f.auth.Token}}})
+	if resp != nil && resp.Body != nil {
+		defer func() { _ = resp.Body.Close() }()
 	}
-	loaded, err := f.service.Get(t.Context(), f.actor, f.doc.ID)
-	if err != nil || loaded.Revision != 2 || len(loaded.Nodes) != 1 {
-		t.Fatal("stale write modified database", err)
+	if conn != nil {
+		_ = conn.CloseNow()
 	}
-	if err := f.db.Exec(`UPDATE workspace.project SET status='archived',archived_at=now() WHERE id=?`, f.doc.ProjectID).Error; err != nil {
-		t.Fatal(err)
-	}
-	liveSend(t, a, map[string]any{"type": "resolve", "op_id": key, "body": body})
-	liveRead(t, a, "ack", 2)
-	// A reused UUID with another body can never resolve the old success.
-	body.BaseRevision = 2
-	liveSend(t, a, map[string]any{"type": "resolve", "op_id": key, "body": body})
-	if reused := liveError(t, a); reused.Code != "op_id_reused" {
-		t.Fatalf("hash mismatch accepted: %+v", reused)
+	if err == nil || resp == nil || resp.StatusCode != 403 {
+		t.Fatalf("foreign origin upgrade was not rejected: %v", err)
 	}
 }
 
+// liveError gives each protocol assertion its own budget, including the server's
+// bounded database operation. Race tests can run alongside CPU-heavy packages.
 func TestCanvasWebSocketHeartbeatDoesNotExtendSessionAndRevocationCloses(t *testing.T) {
 	f := newLiveFixture(t)
 	c := f.dial(t)
-	f.join(t, c)
+	liveJoinYjs(t, f, c)
 	var before, after time.Time
 	if err := f.db.Raw(`SELECT last_active_at FROM identity.user_session WHERE id=?`, f.auth.Session.ID).Scan(&before).Error; err != nil {
 		t.Fatal(err)
@@ -311,8 +196,14 @@ func TestCanvasWebSocketHeartbeatDoesNotExtendSessionAndRevocationCloses(t *test
 	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
 	defer cancel()
 	var p livePacket
-	if err := wsjson.Read(ctx, c, &p); err != nil {
-		t.Fatal(err)
+	for {
+		if err := wsjson.Read(ctx, c, &p); err != nil {
+			t.Fatal(err)
+		}
+		// A presence notification already queued before revocation may arrive first.
+		if p.Type != "yjs_presence" {
+			break
+		}
 	}
 	if p.Type != "error" || p.Status != 401 || p.Document != nil || p.Receipt != nil {
 		t.Fatalf("private delivery after revoke: %+v", p)
@@ -322,37 +213,12 @@ func TestCanvasWebSocketHeartbeatDoesNotExtendSessionAndRevocationCloses(t *test
 	}
 }
 
-func TestCanvasWebSocketArchivedWriteKeepsReadableConnection(t *testing.T) {
-	f := newLiveFixture(t)
-	c := f.dial(t)
-	f.join(t, c)
-	if err := f.db.Exec(`UPDATE workspace.project SET status='archived',archived_at=now() WHERE id=?`, f.doc.ProjectID).Error; err != nil {
-		t.Fatal(err)
-	}
-	n := resourceNode("text")
-	liveSend(t, c, map[string]any{"type": "submit", "op_id": uuid.NewString(), "body": canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: []domain.Operation{{Type: "create_node", Node: &n}}}})
-	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
-	defer cancel()
-	var p livePacket
-	if err := wsjson.Read(ctx, c, &p); err != nil {
-		t.Fatal(err)
-	}
-	if p.Type != "error" || p.Status != 409 || p.Code != "canvas_read_only" {
-		t.Fatalf("read-only write must preserve readable page, got %+v", p)
-	}
-	liveSend(t, c, map[string]any{"type": "sync"})
-	p = liveRead(t, c, "heartbeat", 1)
-	if p.Permissions.Write {
-		t.Fatal("archived canvas still writable")
-	}
-}
-
 func TestCanvasWebSocketStopsWithAPILifetime(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	f := newLiveFixture(t, ctx)
 	c := f.dial(t)
-	f.join(t, c)
+	liveJoinYjs(t, f, c)
 	cancel()
 	read, stop := context.WithTimeout(t.Context(), time.Second)
 	defer stop()
@@ -365,7 +231,7 @@ func TestCanvasWebSocketStopsWithAPILifetime(t *testing.T) {
 func TestCanvasWebSocketSyncBurstDoesNotBlockHeartbeatPong(t *testing.T) {
 	f := newLiveFixture(t)
 	c := f.dial(t)
-	f.join(t, c)
+	liveJoinYjs(t, f, c)
 	tx := f.db.Begin()
 	if tx.Error != nil {
 		t.Fatal(tx.Error)
@@ -392,4 +258,12 @@ func TestCanvasWebSocketSyncBurstDoesNotBlockHeartbeatPong(t *testing.T) {
 		t.Fatal(err)
 	}
 	liveRead(t, c, "heartbeat", 1)
+}
+
+func liveJoinYjs(t *testing.T, f liveFixture, conn *websocket.Conn) {
+	t.Helper()
+	liveSend(t, conn, map[string]any{"type": "join", "protocol_version": 4, "client_id": uuid.New(), "scope_id": f.actor.ScopeID, "csrf_token": f.auth.CSRFToken})
+	readYjsUntil(t, conn, func(p yjsPacket) bool { return p.Type == "yjs_snapshot" })
+	liveRead(t, conn, "heartbeat", 0)
+	liveRead(t, conn, "yjs_presence", 0)
 }

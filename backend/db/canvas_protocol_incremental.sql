@@ -24,7 +24,7 @@ ALTER TABLE canvas.document ALTER COLUMN revision TYPE bigint;
 ALTER TABLE canvas.command_log ALTER COLUMN revision TYPE bigint;
 ALTER TABLE canvas.command_log ALTER COLUMN base_revision TYPE bigint;
 -- Historical version-0 documents and commands remain version 0. New documents
--- use version 1; the existing OT service upgrades a document when it accepts edits.
+-- use version 1; the historical schema transition used version 1 for accepted edits.
 ALTER TABLE canvas.document ALTER COLUMN operation_version SET DEFAULT 1;
 
 DO $$
