@@ -487,6 +487,11 @@ async function proxy(
       methods: ["GET"],
       query: [] as string[],
     },
+    {
+      pattern: `canvas-locations/${identityUUID}`,
+      methods: ["GET"],
+      query: [] as string[],
+    },
     ...identityRoutes,
     ...editorCatalogRoutes,
   ].find((rule) => new RegExp(`^${rule.pattern}$`, "i").test(resource));

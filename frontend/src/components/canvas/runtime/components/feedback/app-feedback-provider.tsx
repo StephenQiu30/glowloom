@@ -10,7 +10,6 @@ import {
   type ReactNode,
 } from "react";
 import { toast } from "sonner";
-import { Toaster } from "@/components/ui/sonner";
 import { notifyError } from "./error-notification";
 
 import {
@@ -25,7 +24,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { useThemeStore } from "@/components/canvas/runtime/store/use-theme-store";
 
 export type ConfirmOptions = {
   title: ReactNode;
@@ -48,7 +46,6 @@ const FeedbackContext = createContext<FeedbackContextValue | null>(null);
 let nextConfirmId = 0;
 
 export function AppFeedbackProvider({ children }: { children: ReactNode }) {
-  const theme = useThemeStore((state) => state.theme);
   const [pending, setPending] = useState<PendingConfirm | null>(null);
   const [accepting, setAccepting] = useState(false);
   const pendingRef = useRef<PendingConfirm | null>(null);
@@ -91,12 +88,6 @@ export function AppFeedbackProvider({ children }: { children: ReactNode }) {
   return (
     <FeedbackContext.Provider value={contextValue}>
       {children}
-      <Toaster
-        position="top-right"
-        offset={{ top: "var(--spacing-toast-top)" }}
-        mobileOffset={{ top: "var(--spacing-toast-mobile-top)" }}
-        theme={theme}
-      />
       <AlertDialog
         open={Boolean(pending)}
         onOpenChange={(open) =>

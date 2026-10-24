@@ -11,6 +11,7 @@ import { getCSRFToken } from "@/lib/request";
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
 import { CanvasEditor } from "./editor";
+import { CanvasLocationGate } from "./canvas-location-gate";
 import { YjsCanvasWorkspace } from "./yjs-workspace";
 import { ensureSessionFresh } from "@/components/auth/session-renewal";
 import { canvasViewKey } from "./view-state";
@@ -223,19 +224,26 @@ function Entry() {
         }
       />
     );
-  if (!session || !space.selected || space.pending) return null;
+  if (!session || !space.selected) return null;
   const ActiveWorkspace =
     process.env.NEXT_PUBLIC_CANVAS_YJS === "true"
       ? YjsCanvasWorkspace
       : Workspace;
   return (
-    <ActiveWorkspace
-      key={`${session.actor.id}/${space.selected.id}/${canvasID}`}
+    <CanvasLocationGate
+      key={`${session.actor.id}/${canvasID}`}
       canvasID={canvasID}
-      projectID={projectID}
-      actorID={session.actor.id}
-      scopeID={space.selected.id}
-    />
+    >
+      {(location) => (
+        <ActiveWorkspace
+          key={`${session.actor.id}/${location.scope_id}/${canvasID}`}
+          canvasID={canvasID}
+          projectID={location.project_id}
+          actorID={session.actor.id}
+          scopeID={location.scope_id}
+        />
+      )}
+    </CanvasLocationGate>
   );
 }
 export function ServiceCanvasWorkspace() {

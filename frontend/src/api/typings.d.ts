@@ -2539,6 +2539,17 @@ declare namespace API {
     status?: string;
   };
 
+  type locateCanvasParams = {
+    /** 画布UUID */
+    id: string;
+  };
+
+  type Location = {
+    canvas_id?: string;
+    project_id?: string;
+    scope_id?: string;
+  };
+
   type LocationContent = {
     aliases?: string[];
     description?: string;

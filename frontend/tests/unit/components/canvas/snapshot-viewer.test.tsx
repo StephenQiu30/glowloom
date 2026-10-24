@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { ServiceCanvasWorkspace } from "@/components/canvas/service-workspace";
 
 const fixture = vi.hoisted(() => ({
+  scope: "10000000-0000-4000-8000-000000000006",
   canvas: "10000000-0000-4000-8000-000000000001",
   project: "10000000-0000-4000-8000-000000000002",
   get: vi.fn(),
@@ -14,8 +15,16 @@ const fixture = vi.hoisted(() => ({
 vi.mock("@/components/auth/session-renewal", () => ({
   ensureSessionFresh: fixture.renew,
 }));
-vi.mock("@/api/canvases", () => ({ getCanvas: fixture.get }));
+vi.mock("@/api/canvases", () => ({
+  getCanvas: fixture.get,
+  locateCanvas: async () => ({
+    canvas_id: fixture.canvas,
+    project_id: fixture.project,
+    scope_id: fixture.scope,
+  }),
+}));
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn() }),
   useSearchParams: () =>
     new URLSearchParams({
       canvas_id: fixture.canvas,
@@ -27,7 +36,12 @@ vi.mock("@/components/auth/session", () => ({
   SessionGate: ({ children }: { children: React.ReactNode }) => children,
 }));
 vi.mock("@/components/spaces/space-context", () => ({
-  useSpace: () => ({ selected: { id: "scope" } }),
+  useSpace: () => ({
+    selected: { id: fixture.scope },
+    spaces: [{ id: fixture.scope }],
+    pending: false,
+    error: "",
+  }),
   SpaceGate: ({ children }: { children: React.ReactNode }) => children,
 }));
 vi.mock("@/components/canvas/live-session", () => ({

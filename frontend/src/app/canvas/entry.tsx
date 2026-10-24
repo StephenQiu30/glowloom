@@ -11,12 +11,7 @@ const Editor = dynamic(
   {
     ssr: false,
     loading: () => (
-      <ContentState
-        className="h-dvh"
-        state="loading"
-        title="正在打开画布"
-        description="正在连接你的创作空间。"
-      />
+      <ContentState className="h-dvh" state="loading" title="正在打开画布" />
     ),
   },
 );

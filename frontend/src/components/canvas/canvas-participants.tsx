@@ -290,10 +290,10 @@ function ParticipantList({
   );
 }
 function Participants({ ids, context }: { ids: string[]; context: Context }) {
-  // Private profile previews live only for this canvas/session, never in the global SWR cache.
-  const [cache] = useState(() => new Map());
+  // Let SWR own each mounted cache, including its subscriptions and cleanup.
+  // Private profiles must not reuse a disposed cache across remounts.
   return (
-    <SWRConfig value={{ provider: () => cache }}>
+    <SWRConfig value={{ provider: () => new Map() }}>
       <div
         className="flex shrink-0 items-center px-1"
         aria-label={`${ids.length} 位参与者在线`}

@@ -137,6 +137,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	}
 	canvasStore := pgcanvas.NewScopedStore(database, mediaFactory, mediawire.NewCanvasProjectAccess)
 	canvasService := canvasapp.NewService(canvasStore)
+	canvashttp.NewHandler(canvasService).RegisterLocation(identityProtected)
 	live := canvaslive.NewHandler(canvasService, canvaswire.SocketAuthority(database, auth), cfg.PublicOrigin).WithCollaboration(canvasapp.NewCollaborationService(canvasStore))
 	if cfg.CanvasRuntimeURL != "" && len(cfg.CanvasRuntimeToken) >= 32 {
 		live.WithYjs(canvasapp.NewYjsService(canvasStore, yjsruntime.New(cfg.CanvasRuntimeURL, cfg.CanvasRuntimeToken)))

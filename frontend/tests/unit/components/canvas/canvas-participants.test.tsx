@@ -7,6 +7,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   CanvasParticipants,
@@ -171,4 +172,17 @@ it("读取失败显示默认头像和正文重试，重试后恢复真实信息"
   fireEvent.click(within(alert).getByRole("button", { name: "重新读取" }));
   await screen.findByRole("button", { name: "查看参与者 真实乙" });
   expect(screen.queryByRole("alert")).toBeNull();
+});
+
+it("strict lifecycle and reconnect preserve the participant cache and interactive details", async () => {
+  const mounted = render(<StrictMode>{view()}</StrictMode>);
+  await screen.findByRole("button", { name: "查看参与者 真实乙" });
+  mounted.rerender(<StrictMode>{view(false)}</StrictMode>);
+  mounted.rerender(<StrictMode>{view()}</StrictMode>);
+  fireEvent.click(
+    await screen.findByRole("button", { name: "查看参与者 真实乙" }),
+  );
+  expect(
+    await screen.findByRole("dialog", { name: "参与者信息" }),
+  ).toBeTruthy();
 });

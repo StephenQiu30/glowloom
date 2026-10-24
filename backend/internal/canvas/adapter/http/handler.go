@@ -236,3 +236,32 @@ func (h *Handler) Delete(c *gin.Context) {
 	}
 	c.JSON(200, application.DeleteResultDTO{ID: result.ID, Revision: application.Revision(result.Revision), Deleted: result.Deleted})
 }
+
+// RegisterLocation requires session middleware, but not a selected creation scope.
+func (h *Handler) RegisterLocation(group *gin.RouterGroup) {
+	group.GET("/canvas-locations/:id", h.Locate)
+}
+
+// Locate returns the authorized destination for old and newly shared canvas links.
+// @Summary 定位有权访问的画布空间
+// @ID locateCanvas
+// @Tags canvases
+// @Produce json
+// @Param id path string true "画布UUID"
+// @Success 200 {object} application.Location
+// @Failure 401 {object} httpapi.Problem
+// @Failure 404 {object} httpapi.Problem
+// @Failure 503 {object} httpapi.Problem
+// @Router /api/canvas-locations/{id} [get]
+func (h *Handler) Locate(c *gin.Context) {
+	id, ok := httpapi.PathUUID(c, "id")
+	if !ok {
+		return
+	}
+	location, err := h.service.Locate(c.Request.Context(), identityhttp.Principal(c), id)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(200, location)
+}

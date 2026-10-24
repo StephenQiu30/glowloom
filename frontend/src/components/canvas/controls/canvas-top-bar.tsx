@@ -237,9 +237,7 @@ export function CanvasTopBar({
                 onClick={() => {
                   void navigator.clipboard
                     .writeText(window.location.href)
-                    .then(() =>
-                      toast.success("画布链接已复制，仅有访问权限的成员可打开"),
-                    )
+                    .then(() => toast.success("画布链接已复制"))
                     .catch(() =>
                       toast.error("复制失败，请从浏览器地址栏复制链接"),
                     );

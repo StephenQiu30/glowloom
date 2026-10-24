@@ -58,6 +58,7 @@ type MediaReader interface {
 
 // Store is the transaction boundary that rechecks project access and persists replay results.
 type Store interface {
+	Locate(context.Context, identityapp.Principal, uuid.UUID) (Location, error)
 	List(context.Context, identityapp.Principal, uuid.UUID) ([]domain.Document, error)
 	Get(context.Context, identityapp.Principal, uuid.UUID) (domain.Document, error)
 	Create(context.Context, identityapp.Principal, uuid.UUID, string, CreateInput) (domain.Document, error)
