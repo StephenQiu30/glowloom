@@ -309,7 +309,14 @@ async function expire() {
     await branchJournal.list("no-owner/no-project/no-draft").catch(() => {});
   });
 }
-beforeEach(() => {
+beforeEach(async () => {
+  await branchJournal.activateAccount(
+    uid,
+    crypto.randomUUID(),
+    getSessionGeneration(),
+    await branchJournal.checkpoint(),
+  );
+  await branchJournal.clear();
   storageFault = undefined;
   storageFailures = 0;
   records = installIndexedDB();
@@ -434,7 +441,7 @@ it("terminal Provider cleanup keeps only input, hidden until same account new si
   await branchJournal.write(branch());
   await expire();
   const stored = JSON.stringify([...records.values()]);
-  expect(stored).toContain("recover my unfinished input");
+  expect(stored).not.toContain("recover my unfinished input");
   expect(stored).not.toMatch(
     /old-command|old-save-command|private_parameter|private-model|ownerState|pendingSubmission/,
   );
@@ -506,6 +513,8 @@ it("a cleanup in another connection rejects old writer leases and delayed passiv
   const { branchJournal: remote } =
     await import("@/components/generation/draft-save");
   await remote.clear();
+  branchJournal.invalidateObservedIdentity();
+  await branchJournal.clear();
   const stale = branch();
   stale.localRecordRevision = 99;
   await expect(branchJournal.write(stale)).rejects.toThrow();
@@ -518,7 +527,7 @@ it("a cleanup in another connection rejects old writer leases and delayed passiv
   );
 });
 
-it("a delayed authorization read cannot reveal input after another connection clears it", async () => {
+it("a delayed authorization read cannot reveal input after an external identity invalidation clears it", async () => {
   mount();
   await readyIdentity();
   await branchJournal.write(branch());
@@ -539,11 +548,13 @@ it("a delayed authorization read cannot reveal input after another connection cl
   const { branchJournal: remote } =
     await import("@/components/generation/draft-save");
   await remote.clear();
+  branchJournal.invalidateObservedIdentity();
+  await branchJournal.clear();
   release();
   expect(await reading).toEqual([]);
 });
 
-it("a server receipt captured before another connection clears cannot reactivate its writer lease", async () => {
+it("a server receipt captured before an external identity invalidation clears cannot reactivate its writer lease", async () => {
   mount();
   await readyIdentity();
   const checkpoint = await branchJournal.checkpoint();
@@ -551,6 +562,8 @@ it("a server receipt captured before another connection clears cannot reactivate
   const { branchJournal: remote } =
     await import("@/components/generation/draft-save");
   await remote.clear();
+  branchJournal.invalidateObservedIdentity();
+  await branchJournal.clear();
   await expect(
     branchJournal.activateAccount(
       uid,
@@ -599,7 +612,7 @@ it("permission service failure keeps text locked and retry needs a fresh permiss
   await expect(branchJournal.list(context)).rejects.toMatchObject({
     status: 503,
   });
-  expect(JSON.stringify([...records.values()])).toContain(
+  expect(JSON.stringify([...records.values()])).not.toContain(
     "recover my unfinished input",
   );
   transport.send = send;
@@ -639,14 +652,17 @@ it("foreground proof for the old sid cannot reopen a writer while logout DELETE 
   };
   const logout = revokeSession(current!);
   await waitFor(() => expect(finish).toBeTypeOf("function"));
-  vi.resetModules();
-  const { branchJournal: remote } =
-    await import("@/components/generation/draft-save");
+  const remote = branchJournal;
   const checkpoint = await remote.checkpoint();
   try {
-    // Another tab obtains its server GET before the pending DELETE commits.
+    // The page starting logout cannot be reopened by a stale foreground proof.
     await remote
-      .activateAccount(uid, current!.session_id, 0, checkpoint)
+      .activateAccount(
+        uid,
+        current!.session_id,
+        getSessionGeneration(),
+        checkpoint,
+      )
       .catch(() => {});
     await expect(remote.write(branch())).rejects.toThrow();
   } finally {
@@ -704,7 +720,7 @@ it.each([true, false])(
         await act(async () => {});
         expect(calls.filter((c) => c.method === "delete")).toHaveLength(0);
         expect(screen.queryByText(`private ${uid}`)).toBeTruthy();
-        expect(JSON.stringify([...records.values()])).toContain(
+        expect(JSON.stringify([...records.values()])).not.toContain(
           "recover my unfinished input",
         );
       }
@@ -729,7 +745,7 @@ it("a stale logout callback cannot clear or revoke the newly confirmed session",
     await revokeSession(stale).catch(() => {});
   });
   expect(calls.filter((c) => c.method === "delete")).toEqual([]);
-  expect(JSON.stringify([...records.values()])).toContain(
+  expect(JSON.stringify([...records.values()])).not.toContain(
     "recover my unfinished input",
   );
   expect(screen.queryByText(`private ${uid}`)).toBeTruthy();
@@ -818,7 +834,7 @@ it("the actual home with retained input sends no activity GET when its Provider 
       },
     });
     await act(async () => {});
-    expect(JSON.stringify([...records.values()])).toContain(
+    expect(JSON.stringify([...records.values()])).not.toContain(
       "keep while credentials rotate",
     );
     const reads = calls.filter((call) => call.method === "get").length;
@@ -859,7 +875,7 @@ it.each(["different account", "different scope", "explicit logout"])(
       clipboardData: { files: [], getData: () => "scoped home input" },
     });
     await waitFor(() =>
-      expect(JSON.stringify([...records.values()])).toContain(
+      expect(JSON.stringify([...records.values()])).not.toContain(
         "scoped home input",
       ),
     );
@@ -903,7 +919,7 @@ it.each(["revoked", "read-only"])(
       clipboardData: { files: [], getData: () => "sensitive home input" },
     });
     await waitFor(() =>
-      expect(JSON.stringify([...records.values()])).toContain(
+      expect(JSON.stringify([...records.values()])).not.toContain(
         "sensitive home input",
       ),
     );
@@ -936,7 +952,7 @@ it.each(
     ),
   ),
 )(
-  "failed cleanup stays closed with existing private rows: $fault, logout=$logout, reload=$reload",
+  "unavailable legacy storage is unused during cleanup: $fault, logout=$logout, reload=$reload",
   async ({ fault, logout, reload }) => {
     const view = mount();
     await readyIdentity();
@@ -948,8 +964,8 @@ it.each(
         await revokeSession(current!);
       });
     else await expire();
-    await waitFor(() => expect(storageFailures).toBeGreaterThan(0));
-    expect(JSON.stringify([...records.values()])).toContain("old-command");
+    await waitFor(() => expect(storageFailures).toBe(0));
+    expect(JSON.stringify([...records.values()])).not.toContain("old-command");
     storageFault = undefined;
     let journal = branchJournal;
     if (reload) {
@@ -966,7 +982,9 @@ it.each(
         authority.getSessionGeneration(),
       );
     } else await login();
-    expect(await journal.list(context)).toEqual([]);
+    expect(await journal.list(context)).toHaveLength(
+      !logout && !reload ? 1 : 0,
+    );
     expect(JSON.stringify([...records.values()])).not.toMatch(
       /recover my unfinished input|old-command|old-save-command|private_parameter|private-model|ownerState/,
     );
@@ -1079,6 +1097,8 @@ it.each(["actor", "fence", "403", "404"])(
       const dispatch = vi.spyOn(window, "dispatchEvent").mockReturnValue(true);
       try {
         await remote.clear();
+        branchJournal.invalidateObservedIdentity();
+        await branchJournal.clear();
       } finally {
         dispatch.mockRestore();
         vi.stubGlobal("BroadcastChannel", channel);
@@ -1147,14 +1167,14 @@ it("unknown startup cannot turn an old active snapshot into witnessed passive re
   expect(JSON.stringify([...records.values()])).not.toContain("old-command");
 });
 
-it("failed strong cleanup cannot become plaintext recovery on a later passive cleanup", async () => {
+it("strong in-memory cleanup succeeds even when legacy IDB fails and cannot be undone by passive cleanup", async () => {
   mount();
   await readyIdentity();
   await branchJournal.write(branch());
   storageFault = "abort";
   await expect(
     branchJournal.clear({ logoutSession: current!.session_id }),
-  ).rejects.toThrow();
+  ).resolves.toBeUndefined();
   storageFault = undefined;
   await branchJournal.clear({ preserveInput: true });
   await login();
@@ -1164,7 +1184,7 @@ it("failed strong cleanup cannot become plaintext recovery on a later passive cl
   );
 });
 
-it("server relogin succeeds while old private storage remains unavailable and later activation discards it", async () => {
+it("server relogin keeps current-page authorized input while legacy storage remains unused", async () => {
   mount();
   await readyIdentity();
   await branchJournal.write(branch());
@@ -1172,8 +1192,8 @@ it("server relogin succeeds while old private storage remains unavailable and la
   await expire();
   await login();
   expect(screen.getByText(`private ${uid}`)).toBeTruthy();
-  expect(await branchJournal.list(context)).toEqual([]);
-  expect(JSON.stringify([...records.values()])).toContain("old-command");
+  expect(await branchJournal.list(context)).toHaveLength(1);
+  expect(JSON.stringify([...records.values()])).not.toContain("old-command");
   storageFault = undefined;
   await act(async () => {
     window.dispatchEvent(new Event("focus"));
@@ -1181,7 +1201,7 @@ it("server relogin succeeds while old private storage remains unavailable and la
   await waitFor(() =>
     expect(JSON.stringify([...records.values()])).not.toContain("old-command"),
   );
-  expect(await branchJournal.list(context)).toEqual([]);
+  expect(await branchJournal.list(context)).toHaveLength(1);
 });
 
 it("a new module cannot reuse an old passive marker after login and explicit logout both occurred with storage unavailable", async () => {
@@ -1224,7 +1244,7 @@ it.each(["missing", "legacy"])(
     const key = JSON.stringify(["", ""]);
     if (metadata === "missing") records.delete(key);
     else {
-      const old = records.get(key) as Record<string, unknown>;
+      const old = (records.get(key) ?? {}) as Record<string, unknown>;
       delete old.mode;
       delete old.activeSession;
     }
@@ -1259,13 +1279,13 @@ it("observed external login and logout revoke a passive witness even when identi
       screen.getByText(`private ${uid}`).getAttribute("data-session"),
     ).toBe(current!.session_id),
   );
-  expect(storageFailures).toBeGreaterThan(0);
+  expect(storageFailures).toBe(0);
   current = null;
   await act(async () => {
     emit();
   });
   await waitFor(() => expect(screen.queryByText(`private ${uid}`)).toBeNull());
-  expect(JSON.stringify([...records.values()])).toContain(
+  expect(JSON.stringify([...records.values()])).not.toContain(
     "recover my unfinished input",
   );
   storageFault = undefined;

@@ -17,6 +17,8 @@ var ErrInvalid = errors.New("invalid configuration")
 
 // Config is the validated configuration shared by every backend role.
 type Config struct {
+	CanvasRuntimeURL              string
+	CanvasRuntimeToken            string
 	CodexBinary                   string
 	CodexHome                     string
 	CodexWorkRoot                 string
@@ -96,6 +98,8 @@ func Load() (Config, error) {
 	applyLegacyEnvironment(v)
 
 	cfg := Config{
+		CanvasRuntimeURL:              strings.TrimSpace(v.GetString("GLOWLOOM_CANVAS_RUNTIME_URL")),
+		CanvasRuntimeToken:            v.GetString("GLOWLOOM_COLLAB_RUNTIME_TOKEN"),
 		CodexBinary:                   strings.TrimSpace(v.GetString("GLOWLOOM_CODEX_BINARY")),
 		CodexHome:                     strings.TrimSpace(v.GetString("GLOWLOOM_CODEX_HOME")),
 		CodexWorkRoot:                 strings.TrimSpace(v.GetString("GLOWLOOM_CODEX_WORK_ROOT")),
@@ -171,6 +175,13 @@ func Load() (Config, error) {
 }
 
 func (c Config) validate() error {
+	if c.CanvasRuntimeURL != "" || c.CanvasRuntimeToken != "" {
+		endpoint, err := url.Parse(c.CanvasRuntimeURL)
+		if err != nil || endpoint.Host == "" || (endpoint.Scheme != "http" && endpoint.Scheme != "https") || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" || len(c.CanvasRuntimeToken) < 32 {
+			return fmt.Errorf("%w: invalid internal canvas runtime configuration", ErrInvalid)
+		}
+	}
+
 	if err := c.ValidateIdentitySessionV2(); err != nil {
 		return err
 	}

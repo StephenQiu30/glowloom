@@ -320,7 +320,7 @@ func (s *Store) SubmitCollaboration(ctx context.Context, a identity.Principal, i
 			return rejectError(err)
 		}
 		candidate.Effects = domain.DocumentEffects(doc, updated)
-		if err := saveGraph(tx, doc, updated); err != nil {
+		if err := saveGraphWithRestoration(tx, doc, updated, input.UndoOf != ""); err != nil {
 			var collision *identityConflict
 			if errors.As(err, &collision) {
 				if err := tx.RollbackTo("collaboration_save").Error; err != nil {

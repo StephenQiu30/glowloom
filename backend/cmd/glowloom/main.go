@@ -14,6 +14,7 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityoperator"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/projectcopyoperator"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/storageoperator"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	lvlog "github.com/StephenQiu30/glowloom-server/backend/internal/platform/log"
@@ -28,6 +29,9 @@ func main() {
 }
 
 func run() error {
+	if len(os.Args) > 1 && os.Args[1] == "project-copy-primary" {
+		return projectcopyoperator.Run(os.Args[2:])
+	}
 	if len(os.Args) > 1 && os.Args[1] == "storage" {
 		return storageoperator.Run(os.Args[2:])
 	}

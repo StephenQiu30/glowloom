@@ -43,6 +43,16 @@ jobs:
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Install and test the private collaboration runtime
+        working-directory: canvas-collab
+        run: |
+          npm install --global pnpm@12.4.2
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm test
       - name: Keep backend tests outside production source
         run: |
           test_file="$(find . -type f -name '*_test.go' ! -path './tests/*' -print -quit)"

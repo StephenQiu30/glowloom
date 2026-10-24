@@ -1,3 +1,4 @@
+import { pageBusinessMemory } from "@/lib/page-business-memory";
 import { render } from "../../../../feedback";
 import {
   act,
@@ -34,12 +35,12 @@ describe("provider trial consent and recovery", () => {
   afterEach(cleanup);
   beforeEach(() => {
     vi.clearAllMocks();
-    localStorage.clear();
+    pageBusinessMemory.clear();
     vi.mocked(listProjects).mockResolvedValue({
       items: [{ id: "project", name: "测试项目" }],
     });
   });
-  it("prepares a free quote without automatic confirmation and persists identities only", async () => {
+  it("prepares a free quote without automatic confirmation and keeps only identities in page memory", async () => {
     vi.mocked(createProviderTrialQuote).mockResolvedValue({
       operation_id: "operation",
       quote_micros: 100,
@@ -67,7 +68,7 @@ describe("provider trial consent and recovery", () => {
     );
     await screen.findByRole("button", { name: "确认费用并执行" });
     expect(confirmOperationQuote).not.toHaveBeenCalled();
-    const saved = localStorage.getItem(key)!;
+    const saved = pageBusinessMemory.getItem(key)!;
     expect(saved).toContain("operation");
     expect(saved).not.toContain("private prompt fixture");
     expect(saved).not.toContain("api_key");
@@ -78,7 +79,9 @@ describe("provider trial consent and recovery", () => {
       screen.getByRole("button", { name: "确认费用并执行" }).closest("form")!,
     );
     await screen.findByText("response lost");
-    expect(JSON.parse(localStorage.getItem(key)!).confirmRequested).toBe(true);
+    expect(JSON.parse(pageBusinessMemory.getItem(key)!).confirmRequested).toBe(
+      true,
+    );
     expect(
       screen.queryByRole("button", { name: "准备另一项试运行" }),
     ).toBeNull();
@@ -88,7 +91,7 @@ describe("provider trial consent and recovery", () => {
     });
   });
   it("recovers a quote through its receipt without creating or charging again", async () => {
-    localStorage.setItem(
+    pageBusinessMemory.setItem(
       key,
       JSON.stringify({
         request: "request",

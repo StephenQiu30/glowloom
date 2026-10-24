@@ -11,6 +11,7 @@ import { getCSRFToken } from "@/lib/request";
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
 import { CanvasEditor } from "./editor";
+import { YjsCanvasWorkspace } from "./yjs-workspace";
 import { ensureSessionFresh } from "@/components/auth/session-renewal";
 import { canvasViewKey } from "./view-state";
 import { CanvasLiveSession, type LiveStatus } from "./live-session";
@@ -223,8 +224,12 @@ function Entry() {
       />
     );
   if (!session || !space.selected || space.pending) return null;
+  const ActiveWorkspace =
+    process.env.NEXT_PUBLIC_CANVAS_YJS === "true"
+      ? YjsCanvasWorkspace
+      : Workspace;
   return (
-    <Workspace
+    <ActiveWorkspace
       key={`${session.actor.id}/${space.selected.id}/${canvasID}`}
       canvasID={canvasID}
       projectID={projectID}

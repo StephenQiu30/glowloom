@@ -346,6 +346,12 @@ func (s *ProjectCopyStore) Create(ctx context.Context, actor identityapp.Princip
 		if err != nil {
 			return err
 		}
+		if source.Project.CanvasID != uuid.Nil {
+			target.CanvasID = canvas.DocumentMapping[source.Project.CanvasID]
+			if target.CanvasID == uuid.Nil || target.CanvasID == source.Project.CanvasID {
+				return domain.ErrInvalidProjectCopy
+			}
+		}
 		var mark struct{ AIGCMarkStyle []byte }
 		if err := tx.Raw(`SELECT aigc_mark_style FROM workspace.project WHERE id=? AND org_id=?`, source.Project.ID, actor.OrgID).Scan(&mark).Error; err != nil {
 			return err

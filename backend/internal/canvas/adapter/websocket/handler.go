@@ -27,8 +27,10 @@ type Authorize func(context.Context, *http.Request, uuid.UUID, uuid.UUID, string
 
 // Handler owns only bounded connection notification hints, never document data.
 type Handler struct {
+	presence      map[uuid.UUID]*presenceRoom
 	service       *application.Service
 	collaboration *application.CollaborationService
+	yjs           *application.YjsService
 	authorize     Authorize
 	origin        string
 	mu            sync.Mutex
@@ -94,20 +96,25 @@ type incoming struct {
 	LastRevision    *application.Revision `json:"last_revision"`
 }
 type packet struct {
-	Type              string                   `json:"type"`
-	FromRevision      int64                    `json:"from_revision,omitempty,string"`
-	ToRevision        int64                    `json:"to_revision,omitempty,string"`
-	Retryable         bool                     `json:"retryable"`
-	ActorID           uuid.UUID                `json:"actor_id,omitempty"`
-	Receipt           *application.ReceiptDTO  `json:"receipt,omitempty"`
-	Changes           []application.ChangeDTO  `json:"changes,omitempty"`
-	Revision          int64                    `json:"revision,omitempty,string"`
-	Permissions       *application.Permissions `json:"permissions,omitempty"`
-	SupportedVersions []int                    `json:"supported_versions,omitempty"`
-	OpID              string                   `json:"op_id,omitempty"`
-	Status            int                      `json:"status,omitempty"`
-	Code              string                   `json:"code,omitempty"`
-	Document          *application.DocumentDTO `json:"document,omitempty"`
+	Presence          []Presence                    `json:"presence,omitempty"`
+	YjsVersions       []application.YjsVersion      `json:"yjs_versions,omitempty"`
+	YjsRestore        *application.YjsRestoreResult `json:"yjs_restore,omitempty"`
+	YjsState          *application.YjsState         `json:"yjs_state,omitempty"`
+	YjsReceipt        *application.YjsReceipt       `json:"yjs_receipt,omitempty"`
+	Type              string                        `json:"type"`
+	FromRevision      int64                         `json:"from_revision,omitempty,string"`
+	ToRevision        int64                         `json:"to_revision,omitempty,string"`
+	Retryable         bool                          `json:"retryable"`
+	ActorID           uuid.UUID                     `json:"actor_id,omitempty"`
+	Receipt           *application.ReceiptDTO       `json:"receipt,omitempty"`
+	Changes           []application.ChangeDTO       `json:"changes,omitempty"`
+	Revision          int64                         `json:"revision,omitempty,string"`
+	Permissions       *application.Permissions      `json:"permissions,omitempty"`
+	SupportedVersions []int                         `json:"supported_versions,omitempty"`
+	OpID              string                        `json:"op_id,omitempty"`
+	Status            int                           `json:"status,omitempty"`
+	Code              string                        `json:"code,omitempty"`
+	Document          *application.DocumentDTO      `json:"document,omitempty"`
 }
 
 func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
@@ -126,7 +133,7 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 	defer func() { _ = conn.CloseNow() }()
 	ctx, cancel := context.WithCancel(lifetime)
 	defer cancel()
-	conn.SetReadLimit(1 << 20)
+	conn.SetReadLimit(2 << 20) // bounded base64 Yjs update plus its immutable envelope
 	// Keep the control reader moving while a database command runs. Sync hints
 	// coalesce; a second queued business request closes the overloaded connection
 	// rather than blocking Pong processing or allocating an unbounded queue.
@@ -198,6 +205,10 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 		send(packet{Type: "error", Status: 422, Code: "invalid_message"})
 		return
 	}
+	if join.ProtocolVersion == 4 && h.yjs != nil {
+		h.serveYjs(ctx, c.Request, conn, id, join, messages, syncRequests, send)
+		return
+	}
 	if join.ProtocolVersion != application.ProtocolVersion {
 		send(packet{Type: "error", Status: 422, Code: "unsupported_protocol_version", SupportedVersions: []int{application.ProtocolVersion}})
 		return
@@ -225,6 +236,17 @@ func (h *Handler) serve(lifetime context.Context, c *gin.Context) {
 		if err != nil {
 			fail("", err)
 			return false
+		}
+		if h.yjs != nil {
+			shared, err := h.yjs.Load(opCtx, actor, id)
+			if err != nil {
+				fail("", err)
+				return false
+			}
+			if len(shared.State) > 0 {
+				send(packet{Type: "error", Status: 409, Code: "collaboration_upgrade_required", SupportedVersions: []int{4}})
+				return false
+			}
 		}
 		doc, err := h.service.Get(opCtx, actor, id)
 		if err != nil {
@@ -340,6 +362,8 @@ func problem(err error) (int, string) {
 		return 403, "forbidden"
 	case errors.Is(err, application.ErrNotFound), errors.Is(err, media.ErrNotFound):
 		return 404, "not_found"
+	case errors.Is(err, application.ErrYjsContention):
+		return 409, "review_stale"
 	case errors.Is(err, application.ErrIdempotencyConflict):
 		return 409, "op_id_reused"
 	case errors.Is(err, domain.ErrGraphReadOnly):

@@ -285,6 +285,9 @@ func (s *ProjectCopyStore) completeOwner(ctx context.Context, actor identityapp.
 			if err != nil {
 				return err
 			}
+			if err := bindCopyPrimaryCanvas(tx, before); err != nil {
+				return err
+			}
 			if err := saved.AcceptCanvasReceipt(worker, domain.ProjectCopyReceipt{ManifestSHA256: receipt.ManifestSHA256, ContentSHA256: receipt.ContentSHA256, PrimaryCount: receipt.Documents, SecondaryCount: receipt.ClearedOperationBindings}); err != nil {
 				return err
 			}
@@ -298,6 +301,26 @@ func (s *ProjectCopyStore) completeOwner(ctx context.Context, actor identityapp.
 		return copyChanged(tx, saved, "checkpoint", time.Now())
 	})
 	return saved, err
+}
+
+// Bind the primary document after its owner has materialized the frozen graph,
+// in the same fenced transaction. Never choose an arbitrary target document.
+func bindCopyPrimaryCanvas(tx *gorm.DB, job domain.ProjectCopyJob) error {
+	frozen, err := readFrozenCopyWorkspace(tx, job)
+	if err != nil {
+		return err
+	}
+	if frozen.Target.CanvasID == uuid.Nil {
+		return nil
+	}
+	written := tx.Exec(`UPDATE workspace.project SET initial_canvas_id=? WHERE id=? AND org_id=? AND status='copying' AND NOT is_delete AND initial_canvas_id IS NULL AND EXISTS(SELECT 1 FROM canvas.document WHERE id=? AND project_id=? AND NOT is_delete)`, frozen.Target.CanvasID, job.TargetProjectID, job.OrgID, frozen.Target.CanvasID, job.TargetProjectID)
+	if written.Error != nil {
+		return written.Error
+	}
+	if written.RowsAffected != 1 {
+		return domain.ErrInvalidProjectCopy
+	}
+	return nil
 }
 
 // Publish activates the entire target and completes the job in the same transaction.

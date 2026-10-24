@@ -81,6 +81,32 @@ func validEditor(c *EditorConfig) bool {
 	}
 	for key, value := range c.Metadata {
 		switch key {
+		case "referenceLabels":
+			var labels map[string]struct {
+				Kind    string `json:"kind"`
+				Ordinal int64  `json:"ordinal"`
+			}
+			if json.Unmarshal(value, &labels) != nil || len(labels) > 10000 {
+				return false
+			}
+			used := map[string]bool{}
+			for id, label := range labels {
+				if _, err := uuid.Parse(id); err != nil {
+					return false
+				}
+				if label.Kind != "image" && label.Kind != "video" && label.Kind != "audio" && label.Kind != "text" {
+					return false
+				}
+				if label.Ordinal < 1 || label.Ordinal > 9007199254740991 {
+					return false
+				}
+				key := label.Kind + strconv.FormatInt(label.Ordinal, 10)
+				if used[key] {
+					return false
+				}
+				used[key] = true
+			}
+
 		case "fontSize", "count", "textCount":
 			var number float64
 			if json.Unmarshal(value, &number) != nil || number < 0 || number > 1000 {

@@ -73,6 +73,16 @@ export function waitForSession<T>(
       .finally(() => signal.removeEventListener("abort", cancel));
   });
 }
+const contextChangeListeners = new Set<() => void>();
+export function subscribeContextChange(listener: () => void) {
+  contextChangeListeners.add(listener);
+  return () => {
+    contextChangeListeners.delete(listener);
+  };
+}
+function releaseContextMemory() {
+  for (const listener of contextChangeListeners) listener();
+}
 let sessionGeneration = 0;
 const sessionInvalidationListeners = new Set<(generation: number) => void>();
 export function getSessionGeneration() {
@@ -119,6 +129,7 @@ export function getCreationScope() {
 export function setCreationScope(scope: string | null) {
   if (creationScope !== scope) {
     ++scopeGeneration;
+    releaseContextMemory();
     scopeController.abort();
     scopeController = new AbortController();
   }
@@ -130,6 +141,7 @@ export function setCSRFToken(token: string | null) {
     setCreationScope(null);
     scopeSwitching = false;
     sessionGeneration++;
+    releaseContextMemory();
   }
   csrfToken = token;
 }

@@ -65,6 +65,7 @@ func TestProjectCopyAtomicAdmissionCompleteGraphAndPublication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	lifecycleFixtureSQL(t, db, `UPDATE workspace.project SET initial_canvas_id=? WHERE id=?`, document.ID, project)
 	nodeID := uuid.New()
 	text := "冻结内容"
 	original, err := canvas.Edit(ctx, actor, document.ID, uuid.NewString(), canvasapp.CollaborationInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: 1, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{{ID: nodeID, Title: "剧情", NodeType: "text", NodeAction: "resource", Config: canvasdomain.NodeConfig{Text: &text}}}))})
@@ -116,6 +117,7 @@ func TestProjectCopyAtomicAdmissionCompleteGraphAndPublication(t *testing.T) {
 		t.Fatal("complete frozen graph", err)
 	}
 	for _, corrupt := range []struct{ name, mutate, restore string }{
+		{"primary_canvas", `UPDATE workspace.project SET initial_canvas_id=NULL WHERE id=?`, `UPDATE workspace.project SET initial_canvas_id=(SELECT id FROM canvas.document WHERE project_id=workspace.project.id) WHERE id=?`},
 		{"workspace", `UPDATE workspace.project SET description='越过冻结规格' WHERE id=?`, `UPDATE workspace.project SET description='完整描述' WHERE id=?`},
 		{"canvas", `UPDATE canvas.node SET config='{"text":"被破坏的目标内容"}'::jsonb WHERE document_id IN(SELECT id FROM canvas.document WHERE project_id=?)`, `UPDATE canvas.node SET config='{"text":"冻结内容"}'::jsonb WHERE document_id IN(SELECT id FROM canvas.document WHERE project_id=?)`},
 		{"budget", `UPDATE billing.budget SET limit_micros=1 WHERE project_id=?`, `UPDATE billing.budget SET limit_micros=0 WHERE project_id=?`},
@@ -150,6 +152,9 @@ func TestProjectCopyAtomicAdmissionCompleteGraphAndPublication(t *testing.T) {
 	docs, err := canvas.List(ctx, actor, job.TargetProjectID)
 	if err != nil || len(docs) != 1 {
 		t.Fatal("published graph list", docs, err)
+	}
+	if settings.Project.CanvasID != docs[0].ID {
+		t.Fatalf("published copy missing its mapped primary canvas: got %s, want %s", settings.Project.CanvasID, docs[0].ID)
 	}
 	copied, err := canvas.Get(ctx, actor, docs[0].ID)
 	if err != nil || copied.ID == document.ID || copied.Revision != 1 || len(copied.Nodes) != 1 || copied.Nodes[0].ID == nodeID || *copied.Nodes[0].Config.Text != *original.Nodes[0].Config.Text {

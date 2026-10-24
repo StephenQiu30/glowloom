@@ -1,4 +1,6 @@
 "use client";
+import { pageBusinessMemory } from "@/lib/page-business-memory";
+
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 
 import { useRef, useState, useSyncExternalStore } from "react";
@@ -27,8 +29,7 @@ export function catalogMessage(error: unknown) {
   return error instanceof Error ? error.message : "操作失败，请重试。";
 }
 
-// Storage contains request identities only. Keys, fingerprints and form bodies
-// never enter persistent browser storage.
+// Request identities remain in page memory. Browser business records are never read.
 export function useCatalogMutation(
   onSaved: (result?: unknown) => void,
   scope = "registry",
@@ -47,7 +48,7 @@ export function useCatalogMutation(
   const writeLock = useRef(false);
   const [message, setMessage] = useState("");
   function clear() {
-    localStorage.removeItem(storageKey);
+    pageBusinessMemory.removeItem(storageKey);
     window.dispatchEvent(new Event(pendingEvent));
   }
   async function run<T>(
@@ -65,7 +66,7 @@ export function useCatalogMutation(
     setBusy(true);
     setMessage("");
     try {
-      localStorage.setItem(storageKey, JSON.stringify(request));
+      pageBusinessMemory.setItem(storageKey, JSON.stringify(request));
       window.dispatchEvent(new Event(pendingEvent));
       if (pending) {
         try {
@@ -204,7 +205,7 @@ function subscribePending(onChange: () => void) {
 }
 function readPending(key: string) {
   try {
-    return localStorage.getItem(key) ?? "";
+    return pageBusinessMemory.getItem(key) ?? "";
   } catch {
     return "unavailable";
   }

@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
   devIndicators: false,
-  allowedDevOrigins: ["127.0.0.1"],
+  allowedDevOrigins: ["127.0.0.1", "[::1]"],
   async rewrites() {
     // Upgrade requests must reach Go before the fetch-only API catch-all.
     const backend =

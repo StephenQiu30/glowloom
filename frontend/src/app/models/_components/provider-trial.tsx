@@ -1,4 +1,6 @@
 "use client";
+import { pageBusinessMemory } from "@/lib/page-business-memory";
+
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ChevronDown } from "lucide-react";
@@ -53,7 +55,7 @@ function subscribe(callback: () => void) {
 }
 function read(key: string) {
   try {
-    return localStorage.getItem(key) ?? "";
+    return pageBusinessMemory.getItem(key) ?? "";
   } catch {
     return "unavailable";
   }
@@ -106,7 +108,7 @@ export function ProviderTrial({
     return () => abort.abort();
   }, []);
   function save(value: PendingTrial) {
-    localStorage.setItem(storageKey, JSON.stringify(value));
+    pageBusinessMemory.setItem(storageKey, JSON.stringify(value));
     window.dispatchEvent(new Event(event));
   }
   async function run(action: () => Promise<void>) {
@@ -452,7 +454,7 @@ export function ProviderTrial({
                 variant="outline"
                 disabled={disabled}
                 onClick={() => {
-                  localStorage.removeItem(storageKey);
+                  pageBusinessMemory.removeItem(storageKey);
                   window.dispatchEvent(new Event(event));
                   setTask(null);
                   setMessage("");

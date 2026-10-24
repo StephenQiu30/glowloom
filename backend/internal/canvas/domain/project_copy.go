@@ -41,7 +41,7 @@ func CopyProjectDocument(source Document, targetProject, job uuid.UUID, assets m
 	}
 	doc := &result.Document
 	for i := range doc.Nodes {
-		if doc.Nodes[i].Config.Editor != nil || IsDraft(doc.Nodes[i]) || doc.Nodes[i].Config.Composer != nil && len(doc.Nodes[i].Config.Composer.References) > 0 || len(doc.Nodes[i].Config.unknown) != 0 {
+		if IsDraft(doc.Nodes[i]) || doc.Nodes[i].Config.Composer != nil && len(doc.Nodes[i].Config.Composer.References) > 0 || len(doc.Nodes[i].Config.unknown) != 0 {
 			return ProjectDocumentCopy{}, ErrUnsupportedProjectCopy
 		}
 		if doc.Nodes[i].LastOperationID != nil {
@@ -82,6 +82,30 @@ func CopyProjectDocument(source Document, targetProject, job uuid.UUID, assets m
 		remapCopyPointer(node.ParentID, func(id uuid.UUID) uuid.UUID { return identity("node", id) })
 		if node.RefID != nil {
 			remapCopyPointer(node.RefID, assetID)
+		}
+		if editor := node.Config.Editor; editor != nil {
+			for j := range editor.Files {
+				editor.Files[j].FileID = assetID(editor.Files[j].FileID)
+			}
+			if raw, ok := editor.Metadata["referenceLabels"]; ok {
+				var labels map[string]json.RawMessage
+				if json.Unmarshal(raw, &labels) != nil {
+					return ProjectDocumentCopy{}, ErrInvalidProjectCopy
+				}
+				mapped := make(map[string]json.RawMessage, len(labels))
+				for key, label := range labels {
+					id, err := uuid.Parse(key)
+					if err != nil {
+						return ProjectDocumentCopy{}, ErrInvalidProjectCopy
+					}
+					mapped[identity("node", id).String()] = label
+				}
+				body, err := json.Marshal(mapped)
+				if err != nil {
+					return ProjectDocumentCopy{}, err
+				}
+				editor.Metadata["referenceLabels"] = body
+			}
 		}
 		if c := node.Config.Generation; c != nil {
 			for j := range c.Inputs {

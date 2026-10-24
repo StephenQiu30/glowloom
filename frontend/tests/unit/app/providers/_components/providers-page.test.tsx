@@ -1,3 +1,4 @@
+import { pageBusinessMemory } from "@/lib/page-business-memory";
 import {
   act,
   cleanup,
@@ -56,7 +57,7 @@ vi.mock("@/app/providers/_components/connection-detail", () => ({
 }));
 beforeEach(() => {
   vi.clearAllMocks();
-  localStorage.clear();
+  pageBusinessMemory.clear();
   api.role = "creator";
   api.delayed = false;
   api.pendingSave = null;
@@ -134,7 +135,7 @@ it("保存后读回成功才关闭弹窗，详情读取不会触发重复写入"
 
 it("关闭后仍展示未确认写入，继续接入只打开原流程而不自动写入", async () => {
   api.role = "platform_admin";
-  localStorage.setItem(
+  pageBusinessMemory.setItem(
     "glowloom.catalog.pending.v1.actor.preset.onboarding.credential",
     JSON.stringify({
       id: "original",

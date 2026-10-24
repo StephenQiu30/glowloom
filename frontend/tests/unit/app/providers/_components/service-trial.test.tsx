@@ -1,3 +1,4 @@
+import { pageBusinessMemory } from "@/lib/page-business-memory";
 import {
   cleanup,
   fireEvent,
@@ -29,7 +30,7 @@ vi.mock("@/api/settings", () => ({
 const savedKey = "glowloom.ai-trial.v1.11111111-1111-4111-8111-111111111111";
 beforeEach(() => {
   vi.clearAllMocks();
-  localStorage.clear();
+  pageBusinessMemory.clear();
   fixtures.get.mockImplementation(async () => fixtures.state);
   fixtures.start.mockImplementation(async (req: API.TrialRequest) => {
     fixtures.state = {
@@ -85,9 +86,9 @@ it("检查本机后发起无计费聊天，并沿同一试验继续下一轮", a
   expect(fixtures.turn.mock.calls[0][0]).toEqual({ id: started.request_id });
   expect(fixtures.start).toHaveBeenCalledTimes(2);
 });
-it("刷新恢复未知图片，只查证原结果且不重新生成", async () => {
+it("同页重新打开恢复未知图片，只查证原结果且不重新生成", async () => {
   const id = crypto.randomUUID();
-  localStorage.setItem(savedKey, id);
+  pageBusinessMemory.setItem(savedKey, id);
   fixtures.state = {
     state: "unknown",
     kind: "image",
@@ -110,7 +111,7 @@ it("刷新恢复未知图片，只查证原结果且不重新生成", async () =
 });
 it("关闭对话框不取消任务，重开只查询原试验", async () => {
   const id = crypto.randomUUID();
-  localStorage.setItem(savedKey, id);
+  pageBusinessMemory.setItem(savedKey, id);
   fixtures.state = {
     state: "succeeded",
     kind: "chat",
@@ -129,11 +130,11 @@ it("关闭对话框不取消任务，重开只查询原试验", async () => {
   expect(screen.getByRole("button", { name: "发送" })).toBeTruthy();
 });
 
-it("刷新时保留待确认轮次，只查询直到原轮次出现", async () => {
+it("同页重开保留待确认轮次，只查询直到原轮次出现", async () => {
   const id = crypto.randomUUID(),
     turnID = crypto.randomUUID();
-  localStorage.setItem(savedKey, id);
-  localStorage.setItem(`${savedKey}.turn`, turnID);
+  pageBusinessMemory.setItem(savedKey, id);
+  pageBusinessMemory.setItem(`${savedKey}.turn`, turnID);
   fixtures.state = {
     state: "succeeded",
     kind: "chat",
@@ -150,8 +151,47 @@ it("刷新时保留待确认轮次，只查询直到原轮次出现", async () =
   render(<ServiceTrial open onOpenChange={() => {}} providers={[]} />);
   await screen.findByText("原轮次的最终回答");
   await waitFor(() =>
-    expect(localStorage.getItem(`${savedKey}.turn`)).toBeNull(),
+    expect(pageBusinessMemory.getItem(`${savedKey}.turn`)).toBeNull(),
   );
   expect(fixtures.start).not.toHaveBeenCalled();
   expect(fixtures.turn).not.toHaveBeenCalled();
+});
+
+it("丢失续聊回执后查证成功，清除已提交正文，避免重复发送", async () => {
+  const id = crypto.randomUUID();
+  pageBusinessMemory.setItem(savedKey, id);
+  fixtures.state = {
+    state: "succeeded",
+    kind: "chat",
+    model: "fixture-model",
+    turns: [{ request_id: id, state: "succeeded", text: "第一轮" }],
+  };
+  fixtures.turn.mockImplementation(
+    async (_: unknown, turn: API.TrialMessage) => {
+      fixtures.state = {
+        ...fixtures.state,
+        turns: [
+          ...fixtures.state.turns!,
+          { ...turn, state: "succeeded", text: "丢回执但已完成" },
+        ],
+      };
+      throw new Error("receipt lost");
+    },
+  );
+  render(<ServiceTrial open onOpenChange={() => {}} providers={[]} />);
+  await screen.findByText("第一轮");
+  fireEvent.change(screen.getByLabelText("继续聊天"), {
+    target: { value: "同一正文不能误发两次" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "发送" }));
+  await waitFor(() => expect(fixtures.turn).toHaveBeenCalledTimes(1));
+  await screen.findByText("丢回执但已完成");
+  expect((screen.getByLabelText("继续聊天") as HTMLTextAreaElement).value).toBe(
+    "",
+  );
+  expect(
+    (screen.getByRole("button", { name: "发送" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  expect(fixtures.turn).toHaveBeenCalledTimes(1);
 });

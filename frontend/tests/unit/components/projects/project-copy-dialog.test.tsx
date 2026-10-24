@@ -1,3 +1,4 @@
+import { pageBusinessMemory } from "@/lib/page-business-memory";
 import {
   cleanup,
   fireEvent,
@@ -37,7 +38,7 @@ const project: Project = {
   update_time: "2026-10-23T00:00:00Z",
 };
 beforeEach(() => {
-  localStorage.clear();
+  pageBusinessMemory.clear();
   vi.clearAllMocks();
   vi.mocked(createProjectCopy).mockRejectedValue(
     new RequestError("dependency_unavailable", 503),
@@ -74,9 +75,9 @@ it("恢复未知复制结果时重用相同幂等键与源版本，不发送第�
   expect(second[2]?.headers).toEqual(first[2]?.headers);
   expect(second[1].expected_revision).toBe(7);
 });
-it("无法持久化恢复记录时不提交复制", async () => {
+it("页面内存预算拒绝时不提交复制", async () => {
   const storage = vi
-    .spyOn(Storage.prototype, "setItem")
+    .spyOn(pageBusinessMemory, "setItem")
     .mockImplementation(() => {
       throw new Error("存储不可用");
     });

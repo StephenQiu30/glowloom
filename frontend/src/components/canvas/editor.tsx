@@ -1,5 +1,10 @@
 "use client";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import {
+  type ReactNode,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { Provider } from "react-redux";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
@@ -219,11 +224,7 @@ function Editor({ service }: { service: ProductionCanvasService }) {
     </CanvasMediaContext.Provider>
   );
 }
-export function CanvasEditor({
-  service,
-}: {
-  service: ProductionCanvasService;
-}) {
+export function CanvasProviders({ children }: { children: ReactNode }) {
   const { resolvedTheme } = useTheme();
   const session = useOptionalSession();
   const [store] = useState(() =>
@@ -253,10 +254,20 @@ export function CanvasEditor({
           signingOut: false,
         }}
       >
-        <AppFeedbackProvider>
-          <Editor service={service} />
-        </AppFeedbackProvider>
+        <AppFeedbackProvider>{children}</AppFeedbackProvider>
       </CanvasAccountContext.Provider>
     </Provider>
+  );
+}
+
+export function CanvasEditor({
+  service,
+}: {
+  service: ProductionCanvasService;
+}) {
+  return (
+    <CanvasProviders>
+      <Editor service={service} />
+    </CanvasProviders>
   );
 }

@@ -30,6 +30,9 @@ type ProjectCopySnapshot struct {
 	ID             uuid.UUID
 	ManifestSHA256 string
 	Documents      int
+	// DocumentMapping is returned at admission from the validated frozen graph.
+	// The coordinator freezes only the primary document it needs in its snapshot.
+	DocumentMapping map[uuid.UUID]uuid.UUID `json:",omitempty"`
 }
 
 // ProjectCopyReceipt proves the exact frozen set and deterministic target graphs.

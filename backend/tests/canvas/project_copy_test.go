@@ -146,3 +146,28 @@ func TestProjectCopyRemapsBatchTimelineAndAnimationIdentities(t *testing.T) {
 		t.Fatal("animation semantic names were changed")
 	}
 }
+
+func TestProjectCopyPreservesEditorContentAndRemapsReferenceLabels(t *testing.T) {
+	text, image := resourceNode("text"), resourceNode("image")
+	text.Config.Editor = &domain.EditorConfig{SchemaVersion: 1, Parameters: &domain.EditorParameters{Mode: "MANUAL"}, Metadata: map[string]json.RawMessage{"referenceLabels": json.RawMessage(`{"` + image.ID.String() + `":{"kind":"image","ordinal":3}}`)}}
+	image.Config.Editor = &domain.EditorConfig{SchemaVersion: 1, Files: []domain.EditorFileReference{{ReferenceKey: "content", FileID: *image.RefID, Version: "1", Purpose: "CONTENT"}}}
+	doc := domain.Document{ID: uuid.New(), ProjectID: uuid.New(), Name: "编辑器内容", Scope: json.RawMessage(`{}`), Revision: 2, Viewport: domain.Viewport{Zoom: 1}, Nodes: []domain.Node{text, image}, Edges: []domain.Edge{}}
+	before, _ := json.Marshal(doc)
+	targetAsset := uuid.New()
+	copied, err := domain.CopyProjectDocument(doc, uuid.New(), uuid.New(), map[uuid.UUID]uuid.UUID{*image.RefID: targetAsset})
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodes := copied.Document.Nodes
+	if nodes[0].Config.Editor.Parameters.Mode != "MANUAL" || nodes[1].Config.Editor.Files[0].FileID != targetAsset {
+		t.Fatal("editor content or file mapping lost")
+	}
+	var labels map[string]json.RawMessage
+	if json.Unmarshal(nodes[0].Config.Editor.Metadata["referenceLabels"], &labels) != nil || labels[nodes[1].ID.String()] == nil || labels[image.ID.String()] != nil {
+		t.Fatal("reference labels retained source node identities")
+	}
+	after, _ := json.Marshal(doc)
+	if !bytes.Equal(before, after) {
+		t.Fatal("copy mutated source")
+	}
+}

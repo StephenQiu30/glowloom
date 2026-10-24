@@ -95,6 +95,15 @@ export function buildConnectedNodeMap(
         files: selected,
       };
     }
+    const allocation = nodeReferenceAllocation(
+      byId.get(connection.toNodeId),
+      source.id,
+    );
+    if (allocation && projection)
+      projection = {
+        ...projection,
+        label: labelForKind(allocation.kind, allocation.ordinal - 1),
+      };
     if (!sources.has(source.id))
       sources.set(
         source.id,
@@ -114,10 +123,26 @@ export function buildNodeMentionReferences(
   nodes: CanvasNodeData[],
   connections: CanvasConnection[],
 ) {
+  const config = connections.find(
+    (edge) =>
+      edge.fromNodeId === node.id &&
+      nodes.find((n) => n.id === edge.toNodeId)?.type === CanvasNodeType.Config,
+  );
+  const owner = config
+    ? (nodes.find((n) => n.id === config.toNodeId) ?? node)
+    : node;
   return labelResourceNodes(
     getMentionResourceNodes(node.id, nodes, connections),
     true,
-  );
+  ).map((reference) => {
+    const allocation = nodeReferenceAllocation(owner, reference.nodeId);
+    return allocation
+      ? {
+          ...reference,
+          label: labelForKind(allocation.kind, allocation.ordinal - 1),
+        }
+      : reference;
+  });
 }
 
 export function buildCanvasResourceReferences(nodes: CanvasNodeData[]) {
@@ -337,4 +362,20 @@ function resourceKind(node: CanvasNodeData): CanvasResourceKind | null {
     return "text";
   // Plugin nodes declare their input eligibility through definition.resource.
   return getNodeDefinition(node.type)?.resource?.(node)?.kind || null;
+}
+
+function nodeReferenceAllocation(
+  node: CanvasNodeData | undefined,
+  id: string,
+): { kind: CanvasResourceKind; ordinal: number } | undefined {
+  const labels = node?.serviceData?.config?.editor?.metadata
+    ?.referenceLabels as
+    Record<string, { kind: CanvasResourceKind; ordinal: number }> | undefined;
+  const value = labels?.[id];
+  return value &&
+    ["image", "video", "audio", "text"].includes(value.kind) &&
+    Number.isSafeInteger(value.ordinal) &&
+    value.ordinal > 0
+    ? value
+    : undefined;
 }

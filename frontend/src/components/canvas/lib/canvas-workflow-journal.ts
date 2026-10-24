@@ -1,9 +1,10 @@
-/** Shared device receipt; it is not a substitute for the server submission fence. */
+import { pageBusinessMemory } from "@/lib/page-business-memory";
+/** Page-local command identity; it is not a substitute for the server submission fence. */
 export function readWorkflowCommand(
   key: string,
   canvasId: string,
 ): CanvasContract.WorkflowSubmitRequest | null {
-  const raw = localStorage.getItem(key);
+  const raw = pageBusinessMemory.getItem(key);
   if (!raw) return null;
   if (raw.length > 8192) throw new Error("原运行命令记录超出预算");
   const value: unknown = JSON.parse(raw);
@@ -42,24 +43,16 @@ export function readWorkflowCommand(
   };
 }
 
-function locked<T>(key: string, action: () => T): Promise<T> {
-  if (!navigator.locks)
-    return Promise.reject(
-      new Error("浏览器不支持安全的多页提交，请使用支持 Web Locks 的浏览器"),
-    );
-  return navigator.locks.request(key, action);
-}
-
 export function claimWorkflowCommand(
   key: string,
   canvasId: string,
   request: CanvasContract.WorkflowSubmitRequest,
   fresh: boolean,
 ) {
-  return locked(key, () => {
+  return Promise.resolve().then(() => {
     const current = readWorkflowCommand(key, canvasId);
     if (fresh ? current != null : current?.commandId !== request.commandId)
-      throw new Error("运行命令已在另一页面更新，请先核对原运行回执");
+      throw new Error("本页运行命令已更新，请先核对原运行回执");
     if (
       current &&
       JSON.stringify(current) !==
@@ -76,7 +69,10 @@ export function claimWorkflowCommand(
         })
     )
       throw new Error("原运行命令内容不一致，请保留原记录核对");
-    localStorage.setItem(key, JSON.stringify({ ...request, schemaVersion: 1 }));
+    pageBusinessMemory.setItem(
+      key,
+      JSON.stringify({ ...request, schemaVersion: 1 }),
+    );
   });
 }
 
@@ -85,9 +81,9 @@ export function clearWorkflowCommand(
   canvasId: string,
   commandId: string,
 ) {
-  return locked(key, () => {
+  return Promise.resolve().then(() => {
     const current = readWorkflowCommand(key, canvasId);
-    if (current?.commandId === commandId) localStorage.removeItem(key);
+    if (current?.commandId === commandId) pageBusinessMemory.removeItem(key);
     return readWorkflowCommand(key, canvasId);
   });
 }

@@ -1,3 +1,4 @@
+import { pageBusinessMemory } from "@/lib/page-business-memory";
 import { render } from "../../../../feedback";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -31,7 +32,7 @@ vi.mock("@/api/settings", () => ({
 }));
 beforeEach(() => {
   vi.clearAllMocks();
-  localStorage.clear();
+  pageBusinessMemory.clear();
   api.detail.mockResolvedValue({
     provider: {
       id: "connection",
@@ -45,7 +46,7 @@ beforeEach(() => {
   api.keys.mockResolvedValue([]);
 });
 afterEach(cleanup);
-it("Key 只进入提交请求，刷新恢复只查询安全回执", async () => {
+it("Key 只进入提交请求，同页重新打开恢复只查询安全回执", async () => {
   api.save.mockRejectedValue(new RequestError("request_unconfirmed"));
   api.receipt.mockResolvedValue({ result: { id: "saved" } });
   const onSaved = vi.fn();
@@ -66,7 +67,7 @@ it("Key 只进入提交请求，刷新恢复只查询安全回执", async () => 
   expect(api.save.mock.calls[0][1].secret.api_key).toBe(
     "fixture-secret-do-not-persist",
   );
-  const stored = localStorage.getItem(
+  const stored = pageBusinessMemory.getItem(
     "glowloom.catalog.pending.v1.admin-fixture.connection.connection",
   );
   expect(stored).toContain("credential.set");
@@ -77,7 +78,7 @@ it("Key 只进入提交请求，刷新恢复只查询安全回执", async () => 
   await waitFor(() => expect(api.receipt).toHaveBeenCalledOnce());
   expect(api.save).toHaveBeenCalledOnce();
   expect(onSaved).toHaveBeenCalledOnce();
-  expect(localStorage.length).toBe(0);
+  expect(pageBusinessMemory.length).toBe(0);
 });
 it("旧 Key 可单独停用，当前 Key 不受影响", async () => {
   api.keys.mockResolvedValue([
@@ -102,7 +103,7 @@ it("旧 Key 可单独停用，当前 Key 不受影响", async () => {
 });
 
 it("向导的 Key 写入未确认时，详情禁止绕过并使用原回执恢复", async () => {
-  localStorage.setItem(
+  pageBusinessMemory.setItem(
     "glowloom.catalog.pending.v1.admin-fixture.preset.onboarding.credential",
     JSON.stringify({
       id: "original-key-request",

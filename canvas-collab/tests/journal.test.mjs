@@ -354,3 +354,24 @@ test("separate sessions keep their writers across log instances and selected-can
   assert.equal((await second.list(unrelated))[0].generation, 2);
   assert.equal(await first.countActor(scope.origin, scope.actorKey), 1);
 });
+
+test("the default journal is page-local and never opens IndexedDB", async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
+  Object.defineProperty(globalThis, "indexedDB", {
+    configurable: true,
+    get() {
+      throw new Error("IndexedDB forbidden");
+    },
+  });
+  try {
+    const page = new CollaborationJournal(),
+      writer = await page.open(scope);
+    await writer.put(record);
+    await writer.close();
+    assert.equal((await page.list(scope)).length, 1);
+    assert.equal((await new CollaborationJournal().list(scope)).length, 0);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, "indexedDB", previous);
+    else delete globalThis.indexedDB;
+  }
+});

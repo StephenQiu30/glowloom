@@ -571,7 +571,9 @@ export function RichTextEditor({ rootRef, ...props }: RichTextInputProps) {
     const read = () => readEditorDraft(editor, binding);
     const unregister = binding.registerDraftReader?.(read);
     return () => {
-      binding.protectDraft?.(read());
+      // Remote deletion already captures composition before detaching. Reading
+      // the detached DOM here would manufacture a draft from accepted content.
+      if (binding.isAttached?.() !== false) binding.protectDraft?.(read());
       unregister?.();
     };
   }, [editor, props.collaboration]);

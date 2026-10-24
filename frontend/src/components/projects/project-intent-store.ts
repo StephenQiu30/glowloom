@@ -14,95 +14,17 @@ export interface IntentTransactions {
   transact<T>(write: boolean, run: (state: IntentDatabase) => T): Promise<T>;
 }
 
-class NativeIntentTransactions implements IntentTransactions {
-  private open(): Promise<IDBDatabase> {
-    return new Promise((resolve, reject) => {
-      if (typeof indexedDB === "undefined") {
-        reject(new Error("creation_storage_unavailable"));
-        return;
-      }
-      let blocked = false;
-      const request = indexedDB.open("glowloom-project-intents", 1);
-      const timeout = setTimeout(() => {
-        blocked = true;
-        reject(new Error("creation_storage_blocked"));
-      }, 5000);
-      request.onupgradeneeded = () => {
-        if (blocked) {
-          request.transaction?.abort();
-          return;
-        }
-        const db = request.result;
-        db.createObjectStore("intents", { keyPath: ["actorId", "scopeId"] });
-        db.createObjectStore("fence");
-      };
-      request.onerror = () => {
-        clearTimeout(timeout);
-        reject(request.error ?? new Error("creation_storage_unavailable"));
-      };
-      request.onblocked = () => {
-        clearTimeout(timeout);
-        blocked = true;
-        reject(new Error("creation_storage_blocked"));
-      };
-      request.onsuccess = () => {
-        clearTimeout(timeout);
-        if (blocked) {
-          request.result.close();
-          return;
-        }
-        request.result.onversionchange = () => request.result.close();
-        resolve(request.result);
-      };
-    });
-  }
+// Serial page-local transactions retain the original request identity until resolved.
+class MemoryIntentTransactions implements IntentTransactions {
+  private state: IntentDatabase = { fence: 0, intents: [] };
   async transact<T>(
     write: boolean,
     run: (state: IntentDatabase) => T,
   ): Promise<T> {
-    const db = await this.open();
-    try {
-      return await new Promise<T>((resolve, reject) => {
-        const tx = db.transaction(
-          ["intents", "fence"],
-          write ? "readwrite" : "readonly",
-        );
-        const records = tx.objectStore("intents"),
-          fence = tx.objectStore("fence");
-        const list = records.getAll(),
-          epoch = fence.get("epoch");
-        let completed = 0,
-          result: T,
-          error: unknown;
-        const ready = () => {
-          if (++completed !== 2) return;
-          try {
-            const state: IntentDatabase = {
-              fence: epoch.result ?? 0,
-              intents: list.result,
-            };
-            if (!Number.isSafeInteger(state.fence) || state.fence < 0)
-              throw new Error("creation_storage_corrupt");
-            result = run(state);
-            if (write) {
-              records.clear();
-              for (const record of state.intents) records.put(record);
-              fence.put(state.fence, "epoch");
-            }
-          } catch (reason) {
-            error = reason;
-            tx.abort();
-          }
-        };
-        list.onsuccess = ready;
-        epoch.onsuccess = ready;
-        tx.oncomplete = () => resolve(result);
-        tx.onabort = tx.onerror = () =>
-          reject(error ?? tx.error ?? new Error("creation_storage_failed"));
-      });
-    } finally {
-      db.close();
-    }
+    const next = structuredClone(this.state);
+    const result = run(next);
+    if (write) this.state = next;
+    return structuredClone(result);
   }
 }
 
@@ -118,7 +40,7 @@ export class ProjectIntentStore {
   private lifecycle = 0;
   private strongClearSequence = 0;
   constructor(
-    private backend: IntentTransactions = new NativeIntentTransactions(),
+    private backend: IntentTransactions = new MemoryIntentTransactions(),
     private generations: () => Generations = () => ({
       sessionGeneration: getSessionGeneration(),
       scopeGeneration: getScopeGeneration(),

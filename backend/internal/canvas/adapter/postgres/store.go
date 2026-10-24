@@ -247,6 +247,12 @@ type nodeRow struct {
 }
 
 func saveGraph(tx *gorm.DB, before, after domain.Document) error {
+	return saveGraphWithRestoration(tx, before, after, false)
+}
+
+// restore is allowed only after proving a server-owned inverse or historical
+// snapshot. Ordinary creates may never reuse a tombstoned business identity.
+func saveGraphWithRestoration(tx *gorm.DB, before, after domain.Document, restore bool) error {
 	if err := application.ValidateSnapshotCapacity(after); err != nil {
 		return err
 	}
@@ -293,7 +299,7 @@ func saveGraph(tx *gorm.DB, before, after domain.Document) error {
 		previous, existed := previousNodes[n.ID]
 		r := tx.Exec(`INSERT INTO canvas.node(id,document_id,title,node_type,node_action,ref_type,ref_id,config,x,y,width,height,parent_id,z_index,input_revision,content_version)
  VALUES(?,?,?,?,?,?,?,?::jsonb,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,config=excluded.config,ref_type=excluded.ref_type,ref_id=excluded.ref_id,content_version=excluded.content_version,x=excluded.x,y=excluded.y,width=excluded.width,height=excluded.height,parent_id=excluded.parent_id,z_index=excluded.z_index,input_revision=excluded.input_revision,is_delete=false,update_time=now()
- WHERE canvas.node.document_id=excluded.document_id AND canvas.node.node_type=excluded.node_type AND canvas.node.node_action=excluded.node_action AND canvas.node.node_action IN ('resource','tool','generate') AND (canvas.node.ref_type IS NOT DISTINCT FROM excluded.ref_type AND canvas.node.ref_id IS NOT DISTINCT FROM excluded.ref_id OR (? AND canvas.node.ref_type IS NOT DISTINCT FROM ? AND canvas.node.ref_id IS NOT DISTINCT FROM ?)) AND canvas.node.last_operation_id IS NULL`, n.ID, after.ID, n.Title, n.NodeType, n.NodeAction, nullableText(n.RefType), n.RefID, string(config), n.X, n.Y, n.Width, n.Height, n.ParentID, n.ZIndex, inputRevision, max(n.ContentVersion, 1), existed, nullableText(previous.RefType), previous.RefID)
+ WHERE canvas.node.document_id=excluded.document_id AND canvas.node.node_type=excluded.node_type AND canvas.node.node_action=excluded.node_action AND canvas.node.node_action IN ('resource','tool','generate') AND (canvas.node.ref_type IS NOT DISTINCT FROM excluded.ref_type AND canvas.node.ref_id IS NOT DISTINCT FROM excluded.ref_id OR (? AND canvas.node.ref_type IS NOT DISTINCT FROM ? AND canvas.node.ref_id IS NOT DISTINCT FROM ?) OR (? AND canvas.node.is_delete)) AND canvas.node.last_operation_id IS NULL`, n.ID, after.ID, n.Title, n.NodeType, n.NodeAction, nullableText(n.RefType), n.RefID, string(config), n.X, n.Y, n.Width, n.Height, n.ParentID, n.ZIndex, inputRevision, max(n.ContentVersion, 1), existed, nullableText(previous.RefType), previous.RefID, restore)
 		if r.Error != nil {
 			return r.Error
 		}
@@ -329,7 +335,7 @@ func saveGraph(tx *gorm.DB, before, after domain.Document) error {
 			}
 			return string(raw)
 		}
-		r := tx.Exec(`INSERT INTO canvas.edge(id,document_id,edge_type,source_node_id,target_node_id,binding) VALUES(?,?,?,?,?,?::jsonb) ON CONFLICT(id) DO UPDATE SET source_node_id=excluded.source_node_id,target_node_id=excluded.target_node_id,binding=excluded.binding,is_delete=false,update_time=now() WHERE canvas.edge.document_id=excluded.document_id AND canvas.edge.edge_type='annotation' AND canvas.edge.role IS NULL AND (canvas.edge.binding IS NULL OR (? AND canvas.edge.binding IS NOT DISTINCT FROM ?::jsonb))`, e.ID, after.ID, e.EdgeType, e.SourceNodeID, e.TargetNodeID, binding(e.Binding), existed, binding(previous.Binding))
+		r := tx.Exec(`INSERT INTO canvas.edge(id,document_id,edge_type,source_node_id,target_node_id,binding) VALUES(?,?,?,?,?,?::jsonb) ON CONFLICT(id) DO UPDATE SET source_node_id=excluded.source_node_id,target_node_id=excluded.target_node_id,binding=excluded.binding,is_delete=false,update_time=now() WHERE canvas.edge.document_id=excluded.document_id AND canvas.edge.edge_type='annotation' AND canvas.edge.role IS NULL AND (canvas.edge.binding IS NULL OR (? AND canvas.edge.binding IS NOT DISTINCT FROM ?::jsonb) OR (? AND canvas.edge.is_delete))`, e.ID, after.ID, e.EdgeType, e.SourceNodeID, e.TargetNodeID, binding(e.Binding), existed, binding(previous.Binding), restore)
 		if r.Error != nil {
 			return r.Error
 		}

@@ -1,4 +1,6 @@
 "use client";
+import { pageBusinessMemory } from "@/lib/page-business-memory";
+
 import { FilterToolbar } from "@/components/canvas/runtime/components/layout/workspace/filter-toolbar";
 import { PageTabsList as TabsList } from "@/components/canvas/runtime/components/layout/workspace/page-tabs-list";
 import { PageHeader } from "@/components/canvas/runtime/components/layout/workspace/page-header";
@@ -691,7 +693,9 @@ export function CreatePersonalProjectDialog({
   const [command, setCommand] =
     useState<CanvasContract.ProjectCreateRequest | null>(() => {
       try {
-        const value = JSON.parse(sessionStorage.getItem(storageKey) ?? "null");
+        const value = JSON.parse(
+          pageBusinessMemory.getItem(storageKey) ?? "null",
+        );
         return value &&
           typeof value.commandId === "string" &&
           typeof value.title === "string"
@@ -731,7 +735,7 @@ export function CreatePersonalProjectDialog({
     if (value.status === "COMPLETED" && value.result?.projectId) {
       handled.current = value.commandId;
       currentCommand.current = null;
-      sessionStorage.removeItem(storageKey);
+      pageBusinessMemory.removeItem(storageKey);
       setCommand(null);
       setResult(null);
       onOpenChange(false);
@@ -751,7 +755,7 @@ export function CreatePersonalProjectDialog({
     } else if (value.status === "ABORTED") {
       handled.current = value.commandId;
       currentCommand.current = null;
-      sessionStorage.removeItem(storageKey);
+      pageBusinessMemory.removeItem(storageKey);
       setCommand(null);
       setResult(null);
       onAborted?.();
@@ -795,7 +799,7 @@ export function CreatePersonalProjectDialog({
       parentProjectId: parentId,
     };
     try {
-      sessionStorage.setItem(storageKey, JSON.stringify(original));
+      pageBusinessMemory.setItem(storageKey, JSON.stringify(original));
       currentCommand.current = original;
       setCommand(original);
       onStarted?.();
@@ -804,7 +808,7 @@ export function CreatePersonalProjectDialog({
     } catch (error) {
       if (active.current) {
         if (error instanceof ApiError && error.code === 40000) {
-          sessionStorage.removeItem(storageKey);
+          pageBusinessMemory.removeItem(storageKey);
           currentCommand.current = null;
           setCommand(null);
           onAborted?.();

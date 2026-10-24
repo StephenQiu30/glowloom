@@ -10,6 +10,8 @@ export type CanvasPreparedDocument = CanvasContract.CanvasVO & {
 };
 
 export type CanvasDocumentIntegration = {
+  presenceOverlay?: ReactNode;
+  onCursor?: (cursor: { x: number; y: number } | null) => void;
   mediaContext?: import("../lib/canvas-file-preview").CanvasFilePreviewContext;
   mediaEnabled?: boolean;
   textBinding?: (nodeId: string) => NodeTextBinding | undefined;

@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import {
   ProjectIntentStore,
   type IntentDatabase,
@@ -174,4 +174,26 @@ it("a successful strong clear remains successful when passive expiry overlaps", 
   expect((await a.beginOrResume(ctx, blankProjectInput())).disposition).toBe(
     "new",
   );
+});
+
+it("the default backend retains same-page request identity and a fresh page has no intent", async () => {
+  const open = vi.fn(() => {
+    throw new Error("IndexedDB forbidden");
+  });
+  vi.stubGlobal("indexedDB", { open });
+  try {
+    const generations = () => ({ sessionGeneration: 1, scopeGeneration: 1 });
+    const page = new ProjectIntentStore(undefined, generations),
+      ctx = context();
+    await page.activate(ctx);
+    const first = await page.beginOrResume(ctx, blankProjectInput());
+    const reopened = await page.beginOrResume(ctx, blankProjectInput());
+    expect(reopened.intent.key).toBe(first.intent.key);
+    const nextPage = new ProjectIntentStore(undefined, generations);
+    await nextPage.activate(ctx);
+    expect(await nextPage.readForActor(ctx)).toEqual([]);
+    expect(open).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

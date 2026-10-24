@@ -1,4 +1,5 @@
 "use client";
+import { pageBusinessMemory } from "@/lib/page-business-memory";
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
@@ -63,7 +64,7 @@ function trialMessage(error: unknown) {
 }
 function readTrialID(key: string) {
   try {
-    const saved = localStorage.getItem(key);
+    const saved = pageBusinessMemory.getItem(key);
     return saved && /^[0-9a-f-]{36}$/i.test(saved) ? saved : "";
   } catch {
     return "";
@@ -71,8 +72,8 @@ function readTrialID(key: string) {
 }
 function rememberTrial(key: string, id?: string) {
   try {
-    if (id) localStorage.setItem(key, id);
-    else localStorage.removeItem(key);
+    if (id) pageBusinessMemory.setItem(key, id);
+    else pageBusinessMemory.removeItem(key);
   } catch {
     /* Storage may be unavailable; the running trial still remains queryable. */
   }
@@ -160,6 +161,15 @@ export function ServiceTrial({
           ) {
             setError("本轮提交尚未确认，请继续查询原会话。");
           } else {
+            if (
+              expectedTurn.current &&
+              last?.request_id === expectedTurn.current &&
+              last.state === "succeeded"
+            ) {
+              // A lost POST response may leave the submitted text in the input.
+              // Only its confirmed receipt can clear it; keep any newer draft.
+              setPrompt((current) => (current === last.prompt ? "" : current));
+            }
             expectedTurn.current = "";
             setAwaitingTurn(false);
             rememberTrial(`${storageKey}.turn`);
@@ -581,11 +591,12 @@ export function ServiceTrial({
               disabled={
                 inFlight ||
                 !prompt.trim() ||
-                !model ||
-                (source === "cloud" && !provider) ||
                 (!conversationReady &&
-                  source === "codex" &&
-                  (!authenticated || (kind === "image" && !imageSupported)))
+                  (!model ||
+                    (source === "cloud" && !provider) ||
+                    (source === "codex" &&
+                      (!authenticated ||
+                        (kind === "image" && !imageSupported)))))
               }
               onClick={() => void (conversationReady ? send() : start())}
             >

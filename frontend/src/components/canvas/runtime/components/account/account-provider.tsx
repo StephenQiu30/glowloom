@@ -158,7 +158,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         let count = 0;
         let cleanupUnavailable = false;
         try {
-          if (typeof indexedDB !== "undefined" && actorKey) {
+          if (actorKey) {
             log = (await import("@glowloom/canvas-collab/journal"))
               .collaborationJournal;
             count = await log.countActor(window.location.origin, actorKey);
@@ -193,9 +193,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         if (cleanupUnavailable)
           notifyError(
             new Error(
-              "设备存储不可用，恢复记录清理未完成。残留记录仍归原账户，其他账户无法接管。",
+              "页面恢复记录清理未完成，请关闭当前页面以释放未确认内容。",
             ),
-            "已退出登录，设备清理未完成",
+            "已退出登录，页面清理未完成",
           );
       } finally {
         logoutRequest.current = null;

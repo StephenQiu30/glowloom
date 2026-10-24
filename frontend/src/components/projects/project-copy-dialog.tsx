@@ -1,4 +1,6 @@
 "use client";
+import { pageBusinessMemory } from "@/lib/page-business-memory";
+
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createProjectCopy, getProjectCopy } from "@/api/projectCopies";
@@ -57,14 +59,14 @@ export function ProjectCopyDialog({
     queueMicrotask(() => {
       if (!active) return;
       try {
-        const raw = localStorage.getItem(storageKey);
+        const raw = pageBusinessMemory.getItem(storageKey);
         if (raw) {
           const saved = restoreCopyIntent(raw, project.id);
           setIntent(saved);
           setName(saved.body.target_name ?? "");
         }
       } catch {
-        setError("无法读取复制恢复记录，请检查浏览器存储。");
+        setError("当前页面的复制恢复记录无效，请重新核对。");
         return;
       }
       setLoaded(true);
@@ -143,7 +145,7 @@ export function ProjectCopyDialog({
     try {
       const original = intent ?? copyIntent(project.id, project.revision, name);
       // Persist before sending so an ambiguous response never becomes a second copy.
-      localStorage.setItem(storageKey, JSON.stringify(original));
+      pageBusinessMemory.setItem(storageKey, JSON.stringify(original));
       setIntent(original);
       const result = requireCopy(
         await createProjectCopy({ pid: project.id }, original.body, {
@@ -162,7 +164,7 @@ export function ProjectCopyDialog({
       const saved = { ...original, jobID: result.id };
       setIntent(saved);
       setJob(result);
-      localStorage.setItem(storageKey, JSON.stringify(saved));
+      pageBusinessMemory.setItem(storageKey, JSON.stringify(saved));
     } catch (reason) {
       if (!controller.signal.aborted) {
         const rejected =
@@ -172,7 +174,7 @@ export function ProjectCopyDialog({
           reason.status !== 408;
         if (rejected) {
           try {
-            localStorage.removeItem(storageKey);
+            pageBusinessMemory.removeItem(storageKey);
             setIntent(null);
           } catch {
             setError("无法更新复制恢复记录，请检查浏览器存储。");
@@ -270,7 +272,7 @@ export function ProjectCopyDialog({
               <Link
                 href={canvasHref(target)}
                 onClick={() => {
-                  if (storageKey) localStorage.removeItem(storageKey);
+                  if (storageKey) pageBusinessMemory.removeItem(storageKey);
                   onClose();
                 }}
               >

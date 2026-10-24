@@ -61,7 +61,7 @@ function RecoveryManager({ actorKey }: { actorKey: string }) {
     } catch (error) {
       if (active.current) {
         setFailed(true);
-        notifyError(error, "设备记录读取未完成");
+        notifyError(error, "页面内存记录读取未完成");
       }
     } finally {
       if (active.current) setLoading(false);
@@ -81,7 +81,7 @@ function RecoveryManager({ actorKey }: { actorKey: string }) {
       setSelected(null);
       await read();
     } catch (error) {
-      if (active.current) notifyError(error, "设备记录清理未完成");
+      if (active.current) notifyError(error, "页面内存记录清理未完成");
     } finally {
       busy.current = false;
       if (active.current) setRemoving(false);
@@ -96,7 +96,7 @@ function RecoveryManager({ actorKey }: { actorKey: string }) {
           void read();
         }}
       >
-        管理设备恢复记录
+        管理页面内存恢复记录
       </Button>
       <Dialog
         open={open}
@@ -106,15 +106,15 @@ function RecoveryManager({ actorKey }: { actorKey: string }) {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>设备恢复记录</DialogTitle>
+            <DialogTitle>页面内存恢复记录</DialogTitle>
             <DialogDescription>
-              仅管理此账户在本设备的恢复空间。按画布编号显示用量；不展示画布内容。已删除或无法访问的画布也可明确放弃设备记录。
+              仅管理此账户在当前页面的恢复空间。按画布编号显示用量；不展示画布内容。已删除或无法访问的画布也可明确放弃页面内存记录。
             </DialogDescription>
           </DialogHeader>
           {loading ? (
-            <p role="status">正在读取设备记录</p>
+            <p role="status">正在读取页面内存记录</p>
           ) : failed ? (
-            <Button onClick={() => void read()}>重试读取设备记录</Button>
+            <Button onClick={() => void read()}>重试读取页面内存记录</Button>
           ) : (
             <div className="grid max-h-80 gap-4 overflow-y-auto">
               <p role="status">
@@ -127,7 +127,7 @@ function RecoveryManager({ actorKey }: { actorKey: string }) {
                 ).toFixed(2)}{" "}
                 / 64 MiB
               </p>
-              {usage.length === 0 && <p>没有设备恢复记录</p>}
+              {usage.length === 0 && <p>没有页面内存恢复记录</p>}
               {usage.map((value) => (
                 <div key={value.canvasId} className="grid gap-2">
                   <p>画布 {value.canvasId}</p>
@@ -139,10 +139,10 @@ function RecoveryManager({ actorKey }: { actorKey: string }) {
                   </p>
                   <Button
                     variant="outline"
-                    aria-label={`放弃画布 ${value.canvasId} 的设备记录`}
+                    aria-label={`放弃画布 ${value.canvasId} 的页面内存记录`}
                     onClick={() => setSelected(value)}
                   >
-                    放弃此画布的设备记录
+                    放弃此画布的页面内存记录
                   </Button>
                 </div>
               ))}
@@ -158,10 +158,10 @@ function RecoveryManager({ actorKey }: { actorKey: string }) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>放弃此画布的设备记录？</AlertDialogTitle>
+            <AlertDialogTitle>放弃此画布的页面内存记录？</AlertDialogTitle>
             <AlertDialogDescription>
               将删除画布 {selected?.canvasId}{" "}
-              在此账户的未同步草稿、原命令与未应用参数。已提交的服务端操作不会撤销。其他画布继续保留；此画布仍打开的页面需刷新后才能重新使用设备恢复。
+              在此账户的未同步草稿、原命令与未应用参数。已提交的服务端操作不会撤销。其他画布继续保留；关闭或刷新页面会释放全部未确认内容。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -171,7 +171,7 @@ function RecoveryManager({ actorKey }: { actorKey: string }) {
               disabled={removing}
               onClick={() => void discard()}
             >
-              {removing ? "正在清理" : "确认放弃设备记录"}
+              {removing ? "正在清理" : "确认放弃页面内存记录"}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

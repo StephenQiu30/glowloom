@@ -550,6 +550,15 @@ function InfiniteCanvasPage({
   );
   const [isNodeDragging, setIsNodeDragging] = useState(false);
   const [composing, setComposing] = useState(false);
+  const composingElement = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    // Removing the active editor can omit compositionend. A remote deletion
+    // already preserves its draft; the detached DOM must not freeze new edits.
+    if (composing && composingElement.current?.isConnected === false) {
+      composingElement.current = null;
+      setComposing(false);
+    }
+  }, [composing, nodes, dialogNodeId]);
   const [pointerActive, setPointerActive] = useState(false);
   const measureMedia = useCanvasMediaSize(
     nodes,
@@ -5379,8 +5388,14 @@ function InfiniteCanvasPage({
     <section
       className="flex h-full min-h-0 flex-1 overflow-hidden"
       style={{ background: theme.canvas.background, color: theme.node.text }}
-      onCompositionStartCapture={() => setComposing(true)}
-      onCompositionEndCapture={() => setComposing(false)}
+      onCompositionStartCapture={(event) => {
+        composingElement.current = event.target as HTMLElement;
+        setComposing(true);
+      }}
+      onCompositionEndCapture={() => {
+        composingElement.current = null;
+        setComposing(false);
+      }}
       onPointerDownCapture={(event) => {
         const target = event.target as Element;
         if (!target.closest("[data-canvas-no-zoom]")) setPointerActive(true);
@@ -5396,7 +5411,16 @@ function InfiniteCanvasPage({
         assetsRevision={assetsRevision}
         savedAssetScope={savedAssetScope}
       />
-      <section className="@container/canvas relative isolate min-w-0 flex-1 overflow-hidden">
+      <section
+        className="@container/canvas relative isolate min-w-0 flex-1 overflow-hidden"
+        onPointerMoveCapture={(event) => {
+          if (containerRef.current?.contains(event.target as Node))
+            documentIntegration?.onCursor?.(
+              screenToCanvas(event.clientX, event.clientY),
+            );
+        }}
+        onPointerLeave={() => documentIntegration?.onCursor?.(null)}
+      >
         {documentIntegration ? (
           documentIntegration.toolbar({
             canUndo: documentIntegration.undo?.canUndo ?? historyState.canUndo,
@@ -5450,6 +5474,7 @@ function InfiniteCanvasPage({
           onContextMenu={preventCanvasContextMenu}
           onDrop={handleDrop}
         >
+          {documentIntegration?.presenceOverlay}
           <svg
             data-canvas-drag-guides
             aria-hidden="true"

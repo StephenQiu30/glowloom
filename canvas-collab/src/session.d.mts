@@ -24,6 +24,7 @@ export type CommittedState = {
   edit: boolean;
 };
 export type FrozenUpdate = {
+  reviewSeq?: string;
   epoch: string;
   sessionId: string;
   updateId: string;
@@ -132,7 +133,8 @@ export class CollaborationSession<
   constructor(options: {
     scope: Omit<CollaborationScope, "epoch">;
     initial: CommittedState;
-    journal: Pick<JournalWriter<G>, "put">;
+    storage?: "memory" | "journal";
+    journal?: Pick<JournalWriter<G>, "put">;
     transport: SessionTransport;
     changed?: (session: CollaborationSession<G>) => void;
     recovery?: RecoveryRecord<G>;

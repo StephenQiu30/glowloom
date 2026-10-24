@@ -213,39 +213,45 @@ export function canonical(value: unknown): string {
       .join(",")}}`;
   return JSON.stringify(value);
 }
-const dbName = "glowloom-prompt-branches";
-async function database() {
-  return new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(dbName, 1);
-    request.onupgradeneeded = () =>
-      request.result.createObjectStore("branches", {
-        keyPath: ["contextKey", "replicaId"],
-      });
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
+// All branch records live only in this page's JavaScript heap.
+let branchRecords = new Map<string, LocalBranch | JournalFence>();
+const recordKey = (key: readonly string[]) => JSON.stringify(key);
+function failTransaction(): never {
+  throw new Error("local_record_conflict");
+}
+function branchStore(records: typeof branchRecords) {
+  function get(key: readonly ["", ""]): JournalFence | undefined;
+  function get(key: readonly string[]): LocalBranch | undefined;
+  function get(key: readonly string[]) {
+    return structuredClone(records.get(recordKey(key)));
+  }
+  return {
+    get,
+    getAll: () => structuredClone([...records.values()]),
+    put: (value: LocalBranch | JournalFence) =>
+      records.set(
+        recordKey([value.contextKey, value.replicaId]),
+        structuredClone(value),
+      ),
+    delete: (key: readonly string[]) => records.delete(recordKey(key)),
+    clear: () => records.clear(),
+  };
 }
 async function transaction<T>(
-  mode: IDBTransactionMode,
-  run: (store: IDBObjectStore, set: (value: T) => void) => void,
+  mode: "readonly" | "readwrite",
+  run: (store: ReturnType<typeof branchStore>, set: (value: T) => void) => void,
 ): Promise<T> {
-  const db = await database();
-  try {
-    return await new Promise<T>((resolve, reject) => {
-      const tx = db.transaction("branches", mode);
-      let result: T;
-      tx.oncomplete = () => resolve(result);
-      tx.onerror = () => reject(tx.error);
-      tx.onabort = () => reject(tx.error ?? new Error("local_record_conflict"));
-      run(tx.objectStore("branches"), (value) => (result = value));
-    });
-  } finally {
-    db.close();
-  }
+  const records = structuredClone(branchRecords);
+  let result!: T;
+  run(branchStore(records), (value) => {
+    result = value;
+  });
+  if (mode === "readwrite") branchRecords = records;
+  return result;
 }
 // A single noncredential fence in the existing store invalidates queued writes
-// across connections. It is never a branch or proof of server authorization.
-const fenceKey = ["", ""];
+// across page callbacks. It is never a branch or proof of server authorization.
+const fenceKey = ["", ""] as const;
 type JournalFence = {
   contextKey: "";
   replicaId: "";
@@ -296,11 +302,12 @@ function inputOnly(branch: LocalBranch): LocalBranch | null {
     ackedSeq: -1,
   };
 }
-const durableBranchJournal = {
+const pageBranchJournal = {
   // An observed external identity change revokes eligibility immediately, even
-  // when both the ensuing server read and durable cleanup are unavailable.
+  // when both the ensuing server read and page cleanup are unavailable.
   invalidateObservedIdentity() {
     ++cleanupEpoch;
+    branchRecords.clear();
     lease = null;
     passiveRecovery = undefined;
     pendingStrongClear = true;
@@ -308,10 +315,10 @@ const durableBranchJournal = {
   async checkpoint(): Promise<string | null> {
     return transaction<string | null>("readonly", (store, set) => {
       const req = store.get(fenceKey);
-      req.onsuccess = () => set(req.result?.epoch ?? null);
+      set(req?.epoch ?? null);
     });
   },
-  /** The Provider captures the durable fence before obtaining server proof. */
+  /** The Provider captures the page fence before obtaining server proof. */
   async activateAccount(
     account: string,
     sessionID: string,
@@ -328,60 +335,59 @@ const durableBranchJournal = {
     }
     const next = await transaction<JournalFence>("readwrite", (store, set) => {
       const req = store.getAll();
-      req.onsuccess = () => {
-        if (generation !== getSessionGeneration() || epoch !== cleanupEpoch) {
-          store.transaction.abort();
-          return;
-        }
-        const values = req.result as (LocalBranch | JournalFence)[];
-        const previous = values.find((v) => v.contextKey === "") as
-          JournalFence | undefined;
-        if (
-          (previous?.epoch ?? null) !== checkpoint ||
-          previous?.blockedSession === sessionID ||
-          pendingLogout === sessionID
-        ) {
-          store.transaction.abort();
-          return;
-        }
-        const fence: JournalFence = {
-          contextKey: "",
-          replicaId: "",
-          epoch: previous?.epoch ?? crypto.randomUUID(),
-          account,
-          activeSession: sessionID,
-          mode: "active",
-        };
-        const sameSession =
-          !pendingStrongClear &&
-          previous?.mode === "active" &&
-          previous.account === account &&
-          previous.activeSession === sessionID;
-        const recoverInput =
-          !pendingStrongClear &&
-          previous?.mode === "input-only" &&
-          passiveRecovery?.epoch === previous.epoch &&
-          passiveRecovery.account === account &&
-          !previous.blockedSession;
-        if (!sameSession) fence.epoch = crypto.randomUUID();
-        for (const value of values) {
-          if (!value.contextKey) continue;
-          const branch = value as LocalBranch;
-          if (value.contextKey.startsWith(`${account}/`)) {
-            if (sameSession) continue;
-            // Old active/legacy rows are not evidence that cleanup committed.
-            const input =
-              recoverInput && branch.inputRecovery ? inputOnly(branch) : null;
-            if (input) {
-              store.put(input);
-              continue;
-            }
-          }
-          store.delete([value.contextKey, value.replicaId]);
-        }
-        store.put(fence);
-        set(fence);
+
+      if (generation !== getSessionGeneration() || epoch !== cleanupEpoch) {
+        failTransaction();
+        return;
+      }
+      const values = req as (LocalBranch | JournalFence)[];
+      const previous = values.find((v) => v.contextKey === "") as
+        JournalFence | undefined;
+      if (
+        (previous?.epoch ?? null) !== checkpoint ||
+        previous?.blockedSession === sessionID ||
+        pendingLogout === sessionID
+      ) {
+        failTransaction();
+        return;
+      }
+      const fence: JournalFence = {
+        contextKey: "",
+        replicaId: "",
+        epoch: previous?.epoch ?? crypto.randomUUID(),
+        account,
+        activeSession: sessionID,
+        mode: "active",
       };
+      const sameSession =
+        !pendingStrongClear &&
+        previous?.mode === "active" &&
+        previous.account === account &&
+        previous.activeSession === sessionID;
+      const recoverInput =
+        !pendingStrongClear &&
+        previous?.mode === "input-only" &&
+        passiveRecovery?.epoch === previous.epoch &&
+        passiveRecovery.account === account &&
+        !previous.blockedSession;
+      if (!sameSession) fence.epoch = crypto.randomUUID();
+      for (const value of values) {
+        if (!value.contextKey) continue;
+        const branch = value as LocalBranch;
+        if (value.contextKey.startsWith(`${account}/`)) {
+          if (sameSession) continue;
+          // Old active/legacy rows are not evidence that cleanup committed.
+          const input =
+            recoverInput && branch.inputRecovery ? inputOnly(branch) : null;
+          if (input) {
+            store.put(input);
+            continue;
+          }
+        }
+        store.delete([value.contextKey, value.replicaId]);
+      }
+      store.put(fence);
+      set(fence);
     });
     if (generation !== getSessionGeneration() || epoch !== cleanupEpoch)
       throw sessionCancellation();
@@ -398,30 +404,28 @@ const durableBranchJournal = {
       throw sessionCancellation();
     await transaction<void>("readwrite", (store) => {
       const fence = store.get(fenceKey);
-      fence.onsuccess = () => {
-        if (
-          lease !== expected ||
-          generation !== getSessionGeneration() ||
-          scope !== getScopeGeneration() ||
-          fence.result?.epoch !== expected.epoch ||
-          fence.result?.account !== expected.account
-        ) {
-          store.transaction.abort();
-          return;
-        }
-        const request = store.get([branch.contextKey, branch.replicaId]);
-        request.onsuccess = () => {
-          const previous = request.result as LocalBranch | undefined;
-          if (
-            previous &&
-            previous.localRecordRevision >= branch.localRecordRevision
-          ) {
-            store.transaction.abort();
-            return;
-          }
-          store.put(branch);
-        };
-      };
+
+      if (
+        lease !== expected ||
+        generation !== getSessionGeneration() ||
+        scope !== getScopeGeneration() ||
+        fence?.epoch !== expected.epoch ||
+        fence?.account !== expected.account
+      ) {
+        failTransaction();
+        return;
+      }
+      const request = store.get([branch.contextKey, branch.replicaId]);
+
+      const previous = request as LocalBranch | undefined;
+      if (
+        previous &&
+        previous.localRecordRevision >= branch.localRecordRevision
+      ) {
+        failTransaction();
+        return;
+      }
+      store.put(branch);
     });
   },
   async list(contextKey: string) {
@@ -437,24 +441,21 @@ const durableBranchJournal = {
     const read = () =>
       transaction<LocalBranch[]>("readonly", (store, set) => {
         const req = store.getAll();
-        req.onsuccess = () => {
-          const values = req.result as (LocalBranch | JournalFence)[];
-          const fence = values.find((v) => v.contextKey === "") as
-            JournalFence | undefined;
-          if (
-            lease !== expected ||
-            generation !== getSessionGeneration() ||
-            scope !== getScopeGeneration() ||
-            fence?.epoch !== expected.epoch ||
-            fence.account !== expected.account
-          ) {
-            set([]);
-            return;
-          }
-          set(
-            values.filter((b) => b.contextKey === contextKey) as LocalBranch[],
-          );
-        };
+
+        const values = req as (LocalBranch | JournalFence)[];
+        const fence = values.find((v) => v.contextKey === "") as
+          JournalFence | undefined;
+        if (
+          lease !== expected ||
+          generation !== getSessionGeneration() ||
+          scope !== getScopeGeneration() ||
+          fence?.epoch !== expected.epoch ||
+          fence.account !== expected.account
+        ) {
+          set([]);
+          return;
+        }
+        set(values.filter((b) => b.contextKey === contextKey) as LocalBranch[]);
       });
     const found = await read();
     if (!found.some((b) => b.inputRecovery)) return found;
@@ -495,27 +496,25 @@ const durableBranchJournal = {
       return false;
     return transaction<boolean>("readwrite", (store, set) => {
       const fence = store.get(fenceKey);
-      fence.onsuccess = () => {
-        if (
-          lease !== expected ||
-          generation !== getSessionGeneration() ||
-          scope !== getScopeGeneration() ||
-          fence.result?.epoch !== expected.epoch ||
-          fence.result?.account !== expected.account
-        ) {
-          set(false);
-          return;
-        }
-        const req = store.get([branch.contextKey, branch.replicaId]);
-        req.onsuccess = () => {
-          if (req.result?.localRecordRevision !== branch.localRecordRevision) {
-            set(false);
-            return;
-          }
-          store.delete([branch.contextKey, branch.replicaId]);
-          set(true);
-        };
-      };
+
+      if (
+        lease !== expected ||
+        generation !== getSessionGeneration() ||
+        scope !== getScopeGeneration() ||
+        fence?.epoch !== expected.epoch ||
+        fence?.account !== expected.account
+      ) {
+        set(false);
+        return;
+      }
+      const req = store.get([branch.contextKey, branch.replicaId]);
+
+      if (req?.localRecordRevision !== branch.localRecordRevision) {
+        set(false);
+        return;
+      }
+      store.delete([branch.contextKey, branch.replicaId]);
+      set(true);
     });
   },
   async clear(options?: {
@@ -541,49 +540,48 @@ const durableBranchJournal = {
     }
     const next = await transaction<JournalFence>("readwrite", (store, set) => {
       const req = store.getAll();
-      req.onsuccess = () => {
-        const values = req.result as LocalBranch[];
-        const previous = values.find((v) => v.contextKey === "") as
-          JournalFence | undefined;
-        store.clear();
-        const keepWriter =
-          options?.retainWriter &&
-          expected &&
-          previous?.epoch === expected.epoch &&
-          previous.account === expected.account &&
-          previous.mode === "active" &&
-          !previous.blockedSession &&
-          generation === getSessionGeneration();
-        const fence: JournalFence = {
-          contextKey: "",
-          replicaId: "",
-          epoch: crypto.randomUUID(),
-          account: keepWriter ? expected.account : null,
-          blockedSession: pendingLogout ?? previous?.blockedSession,
-          activeSession: keepWriter ? expected.activeSession : undefined,
-          mode: keepWriter
-            ? "active"
-            : options?.preserveInput &&
-                !pendingStrongClear &&
-                !previous?.blockedSession &&
-                ((previous?.mode === "active" &&
-                  expected?.epoch === previous.epoch &&
-                  expected.account === previous.account &&
-                  expected.activeSession === previous.activeSession) ||
-                  (previous?.mode === "input-only" &&
-                    passiveRecovery?.epoch === previous.epoch))
-              ? "input-only"
-              : "cleared",
-        };
-        store.put(fence);
-        set(fence);
-        if (fence.mode === "input-only")
-          for (const value of values) {
-            if (!value.contextKey) continue;
-            const input = inputOnly(value);
-            if (input) store.put(input);
-          }
+
+      const values = req as LocalBranch[];
+      const previous = values.find((v) => v.contextKey === "") as
+        JournalFence | undefined;
+      store.clear();
+      const keepWriter =
+        options?.retainWriter &&
+        expected &&
+        previous?.epoch === expected.epoch &&
+        previous.account === expected.account &&
+        previous.mode === "active" &&
+        !previous.blockedSession &&
+        generation === getSessionGeneration();
+      const fence: JournalFence = {
+        contextKey: "",
+        replicaId: "",
+        epoch: crypto.randomUUID(),
+        account: keepWriter ? expected.account : null,
+        blockedSession: pendingLogout ?? previous?.blockedSession,
+        activeSession: keepWriter ? expected.activeSession : undefined,
+        mode: keepWriter
+          ? "active"
+          : options?.preserveInput &&
+              !pendingStrongClear &&
+              !previous?.blockedSession &&
+              ((previous?.mode === "active" &&
+                expected?.epoch === previous.epoch &&
+                expected.account === previous.account &&
+                expected.activeSession === previous.activeSession) ||
+                (previous?.mode === "input-only" &&
+                  passiveRecovery?.epoch === previous.epoch))
+            ? "input-only"
+            : "cleared",
       };
+      store.put(fence);
+      set(fence);
+      if (fence.mode === "input-only")
+        for (const value of values) {
+          if (!value.contextKey) continue;
+          const input = inputOnly(value);
+          if (input) store.put(input);
+        }
     });
     if (epoch === cleanupEpoch) {
       pendingStrongClear = false;
@@ -605,8 +603,8 @@ const durableBranchJournal = {
 };
 
 // The development preview owns a separate journal; it never activates or clears
-// the authenticated account's durable fence or recovery branches.
-export const branchJournal = new Proxy(durableBranchJournal, {
+// the authenticated account's page fence or recovery branches.
+export const branchJournal = new Proxy(pageBranchJournal, {
   get(target, property, receiver) {
     return Reflect.get(developmentJournal() ?? target, property, receiver);
   },

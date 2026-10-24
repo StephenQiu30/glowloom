@@ -30,11 +30,14 @@ export class CollaborationSession {
     scope,
     initial,
     journal,
+    storage = "journal",
     transport,
     changed = () => {},
     recovery,
   }) {
     this.scope = Object.freeze({ ...scope, epoch: initial.epoch });
+    if (storage !== "memory" && !journal) throw problem("JOURNAL_REQUIRED");
+    this.storage = storage;
     this.journal = journal;
     this.transport = transport;
     this.changed = changed;
@@ -228,7 +231,9 @@ export class CollaborationSession {
       record = this.record();
     const write = this.persistence
       .catch(() => {})
-      .then(() => this.journal.put(record));
+      .then(() =>
+        this.storage === "memory" ? undefined : this.journal.put(record),
+      );
     this.persistence = write;
     await write;
     if (!this.closed && generation === this.generation) this.protected = true;
@@ -466,6 +471,9 @@ export class CollaborationSession {
         updateId: crypto.randomUUID(),
         update: binary(update),
         payloadHash: "",
+        ...(this.recoverySelection
+          ? { reviewSeq: this.confirmed.commitSeq }
+          : {}),
       };
       if (this.recoverySelection && !this.recoverySelection.updateId) {
         this.recoverySelection.updateId = this.inFlight.updateId;
@@ -631,7 +639,10 @@ export class CollaborationSession {
         this.changed(this);
         throw error;
       }
-      if (error.definitive && phase === "SUBMIT") {
+      if (
+        error.definitive &&
+        (phase === "SUBMIT" || error.originalOutcome === "REJECTED")
+      ) {
         // Persist the entire dependent chain before discarding its CRDT client identity.
         this.sealed ??= {
           reason: error.code ?? "REJECTED_UPDATE",
@@ -644,15 +655,16 @@ export class CollaborationSession {
           pending: this.pending.map(binary),
         };
         this.sealed.failureReason = error.code ?? "REJECTED_UPDATE";
-        this.sealed.originalRejected = !unknown;
-        this.status = unknown ? "UNKNOWN" : "REJECTED";
+        this.sealed.originalRejected =
+          !unknown || error.originalOutcome === "REJECTED";
+        this.status = this.sealed.originalRejected ? "REJECTED" : "UNKNOWN";
         if (await this.protect()) {
           this.doc.destroy();
           this.doc = this.freshDocument();
           this.pending = [];
           this.intents = [];
           this.inFlightIntents = [];
-          if (!unknown) this.inFlight = null;
+          if (this.sealed.originalRejected) this.inFlight = null;
           this.watch();
         }
       } else this.status = "UNKNOWN";

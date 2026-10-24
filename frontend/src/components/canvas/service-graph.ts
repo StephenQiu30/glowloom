@@ -449,3 +449,74 @@ export function serviceGraphOperations(
       result.push({ type: "delete_node", node_id: node.id });
   return result;
 }
+
+/** Local editor intent only; Go revalidates the resulting Yjs projection. */
+export function serviceDocumentFromEditor(
+  base: API.DocumentDTO,
+  state: CanvasEditorState,
+): API.DocumentDTO {
+  const next = structuredClone(base);
+  const operations = serviceGraphOperations(
+    serviceGraph(base, base.id!, base.project_id!),
+    state,
+  );
+  for (const operation of operations) {
+    const id = operation.node_id as string;
+    const node = next.nodes!.find((item) => item.id === id);
+    switch (operation.type) {
+      case "create_node":
+        next.nodes!.push(operation.node as API.NodeDTO);
+        break;
+      case "delete_node":
+        next.nodes = next.nodes!.filter((item) => item.id !== id);
+        next.edges = next.edges!.filter(
+          (edge) => edge.source_node_id !== id && edge.target_node_id !== id,
+        );
+        break;
+      case "disconnect":
+        next.edges = next.edges!.filter((edge) => edge.id !== id);
+        break;
+      case "connect":
+        next.edges!.push(operation.edge as API.Edge);
+        break;
+      case "set_edge":
+        next.edges = next.edges!.map((edge) =>
+          edge.id === id ? (operation.edge as API.Edge) : edge,
+        );
+        break;
+      case "replace_media":
+        if (!node) throw new Error("节点已删除");
+        if ((operation.new_media_ref as { empty?: boolean }).empty)
+          delete node.media_ref;
+        else node.media_ref = operation.new_media_ref as API.MediaRef;
+        break;
+      case "set": {
+        if (!node) throw new Error("节点已删除");
+        const path = operation.path as string[];
+        if (path[0] === "position" || path[0] === "size")
+          Object.assign(node, operation.value);
+        else if (path[0] === "config" && path[1] === "text_content") {
+          const config = (node.config ??= {});
+          for (const key of [
+            "text",
+            "composer",
+            "format",
+            "format_version",
+            "rich_text",
+          ] as const)
+            delete config[key];
+          Object.assign(config, operation.value);
+        } else {
+          const target = (
+            path[0] === "config" ? (node.config ??= {}) : node
+          ) as Record<string, unknown>;
+          target[path.at(-1)!] = structuredClone(operation.value);
+        }
+        break;
+      }
+      default:
+        throw new Error("不支持的画布变更");
+    }
+  }
+  return next;
+}

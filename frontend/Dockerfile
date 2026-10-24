@@ -21,6 +21,7 @@ CMD ["sh", "-c", "pnpm install --frozen-lockfile && exec pnpm exec next dev --ho
 FROM base AS build
 # Next persists external Upgrade rewrites in its build manifest.
 ARG GLOWLOOM_BACKEND_ORIGIN
+ARG NEXT_PUBLIC_CANVAS_YJS=false
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /canvas-collab /canvas-collab
 COPY frontend/ .

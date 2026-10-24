@@ -48,6 +48,10 @@
     "./rich-text": {
       "types": "./src/rich-text-schema.d.mts",
       "default": "./src/rich-text-schema.mjs"
+    },
+    "./service-document": {
+      "types": "./src/service-document.d.mts",
+      "default": "./src/service-document.mjs"
     }
   },
   "files": [

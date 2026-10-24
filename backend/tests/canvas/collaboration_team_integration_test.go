@@ -21,10 +21,13 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
-func newTeamLiveFixtures(t *testing.T) (liveFixture, liveFixture, uuid.UUID, uuid.UUID) {
+func newTeamLiveFixtures(t *testing.T, configure ...func(*config.Config)) (liveFixture, liveFixture, uuid.UUID, uuid.UUID) {
 	t.Helper()
 	db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	cfg := identityfixture.Configure(t, config.Config{Env: "local", HTTPAddr: "127.0.0.1:18982", PublicOrigin: liveOrigin})
+	for _, apply := range configure {
+		apply(&cfg)
+	}
 	auth := []identity.AuthResult{
 		identityfixture.Create(t, db, cfg, "OT Browser A", uuid.NewString()+"Aa!"),
 		identityfixture.Create(t, db, cfg, "OT Browser B", uuid.NewString()+"Aa!"),

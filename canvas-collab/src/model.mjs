@@ -194,6 +194,23 @@ function updateFields(target, before, after, immutable = []) {
   }
 }
 
+function referenceData(data, references) {
+  if (!references) return data;
+  if (
+    !Array.isArray(references) ||
+    references.length > 255 ||
+    new Set(references.map((r) => r.id)).size !== references.length
+  )
+    throw fail("INVALID_REFERENCES");
+  return {
+    ...data,
+    referencesPresent: true,
+    ...Object.fromEntries(
+      references.map((r) => ["reference:" + r.id, copy(r)]),
+    ),
+  };
+}
+
 function nodeParts(source) {
   const {
     position,
@@ -202,25 +219,30 @@ function nodeParts(source) {
     height,
     textDocument,
     parameters,
+    references,
     ...data
   } = source;
   return {
-    data,
+    data: referenceData(data, references),
     placement: {
       position,
       ...(Object.hasOwn(source, "parentId") ? { parentId } : {}),
     },
-    size: { width, height },
+    size: {
+      ...(width !== undefined ? { width } : {}),
+      ...(height !== undefined ? { height } : {}),
+    },
     textDocument,
     parameters,
   };
 }
 
-function addParameters(node, source) {
+function addParameters(node, source, present = true) {
   if (source.modelSelection) modelIdentity(source.modelSelection.connectionId);
   const { values, ...config } = copy(source);
   const parameters = new Y.Map();
   node.set("parameters", parameters);
+  parameters.set("present", present);
   parameters.set("config", config);
   parameters.set("valuesPresent", Object.hasOwn(source, "values"));
   parameters.set("values", map(values ?? {}));
@@ -229,11 +251,15 @@ function addParameters(node, source) {
 function patchParameters(node, before, after) {
   if (equal(before, after)) return;
   if (!before) {
-    addParameters(node, after);
-    return;
+    if (!node.get("parameters")) {
+      addParameters(node, after);
+      return;
+    }
+    before = {};
   }
   if (!after) throw fail("INVALID_PARAMETERS");
   const parameters = node.get("parameters");
+  parameters.set("present", true);
   const { values: oldValues, ...oldConfig } = before;
   const { values: newValues, ...newConfig } = after;
   if (!equal(oldConfig, newConfig)) parameters.set("config", copy(newConfig));
@@ -434,18 +460,24 @@ function addNode(collection, source, order) {
     height,
     textDocument,
     parameters,
+    references,
     ...data
   } = copy(source);
   const node = new Y.Map();
   collection.set(source.id, node);
-  node.set("data", map(data));
+  node.set("data", map(referenceData(data, references)));
   node.set("placement", {
     position,
     ...(Object.hasOwn(source, "parentId") ? { parentId } : {}),
   });
-  node.set("size", { width, height });
+  node.set("size", {
+    ...(width !== undefined ? { width } : {}),
+    ...(height !== undefined ? { height } : {}),
+  });
   node.set("order", order);
-  if (parameters) addParameters(node, parameters);
+  // Allocate the shared container before peers can concurrently add a first
+  // reference/model setting. Concurrently replacing an absent map loses a branch.
+  addParameters(node, parameters ?? {}, !!parameters);
   if (!["group", "config"].includes(source.type)) {
     if (textDocument && textDocument.schemaVersion !== 1)
       throw fail("INVALID_RICH_TEXT");
@@ -516,10 +548,24 @@ export function readCanvasDocument(doc) {
       ...copy(canvas.get("properties").toJSON()),
       nodes: ordered(canvas.get("nodes")).map((node) => {
         const data = copy(node.get("data").toJSON());
+        const references = Object.entries(data).filter(([key]) =>
+          key.startsWith("reference:"),
+        );
+        if (data.referencesPresent) {
+          data.references = references
+            .map(([, value]) => value)
+            .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
+            .map((value, order) => ({ ...value, order }));
+        }
+        delete data.referencesPresent;
+        for (const [key] of references) delete data[key];
         const body = node.get("body");
         let text = {};
         let parameters = {};
-        if (node.get("parameters")) {
+        if (
+          node.get("parameters")?.get("present") !== false &&
+          node.get("parameters")
+        ) {
           const stored = node.get("parameters");
           parameters = {
             parameters: {

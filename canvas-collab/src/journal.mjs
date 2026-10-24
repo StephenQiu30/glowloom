@@ -90,67 +90,38 @@ function validate(record) {
   if (bytes(record) > 4 * 1024 * 1024) throw fail("JOURNAL_BUDGET");
 }
 
-/** Separate small metadata store avoids reading every account's large recovery payload on each keystroke. */
-class IndexedJournalDatabase {
-  async run(action) {
-    if (typeof indexedDB === "undefined") throw fail("JOURNAL_UNAVAILABLE");
-    const db = await new Promise((resolve, reject) => {
-      const request = indexedDB.open("glowloom-canvas-collaboration", 1);
-      request.onupgradeneeded = () => {
-        request.result.createObjectStore("records");
-        const metadata = request.result.createObjectStore("metadata", {
-          keyPath: "id",
+/** Recovery records never outlive this page/runtime instance. */
+class MemoryJournalDatabase {
+  metadata = new Map();
+  records = new Map();
+  queue = Promise.resolve();
+  run(action) {
+    const operation = this.queue
+      .catch(() => {})
+      .then(async () => {
+        const meta = structuredClone(this.metadata),
+          data = structuredClone(this.records);
+        const result = await action({
+          meta: async (id) => meta.get(id),
+          rows: async (owner) =>
+            [...meta.values()].filter((row) => row.owner === owner),
+          read: async (id) => data.get(id),
+          writeMeta: (row) => meta.set(row.id, structuredClone(row)),
+          write: (id, record) => data.set(id, structuredClone(record)),
+          remove: (id) => data.delete(id),
+          removeMeta: (id) => meta.delete(id),
         });
-        metadata.createIndex("owner", "owner");
-      };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-      request.onblocked = () => reject(fail("JOURNAL_BLOCKED"));
-    });
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(["records", "metadata"], "readwrite"),
-        metadata = transaction.objectStore("metadata"),
-        records = transaction.objectStore("records");
-      let result, failure;
-      const read = (request) =>
-        new Promise((yes, no) => {
-          request.onsuccess = () => yes(request.result);
-          request.onerror = () => no(request.error);
-        });
-      // Only IDB requests may be awaited inside this callback; no network or timers.
-      Promise.resolve(
-        action({
-          meta: (id) => read(metadata.get(id)),
-          rows: (owner) => read(metadata.index("owner").getAll(owner)),
-          read: (id) => read(records.get(id)),
-          writeMeta: (row) => metadata.put(row),
-          write: (id, record) => records.put(record, id),
-          remove: (id) => records.delete(id),
-          removeMeta: (id) => metadata.delete(id),
-        }),
-      ).then(
-        (value) => {
-          result = value;
-        },
-        (error) => {
-          failure = error;
-          transaction.abort();
-        },
-      );
-      transaction.oncomplete = () => {
-        db.close();
-        resolve(result);
-      };
-      transaction.onerror = transaction.onabort = () => {
-        db.close();
-        reject(failure ?? transaction.error ?? fail("JOURNAL_TRANSACTION"));
-      };
-    });
+        this.metadata = meta;
+        this.records = data;
+        return structuredClone(result);
+      });
+    this.queue = operation;
+    return operation;
   }
 }
 
 export class CollaborationJournal {
-  constructor(database = new IndexedJournalDatabase()) {
+  constructor(database = new MemoryJournalDatabase()) {
     this.database = database;
   }
 

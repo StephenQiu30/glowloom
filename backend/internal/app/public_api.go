@@ -10,6 +10,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/yjsruntime"
+
 	trialwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/aitrial"
 	biblewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/bible"
 	canvaswire "github.com/StephenQiu30/glowloom-server/backend/internal/app/canvas"
@@ -98,7 +100,10 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	router.HandleMethodNotAllowed = true
 	router.NoRoute(func(c *gin.Context) { httpapi.WriteProblem(c, 404, "not_found", nil) })
 	router.NoMethod(func(c *gin.Context) { httpapi.WriteProblem(c, 405, "method_not_allowed", nil) })
-	api := router.Group("/api")
+	api := router.Group("/api", func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store")
+		c.Next()
+	})
 	protected := api.Group("")
 	emailAuth, err := identityruntime.NewAuth(database, cfg, time.Now)
 	if err != nil {
@@ -133,6 +138,9 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	canvasStore := pgcanvas.NewScopedStore(database, mediaFactory, mediawire.NewCanvasProjectAccess)
 	canvasService := canvasapp.NewService(canvasStore)
 	live := canvaslive.NewHandler(canvasService, canvaswire.SocketAuthority(database, auth), cfg.PublicOrigin).WithCollaboration(canvasapp.NewCollaborationService(canvasStore))
+	if cfg.CanvasRuntimeURL != "" && len(cfg.CanvasRuntimeToken) >= 32 {
+		live.WithYjs(canvasapp.NewYjsService(canvasStore, yjsruntime.New(cfg.CanvasRuntimeURL, cfg.CanvasRuntimeToken)))
+	}
 	socketLifetime := context.Background()
 	if len(lifetime) > 0 {
 		socketLifetime = lifetime[0]

@@ -110,7 +110,8 @@ func (s *ProjectCopyStore) Freeze(ctx context.Context, actor identityapp.Princip
 		}
 		documents = append(documents, doc)
 	}
-	if _, _, err := application.PrepareProjectCopy(binding, documents, assets); err != nil {
+	copied, _, err := application.PrepareProjectCopy(binding, documents, assets)
+	if err != nil {
 		return application.ProjectCopySnapshot{}, err
 	}
 	body, err := json.Marshal(documents)
@@ -123,6 +124,10 @@ func (s *ProjectCopyStore) Freeze(ctx context.Context, actor identityapp.Princip
 	}
 	hash := sha256.Sum256(append(append(body, '\n'), mapping...))
 	snapshot := application.ProjectCopySnapshot{ID: uuid.NewSHA1(binding.JobID, []byte("canvas-snapshot")), ManifestSHA256: hex.EncodeToString(hash[:]), Documents: len(documents)}
+	snapshot.DocumentMapping = make(map[uuid.UUID]uuid.UUID, len(documents))
+	for i, document := range documents {
+		snapshot.DocumentMapping[document.ID] = copied[i].Document.ID
+	}
 	if err := tx.Exec(`INSERT INTO canvas.project_copy_snapshot(id,job_id,org_id,source_project_id,target_project_id,manifest_sha256,document_count,documents,asset_mapping) VALUES(?,?,?,?,?,?,?,?::jsonb,?::jsonb)`, snapshot.ID, binding.JobID, actor.OrgID, binding.SourceProjectID, binding.TargetProjectID, snapshot.ManifestSHA256, snapshot.Documents, string(body), string(mapping)).Error; err != nil {
 		return application.ProjectCopySnapshot{}, fmt.Errorf("persist frozen project canvases: %w", err)
 	}

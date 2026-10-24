@@ -1,3 +1,4 @@
+import { pageBusinessMemory } from "@/lib/page-business-memory";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { render } from "../../../../feedback";
@@ -32,7 +33,7 @@ const created = vi.fn();
 const saved = vi.fn();
 beforeEach(() => {
   vi.clearAllMocks();
-  localStorage.clear();
+  pageBusinessMemory.clear();
   api.connect.mockResolvedValue({ provider_id: "connection" });
   api.key.mockResolvedValue({
     id: "credential",
@@ -159,7 +160,7 @@ it("错误连接的 Key 回执不能被认作保存成功", async () => {
   fireEvent.click(screen.getByRole("button", { name: "查询回执" }));
   await waitFor(() => expect(api.receipt).toHaveBeenCalledOnce());
   expect(saved).not.toHaveBeenCalled();
-  expect(localStorage.length).toBeGreaterThan(0);
+  expect(pageBusinessMemory.length).toBeGreaterThan(0);
 });
 
 it("创建结果未知时先查回执，仅在未找到时重放原请求标识", async () => {
@@ -187,8 +188,8 @@ it("创建结果未知时先查回执，仅在未找到时重放原请求标识"
     api.connect.mock.calls[1][1].request_id,
   );
 });
-it("刷新后沿用待确认凭据的连接和请求，不要求再次新建", async () => {
-  localStorage.setItem(
+it("同页重开沿用待确认凭据的连接和请求，不要求再次新建", async () => {
+  pageBusinessMemory.setItem(
     "glowloom.catalog.pending.v1.admin-fixture.preset.onboarding.credential",
     JSON.stringify({
       id: "original-key-request",
@@ -238,7 +239,7 @@ it("Key 输入先选预设，支持显隐，提交后清空并恢复隐藏", asy
   expect(screen.getByLabelText("API Key")).toHaveProperty("type", "password");
 });
 it("从其他预设打开时仍恢复原创建请求，不替换其平台", () => {
-  localStorage.setItem(
+  pageBusinessMemory.setItem(
     "glowloom.catalog.pending.v1.admin-fixture.preset.onboarding.create",
     JSON.stringify({
       id: "original",
