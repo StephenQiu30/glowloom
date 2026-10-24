@@ -36,6 +36,20 @@ function document(): API.DocumentDTO {
   };
 }
 describe("正式画布服务接线", () => {
+  it("媒体默认锁定比例，显式自由比例在服务回执后保留", () => {
+    const dto = document();
+    dto.nodes![0] = { ...dto.nodes![0], node_type: "image", config: {} };
+    expect(
+      serviceGraph(dto, canvas, project).nodes[0].metadata?.freeResize,
+    ).toBe(false);
+    dto.nodes![0].config = {
+      editor: { schemaVersion: 1, metadata: { freeResize: true } },
+    };
+    expect(
+      serviceGraph(dto, canvas, project).nodes[0].metadata?.freeResize,
+    ).toBe(true);
+  });
+
   it.each(["image", "video"])(
     "preserves %s prompt documents when typing continues across a save receipt",
     (type) => {

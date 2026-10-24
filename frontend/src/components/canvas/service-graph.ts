@@ -102,7 +102,7 @@ export function serviceGraph(
             : {}),
       },
       metadata: {
-        freeResize: true,
+        freeResize: !["image", "video"].includes(nodeType),
         prompt: node.config?.draft?.prompt ?? node.config?.generation?.prompt,
         groupId: node.parent_id,
         content:

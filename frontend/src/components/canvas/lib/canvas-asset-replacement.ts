@@ -1,3 +1,4 @@
+import { fitNodeSize } from "./canvas-node-size";
 import type { InsertAssetPayload } from "@/components/canvas/runtime/components/assets/picker/asset-picker-modal";
 import type { CanvasNodeData } from "../types/canvas";
 import { toCanvasGraph } from "./canvas-document-adapter";
@@ -34,8 +35,24 @@ export function replaceCanvasNodeAsset(
         }
       : {}),
   };
+  const dimensions =
+    asset.kind !== "audio" &&
+    Number.isFinite(asset.width) &&
+    Number.isFinite(asset.height) &&
+    asset.width! > 0 &&
+    asset.height! > 0
+      ? { width: asset.width!, height: asset.height! }
+      : undefined;
+  const size = dimensions
+    ? fitNodeSize(dimensions.width, dimensions.height, node.width, node.height)
+    : { width: node.width, height: node.height };
   return {
     ...node,
+    ...size,
+    position: {
+      x: node.position.x + (node.width - size.width) / 2,
+      y: node.position.y + (node.height - size.height) / 2,
+    },
     documentData: {
       ...documentData,
       parameters: { mode: "MANUAL" },
@@ -63,8 +80,9 @@ export function replaceCanvasNodeAsset(
       status: "success",
       errorDetails: undefined,
       storageKey: undefined,
-      naturalWidth: undefined,
-      naturalHeight: undefined,
+      freeResize: asset.kind === "audio" ? node.metadata?.freeResize : false,
+      naturalWidth: dimensions?.width,
+      naturalHeight: dimensions?.height,
       bytes: undefined,
       mimeType: undefined,
       durationMs: undefined,

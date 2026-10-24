@@ -1,3 +1,4 @@
+import { retainCanvasMediaPreviews } from "./lib/canvas-media-continuity";
 import type { CanvasEditorState } from "./lib/canvas-document-adapter";
 import { serviceGraphOperations } from "./service-graph";
 import type { Operation } from "./service-document";
@@ -81,6 +82,29 @@ export function rebaseCanvas(
   remote: CanvasEditorState,
   reviewed = false,
 ): CanvasEditorState {
+  // Signed read URLs and decoded dimensions are a presentation of a fixed file,
+  // not competing edits. Keep pending local uploads in the normal conflict path.
+  const uploads = new Set(
+    [...base.nodes, ...local.nodes, ...remote.nodes]
+      .filter((node) => localMedia(node))
+      .map((node) => node.id),
+  );
+  const businessNodes = (nodes: CanvasEditorState["nodes"]) =>
+    nodes.map((node) => {
+      if (
+        uploads.has(node.id) ||
+        !["image", "video", "audio"].includes(node.type) ||
+        !node.documentData?.fileReferences?.some(
+          (reference) => reference.purpose === "CONTENT",
+        )
+      )
+        return node;
+      const metadata = { ...node.metadata };
+      delete metadata.content;
+      delete metadata.naturalWidth;
+      delete metadata.naturalHeight;
+      return { ...node, metadata };
+    });
   function objects<T extends { id: string }>(
     before: T[],
     mine: T[],
@@ -108,15 +132,21 @@ export function rebaseCanvas(
   }
   return {
     ...local,
-    nodes: objects(
-      base.nodes,
+    nodes: retainCanvasMediaPreviews(
       local.nodes,
-      remote.nodes,
-      (a, b) =>
-        serviceGraphOperations(
-          { ...base, nodes: [a], connections: [] },
-          { ...base, nodes: [b], connections: [] },
-        ).length === 0,
+      retainCanvasMediaPreviews(
+        remote.nodes,
+        objects(
+          businessNodes(base.nodes),
+          businessNodes(local.nodes),
+          businessNodes(remote.nodes),
+          (a, b) =>
+            serviceGraphOperations(
+              { ...base, nodes: [a], connections: [] },
+              { ...base, nodes: [b], connections: [] },
+            ).length === 0,
+        ),
+      ),
     ),
     connections: objects(
       base.connections,

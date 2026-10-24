@@ -39,7 +39,14 @@ export async function canvasAssetPayload(
     fileId: asset.id,
     fileVersion: String(asset.revision),
   };
-  if (asset.kind === "image") return { ...shared, kind: "image", dataUrl: url };
+  if (asset.kind === "image")
+    return {
+      ...shared,
+      kind: "image",
+      dataUrl: url,
+      width: asset.width,
+      height: asset.height,
+    };
   if (asset.kind === "video")
     return {
       ...shared,

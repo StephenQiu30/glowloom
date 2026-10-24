@@ -39,6 +39,7 @@ import {
 } from "react";
 
 import { useCanvasFilePreviews } from "../hooks/use-canvas-file-previews";
+import { retainCanvasMediaPreviews } from "../lib/canvas-media-continuity";
 import { useCanvasMediaSize } from "../hooks/use-canvas-media-size";
 import { CanvasDocumentNodePanel } from "../nodes/canvas-document-node-panel";
 import {
@@ -647,7 +648,14 @@ function InfiniteCanvasPage({
     if (!incomingDocument || receivedDocument.current === incomingDocument)
       return;
     receivedDocument.current = incomingDocument;
-    applyingRemote.current = incomingDocument;
+    const replacement = {
+      ...incomingDocument,
+      nodes: retainCanvasMediaPreviews(
+        nodesStateRef.current,
+        incomingDocument.nodes,
+      ),
+    };
+    applyingRemote.current = replacement;
     if (historyCommitTimerRef.current)
       clearTimeout(historyCommitTimerRef.current);
     historyCommitTimerRef.current = null;
@@ -660,9 +668,9 @@ function InfiniteCanvasPage({
       activeChatId,
     };
     setHistoryState({ canUndo: false, canRedo: false });
-    nodesStateRef.current = incomingDocument.nodes;
+    nodesStateRef.current = replacement.nodes;
     connectionsStateRef.current = incomingDocument.connections;
-    setNodesState(incomingDocument.nodes);
+    setNodesState(replacement.nodes);
     setConnectionsState(incomingDocument.connections);
   }, [incomingDocument, chatSessions, activeChatId]);
   useEffect(() => {
