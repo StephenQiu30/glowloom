@@ -188,6 +188,9 @@ html:has(.canvas-controls-layout) {
   .canvas-controls-layout :is(button, a[data-size]) {
     min-height: 2.75rem;
   }
+  .canvas-controls-layout [data-slot="avatar-group"] button {
+    min-height: 2rem;
+  }
   .canvas-controls-layout [data-size="icon-lg"],
   .canvas-controls-layout .canvas-brand {
     width: 2.75rem;

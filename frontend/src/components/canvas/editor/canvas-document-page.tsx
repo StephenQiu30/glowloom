@@ -32,13 +32,6 @@ import {
 } from "@/components/ui/popover";
 import { notifyError } from "@/components/canvas/runtime/components/feedback/error-notification";
 import type { CanvasDocumentIntegration } from "../types/canvas-document-integration";
-const CanvasVersionHistory = dynamic(
-  () =>
-    import("../history/canvas-version-history").then(
-      (module) => module.CanvasVersionHistory,
-    ),
-  { ssr: false },
-);
 const CanvasEditor = dynamic(() => import("./canvas-editor"), {
   ssr: false,
   loading: () => <PageLoading label="正在打开画布" />,
@@ -181,7 +174,6 @@ function CanvasDocumentSession({
   qualifying: boolean;
 }) {
   const router = useRouter();
-  const [historyOpen, setHistoryOpen] = useState(false);
   const save = useCanvasSave({
     scope,
     canvasId,
@@ -189,7 +181,6 @@ function CanvasDocumentSession({
     initialDocument,
     enabled,
     onAccessInvalidated,
-    onRestoreConfirmed: () => setHistoryOpen(false),
   });
   const { state } = save;
   const generation = useCanvasGeneration({
@@ -306,7 +297,6 @@ function CanvasDocumentSession({
             .map((node) => node.id)}
         />
       }
-      onVersionHistory={() => setHistoryOpen(true)}
       canDeleteCanvas={!state.baseline.projectId}
       projectCanvas={!!state.baseline.projectId}
       projectPath={
@@ -668,24 +658,6 @@ function CanvasDocumentSession({
             }}
           />
         </CanvasMediaContext>
-        {historyOpen && (
-          <CanvasVersionHistory
-            open={historyOpen}
-            onOpenChange={setHistoryOpen}
-            scope={scope}
-            identity={identity}
-            enabled={enabled}
-            document={state.baseline}
-            canRestore={
-              !!state.baseline.access?.edit &&
-              !bindingPending &&
-              !state.invalidDraft &&
-              ["CLEAN", "DIRTY", "SAVING"].includes(state.status)
-            }
-            restoring={save.restoring}
-            onRestore={save.restoreSnapshot}
-          />
-        )}
         {projectCreationMounted && (
           <CreatePersonalProjectDialog
             open={creatingProject}

@@ -33,7 +33,7 @@ export function CanvasTopBar({
   onDeleteProject,
   saveControl,
   workflowControl,
-  onVersionHistory,
+  participantsControl,
   onCreatePersonalProject,
   onProjectCanvases,
   canSwitchCanvas = true,
@@ -57,7 +57,7 @@ export function CanvasTopBar({
   onRedo: () => void;
   saveControl?: React.ReactNode;
   workflowControl?: React.ReactNode;
-  onVersionHistory?: () => void;
+  participantsControl?: React.ReactNode;
   onCreatePersonalProject?: () => void;
   onProjectCanvases?: () => void;
   canSwitchCanvas?: boolean;
@@ -163,12 +163,6 @@ export function CanvasTopBar({
                   <Pencil />
                   重命名画布
                 </DropdownMenuItem>
-                {onVersionHistory && (
-                  <DropdownMenuItem className="h-9" onSelect={onVersionHistory}>
-                    <History />
-                    版本历史
-                  </DropdownMenuItem>
-                )}
                 <DropdownMenuItem
                   className="h-9"
                   disabled={exportingProject}
@@ -188,8 +182,6 @@ export function CanvasTopBar({
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
-        <div className="canvas-header-actions pointer-events-auto flex items-center gap-1">
           <div className="canvas-status-panel flex items-center gap-1">
             {workflowControl}
             {saveControl === undefined ? (
@@ -211,6 +203,9 @@ export function CanvasTopBar({
               saveControl
             )}
           </div>
+        </div>
+        <div className="canvas-header-actions pointer-events-auto flex items-center gap-1">
+          {participantsControl}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -228,22 +223,11 @@ export function CanvasTopBar({
             </TooltipTrigger>
             <TooltipContent>搜索画布</TooltipContent>
           </Tooltip>
-          {onVersionHistory ? (
-            <Button
-              variant="ghost"
-              size="icon-lg"
-              aria-label="版本历史"
-              onClick={onVersionHistory}
-            >
+          <CanvasHistoryDialog>
+            <Button variant="ghost" size="icon-lg" aria-label="生成历史">
               <History />
             </Button>
-          ) : (
-            <CanvasHistoryDialog>
-              <Button variant="ghost" size="icon-lg" aria-label="生成历史">
-                <History />
-              </Button>
-            </CanvasHistoryDialog>
-          )}
+          </CanvasHistoryDialog>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

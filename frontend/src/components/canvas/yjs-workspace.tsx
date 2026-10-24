@@ -2,7 +2,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { CanvasYjsLiveSession } from "./yjs-live-session";
-import { YjsVersionHistory } from "./yjs-version-history";
+import { CanvasParticipants } from "./canvas-participants";
 import { YjsPresence } from "./yjs-presence";
 import { SpaceSwitcher } from "@/components/spaces/space-context";
 import { CanvasProviders } from "./editor";
@@ -137,15 +137,16 @@ function CollaborativeEditor({
                 canSwitchCanvas={!view.dirty}
                 onDeleteProject={() => {}}
                 onRenameProject={() => setRename(view.dto?.name ?? "画布")}
+                participantsControl={
+                  <CanvasParticipants
+                    client={client}
+                    actorID={actorID}
+                    scopeID={scopeID}
+                    connected={view.connected}
+                  />
+                }
                 saveControl={
                   <div className="flex items-center gap-2">
-                    <YjsPresence client={client} connected={view.connected} />
-                    {!view.migration && (
-                      <YjsVersionHistory
-                        client={client}
-                        disabled={view.dirty || !view.writable}
-                      />
-                    )}
                     <span role="status" className="text-xs">
                       {view.phase}
                     </span>

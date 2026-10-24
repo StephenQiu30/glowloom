@@ -51,6 +51,7 @@
 }
 
 :root {
+  --canvas-presence-online: #16a34a;
   --layout-header: 64px;
   --layout-sidebar: 240px;
   --layout-sidebar-collapsed: 64px;
