@@ -139,13 +139,13 @@
 
 /* Canvas picker follows the compact Figma modal; other consumers retain their layout. */
 .canvas-material-dialog[data-canvas-picker] {
-  border-radius: 16px;
+  border-radius: 20px;
   background: var(--card);
   box-shadow: var(--shadow-overlay);
 }
 [data-canvas-picker] .canvas-material-card {
   border-color: transparent;
-  border-radius: 8px;
+  border-radius: 12px;
   background: transparent;
 }
 [data-canvas-picker] .canvas-material-card [data-slot="card"] {
@@ -159,7 +159,7 @@
 }
 [data-canvas-picker] .canvas-material-preview {
   height: 132px;
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--muted);
 }
 [data-canvas-picker]
@@ -167,7 +167,7 @@
   [data-slot="card"][data-variant="media"]
   [data-slot="card-header"] {
   min-height: 36px;
-  padding: 8px;
+  padding: 8px 0;
   gap: 0;
   grid-template-rows: auto;
 }
@@ -180,5 +180,33 @@
 @media (max-width: 639px) {
   .canvas-material-dialog[data-canvas-picker] {
     border-radius: 0;
+  }
+}
+
+[data-canvas-picker]
+  .canvas-material-card
+  [data-slot="card"][data-variant="media"]
+  [data-slot="card-title"] {
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 400;
+}
+
+@media (min-width: 640px) {
+  [data-canvas-picker] .canvas-material-filters {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+  [data-canvas-picker] .canvas-material-filters > div:first-child {
+    display: contents;
+  }
+  [data-canvas-picker] .canvas-material-filters > div:last-child {
+    flex: 1;
+    min-width: 0;
+    order: 1;
+  }
+  [data-canvas-picker] .canvas-material-filters > div:first-child > button {
+    order: 2;
   }
 }

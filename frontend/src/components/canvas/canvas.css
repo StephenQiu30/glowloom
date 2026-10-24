@@ -1252,3 +1252,29 @@
     min-height: 3rem;
   }
 }
+
+@layer utilities {
+  .canvas-node-resize[data-slot="button"] {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    background: transparent;
+    color: var(--muted-foreground);
+    transform: none;
+    translate: none;
+  }
+  .canvas-node-resize-mark {
+    position: absolute;
+    right: 7px;
+    bottom: 7px;
+    width: 10px;
+    height: 10px;
+    background: repeating-linear-gradient(
+      135deg,
+      transparent 0 3px,
+      currentColor 3px 4px
+    );
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+    opacity: 0.65;
+  }
+}

@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { CanvasVideoPlayer } from "@/components/canvas/nodes/canvas-video-player";
 import {
@@ -71,5 +77,40 @@ it("替换视频后重置播放状态，不继承旧媒体的错误与进度", (
   const current = screen.getByLabelText("视频验收") as HTMLVideoElement;
   expect(current).not.toBe(previous);
   expect(current.controls).toBe(false);
+  expect(screen.getByRole("button", { name: "播放视频" })).toBeTruthy();
+});
+
+it("播放按钮与原生视频控件隔离鼠标、双击和快捷键，不拖动或打开节点编辑", () => {
+  const mouse = vi.fn(),
+    key = vi.fn(),
+    double = vi.fn();
+  vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+  render(
+    <div onMouseDown={mouse} onKeyDown={key} onDoubleClick={double}>
+      <CanvasVideoPlayer node={node} />
+    </div>,
+  );
+  const trigger = screen.getByRole("button", { name: "播放视频" });
+  fireEvent.mouseDown(trigger);
+  fireEvent.keyDown(trigger, { key: " " });
+  const video = screen.getByLabelText("视频验收");
+  fireEvent.play(video);
+  fireEvent.mouseDown(video);
+  fireEvent.doubleClick(video);
+  fireEvent.keyDown(video, { key: "ArrowRight" });
+  expect(mouse).not.toHaveBeenCalled();
+  expect(key).not.toHaveBeenCalled();
+  expect(double).not.toHaveBeenCalled();
+});
+
+it("开始播放后立刻暂停导致的 AbortError 不显示媒体损坏提示", async () => {
+  vi.spyOn(HTMLMediaElement.prototype, "play").mockRejectedValue(
+    new DOMException("play interrupted by pause", "AbortError"),
+  );
+  render(<CanvasVideoPlayer node={node} />);
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "播放视频" }));
+  });
+  expect(screen.queryByRole("status")).toBeNull();
   expect(screen.getByRole("button", { name: "播放视频" })).toBeTruthy();
 });

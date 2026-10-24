@@ -783,28 +783,57 @@ export const CanvasNode = React.memo(function CanvasNode({
                 </div>
               ) : null}
 
-              {!referenceSelectionState ? (
+              {!readOnly &&
+              !referenceSelectionState &&
+              (isSelected || isEditingContent) ? (
                 <ResizeHandle
-                  corner="top-left"
                   onMouseDown={handleResizeMouseDown}
-                />
-              ) : null}
-              {!referenceSelectionState ? (
-                <ResizeHandle
-                  corner="top-right"
-                  onMouseDown={handleResizeMouseDown}
-                />
-              ) : null}
-              {!referenceSelectionState ? (
-                <ResizeHandle
-                  corner="bottom-left"
-                  onMouseDown={handleResizeMouseDown}
-                />
-              ) : null}
-              {!referenceSelectionState ? (
-                <ResizeHandle
-                  corner="bottom-right"
-                  onMouseDown={handleResizeMouseDown}
+                  onKeyDown={(event) => {
+                    const horizontal =
+                      event.key === "ArrowLeft" || event.key === "ArrowRight";
+                    const vertical =
+                      event.key === "ArrowUp" || event.key === "ArrowDown";
+                    if (!horizontal && !vertical) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const delta =
+                      (event.shiftKey ? 10 : 1) *
+                      (event.key === "ArrowLeft" || event.key === "ArrowUp"
+                        ? -1
+                        : 1);
+                    const keepRatio =
+                      (data.type === CanvasNodeType.Image &&
+                        !data.metadata?.freeResize) ||
+                      data.type === CanvasNodeType.Video ||
+                      Boolean(definition?.keepAspectRatio?.(data));
+                    const ratio =
+                      (data.metadata?.naturalWidth || data.width) /
+                      (data.metadata?.naturalHeight || data.height || 1);
+                    let width = Math.max(
+                      220,
+                      data.width + (horizontal ? delta : 0),
+                    );
+                    let height = Math.max(
+                      160,
+                      data.height + (vertical ? delta : 0),
+                    );
+                    if (keepRatio) {
+                      if (horizontal) height = width / ratio;
+                      else width = height * ratio;
+                      if (height < 160) {
+                        height = 160;
+                        width = height * ratio;
+                      }
+                      if (width < 220) {
+                        width = 220;
+                        height = width / ratio;
+                      }
+                    }
+                    if (width === data.width && height === data.height) return;
+                    onResizeStart(data.id);
+                    onResize(data.id, width, height, data.position);
+                    onResizeEnd(data.id);
+                  }}
                 />
               ) : null}
             </div>
@@ -1408,10 +1437,7 @@ function ImageContent({
             alt={node.title}
             draggable={false}
             onDragStart={(event) => event.preventDefault()}
-            className={cn(
-              "pointer-events-none block h-full w-full select-none",
-              node.metadata?.freeResize ? "object-fill" : "object-contain",
-            )}
+            className="pointer-events-none block h-full w-full object-contain select-none"
           />
         ) : (
           <ImageSlotStatus image={primaryImage} />
@@ -1713,25 +1739,30 @@ function BatchFrame({
   );
 }
 function ResizeHandle({
-  corner,
   onMouseDown,
+  onKeyDown,
 }: {
-  corner: ResizeCorner;
   onMouseDown: (event: React.MouseEvent, corner: ResizeCorner) => void;
+  onKeyDown: (event: React.KeyboardEvent) => void;
 }) {
-  const positionClass = {
-    "top-left": "-left-[14px] -top-[14px] cursor-nwse-resize",
-    "top-right": "-right-[14px] -top-[14px] cursor-nesw-resize",
-    "bottom-left": "-bottom-[14px] -left-[14px] cursor-nesw-resize",
-    "bottom-right": "-bottom-[14px] -right-[14px] cursor-nwse-resize",
-  }[corner];
-
   return (
-    <div
+    <Button
+      variant="ghost"
+      size="icon-lg"
+      aria-label="调整节点大小"
+      title="拖动调整大小；方向键微调，Shift 加速"
       data-canvas-no-pan
-      className={cn("absolute z-50 size-7", positionClass)}
-      onMouseDown={(event) => onMouseDown(event, corner)}
-    />
+      className="canvas-node-resize absolute right-0 bottom-0 z-50 cursor-nwse-resize rounded-tl-xl rounded-br-xl"
+      onMouseDown={(event) => {
+        if (event.button === 0) onMouseDown(event, "bottom-right");
+      }}
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
+      onDoubleClick={(event) => event.stopPropagation()}
+      onKeyDown={onKeyDown}
+    >
+      <span aria-hidden="true" className="canvas-node-resize-mark" />
+    </Button>
   );
 }
 

@@ -41,6 +41,9 @@ function VideoPlayer({ node }: { node: CanvasNodeData }) {
         }}
         onEnded={() => setStarted(false)}
         onPointerDown={started ? (event) => event.stopPropagation() : undefined}
+        onMouseDown={started ? (event) => event.stopPropagation() : undefined}
+        onDoubleClick={started ? (event) => event.stopPropagation() : undefined}
+        onKeyDown={(event) => event.stopPropagation()}
         onError={(event) => {
           resume.current = {
             source: output,
@@ -70,13 +73,21 @@ function VideoPlayer({ node }: { node: CanvasNodeData }) {
             className="rounded-full bg-black/30 text-white hover:bg-black/50"
             aria-label={error ? "重试播放视频" : "播放视频"}
             onPointerDown={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
             onDoubleClick={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.stopPropagation();
               if (error) player.current?.load();
-              void player.current
-                ?.play()
-                .catch(() => setError("视频暂时无法播放，请重试"));
+              void player.current?.play().catch((reason: unknown) => {
+                // Pausing or replacing a loading video cancels play() normally.
+                if (
+                  reason instanceof DOMException &&
+                  reason.name === "AbortError"
+                )
+                  return;
+                setError("视频暂时无法播放，请重试");
+              });
             }}
           >
             <Play />

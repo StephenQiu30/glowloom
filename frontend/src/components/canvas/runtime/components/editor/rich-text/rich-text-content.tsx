@@ -78,7 +78,18 @@ export function RichTextContent({
       case "bulletList":
         return <ul key={key}>{children}</ul>;
       case "orderedList":
-        return <ol key={key}>{children}</ol>;
+        return (
+          <ol
+            key={key}
+            start={
+              Number.isSafeInteger(node.attrs?.start)
+                ? node.attrs?.start
+                : undefined
+            }
+          >
+            {children}
+          </ol>
+        );
       case "listItem":
         return <li key={key}>{children}</li>;
       case "blockquote":

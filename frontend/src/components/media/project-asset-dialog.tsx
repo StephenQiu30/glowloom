@@ -154,76 +154,80 @@ export function ProjectAssetDialog({
               {onSubject && <TabsTrigger value="subjects">主体</TabsTrigger>}
             </TabsList>
             <TabsContent value="assets" className="flex min-h-0 flex-col gap-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <ToggleGroup
-                  type="single"
-                  value={kind}
-                  onValueChange={(v) => {
-                    if (v) setKind(v);
-                  }}
-                  aria-label="素材类型"
-                >
-                  {mediaKinds
-                    .filter(
-                      (k) =>
-                        (!reference || k.value === initialKind) &&
-                        (!allowedKinds || allowedKinds.includes(k.value)),
-                    )
-                    .map(({ value, label, icon: Icon }) => (
-                      <ToggleGroupItem key={value} value={value}>
-                        <Icon data-icon="inline-start" />
-                        {label}
-                      </ToggleGroupItem>
-                    ))}
-                </ToggleGroup>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setUpload(true)}
-                >
-                  <Upload data-icon="inline-start" />
-                  上传素材
-                </Button>
-              </div>
-              <div className="flex items-center gap-2">
-                <InputGroup>
-                  <InputGroupAddon>
-                    <Search />
-                  </InputGroupAddon>
-                  <InputGroupInput
-                    aria-label="搜索项目素材"
-                    placeholder="搜索项目素材"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
-                  {query && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setQuery("")}
-                    >
-                      清除搜索
-                    </Button>
-                  )}
-                </InputGroup>
-                {[
-                  { icon: CalendarDays, label: "时间筛选" },
-                  { icon: ListFilter, label: "来源筛选" },
-                ].map(({ icon: Icon, label }) => (
-                  <Popover key={label}>
-                    <PopoverTrigger asChild>
-                      <Button variant="ghost" size="icon" aria-label={label}>
-                        <Icon />
+              <div className="canvas-material-filters flex flex-col gap-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <ToggleGroup
+                    type="single"
+                    value={kind}
+                    onValueChange={(v) => {
+                      if (v) setKind(v);
+                    }}
+                    aria-label="素材类型"
+                  >
+                    {mediaKinds
+                      .filter(
+                        (k) =>
+                          (!reference || k.value === initialKind) &&
+                          (!allowedKinds || allowedKinds.includes(k.value)),
+                      )
+                      .map(({ value, label, icon: Icon }) => (
+                        <ToggleGroupItem key={value} value={value}>
+                          {!canvasPresentation && (
+                            <Icon data-icon="inline-start" />
+                          )}
+                          {label}
+                        </ToggleGroupItem>
+                      ))}
+                  </ToggleGroup>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setUpload(true)}
+                  >
+                    <Upload data-icon="inline-start" />
+                    上传素材
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <InputGroup>
+                    <InputGroupAddon>
+                      <Search />
+                    </InputGroupAddon>
+                    <InputGroupInput
+                      aria-label="搜索项目素材"
+                      placeholder="搜索项目素材"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                    />
+                    {query && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setQuery("")}
+                      >
+                        清除搜索
                       </Button>
-                    </PopoverTrigger>
-                    <PopoverContent align="end">
-                      <p className="font-medium">{label}暂不可用</p>
-                      <p className="text-muted-foreground">
-                        素材服务尚未提供对应信息，可先按类型或名称查找。
-                      </p>
-                    </PopoverContent>
-                  </Popover>
-                ))}
+                    )}
+                  </InputGroup>
+                  {[
+                    { icon: CalendarDays, label: "时间筛选" },
+                    { icon: ListFilter, label: "来源筛选" },
+                  ].map(({ icon: Icon, label }) => (
+                    <Popover key={label}>
+                      <PopoverTrigger asChild>
+                        <Button variant="ghost" size="icon" aria-label={label}>
+                          <Icon />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="end">
+                        <p className="font-medium">{label}暂不可用</p>
+                        <p className="text-muted-foreground">
+                          素材服务尚未提供对应信息，可先按类型或名称查找。
+                        </p>
+                      </PopoverContent>
+                    </Popover>
+                  ))}
+                </div>
               </div>
               <MaterialList
                 key={projectID + kind + revision + query}
