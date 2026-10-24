@@ -36,7 +36,7 @@
 - `backend/db/schema.sql` 是唯一的数据库结构定义。它只用于空业务库；禁止对已有业务库重放、重建或清理数据。邮箱与身份引用保护见[用户系统设计](docs/design/01-用户系统总体设计.md#81-d6-迁移与切换)。
 - 浏览器请求经同站代理；服务端 `GLOWLOOM_BACKEND_ORIGIN` 不进入浏览器。凭据不进入文档、日志、前端包或提交。
 - 默认本地工程验证不发起真实收费生成；fixture、协议握手或页面成功不能代替真实供应商验收。模型可用性以实际配置和适配能力为准。
-- 本地 namespace 显式准备，不由应用自动创建；Go 工具链与依赖版本以 go.mod、Dockerfile 为准。默认 `docker-compose.yml` 只启动 `frontend`、`backend`，开发环境直接使用 `docker compose up -d --build --no-deps frontend backend` 启动或更新，只更新后端时使用 `docker compose up -d --build --no-deps backend`，不新增启动脚本。宿主访问端口固定为前端 `127.0.0.1:1122`、后端 `127.0.0.1:1123`；两端浏览器 Origin 固定为 `http://localhost:1122`，旧端口及 Origin 环境变量不覆盖默认开发栈。容器内部仍使用前端3000、API代理18080、API8080、worker8081和relay8082，worker/relay健康端口不发布到宿主。数据库等依赖复用现有服务，数据库端口保持原配置；应用端口被占用时，先协调端口冲突。`docker-compose-env.yml` 和 `docker-compose-prod.yml` 为独立配置，不参与默认启动。开发后端每次启动都从只读挂载的当前源码编译，编译失败即停止，不运行旧程序；构建缓存使用独立开发卷。纯 Go 源码更新也可 `docker compose restart backend`，运行中不会自动热重载；依赖、Dockerfile、入口或 Compose 配置更新须重新构建并更新容器。生产镜像仍在构建阶段编译。不把修改文档解释为重启服务授权。
+- `docker-compose.yml` 是唯一的项目启动入口。运行 `docker compose up -d --build` 启动或更新前端、后端和现有的私有 Yjs 协作运行时，不使用额外 Compose 文件、启动脚本或生产角色拆分配置。后端在同一容器运行 API、worker、relay，通过 `depends_on: service_healthy` 等待协作运行时就绪；仅更新后端使用 `docker compose up -d --build backend`，由 Compose 处理必要依赖。前端访问 `http://localhost:1122`，后端访问 `http://127.0.0.1:1123`，仅这两个宿主端口对外提供应用访问；浏览器 Origin 同步为 `http://localhost:1122`，旧端口和 Origin 环境变量不覆盖开发栈。数据库、Redis、Kafka、Temporal、对象存储及 namespace 复用现有资源，不随应用启动创建或迁移；身份密钥、现有卷和依赖连接配置保留。后端每次启动从只读挂载的当前源码编译，失败即停止；独立 Go 构建缓存卷减少重复编译。纯 Go 更新也可 `docker compose restart backend`，运行中不自动热重载；依赖、Dockerfile、入口或 Compose 配置变更须重新构建并更新容器。Go 工具链与依赖版本以 go.mod、Dockerfile 为准。不把修改文档解释为重启服务授权。
 - API 生成使用上述 package.json 命令组织标准工具；其他检查使用现有工具直接命令，不新增 shell 脚本或 Makefile。
 
 ## 4. 质量门禁
@@ -47,11 +47,13 @@
 | 前端实现 | 在 frontend 执行 pnpm exec eslint .、pnpm exec prettier --check .、pnpm exec next typegen、pnpm exec tsc --noEmit、pnpm exec vitest run、pnpm exec next build；交互变化补浏览器验证 |
 | 文档     | Markdown 格式、相对链接与锚点、来源路径、需求/验收对应关系、陈述与源码一致；第三方许可原文保持不变                                                                                  |
 
-默认 CI 仅保留 backend、frontend 两个任务：后端执行静态检查、漏洞检查、Wire 生成一致性和一次 `go test -race -count=1 -v ./...`；前端执行 lint、类型检查、Vitest 和一次 Next.js 构建，并保留两端的测试目录检查。不构建应用 Docker 镜像；后端任务启动隔离 PostgreSQL 18，按空库 schema 初始化并配置画布所有数据库测试及受限运行角色。画布数据库配置缺失直接失败，不允许跳过。Redis、Kafka、对象存储和 Temporal 的专项集成仍按模块变更在相应环境执行；默认 CI 通过不代表这些专项验收或生产可用性已经通过。
+默认 CI 保留 backend、frontend 两个并行任务，以业务测试和可构建性为底线：后端运行私有协作包全量测试及一次 `go test -race -count=1 ./...`，保留 Go 默认 vet、编译和 Race 检查；前端运行全量 `pnpm exec vitest run --maxWorkers=2` 及一次 Next.js 生产构建，由构建执行 TypeScript 检查，不启用跳过类型错误。Vitest 最多两个 worker，控制 jsdom 并发资源开销，不放宽测试超时或业务断言。继续使用锁文件安装，并缓存 Go 依赖/构建和 pnpm store。默认 CI 不再安装或运行 golangci-lint、govulncheck、Wire/goimports 生成检查、ESLint、测试目录布局检查，也不重复执行 next typegen/tsc；这些工具仍按改动风险在本地使用，接口或接线变更仍需相应生成一致性验证。不增加测试矩阵、覆盖率阈值、定时扫描或应用镜像构建。
+
+后端 CI 继续启动隔离 PostgreSQL 18，按空库 schema 初始化并配置画布数据库测试及受限运行角色，保留 FFmpeg 支撑媒体业务测试。画布数据库配置缺失直接失败，不允许以跳过替代通过；不缩减既有业务断言或测试范围。Redis、Kafka、对象存储和 Temporal 的专项集成仍按模块变更在相应环境执行；默认 CI 通过不代表这些专项验收或生产可用性已经通过。
 
 验证范围与修改风险匹配。文档变更不需要重跑无关业务测试；UI/工程检查、隔离存储、真实邮件、实际数据库迁移和产品接受分别记录。缺少外部条件或未执行的检查不得报告通过。
 
-Go 测试统一放在 `backend/tests/<业务模块>/`，通过模块构造函数、应用接口或真实协议入口验证行为；生产源码目录不放置 `*_test.go`。前端测试统一放在 `frontend/tests/`：单元与组件测试在 `frontend/tests/unit/`，目录与 `src/` 对齐，并通过 `@/` 导入被测模块；浏览器夹具留在 `frontend/tests/browser/`。生产源码目录不放置 `*.test.ts` 或 `*.test.tsx`。迁移测试时保留原有断言，不通过放宽 CI 目录门禁解决布局问题。
+Go 测试统一放在 `backend/tests/<业务模块>/`，通过模块构造函数、应用接口或真实协议入口验证行为；生产源码目录不放置 `*_test.go`。前端测试统一放在 `frontend/tests/`：单元与组件测试在 `frontend/tests/unit/`，目录与 `src/` 对齐，并通过 `@/` 导入被测模块；浏览器夹具留在 `frontend/tests/browser/`。生产源码目录不放置 `*.test.ts` 或 `*.test.tsx`。测试布局沿用现有工程约定，由本地检查和评审维护；迁移测试时保留原有断言。
 
 ## 5. 本地文档与交付
 

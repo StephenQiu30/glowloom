@@ -1,9 +1,33 @@
 # Development application stack; existing host middleware retains its data.
-# Start/update only applications: docker compose up -d --build --no-deps frontend backend
+# Single project entry point: docker compose up -d --build
 # Fixed host ports: frontend 1122, backend 1123. Resolve host conflicts before starting.
 name: glowloom
 
 services:
+  canvas-collaboration:
+    build:
+      context: ./canvas-collab
+    init: true
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      GLOWLOOM_COLLAB_RUNTIME_TOKEN: ${GLOWLOOM_COLLAB_RUNTIME_TOKEN:?Set an internal collaboration token of at least 32 bytes}
+    expose: ["4400"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4400/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    mem_limit: 512m
+    cpus: 1
   frontend:
     container_name: glowloom-frontend
     build:
@@ -49,6 +73,9 @@ services:
       start_period: 90s
 
   backend:
+    depends_on:
+      canvas-collaboration:
+        condition: service_healthy
     container_name: glowloom-backend
     build:
       context: ./backend
@@ -76,6 +103,8 @@ services:
     tmpfs:
       - /work:rw,noexec,nosuid,size=8g
     environment:
+      GLOWLOOM_CANVAS_RUNTIME_URL: http://canvas-collaboration:4400
+      GLOWLOOM_COLLAB_RUNTIME_TOKEN: ${GLOWLOOM_COLLAB_RUNTIME_TOKEN:?Set an internal collaboration token of at least 32 bytes}
       GLOWLOOM_HOST_SERVICE_PORTS: ${GLOWLOOM_HOST_SERVICE_PORTS-${LV_HOST_SERVICE_PORTS:-5432 6379 7233 9000 9092}}
       GLOWLOOM_ENV: ${GLOWLOOM_ENV-${LV_ENV:-local}}
       GLOWLOOM_LOG_LEVEL: ${GLOWLOOM_LOG_LEVEL-${LV_LOG_LEVEL:-info}}

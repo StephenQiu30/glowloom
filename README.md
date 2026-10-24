@@ -22,11 +22,11 @@
 Docker 开发环境直接在仓库根目录执行标准 Compose 命令：
 
 ```sh
-docker compose up -d --build --no-deps frontend backend  # 仅启动或更新前后端
-docker compose up -d --build --no-deps backend           # 仅启动或更新后端
+docker compose up -d --build          # 启动或更新项目
+docker compose up -d --build backend  # 更新后端，自动处理必要依赖
 ```
 
-默认 `docker-compose.yml` 只包含 `frontend`、`backend` 两个应用服务，后端在同一容器运行 API、worker、relay。访问地址固定如下，旧 `GLOWLOOM_FRONTEND_PORT`、`GLOWLOOM_BACKEND_PORT` 及 `LV_*` 端口变量不覆盖默认开发栈：
+`docker-compose.yml` 是唯一启动入口，包含 `frontend`、`backend` 和现有画布必需的私有 `canvas-collaboration`。后端在同一容器运行 API、worker、relay，并等待协作运行时健康后启动，无需指定额外文件或手动排序。访问地址固定如下，旧 `GLOWLOOM_FRONTEND_PORT`、`GLOWLOOM_BACKEND_PORT` 及 `LV_*` 端口变量不覆盖开发栈：
 
 应用服务统一通过上述 Docker Compose 命令启动和管理，不另开宿主机 Next 或 Go 服务。PostgreSQL、Redis、Kafka、Temporal 和对象存储继续复用现有基础依赖。
 
@@ -37,7 +37,7 @@ docker compose up -d --build --no-deps backend           # 仅启动或更新后
 
 两端的浏览器 Origin 同步固定为 `http://localhost:1122`，忽略 `.env` 中旧的 Origin，避免端口切换后登录或写入被 Origin 校验拒绝。worker/relay 健康检查在容器内执行，不额外开放宿主端口。
 
-现有依赖服务、Temporal namespace、身份密钥及 `.env` 须提前准备；Compose 复用这些资源，不执行数据库迁移。`docker-compose-env.yml` 和 `docker-compose-prod.yml` 是独立的依赖及生产配置，不参与上述默认启动。
+现有依赖服务、Temporal namespace、身份密钥、前端开发缓存卷及 `.env` 须提前准备；Compose 复用这些资源，不执行数据库迁移。仓库不再提供额外的依赖栈、生产拆分或协作 overlay Compose 文件。
 
 旧画布库须先按[画布增量升级记录](docs/plan/17-画布数据库持久化与DAG实施计划.md#75-本地存量画布增量升级2026-10-23)核对、备份并演练，再由结构所有者执行 `backend/db/canvas_protocol_incremental.sql`。不得对存量库重放 `schema.sql`。容器健康不代表业务表已升级，仍需验证真实画布读取。
 
@@ -51,7 +51,7 @@ Temporal返回命名空间不存在时，先用`temporal operator namespace list
 
 启动会使用工作区当前源码，包括未提交修改；存在并行任务时，先确认这些修改可以一起运行，或在隔离的源码快照中验证。前端继续使用现有 Next.js 开发服务热更新，依赖卷的升级仍按现有依赖管理流程处理；生产镜像仍在构建阶段编译。
 
-前端开发可在 `frontend/` 执行 `pnpm exec next dev --hostname 127.0.0.1 --port 3141`。服务访问地址以实际启动配置为准；启动成功不代表业务或邮件已验收。
+默认 CI 只运行两条业务门禁：后端保留全量 Race、隔离 PostgreSQL 集成与协作运行时测试；前端保留全量 Vitest 和含 TypeScript 检查的生产构建。依赖按锁文件安装并缓存；静态风格、漏洞扫描、生成一致性等检查按变更风险在本地执行，详见 [PROJECT](PROJECT.md#4-质量门禁)。启动或 CI 成功不代表邮件、真实供应商或生产环境已经验收。
 
 工程与门禁见 [PROJECT](PROJECT.md)，协作规则见 [AGENTS](AGENTS.md)，共享视觉规范见 [DESIGN](DESIGN.md)，当前事项见 [BACKLOG](BACKLOG.md)。进程命令为 `glowloom`，入口是 `backend/cmd/glowloom`。配置使用 `GLOWLOOM_*` 并在过渡期兼容旧 `LV_*`；新键优先且不改动凭据值。数据库与存储标识以实际部署为准。
 
