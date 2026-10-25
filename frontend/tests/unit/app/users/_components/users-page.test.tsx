@@ -8,7 +8,9 @@ vi.mock("@/lib/request", async (original) => ({
   request: vi.fn(),
 }));
 vi.mock("@/components/auth/session", () => ({
-  useSession: () => ({ actor: { id: "self" } }),
+  useSession: () => ({
+    actor: { id: "self", platform_role: "platform_admin" },
+  }),
 }));
 afterEach(() => {
   cleanup();
@@ -31,6 +33,8 @@ it("server filters and pagination use platform contract without temporary-passwo
   render(<UserDirectory />);
   await screen.findByText("creator@example.com");
   expect(screen.queryByText("创建用户")).toBeNull();
+  fireEvent.click(screen.getByRole("checkbox", { name: "选择当前页全部用户" }));
+  expect(screen.getByText("已选 1 / 1 项")).toBeTruthy();
   fireEvent.change(screen.getByLabelText("搜索用户邮箱或显示名"), {
     target: { value: "creator" },
   });
@@ -43,10 +47,14 @@ it("server filters and pagination use platform contract without temporary-passwo
       }),
     ),
   );
+  expect(screen.queryByText("已选 1 / 1 项")).toBeNull();
   await waitFor(() =>
-    expect(screen.getByText("加载更多用户")).toHaveProperty("disabled", false),
+    expect(screen.getByRole("button", { name: "下一页" })).toHaveProperty(
+      "disabled",
+      false,
+    ),
   );
-  fireEvent.click(screen.getByText("加载更多用户"));
+  fireEvent.click(screen.getByRole("button", { name: "下一页" }));
   await waitFor(() =>
     expect(request).toHaveBeenLastCalledWith(
       "/api/platform/users",
@@ -82,7 +90,5 @@ it("permission loss clears private directory while retaining retry", async () =>
 it("empty platform directory reports no invented users", async () => {
   vi.mocked(request).mockResolvedValue({ items: [], next_cursor: null });
   render(<UserDirectory />);
-  expect(
-    await screen.findByRole("heading", { name: "没有匹配的用户" }),
-  ).toBeTruthy();
+  expect(await screen.findByText("没有匹配的用户")).toBeTruthy();
 });

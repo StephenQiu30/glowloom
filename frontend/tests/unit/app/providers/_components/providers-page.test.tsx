@@ -11,6 +11,7 @@ import { render } from "../../../../feedback";
 import { ProvidersPage } from "@/app/providers/_components/providers-page";
 const api = vi.hoisted(() => ({
   providers: vi.fn(),
+  detail: vi.fn(),
   presets: vi.fn(),
   role: "creator",
   delayed: false,
@@ -21,6 +22,7 @@ vi.mock("@/components/auth/session", () => ({
 }));
 vi.mock("@/api/settings", () => ({
   listAdminProviders: api.providers,
+  getAdminProvider: api.detail,
   listProviderPresets: api.presets,
   getConfigReceipt: vi.fn(),
   updateProviderPresetState: vi.fn(),
@@ -58,6 +60,10 @@ vi.mock("@/app/providers/_components/connection-detail", () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   pageBusinessMemory.clear();
+  api.detail.mockResolvedValue({
+    provider: { id: "connection" },
+    credential: { status: "active" },
+  });
   api.role = "creator";
   api.delayed = false;
   api.pendingSave = null;
@@ -202,7 +208,7 @@ it("预设与文件维护按需展开，主页面不展示协议与版本", asyn
   });
   render(<ProvidersPage />);
   await screen.findByText("还没有连接");
-  expect(screen.getByText("仅管理员")).toBeTruthy();
+  expect(screen.getByRole("navigation", { name: "管理页面" })).toBeTruthy();
   expect(screen.queryByRole("button", { name: "使用预设" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "预设管理" }));
   expect(screen.getByRole("button", { name: "使用预设" })).toBeTruthy();

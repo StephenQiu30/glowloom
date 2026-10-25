@@ -111,6 +111,11 @@ const identityRoutes: {
   },
   { pattern: `platform/users/${identityUUID}`, methods: ["GET"], query: [] },
   {
+    pattern: `platform/users/${identityUUID}/commands/${identityUUID}`,
+    methods: ["GET"],
+    query: [],
+  },
+  {
     pattern: `platform/users/${identityUUID}/(disable|enable|unlock|revoke-admin|revoke-sessions|profile-reset|password-reset)`,
     methods: ["POST"],
     query: [],

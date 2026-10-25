@@ -1003,3 +1003,26 @@ it("复制接口受限透传原幂等键和回执，拒绝额外查询及非法�
   ).toBe(404);
   expect(fetcher).not.toHaveBeenCalled();
 });
+
+it("账户批量回执仅转发合法 UUID 的只读查询", async () => {
+  const fetcher = vi
+    .fn()
+    .mockResolvedValue(new Response(JSON.stringify({ action: "disable" })));
+  vi.stubGlobal("fetch", fetcher);
+  const target = "11111111-1111-4111-8111-111111111111";
+  const requestID = "22222222-2222-4222-8222-222222222222";
+  const path = `platform/users/${target}/commands/${requestID}`;
+  const result = await GET(
+    new Request(`http://localhost/api/${path}`),
+    context(path),
+  );
+  expect(result.status).toBe(200);
+  expect(fetcher).toHaveBeenCalled();
+  const invalid = await GET(
+    new Request(
+      `http://localhost/api/platform/users/${target}/commands/not-uuid`,
+    ),
+    context(`platform/users/${target}/commands/not-uuid`),
+  );
+  expect(invalid.status).toBe(404);
+});

@@ -53,6 +53,7 @@ type AuthorityProposal struct {
 
 // UserGovernanceChange is a closed internal command, never a generic HTTP action.
 type UserGovernanceChange struct {
+	RequestID              uuid.UUID
 	LoginGuardKey          string
 	Action                 string
 	ResetName, ResetAvatar bool
@@ -77,6 +78,8 @@ type GovernanceTx interface {
 	Settings() PlatformSettings
 	SaveSettings(PlatformSettings, uuid.UUID, time.Time) error
 	TeamGovernance() TeamGovernance
+	ReadUserCommand(uuid.UUID) (UserCommandReceipt, bool, error)
+	SaveUserCommand(UserCommandReceipt, time.Time) error
 	InsertProposal(AuthorityProposal) error
 	ProposalReceipt(uuid.UUID, string) (AuthorityProposal, bool, error)
 	SaveProposalReceipt(uuid.UUID, string, AuthorityProposal, time.Time) error
@@ -141,6 +144,23 @@ func (s *Governance) mutateUser(ctx context.Context, actor Principal, target uui
 		if err := tx.RequirePlatform(); err != nil {
 			return err
 		}
+		var receipt UserCommandReceipt
+		if change.RequestID != uuid.Nil {
+			var found bool
+			var err error
+			receipt, found, err = tx.ReadUserCommand(change.RequestID)
+			if err != nil {
+				return err
+			}
+			hash := userCommandHash(target, revision, reason, change.Action)
+			if found {
+				if receipt.RequestHash != hash {
+					return ErrGovernanceConflict
+				}
+				return nil
+			}
+			receipt = UserCommandReceipt{RequestID: change.RequestID, TargetID: target, Action: change.Action, RequestHash: hash}
+		}
 		u, err := tx.User(target)
 		if err != nil {
 			return err
@@ -187,7 +207,12 @@ func (s *Governance) mutateUser(ctx context.Context, actor Principal, target uui
 			return err
 		}
 		if u.Email != "" {
-			return s.notify(tx, u.Email, "account_governance", now)
+			if err := s.notify(tx, u.Email, "account_governance", now); err != nil {
+				return err
+			}
+		}
+		if change.RequestID != uuid.Nil {
+			return tx.SaveUserCommand(receipt, now)
 		}
 		return nil
 	})

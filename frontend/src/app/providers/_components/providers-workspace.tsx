@@ -14,7 +14,6 @@ export function ProvidersWorkspace({
   return (
     <PageLayout
       screen="providers"
-      fullBleed
       search={{
         value: search,
         onValueChange: setSearch,

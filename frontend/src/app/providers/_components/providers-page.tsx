@@ -3,15 +3,18 @@ import { readErrorMessage } from "@/lib/read-error";
 import { ContentState } from "@/components/layout/content-state";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import {
-  ChevronDown,
-  Globe,
-  MoreHorizontal,
-  Plus,
-  Server,
-  ShieldCheck,
-} from "lucide-react";
+  AdminNavigation,
+  SelectionBar,
+} from "@/components/governance/admin-layout";
+import { useBatchOperation } from "@/components/governance/use-batch-operation";
+import { BatchDialog } from "@/components/governance/batch-dialog";
+import {
+  connectionBatchAction,
+  type ConnectionRow,
+} from "@/components/governance/batch-actions";
+import { ListPagination } from "@/components/canvas/runtime/components/layout/workspace/list-pagination";
+import { ChevronDown, Globe, MoreHorizontal, Plus, Server } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -64,6 +67,7 @@ import {
 
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  getAdminProvider,
   exportProviderPreset,
   listAdminProviders,
   listProviderPresets,
@@ -124,12 +128,28 @@ function ProviderAdministration({
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [trialOpen, setTrialOpen] = useState(false);
   const [providers, setProviders] = useState<API.ProviderListItem[]>([]);
+  const [selection, setSelection] = useState<{
+    scope: string;
+    rows: ConnectionRow[];
+  }>({ scope: search, rows: [] });
+  const [cursors, setCursors] = useState<string[]>([""]);
+  const [pageSize, setPageSize] = useState(20);
+  const [nextCursor, setNextCursor] = useState("");
+  const [refresh, setRefresh] = useState(0);
+  const { registerResultTrigger, ...batch } = useBatchOperation<ConnectionRow>(
+    (ids) => {
+      setSelection((s) => ({
+        ...s,
+        rows: s.rows.filter((r) => !ids.includes(r.id)),
+      }));
+      setRefresh((v) => v + 1);
+    },
+  );
   const [presets, setPresets] = useState<API.Preset[]>([]);
   const [selected, setSelected] = useState(initialConnection);
   const [detailOpen, setDetailOpen] = useState(Boolean(initialConnection));
   const [connect, setConnect] = useState<API.Preset | true | null>(null);
   const connectVisible = useRef(false);
-  const [refresh, setRefresh] = useState(0);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
   const readback = useRef<AbortController | null>(null);
@@ -160,12 +180,16 @@ function ProviderAdministration({
   useEffect(() => {
     const controller = new AbortController();
     Promise.all([
-      listAdminProviders({ limit: 200 }, { signal: controller.signal }),
+      listAdminProviders(
+        { limit: pageSize, cursor: cursors.at(-1) || undefined },
+        { signal: controller.signal },
+      ),
       listProviderPresets({ signal: controller.signal }),
     ])
       .then(([connections, registry]) => {
         if (controller.signal.aborted) return;
         setProviders(connections.items ?? []);
+        setNextCursor(connections.next_cursor ?? "");
         setPresets(registry.items ?? []);
         setError("");
         setLoading(false);
@@ -177,7 +201,7 @@ function ProviderAdministration({
         }
       });
     return () => controller.abort();
-  }, [refresh]);
+  }, [refresh, cursors, pageSize]);
   function openConnect(preset: API.Preset | true) {
     rememberTrigger();
     connectVisible.current = true;
@@ -224,15 +248,14 @@ function ProviderAdministration({
     const controller = new AbortController();
     readback.current = controller;
     try {
-      const result = await listAdminProviders(
-        { limit: 200 },
+      const saved = await getAdminProvider(
+        { id },
         { signal: controller.signal },
       );
       if (controller.signal.aborted) return;
-      const saved = result.items?.find((item) => item.provider?.id === id);
       if (!saved || saved.credential?.status !== "active")
         throw new RequestError("request_unconfirmed");
-      setProviders(result.items ?? []);
+      setRefresh((value) => value + 1);
       selectConnection(id);
       connectVisible.current = false;
       setConnect(null);
@@ -244,13 +267,15 @@ function ProviderAdministration({
   }
   const query = search.trim().toLocaleLowerCase();
   const matches = (text: string) => text.toLocaleLowerCase().includes(query);
-  const visibleProviders = providers.filter(
-    (p) =>
-      p.provider?.id &&
-      matches(
-        `${p.provider.name} ${p.provider.adapter_key} ${regionLabel(p.provider.region)}`,
-      ),
-  );
+  const visibleProviders = providers
+    .filter(
+      (p) =>
+        p.provider?.id &&
+        matches(
+          `${p.provider.name} ${p.provider.adapter_key} ${regionLabel(p.provider.region)}`,
+        ),
+    )
+    .map((item) => ({ ...item, id: item.provider!.id! }));
   const visiblePresets = presets.filter((p) =>
     matches(
       `${p.document?.name} ${p.slug} ${p.document?.config?.adapter_key} ${regionLabel(p.document?.config?.region)}`,
@@ -261,15 +286,29 @@ function ProviderAdministration({
     setLoading(true);
     setRefresh((v) => v + 1);
   }
+  const selectedRows =
+    selection.scope === search
+      ? selection.rows.filter((r) =>
+          visibleProviders.some((p) => p.id === r.id),
+        )
+      : [];
+  if (batch.denied)
+    return (
+      <ContentState
+        state="error"
+        title="暂无访问权限"
+        description="管理员权限或会话已失效，请重新登录后继续。"
+      />
+    );
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-6 md:px-8 md:py-10">
+    <div className="flex w-full flex-col gap-5">
+      <AdminNavigation active="providers" />
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-col gap-2">
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <ShieldCheck className="size-3.5" />
-            仅管理员
-          </span>
           <h1 className="text-2xl font-medium tracking-tight">AI 服务接入</h1>
+          <p className="text-sm text-muted-foreground">
+            连接你的 AI 服务，集中管理凭据与模型。
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -278,9 +317,6 @@ function ProviderAdministration({
             onClick={() => setTrialOpen(true)}
           >
             开发试验
-          </Button>
-          <Button variant="ghost" className="max-md:h-11" asChild>
-            <Link href="/models">模型管理</Link>
           </Button>
           <Button
             className="max-md:h-11"
@@ -324,15 +360,58 @@ function ProviderAdministration({
       ) : (
         <>
           <section aria-label="已添加的服务" className="flex flex-col gap-4">
-            <h2 className="text-sm font-medium text-muted-foreground">
-              服务{" "}
-              <span className="ml-1 tabular-nums">
-                {visibleProviders.length}
-              </span>
-            </h2>
+            <SelectionBar
+              count={selectedRows.length}
+              total={visibleProviders.length}
+              disabled={batch.busy || batch.unresolved}
+              onClear={() => setSelection({ scope: search, rows: [] })}
+            >
+              <Button
+                variant="outline"
+                disabled={
+                  batch.busy || batch.unresolved || !!pendingKey.pending
+                }
+                onClick={() =>
+                  void batch.prepare(
+                    selectedRows,
+                    connectionBatchAction("check"),
+                  )
+                }
+              >
+                检查连接
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={
+                  batch.busy || batch.unresolved || !!pendingKey.pending
+                }
+                onClick={() =>
+                  void batch.prepare(
+                    selectedRows,
+                    connectionBatchAction("disable"),
+                  )
+                }
+              >
+                停用连接
+              </Button>
+            </SelectionBar>
             {visibleProviders.length ? (
               <ConnectionList
                 items={visibleProviders}
+                disabled={
+                  batch.busy || batch.unresolved || !!pendingKey.pending
+                }
+                selection={{
+                  selected: selectedRows,
+                  onChange: (updater) =>
+                    setSelection({
+                      scope: search,
+                      rows:
+                        typeof updater === "function"
+                          ? updater(selectedRows)
+                          : updater,
+                    }),
+                }}
                 pendingCredential={
                   pendingKey.pending?.action === "credential.set"
                     ? pendingKey.pending.target
@@ -356,6 +435,34 @@ function ProviderAdministration({
                 }
               />
             )}
+            <ListPagination
+              mode="cursor"
+              label="服务连接分页"
+              current={cursors.length}
+              pageSize={pageSize}
+              pageSizeOptions={[20, 50]}
+              itemCount={visibleProviders.length}
+              hasNextPage={!!nextCursor}
+              disabled={batch.busy || batch.unresolved}
+              onPageChange={(next) => {
+                setSelection({ scope: search, rows: [] });
+                setLoading(true);
+                setCursors((c) =>
+                  next < c.length ? c.slice(0, -1) : [...c, nextCursor],
+                );
+              }}
+              onPageSizeChange={(size) => {
+                setPageSize(size);
+                setCursors([""]);
+                setSelection({ scope: search, rows: [] });
+                setLoading(true);
+              }}
+            />
+            {query ? (
+              <p className="text-xs text-muted-foreground">
+                筛选当前页的连接；翻页后重新选择。
+              </p>
+            ) : null}
           </section>
           <Collapsible
             open={presetsOpen || Boolean(query)}
@@ -510,6 +617,17 @@ function ProviderAdministration({
           </Collapsible>
         </>
       )}
+      {batch.action ? (
+        <Button
+          variant="outline"
+          className="self-start"
+          ref={registerResultTrigger}
+          onClick={() => batch.setOpen(true)}
+        >
+          查看批量操作结果
+        </Button>
+      ) : null}
+      <BatchDialog key={batch.generation} batch={batch} />
       {trialOpen ? (
         <ServiceTrial
           open={trialOpen}
@@ -626,7 +744,7 @@ function ProviderAdministration({
                 if (!confirmation) return;
                 if (confirmation.kind === "provider") {
                   const p = confirmation.provider;
-                  void mutation.run("provider.disable", p.id!, (request) =>
+                  void mutation.run("provider.update", p.id!, (request) =>
                     updateAdminProvider(
                       { id: p.id! },
                       { expected_revision: p.revision, status: "disabled" },

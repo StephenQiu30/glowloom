@@ -10,7 +10,24 @@ import {
   type ConfirmAction,
 } from "@/components/governance/confirmation";
 import { Button } from "@/components/ui/button";
+import { useSession } from "@/components/auth/session";
+import {
+  AdminNavigation,
+  AdminHeading,
+} from "@/components/governance/admin-layout";
 export function PlatformSettingsPage() {
+  const { actor } = useSession();
+  if (actor.platform_role !== "platform_admin")
+    return (
+      <ContentState
+        state="error"
+        title="暂无访问权限"
+        description="此页面仅向平台管理员开放。"
+      />
+    );
+  return <PlatformSettingsAdministration key={actor.id} />;
+}
+function PlatformSettingsAdministration() {
   const [settings, setSettings] = useState<API.PlatformSettings | null>(null);
   const [registration, setRegistration] = useState(false);
   const [creation, setCreation] = useState(false);
@@ -34,8 +51,12 @@ export function PlatformSettingsPage() {
     return () => c.abort();
   }, [reload]);
   return (
-    <div className="mx-auto grid w-full max-w-2xl gap-4 p-4">
-      <h1 className="text-2xl">平台设置</h1>
+    <div className="flex w-full flex-col gap-5">
+      <AdminNavigation active="settings" />
+      <AdminHeading
+        title="平台设置"
+        description="管理平台注册与团队创建规则。"
+      />
       {error ? (
         <ContentState
           state="error"
@@ -56,7 +77,7 @@ export function PlatformSettingsPage() {
       ) : null}
       {settings && !error ? (
         <form
-          className="grid gap-4"
+          className="grid max-w-2xl gap-6"
           onSubmit={(e) => {
             e.preventDefault();
             setAction({
@@ -91,7 +112,7 @@ export function PlatformSettingsPage() {
             />
             允许创建团队
           </FieldLabel>
-          <Button>保存平台设置</Button>
+          <Button className="justify-self-start">保存平台设置</Button>
         </form>
       ) : !error ? (
         <ContentState state="loading" title="正在读取平台设置" />

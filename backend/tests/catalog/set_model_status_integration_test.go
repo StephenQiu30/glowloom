@@ -26,6 +26,9 @@ import (
 func TestSetModelStatusCommitsAuditAndGuardsActivationOnLocalPostgres(t *testing.T) {
 	dsn := os.Getenv("GLOWLOOM_TEST_CATALOG_DB_DSN")
 	if dsn == "" {
+		dsn = os.Getenv("GLOWLOOM_TEST_CANVAS_DB_DSN")
+	}
+	if dsn == "" {
 		t.Skip("set GLOWLOOM_TEST_CATALOG_DB_DSN to an isolated migrated database")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
@@ -168,6 +171,19 @@ func TestSetModelStatusCommitsAuditAndGuardsActivationOnLocalPostgres(t *testing
 	disabled, err := command.Execute(ctx, actor, disable)
 	if err != nil || disabled.ID != created.ID || disabled.Status != domain.ModelDisabled || disabled.Revision != 6 {
 		t.Fatalf("disabled model %+v: %v", disabled, err)
+	}
+	replayed, err := command.Execute(ctx, actor, disable)
+	if err != nil || replayed.Revision != disabled.Revision {
+		t.Fatalf("model replay changed revision: %+v %v", replayed, err)
+	}
+	receipt, err := store.ReadConfigReceipt(ctx, actor, "model.status", created.ID, uuid.MustParse(disable.RequestID))
+	if err != nil || len(receipt.Result) == 0 {
+		t.Fatalf("missing model receipt: %v", err)
+	}
+	changed := disable
+	changed.ExpectedRevision++
+	if _, err := command.Execute(ctx, actor, changed); !errors.Is(err, catalogapp.ErrPresetConflict) {
+		t.Fatalf("model reused changed key: %v", err)
 	}
 	var events []struct {
 		Topic        string

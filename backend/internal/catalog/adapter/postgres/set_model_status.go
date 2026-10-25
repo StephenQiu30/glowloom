@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"time"
@@ -17,6 +18,29 @@ import (
 // SetModelStatusWithAudit rechecks current administrator rights and commits
 // the model status, revision, and audit in one PostgreSQL transaction.
 func (s *Store) SetModelStatusWithAudit(ctx context.Context, actor identityapp.Principal, modelID uuid.UUID, status domain.ModelStatus, expectedRevision int64, event identityapp.OutboxEvent) (domain.ModelProfile, error) {
+	if s == nil || s.db == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || modelID == uuid.Nil ||
+		expectedRevision < 1 || expectedRevision >= math.MaxInt32 ||
+		!validModelStatusAudit(actor.ID, actor.OrgID, modelID, status, expectedRevision, event) {
+		return domain.ModelProfile{}, application.ErrInvalidSetModelStatus
+	}
+	var payload modelStatusAuditEvent
+	if err := json.Unmarshal(event.Payload, &payload); err != nil {
+		return domain.ModelProfile{}, err
+	}
+	requestID, err := uuid.Parse(payload.Data.RequestID)
+	if err != nil {
+		return domain.ModelProfile{}, application.ErrInvalidSetModelStatus
+	}
+	input := struct {
+		Status   domain.ModelStatus
+		Revision int64
+	}{status, expectedRevision}
+	return catalogRequest(ctx, s.db, s.actors, actor, "model.status", modelID, requestID, input, false, func(tx *gorm.DB) (domain.ModelProfile, error) {
+		return s.withDB(tx).setModelStatusWithAudit(ctx, actor, modelID, status, expectedRevision, event)
+	})
+}
+
+func (s *Store) setModelStatusWithAudit(ctx context.Context, actor identityapp.Principal, modelID uuid.UUID, status domain.ModelStatus, expectedRevision int64, event identityapp.OutboxEvent) (domain.ModelProfile, error) {
 	if s == nil || s.db == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || modelID == uuid.Nil ||
 		expectedRevision < 1 || expectedRevision >= math.MaxInt32 ||
 		!validModelStatusAudit(actor.ID, actor.OrgID, modelID, status, expectedRevision, event) {

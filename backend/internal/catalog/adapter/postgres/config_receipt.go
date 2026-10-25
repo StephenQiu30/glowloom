@@ -19,6 +19,30 @@ func (s *Store) ReadConfigReceipt(ctx context.Context, actor identityapp.Princip
 		if err := requirePlatformCatalogAdmin(tx, s.actors, actor); err != nil {
 			return err
 		}
+
+		if action == "credential.test" {
+			if err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, actor.ID.String()+"/"+id.String()).Error; err != nil {
+				return err
+			}
+			var row struct{ ResponseBody []byte }
+			r := tx.Raw(`SELECT response_body FROM infra.idempotency_record WHERE actor_id=? AND idem_key=? AND status_code=202 AND NOT is_delete`, actor.ID, id.String()).Scan(&row)
+			if r.Error != nil {
+				return r.Error
+			}
+			if r.RowsAffected != 1 {
+				return application.ErrProviderNotFound
+			}
+			var accepted application.CredentialTestAccepted
+			if err := json.Unmarshal(row.ResponseBody, &accepted); err != nil {
+				return err
+			}
+			if accepted.ProviderID != target {
+				return application.ErrProviderNotFound
+			}
+			data, err := json.Marshal(accepted)
+			result.Result = data
+			return err
+		}
 		if err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, actor.ID.String()+"/"+action+"/"+target.String()+"/"+id.String()).Error; err != nil {
 			return err
 		}

@@ -775,6 +775,23 @@ export async function getPlatformUser(
   });
 }
 
+/** Recover account governance command GET /api/platform/users/${param0}/commands/${param1} */
+export async function getUserGovernanceReceipt(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getUserGovernanceReceiptParams,
+  options?: RequestOptions,
+) {
+  const { id: param0, request: param1, ...queryParams } = params;
+  return request<API.UserCommandReceipt>(
+    `/api/platform/users/${param0}/commands/${param1}`,
+    {
+      method: "GET",
+      params: { ...queryParams },
+      ...(options || {}),
+    },
+  );
+}
+
 /** Disable account POST /api/platform/users/${param0}/disable */
 export async function platformDisable(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

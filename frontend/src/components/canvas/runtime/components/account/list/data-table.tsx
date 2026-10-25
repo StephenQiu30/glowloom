@@ -9,6 +9,7 @@ import {
   type RowData,
 } from "@tanstack/react-table";
 import type { Dispatch, SetStateAction } from "react";
+import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,6 +37,7 @@ type Props<TData extends { id?: string | number }> = {
   data: TData[];
   label: string;
   loading?: boolean;
+  density?: "default" | "comfortable";
   columnVisibility?: Record<string, boolean>;
   emptyTitle?: string;
   selection?: {
@@ -52,6 +54,7 @@ export function DataTable<TData extends { id?: string | number }>({
   data,
   label,
   loading = false,
+  density = "default",
   columnVisibility,
   emptyTitle = "暂无记录",
   selection,
@@ -63,27 +66,31 @@ export function DataTable<TData extends { id?: string | number }>({
           id: "selection",
           enableHiding: false,
           header: ({ table }) => (
-            <Checkbox
-              aria-label={selection.pageLabel}
-              disabled={selectionDisabled || !data.length}
-              checked={
-                table.getIsAllPageRowsSelected() ||
-                (table.getIsSomePageRowsSelected() && "indeterminate")
-              }
-              onCheckedChange={(checked) =>
-                table.toggleAllPageRowsSelected(checked === true)
-              }
-            />
+            <Label className="flex size-8 items-center justify-center max-md:size-11">
+              <Checkbox
+                aria-label={selection.pageLabel}
+                disabled={selectionDisabled || !data.length}
+                checked={
+                  table.getIsAllPageRowsSelected() ||
+                  (table.getIsSomePageRowsSelected() && "indeterminate")
+                }
+                onCheckedChange={(checked) =>
+                  table.toggleAllPageRowsSelected(checked === true)
+                }
+              />
+            </Label>
           ),
           cell: ({ row }) => (
-            <Checkbox
-              aria-label={`选择 ${selection.getLabel(row.original)}`}
-              checked={row.getIsSelected()}
-              disabled={selectionDisabled}
-              onCheckedChange={(checked) =>
-                row.toggleSelected(checked === true)
-              }
-            />
+            <Label className="flex size-8 items-center justify-center max-md:size-11">
+              <Checkbox
+                aria-label={`选择 ${selection.getLabel(row.original)}`}
+                checked={row.getIsSelected()}
+                disabled={selectionDisabled}
+                onCheckedChange={(checked) =>
+                  row.toggleSelected(checked === true)
+                }
+              />
+            </Label>
           ),
         },
         ...columns,
@@ -124,7 +131,10 @@ export function DataTable<TData extends { id?: string | number }>({
       <Table aria-label={label}>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
+            <TableRow
+              key={headerGroup.id}
+              className={density === "comfortable" ? "h-12" : undefined}
+            >
               {headerGroup.headers.map((header) => (
                 <TableHead key={header.id} scope="col">
                   {header.isPlaceholder ? null : (
@@ -148,6 +158,7 @@ export function DataTable<TData extends { id?: string | number }>({
             table.getRowModel().rows.map((row) => (
               <TableRow
                 key={row.id}
+                className={density === "comfortable" ? "h-18" : undefined}
                 data-state={row.getIsSelected() ? "selected" : undefined}
               >
                 {row.getVisibleCells().map((cell) => (

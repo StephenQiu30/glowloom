@@ -22,6 +22,7 @@ func NewGovernanceHandler(service *application.Governance) *GovernanceHandler {
 
 // Register requires authenticated session and Origin/CSRF middleware on the supplied group.
 func (h *GovernanceHandler) Register(g *gin.RouterGroup) {
+	g.GET("/platform/users/:id/commands/:request", h.userCommandReceipt)
 	g.POST("/platform/users/:id/disable", h.disable)
 	g.POST("/platform/users/:id/enable", h.enable)
 	g.POST("/platform/users/:id/unlock", h.unlock)
@@ -120,7 +121,7 @@ func (h *GovernanceHandler) disable(c *gin.Context) {
 	if !httpapi.Decode(c, &in) {
 		return
 	}
-	if err := h.service.Disable(c.Request.Context(), Principal(c), id, in.ExpectedRevision, in.Reason); err != nil {
+	if err := h.userCommand(c, id, in.ExpectedRevision, in.Reason, "disable"); err != nil {
 		governanceProblem(c, err)
 		return
 	}
@@ -146,7 +147,7 @@ func (h *GovernanceHandler) enable(c *gin.Context) {
 	if !httpapi.Decode(c, &in) {
 		return
 	}
-	if err := h.service.Enable(c.Request.Context(), Principal(c), id, in.ExpectedRevision, in.Reason); err != nil {
+	if err := h.userCommand(c, id, in.ExpectedRevision, in.Reason, "enable"); err != nil {
 		governanceProblem(c, err)
 		return
 	}
@@ -224,7 +225,7 @@ func (h *GovernanceHandler) revokeSessions(c *gin.Context) {
 	if !httpapi.Decode(c, &in) {
 		return
 	}
-	if err := h.service.RevokeSessions(c.Request.Context(), Principal(c), id, in.ExpectedRevision, in.Reason); err != nil {
+	if err := h.userCommand(c, id, in.ExpectedRevision, in.Reason, "revoke_sessions"); err != nil {
 		governanceProblem(c, err)
 		return
 	}

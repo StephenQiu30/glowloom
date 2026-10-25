@@ -1833,6 +1833,13 @@ declare namespace API {
     id: string;
   };
 
+  type getUserGovernanceReceiptParams = {
+    /** Account ID */
+    id: string;
+    /** Original request UUID */
+    request: string;
+  };
+
   type GovernanceMutation = {
     expected_revision?: string;
     reason?: string;
@@ -5200,6 +5207,12 @@ declare namespace API {
     max_micros?: number;
     reviewed_at?: string;
     source?: string;
+  };
+
+  type UserCommandReceipt = {
+    action?: string;
+    request_id?: string;
+    target_id?: string;
   };
 
   type validatePromptFragmentParams = {

@@ -1,7 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { Globe, MoreHorizontal, Server } from "lucide-react";
+import { useState } from "react";
+import { ColumnMenu } from "@/components/governance/column-menu";
+import type { Dispatch, SetStateAction } from "react";
+import {
+  DataTable,
+  type DataTableColumn,
+} from "@/components/canvas/runtime/components/account/list/data-table";
+import type { ConnectionRow } from "@/components/governance/batch-actions";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -44,10 +53,12 @@ function KeySummary({
 }
 function ConnectionMenu({
   item,
+  disabled,
   onSelect,
   onDisable,
 }: {
   item: API.ProviderListItem;
+  disabled?: boolean;
   onSelect: (id: string) => void;
   onDisable: (provider: API.CreatedProvider) => void;
 }) {
@@ -56,6 +67,7 @@ function ConnectionMenu({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
+          disabled={disabled}
           variant="ghost"
           size="icon"
           className="max-md:size-11"
@@ -89,80 +101,126 @@ export function ConnectionList({
   onSelect,
   onDisable,
   pendingCredential,
+  selection,
+  disabled,
 }: {
   pendingCredential?: string;
-  items: API.ProviderListItem[];
+  items: ConnectionRow[];
   onSelect: (id: string) => void;
   onDisable: (provider: API.CreatedProvider) => void;
+  selection: {
+    selected: ConnectionRow[];
+    onChange: Dispatch<SetStateAction<ConnectionRow[]>>;
+  };
+  disabled?: boolean;
 }) {
-  return (
-    <section aria-label="连接列表" className="grid gap-4 sm:grid-cols-2">
-      {items.map((item) => {
-        const p = item.provider!;
-        const Icon = p.adapter_key === "volcengine_ark" ? Server : Globe;
-        const pending = pendingCredential === p.id;
-        const status = pending
-          ? "保存待确认"
-          : p.status === "disabled"
-            ? "已停用"
-            : p.status !== "active"
-              ? "状态未知"
-              : !item.credential
-                ? "待配置 Key"
-                : item.credential.status === "disabled"
-                  ? "Key 已停用"
-                  : item.credential.status === "draining"
-                    ? "Key 仅供恢复"
-                    : item.credential.status !== "active"
-                      ? "Key 状态未知"
-                      : checkLabel(item.credential.last_test_result);
-        return (
-          <article
-            key={p.id}
-            className="flex min-w-0 flex-col gap-5 rounded-xl border bg-card p-5"
+  const mobile = useIsMobile();
+  const [visibility, setVisibility] = useState<Record<string, boolean>>({});
+  const columns: DataTableColumn<ConnectionRow>[] = [
+    {
+      id: "name",
+      header: "连接",
+      cell: ({ row }) => (
+        <div className="flex flex-col gap-1">
+          <span className="break-all whitespace-normal">
+            {row.original.provider?.name}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {regionLabel(row.original.provider?.region)} ·{" "}
+            {row.original.model_count ?? 0} 个模型
+          </span>
+        </div>
+      ),
+    },
+    {
+      id: "adapter",
+      header: "服务",
+      cell: ({ row }) => row.original.provider?.adapter_key ?? "—",
+    },
+    {
+      id: "status",
+      header: "状态",
+      cell: ({ row }) => (
+        <Badge variant="secondary">
+          {pendingCredential === row.original.id
+            ? "保存待确认"
+            : row.original.provider?.status === "active"
+              ? "启用"
+              : "已停用"}
+        </Badge>
+      ),
+    },
+    {
+      id: "credential",
+      header: "凭据",
+      cell: ({ row }) => <KeySummary credential={row.original.credential} />,
+    },
+    {
+      id: "check",
+      header: "最近检查",
+      cell: ({ row }) =>
+        row.original.credential?.status === "disabled"
+          ? "Key 已停用"
+          : row.original.credential?.status === "draining"
+            ? "Key 仅供恢复"
+            : checkLabel(row.original.credential?.last_test_result),
+    },
+    {
+      id: "actions",
+      header: "操作",
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            disabled={disabled}
+            onClick={() => onSelect(row.original.id)}
+            aria-label={`查看 ${row.original.provider?.name}`}
           >
-            <div className="flex items-start justify-between gap-2">
-              <Button
-                variant="ghost"
-                className="-mt-2 -ml-2 h-auto min-w-0 flex-1 justify-start gap-3 p-2 text-left whitespace-normal"
-                onClick={() => onSelect(p.id!)}
-                aria-label={`查看 ${p.name}`}
-              >
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-muted/40">
-                  <Icon className="size-5" />
-                </span>
-                <span className="flex min-w-0 flex-col gap-1">
-                  <span className="font-medium break-words">{p.name}</span>
-                  <span className="text-xs font-normal text-muted-foreground">
-                    {regionLabel(p.region)}
-                  </span>
-                </span>
-              </Button>
-              <ConnectionMenu
-                item={item}
-                onSelect={onSelect}
-                onDisable={onDisable}
-              />
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <Badge variant="secondary">{status}</Badge>
-              <span className="text-xs text-muted-foreground tabular-nums">
-                {item.model_count === undefined
-                  ? "模型数量未知"
-                  : `${item.model_count} 个模型`}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-2 border-t pt-3 text-xs text-muted-foreground">
-              <span>API Key</span>
-              {pending ? (
-                <span>待确认</span>
-              ) : (
-                <KeySummary credential={item.credential} />
-              )}
-            </div>
-          </article>
-        );
-      })}
-    </section>
+            查看
+          </Button>
+          <ConnectionMenu
+            disabled={disabled}
+            item={row.original}
+            onSelect={onSelect}
+            onDisable={onDisable}
+          />
+        </div>
+      ),
+    },
+  ];
+  return (
+    <div className="flex flex-col gap-2">
+      {!mobile ? (
+        <div className="self-end">
+          <ColumnMenu
+            columns={[
+              { id: "adapter", label: "服务" },
+              { id: "credential", label: "凭据" },
+              { id: "check", label: "最近检查" },
+            ]}
+            visibility={visibility}
+            onChange={setVisibility}
+          />
+        </div>
+      ) : null}
+      <DataTable
+        density="comfortable"
+        label="连接列表"
+        columns={columns}
+        data={items}
+        emptyTitle="没有匹配的连接"
+        columnVisibility={{
+          adapter: !mobile && visibility.adapter !== false,
+          credential: !mobile && visibility.credential !== false,
+          check: !mobile && visibility.check !== false,
+        }}
+        selection={{
+          ...selection,
+          getLabel: (r) => r.provider?.name ?? r.id,
+          pageLabel: "选择当前页全部连接",
+          disabled,
+        }}
+      />
+    </div>
   );
 }

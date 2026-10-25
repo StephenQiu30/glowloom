@@ -26,6 +26,9 @@ import (
 func TestCredentialTestRecordsCurrentResultAndEventsOnLocalPostgres(t *testing.T) {
 	dsn := os.Getenv("GLOWLOOM_TEST_CATALOG_DB_DSN")
 	if dsn == "" {
+		dsn = os.Getenv("GLOWLOOM_TEST_CANVAS_DB_DSN")
+	}
+	if dsn == "" {
 		t.Skip("set GLOWLOOM_TEST_CATALOG_DB_DSN to an isolated migrated database")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
@@ -68,6 +71,14 @@ func TestCredentialTestRecordsCurrentResultAndEventsOnLocalPostgres(t *testing.T
 		return catalogapp.CredentialTestRequest{TestID: accepted.TestID, ProviderID: provider.ID, CredentialID: credential, ActorID: actor.ID, OrgID: actor.OrgID, RequestID: key}
 	}
 	request := requestTest(credentialID)
+	receipt, err := store.ReadConfigReceipt(ctx, actor, "credential.test", provider.ID, uuid.MustParse(request.RequestID))
+	var accepted catalogapp.CredentialTestAccepted
+	if err != nil || json.Unmarshal(receipt.Result, &accepted) != nil || accepted.TestID != request.TestID || accepted.CredentialID != credentialID {
+		t.Fatalf("wrong test receipt: %+v %v", receipt, err)
+	}
+	if _, err := store.ReadConfigReceipt(ctx, actor, "credential.test", uuid.New(), uuid.MustParse(request.RequestID)); !errors.Is(err, catalogapp.ErrProviderNotFound) {
+		t.Fatalf("receipt leaked other target: %v", err)
+	}
 	loadedProvider, loadedCredential, err := service.Load(ctx, request)
 	if err != nil || loadedProvider.ID != provider.ID || loadedCredential.ID != credentialID ||
 		!bytes.Equal(loadedCredential.Ciphertext, []byte{0, 1, 2, 3}) {

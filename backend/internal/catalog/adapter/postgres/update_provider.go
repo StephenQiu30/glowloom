@@ -2,6 +2,9 @@ package postgres
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -15,7 +18,62 @@ import (
 
 // UpdateProviderWithEvents locks the current provider and writes the new
 // settings, cache event, and audit event in one transaction.
-func (s *Store) UpdateProviderWithEvents(ctx context.Context, actor identityapp.Principal, before, after domain.Provider, events []identityapp.OutboxEvent) (domain.Provider, error) {
+func (s *Store) UpdateProviderWithEvents(ctx context.Context, actor identityapp.Principal, before, after domain.Provider, events []identityapp.OutboxEvent, input application.UpdateProviderInput) (domain.Provider, error) {
+	key, err := uuid.Parse(input.RequestID)
+	if err != nil || key == uuid.Nil || input.ProviderID != before.ID || input.ExpectedRevision != before.Revision ||
+		(input.Status != nil && *input.Status != after.Status) ||
+		(input.ConcurrencyLimit != nil && *input.ConcurrencyLimit != after.ConcurrencyLimit) ||
+		(input.RateLimitPerMin != nil && *input.RateLimitPerMin != after.RateLimitPerMin) {
+		return domain.Provider{}, application.ErrInvalidUpdateProvider
+	}
+	return catalogRequest(ctx, s.db, s.actors, actor, "provider.update", input.ProviderID, key, input, false, func(tx *gorm.DB) (domain.Provider, error) {
+		return s.withDB(tx).updateProviderWithEvents(ctx, actor, before, after, events)
+	})
+}
+
+// FindProviderUpdateReceipt rechecks authority and returns only an exact original request.
+func (s *Store) FindProviderUpdateReceipt(ctx context.Context, actor identityapp.Principal, input application.UpdateProviderInput) (application.CreatedProvider, bool, error) {
+	var out application.CreatedProvider
+	found := false
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.requirePlatformAdmin(tx, actor); err != nil {
+			return err
+		}
+		lock := actor.ID.String() + "/provider.update/" + input.ProviderID.String() + "/" + input.RequestID
+		if err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, lock).Error; err != nil {
+			return err
+		}
+		var row struct {
+			Fingerprint string
+			Result      []byte
+		}
+		r := tx.Raw(`SELECT fingerprint,result FROM catalog.config_request WHERE actor_id=? AND action='provider.update' AND target_id=? AND request_id=?`, actor.ID, input.ProviderID, input.RequestID).Scan(&row)
+		if r.Error != nil {
+			return r.Error
+		}
+		if r.RowsAffected == 0 {
+			return nil
+		}
+		data, err := json.Marshal(input)
+		if err != nil {
+			return err
+		}
+		digest := sha256.Sum256(data)
+		if row.Fingerprint != hex.EncodeToString(digest[:]) {
+			return application.ErrPresetConflict
+		}
+		var model domain.Provider
+		if err := json.Unmarshal(row.Result, &model); err != nil {
+			return err
+		}
+		out = application.CreatedProvider{ID: model.ID, Key: model.Key, Name: model.Name, AdapterKey: model.AdapterKey, Region: model.Region, Status: model.Status, ConcurrencyLimit: model.ConcurrencyLimit, RateLimitPerMin: model.RateLimitPerMin, Revision: model.Revision, CreateTime: model.CreateTime, UpdateTime: model.UpdateTime}
+		found = true
+		return nil
+	})
+	return out, found, err
+}
+
+func (s *Store) updateProviderWithEvents(ctx context.Context, actor identityapp.Principal, before, after domain.Provider, events []identityapp.OutboxEvent) (domain.Provider, error) {
 	if s == nil || s.db == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil ||
 		before.Validate() != nil || after.Validate() != nil ||
 		before.ID != after.ID || before.Key != after.Key || before.Name != after.Name ||

@@ -3,6 +3,7 @@ package catalog_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -26,15 +27,18 @@ type interveningUpdateProviderStore struct {
 	beforeWrite func(context.Context) error
 }
 
-func (s interveningUpdateProviderStore) UpdateProviderWithEvents(ctx context.Context, actor identityapp.Principal, before, after domain.Provider, events []identityapp.OutboxEvent) (domain.Provider, error) {
+func (s interveningUpdateProviderStore) UpdateProviderWithEvents(ctx context.Context, actor identityapp.Principal, before, after domain.Provider, events []identityapp.OutboxEvent, input catalogapp.UpdateProviderInput) (domain.Provider, error) {
 	if err := s.beforeWrite(ctx); err != nil {
 		return domain.Provider{}, err
 	}
-	return s.UpdateProviderStore.UpdateProviderWithEvents(ctx, actor, before, after, events)
+	return s.UpdateProviderStore.UpdateProviderWithEvents(ctx, actor, before, after, events, input)
 }
 
 func TestUpdateProviderCommitsEventsAndRejectsStaleAdminOnLocalPostgres(t *testing.T) {
 	dsn := os.Getenv("GLOWLOOM_TEST_CATALOG_DB_DSN")
+	if dsn == "" {
+		dsn = os.Getenv("GLOWLOOM_TEST_CANVAS_DB_DSN")
+	}
 	if dsn == "" {
 		t.Skip("set GLOWLOOM_TEST_CATALOG_DB_DSN to an isolated migrated database")
 	}
@@ -106,16 +110,30 @@ func TestUpdateProviderCommitsEventsAndRejectsStaleAdminOnLocalPostgres(t *testi
 	if auditCount != 1 || changedCount != 1 {
 		t.Fatalf("audit=%d changed=%d", auditCount, changedCount)
 	}
+	replayed, err := command.Execute(ctx, actor, input)
+	if err != nil || replayed.Revision != updated.Revision {
+		t.Fatalf("replay changed provider: %+v %v", replayed, err)
+	}
+	receipt, err := store.ReadConfigReceipt(ctx, actor, "provider.update", provider.ID, uuid.MustParse(input.RequestID))
+	if err != nil || len(receipt.Result) == 0 {
+		t.Fatalf("missing provider receipt: %v", err)
+	}
+	changed := input
+	changed.ExpectedRevision = 2
+	if _, err := command.Execute(ctx, actor, changed); !errors.Is(err, catalogapp.ErrPresetConflict) {
+		t.Fatalf("changed payload reused key: %v", err)
+	}
+	input.RequestID = uuid.NewString()
 	if _, err := command.Execute(ctx, actor, input); !errors.Is(err, domain.ErrProviderRevisionConflict) {
 		t.Fatalf("stale revision accepted: %v", err)
 	}
-	if err := conn.DB.WithContext(ctx).Exec(`
+	if err := conn.DB.WithContext(ctx).Exec(fmt.Sprintf(`
 		CREATE FUNCTION reject_provider_update_audit() RETURNS trigger LANGUAGE plpgsql AS $$
 		BEGIN
-		  IF NEW.topic = 'glowloom.audit.recorded.v1' THEN RAISE EXCEPTION 'reject provider update audit'; END IF;
+		  IF NEW.topic = 'glowloom.audit.recorded.v1' AND NEW.partition_key = '%s' THEN RAISE EXCEPTION 'reject provider update audit'; END IF;
 		  RETURN NEW;
 		END $$
-	`).Error; err != nil {
+	`, actor.OrgID.String())).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := conn.DB.WithContext(ctx).Exec(`

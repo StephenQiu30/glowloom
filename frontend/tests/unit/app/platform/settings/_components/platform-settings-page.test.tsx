@@ -7,6 +7,11 @@ vi.mock("@/lib/request", async (original) => ({
   ...(await original<typeof import("@/lib/request")>()),
   request: vi.fn(),
 }));
+vi.mock("@/components/auth/session", () => ({
+  useSession: () => ({
+    actor: { id: "self", platform_role: "platform_admin" },
+  }),
+}));
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();

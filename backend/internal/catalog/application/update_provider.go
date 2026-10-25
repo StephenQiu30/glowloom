@@ -20,7 +20,8 @@ var ErrInvalidUpdateProvider = errors.New("invalid update-provider command")
 // UpdateProviderStore reads current settings and commits a guarded change with events.
 type UpdateProviderStore interface {
 	FindProviderForAdmin(context.Context, identityapp.Principal, uuid.UUID) (domain.Provider, error)
-	UpdateProviderWithEvents(context.Context, identityapp.Principal, domain.Provider, domain.Provider, []identityapp.OutboxEvent) (domain.Provider, error)
+	FindProviderUpdateReceipt(context.Context, identityapp.Principal, UpdateProviderInput) (CreatedProvider, bool, error)
+	UpdateProviderWithEvents(context.Context, identityapp.Principal, domain.Provider, domain.Provider, []identityapp.OutboxEvent, UpdateProviderInput) (domain.Provider, error)
 }
 
 // UpdateProviderInput includes only mutable operational settings.
@@ -61,6 +62,9 @@ func (c *UpdateProviderCommand) Execute(ctx context.Context, actor identityapp.P
 		(input.RateLimitPerMin != nil && (*input.RateLimitPerMin < 1 || *input.RateLimitPerMin > math.MaxInt32)) {
 		return CreatedProvider{}, ErrInvalidUpdateProvider
 	}
+	if receipt, found, err := c.store.FindProviderUpdateReceipt(ctx, actor, input); err != nil || found {
+		return receipt, err
+	}
 	before, err := c.store.FindProviderForAdmin(ctx, actor, input.ProviderID)
 	if err != nil {
 		return CreatedProvider{}, fmt.Errorf("find provider to update: %w", err)
@@ -97,7 +101,7 @@ func (c *UpdateProviderCommand) Execute(ctx context.Context, actor identityapp.P
 	if err != nil {
 		return CreatedProvider{}, fmt.Errorf("build provider update events: %w", err)
 	}
-	saved, err := c.store.UpdateProviderWithEvents(ctx, actor, before, after, events)
+	saved, err := c.store.UpdateProviderWithEvents(ctx, actor, before, after, events, input)
 	if err != nil {
 		return CreatedProvider{}, fmt.Errorf("update provider with events: %w", err)
 	}
