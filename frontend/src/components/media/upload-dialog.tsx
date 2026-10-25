@@ -130,8 +130,8 @@ export function UploadDialog({
             : "图片和文档最多 20 MB，音频 100 MB，视频 500 MB（60 秒），GLB 模型 64 MB。"}
         </DialogDescription>
         {!done && (
-          <FieldGroup>
-            <Field className="sr-only">
+          <FieldGroup className="min-w-0">
+            <div className="sr-only">
               <FieldLabel htmlFor={`${formFieldId}-file`}>
                 选择素材文件
               </FieldLabel>
@@ -144,7 +144,7 @@ export function UploadDialog({
                 disabled={pending || unconfirmed}
                 onChange={(e) => choose(e.target.files?.[0])}
               />
-            </Field>
+            </div>
             <Button
               variant="secondary"
               className="h-auto min-h-40 flex-col gap-3 p-4 break-all whitespace-normal"
@@ -178,7 +178,10 @@ export function UploadDialog({
                 disabled={pending || unconfirmed}
                 onCheckedChange={(v) => setConfirmed(v === true)}
               />
-              <FieldLabel htmlFor={`${formFieldId}-field-1`}>
+              <FieldLabel
+                className="min-w-0 whitespace-normal"
+                htmlFor={`${formFieldId}-field-1`}
+              >
                 我已确认内容与使用权限，文件不包含需要另行授权的真人内容。
               </FieldLabel>
             </Field>

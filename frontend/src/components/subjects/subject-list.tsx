@@ -11,6 +11,7 @@ import {
 import { toast } from "sonner";
 import { Plus, Search, UserRound, MapPin, Box } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { PageHeading } from "@/components/layout/page-heading";
 import {
   DataPagination,
@@ -173,37 +174,42 @@ export function SubjectList({
             />
           </InputGroup>
         ) : null}
-        {filters}
-        <Button
-          variant={deleted ? "outline" : "secondary"}
-          disabled={!deleted}
-          onClick={() => {
-            pageRequest.current?.abort();
-            setLoading(true);
-            setItems([]);
-            setCursor(undefined);
-            setCursorHistory([undefined]);
-            setDeleted(false);
-          }}
-        >
-          可用主体
-        </Button>
-        {!onSelect && (
+        {filters ? <div className="subject-filter-group">{filters}</div> : null}
+        {filters ? (
+          <Separator orientation="vertical" className="toolbar-separator" />
+        ) : null}
+        <div className="toolbar-filter-group">
           <Button
-            variant={deleted ? "secondary" : "outline"}
-            disabled={deleted}
+            variant={deleted ? "outline" : "secondary"}
+            disabled={!deleted}
             onClick={() => {
               pageRequest.current?.abort();
               setLoading(true);
               setItems([]);
               setCursor(undefined);
               setCursorHistory([undefined]);
-              setDeleted(true);
+              setDeleted(false);
             }}
           >
-            已删除
+            可用主体
           </Button>
-        )}
+          {!onSelect && (
+            <Button
+              variant={deleted ? "secondary" : "outline"}
+              disabled={deleted}
+              onClick={() => {
+                pageRequest.current?.abort();
+                setLoading(true);
+                setItems([]);
+                setCursor(undefined);
+                setCursorHistory([undefined]);
+                setDeleted(true);
+              }}
+            >
+              已删除
+            </Button>
+          )}
+        </div>
         {!pageTitle ? (
           <Button className="ml-auto" onClick={() => setCreate(true)}>
             <Plus />
