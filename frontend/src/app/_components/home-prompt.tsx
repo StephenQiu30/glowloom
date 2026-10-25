@@ -38,7 +38,9 @@ export function HomePrompt({
   onChange,
   placeholder,
   onSubmit,
+  label = "创作提示词",
 }: {
+  label?: string;
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
@@ -61,11 +63,14 @@ export function HomePrompt({
   return (
     <div className="home-prompt">
       <PromptEditor
-        contextKey="home-input"
+        label={label}
+        contextKey={
+          label === "画布创作想法" ? "home-canvas-input" : "home-input"
+        }
         replicaId={replicaId}
         draft={initial}
         placeholder={placeholder}
-        className="max-h-80 min-h-24 overflow-y-auto outline-none"
+        className="home-prompt-editor overflow-y-auto outline-none"
         inputGroup
         onReady={setSession}
         onChange={(snapshot) => {

@@ -158,3 +158,26 @@ it("报价冻结期间不能切换类型、项目或工作模式", async () => {
     true,
   );
 });
+
+it("切换画布后保留输入，再切回生成仍可编辑且不提交请求", async () => {
+  render(<Page />);
+  fireEvent.paste(await screen.findByLabelText("创作提示词"), {
+    clipboardData: { files: [], getData: () => "一片安静的海" },
+  });
+  fireEvent.click(screen.getByRole("radio", { name: "画布" }));
+  await waitFor(() =>
+    expect(screen.getByLabelText("画布创作想法").textContent).toBe(
+      "一片安静的海",
+    ),
+  );
+  fireEvent.paste(screen.getByLabelText("画布创作想法"), {
+    clipboardData: { files: [], getData: () => "，傍晚" },
+  });
+  const text = screen.getByLabelText("画布创作想法").textContent;
+  fireEvent.click(screen.getByRole("radio", { name: "生成" }));
+  await waitFor(() =>
+    expect(screen.getByLabelText("创作提示词").textContent).toBe(text),
+  );
+  expect(state.login).not.toHaveBeenCalled();
+  expect(state.opened).toEqual([]);
+});

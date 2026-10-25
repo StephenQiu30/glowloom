@@ -151,6 +151,7 @@ export function ReferenceControls({
   disabled = false,
   authorized = false,
   compact = false,
+  home = false,
   canvasSources,
   incomingSources,
 }: {
@@ -161,6 +162,7 @@ export function ReferenceControls({
   disabled?: boolean;
   authorized?: boolean;
   compact?: boolean;
+  home?: boolean;
   canvasSources?: CanvasReferenceSource[];
   incomingSources?: (CanvasReferenceSource & { edgeID: string })[];
 }) {
@@ -1276,11 +1278,11 @@ export function ReferenceControls({
                   <PopoverTrigger asChild>
                     <Button
                       type="button"
-                      variant="outline"
-                      size="icon"
+                      variant={home ? "reference" : "outline"}
+                      size={home ? "reference" : "icon"}
                       disabled={disabled}
                       aria-label="添加参考"
-                      className="size-14 shrink-0"
+                      className={home ? "shrink-0" : "size-14 shrink-0"}
                     >
                       <Plus />
                     </Button>

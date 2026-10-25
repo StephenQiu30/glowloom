@@ -1,14 +1,14 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useRef, useState, type ReactNode } from "react";
 import { ArrowUp, AtSign, Plus } from "lucide-react";
-import { cn } from "cn";
 import { useOptionalSession } from "@/components/auth/session";
 import { useLoginDialog } from "@/components/layout/basic-layout";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { UnavailableDialog } from "@/components/availability/unavailable";
+import { RecentCanvases } from "@/components/layout/recent-canvases";
+import { useSpace } from "@/components/spaces/space-context";
 import { NewCanvasButton } from "@/components/projects/new-canvas-button";
 import { ProjectPicker } from "@/components/projects/project-picker";
 import type { Project } from "@/components/projects/project";
@@ -16,15 +16,12 @@ import type { GenerationSeed } from "@/components/generation/generation-dialog";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Field, FieldGroup } from "@/components/ui/field";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@/components/ui/input-group";
+import { InputGroup, InputGroupAddon } from "@/components/ui/input-group";
 import {
   Select,
   SelectContent,
   SelectItem,
+  SelectGroup,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -39,7 +36,7 @@ const RichGeneration = dynamic(
   {
     loading: () => (
       <Skeleton
-        className="h-64 w-full rounded-xl"
+        className="creation-editor-skeleton"
         aria-label="正在加载创作编辑器"
       />
     ),
@@ -98,6 +95,7 @@ export function HomeCreation({
 }) {
   const session = useOptionalSession();
   const login = useLoginDialog();
+  const { selected: space } = useSpace();
   const [mode, setMode] = useState("generate");
   const [type, setType] = useState<CreationType>("image");
   const [project, setProject] = useState<Project | null>(null);
@@ -176,12 +174,14 @@ export function HomeCreation({
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {creationTypes.map((item) => (
-          <SelectItem key={item.id} value={item.id}>
-            {item.label}
-            {!["image", "video"].includes(item.id) ? " · 暂未开放" : ""}
-          </SelectItem>
-        ))}
+        <SelectGroup>
+          {creationTypes.map((item) => (
+            <SelectItem key={item.id} value={item.id}>
+              {item.label}
+              {!["image", "video"].includes(item.id) ? " · 暂未开放" : ""}
+            </SelectItem>
+          ))}
+        </SelectGroup>
       </SelectContent>
     </Select>
   );
@@ -206,165 +206,184 @@ export function HomeCreation({
         <ToggleGroupItem value="generate">生成</ToggleGroupItem>
         <ToggleGroupItem value="canvas">画布</ToggleGroupItem>
       </ToggleGroup>
-      <div hidden={mode !== "generate"}>
-        <div className="creation-tabs mt-4">
-          {/* One active panel, owned by the selected type; switching first flushes its saved draft. */}
-          <div>
-            {workspace ? (
-              <RichGeneration
-                key={`${workspace.project.id}/${workspace.type}`}
-                projectID={workspace.project.id}
-                seed={workspace.seed}
-                draftID={workspace.draftID}
-                presentation="home"
-                headerActions={
-                  <>
-                    {typeControl}
-                    {projectControl}
-                  </>
-                }
-                onLock={setLocked}
-                onDraftReady={(id) =>
-                  drafts.current.set(
-                    `${workspace.project.id}/${workspace.type}`,
-                    id,
-                  )
-                }
-                onCloseGuard={(next) => {
-                  guard.current = next;
-                }}
-              />
-            ) : (
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  if (prompt.trim() || !supported) prepare();
-                }}
-              >
-                <FieldGroup>
-                  <Field>
-                    <InputGroup
-                      variant="composer"
-                      className="creation-composer"
-                    >
-                      <InputGroupAddon
-                        align="block-start"
-                        className="creation-reference-tools"
+      <div className="creation-stage" data-testid="creation-stage">
+        <div hidden={mode !== "generate"} className="creation-panel">
+          <div className="creation-tabs">
+            {/* One active panel, owned by the selected type; switching first flushes its saved draft. */}
+            <div>
+              {workspace ? (
+                <RichGeneration
+                  key={`${workspace.project.id}/${workspace.type}`}
+                  projectID={workspace.project.id}
+                  seed={workspace.seed}
+                  draftID={workspace.draftID}
+                  presentation="home"
+                  headerActions={
+                    <>
+                      {typeControl}
+                      {projectControl}
+                    </>
+                  }
+                  onLock={setLocked}
+                  onDraftReady={(id) =>
+                    drafts.current.set(
+                      `${workspace.project.id}/${workspace.type}`,
+                      id,
+                    )
+                  }
+                  onCloseGuard={(next) => {
+                    guard.current = next;
+                  }}
+                />
+              ) : (
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (prompt.trim() || !supported) prepare();
+                  }}
+                >
+                  <FieldGroup>
+                    <Field>
+                      <InputGroup
+                        variant="composer"
+                        className="creation-composer"
                       >
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="icon"
-                          aria-label="添加参考素材"
-                          onClick={prepare}
+                        <div className="creation-editor-body">
+                          <InputGroupAddon
+                            align="inline-start"
+                            className="creation-reference-tools"
+                          >
+                            <Button
+                              type="button"
+                              variant="reference"
+                              size="reference"
+                              aria-label="添加参考素材"
+                              onClick={prepare}
+                            >
+                              <Plus data-icon="inline-start" />
+                            </Button>
+                          </InputGroupAddon>
+                          <HomePrompt
+                            value={prompt}
+                            onChange={onPromptChange}
+                            placeholder={activeType.placeholder}
+                            onSubmit={() => {
+                              if (prompt.trim() || !supported) prepare();
+                            }}
+                          />
+                        </div>
+                        <InputGroupAddon
+                          align="block-end"
+                          className="creation-tools"
                         >
-                          <Plus data-icon="inline-start" />
-                        </Button>
-                        <div className="ml-auto flex min-w-0 items-center gap-1">
-                          {projectControl}
+                          {typeControl}
                           <Button
                             type="button"
                             variant="ghost"
-                            onClick={() => setFeature("更多创作工具")}
+                            onClick={prepare}
                           >
-                            更多工具
+                            选择模型
                           </Button>
-                        </div>
-                      </InputGroupAddon>
-                      <HomePrompt
-                        value={prompt}
-                        onChange={onPromptChange}
-                        placeholder={activeType.placeholder}
-                        onSubmit={() => {
-                          if (prompt.trim() || !supported) prepare();
-                        }}
-                      />
-                      <InputGroupAddon
-                        align="block-end"
-                        className="creation-tools"
-                      >
-                        {typeControl}
-                        <Button type="button" variant="ghost" onClick={prepare}>
-                          选择模型
-                        </Button>
-                        <Button type="button" variant="ghost" onClick={prepare}>
-                          参数
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          aria-label="添加主体或素材引用"
-                          onClick={prepare}
-                        >
-                          <AtSign />
-                        </Button>
-                        <span className="creation-credit-hint">
-                          {supported ? "提交前确认积分" : "暂未开放"}
-                        </span>
-                        <Button
-                          type="submit"
-                          size="icon"
-                          disabled={supported && !prompt.trim()}
-                          aria-label={
-                            supported
-                              ? "开始生成"
-                              : `${activeType.label}暂未开放`
-                          }
-                        >
-                          <ArrowUp />
-                        </Button>
-                      </InputGroupAddon>
-                    </InputGroup>
-                  </Field>
-                </FieldGroup>
-              </form>
-            )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={prepare}
+                          >
+                            参数
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label="添加主体或素材引用"
+                            onClick={prepare}
+                          >
+                            <AtSign />
+                          </Button>
+                          <div className="creation-project-control">
+                            {projectControl}
+                          </div>
+                          <span className="creation-credit-hint">
+                            {supported ? "提交前确认积分" : "暂未开放"}
+                          </span>
+                          <Button
+                            type="submit"
+                            size="icon"
+                            className="creation-submit"
+                            disabled={supported && !prompt.trim()}
+                            aria-label={
+                              supported
+                                ? "开始生成"
+                                : `${activeType.label}暂未开放`
+                            }
+                          >
+                            <ArrowUp />
+                          </Button>
+                        </InputGroupAddon>
+                      </InputGroup>
+                    </Field>
+                  </FieldGroup>
+                </form>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-      <div
-        hidden={mode !== "canvas"}
-        className={cn(mode === "canvas" && "home-canvas-launch")}
-      >
-        <div className="home-canvas-list">
-          <NewCanvasButton variant="tile">
-            <Plus />
-            <span>新建画布</span>
-          </NewCanvasButton>
-          <Button variant="tile" asChild>
-            <Link href="/projects">
-              <span>我的画布</span>
-              <small>查看已保存的创作</small>
-            </Link>
-          </Button>
-        </div>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!session) login();
-            else setFeature("从提示词创建画布");
-          }}
+        <div
+          hidden={mode !== "canvas"}
+          className="creation-panel home-canvas-launch"
         >
-          <InputGroup variant="composer" className="canvas-idea">
-            <InputGroupInput
-              aria-label="画布创作想法"
-              placeholder="输入创作想法，开始一张新画布"
-              value={prompt}
-              onChange={(event) => onPromptChange(event.target.value)}
-            />
-            <InputGroupAddon align="inline-end">
-              <Button
-                type="submit"
-                size="icon"
-                disabled={!prompt.trim()}
-                aria-label="从想法创建画布"
-              >
-                <ArrowUp />
-              </Button>
-            </InputGroupAddon>
-          </InputGroup>
-        </form>
+          {mode === "canvas" && session && space ? (
+            <RecentCanvases
+              key={`${session.actor.id}/${space.id}`}
+              presentation="cards"
+            >
+              <NewCanvasButton variant="tile">
+                <Plus />
+                <span>新建画布</span>
+              </NewCanvasButton>
+            </RecentCanvases>
+          ) : (
+            <div className="home-canvas-list">
+              <NewCanvasButton variant="tile">
+                <Plus />
+                <span>新建画布</span>
+              </NewCanvasButton>
+            </div>
+          )}
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!prompt.trim()) return;
+              if (!session) login();
+              else setFeature("从提示词创建画布");
+            }}
+          >
+            <InputGroup variant="composer" className="canvas-idea">
+              <HomePrompt
+                label="画布创作想法"
+                value={prompt}
+                onChange={onPromptChange}
+                placeholder="输入想法或上传参考，和 Agent 一起创作"
+                onSubmit={() => {
+                  if (!prompt.trim()) return;
+                  if (!session) login();
+                  else setFeature("从提示词创建画布");
+                }}
+              />
+              <InputGroupAddon align="inline-end">
+                <Button
+                  type="submit"
+                  size="icon"
+                  className="creation-submit"
+                  disabled={!prompt.trim()}
+                  aria-label="从想法创建画布"
+                >
+                  <ArrowUp />
+                </Button>
+              </InputGroupAddon>
+            </InputGroup>
+          </form>
+        </div>
       </div>
       <UnavailableDialog feature={feature} onClose={() => setFeature(null)} />
     </section>

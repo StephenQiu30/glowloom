@@ -517,6 +517,7 @@ button:not(:disabled),
   padding: var(--layout-content-y) var(--layout-content-x);
 }
 .creation-hero {
+  --creation-stage-height: 240px;
   max-width: 1012px;
   margin-inline: auto;
   padding: 12px 0 24px;
@@ -526,11 +527,11 @@ button:not(:disabled),
   font-size: 28px;
   font-weight: 600;
   line-height: 36px;
-  margin: 0 0 16px;
+  margin: 0 0 24px;
 }
 .creation-toggle {
-  margin: 0 auto 4px;
-  width: 232px;
+  margin: 0 auto 24px;
+  width: 320px;
   max-width: 100%;
   height: 40px;
   padding: 4px;
@@ -542,44 +543,159 @@ button:not(:disabled),
   flex: 1;
   min-width: 0;
 }
+/* A stable slot for both modes, including loading, empty and error states. */
+.creation-stage {
+  height: var(--creation-stage-height);
+  min-width: 0;
+}
+.creation-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: safe center;
+  height: 100%;
+  min-width: 0;
+  overflow-y: auto;
+}
+.creation-panel[hidden] {
+  display: none;
+}
+.creation-panel > * {
+  flex-shrink: 0;
+}
+.creation-editor-skeleton {
+  height: 160px;
+  width: 100%;
+  border-radius: var(--radius-xl);
+}
 .creation-composer[data-slot="input-group"] {
-  min-height: 176px;
+  min-height: 160px;
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 16px;
   align-items: stretch;
 }
-
+.creation-editor-body {
+  display: flex;
+  gap: 16px;
+  min-width: 0;
+  height: 80px;
+}
+.creation-reference-tools[data-slot="input-group-addon"] {
+  padding: 0;
+  width: auto;
+  align-items: flex-start;
+  flex-shrink: 0;
+}
+.creation-editor-body > .home-prompt {
+  flex: 1;
+  min-width: 0;
+}
+.home-prompt-editor {
+  height: 80px;
+  min-height: 0;
+}
 .creation-tools[data-slot="input-group-addon"] {
-  height: 40px;
+  height: 36px;
   padding: 0;
   gap: 4px;
   flex-shrink: 0;
+  justify-content: flex-start;
 }
-.creation-tools [data-variant="quiet"] {
-  background: transparent;
+.creation-project-control {
+  margin-left: auto;
+  max-width: 160px;
 }
-
+.creation-project-control > button {
+  max-width: 100%;
+  overflow: hidden;
+}
+.creation-submit {
+  flex-shrink: 0;
+  border-radius: 999px;
+}
+.creation-composer-ready[data-slot="input-group"] {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  grid-template-rows: 80px auto;
+  height: auto;
+}
+.creation-composer-ready > .creation-tools {
+  grid-column: 1 / -1;
+}
+.creation-option-tools {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+}
+.creation-option-tools > * {
+  flex-shrink: 0;
+}
+.creation-ready-prompt {
+  min-width: 0;
+  height: 80px;
+  overflow-y: auto;
+}
+.creation-ready-prompt .tiptap {
+  min-height: 80px;
+  max-height: 80px;
+}
+[data-expanded] .creation-composer-ready {
+  grid-template-rows: minmax(240px, 1fr) auto;
+}
+[data-expanded] .creation-ready-prompt,
+[data-expanded] .creation-ready-prompt .tiptap {
+  height: auto;
+  min-height: 240px;
+  max-height: none;
+}
+.home-canvas-launch {
+  gap: 24px;
+  justify-content: flex-start;
+}
 .home-canvas-list {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: 12px;
+  height: 144px;
+  min-width: 0;
 }
-.home-canvas-list > a {
-  height: 140px;
+.home-canvas-list > a,
+.home-canvas-list > button,
+.home-canvas-skeleton {
+  height: 144px;
+  min-width: 0;
   border-radius: 12px;
   gap: 12px;
 }
-.home-canvas-list small {
-  font-size: 12px;
-  color: var(--muted-foreground);
+.home-canvas-state[data-slot="empty"] {
+  grid-column: span 2;
+  min-height: 0;
+  height: 144px;
+  padding: 12px;
+  gap: 8px;
 }
-.canvas-idea {
-  margin: 32px auto 0;
+.home-canvas-state [data-slot="empty-header"] {
+  gap: 4px;
+}
+.home-canvas-state [data-slot="empty-media"] {
+  display: none;
+}
+.canvas-idea[data-slot="input-group"] {
+  margin: 0 auto;
   max-width: 812px;
-  min-height: 70px;
+  height: 72px;
   padding: 12px 16px;
+}
+.canvas-idea .home-prompt {
+  flex: 1;
+  min-width: 0;
+}
+.canvas-idea .home-prompt-editor {
+  height: 44px;
 }
 .inspiration h2 {
   font-size: 16px;
@@ -880,36 +996,45 @@ button:not(:disabled),
     padding: 24px 16px 32px;
   }
   .creation-hero {
-    padding: 24px 0 32px;
+    padding: 8px 0 16px;
   }
   .creation-hero h1 {
-    font-size: 24px;
-    line-height: 34px;
-    margin-bottom: 24px;
+    font-size: 20px;
+    line-height: 32px;
+    margin-bottom: 16px;
   }
   .creation-toggle {
-    margin-bottom: 8px;
+    width: 100%;
+    margin-bottom: 16px;
   }
   .creation-composer[data-slot="input-group"] {
-    min-height: 248px;
-    padding: 16px;
+    min-height: 200px;
+    padding: 12px;
   }
-
+  .creation-editor-body {
+    gap: 12px;
+  }
   .creation-tools[data-slot="input-group-addon"] {
     gap: 0;
     flex-wrap: wrap;
     height: auto;
   }
-
   .creation-tools > button {
+    min-height: 36px;
     padding-inline: 8px;
-    min-height: 44px;
-    min-width: 44px;
   }
-  .creation-tools > button:first-child {
-    padding-left: 0;
+  .creation-project-control {
+    max-width: 120px;
   }
-
+  .creation-composer-ready > .creation-tools {
+    flex-wrap: nowrap;
+  }
+  .home-canvas-launch {
+    gap: 16px;
+  }
+  .creation-editor-skeleton {
+    height: 200px;
+  }
   .inspiration h2 {
     margin: 0 0 16px;
     font-size: 14px;
@@ -952,16 +1077,17 @@ button:not(:disabled),
     display: flex;
     overflow-x: auto;
   }
-  .home-canvas-list > a {
-    flex: 0 0 252px;
+  .home-canvas-list > a,
+  .home-canvas-list > button,
+  .home-canvas-skeleton {
+    flex: 0 0 172px;
   }
-  .canvas-idea {
-    margin-top: 30px;
+  .home-canvas-state[data-slot="empty"] {
+    flex: 0 0 172px;
   }
-}
-@media (max-width: 359px) {
-  .creation-composer[data-slot="input-group"] {
-    height: 256px;
+  .canvas-idea[data-slot="input-group"] {
+    height: 80px;
+    padding: 12px;
   }
 }
 .workspace-tabs {
@@ -2216,29 +2342,12 @@ button:not(:disabled),
   }
 }
 
-/* Shared homepage creation entry, with the same anchored controls as the canvas. */
-.creation-tabs-scroll {
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
+/* Shared homepage prompt behavior. Layout is owned by the creation stage above. */
 .creation-tabs {
   min-width: 0;
 }
-.creation-tabs-scroll [data-slot="tabs-list"] {
-  justify-content: flex-start;
-}
-.creation-tabs [data-slot="tabs-content"] {
-  min-width: 0;
-}
-.creation-reference-tools[data-slot="input-group-addon"] {
-  padding: 0;
-}
-.creation-composer > .home-prompt {
-  min-height: 96px;
-  flex: 1;
-}
-.home-prompt .tiptap:has(> p:only-child > br:only-child)::before {
+.home-prompt .tiptap:has(> p:only-child > br:only-child)::before,
+.creation-ready-prompt .tiptap:has(> p:only-child > br:only-child)::before {
   content: attr(data-placeholder);
   color: var(--muted-foreground);
   pointer-events: none;
@@ -2256,15 +2365,6 @@ button:not(:disabled),
   }
   .creation-tools > button:last-child {
     margin-left: auto;
-  }
-  .creation-tabs-scroll [data-slot="tabs-trigger"] {
-    min-height: 44px;
-  }
-  .creation-tabs-scroll [data-slot="tabs-list"] {
-    height: 44px;
-  }
-  .creation-reference-tools > div > button {
-    max-width: 140px;
   }
 }
 

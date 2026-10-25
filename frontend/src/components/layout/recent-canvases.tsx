@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Box } from "lucide-react";
 import { listProjects } from "@/api/projects";
@@ -10,6 +10,8 @@ import {
   type Project,
 } from "@/components/projects/project";
 import { subscribeProjectInvalidation } from "@/components/projects/project-presentation-store";
+import { ContentState } from "./content-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
   SidebarMenu,
@@ -18,7 +20,15 @@ import {
 } from "@/components/ui/sidebar";
 
 /** Mounted with an actor/space key. Never retain another scope's private list. */
-export function RecentCanvases({ onNavigate }: { onNavigate: () => void }) {
+export function RecentCanvases({
+  onNavigate,
+  presentation = "sidebar",
+  children,
+}: {
+  onNavigate?: () => void;
+  presentation?: "sidebar" | "cards";
+  children?: ReactNode;
+}) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [error, setError] = useState(false);
@@ -105,6 +115,46 @@ export function RecentCanvases({ onNavigate }: { onNavigate: () => void }) {
       }
     }
   }
+  if (presentation === "cards")
+    return (
+      <div className="home-canvas-list" aria-label="最近画布">
+        {children}
+        {projects?.slice(0, 3).map((project) => (
+          <Button key={project.id} variant="tile" asChild>
+            <Link
+              href={canvasHref(project)}
+              onClick={onNavigate}
+              title={project.name}
+            >
+              <Box aria-hidden="true" />
+              <span className="max-w-full truncate">{project.name}</span>
+            </Link>
+          </Button>
+        ))}
+        {error ? (
+          <ContentState
+            className="home-canvas-state"
+            state="error"
+            title="暂时无法读取画布"
+            actions={
+              <Button variant="ghost" onClick={() => setRevision((n) => n + 1)}>
+                重试读取画布
+              </Button>
+            }
+          />
+        ) : projects === null ? (
+          [0, 1, 2].map((key) => (
+            <Skeleton
+              key={key}
+              className="home-canvas-skeleton"
+              aria-label="正在读取画布"
+            />
+          ))
+        ) : projects.length === 0 ? (
+          <ContentState className="home-canvas-state" title="暂无画布" />
+        ) : null}
+      </div>
+    );
   return (
     <SidebarMenu aria-label="最近画布">
       {projects?.map((project) => (

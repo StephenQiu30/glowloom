@@ -1166,6 +1166,7 @@ function EditorWorkspace({
       disabled={frozen}
       authorized={sourceReady}
       compact={compact}
+      home={presentation === "home"}
       canvasSources={canvas?.referenceSources}
       incomingSources={canvas?.incomingSources}
     />
@@ -1540,57 +1541,38 @@ function EditorWorkspace({
           <InputGroup
             variant="composer"
             className={cn(
-              "min-h-[208px] flex-col items-stretch gap-1",
-              presentation === "home" && "min-h-[248px]",
+              presentation === "home"
+                ? "creation-composer creation-composer-ready"
+                : "min-h-[208px] flex-col items-stretch gap-1",
             )}
           >
             <InputGroupAddon
               align="block-start"
-              className="items-start px-4 pt-4"
+              className={
+                presentation === "home"
+                  ? "creation-reference-tools"
+                  : "items-start px-4 pt-4"
+              }
             >
               {referenceControls}
-              {headerActions}
-              {presentation === "home" && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <InputGroupButton
-                      className="ml-auto"
-                      disabled={pending || frozen}
-                    >
-                      更多工具
-                    </InputGroupButton>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" sideOffset={8}>
-                    <DropdownMenuGroup>
-                      <DropdownMenuItem
-                        onSelect={() =>
-                          void run(async () => {
-                            await flush();
-                          })
-                        }
-                      >
-                        保存草稿
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => void loadDrafts()}>
-                        找回草稿
-                      </DropdownMenuItem>
-                    </DropdownMenuGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+              {presentation !== "home" && headerActions}
+              {presentation !== "home" && (
+                <InputGroupButton
+                  aria-label={full ? "退出全屏" : "展开编辑器"}
+                  size="icon-sm"
+                  className="ml-auto"
+                  onClick={() => setFull((value) => !value)}
+                >
+                  {full ? <Minimize2 /> : <Maximize2 />}
+                </InputGroupButton>
               )}
-              <InputGroupButton
-                aria-label={full ? "退出全屏" : "展开编辑器"}
-                size="icon-sm"
-                className={cn(presentation !== "home" && "ml-auto")}
-                onClick={() => setFull((value) => !value)}
-              >
-                {full ? <Minimize2 /> : <Maximize2 />}
-              </InputGroupButton>
             </InputGroupAddon>
             <div
               data-slot="input-group-control"
               className={cn(
-                "min-h-20 w-full flex-1 px-4 py-2 [&_.tiptap]:min-h-16 [&_.tiptap]:outline-none",
+                presentation === "home"
+                  ? "creation-ready-prompt"
+                  : "min-h-20 w-full flex-1 px-4 py-2 [&_.tiptap]:min-h-16 [&_.tiptap]:outline-none",
                 full && "[&_.tiptap]:min-h-64",
               )}
             >
@@ -1598,64 +1580,112 @@ function EditorWorkspace({
             </div>
             <InputGroupAddon
               align="block-end"
-              className="flex-wrap gap-1 px-4 pb-4"
+              className={
+                presentation === "home"
+                  ? "creation-tools"
+                  : "flex-wrap gap-1 px-4 pb-4"
+              }
             >
-              <ModelPicker
-                models={models}
-                value={draft.modelVersion}
-                disabled={frozen || !session}
-                onSelect={(target) => {
-                  if (target.current_version?.id)
-                    void selectMode(
-                      target.current_version.id,
-                      referenceMode(
-                        { ...draft, modelVersion: target.current_version.id },
-                        target,
-                      ) ?? "",
-                    );
-                }}
-              />
-              <Popover>
-                <PopoverTrigger asChild>
-                  <InputGroupButton
-                    aria-label="生成参数"
-                    disabled={!model || !session || frozen}
-                  >
-                    {[draft.params.aspect_ratio, draft.params.resolution]
-                      .filter((value) => typeof value === "string" && value)
-                      .join(" · ") || "参数"}{" "}
-                    · {Number(draft.params.output_count ?? 1)}
-                    <ChevronDown data-icon="inline-end" />
-                  </InputGroupButton>
-                </PopoverTrigger>
-                <PopoverContent
-                  side="top"
-                  align="start"
-                  sideOffset={8}
-                  collisionPadding={16}
-                  className="max-h-[min(70dvh,var(--radix-popover-content-available-height))] w-[336px] max-w-[calc(100vw-32px)] overflow-y-auto rounded-2xl bg-(--floating-surface) p-4 shadow-xl"
-                  aria-label="生成参数"
-                >
-                  {parameterControls}
-                </PopoverContent>
-              </Popover>
-              <span className="px-2 text-xs text-muted-foreground">
-                全能参考
-              </span>
-              <InputGroupButton
-                aria-label="提及素材或主体"
-                size="icon-sm"
-                disabled={frozen || !session}
-                onClick={() =>
-                  session?.editor
-                    .chain()
-                    .focus(undefined, { scrollIntoView: false })
-                    .insertContent("@")
-                    .run()
+              <div
+                className={
+                  presentation === "home" ? "creation-option-tools" : "contents"
                 }
               >
-                <AtSign />
-              </InputGroupButton>
+                {presentation === "home" && headerActions}
+                <ModelPicker
+                  models={models}
+                  value={draft.modelVersion}
+                  disabled={frozen || !session}
+                  onSelect={(target) => {
+                    if (target.current_version?.id)
+                      void selectMode(
+                        target.current_version.id,
+                        referenceMode(
+                          { ...draft, modelVersion: target.current_version.id },
+                          target,
+                        ) ?? "",
+                      );
+                  }}
+                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <InputGroupButton
+                      aria-label="生成参数"
+                      disabled={!model || !session || frozen}
+                    >
+                      {[draft.params.aspect_ratio, draft.params.resolution]
+                        .filter((value) => typeof value === "string" && value)
+                        .join(" · ") || "参数"}{" "}
+                      · {Number(draft.params.output_count ?? 1)}
+                      <ChevronDown data-icon="inline-end" />
+                    </InputGroupButton>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    side="top"
+                    align="start"
+                    sideOffset={8}
+                    collisionPadding={16}
+                    className="max-h-[min(70dvh,var(--radix-popover-content-available-height))] w-[336px] max-w-[calc(100vw-32px)] overflow-y-auto rounded-2xl bg-(--floating-surface) p-4 shadow-xl"
+                    aria-label="生成参数"
+                  >
+                    {parameterControls}
+                  </PopoverContent>
+                </Popover>
+                <span className="px-2 text-xs text-muted-foreground">
+                  全能参考
+                </span>
+                <InputGroupButton
+                  aria-label="提及素材或主体"
+                  size="icon-sm"
+                  disabled={frozen || !session}
+                  onClick={() =>
+                    session?.editor
+                      .chain()
+                      .focus(undefined, { scrollIntoView: false })
+                      .insertContent("@")
+                      .run()
+                  }
+                >
+                  <AtSign />
+                </InputGroupButton>
+                {presentation === "home" && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <InputGroupButton
+                        className="ml-auto"
+                        disabled={pending || frozen}
+                      >
+                        更多工具
+                      </InputGroupButton>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" sideOffset={8}>
+                      <DropdownMenuGroup>
+                        <DropdownMenuItem
+                          onSelect={() =>
+                            void run(async () => {
+                              await flush();
+                            })
+                          }
+                        >
+                          保存草稿
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => void loadDrafts()}>
+                          找回草稿
+                        </DropdownMenuItem>
+                      </DropdownMenuGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
+              {presentation === "home" && (
+                <InputGroupButton
+                  aria-label={full ? "退出全屏" : "展开编辑器"}
+                  size="icon-sm"
+                  onClick={() => setFull((value) => !value)}
+                >
+                  {full ? <Minimize2 /> : <Maximize2 />}
+                </InputGroupButton>
+              )}
               {current.submission ? (
                 <InputGroupButton
                   className="ml-auto"
