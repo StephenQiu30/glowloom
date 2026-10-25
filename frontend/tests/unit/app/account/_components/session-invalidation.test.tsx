@@ -90,7 +90,7 @@ it("a loaded account mutation 401 clears identity and unmounts private fields", 
   });
   render(
     <SessionGate>
-      <Settings />
+      <Settings initialView="profile" />
     </SessionGate>,
   );
   const field = await screen.findByLabelText("显示名");

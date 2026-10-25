@@ -14,10 +14,12 @@ export function BoundAvatar({
   load,
   assetID,
   label = "头像",
+  size = "default",
 }: {
   load: (signal: AbortSignal) => Promise<Preview>;
   assetID?: string;
   label?: string;
+  size?: "compact" | "default";
 }) {
   const [preview, setPreview] = useState<{
     assetID: string;
@@ -100,8 +102,8 @@ export function BoundAvatar({
   }, [assetID, retry]);
   return (
     <div ref={host}>
-      <Avatar className="size-14">
-        <AvatarImage src={url} alt={label} />
+      <Avatar className={size === "compact" ? "size-12" : "size-14"}>
+        <AvatarImage src={url || undefined} alt={label} />
         <AvatarFallback>
           {label === "头像" ? "织" : Array.from(label.trim())[0] || "织"}
         </AvatarFallback>
@@ -159,12 +161,19 @@ export function AvatarEditor({
   load,
   bind,
   onConflict,
+  compact = false,
+  label = "头像",
+  onBusyChange,
 }: {
   assetID?: string;
   load: (signal: AbortSignal) => Promise<Preview>;
   bind: (asset: string | null, signal: AbortSignal) => Promise<void>;
   onConflict?: () => Promise<void> | void;
+  compact?: boolean;
+  label?: string;
+  onBusyChange?: (busy: boolean) => void;
 }) {
+  const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [local, setLocal] = useState("");
   const [crop, setCrop] = useState(false);
@@ -184,6 +193,7 @@ export function AvatarEditor({
     if (lock.current) return;
     lock.current = true;
     setPending(true);
+    onBusyChange?.(true);
     setError("");
     const c = new AbortController();
     flight.current = c;
@@ -215,22 +225,55 @@ export function AvatarEditor({
       }
     } finally {
       lock.current = false;
-      if (!c.signal.aborted) setPending(false);
+      if (!c.signal.aborted) {
+        setPending(false);
+        onBusyChange?.(false);
+      }
     }
   }
   return (
     <section className="grid gap-3" aria-label="编辑头像">
-      <BoundAvatar key={assetID} assetID={assetID} load={load} />
-      <FieldLabel className="grid gap-2">
+      <div className="flex items-center gap-3">
+        <BoundAvatar
+          key={assetID}
+          assetID={assetID}
+          label={label}
+          load={load}
+          size={compact ? "compact" : "default"}
+        />
+        {compact && (
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={pending}
+            onClick={() => input.current?.click()}
+          >
+            更换头像
+          </Button>
+        )}
+      </div>
+      <FieldLabel className={compact ? "sr-only" : "grid gap-2"}>
         选择头像（JPEG、PNG、WebP，最多 5 MB）
         <Input
+          ref={input}
           type="file"
           accept="image/jpeg,image/png,image/webp"
           disabled={pending}
           onChange={(e) => {
             const next = e.target.files?.[0];
             setError("");
+            setNotice("");
+            setFile(null);
+            setLocal("");
             setCrop(false);
+            e.target.value = "";
+            if (
+              next &&
+              !["image/jpeg", "image/png", "image/webp"].includes(next.type)
+            ) {
+              setError("请选择 JPEG、PNG 或 WebP 图片。");
+              return;
+            }
             if (next && next.size > 5 * 1024 * 1024) {
               setError("图片不能超过 5 MB。");
               return;
@@ -258,7 +301,7 @@ export function AvatarEditor({
             />
             将图片居中裁剪为正方形
           </FieldLabel>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-end gap-3">
             <Button
               type="button"
               disabled={pending}
@@ -284,7 +327,8 @@ export function AvatarEditor({
       {assetID ? (
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
+          className="w-fit"
           disabled={pending}
           onClick={() => void save(true)}
         >

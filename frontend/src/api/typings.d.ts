@@ -2637,6 +2637,7 @@ declare namespace API {
 
   type MeView = {
     avatar_asset_id: string;
+    bio: string;
     capabilities: string[];
     display_name: string;
     email: string;
@@ -3047,12 +3048,14 @@ declare namespace API {
   };
 
   type PreferencesUpdateRequest = {
+    canvas_background?: "dots" | "lines" | "blank";
     expected_revision: string;
-    prompt_suffix: string;
-    theme: string;
+    prompt_suffix?: string;
+    theme?: string;
   };
 
   type PreferencesView = {
+    canvas_background: "dots" | "lines" | "blank";
     prompt_suffix: string;
     revision: string;
     theme: string;
@@ -3193,7 +3196,8 @@ declare namespace API {
 
   type ProfileUpdateRequest = {
     avatar_asset_id?: string;
-    display_name: string;
+    bio?: string;
+    display_name?: string;
     expected_revision: string;
   };
 

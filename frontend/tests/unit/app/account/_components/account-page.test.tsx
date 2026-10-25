@@ -1,4 +1,5 @@
-import { render, findFeedback } from "../../../../feedback";
+import { SWRConfig } from "swr";
+import { render } from "../../../../feedback";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { Settings } from "@/app/account/_components/account-page";
@@ -75,7 +76,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 it("profile saved state requires server readback and preserves explicit missing capabilities", async () => {
-  render(<Settings />);
+  render(<Settings initialView="profile" />);
   const name = await screen.findByLabelText("显示名");
   fireEvent.change(name, { target: { value: "Updated" } });
   fireEvent.click(screen.getByText("保存资料"));
@@ -88,6 +89,7 @@ it("profile saved state requires server readback and preserves explicit missing 
       }),
     }),
   );
+  fireEvent.click(screen.getByRole("button", { name: "编辑资料" }));
   expect(screen.getByRole("region", { name: "编辑头像" })).toBeTruthy();
   expect(screen.queryByRole("region", { name: "更换邮箱" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "更换邮箱" }));
@@ -100,11 +102,11 @@ it("profile conflict preserves unsaved intent and offers reload", async () => {
       throw new RequestError("revision_conflict", 409);
     return original(url, options);
   });
-  render(<Settings />);
+  render(<Settings initialView="profile" />);
   const name = await screen.findByLabelText("显示名");
   fireEvent.change(name, { target: { value: "Unsaved" } });
   fireEvent.click(screen.getByText("保存资料"));
-  expect(await findFeedback()).toBeTruthy();
+  expect(await screen.findByRole("alert")).toBeTruthy();
   expect(name).toHaveProperty("value", "Unsaved");
   expect(mocks.update).not.toHaveBeenCalled();
 });
@@ -120,18 +122,28 @@ it("last administrator duties prevent showing confirmation flow", async () => {
         }
       : original(url, options),
   );
-  render(<Settings />);
+  render(<Settings initialView="profile" />);
   await screen.findByLabelText("显示名");
-  fireEvent.click(screen.getByText("注销账号"));
+  fireEvent.click(screen.getByLabelText("返回账号设置"));
+  fireEvent.pointerDown(screen.getByLabelText("更多账号设置"), {
+    button: 0,
+    ctrlKey: false,
+  });
+  fireEvent.click(await screen.findByText("注销账号"));
   fireEvent.click(screen.getByText("检查注销影响"));
   expect(await screen.findByText("last_platform_administrator")).toBeTruthy();
   expect(screen.queryByText("验证密码并发送验证码")).toBeNull();
   expect(mocks.clear).not.toHaveBeenCalled();
 });
 it("revocation refreshes directory and security activity contains no private payload", async () => {
-  render(<Settings />);
+  render(<Settings initialView="profile" />);
   await screen.findByLabelText("显示名");
-  fireEvent.click(screen.getByText("密码与会话"));
+  fireEvent.click(screen.getByLabelText("返回账号设置"));
+  fireEvent.pointerDown(screen.getByLabelText("更多账号设置"), {
+    button: 0,
+    ctrlKey: false,
+  });
+  fireEvent.click(await screen.findByText("密码与会话"));
   fireEvent.click(screen.getByText("退出其他设备"));
   await waitFor(() =>
     expect(request).toHaveBeenCalledWith(
@@ -151,13 +163,18 @@ it("security event failure cannot block loaded profile or leave loading visible"
       throw new RequestError("temporarily_unavailable", 503);
     return original(url, options);
   });
-  render(<Settings />);
+  render(<Settings initialView="profile" />);
   expect(await screen.findByLabelText("显示名")).toHaveProperty(
     "value",
     "Alice",
   );
   expect(screen.queryByText("正在加载账号资料…")).toBeNull();
-  fireEvent.click(screen.getByText("密码与会话"));
+  fireEvent.click(screen.getByLabelText("返回账号设置"));
+  fireEvent.pointerDown(screen.getByLabelText("更多账号设置"), {
+    button: 0,
+    ctrlKey: false,
+  });
+  fireEvent.click(await screen.findByText("密码与会话"));
   expect(
     await screen.findByRole("heading", { name: "安全活动暂时无法读取" }),
   ).toBeTruthy();
@@ -188,7 +205,7 @@ it("清除头像经生成客户端传送 HTTP null 并以本人读回结果更�
     }
     return original(url, options);
   });
-  render(<Settings />);
+  render(<Settings initialView="profile" />);
   fireEvent.click(await screen.findByText("恢复默认头像"));
   await screen.findByText("已恢复默认头像。");
   expect(screen.queryByText("恢复默认头像")).toBeNull();
@@ -213,7 +230,7 @@ it("profile read error stays in the dialog and retry replaces it with loading", 
     }
     return original(url, options);
   });
-  render(<Settings />);
+  render(<Settings initialView="profile" />);
   expect(await screen.findByRole("alert")).toHaveProperty(
     "textContent",
     expect.stringContaining("个人资料暂时无法读取"),
@@ -231,4 +248,96 @@ it("profile read error stays in the dialog and retry replaces it with loading", 
     "value",
     "Alice",
   );
+});
+
+it("theme is applied only after a matching service readback", async () => {
+  const original = vi.mocked(request).getMockImplementation()!;
+  let committed = false;
+  vi.mocked(request).mockImplementation(async (url, options) => {
+    if (url === "/api/me/preferences") {
+      if (options?.method === "PATCH") committed = true;
+      return {
+        revision: committed ? "2" : "1",
+        theme: committed ? "dark" : "system",
+        prompt_suffix: "initial",
+      };
+    }
+    return original(url, options);
+  });
+  render(<Settings />);
+  fireEvent.click(
+    await screen.findByRole("button", { name: /主题模式.*跟随系统/ }),
+  );
+  fireEvent.click(screen.getByRole("radio", { name: "深色" }));
+  expect(
+    await screen.findByRole("button", { name: /主题模式.*深色/ }),
+  ).toBeTruthy();
+  expect(mocks.theme).toHaveBeenLastCalledWith("dark");
+  expect(
+    vi
+      .mocked(request)
+      .mock.calls.some(
+        ([url, options]) =>
+          url === "/api/me/preferences" && options?.method === "PATCH",
+      ),
+  ).toBe(true);
+});
+it("a mismatched preference readback keeps the choice open and does not announce success", async () => {
+  render(<Settings />);
+  fireEvent.click(
+    await screen.findByRole("button", { name: /主题模式.*跟随系统/ }),
+  );
+  fireEvent.click(screen.getByRole("radio", { name: "深色" }));
+  expect(await screen.findByRole("alert")).toBeTruthy();
+  expect(
+    screen
+      .getByRole("radio", { name: "跟随系统" })
+      .getAttribute("aria-checked"),
+  ).toBe("true");
+  expect(mocks.theme).not.toHaveBeenCalledWith("dark");
+  expect(screen.queryByText("偏好已保存。")).toBeNull();
+});
+
+it("saves biography then background using the new revision in a scoped cache", async () => {
+  let revision = 1,
+    bio = "",
+    background: "dots" | "lines" | "blank" = "dots";
+  vi.mocked(request).mockImplementation(async (url, options) => {
+    if (url === "/api/me" || url === "/api/me/preferences") {
+      const body = options?.data as Record<string, string> | undefined;
+      if (options?.method === "PATCH") {
+        if (body?.expected_revision !== String(revision))
+          throw new RequestError("revision_conflict", 409);
+        revision++;
+        if (body?.bio !== undefined) bio = body.bio;
+        if (body?.canvas_background)
+          background = body.canvas_background as typeof background;
+      }
+      return url === "/api/me"
+        ? { ...profile, bio, revision: String(revision) }
+        : {
+            revision: String(revision),
+            canvas_background: background,
+            theme: "dark",
+            prompt_suffix: "",
+          };
+    }
+    return { items: [] };
+  });
+  render(<Settings initialView="profile" />, {
+    wrapper: ({ children }) => (
+      <SWRConfig value={{ provider: () => new Map() }}>{children}</SWRConfig>
+    ),
+  });
+  fireEvent.change(await screen.findByLabelText("个人简介"), {
+    target: { value: "光影创作者" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存资料" }));
+  fireEvent.click(await screen.findByRole("button", { name: /画布背景.*点阵/ }));
+  fireEvent.click(screen.getByRole("radio", { name: "网格" }));
+  expect(
+    await screen.findByRole("button", { name: /画布背景.*网格/ }),
+  ).toBeTruthy();
+  expect(bio).toBe("光影创作者");
+  expect(screen.queryByRole("alert")).toBeNull();
 });

@@ -538,7 +538,7 @@ export function CanvasViewControls({
           >
             <DropdownMenuRadioItem value="dots">点阵</DropdownMenuRadioItem>
             <DropdownMenuRadioItem value="lines">网格</DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="blank">纯色</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="blank">无背景</DropdownMenuRadioItem>
           </DropdownMenuRadioGroup>
         </DropdownMenuContent>
       </DropdownMenu>

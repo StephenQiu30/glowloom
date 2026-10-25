@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -19,6 +20,7 @@ var ErrAvatarUnavailable = errors.New("avatar unavailable")
 type ProfileInput struct {
 	ExpectedRevision int64
 	DisplayName      *string
+	Bio              *string
 	AvatarID         *uuid.UUID
 	ClearAvatar      bool
 }
@@ -29,6 +31,7 @@ type Profile struct {
 	Email           string
 	EmailVerifiedAt time.Time
 	DisplayName     string
+	Bio             string
 	AvatarID        *uuid.UUID
 	PlatformRole    string
 	Status          domain.Status
@@ -37,8 +40,8 @@ type Profile struct {
 
 // Preferences stores account-wide creation and appearance choices.
 type Preferences struct {
-	Theme, PromptSuffix string
-	Revision            int64
+	Theme, PromptSuffix, CanvasBackground string
+	Revision                              int64
 }
 
 // AvatarAccess validates media eligibility and ownership before profile binding.
@@ -70,7 +73,7 @@ func NewSelfProfile(store SelfProfileStore, now func() time.Time) *SelfProfile {
 	return &SelfProfile{store: store, now: now}
 }
 func profileView(u domain.User) Profile {
-	return Profile{ID: u.ID, Email: u.Email, EmailVerifiedAt: u.EmailVerifiedAt, DisplayName: u.DisplayName, AvatarID: u.AvatarAssetID, PlatformRole: u.PlatformRole, Status: u.Status, Revision: u.Revision}
+	return Profile{ID: u.ID, Email: u.Email, EmailVerifiedAt: u.EmailVerifiedAt, DisplayName: u.DisplayName, Bio: u.Bio, AvatarID: u.AvatarAssetID, PlatformRole: u.PlatformRole, Status: u.Status, Revision: u.Revision}
 }
 func (s *SelfProfile) Read(ctx context.Context, actor Principal) (Profile, error) {
 	var out Profile
@@ -83,7 +86,7 @@ func (s *SelfProfile) ReadPreferences(ctx context.Context, actor Principal) (Pre
 	var out Preferences
 	err := s.store.ProfileTransaction(ctx, actor, s.now, func(tx SelfProfileTx) error {
 		u := tx.Account()
-		out = Preferences{Theme: u.Theme, PromptSuffix: u.PromptSuffix, Revision: u.Revision}
+		out = Preferences{Theme: u.Theme, PromptSuffix: u.PromptSuffix, CanvasBackground: u.CanvasBackground, Revision: u.Revision}
 		return nil
 	})
 	return out, err
@@ -91,7 +94,7 @@ func (s *SelfProfile) ReadPreferences(ctx context.Context, actor Principal) (Pre
 
 // Update validates allowed fields and applies a revision-checked profile change.
 func (s *SelfProfile) Update(ctx context.Context, actor Principal, in ProfileInput) (Profile, error) {
-	if in.ExpectedRevision < 1 || in.ExpectedRevision >= math.MaxInt32 || (in.DisplayName == nil && in.AvatarID == nil && !in.ClearAvatar) || (in.AvatarID != nil && (in.ClearAvatar || *in.AvatarID == uuid.Nil)) || (in.DisplayName != nil && !validDisplayName(*in.DisplayName)) {
+	if in.ExpectedRevision < 1 || in.ExpectedRevision >= math.MaxInt32 || (in.Bio == nil && in.DisplayName == nil && in.AvatarID == nil && !in.ClearAvatar) || (in.AvatarID != nil && (in.ClearAvatar || *in.AvatarID == uuid.Nil)) || (in.DisplayName != nil && !validDisplayName(*in.DisplayName)) || (in.Bio != nil && (!utf8.ValidString(*in.Bio) || utf8.RuneCountInString(*in.Bio) > 100 || strings.ContainsRune(*in.Bio, 0))) {
 		return Profile{}, domain.ErrInvalidProfile
 	}
 	var out Profile
@@ -100,6 +103,9 @@ func (s *SelfProfile) Update(ctx context.Context, actor Principal, in ProfileInp
 		u := tx.Account()
 		if u.Revision != in.ExpectedRevision {
 			return domain.ErrRevisionConflict
+		}
+		if in.Bio != nil {
+			u.Bio = *in.Bio
 		}
 		if in.DisplayName != nil {
 			u.DisplayName = *in.DisplayName
@@ -123,26 +129,49 @@ func (s *SelfProfile) Update(ctx context.Context, actor Principal, in ProfileInp
 	return out, err
 }
 
-// UpdatePreferences applies validated preferences with optimistic concurrency.
-func (s *SelfProfile) UpdatePreferences(ctx context.Context, actor Principal, expected int64, theme, suffix string) (int64, error) {
-	if expected < 1 || expected >= math.MaxInt32 || (theme != "light" && theme != "dark" && theme != "system") || !utf8.ValidString(suffix) || utf8.RuneCountInString(suffix) > 2000 {
-		return 0, domain.ErrInvalidProfile
+// PreferencesInput updates only supplied fields under the shared profile revision.
+type PreferencesInput struct {
+	ExpectedRevision int64
+	Theme            *string
+	PromptSuffix     *string
+	CanvasBackground *string
+}
+
+// PatchPreferences atomically validates and updates account preferences.
+func (s *SelfProfile) PatchPreferences(ctx context.Context, actor Principal, in PreferencesInput) (Preferences, error) {
+	if in.ExpectedRevision < 1 || in.ExpectedRevision >= math.MaxInt32 || (in.Theme == nil && in.PromptSuffix == nil && in.CanvasBackground == nil) {
+		return Preferences{}, domain.ErrInvalidProfile
 	}
-	var revision int64
+	if in.Theme != nil && *in.Theme != "light" && *in.Theme != "dark" && *in.Theme != "system" {
+		return Preferences{}, domain.ErrInvalidProfile
+	}
+	if in.PromptSuffix != nil && (!utf8.ValidString(*in.PromptSuffix) || utf8.RuneCountInString(*in.PromptSuffix) > 2000 || strings.ContainsRune(*in.PromptSuffix, 0)) {
+		return Preferences{}, domain.ErrInvalidProfile
+	}
+	if in.CanvasBackground != nil && *in.CanvasBackground != "dots" && *in.CanvasBackground != "lines" && *in.CanvasBackground != "blank" {
+		return Preferences{}, domain.ErrInvalidProfile
+	}
+	var out Preferences
 	err := s.store.ProfileTransaction(ctx, actor, s.now, func(tx SelfProfileTx) error {
-		now := s.now().UTC()
 		u := tx.Account()
-		if u.Revision != expected {
+		if u.Revision != in.ExpectedRevision {
 			return domain.ErrRevisionConflict
 		}
-		u.Theme = theme
-		u.PromptSuffix = suffix
+		if in.Theme != nil {
+			u.Theme = *in.Theme
+		}
+		if in.PromptSuffix != nil {
+			u.PromptSuffix = *in.PromptSuffix
+		}
+		if in.CanvasBackground != nil {
+			u.CanvasBackground = *in.CanvasBackground
+		}
 		u.Revision++
-		if err := tx.SavePreferences(u, expected, now); err != nil {
+		if err := tx.SavePreferences(u, in.ExpectedRevision, s.now().UTC()); err != nil {
 			return err
 		}
-		revision = u.Revision
+		out = Preferences{Theme: u.Theme, PromptSuffix: u.PromptSuffix, CanvasBackground: u.CanvasBackground, Revision: u.Revision}
 		return nil
 	})
-	return revision, err
+	return out, err
 }

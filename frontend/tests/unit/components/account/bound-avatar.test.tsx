@@ -27,5 +27,5 @@ it("成员头像从已绑定变为空时立即清除旧URL", async () => {
     ),
   );
   view.rerender(<BoundAvatar assetID="" load={load} />);
-  expect(screen.getByRole("img").getAttribute("data-src")).toBe("");
+  expect(screen.getByRole("img").getAttribute("data-src")).toBeNull();
 });

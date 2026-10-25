@@ -132,11 +132,42 @@ func TestSelfProfileHTTPRejectsAuthorityFields(t *testing.T) {
 			t.Fatalf("writable authority field %s", field)
 		}
 	}
-	updated := request("PATCH", "/api/me", map[string]any{"expected_revision": me["revision"], "display_name": "Updated"})
+	updated := request("PATCH", "/api/me", map[string]any{"expected_revision": me["revision"], "display_name": "Updated", "bio": "跨设备简介"})
 	if updated.Code != 200 {
 		t.Fatalf("profile update failed: %d", updated.Code)
 	}
 	if request("PATCH", "/api/me", map[string]any{"expected_revision": me["revision"], "display_name": "Stale"}).Code != 409 {
 		t.Fatal("HTTP stale profile accepted")
+	}
+	if json.Unmarshal(updated.Body.Bytes(), &me) != nil || me["bio"] != "跨设备简介" {
+		t.Fatal("HTTP bio contract missing")
+	}
+	prefs := request("PATCH", "/api/me/preferences", map[string]any{"expected_revision": me["revision"], "canvas_background": "lines"})
+	var preference map[string]any
+	if prefs.Code != 200 || json.Unmarshal(prefs.Body.Bytes(), &preference) != nil || preference["canvas_background"] != "lines" {
+		t.Fatalf("HTTP background contract: %d %s", prefs.Code, prefs.Body.String())
+	}
+	for _, patch := range []map[string]any{
+		{"expected_revision": preference["revision"], "canvas_background": "checker"},
+		{"expected_revision": preference["revision"]},
+	} {
+		if request("PATCH", "/api/me/preferences", patch).Code != 422 {
+			t.Fatal("invalid preferences patch accepted")
+		}
+	}
+	if request("PATCH", "/api/me", map[string]any{"expected_revision": preference["revision"], "bio": strings.Repeat("界", 101)}).Code != 422 {
+		t.Fatal("oversized HTTP bio accepted")
+	}
+	csrf := login.CSRFToken
+	login.CSRFToken = ""
+	if request("PATCH", "/api/me/preferences", map[string]any{"expected_revision": preference["revision"], "canvas_background": "blank"}).Code != 403 {
+		t.Fatal("preferences mutation without CSRF accepted")
+	}
+	login.CSRFToken = csrf
+	if err := tx.Exec(`UPDATE identity.user_session SET revoked_at=? WHERE id=?`, now, login.Session.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if request("GET", "/api/me/preferences", nil).Code != 401 {
+		t.Fatal("revoked session read preferences")
 	}
 }

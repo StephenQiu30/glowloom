@@ -19,6 +19,7 @@ vi.mock("@/api/identity", () => ({
 }));
 const receipt = (): API.EmailSessionView => ({
   actor: {
+    bio: "",
     id: "11111111-1111-4111-8111-111111111111",
     email: "a@example.com",
     display_name: "A",

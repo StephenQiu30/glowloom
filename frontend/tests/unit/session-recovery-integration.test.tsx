@@ -183,6 +183,7 @@ function identity(
 ): API.EmailSessionView {
   return {
     actor: {
+      bio: "",
       id: actor,
       email: "fixture@example.com",
       display_name: actor,
@@ -697,13 +698,12 @@ it.each([true, false])(
       <SessionProvider>
         <SessionGate>
           <Private />
-          <Settings />
+          <Settings initialView="security" />
         </SessionGate>
       </SessionProvider>,
     );
     await readyIdentity();
     await branchJournal.write(branch());
-    fireEvent.click(screen.getByRole("button", { name: "密码与会话" }));
     const buttons = await screen.findAllByRole("button", {
       name: "退出此设备",
     });

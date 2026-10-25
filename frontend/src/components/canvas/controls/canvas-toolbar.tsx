@@ -163,7 +163,7 @@ export function CanvasToolbar({
                   >
                     <ToggleGroupItem value="dots">点阵</ToggleGroupItem>
                     <ToggleGroupItem value="lines">网格</ToggleGroupItem>
-                    <ToggleGroupItem value="blank">纯色</ToggleGroupItem>
+                    <ToggleGroupItem value="blank">无背景</ToggleGroupItem>
                   </ToggleGroup>
                 </Field>
                 <Field orientation="horizontal">

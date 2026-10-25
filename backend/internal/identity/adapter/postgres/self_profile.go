@@ -89,7 +89,7 @@ func (t *selfProfileTx) ValidateAvatar(ctx context.Context, id uuid.UUID) error 
 	return t.avatars.Validate(ctx, t.user.ID, id)
 }
 func (t *selfProfileTx) SaveProfile(u domain.User, expected int64, now time.Time) error {
-	result := t.db.Exec(`UPDATE identity."user" SET display_name=?,avatar_asset_id=?,revision=?,update_time=? WHERE id=? AND revision=?`, u.DisplayName, u.AvatarAssetID, u.Revision, now, u.ID, expected)
+	result := t.db.Exec(`UPDATE identity."user" SET bio=?,display_name=?,avatar_asset_id=?,revision=?,update_time=? WHERE id=? AND revision=?`, u.Bio, u.DisplayName, u.AvatarAssetID, u.Revision, now, u.ID, expected)
 	if result.Error != nil {
 		return fmt.Errorf("save self profile: %w", result.Error)
 	}
@@ -99,7 +99,7 @@ func (t *selfProfileTx) SaveProfile(u domain.User, expected int64, now time.Time
 	return appendSelfEvent(t.db, u.ID, "profile.updated", now)
 }
 func (t *selfProfileTx) SavePreferences(u domain.User, expected int64, now time.Time) error {
-	result := t.db.Exec(`UPDATE identity."user" SET theme=?,prompt_suffix=?,revision=?,update_time=? WHERE id=? AND revision=?`, u.Theme, u.PromptSuffix, u.Revision, now, u.ID, expected)
+	result := t.db.Exec(`UPDATE identity."user" SET canvas_background=?,theme=?,prompt_suffix=?,revision=?,update_time=? WHERE id=? AND revision=?`, u.CanvasBackground, u.Theme, u.PromptSuffix, u.Revision, now, u.ID, expected)
 	if result.Error != nil {
 		return fmt.Errorf("save preferences: %w", result.Error)
 	}

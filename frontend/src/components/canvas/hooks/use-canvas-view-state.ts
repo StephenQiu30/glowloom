@@ -7,6 +7,11 @@ import {
   useState,
   type SetStateAction,
 } from "react";
+import {
+  backgroundIdentity,
+  useCanvasBackground,
+} from "./use-canvas-background";
+import { readErrorMessage } from "@/lib/read-error";
 import type { ViewportTransform } from "../types/canvas";
 import {
   readCanvasView,
@@ -31,6 +36,11 @@ export function useCanvasViewState({
   >;
   size: CanvasViewState["size"];
 }) {
+  const identity = backgroundIdentity(key);
+  const [accountBackground, saveBackground, backgroundQuery] =
+    useCanvasBackground(identity);
+  const [backgroundError, setBackgroundError] = useState("");
+  const backgroundFlight = useRef(false);
   const [loaded] = useState(() => {
     try {
       return key ? readCanvasView(window.localStorage, key) : undefined;
@@ -38,22 +48,28 @@ export function useCanvasViewState({
       return undefined;
     }
   });
-  const [view, setView] = useState<CanvasViewState>(
-    () =>
-      loaded?.view ?? {
-        viewport: initial.viewport,
-        backgroundMode: initial.backgroundMode,
-        showImageInfo: initial.showImageInfo,
-        size: { width: 0, height: 0 },
-        showConnections: true,
-        miniMap: false,
-        snapToGrid: false,
-        panel: {
-          open: false,
-          width: CANVAS_SIDE_PANEL_DEFAULT_WIDTH,
-          tab: "canvas",
+  const [view, setView] = useState<CanvasViewState>(() =>
+    loaded?.view
+      ? {
+          ...loaded.view,
+          backgroundMode: identity
+            ? accountBackground
+            : loaded.view.backgroundMode,
+        }
+      : {
+          viewport: initial.viewport,
+          backgroundMode: identity ? accountBackground : initial.backgroundMode,
+          showImageInfo: initial.showImageInfo,
+          size: { width: 0, height: 0 },
+          showConnections: true,
+          miniMap: false,
+          snapToGrid: false,
+          panel: {
+            open: false,
+            width: CANVAS_SIDE_PANEL_DEFAULT_WIDTH,
+            tab: "canvas",
+          },
         },
-      },
   );
   const latest = useRef(view);
   const dirtyAt = useRef<number | null>(null);
@@ -65,12 +81,30 @@ export function useCanvasViewState({
   }, []);
   const updateView = useCallback(
     (patch: Partial<CanvasViewState>) => {
+      if (identity && patch.backgroundMode) {
+        if (backgroundFlight.current) return;
+        backgroundFlight.current = true;
+        setBackgroundError("");
+        void saveBackground(patch.backgroundMode)
+          .catch((reason) => setBackgroundError(readErrorMessage(reason)))
+          .finally(() => {
+            backgroundFlight.current = false;
+          });
+        return;
+      }
       latest.current = { ...latest.current, ...patch };
       markDirty();
       setView(latest.current);
     },
-    [markDirty],
+    [markDirty, identity, saveBackground],
   );
+  useEffect(() => {
+    if (identity && latest.current.backgroundMode !== accountBackground) {
+      latest.current = { ...latest.current, backgroundMode: accountBackground };
+      markDirty();
+      setView(latest.current);
+    }
+  }, [accountBackground, identity, markDirty]);
   const setViewport = useCallback(
     (next: SetStateAction<ViewportTransform>) => {
       updateView({
@@ -167,5 +201,17 @@ export function useCanvasViewState({
       document.removeEventListener("visibilitychange", hidden);
     };
   }, [flush]);
-  return { view, updateView, setViewport, previewViewport };
+  return {
+    view,
+    updateView,
+    setViewport,
+    previewViewport,
+    backgroundError:
+      backgroundError ||
+      (backgroundQuery.error ? readErrorMessage(backgroundQuery.error) : ""),
+    retryBackground: () => {
+      setBackgroundError("");
+      void backgroundQuery.mutate();
+    },
+  };
 }

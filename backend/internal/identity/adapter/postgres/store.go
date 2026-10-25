@@ -33,6 +33,8 @@ type userRow struct {
 	AvatarAssetID      *uuid.UUID
 	TermsVersion       string
 	TermsAcceptedAt    *time.Time
+	Bio                string
+	CanvasBackground   string
 	Theme              string
 	PromptSuffix       string
 	DeletedAt          *time.Time
@@ -54,7 +56,7 @@ type userRow struct {
 func (r userRow) domainUser() domain.User {
 	user := domain.User{
 		ID: r.ID, OrgID: r.OrgID, LoginName: r.LoginName, DisplayName: r.DisplayName,
-		Email: r.EmailKey, EmailVersion: r.EmailVersion, PlatformRole: r.PlatformRole, PlatformEpoch: r.PlatformEpoch, AvatarAssetID: r.AvatarAssetID, TermsVersion: r.TermsVersion, Theme: r.Theme, PromptSuffix: r.PromptSuffix,
+		Email: r.EmailKey, EmailVersion: r.EmailVersion, PlatformRole: r.PlatformRole, PlatformEpoch: r.PlatformEpoch, AvatarAssetID: r.AvatarAssetID, TermsVersion: r.TermsVersion, Bio: r.Bio, CanvasBackground: r.CanvasBackground, Theme: r.Theme, PromptSuffix: r.PromptSuffix,
 		Role: domain.Role(r.Role), Status: domain.Status(r.Status), PasswordHash: r.PasswordHash,
 		MustChangePassword: r.MustChangePassword, FailedLoginCount: r.FailedLoginCount,
 		SessionEpoch: r.SessionEpoch, Revision: r.Revision, CreateTime: r.CreateTime, UpdateTime: r.UpdateTime,

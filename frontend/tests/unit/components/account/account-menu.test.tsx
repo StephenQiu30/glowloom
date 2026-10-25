@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AccountMenu } from "@/components/account/account-menu";
 
 const actor: API.EmailSessionView["actor"] = {
+  bio: "",
   id: "11111111-1111-4111-8111-111111111111",
   email_verified_at: new Date().toISOString(),
   avatar_asset_id: "",

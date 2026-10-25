@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Suspense, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import { useSession } from "@/components/auth/session";
 import { getMyAvatar } from "@/api/media";
 import { BoundAvatar } from "@/components/account/avatar-editor";
@@ -16,6 +16,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { SettingsSkeleton } from "./settings-skeleton";
 import { ContentState } from "@/components/layout/content-state";
 
 const Settings = dynamic(() =>
@@ -31,6 +32,9 @@ const ProjectList = dynamic(() =>
 export function PersonalSpace() {
   const { actor } = useSession();
   const [settings, setSettings] = useState(false);
+  const [settingsView, setSettingsView] = useState("home");
+  const settingsTrigger = useRef<HTMLButtonElement>(null);
+  const profileTrigger = useRef<HTMLButtonElement>(null);
   const [filter, setFilter] = useState<"active" | "archived" | "deleted">(
     "active",
   );
@@ -42,7 +46,14 @@ export function PersonalSpace() {
       <PageHeading
         title="个人空间"
         actions={
-          <Button variant="ghost" onClick={() => setSettings(true)}>
+          <Button
+            ref={settingsTrigger}
+            variant="ghost"
+            onClick={() => {
+              setSettingsView("home");
+              setSettings(true);
+            }}
+          >
             账号设置
           </Button>
         }
@@ -55,10 +66,22 @@ export function PersonalSpace() {
             label={actor.display_name}
           />
           <h2 className="text-xl font-medium">{actor.display_name}</h2>
+          {actor.bio && (
+            <p className="text-sm break-words whitespace-pre-wrap text-muted-foreground">
+              {actor.bio}
+            </p>
+          )}
           <p className="text-sm break-all text-muted-foreground">
             {actor.email}
           </p>
-          <Button variant="secondary" onClick={() => setSettings(true)}>
+          <Button
+            ref={profileTrigger}
+            variant="secondary"
+            onClick={() => {
+              setSettingsView("profile");
+              setSettings(true);
+            }}
+          >
             编辑资料
           </Button>
         </aside>
@@ -104,21 +127,35 @@ export function PersonalSpace() {
         </Tabs>
       </div>
       <Dialog open={settings} onOpenChange={setSettings}>
-        <DialogContent className="account-settings-dialog sm:max-w-3xl">
-          <DialogTitle>账号设置</DialogTitle>
+        <DialogContent
+          className="account-settings-dialog sm:max-w-[480px]"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            (settingsView === "profile"
+              ? profileTrigger
+              : settingsTrigger
+            ).current?.focus();
+          }}
+        >
           <DialogDescription className="sr-only">
             管理个人资料、安全与创作偏好
           </DialogDescription>
           <Suspense
             fallback={
-              <ContentState
-                className="min-h-40"
-                state="loading"
-                title="正在读取设置"
-              />
+              <div className="flex flex-col gap-5">
+                <DialogTitle className="flex h-8 items-center">
+                  账号设置
+                </DialogTitle>
+                <SettingsSkeleton />
+              </div>
             }
           >
-            <Settings embedded />
+            <Settings
+              embedded
+              key={actor.id}
+              initialView={settingsView}
+              onClose={() => setSettings(false)}
+            />
           </Suspense>
         </DialogContent>
       </Dialog>

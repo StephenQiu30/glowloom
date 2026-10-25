@@ -48,6 +48,7 @@ function session(name: string): API.EmailSessionView {
   const digit = name === "old" ? "1" : name === "next" ? "2" : "3";
   return {
     actor: {
+      bio: "",
       id: `${digit.repeat(8)}-1111-4111-8111-111111111111`,
       email: `${name}@example.com`,
       email_verified_at: new Date().toISOString(),

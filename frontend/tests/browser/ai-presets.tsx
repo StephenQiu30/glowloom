@@ -313,6 +313,7 @@ const [{ ProvidersPage }, { AccountMenu }, { setCSRFToken }] =
   ]);
 setCSRFToken("fixture-only");
 const actor: API.EmailSessionView["actor"] = {
+  bio: "",
   id: "11111111-1111-4111-8111-111111111111",
   email: "fixture@example.test",
   display_name: "浏览器测试管理员",

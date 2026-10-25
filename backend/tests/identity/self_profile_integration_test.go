@@ -60,12 +60,15 @@ func TestSelfProfileCAS(t *testing.T) {
 	if err != nil || loaded.DisplayName != name || loaded.Revision != saved.Revision {
 		t.Fatal("profile did not persist")
 	}
-	revision, err := profiles.UpdatePreferences(t.Context(), actor, saved.Revision, "dark", "画面清晰")
+	theme, suffix := "dark", "clear image"
+	prefs, err := profiles.PatchPreferences(t.Context(), actor, identity.PreferencesInput{ExpectedRevision: saved.Revision, Theme: &theme, PromptSuffix: &suffix})
+	revision := prefs.Revision
 	if err != nil || revision != saved.Revision+1 {
-		t.Fatal("preferences not sharing profile revision")
+		t.Fatal("preferences revision", err)
 	}
-	if _, err := profiles.UpdatePreferences(t.Context(), actor, revision, "dark", strings.Repeat("界", 2001)); !errors.Is(err, domain.ErrInvalidProfile) {
-		t.Fatal("oversized suffix accepted")
+	oversized := strings.Repeat("x", 2001)
+	if _, err := profiles.PatchPreferences(t.Context(), actor, identity.PreferencesInput{ExpectedRevision: revision, PromptSuffix: &oversized}); !errors.Is(err, domain.ErrInvalidProfile) {
+		t.Fatal("oversized suffix accepted", err)
 	}
 	avatar := uuid.New()
 	if _, err := profiles.Update(t.Context(), actor, identity.ProfileInput{ExpectedRevision: revision, AvatarID: &avatar}); !errors.Is(err, identity.ErrAvatarUnavailable) {

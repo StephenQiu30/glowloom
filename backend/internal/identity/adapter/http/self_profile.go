@@ -15,15 +15,17 @@ import (
 // ProfileUpdateRequest carries a versioned self profile patch.
 type ProfileUpdateRequest struct {
 	ExpectedRevision string          `json:"expected_revision" binding:"required"`
-	DisplayName      *string         `json:"display_name" binding:"required"`
+	DisplayName      *string         `json:"display_name"`
+	Bio              *string         `json:"bio"`
 	Avatar           json.RawMessage `json:"avatar_asset_id" swaggertype:"string" extensions:"x-nullable"`
 }
 
 // PreferencesUpdateRequest carries a versioned preference patch.
 type PreferencesUpdateRequest struct {
 	ExpectedRevision string  `json:"expected_revision" binding:"required"`
-	Theme            *string `json:"theme" binding:"required"`
-	Suffix           *string `json:"prompt_suffix" binding:"required"`
+	Theme            *string `json:"theme"`
+	Suffix           *string `json:"prompt_suffix"`
+	CanvasBackground *string `json:"canvas_background" enums:"dots,lines,blank"`
 }
 
 // SelfProfileHandler adapts authenticated self-profile and preference requests.
@@ -46,7 +48,7 @@ func selfProfileView(p application.Profile) MeView {
 	if p.PlatformRole == "platform_admin" {
 		capabilities = append(capabilities, "platform:manage")
 	}
-	return MeView{ID: p.ID, Email: p.Email, EmailVerifiedAt: p.EmailVerifiedAt, DisplayName: p.DisplayName, AvatarAssetID: p.AvatarID, PlatformRole: p.PlatformRole, Status: string(p.Status), Revision: strconv.FormatInt(p.Revision, 10), Capabilities: capabilities}
+	return MeView{ID: p.ID, Email: p.Email, EmailVerifiedAt: p.EmailVerifiedAt, DisplayName: p.DisplayName, Bio: p.Bio, AvatarAssetID: p.AvatarID, PlatformRole: p.PlatformRole, Status: string(p.Status), Revision: strconv.FormatInt(p.Revision, 10), Capabilities: capabilities}
 }
 
 // @Summary getMe
@@ -87,7 +89,7 @@ func (h *SelfProfileHandler) update(c *gin.Context) {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		return
 	}
-	input := application.ProfileInput{ExpectedRevision: revision, DisplayName: request.DisplayName}
+	input := application.ProfileInput{ExpectedRevision: revision, DisplayName: request.DisplayName, Bio: request.Bio}
 	if request.Avatar != nil {
 		if string(request.Avatar) == "null" {
 			input.ClearAvatar = true
@@ -119,9 +121,10 @@ func (h *SelfProfileHandler) update(c *gin.Context) {
 
 // PreferencesView returns account preferences and their concurrency version.
 type PreferencesView struct {
-	Theme        string `json:"theme" binding:"required"`
-	PromptSuffix string `json:"prompt_suffix" binding:"required"`
-	Revision     string `json:"revision" binding:"required"`
+	CanvasBackground string `json:"canvas_background" binding:"required" enums:"dots,lines,blank"`
+	Theme            string `json:"theme" binding:"required"`
+	PromptSuffix     string `json:"prompt_suffix" binding:"required"`
+	Revision         string `json:"revision" binding:"required"`
 }
 
 // @Summary getMyPreferences
@@ -139,7 +142,7 @@ func (h *SelfProfileHandler) preferences(c *gin.Context) {
 		emailAuthProblem(c, err)
 		return
 	}
-	c.JSON(200, PreferencesView{p.Theme, p.PromptSuffix, strconv.FormatInt(p.Revision, 10)})
+	c.JSON(200, preferencesView(p))
 }
 
 // @Summary updateMyPreferences
@@ -158,25 +161,17 @@ func (h *SelfProfileHandler) updatePreferences(c *gin.Context) {
 		return
 	}
 	expected, err := strconv.ParseInt(request.ExpectedRevision, 10, 64)
-	if err != nil || expected < 1 || (request.Theme == nil && request.Suffix == nil) {
+	if err != nil || expected < 1 || (request.Theme == nil && request.Suffix == nil && request.CanvasBackground == nil) {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		return
 	}
-	p, err := h.profiles.ReadPreferences(c.Request.Context(), Principal(c))
+	p, err := h.profiles.PatchPreferences(c.Request.Context(), Principal(c), application.PreferencesInput{ExpectedRevision: expected, Theme: request.Theme, PromptSuffix: request.Suffix, CanvasBackground: request.CanvasBackground})
 	if err != nil {
 		emailAuthProblem(c, err)
 		return
 	}
-	if request.Theme != nil {
-		p.Theme = *request.Theme
-	}
-	if request.Suffix != nil {
-		p.PromptSuffix = *request.Suffix
-	}
-	revision, err := h.profiles.UpdatePreferences(c.Request.Context(), Principal(c), expected, p.Theme, p.PromptSuffix)
-	if err != nil {
-		emailAuthProblem(c, err)
-		return
-	}
-	c.JSON(200, PreferencesView{p.Theme, p.PromptSuffix, strconv.FormatInt(revision, 10)})
+	c.JSON(200, preferencesView(p))
+}
+func preferencesView(p application.Preferences) PreferencesView {
+	return PreferencesView{Theme: p.Theme, PromptSuffix: p.PromptSuffix, CanvasBackground: p.CanvasBackground, Revision: strconv.FormatInt(p.Revision, 10)}
 }

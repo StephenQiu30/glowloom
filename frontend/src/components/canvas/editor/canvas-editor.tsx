@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { canvasConnectionHandles } from "../constants/canvas-input-ports";
 import { isCanvasShortcut } from "../lib/canvas-keyboard";
 import { removeCanvasReferences } from "../lib/canvas-reference-state";
@@ -469,13 +470,18 @@ function InfiniteCanvasPage({
     initialProject.activeChatId,
   );
   const [size, setSize] = useState({ width: 0, height: 0 });
-  const { view, updateView, setViewport, previewViewport } = useCanvasViewState(
-    {
-      key: documentIntegration?.viewStateKey,
-      initial: initialProject,
-      size,
-    },
-  );
+  const {
+    view,
+    updateView,
+    setViewport,
+    previewViewport,
+    backgroundError,
+    retryBackground,
+  } = useCanvasViewState({
+    key: documentIntegration?.viewStateKey,
+    initial: initialProject,
+    size,
+  });
   const {
     viewport,
     backgroundMode,
@@ -5409,6 +5415,17 @@ function InfiniteCanvasPage({
         if (!target.closest("[data-canvas-no-zoom]")) setPointerActive(true);
       }}
     >
+      {backgroundError && (
+        <Alert
+          className="absolute bottom-16 left-1/2 z-50 w-[min(400px,calc(100%-2rem))] -translate-x-1/2"
+          role="alert"
+        >
+          <AlertDescription>{backgroundError}</AlertDescription>
+          <Button variant="ghost" onClick={retryBackground}>
+            重试
+          </Button>
+        </Alert>
+      )}
       <CanvasSidePanel
         projectId={documentIntegration?.projectId}
         nodes={nodes}

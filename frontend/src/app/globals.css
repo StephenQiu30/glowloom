@@ -503,18 +503,6 @@ button:not(:disabled),
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 24px 16px;
 }
-.account-settings-dialog .settings-layout {
-  margin-top: 0;
-  gap: 24px;
-  grid-template-columns: 144px minmax(0, 1fr);
-}
-.account-settings-dialog .settings-card {
-  padding: 0;
-  background: transparent;
-}
-.account-settings-dialog .settings-nav {
-  gap: 8px;
-}
 .product-page > .product-footer {
   margin-top: 48px;
   padding: 16px 0;
@@ -838,9 +826,6 @@ button:not(:disabled),
   }
   .profile-asset-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .account-settings-dialog .settings-layout {
-    grid-template-columns: 1fr;
   }
   .page-heading {
     flex-wrap: wrap;
@@ -1226,46 +1211,6 @@ button:not(:disabled),
 .auth-security-content > .product-brand {
   align-self: center;
 }
-.settings-layout {
-  display: grid;
-  grid-template-columns: 200px minmax(0, 740px);
-  gap: 40px;
-  margin-top: 24px;
-}
-.settings-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.settings-nav button {
-  justify-content: flex-start;
-  height: 36px;
-  font-size: 13px;
-}
-.settings-nav button[aria-current="page"] {
-  background: var(--accent);
-}
-.settings-card {
-  background: var(--card);
-  border-radius: 16px;
-  padding: 28px;
-  min-height: 420px;
-}
-.settings-card > h2 {
-  font-size: 20px;
-  margin-bottom: 12px;
-}
-.settings-card > p {
-  color: var(--muted-foreground);
-  font-size: 13px;
-  line-height: 1.8;
-}
-.settings-card form {
-  margin-top: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 28px;
-}
 @media (max-width: 900px) {
   .auth-shell {
     grid-template-columns: 1fr;
@@ -1276,13 +1221,6 @@ button:not(:disabled),
   .auth-form-panel {
     min-height: 100dvh;
     padding: 60px 24px;
-  }
-  .settings-layout {
-    grid-template-columns: 1fr;
-  }
-  .settings-nav {
-    flex-direction: row;
-    flex-wrap: wrap;
   }
 }
 @media (max-width: 767px) {
@@ -1295,9 +1233,6 @@ button:not(:disabled),
   }
   .search-form {
     width: 100%;
-  }
-  .settings-card {
-    padding: 20px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -2354,4 +2289,48 @@ button:not(:disabled),
 .canvas-tile:not([data-managing="true"]):not(:hover):not(:focus-within)
   .canvas-tile-check {
   opacity: 0;
+}
+
+.account-settings-content {
+  display: flex;
+  min-width: 0;
+  width: 100%;
+  flex-direction: column;
+  gap: 20px;
+}
+.account-settings-dialog {
+  gap: 0;
+  overflow-x: hidden;
+}
+.account-settings-content [data-slot="field-group"] {
+  gap: 20px;
+}
+.account-settings-content input:not([type="file"]) {
+  min-height: 40px;
+}
+.account-settings-content [data-slot="input"],
+.account-settings-content [data-slot="textarea"] {
+  background-color: var(--secondary);
+}
+.account-settings-dialog > [data-slot="dialog-close"] {
+  top: 24px;
+  right: 24px;
+  width: 32px;
+  height: 32px;
+}
+
+@media (max-width: 640px) {
+  .account-settings-content button,
+  .account-settings-dialog > [data-slot="dialog-close"] {
+    min-height: 44px;
+  }
+  .account-settings-content button[data-size^="icon"],
+  .account-settings-dialog > [data-slot="dialog-close"] {
+    min-width: 44px;
+  }
+  .account-settings-dialog > [data-slot="dialog-close"] {
+    min-width: 44px;
+    top: 12px;
+    right: 12px;
+  }
 }

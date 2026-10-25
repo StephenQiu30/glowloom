@@ -56,24 +56,26 @@ const (
 // User contains the account state needed by authentication and account commands.
 // PasswordHash is a versioned credential and must never be logged or returned in an API DTO.
 type User struct {
-	ID              uuid.UUID
-	OrgID           uuid.UUID
-	LoginName       string
-	Email           string
-	EmailVerifiedAt time.Time
-	EmailVersion    int64
-	PlatformRole    string
-	PlatformEpoch   int64
-	AvatarAssetID   *uuid.UUID
-	TermsVersion    string
-	TermsAcceptedAt time.Time
-	Theme           string
-	PromptSuffix    string
-	DeletedAt       time.Time
-	DisplayName     string
-	Role            Role
-	Status          Status
-	PasswordHash    string
+	ID               uuid.UUID
+	OrgID            uuid.UUID
+	LoginName        string
+	Email            string
+	EmailVerifiedAt  time.Time
+	EmailVersion     int64
+	PlatformRole     string
+	PlatformEpoch    int64
+	AvatarAssetID    *uuid.UUID
+	TermsVersion     string
+	TermsAcceptedAt  time.Time
+	Bio              string
+	CanvasBackground string
+	Theme            string
+	PromptSuffix     string
+	DeletedAt        time.Time
+	DisplayName      string
+	Role             Role
+	Status           Status
+	PasswordHash     string
 	// MustChangePassword is historical storage data and never restricts access.
 	MustChangePassword bool
 	PasswordChangedAt  time.Time

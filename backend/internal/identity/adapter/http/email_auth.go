@@ -86,6 +86,7 @@ const registrationFlowCookie = "glowloom_registration_flow"
 
 // MeView exposes only the signed-in account profile and capabilities.
 type MeView struct {
+	Bio             string     `json:"bio" binding:"required"`
 	ID              uuid.UUID  `json:"id" binding:"required"`
 	Email           string     `json:"email" binding:"required"`
 	EmailVerifiedAt time.Time  `json:"email_verified_at" binding:"required"`
@@ -533,7 +534,7 @@ func (h *EmailAuthHandler) respond(c *gin.Context, r application.AuthResult, err
 	if r.Session.ProtocolVersion == 2 {
 		refreshGeneration = strconv.FormatInt(r.Session.RefreshGeneration, 10)
 	}
-	c.JSON(status, EmailSessionView{RefreshGeneration: refreshGeneration, Actor: MeView{ID: u.ID, Email: u.Email, EmailVerifiedAt: u.EmailVerifiedAt, DisplayName: u.DisplayName, AvatarAssetID: u.AvatarAssetID, PlatformRole: u.PlatformRole, Status: string(u.Status), Revision: strconv.FormatInt(u.Revision, 10), Capabilities: capabilities}, SessionID: r.Session.ID, LastActiveAt: r.Session.LastActiveAt, AbsoluteExpiresAt: r.Session.AbsoluteExpiresAt, Persistent: r.Session.Persistent, CredentialEpoch: strconv.FormatInt(u.SessionEpoch, 10), CSRFToken: r.CSRFToken, AccessExpiresAt: optionalTime(r.AccessExpiresAt), IdleExpiresAt: sessionIdleDeadline(r.Session), RefreshAfterAt: optionalTime(r.RefreshAfterAt), ServerTime: r.ServerTime, SessionProtocol: sessionProtocol(r.Session), UpgradeAvailable: r.Session.ProtocolVersion != 2 && h.policy.V2Enabled && !h.policy.LegacyUpgradeUntil.IsZero() && r.ServerTime.Before(h.policy.LegacyUpgradeUntil) && h.auth.LegacyUpgradeAvailable(r.ServerTime)})
+	c.JSON(status, EmailSessionView{RefreshGeneration: refreshGeneration, Actor: MeView{ID: u.ID, Email: u.Email, EmailVerifiedAt: u.EmailVerifiedAt, DisplayName: u.DisplayName, Bio: u.Bio, AvatarAssetID: u.AvatarAssetID, PlatformRole: u.PlatformRole, Status: string(u.Status), Revision: strconv.FormatInt(u.Revision, 10), Capabilities: capabilities}, SessionID: r.Session.ID, LastActiveAt: r.Session.LastActiveAt, AbsoluteExpiresAt: r.Session.AbsoluteExpiresAt, Persistent: r.Session.Persistent, CredentialEpoch: strconv.FormatInt(u.SessionEpoch, 10), CSRFToken: r.CSRFToken, AccessExpiresAt: optionalTime(r.AccessExpiresAt), IdleExpiresAt: sessionIdleDeadline(r.Session), RefreshAfterAt: optionalTime(r.RefreshAfterAt), ServerTime: r.ServerTime, SessionProtocol: sessionProtocol(r.Session), UpgradeAvailable: r.Session.ProtocolVersion != 2 && h.policy.V2Enabled && !h.policy.LegacyUpgradeUntil.IsZero() && r.ServerTime.Before(h.policy.LegacyUpgradeUntil) && h.auth.LegacyUpgradeAvailable(r.ServerTime)})
 }
 func emailAuthProblem(c *gin.Context, err error) {
 	c.Header("Cache-Control", "no-store")
