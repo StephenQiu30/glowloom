@@ -132,6 +132,9 @@ function ProviderAdministration({
     scope: string;
     rows: ConnectionRow[];
   }>({ scope: search, rows: [] });
+  // Invalidate the owned snapshot on every query transition, including a return
+  // to a previous query. Keep any running batch's frozen entries independent.
+  if (selection.scope !== search) setSelection({ scope: search, rows: [] });
   const [cursors, setCursors] = useState<string[]>([""]);
   const [pageSize, setPageSize] = useState(20);
   const [nextCursor, setNextCursor] = useState("");

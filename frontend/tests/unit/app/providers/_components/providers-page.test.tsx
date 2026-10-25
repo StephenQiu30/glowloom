@@ -253,3 +253,29 @@ it.each([
   await screen.findByText(label);
   expect(screen.queryByText("检查通过")).toBeNull();
 });
+
+it("服务筛选往返后不恢复此前的批量选择", async () => {
+  api.role = "platform_admin";
+  api.providers.mockResolvedValue({
+    items: [
+      { provider: { id: "alpha", name: "Alpha", status: "active" } },
+      { provider: { id: "beta", name: "Beta", status: "active" } },
+    ],
+  });
+  const page = render(<ProvidersPage search="" />);
+  const alpha = await screen.findByRole("checkbox", { name: "选择 Alpha" });
+  fireEvent.click(alpha);
+  expect(
+    screen
+      .getByRole("checkbox", { name: "选择 Alpha" })
+      .getAttribute("aria-checked"),
+  ).toBe("true");
+  page.rerender(<ProvidersPage search="Beta" />);
+  expect(screen.queryByRole("checkbox", { name: "选择 Alpha" })).toBeNull();
+  page.rerender(<ProvidersPage search="" />);
+  expect(
+    screen
+      .getByRole("checkbox", { name: "选择 Alpha" })
+      .getAttribute("aria-checked"),
+  ).toBe("false");
+});

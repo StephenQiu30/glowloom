@@ -3,6 +3,8 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import axios from "axios";
 import { ThemeProvider } from "next-themes";
+import { Input } from "../../src/components/ui/input";
+import { Button } from "../../src/components/ui/button";
 import { Toaster } from "../../src/components/ui/sonner";
 import "../../src/app/globals.css";
 const ids = [
@@ -165,6 +167,26 @@ const [
   import("../../src/lib/request"),
 ]);
 setCSRFToken("fixture-only");
+function ProviderFilterAcceptance() {
+  const [search, setSearch] = React.useState("");
+  return (
+    <>
+      <form
+        className="mb-4 flex gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setSearch(
+            String(new FormData(event.currentTarget).get("query") ?? ""),
+          );
+        }}
+      >
+        <Input name="query" aria-label="验收服务筛选" />
+        <Button>应用验收筛选</Button>
+      </form>
+      <ProvidersPage search={search} />
+    </>
+  );
+}
 const screen = new URLSearchParams(location.search).get("screen") ?? "users";
 createRoot(document.getElementById("root")!).render(
   <ThemeProvider
@@ -178,7 +200,11 @@ createRoot(document.getElementById("root")!).render(
       {screen === "users" ? (
         <UserDirectory />
       ) : screen === "providers" ? (
-        <ProvidersPage />
+        new URLSearchParams(location.search).has("filter-acceptance") ? (
+          <ProviderFilterAcceptance />
+        ) : (
+          <ProvidersPage />
+        )
       ) : screen === "models" ? (
         <ModelsPage />
       ) : (
