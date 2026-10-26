@@ -45,6 +45,10 @@ const state: API.ProviderOnboardingState = {
   ],
 };
 let calls = 0;
+if (options.has("long-label")) {
+  state.models![0].display_name =
+    "Doubao-Seed-Enterprise-".repeat(8) + "多语言长模型名称";
+}
 axios.defaults.adapter = async (config) => {
   const path = config.url ?? "";
   let data: unknown = structuredClone(state);
