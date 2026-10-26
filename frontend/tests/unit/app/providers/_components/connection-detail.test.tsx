@@ -23,6 +23,7 @@ vi.mock("@/api/settings", () => ({
   listProviderCredentials: api.keys,
   setAdminCredential: api.save,
   getConfigReceipt: api.receipt,
+  getProviderOnboarding: vi.fn().mockResolvedValue({ models: [] }),
   disableAdminCredential: api.disable,
   testAdminCredential: vi.fn(),
   getProviderCheck: vi.fn(),

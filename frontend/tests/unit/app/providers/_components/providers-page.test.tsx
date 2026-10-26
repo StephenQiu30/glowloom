@@ -136,7 +136,7 @@ it("保存后读回成功才关闭弹窗，详情读取不会触发重复写入"
   fireEvent.click(screen.getByRole("button", { name: "模拟保存完成" }));
   await screen.findByText("连接详情内容");
   expect(screen.queryByRole("dialog", { name: "接入 AI 服务" })).toBeNull();
-  expect(api.providers).toHaveBeenCalledTimes(2);
+  expect(api.providers).toHaveBeenCalledTimes(3);
 });
 
 it("关闭后仍展示未确认写入，继续接入只打开原流程而不自动写入", async () => {
@@ -175,7 +175,7 @@ it("关闭后收到保存成功只刷新列表，不重新弹出详情", async (
   act(() => api.pendingSave?.());
   await screen.findAllByRole("button", { name: "查看 后台保存的连接" });
   expect(screen.queryByRole("dialog")).toBeNull();
-  expect(api.providers).toHaveBeenCalledTimes(2);
+  expect(api.providers).toHaveBeenCalledTimes(4);
 });
 
 it.each(["creator", "admin", "team_admin"])(
@@ -278,4 +278,29 @@ it("服务筛选往返后不恢复此前的批量选择", async () => {
       .getByRole("checkbox", { name: "选择 Alpha" })
       .getAttribute("aria-checked"),
   ).toBe("false");
+});
+
+it("保存连接后稍后验证，关闭弹窗仍能从列表继续", async () => {
+  api.role = "platform_admin";
+  api.delayed = true;
+  api.providers.mockResolvedValueOnce({ items: [] }).mockResolvedValue({
+    items: [
+      {
+        provider: {
+          id: "connection",
+          name: "待验证连接",
+          status: "disabled",
+        },
+        model_count: 3,
+      },
+    ],
+  });
+  render(<ProvidersPage />);
+  await screen.findByText("还没有连接");
+  fireEvent.click(screen.getAllByRole("button", { name: "接入服务" })[0]);
+  fireEvent.click(screen.getByRole("button", { name: "模拟保存完成" }));
+  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+  await screen.findAllByRole("button", { name: "查看 待验证连接" });
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(api.detail).not.toHaveBeenCalled();
 });

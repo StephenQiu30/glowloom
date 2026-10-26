@@ -339,6 +339,21 @@ const editorCatalogRoutes: typeof identityRoutes = [
     query: [],
   },
   {
+    pattern: `admin/providers/${identityUUID}/onboarding`,
+    methods: ["GET"],
+    query: [],
+  },
+  {
+    pattern: `admin/providers/${identityUUID}/onboarding/activate`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `admin/providers/${identityUUID}/credentials/${identityUUID}/models/${identityUUID}/test`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
     pattern: `admin/providers/${identityUUID}/credentials`,
     methods: ["GET", "PUT"],
     query: [],

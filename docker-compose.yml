@@ -88,6 +88,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./backend:/src:ro
+      - ./.local/credentials:/run/glowloom-credentials:ro
       - backend-go-build:/go/build-cache
     healthcheck:
       test:
@@ -109,6 +110,10 @@ services:
       GLOWLOOM_ENV: ${GLOWLOOM_ENV-${LV_ENV:-local}}
       GLOWLOOM_LOG_LEVEL: ${GLOWLOOM_LOG_LEVEL-${LV_LOG_LEVEL:-info}}
       GLOWLOOM_DEV_API_PROXY: "true"
+      GLOWLOOM_CREDENTIAL_KEY_ID: ${GLOWLOOM_CREDENTIAL_KEY_ID:-}
+      GLOWLOOM_CREDENTIAL_PUBLIC_KEY_FILE: ${GLOWLOOM_CREDENTIAL_PUBLIC_KEY_FILE:-}
+      GLOWLOOM_CREDENTIAL_PRIVATE_KEY_FILE: ${GLOWLOOM_CREDENTIAL_PRIVATE_KEY_FILE:-}
+      GLOWLOOM_CREDENTIAL_REQUEST_MAC_KEY: ${GLOWLOOM_CREDENTIAL_REQUEST_MAC_KEY:-}
       GLOWLOOM_WORKER_HEALTH_ADDR: ":8081"
       GLOWLOOM_RELAY_HEALTH_ADDR: ":8082"
       GLOWLOOM_KAFKA_BROKERS: ${GLOWLOOM_KAFKA_BROKERS-${LV_KAFKA_BROKERS:?Set GLOWLOOM_KAFKA_BROKERS for the backend relay}}

@@ -32,17 +32,18 @@ type CreateReleaseInput struct {
 
 // ModelRelease is an immutable binding with an explicit publication lifecycle.
 type ModelRelease struct {
-	ID              uuid.UUID    `json:"id"`
-	ModelID         uuid.UUID    `json:"model_id"`
-	ModelVersionID  uuid.UUID    `json:"model_version_id"`
-	PriceVersionID  uuid.UUID    `json:"price_version_id"`
-	ConfigVersionID uuid.UUID    `json:"config_version_id"`
-	Status          string       `json:"status"`
-	Revision        int64        `json:"revision"`
-	UpstreamCost    UpstreamCost `json:"upstream_cost" gorm:"-"`
-	ValidatedModes  []string     `json:"validated_modes" gorm:"-"`
-	RequiredModes   []string     `json:"required_modes" gorm:"-"`
-	CreatedAt       time.Time    `json:"created_at"`
+	OnboardingCheckID *uuid.UUID   `json:"onboarding_check_id,omitempty"`
+	ID                uuid.UUID    `json:"id"`
+	ModelID           uuid.UUID    `json:"model_id"`
+	ModelVersionID    uuid.UUID    `json:"model_version_id"`
+	PriceVersionID    uuid.UUID    `json:"price_version_id"`
+	ConfigVersionID   uuid.UUID    `json:"config_version_id"`
+	Status            string       `json:"status"`
+	Revision          int64        `json:"revision"`
+	UpstreamCost      UpstreamCost `json:"upstream_cost" gorm:"-"`
+	ValidatedModes    []string     `json:"validated_modes" gorm:"-"`
+	RequiredModes     []string     `json:"required_modes" gorm:"-"`
+	CreatedAt         time.Time    `json:"created_at"`
 }
 
 // ActivateReleaseInput performs an explicit atomic release/default switch.

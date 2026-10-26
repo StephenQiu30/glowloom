@@ -973,6 +973,7 @@ CREATE TABLE catalog.model_profile_version (
 );
 
 CREATE TABLE catalog.model_release (
+    onboarding_check_id uuid,
     id uuid NOT NULL,
     model_id uuid NOT NULL,
     model_version_id uuid NOT NULL,
@@ -1049,6 +1050,11 @@ CREATE TABLE catalog.provider (
 );
 
 CREATE TABLE catalog.provider_check (
+    model_id uuid,
+    model_version_id uuid,
+    model_result text DEFAULT '' NOT NULL,
+    task_id text DEFAULT '' NOT NULL,
+    dispatch_started_at timestamp with time zone,
     id uuid NOT NULL,
     actor_id uuid NOT NULL,
     provider_id uuid NOT NULL,
@@ -1062,7 +1068,7 @@ CREATE TABLE catalog.provider_check (
     error_code text,
     create_time timestamp with time zone DEFAULT now() NOT NULL,
     completed_at timestamp with time zone,
-    CONSTRAINT provider_check_kind_check CHECK ((kind = ANY (ARRAY['connectivity'::text, 'discovery'::text]))),
+    CONSTRAINT provider_check_kind_check CHECK ((kind = ANY (ARRAY['connectivity'::text, 'discovery'::text, 'model_access'::text]))),
     CONSTRAINT provider_check_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'running'::text, 'completed'::text, 'failed'::text])))
 );
 
@@ -6645,3 +6651,7 @@ CREATE TABLE IF NOT EXISTS workspace.project_copy_primary_repair (
  created_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
 REVOKE ALL ON workspace.project_copy_primary_repair FROM PUBLIC, glowloom_app;
+
+ALTER TABLE catalog.model_release ADD CONSTRAINT model_release_onboarding_check_fkey FOREIGN KEY(onboarding_check_id) REFERENCES catalog.provider_check(id);
+ALTER TABLE catalog.provider_check ADD CONSTRAINT provider_check_model_fkey FOREIGN KEY(model_id) REFERENCES catalog.model_profile(id);
+ALTER TABLE catalog.provider_check ADD CONSTRAINT provider_check_model_version_fkey FOREIGN KEY(model_version_id) REFERENCES catalog.model_profile_version(id);

@@ -22,6 +22,8 @@ export function catalogMessage(error: unknown) {
       invalid_preset: "预设格式不正确，或包含不允许的字段及端点。",
       invalid_request: "请检查必填项、参数类型和版本号。",
       dependency_unavailable: "服务暂不可用，请检查后台配置后重试。",
+      credential_sealing_unavailable:
+        "服务端尚未配置凭据加密，API Key 未保存。请配置加密密钥后重试。",
       request_unconfirmed: "请求结果未确认。请先查询回执，避免重复写入。",
     };
     return messages[error.code] ?? error.message;
@@ -168,13 +170,21 @@ export function useCatalogMutation(
 }
 export function MutationStatus({
   mutation,
+  inline = false,
 }: {
   mutation: ReturnType<typeof useCatalogMutation>;
+  inline?: boolean;
 }) {
   return (
     <div className="space-y-2" aria-live="polite">
       {mutation.message ? (
-        <FeedbackToast message={mutation.message} tone="info" />
+        inline ? (
+          <p role="status" className="text-sm break-words">
+            {mutation.message}
+          </p>
+        ) : (
+          <FeedbackToast message={mutation.message} tone="info" />
+        )
       ) : null}
       {mutation.pending ? (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm">

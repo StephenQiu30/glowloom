@@ -46,6 +46,7 @@ type PresetStateInput struct {
 
 // ConnectPresetInput creates a disabled connection from a pinned preset version.
 type ConnectPresetInput struct {
+	DirectUse      bool      `json:"direct_use,omitempty"`
 	CatalogVersion string    `json:"catalog_version,omitempty"`
 	CandidateKeys  []string  `json:"candidate_keys,omitempty"`
 	VersionID      uuid.UUID `json:"version_id"`

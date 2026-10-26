@@ -60,6 +60,7 @@ func (h *AdminHandler) Register(group *gin.RouterGroup) {
 	admin.PUT("/providers/:id/credentials", h.SetCredential)
 	admin.POST("/providers/:id/credentials/:credential_id/disable", h.DisableCredential)
 	admin.POST("/providers/:id/credentials/:credential_id/test", h.TestCredential)
+	admin.POST("/providers/:id/credentials/:credential_id/models/:model_id/test", h.TestModel)
 	admin.GET("/capabilities", h.Capabilities)
 	admin.GET("/models", h.ListModels)
 	admin.POST("/models", h.CreateModel)

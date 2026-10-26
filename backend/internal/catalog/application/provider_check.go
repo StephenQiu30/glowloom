@@ -20,6 +20,10 @@ type ModelCandidate struct {
 
 // ProviderCheck separates authentication, protocol and discovery evidence.
 type ProviderCheck struct {
+	ModelID         *uuid.UUID       `json:"model_id,omitempty"`
+	ModelVersionID  *uuid.UUID       `json:"model_version_id,omitempty"`
+	ModelResult     string           `json:"model_result,omitempty"`
+	TaskID          string           `json:"task_id,omitempty"`
 	ID              uuid.UUID        `json:"id"`
 	ProviderID      uuid.UUID        `json:"provider_id"`
 	ConfigVersionID uuid.UUID        `json:"config_version_id"`

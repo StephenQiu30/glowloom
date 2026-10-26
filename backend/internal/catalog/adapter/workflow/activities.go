@@ -43,7 +43,7 @@ func (a *Activities) RecordCredentialTestResult(ctx context.Context, input Recor
 			TestID: input.TestID, ProviderID: input.ProviderID, CredentialID: input.CredentialID,
 			ActorID: input.ActorID, OrgID: input.OrgID, RequestID: input.RequestID,
 		},
-		Result: input.Result, TestedAt: input.TestedAt, Last4: input.Last4,
+		ModelResult: input.Evidence.ModelResult, TaskID: input.Evidence.TaskID, Result: input.Result, TestedAt: input.TestedAt, Last4: input.Last4,
 		AuthResult: input.Evidence.AuthResult, AdapterResult: input.Evidence.AdapterResult, DiscoveryResult: input.Evidence.DiscoveryResult, Candidates: input.Evidence.Candidates,
 	})
 }

@@ -19,6 +19,7 @@ var ErrInvalidCredentialTest = errors.New("invalid credential test")
 
 // CredentialTestRequest binds one authorized test to its original credential.
 type CredentialTestRequest struct {
+	ModelID      uuid.UUID
 	TestID       uuid.UUID
 	ProviderID   uuid.UUID
 	CredentialID uuid.UUID
@@ -29,6 +30,8 @@ type CredentialTestRequest struct {
 
 // CredentialTestObservation is the Agent's safe result, with no provider body.
 type CredentialTestObservation struct {
+	ModelResult string
+	TaskID      string
 	CredentialTestRequest
 	Result          domain.TestResult
 	TestedAt        time.Time

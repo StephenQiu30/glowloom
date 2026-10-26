@@ -1,4 +1,5 @@
 "use client";
+import { ConnectionOnboarding } from "./connection-onboarding";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { LoadingState } from "@/components/layout/loading-state";
 import { ChevronDown, Eye, EyeOff } from "lucide-react";
@@ -211,6 +212,15 @@ export function ConnectionDetail({
               <TabsTrigger value="config">高级配置</TabsTrigger>
             </TabsList>
             <TabsContent value="overview" className="flex flex-col gap-6">
+              {provider?.status === "disabled" ? (
+                <ConnectionOnboarding
+                  id={id}
+                  onSaved={() => {
+                    onSaved();
+                    setAttempt((v) => v + 1);
+                  }}
+                />
+              ) : null}
               <ItemGroup className="rounded-lg border">
                 <Item>
                   <ItemContent>

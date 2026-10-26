@@ -90,6 +90,55 @@ func (a *Activities) TestCredential(ctx context.Context, input catalogflow.Agent
 	if err := authorize(); err != nil {
 		return unsupported, err
 	}
+	var selected struct {
+		ModelID                     *uuid.UUID
+		ModelVersionID              *uuid.UUID
+		ProviderModelID, Capability string
+	}
+	r = a.db.WithContext(ctx).Raw(`SELECT check_run.model_id,check_run.model_version_id,v.provider_model_id,m.capability
+ FROM catalog.provider_check check_run JOIN catalog.model_profile m ON m.id=check_run.model_id
+ JOIN catalog.model_profile_version v ON v.id=check_run.model_version_id AND v.id=m.current_version_id
+ WHERE check_run.id=? AND check_run.kind='model_access' AND NOT m.is_delete AND NOT v.is_delete`, input.TestID).Scan(&selected)
+	if r.Error != nil {
+		return unsupported, r.Error
+	}
+	if selected.ModelID != nil {
+		claimed := a.db.WithContext(ctx).Exec(`UPDATE catalog.provider_check check_run SET dispatch_started_at=now()
+ FROM catalog.provider p, catalog.provider_credential key, catalog.model_profile m
+ WHERE check_run.id=? AND check_run.status='running' AND check_run.dispatch_started_at IS NULL
+ AND p.id=check_run.provider_id AND p.current_config_version_id=check_run.config_version_id AND NOT p.is_delete
+ AND key.id=check_run.credential_id AND key.status='active' AND NOT key.is_delete
+ AND m.id=check_run.model_id AND m.current_version_id=check_run.model_version_id AND NOT m.is_delete`, input.TestID)
+		if claimed.Error != nil {
+			return unsupported, claimed.Error
+		}
+		if claimed.RowsAffected != 1 {
+			return catalogflow.AgentTestOutput{Result: catalogdomain.TestUnreachable, AuthResult: "unknown", AdapterResult: "ok", DiscoveryResult: "unsupported", ModelResult: "unknown"}, nil
+		}
+		probe := a.client.ProbeModel(ctx, configuration, selected.ProviderModelID, selected.Capability, credential.APIKey)
+		result := catalogflow.AgentTestOutput{Result: catalogdomain.TestUnreachable, AuthResult: "unknown", AdapterResult: "ok", DiscoveryResult: "unsupported", ModelResult: probe.Result, TaskID: probe.TaskID}
+		switch probe.Result {
+		case "completed", "accepted":
+			result.Result, result.AuthResult = catalogdomain.TestOK, "ok"
+		case "rejected":
+			result.AuthResult = probe.ErrorCode
+			if probe.ErrorCode == "auth_failed" {
+				result.Result = catalogdomain.TestAuthFailed
+			}
+			if probe.ErrorCode == "invalid_provider_request" {
+				result.AuthResult = "invalid_parameters"
+			}
+		}
+		return result, nil
+	}
+	// A stale model selection must never fall back to a weaker metadata probe.
+	var isModel bool
+	if err := a.db.WithContext(ctx).Raw(`SELECT kind='model_access' FROM catalog.provider_check WHERE id=?`, input.TestID).Scan(&isModel).Error; err != nil {
+		return unsupported, err
+	}
+	if isModel {
+		return unsupported, nil
+	}
 	result := a.client.Probe(ctx, configuration, credential.APIKey)
 	category := catalogdomain.TestUnreachable
 	switch result.Auth {

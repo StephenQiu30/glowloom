@@ -19,7 +19,7 @@ type releaseRow struct {
 	Validated                []byte
 }
 
-const releaseSelect = `SELECT r.id,r.model_id,r.model_version_id,r.price_version_id,r.config_version_id,r.status,r.revision,r.upstream_cost AS cost,r.create_time AS created_at,
+const releaseSelect = `SELECT r.onboarding_check_id,r.id,r.model_id,r.model_version_id,r.price_version_id,r.config_version_id,r.status,r.revision,r.upstream_cost AS cost,r.create_time AS created_at,
  to_jsonb(v.modes) AS modes,COALESCE((SELECT jsonb_agg(DISTINCT x.mode) FROM catalog.model_validation x
  JOIN catalog.provider_credential c ON c.id=x.credential_id AND c.status='active' AND NOT c.is_delete
  JOIN operation.operation op ON op.id=x.operation_id AND op.status='completed' AND NOT op.is_delete

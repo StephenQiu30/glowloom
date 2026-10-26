@@ -26,7 +26,11 @@ func (s *Store) RequestCredentialTest(ctx context.Context, actor identityapp.Pri
 	if err != nil || requestID == uuid.Nil {
 		return result, application.ErrInvalidCredentialTest
 	}
-	digest := sha256.Sum256([]byte("credential-test/" + actor.OrgID.String() + "/" + request.ProviderID.String() + "/" + request.CredentialID.String()))
+	identity := "credential-test/" + actor.OrgID.String() + "/" + request.ProviderID.String() + "/" + request.CredentialID.String()
+	if request.ModelID != uuid.Nil {
+		identity += "/model/" + request.ModelID.String()
+	}
+	digest := sha256.Sum256([]byte(identity))
 	hash := hex.EncodeToString(digest[:])
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := s.requirePlatformAdmin(tx, actor); err != nil {
@@ -63,8 +67,25 @@ func (s *Store) RequestCredentialTest(ctx context.Context, actor identityapp.Pri
 		if row.RowsAffected != 1 {
 			return application.ErrCredentialNotFound
 		}
-		if err := tx.Exec(`INSERT INTO catalog.provider_check(id,actor_id,provider_id,config_version_id,credential_id,kind,status)
- SELECT ?,?,p.id,p.current_config_version_id,?,'connectivity','pending' FROM catalog.provider p WHERE p.id=? AND p.current_config_version_id IS NOT NULL`, request.TestID, actor.ID, request.CredentialID, request.ProviderID).Error; err != nil {
+		kind := "connectivity"
+		var modelID, versionID *uuid.UUID
+		if request.ModelID != uuid.Nil {
+			var version struct{ ID uuid.UUID }
+			r := tx.Raw(`SELECT v.id FROM catalog.model_profile m JOIN catalog.model_profile_version v ON v.id=m.current_version_id
+ JOIN catalog.model_release release ON release.model_id=m.id AND release.model_version_id=v.id
+ JOIN catalog.provider p ON p.id=m.provider_id AND p.current_config_version_id=release.config_version_id
+ WHERE m.id=? AND m.provider_id=? AND NOT m.is_delete AND m.candidate_snapshot IS NOT NULL
+ AND release.status='draft' AND release.upstream_cost='{}'::jsonb AND NOT v.is_delete FOR SHARE OF m,v,p,release`, request.ModelID, request.ProviderID).Scan(&version)
+			if r.Error != nil {
+				return r.Error
+			}
+			if r.RowsAffected != 1 {
+				return application.ErrInvalidCredentialTest
+			}
+			modelID, versionID, kind = &request.ModelID, &version.ID, "model_access"
+		}
+		if err := tx.Exec(`INSERT INTO catalog.provider_check(id,actor_id,provider_id,config_version_id,credential_id,kind,status,model_id,model_version_id)
+ SELECT ?,?,p.id,p.current_config_version_id,?,?,'pending',?,? FROM catalog.provider p WHERE p.id=? AND p.current_config_version_id IS NOT NULL`, request.TestID, actor.ID, request.CredentialID, kind, modelID, versionID, request.ProviderID).Error; err != nil {
 			return err
 		}
 		eventID := uuid.NewSHA1(request.TestID, []byte("credential_test_requested"))
@@ -77,7 +98,7 @@ func (s *Store) RequestCredentialTest(ctx context.Context, actor identityapp.Pri
 		if err := tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?::uuid,?,?,?::jsonb)`, eventID, topic, actor.OrgID.String(), string(payload)).Error; err != nil {
 			return fmt.Errorf("record credential test request: %w", err)
 		}
-		result = application.CredentialTestAccepted{TestID: request.TestID, CheckID: request.TestID, EventID: eventID, ProviderID: request.ProviderID, CredentialID: request.CredentialID, Accepted: true}
+		result = application.CredentialTestAccepted{TestID: request.TestID, CheckID: request.TestID, EventID: eventID, ProviderID: request.ProviderID, CredentialID: request.CredentialID, Accepted: true, ModelID: modelID}
 		body, err := json.Marshal(struct {
 			application.CredentialTestAccepted
 			PlatformEpoch int64 `json:"platform_epoch"`

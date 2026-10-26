@@ -109,3 +109,46 @@ func TestProviderVideoMapsInternalDurationWithoutChangingFrozenInput(t *testing.
 		require.Equal(t, 1, calls)
 	}
 }
+
+func TestOnboardingProbeUsesOneBoundedRequestAndDistinguishesVideoAcceptance(t *testing.T) {
+	for _, tc := range []struct {
+		name, capability, path, body, result, code string
+		status                                     int
+	}{
+		{"text", "text.generate", "/api/v3/chat/completions", `{"choices":[{"message":{"content":"OK"},"finish_reason":"stop"}]}`, "completed", "", 200},
+		{"video", "video.generate", "/api/v3/contents/generations/tasks", `{"id":"fixture-task"}`, "accepted", "", 200},
+		{"rejected", "text.generate", "/api/v3/chat/completions", `{"error":{"message":"private supplier detail"}}`, "rejected", "auth_failed", 401},
+		{"invalid-response", "text.generate", "/api/v3/chat/completions", `{}`, "unknown", "unreachable", 200},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			client := providerhttp.NewClient(&http.Client{Transport: providerTransport(func(r *http.Request) (*http.Response, error) {
+				calls++
+				require.Equal(t, tc.path, r.URL.Path)
+				require.Equal(t, "Bearer fixture-key", r.Header.Get("Authorization"))
+				var body map[string]any
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+				require.Equal(t, "fixture-model", body["model"])
+				if tc.capability == "video.generate" {
+					require.EqualValues(t, 4, body["duration"])
+				}
+				return providerResponse(tc.status, tc.body), nil
+			})})
+			var config domain.ProviderConfig
+			for _, preset := range domain.BuiltinPresets() {
+				if preset.Config.AdapterKey == "volcengine_ark" {
+					config = preset.Config
+				}
+			}
+			result := client.ProbeModel(t.Context(), config, "fixture-model", tc.capability, "fixture-key")
+			require.Equal(t, tc.result, result.Result)
+			require.Equal(t, tc.code, result.ErrorCode)
+			require.Equal(t, 1, calls)
+			if tc.result == "accepted" {
+				require.Equal(t, "fixture-task", result.TaskID)
+			} else {
+				require.Empty(t, result.TaskID)
+			}
+		})
+	}
+}

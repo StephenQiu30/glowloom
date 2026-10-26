@@ -546,6 +546,9 @@ export function ModelDetail({
               <p className="text-sm text-muted-foreground">尚无发布记录。</p>
             ) : null}
             {releases.map((r, fieldIndex1) => {
+              const onboardingDraft =
+                r.status === "draft" &&
+                !Object.keys(r.upstream_cost ?? {}).length;
               const missing =
                 r.required_modes?.filter(
                   (mode) => !r.validated_modes?.includes(mode),
@@ -570,14 +573,33 @@ export function ModelDetail({
                   <p className="text-xs break-all text-muted-foreground">
                     {r.id}
                   </p>
-                  <p>已验证：{r.validated_modes?.join("、") || "无"}</p>
-                  {missing.length ? (
+                  <p>
+                    {r.onboarding_check_id
+                      ? "本发布已通过连接的单模型接入验证。"
+                      : `已验证：${r.validated_modes?.join("、") || "无"}`}
+                  </p>
+                  {r.onboarding_check_id ? (
+                    <p className="text-muted-foreground">
+                      其他模型及模式未逐项验证，费用由服务商按实际用量计收。
+                    </p>
+                  ) : null}
+                  {missing.length &&
+                  !r.onboarding_check_id &&
+                  !onboardingDraft ? (
                     <p>尚需真实验证：{missing.join("、")}</p>
                   ) : null}
-                  {r.status === "draft" ? (
+                  {onboardingDraft ? (
+                    <Button variant="outline" asChild>
+                      <a href={`/providers?connection=${model?.provider_id}`}>
+                        前往连接验证并启用所选模型
+                      </a>
+                    </Button>
+                  ) : null}
+                  {r.status === "draft" && !onboardingDraft ? (
                     <ProviderTrial release={r} onVerified={onSaved} />
                   ) : null}
-                  {r.status === "draft" || r.status === "retired" ? (
+                  {(r.status === "draft" || r.status === "retired") &&
+                  !onboardingDraft ? (
                     <form
                       onSubmit={async (e) => {
                         e.preventDefault();

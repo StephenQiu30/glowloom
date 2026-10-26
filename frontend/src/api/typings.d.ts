@@ -27,6 +27,17 @@ declare namespace API {
     id: string;
   };
 
+  type ActivateOnboardingInput = {
+    check_id?: string;
+    expected_revision?: number;
+    request_id?: string;
+  };
+
+  type activateProviderOnboardingParams = {
+    /** 服务ID */
+    id: string;
+  };
+
   type ActivateReleaseInput = {
     enable_provider?: boolean;
     expected_active_release_id?: string;
@@ -531,6 +542,7 @@ declare namespace API {
   type ConnectPresetInput = {
     candidate_keys?: string[];
     catalog_version?: string;
+    direct_use?: boolean;
     key?: string;
     name?: string;
     request_id?: string;
@@ -765,6 +777,7 @@ declare namespace API {
     check_id?: string;
     credential_id?: string;
     event_id?: string;
+    model_id?: string;
     provider_id?: string;
     test_id?: string;
   };
@@ -1715,6 +1728,11 @@ declare namespace API {
 
   type getProviderConfigParams = {
     /** 连接ID */
+    id: string;
+  };
+
+  type getProviderOnboardingParams = {
+    /** 服务ID */
     id: string;
   };
 
@@ -2720,6 +2738,7 @@ declare namespace API {
     id?: string;
     model_id?: string;
     model_version_id?: string;
+    onboarding_check_id?: string;
     price_version_id?: string;
     required_modes?: string[];
     revision?: number;
@@ -2804,6 +2823,16 @@ declare namespace API {
     x?: number;
     y?: number;
     z_index?: number;
+  };
+
+  type OnboardingModel = {
+    capability?: string;
+    display_name?: string;
+    id?: string;
+    provider_model_id?: string;
+    release_id?: string;
+    status?: string;
+    version_id?: string;
   };
 
   type OperationStatus =
@@ -3500,8 +3529,12 @@ declare namespace API {
     error_code?: string;
     id?: string;
     kind?: string;
+    model_id?: string;
+    model_result?: string;
+    model_version_id?: string;
     provider_id?: string;
     status?: string;
+    task_id?: string;
   };
 
   type ProviderConfig = {
@@ -3536,6 +3569,15 @@ declare namespace API {
     credential?: ProviderCredentialSummary;
     model_count?: number;
     provider?: CreatedProvider;
+  };
+
+  type ProviderOnboardingState = {
+    check?: ProviderCheck;
+    credential_id?: string;
+    models?: OnboardingModel[];
+    provider_id?: string;
+    revision?: number;
+    status?: string;
   };
 
   type ProviderPage = {
@@ -4867,6 +4909,15 @@ declare namespace API {
     id: string;
     /** 凭据UUID */
     credential_id: string;
+  };
+
+  type testProviderOnboardingModelParams = {
+    /** 服务ID */
+    id: string;
+    /** 凭据ID */
+    credential_id: string;
+    /** 模型ID */
+    model_id: string;
   };
 
   type TestResult =

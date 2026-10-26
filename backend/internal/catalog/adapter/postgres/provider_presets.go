@@ -237,6 +237,9 @@ func (s *Store) ConnectPreset(ctx context.Context, actor identityapp.Principal, 
 		if err := presetvalidation.Validate(document); err != nil {
 			return application.PresetConnection{}, err
 		}
+		if input.DirectUse && (len(input.CandidateKeys) == 0 || len(document.ModelTemplates) != 0) {
+			return application.PresetConnection{}, domain.ErrInvalidPreset
+		}
 		catalog := domain.ModelCatalogForConfig(document.Config)
 		candidates, err := catalog.Select(input.CatalogVersion, input.CandidateKeys)
 		if err != nil {
@@ -284,6 +287,11 @@ func (s *Store) ConnectPreset(ctx context.Context, actor identityapp.Principal, 
 			}
 			if err := tx.Exec(`UPDATE catalog.model_profile SET candidate_snapshot=?::jsonb WHERE id=?`, string(snapshot), id).Error; err != nil {
 				return application.PresetConnection{}, err
+			}
+			if input.DirectUse {
+				if err := instantiateOnboardingModel(tx, actor, id, configID, candidate); err != nil {
+					return application.PresetConnection{}, err
+				}
 			}
 			modelIDs = append(modelIDs, id)
 		}

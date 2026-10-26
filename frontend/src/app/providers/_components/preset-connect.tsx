@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { ChevronDown, Eye, EyeOff, Globe, Server } from "lucide-react";
+import { ConnectionOnboarding } from "./connection-onboarding";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Spinner } from "@/components/ui/spinner";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -91,7 +92,7 @@ export function PresetConnect({
   const credential = useCatalogMutation(
     (result) => {
       setComplete(true);
-      onSaved(connectionID(result));
+      if (!direct) onSaved(connectionID(result));
     },
     "preset.onboarding.credential",
     isCredentialReceipt,
@@ -114,6 +115,17 @@ export function PresetConnect({
         (p) => p.provider?.id === targetID && p.credential?.status === "active",
       ));
   const busy = create.busy || credential.busy;
+  const direct =
+    !!preset?.model_catalog?.models?.length &&
+    !preset.document?.model_templates?.length;
+  if (complete && targetID && direct)
+    return (
+      <ConnectionOnboarding
+        id={targetID}
+        onSaved={onSaved}
+        onCancel={onCancel}
+      />
+    );
   return (
     <form
       className="flex min-h-0 min-w-0 flex-1 flex-col gap-6"
@@ -123,7 +135,10 @@ export function PresetConnect({
           busy ||
           complete ||
           !apiKey ||
-          (!targetID && (!preset?.id || !preset.version_id))
+          (!targetID &&
+            (!preset?.id ||
+              !preset.version_id ||
+              (direct && !candidateKeys.length)))
         )
           return;
         const connectionName = name.trim();
@@ -146,6 +161,7 @@ export function PresetConnect({
                   name: connectionName,
                   catalog_version: preset.model_catalog?.version,
                   candidate_keys: candidateKeys,
+                  direct_use: direct,
                 },
               ),
           );
@@ -191,7 +207,11 @@ export function PresetConnect({
                 .map((p) => (
                   <FieldLabel key={p.id} htmlFor={`${fieldID}-${p.id}`}>
                     <Field orientation="horizontal">
-                      <RadioGroupItem id={`${fieldID}-${p.id}`} value={p.id!} />
+                      <RadioGroupItem
+                        id={`${fieldID}-${p.id}`}
+                        value={p.id!}
+                        aria-label={p.document?.name}
+                      />
                       <FieldContent>
                         <FieldTitle>
                           <span className="flex items-center gap-2">
@@ -260,51 +280,80 @@ export function PresetConnect({
           </Field>
         </FieldGroup>
         {preset?.model_catalog?.models?.length && !targetID ? (
-          <Collapsible>
-            <CollapsibleTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                className="group w-full justify-between max-md:h-11"
-              >
-                <span>
-                  通用模型
-                  {candidateKeys.length
-                    ? ` · 已选 ${candidateKeys.length}`
-                    : "（可选）"}
-                </span>
-                <ChevronDown className="size-4 transition-transform group-data-[state=open]:rotate-180" />
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="pt-3">
-              <FieldSet disabled={busy || !!create.pending} className="gap-3">
-                <FieldDescription>草稿，需验证后启用。</FieldDescription>
-                {preset.model_catalog.models.map((candidate) => (
-                  <Field key={candidate.key} orientation="horizontal">
-                    <Checkbox
-                      id={`${fieldID}-candidate-${candidate.key}`}
-                      checked={candidateKeys.includes(candidate.key!)}
-                      onCheckedChange={(checked) =>
-                        setCandidateKeys((previous) =>
-                          checked === true
-                            ? [...previous, candidate.key!]
-                            : previous.filter((key) => key !== candidate.key),
-                        )
-                      }
-                    />
-                    <FieldLabel
-                      htmlFor={`${fieldID}-candidate-${candidate.key}`}
+          <FieldSet disabled={busy || !!create.pending} className="gap-4">
+            <FieldLegend variant="label">
+              选择模型 · 已选 {candidateKeys.length}
+            </FieldLegend>
+            <FieldDescription>
+              勾选要用于创作的模型，保存后只需验证其中一个。
+            </FieldDescription>
+            {[
+              ["text.generate", "文本"],
+              ["image.generate", "图像"],
+              ["video.generate", "视频"],
+            ].map(([capability, label]) => {
+              const models = preset.model_catalog!.models!.filter(
+                (m) => m.capability === capability,
+              );
+              if (!models.length) return null;
+              return (
+                <FieldSet key={capability} className="gap-3">
+                  <FieldLegend variant="label" className="mb-0">
+                    {label}
+                  </FieldLegend>
+                  {models.map((candidate) => (
+                    <Field
+                      key={candidate.key}
+                      orientation="horizontal"
+                      className="items-start"
                     >
-                      {candidate.display_name}
-                      {candidate.requires_model_selection
-                        ? " · 需选择账号模型"
-                        : ""}
-                    </FieldLabel>
-                  </Field>
-                ))}
-              </FieldSet>
-            </CollapsibleContent>
-          </Collapsible>
+                      <Checkbox
+                        id={`${fieldID}-candidate-${candidate.key}`}
+                        className="mt-1"
+                        disabled={
+                          candidate.requires_model_selection ||
+                          busy ||
+                          !!create.pending
+                        }
+                        checked={candidateKeys.includes(candidate.key!)}
+                        onCheckedChange={(checked) =>
+                          setCandidateKeys((previous) =>
+                            checked === true
+                              ? [...previous, candidate.key!]
+                              : previous.filter((key) => key !== candidate.key),
+                          )
+                        }
+                      />
+                      <FieldContent className="min-w-0">
+                        <FieldLabel
+                          htmlFor={`${fieldID}-candidate-${candidate.key}`}
+                        >
+                          {candidate.display_name}
+                        </FieldLabel>
+                        <FieldDescription className="break-all">
+                          {candidate.provider_model_id ||
+                            "此型号需要先补充账号模型配置"}
+                        </FieldDescription>
+                      </FieldContent>
+                    </Field>
+                  ))}
+                </FieldSet>
+              );
+            })}
+            {preset.document?.config?.adapter_key === "volcengine_ark" ? (
+              <FieldDescription>
+                <a
+                  href="https://console.volcengine.com/ark/region:cn-beijing/docs/model-list"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline underline-offset-4"
+                >
+                  查看火山方舟模型文档
+                </a>{" "}
+                · 请确保 Key 已获得所选模型的调用权限。
+              </FieldDescription>
+            ) : null}
+          </FieldSet>
         ) : null}
         {!targetID ? (
           <Collapsible>
@@ -376,7 +425,13 @@ export function PresetConnect({
         ) : null}
         <Button
           className="max-md:h-11"
-          disabled={busy || (!preset && !targetID) || !apiKey || complete}
+          disabled={
+            busy ||
+            (!preset && !targetID) ||
+            !apiKey ||
+            complete ||
+            (direct && !targetID && !candidateKeys.length)
+          }
         >
           {busy ? <Spinner data-icon="inline-start" /> : null}
           {busy
@@ -385,7 +440,9 @@ export function PresetConnect({
               ? "连接与 Key 已保存"
               : targetID
                 ? "继续保存 API Key"
-                : "保存连接"}
+                : direct
+                  ? "保存并继续验证"
+                  : "保存连接"}
         </Button>
         {complete ? (
           <Button

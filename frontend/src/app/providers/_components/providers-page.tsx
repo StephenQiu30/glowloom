@@ -80,7 +80,6 @@ import {
   MutationStatus,
   useCatalogMutation,
 } from "@/components/catalog/mutation";
-import { ServiceTrial } from "./service-trial";
 import { PresetEditor } from "./preset-editor";
 import { ConnectionDetail } from "./connection-detail";
 import { PresetConnect } from "./preset-connect";
@@ -126,7 +125,6 @@ function ProviderAdministration({
     if (overlayTrigger.current?.isConnected) overlayTrigger.current.focus();
   }
   const [presetsOpen, setPresetsOpen] = useState(false);
-  const [trialOpen, setTrialOpen] = useState(false);
   const [providers, setProviders] = useState<API.ProviderListItem[]>([]);
   const [selection, setSelection] = useState<{
     scope: string;
@@ -241,6 +239,7 @@ function ProviderAdministration({
     connectVisible.current = false;
     readback.current?.abort();
     setConnect(null);
+    setRefresh((value) => value + 1);
   }
   async function connected(id: string) {
     if (!connectVisible.current) {
@@ -314,13 +313,6 @@ function ProviderAdministration({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            className="max-md:h-11"
-            onClick={() => setTrialOpen(true)}
-          >
-            开发试验
-          </Button>
           <Button
             className="max-md:h-11"
             onClick={() => openConnect(true)}
@@ -631,13 +623,6 @@ function ProviderAdministration({
         </Button>
       ) : null}
       <BatchDialog key={batch.generation} batch={batch} />
-      {trialOpen ? (
-        <ServiceTrial
-          open={trialOpen}
-          onOpenChange={setTrialOpen}
-          providers={providers}
-        />
-      ) : null}
       <Dialog
         open={Boolean(connect)}
         onOpenChange={(open) => {
@@ -649,12 +634,12 @@ function ProviderAdministration({
             event.preventDefault();
             if (!detailOpen) restoreFocus();
           }}
-          className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden p-6 sm:max-w-lg max-md:[&_[data-slot=dialog-close]]:size-11"
+          className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden p-6 sm:max-w-xl max-md:[&_[data-slot=dialog-close]]:size-11"
         >
           <DialogHeader>
             <DialogTitle>接入 AI 服务</DialogTitle>
             <DialogDescription className="sr-only">
-              选择平台并添加 API Key。
+              选择模型预设并添加 API Key，验证一个模型后即可用于创作。
             </DialogDescription>
           </DialogHeader>
           {connect ? (
@@ -662,7 +647,10 @@ function ProviderAdministration({
               presets={presets}
               providers={providers}
               initialPreset={connect === true ? undefined : connect.id}
-              onCreated={selectConnection}
+              onCreated={(id) => {
+                selectConnection(id);
+                setRefresh((value) => value + 1);
+              }}
               onSaved={(id) => void connected(id)}
               onCancel={closeConnect}
             />

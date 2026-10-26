@@ -20,11 +20,14 @@ func recordProviderCheck(tx *gorm.DB, observation application.CredentialTestObse
 	if !slices.Contains(allowed, observation.AuthResult) || !slices.Contains(allowed, observation.AdapterResult) || !slices.Contains(allowed, observation.DiscoveryResult) || len(observation.Candidates) > 600 {
 		return application.ErrInvalidCredentialTest
 	}
+	if !slices.Contains([]string{"", "completed", "accepted", "rejected", "unknown"}, observation.ModelResult) || len(observation.TaskID) > 256 {
+		return application.ErrInvalidCredentialTest
+	}
 	status := "completed"
 	if observation.AuthResult != "ok" {
 		status = "failed"
 	}
-	r := tx.Exec(`UPDATE catalog.provider_check SET status=?,auth_result=?,adapter_result=?,discovery_result=?,completed_at=? WHERE id=? AND provider_id=? AND credential_id=?`, status, observation.AuthResult, observation.AdapterResult, observation.DiscoveryResult, observation.TestedAt, observation.TestID, observation.ProviderID, observation.CredentialID)
+	r := tx.Exec(`UPDATE catalog.provider_check SET status=?,auth_result=?,adapter_result=?,discovery_result=?,completed_at=?,model_result=?,task_id=? WHERE id=? AND provider_id=? AND credential_id=?`, status, observation.AuthResult, observation.AdapterResult, observation.DiscoveryResult, observation.TestedAt, observation.ModelResult, observation.TaskID, observation.TestID, observation.ProviderID, observation.CredentialID)
 	if r.Error != nil {
 		return r.Error
 	}
@@ -49,7 +52,7 @@ func (s *Store) ReadProviderCheck(ctx context.Context, actor identityapp.Princip
 		if err := requirePlatformCatalogAdmin(tx, s.actors, actor); err != nil {
 			return err
 		}
-		r := tx.Raw(`SELECT id,provider_id,config_version_id,credential_id,kind,status,auth_result,adapter_result,discovery_result,error_code,create_time AS created_at,completed_at FROM catalog.provider_check WHERE id=?`, id).Scan(&result)
+		r := tx.Raw(`SELECT model_id,model_version_id,model_result,task_id,id,provider_id,config_version_id,credential_id,kind,status,auth_result,adapter_result,discovery_result,error_code,create_time AS created_at,completed_at FROM catalog.provider_check WHERE id=?`, id).Scan(&result)
 		if r.Error != nil {
 			return r.Error
 		}

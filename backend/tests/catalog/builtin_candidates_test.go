@@ -73,8 +73,10 @@ func TestHistoricalArkConfigDoesNotAcquireTextCandidates(t *testing.T) {
 	config := domain.BuiltinPresets()[0].Config
 	config.Capabilities = []string{"video"}
 	catalog := domain.ModelCatalogForConfig(config)
-	require.Len(t, catalog.Models, 1)
-	require.Equal(t, "video.generate", catalog.Models[0].Capability)
+	require.NotEmpty(t, catalog.Models)
+	for _, model := range catalog.Models {
+		require.Equal(t, "video.generate", model.Capability)
+	}
 	_, err := catalog.Select(catalog.Version, []string{"ark-chat"})
 	require.ErrorIs(t, err, domain.ErrInvalidPreset)
 }

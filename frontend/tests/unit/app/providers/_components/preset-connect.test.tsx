@@ -18,6 +18,18 @@ vi.mock("@/api/settings", () => ({
   connectProviderPreset: api.connect,
   setAdminCredential: api.key,
   getConfigReceipt: api.receipt,
+  getProviderOnboarding: vi.fn().mockResolvedValue({
+    provider_id: "connection",
+    status: "disabled",
+    credential_id: "credential",
+    models: [
+      {
+        id: "model",
+        display_name: "DeepSeek Flash",
+        capability: "text.generate",
+      },
+    ],
+  }),
 }));
 const presets: API.Preset[] = [
   {
@@ -273,6 +285,7 @@ it("按目录版本提交候选模型，切换平台会清空旧选择", async (
             key: "chat",
             display_name: "通用聊天",
             provider_model_id: "vendor/chat",
+            capability: "text.generate",
           },
         ],
       },
@@ -283,7 +296,14 @@ it("按目录版本提交候选模型，切换平台会清空旧选择", async (
       document: { name: "DeepSeek" },
       model_catalog: {
         version: "catalog-v2",
-        models: [{ key: "ds", display_name: "DeepSeek Flash" }],
+        models: [
+          {
+            key: "ds",
+            display_name: "DeepSeek Flash",
+            capability: "text.generate",
+            provider_model_id: "deepseek-flash",
+          },
+        ],
       },
     },
   ];
@@ -291,28 +311,28 @@ it("按目录版本提交候选模型，切换平台会清空旧选择", async (
     <PresetConnect presets={candidates} onCreated={created} onSaved={saved} />,
   );
   fireEvent.click(screen.getByRole("radio", { name: /OpenRouter/ }));
-  expect(screen.queryByRole("checkbox", { name: "通用聊天" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "通用模型（可选）" }));
+  expect(screen.getByRole("checkbox", { name: "通用聊天" })).toBeDefined();
   fireEvent.click(screen.getByRole("checkbox", { name: "通用聊天" }));
   fireEvent.click(screen.getByRole("radio", { name: /DeepSeek/ }));
   fireEvent.click(screen.getByRole("checkbox", { name: "DeepSeek Flash" }));
   fireEvent.change(screen.getByLabelText("API Key"), {
     target: { value: "fixture-api-key-test" },
   });
-  expect(screen.getByRole("button", { name: "保存连接" })).toHaveProperty(
+  expect(screen.getByRole("button", { name: "保存并继续验证" })).toHaveProperty(
     "disabled",
     false,
   );
   await waitFor(() =>
     expect(
       screen
-        .getByRole("button", { name: "保存连接" })
+        .getByRole("button", { name: "保存并继续验证" })
         .closest("form")!
         .checkValidity(),
     ).toBe(true),
   );
-  fireEvent.click(screen.getByRole("button", { name: "保存连接" }));
-  await waitFor(() => expect(saved).toHaveBeenCalledOnce());
+  fireEvent.click(screen.getByRole("button", { name: "保存并继续验证" }));
+  await screen.findByText("验证一个模型，完成接入");
+  expect(saved).not.toHaveBeenCalled();
   expect(api.connect).toHaveBeenCalledWith(
     { id: "other" },
     expect.objectContaining({

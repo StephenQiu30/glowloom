@@ -596,6 +596,28 @@ export async function disableAdminCredential(
   );
 }
 
+/** 验证一个所选模型 POST /api/admin/providers/${param0}/credentials/${param1}/models/${param2}/test */
+export async function testProviderOnboardingModel(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.testProviderOnboardingModelParams,
+  options?: RequestOptions,
+) {
+  const {
+    id: param0,
+    credential_id: param1,
+    model_id: param2,
+    ...queryParams
+  } = params;
+  return request<any>(
+    `/api/admin/providers/${param0}/credentials/${param1}/models/${param2}/test`,
+    {
+      method: "POST",
+      params: { ...queryParams },
+      ...(options || {}),
+    },
+  );
+}
+
 /** 请求测试渠道凭据 POST /api/admin/providers/${param0}/credentials/${param1}/test */
 export async function testAdminCredential(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -608,6 +630,45 @@ export async function testAdminCredential(
     {
       method: "POST",
       params: { ...queryParams },
+      ...(options || {}),
+    },
+  );
+}
+
+/** 读取模型预设接入进度 GET /api/admin/providers/${param0}/onboarding */
+export async function getProviderOnboarding(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getProviderOnboardingParams,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.ProviderOnboardingState>(
+    `/api/admin/providers/${param0}/onboarding`,
+    {
+      method: "GET",
+      params: { ...queryParams },
+      ...(options || {}),
+    },
+  );
+}
+
+/** 验证后启用所选模型 POST /api/admin/providers/${param0}/onboarding/activate */
+export async function activateProviderOnboarding(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.activateProviderOnboardingParams,
+  body: API.ActivateOnboardingInput,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.ProviderOnboardingState>(
+    `/api/admin/providers/${param0}/onboarding/activate`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
       ...(options || {}),
     },
   );

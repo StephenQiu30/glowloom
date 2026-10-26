@@ -60,6 +60,8 @@ type AgentCredential struct {
 
 // AgentTestOutput is the safe result category returned by the Agent.
 type AgentTestOutput struct {
+	ModelResult     string                       `json:"model_result,omitempty"`
+	TaskID          string                       `json:"task_id,omitempty"`
 	Result          domain.TestResult            `json:"result"`
 	AuthResult      string                       `json:"auth_result,omitempty"`
 	AdapterResult   string                       `json:"adapter_result,omitempty"`
@@ -132,8 +134,12 @@ func CredentialTestWorkflow(ctx workflow.Context, input Input) (output Output, r
 	if version != workflow.DefaultVersion && domain.IsManagedCloud(loaded.AdapterKey) {
 		queue = "provider"
 	}
+	probeTimeout := 90 * time.Second
+	if workflow.GetVersion(ctx, "catalog-model-access-v1", workflow.DefaultVersion, 1) != workflow.DefaultVersion {
+		probeTimeout = 6 * time.Minute
+	}
 	agentCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-		TaskQueue: queue, StartToCloseTimeout: 90 * time.Second,
+		TaskQueue: queue, StartToCloseTimeout: probeTimeout,
 		RetryPolicy: &temporal.RetryPolicy{MaximumAttempts: 1},
 	})
 	var tested AgentTestOutput
