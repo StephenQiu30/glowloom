@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  X,
   ChevronDown,
   CheckSquare,
   FolderPlus,
@@ -147,10 +148,20 @@ export function LibraryToolbar({
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
-                    variant="ghost"
+                    variant={
+                      filter.favorite || filter.trash || filter.recent
+                        ? "secondary"
+                        : "ghost"
+                    }
                     size="lg"
                     disabled={inactive}
                     aria-label="筛选素材"
+                    data-active={
+                      filter.favorite ||
+                      filter.trash ||
+                      filter.recent ||
+                      undefined
+                    }
                   >
                     筛选
                     <ChevronDown data-icon="inline-end" />
@@ -165,7 +176,11 @@ export function LibraryToolbar({
                     <DropdownMenuCheckboxItem
                       checked={filter.favorite}
                       onCheckedChange={(favorite) =>
-                        onFilter({ ...filter, favorite })
+                        onFilter({
+                          ...filter,
+                          favorite,
+                          trash: favorite ? false : filter.trash,
+                        })
                       }
                     >
                       仅显示收藏
@@ -268,21 +283,32 @@ export function LibraryToolbar({
             </div>
             <div className="library-secondary-actions">
               <Button
-                variant="ghost"
+                variant={filter.favorite ? "secondary" : "ghost"}
                 size="lg"
                 disabled={inactive}
+                aria-label={filter.favorite ? "关闭收藏筛选" : "收藏"}
+                title={filter.favorite ? "关闭收藏筛选" : "仅显示收藏"}
                 aria-pressed={filter.favorite}
                 onClick={() =>
-                  onFilter({ ...filter, favorite: !filter.favorite })
+                  onFilter({
+                    ...filter,
+                    favorite: !filter.favorite,
+                    trash: false,
+                  })
                 }
               >
-                <Heart data-icon="inline-start" />
+                <Heart
+                  data-icon="inline-start"
+                  fill={filter.favorite ? "currentColor" : "none"}
+                />
                 收藏
+                {filter.favorite && <X data-icon="inline-end" />}
               </Button>
               <Button
-                variant="ghost"
+                variant={filter.trash ? "secondary" : "ghost"}
                 size="lg"
                 disabled={inactive}
+                aria-label={filter.trash ? "关闭回收站" : "回收站"}
                 aria-pressed={filter.trash}
                 onClick={() =>
                   onFilter({
@@ -294,7 +320,8 @@ export function LibraryToolbar({
                 }
               >
                 <Trash2 data-icon="inline-start" />
-                {filter.trash ? "返回素材" : "回收站"}
+                回收站
+                {filter.trash && <X data-icon="inline-end" />}
               </Button>
             </div>
           </div>

@@ -284,3 +284,77 @@ it("每页数量选择发送真实分页参数，调整筛选时保留数量", a
     ),
   );
 });
+
+it("收藏筛选有明确关闭入口，返回保留类型和时间且不修改素材", async () => {
+  render(<AssetsPage />);
+  await screen.findByText("这里还没有素材");
+  fireEvent.click(screen.getByRole("radio", { name: "视频" }));
+  fireEvent.click(screen.getByRole("button", { name: "最近30天" }));
+  fireEvent.click(screen.getByRole("button", { name: "收藏" }));
+  expect(
+    screen
+      .getByRole("button", { name: "关闭收藏筛选" })
+      .getAttribute("aria-pressed"),
+  ).toBe("true");
+  await screen.findByText("暂无匹配的收藏");
+  fireEvent.click(screen.getByRole("button", { name: "返回素材" }));
+  await waitFor(() =>
+    expect(request).toHaveBeenLastCalledWith(
+      "/api/media/library",
+      expect.objectContaining({
+        params: expect.objectContaining({
+          favorite_only: false,
+          kind: "video",
+          recent_only: true,
+        }),
+      }),
+    ),
+  );
+  expect(screen.queryByRole("button", { name: "返回素材" })).toBeNull();
+  expect(
+    vi.mocked(request).mock.calls.every(([url]) => !url.endsWith("/commands")),
+  ).toBe(true);
+});
+
+it("收藏加载中和失败后均可返回，重复点击收藏也可以关闭", async () => {
+  render(<AssetsPage />);
+  await screen.findByText("这里还没有素材");
+  let fail!: (reason: unknown) => void;
+  vi.mocked(request).mockImplementationOnce(
+    () =>
+      new Promise((_, reject) => {
+        fail = reject;
+      }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "收藏" }));
+  expect(screen.getByRole("status", { name: "正在读取素材" })).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "返回素材" }).hasAttribute("disabled"),
+  ).toBe(false);
+  fail(new RequestError("unavailable", 503));
+  await screen.findByText("无法读取素材");
+  fireEvent.click(screen.getByRole("button", { name: "关闭收藏筛选" }));
+  await screen.findByText("这里还没有素材");
+  expect(
+    screen.getByRole("button", { name: "收藏" }).getAttribute("aria-pressed"),
+  ).toBe("false");
+});
+
+it("从回收站切换收藏时恢复活动素材范围", async () => {
+  render(<AssetsPage />);
+  await screen.findByText("这里还没有素材");
+  fireEvent.click(screen.getByRole("button", { name: "回收站" }));
+  await screen.findByText("回收站为空");
+  fireEvent.click(screen.getByRole("button", { name: "收藏" }));
+  await waitFor(() =>
+    expect(request).toHaveBeenLastCalledWith(
+      "/api/media/library",
+      expect.objectContaining({
+        params: expect.objectContaining({
+          favorite_only: true,
+          catalog_state: "active",
+        }),
+      }),
+    ),
+  );
+});

@@ -3,7 +3,6 @@
 import {
   useCallback,
   useEffect,
-  useRef,
   useState,
   type Dispatch,
   type SetStateAction,
@@ -14,7 +13,9 @@ import { fitNodeSize } from "../lib/canvas-node-size";
 export type CanvasMediaDimensions = { width: number; height: number };
 type Measurement = CanvasMediaDimensions & { source: string };
 
-/** Size is business geometry; the decoded dimensions and preview URL remain local. */
+/** Normalize the merged bounds without moving the accepted placement.
+ * Only an explicit upload/replacement action may center the new asset.
+ * Decoded dimensions and preview URLs themselves remain page-local. */
 export function fitCanvasMediaNode(
   node: CanvasNodeData,
   measurement: Measurement,
@@ -58,10 +59,6 @@ export function fitCanvasMediaNode(
   return {
     ...node,
     ...size,
-    position: {
-      x: node.position.x + (node.width - size.width) / 2,
-      y: node.position.y + (node.height - size.height) / 2,
-    },
     metadata: {
       ...node.metadata,
       naturalWidth: measurement.width,
@@ -79,7 +76,6 @@ export function useCanvasMediaSize(
   const [measurements, setMeasurements] = useState<Record<string, Measurement>>(
     {},
   );
-  const applied = useRef<Record<string, Measurement>>({});
   const measure = useCallback(
     (id: string, source: string, dimensions?: CanvasMediaDimensions) => {
       if (!dimensions) return;
@@ -95,17 +91,13 @@ export function useCanvasMediaSize(
   );
   useEffect(() => {
     if (!enabled) return;
-    const pending = Object.fromEntries(
-      Object.entries(measurements).filter(
-        ([id, value]) => applied.current[id] !== value,
-      ),
-    );
-    if (!Object.keys(pending).length) return;
-    applied.current = measurements;
+    // A later peer resize can arrive after this media decoded. Recheck the
+    // merged bounds too; the normalization is idempotent and source-bound.
+    if (!Object.keys(measurements).length) return;
     setNodes((previous) => {
       let changed = false;
       const next = previous.map((node) => {
-        const measurement = pending[node.id];
+        const measurement = measurements[node.id];
         const fitted = measurement
           ? fitCanvasMediaNode(node, measurement, document.baseURI)
           : node;

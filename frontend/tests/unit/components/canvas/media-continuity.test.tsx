@@ -38,14 +38,14 @@ function node(): CanvasNodeData {
     },
   };
 }
-it("已有服务节点解码后匹配素材比例，保持中心", () => {
+it("已有服务节点解码后匹配素材比例，但不二次移动已同步位置", () => {
   const result = fitCanvasMediaNode(
     node(),
     { source: "/image.png", width: 640, height: 360 },
     "https://app.test",
   );
   expect([result.width, result.height]).toEqual([320, 180]);
-  expect(result.position).toEqual({ x: 10, y: 90 });
+  expect(result.position).toEqual({ x: 10, y: 20 });
 });
 it.each(["image", "video"] as const)(
   "%s 替换使用回执尺寸并保持节点及引用身份",
@@ -302,4 +302,51 @@ it("Yjs已确认另一素材身份时，不把旧预览覆盖回去", async () =
   );
   expect(result[0].documentData!.fileReferences![0].fileId).toBe("theirs");
   expect(result[0].metadata!.content).toBe("/theirs.png");
+});
+
+it("并发替换和缩放后的比例校正不重复居中，并且再次解码幂等", () => {
+  const merged = {
+    ...node(),
+    width: 340,
+    height: 191.25,
+    position: { x: 1059.375, y: 550 },
+    metadata: { content: "/portrait.png" },
+  };
+  const measurement = { source: "/portrait.png", width: 360, height: 640 };
+  const fitted = fitCanvasMediaNode(merged, measurement, "https://app.test");
+  expect(fitted.width).toBe(107.578125);
+  expect(fitted.height).toBe(191.25);
+  expect(fitted.position).toEqual(merged.position);
+  expect(fitCanvasMediaNode(fitted, measurement, "https://app.test")).toBe(
+    fitted,
+  );
+});
+
+it("解码早于远端几何时仍校正比例，且不移动远端位置", () => {
+  const hook = renderHook(() => {
+    const [nodes, setNodes] = useState([node()]);
+    const measure = useCanvasMediaSize(nodes, true, setNodes);
+    return { nodes, setNodes, measure };
+  });
+  act(() =>
+    hook.result.current.measure("media", "/image.png", {
+      width: 360,
+      height: 640,
+    }),
+  );
+  act(() =>
+    hook.result.current.setNodes((previous) => [
+      {
+        ...previous[0],
+        width: 340,
+        height: 191.25,
+        position: { x: 1059.375, y: 550 },
+      },
+    ]),
+  );
+  expect(hook.result.current.nodes[0]).toMatchObject({
+    width: 107.578125,
+    height: 191.25,
+    position: { x: 1059.375, y: 550 },
+  });
 });

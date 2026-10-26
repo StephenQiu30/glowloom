@@ -12,12 +12,12 @@ import { GenerationHistory } from "@/components/media/generation-history";
 import { cn } from "cn";
 import { useEffect, useRef, useState } from "react";
 import {
+  ArrowLeft,
   Trash2,
   Heart,
   Folder,
   RotateCw,
   Download,
-  ArrowLeft,
 } from "lucide-react";
 import { PageLayout } from "@/components/layout/page-layout";
 import { useLoginDialog } from "@/components/layout/basic-layout";
@@ -429,17 +429,33 @@ function Library({
                     </ItemGroup>
                   </section>
                 )}
-              {page && !loading && !error && (
+              {((page && !loading && !error) ||
+                filter.favorite ||
+                filter.trash ||
+                filter.folder) && (
                 <Item className="library-section-heading flex-nowrap p-0">
-                  {filter.folder && (
+                  {(filter.favorite || filter.trash || filter.folder) && (
                     <Button
                       variant="ghost"
-                      size="icon-lg"
-                      aria-label="返回全部素材"
+                      size="lg"
+                      className="max-sm:min-h-11"
                       disabled={locked}
-                      onClick={() => onFilter({ ...filter, folder: "" })}
+                      onClick={() =>
+                        onFilter({
+                          ...filter,
+                          favorite: false,
+                          trash: false,
+                          folder:
+                            filter.favorite || filter.trash
+                              ? filter.folder
+                              : "",
+                        })
+                      }
                     >
-                      <ArrowLeft />
+                      <ArrowLeft data-icon="inline-start" />
+                      {filter.favorite || filter.trash
+                        ? "返回素材"
+                        : "返回全部素材"}
                     </Button>
                   )}
                   <ItemContent className="min-w-0">
@@ -456,18 +472,20 @@ function Library({
                             : `全部${kinds.find((k) => k.id === filter.kind)?.label ?? "素材"}`)}
                     </ItemTitle>
                   </ItemContent>
-                  <ItemActions>
-                    <ItemDescription>共 {page.total} 个素材</ItemDescription>
-                    <Button
-                      variant="ghost"
-                      size="icon-lg"
-                      aria-label="刷新素材"
-                      disabled={locked}
-                      onClick={reload}
-                    >
-                      <RotateCw />
-                    </Button>
-                  </ItemActions>
+                  {page && !loading && !error && (
+                    <ItemActions>
+                      <ItemDescription>共 {page.total} 个素材</ItemDescription>
+                      <Button
+                        variant="ghost"
+                        size="icon-lg"
+                        aria-label="刷新素材"
+                        disabled={locked}
+                        onClick={reload}
+                      >
+                        <RotateCw />
+                      </Button>
+                    </ItemActions>
+                  )}
                 </Item>
               )}
               {loading ? (
@@ -497,14 +515,18 @@ function Library({
                       ? "没有匹配的素材"
                       : filter.trash
                         ? "回收站为空"
-                        : "这里还没有素材"
+                        : filter.favorite
+                          ? "暂无匹配的收藏"
+                          : "这里还没有素材"
                   }
                   description={
                     filter.search
                       ? "试试其他关键词，或调整筛选条件。"
                       : filter.trash
                         ? "移入回收站的素材会显示在这里。"
-                        : "上传素材，开始积累你的创作灵感。"
+                        : filter.favorite
+                          ? "调整筛选，或返回素材继续浏览。"
+                          : "上传素材，开始积累你的创作灵感。"
                   }
                 />
               ) : (
