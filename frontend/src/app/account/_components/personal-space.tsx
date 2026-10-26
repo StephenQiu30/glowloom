@@ -60,20 +60,18 @@ export function PersonalSpace() {
       />
       <div className="personal-space-layout">
         <aside className="personal-profile" aria-label="个人资料">
-          <BoundAvatar
-            assetID={actor.avatar_asset_id}
-            load={(signal) => getMyAvatar({ signal })}
-            label={actor.display_name}
-          />
-          <h2 className="text-xl font-medium">{actor.display_name}</h2>
-          {actor.bio && (
-            <p className="text-sm break-words whitespace-pre-wrap text-muted-foreground">
-              {actor.bio}
-            </p>
-          )}
-          <p className="text-sm break-all text-muted-foreground">
-            {actor.email}
-          </p>
+          <div className="personal-profile-identity">
+            <BoundAvatar
+              assetID={actor.avatar_asset_id}
+              load={(signal) => getMyAvatar({ signal })}
+              label={actor.display_name}
+            />
+            <div className="personal-profile-copy">
+              <h2>{actor.display_name}</h2>
+              <p>{actor.email}</p>
+              <p className="whitespace-pre-wrap">{actor.bio || "还没有简介"}</p>
+            </div>
+          </div>
           <Button
             ref={profileTrigger}
             variant="secondary"
@@ -85,7 +83,7 @@ export function PersonalSpace() {
             编辑资料
           </Button>
         </aside>
-        <Tabs defaultValue="works" className="min-w-0 gap-6">
+        <Tabs defaultValue="works" className="personal-content">
           <TabsList variant="navigation" aria-label="个人内容">
             <TabsTrigger value="works">作品</TabsTrigger>
             <TabsTrigger value="favorites">收藏</TabsTrigger>

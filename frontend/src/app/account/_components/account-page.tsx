@@ -208,7 +208,8 @@ export function Settings({
     setBio(readBack.bio ?? "");
     updateSession({ ...session, actor: readBack });
     setNotice("个人资料已保存并读回。");
-    setTab("home");
+    if (embedded && initialView === "profile") onClose();
+    else setTab("home");
   }
   async function savePreferences(signal: AbortSignal, nextTheme?: string) {
     if (!preferences) return;
@@ -622,7 +623,8 @@ export function Settings({
                       onClick={() => {
                         setName(profile.display_name);
                         setBio(profile.bio ?? "");
-                        setTab("home");
+                        if (embedded && initialView === "profile") onClose();
+                        else setTab("home");
                       }}
                     >
                       取消

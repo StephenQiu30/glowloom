@@ -2,6 +2,7 @@ import { SWRConfig } from "swr";
 import { render } from "../../../../feedback";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Settings } from "@/app/account/_components/account-page";
 import { request, RequestError } from "@/lib/request";
 vi.mock("@/lib/request", async (original) => ({
@@ -333,11 +334,46 @@ it("saves biography then background using the new revision in a scoped cache", a
     target: { value: "光影创作者" },
   });
   fireEvent.click(screen.getByRole("button", { name: "保存资料" }));
-  fireEvent.click(await screen.findByRole("button", { name: /画布背景.*点阵/ }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: /画布背景.*点阵/ }),
+  );
   fireEvent.click(screen.getByRole("radio", { name: "网格" }));
   expect(
     await screen.findByRole("button", { name: /画布背景.*网格/ }),
   ).toBeTruthy();
   expect(bio).toBe("光影创作者");
   expect(screen.queryByRole("alert")).toBeNull();
+});
+
+it("embedded profile cancel returns to the current personal-space tab without saving", async () => {
+  const onClose = vi.fn();
+  render(
+    <Dialog open>
+      <DialogContent>
+        <Settings embedded initialView="profile" onClose={onClose} />
+      </DialogContent>
+    </Dialog>,
+  );
+  fireEvent.change(await screen.findByLabelText("显示名"), {
+    target: { value: "Discarded" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "取消" }));
+  expect(onClose).toHaveBeenCalledOnce();
+  expect(saved).toBe(false);
+});
+it("embedded profile save closes only after the server readback updates the session", async () => {
+  const onClose = vi.fn(() => expect(mocks.update).toHaveBeenCalled());
+  render(
+    <Dialog open>
+      <DialogContent>
+        <Settings embedded initialView="profile" onClose={onClose} />
+      </DialogContent>
+    </Dialog>,
+  );
+  fireEvent.change(await screen.findByLabelText("显示名"), {
+    target: { value: "Updated" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存资料" }));
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  expect(saved).toBe(true);
 });
