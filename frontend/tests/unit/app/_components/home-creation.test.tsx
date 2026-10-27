@@ -62,6 +62,7 @@ function WorkspaceStub(props: React.ComponentProps<typeof RichGeneration>) {
     <div>
       <p>{props.seed.capability} 富文本编辑器</p>
       {props.headerActions}
+      {props.projectControl}
       <Button onClick={() => props.onLock?.(true)}>冻结报价</Button>
     </div>
   );

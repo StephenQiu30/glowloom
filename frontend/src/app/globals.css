@@ -576,10 +576,9 @@ button:not(:disabled),
   padding: var(--layout-content-y) var(--layout-content-x);
 }
 .creation-hero {
-  --creation-stage-height: 240px;
   max-width: 1012px;
   margin-inline: auto;
-  padding: 12px 0 24px;
+  padding: 12px 0 40px;
 }
 .creation-hero h1 {
   text-align: center;
@@ -594,6 +593,7 @@ button:not(:disabled),
   max-width: 100%;
   height: 40px;
   padding: 4px;
+  gap: 4px;
   border: 0;
   border-radius: 999px;
   background: var(--muted);
@@ -602,18 +602,14 @@ button:not(:disabled),
   flex: 1;
   min-width: 0;
 }
-/* A stable slot for both modes, including loading, empty and error states. */
+/* Content owns its height: references, wrapped tools and recovery stay visible. */
 .creation-stage {
-  height: var(--creation-stage-height);
   min-width: 0;
 }
 .creation-panel {
   display: flex;
   flex-direction: column;
-  justify-content: safe center;
-  height: 100%;
   min-width: 0;
-  overflow-y: auto;
 }
 .creation-panel[hidden] {
   display: none;
@@ -634,6 +630,16 @@ button:not(:disabled),
   padding: 16px;
   align-items: stretch;
 }
+/* Prompt surfaces stay borderless in every state; controls retain local focus. */
+.prompt-editor {
+  border: 0;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 15px;
+  line-height: 24px;
+}
 .creation-editor-body {
   display: flex;
   gap: 16px;
@@ -645,6 +651,7 @@ button:not(:disabled),
   width: auto;
   align-items: flex-start;
   flex-shrink: 0;
+  margin: 0;
 }
 .creation-editor-body > .home-prompt {
   flex: 1;
@@ -654,16 +661,28 @@ button:not(:disabled),
   height: 80px;
   min-height: 0;
 }
+.home-prompt-editor,
+.creation-ready-prompt .tiptap {
+  color: var(--foreground);
+  font-size: 15px;
+  line-height: 24px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .creation-tools[data-slot="input-group-addon"] {
-  height: 36px;
+  min-height: 36px;
+  height: auto;
   padding: 0;
-  gap: 4px;
+  gap: 8px;
+  flex-wrap: wrap;
   flex-shrink: 0;
   justify-content: flex-start;
 }
 .creation-project-control {
-  margin-left: auto;
   max-width: 160px;
+}
+.creation-primary-tools {
+  display: contents;
 }
 .creation-project-control > button {
   max-width: 100%;
@@ -674,21 +693,13 @@ button:not(:disabled),
   border-radius: 999px;
 }
 .creation-composer-ready[data-slot="input-group"] {
-  display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
-  grid-template-rows: 80px auto;
   height: auto;
 }
-.creation-composer-ready > .creation-tools {
-  grid-column: 1 / -1;
+.creation-composer-ready > .creation-reference-tools {
+  width: 100%;
 }
 .creation-option-tools {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  align-items: center;
-  gap: 4px;
-  overflow-x: auto;
+  display: contents;
 }
 .creation-option-tools > * {
   flex-shrink: 0;
@@ -701,9 +712,6 @@ button:not(:disabled),
 .creation-ready-prompt .tiptap {
   min-height: 80px;
   max-height: 80px;
-}
-[data-expanded] .creation-composer-ready {
-  grid-template-rows: minmax(240px, 1fr) auto;
 }
 [data-expanded] .creation-ready-prompt,
 [data-expanded] .creation-ready-prompt .tiptap {
@@ -1070,26 +1078,43 @@ button:not(:disabled),
     margin-bottom: 16px;
   }
   .creation-composer[data-slot="input-group"] {
-    min-height: 200px;
+    min-height: 216px;
     padding: 12px;
   }
   .creation-editor-body {
     gap: 12px;
   }
   .creation-tools[data-slot="input-group-addon"] {
-    gap: 0;
+    gap: 8px;
     flex-wrap: wrap;
     height: auto;
   }
+  .creation-primary-tools {
+    display: flex;
+    flex-basis: 100%;
+    min-width: 0;
+    gap: 8px;
+    align-items: center;
+  }
   .creation-tools > button {
-    min-height: 36px;
+    min-height: 44px;
+    min-width: 44px;
     padding-inline: 8px;
+  }
+  .creation-option-tools button,
+  .creation-project-control > button {
+    min-height: 44px;
+    min-width: 44px;
   }
   .creation-project-control {
     max-width: 120px;
   }
-  .creation-composer-ready > .creation-tools {
-    flex-wrap: nowrap;
+  .creation-submit {
+    width: 44px;
+  }
+  .creation-reference-tools > button {
+    min-width: 44px;
+    min-height: 44px;
   }
   .home-canvas-launch {
     gap: 16px;
@@ -2409,7 +2434,9 @@ button:not(:disabled),
   min-width: 0;
 }
 .home-prompt .tiptap:has(> p:only-child > br:only-child)::before,
-.creation-ready-prompt .tiptap:has(> p:only-child > br:only-child)::before {
+.home-prompt .tiptap:has(> p:only-child:empty)::before,
+.creation-ready-prompt .tiptap:has(> p:only-child > br:only-child)::before,
+.creation-ready-prompt .tiptap:has(> p:only-child:empty)::before {
   content: attr(data-placeholder);
   color: var(--muted-foreground);
   pointer-events: none;
@@ -2422,6 +2449,11 @@ button:not(:disabled),
   color: var(--muted-foreground);
 }
 @media (max-width: 767px) {
+  [data-slot="select-item"],
+  [data-slot="command-item"],
+  [data-slot="dropdown-menu-item"] {
+    min-height: 44px;
+  }
   .creation-credit-hint {
     display: none;
   }
@@ -2472,11 +2504,15 @@ button:not(:disabled),
   }
 }
 
-.creation-tools > button:first-child {
-  padding-left: 0;
+.creation-tools button {
+  min-height: 36px;
+  min-width: 36px;
 }
-[data-presentation="home"] [data-align="block-end"] > button {
-  height: 36px;
+@media (max-width: 767px) {
+  .creation-tools button {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }
 
 .canvas-tile:not([data-managing="true"]):not(:hover):not(:focus-within)

@@ -4,6 +4,7 @@ import type { Transaction } from "@tiptap/pm/state";
 
 import { useEffect } from "react";
 import { EditorContent } from "@tiptap/react";
+import { cn } from "cn";
 import { useEditorSurface } from "./editor-surface";
 import {
   ComposerSession,
@@ -50,7 +51,9 @@ export function PromptEditor({
     {
       "aria-label": label,
       ...(placeholder === undefined ? {} : { "data-placeholder": placeholder }),
-      ...(className === undefined ? {} : { class: className }),
+      ...(className === undefined
+        ? {}
+        : { class: cn("prompt-editor", className) }),
       ...(inputGroup ? { "data-slot": "input-group-control" } : {}),
     },
     editable,

@@ -33,6 +33,7 @@ import {
   LoaderCircle,
   Maximize2,
   Minimize2,
+  MoreHorizontal,
 } from "lucide-react";
 import {
   InputGroup,
@@ -144,6 +145,7 @@ type Props = {
   presentation?: "canvas" | "home";
   onDraftReady?: (draftID: string) => void;
   headerActions?: ReactNode;
+  projectControl?: ReactNode;
 };
 function plainSeed(seed: GenerationSeed) {
   const draft = emptyPromptDraft();
@@ -417,6 +419,7 @@ function EditorWorkspace({
   canvas,
   presentation,
   headerActions,
+  projectControl,
   snapshot,
   actor,
   models: initialModels,
@@ -1129,7 +1132,9 @@ function EditorWorkspace({
     <PromptEditor
       inputGroup={compact}
       className={
-        compact ? "max-h-80 min-h-16 overflow-y-auto outline-none" : undefined
+        compact
+          ? "max-h-80 min-h-16 overflow-y-auto"
+          : "max-h-80 min-h-24 overflow-y-auto"
       }
       placeholder={compact ? "描述创意，@ 引用素材" : undefined}
       resolveGeneration={compact ? resolveReferenceGeneration : undefined}
@@ -1378,7 +1383,7 @@ function EditorWorkspace({
       className={cn(
         "flex min-w-0 flex-col gap-4",
         full &&
-          "fixed inset-0 z-50 items-center justify-center overflow-y-auto bg-black/60 p-4 sm:p-8",
+          "fixed inset-0 z-50 items-center justify-center overflow-y-auto bg-cover-overlay p-4 sm:p-8",
       )}
       onKeyDownCapture={(event) => {
         if (full && event.key === "Tab") {
@@ -1559,6 +1564,44 @@ function EditorWorkspace({
               }
             >
               {referenceControls}
+              {presentation === "home" && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <InputGroupButton
+                      aria-label="更多工具"
+                      size="icon-sm"
+                      disabled={pending || frozen}
+                    >
+                      <MoreHorizontal />
+                    </InputGroupButton>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" sideOffset={8}>
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          void run(async () => {
+                            await flush();
+                          })
+                        }
+                      >
+                        保存草稿
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => void loadDrafts()}>
+                        找回草稿
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              {presentation === "home" && (
+                <InputGroupButton
+                  aria-label={full ? "退出全屏" : "展开编辑器"}
+                  size="icon-sm"
+                  onClick={() => setFull((value) => !value)}
+                >
+                  {full ? <Minimize2 /> : <Maximize2 />}
+                </InputGroupButton>
+              )}
               {presentation !== "home" && headerActions}
               {presentation !== "home" && (
                 <InputGroupButton
@@ -1595,22 +1638,33 @@ function EditorWorkspace({
                   presentation === "home" ? "creation-option-tools" : "contents"
                 }
               >
-                {presentation === "home" && headerActions}
-                <ModelPicker
-                  models={models}
-                  value={draft.modelVersion}
-                  disabled={frozen || !session}
-                  onSelect={(target) => {
-                    if (target.current_version?.id)
-                      void selectMode(
-                        target.current_version.id,
-                        referenceMode(
-                          { ...draft, modelVersion: target.current_version.id },
-                          target,
-                        ) ?? "",
-                      );
-                  }}
-                />
+                <div
+                  className={
+                    presentation === "home"
+                      ? "creation-primary-tools"
+                      : "contents"
+                  }
+                >
+                  {presentation === "home" && headerActions}
+                  <ModelPicker
+                    models={models}
+                    value={draft.modelVersion}
+                    disabled={frozen || !session}
+                    onSelect={(target) => {
+                      if (target.current_version?.id)
+                        void selectMode(
+                          target.current_version.id,
+                          referenceMode(
+                            {
+                              ...draft,
+                              modelVersion: target.current_version.id,
+                            },
+                            target,
+                          ) ?? "",
+                        );
+                    }}
+                  />
+                </div>
                 <Popover>
                   <PopoverTrigger asChild>
                     <InputGroupButton
@@ -1629,15 +1683,17 @@ function EditorWorkspace({
                     align="start"
                     sideOffset={8}
                     collisionPadding={16}
-                    className="max-h-[min(70dvh,var(--radix-popover-content-available-height))] w-[336px] max-w-[calc(100vw-32px)] overflow-y-auto rounded-2xl bg-(--floating-surface) p-4 shadow-xl"
+                    className="max-h-[min(70dvh,var(--radix-popover-content-available-height))] w-[336px] max-w-[calc(100vw-32px)] overflow-y-auto p-4"
                     aria-label="生成参数"
                   >
                     {parameterControls}
                   </PopoverContent>
                 </Popover>
-                <span className="px-2 text-xs text-muted-foreground">
-                  全能参考
-                </span>
+                {presentation !== "home" && (
+                  <span className="shrink-0 px-2 text-xs text-muted-foreground">
+                    全能参考
+                  </span>
+                )}
                 <InputGroupButton
                   aria-label="提及素材或主体"
                   size="icon-sm"
@@ -1652,44 +1708,8 @@ function EditorWorkspace({
                 >
                   <AtSign />
                 </InputGroupButton>
-                {presentation === "home" && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <InputGroupButton
-                        className="ml-auto"
-                        disabled={pending || frozen}
-                      >
-                        更多工具
-                      </InputGroupButton>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" sideOffset={8}>
-                      <DropdownMenuGroup>
-                        <DropdownMenuItem
-                          onSelect={() =>
-                            void run(async () => {
-                              await flush();
-                            })
-                          }
-                        >
-                          保存草稿
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => void loadDrafts()}>
-                          找回草稿
-                        </DropdownMenuItem>
-                      </DropdownMenuGroup>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
+                {presentation === "home" && projectControl}
               </div>
-              {presentation === "home" && (
-                <InputGroupButton
-                  aria-label={full ? "退出全屏" : "展开编辑器"}
-                  size="icon-sm"
-                  onClick={() => setFull((value) => !value)}
-                >
-                  {full ? <Minimize2 /> : <Maximize2 />}
-                </InputGroupButton>
-              )}
               {current.submission ? (
                 <InputGroupButton
                   className="ml-auto"
@@ -1702,7 +1722,7 @@ function EditorWorkspace({
                 </InputGroupButton>
               ) : (
                 <InputGroupButton
-                  className="ml-auto size-9 shrink-0 rounded-full"
+                  className="ml-auto size-9 shrink-0 rounded-full max-md:size-11"
                   size="icon-sm"
                   variant="default"
                   aria-label="检查费用"
@@ -1801,9 +1821,12 @@ function EditorWorkspace({
                 </Select>
               </Field>
             </div>
-            <div className="min-h-32 rounded-lg border p-3 text-base [&_.tiptap]:min-h-24 [&_.tiptap]:outline-none">
+            <InputGroup
+              variant="composer"
+              className="h-auto min-h-32 p-3 [&_.tiptap]:min-h-24"
+            >
               {promptControl}
-            </div>
+            </InputGroup>
             {session && (
               <>
                 <div className="flex gap-2">

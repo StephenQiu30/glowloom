@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Box, Check, ChevronDown } from "lucide-react";
+import { Box, Check, ChevronDown, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -40,8 +40,9 @@ export function ModelPicker({
           aria-label="生成模型"
           aria-expanded={open}
           disabled={disabled}
-          className="max-w-60 justify-start pr-2 pl-0"
+          className="max-w-60 justify-start"
         >
+          <Sparkles data-icon="inline-start" />
           <span className="truncate">
             {current?.display_name ?? "选择模型"}
           </span>
@@ -53,7 +54,7 @@ export function ModelPicker({
         align="start"
         sideOffset={8}
         collisionPadding={16}
-        className="w-80 max-w-[calc(100vw-32px)] rounded-2xl bg-(--floating-surface) p-1.5 shadow-xl"
+        className="max-h-(--radix-popover-content-available-height) w-80 max-w-[calc(100vw-32px)] overflow-y-auto p-0"
         aria-label="选择模型"
       >
         <Command label="搜索模型">

@@ -314,3 +314,36 @@ Figma Code仍为演示；403仅HTTP测试，未声称浏览器403已验收。真
 - Chrome实际点击真实前端组件：桌面及390px窄屏、作品/收藏/画布、键盘右方向切换、编辑资料取消、保存读回、Esc关闭和焦点恢复、空姓名禁用、长姓名/简介换行、读取失败及403。浏览器夹具位于frontend/tests/browser/personal-space.html，使用现有canvas.vite.config.ts和明确的测试传输边界，不接触真实账号。390px实测scrollWidth=390，头像80×80且中心195px，三项Tab均72×36px。
 - Figma导入节点2459:34129已在云端运行并实际点击三个Tab及编辑保存；30个旧链接更新，2354:30599删除，回读确认旧节点不存在、旧引用0、最终设计页仅一个Code层。原型采用本地演示数据，不能视为真实服务保存证据。
 - 截图在父工作区output/implementation-verification/2026-10-26/personal-space/，包括前端桌面、手机、手机弹窗和原型桌面/手机。实测localhost:1122/api/me返回503，后端日志显示缺少Temporal命名空间glowloom-local；本轮不改服务配置，真实保存未计通过，跟踪见BACKLOG。
+
+### 2026-10-27 首页富文本与 Figma 下拉校正证据
+
+本轮沿PRD11和设计09第7.11节修复首页展示，不修改生成、参考来源、报价或草稿持久化合同。REA与竞品对照见[研究07](../research/07-首页富文本与即梦设计对照.md)。
+
+1. 默认首页：移除240px居中槽位；实际桌面输入区与外层均162px，模式到输入区间距24px，四张灵感图片均已加载。默认页与390px正文均无横向溢出。
+2. 项目富文本：实际选择已有验收项目，从该项目素材库添加已有icon-512.png，使用“提及素材或主体 → 图片 → 图片1”插入行内引用；参考条与正文实测均978px，不再受64px列限制。打开过展开编辑器。本次未验证该测试草稿保存重开，也未上传或删除资产。
+3. 下拉与手机：真实模型列表为空时显示“暂无匹配的可用模型”；390px模型Popover宽320px、左右边界29/349px。Escape关闭并恢复模型触发器焦点。七类Select选项实测均44px高，正文scrollWidth=390；临时视口覆盖已清除，最终页面恢复默认桌面。
+4. Figma：原位更新桌面1361:26、手机1361:989；类型与模型菜单使用既有MenuItem的Select/Command角色实例，保留原型变量和选择动作。补齐手机覆盖层、参数及项目弹层，纠正错误目标；参数与项目表单继续复用已有文字样式、语义变量、Input和Button实例。完成相关首页、菜单及新弹层截图核对；未运行Figma交互播放器，不将连线回读视为实际点击验收。
+
+验证命令均在frontend执行：
+
+- `pnpm exec vitest run --maxWorkers=2`：127文件、814项通过。另有Tiptap/首页/模型菜单定向回归通过。
+- `pnpm exec eslint .`、`pnpm exec next typegen`、`pnpm exec tsc --noEmit`、`pnpm exec next build`：通过。
+- 前端修改文件及新增研究的Prettier、`git diff --check`：通过。全仓`pnpm exec prettier --check .`仍报告三个既有文件：`src/components/ui/breadcrumb.tsx`、`src/components/ui/progress.tsx`、`tests/unit/components/canvas/publish-media.test.ts`；未扩展修改这些文件。
+
+截图、REA导出及验收图保存在本机`~/.codex/visualizations/2026/10/27/01a17d74-3713-7932-b0e9-35c0a56141d7/`。真实供应商生成、费用确认、原生系统输入法、真实手机及全产品可访问性不在本轮接受范围；当前项目没有可用模型，参数的真实模型联动未计通过。Figma搜索框和示例项目为设计原型。
+
+工作区文件逐项说明：
+
+| 文件                                                     | 本轮职责                                           |
+| -------------------------------------------------------- | -------------------------------------------------- |
+| `frontend/src/app/_components/home-creation.tsx`         | 复用quiet Select变体、补齐工具图标与项目控件容器   |
+| `frontend/src/app/globals.css`                           | 自适应高度、完整参考条、工具换行、44px目标和焦点环 |
+| `frontend/src/components/generation/model-picker.tsx`    | 模型弹层复用共享Popover皮肤及可用高度              |
+| `frontend/src/components/generation/rich-generation.tsx` | 参数弹层复用共享皮肤、参考标签不压缩和手机提交尺寸 |
+| `docs/design/09-统一顶栏与阶段入口设计.md`               | 本轮采用规则与Figma正式入口                        |
+| `docs/research/07-首页富文本与即梦设计对照.md`           | REA、即梦、shadcn与设计差异拆解                    |
+| `docs/research/00-调研导航.md`                           | 新研究入口                                         |
+| 本计划                                                   | 验收命令、截图及边界                               |
+| `BACKLOG.md`                                             | 当前状态与剩余接受                                 |
+
+本轮未提交、推送、发布或重启服务；当前页面由已有前端开发容器热更新。

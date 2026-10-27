@@ -774,8 +774,7 @@ export function composerEditorOptions(
         role: "textbox",
         "aria-multiline": "true",
         "aria-label": "创作提示词",
-        class:
-          "min-h-32 max-h-80 overflow-y-auto rounded-md border p-3 outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        class: "prompt-editor min-h-32 max-h-80 overflow-y-auto p-3",
       },
     },
   };

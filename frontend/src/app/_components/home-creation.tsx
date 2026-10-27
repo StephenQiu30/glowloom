@@ -2,7 +2,14 @@
 
 import dynamic from "next/dynamic";
 import { useRef, useState, type ReactNode } from "react";
-import { ArrowUp, AtSign, Plus } from "lucide-react";
+import {
+  ArrowUp,
+  AtSign,
+  ChevronDown,
+  Plus,
+  SlidersHorizontal,
+  Sparkles,
+} from "lucide-react";
 import { useOptionalSession } from "@/components/auth/session";
 import { useLoginDialog } from "@/components/layout/basic-layout";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
@@ -169,7 +176,8 @@ export function HomeCreation({
     >
       <SelectTrigger
         aria-label="创作类型"
-        className="w-auto border-0 bg-transparent shadow-none"
+        variant="quiet"
+        className="w-auto max-md:min-h-11"
       >
         <SelectValue />
       </SelectTrigger>
@@ -218,11 +226,11 @@ export function HomeCreation({
                   seed={workspace.seed}
                   draftID={workspace.draftID}
                   presentation="home"
-                  headerActions={
-                    <>
-                      {typeControl}
+                  headerActions={typeControl}
+                  projectControl={
+                    <div className="creation-project-control">
                       {projectControl}
-                    </>
+                    </div>
                   }
                   onLock={setLocked}
                   onDraftReady={(id) =>
@@ -276,19 +284,24 @@ export function HomeCreation({
                           align="block-end"
                           className="creation-tools"
                         >
-                          {typeControl}
+                          <div className="creation-primary-tools">
+                            {typeControl}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={prepare}
+                            >
+                              <Sparkles data-icon="inline-start" />
+                              选择模型
+                              <ChevronDown data-icon="inline-end" />
+                            </Button>
+                          </div>
                           <Button
                             type="button"
                             variant="ghost"
                             onClick={prepare}
                           >
-                            选择模型
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={prepare}
-                          >
+                            <SlidersHorizontal data-icon="inline-start" />
                             参数
                           </Button>
                           <Button

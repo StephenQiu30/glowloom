@@ -209,8 +209,8 @@ export function ProjectPicker({
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
-            variant="outline"
-            className="max-w-64"
+            variant="ghost"
+            className="max-w-64 justify-start"
             aria-label="选择所属项目"
             disabled={disabled}
           >
@@ -218,7 +218,11 @@ export function ProjectPicker({
             <span className="truncate">{value?.name ?? "选择项目"}</span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-80">
+        <PopoverContent
+          align="end"
+          collisionPadding={16}
+          className="max-h-(--radix-popover-content-available-height) w-80 max-w-[calc(100vw-32px)] overflow-y-auto"
+        >
           {controls}
         </PopoverContent>
       </Popover>
