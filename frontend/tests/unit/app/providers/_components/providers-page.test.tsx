@@ -208,7 +208,8 @@ it("预设与文件维护按需展开，主页面不展示协议与版本", asyn
   });
   render(<ProvidersPage />);
   await screen.findByText("还没有连接");
-  expect(screen.getByRole("navigation", { name: "管理页面" })).toBeTruthy();
+  // Shared management navigation is exercised by the persistent shell tests.
+  expect(screen.queryByRole("navigation", { name: "管理页面" })).toBeNull();
   expect(screen.queryByRole("button", { name: "使用预设" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "预设管理" }));
   expect(screen.getByRole("button", { name: "使用预设" })).toBeTruthy();

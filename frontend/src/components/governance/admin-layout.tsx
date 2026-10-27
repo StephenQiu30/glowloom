@@ -1,12 +1,9 @@
 "use client";
 import Link from "next/link";
+import type { AdminSection } from "@/components/layout/routes";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-export function AdminNavigation({
-  active,
-}: {
-  active: "users" | "teams" | "providers" | "models" | "settings";
-}) {
+export function AdminNavigation({ active }: { active: AdminSection }) {
   const links = [
     { id: "users", href: "/users", label: "用户管理" },
     { id: "teams", href: "/platform/teams", label: "团队管理" },
@@ -32,6 +29,21 @@ export function AdminNavigation({
         </Button>
       ))}
     </nav>
+  );
+}
+/** Owned by the persistent application shell, outside route loading boundaries. */
+export function AdminWorkspace({
+  active,
+  children,
+}: {
+  active: AdminSection;
+  children: ReactNode;
+}) {
+  return (
+    <div className="admin-workspace flex min-h-full flex-col gap-5 p-6 max-md:px-4 max-md:pb-8">
+      <AdminNavigation active={active} />
+      {children}
+    </div>
   );
 }
 export function AdminHeading({

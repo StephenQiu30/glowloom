@@ -13,7 +13,6 @@ import Link from "next/link";
 import { ColumnMenu } from "@/components/governance/column-menu";
 import { Plus } from "lucide-react";
 import {
-  AdminNavigation,
   AdminHeading,
   SelectionBar,
 } from "@/components/governance/admin-layout";
@@ -213,7 +212,6 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
     );
   return (
     <div className="flex w-full flex-col gap-5">
-      <AdminNavigation active="models" />
       <AdminHeading
         title="模型管理"
         description="配置模型与生成能力，验证后逐项发布。"

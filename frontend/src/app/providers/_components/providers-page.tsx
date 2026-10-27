@@ -3,10 +3,7 @@ import { readErrorMessage } from "@/lib/read-error";
 import { ContentState } from "@/components/layout/content-state";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  AdminNavigation,
-  SelectionBar,
-} from "@/components/governance/admin-layout";
+import { SelectionBar } from "@/components/governance/admin-layout";
 import { useBatchOperation } from "@/components/governance/use-batch-operation";
 import { BatchDialog } from "@/components/governance/batch-dialog";
 import {
@@ -304,7 +301,6 @@ function ProviderAdministration({
     );
   return (
     <div className="flex w-full flex-col gap-5">
-      <AdminNavigation active="providers" />
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-col gap-2">
           <h1 className="text-2xl font-medium tracking-tight">AI 服务接入</h1>

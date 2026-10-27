@@ -15,7 +15,6 @@ import {
 import { ListPagination } from "@/components/canvas/runtime/components/layout/workspace/list-pagination";
 import {
   AdminHeading,
-  AdminNavigation,
   SelectionBar,
 } from "@/components/governance/admin-layout";
 import { useBatchOperation } from "@/components/governance/use-batch-operation";
@@ -239,7 +238,6 @@ function UserAdministration() {
     );
   return (
     <div className="flex w-full flex-col gap-5">
-      <AdminNavigation active="users" />
       <AdminHeading
         title="用户管理"
         description="查看平台账号，管理访问权限与安全状态。"

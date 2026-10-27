@@ -11,10 +11,7 @@ import {
 } from "@/components/governance/confirmation";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/components/auth/session";
-import {
-  AdminNavigation,
-  AdminHeading,
-} from "@/components/governance/admin-layout";
+import { AdminHeading } from "@/components/governance/admin-layout";
 export function PlatformSettingsPage() {
   const { actor } = useSession();
   if (actor.platform_role !== "platform_admin")
@@ -52,7 +49,6 @@ function PlatformSettingsAdministration() {
   }, [reload]);
   return (
     <div className="flex w-full flex-col gap-5">
-      <AdminNavigation active="settings" />
       <AdminHeading
         title="平台设置"
         description="管理平台注册与团队创建规则。"

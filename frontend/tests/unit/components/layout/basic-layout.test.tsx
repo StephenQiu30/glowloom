@@ -13,6 +13,7 @@ import type { ReactNode } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BasicLayout } from "@/components/layout/basic-layout";
 import { ApplicationLayout } from "@/components/layout/application-layout";
+import { RouteLoading } from "@/components/layout/route-loading";
 import { PageLayout } from "@/components/layout/page-layout";
 import { request, RequestError } from "@/lib/request";
 vi.mock("@/lib/request", async (importOriginal) => {
@@ -389,4 +390,65 @@ it("普通页面换页保留同一个页头与侧栏节点，并清理前一页�
   fireEvent.keyDown(await screen.findByRole("combobox"), { key: "Enter" });
   expect(nextSearch).toHaveBeenCalledWith("新内容");
   expect(oldSearch).not.toHaveBeenCalled();
+});
+
+it("管理页切换与路由加载保留同一导航节点和焦点，正文按页面独立替换", async () => {
+  mocks.pathname = "/users";
+  const view = render(
+    <ApplicationLayout>
+      <PageLayout screen="users">
+        <h1>账号目录正文</h1>
+      </PageLayout>
+    </ApplicationLayout>,
+  );
+  const nav = await screen.findByRole("navigation", { name: "管理页面" });
+  const teamLink = within(nav).getByRole("link", { name: "团队管理" });
+  teamLink.focus();
+  mocks.pathname = "/platform/teams";
+  view.rerender(
+    <ApplicationLayout>
+      <RouteLoading />
+    </ApplicationLayout>,
+  );
+  expect(screen.getByRole("navigation", { name: "管理页面" })).toBe(nav);
+  expect(document.activeElement).toBe(teamLink);
+  expect(teamLink.getAttribute("aria-current")).toBe("page");
+  expect(screen.queryByRole("heading", { name: "账号目录正文" })).toBeNull();
+  view.rerender(
+    <ApplicationLayout>
+      <PageLayout screen="platform/teams">
+        <h1>团队目录正文</h1>
+      </PageLayout>
+    </ApplicationLayout>,
+  );
+  expect(
+    await screen.findByRole("heading", { name: "团队目录正文" }),
+  ).toBeTruthy();
+  expect(screen.getAllByRole("navigation", { name: "管理页面" })).toEqual([
+    nav,
+  ]);
+  expect(document.activeElement).toBe(teamLink);
+  mocks.pathname = "/models";
+  view.rerender(
+    <ApplicationLayout>
+      <PageLayout screen="models">
+        <h1>模型目录正文</h1>
+      </PageLayout>
+    </ApplicationLayout>,
+  );
+  expect(screen.getByRole("navigation", { name: "管理页面" })).toBe(nav);
+  expect(
+    within(nav)
+      .getByRole("link", { name: "模型管理" })
+      .getAttribute("aria-current"),
+  ).toBe("page");
+  mocks.pathname = "/";
+  view.rerender(
+    <ApplicationLayout>
+      <PageLayout screen="home">
+        <h1>创作首页正文</h1>
+      </PageLayout>
+    </ApplicationLayout>,
+  );
+  expect(screen.queryByRole("navigation", { name: "管理页面" })).toBeNull();
 });

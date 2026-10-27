@@ -35,7 +35,8 @@ import {
 } from "@/components/ui/sidebar";
 import { ProductSider } from "./product-sider";
 import { PageOptionsContext, type PageOptions } from "./page-layout";
-import type { Screen } from "./routes";
+import { resolveAdminSection, type Screen } from "./routes";
+import { AdminWorkspace } from "@/components/governance/admin-layout";
 import { ProductHeader } from "./product-header";
 import type { PageSearch } from "./product-search";
 const adminScreens = [
@@ -77,6 +78,7 @@ function Shell({
   initialAuthMode?: AuthMode;
   search?: PageSearch;
 }) {
+  const adminSection = resolveAdminSection(screen);
   const [pageOptions, setPageOptions] = useState<PageOptions | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pageSearch =
@@ -146,7 +148,15 @@ function Shell({
             className="product-main"
           >
             <PageOptionsContext.Provider value={setPageOptions}>
-              <SpaceGate>{children}</SpaceGate>
+              <SpaceGate>
+                {adminSection ? (
+                  <AdminWorkspace active={adminSection}>
+                    {children}
+                  </AdminWorkspace>
+                ) : (
+                  children
+                )}
+              </SpaceGate>
             </PageOptionsContext.Provider>
           </main>
         </div>

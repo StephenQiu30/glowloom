@@ -11,7 +11,7 @@ import {
 } from "react";
 import { cn } from "cn";
 import type { PageSearch } from "./product-search";
-import type { Screen } from "./routes";
+import { resolveAdminSection, type Screen } from "./routes";
 import { ProductFooter } from "./product-footer";
 
 export type PageOptions = {
@@ -52,7 +52,10 @@ export function PageLayout({
     <div
       data-page={screen}
       data-full-bleed={fullBleed}
-      className={cn("product-page", !fullBleed && "workspace-page")}
+      className={cn(
+        "product-page",
+        !fullBleed && !resolveAdminSection(screen) && "workspace-page",
+      )}
     >
       {children}
       <ProductFooter />

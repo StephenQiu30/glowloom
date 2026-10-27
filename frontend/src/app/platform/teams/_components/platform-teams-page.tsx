@@ -6,7 +6,6 @@ import { FieldLabel } from "@/components/ui/field";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AdminHeading,
-  AdminNavigation,
   SelectionBar,
 } from "@/components/governance/admin-layout";
 import {
@@ -247,7 +246,6 @@ function TeamAdministration() {
     );
   return (
     <div className="flex w-full flex-col gap-5">
-      <AdminNavigation active="teams" />
       <AdminHeading
         title="团队管理"
         description="管理团队信息、成员与团队状态。"

@@ -40,3 +40,20 @@ export function resolveScreen(pathname: string) {
     )
   );
 }
+
+/** These sibling management routes share navigation, never their business state. */
+export function resolveAdminSection(screen: Screen) {
+  switch (screen) {
+    case "users":
+    case "providers":
+    case "models":
+      return screen;
+    case "platform/teams":
+      return "teams";
+    case "platform/settings":
+      return "settings";
+    default:
+      return undefined;
+  }
+}
+export type AdminSection = NonNullable<ReturnType<typeof resolveAdminSection>>;

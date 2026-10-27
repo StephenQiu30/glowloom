@@ -568,13 +568,9 @@ button:not(:disabled),
 .workspace-page {
   padding: var(--layout-content-y) var(--layout-content-x);
 }
-.workspace-page:is(
-  [data-page="users"],
-  [data-page="providers"],
-  [data-page="models"],
-  [data-page="platform/settings"]
-) {
-  padding: 24px;
+.admin-workspace > .product-page {
+  min-height: 0;
+  flex: 1;
 }
 .home-page {
   padding: var(--layout-content-y) var(--layout-content-x);
@@ -1059,14 +1055,6 @@ button:not(:disabled),
     padding: 0 16px 32px;
   }
   .workspace-page {
-    padding: 24px 16px 32px;
-  }
-  .workspace-page:is(
-    [data-page="users"],
-    [data-page="providers"],
-    [data-page="models"],
-    [data-page="platform/settings"]
-  ) {
     padding: 24px 16px 32px;
   }
   .creation-hero {
