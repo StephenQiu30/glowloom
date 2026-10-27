@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactElement, type ReactNode } from "react";
 import {
   ArrowUp,
   AtSign,
@@ -21,6 +21,7 @@ import { ProjectPicker } from "@/components/projects/project-picker";
 import type { Project } from "@/components/projects/project";
 import type { GenerationSeed } from "@/components/generation/generation-dialog";
 import { ModelPicker } from "@/components/generation/model-picker";
+import { ProjectRequiredPopover } from "@/components/generation/project-required-popover";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Field, FieldGroup } from "@/components/ui/field";
@@ -169,6 +170,23 @@ export function HomeCreation({
       onChange={(next) => void select(type, next)}
     />
   ) : null;
+  function projectEntry(
+    trigger: ReactElement,
+    title: string,
+    description: string,
+  ) {
+    return supported ? (
+      <ProjectRequiredPopover
+        title={title}
+        description={description}
+        onChooseProject={prepare}
+      >
+        {trigger}
+      </ProjectRequiredPopover>
+    ) : (
+      trigger
+    );
+  }
   const typeControl = (
     <Select
       value={type}
@@ -262,15 +280,20 @@ export function HomeCreation({
                             align="inline-start"
                             className="creation-reference-tools"
                           >
-                            <Button
-                              type="button"
-                              variant="reference"
-                              size="reference"
-                              aria-label="添加参考素材"
-                              onClick={prepare}
-                            >
-                              <Plus data-icon="inline-start" />
-                            </Button>
+                            {projectEntry(
+                              <Button
+                                type="button"
+                                variant="reference"
+                                size="reference"
+                                aria-label="添加参考素材"
+                                onClick={supported ? undefined : prepare}
+                                disabled={locked || switching}
+                              >
+                                <Plus data-icon="inline-start" />
+                              </Button>,
+                              "添加参考素材",
+                              "选择项目后，可从素材库、上传内容或主体库添加参考。",
+                            )}
                           </InputGroupAddon>
                           <HomePrompt
                             value={prompt}
@@ -307,23 +330,33 @@ export function HomeCreation({
                               </Button>
                             )}
                           </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={prepare}
-                          >
-                            <SlidersHorizontal data-icon="inline-start" />
-                            参数
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            aria-label="添加主体或素材引用"
-                            onClick={prepare}
-                          >
-                            <AtSign />
-                          </Button>
+                          {projectEntry(
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={supported ? undefined : prepare}
+                              disabled={locked || switching}
+                            >
+                              <SlidersHorizontal data-icon="inline-start" />
+                              参数
+                            </Button>,
+                            "生成参数",
+                            "选择项目和可用模型后，可配置比例、清晰度等生成参数。",
+                          )}
+                          {projectEntry(
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label="添加主体或素材引用"
+                              onClick={supported ? undefined : prepare}
+                              disabled={locked || switching}
+                            >
+                              <AtSign />
+                            </Button>,
+                            "提及素材或主体",
+                            "选择项目后，可在正文中引用该项目的素材或主体。",
+                          )}
                           <div className="creation-project-control">
                             {projectControl}
                           </div>

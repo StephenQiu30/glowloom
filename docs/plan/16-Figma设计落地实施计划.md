@@ -359,3 +359,42 @@ Figma Code仍为演示；403仅HTTP测试，未声称浏览器403已验收。真
 实际Chrome验证：未选项目时模型层标题为“选择生成模型”，所属项目触发器仍折叠；点击说明内“选择项目”后所属项目Popover展开，焦点落到所属项目Select。选中已有验收项目后点击模型入口显示“搜索模型”与真实空态，项目层保持关闭。390px视口模型层宽320px、左右54/374px、页面scrollWidth=390；恢复桌面后Escape关闭并返回模型触发器。当前项目无可用模型，不宣称模型选择或供应商生成成功。
 
 本机前述证据目录新增29-model-picker-before-project.png和30-model-picker-project-catalog.png；未修改Figma稿、服务、依赖或全局配色。本次五个遗留文件：home-creation.tsx负责入口接线，model-picker.tsx负责项目前提状态，home-creation.test.tsx负责错误接线回归，BACKLOG负责状态，本计划负责证据；均未提交或推送。
+
+### 2026-10-27 参数与参考弹层对应关系检查
+
+承接设计09第7.11节。读取Figma正式参数2672:36162、参考菜单1510:101048的get_design_context和截图，沿项目既有shadcn/Radix Popover、Command、Field、Select及全局主题。初始首页的参数、加号和@原先均绑定prepare项目事件；已有项目但无模型时参数按钮完全禁用，缺少前提说明；紧凑参数使用分段按钮，未对应Figma的下拉字段。
+
+新增三种初始入口回归、无模型参数回归及Select数量交互断言，在旧实现中5项失败；落实后定向3文件34项通过，全量127文件819项通过。未改模型查询、草稿、引用事务、上传授权、报价或确认合同。ESLint、next typegen、tsc、生产构建及修改源码格式通过；全仓格式仍仅有原有breadcrumb.tsx、progress.tsx和publish-media.test.ts告警。
+
+当前Chrome页面逐项检查：
+
+| 动作/状态 | 实际结果与边界 |
+| --- | --- |
+| 未选项目的参数、添加参考、@ | 各自显示生成参数、添加参考素材、提及素材或主体标题与前提说明，所属项目按钮保持折叠；Escape返回对应触发器 |
+| 显式选择项目 | 仅点击说明内选择项目后展开所属项目Popover并聚焦其Select |
+| 已选项目的参数 | 当前项目没有可用模型，弹层显示生成参数及“请先选择可用模型，再配置生成参数。”，不填示例选项；实际模型字段未人工验收 |
+| 添加参考 | 搜索参考和素材库/上传/主体/搜索参考动作正常，参数层与项目层不混入；首页不显示不存在的画布来源 |
+| 素材库图片/视频/音频 | 分别打开选择参考素材对话框，类型分别固定为图片、视频、音频；图片显示现有icon-512.png，音频显示当前项目空态；取消可返回 |
+| 添加主体 | 打开选择主体版本及搜索主体界面，未创建或修改主体 |
+| 搜索项目素材与主体 | 打开选择项目参考、引用检索类型及搜索项目引用，返回当前项目图片；未插入或修改正文 |
+| 上传参考 | 捕获filechooser请求，单文件模式；未选取或上传文件，返回页面后其他菜单仍正常。未计上传成功或系统文件对话框可访问性验收 |
+| 390px参数/参考 | 参数宽336px、边界28/364；参考宽288px、边界28/316；菜单项各44px，页面scrollWidth=390；检查后恢复桌面并关闭弹层 |
+
+有可用模型时的字段、数值类型、输出上限和更改回调由真实React组件单测夹具验证，不能替代真实供应商能力接受。浏览器最初仍为旧模块，刷新后才观察到新Popover；不将修复前现象计为修复后通过。截图在前述本机目录：31-parameters-before-project.png、32-reference-before-project.png、33-parameters-no-model.png、34-reference-command-menu.png、35-reference-image-picker.png、36-parameters-mobile.png、37-reference-mobile.png。
+
+本次工作区文件逐项：
+
+| 文件 | 处理内容 |
+| --- | --- |
+| frontend/src/app/_components/home-creation.tsx | 参数、加号与@各自接入项目前提弹层；未开放类型保持原说明 |
+| frontend/src/components/generation/project-required-popover.tsx | 新增共享锚定说明组件，显式项目前提动作和局部焦点 |
+| frontend/src/components/generation/rich-generation.tsx | 参数标题与无模型说明，冻结/会话未就绪仍禁用 |
+| frontend/src/components/generation/generation-parameters.tsx | 紧凑枚举与数量使用Select，标签及间距对应Figma，保留schema类型转换 |
+| frontend/src/components/generation/reference-controls.tsx | 添加参考Popover显式8px偏移和视口最大宽度；引用动作保持原实现 |
+| frontend/tests/unit/app/_components/home-creation.test.tsx | 三个初始动作与项目弹层隔离的回归 |
+| frontend/tests/unit/components/generation/generation-dialog.test.tsx | 无模型说明及模型schema/数量Select回归 |
+| docs/design/09-统一顶栏与阶段入口设计.md | 项目前提、真实模型字段与参考入口设计合同 |
+| BACKLOG.md | 当前状态及接受边界 |
+| 本计划 | 实现、测试、逐项浏览器证据 |
+
+本轮未提交、推送、发布或重启服务；无外部文件上传、付费生成和资产删除。

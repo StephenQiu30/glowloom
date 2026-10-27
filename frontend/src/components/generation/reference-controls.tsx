@@ -1314,7 +1314,8 @@ export function ReferenceControls({
                     side="top"
                     align="start"
                     collisionPadding={16}
-                    className="max-h-(--radix-popover-content-available-height) w-72 overflow-hidden p-0"
+                    sideOffset={8}
+                    className="max-h-(--radix-popover-content-available-height) w-72 max-w-[calc(100vw-32px)] overflow-hidden p-0"
                     aria-label="添加参考素材"
                     onClick={(event) => event.stopPropagation()}
                     onCloseAutoFocus={(event) => {

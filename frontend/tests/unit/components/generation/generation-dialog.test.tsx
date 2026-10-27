@@ -358,11 +358,12 @@ it("画布紧凑呈现保持真正富文本内联，先保存新节点且重渲�
 it("紧凑参数使用模型schema与候选上限，同一画布来源报价后才允许确认", async () => {
   const { canvas, pointer } = await compactWorkspace();
   fireEvent.click(screen.getByRole("button", { name: "生成参数" }));
-  expect(screen.getByLabelText("比例")).toBeTruthy();
-  expect(screen.getByLabelText("数量").querySelectorAll("button")).toHaveLength(
-    4,
-  );
-  fireEvent.click(screen.getByRole("radio", { name: "2" }));
+  expect(screen.getByRole("combobox", { name: "画面比例" })).toBeTruthy();
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "生成数量" }), {
+    key: "ArrowDown",
+  });
+  expect(await screen.findAllByRole("option")).toHaveLength(4);
+  fireEvent.click(screen.getByRole("option", { name: "2" }));
   await waitFor(() =>
     expect(canvas.onChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -377,6 +378,26 @@ it("紧凑参数使用模型schema与候选上限，同一画布来源报价后�
   expect(api.confirm).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "确认费用并生成" }));
   await waitFor(() => expect(api.confirm).toHaveBeenCalledOnce());
+});
+
+it("已选项目但没有可用模型时，参数入口显示模型前提且不触发报价", async () => {
+  api.models.mockResolvedValue({ items: [] });
+  render(
+    <RichGeneration
+      projectID={project.id}
+      presentation="home"
+      seed={{ project, prompt: "保留正文", capability: "image" }}
+    />,
+  );
+  await screen.findByRole("textbox", { name: "创作提示词" });
+  const trigger = screen.getByRole("button", { name: "生成参数" });
+  expect(trigger.hasAttribute("disabled")).toBe(false);
+  fireEvent.click(trigger);
+  expect(
+    await screen.findByText("请先选择可用模型，再配置生成参数。"),
+  ).toBeTruthy();
+  expect(screen.queryByRole("combobox", { name: "所属项目" })).toBeNull();
+  expect(api.quote).not.toHaveBeenCalled();
 });
 
 it("默认全能参考来自真实目录合同，无模式切换且不重建正文或触发生成", async () => {

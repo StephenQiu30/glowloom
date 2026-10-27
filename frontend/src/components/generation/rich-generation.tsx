@@ -44,6 +44,9 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverDescription,
 } from "@/components/ui/popover";
 import {
   Select,
@@ -1669,7 +1672,7 @@ function EditorWorkspace({
                   <PopoverTrigger asChild>
                     <InputGroupButton
                       aria-label="生成参数"
-                      disabled={!model || !session || frozen}
+                      disabled={!session || frozen}
                     >
                       {[draft.params.aspect_ratio, draft.params.resolution]
                         .filter((value) => typeof value === "string" && value)
@@ -1686,7 +1689,14 @@ function EditorWorkspace({
                     className="max-h-[min(70dvh,var(--radix-popover-content-available-height))] w-[336px] max-w-[calc(100vw-32px)] overflow-y-auto p-4"
                     aria-label="生成参数"
                   >
-                    {parameterControls}
+                    <PopoverHeader>
+                      <PopoverTitle>生成参数</PopoverTitle>
+                    </PopoverHeader>
+                    {parameterControls ?? (
+                      <PopoverDescription>
+                        请先选择可用模型，再配置生成参数。
+                      </PopoverDescription>
+                    )}
                   </PopoverContent>
                 </Popover>
                 {presentation !== "home" && (

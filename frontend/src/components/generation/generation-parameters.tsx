@@ -5,7 +5,6 @@ import { cn } from "cn";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Select,
   SelectContent,
@@ -16,23 +15,6 @@ import {
 } from "@/components/ui/select";
 import type { ParamField } from "./contracts";
 import type { PromptDraft } from "./prompt-document";
-
-function RatioIcon({ value }: { value: string }) {
-  const [width, height] = value.split(":").map(Number);
-  if (!(width > 0 && height > 0)) return null;
-  const scale = 16 / Math.max(width, height);
-  return (
-    <span aria-hidden="true" className="grid h-5 place-items-center">
-      <span
-        className="rounded-[2px] border-[1.5px] border-current"
-        style={{ width: width * scale, height: height * scale }}
-      />
-    </span>
-  );
-}
-
-const segmentClass =
-  "min-w-0 flex-1 rounded-lg px-1 text-xs font-normal text-muted-foreground hover:bg-foreground/5 data-[state=on]:bg-foreground/10 data-[state=on]:text-foreground data-[state=on]:shadow-sm";
 
 /** One schema-driven parameter editor for both the popover and full editor. */
 export function GenerationParameters({
@@ -55,7 +37,9 @@ export function GenerationParameters({
     ? Math.max(1, Math.min(8, Math.floor(maxOutputs)))
     : 1;
   return (
-    <FieldGroup className={cn("gap-5", !compact && "grid sm:grid-cols-2")}>
+    <FieldGroup
+      className={cn("gap-3", !compact && "grid gap-5 sm:grid-cols-2")}
+    >
       {fields
         .filter((field) => field.field !== "output_count")
         .map((field) => {
@@ -63,9 +47,9 @@ export function GenerationParameters({
           const ratio = field.field === "aspect_ratio";
           const label = compact
             ? ratio
-              ? "比例"
+              ? "画面比例"
               : field.field === "resolution"
-                ? "分辨率"
+                ? "清晰度"
                 : field.label
             : field.label;
           const update = (value: string) =>
@@ -80,49 +64,17 @@ export function GenerationParameters({
             });
           return (
             <Field key={field.field} data-disabled={disabled}>
-              <FieldLabel
-                htmlFor={fieldID}
-                className={cn(
-                  compact && "text-xs font-normal text-muted-foreground",
-                )}
-              >
-                {label}
-              </FieldLabel>
-              {field.enum && compact && field.enum.length <= 8 ? (
-                <ToggleGroup
-                  id={fieldID}
-                  aria-label={label}
-                  type="single"
-                  value={String(params[field.field] ?? "")}
-                  disabled={disabled}
-                  spacing={1}
-                  className="w-full flex-wrap rounded-xl bg-foreground/5 p-0.5"
-                  onValueChange={(value) => {
-                    if (value) update(value);
-                  }}
-                >
-                  {field.enum.map((value) => (
-                    <ToggleGroupItem
-                      key={String(value)}
-                      value={String(value)}
-                      aria-label={String(value)}
-                      className={cn(
-                        segmentClass,
-                        ratio ? "h-14 flex-col gap-1" : "h-9",
-                      )}
-                    >
-                      {ratio && <RatioIcon value={String(value)} />}
-                      {value}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
-              ) : field.enum ? (
+              <FieldLabel htmlFor={fieldID}>{label}</FieldLabel>
+              {field.enum ? (
                 <Select
                   disabled={disabled}
                   value={String(params[field.field] ?? "")}
                   onValueChange={(selectedValue) => update(selectedValue)}
                 >
-                  <SelectTrigger id={fieldID} className="w-full">
+                  <SelectTrigger
+                    id={fieldID}
+                    className="w-full max-md:min-h-11"
+                  >
                     <SelectValue placeholder={"请选择"} />
                   </SelectTrigger>
                   <SelectContent>
@@ -160,37 +112,35 @@ export function GenerationParameters({
           );
         })}
       <Field data-disabled={disabled}>
-        <FieldLabel
-          htmlFor={`${id}-count`}
-          className={cn(compact && "text-xs font-normal text-muted-foreground")}
-        >
-          {compact ? "数量" : "候选数量"}
+        <FieldLabel htmlFor={`${id}-count`}>
+          {compact ? "生成数量" : "候选数量"}
         </FieldLabel>
         {compact ? (
-          <ToggleGroup
-            id={`${id}-count`}
-            aria-label="数量"
-            type="single"
+          <Select
             disabled={disabled}
             value={String(params.output_count ?? 1)}
-            spacing={1}
-            className="w-full flex-wrap rounded-xl bg-foreground/5 p-0.5"
-            onValueChange={(value) => {
-              if (value) onChange({ ...params, output_count: Number(value) });
-            }}
+            onValueChange={(value) =>
+              onChange({ ...params, output_count: Number(value) })
+            }
           >
-            {Array.from({ length: count }, (_, index) => index + 1).map(
-              (value) => (
-                <ToggleGroupItem
-                  key={value}
-                  value={String(value)}
-                  className={cn(segmentClass, "h-9")}
-                >
-                  {value}
-                </ToggleGroupItem>
-              ),
-            )}
-          </ToggleGroup>
+            <SelectTrigger
+              id={`${id}-count`}
+              className="w-full max-md:min-h-11"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {Array.from({ length: count }, (_, index) => index + 1).map(
+                  (value) => (
+                    <SelectItem key={value} value={String(value)}>
+                      {value}
+                    </SelectItem>
+                  ),
+                )}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         ) : (
           <Input
             id={`${id}-count`}

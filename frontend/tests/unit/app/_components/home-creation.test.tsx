@@ -113,6 +113,34 @@ async function tab(name: string) {
   );
 }
 
+it.each([
+  ["参数", "生成参数"],
+  ["添加参考素材", "添加参考素材"],
+  ["添加主体或素材引用", "提及素材或主体"],
+])(
+  "未选项目时%s只打开对应内容，显式选择项目后才打开项目弹层",
+  async (trigger, title) => {
+    state.session = { actor: { id: "test-actor" } };
+    render(<Page />);
+    fireEvent.click(screen.getByRole("button", { name: trigger }));
+    expect(await screen.findByText(title)).toBeTruthy();
+    expect(
+      screen
+        .getByRole("button", { name: "选择验证项目" })
+        .getAttribute("aria-expanded"),
+    ).toBe("false");
+    fireEvent.click(screen.getByRole("button", { name: "选择项目" }));
+    await waitFor(() =>
+      expect(
+        screen
+          .getByRole("button", { name: "选择验证项目" })
+          .getAttribute("aria-expanded"),
+      ).toBe("true"),
+    );
+    expect(state.opened).toEqual([]);
+  },
+);
+
 it("使用紧凑类型菜单，游客切换输入不丢失且没有推荐技能行", async () => {
   render(<Page />);
   expect(screen.getByRole("combobox", { name: "创作类型" })).toBeTruthy();
