@@ -31,12 +31,15 @@ vi.mock("@/components/projects/project-picker", () => ({
   ProjectPicker: ({
     onChange,
     disabled,
+    open,
   }: {
     onChange: (p: { id: string; name: string }) => void;
     disabled: boolean;
+    open: boolean;
   }) => (
     <Button
       disabled={disabled}
+      aria-expanded={open}
       onClick={() => onChange({ id: "test-project", name: "验证项目" })}
     >
       选择验证项目
@@ -78,6 +81,29 @@ beforeEach(() => {
   state.login.mockReset();
 });
 afterEach(cleanup);
+
+it("未选项目时模型入口打开模型说明，仅显式选择项目才打开项目弹层", async () => {
+  state.session = { actor: { id: "test-actor" } };
+  render(<Page />);
+  fireEvent.click(screen.getByRole("button", { name: /选择模型|生成模型/ }));
+  expect(await screen.findByText("选择生成模型")).toBeTruthy();
+  expect(
+    screen
+      .getByRole("button", { name: "选择验证项目" })
+      .getAttribute("aria-expanded"),
+  ).toBe("false");
+  fireEvent.click(screen.getByRole("button", { name: "选择项目" }));
+  await waitFor(() =>
+    expect(
+      screen
+        .getByRole("button", { name: "选择验证项目" })
+        .getAttribute("aria-expanded"),
+    ).toBe("true"),
+  );
+  expect(screen.queryByText("选择生成模型")).toBeNull();
+  expect(state.opened).toEqual([]);
+});
+
 async function tab(name: string) {
   fireEvent.keyDown(screen.getByRole("combobox", { name: "创作类型" }), {
     key: "ArrowDown",

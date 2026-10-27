@@ -20,6 +20,7 @@ import { NewCanvasButton } from "@/components/projects/new-canvas-button";
 import { ProjectPicker } from "@/components/projects/project-picker";
 import type { Project } from "@/components/projects/project";
 import type { GenerationSeed } from "@/components/generation/generation-dialog";
+import { ModelPicker } from "@/components/generation/model-picker";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Field, FieldGroup } from "@/components/ui/field";
@@ -286,15 +287,25 @@ export function HomeCreation({
                         >
                           <div className="creation-primary-tools">
                             {typeControl}
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              onClick={prepare}
-                            >
-                              <Sparkles data-icon="inline-start" />
-                              选择模型
-                              <ChevronDown data-icon="inline-end" />
-                            </Button>
+                            {supported ? (
+                              <ModelPicker
+                                models={[]}
+                                value={null}
+                                disabled={locked || switching}
+                                onSelect={() => {}}
+                                onChooseProject={prepare}
+                              />
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={prepare}
+                              >
+                                <Sparkles data-icon="inline-start" />
+                                选择模型
+                                <ChevronDown data-icon="inline-end" />
+                              </Button>
+                            )}
                           </div>
                           <Button
                             type="button"

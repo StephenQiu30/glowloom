@@ -347,3 +347,15 @@ Figma Code仍为演示；403仅HTTP测试，未声称浏览器403已验收。真
 | `BACKLOG.md`                                             | 当前状态与剩余接受                                 |
 
 本轮未提交、推送、发布或重启服务；当前页面由已有前端开发容器热更新。
+
+### 2026-10-27 模型入口误开项目弹层修复证据
+
+用户截图指出首页点击“选择模型”却展示“所属项目”。根因为未选项目分支使用普通Button且onClick绑定prepare，直接setProjectOpen(true)。模型接口listProjectModels仍以pid为授权范围，本次不更改接口或绕过项目前提。
+
+首页支持的图片/视频入口改为共享ModelPicker，新增可选onChooseProject用于未建立项目范围的明确说明；点击模型按钮只打开自己的Popover。用户再点击说明内“选择项目”才关闭模型层并调用原有项目/登录入口。已有项目的模型目录、搜索、停用状态、选中回调及当前项目标签继续使用原实现。未开放创作类型仍走原未开放说明。
+
+新增首页回归先在旧代码因找不到“选择生成模型”失败；修复后断言模型层出现时项目层关闭，显式点击选择项目后才开启项目层且不启动编辑器。模型搜索与不可用状态既有回归仍通过。定向2文件8项、全量127文件815项通过；ESLint、next typegen、tsc和生产构建通过。初次类型检查发现测试错误传入Testing Library不支持的exact选项，删除后通过；修改文件格式通过，全仓仍有原有breadcrumb.tsx、progress.tsx和publish-media.test.ts三个格式告警。
+
+实际Chrome验证：未选项目时模型层标题为“选择生成模型”，所属项目触发器仍折叠；点击说明内“选择项目”后所属项目Popover展开，焦点落到所属项目Select。选中已有验收项目后点击模型入口显示“搜索模型”与真实空态，项目层保持关闭。390px视口模型层宽320px、左右54/374px、页面scrollWidth=390；恢复桌面后Escape关闭并返回模型触发器。当前项目无可用模型，不宣称模型选择或供应商生成成功。
+
+本机前述证据目录新增29-model-picker-before-project.png和30-model-picker-project-catalog.png；未修改Figma稿、服务、依赖或全局配色。本次五个遗留文件：home-creation.tsx负责入口接线，model-picker.tsx负责项目前提状态，home-creation.test.tsx负责错误接线回归，BACKLOG负责状态，本计划负责证据；均未提交或推送。
