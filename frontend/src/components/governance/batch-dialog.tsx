@@ -1,10 +1,5 @@
 "use client";
 import { useId, useState } from "react";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -48,7 +43,10 @@ const labels: Record<BatchStatus, string> = {
 export function BatchDialog<T extends { id?: string }>({
   batch,
 }: {
-  batch: Omit<ReturnType<typeof useBatchOperation<T>>, "registerResultTrigger">;
+  batch: Omit<
+    ReturnType<typeof useBatchOperation<T>>,
+    "registerResultTrigger" | "registerFallbackTrigger"
+  >;
 }) {
   const id = useId();
   const [reason, setReason] = useState("");
@@ -56,7 +54,6 @@ export function BatchDialog<T extends { id?: string }>({
   const ready = batch.entries.filter((e) => e.status === "ready").length;
   const failed = batch.entries.filter((e) => e.status === "failed").length;
   const compact = batch.action?.compact;
-  const [showDetails, setShowDetails] = useState(false);
   const Root = compact ? AlertDialog : Dialog;
   const Content = compact ? AlertDialogContent : DialogContent;
   const Header = compact ? AlertDialogHeader : DialogHeader;
@@ -65,20 +62,6 @@ export function BatchDialog<T extends { id?: string }>({
   const Footer = compact ? AlertDialogFooter : DialogFooter;
   const Cancel = compact ? AlertDialogCancel : Button;
   const success = batch.entries.filter((e) => e.status === "success").length;
-  const summary = (
-    batch.submitted
-      ? [
-          success ? `成功 ${success} 项` : "",
-          batch.entries.some((e) => e.status === "submitted")
-            ? `已提交 ${batch.entries.filter((e) => e.status === "submitted").length} 项`
-            : "",
-          failed ? `失败 ${failed} 项` : "",
-          batch.unresolved
-            ? `结果待确认 ${batch.entries.filter((e) => e.status === "unknown").length} 项`
-            : "",
-        ]
-      : [failed ? `检查失败 ${failed} 项` : ""]
-  ).filter(Boolean);
   const skipped = batch.entries.filter((e) => e.status === "skipped").length;
   const columns: DataTableColumn<BatchEntry<T>>[] = [
     {
@@ -123,59 +106,47 @@ export function BatchDialog<T extends { id?: string }>({
         <Header>
           <Title>
             {compact
-              ? batch.submitted
-                ? "操作结果"
-                : batch.busy
-                  ? batch.action?.title
-                  : ready
-                    ? `${batch.action?.title.replace("账号", "")} ${ready} 个账号？`
-                    : `没有可${batch.action?.title.replace("账号", "")}的账号`
+              ? batch.busy || batch.submitted
+                ? batch.action?.title
+                : ready
+                  ? `${batch.action?.title.replace("账号", "")} ${ready} 个账号？`
+                  : `没有可${batch.action?.title.replace("账号", "")}的账号`
               : batch.action?.title}
           </Title>
-          <Description>
-            {compact && batch.submitted
-              ? "操作已结束，可查看处理明细。"
-              : batch.action?.effect}
-          </Description>
+          <Description>{batch.action?.effect}</Description>
         </Header>
         <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
-          <p aria-live="polite" className="text-sm text-muted-foreground">
-            {batch.busy ? <Spinner className="mr-2 inline" /> : null}
-            {compact
-              ? [...summary, skipped ? `已跳过 ${skipped} 项` : ""]
-                  .filter(Boolean)
-                  .join(" · ") ||
-                (batch.busy ? "正在检查…" : `已选 ${batch.entries.length} 项`)
-              : batch.submitted
-                ? `成功 ${success} / 已提交 ${batch.entries.filter((e) => e.status === "submitted").length} / 失败 ${failed} / 结果未知 ${batch.entries.filter((e) => e.status === "unknown").length} / 未执行 ${skipped}`
-                : `已选 ${batch.entries.length} 项 · 可执行 ${ready} 项${skipped ? ` · 跳过 ${skipped} 项` : ""}${failed ? ` · 检查失败 ${failed} 项` : ""}`}
-          </p>
-          {compact ? (
-            skipped > 0 || failed > 0 || batch.submitted ? (
-              <Collapsible open={showDetails} onOpenChange={setShowDetails}>
-                <CollapsibleTrigger asChild>
-                  <Button type="button" variant="ghost">
-                    {showDetails ? "收起明细" : "查看明细"}
-                  </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="pt-2">
-                  <DataTable
-                    label="批量操作逐项结果"
-                    columns={columns}
-                    data={batch.entries}
-                    loading={batch.busy && !batch.entries.length}
-                  />
-                </CollapsibleContent>
-              </Collapsible>
-            ) : null
-          ) : (
+          {!compact || batch.busy || skipped > 0 ? (
+            <p aria-live="polite" className="text-sm text-muted-foreground">
+              {batch.busy ? <Spinner className="mr-2 inline" /> : null}
+              {compact
+                ? batch.busy
+                  ? batch.submitted
+                    ? "正在处理…"
+                    : "正在检查…"
+                  : `已跳过 ${skipped} 项`
+                : batch.submitted
+                  ? `成功 ${success} / 已提交 ${batch.entries.filter((e) => e.status === "submitted").length} / 失败 ${failed} / 结果未知 ${batch.entries.filter((e) => e.status === "unknown").length} / 未执行 ${skipped}`
+                  : `已选 ${batch.entries.length} 项 · 可执行 ${ready} 项${skipped ? ` · 跳过 ${skipped} 项` : ""}${failed ? ` · 检查失败 ${failed} 项` : ""}`}
+            </p>
+          ) : null}
+          {!compact ? (
             <DataTable
               label="批量操作逐项结果"
               columns={columns}
               data={batch.entries}
               loading={batch.busy && !batch.entries.length}
             />
-          )}
+          ) : null}
+          {compact && (failed > 0 || batch.unresolved) ? (
+            <Alert variant="destructive">
+              <AlertDescription>
+                {batch.unresolved
+                  ? "部分结果待确认，请先查询原请求。"
+                  : `${failed} 项未完成。${batch.entries.find((entry) => entry.status === "failed")?.message ?? "请重新读取后再试。"}`}
+              </AlertDescription>
+            </Alert>
+          ) : null}
           {batch.error ? (
             <Alert variant="destructive">
               <AlertDescription>{batch.error}</AlertDescription>
@@ -239,7 +210,13 @@ export function BatchDialog<T extends { id?: string }>({
               setPassword("");
             }}
           >
-            {batch.busy ? "关闭并稍后查看" : batch.submitted ? "完成" : "取消"}
+            {batch.busy
+              ? "关闭并稍后查看"
+              : batch.unresolved || failed
+                ? "关闭"
+                : batch.submitted
+                  ? "完成"
+                  : "取消"}
           </Cancel>
           {batch.unresolved && batch.action?.recover ? (
             <Button

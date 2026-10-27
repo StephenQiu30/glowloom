@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { RequestError } from "@/lib/request";
 import { reauthenticate } from "@/api/identity";
 import { authErrorMessage } from "@/components/auth/contracts";
+import { toast } from "sonner";
 import {
   executeBatch,
   type BatchEntry,
@@ -51,6 +52,10 @@ export function useBatchOperation<T extends { id?: string }>(
   const savedReason = useRef("");
   const trigger = useRef<HTMLElement | null>(null);
   const resultTrigger = useRef<HTMLButtonElement | null>(null);
+  const fallbackTrigger = useRef<HTMLElement | null>(null);
+  const registerFallbackTrigger = useCallback((element: HTMLElement | null) => {
+    fallbackTrigger.current = element;
+  }, []);
   const registerResultTrigger = useCallback(
     (element: HTMLButtonElement | null) => {
       resultTrigger.current = element;
@@ -62,7 +67,7 @@ export function useBatchOperation<T extends { id?: string }>(
     const target =
       original?.isConnected && !original.matches(":disabled")
         ? original
-        : resultTrigger.current;
+        : (resultTrigger.current ?? fallbackTrigger.current);
     if (!target?.isConnected) return false;
     target.focus();
     return true;
@@ -74,6 +79,30 @@ export function useBatchOperation<T extends { id?: string }>(
     [],
   );
   const unresolved = entries.some((e) => e.status === "unknown");
+  const showResult = Boolean(
+    action &&
+    (!action.compact ||
+      busy ||
+      error ||
+      entries.some((e) => ["failed", "unknown"].includes(e.status))),
+  );
+  function settle(result: BatchEntry<T>[], succeeded: string[]) {
+    onSettled(succeeded);
+    if (
+      !action?.compact ||
+      result.some((entry) => !["success", "skipped"].includes(entry.status))
+    )
+      return;
+    setOpen(false);
+    const count = result.filter((entry) => entry.status === "success").length;
+    const skipped = result.filter((entry) => entry.status === "skipped").length;
+    toast(
+      count
+        ? `已${action.title.replace("账号", "")} ${count} 个账号`
+        : "没有可执行的账号",
+      { description: skipped ? `已跳过 ${skipped} 项` : undefined },
+    );
+  }
   async function prepare(rows: T[], next: BatchAction<T>, refresh = false) {
     if (lock.current || unresolved) return;
     trigger.current =
@@ -145,6 +174,7 @@ export function useBatchOperation<T extends { id?: string }>(
           ? { ...e, status: "ready" as const }
           : e,
       );
+      const results = new Map(work.map((entry) => [entry.id, entry]));
       await executeBatch(
         work,
         async (entry) => {
@@ -161,6 +191,7 @@ export function useBatchOperation<T extends { id?: string }>(
           }
         },
         (entry) => {
+          results.set(entry.id, entry);
           if (entry.status === "success" || entry.status === "submitted")
             succeeded.push(entry.id);
           setEntries((current) =>
@@ -169,7 +200,7 @@ export function useBatchOperation<T extends { id?: string }>(
         },
         c.signal,
       );
-      if (!c.signal.aborted) onSettled(succeeded);
+      if (!c.signal.aborted) settle([...results.values()], succeeded);
     } catch (e) {
       if (!c.signal.aborted) {
         checkAuthority(e);
@@ -188,12 +219,18 @@ export function useBatchOperation<T extends { id?: string }>(
     const c = new AbortController();
     flight.current = c;
     const succeeded: string[] = [];
+    const results = new Map(entries.map((entry) => [entry.id, entry]));
     try {
       for (const entry of entries.filter((e) => e.status === "unknown")) {
         try {
           const result = await action.recover(entry, c.signal);
           if (c.signal.aborted) break;
           if (result) {
+            results.set(entry.id, {
+              ...entry,
+              status: result.status ?? "success",
+              message: result.message,
+            });
             setEntries((list) =>
               list.map((e) =>
                 e.id === entry.id
@@ -217,7 +254,7 @@ export function useBatchOperation<T extends { id?: string }>(
           }
         }
       }
-      if (!c.signal.aborted) onSettled(succeeded);
+      if (!c.signal.aborted) settle([...results.values()], succeeded);
     } finally {
       lock.current = false;
       if (!c.signal.aborted) setBusy(false);
@@ -234,7 +271,9 @@ export function useBatchOperation<T extends { id?: string }>(
     error,
     submitted,
     unresolved,
+    showResult,
     registerResultTrigger,
+    registerFallbackTrigger,
     restoreFocus,
     prepare,
     run,

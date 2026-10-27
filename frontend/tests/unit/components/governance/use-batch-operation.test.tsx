@@ -144,3 +144,48 @@ it("预检权限失效也关闭私有上下文，不允许发起写入", async (
   expect(result.current.denied).toBe(true);
   expect(a.execute).not.toHaveBeenCalled();
 });
+
+it("精简操作成功自动关闭，成功与跳过不会留下结果页", async () => {
+  const a = { ...action(), compact: true };
+  a.prepare = vi.fn(async (row) => ({
+    row,
+    skip: row.id === "self" ? "不能删除本人" : undefined,
+  }));
+  const settled = vi.fn();
+  const { result } = renderHook(() => useBatchOperation<Row>(settled));
+  await act(() =>
+    result.current.prepare(
+      [
+        { id: "a", revision: 1 },
+        { id: "self", revision: 1 },
+      ],
+      a,
+    ),
+  );
+  await act(() => result.current.run("", ""));
+  expect(result.current.open).toBe(false);
+  expect(result.current.showResult).toBe(false);
+  expect(a.execute).toHaveBeenCalledTimes(1);
+  expect(settled).toHaveBeenCalledWith(["a"]);
+});
+
+it("精简操作失败保留恢复入口，未知结果查回执后关闭且不重复写入", async () => {
+  const a = { ...action(), compact: true };
+  a.execute = vi.fn().mockRejectedValue(new RequestError("network", 0));
+  a.recover = vi.fn(async () => ({ message: "原请求成功" }));
+  const { result } = renderHook(() => useBatchOperation<Row>(() => {}));
+  await act(() => result.current.prepare([{ id: "a", revision: 1 }], a));
+  await act(() => result.current.run("", ""));
+  expect(result.current.open).toBe(true);
+  expect(result.current.showResult).toBe(true);
+  expect(result.current.unresolved).toBe(true);
+  const key = result.current.entries[0].requestId;
+  await act(() => result.current.recover());
+  expect(result.current.open).toBe(false);
+  expect(result.current.showResult).toBe(false);
+  expect(a.execute).toHaveBeenCalledTimes(1);
+  expect(a.recover).toHaveBeenCalledWith(
+    expect.objectContaining({ requestId: key }),
+    expect.any(AbortSignal),
+  );
+});

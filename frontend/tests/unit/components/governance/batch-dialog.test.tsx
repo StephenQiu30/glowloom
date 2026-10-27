@@ -56,7 +56,7 @@ it("成功项清空选择移除原按钮后，Escape 关闭结果仍恢复到可
     ),
   );
 });
-it("批量删除只展示数量和必要影响，跳过明细按需展开", async () => {
+it("批量删除只有简短确认，成功后关闭且不展示逐项清单", async () => {
   function DeleteExample() {
     const batch = useBatchOperation<{ id: string }>(() => {});
     return (
@@ -87,9 +87,52 @@ it("批量删除只展示数量和必要影响，跳过明细按需展开", asyn
   await screen.findByRole("alertdialog", { name: "删除 1 个账号？" });
   expect(screen.getByText("已跳过 1 项")).toBeTruthy();
   expect(screen.queryByText("当前账号不能删除")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "查看明细" }));
-  await screen.findByText("当前账号不能删除");
+  expect(screen.queryByRole("button", { name: "查看明细" })).toBeNull();
+  expect(screen.queryByRole("table")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "删除" }));
-  await screen.findByText("成功 1 项 · 已跳过 1 项");
-  expect(screen.queryByRole("button", { name: "删除" })).toBeNull();
+  await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+  expect(screen.queryByText("操作结果")).toBeNull();
+});
+
+it("精简操作的原入口消失后，自动关闭会恢复到筛选区", async () => {
+  function CompactExample() {
+    const [done, setDone] = useState(false);
+    const { registerFallbackTrigger, ...batch } = useBatchOperation<{
+      id: string;
+    }>(() => setDone(true));
+    return (
+      <>
+        <form
+          aria-label="用户筛选"
+          tabIndex={-1}
+          ref={registerFallbackTrigger}
+        />
+        {!done ? (
+          <button
+            onClick={() =>
+              void batch.prepare([{ id: "one" }], {
+                ...action,
+                title: "删除账号",
+                compact: true,
+              })
+            }
+          >
+            批量删除
+          </button>
+        ) : null}
+        <BatchDialog batch={batch} />
+      </>
+    );
+  }
+  render(<CompactExample />);
+  const trigger = screen.getByRole("button", { name: "批量删除" });
+  trigger.focus();
+  fireEvent.click(trigger);
+  fireEvent.click(await screen.findByRole("button", { name: "删除" }));
+  await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      screen.getByRole("form", { name: "用户筛选" }),
+    ),
+  );
 });

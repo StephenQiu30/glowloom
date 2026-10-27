@@ -94,7 +94,7 @@ function UserAdministration() {
   const [advanced, setAdvanced] = useState(false);
   const mobile = useIsMobile();
   const [visibility, setVisibility] = useState<Record<string, boolean>>({});
-  const { registerResultTrigger, ...batch } =
+  const { registerResultTrigger, registerFallbackTrigger, ...batch } =
     useBatchOperation<API.PlatformUserView>((ids) => {
       setSelectedUsers((rows) => rows.filter((r) => !ids.includes(r.id)));
       setRetry((n) => n + 1);
@@ -264,6 +264,9 @@ function UserAdministration() {
         </Button>
       </AdminHeading>
       <form
+        ref={registerFallbackTrigger}
+        tabIndex={-1}
+        aria-label="用户筛选"
         className="flex flex-wrap items-center gap-2"
         onSubmit={(e) => {
           e.preventDefault();
@@ -519,14 +522,14 @@ function UserAdministration() {
           目录读取时间：{new Date(page.as_of).toLocaleString()}
         </p>
       ) : null}
-      {batch.action ? (
+      {batch.showResult ? (
         <Button
           variant="outline"
           className="self-start"
           ref={registerResultTrigger}
           onClick={() => batch.setOpen(true)}
         >
-          查看批量操作结果
+          {batch.action?.compact ? "处理未完成的操作" : "查看批量操作结果"}
         </Button>
       ) : null}
       {!forbidden ? <BatchDialog key={batch.generation} batch={batch} /> : null}

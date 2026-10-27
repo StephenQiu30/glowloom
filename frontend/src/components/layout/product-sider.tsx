@@ -100,6 +100,8 @@ export function ProductSider({
   const closeMobile = () => setOpenMobile(false);
   return (
     <Sidebar
+      role="complementary"
+      aria-label="侧栏导航"
       collapsible="icon"
       className="product-sidebar border-r-0"
       onMobileCloseAutoFocus={onMobileCloseAutoFocus}
