@@ -116,7 +116,7 @@ const identityRoutes: {
     query: [],
   },
   {
-    pattern: `platform/users/${identityUUID}/(disable|enable|unlock|revoke-admin|revoke-sessions|profile-reset|password-reset)`,
+    pattern: `platform/users/${identityUUID}/(disable|delete|enable|unlock|revoke-admin|revoke-sessions|profile-reset|password-reset)`,
     methods: ["POST"],
     query: [],
   },

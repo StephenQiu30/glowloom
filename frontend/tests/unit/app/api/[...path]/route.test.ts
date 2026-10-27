@@ -418,6 +418,7 @@ it("all current registered identity handler contracts cross the bounded BFF", as
       "media/adapter/http/avatar.go",
       "identity/adapter/http/event_query.go",
       "identity/adapter/http/platform_users.go",
+      "identity/adapter/http/platform_delete.go",
       "identity/adapter/http/governance.go",
       "identity/adapter/http/invitation.go",
       "workspace/adapter/http/team.go",
@@ -448,7 +449,7 @@ it.each([
   "admin/users",
   "admin/users/11111111-1111-4111-8111-111111111111",
   "teams/wrong/members",
-  "platform/users/11111111-1111-4111-8111-111111111111/delete",
+  "platform/users/not-a-uuid/delete",
 ])("retired or unknown route %s is never forwarded", async (path) => {
   const fetcher = vi.fn();
   vi.stubGlobal("fetch", fetcher);
@@ -1025,4 +1026,51 @@ it("账户批量回执仅转发合法 UUID 的只读查询", async () => {
     context(`platform/users/${target}/commands/not-uuid`),
   );
   expect(invalid.status).toBe(404);
+});
+
+it("账号删除仅 POST 透传原始版本、Cookie、CSRF 和幂等键，禁止查询及未知动作", async () => {
+  const fetcher = vi
+    .fn()
+    .mockResolvedValue(new Response(null, { status: 204 }));
+  vi.stubGlobal("fetch", fetcher);
+  const path = "platform/users/11111111-1111-4111-8111-111111111111/delete";
+  const response = await POST(
+    new Request(`http://localhost/api/${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: "gl_session=fixture-only",
+        "X-CSRF-Token": "fixture-csrf",
+        "Idempotency-Key": "original-key",
+      },
+      body: '{"expected_revision":"7"}',
+    }),
+    context(path),
+  );
+  expect(response.status).toBe(204);
+  const [url, init] = fetcher.mock.calls[0];
+  expect((url as URL).pathname).toBe(`/api/${path}`);
+  expect(init.headers.get("Cookie")).toBe("gl_session=fixture-only");
+  expect(init.headers.get("X-CSRF-Token")).toBe("fixture-csrf");
+  expect(init.headers.get("Idempotency-Key")).toBe("original-key");
+  expect(await new Response(init.body).text()).toBe(
+    '{"expected_revision":"7"}',
+  );
+  expect(response.headers.get("Cache-Control")).toBe("no-store");
+  fetcher.mockClear();
+  expect(
+    (await GET(new Request(`http://localhost/api/${path}`), context(path)))
+      .status,
+  ).toBe(405);
+  expect(
+    (
+      await POST(
+        new Request(`http://localhost/api/${path}?force=true`, {
+          method: "POST",
+        }),
+        context(path),
+      )
+    ).status,
+  ).toBe(422);
+  expect(fetcher).not.toHaveBeenCalled();
 });

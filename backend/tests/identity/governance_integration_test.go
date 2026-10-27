@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -22,6 +23,10 @@ import (
 
 func governanceFixture(t *testing.T) (*gorm.DB, *identity.Governance, identity.Principal, time.Time) {
 	t.Helper()
+	// CI supplies the isolated canvas schema; governance uses the same installed identity tables.
+	if os.Getenv("GLOWLOOM_TEST_EXISTING_DB_DSN") == "" && os.Getenv("GLOWLOOM_TEST_CANVAS_DB_DSN") != "" {
+		t.Setenv("GLOWLOOM_TEST_EXISTING_DB_DSN", os.Getenv("GLOWLOOM_TEST_CANVAS_DB_DSN"))
+	}
 	tx := existingIdentityTransaction(t)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	_, actor := verifiedTestActor(t, tx, "governance-admin@example.invalid", now)
