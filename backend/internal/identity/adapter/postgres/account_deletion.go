@@ -50,7 +50,7 @@ func (s *AccountDeletionStore) DeletionTransaction(ctx context.Context, actor ap
 
 func (t *accountDeletionTx) Impact() (application.DeletionImpact, error) {
 	out := application.DeletionImpact{Revision: t.user.Revision, TeamIDs: []uuid.UUID{}, BlockingDuties: []string{}}
-	if t.user.PlatformRole == "platform_admin" {
+	if t.user.PlatformRole == "platform_admin" && t.user.Status == domain.StatusActive && !t.user.EmailVerifiedAt.IsZero() {
 		var count int64
 		if err := t.db.Raw(`SELECT count(*) FROM identity."user" WHERE platform_role='platform_admin' AND status='active' AND email_verified_at IS NOT NULL AND NOT is_delete`).Scan(&count).Error; err != nil {
 			return out, err
@@ -77,6 +77,14 @@ func (t *accountDeletionTx) Impact() (application.DeletionImpact, error) {
 }
 
 func (t *accountDeletionTx) SoftDelete(now time.Time) error {
+	if err := t.softDelete(now); err != nil {
+		return err
+	}
+	return appendSelfEvent(t.db, t.user.ID, "account.deleted", now)
+}
+
+// softDelete revokes access only; each caller records its own actor and audit scope.
+func (t *accountDeletionTx) softDelete(now time.Time) error {
 	if t.user.SessionEpoch >= math.MaxInt32 || t.user.Revision >= math.MaxInt32 {
 		return domain.ErrInvalidAccountState
 	}
@@ -113,5 +121,5 @@ func (t *accountDeletionTx) SoftDelete(now time.Time) error {
 	if err := t.db.Exec(`UPDATE workspace.team_member SET status='removed',auth_epoch=auth_epoch+1,revision=revision+1,update_time=? WHERE user_id=? AND status<>'removed'`, now, t.user.ID).Error; err != nil {
 		return err
 	}
-	return appendSelfEvent(t.db, t.user.ID, "account.deleted", now)
+	return nil
 }

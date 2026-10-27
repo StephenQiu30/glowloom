@@ -1,10 +1,8 @@
 "use client";
 import { ContentState } from "@/components/layout/content-state";
-import { FeedbackToast } from "@/components/feedback/feedback-toast";
-import Link from "next/link";
 import { DirectoryTools } from "@/components/directory/directory-tools";
 import { UserActions } from "./user-actions";
-import { GovernanceLists } from "@/components/teams/governance-lists";
+import { AccountGovernanceLists } from "./account-governance-lists";
 import {
   Confirmation,
   type ConfirmAction,
@@ -77,7 +75,6 @@ function UserAdministration() {
     platform_role: "",
   });
   const [verified, setVerified] = useState("");
-  const [inTeam, setInTeam] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [order, setOrder] = useState("created_desc");
@@ -177,7 +174,7 @@ function UserAdministration() {
       header: "用户",
       cell: ({ row }) => (
         <div className="flex min-w-0 flex-col gap-1">
-          <span>
+          <span className="break-words whitespace-normal">
             {row.original.display_name}
             {row.original.id === session.actor.id ? " · 当前账号" : ""}
           </span>
@@ -208,11 +205,6 @@ function UserAdministration() {
           )[row.original.status] ?? "未知"}
         </Badge>
       ),
-    },
-    {
-      id: "teams",
-      header: "关联团队",
-      cell: ({ row }) => `${row.original.active_team_count} 个团队`,
     },
     {
       id: "created",
@@ -288,7 +280,6 @@ function UserAdministration() {
             platform_role: role,
             order,
             ...(verified ? { verified: verified === "true" } : {}),
-            ...(inTeam ? { in_team: inTeam === "true" } : {}),
             ...(from ? { from: new Date(from).toISOString() } : {}),
             ...(to ? { to: new Date(to).toISOString() } : {}),
           });
@@ -343,19 +334,6 @@ function UserAdministration() {
               <NativeSelectOption value="true">邮箱已验证</NativeSelectOption>
               <NativeSelectOption value="false">邮箱未验证</NativeSelectOption>
             </NativeSelect>
-            <NativeSelect
-              aria-label="团队关系筛选"
-              value={inTeam}
-              onChange={(e) => setInTeam(e.target.value)}
-            >
-              <NativeSelectOption value="">全部团队关系</NativeSelectOption>
-              <NativeSelectOption value="true">
-                有有效团队关系
-              </NativeSelectOption>
-              <NativeSelectOption value="false">
-                无有效团队关系
-              </NativeSelectOption>
-            </NativeSelect>
             <Input
               type="datetime-local"
               aria-label="注册时间起"
@@ -399,7 +377,6 @@ function UserAdministration() {
           <ColumnMenu
             columns={[
               { id: "role", label: "平台角色" },
-              { id: "teams", label: "关联团队" },
               { id: "created", label: "注册日期" },
             ]}
             visibility={visibility}
@@ -408,28 +385,24 @@ function UserAdministration() {
         ) : null}
       </form>
       {error ? (
-        !page ? (
-          <ContentState
-            state="error"
-            title={forbidden ? "暂无访问权限" : "用户目录暂时无法读取"}
-            description={error}
-            actions={
-              <Button
-                disabled={pending}
-                onClick={() => {
-                  setError("");
-                  setPending(true);
-                  setForbidden(false);
-                  setRetry((n) => n + 1);
-                }}
-              >
-                重新读取
-              </Button>
-            }
-          />
-        ) : (
-          <FeedbackToast message={error} />
-        )
+        <ContentState
+          state="error"
+          title={forbidden ? "暂无访问权限" : "用户目录暂时无法读取"}
+          description={error}
+          actions={
+            <Button
+              disabled={pending}
+              onClick={() => {
+                setError("");
+                setPending(true);
+                setForbidden(false);
+                setRetry((n) => n + 1);
+              }}
+            >
+              重新读取
+            </Button>
+          }
+        />
       ) : null}
       {pending && !page ? <LoadingState>正在读取用户…</LoadingState> : null}
       {toolsOpen && !forbidden ? (
@@ -446,27 +419,30 @@ function UserAdministration() {
             disabled={locked || batch.unresolved}
             onClear={() => setSelectedUsers([])}
           >
-            {(["enable", "revoke_sessions", "disable"] as const).map((kind) => (
-              <Button
-                key={kind}
-                variant={kind === "disable" ? "destructive" : "outline"}
-                disabled={locked || batch.unresolved}
-                onClick={() =>
-                  void batch.prepare(
-                    selectedInPage,
-                    userBatchAction(kind, session.actor.id),
-                  )
-                }
-              >
-                {
+            {(["enable", "revoke_sessions", "disable", "delete"] as const).map(
+              (kind) => (
+                <Button
+                  key={kind}
+                  variant={kind === "delete" ? "destructive" : "outline"}
+                  disabled={locked || batch.unresolved}
+                  onClick={() =>
+                    void batch.prepare(
+                      selectedInPage,
+                      userBatchAction(kind, session.actor.id),
+                    )
+                  }
+                >
                   {
-                    enable: "启用账号",
-                    revoke_sessions: "撤销会话",
-                    disable: "禁用账号",
-                  }[kind]
-                }
-              </Button>
-            ))}
+                    {
+                      enable: "启用账号",
+                      revoke_sessions: "撤销会话",
+                      disable: "禁用账号",
+                      delete: "删除账号",
+                    }[kind]
+                  }
+                </Button>
+              ),
+            )}
           </SelectionBar>
           <DataTable
             density="comfortable"
@@ -476,7 +452,6 @@ function UserAdministration() {
             emptyTitle="没有匹配的用户"
             columnVisibility={{
               role: !mobile && visibility.role !== false,
-              teams: !mobile && visibility.teams !== false,
               created: !mobile && visibility.created !== false,
             }}
             selection={{
@@ -541,49 +516,52 @@ function UserAdministration() {
       >
         <SheetContent className="overflow-y-auto p-6 data-[side=right]:w-full data-[side=right]:sm:max-w-[520px]">
           <SheetTitle>账号详情</SheetTitle>
-          <SheetDescription>
-            平台治理视图包含成员摘要，不包含私人创作内容。
-          </SheetDescription>
+          <SheetDescription>管理账号资料、登录状态与安全。</SheetDescription>
           {detail ? (
             <div className="flex flex-col gap-3">
-              <p>{detail.user.email}</p>
-              <p>
-                {detail.user.display_name} · {detail.user.status} ·{" "}
-                {detail.user.platform_role}
+              <h2 className="text-xl font-medium break-words">
+                {detail.user.display_name}
+              </h2>
+              <p className="text-sm break-all text-muted-foreground">
+                {detail.user.email}
               </p>
-              <p>
-                邮箱{detail.user.email_verified_at ? "已验证" : "未验证"}
-                ；资料版本 {detail.user.revision}
-              </p>
-              <h3>团队成员摘要</h3>
-              {detail.teams.length ? (
-                detail.teams.map((team) => (
-                  <p key={team.team_id}>
-                    {team.team_id} · {team.role} · {team.status}
-                  </p>
-                ))
-              ) : (
-                <p>没有关联团队。</p>
-              )}
+              <div className="flex gap-2">
+                <Badge variant="secondary">
+                  {{ active: "启用", disabled: "已禁用", deleted: "已注销" }[
+                    detail.user.status
+                  ] ?? detail.user.status}
+                </Badge>
+                <Badge variant="outline">
+                  邮箱{detail.user.email_verified_at ? "已验证" : "未验证"}
+                </Badge>
+              </div>
+              <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-4 py-4 text-sm">
+                <dt className="text-muted-foreground">平台角色</dt>
+                <dd className="text-right">
+                  {detail.user.platform_role === "platform_admin"
+                    ? "平台管理员"
+                    : "创作者"}
+                </dd>
+                <dt className="text-muted-foreground">注册日期</dt>
+                <dd className="text-right">
+                  {detail.user.create_time
+                    ? new Date(detail.user.create_time).toLocaleDateString()
+                    : "—"}
+                </dd>
+                <dt className="text-muted-foreground">最近登录</dt>
+                <dd className="text-right">
+                  {detail.user.last_login_at
+                    ? new Date(detail.user.last_login_at).toLocaleString()
+                    : "—"}
+                </dd>
+              </dl>
               <UserActions detail={detail} onAction={setAction} />
             </div>
           ) : null}
         </SheetContent>
       </Sheet>
-      <div className="flex flex-wrap gap-2">
-        <Button asChild variant="ghost">
-          <Link href="/platform/teams">平台团队管理</Link>
-        </Button>
-      </div>
-      <Button
-        variant="ghost"
-        onClick={() => setGovernanceOpen((v) => !v)}
-        aria-expanded={governanceOpen}
-      >
-        账号邀请与平台授权
-      </Button>
       {governanceOpen ? (
-        <GovernanceLists reload={retry} onAction={setAction} />
+        <AccountGovernanceLists reload={retry} onAction={setAction} />
       ) : null}
       <Confirmation
         key={action?.title ?? "closed"}

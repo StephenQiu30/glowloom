@@ -1,6 +1,8 @@
+import { accountActionRestriction } from "./action-restrictions";
 import {
   getPlatformUser,
   platformDisable,
+  platformDeleteUser,
   platformEnable,
   platformRevokeSessions,
   getUserGovernanceReceipt,
@@ -16,25 +18,29 @@ import {
 import { RequestError } from "@/lib/request";
 import type { BatchAction } from "./use-batch-operation";
 export function userBatchAction(
-  kind: "enable" | "disable" | "revoke_sessions",
+  kind: "enable" | "disable" | "revoke_sessions" | "delete",
   actorID: string,
 ): BatchAction<API.PlatformUserView> {
   const titles = {
     enable: "启用账号",
     disable: "禁用账号",
+    delete: "删除账号",
     revoke_sessions: "撤销会话",
   };
   return {
     title: titles[kind],
     effect:
-      kind === "disable"
-        ? "撤销所选账号的会话并阻止登录；资料和作品保留。权限或状态不适用的账号不执行。"
-        : kind === "enable"
-          ? "恢复账号访问资格，不恢复旧会话或自动解冻团队。"
-          : "撤销所选账号全部会话，用户需要重新登录。",
-    reason: true,
-    password: true,
-    destructive: kind !== "enable",
+      kind === "delete"
+        ? "删除后无法登录且不可恢复，账号资料、作品与团队数据保留。"
+        : kind === "disable"
+          ? "撤销所选账号的会话并阻止登录；资料和作品保留。权限或状态不适用的账号不执行。"
+          : kind === "enable"
+            ? "恢复账号访问资格，不恢复旧会话或自动解冻团队。"
+            : "撤销所选账号全部会话，用户需要重新登录。",
+    reason: kind !== "disable" && kind !== "delete",
+    password: kind !== "disable" && kind !== "delete",
+    compact: kind === "disable" || kind === "delete",
+    destructive: kind === "delete",
     label: (r) => `${r.display_name} · ${r.email}`,
     prepare: async (row, signal, refresh) => {
       if (row.id === actorID)
@@ -46,10 +52,18 @@ export function userBatchAction(
         row: refresh ? detail.user : row,
         skip: detail.allowed_actions.includes(kind)
           ? undefined
-          : "当前状态或权限不允许此操作",
+          : accountActionRestriction(detail.blocked_actions?.[kind]),
       };
     },
     execute: async (entry, reason, signal) => {
+      if (kind === "delete") {
+        await platformDeleteUser(
+          { id: entry.id },
+          { expected_revision: entry.row.revision },
+          { signal, headers: { "Idempotency-Key": entry.requestId } },
+        );
+        return { message: "账号已删除，作品与团队数据保留" };
+      }
       await {
         enable: platformEnable,
         disable: platformDisable,

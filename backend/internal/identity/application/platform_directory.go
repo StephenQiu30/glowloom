@@ -55,6 +55,7 @@ type UserDetail struct {
 	User           UserSummary
 	Teams          []TeamMembershipSummary
 	AllowedActions []string
+	BlockedActions map[string]string
 }
 
 // DirectoryPosition stores a stable keyset position and snapshot bound.

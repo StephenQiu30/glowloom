@@ -31,7 +31,7 @@ func (s *Governance) ExecuteUserCommand(ctx context.Context, actor Principal, ta
 		return ErrInvalidGovernance
 	}
 	switch action {
-	case "disable", "enable", "revoke_sessions":
+	case "disable", "enable", "revoke_sessions", "delete":
 	default:
 		return ErrInvalidGovernance
 	}

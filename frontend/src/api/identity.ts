@@ -792,6 +792,25 @@ export async function getUserGovernanceReceipt(
   );
 }
 
+/** Delete platform account and retain resources POST /api/platform/users/${param0}/delete */
+export async function platformDeleteUser(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.platformDeleteUserParams,
+  body: API.GovernanceVersion,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<any>(`/api/platform/users/${param0}/delete`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    params: { ...queryParams },
+    data: body,
+    ...(options || {}),
+  });
+}
+
 /** Disable account POST /api/platform/users/${param0}/disable */
 export async function platformDisable(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

@@ -24,6 +24,7 @@ func NewGovernanceHandler(service *application.Governance) *GovernanceHandler {
 func (h *GovernanceHandler) Register(g *gin.RouterGroup) {
 	g.GET("/platform/users/:id/commands/:request", h.userCommandReceipt)
 	g.POST("/platform/users/:id/disable", h.disable)
+	g.POST("/platform/users/:id/delete", h.deleteUser)
 	g.POST("/platform/users/:id/enable", h.enable)
 	g.POST("/platform/users/:id/unlock", h.unlock)
 	g.POST("/platform/users/:id/revoke-admin", h.revokeAdmin)
@@ -89,6 +90,8 @@ func governanceProblem(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 	case errors.Is(err, application.ErrLastPlatformAdmin):
 		httpapi.WriteProblem(c, 409, "last_platform_administrator", nil)
+	case errors.Is(err, application.ErrDeletionDuties):
+		httpapi.WriteProblem(c, 409, "deletion_duties", nil)
 	case errors.Is(err, application.ErrGovernanceConflict), errors.Is(err, workspace.ErrTeamStateConflict), errors.Is(err, workspace.ErrTeamCapacity):
 		httpapi.WriteProblem(c, 409, "governance_conflict", nil)
 	case errors.Is(err, workspace.ErrTeamRevisionConflict), errors.Is(err, domain.ErrRevisionConflict):

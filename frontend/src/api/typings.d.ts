@@ -2929,6 +2929,11 @@ declare namespace API {
     duplicate_of?: string;
   };
 
+  type platformDeleteUserParams = {
+    /** Account ID */
+    id: string;
+  };
+
   type platformDisableParams = {
     /** Account ID */
     id: string;
@@ -3049,6 +3054,7 @@ declare namespace API {
 
   type PlatformUserDetailView = {
     allowed_actions: string[];
+    blocked_actions?: Record<string, any>;
     teams: TeamMembershipView[];
     user: PlatformUserView;
   };

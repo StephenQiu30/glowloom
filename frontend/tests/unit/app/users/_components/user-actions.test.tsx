@@ -19,6 +19,34 @@ const detail = {
   teams: [],
 } satisfies API.PlatformUserDetailView;
 afterEach(cleanup);
+it("禁用与删除只需一次确认，保留对象和明确的删除影响", () => {
+  const choose = vi.fn();
+  render(
+    <UserActions
+      detail={{ ...detail, allowed_actions: ["disable", "delete"] }}
+      onAction={choose}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "禁用账号" }));
+  expect(choose).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      password: false,
+      reason: false,
+      confirmLabel: "禁用账号",
+      title: expect.stringContaining("Target"),
+    }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "删除账号" }));
+  expect(choose).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      password: false,
+      reason: false,
+      destructive: true,
+      confirmLabel: "删除账号",
+      effect: expect.stringContaining("保留"),
+    }),
+  );
+});
 it("只显示服务端当前允许的工作流，密码恢复不设置临时密码", () => {
   const choose = vi.fn();
   render(<UserActions detail={detail} onAction={choose} />);

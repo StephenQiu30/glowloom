@@ -2095,3 +2095,14 @@ AI 平台接入与预设管理：保留平台管理员统一配置凭据和原�
 - 复用 shadcn 组件并修正选中平台辅助文字对比度；最大宽度 520px，窄屏受视口约束，模型列表及短视口内容滚动，取消多余说明和可选名称入口。
 - 前端全量 125 文件 / 800 项测试、ESLint、TypeScript、生产构建通过；Go catalog 隔离 PostgreSQL 18 Race、vet、范围 golangci-lint 通过，goimports 无差异；govulncheck 可调用漏洞为 0，另有 1 项未调用模块条目。改动文件格式通过；全仓 Prettier 仍有既有 breadcrumb.tsx、progress.tsx、publish-media.test.ts 三文件不通过，未修改。
 - agent-browser 受控夹具验证接入到管理、一次调用后启用所选模型、失败提示、分类选择和方向键；320/390/768/1440px 无整页横向溢出，320px 提交按钮仍可见，深浅主题弹窗 axe 检查均为 0 违规。真实 localhost 页面要求登录，未使用有效服务商 Key，真实账号与最终生成未验收。证据保存在忽略目录 output/onboarding-acceptance/design-implementation/。
+
+### 2026-10-27 用户与团队独立管理、账号删除
+
+来源：[需求02同日实施确认](docs/requirement/02-用户系统需求.md)、[设计20](docs/design/20-平台用户管理设计.md)、[PRD01](docs/prd/01-用户系统.md)、[计划04](docs/plan/04-平台用户管理.md)。
+
+- 本轮实现：用户/团队同级独立目录与 DataTable 状态；账号邀请与团队邀请业务组件拆分；单项/批量管理员软删除；普通禁用一次确认；当前账号、最后管理员、团队交接、版本、权限、CSRF、回执与事务审计保护；暗色删除按钮对比度和批量区语义修正。
+- 前端：全量 Vitest 126文件/804测试、全量 ESLint、Next typegen/TypeScript、生产构建、生成客户端一致性、本次文件 Prettier 均通过。全库 Prettier 仍失败于未修改的 `ui/breadcrumb.tsx`、`ui/progress.tsx`、`tests/unit/components/canvas/publish-media.test.ts`，未扩大修改范围。
+- 后端：相关24项测试使用隔离 PostgreSQL 运行 Race，go vet/gofmt/goimports 检查；完整 identity 回归未全绿。`TestHistoricalPasswordFlagDoesNotRestrictSessionDirectory` 的 Cookie 到期断言、`TestMinimumUserRuntimeDependencyIncrement` 的外键数量断言、`TestSecondaryCopyListLockOrder` 的既存项目条件均在未修改 HEAD 副本复现。未修改这些断言；golangci-lint、govulncheck 本轮未执行（环境未安装）。
+- agent-browser：正式组件＋真实 HTTP handler＋独立 PostgreSQL，完成单项禁用、已禁用账号删除、批量删除跳过、团队批量停用、职责保护提示、零可执行提交禁用、断网正文重试与页面选择隔离。SQL 回读3个账号软删除、1次账号禁用、2个团队停用，团队负责人账号仍启用。1440桌面/390窄屏已截图；两页390px视口均无根级横向溢出；用户页 axe复查0违规。
+- 证据层次：不是 API mock；测试登录和数据为隔离测试账号，不触碰原用户账号。完整1122应用壳层与真实账号写入、通知送达、生产发布未在本轮接受。现有本地后端已重启加载源代码，1122/1123健康检查200；新增删除路由对无会话请求返回401。临时浏览器、测试服务与数据库在验收后关闭。
+- Git：本轮不提交或推送；保留进入本轮前的需求02、设计20修改。本轮修改逐项清单、截图和命令结果在本机忽略目录 `artifacts/admin-management-2026-10-27/verification.md`，不纳入源码发布。

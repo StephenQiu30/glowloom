@@ -3,6 +3,11 @@ import { cleanup, fireEvent, screen, act } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { PlatformTeamsPage } from "@/app/platform/teams/_components/platform-teams-page";
 import { request } from "@/lib/request";
+vi.mock("@/components/auth/session", () => ({
+  useSession: () => ({
+    actor: { id: "admin", platform_role: "platform_admin" },
+  }),
+}));
 vi.mock("@/lib/request", async (original) => ({
   ...(await original<typeof import("@/lib/request")>()),
   request: vi.fn(),
@@ -32,15 +37,17 @@ it("A头像上传迟到时已选B，不再弹出旧团队确认或修改A", asyn
     return { items: [] };
   });
   render(<PlatformTeamsPage />);
-  fireEvent.click(await screen.findByRole("button", { name: /Alpha ·/ }));
+  fireEvent.click(await screen.findByRole("button", { name: "查看 Alpha" }));
   await screen.findByRole("heading", { name: "Alpha" });
+  fireEvent.click(screen.getByRole("button", { name: "编辑团队资料" }));
   fireEvent.change(screen.getByLabelText(/选择头像/), {
     target: {
       files: [new File(["image"], "avatar.png", { type: "image/png" })],
     },
   });
   fireEvent.click(screen.getByText("上传并保存头像"));
-  fireEvent.click(screen.getByRole("button", { name: /Beta ·/ }));
+  fireEvent.click(screen.getByRole("button", { name: "关闭团队详情" }));
+  fireEvent.click(screen.getByRole("button", { name: "查看 Beta" }));
   await screen.findByRole("heading", { name: "Beta" });
   const uploadOptions = vi
     .mocked(request)
@@ -48,7 +55,9 @@ it("A头像上传迟到时已选B，不再弹出旧团队确认或修改A", asyn
   expect(uploadOptions?.signal?.aborted).toBe(true);
   expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:file");
   await act(async () => finish({ id: "uploaded-for-a" }));
-  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(
+    screen.queryByRole("dialog", { name: "修改 Alpha 的头像" }),
+  ).toBeNull();
   expect(
     vi
       .mocked(request)
@@ -72,8 +81,9 @@ it("关闭详情同时取消已上传头像的待确认动作", async () => {
     return { items: [] };
   });
   render(<PlatformTeamsPage />);
-  fireEvent.click(await screen.findByRole("button", { name: /Alpha ·/ }));
+  fireEvent.click(await screen.findByRole("button", { name: "查看 Alpha" }));
   await screen.findByRole("heading", { name: "Alpha" });
+  fireEvent.click(screen.getByRole("button", { name: "编辑团队资料" }));
   fireEvent.change(screen.getByLabelText(/选择头像/), {
     target: {
       files: [new File(["image"], "avatar.png", { type: "image/png" })],

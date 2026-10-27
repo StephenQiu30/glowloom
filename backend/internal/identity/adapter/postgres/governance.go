@@ -88,6 +88,17 @@ func (t *governanceTx) AvailablePlatformAdmins() (int64, error) {
 
 // ChangeUser defines the explicit governance contract.
 func (t *governanceTx) ChangeUser(u domain.User, c application.UserGovernanceChange, now time.Time) error {
+	if c.Action == "delete" {
+		deletion := &accountDeletionTx{emailAuthTx: &emailAuthTx{authTx: t.authTx}, user: u}
+		impact, err := deletion.Impact()
+		if err != nil {
+			return err
+		}
+		if len(impact.BlockingDuties) > 0 {
+			return application.ErrDeletionDuties
+		}
+		return deletion.softDelete(now)
+	}
 	values := map[string]any{"revision": gorm.Expr("revision+1"), "update_time": now}
 	revoke := false
 	switch c.Action {

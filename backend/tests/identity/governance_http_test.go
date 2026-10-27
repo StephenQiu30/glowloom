@@ -106,6 +106,42 @@ func TestGovernanceHTTPBoundary(t *testing.T) {
 	if err := tx.Raw(`SELECT reason FROM identity.authority_proposal WHERE id=?`, proposal.ID).Scan(&originalReason).Error; err != nil || originalReason != "Original grant rationale" {
 		t.Fatal("cancellation overwrote proposal rationale", err)
 	}
+	// Minimal account actions still require CSRF, current authority, CAS and an idempotency key.
+	_, deleted := verifiedTestActor(t, tx, "http-delete@example.invalid", now)
+	if err := tx.Exec(`UPDATE identity."user" SET revision=1 WHERE id=?`, deleted.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Exec(`UPDATE identity.user_session SET reauth_at=NULL,reauth_epoch=NULL WHERE account_id=?`, actor.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	deletePath := "/api/platform/users/" + deleted.ID.String() + "/delete"
+	deleteRequest := func(body, csrf, key string) *httptest.ResponseRecorder {
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, deletePath, strings.NewReader(body))
+		req.AddCookie(cookie)
+		req.Header.Set("Origin", "http://localhost:3200")
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-CSRF-Token", csrf)
+		req.Header.Set("Idempotency-Key", key)
+		out := httptest.NewRecorder()
+		router.ServeHTTP(out, req)
+		return out
+	}
+	key := uuid.NewString()
+	for _, attempt := range []struct {
+		body, csrf, key string
+		status          int
+	}{
+		{`{"expected_revision":"1"}`, "", key, 403},
+		{`{"expected_revision":"1"}`, session.CSRFToken, "", 422},
+		{`{"expected_revision":1}`, session.CSRFToken, key, 422},
+		{`{"expected_revision":"99"}`, session.CSRFToken, key, 409},
+		{`{"expected_revision":"1"}`, session.CSRFToken, key, 204},
+		{`{"expected_revision":"1"}`, session.CSRFToken, key, 204},
+	} {
+		if out := deleteRequest(attempt.body, attempt.csrf, attempt.key); out.Code != attempt.status {
+			t.Fatalf("delete HTTP: want %d got %d: %s", attempt.status, out.Code, out.Body.String())
+		}
+	}
 	if err := tx.Exec(`UPDATE identity."user" SET platform_role='creator',platform_epoch=platform_epoch+1 WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}

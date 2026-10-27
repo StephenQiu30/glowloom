@@ -1,9 +1,11 @@
 "use client";
+import { accountActionRestriction } from "@/components/governance/action-restrictions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FieldLabel } from "@/components/ui/field";
 import { useState } from "react";
 import {
   platformDisable,
+  platformDeleteUser,
   platformEnable,
   platformUnlock,
   platformRevokeSessions,
@@ -16,6 +18,7 @@ import type { ConfirmAction } from "@/components/governance/confirmation";
 import { Button } from "@/components/ui/button";
 const labels: Record<string, string> = {
   disable: "禁用账号",
+  delete: "删除账号",
   enable: "启用账号",
   unlock: "解除登录锁定",
   revoke_sessions: "撤销全部会话",
@@ -34,23 +37,37 @@ export function UserActions({
   const [resetName, setResetName] = useState(true);
   const [resetAvatar, setResetAvatar] = useState(true);
   function choose(kind: string) {
+    const simple = kind === "disable" || kind === "delete";
     onAction({
-      title: labels[kind],
+      title: simple
+        ? `${kind === "delete" ? "删除" : "禁用"}${detail.user.display_name}？`
+        : labels[kind],
+      confirmLabel: labels[kind],
+      destructive: kind === "delete" || kind === "revoke_admin",
       effect:
         kind === "password_reset"
           ? "成功表示密码恢复通知已加入邮件队列。管理员不会设置或看到用户密码。"
           : kind === "propose_admin"
             ? "目标账号需主动接受授权，接受前平台角色保持原状态。"
-            : kind === "disable"
-              ? "禁用将撤销会话并阻止登录；资料和作品保留。"
-              : kind === "profile_reset"
-                ? "仅重置所选公开资料；账号和作品保留。"
-                : "根据当前账号状态执行治理操作，并通知相关用户。",
-      reason: true,
+            : kind === "delete"
+              ? "删除后将无法登录，账号资料与作品保留，不会删除团队或团队作品。此操作不可恢复。"
+              : kind === "disable"
+                ? "禁用将撤销会话并阻止登录；资料和作品保留。"
+                : kind === "profile_reset"
+                  ? "仅重置所选公开资料；账号和作品保留。"
+                  : "根据当前账号状态执行治理操作，并通知相关用户。",
+      reason: !simple,
+      password: !simple,
       run: (reason, signal, requestID) => {
         const params = { id: detail.user.id };
         const body = { expected_revision: detail.user.revision, reason };
         const options = { signal, headers: { "Idempotency-Key": requestID } };
+        if (kind === "delete")
+          return platformDeleteUser(
+            params,
+            { expected_revision: detail.user.revision },
+            options,
+          );
         if (kind === "profile_reset")
           return platformResetProfile(
             params,
@@ -108,9 +125,7 @@ export function UserActions({
           <Button
             key={a}
             variant={
-              a === "disable" || a === "revoke_admin"
-                ? "destructive"
-                : "outline"
+              a === "delete" || a === "revoke_admin" ? "destructive" : "outline"
             }
             disabled={a === "profile_reset" && !resetName && !resetAvatar}
             onClick={() => choose(a)}
@@ -119,6 +134,11 @@ export function UserActions({
           </Button>
         ))}
       </div>
+      {detail.blocked_actions?.delete && detail.user.status !== "deleted" ? (
+        <p className="text-sm text-muted-foreground">
+          {accountActionRestriction(detail.blocked_actions.delete)}
+        </p>
+      ) : null}
       {actions.length === 0 ? <p>当前账号没有可用管理动作。</p> : null}
     </section>
   );

@@ -5,17 +5,11 @@ import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { FieldLabel } from "@/components/ui/field";
 import { useEffect, useState } from "react";
 import {
-  accountListInvitations,
-  createAccountInvitation,
-  resendAccountInvitation,
-  revokeAccountInvitation,
   teamListInvitations,
   createTeamInvitation,
   resendTeamInvitation,
   revokeTeamInvitation,
   teamAuthorityProposals,
-  platformProposals,
-  cancelProposal,
   cancelTeamTransfer,
 } from "@/api/identity";
 import { useReadBoundary } from "@/components/governance/use-read-boundary";
@@ -32,7 +26,7 @@ export function GovernanceLists({
   reload,
   onAction,
 }: {
-  teamID?: string;
+  teamID: string;
   reload: number;
   onAction: (a: ConfirmAction) => void;
 }) {
@@ -66,12 +60,8 @@ export function GovernanceLists({
     };
     const opts = { signal: c.signal };
     Promise.allSettled([
-      teamID
-        ? teamListInvitations({ id: teamID, ...filter }, opts)
-        : accountListInvitations(filter, opts),
-      teamID
-        ? teamAuthorityProposals({ id: teamID, ...proposalFilter }, opts)
-        : platformProposals(proposalFilter, opts),
+      teamListInvitations({ id: teamID, ...filter }, opts),
+      teamAuthorityProposals({ id: teamID, ...proposalFilter }, opts),
     ]).then(([i, p]) => {
       if (c.signal.aborted) return;
       if (i.status === "fulfilled") {
@@ -93,26 +83,21 @@ export function GovernanceLists({
   }, [teamID, reload, status, proposalStatus, retry]);
   return (
     <section className="grid gap-4">
-      <h2>{teamID ? "团队邀请与转交" : "账号邀请与平台授权"}</h2>
+      <h2>{"团队邀请与转交"}</h2>
       <form
         className="flex flex-wrap items-end gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           onAction({
-            title: teamID ? "邀请团队成员" : "邀请普通账号",
+            title: "邀请团队成员",
             effect:
               "请求成功表示邀请已创建并进入通知队列；邮件送达尚未确认。受邀者验证邮箱后需主动接受。",
             run: (_r, signal, requestID) =>
-              teamID
-                ? createTeamInvitation(
-                    { id: teamID },
-                    { email: email.trim(), team_role: role },
-                    { signal, headers: { "Idempotency-Key": requestID } },
-                  )
-                : createAccountInvitation(
-                    { email: email.trim() },
-                    { signal, headers: { "Idempotency-Key": requestID } },
-                  ),
+              createTeamInvitation(
+                { id: teamID },
+                { email: email.trim(), team_role: role },
+                { signal, headers: { "Idempotency-Key": requestID } },
+              ),
           });
         }}
       >
@@ -125,7 +110,7 @@ export function GovernanceLists({
             onChange={(e) => setEmail(e.target.value)}
           />
         </FieldLabel>
-        {teamID ? (
+        {
           <NativeSelect
             aria-label="邀请团队角色"
             value={role}
@@ -136,7 +121,7 @@ export function GovernanceLists({
               团队管理员
             </NativeSelectOption>
           </NativeSelect>
-        ) : null}
+        }
         <Button>发送邀请</Button>
       </form>
       <NativeSelect
@@ -195,27 +180,14 @@ export function GovernanceLists({
                         : "此邀请立即失效。",
                       reason: !resend,
                       run: (reason, signal) =>
-                        teamID
-                          ? (resend
-                              ? resendTeamInvitation
-                              : revokeTeamInvitation)(
-                              { id: teamID, iid: i.id! },
-                              {
-                                expected_revision: i.revision,
-                                ...(!resend ? { reason } : {}),
-                              },
-                              { signal },
-                            )
-                          : (resend
-                              ? resendAccountInvitation
-                              : revokeAccountInvitation)(
-                              { id: i.id! },
-                              {
-                                expected_revision: i.revision,
-                                ...(!resend ? { reason } : {}),
-                              },
-                              { signal },
-                            ),
+                        (resend ? resendTeamInvitation : revokeTeamInvitation)(
+                          { id: teamID, iid: i.id! },
+                          {
+                            expected_revision: i.revision,
+                            ...(!resend ? { reason } : {}),
+                          },
+                          { signal },
+                        ),
                     })
                   }
                 >
@@ -240,9 +212,7 @@ export function GovernanceLists({
               };
               await read(
                 (signal) =>
-                  teamID
-                    ? teamListInvitations({ id: teamID, ...f }, { signal })
-                    : accountListInvitations(f, { signal }),
+                  teamListInvitations({ id: teamID, ...f }, { signal }),
                 (p) =>
                   setInvites((v) => ({
                     ...p,
@@ -310,17 +280,11 @@ export function GovernanceLists({
                   effect: "目标用户将无法接受该提议。",
                   reason: true,
                   run: (reason, signal) =>
-                    teamID
-                      ? cancelTeamTransfer(
-                          { id: teamID, pid: p.id! },
-                          { expected_revision: p.revision, reason },
-                          { signal },
-                        )
-                      : cancelProposal(
-                          { id: p.id! },
-                          { expected_revision: p.revision, reason },
-                          { signal },
-                        ),
+                    cancelTeamTransfer(
+                      { id: teamID, pid: p.id! },
+                      { expected_revision: p.revision, reason },
+                      { signal },
+                    ),
                 })
               }
             >
@@ -343,9 +307,7 @@ export function GovernanceLists({
               };
               await read(
                 (signal) =>
-                  teamID
-                    ? teamAuthorityProposals({ id: teamID, ...f }, { signal })
-                    : platformProposals(f, { signal }),
+                  teamAuthorityProposals({ id: teamID, ...f }, { signal }),
                 (p) =>
                   setProposals((v) => ({
                     ...p,

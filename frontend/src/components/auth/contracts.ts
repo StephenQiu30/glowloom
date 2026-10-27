@@ -21,6 +21,7 @@ export function authErrorMessage(error: unknown) {
     state_conflict: "当前状态不允许此操作，请刷新后检查。",
     team_creation_closed: "团队创建暂未开放。",
     team_capacity_exceeded: "您已达到创建或加入团队的数量限制。",
+    deletion_duties: "该账号仍承担最后管理员职责，请先在对应管理页面完成交接。",
     last_platform_administrator:
       "平台必须保留一位可用管理员，请先完成管理交接。",
     export_limit_exceeded:

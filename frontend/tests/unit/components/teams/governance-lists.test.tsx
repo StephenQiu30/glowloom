@@ -2,6 +2,7 @@ import { render } from "../../../feedback";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, expect, it, vi } from "vitest";
+import { AccountGovernanceLists } from "@/app/users/_components/account-governance-lists";
 import { GovernanceLists } from "@/components/teams/governance-lists";
 import {
   Confirmation,
@@ -16,7 +17,11 @@ function View({ teamID }: { teamID?: string }) {
   const [action, setAction] = useState<ConfirmAction | null>(null);
   return (
     <>
-      <GovernanceLists teamID={teamID} reload={0} onAction={setAction} />
+      {teamID ? (
+        <GovernanceLists teamID={teamID} reload={0} onAction={setAction} />
+      ) : (
+        <AccountGovernanceLists reload={0} onAction={setAction} />
+      )}
       <Confirmation
         key={action?.title ?? "closed"}
         action={action}

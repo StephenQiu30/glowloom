@@ -136,10 +136,18 @@ func (s *Governance) notify(tx GovernanceTx, recipient, template string, now tim
 }
 func (s *Governance) mutateUser(ctx context.Context, actor Principal, target uuid.UUID, revision int64, reason string, change UserGovernanceChange) error {
 	reason = strings.TrimSpace(reason)
+	simple := change.Action == "disable" || change.Action == "delete"
+	if simple && target == actor.ID {
+		return ErrInvalidGovernance
+	}
+	if simple && reason == "" {
+		// A structured action supplies audit context without an arbitrary form field.
+		reason = "platform account " + change.Action
+	}
 	if target == uuid.Nil || revision < 1 || !validGovernanceReason(reason) {
 		return ErrInvalidGovernance
 	}
-	return s.store.GovernanceTransaction(ctx, actor, true, s.now, func(tx GovernanceTx) error {
+	return s.store.GovernanceTransaction(ctx, actor, !simple, s.now, func(tx GovernanceTx) error {
 		now := s.now().UTC()
 		if err := tx.RequirePlatform(); err != nil {
 			return err
@@ -168,7 +176,7 @@ func (s *Governance) mutateUser(ctx context.Context, actor Principal, target uui
 		if u.Revision != revision {
 			return domain.ErrRevisionConflict
 		}
-		if u.Status == domain.StatusDisabled && change.Action != "enable" && change.Action != "revoke_admin" && change.Action != "profile_reset" {
+		if u.Status == domain.StatusDisabled && change.Action != "enable" && change.Action != "revoke_admin" && change.Action != "profile_reset" && change.Action != "delete" {
 			return ErrGovernanceConflict
 		}
 		if change.Action == "enable" && u.Status != domain.StatusDisabled {
@@ -177,7 +185,7 @@ func (s *Governance) mutateUser(ctx context.Context, actor Principal, target uui
 		if change.Action == "revoke_admin" && u.PlatformRole != "platform_admin" {
 			return ErrGovernanceConflict
 		}
-		if (change.Action == "disable" || change.Action == "revoke_admin") && u.PlatformRole == "platform_admin" && u.Status == domain.StatusActive && !u.EmailVerifiedAt.IsZero() {
+		if (change.Action == "disable" || change.Action == "delete" || change.Action == "revoke_admin") && u.PlatformRole == "platform_admin" && u.Status == domain.StatusActive && !u.EmailVerifiedAt.IsZero() {
 			n, err := tx.AvailablePlatformAdmins()
 			if err != nil {
 				return err

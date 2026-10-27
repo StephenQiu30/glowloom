@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 export function AdminNavigation({
   active,
 }: {
-  active: "users" | "providers" | "models" | "settings";
+  active: "users" | "teams" | "providers" | "models" | "settings";
 }) {
   const links = [
     { id: "users", href: "/users", label: "用户管理" },
+    { id: "teams", href: "/platform/teams", label: "团队管理" },
     { id: "providers", href: "/providers", label: "AI 服务接入" },
     { id: "models", href: "/models", label: "模型管理" },
     { id: "settings", href: "/platform/settings", label: "平台设置" },
@@ -68,6 +69,7 @@ export function SelectionBar({
   return (
     <div
       className="flex min-h-11 flex-wrap items-center gap-2"
+      role="group"
       aria-label="批量操作"
     >
       {count ? (

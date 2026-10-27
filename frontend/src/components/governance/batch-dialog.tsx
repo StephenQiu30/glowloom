@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +41,8 @@ export function BatchDialog<T extends { id?: string }>({
   const [password, setPassword] = useState("");
   const ready = batch.entries.filter((e) => e.status === "ready").length;
   const failed = batch.entries.filter((e) => e.status === "failed").length;
+  const compact = batch.action?.compact && !batch.submitted;
+  const skipped = batch.entries.filter((e) => e.status === "skipped").length;
   const columns: DataTableColumn<BatchEntry<T>>[] = [
     {
       id: "target",
@@ -72,7 +75,10 @@ export function BatchDialog<T extends { id?: string }>({
       }}
     >
       <DialogContent
-        className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden sm:max-w-2xl"
+        className={cn(
+          "flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden",
+          compact ? "sm:max-w-md" : "sm:max-w-2xl",
+        )}
         onCloseAutoFocus={(event) => {
           if (batch.restoreFocus()) event.preventDefault();
         }}
@@ -87,14 +93,25 @@ export function BatchDialog<T extends { id?: string }>({
             {batch.entries.length} 项 ·{" "}
             {batch.submitted
               ? `成功 ${batch.entries.filter((e) => e.status === "success").length} / 已提交 ${batch.entries.filter((e) => e.status === "submitted").length} / 失败 ${failed} / 结果未知 ${batch.entries.filter((e) => e.status === "unknown").length} / 未执行 ${batch.entries.filter((e) => e.status === "skipped").length}`
-              : `可执行 ${ready} 项`}
+              : `可执行 ${ready} 项${skipped ? ` · 跳过 ${skipped} 项` : ""}${failed ? ` · 检查失败 ${failed} 项` : ""}`}
           </p>
-          <DataTable
-            label="批量操作逐项结果"
-            columns={columns}
-            data={batch.entries}
-            loading={batch.busy && !batch.entries.length}
-          />
+          {!compact ? (
+            <DataTable
+              label="批量操作逐项结果"
+              columns={columns}
+              data={batch.entries}
+              loading={batch.busy && !batch.entries.length}
+            />
+          ) : failed || (!ready && !batch.busy) ? (
+            <Alert>
+              <AlertDescription>
+                {batch.entries
+                  .filter((e) => e.status !== "ready")
+                  .map((e) => `${e.label}：${e.message}`)
+                  .join("；")}
+              </AlertDescription>
+            </Alert>
+          ) : null}
           {batch.error ? (
             <Alert variant="destructive">
               <AlertDescription>{batch.error}</AlertDescription>
@@ -144,7 +161,9 @@ export function BatchDialog<T extends { id?: string }>({
           </form>
           {batch.submitted ? (
             <p className="text-xs text-muted-foreground">
-              成功项已移出选择。结果未知时先查回执，恢复使用原请求标识；失败项重新读取并确认后再执行。
+              {batch.action?.recover
+                ? "成功项已移出选择。结果未知时可查询回执；失败项重新读取后再确认。"
+                : "成功项已移出选择。结果未知时请刷新页面核对状态，避免重复提交。"}
             </p>
           ) : null}
         </div>
@@ -156,7 +175,7 @@ export function BatchDialog<T extends { id?: string }>({
               setPassword("");
             }}
           >
-            {batch.busy ? "关闭并稍后查看" : "关闭"}
+            {batch.busy ? "关闭并稍后查看" : compact ? "取消" : "关闭"}
           </Button>
           {batch.unresolved && batch.action?.recover ? (
             <Button
@@ -179,7 +198,7 @@ export function BatchDialog<T extends { id?: string }>({
               重新读取失败项（{failed}）
             </Button>
           ) : null}
-          {!batch.submitted || batch.unresolved ? (
+          {!batch.submitted || (batch.unresolved && batch.action?.recover) ? (
             <Button
               form={id}
               type="submit"

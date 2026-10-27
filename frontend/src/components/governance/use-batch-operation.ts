@@ -14,6 +14,7 @@ export type BatchAction<T> = {
   destructive?: boolean;
   reason?: boolean;
   password?: boolean;
+  compact?: boolean;
   label: (row: T) => string;
   prepare: (
     row: T,
@@ -127,7 +128,7 @@ export function useBatchOperation<T extends { id?: string }>(
     }
   }
   async function run(reason: string, password: string, replay = false) {
-    if (!action || lock.current) return;
+    if (!action || lock.current || (replay && !action.recover)) return;
     lock.current = true;
     setBusy(true);
     setError("");

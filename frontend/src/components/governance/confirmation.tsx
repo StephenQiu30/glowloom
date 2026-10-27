@@ -1,5 +1,5 @@
 "use client";
-import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FieldLabel } from "@/components/ui/field";
 import { useEffect, useRef, useState } from "react";
 import { reauthenticate } from "@/api/identity";
@@ -19,6 +19,8 @@ export type ConfirmAction = {
   effect: string;
   reason?: boolean;
   password?: boolean;
+  confirmLabel?: string;
+  destructive?: boolean;
   run: (
     reason: string,
     signal: AbortSignal,
@@ -126,7 +128,11 @@ export function Confirmation({
               />
             </FieldLabel>
           ) : null}
-          {error ? <FeedbackToast message={error} /> : null}
+          {error ? (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
           <div className="flex flex-wrap justify-end gap-2">
             <Button
               type="button"
@@ -137,6 +143,7 @@ export function Confirmation({
               取消
             </Button>
             <Button
+              variant={action?.destructive ? "destructive" : "default"}
               disabled={
                 conflicted ||
                 pending ||
@@ -144,7 +151,7 @@ export function Confirmation({
                 (!password && action?.password !== false)
               }
             >
-              {pending ? "正在确认…" : "确认操作"}
+              {pending ? "正在处理…" : (action?.confirmLabel ?? "确认操作")}
             </Button>
           </div>
         </form>

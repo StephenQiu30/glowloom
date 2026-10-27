@@ -64,6 +64,7 @@ type PlatformUserDetailView struct {
 	User           PlatformUserView     `json:"user" binding:"required"`
 	Teams          []TeamMembershipView `json:"teams" binding:"required"`
 	AllowedActions []string             `json:"allowed_actions" binding:"required"`
+	BlockedActions map[string]string    `json:"blocked_actions,omitempty"`
 }
 
 func platformUserView(u application.UserSummary) PlatformUserView {
@@ -193,5 +194,5 @@ func (h *PlatformDirectoryHandler) detail(c *gin.Context) {
 		teams = append(teams, TeamMembershipView{TeamID: m.TeamID, Role: m.Role, Status: m.Status})
 	}
 	// Governance actions remain closed until atomic team freeze and grants exist.
-	c.JSON(200, PlatformUserDetailView{User: platformUserView(detail.User), Teams: teams, AllowedActions: detail.AllowedActions})
+	c.JSON(200, PlatformUserDetailView{User: platformUserView(detail.User), Teams: teams, AllowedActions: detail.AllowedActions, BlockedActions: detail.BlockedActions})
 }

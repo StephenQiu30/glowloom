@@ -77,9 +77,13 @@ func (s *PlatformDirectoryStore) ReadUserDetail(ctx context.Context, actor appli
 		if r.RowsAffected != 1 {
 			return domain.ErrUserNotFound
 		}
-		// Actions advertise eligible workflows; submission still requires recent proof and CAS.
+		// Actions advertise eligible workflows; submission rechecks authority and CAS.
 		u := detail.User
 		detail.AllowedActions = []string{}
+		detail.BlockedActions = map[string]string{}
+		if u.Status == "deleted" {
+			detail.BlockedActions["delete"] = "account_deleted"
+		}
 		if u.Status == "active" || u.Status == "disabled" {
 			detail.AllowedActions = append(detail.AllowedActions, "profile_reset")
 			if u.Verified {
@@ -90,11 +94,19 @@ func (s *PlatformDirectoryStore) ReadUserDetail(ctx context.Context, actor appli
 				return err
 			}
 			last := u.PlatformRole == "platform_admin" && u.Status == "active" && u.Verified && admins <= 1
+			if last {
+				detail.BlockedActions["delete"] = "last_platform_admin"
+				detail.BlockedActions["disable"] = "last_platform_admin"
+			}
+			if u.ID == actor.ID {
+				detail.BlockedActions["delete"] = "current_account"
+				detail.BlockedActions["disable"] = "current_account"
+			}
 			if u.Status == "disabled" {
 				detail.AllowedActions = append(detail.AllowedActions, "enable")
 			} else {
 				detail.AllowedActions = append(detail.AllowedActions, "unlock", "revoke_sessions")
-				if !last {
+				if !last && u.ID != actor.ID {
 					detail.AllowedActions = append(detail.AllowedActions, "disable")
 				}
 				if u.PlatformRole == "creator" && u.Verified && u.ID != actor.ID {
@@ -109,6 +121,17 @@ func (s *PlatformDirectoryStore) ReadUserDetail(ctx context.Context, actor appli
 			}
 			if u.PlatformRole == "platform_admin" && !last {
 				detail.AllowedActions = append(detail.AllowedActions, "revoke_admin")
+			}
+			if !last && u.ID != actor.ID {
+				var duties bool
+				if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM workspace.team_member m WHERE m.user_id=? AND m.role='team_admin' AND m.status='active' AND NOT EXISTS(SELECT 1 FROM workspace.team_member other JOIN identity."user" u ON u.id=other.user_id WHERE other.team_id=m.team_id AND other.user_id<>m.user_id AND other.role='team_admin' AND other.status='active' AND u.status='active' AND NOT u.is_delete AND u.email_verified_at IS NOT NULL))`, u.ID).Scan(&duties).Error; err != nil {
+					return err
+				}
+				if !duties {
+					detail.AllowedActions = append(detail.AllowedActions, "delete")
+				} else {
+					detail.BlockedActions["delete"] = "deletion_duties"
+				}
 			}
 		}
 		if err := tx.Table("workspace.team_member").Select("team_id,role,status").Where("user_id=?", id).Order("team_id").Scan(&detail.Teams).Error; err != nil {
