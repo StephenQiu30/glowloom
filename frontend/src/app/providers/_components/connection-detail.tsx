@@ -45,9 +45,13 @@ import {
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useEffect, useState, useId } from "react";
 import { Button } from "@/components/ui/button";
 import { isCredentialReceipt } from "@/components/catalog/credential-receipt";
@@ -584,35 +588,42 @@ export function ConnectionDetail({
                     <FieldLabel htmlFor={`${formFieldId}-field-2`}>
                       <span>目标预设版本</span>
                     </FieldLabel>
-                    <NativeSelect
-                      id={`${formFieldId}-field-2`}
-                      className="mt-1 h-10 w-full"
+                    <Select
                       value={target}
-                      onChange={(e) => {
-                        setTarget(e.target.value);
+                      onValueChange={(value) => {
+                        setTarget(value);
                         setPreview(null);
                       }}
                     >
-                      <NativeSelectOption value="">
-                        选择同一预设的新版本
-                      </NativeSelectOption>
-                      {presets
-                        .filter(
-                          (p) =>
-                            !p.archived &&
-                            !p.emergency_disabled &&
-                            p.document?.config?.adapter_key ===
-                              provider?.adapter_key,
-                        )
-                        .map((p) => (
-                          <NativeSelectOption
-                            key={p.version_id}
-                            value={p.version_id}
-                          >
-                            {p.document?.name} v{p.version}
-                          </NativeSelectOption>
-                        ))}
-                    </NativeSelect>
+                      <SelectTrigger
+                        id={`${formFieldId}-field-2`}
+                        className="mt-1 h-10 w-full"
+                      >
+                        <SelectValue placeholder={"选择同一预设的新版本"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {presets
+                            .filter(
+                              (p) =>
+                                !p.archived &&
+                                !p.emergency_disabled &&
+                                p.document?.config?.adapter_key ===
+                                  provider?.adapter_key,
+                            )
+                            .map((p) =>
+                              p.version_id ? (
+                                <SelectItem
+                                  key={p.version_id}
+                                  value={p.version_id}
+                                >
+                                  {p.document?.name} v{p.version}
+                                </SelectItem>
+                              ) : null,
+                            )}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
                   </Field>
                   <Button
                     variant="outline"

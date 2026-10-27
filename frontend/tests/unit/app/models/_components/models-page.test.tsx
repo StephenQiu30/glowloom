@@ -47,10 +47,9 @@ it("连接详情跳转后预选连接，只展示该连接的已加载模型并�
     screen.getByRole("link", { name: "查看全部模型" }).getAttribute("href"),
   ).toBe("/models");
   fireEvent.click(screen.getByRole("button", { name: "添加模型" }));
-  expect(screen.getByLabelText("平台连接")).toHaveProperty(
-    "value",
-    "connection",
-  );
+  expect(
+    screen.getByRole("combobox", { name: "平台连接" }).textContent,
+  ).toContain("目标连接");
   expect(api.models.mock.calls[0][0]).not.toHaveProperty("provider_id");
 });
 

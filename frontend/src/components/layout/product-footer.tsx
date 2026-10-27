@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 /** Quiet legal footer; never competes with page actions. */
 export function ProductFooter() {
   return (
-    <footer className="product-footer" aria-label="法律信息">
+    <footer className="product-footer">
       <span className="mr-auto text-xs text-muted-foreground">
         © {new Date().getFullYear()} 织光 Glowloom
       </span>

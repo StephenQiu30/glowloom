@@ -26,9 +26,13 @@ import {
   subscribeScopeDenied,
 } from "@/lib/request";
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 export const SpaceContext = createContext<{
   spaces: API.SpaceView[];
   selected: API.SpaceView | null;
@@ -202,23 +206,25 @@ export function SpaceSwitcher({ compact = false }: { compact?: boolean }) {
   if (!session) return null;
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
-      <NativeSelect
-        className="max-w-48 truncate"
-        aria-label="当前创作空间"
+      <Select
         disabled={pending || !selected}
         value={selected?.id ?? ""}
-        onChange={(e) => void select(e.target.value)}
+        onValueChange={(selectedValue) => void select(selectedValue)}
       >
-        {!selected ? (
-          <NativeSelectOption value="">正在读取空间</NativeSelectOption>
-        ) : null}
-        {spaces.map((s) => (
-          <NativeSelectOption key={s.id} value={s.id}>
-            {s.name}
-            {!s.writable ? "（只读）" : ""}
-          </NativeSelectOption>
-        ))}
-      </NativeSelect>
+        <SelectTrigger className="max-w-48 truncate" aria-label="当前创作空间">
+          <SelectValue placeholder="正在读取空间" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {spaces.map((s) => (
+              <SelectItem key={s.id} value={s.id}>
+                {s.name}
+                {!s.writable ? "（只读）" : ""}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
       {!compact && (
         <>
           <Link href="/teams" className="text-sm underline">

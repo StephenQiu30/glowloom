@@ -18,6 +18,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ProjectPicker } from "@/components/projects/project-picker";
 import { type Project } from "@/components/projects/project";
 import { ProjectMediaPreview } from "@/components/media/project-media";
@@ -105,24 +106,23 @@ export function GenerationDialog({
           选择模型与参考素材，确认报价后开始生成。任务保留在所选项目中。
         </DialogDescription>
         {closeFailed && (
-          <div
-            role="alertdialog"
-            aria-label="保存尚未确认"
-            className="rounded border p-3"
-          >
-            <p>
-              保存尚未确认。可继续等待或重试；明确离开会保留已有本地恢复分支，未决生成仍需下次核对。
-            </p>
-            <Button disabled={closing} onClick={() => void closeSaved()}>
-              重试保存并关闭
-            </Button>
-            <Button variant="outline" onClick={() => setCloseFailed(false)}>
-              继续编辑
-            </Button>
-            <Button variant="ghost" onClick={onClose}>
-              保留恢复分支并离开
-            </Button>
-          </div>
+          <Alert>
+            <AlertTitle>保存尚未确认</AlertTitle>
+            <AlertDescription>
+              离开后可从本地恢复，未确认的生成结果需稍后核对。
+            </AlertDescription>
+            <div className="col-span-full flex flex-wrap justify-end gap-2">
+              <Button disabled={closing} onClick={() => void closeSaved()}>
+                重试保存并关闭
+              </Button>
+              <Button variant="outline" onClick={() => setCloseFailed(false)}>
+                继续编辑
+              </Button>
+              <Button variant="ghost" onClick={onClose}>
+                保留恢复分支并离开
+              </Button>
+            </div>
+          </Alert>
         )}
         {!seed.project && (
           <ProjectPicker

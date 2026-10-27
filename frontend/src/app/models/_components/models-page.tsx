@@ -4,9 +4,13 @@ import { ContentState } from "@/components/layout/content-state";
 
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import { useEffect, useState, useId } from "react";
 import Link from "next/link";
@@ -273,53 +277,71 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
                 <FieldLabel htmlFor={`${formFieldId}-field-1`}>
                   <span>平台连接</span>
                 </FieldLabel>
-                <NativeSelect
-                  id={`${formFieldId}-field-1`}
+                <Select
                   required
-                  className="h-10 w-full"
                   value={providerID}
-                  onChange={(e) => setProviderID(e.target.value)}
+                  onValueChange={(value) => setProviderID(value)}
                 >
-                  <NativeSelectOption value="">选择连接</NativeSelectOption>
-                  {providers
-                    .filter((p) =>
-                      ["volcengine_ark", "openrouter"].includes(
-                        p.provider?.adapter_key ?? "",
-                      ),
-                    )
-                    .map((p) => (
-                      <NativeSelectOption
-                        key={p.provider?.id}
-                        value={p.provider?.id}
-                      >
-                        {p.provider?.name}
-                      </NativeSelectOption>
-                    ))}
-                </NativeSelect>
+                  <SelectTrigger
+                    id={`${formFieldId}-field-1`}
+                    className="h-10 w-full"
+                  >
+                    <SelectValue placeholder={"选择连接"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {providers
+                        .filter((p) =>
+                          ["volcengine_ark", "openrouter"].includes(
+                            p.provider?.adapter_key ?? "",
+                          ),
+                        )
+                        .map((p) =>
+                          p.provider?.id ? (
+                            <SelectItem
+                              key={p.provider?.id}
+                              value={p.provider?.id}
+                            >
+                              {p.provider?.name}
+                            </SelectItem>
+                          ) : null,
+                        )}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
               </Field>
               <Field>
                 <FieldLabel htmlFor={`${formFieldId}-field-2`}>
                   <span>生成能力</span>
                 </FieldLabel>
-                <NativeSelect
-                  id={`${formFieldId}-field-2`}
+                <Select
                   key={providerID}
                   name="capability"
                   required
-                  className="h-10 w-full"
                   defaultValue=""
                 >
-                  <NativeSelectOption value="">选择能力</NativeSelectOption>
-                  {supported.map((c) => (
-                    <NativeSelectOption key={c.key} value={c.key}>
-                      {c.key === "video.generate"
-                        ? "视频生成"
-                        : c.key === "image.generate"
-                          ? "图片生成"
-                          : "文本生成"}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                  <SelectTrigger
+                    id={`${formFieldId}-field-2`}
+                    className="h-10 w-full"
+                  >
+                    <SelectValue placeholder={"选择能力"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {supported.map((c) =>
+                        c.key ? (
+                          <SelectItem key={c.key} value={c.key}>
+                            {c.key === "video.generate"
+                              ? "视频生成"
+                              : c.key === "image.generate"
+                                ? "图片生成"
+                                : "文本生成"}
+                          </SelectItem>
+                        ) : null,
+                      )}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
               </Field>
               <Field>
                 <FieldLabel htmlFor={`${formFieldId}-field-3`}>

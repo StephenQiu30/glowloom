@@ -7,9 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { ParamField } from "./contracts";
 import type { PromptDraft } from "./prompt-document";
 
@@ -113,19 +117,24 @@ export function GenerationParameters({
                   ))}
                 </ToggleGroup>
               ) : field.enum ? (
-                <NativeSelect
-                  id={fieldID}
+                <Select
                   disabled={disabled}
                   value={String(params[field.field] ?? "")}
-                  onChange={(event) => update(event.target.value)}
+                  onValueChange={(selectedValue) => update(selectedValue)}
                 >
-                  <NativeSelectOption value="">请选择</NativeSelectOption>
-                  {field.enum.map((value) => (
-                    <NativeSelectOption key={String(value)} value={value}>
-                      {value}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                  <SelectTrigger id={fieldID} className="w-full">
+                    <SelectValue placeholder={"请选择"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {field.enum.map((value) => (
+                        <SelectItem key={String(value)} value={String(value)}>
+                          {value}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
               ) : field.type === "boolean" ? (
                 <Checkbox
                   id={fieldID}

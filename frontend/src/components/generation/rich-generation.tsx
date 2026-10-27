@@ -45,9 +45,13 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   useCallback,
   useEffect,
@@ -1722,15 +1726,12 @@ function EditorWorkspace({
                 <FieldLabel htmlFor={`${formFieldId}-field-1`}>
                   <span>生成模型</span>
                 </FieldLabel>
-                <NativeSelect
-                  id={`${formFieldId}-field-1`}
-                  aria-label="生成模型"
-
+                <Select
                   disabled={frozen || !session}
                   value={draft.modelVersion ?? ""}
-                  onChange={(e) => {
+                  onValueChange={(selectedValue) => {
                     const m = models.find(
-                      (m) => m.current_version?.id === e.target.value,
+                      (m) => m.current_version?.id === selectedValue,
                     );
                     if (m?.current_version?.id)
                       selectMode(
@@ -1739,44 +1740,65 @@ function EditorWorkspace({
                       );
                   }}
                 >
-                  <NativeSelectOption value="">请选择模型</NativeSelectOption>
-                  {models.map((m) => (
-                    <NativeSelectOption
-                      key={m.id}
-                      value={m.current_version?.id}
-                      disabled={
-                        m.status !== "active" ||
-                        m.provider_status !== "active" ||
-                        !m.credential_present
-                      }
-                    >
-                      {m.display_name}
-                      {m.status !== "active" || !m.credential_present
-                        ? " · 当前不可用"
-                        : ""}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                  <SelectTrigger
+                    id={`${formFieldId}-field-1`}
+                    aria-label="生成模型"
+                    className="w-full"
+                  >
+                    <SelectValue placeholder={"请选择模型"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {models.map((m) =>
+                        m.current_version?.id ? (
+                          <SelectItem
+                            key={m.id}
+                            value={m.current_version?.id}
+                            disabled={
+                              m.status !== "active" ||
+                              m.provider_status !== "active" ||
+                              !m.credential_present
+                            }
+                          >
+                            {m.display_name}
+                            {m.status !== "active" || !m.credential_present
+                              ? " · 当前不可用"
+                              : ""}
+                          </SelectItem>
+                        ) : null,
+                      )}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
               </Field>
               <Field data-disabled={frozen || !model || !session}>
                 <FieldLabel htmlFor={`${formFieldId}-field-2`}>
                   <span>生成模式</span>
                 </FieldLabel>
-                <NativeSelect
-                  id={`${formFieldId}-field-2`}
-                  aria-label="生成模式"
-
+                <Select
                   disabled={frozen || !model || !session}
                   value={draft.mode ?? ""}
-                  onChange={(e) =>
-                    selectMode(draft.modelVersion!, e.target.value)
+                  onValueChange={(selectedValue) =>
+                    selectMode(draft.modelVersion!, selectedValue)
                   }
                 >
-                  <NativeSelectOption value="">请选择模式</NativeSelectOption>
-                  {model?.current_version?.modes?.map((m) => (
-                    <NativeSelectOption key={m}>{m}</NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                  <SelectTrigger
+                    id={`${formFieldId}-field-2`}
+                    aria-label="生成模式"
+                    className="w-full"
+                  >
+                    <SelectValue placeholder={"请选择模式"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {model?.current_version?.modes?.map((m) => (
+                        <SelectItem key={m} value={m}>
+                          {m}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
               </Field>
             </div>
             <div className="min-h-32 rounded-lg border p-3 text-base [&_.tiptap]:min-h-24 [&_.tiptap]:outline-none">

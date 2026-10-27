@@ -36,9 +36,13 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useEffect, useRef, useState } from "react";
 import { PageLayout } from "@/components/layout/page-layout";
 import { listPlatformUsers, getPlatformUser } from "@/api/identity";
@@ -292,29 +296,45 @@ function UserAdministration() {
           maxLength={100}
           className="max-w-sm"
         />
-        <NativeSelect
+        <Select
           disabled={locked}
-          aria-label="用户状态筛选"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
+          value={status || "all"}
+          onValueChange={(value) => setStatus(value === "all" ? "" : value)}
         >
-          <NativeSelectOption value="">全部状态</NativeSelectOption>
-          <NativeSelectOption value="active">启用</NativeSelectOption>
-          <NativeSelectOption value="disabled">禁用</NativeSelectOption>
-          <NativeSelectOption value="deleted">已注销</NativeSelectOption>
-        </NativeSelect>
-        <NativeSelect
+          <SelectTrigger
+            aria-label="用户状态筛选"
+            className="max-w-full min-w-28"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value="all">全部状态</SelectItem>
+              <SelectItem value="active">启用</SelectItem>
+              <SelectItem value="disabled">禁用</SelectItem>
+              <SelectItem value="deleted">已注销</SelectItem>
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+        <Select
           disabled={locked}
-          aria-label="平台角色筛选"
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
+          value={role || "all"}
+          onValueChange={(value) => setRole(value === "all" ? "" : value)}
         >
-          <NativeSelectOption value="">全部角色</NativeSelectOption>
-          <NativeSelectOption value="creator">创作者</NativeSelectOption>
-          <NativeSelectOption value="platform_admin">
-            平台管理员
-          </NativeSelectOption>
-        </NativeSelect>
+          <SelectTrigger
+            aria-label="平台角色筛选"
+            className="max-w-full min-w-36"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value="all">全部角色</SelectItem>
+              <SelectItem value="creator">创作者</SelectItem>
+              <SelectItem value="platform_admin">平台管理员</SelectItem>
+            </SelectGroup>
+          </SelectContent>
+        </Select>
         <Collapsible open={advanced} onOpenChange={setAdvanced}>
           <CollapsibleTrigger asChild>
             <Button type="button" variant="ghost">
@@ -323,15 +343,23 @@ function UserAdministration() {
           </CollapsibleTrigger>
           <CollapsibleContent className="flex flex-wrap gap-2 pt-3">
             {" "}
-            <NativeSelect
-              aria-label="邮箱验证筛选"
-              value={verified}
-              onChange={(e) => setVerified(e.target.value)}
+            <Select
+              value={verified || "all"}
+              onValueChange={(value) =>
+                setVerified(value === "all" ? "" : value)
+              }
             >
-              <NativeSelectOption value="">全部验证状态</NativeSelectOption>
-              <NativeSelectOption value="true">邮箱已验证</NativeSelectOption>
-              <NativeSelectOption value="false">邮箱未验证</NativeSelectOption>
-            </NativeSelect>
+              <SelectTrigger aria-label="邮箱验证筛选" className="max-w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="all">全部验证状态</SelectItem>
+                  <SelectItem value="true">邮箱已验证</SelectItem>
+                  <SelectItem value="false">邮箱未验证</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
             <Input
               type="datetime-local"
               aria-label="注册时间起"
@@ -344,18 +372,17 @@ function UserAdministration() {
               value={to}
               onChange={(e) => setTo(e.target.value)}
             />
-            <NativeSelect
-              aria-label="注册时间排序"
-              value={order}
-              onChange={(e) => setOrder(e.target.value)}
-            >
-              <NativeSelectOption value="created_desc">
-                最新注册优先
-              </NativeSelectOption>
-              <NativeSelectOption value="created_asc">
-                最早注册优先
-              </NativeSelectOption>
-            </NativeSelect>
+            <Select value={order} onValueChange={(value) => setOrder(value)}>
+              <SelectTrigger aria-label="注册时间排序" className="max-w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="created_desc">最新注册优先</SelectItem>
+                  <SelectItem value="created_asc">最早注册优先</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           </CollapsibleContent>
         </Collapsible>
         <Button disabled={locked}>查询</Button>

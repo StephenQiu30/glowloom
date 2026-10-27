@@ -1,8 +1,8 @@
 "use client";
 import { ContentState } from "@/components/layout/content-state";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
-import { FieldLabel } from "@/components/ui/field";
-import { useRef, useState } from "react";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { useId, useRef, useState } from "react";
 import Link from "next/link";
 import { createTeam } from "@/api/identity";
 import { useSpace } from "@/components/spaces/space-context";
@@ -10,6 +10,7 @@ import { authErrorMessage } from "@/components/auth/contracts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 export function TeamsPage() {
+  const nameID = useId();
   const { spaces, refresh } = useSpace();
   const [name, setName] = useState("");
   const [pending, setPending] = useState(false);
@@ -42,7 +43,7 @@ export function TeamsPage() {
         ) : null}
       </div>
       <form
-        className="grid gap-3 rounded-xl border p-4"
+        className="rounded-xl border p-4"
         onSubmit={async (e) => {
           e.preventDefault();
           if (lock.current) return;
@@ -66,27 +67,30 @@ export function TeamsPage() {
           }
         }}
       >
-        <h2>创建团队</h2>
-        <FieldLabel>
-          团队名称
-          <Input
-            required
-            minLength={2}
-            maxLength={50}
-            value={name}
-            onChange={(e) => {
-              setName(e.target.value);
-              creationKey.current = crypto.randomUUID();
-            }}
-            disabled={pending}
-          />
-        </FieldLabel>
-        <p className="text-sm text-muted-foreground">
-          创建后您成为首位团队管理员。创建资格和数量限制由服务端检查。
-        </p>
-        <Button disabled={pending || !name.trim()}>
-          {pending ? "正在创建…" : "创建团队"}
-        </Button>
+        <FieldGroup>
+          <h2>创建团队</h2>
+          <Field>
+            <FieldLabel htmlFor={nameID}>团队名称</FieldLabel>
+            <Input
+              id={nameID}
+              required
+              minLength={2}
+              maxLength={50}
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                creationKey.current = crypto.randomUUID();
+              }}
+              disabled={pending}
+            />
+          </Field>
+          <p className="text-sm text-muted-foreground">
+            创建后，你将成为团队管理员。
+          </p>
+          <Button disabled={pending || !name.trim()}>
+            {pending ? "正在创建…" : "创建团队"}
+          </Button>
+        </FieldGroup>
         {error ? <FeedbackToast message={error} /> : null}
         {created ? (
           <Link href={`/teams/${created}`} className="underline">

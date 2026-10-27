@@ -67,3 +67,35 @@ it("错误密码不执行业务动作", async () => {
   await screen.findByRole("alert");
   await waitFor(() => expect(run).not.toHaveBeenCalled());
 });
+it("简短删除确认使用警示对话框，取消优先聚焦，失败保留确认入口", async () => {
+  const run = vi.fn().mockRejectedValue(new Error("failed"));
+  const close = vi.fn();
+  render(
+    <Confirmation
+      action={{
+        title: "删除测试用户？",
+        effect: "删除后无法登录，作品保留。此操作不可恢复。",
+        confirmLabel: "删除",
+        destructive: true,
+        reason: false,
+        password: false,
+        run,
+      }}
+      onDone={vi.fn()}
+      onClose={close}
+    />,
+  );
+  expect(
+    screen.getByRole("alertdialog", { name: "删除测试用户？" }),
+  ).toBeTruthy();
+  expect(screen.queryByLabelText("当前密码")).toBeNull();
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "取消" }),
+    ),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "删除" }));
+  await screen.findByRole("alert");
+  expect(close).not.toHaveBeenCalled();
+  expect(run).toHaveBeenCalledTimes(1);
+});

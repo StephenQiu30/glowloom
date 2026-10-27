@@ -53,10 +53,11 @@ describe("provider trial consent and recovery", () => {
     });
     render(<ProviderTrial release={release} onVerified={vi.fn()} />);
     fireEvent.click(screen.getByText("试运行此发布"));
-    await screen.findByText("测试项目");
-    fireEvent.change(screen.getByLabelText("扣费项目"), {
-      target: { value: "project" },
-    });
+    fireEvent.keyDown(
+      await screen.findByRole("combobox", { name: "扣费项目" }),
+      { key: "ArrowDown" },
+    );
+    fireEvent.click(await screen.findByRole("option", { name: "测试项目" }));
     fireEvent.change(screen.getByLabelText("提示词"), {
       target: { value: "private prompt fixture" },
     });

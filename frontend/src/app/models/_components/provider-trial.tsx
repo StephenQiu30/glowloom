@@ -13,9 +13,13 @@ import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import dynamic from "next/dynamic";
 import {
@@ -247,37 +251,55 @@ export function ProviderTrial({
                 <FieldLabel htmlFor={`${formFieldId}-field-1`}>
                   <span>扣费项目</span>
                 </FieldLabel>
-                <NativeSelect
-                  id={`${formFieldId}-field-1`}
+                <Select
                   required
                   name="project"
                   defaultValue={pending?.project ?? ""}
-                  className="mt-1 w-full"
                 >
-                  <NativeSelectOption value="" disabled>
-                    选择有权访问的项目
-                  </NativeSelectOption>
-                  {projects.map((p) => (
-                    <NativeSelectOption key={p.id} value={p.id}>
-                      {p.name}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                  <SelectTrigger
+                    id={`${formFieldId}-field-1`}
+                    className="mt-1 w-full"
+                  >
+                    <SelectValue placeholder={"选择有权访问的项目"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {projects.map((p) =>
+                        p.id ? (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.name}
+                          </SelectItem>
+                        ) : null,
+                      )}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
               </Field>
               <Field>
                 <FieldLabel htmlFor={`${formFieldId}-field-2`}>
                   <span>验证模式</span>
                 </FieldLabel>
-                <NativeSelect
-                  id={`${formFieldId}-field-2`}
+                <Select
                   name="mode"
                   required
-                  className="mt-1 w-full"
+                  defaultValue={release.required_modes?.[0]}
                 >
-                  {release.required_modes?.map((mode) => (
-                    <NativeSelectOption key={mode}>{mode}</NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                  <SelectTrigger
+                    id={`${formFieldId}-field-2`}
+                    className="mt-1 w-full"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {release.required_modes?.map((mode) => (
+                        <SelectItem key={mode} value={mode}>
+                          {mode}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
               </Field>
               <Field>
                 <FieldLabel htmlFor={`${formFieldId}-field-3`}>

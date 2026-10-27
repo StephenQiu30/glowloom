@@ -19,9 +19,13 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -135,14 +139,13 @@ export function PresetEditor({
                   <FieldLabel htmlFor={`${fieldID}-protocol`}>
                     平台协议
                   </FieldLabel>
-                  <NativeSelect
-                    id={`${fieldID}-protocol`}
+                  <Select
                     value={document.config?.adapter_key ?? ""}
-                    onChange={(e) => {
+                    onValueChange={(value) => {
                       const base = presets.find(
                         (p) =>
                           p.origin === "builtin" &&
-                          p.document?.config?.adapter_key === e.target.value,
+                          p.document?.config?.adapter_key === value,
                       )?.document;
                       if (base)
                         update({
@@ -152,17 +155,29 @@ export function PresetEditor({
                         });
                     }}
                   >
-                    {presets
-                      .filter((p) => p.origin === "builtin")
-                      .map((p) => (
-                        <NativeSelectOption
-                          key={p.id}
-                          value={p.document?.config?.adapter_key}
-                        >
-                          {p.document?.name}
-                        </NativeSelectOption>
-                      ))}
-                  </NativeSelect>
+                    <SelectTrigger
+                      id={`${fieldID}-protocol`}
+                      className="w-full"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {presets
+                          .filter((p) => p.origin === "builtin")
+                          .map((p) =>
+                            p.document?.config?.adapter_key ? (
+                              <SelectItem
+                                key={p.id}
+                                value={p.document?.config?.adapter_key}
+                              >
+                                {p.document?.name}
+                              </SelectItem>
+                            ) : null,
+                          )}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
                 </Field>
                 <Field>
                   <FieldLabel htmlFor={`${fieldID}-region`}>区域</FieldLabel>

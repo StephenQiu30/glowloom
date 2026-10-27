@@ -50,9 +50,13 @@ import { authErrorMessage } from "@/components/auth/contracts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 export function PlatformTeamsPage() {
   const session = useSession();
   if (session.actor.platform_role !== "platform_admin")
@@ -258,7 +262,11 @@ function TeamAdministration() {
           const data = new FormData(e.currentTarget);
           const f: Record<string, string | number | boolean> = {};
           for (const [k, v] of data)
-            if (typeof v === "string" && v.trim())
+            if (
+              typeof v === "string" &&
+              v.trim() &&
+              !(["status", "governance_blocked"].includes(k) && v === "all")
+            )
               f[k] = k === "governance_blocked" ? v === "true" : v.trim();
           setPage(null);
           setError("");
@@ -276,14 +284,21 @@ function TeamAdministration() {
           className="max-w-sm"
           disabled={locked}
         />
-        <NativeSelect name="status" aria-label="团队状态" disabled={locked}>
-          <NativeSelectOption value="">全部状态</NativeSelectOption>
-          {Object.entries(statusLabels).map(([k, v]) => (
-            <NativeSelectOption key={k} value={k}>
-              {v}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
+        <Select name="status" disabled={locked} defaultValue="all">
+          <SelectTrigger aria-label="团队状态" className="max-w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value="all">全部状态</SelectItem>
+              {Object.entries(statusLabels).map(([k, v]) => (
+                <SelectItem key={k} value={k}>
+                  {v}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
         <Collapsible open={advanced} onOpenChange={setAdvanced}>
           <CollapsibleTrigger asChild>
             <Button type="button" variant="ghost">
@@ -297,11 +312,18 @@ function TeamAdministration() {
               placeholder="团队管理员 ID"
             />
             <Input name="id" aria-label="团队 ID" placeholder="团队 ID" />
-            <NativeSelect name="governance_blocked" aria-label="治理状态">
-              <NativeSelectOption value="">全部治理状态</NativeSelectOption>
-              <NativeSelectOption value="true">待接管</NativeSelectOption>
-              <NativeSelectOption value="false">正常</NativeSelectOption>
-            </NativeSelect>
+            <Select name="governance_blocked" defaultValue="all">
+              <SelectTrigger aria-label="治理状态" className="max-w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="all">全部治理状态</SelectItem>
+                  <SelectItem value="true">待接管</SelectItem>
+                  <SelectItem value="false">正常</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           </CollapsibleContent>
         </Collapsible>
         <Button disabled={locked}>查询</Button>
@@ -632,18 +654,23 @@ function TeamAdministration() {
                         onChange={(e) => setEmail(e.target.value)}
                       />
                     </FieldLabel>
-                    <NativeSelect
-                      aria-label="平台邀请团队角色"
+                    <Select
                       value={role}
-                      onChange={(e) => setRole(e.target.value)}
+                      onValueChange={(value) => setRole(value)}
                     >
-                      <NativeSelectOption value="member">
-                        普通成员
-                      </NativeSelectOption>
-                      <NativeSelectOption value="team_admin">
-                        团队管理员
-                      </NativeSelectOption>
-                    </NativeSelect>
+                      <SelectTrigger
+                        aria-label="平台邀请团队角色"
+                        className="max-w-full"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="member">普通成员</SelectItem>
+                          <SelectItem value="team_admin">团队管理员</SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
                     <Button>发送团队邀请</Button>
                   </form>
                   <PlatformTeamInvitations

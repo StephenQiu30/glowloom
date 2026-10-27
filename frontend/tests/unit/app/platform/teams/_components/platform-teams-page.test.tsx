@@ -1,5 +1,11 @@
 import { render } from "../../../../../feedback";
-import { cleanup, fireEvent, screen, act } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  screen,
+  act,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { PlatformTeamsPage } from "@/app/platform/teams/_components/platform-teams-page";
 import { request } from "@/lib/request";
@@ -101,4 +107,50 @@ it("关闭详情同时取消已上传头像的待确认动作", async () => {
           url === "/api/platform/teams/a" && options?.method === "PATCH",
       ),
   ).toBe(false);
+});
+
+it("团队 Select 保留 FormData 语义，全部条件不进入 API", async () => {
+  vi.mocked(request).mockResolvedValue({ items: [] });
+  render(<PlatformTeamsPage />);
+  await screen.findByText("没有符合条件的团队");
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "团队状态" }), {
+    key: "ArrowDown",
+  });
+  fireEvent.click(await screen.findByRole("option", { name: "正常" }));
+  fireEvent.click(screen.getByRole("button", { name: "更多筛选" }));
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "治理状态" }), {
+    key: "ArrowDown",
+  });
+  fireEvent.click(await screen.findByRole("option", { name: "正常" }));
+  fireEvent.click(screen.getByRole("button", { name: "查询" }));
+  await waitFor(() =>
+    expect(request).toHaveBeenLastCalledWith(
+      "/api/platform/teams",
+      expect.objectContaining({
+        params: expect.objectContaining({
+          status: "active",
+          governance_blocked: false,
+        }),
+      }),
+    ),
+  );
+  fireEvent.change(screen.getByRole("textbox", { name: "搜索团队名称" }), {
+    target: { value: "all" },
+  });
+  for (const [label, option] of [
+    ["团队状态", "全部状态"],
+    ["治理状态", "全部治理状态"],
+  ]) {
+    fireEvent.keyDown(screen.getByRole("combobox", { name: label }), {
+      key: "ArrowDown",
+    });
+    fireEvent.click(await screen.findByRole("option", { name: option }));
+  }
+  fireEvent.click(screen.getByRole("button", { name: "查询" }));
+  await waitFor(() => {
+    const params = vi.mocked(request).mock.calls.at(-1)?.[1]?.params;
+    expect(params).toHaveProperty("search", "all");
+    expect(params).not.toHaveProperty("status");
+    expect(params).not.toHaveProperty("governance_blocked");
+  });
 });

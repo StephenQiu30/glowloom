@@ -31,9 +31,9 @@ export function userBatchAction(
     title: titles[kind],
     effect:
       kind === "delete"
-        ? "删除后无法登录且不可恢复，账号资料、作品与团队数据保留。"
+        ? "删除后无法登录，作品保留。此操作不可恢复。"
         : kind === "disable"
-          ? "撤销所选账号的会话并阻止登录；资料和作品保留。权限或状态不适用的账号不执行。"
+          ? "禁用后无法登录，可随时重新启用。"
           : kind === "enable"
             ? "恢复账号访问资格，不恢复旧会话或自动解冻团队。"
             : "撤销所选账号全部会话，用户需要重新登录。",
@@ -62,7 +62,7 @@ export function userBatchAction(
           { expected_revision: entry.row.revision },
           { signal, headers: { "Idempotency-Key": entry.requestId } },
         );
-        return { message: "账号已删除，作品与团队数据保留" };
+        return { message: "账号已删除" };
       }
       await {
         enable: platformEnable,

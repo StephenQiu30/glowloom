@@ -12,9 +12,13 @@ import type { ConfirmAction } from "@/components/governance/confirmation";
 import { useReadBoundary } from "@/components/governance/use-read-boundary";
 import { Button } from "@/components/ui/button";
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 export function PlatformTeamInvitations({
   teamID,
   reload,
@@ -53,32 +57,40 @@ export function PlatformTeamInvitations({
   return (
     <section className="grid gap-3" aria-label="团队历史邀请">
       <h3>团队历史邀请</h3>
-      <NativeSelect
-        aria-label="平台团队邀请状态"
-        value={status}
-        onChange={(e) => {
+      <Select
+        value={status || "all"}
+        onValueChange={(value) => {
           setPage(null);
           setError("");
-          setStatus(e.target.value);
+          setStatus(value === "all" ? "" : value);
         }}
       >
-        <NativeSelectOption value="">全部邀请状态</NativeSelectOption>
-        {["pending", "accepted", "declined", "revoked", "expired"].map((s) => (
-          <NativeSelectOption key={s} value={s}>
-            {
-              (
-                {
-                  pending: "待接受",
-                  accepted: "已接受",
-                  declined: "已拒绝",
-                  revoked: "已撤销",
-                  expired: "已过期",
-                } as Record<string, string>
-              )[s]
-            }
-          </NativeSelectOption>
-        ))}
-      </NativeSelect>
+        <SelectTrigger aria-label="平台团队邀请状态" className="max-w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            <SelectItem value="all">全部邀请状态</SelectItem>
+            {["pending", "accepted", "declined", "revoked", "expired"].map(
+              (s) => (
+                <SelectItem key={s} value={s}>
+                  {
+                    (
+                      {
+                        pending: "待接受",
+                        accepted: "已接受",
+                        declined: "已拒绝",
+                        revoked: "已撤销",
+                        expired: "已过期",
+                      } as Record<string, string>
+                    )[s]
+                  }
+                </SelectItem>
+              ),
+            )}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
       {error && !page ? (
         <ContentState
           className="min-h-40"

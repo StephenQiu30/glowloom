@@ -56,3 +56,40 @@ it("成功项清空选择移除原按钮后，Escape 关闭结果仍恢复到可
     ),
   );
 });
+it("批量删除只展示数量和必要影响，跳过明细按需展开", async () => {
+  function DeleteExample() {
+    const batch = useBatchOperation<{ id: string }>(() => {});
+    return (
+      <>
+        <button
+          onClick={() =>
+            void batch.prepare([{ id: "one" }, { id: "two" }], {
+              ...action,
+              title: "删除账号",
+              effect: "删除后无法登录，作品保留。此操作不可恢复。",
+              compact: true,
+              destructive: true,
+              prepare: async (row) => ({
+                row,
+                skip: row.id === "two" ? "当前账号不能删除" : undefined,
+              }),
+            })
+          }
+        >
+          批量删除
+        </button>
+        <BatchDialog batch={batch} />
+      </>
+    );
+  }
+  render(<DeleteExample />);
+  fireEvent.click(screen.getByRole("button", { name: "批量删除" }));
+  await screen.findByRole("alertdialog", { name: "删除 1 个账号？" });
+  expect(screen.getByText("已跳过 1 项")).toBeTruthy();
+  expect(screen.queryByText("当前账号不能删除")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "查看明细" }));
+  await screen.findByText("当前账号不能删除");
+  fireEvent.click(screen.getByRole("button", { name: "删除" }));
+  await screen.findByText("成功 1 项 · 已跳过 1 项");
+  expect(screen.queryByRole("button", { name: "删除" })).toBeNull();
+});

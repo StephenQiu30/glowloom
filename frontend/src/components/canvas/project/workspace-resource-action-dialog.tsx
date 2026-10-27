@@ -368,9 +368,7 @@ export function WorkspaceResourceActionDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
         {recovery}
-        <AlertDialogFooter className="flex-col sm:flex-row">
-          {buttons}
-        </AlertDialogFooter>
+        <AlertDialogFooter>{buttons}</AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
   );

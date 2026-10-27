@@ -8,9 +8,13 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   FieldSet,
@@ -348,25 +352,27 @@ export function ModelDetail({
                     <FieldLabel htmlFor={`${formFieldId}-field-4`}>
                       <span>计费单位</span>
                     </FieldLabel>
-                    <NativeSelect
-                      id={`${formFieldId}-field-4`}
+                    <Select
                       name="unit"
-                      className="h-10 w-full"
                       defaultValue={latestPrice?.unit ?? "per_request"}
                     >
-                      <NativeSelectOption value="per_request">
-                        每次请求
-                      </NativeSelectOption>
-                      <NativeSelectOption value="per_image">
-                        每张图片
-                      </NativeSelectOption>
-                      <NativeSelectOption value="per_second">
-                        每秒
-                      </NativeSelectOption>
-                      <NativeSelectOption value="per_1k_tokens">
-                        每千 Token
-                      </NativeSelectOption>
-                    </NativeSelect>
+                      <SelectTrigger
+                        id={`${formFieldId}-field-4`}
+                        className="h-10 w-full"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="per_request">每次请求</SelectItem>
+                          <SelectItem value="per_image">每张图片</SelectItem>
+                          <SelectItem value="per_second">每秒</SelectItem>
+                          <SelectItem value="per_1k_tokens">
+                            每千 Token
+                          </SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
                   </Field>
                   <PriceSetup rule={latestPrice?.rule} />
                   <Field>
@@ -444,35 +450,57 @@ export function ModelDetail({
                     <FieldLabel htmlFor={`${formFieldId}-field-6`}>
                       <span>配置版本</span>
                     </FieldLabel>
-                    <NativeSelect
-                      id={`${formFieldId}-field-6`}
+                    <Select
                       name="version"
                       required
-                      className="h-10 w-full"
+                      defaultValue={detail.versions?.[0]?.id}
                     >
-                      {detail.versions?.map((v) => (
-                        <NativeSelectOption key={v.id} value={v.id}>
-                          v{v.version_no} · {v.provider_model_id}
-                        </NativeSelectOption>
-                      ))}
-                    </NativeSelect>
+                      <SelectTrigger
+                        id={`${formFieldId}-field-6`}
+                        className="h-10 w-full"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {detail.versions?.map((v) =>
+                            v.id ? (
+                              <SelectItem key={v.id} value={v.id}>
+                                v{v.version_no} · {v.provider_model_id}
+                              </SelectItem>
+                            ) : null,
+                          )}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
                   </Field>
                   <Field>
                     <FieldLabel htmlFor={`${formFieldId}-field-7`}>
                       <span>价格版本</span>
                     </FieldLabel>
-                    <NativeSelect
-                      id={`${formFieldId}-field-7`}
+                    <Select
                       name="price"
                       required
-                      className="h-10 w-full"
+                      defaultValue={detail.prices?.[0]?.id}
                     >
-                      {detail.prices?.map((p) => (
-                        <NativeSelectOption key={p.id} value={p.id}>
-                          v{p.version_no} · {p.unit} · {p.currency}
-                        </NativeSelectOption>
-                      ))}
-                    </NativeSelect>
+                      <SelectTrigger
+                        id={`${formFieldId}-field-7`}
+                        className="h-10 w-full"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {detail.prices?.map((p) =>
+                            p.id ? (
+                              <SelectItem key={p.id} value={p.id}>
+                                v{p.version_no} · {p.unit} · {p.currency}
+                              </SelectItem>
+                            ) : null,
+                          )}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
                   </Field>
                   <p className="text-sm">
                     绑定连接配置：v{config?.version ?? "—"}
@@ -482,18 +510,20 @@ export function ModelDetail({
                       <FieldLabel htmlFor={`${formFieldId}-field-8`}>
                         <span>上游币种</span>
                       </FieldLabel>
-                      <NativeSelect
-                        id={`${formFieldId}-field-8`}
-                        name="currency"
-                        className="h-10 w-full"
-                      >
-                        <NativeSelectOption value="CNY">
-                          人民币
-                        </NativeSelectOption>
-                        <NativeSelectOption value="USD">
-                          美元
-                        </NativeSelectOption>
-                      </NativeSelect>
+                      <Select name="currency" defaultValue="CNY">
+                        <SelectTrigger
+                          id={`${formFieldId}-field-8`}
+                          className="h-10 w-full"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectItem value="CNY">人民币</SelectItem>
+                            <SelectItem value="USD">美元</SelectItem>
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
                     </Field>
                     <Field>
                       <FieldLabel htmlFor={`${formFieldId}-field-9`}>

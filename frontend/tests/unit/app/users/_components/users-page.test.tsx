@@ -92,3 +92,47 @@ it("empty platform directory reports no invented users", async () => {
   render(<UserDirectory />);
   expect(await screen.findByText("没有匹配的用户")).toBeTruthy();
 });
+
+it("Select 角色和状态的选择进入查询，全部值不会发送给服务端", async () => {
+  vi.mocked(request).mockResolvedValue({ items: [], next_cursor: null });
+  render(<UserDirectory />);
+  await screen.findByText("没有匹配的用户");
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "平台角色筛选" }), {
+    key: "ArrowDown",
+  });
+  fireEvent.click(await screen.findByRole("option", { name: "创作者" }));
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "用户状态筛选" }), {
+    key: "ArrowDown",
+  });
+  fireEvent.click(await screen.findByRole("option", { name: "禁用" }));
+  fireEvent.click(screen.getByRole("button", { name: "查询" }));
+  await waitFor(() =>
+    expect(request).toHaveBeenLastCalledWith(
+      "/api/platform/users",
+      expect.objectContaining({
+        params: expect.objectContaining({
+          platform_role: "creator",
+          status: "disabled",
+        }),
+      }),
+    ),
+  );
+  for (const [label, option] of [
+    ["平台角色筛选", "全部角色"],
+    ["用户状态筛选", "全部状态"],
+  ]) {
+    fireEvent.keyDown(screen.getByRole("combobox", { name: label }), {
+      key: "ArrowDown",
+    });
+    fireEvent.click(await screen.findByRole("option", { name: option }));
+  }
+  fireEvent.click(screen.getByRole("button", { name: "查询" }));
+  await waitFor(() =>
+    expect(request).toHaveBeenLastCalledWith(
+      "/api/platform/users",
+      expect.objectContaining({
+        params: expect.objectContaining({ platform_role: "", status: "" }),
+      }),
+    ),
+  );
+});

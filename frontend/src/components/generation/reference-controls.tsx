@@ -48,9 +48,13 @@ import {
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   useEffect,
   useEffectEvent,
@@ -644,16 +648,27 @@ export function ReferenceControls({
         <FieldLabel htmlFor={`${formFieldId}-field-2`}>
           <span>新参考角色</span>
         </FieldLabel>
-        <NativeSelect
-          id={`${formFieldId}-field-2`}
-          aria-label="新参考角色"
+        <Select
           value={role}
-          onChange={(e) => setRole(e.target.value)}
+          onValueChange={(selectedValue) => setRole(selectedValue)}
         >
-          {roles.map((r) => (
-            <NativeSelectOption key={r}>{r}</NativeSelectOption>
-          ))}
-        </NativeSelect>
+          <SelectTrigger
+            id={`${formFieldId}-field-2`}
+            aria-label="新参考角色"
+            className="w-full"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {roles.map((r) => (
+                <SelectItem key={r} value={r}>
+                  {r}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
       </Field>
     </>
   );
@@ -732,24 +747,32 @@ export function ReferenceControls({
             {!authorized && ref.source.kind !== "pending_upload" && (
               <p className="text-sm">来源待核验；确认权限前隐藏内容。</p>
             )}
-            <NativeSelect
-              aria-label={`${displayLabel(ref.id)}角色`}
+            <Select
               disabled={disabled}
               value={ref.role}
-              className="w-full"
-              onChange={(e) =>
+              onValueChange={(selectedValue) =>
                 session.replaceReference(ref.id, {
                   ...ref,
-                  role: e.target.value,
+                  role: selectedValue,
                 })
               }
             >
-              {roles.map((r) => (
-                <NativeSelectOption key={r} value={r}>
-                  {referenceRoleLabel(r)}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+              <SelectTrigger
+                aria-label={`${displayLabel(ref.id)}角色`}
+                className="w-full"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {roles.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {referenceRoleLabel(r)}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
             {ref.source.kind === "pending_upload" && (
               <div className="space-y-2 text-sm">
                 <p>

@@ -20,9 +20,13 @@ import { authErrorMessage } from "@/components/auth/contracts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 export function MemberDirectory({
   team,
   reload,
@@ -154,28 +158,44 @@ export function MemberDirectory({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <NativeSelect
-          aria-label="团队角色筛选"
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
+        <Select
+          value={role || "all"}
+          onValueChange={(selectedValue) =>
+            setRole(selectedValue === "all" ? "" : selectedValue)
+          }
         >
-          <NativeSelectOption value="">全部角色</NativeSelectOption>
-          <NativeSelectOption value="member">普通成员</NativeSelectOption>
-          <NativeSelectOption value="team_admin">团队管理员</NativeSelectOption>
-        </NativeSelect>
+          <SelectTrigger aria-label="团队角色筛选" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value="all">全部角色</SelectItem>
+              <SelectItem value="member">普通成员</SelectItem>
+              <SelectItem value="team_admin">团队管理员</SelectItem>
+            </SelectGroup>
+          </SelectContent>
+        </Select>
         {team.role === "team_admin" ? (
-          <NativeSelect
-            aria-label="成员状态筛选"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
+          <Select
+            value={status || "all"}
+            onValueChange={(selectedValue) =>
+              setStatus(selectedValue === "all" ? "" : selectedValue)
+            }
           >
-            <NativeSelectOption value="">全部状态</NativeSelectOption>
-            {["active", "suspended", "removed"].map((s) => (
-              <NativeSelectOption key={s} value={s}>
-                {s}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+            <SelectTrigger aria-label="成员状态筛选" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="all">全部状态</SelectItem>
+                {["active", "suspended", "removed"].map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         ) : null}
         <Input
           type="datetime-local"

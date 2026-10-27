@@ -234,19 +234,20 @@ async function open(reference = false) {
       onClose={() => {}}
     />,
   );
-  await screen.findByRole("option", { name: "真实模型" });
   await waitFor(() =>
-    expect(screen.getByLabelText("生成模型").hasAttribute("disabled")).toBe(
+    expect(screen.getByRole("combobox", { name: "生成模型" })).toHaveProperty(
+      "disabled",
       false,
     ),
   );
-  fireEvent.change(screen.getByLabelText("生成模型"), {
-    target: { value: version },
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "生成模型" }), {
+    key: "ArrowDown",
   });
+  fireEvent.click(await screen.findByRole("option", { name: "真实模型" }));
   await waitFor(() =>
-    expect((screen.getByLabelText("生成模式") as HTMLSelectElement).value).toBe(
-      "text_to_image",
-    ),
+    expect(
+      screen.getByRole("combobox", { name: "生成模式" }).textContent,
+    ).toContain("text_to_image"),
   );
 }
 
@@ -818,9 +819,12 @@ it("画布参考保留版本与模型角色，选择图生图模式后先保存�
   expect(
     screen.getByRole("button", { name: "检查费用" }).hasAttribute("disabled"),
   ).toBe(true);
-  fireEvent.change(screen.getByLabelText("生成模式"), {
-    target: { value: "image_to_image" },
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "生成模式" }), {
+    key: "ArrowDown",
   });
+  fireEvent.click(
+    await screen.findByRole("option", { name: "image_to_image" }),
+  );
   await waitFor(() =>
     expect(
       screen.getByRole("button", { name: "检查费用" }).hasAttribute("disabled"),
@@ -894,14 +898,17 @@ it("模式查询发现当前模型停用后保留输入并禁用报价", async (
   api.models.mockResolvedValue({
     items: [{ ...page.items[0], status: "disabled" }],
   });
-  fireEvent.change(screen.getByLabelText("生成模式"), {
-    target: { value: "image_to_image" },
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "生成模式" }), {
+    key: "ArrowDown",
   });
+  fireEvent.click(
+    await screen.findByRole("option", { name: "image_to_image" }),
+  );
   await screen.findByText("该模型当前不可用");
   expect(
     screen.getByRole("button", { name: "检查费用" }).hasAttribute("disabled"),
   ).toBe(true);
-  expect((screen.getByLabelText("生成模式") as HTMLSelectElement).value).toBe(
+  expect(screen.getByRole("combobox", { name: "生成模式" }).textContent).toBe(
     "text_to_image",
   );
   expect(

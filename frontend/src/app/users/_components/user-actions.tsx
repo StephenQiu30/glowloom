@@ -42,7 +42,11 @@ export function UserActions({
       title: simple
         ? `${kind === "delete" ? "删除" : "禁用"}${detail.user.display_name}？`
         : labels[kind],
-      confirmLabel: labels[kind],
+      confirmLabel: simple
+        ? kind === "delete"
+          ? "删除"
+          : "禁用"
+        : labels[kind],
       destructive: kind === "delete" || kind === "revoke_admin",
       effect:
         kind === "password_reset"
@@ -50,9 +54,9 @@ export function UserActions({
           : kind === "propose_admin"
             ? "目标账号需主动接受授权，接受前平台角色保持原状态。"
             : kind === "delete"
-              ? "删除后将无法登录，账号资料与作品保留，不会删除团队或团队作品。此操作不可恢复。"
+              ? "删除后无法登录，作品保留。此操作不可恢复。"
               : kind === "disable"
-                ? "禁用将撤销会话并阻止登录；资料和作品保留。"
+                ? "禁用后无法登录，可随时重新启用。"
                 : kind === "profile_reset"
                   ? "仅重置所选公开资料；账号和作品保留。"
                   : "根据当前账号状态执行治理操作，并通知相关用户。",

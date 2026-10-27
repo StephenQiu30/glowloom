@@ -10,9 +10,13 @@ import {
   FieldGroup,
 } from "@/components/ui/field";
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useEffect, useState, useId } from "react";
 import { listMediaAssets } from "@/api/media";
 import { getBibleEntry, listBibleEntries } from "@/api/bible";
@@ -188,22 +192,27 @@ export function ReferenceSearch({
         }
       }}
     >
-      <NativeSelect
-        aria-label="引用检索类型"
-        className="w-full"
+      <Select
         value={kind}
-        onChange={(event) => {
-          setKind(event.target.value as Kind);
+        onValueChange={(selectedValue) => {
+          setKind(selectedValue as Kind);
           setBudget(1);
           setResult({ items: [], loading: true, more: false, error: "" });
         }}
       >
-        {Object.entries(kinds).map(([value, label]) => (
-          <NativeSelectOption key={value} value={value}>
-            {label}
-          </NativeSelectOption>
-        ))}
-      </NativeSelect>
+        <SelectTrigger aria-label="引用检索类型" className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {Object.entries(kinds).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
       {result.loading && <LoadingState>正在检索当前项目…</LoadingState>}
       {result.error && (
         <FeedbackToast

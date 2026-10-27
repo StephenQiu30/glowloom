@@ -14,6 +14,16 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 export type ConfirmAction = {
   title: string;
   effect: string;
@@ -84,6 +94,43 @@ export function Confirmation({
       locked.current = false;
       if (!c.signal.aborted) setPending(false);
     }
+  }
+  if (action?.reason === false && action.password === false) {
+    return (
+      <AlertDialog
+        open
+        onOpenChange={(open) => {
+          if (!open && !pending) onClose();
+        }}
+      >
+        <AlertDialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="break-all">
+              {action.title}
+            </AlertDialogTitle>
+            <AlertDialogDescription>{action.effect}</AlertDialogDescription>
+          </AlertDialogHeader>
+          {error ? (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={pending}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              variant={action.destructive ? "destructive" : "default"}
+              disabled={pending || conflicted}
+              onClick={(event) => {
+                event.preventDefault();
+                void submit();
+              }}
+            >
+              {pending ? "正在处理…" : (action.confirmLabel ?? "确认")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    );
   }
   return (
     <Dialog

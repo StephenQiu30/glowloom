@@ -174,9 +174,10 @@ it("已启用连接仍可手动验证，切换模型不会沿用其他模型的�
   setup();
   await screen.findByText("所选模型验证通过");
   expect(screen.queryByRole("button", { name: "启用 2 个模型" })).toBeNull();
-  fireEvent.change(screen.getByRole("combobox", { name: "模型验证" }), {
-    target: { value: "image" },
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "模型验证" }), {
+    key: "ArrowDown",
   });
+  fireEvent.click(await screen.findByRole("option", { name: "Seedream" }));
   expect(screen.queryByText("所选模型验证通过")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "验证模型" }));
   await waitFor(() =>

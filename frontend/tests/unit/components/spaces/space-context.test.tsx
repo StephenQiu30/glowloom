@@ -55,6 +55,16 @@ function Child() {
     </>
   );
 }
+async function chooseSpace(value: "team" | "personal") {
+  const trigger = screen.getByRole("combobox", { name: "当前创作空间" });
+  await waitFor(() => expect(trigger).toHaveProperty("disabled", false));
+  fireEvent.keyDown(trigger, { key: "ArrowDown" });
+  fireEvent.click(
+    await screen.findByRole("option", {
+      name: value === "team" ? /团队空间/ : /个人空间/,
+    }),
+  );
+}
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
@@ -74,15 +84,11 @@ it("StrictMode 初始化、切换清除私有视图并拒绝失效团队选择",
   fireEvent.change(screen.getByLabelText("私有草稿"), {
     target: { value: "old secret" },
   });
-  fireEvent.change(screen.getByLabelText("当前创作空间"), {
-    target: { value: "team" },
-  });
+  await chooseSpace("team");
   await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
   expect(screen.getByLabelText("私有草稿")).toHaveProperty("value", "");
   vi.mocked(request).mockResolvedValue({ items: [personal] });
-  fireEvent.change(screen.getByLabelText("当前创作空间"), {
-    target: { value: "personal" },
-  });
+  await chooseSpace("personal");
   await screen.findByText("personal");
   expect(mocks.clear).toHaveBeenCalled();
 });
@@ -95,9 +101,7 @@ it("403 重新确认空间后只在真实成员丢失时回个人空间", async 
     </SpaceProvider>,
   );
   await screen.findByLabelText("私有草稿");
-  fireEvent.change(screen.getByLabelText("当前创作空间"), {
-    target: { value: "team" },
-  });
+  await chooseSpace("team");
   await screen.findByText("team");
   const triggerScopeDenied = () => mocks.denied();
   triggerScopeDenied();
@@ -118,9 +122,7 @@ it("同一空间失去管理员角色也清除旧私有视图", async () => {
     </SpaceProvider>,
   );
   await screen.findByLabelText("私有草稿");
-  fireEvent.change(screen.getByLabelText("当前创作空间"), {
-    target: { value: "team" },
-  });
+  await chooseSpace("team");
   await screen.findByText("team");
   fireEvent.change(screen.getByLabelText("私有草稿"), {
     target: { value: "admin private" },
@@ -161,9 +163,7 @@ it("business viewer403 revalidates once and retains readable team and draft", as
     </SpaceProvider>,
   );
   await screen.findByLabelText("私有草稿");
-  fireEvent.change(screen.getByLabelText("当前创作空间"), {
-    target: { value: "team" },
-  });
+  await chooseSpace("team");
   await screen.findByText("team");
   const draft = screen.getByLabelText("私有草稿");
   fireEvent.change(draft, { target: { value: "viewer idea" } });

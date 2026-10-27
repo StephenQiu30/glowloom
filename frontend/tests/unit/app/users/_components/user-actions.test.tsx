@@ -32,7 +32,7 @@ it("禁用与删除只需一次确认，保留对象和明确的删除影响", (
     expect.objectContaining({
       password: false,
       reason: false,
-      confirmLabel: "禁用账号",
+      confirmLabel: "禁用",
       title: expect.stringContaining("Target"),
     }),
   );
@@ -42,7 +42,7 @@ it("禁用与删除只需一次确认，保留对象和明确的删除影响", (
       password: false,
       reason: false,
       destructive: true,
-      confirmLabel: "删除账号",
+      confirmLabel: "删除",
       effect: expect.stringContaining("保留"),
     }),
   );

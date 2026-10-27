@@ -23,9 +23,13 @@ import {
   ItemActions,
 } from "@/components/ui/item";
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { catalogMessage } from "@/components/catalog/mutation";
 import { templateFromRelease } from "./preset-template";
@@ -124,44 +128,60 @@ export function PresetModels({
       </ItemGroup>
       <Field>
         <FieldLabel htmlFor={`${fieldID}-source`}>来源模型</FieldLabel>
-        <NativeSelect
-          id={`${fieldID}-source`}
+        <Select
           value={source}
-          onChange={(e) => {
-            setSource(e.target.value);
+          onValueChange={(value) => {
+            setSource(value);
             setDetail(null);
             setReleases([]);
             setReleaseID("");
-            setLoading(!!e.target.value);
+            setLoading(!!value);
             setError("");
           }}
         >
-          <NativeSelectOption value="">选择同平台已配置模型</NativeSelectOption>
-          {models.map((m) => (
-            <NativeSelectOption key={m.id} value={m.id}>
-              {m.display_name}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
+          <SelectTrigger id={`${fieldID}-source`} className="w-full">
+            <SelectValue placeholder={"选择同平台已配置模型"} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {models.map((m) =>
+                m.id ? (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.display_name}
+                  </SelectItem>
+                ) : null,
+              )}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
       </Field>
       {source ? (
         <Field>
           <FieldLabel htmlFor={`${fieldID}-release`}>来源发布组合</FieldLabel>
-          <NativeSelect
-            id={`${fieldID}-release`}
+          <Select
             value={releaseID}
             disabled={loading}
-            onChange={(e) => setReleaseID(e.target.value)}
+            onValueChange={(value) => setReleaseID(value)}
           >
-            <NativeSelectOption value="">
-              {loading ? "正在读取发布…" : "选择明确的模型与价格版本"}
-            </NativeSelectOption>
-            {releases.map((r) => (
-              <NativeSelectOption key={r.id} value={r.id}>
-                {r.status === "active" ? "已上线" : "待验证"} · {r.id}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+            <SelectTrigger id={`${fieldID}-release`} className="w-full">
+              <SelectValue
+                placeholder={
+                  loading ? "正在读取发布…" : "选择明确的模型与价格版本"
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {releases.map((r) =>
+                  r.id ? (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.status === "active" ? "已上线" : "待验证"} · {r.id}
+                    </SelectItem>
+                  ) : null,
+                )}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </Field>
       ) : null}
       {source && !loading && !releases.length ? (

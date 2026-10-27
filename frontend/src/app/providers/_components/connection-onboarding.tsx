@@ -13,9 +13,13 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import {
   catalogMessage,
@@ -151,19 +155,26 @@ export function ConnectionOnboarding({
         <FieldLabel variant="title" htmlFor={`${fieldID}-model`}>
           模型验证
         </FieldLabel>
-        <NativeSelect
-          id={`${fieldID}-model`}
+        <Select
           value={model}
           disabled={busy || !!test.pending || !!activate.pending}
-          onChange={(e) => setSelected(e.target.value)}
-          className="w-full max-md:h-11"
+          onValueChange={(value) => setSelected(value)}
         >
-          {data.models.map((m) => (
-            <NativeSelectOption key={m.id} value={m.id}>
-              {m.display_name}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
+          <SelectTrigger id={`${fieldID}-model`} className="w-full max-md:h-11">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {data.models.map((m) =>
+                m.id ? (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.display_name}
+                  </SelectItem>
+                ) : null,
+              )}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
         <FieldDescription>验证会调用服务商，可能产生费用。</FieldDescription>
       </Field>
       {!data.credential_id ? (

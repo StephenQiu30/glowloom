@@ -18,9 +18,13 @@ import { authErrorMessage } from "@/components/auth/contracts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 export function AccountGovernanceLists({
   reload,
   onAction,
@@ -110,24 +114,32 @@ export function AccountGovernanceLists({
         {null}
         <Button>发送邀请</Button>
       </form>
-      <NativeSelect
-        aria-label="邀请状态"
-        value={status}
-        onChange={(e) => {
+      <Select
+        value={status || "all"}
+        onValueChange={(value) => {
           setInvites(null);
           setProposals(null);
           setInviteError("");
           setProposalError("");
-          setStatus(e.target.value);
+          setStatus(value === "all" ? "" : value);
         }}
       >
-        <NativeSelectOption value="">全部状态</NativeSelectOption>
-        {["pending", "accepted", "declined", "revoked", "expired"].map((s) => (
-          <NativeSelectOption key={s} value={s}>
-            {s}
-          </NativeSelectOption>
-        ))}
-      </NativeSelect>
+        <SelectTrigger aria-label="邀请状态" className="max-w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            <SelectItem value="all">全部状态</SelectItem>
+            {["pending", "accepted", "declined", "revoked", "expired"].map(
+              (s) => (
+                <SelectItem key={s} value={s}>
+                  {s}
+                </SelectItem>
+              ),
+            )}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
       {error ? <FeedbackToast message={error} /> : null}
       {inviteError ? (
         <ContentState
@@ -217,24 +229,30 @@ export function AccountGovernanceLists({
         </Button>
       ) : null}
       <h3>管理授权提议</h3>
-      <NativeSelect
-        aria-label="授权提议状态"
-        value={proposalStatus}
-        onChange={(e) => {
+      <Select
+        value={proposalStatus || "all"}
+        onValueChange={(value) => {
           setProposals(null);
           setProposalError("");
-          setProposalStatus(e.target.value);
+          setProposalStatus(value === "all" ? "" : value);
         }}
       >
-        <NativeSelectOption value="">全部提议状态</NativeSelectOption>
-        {["pending", "accepted", "declined", "expired", "cancelled"].map(
-          (s) => (
-            <NativeSelectOption key={s} value={s}>
-              {s}
-            </NativeSelectOption>
-          ),
-        )}
-      </NativeSelect>
+        <SelectTrigger aria-label="授权提议状态" className="max-w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            <SelectItem value="all">全部提议状态</SelectItem>
+            {["pending", "accepted", "declined", "expired", "cancelled"].map(
+              (s) => (
+                <SelectItem key={s} value={s}>
+                  {s}
+                </SelectItem>
+              ),
+            )}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
       {proposalError ? (
         <ContentState
           className="min-h-40"
