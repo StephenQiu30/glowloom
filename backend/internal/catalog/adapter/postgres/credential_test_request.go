@@ -75,7 +75,8 @@ func (s *Store) RequestCredentialTest(ctx context.Context, actor identityapp.Pri
  JOIN catalog.model_release release ON release.model_id=m.id AND release.model_version_id=v.id
  JOIN catalog.provider p ON p.id=m.provider_id AND p.current_config_version_id=release.config_version_id
  WHERE m.id=? AND m.provider_id=? AND NOT m.is_delete AND m.candidate_snapshot IS NOT NULL
- AND release.status='draft' AND release.upstream_cost='{}'::jsonb AND NOT v.is_delete FOR SHARE OF m,v,p,release`, request.ModelID, request.ProviderID).Scan(&version)
+ AND (release.status='draft' OR (release.status='active' AND m.active_release_id=release.id))
+ AND release.upstream_cost='{}'::jsonb AND NOT v.is_delete FOR SHARE OF m,v,p,release`, request.ModelID, request.ProviderID).Scan(&version)
 			if r.Error != nil {
 				return r.Error
 			}

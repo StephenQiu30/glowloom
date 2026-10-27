@@ -4,9 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>模型接入受控验收</title>
+    <style>
+      @font-face {
+        font-family: "Geist";
+        src: url("/node_modules/geist/dist/fonts/geist-sans/Geist-Regular.woff2")
+          format("woff2");
+        font-weight: 400;
+      }
+      @font-face {
+        font-family: "Geist";
+        src: url("/node_modules/geist/dist/fonts/geist-sans/Geist-Medium.woff2")
+          format("woff2");
+        font-weight: 500;
+      }
+      :root {
+        --font-geist-sans: "Geist";
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root" class="product-shell"></div>
     <script type="module" src="./onboarding.tsx"></script>
   </body>
 </html>

@@ -2088,3 +2088,10 @@ AI 平台接入与预设管理：保留平台管理员统一配置凭据和原�
 - 受控成功链路：隔离 PostgreSQL + HTTP fixture 验证单次派发、凭据撤销拒绝、幂等启用、三个模型进入创作列表并分别成功创建免费平台报价；浏览器 fixture 验证一次调用后启用 3 个模型，以及视频“已受理”状态。并未使用真实有效供应商 Key，也未完成真实文本/图像/视频生成验收。
 - 浏览器使用 agent-browser：真实页面桌面和 390px、模型选择/保存/失败/详情恢复；受控成功页面浅色手机和深色桌面。截图及逐文件交付范围保存在本地忽略目录 `output/onboarding-acceptance/`。前端全量 125 文件 / 798 项通过；生产构建、TypeScript、ESLint、生成一致性通过。后端全量 Race、范围 golangci-lint 及 govulncheck 已通过；govulncheck 报告依赖模块有 1 项未调用漏洞，受影响可调用漏洞为 0。
 - 本轮代码和文档尚未提交、推送或部署；等待用户用有效火山 Key 验证实际账号授权与最终生成结果。
+
+## 2026-10-27 AI 接入设计落地与管理验证分离
+
+- 已按 SRC-AI-27 落实：平台单选、独立 API Key、文本/视频/音频/图片分类多选；保存成功后由管理员打开管理详情，不自动验证。管理支持显式验证与失败恢复，已启用模型可以重新验证；退休 release 和失效凭据仍拒绝。
+- 复用 shadcn 组件并修正选中平台辅助文字对比度；最大宽度 520px，窄屏受视口约束，模型列表及短视口内容滚动，取消多余说明和可选名称入口。
+- 前端全量 125 文件 / 800 项测试、ESLint、TypeScript、生产构建通过；Go catalog 隔离 PostgreSQL 18 Race、vet、范围 golangci-lint 通过，goimports 无差异；govulncheck 可调用漏洞为 0，另有 1 项未调用模块条目。改动文件格式通过；全仓 Prettier 仍有既有 breadcrumb.tsx、progress.tsx、publish-media.test.ts 三文件不通过，未修改。
+- agent-browser 受控夹具验证接入到管理、一次调用后启用所选模型、失败提示、分类选择和方向键；320/390/768/1440px 无整页横向溢出，320px 提交按钮仍可见，深浅主题弹窗 axe 检查均为 0 违规。真实 localhost 页面要求登录，未使用有效服务商 Key，真实账号与最终生成未验收。证据保存在忽略目录 output/onboarding-acceptance/design-implementation/。

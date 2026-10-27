@@ -130,13 +130,17 @@ function DialogFooter({
 
 function DialogTitle({
   className,
+  size = "default",
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Title>) {
+}: React.ComponentProps<typeof DialogPrimitive.Title> & {
+  size?: "default" | "lg";
+}) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
       className={cn(
         "font-heading text-base leading-none font-medium",
+        size === "lg" && "text-lg leading-7",
         className,
       )}
       {...props}

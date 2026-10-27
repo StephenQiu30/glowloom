@@ -89,7 +89,7 @@ it("验证一次后启用所有所选模型，保存Key本身不能启用", asyn
   await screen.findByRole("button", { name: "验证模型" });
   expect(screen.queryByRole("button", { name: "启用 2 个模型" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "验证模型" }));
-  await screen.findByText("接入验证通过");
+  await screen.findByText("所选模型验证通过");
   expect(api.test).toHaveBeenCalledOnce();
   expect(api.test).toHaveBeenCalledWith(
     { id: "provider", credential_id: "credential", model_id: "chat" },
@@ -158,5 +158,32 @@ it("检查读取失败有重试入口，不显示可启用", async () => {
   setup();
   fireEvent.click(await screen.findByRole("button", { name: "重试" }));
   await screen.findByRole("button", { name: "验证模型" });
+  expect(api.activate).not.toHaveBeenCalled();
+});
+
+it("已启用连接仍可手动验证，切换模型不会沿用其他模型的成功状态", async () => {
+  state.status = "active";
+  state.models = state.models!.map((m) => ({ ...m, status: "active" }));
+  state.check = {
+    id: "old-check",
+    model_id: "chat",
+    status: "completed",
+    auth_result: "ok",
+    model_result: "completed",
+  };
+  setup();
+  await screen.findByText("所选模型验证通过");
+  expect(screen.queryByRole("button", { name: "启用 2 个模型" })).toBeNull();
+  fireEvent.change(screen.getByRole("combobox", { name: "模型验证" }), {
+    target: { value: "image" },
+  });
+  expect(screen.queryByText("所选模型验证通过")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "验证模型" }));
+  await waitFor(() =>
+    expect(api.test).toHaveBeenCalledWith(
+      { id: "provider", credential_id: "credential", model_id: "image" },
+      expect.anything(),
+    ),
+  );
   expect(api.activate).not.toHaveBeenCalled();
 });

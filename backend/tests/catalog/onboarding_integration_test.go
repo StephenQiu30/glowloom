@@ -151,6 +151,17 @@ func TestOnboardingOneModelEnablesSelectionForCreation(t *testing.T) {
 		require.Zero(t, quote.QuoteMicros)
 	}
 	require.Equal(t, 3, found)
+	// Management can verify an active model again without reactivating releases.
+	recheck, err := command.ExecuteModel(t.Context(), actor, connection.ProviderID, credential, connection.ModelIDs[0], uuid.NewString())
+	require.NoError(t, err)
+	require.NotEqual(t, accepted.CheckID, recheck.CheckID)
+	require.NoError(t, conn.DB.Exec(`UPDATE catalog.provider_credential SET status='disabled' WHERE id=?`, credential).Error)
+	_, err = command.ExecuteModel(t.Context(), actor, connection.ProviderID, credential, connection.ModelIDs[0], uuid.NewString())
+	require.Error(t, err)
+	require.NoError(t, conn.DB.Exec(`UPDATE catalog.provider_credential SET status='active' WHERE id=?`, credential).Error)
+	require.NoError(t, conn.DB.Exec(`UPDATE catalog.model_release SET status='retired' WHERE model_id=?`, connection.ModelIDs[0]).Error)
+	_, err = command.ExecuteModel(t.Context(), actor, connection.ProviderID, credential, connection.ModelIDs[0], uuid.NewString())
+	require.Error(t, err)
 	actor.PlatformRole = "creator"
 	_, err = onboarding.Read(t.Context(), actor, connection.ProviderID)
 	require.Error(t, err)

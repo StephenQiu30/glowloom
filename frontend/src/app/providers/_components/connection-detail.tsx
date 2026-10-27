@@ -212,15 +212,6 @@ export function ConnectionDetail({
               <TabsTrigger value="config">高级配置</TabsTrigger>
             </TabsList>
             <TabsContent value="overview" className="flex flex-col gap-6">
-              {provider?.status === "disabled" ? (
-                <ConnectionOnboarding
-                  id={id}
-                  onSaved={() => {
-                    onSaved();
-                    setAttempt((v) => v + 1);
-                  }}
-                />
-              ) : null}
               <ItemGroup className="rounded-lg border">
                 <Item>
                   <ItemContent>
@@ -250,6 +241,14 @@ export function ConnectionDetail({
                   </ItemContent>
                 </Item>
               </ItemGroup>
+              <ConnectionOnboarding
+                id={id}
+                revision={revision + attempt}
+                onSaved={() => {
+                  onSaved();
+                  setAttempt((v) => v + 1);
+                }}
+              />
               <Button
                 variant="outline"
                 asChild
@@ -259,94 +258,104 @@ export function ConnectionDetail({
                   模型管理
                 </Link>
               </Button>
-              <div className="flex flex-col gap-4">
-                <h3 className="font-medium">连接检查</h3>
-                <p className="text-xs text-muted-foreground">
-                  只读检查，不生成内容。
-                </p>
-                <Button
-                  variant="outline"
-                  disabled={!detail.credential?.id || checking}
-                  onClick={async () => {
-                    setChecking(true);
-                    setError("");
-                    try {
-                      const result = await testAdminCredential(
-                        { id, credential_id: detail.credential!.id! },
-                        { headers: { "Idempotency-Key": crypto.randomUUID() } },
-                      );
-                      if (result.check_id) setCheckID(result.check_id);
-                      else throw new Error("检查回执不完整。");
-                    } catch (error) {
-                      setError(catalogMessage(error));
-                      setChecking(false);
-                    }
-                  }}
-                >
-                  {checking ? <Spinner data-icon="inline-start" /> : null}
-                  {checking ? "正在检查" : "检查连接"}
-                </Button>
-                {check ? (
-                  <div className="flex flex-col gap-3 text-sm">
-                    <p>
-                      鉴权：{check.auth_result} · 适配：{check.adapter_result} ·
-                      发现：{check.discovery_result}
-                    </p>
-                    {check.discovery_result === "unsupported" ? (
+              <Collapsible className="flex flex-col gap-3">
+                <CollapsibleTrigger asChild>
+                  <Button type="button" variant="ghost" className="self-start">
+                    <ChevronDown data-icon="inline-start" />
+                    连接检查
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="flex flex-col gap-4">
+                  <p className="text-xs text-muted-foreground">
+                    只读检查，不生成内容。
+                  </p>
+                  <Button
+                    variant="outline"
+                    disabled={!detail.credential?.id || checking}
+                    onClick={async () => {
+                      setChecking(true);
+                      setError("");
+                      try {
+                        const result = await testAdminCredential(
+                          { id, credential_id: detail.credential!.id! },
+                          {
+                            headers: { "Idempotency-Key": crypto.randomUUID() },
+                          },
+                        );
+                        if (result.check_id) setCheckID(result.check_id);
+                        else throw new Error("检查回执不完整。");
+                      } catch (error) {
+                        setError(catalogMessage(error));
+                        setChecking(false);
+                      }
+                    }}
+                  >
+                    {checking ? <Spinner data-icon="inline-start" /> : null}
+                    {checking ? "正在检查" : "检查连接"}
+                  </Button>
+                  {check ? (
+                    <div className="flex flex-col gap-3 text-sm">
                       <p>
-                        此平台不提供已接入的模型发现接口，请在模型管理中填写账号可用的模型
-                        ID。
+                        鉴权：{check.auth_result} · 适配：{check.adapter_result}{" "}
+                        · 发现：{check.discovery_result}
                       </p>
-                    ) : null}
-                    {check.discovery_result === "partial" ? (
-                      <p>候选列表已截断，可在模型管理中手动补充模型 ID。</p>
-                    ) : null}
-                    {check.candidates?.length ? (
-                      <Collapsible>
-                        <CollapsibleTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            className="group/collapsible h-auto w-full justify-between whitespace-normal"
+                      {check.discovery_result === "unsupported" ? (
+                        <p>
+                          此平台不提供已接入的模型发现接口，请在模型管理中填写账号可用的模型
+                          ID。
+                        </p>
+                      ) : null}
+                      {check.discovery_result === "partial" ? (
+                        <p>候选列表已截断，可在模型管理中手动补充模型 ID。</p>
+                      ) : null}
+                      {check.candidates?.length ? (
+                        <Collapsible>
+                          <CollapsibleTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="group/collapsible h-auto w-full justify-between whitespace-normal"
+                            >
+                              <span>
+                                查看 {check.candidates.length} 个候选模型
+                              </span>
+                              <ChevronDown
+                                data-icon="inline-end"
+                                className="transition-transform group-data-[state=open]/collapsible:rotate-180"
+                              />
+                            </Button>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent
+                            forceMount
+                            className="pt-3 data-[state=closed]:hidden"
                           >
-                            <span>
-                              查看 {check.candidates.length} 个候选模型
-                            </span>
-                            <ChevronDown
-                              data-icon="inline-end"
-                              className="transition-transform group-data-[state=open]/collapsible:rotate-180"
-                            />
-                          </Button>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent
-                          forceMount
-                          className="pt-3 data-[state=closed]:hidden"
-                        >
-                          <ItemGroup className="mt-2 max-h-64 overflow-auto">
-                            {check.candidates.map((item) => (
-                              <Item
-                                key={`${item.capability}:${item.provider_model_id}`}
-                                variant="outline"
-                                className="break-all"
-                              >
-                                <span>
-                                  {item.display_name || item.provider_model_id}
-                                </span>
-                                <code className="block text-xs">
-                                  {item.provider_model_id}
-                                </code>
-                                <span className="text-xs text-muted-foreground">
-                                  {item.capability}
-                                </span>
-                              </Item>
-                            ))}
-                          </ItemGroup>
-                        </CollapsibleContent>
-                      </Collapsible>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
+                            <ItemGroup className="mt-2 max-h-64 overflow-auto">
+                              {check.candidates.map((item) => (
+                                <Item
+                                  key={`${item.capability}:${item.provider_model_id}`}
+                                  variant="outline"
+                                  className="break-all"
+                                >
+                                  <span>
+                                    {item.display_name ||
+                                      item.provider_model_id}
+                                  </span>
+                                  <code className="block text-xs">
+                                    {item.provider_model_id}
+                                  </code>
+                                  <span className="text-xs text-muted-foreground">
+                                    {item.capability}
+                                  </span>
+                                </Item>
+                              ))}
+                            </ItemGroup>
+                          </CollapsibleContent>
+                        </Collapsible>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </CollapsibleContent>
+              </Collapsible>
               {provider?.status === "active" ? (
                 <AlertDialog>
                   <AlertDialogTrigger asChild>

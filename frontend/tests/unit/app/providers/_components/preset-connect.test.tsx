@@ -8,6 +8,7 @@ const api = vi.hoisted(() => ({
   connect: vi.fn(),
   key: vi.fn(),
   receipt: vi.fn(),
+  onboarding: vi.fn(),
 }));
 vi.mock("@/components/auth/session", () => ({
   useSession: () => ({
@@ -18,7 +19,7 @@ vi.mock("@/api/settings", () => ({
   connectProviderPreset: api.connect,
   setAdminCredential: api.key,
   getConfigReceipt: api.receipt,
-  getProviderOnboarding: vi.fn().mockResolvedValue({
+  getProviderOnboarding: api.onboarding.mockResolvedValue({
     provider_id: "connection",
     status: "disabled",
     credential_id: "credential",
@@ -318,21 +319,25 @@ it("按目录版本提交候选模型，切换平台会清空旧选择", async (
   fireEvent.change(screen.getByLabelText("API Key"), {
     target: { value: "fixture-api-key-test" },
   });
-  expect(screen.getByRole("button", { name: "保存并继续验证" })).toHaveProperty(
+  expect(screen.getByRole("button", { name: "接入服务" })).toHaveProperty(
     "disabled",
     false,
   );
   await waitFor(() =>
     expect(
       screen
-        .getByRole("button", { name: "保存并继续验证" })
+        .getByRole("button", { name: "接入服务" })
         .closest("form")!
         .checkValidity(),
     ).toBe(true),
   );
-  fireEvent.click(screen.getByRole("button", { name: "保存并继续验证" }));
-  await screen.findByText("验证一个模型，完成接入");
+  fireEvent.click(screen.getByRole("button", { name: "接入服务" }));
+  await screen.findByText("服务已接入。");
   expect(saved).not.toHaveBeenCalled();
+  expect(api.onboarding).not.toHaveBeenCalled();
+  expect(screen.queryByRole("button", { name: "验证模型" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "管理服务" }));
+  expect(saved).toHaveBeenCalledWith("connection");
   expect(api.connect).toHaveBeenCalledWith(
     { id: "other" },
     expect.objectContaining({
@@ -340,4 +345,67 @@ it("按目录版本提交候选模型，切换平台会清空旧选择", async (
       candidate_keys: ["ds"],
     }),
   );
+});
+
+it("跨分类多选保留选择，全选排除不可用模型，空分类不虚构模型", async () => {
+  render(
+    <PresetConnect
+      presets={[
+        {
+          id: "preset",
+          version_id: "v1",
+          document: { name: "火山方舟" },
+          model_catalog: {
+            version: "v1",
+            models: [
+              {
+                key: "text",
+                display_name: "文本模型",
+                capability: "text.generate",
+              },
+              {
+                key: "image",
+                display_name: "图片模型",
+                capability: "image.generate",
+              },
+              {
+                key: "video",
+                display_name: "需配置视频",
+                capability: "video.generate",
+                requires_model_selection: true,
+              },
+            ],
+          },
+        },
+      ]}
+      onCreated={created}
+      onSaved={saved}
+    />,
+  );
+  fireEvent.click(screen.getByRole("radio", { name: "火山方舟" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "文本模型" }));
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "图片" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  fireEvent.click(await screen.findByRole("checkbox", { name: "图片模型" }));
+  expect(screen.getByText("已选 2")).toBeDefined();
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "音频" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  await screen.findByText("暂无可接入的音频模型");
+  fireEvent.click(screen.getByRole("button", { name: "取消全选" }));
+  expect(screen.getByText("已选 0")).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "全选" }));
+  fireEvent.change(screen.getByLabelText("API Key"), {
+    target: { value: "fixture-key" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "接入服务" }));
+  await screen.findByText("服务已接入。");
+  expect(api.connect).toHaveBeenCalledWith(
+    { id: "preset" },
+    expect.objectContaining({ candidate_keys: ["text", "image"] }),
+  );
+  expect(api.onboarding).not.toHaveBeenCalled();
 });

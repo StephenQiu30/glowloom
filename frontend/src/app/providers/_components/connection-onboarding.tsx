@@ -37,11 +37,11 @@ function accepted(value: unknown, provider: string) {
 export function ConnectionOnboarding({
   id,
   onSaved,
-  onCancel,
+  revision = 0,
 }: {
   id: string;
   onSaved: (id: string) => void;
-  onCancel?: () => void;
+  revision?: number;
 }) {
   const fieldID = useId();
   const session = useSession();
@@ -51,14 +51,21 @@ export function ConnectionOnboarding({
   } | null>(null);
   const [selected, setSelected] = useState("");
   const { data, error, isLoading, isValidating, mutate } = useSWR(
-    ["provider-onboarding", session.actor.id, id],
+    ["provider-onboarding", session.actor.id, id, revision],
     () => getProviderOnboarding({ id }),
     {
       refreshInterval: (state) =>
-        ["pending", "running"].includes(state?.check?.status ?? "") ? 2500 : 0,
+        requestedCheck ||
+        ["pending", "running"].includes(state?.check?.status ?? "")
+          ? 2500
+          : 0,
       revalidateOnFocus: true,
       onSuccess: (state) => {
-        if (state.check?.id) setRequestedCheck(null);
+        if (
+          state.check?.id === requestedCheck?.id ||
+          state.credential_id !== requestedCheck?.credentialID
+        )
+          setRequestedCheck(null);
       },
     },
   );
@@ -93,16 +100,17 @@ export function ConnectionOnboarding({
   );
   const check = data?.check;
   const model =
-    selected ||
+    (data?.models?.some((m) => m.id === selected) ? selected : "") ||
     check?.model_id ||
     data?.models?.find((m) => m.capability === "text.generate")?.id ||
     data?.models?.[0]?.id ||
     "";
   const running = ["pending", "running"].includes(check?.status ?? "");
+  const selectedCheck = check?.model_id === model ? check : undefined;
   const verified =
-    check?.status === "completed" &&
-    check.auth_result === "ok" &&
-    ["completed", "accepted"].includes(check.model_result ?? "");
+    selectedCheck?.status === "completed" &&
+    selectedCheck.auth_result === "ok" &&
+    ["completed", "accepted"].includes(selectedCheck.model_result ?? "");
   const busy =
     test.busy ||
     activate.busy ||
@@ -114,13 +122,13 @@ export function ConnectionOnboarding({
     return (
       <p role="status" className="flex items-center gap-2 text-sm">
         <Spinner />
-        正在读取接入进度…
+        正在读取模型验证状态…
       </p>
     );
   if (error)
     return (
       <Alert variant="destructive">
-        <AlertTitle>无法读取接入进度</AlertTitle>
+        <AlertTitle>无法读取模型验证状态</AlertTitle>
         <AlertDescription>
           {catalogMessage(error)}
           <Button type="button" variant="outline" onClick={() => void mutate()}>
@@ -129,7 +137,7 @@ export function ConnectionOnboarding({
         </AlertDescription>
       </Alert>
     );
-  if (!data?.models?.length || data.status === "active") return null;
+  if (!data?.models?.length) return null;
   const errors: Record<string, string> = {
     auth_failed: "API Key 无效或没有该模型的调用权限，请检查 Key 和模型授权。",
     insufficient_balance: "服务商账户余额不足，请充值后再验证。",
@@ -138,19 +146,15 @@ export function ConnectionOnboarding({
     invalid_parameters: "服务商拒绝了验证参数，请检查该模型的接入配置。",
   };
   return (
-    <div className="flex min-h-0 flex-col gap-5 overflow-y-auto">
-      <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium">验证一个模型，完成接入</p>
-        <p className="text-sm text-muted-foreground">
-          已保存 {data.models.length} 个模型。验证通过后，可一起启用并用于创作。
-        </p>
-      </div>
+    <div className="flex min-w-0 flex-col gap-3">
       <Field>
-        <FieldLabel htmlFor={`${fieldID}-model`}>用于验证的模型</FieldLabel>
+        <FieldLabel variant="title" htmlFor={`${fieldID}-model`}>
+          模型验证
+        </FieldLabel>
         <NativeSelect
           id={`${fieldID}-model`}
           value={model}
-          disabled={busy || !!test.pending || !!activate.pending || verified}
+          disabled={busy || !!test.pending || !!activate.pending}
           onChange={(e) => setSelected(e.target.value)}
           className="w-full max-md:h-11"
         >
@@ -160,9 +164,7 @@ export function ConnectionOnboarding({
             </NativeSelectOption>
           ))}
         </NativeSelect>
-        <FieldDescription className="break-all">
-          {data.models.find((m) => m.id === model)?.provider_model_id}
-        </FieldDescription>
+        <FieldDescription>验证会调用服务商，可能产生费用。</FieldDescription>
       </Field>
       {!data.credential_id ? (
         <Alert>
@@ -184,7 +186,7 @@ export function ConnectionOnboarding({
       {verified ? (
         <Alert>
           <Check />
-          <AlertTitle>接入验证通过</AlertTitle>
+          <AlertTitle>所选模型验证通过</AlertTitle>
           <AlertDescription>
             {check?.model_result === "accepted"
               ? "服务商已受理视频验证任务，视频仍在生成。"
@@ -193,37 +195,36 @@ export function ConnectionOnboarding({
           </AlertDescription>
         </Alert>
       ) : null}
-      {check?.status === "failed" ? (
+      {selectedCheck?.status === "failed" ? (
         <Alert variant="destructive">
           <AlertTitle>验证未通过</AlertTitle>
           <AlertDescription>
-            {errors[check.auth_result ?? ""] ??
+            {errors[selectedCheck.auth_result ?? ""] ??
               "尚未确认调用结果，请先在服务商控制台核对。再次验证会发起一次新的真实调用。"}
           </AlertDescription>
         </Alert>
       ) : null}
-      <MutationStatus inline mutation={test} />
-      <MutationStatus inline mutation={activate} />
-      <p className="text-xs text-muted-foreground">
-        验证会发起一次真实调用，可能产生服务商费用。平台暂不额外收费，后续创作由服务商按账号实际用量计费。
-      </p>
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={isValidating}
-          onClick={() => void mutate()}
-          className="mr-auto max-md:h-11"
-        >
-          <RefreshCw data-icon="inline-start" />
-          查询结果
-        </Button>
-        {onCancel ? (
-          <Button type="button" variant="ghost" onClick={onCancel}>
-            稍后继续
+      {test.pending || (test.message && test.message !== "已保存。") ? (
+        <MutationStatus inline mutation={test} />
+      ) : null}
+      {activate.pending ||
+      (activate.message && activate.message !== "已保存。") ? (
+        <MutationStatus inline mutation={activate} />
+      ) : null}
+      <div className="flex flex-wrap items-center gap-2">
+        {busy || error || check?.status === "failed" ? (
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={isValidating}
+            onClick={() => void mutate()}
+            className="mr-auto max-md:h-11"
+          >
+            <RefreshCw data-icon="inline-start" />
+            查询结果
           </Button>
         ) : null}
-        {verified ? (
+        {verified && data.status !== "active" ? (
           <Button
             type="button"
             disabled={busy || !!activate.pending}
@@ -247,28 +248,36 @@ export function ConnectionOnboarding({
             {activate.busy ? <Spinner data-icon="inline-start" /> : null}启用{" "}
             {data.models.length} 个模型
           </Button>
-        ) : (
-          <Button
-            type="button"
-            disabled={busy || !data.credential_id || !model || !!test.pending}
-            className="max-md:h-11"
-            onClick={() =>
-              void test.run("credential.test", id, (requestID) =>
-                testProviderOnboardingModel(
-                  { id, credential_id: data.credential_id!, model_id: model },
-                  { headers: { "Idempotency-Key": requestID } },
-                ),
-              )
-            }
-          >
-            {busy ? <Spinner data-icon="inline-start" /> : null}
-            {running
-              ? "验证中…"
-              : check?.status === "failed"
-                ? "重新验证（新调用）"
+        ) : null}
+        <Button
+          type="button"
+          variant={verified && data.status !== "active" ? "outline" : "default"}
+          disabled={
+            busy ||
+            !data.credential_id ||
+            !model ||
+            !!test.pending ||
+            !!activate.pending
+          }
+          className="max-md:h-11"
+          onClick={() =>
+            void test.run("credential.test", id, (requestID) =>
+              testProviderOnboardingModel(
+                { id, credential_id: data.credential_id!, model_id: model },
+                { headers: { "Idempotency-Key": requestID } },
+              ),
+            )
+          }
+        >
+          {busy ? <Spinner data-icon="inline-start" /> : null}
+          {running
+            ? "验证中…"
+            : selectedCheck?.status === "failed"
+              ? "重新验证"
+              : verified
+                ? "重新验证"
                 : "验证模型"}
-          </Button>
-        )}
+        </Button>
       </div>
     </div>
   );

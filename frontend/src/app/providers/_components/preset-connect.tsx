@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { ChevronDown, Eye, EyeOff, Globe, Server } from "lucide-react";
-import { ConnectionOnboarding } from "./connection-onboarding";
+import { Eye, EyeOff } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Empty, EmptyHeader, EmptyDescription } from "@/components/ui/empty";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Spinner } from "@/components/ui/spinner";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -15,11 +16,6 @@ import {
 import { connectProviderPreset, setAdminCredential } from "@/api/settings";
 import { isCredentialReceipt } from "@/components/catalog/credential-receipt";
 import { RequestError } from "@/lib/request";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import {
   Field,
@@ -31,7 +27,6 @@ import {
   FieldContent,
   FieldTitle,
 } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import {
   MutationStatus,
   useCatalogMutation,
@@ -75,7 +70,7 @@ export function PresetConnect({
     };
   }, []);
   const [apiKey, setAPIKey] = useState("");
-  const [name, setName] = useState("");
+  const [category, setCategory] = useState("text.generate");
   const [createdID, setCreatedID] = useState("");
   const [confirmed, setComplete] = useState(false);
   const create = useCatalogMutation(
@@ -118,17 +113,14 @@ export function PresetConnect({
   const direct =
     !!preset?.model_catalog?.models?.length &&
     !preset.document?.model_templates?.length;
-  if (complete && targetID && direct)
-    return (
-      <ConnectionOnboarding
-        id={targetID}
-        onSaved={onSaved}
-        onCancel={onCancel}
-      />
-    );
+  const models = preset?.model_catalog?.models ?? [];
+  const selectable = models.filter((m) => m.key && !m.requires_model_selection);
+  const allSelected =
+    selectable.length > 0 &&
+    selectable.every((m) => candidateKeys.includes(m.key!));
   return (
     <form
-      className="flex min-h-0 min-w-0 flex-1 flex-col gap-6"
+      className="flex min-h-0 min-w-0 flex-1 flex-col gap-4"
       onSubmit={async (event) => {
         event.preventDefault();
         if (
@@ -141,7 +133,7 @@ export function PresetConnect({
               (direct && !candidateKeys.length)))
         )
           return;
-        const connectionName = name.trim();
+        const connectionName = "";
         setPresetID(selectedPreset);
         const secret = apiKey;
         setAPIKey("");
@@ -186,9 +178,9 @@ export function PresetConnect({
         );
       }}
     >
-      <div className="flex min-h-0 flex-col gap-6 overflow-y-auto">
-        <FieldGroup>
-          <FieldSet>
+      <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
+        <FieldGroup className="gap-4">
+          <FieldSet className="gap-2">
             <FieldLegend variant="label">平台预设</FieldLegend>
             <RadioGroup
               aria-label="平台预设"
@@ -199,31 +191,22 @@ export function PresetConnect({
               onValueChange={(id) => {
                 setPresetID(id);
                 setCandidateKeys([]);
+                setCategory("text.generate");
               }}
-              className="grid-cols-1 sm:grid-cols-2"
+              className="grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-3"
             >
               {presets
                 .filter((p) => !p.archived && !p.emergency_disabled)
                 .map((p) => (
                   <FieldLabel key={p.id} htmlFor={`${fieldID}-${p.id}`}>
-                    <Field orientation="horizontal">
+                    <Field orientation="horizontal" className="min-h-16">
                       <RadioGroupItem
                         id={`${fieldID}-${p.id}`}
                         value={p.id!}
                         aria-label={p.document?.name}
                       />
                       <FieldContent>
-                        <FieldTitle>
-                          <span className="flex items-center gap-2">
-                            {p.document?.config?.adapter_key ===
-                            "volcengine_ark" ? (
-                              <Server className="size-4" />
-                            ) : (
-                              <Globe className="size-4" />
-                            )}
-                            {p.document?.name}
-                          </span>
-                        </FieldTitle>
+                        <FieldTitle>{p.document?.name}</FieldTitle>
                         <FieldDescription>
                           {p.document?.config?.region === "domestic"
                             ? "国内"
@@ -241,7 +224,9 @@ export function PresetConnect({
             ) : null}
           </FieldSet>
           <Field>
-            <FieldLabel htmlFor={`${fieldID}-key`}>API Key</FieldLabel>
+            <FieldLabel variant="title" htmlFor={`${fieldID}-key`}>
+              API Key
+            </FieldLabel>
             <InputGroup className="h-10 max-md:h-11">
               <InputGroupInput
                 className="h-full"
@@ -276,120 +261,155 @@ export function PresetConnect({
                 </InputGroupButton>
               </InputGroupAddon>
             </InputGroup>
-            <FieldDescription>加密保存</FieldDescription>
           </Field>
         </FieldGroup>
-        {preset?.model_catalog?.models?.length && !targetID ? (
-          <FieldSet disabled={busy || !!create.pending} className="gap-4">
-            <FieldLegend variant="label">
-              选择模型 · 已选 {candidateKeys.length}
+        {models.length ? (
+          <FieldSet
+            disabled={busy || complete || !!targetID || !!create.pending}
+            className="min-w-0 gap-1"
+          >
+            <FieldLegend variant="label" className="sr-only">
+              接入模型
             </FieldLegend>
-            <FieldDescription>
-              勾选要用于创作的模型，保存后只需验证其中一个。
-            </FieldDescription>
-            {[
-              ["text.generate", "文本"],
-              ["image.generate", "图像"],
-              ["video.generate", "视频"],
-            ].map(([capability, label]) => {
-              const models = preset.model_catalog!.models!.filter(
-                (m) => m.capability === capability,
-              );
-              if (!models.length) return null;
-              return (
-                <FieldSet key={capability} className="gap-3">
-                  <FieldLegend variant="label" className="mb-0">
-                    {label}
-                  </FieldLegend>
-                  {models.map((candidate) => (
-                    <Field
-                      key={candidate.key}
-                      orientation="horizontal"
-                      className="items-start"
-                    >
-                      <Checkbox
-                        id={`${fieldID}-candidate-${candidate.key}`}
-                        className="mt-1"
-                        disabled={
-                          candidate.requires_model_selection ||
-                          busy ||
-                          !!create.pending
-                        }
-                        checked={candidateKeys.includes(candidate.key!)}
-                        onCheckedChange={(checked) =>
-                          setCandidateKeys((previous) =>
-                            checked === true
-                              ? [...previous, candidate.key!]
-                              : previous.filter((key) => key !== candidate.key),
-                          )
-                        }
-                      />
-                      <FieldContent className="min-w-0">
-                        <FieldLabel
-                          htmlFor={`${fieldID}-candidate-${candidate.key}`}
-                        >
-                          {candidate.display_name}
-                        </FieldLabel>
-                        <FieldDescription className="break-all">
-                          {candidate.provider_model_id ||
-                            "此型号需要先补充账号模型配置"}
-                        </FieldDescription>
-                      </FieldContent>
-                    </Field>
-                  ))}
-                </FieldSet>
-              );
-            })}
-            {preset.document?.config?.adapter_key === "volcengine_ark" ? (
-              <FieldDescription>
-                <a
-                  href="https://console.volcengine.com/ark/region:cn-beijing/docs/model-list"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="underline underline-offset-4"
-                >
-                  查看火山方舟模型文档
-                </a>{" "}
-                · 请确保 Key 已获得所选模型的调用权限。
-              </FieldDescription>
-            ) : null}
-          </FieldSet>
-        ) : null}
-        {!targetID ? (
-          <Collapsible>
-            <CollapsibleTrigger asChild>
-              <Button type="button" variant="ghost" className="max-md:h-11">
-                <ChevronDown data-icon="inline-start" />
-                连接名称（可选）
+            <div className="flex min-h-8 flex-wrap items-center gap-2">
+              <FieldTitle aria-hidden="true">接入模型</FieldTitle>
+              <span
+                role="status"
+                className="ml-auto text-xs text-muted-foreground"
+              >
+                已选 {candidateKeys.length}
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="max-md:h-11"
+                disabled={
+                  busy ||
+                  complete ||
+                  !!targetID ||
+                  !!create.pending ||
+                  !selectable.length
+                }
+                onClick={() =>
+                  setCandidateKeys(
+                    allSelected ? [] : selectable.map((m) => m.key!),
+                  )
+                }
+              >
+                {allSelected ? "取消全选" : "全选"}
               </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <Field className="mt-3">
-                <FieldLabel htmlFor={`${fieldID}-name`}>
-                  连接名称（可选）
-                </FieldLabel>
-                <Input
-                  id={`${fieldID}-name`}
-                  name="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  maxLength={200}
-                  placeholder="留空自动命名"
-                  disabled={busy || !!create.pending}
-                />
-              </Field>
-            </CollapsibleContent>
-          </Collapsible>
+            </div>
+            <Tabs
+              value={category}
+              onValueChange={setCategory}
+              className="min-w-0 gap-1"
+            >
+              <TabsList
+                className="w-full group-data-horizontal/tabs:h-10 max-md:group-data-horizontal/tabs:h-12"
+                aria-label="模型类型"
+              >
+                {[
+                  ["text.generate", "文本"],
+                  ["video.generate", "视频"],
+                  ["audio.generate", "音频"],
+                  ["image.generate", "图片"],
+                ].map(([value, label]) => (
+                  <TabsTrigger key={value} value={value}>
+                    {label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              {[
+                ["text.generate", "文本"],
+                ["video.generate", "视频"],
+                ["audio.generate", "音频"],
+                ["image.generate", "图片"],
+              ].map(([value, label]) => {
+                const visibleModels = models.filter(
+                  (m) => m.capability === value,
+                );
+                return (
+                  <TabsContent
+                    key={value}
+                    value={value}
+                    className="max-h-60 overflow-y-auto py-1"
+                  >
+                    {visibleModels.length ? (
+                      <FieldGroup className="gap-0">
+                        {visibleModels.map((candidate) => (
+                          <Field
+                            key={candidate.key}
+                            orientation="horizontal"
+                            data-disabled={
+                              candidate.requires_model_selection || undefined
+                            }
+                            className="min-h-10 gap-2 px-2 max-md:min-h-11"
+                          >
+                            <Checkbox
+                              id={fieldID + "-candidate-" + candidate.key}
+                              disabled={
+                                candidate.requires_model_selection ||
+                                busy ||
+                                complete ||
+                                !!targetID ||
+                                !!create.pending
+                              }
+                              checked={candidateKeys.includes(candidate.key!)}
+                              onCheckedChange={(checked) =>
+                                setCandidateKeys((previous) =>
+                                  checked === true
+                                    ? [
+                                        ...new Set([
+                                          ...previous,
+                                          candidate.key!,
+                                        ]),
+                                      ]
+                                    : previous.filter(
+                                        (key) => key !== candidate.key,
+                                      ),
+                                )
+                              }
+                            />
+                            <FieldLabel
+                              htmlFor={fieldID + "-candidate-" + candidate.key}
+                              className="min-h-10 min-w-0 flex-1 items-center py-2 max-md:min-h-11"
+                            >
+                              <FieldTitle className="min-w-0 break-words">
+                                {candidate.display_name}
+                              </FieldTitle>
+                              {candidate.requires_model_selection ? (
+                                <span>需配置</span>
+                              ) : null}
+                            </FieldLabel>
+                          </Field>
+                        ))}
+                      </FieldGroup>
+                    ) : (
+                      <Empty className="min-h-24 p-4">
+                        <EmptyHeader>
+                          <EmptyDescription>
+                            暂无可接入的{label}模型
+                          </EmptyDescription>
+                        </EmptyHeader>
+                      </Empty>
+                    )}
+                  </TabsContent>
+                );
+              })}
+            </Tabs>
+          </FieldSet>
         ) : null}
         {targetID ? (
           <p role="status" className="text-sm">
             {complete
-              ? "连接与 Key 已保存。"
+              ? "服务已接入。"
               : "连接已创建，请继续保存 Key；结果待确认时先查询回执。"}
           </p>
         ) : null}
         {create.pending || (!targetID && create.message) ? (
           <MutationStatus
+            inline
             mutation={{
               ...create,
               message: targetID ? "" : create.message,
@@ -402,6 +422,7 @@ export function PresetConnect({
         ) : null}
         {credential.pending || (!complete && credential.message) ? (
           <MutationStatus
+            inline
             mutation={{
               ...credential,
               message: complete ? "" : credential.message,
@@ -409,10 +430,7 @@ export function PresetConnect({
           />
         ) : null}
       </div>
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t pt-4">
-        <span className="mr-auto text-xs text-muted-foreground">
-          保存不会产生生成费用
-        </span>
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
         {onCancel ? (
           <Button
             type="button"
@@ -423,43 +441,36 @@ export function PresetConnect({
             取消
           </Button>
         ) : null}
-        <Button
-          className="max-md:h-11"
-          disabled={
-            busy ||
-            (!preset && !targetID) ||
-            !apiKey ||
-            complete ||
-            (direct && !targetID && !candidateKeys.length)
-          }
-        >
-          {busy ? <Spinner data-icon="inline-start" /> : null}
-          {busy
-            ? "正在保存…"
-            : complete
-              ? "连接与 Key 已保存"
-              : targetID
-                ? "继续保存 API Key"
-                : direct
-                  ? "保存并继续验证"
-                  : "保存连接"}
-        </Button>
+        {!complete ? (
+          <Button
+            className="max-md:h-11"
+            disabled={
+              busy ||
+              (!preset && !targetID) ||
+              !apiKey ||
+              complete ||
+              (direct && !targetID && !candidateKeys.length)
+            }
+          >
+            {busy ? <Spinner data-icon="inline-start" /> : null}
+            {busy
+              ? "接入中…"
+              : complete
+                ? "连接与 Key 已保存"
+                : targetID
+                  ? "继续保存 API Key"
+                  : direct
+                    ? "接入服务"
+                    : "保存连接"}
+          </Button>
+        ) : null}
         {complete ? (
           <Button
             type="button"
-            variant="outline"
-            onClick={() => {
-              if (onCancel) {
-                onSaved(targetID);
-                return;
-              }
-              setCreatedID("");
-              setComplete(false);
-              setPresetID("");
-              setName("");
-            }}
+            className="max-md:h-11"
+            onClick={() => onSaved(targetID)}
           >
-            {onCancel ? "查看连接" : "添加另一个连接"}
+            管理服务
           </Button>
         ) : null}
       </div>

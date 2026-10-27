@@ -45,14 +45,49 @@ const state: API.ProviderOnboardingState = {
   ],
 };
 let calls = 0;
+let savedModels: string[] = [];
+const presets: API.Preset[] = [
+  {
+    id: "openrouter",
+    version_id: "openrouter-v1",
+    document: { name: "OpenRouter", config: { region: "overseas" } },
+  },
+  {
+    id: "ark",
+    version_id: "ark-v1",
+    document: { name: "火山方舟", config: { region: "domestic" } },
+    model_catalog: {
+      version: "v1",
+      models: state.models!.map((m) => ({
+        key: m.id,
+        display_name: m.display_name,
+        capability: m.capability,
+        provider_model_id: m.provider_model_id,
+      })),
+    },
+  },
+];
 if (options.has("long-label")) {
   state.models![0].display_name =
     "Doubao-Seed-Enterprise-".repeat(8) + "多语言长模型名称";
 }
 axios.defaults.adapter = async (config) => {
   const path = config.url ?? "";
-  let data: unknown = structuredClone(state);
-  if (path.endsWith("/test")) {
+  let data: unknown = {
+    ...structuredClone(state),
+    models: state.models!.filter((m) => savedModels.includes(m.id!)),
+  };
+  if (path.endsWith("/connections")) {
+    savedModels = JSON.parse(config.data).candidate_keys;
+    data = { provider_id: id };
+  } else if (path.endsWith("/credentials")) {
+    data = {
+      id: "credential-fixture",
+      provider_id: id,
+      status: "active",
+      last4: "test",
+    };
+  } else if (path.endsWith("/test")) {
     calls++;
     const modelID = path.split("/models/")[1]?.split("/")[0] ?? "text";
     state.check = { id: "check", model_id: modelID, status: "running" };
@@ -77,13 +112,16 @@ axios.defaults.adapter = async (config) => {
   }
   return { data, status: 200, statusText: "OK", headers: {}, config };
 };
-const [{ ConnectionOnboarding }, { setCSRFToken }] = await Promise.all([
-  import("../../src/app/providers/_components/connection-onboarding"),
-  import("../../src/lib/request"),
-]);
+const [{ ConnectionOnboarding }, { PresetConnect }, { setCSRFToken }] =
+  await Promise.all([
+    import("../../src/app/providers/_components/connection-onboarding"),
+    import("../../src/app/providers/_components/preset-connect"),
+    import("../../src/lib/request"),
+  ]);
 setCSRFToken("fixture-only");
 function Fixture() {
   const [done, setDone] = useState(false);
+  const [management, setManagement] = useState(false);
   return (
     <ThemeProvider
       attribute="class"
@@ -94,22 +132,30 @@ function Fixture() {
       </p>
       {done ? (
         <p role="status" className="p-6">
-          已启用 3 个模型 · 验证调用 {calls} 次
+          已启用 {savedModels.length} 个模型 · 验证调用 {calls} 次
         </p>
       ) : (
         <Dialog open>
-          <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden p-6 sm:max-w-xl">
+          <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden p-6 sm:max-w-[520px]">
             <DialogHeader>
-              <DialogTitle>接入 AI 服务</DialogTitle>
+              <DialogTitle size="lg">
+                {management ? "管理服务" : "接入 AI 服务"}
+              </DialogTitle>
               <DialogDescription className="sr-only">
-                选择模型预设并添加 API Key，验证一个模型后即可用于创作。
+                接入与模型验证分离的受控验收。
               </DialogDescription>
             </DialogHeader>
-            <ConnectionOnboarding
-              id={id}
-              onSaved={() => setDone(true)}
-              onCancel={() => setDone(true)}
-            />
+            {management ? (
+              <ConnectionOnboarding id={id} onSaved={() => setDone(true)} />
+            ) : (
+              <PresetConnect
+                presets={presets}
+                initialPreset="ark"
+                onCreated={() => undefined}
+                onSaved={() => setManagement(true)}
+                onCancel={() => setDone(true)}
+              />
+            )}
           </DialogContent>
         </Dialog>
       )}

@@ -634,12 +634,13 @@ function ProviderAdministration({
             event.preventDefault();
             if (!detailOpen) restoreFocus();
           }}
-          className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden p-6 sm:max-w-xl max-md:[&_[data-slot=dialog-close]]:size-11"
+          className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden p-6 sm:max-w-[520px] max-md:[&_[data-slot=dialog-close]]:size-11"
         >
           <DialogHeader>
-            <DialogTitle>接入 AI 服务</DialogTitle>
+            <DialogTitle size="lg">接入 AI 服务</DialogTitle>
             <DialogDescription className="sr-only">
-              选择模型预设并添加 API Key，验证一个模型后即可用于创作。
+              选择平台、填写 API
+              Key，并勾选需要接入的模型。模型验证可在管理详情中进行。
             </DialogDescription>
           </DialogHeader>
           {connect ? (
