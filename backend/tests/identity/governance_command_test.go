@@ -2,7 +2,6 @@ package identity_test
 
 import (
 	"errors"
-	"os"
 	"testing"
 
 	"github.com/google/uuid"
@@ -12,9 +11,6 @@ import (
 )
 
 func TestGovernanceCommandReceiptAndReplay(t *testing.T) {
-	if os.Getenv("GLOWLOOM_TEST_EXISTING_DB_DSN") == "" && os.Getenv("GLOWLOOM_TEST_CANVAS_DB_DSN") != "" {
-		t.Setenv("GLOWLOOM_TEST_EXISTING_DB_DSN", os.Getenv("GLOWLOOM_TEST_CANVAS_DB_DSN"))
-	}
 	tx, svc, actor, now := governanceFixture(t)
 	_, target := verifiedTestActor(t, tx, "batch-target@example.invalid", now)
 	if err := tx.Exec(`UPDATE identity."user" SET revision=1 WHERE id=?`, target.ID).Error; err != nil {
