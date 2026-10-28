@@ -11,6 +11,7 @@ import {
 
 /** Figma ProductHeader 620:24416; shared by ordinary product pages. */
 export function ProductHeader({
+  assetLayout = false,
   toolbarRef,
   pageActionsRef,
   replaceBase = false,
@@ -24,6 +25,7 @@ export function ProductHeader({
   onLogout,
   onFeature,
 }: {
+  assetLayout?: boolean;
   toolbarRef?: Ref<HTMLDivElement>;
   pageActionsRef?: Ref<HTMLDivElement>;
   replaceBase?: boolean;
@@ -44,6 +46,8 @@ export function ProductHeader({
   const common = replaceBase ? null : (
     <ProductHeaderActions
       key="common"
+      assetLayout={assetLayout}
+      pageActions={assetLayout ? pageActions : undefined}
       search={search}
       actor={actor}
       isMobile={isMobile}
@@ -54,6 +58,7 @@ export function ProductHeader({
   );
   return (
     <header
+      data-asset-layout={assetLayout || undefined}
       data-replace-base={replaceBase || undefined}
       className="product-header"
       aria-label="页面顶栏"
@@ -77,8 +82,8 @@ export function ProductHeader({
         ) : null}
       </div>
       {isMobile
-        ? [common, navigation, pageActions]
-        : [navigation, pageActions, common]}
+        ? [common, navigation, assetLayout ? null : pageActions]
+        : [navigation, assetLayout ? null : pageActions, common]}
     </header>
   );
 }

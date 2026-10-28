@@ -2685,3 +2685,93 @@ button:not(:disabled),
     grid-row: 3;
   }
 }
+
+/* Asset header uses shadcn surfaces; these rules only arrange their slots. */
+.product-header[data-asset-layout]:has(.product-header-toolbar:not(:empty)) {
+  grid-template-columns: minmax(240px, 1fr) minmax(0, auto);
+  padding-block: 12px;
+}
+.product-header[data-asset-layout] .product-header-page-actions {
+  padding: 0;
+}
+.product-header[data-asset-layout]:has(.product-header-toolbar:not(:empty))
+  .product-header-actions {
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.workspace-page:has(> .asset-workspace-tabs) {
+  display: flex;
+  flex-direction: column;
+}
+.asset-workspace-tabs {
+  flex: 1;
+}
+.asset-workspace-tabs > [data-slot="tabs-content"]:has([data-slot="empty"]) {
+  display: flex;
+  flex-direction: column;
+}
+.asset-workspace-tabs
+  > [data-slot="tabs-content"]
+  > :has(> [data-slot="empty"]) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+@media (max-width: 1100px) {
+  .product-header[data-asset-layout]:has(.product-header-toolbar:not(:empty)) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .product-header[data-asset-layout] .product-header-toolbar {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 767px) {
+  .product-header[data-asset-layout]:has(.product-header-toolbar:not(:empty)) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 8px;
+  }
+  .product-header[data-asset-layout]:has(.product-header-toolbar:not(:empty))
+    .product-header-actions {
+    display: contents;
+  }
+  .product-header[data-asset-layout] [data-asset-tool-group] {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    max-width: 100%;
+  }
+  .product-header[data-asset-layout] [data-asset-account-group] {
+    grid-row: 1;
+    grid-column: 2;
+    justify-self: end;
+  }
+  .product-header[data-asset-layout] .product-header-toolbar:not(:empty) {
+    grid-row: 3;
+    padding-bottom: 0;
+  }
+  .product-header[data-asset-layout] .product-header-page-actions:not(:empty) {
+    display: flex;
+  }
+}
+
+/* Keep the account aligned with source navigation when batch actions wrap. */
+@media (min-width: 768px) and (max-width: 1400px) {
+  .product-header[data-asset-layout]:has(.product-header-toolbar:not(:empty)):has([data-asset-batch]) .product-header-actions {
+    display: contents;
+  }
+  .product-header[data-asset-layout]:has([data-asset-batch]) .product-header-toolbar {
+    grid-row: 1;
+    grid-column: 1;
+  }
+  .product-header[data-asset-layout]:has([data-asset-batch]) [data-asset-account-group] {
+    grid-row: 1;
+    grid-column: 2;
+    justify-self: end;
+  }
+  .product-header[data-asset-layout]:has([data-asset-batch]) [data-asset-tool-group] {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    justify-self: end;
+    max-width: 100%;
+  }
+}

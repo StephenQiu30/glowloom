@@ -58,7 +58,7 @@ export function PageLayout({
       )}
     >
       {children}
-      <ProductFooter />
+      {screen !== "assets" && <ProductFooter />}
     </div>
   );
 }

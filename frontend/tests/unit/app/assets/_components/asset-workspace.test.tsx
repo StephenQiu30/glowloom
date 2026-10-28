@@ -9,6 +9,7 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { PageToolbarContext } from "@/components/layout/page-toolbar";
 import { AssetWorkspace } from "@/app/assets/_components/asset-workspace";
 import { assetDateRange } from "@/app/assets/_components/asset-query";
@@ -60,10 +61,12 @@ vi.mock("@/components/layout/page-layout", () => ({
     const [target, setTarget] = useState<HTMLElement | null>(null);
     state.search = search;
     return (
-      <PageToolbarContext.Provider value={target}>
-        <header ref={setTarget} />
-        {children}
-      </PageToolbarContext.Provider>
+      <TooltipProvider>
+        <PageToolbarContext.Provider value={target}>
+          <header ref={setTarget} />
+          {children}
+        </PageToolbarContext.Provider>
+      </TooltipProvider>
     );
   },
 }));
@@ -200,6 +203,10 @@ it("date validation stays inline, associates the invalid input and returns keybo
   fireEvent.submit(from.closest("form")!);
   expect(await screen.findByText("开始日期不能晚于结束日期。")).toBeTruthy();
   expect(from.getAttribute("aria-invalid")).toBe("true");
+  expect(from.closest("[data-slot=field]")?.getAttribute("data-invalid")).toBe(
+    "true",
+  );
+  expect(screen.getAllByText("开始日期不能晚于结束日期。")).toHaveLength(1);
   expect(document.activeElement).toBe(from);
 });
 
@@ -1019,3 +1026,20 @@ it("original-only documents expose real original downloads in card, detail and b
     else Reflect.deleteProperty(URL, "revokeObjectURL");
   }
 });
+
+it.each(["history", "canvas", "short_drama"] as const)(
+  "%s batch mode keeps keyboard focus on a usable control and restores the trigger",
+  async (initialView) => {
+    render(<AssetWorkspace initialView={initialView} />);
+    await screen.findByText("暂无相关资产");
+    const trigger = screen.getByRole("button", { name: "批量操作" });
+    act(() => trigger.focus());
+    fireEvent.click(trigger);
+    const cancel = screen.getByRole("button", { name: "取消选择" });
+    expect(document.activeElement).toBe(cancel);
+    fireEvent.click(cancel);
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "批量操作" }),
+    );
+  },
+);

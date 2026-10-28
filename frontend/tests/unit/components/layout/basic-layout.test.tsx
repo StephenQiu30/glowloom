@@ -479,6 +479,22 @@ it("asset header options stay stable under the shared login context", async () =
   ).toBeTruthy();
   expect(within(header).getByRole("button", { name: "批量操作" })).toBeTruthy();
   expect(within(header).getByRole("button", { name: "账号菜单" })).toBeTruthy();
+  expect(within(header).queryByRole("button", { name: "企业服务" })).toBeNull();
+  const tools = within(header).getByRole("group", { name: "资产工具" });
+  expect(
+    within(tools).getByRole("button", { name: "搜索本人生成历史" }),
+  ).toBeTruthy();
+  expect(within(tools).getByRole("button", { name: "批量操作" })).toBeTruthy();
+  expect(within(tools).getByRole("button", { name: "参考素材" })).toBeTruthy();
+  const account = within(header).getByRole("group", { name: "通知与账号" });
+  expect(
+    within(account).getByRole("button", { name: "账号菜单" }),
+  ).toBeTruthy();
+  expect(
+    within(account).getByRole("button", { name: "消息中心" }),
+  ).toBeTruthy();
+  expect(within(header).queryByRole("button", { name: "切换主题" })).toBeNull();
+  expect(screen.queryByRole("contentinfo")).toBeNull();
   expect(within(header).queryByLabelText("资产筛选")).toBeNull();
   expect(screen.getByLabelText("资产筛选").closest("main")).toBeTruthy();
   expect(screen.getByRole("heading", { name: /^资产$/ }).className).toContain(

@@ -2,14 +2,13 @@
 
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { ChevronDown, PanelsTopLeft } from "lucide-react";
+import { ChevronDown, PanelsTopLeft, FolderInput } from "lucide-react";
 import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
 import { useLoginDialog } from "@/components/layout/basic-layout";
 import { PageLayout } from "@/components/layout/page-layout";
 import { PageToolbar } from "@/components/layout/page-toolbar";
 import { ContentState } from "@/components/layout/content-state";
-import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -28,7 +27,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 
 import {
@@ -40,6 +44,7 @@ import {
   defaultAssetFilters as defaultFilters,
   hasAssetFilters,
 } from "./asset-query";
+import { AssetToolbarButton } from "./asset-toolbar-button";
 import { AssetFilterMenu } from "./asset-filter-menu";
 import { PersonalHistoryList } from "./personal-history-list";
 import { AssetCanvasList } from "./asset-canvas-list";
@@ -222,18 +227,22 @@ function WorkspaceScope({
                 </TabsTrigger>
               ))}
             </TabsList>
-            <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
-              <div ref={setToolbarTarget} className="min-w-0" />
-              {!batch && (
-                <Button
-                  variant="ghost"
-                  disabled={locked}
-                  onClick={() => changeView("reference")}
-                >
-                  参考素材
-                </Button>
-              )}
-            </div>
+          </div>
+        </PageToolbar>
+        <PageToolbar inHeader slot="actions">
+          <div
+            className="flex min-w-0 flex-wrap items-center gap-1"
+            data-asset-page-actions
+          >
+            <div ref={setToolbarTarget} className="min-w-0" />
+            {!batch && (
+              <AssetToolbarButton
+                label="参考素材"
+                icon={FolderInput}
+                disabled={locked}
+                onClick={() => changeView("reference")}
+              />
+            )}
           </div>
         </PageToolbar>
         <div
@@ -299,7 +308,10 @@ function WorkspaceScope({
             </ToggleGroup>
           )}
           {view !== "short_drama" && (
-            <Separator orientation="vertical" className="hidden h-4 sm:block" />
+            <Separator
+              orientation="vertical"
+              className="hidden h-4 sm:block data-vertical:self-center"
+            />
           )}
           <div className="flex flex-wrap items-center gap-2">
             <AssetFilterMenu
@@ -464,7 +476,6 @@ function TimeFilter({
   }
   return (
     <>
-      {error && <FeedbackToast message={error} />}
       <Popover
         open={open}
         onOpenChange={(next) => {
@@ -492,10 +503,10 @@ function TimeFilter({
               event.preventDefault();
               apply(from, through);
             }}
-            className="grid gap-4"
+            className="flex flex-col gap-4"
           >
             <FieldGroup>
-              <Field>
+              <Field data-invalid={!!error}>
                 <FieldLabel htmlFor="asset-from">开始日期</FieldLabel>
                 <Input
                   id="asset-from"
@@ -508,8 +519,11 @@ function TimeFilter({
                   value={from}
                   onChange={(event) => setFrom(event.target.value)}
                 />
+                {error && (
+                  <FieldError id="asset-date-error">{error}</FieldError>
+                )}
               </Field>
-              <Field>
+              <Field data-invalid={!!error}>
                 <FieldLabel htmlFor="asset-through">结束日期</FieldLabel>
                 <Input
                   id="asset-through"
@@ -523,15 +537,6 @@ function TimeFilter({
                 />
               </Field>
             </FieldGroup>
-            {error && (
-              <p
-                id="asset-date-error"
-                role="alert"
-                className="text-sm text-destructive"
-              >
-                {error}
-              </p>
-            )}
             <div className="flex flex-wrap gap-1">
               <Button
                 type="button"

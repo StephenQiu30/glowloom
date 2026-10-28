@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ListChecks } from "lucide-react";
+import { useBatchToolbarFocus } from "./use-batch-toolbar-focus";
+import { AssetToolbarButton } from "./asset-toolbar-button";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import {
@@ -106,6 +109,7 @@ export function PersonalHistoryList({
   const [denied, setDenied] = useState(0);
   const [retry, setRetry] = useState(0);
   const [batch, setBatch] = useState(false);
+  const batchToolbar = useBatchToolbarFocus(batch);
   const [chosen, setChosen] = useState<string[]>([]);
   const [detail, setDetail] = useState<HistoryCardTarget | null>(null);
   const [detailAvailable, setDetailAvailable] = useState(false);
@@ -401,6 +405,8 @@ export function PersonalHistoryList({
     kind === "document" && formatTargets.some(hasDocumentBody);
   const toolbar = (
     <div
+      ref={batchToolbar}
+      data-asset-batch={batch || undefined}
       className="flex min-w-0 flex-wrap items-center gap-2"
       aria-label="生成历史操作"
     >
@@ -486,6 +492,7 @@ export function PersonalHistoryList({
             删除
           </Button>
           <Button
+            data-batch-focus
             variant="ghost"
             disabled={locked}
             onClick={() => {
@@ -498,16 +505,17 @@ export function PersonalHistoryList({
           </Button>
         </>
       ) : (
-        <Button
+        <AssetToolbarButton
+          data-batch-focus
+          label="批量操作"
+          icon={ListChecks}
           variant="ghost"
           disabled={locked || pending || !page || !!error}
           onClick={() => {
             setBatch(true);
             onBatchMode(true);
           }}
-        >
-          批量操作
-        </Button>
+        />
       )}
       {kind === "document" && (
         <DropdownMenu>

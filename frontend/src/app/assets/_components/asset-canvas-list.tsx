@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ListChecks } from "lucide-react";
+import { useBatchToolbarFocus } from "./use-batch-toolbar-focus";
+import { AssetToolbarButton } from "./asset-toolbar-button";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { Heart, MoreHorizontal, PanelsTopLeft } from "lucide-react";
@@ -88,9 +91,21 @@ export function AssetCanvasList({
   const [creating, setCreating] = useState<"project" | "existing" | null>(null);
   const [template, setTemplate] = useState<AssetTemplate | undefined>();
   const [batch, setBatch] = useState(false);
+  const batchToolbar = useBatchToolbarFocus(batch);
   const [selected, setSelected] = useState<string[]>([]);
   const [deleting, setDeleting] = useState<AssetCanvasItem[] | null>(null);
   const [renaming, setRenaming] = useState<AssetCanvasItem | null>(null);
+  const dialogTrigger = useRef<HTMLButtonElement | null>(null);
+  function rememberDialogTrigger(event: { currentTarget: HTMLButtonElement }) {
+    dialogTrigger.current = event.currentTarget;
+  }
+  function restoreDialogFocus(event: Event) {
+    if (dialogTrigger.current?.isConnected) {
+      event.preventDefault();
+      dialogTrigger.current.focus();
+    }
+  }
+
   const [name, setName] = useState("");
   const [copying, setCopying] = useState<Project | null>(null);
   const [intent, setIntent] = useState<Intent | null>(null);
@@ -302,7 +317,12 @@ export function AssetCanvasList({
     }
   }
   const toolbar = (
-    <div className="flex flex-wrap items-center gap-2" aria-label="画布操作">
+    <div
+      ref={batchToolbar}
+      data-asset-batch={batch || undefined}
+      className="flex flex-wrap items-center gap-2"
+      aria-label="画布操作"
+    >
       {batch ? (
         <>
           <span
@@ -345,6 +365,8 @@ export function AssetCanvasList({
               : "收藏"}
           </Button>
           <Button
+            onPointerDown={rememberDialogTrigger}
+            onFocus={rememberDialogTrigger}
             variant="ghost"
             disabled={
               locked || !writable || !chosen.length || chosen.length > 100
@@ -357,6 +379,7 @@ export function AssetCanvasList({
             删除
           </Button>
           <Button
+            data-batch-focus
             variant="ghost"
             disabled={locked}
             onClick={() => {
@@ -370,16 +393,17 @@ export function AssetCanvasList({
         </>
       ) : (
         <>
-          <Button
+          <AssetToolbarButton
+            data-batch-focus
+            label="批量操作"
+            icon={ListChecks}
             variant="ghost"
             disabled={locked || pending || !page || !!error}
             onClick={() => {
               setBatch(true);
               onBatchMode(true);
             }}
-          >
-            批量操作
-          </Button>
+          />
           {collection === "current" && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -539,6 +563,8 @@ export function AssetCanvasList({
                       size="icon"
                       className="max-md:size-11"
                       disabled={locked}
+                      onPointerDown={rememberDialogTrigger}
+                      onFocus={rememberDialogTrigger}
                       aria-label={`更多 · ${item.name}`}
                     >
                       <MoreHorizontal aria-hidden="true" />
@@ -660,7 +686,7 @@ export function AssetCanvasList({
             if (!open && !locked) setDeleting(null);
           }}
         >
-          <AlertDialogContent>
+          <AlertDialogContent onCloseAutoFocus={restoreDialogFocus}>
             <AlertDialogHeader>
               <AlertDialogTitle>
                 删除所选{kind === "short_drama" ? "短剧" : "画布"}？
@@ -754,7 +780,7 @@ export function AssetCanvasList({
 }
 function CanvasCover({ item }: { item: AssetCanvasItem }) {
   return (
-    <span className="flex aspect-video w-full items-center justify-center overflow-hidden rounded-lg bg-muted">
+    <span className="relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-lg bg-muted">
       {item.cover_asset_id && !item.cover_unavailable ? (
         <ProjectMediaPreview
           projectID={item.project_id}

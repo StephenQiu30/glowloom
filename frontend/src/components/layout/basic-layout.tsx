@@ -148,6 +148,7 @@ function Shell({
       <SidebarInset asChild>
         <div className="product-content">
           <ProductHeader
+            assetLayout={screen === "assets"}
             toolbarRef={setToolbarTarget}
             pageActionsRef={setActionsTarget}
             replaceBase={actionsRegistration?.presentation === "replace-base"}
