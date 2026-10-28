@@ -26,13 +26,9 @@ export function SubjectsPage() {
       }}
     >
       <h1 className="sr-only">主体</h1>
-      <div className="flex justify-end">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/subjects/history">项目历史主体</Link>
-        </Button>
-      </div>
       {session && space.selected ? (
         <UnifiedSubjectLibrary
+          toolbarInHeader
           key={`${session.actor.id}/${space.selected.id}`}
           actorID={session.actor.id}
           scopeID={space.selected.id!}
@@ -47,6 +43,11 @@ export function SubjectsPage() {
           }
         />
       )}
+      <div className="mt-6 flex justify-end">
+        <Button asChild variant="ghost" size="sm">
+          <Link href="/subjects/history">项目历史主体</Link>
+        </Button>
+      </div>
     </PageLayout>
   );
 }

@@ -32,6 +32,7 @@ import {
 } from "@/lib/request";
 import { UnifiedSubjectMedia } from "./unified-media";
 import {
+  AppliedSubjectTimeRange,
   UnifiedSubjectToolbar,
   defaultSubjectFilter,
   type SubjectFilter,
@@ -49,6 +50,7 @@ import {
   type SubjectSelection,
 } from "./unified-contracts";
 import "./unified-subjects.css";
+import { PageToolbar } from "@/components/layout/page-toolbar";
 const Editor = dynamic(() =>
   import("./unified-editor").then((m) => m.UnifiedSubjectEditor),
 );
@@ -62,7 +64,9 @@ export function UnifiedSubjectLibrary({
   scopeID,
   query = "",
   onSelect,
+  toolbarInHeader = false,
 }: {
+  toolbarInHeader?: boolean;
   actorID: string;
   scopeID: string;
   query?: string;
@@ -281,72 +285,111 @@ export function UnifiedSubjectLibrary({
     setWriteError("");
     setDeleting(subjects);
   }
+  function changeFilter(value: SubjectFilter) {
+    setFilter(value);
+    setPageIndex(1);
+    setSelected([]);
+  }
+  const batchTrigger = useRef<HTMLButtonElement>(null);
+  const cancelBatchTrigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (batch) cancelBatchTrigger.current?.focus();
+  }, [batch]);
   const allFavorites = selected.length > 0 && selected.every((s) => s.favorite);
   return (
     <section
       className="unified-subject-library flex min-w-0 flex-col gap-6"
       aria-label="主体"
     >
-      {batch ? (
-        <div
-          className="flex flex-wrap items-center gap-2"
-          aria-label="主体批量操作"
-        >
-          <span className="mr-auto text-sm" aria-live="polite">
-            已选择 {selected.length} 项内容
-          </span>
-          <Button
-            variant="ghost"
-            disabled={locked || !selected.length}
-            onClick={() => openDelete(selected)}
+      <PageToolbar inHeader={toolbarInHeader}>
+        {toolbarInHeader || !batch ? (
+          <UnifiedSubjectToolbar
+            batchTriggerRef={batchTrigger}
+            showBatchAction={!toolbarInHeader}
+            showAppliedRange={!toolbarInHeader}
+            value={filter}
+            disabled={locked}
+            onChange={changeFilter}
+            onBatch={() => {
+              setBatch(true);
+              setSelected([]);
+            }}
+          />
+        ) : null}
+      </PageToolbar>
+      <PageToolbar
+        inHeader={toolbarInHeader}
+        slot="actions"
+        presentation={batch ? "replace-base" : "adjacent"}
+      >
+        {batch ? (
+          <div
+            className="unified-subject-toolbar flex min-w-0 flex-1 flex-wrap items-center gap-2"
+            aria-label="主体批量操作"
           >
-            <Trash2 />
-            删除
-          </Button>
+            <span className="mr-auto text-sm" aria-live="polite">
+              已选择 {selected.length} 项内容
+            </span>
+            <Button
+              variant="ghost"
+              disabled={locked || !selected.length}
+              onClick={() => openDelete(selected)}
+            >
+              <Trash2 />
+              删除
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={locked || !selected.length}
+              onClick={() => void download(selected)}
+            >
+              <Download />
+              下载
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={locked || !selected.length}
+              onClick={() =>
+                void mutate(allFavorites ? "unfavorite" : "favorite", selected)
+              }
+            >
+              <Heart />
+              {allFavorites ? "取消收藏" : "收藏"}
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={locked}
+              ref={cancelBatchTrigger}
+              onClick={() => {
+                setBatch(false);
+                setSelected([]);
+                requestAnimationFrame(() => batchTrigger.current?.focus());
+              }}
+            >
+              取消选择
+            </Button>
+          </div>
+        ) : toolbarInHeader ? (
           <Button
-            variant="ghost"
-            disabled={locked || !selected.length}
-            onClick={() => void download(selected)}
-          >
-            <Download />
-            下载
-          </Button>
-          <Button
-            variant="ghost"
-            disabled={locked || !selected.length}
-            onClick={() =>
-              void mutate(allFavorites ? "unfavorite" : "favorite", selected)
-            }
-          >
-            <Heart />
-            {allFavorites ? "取消收藏" : "收藏"}
-          </Button>
-          <Button
+            ref={batchTrigger}
             variant="ghost"
             disabled={locked}
             onClick={() => {
-              setBatch(false);
+              setBatch(true);
               setSelected([]);
             }}
           >
-            取消选择
+            批量操作
           </Button>
-        </div>
-      ) : (
-        <UnifiedSubjectToolbar
+        ) : null}
+      </PageToolbar>
+      {toolbarInHeader ? (
+        <AppliedSubjectTimeRange
           value={filter}
           disabled={locked}
-          onChange={(value) => {
-            setFilter(value);
-            setPageIndex(1);
-            setSelected([]);
-          }}
-          onBatch={() => {
-            setBatch(true);
-            setSelected([]);
-          }}
+          onChange={changeFilter}
         />
-      )}
+      ) : null}
       {writeError ? (
         <div
           role="alert"

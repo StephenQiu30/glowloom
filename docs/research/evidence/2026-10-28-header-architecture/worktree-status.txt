@@ -1,0 +1,56 @@
+ M BACKLOG.md
+ M DESIGN.md
+ M docs/design/09-统一顶栏与阶段入口设计.md
+ M docs/design/10-画布交互设计.md
+ M docs/design/25-统一主体库与创作引用设计.md
+ M docs/design/26-资产信息架构与即梦对齐设计.md
+ M docs/design/27-无限画布一致性改造设计.md
+ M docs/plan/16-Figma设计落地实施计划.md
+ M docs/plan/21-统一主体库与创作引用实施计划.md
+ M docs/plan/23-无限画布一致性改造实施计划.md
+ M docs/prd/11-统一工作台与创作入口.md
+ M docs/prd/12-统一主体库与创作引用.md
+ M docs/prd/14-无限画布一致性改造.md
+ M docs/requirement/11-统一工作台与创作入口需求.md
+ M docs/requirement/12-主体功能对齐需求.md
+ M docs/requirement/14-无限画布对齐即梦需求.md
+ M frontend/src/app/assets/_components/asset-workspace.tsx
+ M frontend/src/app/globals.css
+ M frontend/src/app/subjects/_components/subjects-page.tsx
+ M frontend/src/components/canvas/canvas.css
+ M frontend/src/components/canvas/connection-state.tsx
+ M frontend/src/components/canvas/controls/canvas-selection-toolbar.tsx
+ M frontend/src/components/canvas/controls/canvas-toolbar.tsx
+ M frontend/src/components/canvas/controls/canvas-top-bar.tsx
+ M frontend/src/components/canvas/controls/canvas-zoom-controls.tsx
+ M frontend/src/components/canvas/editor/canvas-editor.tsx
+ M frontend/src/components/canvas/lib/canvas-node-factory.ts
+ M frontend/src/components/canvas/nodes/canvas-document-node-panel.tsx
+ M frontend/src/components/canvas/nodes/canvas-node.tsx
+ M frontend/src/components/canvas/yjs-workspace.tsx
+ M frontend/src/components/layout/basic-layout.tsx
+ M frontend/src/components/layout/product-header.tsx
+ M frontend/src/components/subjects/unified-library.tsx
+ M frontend/src/components/subjects/unified-toolbar.tsx
+ M frontend/src/components/ui/tabs.tsx
+ M frontend/src/components/ui/toggle.tsx
+ M frontend/tests/unit/app/assets/_components/asset-workspace.test.tsx
+ M frontend/tests/unit/components/canvas/controls/canvas-controls.test.tsx
+ M frontend/tests/unit/components/canvas/nodes/canvas-node-resize.test.tsx
+ M frontend/tests/unit/components/layout/basic-layout.test.tsx
+ M frontend/tests/unit/components/subjects/unified-library.test.tsx
+?? docs/research/2026-10-28-即梦共享顶栏架构逆向.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/
+?? docs/research/evidence/2026-10-28-header-architecture/
+?? docs/research/evidence/2026-10-28-jimeng-explore/
+?? docs/research/evidence/2026-10-28-subject-header/
+?? docs/research/evidence/2026-10-28-subject-implementation/worktree-status.txt
+?? frontend/src/components/canvas/controls/canvas-node-summary.tsx
+?? frontend/src/components/canvas/lib/canvas-node-resize.ts
+?? frontend/src/components/canvas/lib/canvas-selection-layout.ts
+?? frontend/src/components/layout/page-toolbar.tsx
+?? frontend/src/components/layout/product-header-actions.tsx
+?? frontend/tests/unit/components/canvas/canvas-node-geometry-edit.test.ts
+?? frontend/tests/unit/components/canvas/canvas-selection-layout.test.ts
+?? frontend/tests/unit/components/canvas/nodes/canvas-document-node-panel.test.tsx
+?? frontend/tests/unit/components/layout/page-toolbar.test.tsx

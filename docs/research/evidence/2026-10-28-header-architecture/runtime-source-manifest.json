@@ -1,0 +1,51 @@
+[
+  {
+    "url": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/dreamina/web/jimeng/static/js/async/Asset-4.9b829f63ad.js",
+    "path": "Asset-4.9b829f63ad.js",
+    "bytes": 45765,
+    "sha256": "8247e6fd164c7a9c175bebe7e39791e956299e42948ab66201cf82831b96ae35",
+    "acquisition": "CDP Page.getResourceContent from current page resource tree"
+  },
+  {
+    "url": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/dreamina/web/jimeng/static/js/async/Explore.f7a35790f5.js",
+    "path": "Explore.f7a35790f5.js",
+    "bytes": 125524,
+    "sha256": "2184e8eb50f302cd7feec4526bd5f50d7c7418839f757635717ea1bf78246598",
+    "acquisition": "CDP Page.getResourceContent from current page resource tree"
+  },
+  {
+    "url": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/dreamina/web/jimeng/static/js/async/Asset-0.1a44ee9be9.js",
+    "path": "Asset-0.1a44ee9be9.js",
+    "bytes": 50729,
+    "sha256": "c1e49dfe874fde10a61d548f6cce6bf65ecc809cd5bd4931577cb46190daa884",
+    "acquisition": "CDP Page.getResourceContent from current page resource tree"
+  },
+  {
+    "url": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/dreamina/web/jimeng/static/js/async/Asset-3.90342a857a.js",
+    "path": "Asset-3.90342a857a.js",
+    "bytes": 173777,
+    "sha256": "a0e4fc53c387b1c7e1543ef1d68f1ce589c02ff9715e9eca6aa3afc3d224cfff",
+    "acquisition": "CDP Page.getResourceContent from current page resource tree"
+  },
+  {
+    "url": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/dreamina/web/jimeng/static/js/async/Asset-1.0045897620.js",
+    "path": "Asset-1.0045897620.js",
+    "bytes": 201229,
+    "sha256": "b139280ec5dfee0b0139979fb919e715811fc2cb1023689f4f47687281167c8a",
+    "acquisition": "CDP Page.getResourceContent from current page resource tree"
+  },
+  {
+    "url": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/dreamina/web/jimeng/static/js/async/Elements.8ceda24ee7.js",
+    "path": "Elements.8ceda24ee7.js",
+    "bytes": 112516,
+    "sha256": "5394db6ad6e6dc21aa05d609594d4ac3efe146613d6c983f2f4f45303b8c5764",
+    "acquisition": "CDP Page.getResourceContent from current page resource tree"
+  },
+  {
+    "url": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/dreamina/web/jimeng/static/js/async/dreamina-main-frame-2026-sidebar.5b2c467537.js",
+    "path": "dreamina-main-frame-2026-sidebar.5b2c467537.js",
+    "bytes": 164672,
+    "sha256": "ecda478d7beef59d8388b12378b9ae3c75cdce3694a008b249b20b9feab64c5b",
+    "acquisition": "CDP Page.getResourceContent from current page resource tree"
+  }
+]

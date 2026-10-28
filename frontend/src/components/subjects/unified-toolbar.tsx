@@ -1,4 +1,5 @@
 "use client";
+import type { Ref } from "react";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,14 +31,20 @@ export function UnifiedSubjectToolbar({
   disabled,
   onChange,
   onBatch,
+  batchTriggerRef,
+  showAppliedRange = true,
+  showBatchAction = true,
 }: {
+  batchTriggerRef?: Ref<HTMLButtonElement>;
+  showAppliedRange?: boolean;
+  showBatchAction?: boolean;
   value: SubjectFilter;
   disabled: boolean;
   onChange: (filter: SubjectFilter) => void;
   onBatch: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-2">
+    <div className="unified-subject-toolbar flex min-w-0 flex-1 flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -107,42 +114,63 @@ export function UnifiedSubjectToolbar({
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button
-          variant="ghost"
-          className="ml-auto"
-          disabled={disabled}
-          onClick={onBatch}
-        >
-          批量操作
-        </Button>
-      </div>
-      {value.from || value.through ? (
-        <div
-          className="flex flex-wrap items-start gap-2"
-          aria-label="已应用时间范围"
-        >
-          <span className="w-12 text-xs leading-[18px] text-muted-foreground">
-            时间：
-          </span>
-          <span className="w-[110px] text-xs leading-[18px] text-muted-foreground">
-            {value.from || "不限"}
-          </span>
-          <span className="w-5 text-xs leading-[18px] text-muted-foreground">
-            至
-          </span>
-          <span className="w-[110px] text-xs leading-[18px] text-muted-foreground">
-            {value.through || "不限"}
-          </span>
+        {showBatchAction ? (
           <Button
             variant="ghost"
-            className="min-h-11 w-25"
+            ref={batchTriggerRef}
+            className="ml-auto"
             disabled={disabled}
-            onClick={() => onChange({ ...value, from: "", through: "" })}
+            onClick={onBatch}
           >
-            清除时间
+            批量操作
           </Button>
-        </div>
+        ) : null}
+      </div>
+      {showAppliedRange ? (
+        <AppliedSubjectTimeRange
+          value={value}
+          disabled={disabled}
+          onChange={onChange}
+        />
       ) : null}
     </div>
   );
+}
+
+export function AppliedSubjectTimeRange({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: SubjectFilter;
+  disabled: boolean;
+  onChange: (filter: SubjectFilter) => void;
+}) {
+  return value.from || value.through ? (
+    <div
+      className="flex flex-wrap items-start gap-2"
+      aria-label="已应用时间范围"
+    >
+      <span className="w-12 text-xs leading-[18px] text-muted-foreground">
+        时间：
+      </span>
+      <span className="w-[110px] text-xs leading-[18px] text-muted-foreground">
+        {value.from || "不限"}
+      </span>
+      <span className="w-5 text-xs leading-[18px] text-muted-foreground">
+        至
+      </span>
+      <span className="w-[110px] text-xs leading-[18px] text-muted-foreground">
+        {value.through || "不限"}
+      </span>
+      <Button
+        variant="ghost"
+        className="min-h-11 w-25"
+        disabled={disabled}
+        onClick={() => onChange({ ...value, from: "", through: "" })}
+      >
+        清除时间
+      </Button>
+    </div>
+  ) : null;
 }

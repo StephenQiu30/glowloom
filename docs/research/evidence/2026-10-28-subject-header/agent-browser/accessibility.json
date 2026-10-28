@@ -1,0 +1,50 @@
+{
+  "390": {
+    "axeVersion": "4.12.1",
+    "counts": {
+      "inapplicable": 49,
+      "incomplete": 0,
+      "passes": 40,
+      "violations": 0
+    },
+    "violations": [],
+    "incomplete": [],
+    "url": "http://localhost:1122/subjects"
+  },
+  "320": {
+    "axeVersion": "4.12.1",
+    "counts": {
+      "inapplicable": 48,
+      "incomplete": 0,
+      "passes": 41,
+      "violations": 0
+    },
+    "violations": [],
+    "incomplete": [],
+    "url": "http://localhost:1122/subjects"
+  },
+  "desktop-light": {
+    "axeVersion": "4.12.1",
+    "counts": {
+      "inapplicable": 49,
+      "incomplete": 0,
+      "passes": 40,
+      "violations": 0
+    },
+    "violations": [],
+    "incomplete": [],
+    "url": "http://localhost:1122/subjects"
+  },
+  "desktop-dark": {
+    "axeVersion": "4.12.1",
+    "counts": {
+      "inapplicable": 49,
+      "incomplete": 0,
+      "passes": 40,
+      "violations": 0
+    },
+    "violations": [],
+    "incomplete": [],
+    "url": "http://localhost:1122/subjects"
+  }
+}

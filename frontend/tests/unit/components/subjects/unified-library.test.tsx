@@ -1,3 +1,9 @@
+import { useState } from "react";
+import {
+  PageToolbarContext,
+  PageActionsContext,
+  type PageActionsRegistration,
+} from "@/components/layout/page-toolbar";
 import {
   cleanup,
   fireEvent,
@@ -259,5 +265,100 @@ it("删除结果未知时在确认框内可重试同一请求，避免锁死在�
   await waitFor(() => expect(api.batch).toHaveBeenCalledTimes(2));
   expect(api.batch.mock.calls[1][1].headers["Idempotency-Key"]).toBe(
     api.batch.mock.calls[0][1].headers["Idempotency-Key"],
+  );
+});
+
+function HeaderLibraryHarness({
+  embedded = false,
+  show = true,
+}: {
+  embedded?: boolean;
+  show?: boolean;
+}) {
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
+  const [actions, setActions] = useState<HTMLDivElement | null>(null);
+  const [registration, setPresentation] =
+    useState<PageActionsRegistration | null>(null);
+  return (
+    <>
+      <header aria-label="页面顶栏">
+        <div ref={setHost} />
+        <div ref={setActions} />
+        {registration?.presentation !== "replace-base" ? (
+          <button>账号菜单</button>
+        ) : null}
+      </header>
+      <PageActionsContext.Provider value={{ target: actions, setPresentation }}>
+        <PageToolbarContext.Provider value={host}>
+          <main>
+            {show ? (
+              <UnifiedSubjectLibrary
+                actorID={actorID}
+                scopeID={scopeID}
+                toolbarInHeader={!embedded}
+              />
+            ) : (
+              <h1>探索</h1>
+            )}
+          </main>
+        </PageToolbarContext.Provider>
+      </PageActionsContext.Provider>
+    </>
+  );
+}
+
+it("主体筛选和批量选择共用顶栏，保留业务状态且路由卸载清除工具", async () => {
+  const view = render(<HeaderLibraryHarness />);
+  await screen.findByRole("button", { name: "设置主体 海边香氛" });
+  const header = screen.getByRole("banner", { name: "页面顶栏" });
+  expect(within(header).getByRole("button", { name: "筛选" })).toBeTruthy();
+  expect(
+    within(screen.getByRole("main")).queryByRole("button", { name: "筛选" }),
+  ).toBeNull();
+  fireEvent.click(within(header).getByRole("button", { name: "批量操作" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "选择主体 海边香氛" }));
+  expect(within(header).getByText("已选择 1 项内容")).toBeTruthy();
+  expect(within(header).getByRole("button", { name: "筛选" })).toBeTruthy();
+  expect(within(header).queryByRole("button", { name: "账号菜单" })).toBeNull();
+  expect(
+    within(header)
+      .getByRole("button", { name: "删除" })
+      .hasAttribute("disabled"),
+  ).toBe(false);
+  fireEvent.click(within(header).getByRole("button", { name: "取消选择" }));
+  expect(within(header).getByRole("button", { name: "排序" })).toBeTruthy();
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      within(header).getByRole("button", { name: "批量操作" }),
+    ),
+  );
+  expect(
+    screen.queryByRole("checkbox", { name: "选择主体 海边香氛" }),
+  ).toBeNull();
+  view.rerender(<HeaderLibraryHarness show={false} />);
+  expect(within(header).queryByRole("button", { name: "筛选" })).toBeNull();
+  expect(within(header).getByRole("button", { name: "账号菜单" })).toBeTruthy();
+});
+
+it("嵌入式主体选择器即使存在顶栏宿主也保留内联工具", async () => {
+  render(<HeaderLibraryHarness embedded />);
+  await screen.findByRole("button", { name: "设置主体 海边香氛" });
+  expect(
+    within(screen.getByRole("main")).getByRole("button", { name: "筛选" }),
+  ).toBeTruthy();
+  expect(
+    within(screen.getByRole("banner")).queryByRole("button", { name: "筛选" }),
+  ).toBeNull();
+});
+
+it("嵌入式主体库退出批量后恢复入口焦点", async () => {
+  render(<HeaderLibraryHarness embedded />);
+  await screen.findByRole("button", { name: "设置主体 海边香氛" });
+  fireEvent.click(screen.getByRole("button", { name: "批量操作" }));
+  fireEvent.click(screen.getByRole("button", { name: "取消选择" }));
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "批量操作" }),
+    ),
   );
 });

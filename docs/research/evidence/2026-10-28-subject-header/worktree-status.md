@@ -1,0 +1,54 @@
+# 本轮结束工作区记录
+
+未执行本轮提交或推送。BACKLOG 为共享文件，仅追加本轮记录。其余非本轮路径保留原状。
+
+| 状态 | 文件 | 归属 |
+| --- | --- | --- |
+| M | `BACKLOG.md` | 共享进度，含本轮追加 |
+| M | `DESIGN.md` | 本轮主体顶栏 |
+| M | `docs/design/09-统一顶栏与阶段入口设计.md` | 本轮主体顶栏 |
+| M | `docs/design/10-画布交互设计.md` | 其他工作，未处理 |
+| M | `docs/design/25-统一主体库与创作引用设计.md` | 本轮主体顶栏 |
+| M | `docs/design/26-资产信息架构与即梦对齐设计.md` | 其他工作，未处理 |
+| M | `docs/design/27-无限画布一致性改造设计.md` | 其他工作，未处理 |
+| M | `docs/plan/16-Figma设计落地实施计划.md` | 其他工作，未处理 |
+| M | `docs/plan/21-统一主体库与创作引用实施计划.md` | 本轮主体顶栏 |
+| M | `docs/plan/23-无限画布一致性改造实施计划.md` | 其他工作，未处理 |
+| M | `docs/prd/12-统一主体库与创作引用.md` | 本轮主体顶栏 |
+| M | `docs/requirement/12-主体功能对齐需求.md` | 本轮主体顶栏 |
+| M | `frontend/src/app/assets/_components/asset-workspace.tsx` | 其他工作，未处理 |
+| M | `frontend/src/app/globals.css` | 本轮主体顶栏 |
+| M | `frontend/src/app/subjects/_components/subjects-page.tsx` | 本轮主体顶栏 |
+| M | `frontend/src/components/canvas/connection-state.tsx` | 其他工作，未处理 |
+| M | `frontend/src/components/canvas/controls/canvas-selection-toolbar.tsx` | 其他工作，未处理 |
+| M | `frontend/src/components/canvas/controls/canvas-top-bar.tsx` | 其他工作，未处理 |
+| M | `frontend/src/components/canvas/controls/canvas-zoom-controls.tsx` | 其他工作，未处理 |
+| M | `frontend/src/components/canvas/editor/canvas-editor.tsx` | 其他工作，未处理 |
+| M | `frontend/src/components/canvas/lib/canvas-node-factory.ts` | 其他工作，未处理 |
+| M | `frontend/src/components/canvas/nodes/canvas-document-node-panel.tsx` | 其他工作，未处理 |
+| M | `frontend/src/components/canvas/nodes/canvas-node.tsx` | 其他工作，未处理 |
+| M | `frontend/src/components/canvas/yjs-workspace.tsx` | 其他工作，未处理 |
+| M | `frontend/src/components/layout/basic-layout.tsx` | 本轮主体顶栏 |
+| M | `frontend/src/components/layout/product-header.tsx` | 本轮主体顶栏 |
+| M | `frontend/src/components/subjects/unified-library.tsx` | 本轮主体顶栏 |
+| M | `frontend/src/components/subjects/unified-toolbar.tsx` | 本轮主体顶栏 |
+| M | `frontend/tests/unit/app/assets/_components/asset-workspace.test.tsx` | 其他工作，未处理 |
+| M | `frontend/tests/unit/components/canvas/nodes/canvas-node-resize.test.tsx` | 其他工作，未处理 |
+| M | `frontend/tests/unit/components/layout/basic-layout.test.tsx` | 其他工作，未处理 |
+| M | `frontend/tests/unit/components/subjects/unified-library.test.tsx` | 本轮主体顶栏 |
+| ?? | `docs/research/evidence/2026-10-28-canvas-implementation/domain-audit.md` | 其他工作，未处理 |
+| ?? | `docs/research/evidence/2026-10-28-canvas-implementation/foundation-audit.md` | 其他工作，未处理 |
+| ?? | `docs/research/evidence/2026-10-28-canvas-implementation/frontend-audit.md` | 其他工作，未处理 |
+| ?? | `docs/research/evidence/2026-10-28-jimeng-explore/graphic-list.png` | 其他工作，未处理 |
+| ?? | `docs/research/evidence/2026-10-28-jimeng-explore/image-detail.png` | 其他工作，未处理 |
+| ?? | `docs/research/evidence/2026-10-28-subject-header/figma-desktop.png` | 本轮主体顶栏 |
+| ?? | `docs/research/evidence/2026-10-28-subject-header/figma-mobile.png` | 本轮主体顶栏 |
+| ?? | `docs/research/evidence/2026-10-28-subject-header/verification.md` | 本轮主体顶栏 |
+| ?? | `docs/research/evidence/2026-10-28-subject-implementation/worktree-status.txt` | 其他工作，未处理 |
+| ?? | `frontend/src/components/canvas/controls/canvas-node-summary.tsx` | 其他工作，未处理 |
+| ?? | `frontend/src/components/canvas/lib/canvas-node-resize.ts` | 其他工作，未处理 |
+| ?? | `frontend/src/components/canvas/lib/canvas-selection-layout.ts` | 其他工作，未处理 |
+| ?? | `frontend/src/components/layout/page-toolbar.tsx` | 本轮主体顶栏 |
+| ?? | `frontend/tests/unit/components/canvas/canvas-node-geometry-edit.test.ts` | 其他工作，未处理 |
+| ?? | `frontend/tests/unit/components/canvas/canvas-selection-layout.test.ts` | 其他工作，未处理 |
+| ?? | `frontend/tests/unit/components/canvas/nodes/canvas-document-node-panel.test.tsx` | 其他工作，未处理 |
