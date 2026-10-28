@@ -46,27 +46,27 @@ export function requireTask(value: API.TaskDetail, project: string): Task {
           (o) =>
             !o ||
             !isProjectID(o.id) ||
+            (o.kind === "json" &&
+              o.media_asset_id !== undefined &&
+              o.media_asset_id !== null) ||
+            (o.text !== undefined &&
+              (o.kind !== "json" ||
+                o.moderation_status !== "passed" ||
+                value.status !== "completed" ||
+                !(
+                  value.capability?.startsWith("text.") ||
+                  value.capability?.startsWith("document.")
+                ) ||
+                typeof o.text !== "string" ||
+                !o.text.trim() ||
+                o.text.length > 65536 ||
+                new TextEncoder().encode(o.text).length > 65536)) ||
             (o.moderation_status === "passed" &&
-              (o.kind === "json"
-                ? !(
-                    value.capability?.startsWith("text.") ||
-                    value.capability?.startsWith("document.")
-                  ) ||
-                  value.status !== "completed" ||
-                  typeof o.text !== "string" ||
-                  !o.text.trim() ||
-                  o.text.length > 65536 ||
-                  !!o.media_asset_id
-                : !isProjectID(o.media_asset_id) ||
-                  !["image", "video", "audio", "model", "document"].includes(
-                    o.kind ?? "",
-                  ) ||
-                  (o.kind === "document" &&
-                    (value.status !== "completed" ||
-                      !(
-                        value.capability?.startsWith("text.") ||
-                        value.capability?.startsWith("document.")
-                      ))))),
+              o.kind !== "json" &&
+              (!isProjectID(o.media_asset_id) ||
+                !["image", "video", "audio", "model", "document"].includes(
+                  o.kind ?? "",
+                ))),
         )))
   )
     throw new RequestError("invalid_receipt");

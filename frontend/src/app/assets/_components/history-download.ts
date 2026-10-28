@@ -75,7 +75,11 @@ export async function downloadHistoryCards(
           ? "original"
           : format;
       try {
-        if (output.moderation_status !== "passed")
+        if (
+          card.task.status !== "completed" ||
+          output.can_download !== true ||
+          output.moderation_status !== "passed"
+        )
           throw new RequestError("forbidden", 403);
         if (output.kind === "document" && output.media_asset_id) {
           const blob = await downloadDocumentAsset(

@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
 import { ChevronDown, PanelsTopLeft } from "lucide-react";
 import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
@@ -31,7 +30,6 @@ import {
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 
-import { readErrorMessage } from "@/lib/read-error";
 import {
   assetDateRange,
   assetKinds,
@@ -44,6 +42,11 @@ import {
 import { AssetFilterMenu } from "./asset-filter-menu";
 import { PersonalHistoryList } from "./personal-history-list";
 import { AssetCanvasList } from "./asset-canvas-list";
+import {
+  readAssetLocation,
+  writeAssetLocation,
+  type AssetLocation,
+} from "./asset-location";
 
 const ReferenceAssetsPage = dynamic(
   () => import("./assets-page").then((m) => m.ReferenceAssetsPage),
@@ -59,8 +62,10 @@ const sources = [
 
 export function AssetWorkspace({
   initialView = "history",
+  initialLocation,
 }: {
   initialView?: AssetSource | "reference";
+  initialLocation?: AssetLocation;
 }) {
   const session = useOptionalSession();
   const space = useSpace();
@@ -68,6 +73,7 @@ export function AssetWorkspace({
     <WorkspaceScope
       key={`${session?.actor.id ?? "guest"}:${space.selected?.id ?? "none"}`}
       initialView={initialView}
+      initialLocation={initialLocation}
       authenticated={!!session}
     />
   );
@@ -75,28 +81,75 @@ export function AssetWorkspace({
 
 function WorkspaceScope({
   initialView,
+  initialLocation,
   authenticated,
 }: {
   initialView: AssetSource | "reference";
+  initialLocation?: AssetLocation;
   authenticated: boolean;
 }) {
-  const router = useRouter();
-  const [view, setView] = useState(initialView);
-  const [kind, setKind] = useState<AssetKind>("image");
-  const [search, setSearch] = useState("");
-  const [filters, setFilters] = useState(defaultFilters);
+  const [view, setView] = useState(initialLocation?.view ?? initialView);
+  const [kind, setKind] = useState<AssetKind>(initialLocation?.kind ?? "image");
+  const [search, setSearch] = useState(initialLocation?.filters.search ?? "");
+  const [filters, setFilters] = useState(
+    initialLocation?.filters ?? defaultFilters,
+  );
+  const [referenceFilter, setReferenceFilter] = useState(
+    initialLocation?.reference,
+  );
   const login = useLoginDialog();
   const [locked, setLocked] = useState(false);
   const [batch, setBatch] = useState(false);
   const [toolbarTarget, setToolbarTarget] = useState<HTMLDivElement | null>(
     null,
   );
-  const [collection, setCollection] = useState<"current" | "legacy">("current");
+  const [collection, setCollection] = useState<"current" | "legacy">(
+    initialLocation?.collection ?? "current",
+  );
+  const restoreLocation = useEffectEvent(() => {
+    const restored = readAssetLocation(
+      new URLSearchParams(window.location.search),
+    );
+    setView(restored.view);
+    setKind(restored.kind);
+    setCollection(restored.collection);
+    setSearch(restored.filters.search);
+    setFilters(restored.filters);
+    setReferenceFilter(restored.reference);
+  });
+  useEffect(() => {
+    const restore = () => restoreLocation();
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, []);
+  useEffect(() => {
+    if (view === "reference") return;
+    const url = new URL(window.location.href);
+    url.search = writeAssetLocation(
+      { view, kind, collection, filters },
+      url.searchParams,
+    );
+    if (url.href !== window.location.href)
+      window.history.replaceState(null, "", url);
+  }, [view, kind, collection, filters]);
   function changeView(value: AssetSource | "reference") {
     setView(value);
+    setKind("image");
+    setCollection("current");
     setSearch("");
     setFilters(defaultFilters);
-    router.push(value === "history" ? "/assets" : `/assets?view=${value}`);
+    setReferenceFilter(undefined);
+    const url = new URL(window.location.href);
+    url.search = writeAssetLocation(
+      {
+        view: value,
+        kind: "image",
+        collection: "current",
+        filters: defaultFilters,
+      },
+      url.searchParams,
+    );
+    window.history.pushState(null, "", url);
   }
   const pageSearch = useMemo(
     () => ({
@@ -117,7 +170,13 @@ function WorkspaceScope({
     [search, view, authenticated, locked],
   );
   if (view === "reference")
-    return <ReferenceAssetsPage onBack={() => changeView("history")} />;
+    return (
+      <ReferenceAssetsPage
+        key={JSON.stringify(referenceFilter)}
+        initialFilter={referenceFilter}
+        onBack={() => changeView("history")}
+      />
+    );
   const filtered = hasAssetFilters(filters);
   const clear = () => {
     setSearch("");
@@ -166,7 +225,7 @@ function WorkspaceScope({
             <TabsTrigger
               key={source.id}
               value={source.id}
-              className="min-h-11"
+              className="min-h-11 transition-[color,background-color,box-shadow] motion-reduce:transition-none"
               disabled={locked}
             >
               {source.label}
@@ -214,10 +273,18 @@ function WorkspaceScope({
               }}
               aria-label="画布类型"
             >
-              <ToggleGroupItem value="current" disabled={locked}>
+              <ToggleGroupItem
+                value="current"
+                disabled={locked}
+                className="min-h-11"
+              >
                 画布
               </ToggleGroupItem>
-              <ToggleGroupItem value="legacy" disabled={locked}>
+              <ToggleGroupItem
+                value="legacy"
+                disabled={locked}
+                className="min-h-11"
+              >
                 历史画布
               </ToggleGroupItem>
             </ToggleGroup>
@@ -350,6 +417,7 @@ function TimeFilter({
   const [from, setFrom] = useState(value.from);
   const [through, setThrough] = useState(value.through);
   const [error, setError] = useState("");
+  const fromInput = useRef<HTMLInputElement>(null);
   function apply(nextFrom: string, nextThrough: string) {
     try {
       assetDateRange(nextFrom, nextThrough);
@@ -357,7 +425,8 @@ function TimeFilter({
       setError("");
       setOpen(false);
     } catch (reason) {
-      setError(readErrorMessage(reason));
+      setError(reason instanceof Error ? reason.message : "请选择有效日期。");
+      fromInput.current?.focus();
     }
   }
   function preset(months: number, days = 0) {
@@ -418,7 +487,12 @@ function TimeFilter({
                 <FieldLabel htmlFor="asset-from">开始日期</FieldLabel>
                 <Input
                   id="asset-from"
+                  ref={fromInput}
+                  name="from"
+                  autoComplete="off"
                   type="date"
+                  aria-invalid={!!error}
+                  aria-describedby={error ? "asset-date-error" : undefined}
                   value={from}
                   onChange={(event) => setFrom(event.target.value)}
                 />
@@ -427,12 +501,25 @@ function TimeFilter({
                 <FieldLabel htmlFor="asset-through">结束日期</FieldLabel>
                 <Input
                   id="asset-through"
+                  name="through"
+                  autoComplete="off"
                   type="date"
+                  aria-invalid={!!error}
+                  aria-describedby={error ? "asset-date-error" : undefined}
                   value={through}
                   onChange={(event) => setThrough(event.target.value)}
                 />
               </Field>
             </FieldGroup>
+            {error && (
+              <p
+                id="asset-date-error"
+                role="alert"
+                className="text-sm text-destructive"
+              >
+                {error}
+              </p>
+            )}
             <div className="flex flex-wrap gap-1">
               <Button
                 type="button"

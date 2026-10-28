@@ -33,7 +33,9 @@ export function historyCardTargets(
         results.length > 0 &&
         results.every((item) => item.moderation_status === "passed");
       const downloadable =
-        passed && results.every((item) => item.can_download === true);
+        task.status === "completed" &&
+        passed &&
+        results.every((item) => item.can_download === true);
       const dubbing =
         task.capability === "video.dubbing" ||
         ["video_dubbing", "dubbing"].includes(task.mode ?? "");
@@ -46,6 +48,7 @@ export function historyCardTargets(
         canFavorite: results.length > 0,
         canDownload: downloadable,
         canPublish:
+          task.status === "completed" &&
           passed &&
           (kind === "image" || kind === "video") &&
           !dubbing &&

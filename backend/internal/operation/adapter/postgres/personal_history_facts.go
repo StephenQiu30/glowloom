@@ -12,7 +12,8 @@ import (
 // candidates are excluded separately so deleting the final result does not
 // accidentally recreate a synthetic empty card.
 const personalHistoryCandidates = `, history_outputs AS (
- SELECT candidate_op.id AS operation_id,candidate_op.capability,output.id,output.seq_no AS sequence,output.kind,
+ SELECT candidate_op.id AS operation_id,candidate_op.capability,output.id,output.seq_no AS sequence,
+ CASE WHEN output.kind='media' THEN asset.kind ELSE output.kind END AS kind,
  CASE WHEN output.moderation_status='passed' AND asset.status='ready' AND asset.moderation_status='passed' AND NOT asset.is_delete THEN output.media_asset_id END AS media_asset_id,
  output.moderation_status,output.create_time,asset.width,asset.height,asset.duration_ms,
  COALESCE(meta.favorite,false) AS favorite,COALESCE(meta.revision,0) AS metadata_revision,

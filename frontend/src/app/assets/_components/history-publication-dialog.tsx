@@ -177,12 +177,12 @@ export function HistoryPublicationDialog({
       }}
     >
       <DialogContent
-        className="max-h-[90dvh] overflow-y-auto sm:max-w-xl"
+        className="max-h-[90dvh] overflow-y-auto overscroll-contain sm:max-w-xl"
         showCloseButton={!frozen}
       >
         <DialogTitle>发布作品</DialogTitle>
         <DialogDescription>
-          所选图片和视频将公开展示。较多视频结果将按每批16个分批提交。
+          所选作品内容将公开展示。发布完成后，可在下方查看每项结果。
         </DialogDescription>
         <form
           className="grid gap-5"
@@ -203,6 +203,8 @@ export function HistoryPublicationDialog({
               <FieldLabel htmlFor="history-work-title">标题</FieldLabel>
               <Input
                 id="history-work-title"
+                name="title"
+                autoComplete="off"
                 maxLength={120}
                 value={title}
                 disabled={frozen}
@@ -213,6 +215,8 @@ export function HistoryPublicationDialog({
               <FieldLabel htmlFor="history-work-description">描述</FieldLabel>
               <Textarea
                 id="history-work-description"
+                name="description"
+                autoComplete="off"
                 maxLength={2000}
                 value={description}
                 disabled={frozen}
@@ -234,7 +238,11 @@ export function HistoryPublicationDialog({
             </Field>
           </FieldGroup>
           {results.length > 0 && (
-            <section aria-label="发布结果" className="grid gap-2">
+            <section
+              aria-label="发布结果"
+              aria-live="polite"
+              className="grid gap-2"
+            >
               <p>
                 已发布{published.length}项，失败
                 {results.length - published.length}项。

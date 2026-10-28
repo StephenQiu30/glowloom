@@ -123,12 +123,19 @@ export function CreateAssetCanvas({
             <FieldLabel htmlFor="asset-canvas-name">名称</FieldLabel>
             <Input
               id="asset-canvas-name"
+              name="name"
+              autoComplete="off"
               value={name}
               maxLength={50}
               disabled={frozen}
               onChange={(event) => setName(event.target.value)}
             />
           </Field>
+          {error && (
+            <p role="alert" className="text-sm break-words text-destructive">
+              {error}
+            </p>
+          )}
           <DialogFooter>
             <Button
               variant="ghost"

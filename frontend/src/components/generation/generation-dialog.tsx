@@ -330,6 +330,7 @@ export function TaskDetail({
   onReuse,
   outputID,
   presentation = "default",
+  onAvailabilityChange,
 }: {
   projectID: string;
   id: string;
@@ -337,6 +338,7 @@ export function TaskDetail({
   onReuse?: (task: Task) => void;
   outputID?: string;
   presentation?: "default" | "asset";
+  onAvailabilityChange?: (available: boolean) => void;
 }) {
   const [task, setTask] = useState<Task | null>(null),
     [error, setError] = useState(""),
@@ -345,6 +347,7 @@ export function TaskDetail({
     [pending, setPending] = useState(false);
   const cancelKey = useRef<string | null>(null);
   const [adopting, setAdopting] = useState(false);
+  const [assetDenied, setAssetDenied] = useState(false);
   async function adopt(asset: string, kind: string) {
     if (adopting) return;
     setAdopting(true);
@@ -373,9 +376,29 @@ export function TaskDetail({
         if (t.id !== id) throw new RequestError("invalid_receipt");
         setTask(t);
         setError("");
+        if (presentation === "asset") setAssetDenied(false);
+        if (presentation === "asset")
+          onAvailabilityChange?.(
+            !outputID ||
+              !!t.outputs?.some(
+                (output) =>
+                  output.id === outputID &&
+                  output.moderation_status === "passed",
+              ),
+          );
         if (activeTask(t.status)) timer = setTimeout(() => void read(), 3000);
       } catch (e) {
-        if (!c.signal.aborted) setError(flowError(e));
+        if (!c.signal.aborted) {
+          if (presentation === "asset") {
+            setTask(null);
+            onAvailabilityChange?.(false);
+            setConfirmCancel(false);
+            setAssetDenied(
+              e instanceof RequestError && [401, 403, 404].includes(e.status),
+            );
+          }
+          setError(flowError(e));
+        }
       }
     }
     void read();
@@ -383,7 +406,7 @@ export function TaskDetail({
       c.abort();
       clearTimeout(timer);
     };
-  }, [id, projectID, retry]);
+  }, [id, projectID, retry, presentation, onAvailabilityChange, outputID]);
   async function cancel() {
     if (pending) return;
     setPending(true);
@@ -409,6 +432,17 @@ export function TaskDetail({
       setPending(false);
     }
   }
+  const missingDocumentBody =
+    task?.status === "completed" &&
+    (task.capability?.startsWith("text.") ||
+      task.capability?.startsWith("document.")) &&
+    task.outputs?.some(
+      (output) =>
+        (!outputID || output.id === outputID) &&
+        output.kind === "json" &&
+        output.moderation_status === "passed" &&
+        !output.text,
+    );
   const preview = (
     <>
       {task?.status === "completed" &&
@@ -457,7 +491,11 @@ export function TaskDetail({
                   {o.kind === "document" ? (
                     <div className="grid justify-items-center gap-3 p-6 text-center text-muted-foreground">
                       <FileText className="size-10" />
-                      <p>正式文档仅提供原件，下载原件以查看。</p>
+                      <p>
+                        {task.status === "completed"
+                          ? "正式文档仅提供原件，下载原件以查看。"
+                          : "文档结果尚未完成，暂不可下载。"}
+                      </p>
                     </div>
                   ) : (
                     <ProjectMediaPreview
@@ -495,7 +533,55 @@ export function TaskDetail({
       {presentation === "asset" && (
         <div className="min-w-0" aria-label="选定结果预览">
           {preview}
-          {!task && <ContentState state="loading" title="正在读取结果" />}
+          {task &&
+            !error &&
+            !task.outputs?.some(
+              (output) =>
+                (!outputID || output.id === outputID) &&
+                output.moderation_status === "passed" &&
+                (output.media_asset_id ||
+                  (output.kind === "json" && output.text)),
+            ) && (
+              <ContentState
+                title={
+                  activeTask(task.status)
+                    ? "结果生成中"
+                    : missingDocumentBody
+                      ? "此结果没有可导出的正文"
+                      : outputID
+                        ? "所选结果已不可用"
+                        : "暂无可预览结果"
+                }
+                description={
+                  activeTask(task.status)
+                    ? "生成完成后将在这里显示结果。"
+                    : missingDocumentBody
+                      ? "该记录未提供文档正文，无法导出PDF或Markdown。你仍可查看生成参数。"
+                      : "请刷新生成记录，或稍后重试。"
+                }
+              />
+            )}
+          {error ? (
+            <ContentState
+              state="error"
+              title={
+                assetDenied ? "此生成记录已不可访问" : "暂时无法读取生成记录"
+              }
+              description={error}
+              actions={
+                <Button
+                  onClick={() => {
+                    setError("");
+                    setRetry((n) => n + 1);
+                  }}
+                >
+                  重试读取详情
+                </Button>
+              }
+            />
+          ) : (
+            !task && <ContentState state="loading" title="正在读取结果" />
+          )}
         </div>
       )}
       <div
@@ -506,7 +592,13 @@ export function TaskDetail({
         }
       >
         <div className="flex items-center gap-3">
-          <h3>{task ? taskLabels[task.status] : "读取任务…"}</h3>
+          <h3>
+            {task
+              ? taskLabels[task.status]
+              : presentation === "asset" && error
+                ? "生成记录"
+                : "读取任务…"}
+          </h3>
           {task && activeTask(task.status) && (
             <Spinner aria-label="任务进行中" />
           )}
@@ -519,7 +611,7 @@ export function TaskDetail({
             <RotateCw />
           </Button>
         </div>
-        {error && <FeedbackToast message={error} />}
+        {error && presentation !== "asset" && <FeedbackToast message={error} />}
         {task && (
           <dl className="grid min-w-0 gap-2 text-sm">
             <div>

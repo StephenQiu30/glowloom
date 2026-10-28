@@ -89,6 +89,16 @@ it("对口型可发布，配音不可发布；最终能力不足不依据成功�
     canDownload: false,
     canPublish: false,
   });
+  const unfinishedDocument = {
+    ...validated(),
+    status: "ingesting" as const,
+    outputs: validated().outputs.map((item) => ({ ...item, kind: "document" })),
+  };
+  expect(
+    historyCardTargets([unfinishedDocument], "document").every(
+      (card) => !card.canDownload && !card.canPublish,
+    ),
+  ).toBe(true);
   for (const kind of ["audio", "document"] as const)
     expect(
       historyCardTargets([validated()], kind).every((card) => !card.canPublish),

@@ -77,6 +77,26 @@ function cards(kind: "image" | "document") {
     kind,
   );
 }
+it("unfinished formal candidates cannot bypass download eligibility", async () => {
+  const selected = cards("document").map((card) => ({
+    ...card,
+    task: { ...card.task, status: "ingesting" as const },
+    outputs: card.outputs.map((output) => ({
+      ...output,
+      kind: "document",
+      media_asset_id: id,
+    })),
+  }));
+  const results = await downloadHistoryCards(
+    selected,
+    "pdf",
+    new AbortController().signal,
+    () => {},
+  );
+  expect(results.every((item) => !item.ok)).toBe(true);
+  expect(api.document).not.toHaveBeenCalled();
+  expect(api.operation).not.toHaveBeenCalled();
+});
 it("逐项授权原件下载保留部分失败，真实MIME决定文件扩展名", async () => {
   api.original
     .mockResolvedValueOnce(new Blob(["actual-file"], { type: "image/webp" }))

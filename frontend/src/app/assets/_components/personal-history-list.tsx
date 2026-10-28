@@ -50,6 +50,7 @@ import {
 } from "./history-results";
 import { HistoryResultCard, historyCardTitle } from "./history-result-card";
 import { HistoryPublicationDialog } from "./history-publication-dialog";
+import { assetActionFeedback } from "./asset-action-feedback";
 import {
   downloadHistoryCards,
   type DocumentDownloadFormat,
@@ -97,6 +98,7 @@ export function PersonalHistoryList({
   const [batch, setBatch] = useState(false);
   const [chosen, setChosen] = useState<string[]>([]);
   const [detail, setDetail] = useState<HistoryCardTarget | null>(null);
+  const [detailAvailable, setDetailAvailable] = useState(false);
   const [reuse, setReuse] = useState<GenerationSeed | null>(null);
   const [deleting, setDeleting] = useState<HistoryCardTarget[] | null>(null);
   const [publishing, setPublishing] = useState<HistoryCardTarget[] | null>(
@@ -111,6 +113,9 @@ export function PersonalHistoryList({
   >([]);
   const [results, setResults] = useState<CommandResult[]>([]);
   const [notice, setNotice] = useState("");
+  const [noticeTone, setNoticeTone] = useState<"error" | "info" | "success">(
+    "error",
+  );
   const busy = useRef(false);
   const actionFlight = useRef<AbortController | null>(null);
   const locked = writing || !!intent;
@@ -169,6 +174,7 @@ export function PersonalHistoryList({
   const smallActionLimit = kind === "image" || kind === "document" ? 50 : 100;
   function toggle(card: HistoryCardTarget) {
     if (!chosen.includes(card.key) && chosen.length >= selectionLimit) {
+      setNoticeTone("info");
       setNotice(`最多选择${selectionLimit}项内容。`);
       return;
     }
@@ -198,6 +204,7 @@ export function PersonalHistoryList({
     busy.current = true;
     setWriting(true);
     setIntent(op);
+    setNoticeTone("error");
     setNotice("");
     onLock(true);
     const controller = new AbortController();
@@ -284,6 +291,7 @@ export function PersonalHistoryList({
     onLock(true);
     setNotice("");
     setDownloadResults([]);
+    setNoticeTone("info");
     const controller = new AbortController();
     actionFlight.current = controller;
     try {
@@ -303,6 +311,7 @@ export function PersonalHistoryList({
         onBatchMode(false);
       }
       setDownloadResults(outcomes);
+      setNoticeTone(outcomes.some((item) => !item.ok) ? "error" : "success");
       setNotice(
         `已开始下载${outcomes.filter((item) => item.ok).length}项，失败${outcomes.filter((item) => !item.ok).length}项。`,
       );
@@ -327,6 +336,7 @@ export function PersonalHistoryList({
     setWriting(true);
     onLock(true);
     setNotice("");
+    setNoticeTone("error");
     const controller = new AbortController();
     actionFlight.current = controller;
     try {
@@ -386,7 +396,10 @@ export function PersonalHistoryList({
     >
       {batch ? (
         <>
-          <span className="text-sm text-muted-foreground">
+          <span
+            role="status"
+            className="text-sm text-muted-foreground tabular-nums"
+          >
             已选择{selected.length}项内容
           </span>
           <Button
@@ -394,8 +407,10 @@ export function PersonalHistoryList({
             disabled={locked || !cards.length}
             onClick={() => {
               setChosen(cards.slice(0, selectionLimit).map((card) => card.key));
-              if (cards.length > selectionLimit)
+              if (cards.length > selectionLimit) {
+                setNoticeTone("info");
                 setNotice(`已选择前${selectionLimit}项内容。`);
+              }
             }}
           >
             全选
@@ -595,7 +610,10 @@ export function PersonalHistoryList({
             batch={batch}
             checked={chosen.includes(card.key)}
             disabled={locked || pending || !!error}
-            onOpen={() => setDetail(card)}
+            onOpen={() => {
+              setDetailAvailable(false);
+              setDetail(card);
+            }}
             onToggle={() => toggle(card)}
             onFavorite={() => void command("favorite", [card], !card.favorite)}
             onDelete={() => setDeleting([card])}
@@ -618,31 +636,34 @@ export function PersonalHistoryList({
           更多记录
         </Button>
       )}
-      {results.length > 0 && (
-        <section aria-label="操作结果" className="grid gap-1 text-sm">
-          {results.map((item) => (
-            <p key={item.key} className="break-words">
-              {item.title}：
-              {item.ok ? "已完成" : `未完成（${item.code}），请刷新后重试`}
-            </p>
-          ))}
-        </section>
-      )}
-      {downloadResults.length > 0 && (
-        <section aria-label="下载结果" className="grid gap-1 text-sm">
-          {downloadResults.map((item) => (
-            <p key={`${item.key}:${item.outputID}`} className="break-words">
-              {item.title} · {item.outputID.slice(0, 8)} ·{" "}
-              {item.format === "original"
-                ? "原件"
-                : item.format === "pdf"
-                  ? "PDF"
-                  : "Markdown"}
-              ：{item.ok ? "已开始下载" : item.message || "下载失败，请重试。"}
-            </p>
-          ))}
-        </section>
-      )}
+      <section
+        aria-label="操作结果"
+        aria-live="polite"
+        className={results.length ? "grid gap-1 text-sm" : "sr-only"}
+      >
+        {results.map((item) => (
+          <p key={item.key} className="break-words">
+            {item.title}：{item.ok ? "已完成" : assetActionFeedback(item.code)}
+          </p>
+        ))}
+      </section>
+      <section
+        aria-label="下载结果"
+        aria-live="polite"
+        className={downloadResults.length ? "grid gap-1 text-sm" : "sr-only"}
+      >
+        {downloadResults.map((item) => (
+          <p key={`${item.key}:${item.outputID}`} className="break-words">
+            {item.title} · {item.outputID.slice(0, 8)} ·{" "}
+            {item.format === "original"
+              ? "原件"
+              : item.format === "pdf"
+                ? "PDF"
+                : "Markdown"}
+            ：{item.ok ? "已开始下载" : item.message || "下载失败，请重试。"}
+          </p>
+        ))}
+      </section>
       <Dialog
         open={!!detail}
         onOpenChange={(open) => {
@@ -651,10 +672,10 @@ export function PersonalHistoryList({
       >
         <DialogContent
           showCloseButton={!locked}
-          className="max-h-[90dvh] overflow-y-auto sm:max-w-[calc(100vw-3rem)] lg:max-w-6xl"
+          className="max-h-[90dvh] overflow-y-auto overscroll-contain sm:max-w-[calc(100vw-3rem)] lg:max-w-6xl"
         >
           <DialogTitle>生成记录</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="break-words">
             {detail?.task.model_name || "任务详情"}
           </DialogDescription>
           {detail && (
@@ -664,6 +685,7 @@ export function PersonalHistoryList({
               id={detail.task.id}
               outputID={detail.output?.id}
               presentation="asset"
+              onAvailabilityChange={setDetailAvailable}
               onReuse={(task) => void startReuse(detail, task)}
             />
           )}
@@ -674,7 +696,7 @@ export function PersonalHistoryList({
             >
               <Button
                 variant="ghost"
-                disabled={locked || !detail.canFavorite}
+                disabled={locked || !detailAvailable || !detail.canFavorite}
                 onClick={() =>
                   void command("favorite", [detail], !detail.favorite)
                 }
@@ -686,7 +708,9 @@ export function PersonalHistoryList({
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="ghost"
-                      disabled={locked || !hasDocumentBody(detail)}
+                      disabled={
+                        locked || !detailAvailable || !hasDocumentBody(detail)
+                      }
                     >
                       下载格式 ·{" "}
                       {hasOriginalDocument(detail)
@@ -717,7 +741,7 @@ export function PersonalHistoryList({
               )}
               <Button
                 variant="ghost"
-                disabled={locked || !detail.canDownload}
+                disabled={locked || !detailAvailable || !detail.canDownload}
                 onClick={() => void download([detail])}
               >
                 {hasOriginalDocument(detail) ? "下载原件" : "下载"}
@@ -726,7 +750,7 @@ export function PersonalHistoryList({
                 (kind === "video" && !isVideoDubbing(detail))) && (
                 <Button
                   variant="ghost"
-                  disabled={locked || !detail.canPublish}
+                  disabled={locked || !detailAvailable || !detail.canPublish}
                   onClick={() => {
                     setPublishing([detail]);
                     setDetail(null);
@@ -737,7 +761,7 @@ export function PersonalHistoryList({
               )}
               <Button
                 variant="ghost"
-                disabled={locked}
+                disabled={locked || !detailAvailable}
                 onClick={() => {
                   setDeleting([detail]);
                   setDetail(null);
@@ -791,7 +815,7 @@ export function PersonalHistoryList({
       {reuse && (
         <GenerationDialog seed={reuse} onClose={() => setReuse(null)} />
       )}
-      {notice && <FeedbackToast message={notice} />}
+      {notice && <FeedbackToast message={notice} tone={noticeTone} />}
     </div>
   );
 }

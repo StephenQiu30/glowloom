@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import {
   act,
   cleanup,
@@ -11,6 +11,7 @@ import {
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AssetWorkspace } from "@/app/assets/_components/asset-workspace";
 import { assetDateRange } from "@/app/assets/_components/asset-query";
+import { readAssetLocation } from "@/app/assets/_components/asset-location";
 import { RequestError } from "@/lib/request";
 
 const state = vi.hoisted(() => ({
@@ -83,11 +84,19 @@ vi.mock("@/components/media/project-media", () => ({
   ProjectMediaPreview: () => <span>媒体预览</span>,
 }));
 vi.mock("@/components/generation/generation-dialog", () => ({
-  TaskDetail: () => <span>真实任务详情</span>,
+  TaskDetail: ({
+    onAvailabilityChange,
+  }: {
+    onAvailabilityChange?: (available: boolean) => void;
+  }) => {
+    useEffect(() => onAvailabilityChange?.(true), [onAvailabilityChange]);
+    return <span>真实任务详情</span>;
+  },
 }));
 
 beforeEach(() => {
   vi.resetAllMocks();
+  window.history.replaceState({}, "", "/assets");
   state.pickProject = null;
   state.scope = "22222222-2222-4222-8222-222222222222";
   state.actor = "11111111-1111-4111-8111-111111111111";
@@ -96,6 +105,96 @@ beforeEach(() => {
   state.templates.mockResolvedValue({ items: [] });
 });
 afterEach(cleanup);
+
+it("a bookmarked query restores its media, selected filters and server search on first read", async () => {
+  const initialLocation = readAssetLocation(
+    new URLSearchParams(
+      "kind=video&q=山谷&favorite=1&resolutions=1080P&from=2026-10-01&through=2026-10-28&order=asc",
+    ),
+  );
+  render(<AssetWorkspace initialLocation={initialLocation} />);
+  await screen.findByText("当前已开启筛选，部分内容可能被隐藏");
+  expect(state.history).toHaveBeenCalledWith(
+    expect.objectContaining({
+      kind: "video",
+      search: "山谷",
+      favorite_only: true,
+      resolutions: "1080P",
+      order: "asc",
+      ...assetDateRange("2026-10-01", "2026-10-28"),
+    }),
+    expect.anything(),
+  );
+  expect(
+    screen.getByRole("radio", { name: "视频" }).getAttribute("aria-checked"),
+  ).toBe("true");
+});
+
+it("keyboard focus can switch asset-source tabs without losing the current source URL", async () => {
+  render(<AssetWorkspace />);
+  await screen.findByText("暂无相关资产");
+  const historyTab = screen.getByRole("tab", { name: "生成历史" });
+  act(() => historyTab.focus());
+  fireEvent.keyDown(historyTab, { key: "ArrowRight" });
+  await waitFor(() =>
+    expect(state.canvases).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "canvas" }),
+      expect.anything(),
+    ),
+  );
+  expect(
+    screen.getByRole("tab", { name: "画布" }).getAttribute("aria-selected"),
+  ).toBe("true");
+  expect(new URLSearchParams(location.search).get("view")).toBe("canvas");
+});
+
+it("media and legacy-canvas state survive URL navigation back to the asset source", async () => {
+  render(<AssetWorkspace />);
+  await screen.findByText("暂无相关资产");
+  fireEvent.click(screen.getByRole("radio", { name: "视频" }));
+  await waitFor(() =>
+    expect(new URLSearchParams(location.search).get("kind")).toBe("video"),
+  );
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "画布" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  await screen.findByText("暂无相关资产");
+  fireEvent.click(screen.getByRole("radio", { name: "历史画布" }));
+  await waitFor(() =>
+    expect(new URLSearchParams(location.search).get("collection")).toBe(
+      "legacy",
+    ),
+  );
+  act(() => {
+    window.history.replaceState({}, "", "/assets?kind=audio&q=配音");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await waitFor(() =>
+    expect(state.history.mock.calls.at(-1)?.[0]).toMatchObject({
+      kind: "audio",
+      search: "配音",
+    }),
+  );
+  expect(
+    screen.getByRole("radio", { name: "音频" }).getAttribute("aria-checked"),
+  ).toBe("true");
+});
+
+it("date validation stays inline, associates the invalid input and returns keyboard focus", async () => {
+  render(<AssetWorkspace />);
+  await screen.findByText("暂无相关资产");
+  fireEvent.click(screen.getByRole("button", { name: "时间" }));
+  const from = screen.getByLabelText("开始日期");
+  fireEvent.change(from, { target: { value: "2026-10-28" } });
+  fireEvent.change(screen.getByLabelText("结束日期"), {
+    target: { value: "2026-10-01" },
+  });
+  fireEvent.submit(from.closest("form")!);
+  expect(await screen.findByText("开始日期不能晚于结束日期。")).toBeTruthy();
+  expect(from.getAttribute("aria-invalid")).toBe("true");
+  expect(document.activeElement).toBe(from);
+});
 
 const outputMetadata = {
   favorite: false,
@@ -441,6 +540,11 @@ it("多图结果分别计数，批量收藏部分失败后仅保留失败项并�
   fireEvent.click(screen.getByRole("button", { name: "批量操作" }));
   fireEvent.click(screen.getByRole("button", { name: "全选" }));
   expect(screen.getByText("已选择2项内容")).toBeTruthy();
+  expect(
+    within(screen.getByRole("article", { name: "本人的创作记录 · 结果2" }))
+      .getByRole("button")
+      .getAttribute("aria-pressed"),
+  ).toBe("true");
   fireEvent.click(screen.getByRole("button", { name: "收藏" }));
   await screen.findByText("已选择1项内容");
   expect(state.historyCommand.mock.calls[0][0].targets).toEqual([
@@ -454,7 +558,10 @@ it("多图结果分别计数，批量收藏部分失败后仅保留失败项并�
   ).toBe("checked");
   expect(state.history).toHaveBeenCalledTimes(2);
   expect(screen.getByLabelText("操作结果").textContent).toContain(
-    "revision_conflict",
+    "内容已更新，请重试此项。",
+  );
+  expect(screen.getByLabelText("操作结果").getAttribute("aria-live")).toBe(
+    "polite",
   );
 });
 it("收藏未知结果冻结来源与原幂等键，重试不会改为新命令", async () => {

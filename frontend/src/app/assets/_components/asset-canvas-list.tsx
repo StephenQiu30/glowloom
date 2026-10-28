@@ -42,6 +42,7 @@ import {
 import { CreateAssetCanvas } from "./create-asset-canvas";
 import { AssetCreateProject } from "./asset-create-project";
 import { AssetTemplateList, type AssetTemplate } from "./asset-template-list";
+import { assetActionFeedback } from "./asset-action-feedback";
 
 type Intent = {
   key: string;
@@ -293,7 +294,10 @@ export function AssetCanvasList({
     <div className="flex flex-wrap items-center gap-2" aria-label="画布操作">
       {batch ? (
         <>
-          <span className="text-sm text-muted-foreground">
+          <span
+            role="status"
+            className="text-sm text-muted-foreground tabular-nums"
+          >
             已选择{chosen.length}项内容
           </span>
           <Button
@@ -463,7 +467,7 @@ export function AssetCanvasList({
         {page?.items.map((item) => (
           <article
             key={item.id}
-            className="group relative min-w-0"
+            className="group relative min-w-0 [contain-intrinsic-size:auto_16rem] [content-visibility:auto]"
             aria-label={item.name}
           >
             <Button
@@ -471,6 +475,7 @@ export function AssetCanvasList({
               className="h-auto w-full min-w-0 flex-col items-stretch gap-2 p-0 text-left font-normal"
               asChild={!batch && !locked}
               disabled={locked}
+              aria-pressed={batch ? selected.includes(item.id) : undefined}
               onClick={batch ? () => toggle(item.id) : undefined}
             >
               {batch || locked ? (
@@ -489,25 +494,27 @@ export function AssetCanvasList({
             </Button>
             {batch ? (
               <Checkbox
-                className="absolute top-3 left-3"
+                className="absolute top-3 left-3 after:-inset-3.5"
                 checked={selected.includes(item.id)}
                 disabled={locked}
                 aria-label={`选择${item.name}`}
                 onCheckedChange={() => toggle(item.id)}
               />
             ) : (
-              <div className="absolute top-2 right-2 flex gap-1 rounded-lg bg-popover/90 p-1 text-popover-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100">
+              <div className="absolute top-2 right-2 flex gap-1 rounded-lg bg-popover/90 p-1 text-popover-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none max-md:opacity-100">
                 <Button
                   variant="ghost"
                   size="icon"
                   className="max-md:size-11"
                   disabled={locked}
+                  aria-pressed={item.favorite}
                   aria-label={`${item.favorite ? "取消收藏" : "收藏"}${item.name}`}
                   onClick={() =>
                     void command("favorite", [item], !item.favorite)
                   }
                 >
                   <Heart
+                    aria-hidden="true"
                     className={item.favorite ? "fill-current" : undefined}
                   />
                 </Button>
@@ -520,7 +527,7 @@ export function AssetCanvasList({
                       disabled={locked}
                       aria-label={`更多 · ${item.name}`}
                     >
-                      <MoreHorizontal />
+                      <MoreHorizontal aria-hidden="true" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
@@ -576,16 +583,17 @@ export function AssetCanvasList({
           更多画布
         </Button>
       )}
-      {results.length > 0 && (
-        <section aria-label="画布操作结果" className="grid gap-1 text-sm">
-          {results.map((item) => (
-            <p className="break-words" key={item.id}>
-              {item.title}：
-              {item.ok ? "已完成" : `未完成（${item.code}），请刷新后重试`}
-            </p>
-          ))}
-        </section>
-      )}
+      <section
+        aria-label="画布操作结果"
+        aria-live="polite"
+        className={results.length ? "grid gap-1 text-sm" : "sr-only"}
+      >
+        {results.map((item) => (
+          <p className="break-words" key={item.id}>
+            {item.title}：{item.ok ? "已完成" : assetActionFeedback(item.code)}
+          </p>
+        ))}
+      </section>
       {collection === "current" && !batch && !!page && !error && (
         <AssetTemplateList
           kind={kind}
@@ -682,6 +690,8 @@ export function AssetCanvasList({
                 <FieldLabel htmlFor="asset-rename-name">名称</FieldLabel>
                 <Input
                   id="asset-rename-name"
+                  name="name"
+                  autoComplete="off"
                   maxLength={50}
                   value={name}
                   disabled={locked}
@@ -721,7 +731,10 @@ function CanvasCover({ item }: { item: AssetCanvasItem }) {
           interactive={false}
         />
       ) : (
-        <PanelsTopLeft className="size-8 text-muted-foreground" />
+        <PanelsTopLeft
+          className="size-8 text-muted-foreground"
+          aria-hidden="true"
+        />
       )}
     </span>
   );

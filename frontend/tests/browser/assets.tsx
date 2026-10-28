@@ -6,6 +6,7 @@ import { SessionProvider } from "../../src/components/auth/session";
 import { SpaceProvider } from "../../src/components/spaces/space-context";
 import { BasicLayout } from "../../src/components/layout/basic-layout";
 import { AssetWorkspace } from "../../src/app/assets/_components/asset-workspace";
+import { readAssetLocation } from "../../src/app/assets/_components/asset-location";
 import { TooltipProvider } from "../../src/components/ui/tooltip";
 import { Toaster } from "../../src/components/ui/sonner";
 import { installDevelopmentTransport } from "../../src/lib/development-transport";
@@ -355,20 +356,14 @@ installDevelopmentTransport({
     throw new Error(`Unmocked fixture command: ${method} ${url}`);
   },
 });
-const initialView = new URLSearchParams(location.search).get("view");
+const initialLocation = readAssetLocation(new URLSearchParams(location.search));
 createRoot(document.getElementById("root")!).render(
   <ThemeProvider attribute="class" defaultTheme="dark">
     <TooltipProvider>
       <SessionProvider>
         <SpaceProvider>
           <BasicLayout screen="assets">
-            <AssetWorkspace
-              initialView={
-                initialView === "canvas" || initialView === "short_drama"
-                  ? initialView
-                  : "history"
-              }
-            />
+            <AssetWorkspace initialLocation={initialLocation} />
           </BasicLayout>
         </SpaceProvider>
       </SessionProvider>

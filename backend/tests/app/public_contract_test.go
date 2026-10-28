@@ -112,6 +112,11 @@ func TestPublicBusinessRoutesRequireSession(t *testing.T) {
 			path := route.Path
 			wantStatus, wantCode := http.StatusUnauthorized, "session_invalid"
 			switch route.Method + " " + route.Path {
+			case "GET /api/works/:work_id":
+				// Published work projections are anonymous; all publication writes
+				// still take the default session-required assertion below.
+				path = "/api/works/not-a-uuid"
+				wantStatus, wantCode = http.StatusUnprocessableEntity, "invalid_request"
 			case "POST /api/session/refresh":
 				wantStatus, wantCode = http.StatusForbidden, "csrf_invalid"
 			case "POST /api/session/upgrade":

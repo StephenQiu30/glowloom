@@ -218,9 +218,19 @@ func (s *Store) ReadPublicTask(ctx context.Context, actor identityapp.Principal,
 			application.TaskOutput `gorm:"embedded"`
 			Payload                json.RawMessage
 		}
-		if err := tx.Raw(`SELECT id,seq_no AS sequence,kind,media_asset_id,moderation_status,create_time,
- CASE WHEN kind='json' AND moderation_status='passed' THEN json_payload ELSE NULL END AS payload
- FROM operation.operation_output WHERE operation_id=?::uuid AND project_id=?::uuid AND NOT is_delete ORDER BY seq_no`, operationID, projectID).Scan(&outputs).Error; err != nil {
+		// Storage distinguishes media from JSON; clients consume the actual media
+		// category from the same project. Retain current candidate metadata even
+		// when media becomes unavailable; its owning endpoints authorize bytes.
+		// Exclude only references that cannot yield a real owned media category.
+		if err := tx.Raw(`SELECT output.id,output.seq_no AS sequence,
+ CASE WHEN output.kind='media' THEN asset.kind ELSE output.kind END AS kind,
+ output.media_asset_id,output.moderation_status,output.create_time,
+ CASE WHEN output.kind='json' AND output.moderation_status='passed' THEN output.json_payload ELSE NULL END AS payload
+ FROM operation.operation_output output
+ LEFT JOIN media.media_asset asset ON asset.id=output.media_asset_id AND asset.project_id=output.project_id
+ WHERE output.operation_id=?::uuid AND output.project_id=?::uuid AND NOT output.is_delete
+ AND (output.kind<>'media' OR asset.id IS NOT NULL)
+ ORDER BY output.seq_no`, operationID, projectID).Scan(&outputs).Error; err != nil {
 			return fmt.Errorf("read public task candidates: %w", err)
 		}
 		for _, output := range outputs {

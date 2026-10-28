@@ -65,6 +65,37 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it("reference media and folder filters restore from a bookmark and keep URL state", async () => {
+  const initialFilter = {
+    kind: "model",
+    search: "长名称",
+    favorite: true,
+    trash: false,
+    folder: "33333333-3333-4333-8333-333333333333",
+    order: "name_asc",
+    recent: true,
+  };
+  render(<AssetsPage initialFilter={initialFilter} />);
+  await screen.findByText("没有匹配的素材");
+  expect(request).toHaveBeenCalledWith(
+    "/api/media/library",
+    expect.objectContaining({
+      params: expect.objectContaining({
+        kind: "model",
+        search: "长名称",
+        favorite_only: true,
+        folder_id: initialFilter.folder,
+        order: "name_asc",
+        recent_only: true,
+      }),
+    }),
+  );
+  expect(new URLSearchParams(location.search).get("reference_kind")).toBe(
+    "model",
+  );
+  expect(new URLSearchParams(location.search).get("view")).toBe("reference");
+});
+
 it("收藏预览中的素材后保持弹窗并更新操作状态", async () => {
   const item = {
     id: "33333333-3333-4333-8333-333333333333",

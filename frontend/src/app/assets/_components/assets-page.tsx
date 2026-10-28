@@ -9,7 +9,7 @@ import {
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
 import { cn } from "cn";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Trash2,
@@ -84,6 +84,7 @@ import {
   mediaKinds as kinds,
   type LibraryFilter as Filter,
 } from "./library-toolbar";
+import { writeReferenceLocation } from "./asset-location";
 function Library({
   filter,
   onFilter,
@@ -639,7 +640,7 @@ function Library({
                     {batch && (
                       <Checkbox
                         aria-label={`选择 ${item.title}`}
-                        className="asset-selection"
+                        className="asset-selection after:-inset-3.5"
                         checked={selected.includes(item.id)}
                         disabled={locked || loading}
                         onCheckedChange={(v) =>
@@ -713,7 +714,7 @@ function Library({
               }}
             >
               <DialogContent
-                className="sm:max-w-4xl"
+                className="max-h-[90dvh] overflow-y-auto overscroll-contain sm:max-w-4xl"
                 onCloseAutoFocus={(event) => {
                   event.preventDefault();
                   (previewOpener.current?.isConnected
@@ -722,8 +723,10 @@ function Library({
                   )?.focus();
                 }}
               >
-                <DialogTitle>{detail?.title}</DialogTitle>
-                <DialogDescription>
+                <DialogTitle className="min-w-0 break-words">
+                  {detail?.title}
+                </DialogTitle>
+                <DialogDescription className="min-w-0 break-words">
                   个人素材 · {detail?.media?.file_name ?? detail?.kind}
                 </DialogDescription>
                 {detail && (
@@ -803,6 +806,8 @@ function Library({
                       </FieldLabel>
                       <Input
                         id="library-folder-name"
+                        name="folder_name"
+                        autoComplete="off"
                         value={folderName}
                         maxLength={40}
                         disabled={saving || !!pendingOperation}
@@ -822,7 +827,14 @@ function Library({
                     </Button>
                   </DialogFooter>
                 </form>
-                {writeError && <></>}
+                {writeError && (
+                  <p
+                    role="alert"
+                    className="text-sm break-words text-destructive"
+                  >
+                    {writeError}
+                  </p>
+                )}
                 {pendingOperation && !saving && (
                   <Button onClick={() => void command()}>重试原操作</Button>
                 )}
@@ -879,7 +891,14 @@ function Library({
                         : "确认"}
                   </Button>
                 </DialogFooter>
-                {writeError && <></>}
+                {writeError && (
+                  <p
+                    role="alert"
+                    className="text-sm break-words text-destructive"
+                  >
+                    {writeError}
+                  </p>
+                )}
               </DialogContent>
             </Dialog>
             {upload && (
@@ -898,31 +917,51 @@ function Library({
     </section>
   );
 }
-export function ReferenceAssetsPage({ onBack }: { onBack?: () => void }) {
+export function ReferenceAssetsPage({
+  onBack,
+  initialFilter,
+}: {
+  onBack?: () => void;
+  initialFilter?: Filter;
+}) {
   const [pageSize, setPageSize] = useState<PageSize>(12);
-  const [filter, setFilter] = useState<Filter>({
-    kind: "image",
-    search: "",
-    favorite: false,
-    trash: false,
-    folder: "",
-    order: "updated_desc",
-    recent: false,
-  });
-  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<Filter>(
+    initialFilter ?? {
+      kind: "image",
+      search: "",
+      favorite: false,
+      trash: false,
+      folder: "",
+      order: "updated_desc",
+      recent: false,
+    },
+  );
+  const [search, setSearch] = useState(initialFilter?.search ?? "");
   const [locked, setLocked] = useState(false);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    url.search = writeReferenceLocation(filter, url.searchParams);
+    if (url.href !== window.location.href)
+      window.history.replaceState(null, "", url);
+  }, [filter]);
+  const pageSearch = useMemo(
+    () => ({
+      value: search,
+      onValueChange: setSearch,
+      onSearch: (value: string) => {
+        if (!locked) setFilter((f) => ({ ...f, search: value.trim() }));
+      },
+      label: "搜索参考素材",
+      disabled: locked,
+    }),
+    [search, locked],
+  );
   return (
     <PageLayout
       screen="assets"
 
       fullBleed
-      search={{
-        value: search,
-        onValueChange: setSearch,
-        onSearch: (value) => setFilter((f) => ({ ...f, search: value })),
-        label: "搜索参考素材",
-        disabled: locked,
-      }}
+      search={pageSearch}
     >
       <Library
         key={JSON.stringify([filter, pageSize])}

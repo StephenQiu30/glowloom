@@ -78,10 +78,14 @@ export function HistoryResultCard({
     .filter(Boolean)
     .join(" · ");
   return (
-    <article className="group relative min-w-0" aria-label={title}>
+    <article
+      className="group relative min-w-0 [contain-intrinsic-size:auto_16rem] [content-visibility:auto]"
+      aria-label={title}
+    >
       <Button
         variant="ghost"
         disabled={disabled}
+        aria-pressed={batch ? checked : undefined}
         className="h-auto w-full min-w-0 flex-col items-stretch gap-2 overflow-hidden p-0 text-left font-normal"
         onClick={batch ? onToggle : onOpen}
       >
@@ -95,7 +99,7 @@ export function HistoryResultCard({
               interactive={false}
             />
           ) : (
-            <Icon className="size-8 text-muted-foreground" />
+            <Icon className="size-8 text-muted-foreground" aria-hidden="true" />
           )}
         </span>
         <span className="line-clamp-2 w-full text-sm break-words whitespace-normal">
@@ -110,23 +114,27 @@ export function HistoryResultCard({
       </Button>
       {batch ? (
         <Checkbox
-          className="absolute top-3 left-3"
+          className="absolute top-3 left-3 after:-inset-3.5"
           checked={checked}
           disabled={disabled}
           aria-label={`选择${title}`}
           onCheckedChange={onToggle}
         />
       ) : (
-        <div className="absolute top-2 right-2 flex gap-1 rounded-lg bg-popover/90 p-1 text-popover-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100">
+        <div className="absolute top-2 right-2 flex gap-1 rounded-lg bg-popover/90 p-1 text-popover-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none max-md:opacity-100">
           <Button
             size="icon"
             variant="ghost"
             className="max-md:size-11"
             disabled={disabled || !card.canFavorite}
+            aria-pressed={card.favorite}
             aria-label={`${card.favorite ? "取消收藏" : "收藏"}${title}`}
             onClick={onFavorite}
           >
-            <Heart className={card.favorite ? "fill-current" : undefined} />
+            <Heart
+              aria-hidden="true"
+              className={card.favorite ? "fill-current" : undefined}
+            />
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -137,7 +145,7 @@ export function HistoryResultCard({
                 disabled={disabled}
                 aria-label={`更多 · ${title}`}
               >
-                <MoreHorizontal />
+                <MoreHorizontal aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
