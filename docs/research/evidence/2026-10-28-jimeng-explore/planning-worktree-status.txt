@@ -1,0 +1,56 @@
+ M BACKLOG.md
+ M DESIGN.md
+ M backend/internal/canvas/domain/editor_config.go
+ M backend/tests/canvas/editor_persistence_test.go
+ M docs/00-文档索引.md
+ M docs/design/00-设计导航.md
+ M docs/design/09-统一顶栏与阶段入口设计.md
+ M docs/design/10-画布交互设计.md
+ M docs/design/26-资产信息架构与即梦对齐设计.md
+ M docs/plan/00-Plan导航.md
+ M docs/plan/16-Figma设计落地实施计划.md
+ M docs/plan/23-无限画布一致性改造实施计划.md
+ M docs/prd/00-PRD导航.md
+ M docs/prd/14-无限画布一致性改造.md
+ M docs/requirement/00-需求导航.md
+ M docs/research/00-调研导航.md
+ M docs/research/evidence/2026-10-28-canvas-implementation/figma-visual-correction-ledger.json
+ M frontend/src/app/assets/_components/asset-canvas-list.tsx
+ M frontend/src/app/assets/_components/asset-workspace.tsx
+ M frontend/src/app/assets/_components/personal-history-list.tsx
+ M frontend/src/app/globals.css
+ M frontend/src/components/canvas/canvas.css
+ M frontend/src/components/canvas/editor/canvas-editor.tsx
+ M frontend/src/components/canvas/nodes/canvas-node.tsx
+ M frontend/src/components/canvas/runtime/components/editor/rich-text/rich-text-editor.tsx
+ M frontend/src/components/canvas/runtime/components/editor/types/rich-text.ts
+ M frontend/src/components/canvas/service-graph.ts
+ M frontend/src/components/canvas/types/canvas.ts
+ M frontend/src/components/layout/basic-layout.tsx
+ M frontend/src/components/layout/page-layout.tsx
+ M frontend/src/components/layout/product-header-actions.tsx
+ M frontend/src/components/layout/product-header.tsx
+ M frontend/tests/unit/app/assets/_components/asset-workspace.test.tsx
+ M frontend/tests/unit/components/canvas/nodes/canvas-node-resize.test.tsx
+ M frontend/tests/unit/components/canvas/service-graph.test.ts
+ M frontend/tests/unit/components/layout/basic-layout.test.tsx
+?? docs/design/28-探索发现与创作转化设计.md
+?? docs/plan/24-探索一致性改造Agent执行计划.md
+?? docs/prd/15-探索发现与创作转化.md
+?? docs/requirement/15-探索对齐即梦需求.md
+?? docs/research/11-即梦探索完整需求分析.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-text-fullscreen.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-text-palette.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/figma-text-fullscreen.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/figma-text-palette.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/text-actions-validation.md
+?? docs/research/evidence/2026-10-28-jimeng-explore/
+?? docs/research/evidence/2026-10-28-subject-implementation/worktree-status.txt
+?? frontend/src/app/assets/_components/asset-toolbar-button.tsx
+?? frontend/src/app/assets/_components/use-batch-toolbar-focus.ts
+?? frontend/src/components/canvas/lib/canvas-text-background.ts
+?? frontend/src/components/canvas/nodes/canvas-text-actions.tsx
+?? frontend/src/components/canvas/runtime/components/editor/lib/rich-text-download.ts
+?? frontend/src/components/ui/button-group.tsx
+?? frontend/tests/unit/components/canvas/nodes/canvas-text-actions.test.tsx
+?? frontend/tests/unit/components/canvas/rich-text-download.test.ts

@@ -1,0 +1,158 @@
+{
+  "controls": [
+    {
+      "label": "lv-input lv-input-size-default",
+      "rect": {
+        "height": 34,
+        "width": 264,
+        "x": 1222.4375,
+        "y": 59.75
+      },
+      "tag": "INPUT"
+    },
+    {
+      "label": "消息中心",
+      "rect": {
+        "height": 28,
+        "width": 28,
+        "x": 1608.4375,
+        "y": 62.25
+      },
+      "tag": "BUTTON"
+    },
+    {
+      "label": "短剧漫剧",
+      "rect": {
+        "height": 36,
+        "width": 84,
+        "x": 280,
+        "y": 58.25
+      },
+      "tag": "BUTTON"
+    },
+    {
+      "label": "影视作品",
+      "rect": {
+        "height": 36,
+        "width": 109,
+        "x": 372,
+        "y": 58.25
+      },
+      "tag": "BUTTON"
+    },
+    {
+      "label": "动画动漫",
+      "rect": {
+        "height": 36,
+        "width": 84,
+        "x": 489,
+        "y": 58.25
+      },
+      "tag": "BUTTON"
+    },
+    {
+      "label": "广告营销",
+      "rect": {
+        "height": 36,
+        "width": 84,
+        "x": 581,
+        "y": 58.25
+      },
+      "tag": "BUTTON"
+    },
+    {
+      "label": "平面设计",
+      "rect": {
+        "height": 36,
+        "width": 84,
+        "x": 673,
+        "y": 58.25
+      },
+      "tag": "BUTTON"
+    },
+    {
+      "label": "电商",
+      "rect": {
+        "height": 36,
+        "width": 58,
+        "x": 765,
+        "y": 58.25
+      },
+      "tag": "BUTTON"
+    },
+    {
+      "label": "其他",
+      "rect": {
+        "height": 36,
+        "width": 58,
+        "x": 831,
+        "y": 58.25
+      },
+      "tag": "BUTTON"
+    },
+    {
+      "label": "技能",
+      "rect": {
+        "height": 36,
+        "width": 50,
+        "x": 906,
+        "y": 58.25
+      },
+      "tag": "BUTTON"
+    },
+    {
+      "label": "活动",
+      "rect": {
+        "height": 36,
+        "width": 50,
+        "x": 964,
+        "y": 58.25
+      },
+      "tag": "BUTTON"
+    },
+    {
+      "label": "短片作品",
+      "rect": {
+        "height": 36,
+        "width": 84,
+        "x": 280,
+        "y": 106.25
+      },
+      "tag": "BUTTON"
+    },
+    {
+      "label": "音乐MV",
+      "rect": {
+        "height": 36,
+        "width": 78.1796875,
+        "x": 372,
+        "y": 106.25
+      },
+      "tag": "BUTTON"
+    },
+    {
+      "label": "视觉设定",
+      "rect": {
+        "height": 36,
+        "width": 84,
+        "x": 458.1796875,
+        "y": 106.25
+      },
+      "tag": "BUTTON"
+    },
+    {
+      "tag": "DIV",
+      "label": "顶栏头像",
+      "rect": {
+        "x": 1814,
+        "y": 62.25,
+        "width": 28,
+        "height": 28
+      }
+    }
+  ],
+  "viewport": {
+    "height": 873,
+    "width": 1869
+  }
+}
