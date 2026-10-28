@@ -80,7 +80,7 @@ export function ProductHeaderActions({
           {actor ? (
             <>
               <CreditPopover />
-              <Button asChild variant="ghost" className="max-md:hidden">
+              <Button asChild variant="ghost" className="max-lg:hidden">
                 <Link href="/billing/membership">会员中心</Link>
               </Button>
             </>

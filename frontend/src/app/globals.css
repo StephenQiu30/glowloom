@@ -7,6 +7,11 @@
 
 @theme inline {
   --color-background: var(--background);
+  --color-workspace-foreground: var(--workspace-foreground);
+  --color-workspace-muted-foreground: var(--workspace-muted-foreground);
+  --color-workspace-subtle-foreground: var(--workspace-subtle-foreground);
+  --text-workspace: 13px;
+  --text-workspace--line-height: 22px;
   --color-cover-overlay: var(--cover-overlay);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans), system-ui, sans-serif;
@@ -51,6 +56,9 @@
 }
 
 :root {
+  --workspace-foreground: var(--foreground);
+  --workspace-muted-foreground: var(--muted-foreground);
+  --workspace-subtle-foreground: var(--subtle-foreground);
   /* REQ-JC-007: measured canvas surfaces, independent of ordinary page surfaces. */
   --canvas-reference-background: #0d0d0d;
   --canvas-reference-toolbar: #202022;
@@ -109,6 +117,9 @@
 }
 
 .dark {
+  --workspace-foreground: #fff;
+  --workspace-muted-foreground: rgb(255 255 255 / 70%);
+  --workspace-subtle-foreground: rgb(255 255 255 / 35%);
   --editor-surface: var(--card);
   --floating-surface: var(--popover);
   --floating-active: var(--accent);
@@ -368,7 +379,7 @@ button:not(:disabled),
   padding: 6px 12px;
 }
 .primary-navigation [data-slot="sidebar-menu"] {
-  gap: 8px;
+  gap: 4px;
 }
 .primary-navigation [data-slot="sidebar-menu-button"] {
   height: var(--control-height);
@@ -2688,8 +2699,10 @@ button:not(:disabled),
 
 /* Asset header uses shadcn surfaces; these rules only arrange their slots. */
 .product-header[data-asset-layout]:has(.product-header-toolbar:not(:empty)) {
-  grid-template-columns: minmax(240px, 1fr) minmax(0, auto);
-  padding-block: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+  grid-auto-rows: minmax(44px, auto);
+  min-height: 0;
+  padding-block: 12px 4px;
 }
 .product-header[data-asset-layout] .product-header-page-actions {
   padding: 0;
@@ -2717,14 +2730,6 @@ button:not(:disabled),
   flex: 1;
   display: flex;
   flex-direction: column;
-}
-@media (max-width: 1100px) {
-  .product-header[data-asset-layout]:has(.product-header-toolbar:not(:empty)) {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .product-header[data-asset-layout] .product-header-toolbar {
-    grid-column: 1 / -1;
-  }
 }
 @media (max-width: 767px) {
   .product-header[data-asset-layout]:has(.product-header-toolbar:not(:empty)) {
@@ -2754,23 +2759,36 @@ button:not(:disabled),
   }
 }
 
-/* Keep the account aligned with source navigation when batch actions wrap. */
 @media (min-width: 768px) and (max-width: 1400px) {
-  .product-header[data-asset-layout]:has(.product-header-toolbar:not(:empty)):has([data-asset-batch]) .product-header-actions {
-    display: contents;
+  .product-header[data-asset-layout]:has([data-asset-batch]) {
+    --asset-actions-display: contents;
+    --asset-tools-row: 2;
+    --asset-tools-column: 1 / -1;
   }
-  .product-header[data-asset-layout]:has([data-asset-batch]) .product-header-toolbar {
+}
+@media (min-width: 768px) and (max-width: 1100px) {
+  .product-header[data-asset-layout] {
+    --asset-actions-display: contents;
+    --asset-tools-row: 2;
+    --asset-tools-column: 1 / -1;
+  }
+}
+@media (min-width: 768px) {
+  .product-header[data-asset-layout]:has(.product-header-toolbar:not(:empty)) .product-header-actions {
+    display: var(--asset-actions-display, flex);
+  }
+  .product-header[data-asset-layout] .product-header-toolbar {
     grid-row: 1;
     grid-column: 1;
   }
-  .product-header[data-asset-layout]:has([data-asset-batch]) [data-asset-account-group] {
+  .product-header[data-asset-layout] [data-asset-account-group] {
     grid-row: 1;
     grid-column: 2;
     justify-self: end;
   }
-  .product-header[data-asset-layout]:has([data-asset-batch]) [data-asset-tool-group] {
-    grid-row: 2;
-    grid-column: 1 / -1;
+  .product-header[data-asset-layout] [data-asset-tool-group] {
+    grid-row: var(--asset-tools-row, auto);
+    grid-column: var(--asset-tools-column, auto);
     justify-self: end;
     max-width: 100%;
   }

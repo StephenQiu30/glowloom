@@ -608,6 +608,7 @@ export function PersonalHistoryList({
       )}
       {!pending && !error && !cards.length && (
         <ContentState
+          variant="workspace"
           title={
             hasAssetFilters(filters)
               ? "当前已开启筛选，部分内容可能被隐藏"

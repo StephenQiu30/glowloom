@@ -8,6 +8,7 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
+        filter: "text-workspace-muted-foreground hover:bg-muted hover:text-workspace-foreground aria-expanded:bg-muted aria-expanded:text-workspace-foreground data-active:bg-secondary data-active:text-workspace-foreground",
         reference:
           "bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground",
         tile: "bg-card text-card-foreground hover:bg-accent flex-col",
@@ -27,6 +28,7 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
+        workspace: "h-9 gap-2 px-3 text-[length:var(--text-workspace)] leading-[var(--text-workspace--line-height)] font-medium max-md:min-h-11 pointer-coarse:min-h-11",
         reference: "h-16 w-12 rounded-md",
         skill: "h-9 gap-1.5 rounded-full px-3 text-sm",
         default: "h-9 gap-2 px-3",

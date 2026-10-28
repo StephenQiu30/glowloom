@@ -17,6 +17,7 @@ export function ContentState({
   description,
   icon: Icon = Inbox,
   state = "empty",
+  variant = "default",
   actions,
   className,
 }: {
@@ -24,6 +25,7 @@ export function ContentState({
   description?: ReactNode;
   icon?: LucideIcon;
   state?: "empty" | "error" | "loading";
+  variant?: "default" | "workspace";
   actions?: ReactNode;
   className?: string;
 }) {
@@ -45,7 +47,7 @@ export function ContentState({
             <Icon />
           )}
         </EmptyMedia>
-        <EmptyTitle>
+        <EmptyTitle variant={state === "empty" ? variant : "default"}>
           <h2>{title}</h2>
         </EmptyTitle>
         {description ? (

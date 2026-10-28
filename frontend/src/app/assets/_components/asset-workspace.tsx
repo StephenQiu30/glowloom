@@ -212,7 +212,7 @@ function WorkspaceScope({
             className="flex w-full min-w-0 flex-wrap items-center gap-x-4 gap-y-2"
           >
             <TabsList
-              variant="pill"
+              variant="workspace"
               aria-label="资产来源"
               className="max-w-full"
             >
@@ -220,7 +220,7 @@ function WorkspaceScope({
                 <TabsTrigger
                   key={source.id}
                   value={source.id}
-                  className="min-h-11 transition-[color,background-color,box-shadow] motion-reduce:transition-none"
+                  className="transition-[color,background-color,box-shadow] motion-reduce:transition-none"
                   disabled={locked}
                 >
                   {source.label}
@@ -251,7 +251,9 @@ function WorkspaceScope({
         >
           {view === "history" && (
             <ToggleGroup
-              variant="text"
+              variant="workspace"
+              size="workspace"
+              spacing={0}
               type="single"
               value={kind}
               onValueChange={(value) => {
@@ -273,7 +275,6 @@ function WorkspaceScope({
                 <ToggleGroupItem
                   key={item.id}
                   value={item.id}
-                  className="min-h-11 px-3"
                   disabled={locked}
                 >
                   {item.label}
@@ -283,7 +284,9 @@ function WorkspaceScope({
           )}
           {view === "canvas" && (
             <ToggleGroup
-              variant="text"
+              variant="workspace"
+              size="workspace"
+              spacing={0}
               type="single"
               value={collection}
               onValueChange={(value) => {
@@ -294,14 +297,12 @@ function WorkspaceScope({
               <ToggleGroupItem
                 value="current"
                 disabled={locked}
-                className="min-h-11"
               >
                 画布
               </ToggleGroupItem>
               <ToggleGroupItem
                 value="legacy"
                 disabled={locked}
-                className="min-h-11"
               >
                 历史画布
               </ToggleGroupItem>
@@ -313,7 +314,7 @@ function WorkspaceScope({
               className="hidden h-4 sm:block data-vertical:self-center"
             />
           )}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center">
             <AssetFilterMenu
               kind={view === "history" ? kind : undefined}
               value={filters}
@@ -328,9 +329,9 @@ function WorkspaceScope({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="filter"
+                  size="workspace"
                   disabled={!authenticated || locked}
-                  className="min-h-11"
                   aria-label="资产排序"
                 >
                   排序
@@ -382,8 +383,8 @@ function WorkspaceScope({
             </DropdownMenu>
             {filtered && (
               <Button
-                variant="ghost"
-                className="min-h-11"
+                variant="filter"
+                size="workspace"
                 disabled={locked}
                 onClick={clear}
               >
@@ -489,9 +490,10 @@ function TimeFilter({
       >
         <PopoverTrigger asChild>
           <Button
-            variant={value.from || value.through ? "secondary" : "ghost"}
+            variant="filter"
+            size="workspace"
+            data-active={!!(value.from || value.through) || undefined}
             disabled={disabled}
-            className="min-h-11"
           >
             时间
             <ChevronDown data-icon="inline-end" />

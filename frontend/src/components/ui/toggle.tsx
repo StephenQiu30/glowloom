@@ -12,11 +12,13 @@ const toggleVariants = cva(
     variants: {
       variant: {
         default: "bg-transparent",
+        workspace: "bg-transparent text-workspace-muted-foreground hover:bg-transparent hover:text-workspace-foreground aria-pressed:bg-transparent data-[state=on]:bg-transparent data-[state=on]:text-workspace-foreground",
         text: "bg-transparent text-muted-foreground aria-pressed:bg-transparent data-[state=on]:bg-transparent data-[state=on]:text-foreground",
         pill: "data-[variant=pill]:rounded-full bg-transparent text-muted-foreground hover:bg-accent aria-pressed:bg-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary data-[state=on]:hover:text-primary-foreground",
         outline: "border border-input bg-transparent hover:bg-muted",
       },
       size: {
+        workspace: "h-9 min-w-0 px-4 text-[length:var(--text-workspace)] leading-[var(--text-workspace--line-height)] font-medium max-md:min-h-11 pointer-coarse:min-h-11",
         hero: "h-8 min-w-0 px-3 leading-5",
         default:
           "h-9 min-w-9 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",

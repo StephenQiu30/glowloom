@@ -60,6 +60,8 @@ function PrimaryNavigation({ screen }: { screen: string }) {
         {links.map(({ id, label, icon: Icon, href }) => (
           <SidebarMenuItem key={id}>
             <SidebarMenuButton
+              variant="workspace"
+              size="workspace"
               asChild
               isActive={screen === id}
               tooltip={label}
