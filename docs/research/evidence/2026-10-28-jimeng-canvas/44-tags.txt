@@ -1,0 +1,114 @@
+Browser tab: 1980371041, Title: "一致性调研-202610221 - 即梦AI", URL: "[目标画布URL已省略]".
+0 AXWebArea 一致性调研-202610221 - 即梦AI, URL: [目标画布URL已省略]
+	1 container
+		2 container root
+			3 container
+				4 container Canvas top bar
+					5 link Description: 返回首页, Value: jimeng.jianying.com/ai-tool/home
+					6 container
+						7 button Canvas title: 一致性调研-202610221
+						8 button (collapsed) Description: 项目, Secondary Actions: Expand
+					9 pop up button (collapsed) Description: Canvas node summary: 节点 5, Secondary Actions: Expand
+					10 text 已保存
+					11 container
+						12 pop up button (collapsed) Description: 搜索, Secondary Actions: Expand
+						13 pop up button (collapsed) Description: 生成历史, Secondary Actions: Expand
+						14 container
+							15 button (collapsed) Description: 分享, Secondary Actions: Expand
+						16 pop up button (collapsed) Description: 更多, ID: radix-:modern-js-r2j:, Secondary Actions: Expand
+						17 button Credits: 66 · 开会员
+							18 text 66
+							19 text 开会员
+						20 pop up button (collapsed) Description: 用户菜单, ID: radix-:modern-js-r14:, Secondary Actions: Expand
+				21 container Canvas workspace
+					22 container
+						23 container
+							24 container Canvas editing area
+								25 container
+									26 text 5 nodes, 0 edges, 1 selected. Editable. Room connected. 已保存.
+									27 container Canvas
+										28 container
+											29 container
+												30 container 文本 node: 文本 1
+													31 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_cgm1h72hr6
+													32 text 文本 1
+												33 container 文本 node: 文本 2
+													34 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_862fkmng46
+													35 text 文本 2
+												36 container 文本 node: 文本 3
+													37 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Selected., ID: canvas-node-description-node_jt894kh8f0
+													38 container
+														39 button Resize text from top left
+														40 button Resize text from top. Press Enter to reset this dimension
+														41 button Resize text from top right
+														42 button Resize text from right. Press Enter to reset this dimension
+														43 button Resize text from bottom right
+														44 button Resize text from bottom. Press Enter to reset this dimension
+														45 button Resize text from bottom left
+														46 button Resize text from left. Press Enter to reset this dimension
+													47 pop up button Create connected node before 文本 3
+													48 button Rename 文本 3
+														49 text 文本 3
+													50 button (expanded) Description: Add tags, Secondary Actions: Collapse
+													51 pop up button Create connected node after 文本 3
+												52 container 外部 node: 导演台
+													53 container
+														54 text 导演台
+														55 text 在 3D 空间中设计角色、机位与镜头
+														56 text No resources: 0 ready, 0 processing, 0 failed. Not selected.
+												57 container 视频 node: 视频 1
+													58 container
+														59 text 视频 1
+														60 image 暂无视频
+														61 text No resources: 0 ready, 0 processing, 0 failed. Not selected.
+											62 toolbar Description: Canvas tags, ID: :modern-js-r3l:
+												63 button 全部清空
+												64 checkbox Description: 添加“青绿色”, Value: 0
+												65 checkbox Description: 添加“靛蓝色”, Value: 0
+												66 checkbox Description: 添加“紫色”, Value: 0
+												67 checkbox Description: 添加“橙色”, Value: 0
+												68 checkbox Description: 添加“黄色”, Value: 0
+											69 container
+												70 button Expand text generator
+												71 container Generate text
+													72 content list 参考内容
+														73 pop up button (collapsed) Description: 添加参考, ID: radix-:modern-js-r1sa:, Secondary Actions: Expand
+													74 container 提示词
+														75 text entry area (settable) Description: 提示词, Value: 
+
+													76 container
+														77 button (disabled) 生成
+														78 text 请检查指令和参考素材后重试
+											79 container
+												80 toolbar Selection actions
+													81 pop up button (collapsed) 背景色, ID: radix-:modern-js-r1so:, Secondary Actions: Expand
+														82 container 背景色
+															83 text 背景色
+													84 button 全屏
+													85 button 下载
+						86 container Canvas left toolbar
+							87 toolbar Canvas toolbar
+								88 button 文本
+								89 button 图片
+								90 button 视频
+								91 button 音频
+								92 button 时间线
+								93 button 主体
+								94 checkbox (collapsed) Description: 导演工具箱, Value: 0, ID: radix-:modern-js-r34:, Secondary Actions: Expand
+								95 button 导演台
+								96 button 资产库
+								97 button 上传
+						98 container Canvas viewport controls
+							99 checkbox Description: 选择工具, Value: 0
+							100 checkbox Description: 小地图, Value: 0
+							101 checkbox Description: 显示连线, Value: 1
+							102 container
+								103 pop up button (collapsed) Description: Zoom options, 52%, ID: radix-:modern-js-r25:, Secondary Actions: Expand
+						104 button (collapsed) Description: 与 AI 对话, Secondary Actions: Expand
+		105 container Notifications
+		106 container Canvas tag notifications
+		107 container Canvas notifications
+		108 container Canvas notifications
+		109 container Canvas notifications
+
+The focused UI element is 36 container 文本 node: 文本 3

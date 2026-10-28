@@ -1,0 +1,6 @@
+证据类型：本会话浏览器工具返回的观察摘录（人工整理，非完整AX原文）。
+观察日期：2026-10-28，Asia/Shanghai。
+来源：用户指定的即梦画布，Chrome标签1980371041。
+限制：早期重复getAXState仅返回无变化摘要，因此本文件如实保留已返回工具内容的整理摘录；不是REA Evidence。
+
+图片模型列表：Seedream 5.0 Pro、Seedream 5.0 Flash、图片美学模型V8.2、Seedream 5.0 Lite（选中）、Seedream 4.7、4.6、4.5、4.1、4.0。条目有能力说明，部分含Standard-only model标记（具体套餐含义待验证）；能力未实测。

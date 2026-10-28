@@ -1,0 +1,63 @@
+Browser tab: 1980371041, Title: "一致性调研-202610221 - 即梦AI", URL: "[目标画布URL已省略]".
+0 AXWebArea 一致性调研-202610221 - 即梦AI, URL: [目标画布URL已省略]
+	1 container
+		2 container
+			3 container Canvas top bar
+				4 text 已保存
+			5 container Canvas workspace
+				6 container
+					7 container
+						8 container Canvas editing area
+							9 container
+								10 container Canvas
+					11 container Canvas left toolbar
+						12 toolbar Canvas toolbar
+					13 container Canvas viewport controls
+		14 container 运镜, ID: radix-:modern-js-r1mm:
+			15 heading 运镜, Value: 2, ID: radix-:modern-js-r1mn:
+				16 text 运镜
+			17 button 关闭
+			18 container
+				19 checkbox Description: 迎面跟拍, Value: 0
+					20 text 迎面跟拍
+				21 checkbox Description: 侧面跟拍, Value: 0
+					22 text 侧面跟拍
+				23 checkbox Description: 镜头左移, Value: 0
+					24 text 镜头左移
+				25 checkbox Description: 镜头右移, Value: 0
+					26 text 镜头右移
+				27 checkbox Description: 镜头上移, Value: 0
+					28 text 镜头上移
+				29 checkbox Description: 镜头下移, Value: 0
+					30 text 镜头下移
+				31 checkbox Description: 急速推进, Value: 0
+					32 text 急速推进
+				33 checkbox Description: 急速后移, Value: 0
+					34 text 急速后移
+				35 checkbox Description: FPV穿越机, Value: 0
+					36 text FPV穿越机
+				37 checkbox Description: 一镜到底, Value: 0
+					38 text 一镜到底
+				39 checkbox Description: 盘旋抬升, Value: 0
+					40 text 盘旋抬升
+				41 checkbox Description: 手持拍摄, Value: 0
+					42 text 手持拍摄
+				43 checkbox Description: 低角度环绕, Value: 0
+					44 text 低角度环绕
+				45 checkbox Description: 第一视角, Value: 0
+					46 text 第一视角
+				47 checkbox Description: 希区柯克, Value: 0
+					48 text 希区柯克
+				49 checkbox Description: 子弹时间, Value: 0
+					50 text 子弹时间
+				51 checkbox Description: 快速摇摄, Value: 0
+					52 text 快速摇摄
+				53 checkbox Description: 定格抽帧, Value: 0
+					54 text 定格抽帧
+				55 checkbox Description: 焦点转移, Value: 0
+					56 text 焦点转移
+				57 checkbox Description: 机械臂, Value: 0
+					58 text 机械臂
+			59 button (disabled) 确认
+
+The focused UI element is 17 button 关闭

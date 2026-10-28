@@ -1,0 +1,6 @@
+证据类型：本会话浏览器工具返回的观察摘录（人工整理，非完整AX原文）。
+观察日期：2026-10-28，Asia/Shanghai。
+来源：用户指定的即梦画布，Chrome标签1980371041。
+限制：早期重复getAXState仅返回无变化摘要，因此本文件如实保留已返回工具内容的整理摘录；不是REA Evidence。
+
+视频默认模型即梦 Seedance 2.0 VIP，全能参考模式。列表：Seedance 2.5（样片模式）、Seedance 2.5、Seedance 2.0 mini、Seedance 2.0 Fast VIP、Seedance 2.0 VIP、Seedance 1.0 Fast（禁用，提示「已使用全能参考，暂不支持此模型」）、HappyHorse 1.1、Wan 3.0。2.5说明声称支持50个参考、视频编辑与超长生成；这是产品文案，未验证服务能力。

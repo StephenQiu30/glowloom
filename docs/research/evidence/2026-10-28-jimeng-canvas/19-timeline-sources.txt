@@ -1,0 +1,21 @@
+Browser tab: 1980371041, Title: "一致性调研-202610221 - 即梦AI", URL: "[目标画布URL已省略]".
+0 AXWebArea 一致性调研-202610221 - 即梦AI, URL: [目标画布URL已省略]
+	1 container
+		2 container
+			3 container Canvas top bar
+				4 text 已保存
+			5 container Canvas workspace
+				6 container
+					7 container
+						8 container Canvas editing area
+							9 container
+								10 container Canvas
+					11 container Canvas left toolbar
+						12 toolbar Canvas toolbar
+					13 container Canvas viewport controls
+		14 menu 添加素材到时间线, ID: radix-:modern-js-rou:
+			15 本地上传
+			16 从资产库添加
+			17 从画布选择
+
+The focused UI element is 14 menu 添加素材到时间线, ID: radix-:modern-js-rou:

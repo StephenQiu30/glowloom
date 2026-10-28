@@ -1,0 +1,143 @@
+Browser tab: 1980371041, Title: "一致性调研-202610221 - 即梦AI", URL: "[目标画布URL已省略]".
+0 AXWebArea 一致性调研-202610221 - 即梦AI, URL: [目标画布URL已省略]
+	1 container
+		2 container root
+			3 container
+				4 container Canvas top bar
+					5 link Description: 返回首页, Value: jimeng.jianying.com/ai-tool/home
+					6 container
+						7 button Canvas title: 一致性调研-202610221
+						8 button (collapsed) Description: 项目, Secondary Actions: Expand
+					9 pop up button (collapsed) Description: Canvas node summary: 节点 7, Secondary Actions: Expand
+					10 text 已保存
+					11 container
+						12 pop up button (collapsed) Description: 搜索, Secondary Actions: Expand
+						13 pop up button (collapsed) Description: 生成历史, Secondary Actions: Expand
+						14 container
+							15 button (collapsed) Description: 分享, Secondary Actions: Expand
+						16 pop up button (collapsed) Description: 更多, ID: radix-:modern-js-r2j:, Secondary Actions: Expand
+						17 button Credits: 66 · 开会员
+							18 text 66
+							19 text 开会员
+						20 pop up button (collapsed) Description: 用户菜单, ID: radix-:modern-js-r14:, Secondary Actions: Expand
+				21 container Canvas workspace
+					22 container
+						23 container
+							24 container Canvas editing area
+								25 container
+									26 text 7 nodes, 0 edges, 1 selected. Editable. Room connected. 已保存.
+									27 container Canvas
+										97 container
+											98 container
+												99 container 文本 node: 文本 1
+													100 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_cgm1h72hr6
+													101 text 文本 1
+												102 container 文本 node: 文本 2
+													103 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_862fkmng46
+													104 text 文本 2
+												105 container 文本 node: 文本 3
+													106 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_jt894kh8f0
+													107 text 文本 3
+												108 container 外部 node: 导演台
+													109 container
+														110 text 导演台
+														111 text 在 3D 空间中设计角色、机位与镜头
+														112 text No resources: 0 ready, 0 processing, 0 failed. Not selected.
+												113 container 视频 node: 视频 1
+													114 container
+														115 text 视频 1
+														116 image 暂无视频
+														117 text No resources: 0 ready, 0 processing, 0 failed. Not selected.
+												118 container 视频 node: 视频 2
+													119 container
+														120 text 视频 2
+														121 image 暂无视频
+														122 text No resources: 0 ready, 0 processing, 0 failed. Not selected.
+												123 container 图片 node: 图片 1
+													124 container
+														125 image Description: 暂无图片. No resources: 0 ready, 0 processing, 0 failed. Selected., ID: canvas-node-description-node_ex6shy68je
+														126 pop up button Create connected node before 图片 1
+														127 button Rename 图片 1
+															128 text 图片 1
+														129 button (collapsed) Description: Add tags, Secondary Actions: Expand
+														130 pop up button Create connected node after 图片 1
+											131 container
+												132 toolbar 导演工具箱
+													133 button 相机
+													134 button 配色
+													135 button 风格
+													136 button (expanded) Description: Hide Cinema Kit, Secondary Actions: Collapse
+												137 button 展开图片生成器
+												138 container 生成
+													139 content list 参考内容
+														140 pop up button (collapsed) Description: 添加参考, ID: radix-:modern-js-r1jr:, Secondary Actions: Expand
+													141 container 提示词
+														142 container
+															143 combo box (collapsed) Description: 提示词, Secondary Actions: Expand, Value: 
+
+															144 button 引用参考
+													145 container
+														146 pop up button (collapsed) Description: 选择模型: Seedream 5.0 Lite, Secondary Actions: Expand
+														147 pop up button (expanded) Description: 图片尺寸选项: 1:1 · 2K · 1, Secondary Actions: Collapse
+															148 text 1:1
+															149 text 2K
+															150 text 1
+														151 button 引用参考
+														156 container Description: 图片尺寸选项, ID: :modern-js-r1j2:-size
+															157 container 选择比例
+																158 text 选择比例
+																159 list 选择比例 options
+																	160 21:9
+																	161 16:9
+																	162 3:2
+																	163 4:3
+																	164 (selected) 1:1
+																	165 3:4
+																	166 2:3
+																	167 9:16
+															168 container 选择分辨率
+																169 text 选择分辨率
+																170 list 选择分辨率 options
+																	171 (selected) 2K
+																	172 4K, Standard-only model
+															173 container 选择生成数量
+																174 text 选择生成数量
+																175 list 选择生成数量 options
+																	176 (selected) 1
+																	177 2
+																	178 3
+																	179 4
+																	180 5
+																	181 6
+																	182 7
+																	183 8
+													152 text Current price 3 / 张.
+													153 container
+														154 button (disabled) 生成
+														155 text 请输入提示词
+						73 container Canvas left toolbar
+							74 toolbar Canvas toolbar
+								75 button 文本
+								76 button 图片
+								77 button 视频
+								78 button 音频
+								79 button 时间线
+								80 button 主体
+								81 checkbox (collapsed) Description: 导演工具箱, Value: 0, ID: radix-:modern-js-r34:, Secondary Actions: Expand
+								82 button 导演台
+								83 button 资产库
+								84 button 上传
+						85 container Canvas viewport controls
+							86 checkbox Description: 选择工具, Value: 0
+							87 checkbox Description: 小地图, Value: 0
+							88 checkbox Description: 显示连线, Value: 1
+							89 container
+								90 pop up button (collapsed) Description: Zoom options, 52%, ID: radix-:modern-js-r25:, Secondary Actions: Expand
+						91 button (collapsed) Description: 与 AI 对话, Secondary Actions: Expand
+		92 container Notifications
+		93 container Canvas tag notifications
+		94 container Canvas notifications
+		95 container Canvas notifications
+		96 container Canvas notifications
+
+The focused UI element is 164 (selected) 1:1
