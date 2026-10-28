@@ -603,9 +603,13 @@ it("没有输出的进行中记录不可收藏，删除只提交记录修订且�
   ).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "删除" }));
   expect(state.historyCommand).not.toHaveBeenCalled();
-  expect(screen.getByRole("dialog").textContent).toContain("任务执行、计费");
+  expect(screen.getByRole("alertdialog").textContent).toContain(
+    "任务执行、计费",
+  );
   fireEvent.click(
-    within(screen.getByRole("dialog")).getByRole("button", { name: "删除" }),
+    within(screen.getByRole("alertdialog")).getByRole("button", {
+      name: "删除",
+    }),
   );
   await waitFor(() => expect(state.historyCommand).toHaveBeenCalled());
   expect(state.historyCommand.mock.calls[0][0].targets).toEqual([
@@ -687,9 +691,9 @@ it("主画布删除明确项目影响，并通过统一命令携带项目CAS", a
   fireEvent.click(screen.getByRole("button", { name: "批量操作" }));
   fireEvent.click(screen.getByRole("button", { name: "全选" }));
   fireEvent.click(screen.getByRole("button", { name: "删除" }));
-  expect(screen.getByRole("dialog").textContent).toContain("整个所属项目");
+  expect(screen.getByRole("alertdialog").textContent).toContain("整个所属项目");
   fireEvent.click(
-    within(screen.getByRole("dialog")).getByRole("button", {
+    within(screen.getByRole("alertdialog")).getByRole("button", {
       name: "确认删除",
     }),
   );
@@ -712,6 +716,78 @@ it("主画布删除明确项目影响，并通过统一命令携带项目CAS", a
     ),
   );
 });
+it("画布删除未知结果保留确认框和幂等重试，明确失败展示组件反馈", async () => {
+  state.canvases.mockResolvedValue({
+    items: [
+      {
+        id: task.id,
+        project_id: task.project_id,
+        name: "主画布",
+        kind: "canvas",
+        revision: "7",
+        created_at: task.create_time,
+        updated_at: task.create_time,
+        is_main: true,
+        collection: "current",
+        favorite: false,
+        favorite_revision: "2",
+        project_revision: 9,
+        cover_asset_id: null,
+        cover_unavailable: false,
+        can_copy_project: true,
+      },
+    ],
+    next_cursor: null,
+  });
+  state.canvasCommand.mockRejectedValueOnce(
+    new RequestError("dependency_unavailable", 503),
+  );
+  state.canvasCommand.mockResolvedValueOnce({
+    results: [{ id: task.id, status: "failed", code: "revision_conflict" }],
+    succeeded: 0,
+    failed: 1,
+  });
+  render(<AssetWorkspace initialView="canvas" />);
+  await screen.findByRole("link", { name: /主画布/ });
+  fireEvent.click(screen.getByRole("button", { name: "批量操作" }));
+  fireEvent.click(screen.getByRole("button", { name: "全选" }));
+  fireEvent.click(screen.getByRole("button", { name: "删除" }));
+  expect(screen.getByRole("alertdialog").textContent).toContain("整个所属项目");
+  fireEvent.click(
+    within(screen.getByRole("alertdialog")).getByRole("button", {
+      name: "确认删除",
+    }),
+  );
+  const retry = await screen.findByRole("button", { name: "重试原操作" });
+  const dialog = screen.getByRole("alertdialog");
+  expect(within(dialog).getByRole("alert").textContent).toContain(
+    "操作结果尚未确认",
+  );
+  expect(
+    within(dialog)
+      .getByRole("button", { name: "取消" })
+      .hasAttribute("disabled"),
+  ).toBe(true);
+  fireEvent.keyDown(dialog, { key: "Escape" });
+  expect(screen.getByRole("alertdialog")).toBeTruthy();
+  fireEvent.click(retry);
+  await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+  expect(state.canvasCommand.mock.calls[1][0]).toEqual(
+    state.canvasCommand.mock.calls[0][0],
+  );
+  expect(state.canvasCommand.mock.calls[1][1].headers).toEqual(
+    state.canvasCommand.mock.calls[0][1].headers,
+  );
+  const result = screen.getByLabelText("画布操作结果");
+  expect(result.querySelector('[data-slot="alert"]')).toBeTruthy();
+  expect(result.textContent).toContain("操作未完成");
+  expect(
+    (await screen.findByRole("checkbox", { name: "选择主画布" })).getAttribute(
+      "aria-checked",
+    ),
+  ).toBe("true");
+});
+
 it("权限拒绝不会显示为空列表或可操作旧数据", async () => {
   state.history.mockRejectedValue(new RequestError("forbidden", 403));
   render(<AssetWorkspace />);

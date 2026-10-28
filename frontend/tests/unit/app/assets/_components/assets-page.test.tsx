@@ -292,7 +292,7 @@ it("跨页读取清空本页批量选择，不把上一页素材带入下一次�
   );
   fireEvent.click(screen.getByRole("button", { name: "选择 素材 13" }));
   fireEvent.click(screen.getByRole("button", { name: "移入回收站" }));
-  expect(screen.getByRole("dialog")).toBeTruthy();
+  expect(screen.getByRole("alertdialog")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: /^取消$/ }));
   fireEvent.click(screen.getByRole("button", { name: "取消选择" }));
   expect(screen.queryByText("已选择 1 项")).toBeNull();

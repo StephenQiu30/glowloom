@@ -12,6 +12,17 @@ import { ProjectMediaPreview } from "@/components/media/project-media";
 import { useSpace } from "@/components/spaces/space-context";
 import { ContentState } from "@/components/layout/content-state";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -338,7 +349,10 @@ export function AssetCanvasList({
             disabled={
               locked || !writable || !chosen.length || chosen.length > 100
             }
-            onClick={() => setDeleting(chosen)}
+            onClick={() => {
+              setNotice("");
+              setDeleting(chosen);
+            }}
           >
             删除
           </Button>
@@ -558,7 +572,10 @@ export function AssetCanvasList({
                       )}
                       <DropdownMenuItem
                         disabled={!writable}
-                        onSelect={() => setDeleting([item])}
+                        onSelect={() => {
+                          setNotice("");
+                          setDeleting([item]);
+                        }}
                       >
                         删除
                       </DropdownMenuItem>
@@ -586,12 +603,20 @@ export function AssetCanvasList({
       <section
         aria-label="画布操作结果"
         aria-live="polite"
-        className={results.length ? "grid gap-1 text-sm" : "sr-only"}
+        className={results.length ? "flex flex-col gap-2" : "sr-only"}
       >
         {results.map((item) => (
-          <p className="break-words" key={item.id}>
-            {item.title}：{item.ok ? "已完成" : assetActionFeedback(item.code)}
-          </p>
+          <Alert
+            key={item.id}
+            variant={item.ok ? "default" : "destructive"}
+            role="group"
+          >
+            <AlertTitle>{item.ok ? "操作完成" : "操作未完成"}</AlertTitle>
+            <AlertDescription className="break-words">
+              {item.title}：
+              {item.ok ? "已完成" : assetActionFeedback(item.code)}
+            </AlertDescription>
+          </Alert>
         ))}
       </section>
       {collection === "current" && !batch && !!page && !error && (
@@ -629,39 +654,47 @@ export function AssetCanvasList({
         />
       )}
       {deleting && (
-        <Dialog
+        <AlertDialog
           open
           onOpenChange={(open) => {
             if (!open && !locked) setDeleting(null);
           }}
         >
-          <DialogContent showCloseButton={!locked}>
-            <DialogTitle>
-              删除所选{kind === "short_drama" ? "短剧" : "画布"}？
-            </DialogTitle>
-            <DialogDescription>
-              {deleting.some((item) => item.is_main)
-                ? "选择中包含主画布，删除主画布会将其整个所属项目移入项目回收站，并影响该项目的其他画布。"
-                : "所选画布将被移除，其他画布保持不变。"}
-              共{deleting.length}项。
-            </DialogDescription>
-            <DialogFooter>
-              <Button
-                variant="ghost"
-                disabled={locked}
-                onClick={() => setDeleting(null)}
-              >
-                取消
-              </Button>
-              <Button
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                删除所选{kind === "short_drama" ? "短剧" : "画布"}？
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {deleting.some((item) => item.is_main)
+                  ? "选择中包含主画布，删除主画布会将其整个所属项目移入项目回收站，并影响该项目的其他画布。"
+                  : "所选画布将被移除，其他画布保持不变。"}
+                共{deleting.length}项。
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            {notice && (
+              <Alert variant="destructive">
+                <AlertTitle>删除尚未完成</AlertTitle>
+                <AlertDescription className="break-words">
+                  {notice}
+                </AlertDescription>
+              </Alert>
+            )}
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={locked}>取消</AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
                 disabled={writing}
-                onClick={() => void command("delete", deleting)}
+                onClick={(event) => {
+                  event.preventDefault();
+                  void command("delete", deleting);
+                }}
               >
                 {writing ? "正在删除…" : intent ? "重试原操作" : "确认删除"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
       {renaming && (
         <Dialog
@@ -715,7 +748,7 @@ export function AssetCanvasList({
           </DialogContent>
         </Dialog>
       )}
-      {notice && <FeedbackToast message={notice} />}
+      {notice && !deleting && <FeedbackToast message={notice} />}
     </div>
   );
 }

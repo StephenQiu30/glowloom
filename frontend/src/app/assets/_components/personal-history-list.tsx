@@ -14,12 +14,22 @@ import { requireTask, type Task } from "@/components/generation/contracts";
 import type { GenerationSeed } from "@/components/generation/generation-dialog";
 import { ContentState } from "@/components/layout/content-state";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
@@ -468,7 +478,10 @@ export function PersonalHistoryList({
             disabled={
               locked || !selected.length || selected.length > smallActionLimit
             }
-            onClick={() => setDeleting(selected)}
+            onClick={() => {
+              setNotice("");
+              setDeleting(selected);
+            }}
           >
             删除
           </Button>
@@ -616,7 +629,10 @@ export function PersonalHistoryList({
             }}
             onToggle={() => toggle(card)}
             onFavorite={() => void command("favorite", [card], !card.favorite)}
-            onDelete={() => setDeleting([card])}
+            onDelete={() => {
+              setNotice("");
+              setDeleting([card]);
+            }}
             onDownload={() => void download([card])}
             onPublish={() => setPublishing([card])}
             onReuse={() => void startReuse(card)}
@@ -639,12 +655,20 @@ export function PersonalHistoryList({
       <section
         aria-label="操作结果"
         aria-live="polite"
-        className={results.length ? "grid gap-1 text-sm" : "sr-only"}
+        className={results.length ? "flex flex-col gap-2" : "sr-only"}
       >
         {results.map((item) => (
-          <p key={item.key} className="break-words">
-            {item.title}：{item.ok ? "已完成" : assetActionFeedback(item.code)}
-          </p>
+          <Alert
+            key={item.key}
+            variant={item.ok ? "default" : "destructive"}
+            role="group"
+          >
+            <AlertTitle>{item.ok ? "操作完成" : "操作未完成"}</AlertTitle>
+            <AlertDescription className="break-words">
+              {item.title}：
+              {item.ok ? "已完成" : assetActionFeedback(item.code)}
+            </AlertDescription>
+          </Alert>
         ))}
       </section>
       <section
@@ -763,6 +787,7 @@ export function PersonalHistoryList({
                 variant="ghost"
                 disabled={locked || !detailAvailable}
                 onClick={() => {
+                  setNotice("");
                   setDeleting([detail]);
                   setDetail(null);
                 }}
@@ -774,35 +799,44 @@ export function PersonalHistoryList({
         </DialogContent>
       </Dialog>
       {deleting && (
-        <Dialog
+        <AlertDialog
           open
           onOpenChange={(open) => {
             if (!open && !locked) setDeleting(null);
           }}
         >
-          <DialogContent showCloseButton={!locked}>
-            <DialogTitle>确认删除</DialogTitle>
-            <DialogDescription>
-              删除的历史记录将无法找回。将从你的生成历史中移除{deleting.length}
-              项，任务执行、计费和画布引用不受影响。
-            </DialogDescription>
-            <DialogFooter>
-              <Button
-                variant="ghost"
-                disabled={locked}
-                onClick={() => setDeleting(null)}
-              >
-                取消
-              </Button>
-              <Button
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>确认删除</AlertDialogTitle>
+              <AlertDialogDescription>
+                删除的历史记录将无法找回。将从你的生成历史中移除
+                {deleting.length}
+                项，任务执行、计费和画布引用不受影响。
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            {notice && (
+              <Alert variant="destructive">
+                <AlertTitle>删除尚未完成</AlertTitle>
+                <AlertDescription className="break-words">
+                  {notice}
+                </AlertDescription>
+              </Alert>
+            )}
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={locked}>取消</AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
                 disabled={writing}
-                onClick={() => void command("delete", deleting)}
+                onClick={(event) => {
+                  event.preventDefault();
+                  void command("delete", deleting);
+                }}
               >
                 {writing ? "正在删除…" : intent ? "重试原操作" : "删除"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
       {publishing && (
         <HistoryPublicationDialog
@@ -815,7 +849,9 @@ export function PersonalHistoryList({
       {reuse && (
         <GenerationDialog seed={reuse} onClose={() => setReuse(null)} />
       )}
-      {notice && <FeedbackToast message={notice} tone={noticeTone} />}
+      {notice && !deleting && (
+        <FeedbackToast message={notice} tone={noticeTone} />
+      )}
     </div>
   );
 }

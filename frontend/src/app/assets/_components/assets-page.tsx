@@ -1,4 +1,15 @@
 "use client";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import {
   Field,
@@ -434,7 +445,7 @@ function Library({
                 </ItemActions>
               </Item>
             )}
-            {writeError && (
+            {writeError && !confirm && (
               <FeedbackToast
                 message={writeError}
                 action={
@@ -840,38 +851,45 @@ function Library({
                 )}
               </DialogContent>
             </Dialog>
-            <Dialog
+            <AlertDialog
               open={!!confirm}
               onOpenChange={(v) => {
                 if (!v && !saving && !pendingOperation) setConfirm(null);
               }}
             >
-              <DialogContent>
-                <DialogTitle>
-                  {confirm === "restore_items"
-                    ? "恢复所选素材？"
-                    : "移入回收站？"}
-                </DialogTitle>
-                <DialogDescription>
-                  将处理已选择的 {selection.length} 项素材。
-                  {confirm === "restore_items"
-                    ? "恢复后可在素材列表中继续使用。"
-                    : "移入回收站后可以恢复。"}
-                </DialogDescription>
-                <DialogFooter>
-                  <Button
-                    variant="ghost"
-                    disabled={saving || !!pendingOperation}
-                    onClick={() => setConfirm(null)}
-                  >
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    {confirm === "restore_items"
+                      ? "恢复所选素材？"
+                      : "移入回收站？"}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    将处理已选择的 {selection.length} 项素材。
+                    {confirm === "restore_items"
+                      ? "恢复后可在素材列表中继续使用。"
+                      : "移入回收站后可以恢复。"}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                {writeError && (
+                  <Alert variant="destructive">
+                    <AlertTitle>操作尚未完成</AlertTitle>
+                    <AlertDescription className="break-words">
+                      {writeError}
+                    </AlertDescription>
+                  </Alert>
+                )}
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={saving || !!pendingOperation}>
                     取消
-                  </Button>
-                  <Button
+                  </AlertDialogCancel>
+                  <AlertDialogAction
                     variant={
                       confirm === "recycle_items" ? "destructive" : "default"
                     }
                     disabled={saving}
-                    onClick={() => {
+                    onClick={(event) => {
+                      event.preventDefault();
                       if (page && confirm)
                         void command({
                           scope: { kind: "personal" },
@@ -889,18 +907,10 @@ function Library({
                       : pendingOperation
                         ? "重试原操作"
                         : "确认"}
-                  </Button>
-                </DialogFooter>
-                {writeError && (
-                  <p
-                    role="alert"
-                    className="text-sm break-words text-destructive"
-                  >
-                    {writeError}
-                  </p>
-                )}
-              </DialogContent>
-            </Dialog>
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
             {upload && (
               <UploadDialog
                 onClose={() => {
