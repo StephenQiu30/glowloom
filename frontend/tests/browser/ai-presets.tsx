@@ -55,6 +55,7 @@ for (const [name, adapter, region] of [
   ["火山方舟", "volcengine_ark", "domestic"],
   ["BytePlus", "byteplus", "overseas"],
   ["DeepSeek", "deepseek", "domestic"],
+  ["豆包语音", "volcengine_speech", "domestic"],
 ] as const) {
   presets.push({
     id: crypto.randomUUID(),
@@ -67,9 +68,16 @@ for (const [name, adapter, region] of [
       models: [
         {
           key: adapter + "-chat",
-          display_name: name + " 聊天",
-          capability: "text.generate",
-          requires_model_selection: adapter !== "deepseek",
+          display_name:
+            adapter === "volcengine_speech"
+              ? "豆包语音合成 2.0"
+              : name + " 聊天",
+          capability:
+            adapter === "volcengine_speech"
+              ? "audio.generate"
+              : "text.generate",
+          requires_model_selection:
+            adapter !== "deepseek" && adapter !== "volcengine_speech",
         },
       ],
     },

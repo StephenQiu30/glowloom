@@ -17,6 +17,7 @@ import {
 import { connectProviderPreset, setAdminCredential } from "@/api/settings";
 import { isCredentialReceipt } from "@/components/catalog/credential-receipt";
 import { RequestError } from "@/lib/request";
+import { ProviderLogo } from "./provider-logo";
 import { Button } from "@/components/ui/button";
 import {
   Field,
@@ -216,7 +217,12 @@ export function PresetConnect({
                         aria-label={p.document?.name}
                       />
                       <FieldContent>
-                        <FieldTitle>{p.document?.name}</FieldTitle>
+                        <FieldTitle>
+                          <ProviderLogo
+                            adapterKey={p.document?.config?.adapter_key}
+                          />
+                          {p.document?.name}
+                        </FieldTitle>
                         <FieldDescription>
                           {p.document?.config?.region === "domestic"
                             ? "国内"
