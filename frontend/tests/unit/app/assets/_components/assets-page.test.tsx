@@ -236,11 +236,15 @@ it("跨页读取清空本页批量选择，不把上一页素材带入下一次�
   render(<AssetsPage />);
   await screen.findByRole("button", { name: "查看 素材 1" });
   fireEvent.click(screen.getByRole("button", { name: "批量操作" }));
+  expect(screen.queryByRole("button", { name: "上传素材" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "选择 素材 1" }));
+  expect(screen.getByText("已选择 1 项")).toBeTruthy();
+  expect(screen.queryByRole("dialog")).toBeNull();
   fireEvent.click(screen.getByRole("checkbox", { name: "选择本页全部素材" }));
   expect(screen.getByText("已选择 12 项")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "下一页" }));
-  await screen.findByRole("button", { name: "查看 素材 13" });
-  expect(screen.queryByRole("button", { name: "查看 素材 1" })).toBeNull();
+  await screen.findByRole("button", { name: "选择 素材 13" });
+  expect(screen.queryByRole("button", { name: "选择 素材 1" })).toBeNull();
   expect(screen.getByText("已选择 0 项")).toBeTruthy();
   expect(screen.getByRole("button", { name: "移入回收站" })).toHaveProperty(
     "disabled",
@@ -252,6 +256,16 @@ it("跨页读取清空本页批量选择，不把上一页素材带入下一次�
       params: expect.objectContaining({ page: 2, page_size: 12 }),
     }),
   );
+  fireEvent.click(screen.getByRole("button", { name: "选择 素材 13" }));
+  fireEvent.click(screen.getByRole("button", { name: "移入回收站" }));
+  expect(screen.getByRole("dialog")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /^取消$/ }));
+  fireEvent.click(screen.getByRole("button", { name: "取消选择" }));
+  expect(screen.queryByText("已选择 1 项")).toBeNull();
+  expect(screen.getByRole("button", { name: "上传素材" })).toBeTruthy();
+  expect(
+    vi.mocked(request).mock.calls.some(([url]) => url.endsWith("/commands")),
+  ).toBe(false);
 });
 
 it("每页数量选择发送真实分页参数，调整筛选时保留数量", async () => {
@@ -285,17 +299,25 @@ it("每页数量选择发送真实分页参数，调整筛选时保留数量", a
   );
 });
 
-it("收藏筛选有明确关闭入口，返回保留类型和时间且不修改素材", async () => {
+async function toggleFavoriteFilter() {
+  fireEvent.keyDown(screen.getByRole("button", { name: /筛选素材/ }), {
+    key: "Enter",
+  });
+  fireEvent.click(
+    await screen.findByRole("menuitemcheckbox", { name: "仅显示收藏" }),
+  );
+}
+
+it("收藏统一从筛选菜单开启，返回保留类型和时间且不修改素材", async () => {
   render(<AssetsPage />);
   await screen.findByText("这里还没有素材");
   fireEvent.click(screen.getByRole("radio", { name: "视频" }));
   fireEvent.click(screen.getByRole("button", { name: "最近30天" }));
-  fireEvent.click(screen.getByRole("button", { name: "收藏" }));
+  expect(screen.queryByRole("button", { name: /^收藏$/ })).toBeNull();
+  await toggleFavoriteFilter();
   expect(
-    screen
-      .getByRole("button", { name: "关闭收藏筛选" })
-      .getAttribute("aria-pressed"),
-  ).toBe("true");
+    screen.getByRole("button", { name: "筛选素材：收藏" }).textContent,
+  ).toBe("收藏");
   await screen.findByText("暂无匹配的收藏");
   fireEvent.click(screen.getByRole("button", { name: "返回素材" }));
   await waitFor(() =>
@@ -316,7 +338,7 @@ it("收藏筛选有明确关闭入口，返回保留类型和时间且不修改�
   ).toBe(true);
 });
 
-it("收藏加载中和失败后均可返回，重复点击收藏也可以关闭", async () => {
+it("收藏加载中和失败后均可返回，菜单取消后恢复筛选入口", async () => {
   render(<AssetsPage />);
   await screen.findByText("这里还没有素材");
   let fail!: (reason: unknown) => void;
@@ -326,26 +348,35 @@ it("收藏加载中和失败后均可返回，重复点击收藏也可以关闭"
         fail = reject;
       }),
   );
-  fireEvent.click(screen.getByRole("button", { name: "收藏" }));
+  await toggleFavoriteFilter();
   expect(screen.getByRole("status", { name: "正在读取素材" })).toBeTruthy();
   expect(
     screen.getByRole("button", { name: "返回素材" }).hasAttribute("disabled"),
   ).toBe(false);
   fail(new RequestError("unavailable", 503));
   await screen.findByText("无法读取素材");
-  fireEvent.click(screen.getByRole("button", { name: "关闭收藏筛选" }));
+  await toggleFavoriteFilter();
   await screen.findByText("这里还没有素材");
-  expect(
-    screen.getByRole("button", { name: "收藏" }).getAttribute("aria-pressed"),
-  ).toBe("false");
+  expect(screen.getByRole("button", { name: /^筛选素材$/ }).textContent).toBe(
+    "筛选",
+  );
 });
 
 it("从回收站切换收藏时恢复活动素材范围", async () => {
   render(<AssetsPage />);
   await screen.findByText("这里还没有素材");
-  fireEvent.click(screen.getByRole("button", { name: "回收站" }));
+  expect(screen.queryByRole("button", { name: /^回收站$/ })).toBeNull();
+  fireEvent.keyDown(screen.getByRole("button", { name: /筛选素材/ }), {
+    key: "Enter",
+  });
+  fireEvent.click(
+    await screen.findByRole("menuitemcheckbox", { name: "回收站" }),
+  );
   await screen.findByText("回收站为空");
-  fireEvent.click(screen.getByRole("button", { name: "收藏" }));
+  expect(
+    screen.getByRole("button", { name: "筛选素材：回收站" }).textContent,
+  ).toBe("回收站");
+  await toggleFavoriteFilter();
   await waitFor(() =>
     expect(request).toHaveBeenLastCalledWith(
       "/api/media/library",

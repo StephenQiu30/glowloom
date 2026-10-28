@@ -17,6 +17,7 @@ import {
   Heart,
   Folder,
   RotateCw,
+  X,
   Download,
 } from "lucide-react";
 import { PageLayout } from "@/components/layout/page-layout";
@@ -272,6 +273,57 @@ function Library({
           disabled={!authenticated}
           locked={locked}
           batch={batch}
+          batchActions={
+            <div className="library-batch-actions">
+              <Field orientation="horizontal">
+                <Checkbox
+                  id="library-select-page"
+                  aria-label="选择本页全部素材"
+                  checked={
+                    selection.length > 0 &&
+                    selection.length < (page?.items.length ?? 0)
+                      ? "indeterminate"
+                      : !!page?.items.length &&
+                        selection.length === page.items.length
+                  }
+                  disabled={locked || loading}
+                  onCheckedChange={(v) =>
+                    setSelected(
+                      v === true ? (page?.items.map((i) => i.id) ?? []) : [],
+                    )
+                  }
+                />
+                <FieldLabel htmlFor="library-select-page">
+                  已选择 {selection.length} 项
+                </FieldLabel>
+              </Field>
+
+              <Button
+                className="max-md:min-h-11"
+                disabled={!selection.length || saving || !!pendingOperation}
+                variant="ghost"
+                onClick={() =>
+                  setConfirm(filter.trash ? "restore_items" : "recycle_items")
+                }
+              >
+                {filter.trash ? <RotateCw /> : <Trash2 />}
+                {filter.trash ? "恢复" : "移入回收站"}
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="lg"
+                disabled={locked}
+                onClick={() => {
+                  setBatch(false);
+                  setSelected([]);
+                }}
+              >
+                <X data-icon="inline-start" />
+                取消选择
+              </Button>
+            </div>
+          }
           canCreateFolder={!!page && !loading}
           onBatch={() => {
             setBatch(!batch);
@@ -325,55 +377,6 @@ function Library({
                         }
                   }
                 />
-              )}
-              {batch && (
-                <Item variant="outline" size="sm">
-                  <ItemContent>
-                    <FieldGroup>
-                      <Field orientation="horizontal">
-                        <Checkbox
-                          id="library-select-page"
-                          aria-label="选择本页全部素材"
-                          checked={
-                            selection.length > 0 &&
-                            selection.length < (page?.items.length ?? 0)
-                              ? "indeterminate"
-                              : !!page?.items.length &&
-                                selection.length === page.items.length
-                          }
-                          disabled={locked || loading}
-                          onCheckedChange={(v) =>
-                            setSelected(
-                              v === true
-                                ? (page?.items.map((i) => i.id) ?? [])
-                                : [],
-                            )
-                          }
-                        />
-                        <FieldLabel htmlFor="library-select-page">
-                          已选择 {selection.length} 项
-                        </FieldLabel>
-                      </Field>
-                    </FieldGroup>
-                  </ItemContent>
-                  <ItemActions>
-                    <Button
-                      className="max-md:min-h-11"
-                      disabled={
-                        !selection.length || saving || !!pendingOperation
-                      }
-                      variant={filter.trash ? "outline" : "destructive"}
-                      onClick={() =>
-                        setConfirm(
-                          filter.trash ? "restore_items" : "recycle_items",
-                        )
-                      }
-                    >
-                      {filter.trash ? <RotateCw /> : <Trash2 />}
-                      {filter.trash ? "恢复" : "移入回收站"}
-                    </Button>
-                  </ItemActions>
-                </Item>
               )}
               {page &&
                 !loading &&
@@ -542,8 +545,20 @@ function Library({
                         <Button
                           variant="ghost"
                           className="asset-cover h-auto w-full p-0"
-                          aria-label={`查看 ${item.title}`}
-                          onClick={() => setDetail(item)}
+                          aria-label={`${batch ? "选择" : "查看"} ${item.title}`}
+                          aria-pressed={
+                            batch ? selected.includes(item.id) : undefined
+                          }
+                          disabled={batch && (locked || loading)}
+                          onClick={() => {
+                            if (batch)
+                              setSelected((ids) =>
+                                ids.includes(item.id)
+                                  ? ids.filter((id) => id !== item.id)
+                                  : [...ids, item.id],
+                              );
+                            else setDetail(item);
+                          }}
                         >
                           <AssetPreview item={item} />
                         </Button>
@@ -645,7 +660,7 @@ function Library({
                         </ItemContent>
                         <ItemActions>
                           <Button
-                            variant="outline"
+                            variant="ghost"
                             disabled={
                               saving || !!pendingOperation || filter.trash
                             }
@@ -752,13 +767,16 @@ function Library({
                   </DialogDescription>
                   <DialogFooter>
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       disabled={saving || !!pendingOperation}
                       onClick={() => setConfirm(null)}
                     >
                       取消
                     </Button>
                     <Button
+                      variant={
+                        confirm === "recycle_items" ? "destructive" : "default"
+                      }
                       disabled={saving}
                       onClick={() => {
                         if (page && confirm)

@@ -474,6 +474,36 @@ button:not(:disabled),
 .media-library > .page-heading {
   margin-bottom: 0;
 }
+.library-batch-actions {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.library-batch-actions [data-slot="field"] {
+  width: auto;
+  margin-right: 8px;
+  gap: 8px;
+  color: var(--muted-foreground);
+}
+.library-batch-actions [data-slot="field-label"] {
+  white-space: nowrap;
+}
+@media (max-width: 767px) {
+  .media-library > .page-heading:has(.library-batch-actions) {
+    flex-wrap: wrap;
+  }
+  .media-library
+    > .page-heading:has(.library-batch-actions)
+    .page-heading-actions {
+    flex-basis: 100%;
+  }
+  .library-batch-actions [data-slot="button"] {
+    min-height: 44px;
+  }
+}
 .sidebar-history-note {
   padding: 8px;
   font-size: 12px;

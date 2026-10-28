@@ -1,5 +1,41 @@
 # Figma 设计落地实施计划
 
+## 2026-10-28 素材批量模式与边框收敛证据
+
+承接需求11的FR-WB-16/AC-WB-16、设计09第5.1.1节及PRD11第9节。即梦登录态“资产 → 生成历史”实际进入批量模式，右上角为数量、操作及取消选择，正文没有通栏描边批量卡片；该账号没有生成素材，本次只观察零选择状态，未验证即梦选中素材后的行为。参考其布局和视觉层级，织光保留既有本页选择、回收/恢复及确认合同。
+
+正式前端将批量控件移入PageHeading操作区，替换上传和新建文件夹；移除正文outline Item，回收/恢复与取消采用共享ghost按钮，回收确认才使用destructive。封面点击在批量模式切换选择，保持复选框和部分全选状态；取消与翻页清空选择。预览次要收藏、确认框取消同步为ghost。CSS只补素材库操作组和手机换行规则，没有全局清空边框；保留控件、焦点和分页的必要边界。本轮连同前两节共涉及根DESIGN、需求11、设计09、PRD11、本计划、assets-page.tsx、library-toolbar.tsx、globals.css和既有素材页测试九个文件。
+
+Chrome真实服务1122最初出现素材读取503，重试后读出既有alpine-road.png。实际验证零选择禁用、封面选择一项、数量/全选状态、回收确认及取消、取消选择恢复普通操作；未确认删除或写入用户内容。390×844选中态可换行，页面scrollWidth=390，批量容器border=0、shadow=none。临时视口与选择状态已恢复。跨页选择、本页全选及取消不发写命令由既有组件回归覆盖，不将组件数据当成真实跨页素材验收。
+
+Figma图片、视频、音频、文档四个批量稿原位收敛标题操作组，隐藏原正文工具栏及未纳入本批的批量动作，回收/取消统一ghost；去掉32个SelectedOutline描边，64个叠放复选框移至封面左上。图片原生稿实际点击封面选择一项并取消，数量、部分全选和退出恢复正常；其余三类完成结构检查，未逐页实点。最终Code层为[2719:36570](https://www.figma.com/design/uLqmeRWuQuzfrp9xOYg6FT?node-id=2719-36570)，替换上一节2691:36582；迁移30处入口，删除旧层及手机布局未通过的临时2711:36570，回读旧引用为0、最终页仅一个Code层、文件仍为两页。
+
+完整静态客户端在本轮figma-prototype/保留源码。托管原型实际验证素材库进入批量、零选择禁用、取消及390px换行，修复原型操作容器类名及44px规则误套复选框导致的溢出，复验scrollWidth=375、innerWidth=390。该托管验收为未登录零选择状态，不记为真实服务或选中素材写入通过。Figma内嵌Code预览曾出现M8加载提示，重新启动并独立打开同一托管预览可运行；未声称内嵌稳定性通过。
+
+工程检查：ESLint、修改TSX/CSS的Prettier、Next typegen、TypeScript、Next生产构建及全量127文件819项测试通过；最后补充手机菜单在批量时隐藏新建文件夹后，再跑该文件ESLint/Prettier、素材页12项测试和TypeScript通过。原型Vite构建通过，保留既有use-client与包体积警告。全仓原有格式问题见下一节，没有扩大修改。
+
+截图位于`~/.codex/visualizations/2026/10/27/01a17dfe-0677-7220-8079-50736e233ac2/`：`jimeng-batch-reference.png`、`glowloom-batch-selected-{desktop,mobile}.png`、`glowloom-figma-batch-selected.png`、`figma-prototype-batch-{desktop,mobile}.png`。手机为浏览器视口检查；未覆盖实体设备、全部媒体组合或实际回收/恢复写入。修改保留未提交，未推送或发布产品。
+
+## 2026-10-28 Figma收藏同步与素材回收站入口收敛证据
+
+承接PRD11第9节和FR-WB-14/15、AC-WB-14/15。素材库前端移除独立回收站按钮，复用原筛选菜单和查询状态；触发器按当前范围显示“筛选”“收藏”或“回收站”。卡片收藏、删除确认、批量恢复和服务端合同保持原样。变更文件为根DESIGN、需求11、设计09、PRD11、本计划，以及`library-toolbar.tsx`和既有`assets-page.test.tsx`。
+
+Figma原生稿原位移除30个重复按钮/收藏关闭标签；图片、视频、音频、文档四个菜单补回收站，保留素材返回及既有恢复设计。菜单进入/取消、返回重算复用已有筛选动作；修复组件文字变量绑定导致收藏标签不显示，以及收藏→回收站→返回仍保留旧收藏结果的问题。Chrome实际点击图片原生稿的筛选、收藏、回收站及返回，确认回到8个示例素材；其余三类完成结构与连线检查，未记为逐页点击通过。
+
+最终Code层为[2691:36582](https://www.figma.com/design/uLqmeRWuQuzfrp9xOYg6FT?node-id=2691-36582)，替换2459:34129，迁移30处URL入口。回读确认旧层不存在、旧引用0、最终页仅一个Code层，原文件仍为最终设计稿/组件库两页。原型源自已有交互项目，在本轮可视化目录的`figma-prototype/`保留修订源码；完整静态客户端导出上传。托管预览实际点击素材库、收藏→回收站互斥和返回，390px菜单可达且无横向溢出；该原型仍使用浏览器演示数据，没有新增真实资产或服务写入。Figma编辑器内嵌预览曾出现M8网络加载提示，独立打开同一托管预览验证通过，不将其计为内嵌预览稳定性验收。
+
+正式前端Chrome1122实际从菜单读到既有回收站2项素材，390×844下进入和返回可用、scrollWidth=390；未删除或恢复用户内容，筛选及视口已恢复。既有素材页12项、全量127文件819项测试通过；ESLint、Next typegen、TypeScript、生产构建及修改TSX的Prettier检查通过。全仓原有格式问题沿上一节保留；不扩大修改范围。原型Vite构建通过，保留既有use-client与包体积警告。
+
+截图在`~/.codex/visualizations/2026/10/27/01a17dfe-0677-7220-8079-50736e233ac2/`：`figma-native-favorite.png`、`figma-native-trash.png`、`figma-native-return-restored.png`、`figma-prototype-trash{,-mobile}.png`及`glowloom-trash-filter-{desktop,mobile}.png`。手机为浏览器视口检查；未覆盖实体设备或全部媒体交互组合。修改保留未提交，未推送或发布产品。
+
+## 2026-10-27 素材库收藏入口收敛证据
+
+来源为PRD11第9节、需求11的FR-WB-14/AC-WB-14和设计09第5.1节。移除`LibraryToolbar`工具栏独立收藏按钮，桌面和手机共用原筛选菜单的“仅显示收藏”；同一触发器随筛选状态显示“收藏”或“筛选”，可访问名称同步。保留原查询参数、返回入口、回收站互斥、卡片/预览收藏及已有数据。本批同步需求11、设计09、根DESIGN和PRD11；未修改云端Figma稿或代码交互原型。
+
+既有素材页回归先复现独立按钮仍存在的失败，再经菜单开启/取消及返回验证通过：12项用例包含空结果、加载/失败退出、其他查询条件保留、不发素材写入命令及回收站切换。全量Vitest为127文件819项通过；ESLint、Next typegen、TypeScript及生产构建通过。修改的TSX文件通过Prettier；全仓Prettier仍报原有`components/ui/breadcrumb.tsx`、`components/ui/progress.tsx`、`tests/unit/components/canvas/publish-media.test.ts`格式问题，设计09也保留原有表格/空行格式问题，均未扩大修改范围。
+
+Chrome实际使用`http://localhost:1122/assets`现有登录会话，验证桌面菜单启用与取消、390×844菜单启用和“返回素材”；真实收藏列表读出已有`alpine-road.png`，未操作素材收藏写入或上传。390px页面scrollWidth为390，无横向溢出；筛选和视口已恢复。截图位于`~/.codex/visualizations/2026/10/27/01a17dfe-0677-7220-8079-50736e233ac2/glowloom-favorite-filter-{desktop,mobile}.png`。加载/失败证据来自隔离组件回归，不作为真实服务故障验收；未覆盖实体手机。未提交、推送或发布。
+
 ## 最终设计正式工程落地（2026-10-23）
 
 依据PRD11的正式工程范围，按共享token与外壳、页面标题及动作、真实项目侧栏、个人空间和认证、素材/主体/画布服务链、工程和浏览器验收实施。采用Vercel React规范；当前插件无独立nextjs技能文件，按项目安装的Next16文档核对边界。复用Radix Nova，不安装另一套UI。服务缺口见本计划后续附录，进度只写BACKLOG；不自动发布、提交或推送。

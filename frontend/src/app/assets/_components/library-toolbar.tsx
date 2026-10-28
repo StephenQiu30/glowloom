@@ -1,14 +1,8 @@
 "use client";
 
-import {
-  X,
-  ChevronDown,
-  CheckSquare,
-  FolderPlus,
-  Heart,
-  Trash2,
-  Upload,
-} from "lucide-react";
+import type { ReactNode } from "react";
+
+import { ChevronDown, CheckSquare, FolderPlus, Upload } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { PageHeading } from "@/components/layout/page-heading";
@@ -55,6 +49,7 @@ export function LibraryToolbar({
   disabled,
   locked,
   batch,
+  batchActions,
   canCreateFolder,
   onBatch,
   onFolder,
@@ -66,6 +61,7 @@ export function LibraryToolbar({
   disabled: boolean;
   locked: boolean;
   batch: boolean;
+  batchActions: ReactNode;
   canCreateFolder: boolean;
   onBatch: () => void;
   onFolder: () => void;
@@ -78,39 +74,43 @@ export function LibraryToolbar({
         title="素材库"
         actions={
           section === "library" ? (
-            <>
-              <Button
-                variant="ghost"
-                size="lg"
-                className="library-desktop-action"
-                disabled={inactive}
-                onClick={onBatch}
-                aria-pressed={batch}
-              >
-                <CheckSquare data-icon="inline-start" />
-                {batch ? "取消选择" : "批量操作"}
-              </Button>
-              <Button
-                variant="ghost"
-                size="lg"
-                className="library-folder-action"
-                disabled={inactive || !canCreateFolder}
-                onClick={onFolder}
-              >
-                <FolderPlus data-icon="inline-start" />
-                新建文件夹
-              </Button>
-              <Button
-                size="lg"
-                aria-label="上传素材"
-                disabled={inactive}
-                onClick={onUpload}
-              >
-                <Upload data-icon="inline-start" />
-                <span className="library-upload-label">上传素材</span>
-                <span className="library-upload-short-label">上传</span>
-              </Button>
-            </>
+            batch ? (
+              batchActions
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  className="library-desktop-action"
+                  disabled={inactive}
+                  onClick={onBatch}
+                  aria-pressed={batch}
+                >
+                  <CheckSquare data-icon="inline-start" />
+                  {batch ? "取消选择" : "批量操作"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  className="library-folder-action"
+                  disabled={inactive || !canCreateFolder}
+                  onClick={onFolder}
+                >
+                  <FolderPlus data-icon="inline-start" />
+                  新建文件夹
+                </Button>
+                <Button
+                  size="lg"
+                  aria-label="上传素材"
+                  disabled={inactive}
+                  onClick={onUpload}
+                >
+                  <Upload data-icon="inline-start" />
+                  <span className="library-upload-label">上传素材</span>
+                  <span className="library-upload-short-label">上传</span>
+                </Button>
+              </>
+            )
           ) : null
         }
       />
@@ -155,7 +155,13 @@ export function LibraryToolbar({
                     }
                     size="lg"
                     disabled={inactive}
-                    aria-label="筛选素材"
+                    aria-label={
+                      filter.favorite
+                        ? "筛选素材：收藏"
+                        : filter.trash
+                          ? "筛选素材：回收站"
+                          : "筛选素材"
+                    }
                     data-active={
                       filter.favorite ||
                       filter.trash ||
@@ -163,7 +169,11 @@ export function LibraryToolbar({
                       undefined
                     }
                   >
-                    筛选
+                    {filter.favorite
+                      ? "收藏"
+                      : filter.trash
+                        ? "回收站"
+                        : "筛选"}
                     <ChevronDown data-icon="inline-end" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -229,13 +239,15 @@ export function LibraryToolbar({
                       <CheckSquare />
                       {batch ? "取消选择" : "批量操作"}
                     </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={!canCreateFolder}
-                      onSelect={onFolder}
-                    >
-                      <FolderPlus />
-                      新建文件夹
-                    </DropdownMenuItem>
+                    {!batch && (
+                      <DropdownMenuItem
+                        disabled={!canCreateFolder}
+                        onSelect={onFolder}
+                      >
+                        <FolderPlus />
+                        新建文件夹
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -280,49 +292,6 @@ export function LibraryToolbar({
                   </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
-            <div className="library-secondary-actions">
-              <Button
-                variant={filter.favorite ? "secondary" : "ghost"}
-                size="lg"
-                disabled={inactive}
-                aria-label={filter.favorite ? "关闭收藏筛选" : "收藏"}
-                title={filter.favorite ? "关闭收藏筛选" : "仅显示收藏"}
-                aria-pressed={filter.favorite}
-                onClick={() =>
-                  onFilter({
-                    ...filter,
-                    favorite: !filter.favorite,
-                    trash: false,
-                  })
-                }
-              >
-                <Heart
-                  data-icon="inline-start"
-                  fill={filter.favorite ? "currentColor" : "none"}
-                />
-                收藏
-                {filter.favorite && <X data-icon="inline-end" />}
-              </Button>
-              <Button
-                variant={filter.trash ? "secondary" : "ghost"}
-                size="lg"
-                disabled={inactive}
-                aria-label={filter.trash ? "关闭回收站" : "回收站"}
-                aria-pressed={filter.trash}
-                onClick={() =>
-                  onFilter({
-                    ...filter,
-                    trash: !filter.trash,
-                    favorite: false,
-                    folder: "",
-                  })
-                }
-              >
-                <Trash2 data-icon="inline-start" />
-                回收站
-                {filter.trash && <X data-icon="inline-end" />}
-              </Button>
             </div>
           </div>
         )}
