@@ -11,7 +11,7 @@ import {
   type ConnectionRow,
 } from "@/components/governance/batch-actions";
 import { ListPagination } from "@/components/canvas/runtime/components/layout/workspace/list-pagination";
-import { ChevronDown, Globe, MoreHorizontal, Plus, Server } from "lucide-react";
+import { ChevronDown, MoreHorizontal, Plus } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { useSession } from "@/components/auth/session";
-import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { DownloadButton } from "@/components/media/download-button";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -64,16 +63,13 @@ import {
 
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  getAdminProvider,
   exportProviderPreset,
   listAdminProviders,
   listProviderPresets,
   updateProviderPresetState,
   updateAdminProvider,
 } from "@/api/settings";
-import { RequestError } from "@/lib/request";
 import {
-  catalogMessage,
   MutationStatus,
   useCatalogMutation,
 } from "@/components/catalog/mutation";
@@ -81,6 +77,8 @@ import { PresetEditor } from "./preset-editor";
 import { ConnectionDetail } from "./connection-detail";
 import { PresetConnect } from "./preset-connect";
 import { ConnectionList, regionLabel } from "./connection-list";
+import { ProviderLogo } from "./provider-logo";
+import { providerLabel } from "./provider-label";
 
 type Confirmation =
   | { kind: "provider"; provider: API.CreatedProvider }
@@ -149,12 +147,9 @@ function ProviderAdministration({
   const [connect, setConnect] = useState<API.Preset | true | null>(null);
   const connectVisible = useRef(false);
   const [error, setError] = useState("");
-  const [feedback, setFeedback] = useState("");
-  const readback = useRef<AbortController | null>(null);
   useEffect(
     () => () => {
       connectVisible.current = false;
-      readback.current?.abort();
     },
     [],
   );
@@ -234,35 +229,18 @@ function ProviderAdministration({
   }
   function closeConnect() {
     connectVisible.current = false;
-    readback.current?.abort();
     setConnect(null);
     setRefresh((value) => value + 1);
   }
-  async function connected(id: string) {
+  function connected() {
+    setRefresh((value) => value + 1);
     if (!connectVisible.current) {
-      setRefresh((value) => value + 1);
       return;
     }
-    readback.current?.abort();
-    const controller = new AbortController();
-    readback.current = controller;
-    try {
-      const saved = await getAdminProvider(
-        { id },
-        { signal: controller.signal },
-      );
-      if (controller.signal.aborted) return;
-      if (!saved || saved.credential?.status !== "active")
-        throw new RequestError("request_unconfirmed");
-      setRefresh((value) => value + 1);
-      selectConnection(id);
-      connectVisible.current = false;
-      setConnect(null);
-      setDetailOpen(true);
-      toast.success("连接已保存");
-    } catch (error) {
-      if (!controller.signal.aborted) setFeedback(catalogMessage(error));
-    }
+    connectVisible.current = false;
+    setConnect(null);
+    closeDetail(false);
+    toast.success("服务已接入");
   }
   const query = search.trim().toLocaleLowerCase();
   const matches = (text: string) => text.toLocaleLowerCase().includes(query);
@@ -271,7 +249,7 @@ function ProviderAdministration({
       (p) =>
         p.provider?.id &&
         matches(
-          `${p.provider.name} ${p.provider.adapter_key} ${regionLabel(p.provider.region)}`,
+          `${p.provider.name} ${p.provider.adapter_key} ${providerLabel(p.provider.adapter_key)} ${regionLabel(p.provider.region)}`,
         ),
     )
     .map((item) => ({ ...item, id: item.provider!.id! }));
@@ -322,7 +300,6 @@ function ProviderAdministration({
       {mutation.message || mutation.pending ? (
         <MutationStatus mutation={mutation} />
       ) : null}
-      {feedback ? <FeedbackToast message={feedback} /> : null}
       {pendingCreate.pending || pendingKey.pending ? (
         <div className="flex flex-wrap items-center gap-3">
           <Badge variant="secondary">保存待确认</Badge>
@@ -479,10 +456,6 @@ function ProviderAdministration({
             <CollapsibleContent className="pt-4">
               <div className="grid gap-3 sm:grid-cols-2">
                 {visiblePresets.map((p) => {
-                  const Icon =
-                    p.document?.config?.adapter_key === "volcengine_ark"
-                      ? Server
-                      : Globe;
                   return (
                     <Card
                       key={p.id}
@@ -491,7 +464,9 @@ function ProviderAdministration({
                       <CardHeader>
                         <CardTitle>
                           <h2 className="flex items-center gap-3">
-                            <Icon className="size-5" />
+                            <ProviderLogo
+                              adapterKey={p.document?.config?.adapter_key}
+                            />
                             {p.document?.name}
                           </h2>
                         </CardTitle>
@@ -645,10 +620,10 @@ function ProviderAdministration({
               providers={providers}
               initialPreset={connect === true ? undefined : connect.id}
               onCreated={(id) => {
-                selectConnection(id);
+                setSelected(id);
                 setRefresh((value) => value + 1);
               }}
-              onSaved={(id) => void connected(id)}
+              onSaved={connected}
               onCancel={closeConnect}
             />
           ) : null}

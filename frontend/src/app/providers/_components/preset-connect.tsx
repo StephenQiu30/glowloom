@@ -93,7 +93,7 @@ export function PresetConnect({
   const credential = useCatalogMutation(
     (result) => {
       setComplete(true);
-      if (!direct) onSaved(connectionID(result));
+      onSaved(connectionID(result));
     },
     "preset.onboarding.credential",
     isCredentialReceipt,
@@ -490,15 +490,6 @@ export function PresetConnect({
                   : direct
                     ? "接入服务"
                     : "保存连接"}
-          </Button>
-        ) : null}
-        {complete ? (
-          <Button
-            type="button"
-            className="max-md:h-11"
-            onClick={() => onSaved(targetID)}
-          >
-            管理服务
           </Button>
         ) : null}
       </div>

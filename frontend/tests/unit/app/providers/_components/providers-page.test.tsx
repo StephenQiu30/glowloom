@@ -120,7 +120,7 @@ it("加载失败显示恢复入口，不伪装成空连接", async () => {
   expect(screen.queryByText("还没有连接")).toBeNull();
 });
 
-it("保存后读回成功才关闭弹窗，详情读取不会触发重复写入", async () => {
+it("成功回执后关闭接入弹窗并刷新列表，不自动打开详情", async () => {
   api.role = "platform_admin";
   api.providers.mockResolvedValueOnce({ items: [] }).mockResolvedValue({
     items: [
@@ -134,9 +134,10 @@ it("保存后读回成功才关闭弹窗，详情读取不会触发重复写入"
   await screen.findByText("还没有连接");
   fireEvent.click(screen.getAllByRole("button", { name: "接入服务" })[0]);
   fireEvent.click(screen.getByRole("button", { name: "模拟保存完成" }));
-  await screen.findByText("连接详情内容");
-  expect(screen.queryByRole("dialog", { name: "接入 AI 服务" })).toBeNull();
-  expect(api.providers).toHaveBeenCalledTimes(3);
+  await screen.findByRole("button", { name: "查看 保存的连接" });
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.queryByText("连接详情内容")).toBeNull();
+  expect(api.detail).not.toHaveBeenCalled();
 });
 
 it("关闭后仍展示未确认写入，继续接入只打开原流程而不自动写入", async () => {
@@ -251,6 +252,14 @@ it.each([
     ],
   });
   render(<ProvidersPage />);
+  await screen.findByRole("button", { name: "显示列" });
+  fireEvent.pointerDown(screen.getByRole("button", { name: "显示列" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  fireEvent.click(
+    await screen.findByRole("menuitemcheckbox", { name: "最近检查" }),
+  );
   await screen.findByText(label);
   expect(screen.queryByText("检查通过")).toBeNull();
 });
@@ -304,4 +313,33 @@ it("保存连接后稍后验证，关闭弹窗仍能从列表继续", async () =
   await screen.findAllByRole("button", { name: "查看 待验证连接" });
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(api.detail).not.toHaveBeenCalled();
+});
+
+it("连接列表显示品牌名称和模型数，不将未启用连接称为已停用", async () => {
+  api.role = "platform_admin";
+  api.providers.mockResolvedValue({
+    items: [
+      {
+        provider: {
+          id: "connection",
+          name: "我的连接",
+          adapter_key: "volcengine_ark",
+          region: "domestic",
+          status: "disabled",
+        },
+        credential: { status: "active", last4: "1234" },
+        model_count: 8,
+      },
+    ],
+  });
+  render(<ProvidersPage />);
+  await screen.findByText("火山方舟");
+  expect(screen.queryByText("volcengine_ark")).toBeNull();
+  expect(screen.queryByText(/••••|1234/)).toBeNull();
+  expect(screen.getByRole("columnheader", { name: "供应商" })).toBeTruthy();
+  expect(screen.getByRole("columnheader", { name: "接入模型" })).toBeTruthy();
+  expect(screen.getByRole("columnheader", { name: "配置状态" })).toBeTruthy();
+  expect(screen.queryByRole("columnheader", { name: "最近检查" })).toBeNull();
+  expect(screen.getByText("未启用")).toBeTruthy();
+  expect(screen.queryByText("已停用")).toBeNull();
 });

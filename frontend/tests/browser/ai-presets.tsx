@@ -83,6 +83,26 @@ for (const [name, adapter, region] of [
     },
   });
 }
+const deepseekPreset = presets.find(
+  (p) => p.document?.config?.adapter_key === "deepseek",
+)!;
+deepseekPreset.model_catalog = {
+  version: "fixture-catalog-v1",
+  models: [
+    {
+      key: "ds-flash",
+      display_name: "DeepSeek Flash",
+      provider_model_id: "deepseek-flash",
+      capability: "text.generate",
+    },
+    {
+      key: "ds-pro",
+      display_name: "DeepSeek V4 Pro",
+      provider_model_id: "deepseek-v4-pro",
+      capability: "text.generate",
+    },
+  ],
+};
 const price = {
   id: priceID,
   unit: "per_request",
@@ -262,7 +282,9 @@ axios.defaults.adapter = async (config) => {
         status: "disabled",
         revision: 1,
       },
-      model_count: p?.document?.model_templates?.length ?? 0,
+      model_count:
+        (p?.document?.model_templates?.length ?? 0) +
+        (Array.isArray(body.candidate_keys) ? body.candidate_keys.length : 0),
     });
     data = {
       provider_id: id,

@@ -33,10 +33,11 @@ import {
   ItemGroup,
   ItemContent,
   ItemTitle,
-  ItemDescription,
+  ItemActions,
 } from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
-import { checkLabel, regionLabel } from "./connection-list";
+import { Badge } from "@/components/ui/badge";
+import { regionLabel } from "./connection-list";
 import {
   Collapsible,
   CollapsibleContent,
@@ -193,7 +194,7 @@ export function ConnectionDetail({
             {provider?.status === "active"
               ? "已启用"
               : provider?.status === "disabled"
-                ? "已停用"
+                ? "未启用"
                 : "状态未知"}{" "}
             · {regionLabel(provider?.region)}
           </p>
@@ -216,35 +217,22 @@ export function ConnectionDetail({
               <TabsTrigger value="config">高级配置</TabsTrigger>
             </TabsList>
             <TabsContent value="overview" className="flex flex-col gap-6">
-              <ItemGroup className="rounded-lg border">
-                <Item>
-                  <ItemContent>
-                    <ItemTitle>API Key</ItemTitle>
-                    <ItemDescription>
-                      {detail.credential?.status === "active"
-                        ? "已加密保存"
-                        : detail.credential?.status === "draining"
-                          ? "仅供已有任务恢复"
-                          : detail.credential?.status === "disabled"
-                            ? "已停用"
-                            : "未配置"}
-                    </ItemDescription>
-                  </ItemContent>
-                </Item>
-                <Item>
-                  <ItemContent>
-                    <ItemTitle>最近检查</ItemTitle>
-                    <ItemDescription>
-                      {check
-                        ? (check.status ?? "状态未知")
-                        : checkLabel(detail.credential?.last_test_result)}
-                      {check?.completed_at || detail.credential?.last_tested_at
-                        ? ` · ${check?.completed_at || detail.credential?.last_tested_at}`
-                        : ""}
-                    </ItemDescription>
-                  </ItemContent>
-                </Item>
-              </ItemGroup>
+              <Item size="xs" className="px-0">
+                <ItemContent>
+                  <ItemTitle>密钥配置</ItemTitle>
+                </ItemContent>
+                <ItemActions>
+                  <Badge variant="secondary">
+                    {detail.credential?.status === "active"
+                      ? "已配置"
+                      : detail.credential?.status === "draining"
+                        ? "仅供恢复"
+                        : detail.credential?.status === "disabled"
+                          ? "已停用"
+                          : "未配置"}
+                  </Badge>
+                </ItemActions>
+              </Item>
               <ConnectionOnboarding
                 id={id}
                 revision={revision + attempt}
@@ -449,8 +437,8 @@ export function ConnectionDetail({
                         spellCheck={false}
                         required
                         placeholder={
-                          detail.credential?.last4
-                            ? `已配置 ••••${detail.credential.last4}，输入以轮换`
+                          detail.credential?.status === "active"
+                            ? "已配置，输入新密钥以更换"
                             : "输入 API Key"
                         }
                       />
@@ -497,12 +485,14 @@ export function ConnectionDetail({
                     className="flex flex-wrap items-center justify-between gap-2 rounded border p-3 text-sm"
                   >
                     <span>
-                      ••••{key.last4} ·{" "}
                       {key.status === "active"
-                        ? "使用中"
+                        ? "已配置"
                         : key.status === "draining"
                           ? "仅供已有任务恢复"
                           : "已停用"}
+                      {key.create_time
+                        ? ` · ${new Date(key.create_time).toLocaleString("zh-CN")}`
+                        : ""}
                     </span>
                     {key.status !== "disabled" ? (
                       <AlertDialog>

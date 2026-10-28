@@ -89,7 +89,7 @@ it("验证一次后启用所有所选模型，保存Key本身不能启用", asyn
   await screen.findByRole("button", { name: "验证模型" });
   expect(screen.queryByRole("button", { name: "启用 2 个模型" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "验证模型" }));
-  await screen.findByText("所选模型验证通过");
+  await screen.findByText("已通过");
   expect(api.test).toHaveBeenCalledOnce();
   expect(api.test).toHaveBeenCalledWith(
     { id: "provider", credential_id: "credential", model_id: "chat" },
@@ -127,14 +127,15 @@ it("未知验证先查询原回执，不重新发起调用", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "验证模型" }));
   const recover = await screen.findByRole("button", { name: "查询回执" });
   await waitFor(() => expect(recover).toHaveProperty("disabled", false));
-  expect(screen.getByRole("button", { name: "验证模型" })).toHaveProperty(
-    "disabled",
-    true,
-  );
+  expect(screen.queryByRole("button", { name: "验证模型" })).toBeNull();
+  expect(
+    screen
+      .getByRole("combobox", { name: "模型验证" })
+      .getAttribute("data-disabled"),
+  ).not.toBeNull();
+  expect(screen.queryByText(/credential\.test/)).toBeNull();
   fireEvent.click(recover);
-  await screen.findByText(
-    "API Key 无效或没有该模型的调用权限，请检查 Key 和模型授权。",
-  );
+  await screen.findByText("API Key 无效或模型未授权。");
   expect(api.test).toHaveBeenCalledOnce();
   expect(api.activate).not.toHaveBeenCalled();
 });
@@ -172,13 +173,13 @@ it("已启用连接仍可手动验证，切换模型不会沿用其他模型的�
     model_result: "completed",
   };
   setup();
-  await screen.findByText("所选模型验证通过");
+  await screen.findByText("已通过");
   expect(screen.queryByRole("button", { name: "启用 2 个模型" })).toBeNull();
   fireEvent.keyDown(screen.getByRole("combobox", { name: "模型验证" }), {
     key: "ArrowDown",
   });
   fireEvent.click(await screen.findByRole("option", { name: "Seedream" }));
-  expect(screen.queryByText("所选模型验证通过")).toBeNull();
+  expect(screen.queryByText("已通过")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "验证模型" }));
   await waitFor(() =>
     expect(api.test).toHaveBeenCalledWith(
@@ -186,5 +187,26 @@ it("已启用连接仍可手动验证，切换模型不会沿用其他模型的�
       expect.anything(),
     ),
   );
+  expect(api.activate).not.toHaveBeenCalled();
+});
+
+it("再次验证结果未知时冻结模型和启用，只查询原回执", async () => {
+  state.check = {
+    id: "old",
+    model_id: "chat",
+    status: "completed",
+    auth_result: "ok",
+    model_result: "completed",
+  };
+  api.test.mockRejectedValueOnce(new RequestError("request_unconfirmed"));
+  setup();
+  fireEvent.click(await screen.findByRole("button", { name: "重新验证" }));
+  await screen.findByRole("button", { name: "查询回执" });
+  expect(screen.getByRole("button", { name: "启用 2 个模型" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  expect(screen.queryByRole("button", { name: "重新验证" })).toBeNull();
+  expect(api.test).toHaveBeenCalledOnce();
   expect(api.activate).not.toHaveBeenCalled();
 });

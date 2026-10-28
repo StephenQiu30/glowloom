@@ -333,11 +333,10 @@ it("按目录版本提交候选模型，切换平台会清空旧选择", async (
   );
   fireEvent.click(screen.getByRole("button", { name: "接入服务" }));
   await screen.findByText("服务已接入。");
-  expect(saved).not.toHaveBeenCalled();
+  expect(saved).toHaveBeenCalledExactlyOnceWith("connection");
   expect(api.onboarding).not.toHaveBeenCalled();
   expect(screen.queryByRole("button", { name: "验证模型" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "管理服务" }));
-  expect(saved).toHaveBeenCalledWith("connection");
+  expect(screen.queryByRole("button", { name: "管理服务" })).toBeNull();
   expect(api.connect).toHaveBeenCalledWith(
     { id: "other" },
     expect.objectContaining({

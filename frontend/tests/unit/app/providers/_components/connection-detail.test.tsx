@@ -132,3 +132,21 @@ it("向导的 Key 写入未确认时，详情禁止绕过并使用原回执恢�
   await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
   expect(api.save).not.toHaveBeenCalled();
 });
+
+it("密钥配置只显示状态，轮换输入和记录不显示尾号", async () => {
+  api.detail.mockResolvedValue({
+    provider: { id: "connection", name: "连接", status: "disabled" },
+    credential: { id: "key", status: "active", last4: "abcd" },
+  });
+  api.keys.mockResolvedValue([{ id: "key", status: "active", last4: "5678" }]);
+  render(<ConnectionDetail id="connection" presets={[]} onSaved={() => {}} />);
+  await screen.findByText("已配置");
+  expect(screen.queryByText(/abcd|5678|••••/)).toBeNull();
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "API Key" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  const input = await screen.findByLabelText("平台 API Key");
+  expect(input.getAttribute("placeholder")).toBe("已配置，输入新密钥以更换");
+  expect(screen.queryByText(/abcd|5678|••••/)).toBeNull();
+});

@@ -1,4 +1,5 @@
 "use client";
+import { providerLabel } from "./provider-label";
 
 import { useId, useState, type RefObject } from "react";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
@@ -357,7 +358,7 @@ export function PresetEditor({
             <div className="rounded bg-muted p-3 text-sm">
               <p>
                 {preview.document?.name} ·{" "}
-                {preview.document?.config?.adapter_key}
+                {providerLabel(preview.document?.config?.adapter_key)}
               </p>
               <p>
                 {preview.document?.model_templates?.length ?? 0} 个模型模板 ·

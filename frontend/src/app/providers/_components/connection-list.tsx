@@ -13,6 +13,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ProviderLogo } from "./provider-logo";
+import { providerLabel } from "./provider-label";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -46,7 +48,13 @@ function KeySummary({
   return (
     <span>
       {credential
-        ? `${credential.status === "active" ? "已配置" : credential.status === "draining" ? "仅供恢复" : credential.status === "disabled" ? "已停用" : "状态未知"}${credential.last4 ? ` · ••••${credential.last4}` : ""}`
+        ? credential.status === "active"
+          ? "已配置"
+          : credential.status === "draining"
+            ? "仅供恢复"
+            : credential.status === "disabled"
+              ? "已停用"
+              : "状态未知"
         : "未配置"}
     </span>
   );
@@ -115,27 +123,47 @@ export function ConnectionList({
   disabled?: boolean;
 }) {
   const mobile = useIsMobile();
-  const [visibility, setVisibility] = useState<Record<string, boolean>>({});
+  const [visibility, setVisibility] = useState<Record<string, boolean>>({
+    check: false,
+  });
   const columns: DataTableColumn<ConnectionRow>[] = [
     {
       id: "name",
-      header: "连接",
+      header: "连接名称",
       cell: ({ row }) => (
         <div className="flex flex-col gap-1">
-          <span className="break-all whitespace-normal">
-            {row.original.provider?.name}
-          </span>
+          <div className="flex items-center gap-2">
+            {mobile ? (
+              <ProviderLogo adapterKey={row.original.provider?.adapter_key} />
+            ) : null}
+            <span className="break-words whitespace-normal">
+              {row.original.provider?.name}
+            </span>
+          </div>
           <span className="text-xs text-muted-foreground">
-            {regionLabel(row.original.provider?.region)} ·{" "}
-            {row.original.model_count ?? 0} 个模型
+            {mobile
+              ? `${providerLabel(row.original.provider?.adapter_key)} · `
+              : ""}
+            {regionLabel(row.original.provider?.region)}
+            {mobile ? ` · ${row.original.model_count ?? 0} 个模型` : ""}
           </span>
         </div>
       ),
     },
     {
       id: "adapter",
-      header: "服务",
-      cell: ({ row }) => row.original.provider?.adapter_key ?? "—",
+      header: "供应商",
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          <ProviderLogo adapterKey={row.original.provider?.adapter_key} />
+          <span>{providerLabel(row.original.provider?.adapter_key)}</span>
+        </div>
+      ),
+    },
+    {
+      id: "models",
+      header: "接入模型",
+      cell: ({ row }) => `${row.original.model_count ?? 0} 个模型`,
     },
     {
       id: "status",
@@ -145,14 +173,14 @@ export function ConnectionList({
           {pendingCredential === row.original.id
             ? "保存待确认"
             : row.original.provider?.status === "active"
-              ? "启用"
-              : "已停用"}
+              ? "已启用"
+              : "未启用"}
         </Badge>
       ),
     },
     {
       id: "credential",
-      header: "凭据",
+      header: "配置状态",
       cell: ({ row }) => <KeySummary credential={row.original.credential} />,
     },
     {
@@ -194,8 +222,9 @@ export function ConnectionList({
         <div className="self-end">
           <ColumnMenu
             columns={[
-              { id: "adapter", label: "服务" },
-              { id: "credential", label: "凭据" },
+              { id: "adapter", label: "供应商" },
+              { id: "models", label: "接入模型" },
+              { id: "credential", label: "配置状态" },
               { id: "check", label: "最近检查" },
             ]}
             visibility={visibility}
@@ -211,6 +240,7 @@ export function ConnectionList({
         emptyTitle="没有匹配的连接"
         columnVisibility={{
           adapter: !mobile && visibility.adapter !== false,
+          models: !mobile && visibility.models !== false,
           credential: !mobile && visibility.credential !== false,
           check: !mobile && visibility.check !== false,
         }}
