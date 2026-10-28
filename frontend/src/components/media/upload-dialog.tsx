@@ -8,8 +8,9 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useEffect, useRef, useState, useId } from "react";
-import { Upload, X } from "lucide-react";
+import { X } from "lucide-react";
 import { LoadingState } from "@/components/layout/loading-state";
+import { UploadDropzone } from "./upload-dropzone";
 import {
   Dialog,
   DialogContent,
@@ -133,17 +134,17 @@ export function UploadDialog({
         if (!open && !pending) onClose();
       }}
     >
-      <DialogContent>
+      <DialogContent className="sm:max-w-[560px]">
         <DialogTitle>{done ? "素材上传成功" : "上传素材"}</DialogTitle>
         <DialogDescription>
           {done
             ? destinationLabel
               ? `文件已保存到「${destinationLabel}」。`
               : "文件已保存到当前参考素材目录。"
-            : "图片和文档最多 20 MB，音频 100 MB，视频 500 MB（60 秒），GLB 模型 64 MB。"}
+            : "图片/文档 ≤20MB · 音频 ≤100MB · 视频 ≤500MB/60秒 · GLB ≤64MB"}
         </DialogDescription>
         {!done && (
-          <FieldGroup className="min-w-0">
+          <FieldGroup className="min-w-0 gap-4">
             <div className="sr-only">
               <FieldLabel htmlFor={`${formFieldId}-file`}>
                 选择素材文件
@@ -158,29 +159,13 @@ export function UploadDialog({
                 onChange={(e) => choose(e.target.files?.[0])}
               />
             </div>
-            <Button
-              variant="secondary"
-              className="h-auto min-h-40 flex-col gap-3 p-4 break-all whitespace-normal"
+            <UploadDropzone
+              file={file}
               disabled={pending || unconfirmed}
-              onClick={() => input.current?.click()}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (e.dataTransfer.files.length > 1) {
-                  setError("请每次上传一个文件。");
-                  return;
-                }
-                choose(e.dataTransfer.files[0]);
-              }}
-            >
-              <Upload data-icon="inline-start" />
-              {file ? file.name : "拖入文件，或点击选择"}
-            </Button>
-            {file && (
-              <FieldDescription>
-                {(file.size / 1024 / 1024).toFixed(2)} MB
-              </FieldDescription>
-            )}
+              onBrowse={() => input.current?.click()}
+              onChoose={choose}
+              onError={setError}
+            />
             <Field
               data-disabled={pending || unconfirmed}
               orientation="horizontal"
@@ -195,7 +180,7 @@ export function UploadDialog({
                 className="min-w-0 whitespace-normal"
                 htmlFor={`${formFieldId}-field-1`}
               >
-                我已确认内容与使用权限，文件不包含需要另行授权的真人内容。
+                我有使用权限，且无待授权真人内容。
               </FieldLabel>
             </Field>
             {pending && (
@@ -207,27 +192,38 @@ export function UploadDialog({
                     : "上传完成，正在等待服务确认…"}
               </LoadingState>
             )}
-            {error && <FeedbackToast message={error} />}
+            {error && !unconfirmed && <FeedbackToast message={error} />}
             {unconfirmed && (
-              <FieldDescription>
-                保留当前文件和原请求编号以安全重试。关闭后，请先刷新资产列表确认结果。
+              <FieldDescription role="status">
+                {uploaded
+                  ? "文件已上传，归档尚未完成。"
+                  : "结果待确认，重试不会重复上传。"}
               </FieldDescription>
             )}
           </FieldGroup>
         )}
         <DialogFooter>
           {pending ? (
-            <Button variant="outline" onClick={() => request.current?.abort()}>
-              <X />
+            <Button
+              variant="secondary"
+              className="h-11 min-w-24"
+              onClick={() => request.current?.abort()}
+            >
+              <X data-icon="inline-start" />
               中止上传
             </Button>
           ) : (
-            <Button variant="outline" onClick={onClose}>
+            <Button
+              variant="secondary"
+              className="h-11 min-w-24"
+              onClick={onClose}
+            >
               {done ? "完成" : "关闭"}
             </Button>
           )}
           {!done && (
             <Button
+              className="h-11 min-w-28"
               disabled={
                 !file ||
                 !confirmed ||
