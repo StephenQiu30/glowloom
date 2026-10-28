@@ -60,7 +60,7 @@ function setup() {
   render(
     <PresetConnect presets={presets} onCreated={created} onSaved={saved} />,
   );
-  fireEvent.click(screen.getByRole("radio", { name: /OpenRouter/ }));
+  fireEvent.click(screen.getByLabelText(/OpenRouter/));
   fireEvent.change(screen.getByLabelText("API Key"), {
     target: { value: "fixture-api-key-test" },
   });
@@ -408,4 +408,98 @@ it("跨分类多选保留选择，全选排除不可用模型，空分类不虚�
     expect.objectContaining({ candidate_keys: ["text", "image"] }),
   );
   expect(api.onboarding).not.toHaveBeenCalled();
+});
+
+it("音频分类包含audio.tts豆包语音，保存接入不触发模型验证", async () => {
+  render(
+    <PresetConnect
+      presets={[
+        {
+          id: "preset",
+          version_id: "v1",
+          document: { name: "豆包语音" },
+          model_catalog: {
+            version: "v1",
+            models: [
+              {
+                key: "doubao-tts",
+                display_name: "豆包语音合成",
+                capability: "audio.tts",
+              },
+            ],
+          },
+        },
+      ]}
+      onCreated={created}
+      onSaved={saved}
+    />,
+  );
+  fireEvent.click(screen.getByRole("radio", { name: "豆包语音" }));
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "音频" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  fireEvent.click(
+    await screen.findByRole("checkbox", { name: "豆包语音合成" }),
+  );
+  fireEvent.change(screen.getByLabelText("API Key"), {
+    target: { value: "fixture-key" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "接入服务" }));
+  await screen.findByText("服务已接入。");
+  expect(api.connect).toHaveBeenCalledWith(
+    { id: "preset" },
+    expect.objectContaining({ candidate_keys: ["doubao-tts"] }),
+  );
+  expect(api.onboarding).not.toHaveBeenCalled();
+});
+
+it("豆包语音直接显示音频模型，切换服务清除原Key和选择", async () => {
+  const speech: API.Preset = {
+    id: "speech",
+    version_id: "speech-version",
+    document: {
+      name: "豆包语音",
+      config: {
+        adapter_key: "volcengine_speech",
+        region: "domestic",
+        capabilities: ["audio"],
+      },
+    },
+    model_catalog: {
+      version: "speech-v1",
+      models: [
+        {
+          key: "tts",
+          capability: "audio.generate",
+          display_name: "豆包语音合成 2.0",
+          provider_model_id: "seed-tts-2.0",
+        },
+      ],
+    },
+  };
+  render(
+    <PresetConnect
+      presets={[...presets, speech]}
+      initialPreset="speech"
+      onCreated={created}
+      onSaved={saved}
+    />,
+  );
+  expect(
+    screen.getByRole("tab", { name: "音频" }).getAttribute("aria-selected"),
+  ).toBe("true");
+  expect(screen.getByLabelText("豆包语音合成 2.0")).toBeTruthy();
+  expect(screen.getByText("使用豆包语音 API Key")).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("API Key"), {
+    target: { value: "speech-only-key" },
+  });
+  fireEvent.click(screen.getByLabelText("豆包语音合成 2.0"));
+  fireEvent.click(screen.getByLabelText("OpenRouter"));
+  expect((screen.getByLabelText("API Key") as HTMLInputElement).value).toBe("");
+  fireEvent.click(screen.getByLabelText("豆包语音"));
+  expect(
+    screen.getByLabelText("豆包语音合成 2.0").getAttribute("aria-checked"),
+  ).toBe("false");
+  expect(api.key).not.toHaveBeenCalled();
 });

@@ -56,6 +56,10 @@ func (r ManagedResult) Validate() error {
 			if a.Size > 32<<20 {
 				return ErrInvalidProviderCall
 			}
+		case "audio/mpeg":
+			if a.Size > 32<<20 {
+				return ErrInvalidProviderCall
+			}
 		case "video/mp4":
 		default:
 			return ErrInvalidProviderCall

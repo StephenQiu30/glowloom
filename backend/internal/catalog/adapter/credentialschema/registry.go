@@ -25,7 +25,7 @@ func (r *Registry) Supports(adapterKey string) bool {
 		return false
 	}
 	switch adapterKey {
-	case "volcengine_ark", "minimax", "openrouter", "byteplus", "deepseek":
+	case "volcengine_ark", "minimax", "openrouter", "byteplus", "deepseek", "volcengine_speech":
 		return true
 	default:
 		return false

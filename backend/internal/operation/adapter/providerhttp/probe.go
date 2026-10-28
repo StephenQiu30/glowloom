@@ -23,6 +23,12 @@ func (c *Client) Probe(ctx context.Context, config catalogdomain.ProviderConfig,
 		result.Adapter = "unsupported"
 		return result
 	}
+	// Speech has no supported read-only Key probe. Generating audio is allowed
+	// only through an explicit management model validation.
+	if config.AdapterKey == "volcengine_speech" {
+		result.Adapter = "ok"
+		return result
+	}
 	path := "/key"
 	if config.AdapterKey == "volcengine_ark" || config.AdapterKey == "byteplus" {
 		path = "/contents/generations/tasks?page_size=1"

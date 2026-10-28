@@ -102,6 +102,19 @@ func submission(input application.GenerationRequest) (string, map[string]any, bo
 		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || len(ref.URL) > 8192 {
 			return "", nil, false
 		}
+		if ref.MediaKind != "" && ref.MediaKind != "image" {
+			// Ark's omni-reference protocol has distinct media objects. Published
+			// catalog limits authorize the model's actual kinds before dispatch.
+			kind := ref.MediaKind
+			if input.Config.AdapterKey != "volcengine_ark" || input.Capability != "video.generate" || input.Mode != "omni_reference" ||
+				(kind != "video" && kind != "audio") || (ref.Role != "subject" && ref.Role != "reference" && ref.Role != "reference_"+kind) {
+				return "", nil, false
+			}
+			item := map[string]any{"type": kind + "_url", kind + "_url": map[string]string{"url": ref.URL}, "role": "reference_" + kind}
+			references = append(references, item)
+			arkContent = append(arkContent, item)
+			continue
+		}
 		item := map[string]any{"type": "image_url", "image_url": map[string]string{"url": ref.URL}}
 		switch ref.Role {
 		case "first_frame", "last_frame":
@@ -156,6 +169,13 @@ func submission(input application.GenerationRequest) (string, map[string]any, bo
 		validMode = input.Mode == "text2image" && len(references) == 0 || input.Mode == "image2image" && len(references) > 0
 	case "video.generate":
 		validMode = input.Mode == "text2video" && len(input.References) == 0 || input.Mode == "image2video" && seenFrames["first_frame"] || input.Mode == "omni_reference" && len(references) > 0
+	}
+	if input.Config.AdapterKey == "volcengine_ark" && strings.HasPrefix(input.ModelID, "doubao-seedance-2-5-") && input.Capability == "video.generate" {
+		// The model requires an adaptive ratio for first/last-frame generation.
+		// Freeze this wire requirement even if the shared UI retained a prior ratio.
+		if input.Mode == "image2video" {
+			payload["ratio"] = "adaptive"
+		}
 	}
 	if !validMode {
 		return "", nil, false

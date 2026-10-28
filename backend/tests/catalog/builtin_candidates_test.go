@@ -10,7 +10,7 @@ import (
 )
 
 func TestCommonCandidatesAreNotPublishableTemplates(t *testing.T) {
-	for _, adapter := range []string{"volcengine_ark", "openrouter", "byteplus", "deepseek", "codex"} {
+	for _, adapter := range []string{"volcengine_ark", "openrouter", "byteplus", "deepseek", "codex", "volcengine_speech"} {
 		t.Run(adapter, func(t *testing.T) {
 			catalog := domain.BuiltinModelCatalog(adapter)
 			require.NotEmpty(t, catalog.Version)
@@ -83,6 +83,9 @@ func TestHistoricalArkConfigDoesNotAcquireTextCandidates(t *testing.T) {
 
 func TestEachCloudPresetAcceptsAnExplicitPricedTextTemplate(t *testing.T) {
 	for _, preset := range domain.BuiltinPresets() {
+		if preset.Config.AdapterKey == "volcengine_speech" {
+			continue
+		}
 		doc := domain.PresetDocument{SchemaVersion: 1, Name: preset.Name, Config: preset.Config, ModelTemplates: []domain.PresetModelTemplate{presetTextTemplate()}}
 		require.NoError(t, doc.Validate(), preset.Slug)
 	}

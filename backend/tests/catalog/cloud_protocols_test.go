@@ -14,6 +14,9 @@ import (
 
 func TestCloudTextProtocolsKeepProviderRoutingIndependent(t *testing.T) {
 	for _, preset := range domain.BuiltinPresets() {
+		if preset.Config.AdapterKey == "volcengine_speech" {
+			continue
+		}
 		t.Run(preset.Slug, func(t *testing.T) {
 			calls := 0
 			client := providerhttp.NewClient(&http.Client{Transport: providerTransport(func(r *http.Request) (*http.Response, error) {
@@ -75,7 +78,7 @@ func TestArkImageRequestsUseSingleImageContractWithoutOpenRouterFields(t *testin
 
 func TestCloudDiscoveryDoesNotInventImageOrAccountPermissions(t *testing.T) {
 	for _, preset := range domain.BuiltinPresets() {
-		if preset.Config.AdapterKey == "openrouter" {
+		if preset.Config.AdapterKey == "openrouter" || preset.Config.AdapterKey == "volcengine_speech" {
 			continue
 		}
 		calls := 0

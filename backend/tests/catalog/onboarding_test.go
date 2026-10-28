@@ -17,11 +17,13 @@ func TestArkOnboardingPresetsHaveExecutablePinnedVersions(t *testing.T) {
 	capabilities := map[string]bool{}
 	for _, candidate := range catalog.Models {
 		require.False(t, candidate.RequiresModelSelection)
-		require.Regexp(t, `-\d{6}$`, candidate.ProviderModelID)
+		if candidate.Lifecycle != "alias" {
+			require.Regexp(t, `-\d{6}$`, candidate.ProviderModelID)
+		}
 		version, err := candidate.OnboardingVersion(uuid.New(), uuid.New())
 		require.NoError(t, err)
 		require.NoError(t, version.Validate())
-		require.NoError(t, validator.Validate(version))
+		require.NoError(t, validator.Validate(version), candidate.Key)
 		require.Equal(t, candidate.ProviderModelID, version.ProviderModelID)
 		capabilities[candidate.Capability] = true
 	}

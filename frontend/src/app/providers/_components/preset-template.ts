@@ -31,9 +31,13 @@ export function templateFromRelease(
   )
     throw new Error("来源发布使用了当前预设不支持的执行配置。");
   if (
-    !["per_request", "per_image", "per_second", "per_1k_tokens"].includes(
-      price.unit,
-    )
+    ![
+      "per_request",
+      "per_image",
+      "per_second",
+      "per_1k_tokens",
+      "per_1k_chars",
+    ].includes(price.unit)
   )
     throw new Error("来源发布的价格单位不受支持。");
   return {

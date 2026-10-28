@@ -161,6 +161,16 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 		}
 		evidence.Artifacts = append(evidence.Artifacts, output)
 	}
+	for index, item := range result.Audio {
+		if op.Capability != "audio.generate" || len(result.Images) != 0 || result.Text != "" {
+			return unknown, application.ErrInvalidProviderCall
+		}
+		output, e := a.results.StageArtifact(ctx, identity, index+1, item.Bytes, item.MediaType)
+		if e != nil {
+			return unknown, e
+		}
+		evidence.Artifacts = append(evidence.Artifacts, output)
+	}
 	if op.Capability == "video.generate" {
 		if len(result.URLs) != 1 || a.video == nil {
 			return unknown, application.ErrInvalidProviderCall
@@ -189,6 +199,12 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 	}
 	var tokens map[string]json.RawMessage
 	if json.Unmarshal(result.Usage, &tokens) == nil {
+		if op.Capability == "audio.generate" {
+			var characters int64
+			if raw, ok := tokens["text_words"]; ok && json.Unmarshal(raw, &characters) == nil && characters >= 0 {
+				usage["character_count"] = characters
+			}
+		}
 		for _, pair := range [][2]string{{"prompt_tokens", "input_tokens"}, {"completion_tokens", "output_tokens"}, {"input_tokens", "input_tokens"}, {"output_tokens", "output_tokens"}} {
 			var value int64
 			if raw, ok := tokens[pair[0]]; ok && json.Unmarshal(raw, &value) == nil && value >= 0 {

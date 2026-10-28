@@ -239,11 +239,13 @@ export function PresetEditor({
                 <FieldSet>
                   <FieldLegend>可提供的能力</FieldLegend>
                   <FieldGroup className="flex-row flex-wrap">
-                    {(document.config?.adapter_key === "deepseek"
-                      ? ["text"]
-                      : document.config?.adapter_key === "byteplus"
-                        ? ["text", "image"]
-                        : ["text", "image", "video"]
+                    {(document.config?.adapter_key === "volcengine_speech"
+                      ? ["audio"]
+                      : document.config?.adapter_key === "deepseek"
+                        ? ["text"]
+                        : document.config?.adapter_key === "byteplus"
+                          ? ["text", "image"]
+                          : ["text", "image", "video"]
                     ).map((capability) => (
                       <Field key={capability} orientation="horizontal">
                         <Checkbox
@@ -270,9 +272,12 @@ export function PresetEditor({
                         />
                         <FieldLabel htmlFor={`${fieldID}-${capability}`}>
                           {
-                            { text: "文本", image: "图片", video: "视频" }[
-                              capability
-                            ]
+                            {
+                              text: "文本",
+                              image: "图片",
+                              video: "视频",
+                              audio: "音频",
+                            }[capability]
                           }
                         </FieldLabel>
                       </Field>

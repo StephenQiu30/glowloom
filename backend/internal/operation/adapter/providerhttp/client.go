@@ -66,6 +66,9 @@ func (c *Client) request(ctx context.Context, config catalogdomain.ProviderConfi
 
 // Submit translates a validated request and makes exactly one charged POST.
 func (c *Client) Submit(ctx context.Context, input application.GenerationRequest, key string) (application.GenerationResult, error) {
+	if input.Config.AdapterKey == "volcengine_speech" {
+		return c.submitSpeech(ctx, input, key)
+	}
 	path, payload, ok := submission(input)
 	if !ok || !validKey(key) {
 		return application.GenerationResult{Outcome: "not_submitted", ErrorCode: "invalid_provider_request"}, nil

@@ -3,7 +3,6 @@ package domain
 import (
 	"encoding/json"
 	"slices"
-
 	"strings"
 
 	"github.com/google/uuid"
@@ -24,6 +23,9 @@ type ModelCandidatePreset struct {
 	RequiresModelSelection bool     `json:"requires_model_selection"`
 	MaxOutputs             *int     `json:"max_outputs,omitempty"`
 }
+
+// MaxPresetModels bounds atomic onboarding selections and management readback.
+const MaxPresetModels = 64
 
 // ModelCandidateCatalog versions selections independently of priced v1 templates.
 type ModelCandidateCatalog struct {
@@ -66,15 +68,9 @@ func BuiltinModelCatalog(adapter string) ModelCandidateCatalog {
 		catalog.Models[len(catalog.Models)-1].MaxOutputs = &one
 		add("or-seedream", "Seedream 4.5", "bytedance-seed/seedream-4.5", "image.generate", source, "active", "text2image", "image2image")
 	case "volcengine_ark":
-		source := "https://console.volcengine.com/ark/region:cn-beijing/docs/model-list"
-		add("ark-chat", "Doubao Seed 2.1 Pro", "doubao-seed-2-1-pro-260915", "text.generate", source, "active", "text_to_text")
-		add("ark-chat-lite", "Doubao Seed 2.1 Lite", "doubao-seed-2-1-lite-260915", "text.generate", source, "active", "text_to_text")
-		add("ark-image", "Seedream 4.5", "doubao-seedream-4-5-251128", "image.generate", source, "active", "text2image", "image2image")
-		add("ark-video", "Seedance 2.0", "doubao-seedance-2-0-260128", "video.generate", source, "active", "text2video", "image2video", "omni_reference")
-		add("ark-video-fast", "Seedance 2.0 Fast", "doubao-seedance-2-0-fast-260128", "video.generate", source, "active", "text2video", "image2video", "omni_reference")
-		for i := range catalog.Models {
-			catalog.Models[i].ReviewedAt = "2026-10-26"
-		}
+		return volcengineModelCatalog()
+	case "volcengine_speech":
+		return doubaoSpeechCatalog()
 	case "byteplus":
 		source := "https://docs.byteplus.com/en/docs/modelark/model-list"
 		add("bp-chat", "BytePlus 文本 · 选择账号型号", "", "text.generate", source, "account_selection", "text_to_text")
@@ -99,7 +95,7 @@ func BuiltinModelCatalog(adapter string) ModelCandidateCatalog {
 
 // Select resolves an ordered selection against one exact catalog snapshot.
 func (c ModelCandidateCatalog) Select(version string, keys []string) ([]ModelCandidatePreset, error) {
-	if len(keys) > 16 || (len(keys) > 0 && version != c.Version) {
+	if len(keys) > MaxPresetModels || (len(keys) > 0 && version != c.Version) {
 		return nil, ErrInvalidPreset
 	}
 	selected := make([]ModelCandidatePreset, 0, len(keys))
@@ -154,8 +150,16 @@ func (m ModelCandidatePreset) OnboardingVersion(modelID, actorID uuid.UUID) (Mod
 		}
 		version.Limits = json.RawMessage(`{"max_outputs":1,"roles":{"_total_images":8,"reference_image":{"max_count":8,"types":["image"],"for_modes":["image2image"]},"subject":{"max_count":8,"types":["image"],"for_modes":["image2image"]}}}`)
 		version.ParamSchema = json.RawMessage(`[{"field":"size","label":"图像尺寸","component":"select","type":"string","enum":["2K","4K"],"default":"2K"}]`)
+	case "audio.generate":
+		if m.AdapterKey != "volcengine_speech" {
+			return ModelVersion{}, ErrInvalidPreset
+		}
+		version.ParamSchema = json.RawMessage(`[{"field":"speaker","label":"音色","component":"input","type":"string","required":true,"default":"zh_female_vv_uranus_bigtts"},{"field":"speech_rate","label":"语速","component":"input","type":"integer","min":-50,"max":100,"default":0},{"field":"loudness_rate","label":"音量","component":"input","type":"integer","min":-50,"max":100,"default":0}]`)
 	case "video.generate":
 		version.Limits = json.RawMessage(`{"max_outputs":1,"roles":{"_total_images":9,"first_frame":{"max_count":1,"min_count":1,"types":["image"],"for_modes":["image2video"]},"last_frame":{"max_count":1,"types":["image"],"for_modes":["image2video"]},"reference_image":{"max_count":9,"types":["image"],"for_modes":["omni_reference"]},"subject":{"max_count":9,"types":["image"],"for_modes":["omni_reference"]}}}`)
+		if !slices.Contains(m.Modes, "omni_reference") {
+			version.Limits = json.RawMessage(`{"max_outputs":1,"roles":{"_total_images":2,"first_frame":{"max_count":1,"min_count":1,"types":["image"],"for_modes":["image2video"]},"last_frame":{"max_count":1,"types":["image"],"for_modes":["image2video"]}}}`)
+		}
 		if m.AdapterKey != "volcengine_ark" {
 			return ModelVersion{}, ErrInvalidPreset
 		}
@@ -167,6 +171,9 @@ func (m ModelCandidatePreset) OnboardingVersion(modelID, actorID uuid.UUID) (Mod
 	}
 	if m.AdapterKey == "openrouter" && m.Capability == "image.generate" {
 		version.ParamSchema = json.RawMessage(`[]`)
+	}
+	if m.AdapterKey == "volcengine_ark" && m.Capability == "video.generate" {
+		configureSeedanceGeneration(&version)
 	}
 	return version, version.Validate()
 }

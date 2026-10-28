@@ -71,18 +71,18 @@ func (s *Store) ListModelsForProject(ctx context.Context, actor identityapp.Prin
 			LEFT JOIN catalog.model_release AS published ON published.id=m.active_release_id AND published.status='active'
 			JOIN catalog.capability AS cap ON cap.key = m.capability AND NOT cap.is_delete
 			LEFT JOIN catalog.model_profile_version AS v
-			  ON v.id = CASE WHEN p.adapter_key IN ('volcengine_ark','openrouter','byteplus','deepseek') THEN published.model_version_id ELSE m.current_version_id END AND v.model_profile_id = m.id AND NOT v.is_delete
+			  ON v.id = CASE WHEN p.adapter_key IN ('volcengine_ark','openrouter','byteplus','deepseek','volcengine_speech') THEN published.model_version_id ELSE m.current_version_id END AND v.model_profile_id = m.id AND NOT v.is_delete
 			LEFT JOIN catalog.provider_credential AS c
 			  ON c.provider_id = p.id AND c.status = 'active' AND NOT c.is_delete
 			LEFT JOIN LATERAL (
 			  SELECT id, version_no, unit, rule, currency, fx_rate_to_cny, effective_from
 			  FROM catalog.price_rule_version
-			  WHERE (p.adapter_key NOT IN ('volcengine_ark','openrouter','byteplus','deepseek') OR id=published.price_version_id) AND model_profile_id = m.id AND effective_from <= transaction_timestamp()
+			  WHERE (p.adapter_key NOT IN ('volcengine_ark','openrouter','byteplus','deepseek','volcengine_speech') OR id=published.price_version_id) AND model_profile_id = m.id AND effective_from <= transaction_timestamp()
 			    AND NOT is_delete
 			  ORDER BY effective_from DESC, version_no DESC
 			  LIMIT 1
 			) AS pr ON true
-			WHERE NOT m.is_delete AND (p.adapter_key NOT IN ('volcengine_ark','openrouter','byteplus','deepseek') OR EXISTS (SELECT 1 FROM catalog.provider_config_version pc JOIN catalog.provider_preset_version pv ON pv.id=pc.preset_version_id JOIN catalog.provider_preset preset ON preset.id=pv.preset_id WHERE pc.id=published.config_version_id AND NOT preset.emergency_disabled)) AND (? OR p.region = 'domestic')
+			WHERE NOT m.is_delete AND (p.adapter_key NOT IN ('volcengine_ark','openrouter','byteplus','deepseek','volcengine_speech') OR EXISTS (SELECT 1 FROM catalog.provider_config_version pc JOIN catalog.provider_preset_version pv ON pv.id=pc.preset_version_id JOIN catalog.provider_preset preset ON preset.id=pv.preset_id WHERE pc.id=published.config_version_id AND NOT preset.emergency_disabled)) AND (? OR p.region = 'domestic')
 			  AND (? = '' OR m.capability = ?)
 			  AND (? = '' OR ? = ANY(v.modes))
 		`

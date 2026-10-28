@@ -87,6 +87,7 @@ func (s *Store) CreateModelRelease(ctx context.Context, actor identityapp.Princi
  JOIN catalog.provider_preset preset ON preset.id=pv.preset_id AND NOT preset.emergency_disabled
  WHERE m.id=? AND v.id=? AND price.id=? AND config.id=? AND NOT m.is_delete
  AND ((m.capability='text.generate' AND price.unit IN ('per_request','per_1k_tokens') AND v.modes <@ ARRAY['text_to_text']::text[])
+ OR (m.capability='audio.generate' AND config.config->>'adapter_key'='volcengine_speech' AND v.provider_model_id='seed-tts-2.0' AND v.modes=ARRAY['text2audio']::text[] AND price.unit IN ('per_request','per_1k_chars') AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('speaker','speech_rate','loudness_rate')))
  OR (m.capability='image.generate' AND price.unit IN ('per_request','per_image') AND v.modes <@ ARRAY['text2image','image2image']::text[])
  OR (m.capability='video.generate' AND price.unit IN ('per_request','per_second') AND v.modes <@ ARRAY['text2video','image2video','omni_reference']::text[]))
  AND (m.capability='image.generate' OR (v.limits->>'max_outputs')::int=1)
@@ -95,6 +96,7 @@ func (s *Store) CreateModelRelease(ctx context.Context, actor identityapp.Princi
  AND v.queue='provider' AND v.moderation='provider' AND NOT v.supports_cancel AND NOT v.supports_callback
  AND ((m.capability='video.generate' AND config.config->>'adapter_key' IN ('openrouter','volcengine_ark'))
  OR (m.capability='text.generate' AND config.config->>'adapter_key' IN ('openrouter','volcengine_ark','byteplus','deepseek'))
+ OR (m.capability='audio.generate' AND config.config->>'adapter_key'='volcengine_speech')
  OR (m.capability='image.generate' AND (config.config->>'adapter_key'='openrouter' OR (config.config->>'adapter_key' IN ('volcengine_ark','byteplus') AND (v.limits->>'max_outputs')::int=1))))
  FOR SHARE OF preset,m`, id, input.ModelVersionID, input.PriceVersionID, input.ConfigVersionID).Scan(&found)
 		if r.Error != nil {

@@ -43,3 +43,22 @@ func TestManagedManifestRecoversAfterDatabaseFailure(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, missing)
 }
+
+func TestManagedAudioArtifactKeepsPrivateRecoveryEvidence(t *testing.T) {
+	objects := &stageTestObjects{entries: make(map[string]stageTestObject)}
+	records := &managedRecords{}
+	service := application.NewManagedResults(objects, records)
+	identity := application.ProviderDispatchIdentity{ProjectID: uuid.New(), OperationID: uuid.New(), ModelProfileVersionID: uuid.New(), PriceRuleVersionID: uuid.New(), Action: "submit", Attempt: 1, RequestKey: "speech-fixture"}
+	audio := []byte("ID3 private audio fixture")
+	artifact, err := service.StageArtifact(t.Context(), identity, 1, audio, "audio/mpeg")
+	require.NoError(t, err)
+	result := application.ManagedResult{Identity: identity, State: "succeeded", Artifacts: []application.ManagedArtifact{artifact}, Usage: json.RawMessage(`{"billable_requests":1,"output_count":1,"character_count":3}`)}
+	require.NoError(t, service.Save(t.Context(), result))
+	recovered, err := service.Recover(t.Context(), identity)
+	require.NoError(t, err)
+	require.Equal(t, result, *recovered)
+	saved, data, err := service.ReadArtifact(t.Context(), identity, 1)
+	require.NoError(t, err)
+	require.Equal(t, "audio/mpeg", saved.MIME)
+	require.Equal(t, audio, data)
+}

@@ -5,6 +5,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Empty, EmptyHeader, EmptyDescription } from "@/components/ui/empty";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -70,7 +71,11 @@ export function PresetConnect({
     };
   }, []);
   const [apiKey, setAPIKey] = useState("");
-  const [category, setCategory] = useState("text.generate");
+  const [category, setCategory] = useState(
+    () =>
+      presets.find((p) => p.id === initialPreset)?.model_catalog?.models?.[0]
+        ?.capability ?? "text.generate",
+  );
   const [createdID, setCreatedID] = useState("");
   const [confirmed, setComplete] = useState(false);
   const create = useCatalogMutation(
@@ -191,7 +196,12 @@ export function PresetConnect({
               onValueChange={(id) => {
                 setPresetID(id);
                 setCandidateKeys([]);
-                setCategory("text.generate");
+                setAPIKey("");
+                setVisible(false);
+                setCategory(
+                  presets.find((p) => p.id === id)?.model_catalog?.models?.[0]
+                    ?.capability ?? "text.generate",
+                );
               }}
               className="grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-3"
             >
@@ -238,7 +248,11 @@ export function PresetConnect({
                 autoComplete="off"
                 spellCheck={false}
                 disabled={complete || busy || (!preset && !targetID)}
-                placeholder="输入 API Key"
+                placeholder={
+                  preset?.document?.config?.adapter_key === "volcengine_speech"
+                    ? "输入豆包语音 API Key"
+                    : "输入 API Key"
+                }
               />
               <InputGroupAddon
                 align="inline-end"
@@ -261,6 +275,9 @@ export function PresetConnect({
                 </InputGroupButton>
               </InputGroupAddon>
             </InputGroup>
+            {preset?.document?.config?.adapter_key === "volcengine_speech" ? (
+              <FieldDescription>使用豆包语音 API Key</FieldDescription>
+            ) : null}
           </Field>
         </FieldGroup>
         {models.length ? (
@@ -326,8 +343,10 @@ export function PresetConnect({
                 ["audio.generate", "音频"],
                 ["image.generate", "图片"],
               ].map(([value, label]) => {
-                const visibleModels = models.filter(
-                  (m) => m.capability === value,
+                const visibleModels = models.filter((m) =>
+                  value === "audio.generate"
+                    ? m.capability?.startsWith("audio.")
+                    : m.capability === value,
                 );
                 return (
                   <TabsContent
@@ -380,6 +399,9 @@ export function PresetConnect({
                               </FieldTitle>
                               {candidate.requires_model_selection ? (
                                 <span>需配置</span>
+                              ) : null}
+                              {candidate.lifecycle === "sunsetting" ? (
+                                <Badge variant="outline">即将下线</Badge>
                               ) : null}
                             </FieldLabel>
                           </Field>

@@ -11,7 +11,7 @@ import (
 
 func TestBuiltinPresetsAreIsolatedAndContainNoCredentials(t *testing.T) {
 	presets := domain.BuiltinPresets()
-	require.Len(t, presets, 4)
+	require.Len(t, presets, 5)
 	for _, p := range presets {
 		require.NoError(t, p.Config.Validate())
 	}

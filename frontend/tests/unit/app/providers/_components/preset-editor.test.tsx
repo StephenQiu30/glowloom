@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  isInaccessible,
+} from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { render } from "../../../../feedback";
 import { PresetEditor } from "@/app/providers/_components/preset-editor";
@@ -60,30 +66,21 @@ it("管理员通过表单维护预设，无需手写 JSON 或标识；修改使�
   fireEvent.change(screen.getByLabelText("最大并发"), {
     target: { value: "4" },
   });
+  // Query semantics once; waiting on state must not rescan the whole sheet.
+  const saveButton = screen.getByRole("button", {
+    name: "保存新版本",
+  }) as HTMLButtonElement;
   fireEvent.click(screen.getByRole("button", { name: "校验并预览" }));
   await waitFor(() => expect(api.preview).toHaveBeenCalledOnce());
-  await waitFor(() =>
-    expect(
-      (screen.getByRole("button", { name: "保存新版本" }) as HTMLButtonElement)
-        .disabled,
-    ).toBe(false),
-  );
+  await waitFor(() => expect(saveButton.disabled).toBe(false));
   fireEvent.change(screen.getByLabelText("预设名称"), {
     target: { value: "修改后的预设" },
   });
-  expect(
-    (screen.getByRole("button", { name: "保存新版本" }) as HTMLButtonElement)
-      .disabled,
-  ).toBe(true);
+  expect(saveButton.disabled).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "校验并预览" }));
   await waitFor(() => expect(api.preview).toHaveBeenCalledTimes(2));
-  await waitFor(() =>
-    expect(
-      (screen.getByRole("button", { name: "保存新版本" }) as HTMLButtonElement)
-        .disabled,
-    ).toBe(false),
-  );
-  fireEvent.click(screen.getByRole("button", { name: "保存新版本" }));
+  await waitFor(() => expect(saveButton.disabled).toBe(false));
+  fireEvent.click(saveButton);
   await waitFor(() => expect(api.save).toHaveBeenCalledOnce());
   const input = api.save.mock.calls[0][0];
   expect(input.slug).toMatch(/^preset-/);
@@ -99,14 +96,12 @@ it("复制内置预设创建派生副本，不写回内置版本", async () => {
       onSaved={vi.fn()}
     />,
   );
+  const saveButton = screen.getByRole("button", {
+    name: "保存新版本",
+  }) as HTMLButtonElement;
   fireEvent.click(screen.getByRole("button", { name: "校验并预览" }));
-  await waitFor(() =>
-    expect(
-      (screen.getByRole("button", { name: "保存新版本" }) as HTMLButtonElement)
-        .disabled,
-    ).toBe(false),
-  );
-  fireEvent.click(screen.getByRole("button", { name: "保存新版本" }));
+  await waitFor(() => expect(saveButton.disabled).toBe(false));
+  fireEvent.click(saveButton);
   await waitFor(() => expect(api.save).toHaveBeenCalledOnce());
   expect(api.save.mock.calls[0][0].parent_id).toBe("builtin");
   expect(api.version).not.toHaveBeenCalled();
@@ -134,8 +129,11 @@ it.each([
   );
   fireEvent.click(screen.getByRole("button", { name: "高级设置" }));
   for (const name of ["文本", "图片", "视频"]) {
-    expect(!!screen.queryByRole("checkbox", { name })).toBe(
-      supported.includes(name),
-    );
+    const checkbox = screen.queryByLabelText(name);
+    expect(!!checkbox).toBe(supported.includes(name));
+    if (checkbox) {
+      expect(checkbox.getAttribute("role")).toBe("checkbox");
+      expect(isInaccessible(checkbox)).toBe(false);
+    }
   }
 });

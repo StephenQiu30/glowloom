@@ -58,7 +58,7 @@ func (s *Store) ReadProviderOnboarding(ctx context.Context, actor identityapp.Pr
  JOIN catalog.model_profile_version v ON v.id=r.model_version_id
  JOIN catalog.provider p ON p.id=m.provider_id AND p.current_config_version_id=r.config_version_id
  WHERE m.provider_id=? AND m.candidate_snapshot IS NOT NULL AND NOT m.is_delete AND NOT v.is_delete
- ORDER BY m.capability,m.display_name LIMIT 16`, id).Scan(&result.Models).Error; err != nil {
+ ORDER BY m.capability,m.display_name LIMIT ?`, id, domain.MaxPresetModels).Scan(&result.Models).Error; err != nil {
 			return err
 		}
 		var check application.ProviderCheck
@@ -126,7 +126,7 @@ func (s *Store) ActivateProviderOnboarding(ctx context.Context, actor identityap
  ORDER BY m.id FOR UPDATE OF m,r`, id, provider.ConfigID).Scan(&models).Error; err != nil {
 			return empty, err
 		}
-		if len(models) == 0 || len(models) > 16 {
+		if len(models) == 0 || len(models) > domain.MaxPresetModels {
 			return empty, domain.ErrInvalidPreset
 		}
 		for _, model := range models {

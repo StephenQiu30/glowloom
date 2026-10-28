@@ -3592,6 +3592,7 @@ declare namespace API {
   };
 
   type ProviderReference = {
+    media_kind?: string;
     role?: string;
     url?: string;
   };

@@ -63,9 +63,14 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Initialize isolated test databases
         run: |
-          psql "$GLOWLOOM_TEST_CANVAS_DB_DSN" -X -v ON_ERROR_STOP=1 -c 'CREATE ROLE glowloom_app NOLOGIN NOSUPERUSER' -c 'CREATE ROLE canvas_test_runtime LOGIN INHERIT NOSUPERUSER IN ROLE glowloom_app' -c 'CREATE DATABASE schema_probe' -c 'CREATE DATABASE glowloom_governance'
+          psql "$GLOWLOOM_TEST_CANVAS_DB_DSN" -X -v ON_ERROR_STOP=1 -c 'CREATE ROLE glowloom_app NOLOGIN NOSUPERUSER' -c 'CREATE ROLE canvas_test_runtime LOGIN INHERIT NOSUPERUSER IN ROLE glowloom_app' -c 'CREATE DATABASE schema_probe' -c 'CREATE DATABASE glowloom_governance' -c 'CREATE DATABASE glowloom_catalog'
           psql "$GLOWLOOM_TEST_CANVAS_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           psql "$GLOWLOOM_TEST_GOVERNANCE_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
+          psql "postgres://postgres@127.0.0.1:5432/glowloom_catalog?sslmode=disable" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
+      - name: Verify model preset onboarding
+        env:
+          GLOWLOOM_TEST_MODEL_CATALOG_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_catalog?sslmode=disable
+        run: go test -race -count=1 ./tests/catalog -run '^TestVolcengineWholeCatalogAndSpeechOnboardingUseRealStores$'
       - name: Run backend Race tests
         run: go test -race -count=1 ./...
 
