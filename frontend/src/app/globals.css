@@ -270,6 +270,29 @@ button:not(:disabled),
   flex-shrink: 0;
   background: var(--background);
 }
+.product-header-toolbar:empty,
+.product-header-page-actions:empty {
+  display: none;
+}
+.product-header:has(.product-header-toolbar:not(:empty)) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  min-height: var(--layout-header);
+  height: auto;
+}
+.product-header[data-replace-base] {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.product-header:has(.product-header-toolbar:not(:empty))
+  .product-header-location {
+  display: none;
+}
+.product-header-page-actions,
+.product-header-toolbar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
 .product-brand {
   display: inline-flex;
   flex-shrink: 0;
@@ -1057,6 +1080,50 @@ button:not(:disabled),
   }
   .product-header-actions {
     gap: 0;
+  }
+  .product-header:has(.product-header-toolbar:not(:empty)) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 0;
+  }
+  .product-header:has(.product-header-toolbar:not(:empty))
+    .product-header-location {
+    display: flex;
+    grid-column: 1;
+    grid-row: 1;
+    width: fit-content;
+    min-height: var(--layout-header);
+  }
+  .product-header-toolbar:not(:empty) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding-bottom: 8px;
+  }
+  .product-header:has(.product-header-page-actions:not(:empty))
+    .product-header-toolbar {
+    grid-column: 1;
+  }
+  .product-header-page-actions:not(:empty) {
+    grid-column: 2;
+    grid-row: 2;
+    padding-bottom: 8px;
+    justify-content: flex-end;
+  }
+  .product-header[data-replace-base] .product-header-toolbar {
+    grid-column: 1 / -1;
+  }
+  .product-header[data-replace-base] .product-header-page-actions {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+  .product-header:has(.product-header-toolbar:not(:empty))
+    .product-header-actions {
+    grid-column: 1 / -1;
+    justify-self: end;
+    grid-row: 1;
+  }
+  .product-header-toolbar button,
+  .product-header-page-actions button {
+    min-height: 44px;
   }
   .product-header .brand-mark {
     width: 24px;
@@ -2591,5 +2658,24 @@ button:not(:disabled),
     min-width: 44px;
     top: 12px;
     right: 12px;
+  }
+}
+
+/* Asset source tabs share the account row; filters begin directly below it. */
+.product-header:has([data-asset-toolbar]) {
+  padding-inline: var(--layout-content-x);
+}
+.workspace-page:has(> .asset-workspace-tabs) {
+  padding-top: 0;
+}
+
+@media (max-width: 379px) {
+  .product-header:has(.product-header-page-actions:not(:empty))
+    .product-header-toolbar {
+    grid-column: 1 / -1;
+  }
+  .product-header-page-actions:not(:empty) {
+    grid-column: 1 / -1;
+    grid-row: 3;
   }
 }

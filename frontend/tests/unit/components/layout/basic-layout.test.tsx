@@ -10,6 +10,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
+import { PageToolbar } from "@/components/layout/page-toolbar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AssetWorkspace } from "@/app/assets/_components/asset-workspace";
 import { BasicLayout } from "@/components/layout/basic-layout";
@@ -472,10 +473,82 @@ it("asset header options stay stable under the shared login context", async () =
     await Promise.resolve();
   });
   expect(screen.getByRole("button", { name: "搜索本人生成历史" })).toBeTruthy();
+  const header = screen.getByRole("banner", { name: "页面顶栏" });
+  expect(
+    within(header).getByRole("tablist", { name: "资产来源" }),
+  ).toBeTruthy();
+  expect(within(header).getByRole("button", { name: "批量操作" })).toBeTruthy();
+  expect(within(header).getByRole("button", { name: "账号菜单" })).toBeTruthy();
+  expect(within(header).queryByLabelText("资产筛选")).toBeNull();
+  expect(screen.getByLabelText("资产筛选").closest("main")).toBeTruthy();
+  expect(screen.getByRole("heading", { name: /^资产$/ }).className).toContain(
+    "sr-only",
+  );
   expect(
     errors.mock.calls.some((args) =>
       args.some((value) => String(value).includes("Maximum update depth")),
     ),
   ).toBe(false);
   errors.mockRestore();
+});
+
+function BatchHeaderPage({ batch }: { batch: boolean }) {
+  return (
+    <>
+      <PageToolbar inHeader>
+        <button>Page filter</button>
+      </PageToolbar>
+      <PageToolbar
+        inHeader
+        slot="actions"
+        presentation={batch ? "replace-base" : "adjacent"}
+      >
+        <button>Page action</button>
+      </PageToolbar>
+    </>
+  );
+}
+
+it("replacing public actions closes its search portal and releases shortcuts; unmount restores the shell", async () => {
+  const search = {
+    value: "",
+    onValueChange: vi.fn(),
+    label: "Header search",
+    placeholder: "Search",
+    onSearch: vi.fn(),
+  };
+  const view = render(
+    <BasicLayout screen="subjects" search={search}>
+      <BatchHeaderPage batch={false} />
+    </BasicLayout>,
+  );
+  const header = await screen.findByRole("banner");
+  await screen.findByRole("button", { name: "Header search" });
+  fireEvent.keyDown(document, { key: "k", metaKey: true });
+  expect(await screen.findByRole("combobox")).toBeTruthy();
+  view.rerender(
+    <BasicLayout screen="subjects" search={search}>
+      <BatchHeaderPage batch />
+    </BasicLayout>,
+  );
+  expect(screen.queryByRole("combobox")).toBeNull();
+  expect(
+    within(header).getByRole("button", { name: "Page filter" }),
+  ).toBeTruthy();
+  expect(
+    within(header).queryByRole("button", { name: "Header search" }),
+  ).toBeNull();
+  fireEvent.keyDown(document, { key: "k", metaKey: true });
+  expect(screen.queryByRole("combobox")).toBeNull();
+  view.rerender(
+    <BasicLayout screen="subjects" search={search}>
+      <h1>Next page</h1>
+    </BasicLayout>,
+  );
+  expect(
+    within(header).queryByRole("button", { name: "Page action" }),
+  ).toBeNull();
+  fireEvent.keyDown(document, { key: "k", metaKey: true });
+  expect(await screen.findByRole("combobox")).toBeTruthy();
+  expect(screen.getAllByRole("combobox")).toHaveLength(1);
 });

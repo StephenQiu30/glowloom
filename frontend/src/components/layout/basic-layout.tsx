@@ -6,6 +6,7 @@ import {
   useState,
   useEffect,
   useRef,
+  useMemo,
   useSyncExternalStore,
   type CSSProperties,
   type ReactNode,
@@ -38,6 +39,11 @@ import { PageOptionsContext, type PageOptions } from "./page-layout";
 import { resolveAdminSection, type Screen } from "./routes";
 import { AdminWorkspace } from "@/components/governance/admin-layout";
 import { ProductHeader } from "./product-header";
+import {
+  PageToolbarContext,
+  PageActionsContext,
+  type PageActionsRegistration,
+} from "./page-toolbar";
 import type { PageSearch } from "./product-search";
 const adminScreens = [
   "users",
@@ -80,6 +86,18 @@ function Shell({
 }) {
   const adminSection = resolveAdminSection(screen);
   const [pageOptions, setPageOptions] = useState<PageOptions | null>(null);
+  const [toolbarTarget, setToolbarTarget] = useState<HTMLDivElement | null>(
+    null,
+  );
+  const [actionsTarget, setActionsTarget] = useState<HTMLDivElement | null>(
+    null,
+  );
+  const [actionsRegistration, setActionsRegistration] =
+    useState<PageActionsRegistration | null>(null);
+  const actionsContext = useMemo(
+    () => ({ target: actionsTarget, setPresentation: setActionsRegistration }),
+    [actionsTarget],
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
   const pageSearch =
     pageOptions?.screen === screen ? pageOptions.search : search;
@@ -130,7 +148,9 @@ function Shell({
       <SidebarInset asChild>
         <div className="product-content">
           <ProductHeader
-            screen={screen}
+            toolbarRef={setToolbarTarget}
+            pageActionsRef={setActionsTarget}
+            replaceBase={actionsRegistration?.presentation === "replace-base"}
             search={pageSearch}
             actor={session?.actor}
             isMobile={isMobile}
@@ -148,15 +168,19 @@ function Shell({
             className="product-main"
           >
             <PageOptionsContext.Provider value={setPageOptions}>
-              <SpaceGate>
-                {adminSection ? (
-                  <AdminWorkspace active={adminSection}>
-                    {children}
-                  </AdminWorkspace>
-                ) : (
-                  children
-                )}
-              </SpaceGate>
+              <PageToolbarContext.Provider value={toolbarTarget}>
+                <PageActionsContext.Provider value={actionsContext}>
+                  <SpaceGate>
+                    {adminSection ? (
+                      <AdminWorkspace active={adminSection}>
+                        {children}
+                      </AdminWorkspace>
+                    ) : (
+                      children
+                    )}
+                  </SpaceGate>
+                </PageActionsContext.Provider>
+              </PageToolbarContext.Provider>
             </PageOptionsContext.Provider>
           </main>
         </div>

@@ -7,9 +7,10 @@ import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
 import { useLoginDialog } from "@/components/layout/basic-layout";
 import { PageLayout } from "@/components/layout/page-layout";
-import { PageHeading } from "@/components/layout/page-heading";
+import { PageToolbar } from "@/components/layout/page-toolbar";
 import { ContentState } from "@/components/layout/content-state";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -194,47 +195,54 @@ function WorkspaceScope({
   };
   return (
     <PageLayout screen="assets" search={pageSearch}>
-      <PageHeading
-        title="资产"
-        actions={
-          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-            <div ref={setToolbarTarget} className="min-w-0" />
-            {!batch && (
-              <Button
-                variant="ghost"
-                disabled={locked}
-                onClick={() => changeView("reference")}
-              >
-                参考素材
-              </Button>
-            )}
-          </div>
-        }
-      />
+      <h1 className="sr-only">资产</h1>
       <Tabs
         value={view}
         onValueChange={(value) => changeView(value as AssetSource)}
-        className="gap-6"
+        className="asset-workspace-tabs gap-3"
       >
-        <TabsList
-          variant="navigation"
-          aria-label="资产来源"
-          className="max-w-full"
-        >
-          {sources.map((source) => (
-            <TabsTrigger
-              key={source.id}
-              value={source.id}
-              className="min-h-11 transition-[color,background-color,box-shadow] motion-reduce:transition-none"
-              disabled={locked}
+        <PageToolbar inHeader>
+          <div
+            data-asset-toolbar
+            className="flex w-full min-w-0 flex-wrap items-center gap-x-4 gap-y-2"
+          >
+            <TabsList
+              variant="pill"
+              aria-label="资产来源"
+              className="max-w-full"
             >
-              {source.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-        <div className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-3">
+              {sources.map((source) => (
+                <TabsTrigger
+                  key={source.id}
+                  value={source.id}
+                  className="min-h-11 transition-[color,background-color,box-shadow] motion-reduce:transition-none"
+                  disabled={locked}
+                >
+                  {source.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
+              <div ref={setToolbarTarget} className="min-w-0" />
+              {!batch && (
+                <Button
+                  variant="ghost"
+                  disabled={locked}
+                  onClick={() => changeView("reference")}
+                >
+                  参考素材
+                </Button>
+              )}
+            </div>
+          </div>
+        </PageToolbar>
+        <div
+          aria-label="资产筛选"
+          className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2"
+        >
           {view === "history" && (
             <ToggleGroup
+              variant="text"
               type="single"
               value={kind}
               onValueChange={(value) => {
@@ -266,6 +274,7 @@ function WorkspaceScope({
           )}
           {view === "canvas" && (
             <ToggleGroup
+              variant="text"
               type="single"
               value={collection}
               onValueChange={(value) => {
@@ -288,6 +297,9 @@ function WorkspaceScope({
                 历史画布
               </ToggleGroupItem>
             </ToggleGroup>
+          )}
+          {view !== "short_drama" && (
+            <Separator orientation="vertical" className="hidden h-4 sm:block" />
           )}
           <div className="flex flex-wrap items-center gap-2">
             <AssetFilterMenu

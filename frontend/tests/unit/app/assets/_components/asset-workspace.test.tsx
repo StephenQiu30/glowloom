@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   act,
   cleanup,
@@ -9,6 +9,7 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { PageToolbarContext } from "@/components/layout/page-toolbar";
 import { AssetWorkspace } from "@/app/assets/_components/asset-workspace";
 import { assetDateRange } from "@/app/assets/_components/asset-query";
 import { readAssetLocation } from "@/app/assets/_components/asset-location";
@@ -56,8 +57,14 @@ vi.mock("@/components/layout/page-layout", () => ({
     children: ReactNode;
     search: typeof state.search;
   }) => {
+    const [target, setTarget] = useState<HTMLElement | null>(null);
     state.search = search;
-    return children;
+    return (
+      <PageToolbarContext.Provider value={target}>
+        <header ref={setTarget} />
+        {children}
+      </PageToolbarContext.Provider>
+    );
   },
 }));
 vi.mock("@/components/layout/basic-layout", () => ({

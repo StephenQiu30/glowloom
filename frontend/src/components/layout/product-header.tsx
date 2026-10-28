@@ -1,22 +1,19 @@
 "use client";
 
 import type { Ref } from "react";
-import { Bell, Menu } from "lucide-react";
-import { ThemeToggle } from "@/components/controls/theme-controls";
-import { AccountMenu } from "@/components/account/account-menu";
+import { Menu } from "lucide-react";
 import { Brand } from "@/components/brand/brand";
 import { Button } from "@/components/ui/button";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import type { Screen } from "./routes";
-import { ProductSearch, type PageSearch } from "./product-search";
+  ProductHeaderActions,
+  type ProductHeaderActionsProps,
+} from "./product-header-actions";
 
 /** Figma ProductHeader 620:24416; shared by ordinary product pages. */
 export function ProductHeader({
-  screen,
+  toolbarRef,
+  pageActionsRef,
+  replaceBase = false,
   search,
   actor,
   isMobile,
@@ -27,19 +24,40 @@ export function ProductHeader({
   onLogout,
   onFeature,
 }: {
-  screen: Screen;
-  search?: PageSearch;
-  actor?: API.EmailSessionView["actor"];
-  isMobile: boolean;
+  toolbarRef?: Ref<HTMLDivElement>;
+  pageActionsRef?: Ref<HTMLDivElement>;
+  replaceBase?: boolean;
   navigationOpen: boolean;
   navigationTriggerRef?: Ref<HTMLButtonElement>;
   onOpenNavigation: () => void;
-  onLogin: () => void;
-  onLogout: () => void;
-  onFeature: (feature: string) => void;
-}) {
+} & ProductHeaderActionsProps) {
+  const navigation = (
+    <div key="navigation" className="product-header-toolbar" ref={toolbarRef} />
+  );
+  const pageActions = (
+    <div
+      key="page-actions"
+      className="product-header-page-actions"
+      ref={pageActionsRef}
+    />
+  );
+  const common = replaceBase ? null : (
+    <ProductHeaderActions
+      key="common"
+      search={search}
+      actor={actor}
+      isMobile={isMobile}
+      onLogin={onLogin}
+      onLogout={onLogout}
+      onFeature={onFeature}
+    />
+  );
   return (
-    <header className="product-header" aria-label="页面顶栏">
+    <header
+      data-replace-base={replaceBase || undefined}
+      className="product-header"
+      aria-label="页面顶栏"
+    >
       <div className="product-header-location">
         {isMobile ? (
           <>
@@ -58,40 +76,9 @@ export function ProductHeader({
           </>
         ) : null}
       </div>
-      <div className="product-header-actions">
-        <ProductSearch
-          search={
-            screen === "assets" && !actor && search
-              ? { ...search, disabled: true }
-              : search
-          }
-          isMobile={isMobile}
-        />
-        <ThemeToggle />
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-lg"
-              className="max-md:size-11"
-              aria-label="消息中心"
-              onClick={() => onFeature("消息中心")}
-            >
-              <Bell />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>消息中心</TooltipContent>
-        </Tooltip>
-        <div className="product-account-slot">
-          {actor ? (
-            <AccountMenu actor={actor} onLogout={onLogout} />
-          ) : (
-            <Button className="w-full" onClick={onLogin}>
-              登录
-            </Button>
-          )}
-        </div>
-      </div>
+      {isMobile
+        ? [common, navigation, pageActions]
+        : [navigation, pageActions, common]}
     </header>
   );
 }
