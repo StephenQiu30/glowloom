@@ -1,4 +1,5 @@
 "use client";
+import { layoutCanvasSelection } from "../lib/canvas-selection-layout";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { canvasConnectionHandles } from "../constants/canvas-input-ports";
 import { isCanvasShortcut } from "../lib/canvas-keyboard";
@@ -1235,7 +1236,12 @@ function InfiniteCanvasPage({
               ),
             }
           : undefined;
-      const newNode = createCanvasNode(type, pending.position, metadata);
+      const newNode = createCanvasNode(
+        type,
+        pending.position,
+        metadata,
+        nodesRef.current,
+      );
       const connection = integrationRef.current
         ? canvasConnectionDirection(pending.connection, newNode.id)
         : normalizeConnection(
@@ -1603,7 +1609,12 @@ function InfiniteCanvasPage({
               ),
             }
           : undefined;
-      const newNode = createCanvasNode(type, targetPosition, configMetadata);
+      const newNode = createCanvasNode(
+        type,
+        targetPosition,
+        configMetadata,
+        nodesRef.current,
+      );
       if (!position)
         newNode.position = {
           x: targetPosition.x - newNode.width / 2,
@@ -5782,6 +5793,19 @@ function InfiniteCanvasPage({
             canUngroup={canUngroupSelection}
             onGroup={groupSelection}
             onUngroup={ungroupSelection}
+            readOnly={documentIntegration?.frozen}
+            onCopy={copySelectedNodes}
+            onDelete={() => deleteNodes(selectedNodeIdsRef.current)}
+            onLayout={(mode) => {
+              if (integrationRef.current?.frozen) return;
+              setNodes(
+                layoutCanvasSelection(
+                  nodesRef.current,
+                  selectedNodeIdsRef.current,
+                  mode,
+                ),
+              );
+            }}
             runDisabled={
               documentIntegration?.workflow?.busy ||
               !documentIntegration?.workflow?.accepting
@@ -5812,6 +5836,7 @@ function InfiniteCanvasPage({
           header={
             documentIntegration ? (
               documentIntegration.toolbar({
+                nodes,
                 canUndo:
                   documentIntegration.undo?.canUndo ?? historyState.canUndo,
                 canRedo:
@@ -5826,6 +5851,7 @@ function InfiniteCanvasPage({
               })
             ) : (
               <CanvasTopBar
+                nodes={nodes}
                 title={currentProject?.title || "未命名画布"}
                 onRenameProject={() => {
                   message.info("请从项目空间打开已保存的画布");

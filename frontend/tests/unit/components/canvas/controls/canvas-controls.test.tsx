@@ -107,7 +107,7 @@ it("缩放菜单保留吸附开关和适应画布，移除重复视图菜单", (
   expect(fit).toHaveBeenCalledOnce();
 });
 
-it("统一布局内直接提供可持久化的主题菜单", async () => {
+it("主题入口收进更多菜单，选择后持久保存并在重开时恢复", async () => {
   const { unmount } = render(
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
       <TooltipProvider>
@@ -134,13 +134,16 @@ it("统一布局内直接提供可持久化的主题菜单", async () => {
       </TooltipProvider>
     </ThemeProvider>,
   );
-  const toggle = screen.getByRole("button", { name: "切换主题" });
-  const layout = toggle.closest("[data-canvas-controls]");
+  expect(screen.queryByRole("button", { name: "切换主题" })).toBeNull();
+  const more = screen.getByRole("button", { name: "更多画布操作" });
+  const layout = more.closest("[data-canvas-controls]");
   expect(layout?.contains(screen.getByText("画布标题"))).toBe(true);
   expect(layout?.contains(screen.getByText("视图控制"))).toBe(true);
   expect(
     layout?.contains(screen.getByRole("button", { name: "添加文本节点" })),
   ).toBe(true);
+  fireEvent.click(more);
+  const toggle = await screen.findByRole("button", { name: "切换主题" });
   fireEvent.keyDown(toggle, { key: "ArrowDown" });
   fireEvent.click(await screen.findByRole("menuitemradio", { name: "浅色" }));
   await waitFor(() =>

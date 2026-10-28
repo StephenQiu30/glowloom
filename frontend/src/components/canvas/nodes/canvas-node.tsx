@@ -82,7 +82,11 @@ import { documentText } from "@/components/canvas/runtime/components/editor/lib/
 import { RichTextContent } from "@/components/canvas/runtime/components/editor/rich-text/rich-text-content";
 import type { RichTextDocument } from "@/components/canvas/runtime/components/editor/types/rich-text";
 
-type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+import {
+  resizeCanvasNode,
+  type CanvasResizeHandle as ResizeCorner,
+} from "../lib/canvas-node-resize";
+import { getNodeSpec } from "../constants/canvas";
 const selectionBlue = "var(--ring)";
 
 type CanvasNodeProps = {
@@ -375,44 +379,20 @@ export const CanvasNode = React.memo(function CanvasNode({
 
       const dx = (event.clientX - resizeRef.current.startX) / scale;
       const dy = (event.clientY - resizeRef.current.startY) / scale;
-      const minWidth = 220;
-      const minHeight = 160;
-      const startRight =
-        resizeRef.current.startLeft + resizeRef.current.startWidth;
-      const startBottom =
-        resizeRef.current.startTop + resizeRef.current.startHeight;
-      const fromLeft = resizeRef.current.corner.includes("left");
-      const fromTop = resizeRef.current.corner.includes("top");
-      const rawWidth = Math.max(
-        minWidth,
-        resizeRef.current.startWidth + (fromLeft ? -dx : dx),
+      const current = resizeRef.current;
+      const next = resizeCanvasNode(
+        {
+          x: current.startLeft,
+          y: current.startTop,
+          width: current.startWidth,
+          height: current.startHeight,
+        },
+        current.corner,
+        dx,
+        dy,
+        current.keepRatio ? current.ratio : undefined,
       );
-      const rawHeight = Math.max(
-        minHeight,
-        resizeRef.current.startHeight + (fromTop ? -dy : dy),
-      );
-      let width = rawWidth;
-      let height = rawHeight;
-      if (resizeRef.current.keepRatio) {
-        const ratio = resizeRef.current.ratio;
-        if (Math.abs(dx) >= Math.abs(dy)) {
-          height = width / ratio;
-        } else {
-          width = height * ratio;
-        }
-        if (height < minHeight) {
-          height = minHeight;
-          width = height * ratio;
-        }
-        if (width < minWidth) {
-          width = minWidth;
-          height = width / ratio;
-        }
-      }
-      onResize(data.id, width, height, {
-        x: fromLeft ? startRight - width : resizeRef.current.startLeft,
-        y: fromTop ? startBottom - height : resizeRef.current.startTop,
-      });
+      onResize(data.id, next.width, next.height, { x: next.x, y: next.y });
     },
     [data.id, onResize, scale],
   );
@@ -543,6 +523,11 @@ export const CanvasNode = React.memo(function CanvasNode({
             {!referenceSelectionState && (
               <div
                 className="canvas-node-heading absolute top-[-28px] left-0 z-[65] max-w-canvas-dialog"
+                style={{
+                  top: -28 / scale,
+                  transform: `scale(${1 / scale})`,
+                  transformOrigin: "top left",
+                }}
                 onMouseDown={(event) => {
                   event.stopPropagation();
                   if (!isEditingTitle) onMouseDown(event, data.id);
@@ -610,7 +595,7 @@ export const CanvasNode = React.memo(function CanvasNode({
             )}
 
             <div
-              className="relative h-full w-full overflow-visible rounded-xl border"
+              className="canvas-node-body relative h-full w-full overflow-visible rounded-xl border"
               style={{
                 background: isGroup
                   ? "transparent"
@@ -631,6 +616,13 @@ export const CanvasNode = React.memo(function CanvasNode({
                           ? "transparent"
                           : theme.node.stroke,
                 borderStyle: isGroup ? "dashed" : "solid",
+                borderWidth: data.type === CanvasNodeType.Text ? 0 : undefined,
+                outline:
+                  data.type === CanvasNodeType.Text && isSelected
+                    ? `${1 / scale}px solid color-mix(in srgb, var(--canvas-reference-foreground) 50%, transparent)`
+                    : undefined,
+                outlineOffset:
+                  data.type === CanvasNodeType.Text ? 3 / scale : undefined,
                 boxShadow: isGroupDropTarget
                   ? `0 0 0 2px color-mix(in srgb, ${selectionBlue} 40%, transparent), inset 0 0 0 999px color-mix(in srgb, ${selectionBlue} 6%, transparent)`
                   : isConnectionTarget
@@ -707,7 +699,9 @@ export const CanvasNode = React.memo(function CanvasNode({
                       ? "transparent"
                       : hasImageContent || hasVideoContent || transparentBg
                         ? "transparent"
-                        : theme.node.fill,
+                        : data.type === CanvasNodeType.Text
+                          ? "linear-gradient(to bottom right, var(--canvas-reference-text-start), var(--canvas-reference-text-end))"
+                          : theme.node.fill,
                     pointerEvents: contentInteractive ? undefined : "none",
                   } as React.CSSProperties
                 }
@@ -786,21 +780,40 @@ export const CanvasNode = React.memo(function CanvasNode({
               {!readOnly &&
               !referenceSelectionState &&
               (isSelected || isEditingContent) ? (
-                <ResizeHandle
+                <ResizeHandles
+                  scale={scale}
                   onMouseDown={handleResizeMouseDown}
-                  onKeyDown={(event) => {
+                  onKeyDown={(event, handle) => {
+                    if (isImeComposing(event)) return;
                     const horizontal =
                       event.key === "ArrowLeft" || event.key === "ArrowRight";
                     const vertical =
                       event.key === "ArrowUp" || event.key === "ArrowDown";
-                    if (!horizontal && !vertical) return;
+                    const reset =
+                      event.key === "Enter" && !handle.includes("-");
+                    if (!horizontal && !vertical && !reset) return;
                     event.preventDefault();
                     event.stopPropagation();
-                    const delta =
-                      (event.shiftKey ? 10 : 1) *
-                      (event.key === "ArrowLeft" || event.key === "ArrowUp"
-                        ? -1
-                        : 1);
+                    const step = event.shiftKey ? 10 : 1;
+                    const defaults = getNodeSpec(data.type);
+                    let dx = horizontal
+                      ? event.key === "ArrowLeft"
+                        ? -step
+                        : step
+                      : 0;
+                    let dy = vertical
+                      ? event.key === "ArrowUp"
+                        ? -step
+                        : step
+                      : 0;
+                    if (reset) {
+                      dx =
+                        (defaults.width - data.width) *
+                        (handle === "left" ? -1 : 1);
+                      dy =
+                        (defaults.height - data.height) *
+                        (handle === "top" ? -1 : 1);
+                    }
                     const keepRatio =
                       (data.type === CanvasNodeType.Image &&
                         !data.metadata?.freeResize) ||
@@ -809,29 +822,27 @@ export const CanvasNode = React.memo(function CanvasNode({
                     const ratio =
                       (data.metadata?.naturalWidth || data.width) /
                       (data.metadata?.naturalHeight || data.height || 1);
-                    let width = Math.max(
-                      220,
-                      data.width + (horizontal ? delta : 0),
+                    const next = resizeCanvasNode(
+                      {
+                        ...data.position,
+                        width: data.width,
+                        height: data.height,
+                      },
+                      handle,
+                      dx,
+                      dy,
+                      keepRatio ? ratio : undefined,
                     );
-                    let height = Math.max(
-                      160,
-                      data.height + (vertical ? delta : 0),
-                    );
-                    if (keepRatio) {
-                      if (horizontal) height = width / ratio;
-                      else width = height * ratio;
-                      if (height < 160) {
-                        height = 160;
-                        width = height * ratio;
-                      }
-                      if (width < 220) {
-                        width = 220;
-                        height = width / ratio;
-                      }
-                    }
-                    if (width === data.width && height === data.height) return;
+                    if (
+                      next.width === data.width &&
+                      next.height === data.height
+                    )
+                      return;
                     onResizeStart(data.id);
-                    onResize(data.id, width, height, data.position);
+                    onResize(data.id, next.width, next.height, {
+                      x: next.x,
+                      y: next.y,
+                    });
                     onResizeEnd(data.id);
                   }}
                 />
@@ -842,6 +853,7 @@ export const CanvasNode = React.memo(function CanvasNode({
             !isGroup &&
             (connectionTypes?.input ?? true) ? (
               <ConnectionHandleDot
+                scale={scale}
                 side="left"
                 visible={hovered || isSelected || isConnecting}
                 onMouseDown={(event) =>
@@ -854,6 +866,7 @@ export const CanvasNode = React.memo(function CanvasNode({
               ((definition?.hasSourceHandle ?? true) &&
                 data.type !== CanvasNodeType.Config)) ? (
               <ConnectionHandleDot
+                scale={scale}
                 side="right"
                 visible={hovered || isSelected || isConnecting}
                 onMouseDown={(event) =>
@@ -1293,7 +1306,7 @@ function ImageNodeContent(props: NodeContentRendererProps) {
 function EmptyNodeContent({ type }: { type: string }) {
   if (type === CanvasNodeType.Text)
     return (
-      <div className="h-full w-full p-4 text-sm text-muted-foreground">
+      <div className="canvas-text-placeholder h-full w-full px-6 py-5">
         双击编辑文本
       </div>
     );
@@ -1738,55 +1751,156 @@ function BatchFrame({
     </div>
   );
 }
-function ResizeHandle({
+const resizeHandles: {
+  handle: ResizeCorner;
+  label: string;
+  cursor: string;
+}[] = [
+  {
+    handle: "top-left",
+    label: "左上角",
+    cursor: "nwse-resize",
+  },
+  {
+    handle: "top",
+    label: "上边",
+    cursor: "ns-resize",
+  },
+  {
+    handle: "top-right",
+    label: "右上角",
+    cursor: "nesw-resize",
+  },
+  {
+    handle: "right",
+    label: "右边",
+    cursor: "ew-resize",
+  },
+  {
+    handle: "bottom-right",
+    label: "右下角",
+    cursor: "nwse-resize",
+  },
+  {
+    handle: "bottom",
+    label: "下边",
+    cursor: "ns-resize",
+  },
+  {
+    handle: "bottom-left",
+    label: "左下角",
+    cursor: "nesw-resize",
+  },
+  {
+    handle: "left",
+    label: "左边",
+    cursor: "ew-resize",
+  },
+];
+function ResizeHandles({
+  scale,
   onMouseDown,
   onKeyDown,
 }: {
+  scale: number;
   onMouseDown: (event: React.MouseEvent, corner: ResizeCorner) => void;
-  onKeyDown: (event: React.KeyboardEvent) => void;
+  onKeyDown: (event: React.KeyboardEvent, corner: ResizeCorner) => void;
 }) {
-  return (
-    <Button
-      variant="ghost"
-      size="icon-lg"
-      aria-label="调整节点大小"
-      title="拖动调整大小；方向键微调，Shift 加速"
-      data-canvas-no-pan
-      className="canvas-node-resize absolute right-0 bottom-0 z-50 cursor-nwse-resize rounded-tl-xl rounded-br-xl"
-      onMouseDown={(event) => {
-        if (event.button === 0) onMouseDown(event, "bottom-right");
-      }}
-      onPointerDown={(event) => event.stopPropagation()}
-      onClick={(event) => event.stopPropagation()}
-      onDoubleClick={(event) => event.stopPropagation()}
-      onKeyDown={onKeyDown}
-    >
-      <span aria-hidden="true" className="canvas-node-resize-mark" />
-    </Button>
-  );
+  // Hot zones stay in screen pixels while the node body follows canvas zoom.
+  const unit = 1 / Math.max(scale, 0.01);
+  return resizeHandles.map(({ handle, label, cursor }) => {
+    const corner = handle.includes("-");
+    const horizontal = handle === "top" || handle === "bottom";
+    const position: React.CSSProperties = corner
+      ? {
+          [handle.includes("left") ? "left" : "right"]: -16 * unit,
+          [handle.includes("top") ? "top" : "bottom"]: -16 * unit,
+          width: 24 * unit,
+          height: 24 * unit,
+        }
+      : horizontal
+        ? {
+            left: 12 * unit,
+            right: 12 * unit,
+            [handle]: -9 * unit,
+            width: "auto",
+            height: 10 * unit,
+          }
+        : {
+            top: 12 * unit,
+            bottom: 12 * unit,
+            [handle]: -9 * unit,
+            width: 10 * unit,
+            height: "auto",
+          };
+    return (
+      <Button
+        key={handle}
+        variant="ghost"
+        size="icon-lg"
+        aria-label={`调整节点大小：${label}`}
+        title={`拖动或方向键调整${label}${handle.includes("-") ? "" : "；Enter 重置该方向尺寸"}`}
+        data-canvas-no-pan
+        className="canvas-node-resize absolute z-50"
+        style={{ ...position, cursor }}
+        onMouseDown={(event) => {
+          if (event.button === 0) onMouseDown(event, handle);
+        }}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
+        onDoubleClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => onKeyDown(event, handle)}
+      >
+        {handle === "bottom-right" && (
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 16 16"
+            className="canvas-node-resize-mark"
+            style={{
+              width: 16 * unit,
+              height: 16 * unit,
+              right: 22 * unit,
+              bottom: 22 * unit,
+            }}
+          >
+            <path
+              d="M4 12 12 4M8 12 12 8"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              strokeLinecap="round"
+            />
+          </svg>
+        )}
+      </Button>
+    );
+  });
 }
 
 function ConnectionHandleDot({
+  scale,
   side,
   visible,
   onMouseDown,
 }: {
+  scale: number;
   side: "left" | "right";
   visible: boolean;
   onMouseDown: (event: React.MouseEvent) => void;
 }) {
   const theme = canvasThemes[useThemeStore((state) => state.theme)];
+  const unit = 1 / Math.max(scale, 0.01);
 
   return (
     <div
       data-canvas-no-pan
       className={cn(
-        "absolute top-1/2 z-30 flex size-11 -translate-y-1/2 cursor-crosshair items-center justify-center transition-opacity duration-150",
-        side === "left" ? "-left-[22px]" : "-right-[22px]",
+        "absolute top-1/2 z-30 flex -translate-y-1/2 cursor-crosshair items-center justify-center transition-opacity duration-150",
         visible
           ? "pointer-events-auto opacity-100"
           : "pointer-events-none opacity-0",
       )}
+      style={{ width: 36 * unit, height: 36 * unit, [side]: -38 * unit }}
       onMouseDown={onMouseDown}
     >
       <Button
@@ -1794,9 +1908,18 @@ function ConnectionHandleDot({
         size="icon-xs"
         aria-label={side === "left" ? "连接输入节点" : "连接输出节点"}
         className="canvas-node-port"
-        style={{ background: theme.node.panel, borderColor: theme.node.muted }}
+        style={{
+          background: "transparent",
+          borderColor: theme.node.muted,
+          width: 18 * unit,
+          height: 18 * unit,
+          borderWidth: unit,
+        }}
       >
-        <Plus aria-hidden="true" />
+        <Plus
+          aria-hidden="true"
+          style={{ width: 12 * unit, height: 12 * unit }}
+        />
       </Button>
     </div>
   );

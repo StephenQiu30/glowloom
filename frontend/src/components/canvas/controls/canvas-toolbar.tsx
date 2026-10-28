@@ -88,12 +88,12 @@ export function CanvasToolbar({
           data-canvas-no-zoom
           className="canvas-global-actions flex shrink-0 items-center gap-1"
         >
-          <ThemeToggle />
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon-lg"
+                className="canvas-more-trigger"
                 aria-label="更多画布操作"
                 title="更多画布操作"
               >
@@ -150,6 +150,10 @@ export function CanvasToolbar({
                 </CanvasGuideDialog>
               </div>
               <FieldGroup>
+                <Field orientation="horizontal">
+                  <FieldLabel>主题</FieldLabel>
+                  <ThemeToggle />
+                </Field>
                 <Field>
                   <FieldLabel>画布背景</FieldLabel>
                   <ToggleGroup

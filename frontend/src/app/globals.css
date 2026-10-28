@@ -51,6 +51,12 @@
 }
 
 :root {
+  /* REQ-JC-007: measured canvas surfaces, independent of ordinary page surfaces. */
+  --canvas-reference-background: #0d0d0d;
+  --canvas-reference-toolbar: #202022;
+  --canvas-reference-text-start: #222222;
+  --canvas-reference-text-end: #141414;
+  --canvas-reference-foreground: #ffffff;
   --canvas-presence-online: #16a34a;
   --layout-header: 64px;
   --layout-sidebar: 240px;

@@ -1,0 +1,21 @@
+{
+  "fileKey": "uLqmeRWuQuzfrp9xOYg6FT",
+  "sessionId": "2c1e62e7-5a29-44a6-a2f1-4d6f892329ce",
+  "pageId": "1361:10",
+  "referenceFrame": "1510:105337",
+  "referenceSize": [1869, 930],
+  "components": {
+    "header": "3061:46512",
+    "toolbar": "3061:46607",
+    "viewport": "3061:46719",
+    "ai": "3061:46752"
+  },
+  "variableCollectionId": "VariableCollectionId:3064:46571",
+  "sceneFrames": ["1510:105337", "1436:102875", "1436:102900", "3041:46153", "1510:105536", "1510:106902", "1510:105434", "1530:21316", "1530:21491", "1592:20971", "1809:21170"],
+  "limits": [
+    "Figma未提供PingFang SC，Noto Sans SC只用于继续排稿，不作为字体一致接受",
+    "部分图标仍来自现有库或几何重建；品牌、头像、示例积分不同",
+    "共享chrome替换不等于旧原型跳转全部迁移",
+    "源DOM为1869x873，设计为1869x930；底部与垂直居中控件按高度重新定位"
+  ]
+}

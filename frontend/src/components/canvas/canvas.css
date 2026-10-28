@@ -245,6 +245,125 @@ html:has(.canvas-controls-layout) {
   .canvas-status-panel > div {
     flex-wrap: wrap;
   }
+  /* Desktop chrome follows the measured Jimeng sizes; touch layout stays separate. */
+  @container canvas (min-width: 641px) {
+    .canvas-controls-layout {
+      padding: 10px 12px 12px;
+      font-family:
+        "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+    }
+    .canvas-controls-layout :is(button, a[data-size]) {
+      min-height: 0;
+    }
+    .canvas-control-header,
+    .canvas-control-footer {
+      padding-inline: 0;
+    }
+    .canvas-control-header {
+      min-height: 40px;
+      height: 40px;
+      gap: 8px;
+    }
+    .canvas-control-header :is(button, a[data-size]) {
+      height: 40px;
+    }
+    .canvas-control-header [data-size="icon-lg"],
+    .canvas-controls-layout .canvas-brand {
+      width: 40px;
+      height: 40px;
+    }
+    .canvas-control-header [data-slot="avatar-group"] button {
+      width: 32px;
+      height: 32px;
+    }
+    .canvas-project-trigger {
+      font-size: 13px;
+      line-height: 22px;
+      font-weight: 500;
+      gap: 8px;
+      padding-inline: 4px;
+    }
+    .canvas-control-header .canvas-project-trigger[data-size] svg {
+      width: 12px;
+      height: 12px;
+    }
+    .canvas-control-header .canvas-node-summary-trigger {
+      height: 28px;
+      padding-inline: 8px;
+      font-size: 10px;
+      font-weight: 400;
+      line-height: 18px;
+    }
+    .canvas-save-status {
+      font-size: 10px;
+      line-height: 18px;
+    }
+    .canvas-more-trigger,
+    .canvas-share-trigger {
+      border-radius: 8px;
+      background: var(--canvas-toolbar);
+    }
+    .canvas-share-trigger {
+      font-size: 13px;
+      line-height: 22px;
+    }
+    .canvas-action-dock,
+    .canvas-dock-surface {
+      border-radius: 12px;
+    }
+    .canvas-dock-surface {
+      width: 48px;
+      gap: 2px;
+      padding: 4px 4px 8px;
+      border: 0;
+    }
+    .canvas-dock-surface [data-size="icon-lg"] {
+      width: 40px;
+      height: 40px;
+      padding: 10px;
+      border-radius: 8px;
+    }
+    .canvas-dock-surface [data-size] svg:not([class*="size-"]) {
+      width: 20px;
+      height: 20px;
+    }
+    .canvas-control-footer {
+      min-height: 34px;
+    }
+    .canvas-viewport-controls {
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .canvas-viewport-controls [data-size="icon-lg"] {
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border-radius: 6px;
+    }
+    .canvas-viewport-controls [data-size] svg:not([class*="size-"]) {
+      width: 12px;
+      height: 12px;
+    }
+    .canvas-viewport-controls > [data-canvas-view-control] {
+      width: 48px;
+      min-width: 48px;
+      height: 28px;
+      padding-inline: 8px;
+      font-size: 10px;
+      line-height: 18px;
+    }
+    .canvas-assistant-action button {
+      width: 118px;
+      height: 34px;
+      padding: 0;
+      gap: 4px;
+      border-radius: 20px;
+      font-size: 13px;
+      line-height: 20px;
+    }
+  }
   @container canvas (max-width: 640px) {
     .canvas-control-header {
       flex-wrap: wrap;
@@ -739,16 +858,24 @@ html:has(.canvas-controls-layout) {
     font-size: 0.75rem;
     font-weight: 400;
   }
-  .canvas-node-title[data-slot="button"] {
-    height: 1.25rem;
-    gap: 0.375rem;
+  .canvas-node-heading {
+    display: flex;
+    align-items: center;
+    height: 24px;
+  }
+  .canvas-node-title {
+    height: 1.5rem;
+    gap: 0.5rem;
     color: var(--muted-foreground);
-    font-size: 0.875rem;
+    font-family:
+      "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+    font-size: 13px;
+    line-height: 20px;
     font-weight: 400;
   }
   .canvas-node-title svg {
-    width: 0.875rem;
-    height: 0.875rem;
+    width: 1rem;
+    height: 1rem;
   }
   .canvas-node-port[data-slot="button"] {
     width: 1.75rem;
@@ -996,6 +1123,11 @@ html:has(.canvas-controls-layout) {
     height: 2.5rem;
   }
 }
+.dark .canvas-workspace {
+  --canvas-background: var(--canvas-reference-background);
+  --canvas-toolbar: var(--canvas-reference-toolbar);
+}
+
 .canvas-workspace {
   --canvas-background: var(--background);
   --canvas-dot: color-mix(in srgb, var(--foreground) 16%, transparent);
@@ -1274,26 +1406,36 @@ html:has(.canvas-controls-layout) {
 
 @layer utilities {
   .canvas-node-resize[data-slot="button"] {
-    width: 44px;
-    height: 44px;
+    min-width: 0;
+    min-height: 0;
     padding: 0;
     background: transparent;
-    color: var(--muted-foreground);
+    border: 0;
+    border-radius: 0;
+    color: color-mix(
+      in srgb,
+      var(--canvas-reference-foreground) 20%,
+      transparent
+    );
     transform: none;
     translate: none;
   }
   .canvas-node-resize-mark {
     position: absolute;
-    right: 7px;
-    bottom: 7px;
-    width: 10px;
-    height: 10px;
-    background: repeating-linear-gradient(
-      135deg,
-      transparent 0 3px,
-      currentColor 3px 4px
+    pointer-events: none;
+  }
+  .canvas-text-placeholder {
+    font-family:
+      "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+    font-size: 13px;
+    line-height: 22px;
+    color: color-mix(
+      in srgb,
+      var(--canvas-reference-foreground) 60%,
+      transparent
     );
-    clip-path: polygon(100% 0, 100% 100%, 0 100%);
-    opacity: 0.65;
+  }
+  .node-element[data-node-type="text"] .canvas-node-body {
+    border-radius: 8px;
   }
 }

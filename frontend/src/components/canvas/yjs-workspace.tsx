@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { CanvasYjsLiveSession } from "./yjs-live-session";
 import { CanvasParticipants } from "./canvas-participants";
@@ -30,6 +30,9 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import type { RecoveryField } from "@glowloom/canvas-collab/recovery";
+import { getProject } from "@/api/projects";
+import { requireProject, type Project } from "@/components/projects/project";
+import { ProjectRenameDialog } from "@/components/projects/project-rename-dialog";
 
 export function YjsCanvasWorkspace(props: {
   canvasID: string;
@@ -78,6 +81,32 @@ function CollaborativeEditor({
     client.getSnapshot,
   );
   const [rename, setRename] = useState<string | null>(null);
+  const [renameProject, setRenameProject] = useState<Project | null>(null);
+  const renameRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => renameRequest.current?.abort(), []);
+  const openRename = async () => {
+    if (!view.writable || view.dirty || renameRequest.current) return;
+    const controller = new AbortController();
+    renameRequest.current = controller;
+    try {
+      const project = requireProject(
+        await getProject({ pid: projectID }, { signal: controller.signal }),
+      );
+      if (controller.signal.aborted) return;
+      if (project.id !== projectID) throw new Error("画布所属项目不匹配");
+      // The main canvas name belongs to the project's lifecycle and revision.
+      // Sending it as a Yjs title edit is rejected and seals the local input.
+      if (project.canvas_id === canvasID) setRenameProject(project);
+      else setRename(client.getSnapshot().dto?.name ?? "画布");
+    } catch (cause) {
+      if (!controller.signal.aborted)
+        toast.error(
+          cause instanceof Error ? cause.message : "无法读取画布名称",
+        );
+    } finally {
+      if (renameRequest.current === controller) renameRequest.current = null;
+    }
+  };
   const [review, setReview] = useState<{
     sourceId: string;
     fields: RecoveryField[];
@@ -139,9 +168,10 @@ function CollaborativeEditor({
                 {...controls}
                 title={view.dto!.name ?? "画布"}
                 canDeleteCanvas={false}
+                canRenameCanvas={view.writable && !view.dirty}
                 canSwitchCanvas={!view.dirty}
                 onDeleteProject={() => {}}
-                onRenameProject={() => setRename(view.dto?.name ?? "画布")}
+                onRenameProject={() => void openRename()}
                 participantsControl={
                   <CanvasParticipants
                     client={client}
@@ -231,6 +261,18 @@ function CollaborativeEditor({
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        {renameProject && (
+          <ProjectRenameDialog
+            project={renameProject}
+            open
+            onOpenChange={(open) => {
+              if (!open) {
+                setRenameProject(null);
+                client.retry();
+              }
+            }}
+          />
+        )}
         <Dialog
           open={!!review}
           onOpenChange={(open) => {

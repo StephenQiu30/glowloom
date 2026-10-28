@@ -20,6 +20,7 @@ export function createCanvasNode(
   type: CanvasNodeTypeId,
   position: Position,
   metadata?: CanvasNodeMetadata,
+  existingNodes: CanvasNodeData[] = [],
 ): CanvasNodeData {
   const spec = getNodeSpec(type);
   const id = crypto.randomUUID();
@@ -27,7 +28,7 @@ export function createCanvasNode(
   return {
     id,
     type,
-    title: spec.title,
+    title: nextCanvasNodeTitle(spec.title, type, existingNodes),
     position: {
       x: position.x - spec.width / 2,
       y: position.y - spec.height / 2,
@@ -138,4 +139,23 @@ export function applyNodeConfigPatch(
         },
       }
     : next;
+}
+
+/** Names are display labels; UUIDs remain the only node identity. */
+export function nextCanvasNodeTitle(
+  title: string,
+  type: CanvasNodeTypeId,
+  nodes: CanvasNodeData[],
+) {
+  let greatest = 0;
+  const prefix = `${title} `;
+  for (const node of nodes) {
+    if (node.type !== type || !node.title?.startsWith(prefix)) continue;
+    const suffix = node.title.slice(prefix.length);
+    if (/^[1-9]\d*$/.test(suffix)) {
+      const value = Number(suffix);
+      if (Number.isSafeInteger(value)) greatest = Math.max(greatest, value);
+    }
+  }
+  return `${title} ${greatest + 1}`;
 }

@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/tooltip";
 import { PanelTop, Link2, Focus, Minus, Plus, Check } from "lucide-react";
 import { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { CANVAS_MIN_SCALE, CANVAS_MAX_SCALE } from "../lib/canvas-viewport";
 
 export function CanvasZoomControls({
   canvasTool = "select",
@@ -42,6 +44,8 @@ export function CanvasZoomControls({
   onToggleSnap: () => void;
 }) {
   const [zoomOpen, setZoomOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [error, setError] = useState("");
   const percent = Math.round(scale * 100);
   return (
     <div
@@ -88,6 +92,10 @@ export function CanvasZoomControls({
         open={zoomOpen}
         onOpenChange={(open) => {
           setZoomOpen(open);
+          if (open) {
+            setDraft(String(percent));
+            setError("");
+          }
         }}
       >
         <PopoverTrigger asChild>
@@ -109,6 +117,46 @@ export function CanvasZoomControls({
           data-canvas-no-zoom
         >
           <PopoverTitle className="sr-only">缩放</PopoverTitle>
+          <form
+            className="mb-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const input = draft.trim().replace(/%$/, "").trim();
+              const value = Number(input);
+              if (!input || !Number.isFinite(value) || value <= 0) {
+                setError("请输入有效的缩放比例");
+                return;
+              }
+              onScaleChange(
+                Math.min(
+                  CANVAS_MAX_SCALE,
+                  Math.max(CANVAS_MIN_SCALE, value / 100),
+                ),
+              );
+              setZoomOpen(false);
+            }}
+          >
+            <Input
+              aria-label="缩放比例（百分比）"
+              inputMode="decimal"
+              value={draft}
+              aria-invalid={!!error}
+              onChange={(event) => {
+                setDraft(event.target.value);
+                setError("");
+              }}
+              onKeyDown={(event) => {
+                if (event.nativeEvent.isComposing && event.key === "Enter")
+                  event.preventDefault();
+              }}
+            />
+            <p
+              className="mt-1 text-xs text-muted-foreground"
+              role={error ? "alert" : undefined}
+            >
+              {error || "5%–500%，按 Enter 应用"}
+            </p>
+          </form>
           {[
             {
               label: "放大视图",

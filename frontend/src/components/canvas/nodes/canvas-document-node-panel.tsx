@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useCopyText } from "@/components/canvas/runtime/hooks/use-copy-text";
 import { ArrowUp, LoaderCircle, Maximize2, X } from "lucide-react";
 import { notifyError } from "@/components/canvas/runtime/components/feedback/error-notification";
@@ -66,6 +66,7 @@ export function CanvasDocumentNodePanel({
   const previews = useCanvasReferencePreviews(mentionReferences);
   const copyText = useCopyText();
   const [expanded, setExpanded] = useState(false);
+  const availabilityId = useId();
   const expandButtonRef = useRef<HTMLButtonElement>(null);
   const source =
     node.documentData ??
@@ -91,11 +92,18 @@ export function CanvasDocumentNodePanel({
     !!run?.pending && !completedGenerationStates.has(run.state ?? "");
   const canGenerate =
     supported &&
-    generation?.ready !== false &&
     !!onGenerate &&
     (processing
       ? workflow?.enabled && workflow.accepting && !workflow.busy
-      : !!selected) &&
+      : generation?.ready === true &&
+        !!selected &&
+        !!(
+          node.metadata?.richText
+            ? documentText(node.metadata.richText.content)
+            : node.type === "text"
+              ? node.metadata?.content
+              : node.metadata?.prompt
+        )?.trim()) &&
     !pending &&
     !submitting;
   const generate = () => {
@@ -197,16 +205,21 @@ export function CanvasDocumentNodePanel({
                 : "生成"
           }
           disabled={!canGenerate}
+          aria-describedby={
+            !processing && !generation ? availabilityId : undefined
+          }
           title={
             processing
               ? agent
                 ? "按保存快照运行 Agent（Mock）"
                 : "按保存快照运行确定性拼接"
-              : !selected
-                ? "请先选择模型"
-                : pending
-                  ? "生成中"
-                  : undefined
+              : !generation
+                ? "当前画布的生成服务尚未接入"
+                : !selected
+                  ? "请先选择模型"
+                  : pending
+                    ? "生成中"
+                    : undefined
           }
           onClick={generate}
         >
@@ -400,6 +413,15 @@ export function CanvasDocumentNodePanel({
         />
       )}
       {!expanded && generationControls}
+      {supported && !processing && !generation && (
+        <p
+          id={availabilityId}
+          role="status"
+          className="px-3 pb-3 text-xs text-muted-foreground"
+        >
+          当前画布的生成服务尚未接入，提示词会随画布保存。
+        </p>
+      )}
       {node.type === "text" &&
         run &&
         ["UNCONFIRMED", "SUBMISSION_UNKNOWN", "ARCHIVE_FAILED"].includes(

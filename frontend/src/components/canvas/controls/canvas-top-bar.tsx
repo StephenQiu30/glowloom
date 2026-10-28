@@ -21,9 +21,12 @@ import { toast } from "sonner";
 import { Search, UserRound, Link2 } from "lucide-react";
 import Link from "next/link";
 import { BrandMark } from "@/components/canvas/runtime/components/layout/shell/brand-mark";
+import { CanvasNodeSummary } from "./canvas-node-summary";
+import type { CanvasNodeData } from "../types/canvas";
 
 export function CanvasTopBar({
   title,
+  nodes,
   onRenameProject,
   onExportProject,
   exportingProject,
@@ -38,10 +41,12 @@ export function CanvasTopBar({
   onProjectCanvases,
   canSwitchCanvas = true,
   canDeleteCanvas = true,
+  canRenameCanvas = true,
   projectCanvas = false,
   projectPath,
 }: {
   title: string;
+  nodes?: CanvasNodeData[];
   onRenameProject: () => void;
   canUndo: boolean;
   canRedo: boolean;
@@ -62,6 +67,7 @@ export function CanvasTopBar({
   onProjectCanvases?: () => void;
   canSwitchCanvas?: boolean;
   canDeleteCanvas?: boolean;
+  canRenameCanvas?: boolean;
   projectCanvas?: boolean;
   projectPath?: string;
 }) {
@@ -133,8 +139,8 @@ export function CanvasTopBar({
                 className="canvas-project-trigger"
                 aria-label="打开画布菜单"
               >
-                <ChevronDown data-icon="inline-start" />
                 <span className="truncate">{title}</span>
+                <ChevronDown data-icon="inline-end" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
@@ -159,7 +165,11 @@ export function CanvasTopBar({
                     返回所属项目
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem className="h-9" onSelect={onRenameProject}>
+                <DropdownMenuItem
+                  className="h-9"
+                  disabled={!canRenameCanvas}
+                  onSelect={onRenameProject}
+                >
                   <Pencil />
                   重命名画布
                 </DropdownMenuItem>
@@ -183,6 +193,7 @@ export function CanvasTopBar({
             </DropdownMenuContent>
           </DropdownMenu>
           <div className="canvas-status-panel flex items-center gap-1">
+            {nodes && <CanvasNodeSummary nodes={nodes} />}
             {workflowControl}
             {saveControl === undefined ? (
               <Tooltip>
@@ -233,6 +244,7 @@ export function CanvasTopBar({
               <Button
                 variant="ghost"
                 size="default"
+                className="canvas-share-trigger"
                 aria-label="复制画布链接"
                 onClick={() => {
                   void navigator.clipboard

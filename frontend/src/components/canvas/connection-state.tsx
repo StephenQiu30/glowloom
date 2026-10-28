@@ -13,6 +13,8 @@ export function canvasConnectionMessage(message: string): string {
     unauthorized: "登录已失效，请重新登录后打开画布。",
     not_found: "画布不存在或当前账号无法访问。",
     network_error: "连接已中断，请检查网络后重试。",
+    MAIN_CANVAS_MANAGED_BY_PROJECT:
+      "主画布名称由所属项目管理，请从画布菜单重新命名。已有输入保留在待恢复列表中。",
   };
   if (messages[message]) return messages[message];
   // Locally authored recovery instructions retain their precise save semantics.
