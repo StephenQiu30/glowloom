@@ -128,7 +128,7 @@ func (s *Store) confirmSingleQuote(ctx context.Context, actor identityapp.Princi
 			stale = &QuoteStaleError{Reasons: reasons}
 			return nil
 		}
-		if err := checkWorkflowInputsForSubmission(tx, quoted.ID, quoted.ProjectID); err != nil {
+		if err := s.checkWorkflowInputsForSubmission(tx, quoted.ID, quoted.ProjectID, actor); err != nil {
 			return err
 		}
 		var model struct{ ModelKey string }

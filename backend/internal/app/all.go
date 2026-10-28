@@ -14,7 +14,7 @@ import (
 // A role failure cancels the others; the process waits for every role to exit.
 func RunAll(ctx context.Context, cfg config.Config, logger *zap.Logger) error {
 	queues := "flow,media"
-	if cfg.CredentialPrivateKeyFile != "" {
+	if cfg.HasCredentialPrivateKey() {
 		queues += ",provider"
 	}
 	roles := []struct {

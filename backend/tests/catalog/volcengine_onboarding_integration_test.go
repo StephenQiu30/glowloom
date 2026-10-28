@@ -9,6 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
+
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialseal"
@@ -19,8 +22,6 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/providerhttp"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
 )
 
 func TestVolcengineWholeCatalogAndSpeechOnboardingUseRealStores(t *testing.T) {

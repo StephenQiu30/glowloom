@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -24,6 +25,8 @@ func verifyTransferredObject(ctx context.Context, objects ProjectCopyObjects, ph
 }
 
 func transferPrivateObject(ctx context.Context, objects ProjectCopyObjects, physical PhysicalTransferObjects, tempDir string, object ProjectCopyObject, recordDigest func(string, int64) error, beginWrite func() error, confirm func(string, int64) error) (resultErr error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
 	if object.Status == "verified" {
 		if err := verifyTransferredObject(ctx, objects, physical, object); err != nil {
 			return &ProjectCopyTransferError{Code: "object_readback_unverified", NeedsReconciliation: true, Cause: err}

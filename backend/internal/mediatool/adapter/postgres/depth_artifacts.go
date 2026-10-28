@@ -41,7 +41,7 @@ func loadDepthArtifact(tx *gorm.DB, r depthRow) (application.DepthArtifact, bool
 }
 func readDepthObjects(tx *gorm.DB, r depthRow) ([]application.DepthObject, error) {
 	var rows []application.DepthObject
-	if err := tx.Raw(`SELECT kind,object_key,sha256,byte_size,mime_type,write_started,delete_started,status FROM mediatool.depth_object WHERE job_id=? AND attempt=? ORDER BY CASE kind WHEN 'original' THEN 0 WHEN 'poster' THEN 1 ELSE 2 END`, r.ID, r.Attempt).Scan(&rows).Error; err != nil {
+	if err := tx.Raw(`SELECT kind,object_key,sha256,byte_size,mime_type,write_started,delete_started,status,object_location_id FROM mediatool.depth_object WHERE job_id=? AND attempt=? ORDER BY CASE kind WHEN 'original' THEN 0 WHEN 'poster' THEN 1 ELSE 2 END`, r.ID, r.Attempt).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 	a, found, err := loadDepthArtifact(tx, r)
@@ -156,7 +156,11 @@ func (s *DepthStore) FreezeArtifact(ctx context.Context, id application.DepthWor
 			return err
 		}
 		for _, o := range a.Objects {
-			if err := tx.Exec(`INSERT INTO mediatool.depth_object(job_id,attempt,kind,object_key,sha256,byte_size,mime_type,updated_at) VALUES(?,?,?,?,?,?,?,?)`, r.ID, r.Attempt, o.Kind, o.ObjectKey, o.SHA256, o.ByteSize, o.MIMEType, now).Error; err != nil {
+			locationID, err := s.reserveDepthObject(ctx, tx, r, o.ObjectKey)
+			if err != nil {
+				return err
+			}
+			if err := tx.Exec(`INSERT INTO mediatool.depth_object(job_id,attempt,kind,object_key,sha256,byte_size,mime_type,object_location_id,updated_at) VALUES(?,?,?,?,?,?,?,?,?)`, r.ID, r.Attempt, o.Kind, o.ObjectKey, o.SHA256, o.ByteSize, o.MIMEType, locationID, now).Error; err != nil {
 				return err
 			}
 		}

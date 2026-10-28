@@ -27,6 +27,7 @@ type SourceStore struct {
 	importAuthority *application.ImportAuthority
 	importRecovery  bool
 	characters      CharacterReferenceFactory
+	locations       SourceObjectLocationFactory
 }
 
 // NewSourceStore injects the own database and the workspace transaction factory.
@@ -124,6 +125,9 @@ func findCommand(tx *gorm.DB, actor identityapp.Principal, project, key uuid.UUI
 	var saved application.PendingWrite
 	if err := json.Unmarshal([]byte(row.Plan), &saved.Plan); err != nil {
 		return nil, application.ErrUnavailable
+	}
+	if err := loadPlanLocations(tx, &saved.Plan); err != nil {
+		return nil, err
 	}
 	if row.Response != nil {
 		var response application.SourceReceipt
@@ -234,6 +238,9 @@ func (s *SourceStore) BeginWrite(ctx context.Context, actor identityapp.Principa
 		if err := reuseOrNumberVersion(tx, actor, state, &p); err != nil {
 			return err
 		}
+		if err := s.admitSourceLocations(ctx, tx, &p); err != nil {
+			return err
+		}
 		data, err := json.Marshal(p)
 		if err != nil {
 			return err
@@ -248,10 +255,10 @@ func (s *SourceStore) BeginWrite(ctx context.Context, actor identityapp.Principa
 			return err
 		}
 		for _, object := range p.Objects {
-			if err := exactlyOne(tx.Exec(`INSERT INTO script.object_intent(actor_id,request_id,org_id,project_id,object_key,sha256,byte_size,mime) VALUES(?,?,?,?,?,?,?,?)`, actor.ID, p.Command.Key, actor.OrgID, p.Command.ProjectID, object.Key, object.SHA256, object.ByteSize, object.MIME)); err != nil {
+			if err := exactlyOne(tx.Exec(`INSERT INTO script.object_intent(actor_id,request_id,org_id,project_id,object_key,sha256,byte_size,mime,object_location_id) VALUES(?,?,?,?,?,?,?,?,?)`, actor.ID, p.Command.Key, actor.OrgID, p.Command.ProjectID, object.Key, object.SHA256, object.ByteSize, object.MIME, nullableLocation(object.LocationID))); err != nil {
 				return err
 			}
-			if err := exactlyOne(tx.Exec(`INSERT INTO script.object_state(object_key,updated_at) VALUES(?,?)`, object.Key, p.CreatedAt)); err != nil {
+			if err := exactlyOne(tx.Exec(`INSERT INTO script.object_state(object_key,updated_at,object_location_id) VALUES(?,?,?)`, object.Key, p.CreatedAt, nullableLocation(object.LocationID))); err != nil {
 				return err
 			}
 		}
@@ -278,6 +285,9 @@ func (s *SourceStore) FinishWrite(ctx context.Context, actor identityapp.Princip
 		if prior.Receipt != nil {
 			result = *prior.Receipt
 			return nil
+		}
+		if !slices.Equal(prior.Plan.Objects, p.Objects) {
+			return application.ErrIdempotencyConflict
 		}
 		if !p.Reuse {
 			if err := requireSourceIO(tx, p, nil, true); err != nil {
@@ -320,6 +330,14 @@ func (s *SourceStore) FinishWrite(ctx context.Context, actor identityapp.Princip
 		}
 		if p.Version.VersionNo != latest+1 {
 			return application.ErrConflict
+		}
+		if p.StorageIntentID != uuid.Nil {
+			if s.locations == nil || s.locations(tx) == nil {
+				return application.ErrUnavailable
+			}
+			if err := s.locations(tx).Accept(ctx, p.StorageIntentID, p.Objects); err != nil {
+				return err
+			}
 		}
 		for _, source := range p.NewSources {
 			if err := insertSource(ctx, tx, source); err != nil {

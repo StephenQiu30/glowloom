@@ -38,7 +38,7 @@ func requireSourceIO(tx *gorm.DB, p application.WritePlan, owner *uuid.UUID, req
 	}
 	if requireObjects {
 		var incomplete bool
-		if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM script.object_intent i JOIN script.object_state s USING(object_key) WHERE i.actor_id=? AND i.request_id=? AND (NOT s.confirmed OR s.removed))`, p.ActorID, p.Command.Key).Scan(&incomplete).Error; err != nil {
+		if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM script.object_intent i JOIN script.object_state s ON s.object_key=i.object_key AND s.object_location_id IS NOT DISTINCT FROM i.object_location_id WHERE i.actor_id=? AND i.request_id=? AND (NOT s.confirmed OR s.removed))`, p.ActorID, p.Command.Key).Scan(&incomplete).Error; err != nil {
 			return err
 		}
 		if incomplete {
@@ -49,7 +49,7 @@ func requireSourceIO(tx *gorm.DB, p application.WritePlan, owner *uuid.UUID, req
 }
 func exactSourceObject(tx *gorm.DB, p application.WritePlan, f domain.ObjectFact) error {
 	var count int64
-	if err := tx.Raw(`SELECT count(*) FROM script.object_intent WHERE actor_id=? AND request_id=? AND org_id=? AND project_id=? AND object_key=? AND sha256=? AND byte_size=? AND mime=?`, p.ActorID, p.Command.Key, p.OrgID, p.Command.ProjectID, f.Key, f.SHA256, f.ByteSize, f.MIME).Scan(&count).Error; err != nil {
+	if err := tx.Raw(`SELECT count(*) FROM script.object_intent WHERE actor_id=? AND request_id=? AND org_id=? AND project_id=? AND object_key=? AND sha256=? AND byte_size=? AND mime=? AND object_location_id IS NOT DISTINCT FROM ?::uuid`, p.ActorID, p.Command.Key, p.OrgID, p.Command.ProjectID, f.Key, f.SHA256, f.ByteSize, f.MIME, nullableLocation(f.LocationID)).Scan(&count).Error; err != nil {
 		return err
 	}
 	if count != 1 {
@@ -110,7 +110,15 @@ func (s *SourceStore) BeginSourceObject(ctx context.Context, actor identityapp.P
 		if err := exactSourceObject(tx, p, f); err != nil {
 			return err
 		}
-		return exactlyOne(tx.Exec(`UPDATE script.object_state SET put_started=true,updated_at=now() WHERE object_key=? AND NOT removed`, f.Key))
+		if p.StorageIntentID != uuid.Nil {
+			if s.locations == nil || s.locations(tx) == nil {
+				return application.ErrUnavailable
+			}
+			if err := s.locations(tx).Begin(ctx, p.StorageIntentID, f); err != nil {
+				return err
+			}
+		}
+		return exactlyOne(tx.Exec(`UPDATE script.object_state SET put_started=true,updated_at=now() WHERE object_key=? AND object_location_id IS NOT DISTINCT FROM ?::uuid AND NOT removed`, f.Key, nullableLocation(f.LocationID)))
 	})
 }
 
@@ -123,7 +131,15 @@ func (s *SourceStore) ConfirmSourceObject(ctx context.Context, actor identityapp
 		if err := exactSourceObject(tx, p, f); err != nil {
 			return err
 		}
-		return exactlyOne(tx.Exec(`UPDATE script.object_state SET confirmed=true,updated_at=now() WHERE object_key=? AND put_started AND NOT removed`, f.Key))
+		if p.StorageIntentID != uuid.Nil {
+			if s.locations == nil || s.locations(tx) == nil {
+				return application.ErrUnavailable
+			}
+			if err := s.locations(tx).Confirm(ctx, p.StorageIntentID, f); err != nil {
+				return err
+			}
+		}
+		return exactlyOne(tx.Exec(`UPDATE script.object_state SET confirmed=true,updated_at=now() WHERE object_key=? AND object_location_id IS NOT DISTINCT FROM ?::uuid AND put_started AND NOT removed`, f.Key, nullableLocation(f.LocationID)))
 	})
 }
 

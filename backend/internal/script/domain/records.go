@@ -10,10 +10,12 @@ import (
 
 // ObjectFact freezes private bytes. It is never a public object URL or path input.
 type ObjectFact struct {
-	Key      string `json:"key"`
-	SHA256   string `json:"sha256"`
-	ByteSize int64  `json:"byte_size"`
-	MIME     string `json:"mime"`
+	// LocationID is physical owner metadata, excluded from semantic manifests.
+	LocationID uuid.UUID `json:"-"`
+	Key        string    `json:"key"`
+	SHA256     string    `json:"sha256"`
+	ByteSize   int64     `json:"byte_size"`
+	MIME       string    `json:"mime"`
 }
 
 // Validate checks immutable integrity facts before any object operation.

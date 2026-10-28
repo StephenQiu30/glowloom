@@ -25,8 +25,9 @@ import (
 // Store owns database transactions and current project access checks.
 type Store struct {
 	projectAuthority
-	db    *gorm.DB
-	media MediaReaderFactory
+	db       *gorm.DB
+	media    MediaReaderFactory
+	subjects SubjectSourcesFactory
 }
 
 // MediaReaderFactory binds the media application query to the canvas transaction.

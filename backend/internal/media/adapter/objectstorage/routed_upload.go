@@ -48,10 +48,9 @@ func (s *RoutedUploadObjects) CreateUploadObject(ctx context.Context, target app
 	if err != nil {
 		return domain.ObjectLocation{}, err
 	}
-	if _, err := file.File.Seek(0, io.SeekStart); err != nil {
-		return location, err
-	}
-	err = s.registry.PutIfAbsent(ctx, transportRef(ref), file.File, file.Size, file.MIMEType, file.SHA256)
+	// Keep the caller's temporary file open even if the native SDK closes its body.
+	body := io.NewSectionReader(file.File, 0, file.Size)
+	err = s.registry.PutIfAbsent(ctx, transportRef(ref), body, file.Size, file.MIMEType, file.SHA256)
 	if err != nil && !errors.Is(err, platform.ErrObjectExists) {
 		location.State = "unknown"
 		return location, err

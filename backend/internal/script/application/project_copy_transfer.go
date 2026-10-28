@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 	"unicode/utf8"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
@@ -37,6 +38,8 @@ func (p *ProjectCopy) Transfer(ctx context.Context, actor identityapp.Principal,
 	if p == nil || p.store == nil || p.objects == nil {
 		return ProjectCopyReceipt{}, ErrUnavailable
 	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
 	m, err := p.store.Manifest(ctx, actor, b, snapshot)
 	if err != nil {
 		return ProjectCopyReceipt{}, err
@@ -58,7 +61,7 @@ func (p *ProjectCopy) Transfer(ctx context.Context, actor identityapp.Principal,
 			return ProjectCopyReceipt{}, err
 		}
 		if missing {
-			if err := p.objects.PutIfAbsent(ctx, object.Target.Key, bytes.NewReader(data), object.Target.ByteSize, object.Target.MIME, object.Target.SHA256); err != nil && !errors.Is(err, ErrObjectExists) {
+			if err := putPrivateObject(ctx, p.objects, object.Target, bytes.NewReader(data)); err != nil && !errors.Is(err, ErrObjectExists) {
 				return ProjectCopyReceipt{}, scriptCopyFailure("script_copy_put_unconfirmed", err)
 			}
 		}
@@ -173,7 +176,7 @@ func (p *ProjectCopy) Cleanup(ctx context.Context, actor identityapp.Principal, 
 			if err := p.store.BeginCleanupObject(ctx, actor, b, snapshot, object.Target); err != nil {
 				return err
 			}
-			removeErr := p.objects.Remove(ctx, object.Target.Key)
+			removeErr := removePrivateObject(ctx, p.objects, object.Target)
 			if _, err := p.readObject(ctx, object.Target); !errors.Is(err, ErrObjectMissing) {
 				return scriptCopyFailure("script_copy_remove_unconfirmed", errors.Join(err, removeErr))
 			}

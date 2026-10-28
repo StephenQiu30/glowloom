@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
 
@@ -44,7 +45,7 @@ func (s *Store) CheckSubmissionInputs(ctx context.Context, operationID uuid.UUID
 		if result.RowsAffected != 1 {
 			return ErrNotFound
 		}
-		return checkWorkflowInputsForSubmission(tx, operationID, operation.ProjectID)
+		return s.checkWorkflowInputsForSubmission(tx, operationID, operation.ProjectID)
 	})
 	if err != nil {
 		return fmt.Errorf("check workflow submission inputs: %w", err)
@@ -52,15 +53,14 @@ func (s *Store) CheckSubmissionInputs(ctx context.Context, operationID uuid.UUID
 	return nil
 }
 
-func checkWorkflowInputsForSubmission(tx *gorm.DB, operationID, projectID uuid.UUID) error {
-	var inputs []struct {
-		MediaAssetID *uuid.UUID
-		MaskAssetID  *uuid.UUID
-		RefType      string
-		RefVersion   *string
+func (s *Store) checkWorkflowInputsForSubmission(tx *gorm.DB, operationID, projectID uuid.UUID, actors ...identity.Principal) error {
+	var actor identity.Principal
+	if len(actors) == 1 {
+		actor = actors[0]
 	}
+	var inputs []operationInputRow
 	result := tx.Raw(`
-		SELECT media_asset_id, mask_asset_id, ref_type, ref_version
+		SELECT id,operation_id,seq_no,role,ref_type,ref_id,ref_version,text_value,media_asset_id,mask_asset_id
 		FROM operation.operation_input
 		WHERE operation_id = ?::uuid AND NOT is_delete
 		ORDER BY seq_no
@@ -71,6 +71,16 @@ func checkWorkflowInputsForSubmission(tx *gorm.DB, operationID, projectID uuid.U
 	assetIDs := make(map[uuid.UUID]struct{})
 	contentHashes := make(map[uuid.UUID]string)
 	for _, input := range inputs {
+		if input.RefType == "subject_media" {
+			frozen := input.domain()
+			if frozen.Validate() != nil || s.subjects(tx) == nil {
+				return ErrWorkflowInputNotReady
+			}
+			if err := s.subjects(tx).VerifyInput(tx.Statement.Context, actor, operationID, projectID, frozen); err != nil {
+				return err
+			}
+			continue
+		}
 		if input.RefType == "media_asset" && input.MediaAssetID != nil && input.RefVersion != nil {
 			if previous, exists := contentHashes[*input.MediaAssetID]; exists && previous != *input.RefVersion {
 				return ErrWorkflowInputNotReady

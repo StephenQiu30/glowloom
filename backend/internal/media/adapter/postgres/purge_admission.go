@@ -160,11 +160,11 @@ func (s *PurgeStore) CreatePurge(ctx context.Context, actor identityapp.Principa
 				return err
 			}
 			if file != nil {
-				if err := libraryChanged(tx, `INSERT INTO media.purge_object(job_id,item_index,object_key,rendition_kind,byte_size,sha256) VALUES(?,?,?,'',?,?)`, job, index, file.Asset.ObjectKey, file.Asset.ByteSize, file.Asset.SHA256); err != nil {
+				if err := libraryChanged(tx, `INSERT INTO media.purge_object(job_id,item_index,object_key,object_location_id,rendition_kind,byte_size,sha256) VALUES(?,?,?,?,'',?,?)`, job, index, file.Asset.ObjectKey, locationID(file.Asset.ObjectLocation), file.Asset.ByteSize, file.Asset.SHA256); err != nil {
 					return err
 				}
 				for _, rend := range file.Renditions {
-					if err := libraryChanged(tx, `INSERT INTO media.purge_object(job_id,item_index,object_key,rendition_kind,byte_size) VALUES(?,?,?,?,?)`, job, index, rend.ObjectKey, string(rend.Kind), rend.ByteSize); err != nil {
+					if err := libraryChanged(tx, `INSERT INTO media.purge_object(job_id,item_index,object_key,object_location_id,rendition_kind,byte_size) VALUES(?,?,?,?,?,?)`, job, index, rend.ObjectKey, locationID(rend.ObjectLocation), string(rend.Kind), rend.ByteSize); err != nil {
 						return err
 					}
 				}

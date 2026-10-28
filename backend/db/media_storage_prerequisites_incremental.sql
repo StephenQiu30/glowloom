@@ -1,6 +1,6 @@
 -- Additive canonical storage prerequisites for an existing database.
 -- User-authorized local application verified on 2026-10-28. No data backfill.
--- Canonical storage-ledger prerequisite closure for existing databases.
+-- Canonical prerequisite closure for subject_voice_incremental.sql.
 -- Creates storage metadata only; no profile/route/config/asset data is inserted,
 -- rewritten, backfilled, rebound or deleted. Existing incompatible data aborts.
 BEGIN;
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS media.storage_work_intent (
     closed_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT storage_work_intent_check CHECK ((((state = 'open'::text) AND (closed_at IS NULL)) OR ((state <> 'open'::text) AND (closed_at IS NOT NULL)))),
-    CONSTRAINT storage_work_intent_kind_check CHECK ((kind = ANY (ARRAY['operation'::text, 'script'::text, 'export'::text, 'depth'::text, 'transcription'::text, 'package'::text, 'transfer'::text, 'project-copy'::text]))),
+    CONSTRAINT storage_work_intent_kind_check CHECK ((kind = ANY (ARRAY['operation'::text, 'script'::text, 'export'::text, 'depth'::text, 'transcription'::text, 'package'::text, 'transfer'::text, 'project-copy'::text, 'subject-voice'::text]))),
     CONSTRAINT storage_work_intent_owner_id_check CHECK ((owner_id <> '00000000-0000-0000-0000-000000000000'::uuid)),
     CONSTRAINT storage_work_intent_state_check CHECK ((state = ANY (ARRAY['open'::text, 'accepted'::text, 'cancelled'::text]))),
     CONSTRAINT storage_work_intent_work_id_check CHECK ((work_id <> '00000000-0000-0000-0000-000000000000'::uuid)),

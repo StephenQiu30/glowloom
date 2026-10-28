@@ -240,7 +240,7 @@ func (s *SourceRecovery) recover(ctx context.Context, actor identityapp.Principa
 			if err := s.store.BeginSourceRemoval(ctx, actor, input, object.Fact, s.now().UTC()); err != nil {
 				return err
 			}
-			removeErr := s.sources.objects.Remove(ctx, object.Fact.Key)
+			removeErr := removePrivateObject(ctx, s.sources.objects, object.Fact)
 			_, afterErr := s.sources.readObject(ctx, object.Fact)
 			if !errors.Is(afterErr, ErrObjectMissing) {
 				return errors.Join(ErrNeedsReconciliation, removeErr, afterErr)

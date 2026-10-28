@@ -17,6 +17,8 @@ import (
 )
 
 var (
+	// ErrUnavailable rejects absent object storage dependencies without panicking.
+	ErrUnavailable = errors.New("object storage unavailable")
 	// ErrEndpointRequired means no object storage endpoint is configured.
 	ErrEndpointRequired = errors.New("GLOWLOOM_OBJECT_STORAGE_ENDPOINT is required")
 	// ErrInvalidEndpoint means the endpoint is not a plain HTTP(S) origin.
@@ -37,8 +39,11 @@ var (
 
 // Client provides access to the configured private object storage bucket.
 type Client struct {
-	sdk    *minio.Client
-	bucket string
+	sdk       *minio.Client
+	native    backend
+	readOnly  bool
+	transport *http.Transport
+	bucket    string
 }
 
 // ObjectInfo contains only the metadata needed to verify a stored result.
@@ -81,6 +86,24 @@ func Open(endpoint, bucket, accessKey, secretKey, region string) (*Client, error
 
 // Ping checks read-only access to the configured bucket.
 func (c *Client) Ping(ctx context.Context) error {
+	if c == nil {
+		return ErrUnavailable
+	}
+	if c.native != nil {
+		switch b := c.native.(type) {
+		case tosBackend:
+			return b.ping(ctx)
+		case cosBackend:
+			return b.ping(ctx)
+		case minioBackend:
+			return b.client.Ping(ctx)
+		default:
+			return ErrUnavailable
+		}
+	}
+	if c.sdk == nil {
+		return ErrUnavailable
+	}
 	exists, err := c.sdk.BucketExists(ctx, c.bucket)
 	if err != nil {
 		return fmt.Errorf("check object storage bucket: %w", err)
@@ -94,11 +117,17 @@ func (c *Client) Ping(ctx context.Context) error {
 // Put writes a complete object with its detected content type. Callers own
 // bounded reading and may retry the same key after an interrupted upload.
 func (c *Client) Put(ctx context.Context, key string, reader io.Reader, size int64, contentType string) error {
-	if c == nil || c.sdk == nil {
-		return ErrInvalidObject
+	if c == nil || (c.sdk == nil && c.native == nil) {
+		return ErrUnavailable
+	}
+	if c.readOnly {
+		return ErrAccessDenied
 	}
 	if !validKey(key) || reader == nil || size < 0 || strings.TrimSpace(contentType) == "" {
 		return ErrInvalidObject
+	}
+	if c.native != nil {
+		return ErrAccessDenied
 	}
 	_, err := c.sdk.PutObject(ctx, c.bucket, key, reader, size, minio.PutObjectOptions{ContentType: contentType})
 	if err != nil {
@@ -110,7 +139,13 @@ func (c *Client) Put(ctx context.Context, key string, reader io.Reader, size int
 // PutIfAbsent creates an immutable result object and records the checked SHA.
 // A retry must inspect the existing object's metadata before reusing it.
 func (c *Client) PutIfAbsent(ctx context.Context, key string, reader io.Reader, size int64, contentType, sha256 string) error {
-	if c == nil || c.sdk == nil || !validKey(key) || reader == nil || size < 0 ||
+	if c == nil || (c.sdk == nil && c.native == nil) {
+		return ErrUnavailable
+	}
+	if c.readOnly {
+		return ErrAccessDenied
+	}
+	if !validKey(key) || reader == nil || size < 0 ||
 		strings.TrimSpace(contentType) == "" || len(sha256) != 64 {
 		return ErrInvalidObject
 	}
@@ -131,8 +166,15 @@ func (c *Client) PutIfAbsent(ctx context.Context, key string, reader io.Reader, 
 
 // Stat reports the persisted object's size and content type.
 func (c *Client) Stat(ctx context.Context, key string) (ObjectInfo, error) {
-	if c == nil || c.sdk == nil || !validKey(key) {
+	if c == nil || (c.sdk == nil && c.native == nil) {
+		return ObjectInfo{}, ErrUnavailable
+	}
+	if !validKey(key) {
 		return ObjectInfo{}, ErrInvalidObject
+	}
+	if c.native != nil {
+		info, err := c.native.stat(ctx, key)
+		return info, storageError("stat", "legacy", err)
 	}
 	info, err := c.sdk.StatObject(ctx, c.bucket, key, minio.StatObjectOptions{})
 	if err != nil {
@@ -152,8 +194,18 @@ func (c *Client) Stat(ctx context.Context, key string) (ObjectInfo, error) {
 // reads, verify their expected metadata/digest, and close the returned object.
 // The SDK can defer network errors until the first read.
 func (c *Client) Get(ctx context.Context, key string) (io.ReadCloser, error) {
-	if c == nil || c.sdk == nil || !validKey(key) {
+	if c == nil || (c.sdk == nil && c.native == nil) {
+		return nil, ErrUnavailable
+	}
+	if !validKey(key) {
 		return nil, ErrInvalidObject
+	}
+	if c.native != nil {
+		body, err := c.native.get(ctx, key)
+		if err != nil {
+			return nil, storageError("get", "legacy", err)
+		}
+		return &checkedReader{ReadCloser: body, profile: "legacy"}, nil
 	}
 	object, err := c.sdk.GetObject(ctx, c.bucket, key, minio.GetObjectOptions{})
 	if err != nil {
@@ -165,7 +217,13 @@ func (c *Client) Get(ctx context.Context, key string) (io.ReadCloser, error) {
 // Remove deletes one exact object key. Callers must first establish ownership
 // of that key, for example when cleaning up a test-created or purged asset.
 func (c *Client) Remove(ctx context.Context, key string) error {
-	if c == nil || c.sdk == nil || !validKey(key) {
+	if c == nil || (c.sdk == nil && c.native == nil) {
+		return ErrUnavailable
+	}
+	if c.readOnly {
+		return ErrAccessDenied
+	}
+	if !validKey(key) {
 		return ErrInvalidObject
 	}
 	if err := c.sdk.RemoveObject(ctx, c.bucket, key, minio.RemoveObjectOptions{}); err != nil {
@@ -176,8 +234,15 @@ func (c *Client) Remove(ctx context.Context, key string) error {
 
 // PresignGet grants bounded access to one safe, server-selected object key.
 func (c *Client) PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error) {
-	if c == nil || c.sdk == nil || !validKey(key) || ttl < time.Second || ttl > 15*time.Minute {
+	if c == nil || (c.sdk == nil && c.native == nil) {
+		return "", ErrUnavailable
+	}
+	if !validKey(key) || ttl < time.Second || ttl > 15*time.Minute {
 		return "", ErrInvalidObject
+	}
+	if c.native != nil {
+		grant, err := c.native.sign(ctx, key, ttl)
+		return grant, storageError("sign", "legacy", err)
 	}
 	signed, err := c.sdk.PresignedGetObject(ctx, c.bucket, key, ttl, url.Values{})
 	if err != nil {
@@ -196,4 +261,11 @@ func validKey(key string) bool {
 		}
 	}
 	return true
+}
+
+// Close releases only the native legacy connection owned by this client.
+func (c *Client) Close() {
+	if c != nil && c.transport != nil {
+		c.transport.CloseIdleConnections()
+	}
 }

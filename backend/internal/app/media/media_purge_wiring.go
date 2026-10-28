@@ -24,19 +24,34 @@ import (
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 	pgscript "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
+	pgsubject "github.com/StephenQiu30/glowloom-server/backend/internal/subject/adapter/postgres"
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 )
 
 type avatarReferenceOwner interface {
 	HasAvatarReference(context.Context, uuid.UUID) (bool, error)
 }
+type retainedMediaOwner interface {
+	HasRetainedMediaReference(context.Context, uuid.UUID) (bool, error)
+}
 type mediaReferenceOwners struct {
-	owners  []mediaapp.LibraryReferences
-	avatars []avatarReferenceOwner
+	owners   []mediaapp.LibraryReferences
+	avatars  []avatarReferenceOwner
+	retained []retainedMediaOwner
 }
 
 func (g mediaReferenceOwners) HasMediaReferences(ctx context.Context, actor identityapp.Principal, project, asset uuid.UUID) (bool, error) {
 	used := false
+	for _, owner := range g.retained {
+		if owner == nil {
+			return false, mediaapp.ErrUnavailable
+		}
+		present, err := owner.HasRetainedMediaReference(ctx, asset)
+		if err != nil {
+			return false, err
+		}
+		used = used || present
+	}
 	for _, owner := range g.avatars {
 		if owner == nil {
 			return false, mediaapp.ErrUnavailable
@@ -77,7 +92,7 @@ func provideMediaReferenceOwners(tx *gorm.DB) mediaapp.LibraryReferences {
 // their caller. Workers must not inherit request-session factories indirectly
 // through Bible, script, or unpublished package reference readers.
 func provideMediaReferenceOwnersWithAccess(tx *gorm.DB, access *pgworkspace.ProjectContentAccessStore, project pgmedia.LibraryProjectAccessFactory, scopes pgmedia.ScopeAccessFactory) mediaapp.LibraryReferences {
-	return mediaReferenceOwners{avatars: []avatarReferenceOwner{pgidentity.NewAvatarReferences(tx), pgworkspace.NewTeamAvatarReferences(tx)}, owners: []mediaapp.LibraryReferences{
+	return mediaReferenceOwners{retained: []retainedMediaOwner{pgsubject.NewMediaGuard(tx)}, avatars: []avatarReferenceOwner{pgidentity.NewAvatarReferences(tx), pgworkspace.NewTeamAvatarReferences(tx)}, owners: []mediaapp.LibraryReferences{
 		pgworkspace.NewScopedMediaReferenceGuard(tx, access),
 		pgcanvas.NewScopedMediaReferenceGuard(tx, func(tx *gorm.DB) canvasapp.ProjectAccess { return canvasScopedAccess{ScopeAccess: scopes(tx), tx: tx} }),
 		pgoperation.NewScopedMediaReferenceGuard(tx, func(*gorm.DB) operationapp.ProjectAccess { return operationwire.ContentProjectAccess(access) }),
@@ -107,4 +122,10 @@ func NewMediaWorkerReferenceOwners(tx *gorm.DB) mediaapp.LibraryReferences {
 // ProvideMediaPurgeWorkerStore assembles worker-authorized purge storage.
 func ProvideMediaPurgeWorkerStore(database *gorm.DB) *pgmedia.PurgeStore {
 	return pgmedia.NewScopedPurgeStore(database, NewMediaLibraryWorkerProjectAccess, provideMediaLibraryWorkGuards, NewMediaWorkerReferenceOwners, time.Now, NewMediaWorkerScopeAccess)
+}
+
+// NewRoutedMediaPurgeWorker keeps every removal on its saved physical location.
+func NewRoutedMediaPurgeWorker(database *gorm.DB, registry *objectstorage.Registry) (*mediaapp.PurgeWorker, *pgmedia.PurgeStore) {
+	store := ProvideMediaPurgeWorkerStore(database)
+	return mediaapp.NewPurgeWorker(store, mediaobjects.NewRoutedPurgeObjects(registry, pgmedia.NewStorageRoutes(database))), store
 }

@@ -74,7 +74,7 @@ func provideTemporal(cfg config.Config, logger *zap.Logger, tracerProvider trace
 }
 
 func provideObjectStorage(cfg config.Config) (*objectstorage.Client, error) {
-	conn, err := objectstorage.Open(cfg.ObjectStorageEndpoint, cfg.ObjectStorageBucket, cfg.ObjectStorageAccessKey, cfg.ObjectStorageSecretKey, cfg.ObjectStorageRegion)
+	conn, err := objectstorage.OpenLegacy(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("configure api object storage: %w", err)
 	}
@@ -92,7 +92,10 @@ func provideReadyCheck(dbConn *db.Connection, redisConn *redisconn.Connection, t
 		if err := temporalConn.Ping(ctx); err != nil {
 			return err
 		}
-		return storageClient.Ping(ctx)
+		if storageClient != nil {
+			return storageClient.Ping(ctx)
+		}
+		return nil
 	}
 }
 

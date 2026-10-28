@@ -36,14 +36,20 @@ type ProjectCopyReferenceReader interface {
 
 // ProjectCopyReferenceQuery separates SQL-only admission from actual byte proof.
 type ProjectCopyReferenceQuery struct {
-	repo    ProjectCopyReferenceReader
-	objects DocumentObjectGetter
+	repo         ProjectCopyReferenceReader
+	objects      DocumentObjectGetter
+	objectReader ObjectReader
 }
 
 // NewProjectCopyReferenceQuery injects the authority-bound SQL reader and byte I/O.
 // SQL-only FreezeReferences does not require or access the object getter.
 func NewProjectCopyReferenceQuery(repo ProjectCopyReferenceReader, objects DocumentObjectGetter) *ProjectCopyReferenceQuery {
 	return &ProjectCopyReferenceQuery{repo: repo, objects: objects}
+}
+
+// NewRoutedProjectCopyReferenceQuery verifies exact saved source and target locations.
+func NewRoutedProjectCopyReferenceQuery(repo ProjectCopyReferenceReader, reader ObjectReader, legacy DocumentObjectGetter) *ProjectCopyReferenceQuery {
+	return &ProjectCopyReferenceQuery{repo: repo, objectReader: reader, objects: legacy}
 }
 
 func validReferenceFact(f ReferenceFact) bool {
@@ -126,8 +132,8 @@ func sameReferenceFact(a, b ReferenceFact) bool {
 	return (a.RenditionID == nil || *a.RenditionID == *b.RenditionID) && (a.RenditionSHA256 == nil || *a.RenditionSHA256 == *b.RenditionSHA256)
 }
 
-func verifyReferenceFile(ctx context.Context, objects DocumentObjectGetter, file LibraryMediaFile, fact ReferenceFact) error {
-	q := &ReferenceFactQuery{objects: objects}
+func verifyReferenceFile(ctx context.Context, objects DocumentObjectGetter, reader ObjectReader, file LibraryMediaFile, fact ReferenceFact) error {
+	q := &ReferenceFactQuery{objects: objects, objectReader: reader}
 	a := file.Asset
 	if _, _, err := q.verify(ctx, a.ObjectLocation, a.ObjectKey, &fact.ByteSize, &fact.SHA256, libraryOriginalLimit(fact.Kind)); err != nil {
 		return errors.Join(ErrObjectMismatch, err)
@@ -151,7 +157,7 @@ func verifyReferenceFile(ctx context.Context, objects DocumentObjectGetter, file
 // VerifyTransferred requires registered owning receipts, exact SQL facts, and
 // actual source/target bytes. The caller runs it before publishing its project.
 func (q *ProjectCopyReferenceQuery) VerifyTransferred(ctx context.Context, actor identityapp.Principal, binding ProjectCopyBinding, snapshot ProjectCopySnapshot, mappings []ProjectCopyReferenceMapping) error {
-	if q == nil || q.repo == nil || q.objects == nil || binding.Validate() != nil || binding.OrgID != actor.OrgID || len(mappings) > 4096 {
+	if q == nil || q.repo == nil || (q.objects == nil && q.objectReader == nil) || binding.Validate() != nil || binding.OrgID != actor.OrgID || len(mappings) > 4096 {
 		return ErrProjectCopyMediaUnavailable
 	}
 	for _, mapping := range mappings {
@@ -166,10 +172,10 @@ func (q *ProjectCopyReferenceQuery) VerifyTransferred(ctx context.Context, actor
 		if err != nil || !sameReferenceFact(mapping.Target, expected.Target) {
 			return errors.Join(ErrObjectMismatch, err)
 		}
-		if err := verifyReferenceFile(ctx, q.objects, files.Source, mapping.Source); err != nil {
+		if err := verifyReferenceFile(ctx, q.objects, q.objectReader, files.Source, mapping.Source); err != nil {
 			return err
 		}
-		if err := verifyReferenceFile(ctx, q.objects, files.Target, mapping.Target); err != nil {
+		if err := verifyReferenceFile(ctx, q.objects, q.objectReader, files.Target, mapping.Target); err != nil {
 			return err
 		}
 	}

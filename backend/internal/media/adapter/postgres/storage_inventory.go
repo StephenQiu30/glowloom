@@ -20,6 +20,13 @@ type legacyObjectColumn struct{ table, key, location, size, sha, mime string }
 // This privileged migration inventory is closed over reviewed owning columns.
 // Business authorization and ordinary cross-module reads retain their own ports.
 var legacyObjectColumns = []legacyObjectColumn{
+	{"script.script_source", "original_key", "original_location_id", "original_bytes", "original_sha256", "original_mime"},
+	{"script.script_source", "rich_key", "rich_location_id", "rich_bytes", "rich_sha256", "'application/json'"},
+	{"script.script_version", "text_key", "text_location_id", "text_bytes", "text_sha256", "'text/plain; charset=utf-8'"},
+	{"script.script_version", "rich_key", "rich_location_id", "rich_bytes", "rich_sha256", "'application/json'"},
+	{"script.copy_object_intent", "source_key", "source_location_id", "byte_size", "sha256", "mime"},
+	{"script.copy_object_intent", "target_key", "target_location_id", "byte_size", "sha256", "mime"},
+	{"script.copy_object_state", "target_key", "target_location_id", "NULL::bigint", "NULL::text", "NULL::text"},
 	{"media.media_asset", "object_key", "object_location_id", "byte_size", "sha256", "mime_type"},
 	{"media.rendition", "object_key", "object_location_id", "byte_size", "NULL::text", "NULL::text"},
 	{"media.package_object", "object_key", "object_location_id", "byte_size", "sha256", "content_type"},
@@ -33,7 +40,7 @@ var legacyObjectColumns = []legacyObjectColumn{
 	{"script.object_state", "object_key", "object_location_id", "NULL::bigint", "NULL::text", "NULL::text"},
 }
 
-const legacyRowDigest = `encode(sha256(convert_to((to_jsonb(t)-'object_location_id'-'source_location_id'-'target_location_id')::text,'UTF8')),'hex')`
+const legacyRowDigest = `encode(sha256(convert_to((to_jsonb(t)-'object_location_id'-'source_location_id'-'target_location_id'-'original_location_id'-'rich_location_id'-'text_location_id')::text,'UTF8')),'hex')`
 
 type legacyObjectRow struct {
 	Retired                  bool
@@ -56,7 +63,7 @@ func (s *StorageRoutes) BindLegacyStorage(ctx context.Context, p application.Sto
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var identity string
-		read := tx.Raw(`SELECT resource_identity FROM media.storage_profile WHERE id=? AND provider='minio' AND endpoint=? AND signing_endpoint=? AND region=? AND bucket=? AND addressing_style=? FOR SHARE`, p.ID, p.Endpoint, p.SigningEndpoint, p.Region, p.Bucket, p.AddressingStyle).Scan(&identity)
+		read := tx.Raw(`SELECT resource_identity FROM media.storage_profile WHERE id=? AND provider='minio' AND endpoint=? AND signing_endpoint=? AND region=? AND bucket=? AND addressing_style=?`, p.ID, p.Endpoint, p.SigningEndpoint, p.Region, p.Bucket, p.AddressingStyle).Scan(&identity)
 		if read.Error != nil {
 			return read.Error
 		}
@@ -79,7 +86,7 @@ func (s *StorageRoutes) BindLegacyStorage(ctx context.Context, p application.Sto
 
 func readLegacyBinding(tx *gorm.DB) (legacyBindingRow, error) {
 	var row legacyBindingRow
-	read := tx.Raw(`SELECT b.* FROM media.storage_legacy_binding b JOIN media.storage_profile p ON p.id=b.profile_id AND p.bucket=b.bucket AND p.resource_identity=b.resource_identity AND p.provider='minio' WHERE singleton=1 FOR SHARE OF b,p`).Scan(&row)
+	read := tx.Raw(`SELECT b.* FROM media.storage_legacy_binding b JOIN media.storage_profile p ON p.id=b.profile_id AND p.bucket=b.bucket AND p.resource_identity=b.resource_identity AND p.provider='minio' WHERE singleton=1`).Scan(&row)
 	if read.Error != nil {
 		return row, read.Error
 	}
@@ -338,20 +345,25 @@ func (s *StorageRoutes) BackfillLegacyObject(ctx context.Context, c application.
 func legacyRetired(c legacyObjectColumn) string {
 	switch c.table {
 	case "media.media_asset", "media.rendition":
-		return "t.is_delete AND EXISTS(SELECT 1 FROM media.purge_object p WHERE p.object_key=t.object_key AND p.removed)"
+		return "t.is_delete AND EXISTS(SELECT 1 FROM media.purge_object p WHERE p.object_key=t.object_key AND p.object_location_id IS NOT DISTINCT FROM t.object_location_id AND p.removed)"
 	case "media.package_object", "mediatool.depth_object":
 		return "t.status='removed'"
 	case "media.project_copy_object", "media.transfer_object":
 		if c.location == "target_location_id" {
 			return "t.status='removed'"
 		}
-		return "EXISTS(SELECT 1 FROM media.purge_object p WHERE p.object_key=t.source_object_key AND p.removed)"
+		return "EXISTS(SELECT 1 FROM media.purge_object p WHERE p.object_key=t.source_object_key AND p.object_location_id IS NOT DISTINCT FROM t.source_location_id AND p.removed)"
 	case "media.purge_object":
 		return "t.removed"
 	case "script.object_intent":
-		return "EXISTS(SELECT 1 FROM script.object_state s WHERE s.object_key=t.object_key AND s.removed)"
-	case "script.object_state":
+		return "EXISTS(SELECT 1 FROM script.object_state s WHERE s.object_key=t.object_key AND s.object_location_id IS NOT DISTINCT FROM t.object_location_id AND s.removed)"
+	case "script.object_state", "script.copy_object_state":
 		return "t.removed"
+	case "script.copy_object_intent":
+		if c.location == "target_location_id" {
+			return "EXISTS(SELECT 1 FROM script.copy_object_state s WHERE s.target_key=t.target_key AND s.target_location_id IS NOT DISTINCT FROM t.target_location_id AND s.removed)"
+		}
+		return "false"
 	default:
 		return "false"
 	}

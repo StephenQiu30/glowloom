@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
@@ -68,12 +69,25 @@ func (h *UploadHandler) Upload(c *gin.Context) {
 }
 
 func (h *UploadHandler) receiveUpload(c *gin.Context, project uuid.UUID, personal bool) {
+	h.receiveUploadFor(c, identityhttp.Principal(c), project, personal)
+}
+
+// UploadPersonalFor reuses bounded multipart admission for a server-resolved
+// personal source. Only composition code may supply this authorized principal.
+func (h *UploadHandler) UploadPersonalFor(c *gin.Context, actor identityapp.Principal) {
+	if len(c.Request.URL.Query()) != 0 {
+		httpapi.WriteProblem(c, 422, "invalid_request", nil)
+		return
+	}
+	h.receiveUploadFor(c, actor, uuid.Nil, true)
+}
+
+func (h *UploadHandler) receiveUploadFor(c *gin.Context, actor identityapp.Principal, project uuid.UUID, personal bool) {
 	key, err := uuid.Parse(c.GetHeader("Idempotency-Key"))
 	if err != nil || key == uuid.Nil {
 		httpapi.WriteProblem(c, 422, "invalid_idempotency_key", nil)
 		return
 	}
-	actor := identityhttp.Principal(c)
 	if h == nil || h.service == nil {
 		uploadError(c, application.ErrUnavailable)
 		return

@@ -156,13 +156,8 @@ func (s *Store) CommitPersonalUpload(ctx context.Context, actor identityapp.Prin
 			duplicateID := duplicate.ID
 			result = application.PersonalUploadResult{Asset: application.PersonalUploadSummary(duplicate), DuplicateOf: &duplicateID}
 		} else {
-			if err := libraryChanged(tx, `INSERT INTO media.media_asset(id,personal_org_id,personal_actor_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,width,height,duration_ms,fps,audio_channels,codec,moderation_status,moderation_detail,revision,create_time,update_time) VALUES(?,?,?,?,'upload','ready',?,?,?,?,?,?,?,?,?,?,?,'passed',?::jsonb,1,?,?)`, a.ID, actor.OrgID, actor.ID, string(a.Kind), a.ObjectKey, a.FileName, a.MimeType, a.ByteSize, a.SHA256, a.Width, a.Height, a.DurationMS, a.FPS, a.AudioChannels, a.Codec, string(a.ModerationDetail), a.CreateTime, a.UpdateTime); err != nil {
+			if err := insertReviewedUpload(tx, a, renditions); err != nil {
 				return err
-			}
-			for _, rend := range renditions {
-				if err := libraryChanged(tx, `INSERT INTO media.rendition(id,media_asset_id,kind,object_key,width,height,byte_size,create_time,update_time) VALUES(?,?,?,?,?,?,?,?,?)`, rend.ID, rend.MediaAssetID, string(rend.Kind), rend.ObjectKey, rend.Width, rend.Height, rend.ByteSize, rend.CreateTime, rend.UpdateTime); err != nil {
-					return err
-				}
 			}
 			if err := libraryChanged(tx, `UPDATE media.library SET revision=revision+1,update_time=? WHERE id=? AND revision=?`, a.UpdateTime, id, library.Revision); err != nil {
 				return err

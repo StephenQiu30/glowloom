@@ -39,6 +39,83 @@ it("项目查询只透传允许的筛选参数，详情只读且必须是UUID", 
   ).toBe(405);
   expect(fetcher).not.toHaveBeenCalled();
 });
+
+it("主体来源保持有界查询和目标空间头，不能注入个人owner或项目", async () => {
+  const fetcher = vi.fn().mockResolvedValue(new Response('{"items":[]}'));
+  vi.stubGlobal("fetch", fetcher);
+  const scope = "00000000-0000-4000-8000-000000000003";
+  const path = "subjects/sources";
+  const query =
+    "kind=image&favorite_only=true&page=2&page_size=12&search=geometry";
+  const response = await GET(
+    new Request(`http://localhost/api/${path}?${query}`, {
+      headers: { "X-Creation-Scope": scope },
+    }),
+    context(path),
+  );
+  expect(response.status).toBe(200);
+  expect(
+    (fetcher.mock.calls[0][0] as URL).searchParams.get("favorite_only"),
+  ).toBe("true");
+  expect((fetcher.mock.calls[0][1] as RequestInit).headers).toBeDefined();
+  expect(
+    new Headers((fetcher.mock.calls[0][1] as RequestInit).headers).get(
+      "X-Creation-Scope",
+    ),
+  ).toBe(scope);
+  fetcher.mockClear();
+  for (const extra of [
+    "actor_id=other",
+    "project_id=other",
+    "scope=personal",
+    "kind=video",
+  ]) {
+    expect(
+      (
+        await GET(
+          new Request(`http://localhost/api/${path}?${query}&${extra}`),
+          context(path),
+        )
+      ).status,
+    ).toBe(422);
+  }
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("主体私有媒体及导出不开放未知查询或替代写入路径", async () => {
+  const fetcher = vi
+    .fn()
+    .mockImplementation(() =>
+      Promise.resolve(
+        new Response("bytes", { headers: { "Content-Type": "image/png" } }),
+      ),
+    );
+  vi.stubGlobal("fetch", fetcher);
+  const id = "00000000-0000-4000-8000-000000000001";
+  const path = `subjects/${id}/versions/${id}/media/${id}`;
+  expect(
+    (await GET(new Request(`http://localhost/api/${path}`), context(path)))
+      .status,
+  ).toBe(200);
+  fetcher.mockClear();
+  expect(
+    (
+      await GET(
+        new Request(`http://localhost/api/${path}?owner=other`),
+        context(path),
+      )
+    ).status,
+  ).toBe(422);
+  expect(
+    (
+      await PUT(
+        new Request(`http://localhost/api/${path}`, { method: "PUT" }),
+        context(path),
+      )
+    ).status,
+  ).toBe(405);
+  expect(fetcher).not.toHaveBeenCalled();
+});
 const context = (path: string) => ({
   params: Promise.resolve({ path: path.split("/") }),
 });

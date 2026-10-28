@@ -95,9 +95,9 @@ func (s *Store) CreateProviderTrialQuote(ctx context.Context, actor identityapp.
 			requested.Params = json.RawMessage(`{}`)
 		}
 		for _, m := range input.MediaInputs {
-			requested.MediaInputs = append(requested.MediaInputs, application.FreeQuoteMediaInput(m))
+			requested.MediaInputs = append(requested.MediaInputs, application.FreeQuoteMediaInput{Role: m.Role, MediaAssetID: m.MediaAssetID})
 		}
-		media, err := readFreeQuoteMedia(tx, input.ProjectID, requested.MediaInputs)
+		media, err := s.readQuoteMedia(tx, actor, input.ProjectID, requested.MediaInputs)
 		if err != nil {
 			return err
 		}

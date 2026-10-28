@@ -33,6 +33,13 @@ jobs:
       GLOWLOOM_TEST_SCHEMA_DB_DSN: postgres://postgres@127.0.0.1:5432/schema_probe?sslmode=disable
       GLOWLOOM_TEST_CANVAS_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_reference?sslmode=disable
       GLOWLOOM_TEST_GOVERNANCE_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_governance?sslmode=disable
+      GLOWLOOM_TEST_CATALOG_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_catalog?sslmode=disable
+      GLOWLOOM_TEST_MODEL_CATALOG_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_catalog?sslmode=disable
+      GLOWLOOM_TEST_STORAGE_MIGRATION_DSN: postgres://postgres@127.0.0.1:5432/glowloom_subject_storage_ci?sslmode=disable
+      GLOWLOOM_TEST_PACKAGE_LOCATION_DSN: postgres://postgres@127.0.0.1:5432/glowloom_subject_storage_package_ci?sslmode=disable
+      GLOWLOOM_TEST_SCRIPT_LOCATION_DSN: postgres://postgres@127.0.0.1:5432/glowloom_subject_storage_script_ci?sslmode=disable
+      GLOWLOOM_TEST_SUBJECT_SOURCE_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_subject_source_ci?sslmode=disable
+      GLOWLOOM_TEST_SUBJECT_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_subject_alignment_ci?sslmode=disable
       GLOWLOOM_TEST_CANVAS_HTTP_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_reference?sslmode=disable
       GLOWLOOM_TEST_PROJECT_COPY_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_reference?sslmode=disable
       GLOWLOOM_TEST_CANVAS_M1_RUNTIME_DSN: postgres://canvas_test_runtime@127.0.0.1:5432/glowloom_reference?sslmode=disable&options=-c%20role%3Dglowloom_app
@@ -63,10 +70,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Initialize isolated test databases
         run: |
-          psql "$GLOWLOOM_TEST_CANVAS_DB_DSN" -X -v ON_ERROR_STOP=1 -c 'CREATE ROLE glowloom_app NOLOGIN NOSUPERUSER' -c 'CREATE ROLE canvas_test_runtime LOGIN INHERIT NOSUPERUSER IN ROLE glowloom_app' -c 'CREATE DATABASE schema_probe' -c 'CREATE DATABASE glowloom_governance' -c 'CREATE DATABASE glowloom_catalog'
+          psql "$GLOWLOOM_TEST_CANVAS_DB_DSN" -X -v ON_ERROR_STOP=1 -c 'CREATE ROLE glowloom_app NOLOGIN NOSUPERUSER' -c 'CREATE ROLE canvas_test_runtime LOGIN INHERIT NOSUPERUSER IN ROLE glowloom_app' -c 'CREATE DATABASE schema_probe' -c 'CREATE DATABASE glowloom_governance' -c 'CREATE DATABASE glowloom_catalog' -c 'CREATE DATABASE glowloom_subject_alignment_ci' -c 'CREATE DATABASE glowloom_subject_source_ci' -c 'CREATE DATABASE glowloom_subject_storage_ci' -c 'CREATE DATABASE glowloom_subject_storage_package_ci' -c 'CREATE DATABASE glowloom_subject_storage_script_ci'
           psql "$GLOWLOOM_TEST_CANVAS_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           psql "$GLOWLOOM_TEST_GOVERNANCE_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           psql "postgres://postgres@127.0.0.1:5432/glowloom_catalog?sslmode=disable" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
+          psql "$GLOWLOOM_TEST_SUBJECT_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
       - name: Verify model preset onboarding
         env:
           GLOWLOOM_TEST_MODEL_CATALOG_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_catalog?sslmode=disable

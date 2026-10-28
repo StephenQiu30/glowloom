@@ -16,6 +16,9 @@ import (
 	"gorm.io/gorm"
 
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
+	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/codex"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/staging"
 	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
@@ -28,8 +31,22 @@ import (
 // Non-local workers retain a separate service home and strict preflight.
 // Existing project dispatch keeps its own authorization and price gate.
 func Register(ctx context.Context, w worker.Worker, database *gorm.DB, cfg config.Config) error {
+	storage, err := objectstorage.OpenLegacy(cfg)
+	if err != nil {
+		return err
+	}
+	objects, err := subjectwire.OpenObjects(cfg, storage)
+	if err != nil {
+		return err
+	}
+	context.AfterFunc(ctx, objects.Close)
+	if storage == nil && objects.Registry() == nil {
+		w.RegisterActivityWithOptions(func(context.Context, operationflow.ProviderSubmitInput) (operationflow.ProviderSubmitOutput, error) {
+			return operationflow.ProviderSubmitOutput{Outcome: operationflow.ProviderSubmitNotSubmitted}, mediaapp.ErrStorageNotReady
+		}, activity.RegisterOptions{Name: "provider.submit"})
+		return nil
+	}
 	var launcher *codex.ProcessLauncher
-	var err error
 	if cfg.Env == "local" && cfg.CodexHome == "" {
 		if cfg.CodexWorkRoot == "" {
 			cache, e := os.UserCacheDir()
@@ -57,18 +74,15 @@ func Register(ctx context.Context, w worker.Worker, database *gorm.DB, cfg confi
 	if cfg.Env != "local" && (!status.Authenticated || !status.ImageGeneration) {
 		return fmt.Errorf("codex service identity must be logged in with image generation available")
 	}
-	storage, err := objectstorage.Open(cfg.ObjectStorageEndpoint, cfg.ObjectStorageBucket, cfg.ObjectStorageAccessKey, cfg.ObjectStorageSecretKey, cfg.ObjectStorageRegion)
-	if err != nil {
-		return err
-	}
-	if err := storage.Ping(ctx); err != nil {
-		return err
-	}
-	if cfg.Env == "local" {
+
+	if cfg.Env == "local" && storage != nil {
 		trialwire.RegisterCodex(w, database, launcher, cfg.CodexWorkRoot, storage, application.TrialStorageID(cfg.ObjectStorageEndpoint, cfg.ObjectStorageBucket))
 	}
 	store := operationwire.ProvideOperationStore(database)
 	receipts := application.NewProviderStageService(staging.NewObjects(storage), store)
+	if objects.Registry() != nil {
+		receipts = application.NewRoutedProviderStageService(staging.NewRoutedFactory(objects.Registry(), pgmedia.NewStorageRoutes(database)), store)
+	}
 	adapter, err := codex.New(store, launcher, receipts, codex.Config{WorkRoot: cfg.CodexWorkRoot})
 	if err != nil {
 		return err

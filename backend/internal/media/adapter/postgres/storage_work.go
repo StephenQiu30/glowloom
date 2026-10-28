@@ -233,7 +233,8 @@ func (s *StorageRoutes) CancelStorageWork(ctx context.Context, id uuid.UUID) err
 }
 
 // BeginWorkRemoval requires cancellation and a ten-minute drain for the bounded
-// five-minute SDK write. Accepted assets and uncertain live writes stay protected.
+// five-minute SDK write. A namespace with no write fence has never started SDK
+// mutation and can confirm absence immediately. Accepted assets and uncertain live writes stay protected.
 func (s *StorageRoutes) BeginWorkRemoval(ctx context.Context, id uuid.UUID, location domain.ObjectLocation) (bool, error) {
 	if s == nil || s.db == nil {
 		return false, application.ErrUnavailable
@@ -241,7 +242,7 @@ func (s *StorageRoutes) BeginWorkRemoval(ctx context.Context, id uuid.UUID, loca
 	remove := false
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var intent storageWorkRow
-		read := tx.Raw(`SELECT * FROM media.storage_work_intent WHERE id=? AND state='cancelled' AND closed_at<now()-interval '10 minutes' FOR UPDATE`, id).Scan(&intent)
+		read := tx.Raw(`SELECT * FROM media.storage_work_intent WHERE id=? AND state='cancelled' AND (closed_at<clock_timestamp()-interval '10 minutes' OR NOT EXISTS(SELECT 1 FROM media.object_location l WHERE l.owner_intent_id=media.storage_work_intent.id AND l.write_until IS NOT NULL)) FOR UPDATE`, id).Scan(&intent)
 		if read.Error != nil {
 			return read.Error
 		}
@@ -254,10 +255,16 @@ func (s *StorageRoutes) BeginWorkRemoval(ctx context.Context, id uuid.UUID, loca
 				return err
 			}
 			if live {
-				return nil
+				private, err := privateWorkReference(tx, column, location, intent)
+				if err != nil {
+					return err
+				}
+				if !private {
+					return nil
+				}
 			}
 		}
-		update := tx.Exec(`UPDATE media.object_location l SET state='delete_pending' WHERE l.id=? AND l.owner_intent_id=? AND l.profile_id=? AND l.bucket=? AND l.object_key=? AND l.state IN ('reserved','present','unknown','delete_pending') AND (l.write_until IS NULL OR l.write_until<clock_timestamp()) AND NOT EXISTS(SELECT 1 FROM media.media_asset a WHERE a.object_location_id=l.id) AND NOT EXISTS(SELECT 1 FROM media.rendition r WHERE r.object_location_id=l.id)`, location.ID, id, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key)
+		update := tx.Exec(`UPDATE media.object_location l SET state='delete_pending' WHERE l.id=? AND l.owner_intent_id=? AND l.profile_id=? AND l.bucket=? AND l.object_key=? AND l.state IN ('reserved','present','unknown','delete_pending') AND (l.write_until IS NULL OR l.write_until<clock_timestamp())`, location.ID, id, location.Ref.ProfileID, location.Ref.Bucket, location.Ref.Key)
 		remove = update.RowsAffected == 1
 		return update.Error
 	})

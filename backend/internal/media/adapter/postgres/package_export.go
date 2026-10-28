@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"io"
 
+	"gorm.io/gorm"
+
 	"github.com/google/uuid"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
@@ -38,7 +40,7 @@ func packageExportEntries(actor identityapp.Principal, scope domain.LibraryScope
  FROM media.library_item i WHERE i.library_id=? AND i.asset_id IS NULL AND i.purged_at IS NULL) `, args
 }
 
-func decodePackageExportAsset(raw []byte, state string) (domain.MediaAsset, error) {
+func decodePackageExportAsset(tx *gorm.DB, raw []byte, state string) (domain.MediaAsset, error) {
 	var wire struct {
 		assetRow
 		ModerationDetail json.RawMessage `json:"moderation_detail"`
@@ -49,6 +51,9 @@ func decodePackageExportAsset(raw []byte, state string) (domain.MediaAsset, erro
 		return domain.MediaAsset{}, application.ErrUnavailable
 	}
 	wire.assetRow.ModerationDetail = wire.ModerationDetail
+	if err := wire.loadLocation(tx); err != nil {
+		return domain.MediaAsset{}, err
+	}
 	a := wire.domain()
 	if a.Validate() != nil || a.Status != domain.StatusReady || a.ModerationStatus != domain.ModerationPassed || a.IsDelete && state != "trashed" {
 		return domain.MediaAsset{}, application.ErrPackageIncomplete
@@ -56,11 +61,11 @@ func decodePackageExportAsset(raw []byte, state string) (domain.MediaAsset, erro
 	return a, nil
 }
 
-func packageExportDetail(r libraryEntryRow, library uuid.UUID) (application.LibraryItemDetail, error) {
+func packageExportDetail(tx *gorm.DB, r libraryEntryRow, library uuid.UUID) (application.LibraryItemDetail, error) {
 	if r.AssetID == nil {
 		return r.detail(library)
 	}
-	a, err := decodePackageExportAsset(r.AssetFacts, r.CatalogState)
+	a, err := decodePackageExportAsset(tx, r.AssetFacts, r.CatalogState)
 	if err != nil || a.ID != *r.AssetID || r.ID != a.ID || string(a.Kind) != r.Kind {
 		return application.LibraryItemDetail{}, application.ErrPackageIncomplete
 	}

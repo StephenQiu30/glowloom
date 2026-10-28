@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -75,7 +76,9 @@ func ProvideOperationWorkerAccess(tx *gorm.DB) operation.ProjectAccess {
 
 // ProvideOperationStore assembles operation persistence and cross-module dependencies.
 func ProvideOperationStore(db *gorm.DB) *pgoperation.Store {
-	return pgoperation.NewScopedStore(db, ProvideOperationProjectAccess, ProvideOperationWorkerAccess, ProvideOperationPlatformAccess)
+	return pgoperation.NewScopedStore(db, ProvideOperationProjectAccess, ProvideOperationWorkerAccess, ProvideOperationPlatformAccess).WithSubjectMedia(func(tx *gorm.DB) operation.SubjectMediaAccess {
+		return subjectwire.NewGenerationAccess(tx, subjectwire.Objects{})
+	})
 }
 
 // ProvidePromptPreferenceStore assembles prompt preferences with operation authority.

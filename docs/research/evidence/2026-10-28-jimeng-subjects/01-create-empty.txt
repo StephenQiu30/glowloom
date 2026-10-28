@@ -1,0 +1,23 @@
+Browser tab: 1980370571, Title: "即梦AI - 一站式AI创作平台", URL: "https://jimeng.jianying.com/ai-tool/elements".
+0 AXWebArea 即梦AI - 一站式AI创作平台, URL: jimeng.jianying.com/ai-tool/elements
+	1 container 设置主体 关闭
+		2 container
+			3 container arco-dialog-8
+				4 text 设置主体
+				5 button 关闭
+			6 text 参考主体
+			7 text *
+			8 image 空态插画
+			9 text 上传主图，将素材拖拽至此处或从以下选择
+			10 button 从本地添加
+			11 button 从资产添加
+			12 text 名称
+			13 text *
+			14 container
+				15 text field (settable) 名称
+				16 text 0 / 20
+			17 text 描述
+			18 text entry area (settable) 描述
+			19 button (disabled) 保存
+
+The focused UI element is 5 button 关闭

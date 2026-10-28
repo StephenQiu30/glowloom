@@ -141,7 +141,7 @@ func (s *Store) confirmBatchQuote(ctx context.Context, actor identityapp.Princip
 				})
 				continue
 			}
-			if err := checkWorkflowInputsForSubmission(tx, quoted.ID, quoted.ProjectID); err != nil {
+			if err := s.checkWorkflowInputsForSubmission(tx, quoted.ID, quoted.ProjectID, actor); err != nil {
 				return err
 			}
 			selected = append(selected, quoted)

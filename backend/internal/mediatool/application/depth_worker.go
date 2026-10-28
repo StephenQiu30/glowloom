@@ -22,6 +22,7 @@ import (
 // DepthWorker owns one bounded physical execution and its private file lifetime.
 type DepthWorker struct {
 	store     DepthWorkerStore
+	routes    WorkObjectsFactory
 	objects   DepthObjects
 	processor DepthProcessor
 	prober    mediaapp.Prober
@@ -34,9 +35,14 @@ func NewDepthWorker(s DepthWorkerStore, objects DepthObjects, processor DepthPro
 	return &DepthWorker{store: s, objects: objects, processor: processor, prober: prober, previews: previews, verifier: verifier}
 }
 
+// NewRoutedDepthWorker resolves a private object view for each claimed attempt.
+func NewRoutedDepthWorker(s DepthWorkerStore, routes WorkObjectsFactory, processor DepthProcessor, prober mediaapp.Prober, previews mediaapp.Renderer, verifier DepthVerifier) *DepthWorker {
+	return &DepthWorker{store: s, routes: routes, processor: processor, prober: prober, previews: previews, verifier: verifier}
+}
+
 // Execute never replays native inference after dispatch; recovery reads the original manifest.
 func (w *DepthWorker) Execute(ctx context.Context, id DepthWorkID) (job domain.DepthJob, err error) {
-	if w == nil || w.store == nil || w.objects == nil {
+	if w == nil || w.store == nil || (w.objects == nil && w.routes == nil) {
 		return job, ErrUnavailable
 	}
 	work, err := w.store.Claim(ctx, id)
@@ -81,6 +87,18 @@ func (w *DepthWorker) Execute(ctx context.Context, id DepthWorkID) (job domain.D
 			err = nil
 		}
 	}()
+	if w.routes != nil {
+		objects, openErr := w.routes.Open(ctx, StorageOwner("depth", job.ProjectID, id.JobID, id.Attempt), work.SourceAssets)
+		if openErr != nil {
+			return job, openErr
+		}
+		if objects == nil {
+			return job, ErrUnavailable
+		}
+		local := *w
+		local.objects = objects
+		w = &local
+	}
 	if job.CancellationRequested {
 		err = ErrCancelled
 		return job, err

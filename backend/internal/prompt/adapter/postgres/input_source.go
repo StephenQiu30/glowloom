@@ -62,7 +62,7 @@ func (s *DraftStore) ReadInput(ctx context.Context, a identityapp.Principal, p u
 			}
 			out = *config.Draft.Composer
 		}
-		return ValidateDraftSources(tx, a, p, out, true)
+		return ValidateDraftSources(tx, a, p, out, true, s.sources(tx))
 	})
 	return out, err
 }

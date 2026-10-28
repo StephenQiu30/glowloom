@@ -87,6 +87,7 @@ type SourceMedia struct {
 	SourceID      string `json:"sourceId"`
 	SourceVersion string `json:"sourceVersion"`
 	MediaKind     string `json:"mediaKind"`
+	BindingID     string `json:"bindingId,omitempty"`
 }
 
 // LabelAllocation assigns a stable type-specific display number.
@@ -195,7 +196,7 @@ func (d Draft) Validate() error {
 					return ErrInvalidDraft
 				}
 				for _, m := range s.Media {
-					if !identifier(m.SourceID) || !identifier(m.SourceVersion) || !mediaKind(m.MediaKind) {
+					if !identifier(m.SourceID) || !identifier(m.SourceVersion) || !mediaKind(m.MediaKind) || m.BindingID != "" && !identifier(m.BindingID) {
 						return ErrInvalidDraft
 					}
 				}
@@ -316,11 +317,15 @@ func (d Draft) Compile() (CompiledDraft, error) {
 		case "pending_upload":
 			return CompiledDraft{}, ErrReferenceUnavailable
 		case "media":
-			mapping.MediaSeqNos = append(mapping.MediaSeqNos, add(SourceMedia{s.SourceID, s.SourceVersion, r.MediaKind}, r.Role))
+			mapping.MediaSeqNos = append(mapping.MediaSeqNos, add(SourceMedia{SourceID: s.SourceID, SourceVersion: s.SourceVersion, MediaKind: r.MediaKind}, r.Role))
 		case "subject":
 			subjects = append(subjects, "["+d.Label(r.ID)+"] "+s.Description)
 			for _, m := range s.Media {
-				mapping.MediaSeqNos = append(mapping.MediaSeqNos, add(m, r.Role))
+				role := r.Role
+				if m.BindingID != "" && role == "subject" {
+					role = "reference_" + m.MediaKind
+				}
+				mapping.MediaSeqNos = append(mapping.MediaSeqNos, add(m, role))
 			}
 		}
 		out.Mapping = append(out.Mapping, mapping)

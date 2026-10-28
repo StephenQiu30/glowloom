@@ -122,7 +122,7 @@ func TestRoutedUsageSourceReadsSavedLocationsAfterSwitch(t *testing.T) {
 	called := false
 	err = source.InspectStorageUsage(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, func(in mediaapp.StorageUsageInventory) error {
 		called = true
-		if len(in.Locations) != 3 || len(in.PhysicalPrefixes) != 10 || len(in.ObjectKeys) != 0 || len(in.Prefixes) != 0 {
+		if len(in.Locations) != 3 || len(in.PhysicalPrefixes) != 2 || len(in.ObjectKeys) != 0 || len(in.Prefixes) != 0 {
 			t.Fatal("inventory omitted saved identities")
 		}
 		for _, ref := range in.Locations {

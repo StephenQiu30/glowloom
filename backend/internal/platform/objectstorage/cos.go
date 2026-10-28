@@ -115,3 +115,5 @@ func closeCOS(resp *cos.Response) {
 		_ = resp.Body.Close()
 	}
 }
+
+func (b cosBackend) ping(ctx context.Context) error { _, err := b.sdk.Bucket.Head(ctx); return err }

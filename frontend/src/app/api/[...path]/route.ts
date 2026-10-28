@@ -482,6 +482,76 @@ async function proxy(
                           ? ["GET"]
                           : undefined;
   const boundedRoute = [
+    { pattern: "subjects/voice-options", methods: ["GET"], query: [] },
+    { pattern: "subjects/voice-jobs", methods: ["POST"], query: [] },
+    {
+      pattern: `subjects/voice-jobs/${identityUUID}`,
+      methods: ["GET"],
+      query: [],
+    },
+    {
+      pattern: `subject-voice-commands/${identityUUID}`,
+      methods: ["GET"],
+      query: [],
+    },
+    {
+      pattern: "subjects/sources",
+      methods: ["GET"],
+      query: [
+        "kind",
+        "search",
+        "favorite_only",
+        "quality",
+        "page",
+        "page_size",
+      ],
+    },
+    { pattern: "subjects/sources/uploads", methods: ["POST"], query: [] },
+    {
+      pattern: `subjects/sources/${identityUUID}(/preview)?`,
+      methods: ["GET"],
+      query: [],
+    },
+    {
+      pattern: "subjects",
+      methods: ["GET", "POST"],
+      query: [
+        "q",
+        "favorite",
+        "from",
+        "to",
+        "time_field",
+        "order",
+        "page",
+        "page_size",
+      ],
+    },
+    { pattern: "subjects/(batch|export)", methods: ["POST"], query: [] },
+    {
+      pattern: `subjects/${identityUUID}`,
+      methods: ["GET", "PUT", "DELETE"],
+      query: [],
+    },
+    {
+      pattern: `subjects/${identityUUID}/favorite`,
+      methods: ["PUT"],
+      query: [],
+    },
+    {
+      pattern: `subjects/${identityUUID}/versions/${identityUUID}`,
+      methods: ["GET"],
+      query: [],
+    },
+    {
+      pattern: `subjects/${identityUUID}/versions/${identityUUID}/media/${identityUUID}`,
+      methods: ["GET"],
+      query: [],
+    },
+    {
+      pattern: `subject-commands/${identityUUID}`,
+      methods: ["GET"],
+      query: [],
+    },
     {
       pattern: "operations/history/(commands|publications)",
       methods: ["POST"],
@@ -712,6 +782,7 @@ async function proxy(
     if (
       resource === "me/avatar/uploads" ||
       resource === "media/library/uploads" ||
+      resource === "subjects/sources/uploads" ||
       matches(`projects/${uuid}/media/uploads`)
     ) {
       let bytes = 0;

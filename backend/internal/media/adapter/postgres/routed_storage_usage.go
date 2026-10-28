@@ -77,26 +77,33 @@ func (s *RoutedStorageUsageStore) InspectStorageUsage(ctx context.Context, actor
 		if scope.Kind == domain.LibraryProject {
 			base = "projects/" + scope.ProjectID.String() + "/"
 		}
-		prefixes := make([]application.StorageUsagePrefix, 0, 5*len(s.buckets))
-		seen := make(map[application.StorageUsageBucket]bool)
+		prefixes := make([]application.StorageUsagePrefix, 0, len(s.buckets))
+		seen := make(map[string]string)
 		for _, bucket := range s.buckets {
-			if seen[bucket] || (domain.ObjectRef{ProfileID: bucket.ProfileID, Bucket: bucket.Bucket, Key: "validation"}).Validate() != nil {
+			if seen[bucket.ProfileID] != "" || (domain.ObjectRef{ProfileID: bucket.ProfileID, Bucket: bucket.Bucket, Key: "validation"}).Validate() != nil {
 				return application.ErrUnavailable
 			}
-			seen[bucket] = true
+			seen[bucket.ProfileID] = bucket.Bucket
 			var count int64
-			if err := tx.Raw(`SELECT count(*) FROM media.storage_profile WHERE id=? AND bucket=?`, bucket.ProfileID, bucket.Bucket).Scan(&count).Error; err != nil {
+			query := "SELECT count(*) FROM media.storage_profile WHERE id=? AND bucket=?"
+			args := []any{bucket.ProfileID, bucket.Bucket}
+			if bucket.ResourceIdentity != "" {
+				if !storageDigest(bucket.ResourceIdentity) {
+					return application.ErrStorageIdentityConflict
+				}
+				query += " AND resource_identity=?"
+				args = append(args, bucket.ResourceIdentity)
+			}
+			if err := tx.Raw(query, args...).Scan(&count).Error; err != nil {
 				return err
 			}
 			if count != 1 {
 				return application.ErrStorageNotReady
 			}
-			for _, kind := range []string{"image", "video", "audio", "model", "document"} {
-				prefixes = append(prefixes, application.StorageUsagePrefix{ProfileID: bucket.ProfileID, Bucket: bucket.Bucket, Prefix: base + kind + "/"})
-			}
+			prefixes = append(prefixes, application.StorageUsagePrefix{ProfileID: bucket.ProfileID, Bucket: bucket.Bucket, Prefix: base})
 		}
 		for _, ref := range refs {
-			if !seen[application.StorageUsageBucket{ProfileID: ref.ProfileID, Bucket: ref.Bucket}] {
+			if seen[ref.ProfileID] != ref.Bucket {
 				return application.ErrStorageNotReady
 			}
 		}
@@ -125,7 +132,7 @@ func storageUsageMediaLocations(tx *gorm.DB, actor identityapp.Principal, scope 
 		query += ` UNION ALL SELECT o.source_location_id,o.source_object_key FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id WHERE j.source_kind='personal' AND j.source_org_id=? AND j.actor_id=?
   UNION ALL SELECT o.target_location_id,o.target_object_key FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id WHERE j.target_kind='personal' AND j.target_org_id=? AND j.actor_id=?`
 	}
-	query += `) held LEFT JOIN media.object_location l ON l.id=held.location_id AND l.object_key=held.object_key ORDER BY held.location_id,held.object_key LIMIT 50001`
+	query += `) held LEFT JOIN media.object_location l ON l.id=held.location_id AND l.object_key=held.object_key WHERE l.state IS DISTINCT FROM 'deleted' AND NOT EXISTS(SELECT 1 FROM media.purge_object p WHERE p.object_location_id=held.location_id AND p.object_key=held.object_key AND p.removed) ORDER BY held.location_id,held.object_key LIMIT 50001`
 	var rows []struct{ ProfileID, Bucket, ObjectKey string }
 	if err := tx.Raw(query, args...).Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("read media physical usage: %w", err)

@@ -22,7 +22,8 @@ import (
 // ProjectCopyStore owns media snapshots, immutable object intents and target registration.
 // Workspace injects its admission/fenced transaction; no method reads its copy job.
 type ProjectCopyStore struct {
-	db *gorm.DB
+	routed bool
+	db     *gorm.DB
 	scopeAuthority
 }
 
@@ -218,10 +219,16 @@ func (s *ProjectCopyStore) freezeWithReferenceFacts(ctx context.Context, actor i
 	}
 	byAsset := make(map[uuid.UUID][]domain.Rendition)
 	for _, row := range renditions {
+		if err := hydrateCopySourceRendition(tx, &row); err != nil {
+			return application.ProjectCopySnapshot{}, err
+		}
 		byAsset[row.MediaAssetID] = append(byAsset[row.MediaAssetID], row.domain())
 	}
 	sources := make([]application.ProjectCopySourceAsset, 0, len(rows))
 	for _, row := range rows {
+		if err := hydrateCopySourceAsset(tx, &row); err != nil {
+			return application.ProjectCopySnapshot{}, err
+		}
 		source := application.ProjectCopySourceAsset{Asset: row.domain(), Renditions: byAsset[row.ID]}
 		if source.Asset.IsDelete {
 			if source.Asset.DeleteTime == nil || source.Asset.PurgeAfter == nil {
@@ -240,6 +247,15 @@ func (s *ProjectCopyStore) freezeWithReferenceFacts(ctx context.Context, actor i
 	if err != nil {
 		return application.ProjectCopySnapshot{}, err
 	}
+	snapshotID := uuid.NewSHA1(binding.JobID, []byte("media-snapshot"))
+	if s.routed {
+		if err := bindCopyLocations(ctx, tx, projectCopyWorkOwner(binding.TargetProjectID, snapshotID), content.Objects); err != nil {
+			return application.ProjectCopySnapshot{}, err
+		}
+		if err := attachCopyAssetLocations(content.Assets, content.Objects); err != nil {
+			return application.ProjectCopySnapshot{}, err
+		}
+	}
 	mapping := make(map[uuid.UUID]uuid.UUID, len(sources))
 	for i, source := range sources {
 		mapping[source.Asset.ID] = content.Assets[i].Asset.ID
@@ -252,12 +268,12 @@ func (s *ProjectCopyStore) freezeWithReferenceFacts(ctx context.Context, actor i
 	if err != nil {
 		return application.ProjectCopySnapshot{}, err
 	}
-	snapshot := application.ProjectCopySnapshot{ID: uuid.NewSHA1(binding.JobID, []byte("media-snapshot")), ManifestSHA256: digest, Assets: len(sources), Renditions: len(renditions), AssetMapping: mapping}
+	snapshot := application.ProjectCopySnapshot{ID: snapshotID, ManifestSHA256: digest, Assets: len(sources), Renditions: len(renditions), AssetMapping: mapping}
 	if err := tx.Exec(`INSERT INTO media.project_copy_snapshot(id,job_id,org_id,source_project_id,target_project_id,manifest_sha256,asset_count,rendition_count,content,asset_mapping) VALUES(?,?,?,?,?,?,?,?,?::jsonb,?::jsonb)`, snapshot.ID, binding.JobID, binding.OrgID, binding.SourceProjectID, binding.TargetProjectID, digest, snapshot.Assets, snapshot.Renditions, string(body), string(assetMap)).Error; err != nil {
 		return application.ProjectCopySnapshot{}, fmt.Errorf("persist frozen media snapshot: %w", err)
 	}
 	for _, object := range content.Objects {
-		if err := tx.Exec(`INSERT INTO media.project_copy_object(snapshot_id,target_asset_id,rendition_kind,source_object_key,target_object_key,byte_size,content_type,sha256) VALUES(?,?,?,?,?,?,?,?)`, snapshot.ID, object.TargetAssetID, object.RenditionKind, object.SourceObjectKey, object.TargetObjectKey, object.ByteSize, object.ContentType, object.SHA256).Error; err != nil {
+		if err := tx.Exec(`INSERT INTO media.project_copy_object(snapshot_id,target_asset_id,rendition_kind,source_object_key,target_object_key,byte_size,content_type,sha256,source_location_id,target_location_id) VALUES(?,?,?,?,?,?,?,?,?,?)`, snapshot.ID, object.TargetAssetID, object.RenditionKind, object.SourceObjectKey, object.TargetObjectKey, object.ByteSize, object.ContentType, object.SHA256, locationID(object.SourceLocation), locationID(object.TargetLocation)).Error; err != nil {
 			return application.ProjectCopySnapshot{}, fmt.Errorf("persist private object identity: %w", err)
 		}
 	}
@@ -265,16 +281,17 @@ func (s *ProjectCopyStore) freezeWithReferenceFacts(ctx context.Context, actor i
 }
 
 type copyObjectRow struct {
-	TargetAssetID   uuid.UUID
-	RenditionKind   string
-	SourceObjectKey string
-	TargetObjectKey string
-	ByteSize        *int64
-	ContentType     string
-	SHA256          *string
-	Status          string
-	SourceVerified  bool
-	WriteStarted    bool
+	SourceLocationID, TargetLocationID *uuid.UUID
+	TargetAssetID                      uuid.UUID
+	RenditionKind                      string
+	SourceObjectKey                    string
+	TargetObjectKey                    string
+	ByteSize                           *int64
+	ContentType                        string
+	SHA256                             *string
+	Status                             string
+	SourceVerified                     bool
+	WriteStarted                       bool
 }
 
 func (r copyObjectRow) object() application.ProjectCopyObject {
@@ -339,7 +356,20 @@ func (s *ProjectCopyStore) Objects(ctx context.Context, actor identityapp.Princi
 		if !found || row.TargetAssetID != original.TargetAssetID || row.RenditionKind != original.RenditionKind || row.SourceObjectKey != original.SourceObjectKey || row.ContentType != original.ContentType || original.ByteSize != nil && (row.ByteSize == nil || *row.ByteSize != *original.ByteSize) || original.SHA256 != nil && (row.SHA256 == nil || *row.SHA256 != *original.SHA256) {
 			return nil, application.ErrProjectCopyMediaUnavailable
 		}
-		result = append(result, row.object())
+		value := row.object()
+		source, err := readRowLocation(s.db.WithContext(ctx), row.SourceLocationID, row.SourceObjectKey)
+		if err != nil {
+			return nil, err
+		}
+		target, err := readRowLocation(s.db.WithContext(ctx), row.TargetLocationID, row.TargetObjectKey)
+		if err != nil {
+			return nil, err
+		}
+		if original.SourceLocation != nil && (source == nil || original.SourceLocation.ID != source.ID || original.SourceLocation.Ref != source.Ref) || original.TargetLocation != nil && (target == nil || original.TargetLocation.ID != target.ID || original.TargetLocation.Ref != target.Ref) {
+			return nil, application.ErrObjectMismatch
+		}
+		value.SourceLocation, value.TargetLocation = source, target
+		result = append(result, value)
 	}
 	return result, nil
 }
@@ -380,6 +410,15 @@ func (s *ProjectCopyStore) RecordObjectDigest(ctx context.Context, actor identit
 func (s *ProjectCopyStore) ConfirmObject(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, asset uuid.UUID, kind, digest string, size int64) error {
 	if _, err := s.load(ctx, actor, binding, snapshot); err != nil {
 		return err
+	}
+	var object copyObjectRow
+	if err := s.db.WithContext(ctx).Raw(`SELECT * FROM media.project_copy_object WHERE snapshot_id=? AND target_asset_id=? AND rendition_kind=? FOR UPDATE`, snapshot.ID, asset, kind).Scan(&object).Error; err != nil {
+		return err
+	}
+	if object.TargetLocationID != nil {
+		if err := confirmCopyLocation(ctx, s.db.WithContext(ctx), projectCopyWorkOwner(binding.TargetProjectID, snapshot.ID), object.TargetLocationID, object.TargetObjectKey, object.ContentType, digest, size); err != nil {
+			return err
+		}
 	}
 	update := s.db.WithContext(ctx).Exec(`UPDATE media.project_copy_object SET status='verified',update_time=statement_timestamp() WHERE snapshot_id=? AND target_asset_id=? AND rendition_kind=? AND status IN ('pending','verified') AND source_verified AND write_started AND sha256=? AND byte_size=?`, snapshot.ID, asset, kind, digest, size)
 	if update.Error != nil {
@@ -451,19 +490,24 @@ func (s *ProjectCopyStore) Register(ctx context.Context, actor identityapp.Princ
 		return result, nil
 	}
 	tx := s.db.WithContext(ctx)
+	if len(objects) > 0 && objects[0].TargetLocation != nil {
+		if err := acceptCopyLocations(ctx, tx, projectCopyWorkOwner(binding.TargetProjectID, snapshot.ID), objects); err != nil {
+			return application.ProjectCopyReceipt{}, err
+		}
+	}
 	for _, item := range content.Assets {
 		a := item.Asset
 		if a.Validate() != nil {
 			return application.ProjectCopyReceipt{}, application.ErrProjectCopyMediaUnavailable
 		}
-		if err := tx.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,width,height,duration_ms,fps,audio_channels,codec,moderation_status,moderation_detail,aigc_marked,contains_real_person,revision,create_time,update_time) VALUES(?,?,?,?,'ready',?,?,?,?,?,?,?,?,?,?,?,'passed',?::jsonb,?,false,1,?,?)`, a.ID, a.ProjectID, a.Kind, a.Origin, a.ObjectKey, a.FileName, a.MimeType, a.ByteSize, a.SHA256, a.Width, a.Height, a.DurationMS, a.FPS, a.AudioChannels, a.Codec, nullableJSON(a.ModerationDetail), a.AIGCMarked, a.CreateTime, a.UpdateTime).Error; err != nil {
+		if err := tx.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,object_location_id,file_name,mime_type,byte_size,sha256,width,height,duration_ms,fps,audio_channels,codec,moderation_status,moderation_detail,aigc_marked,contains_real_person,revision,create_time,update_time) VALUES(?,?,?,?,'ready',?,?,?,?,?,?,?,?,?,?,?,?,'passed',?::jsonb,?,false,1,?,?)`, a.ID, a.ProjectID, a.Kind, a.Origin, a.ObjectKey, locationID(a.ObjectLocation), a.FileName, a.MimeType, a.ByteSize, a.SHA256, a.Width, a.Height, a.DurationMS, a.FPS, a.AudioChannels, a.Codec, nullableJSON(a.ModerationDetail), a.AIGCMarked, a.CreateTime, a.UpdateTime).Error; err != nil {
 			return application.ProjectCopyReceipt{}, fmt.Errorf("register copied asset: %w", err)
 		}
 		for _, r := range item.Renditions {
 			if r.Validate() != nil {
 				return application.ProjectCopyReceipt{}, application.ErrProjectCopyMediaUnavailable
 			}
-			if err := tx.Exec(`INSERT INTO media.rendition(id,media_asset_id,kind,object_key,width,height,byte_size,create_time,update_time) VALUES(?,?,?,?,?,?,?,?,?)`, r.ID, r.MediaAssetID, r.Kind, r.ObjectKey, r.Width, r.Height, r.ByteSize, r.CreateTime, r.UpdateTime).Error; err != nil {
+			if err := tx.Exec(`INSERT INTO media.rendition(id,media_asset_id,kind,object_key,object_location_id,width,height,byte_size,create_time,update_time) VALUES(?,?,?,?,?,?,?,?,?,?)`, r.ID, r.MediaAssetID, r.Kind, r.ObjectKey, locationID(r.ObjectLocation), r.Width, r.Height, r.ByteSize, r.CreateTime, r.UpdateTime).Error; err != nil {
 				return application.ProjectCopyReceipt{}, fmt.Errorf("register copied rendition: %w", err)
 			}
 		}
@@ -529,6 +573,11 @@ func (s *ProjectCopyStore) AuthorizeObjectRemoval(ctx context.Context, actor ide
 	if conflict {
 		return application.ErrObjectMismatch
 	}
+	for _, object := range objects {
+		if object.TargetAssetID == asset && object.RenditionKind == kind && object.TargetLocation != nil {
+			return beginCopyRemoval(ctx, s.db.WithContext(ctx), projectCopyWorkOwner(binding.TargetProjectID, snapshot.ID), locationID(object.TargetLocation), object.TargetObjectKey)
+		}
+	}
 	return nil
 }
 
@@ -536,6 +585,15 @@ func (s *ProjectCopyStore) AuthorizeObjectRemoval(ctx context.Context, actor ide
 func (s *ProjectCopyStore) ConfirmObjectRemoved(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, asset uuid.UUID, kind string) error {
 	if err := s.AuthorizeObjectRemoval(ctx, actor, binding, snapshot, asset, kind); err != nil {
 		return err
+	}
+	var object copyObjectRow
+	if err := s.db.WithContext(ctx).Raw(`SELECT * FROM media.project_copy_object WHERE snapshot_id=? AND target_asset_id=? AND rendition_kind=? FOR UPDATE`, snapshot.ID, asset, kind).Scan(&object).Error; err != nil {
+		return err
+	}
+	if object.TargetLocationID != nil {
+		if err := confirmCopyRemoval(ctx, s.db.WithContext(ctx), projectCopyWorkOwner(binding.TargetProjectID, snapshot.ID), object.TargetLocationID, object.TargetObjectKey); err != nil {
+			return err
+		}
 	}
 	update := s.db.WithContext(ctx).Exec(`UPDATE media.project_copy_object SET status='removed',update_time=statement_timestamp() WHERE snapshot_id=? AND target_asset_id=? AND rendition_kind=?`, snapshot.ID, asset, kind)
 	if update.Error != nil {
@@ -580,6 +638,15 @@ func (s *ProjectCopyStore) BeginObjectWrite(ctx context.Context, actor identitya
 	if _, err := s.load(ctx, actor, binding, snapshot); err != nil {
 		return err
 	}
+	var object copyObjectRow
+	if err := s.db.WithContext(ctx).Raw(`SELECT * FROM media.project_copy_object WHERE snapshot_id=? AND target_asset_id=? AND rendition_kind=? FOR UPDATE`, snapshot.ID, asset, kind).Scan(&object).Error; err != nil {
+		return err
+	}
+	if object.TargetLocationID != nil {
+		if err := beginCopyLocation(ctx, s.db.WithContext(ctx), projectCopyWorkOwner(binding.TargetProjectID, snapshot.ID), object.TargetLocationID, object.TargetObjectKey); err != nil {
+			return err
+		}
+	}
 	update := s.db.WithContext(ctx).Exec(`UPDATE media.project_copy_object SET write_started=true,update_time=statement_timestamp() WHERE snapshot_id=? AND target_asset_id=? AND rendition_kind=? AND status='pending' AND source_verified AND sha256 IS NOT NULL AND byte_size IS NOT NULL AND NOT write_started`, snapshot.ID, asset, kind)
 	if update.Error != nil {
 		return update.Error
@@ -593,4 +660,11 @@ func (s *ProjectCopyStore) BeginObjectWrite(ctx context.Context, actor identitya
 // NewScopedProjectCopyStore binds coordinator authority without replacing its lease.
 func NewScopedProjectCopyStore(tx *gorm.DB, scopes ScopeAccessFactory) *ProjectCopyStore {
 	return &ProjectCopyStore{db: tx, scopeAuthority: scopeAuthority{scopes: scopes}}
+}
+
+// WithRoutedStorage binds source and target locations before freezing new copy jobs.
+func (s *ProjectCopyStore) WithRoutedStorage() *ProjectCopyStore {
+	clone := *s
+	clone.routed = true
+	return &clone
 }

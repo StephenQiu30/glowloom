@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"slices"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 // ErrPurgeUnknown preserves uncertainty after an owning removal intent. It must
@@ -15,12 +17,13 @@ var ErrPurgeUnknown = errors.New("media purge outcome unknown")
 // PurgeObject is an internal immutable key plus its persisted physical receipt.
 // Neither this object nor the original bytes cross a public job response.
 type PurgeObject struct {
-	ObjectKey      string  `json:"object_key"`
-	ByteSize       *int64  `json:"byte_size"`
-	SHA256         *string `json:"sha256"`
-	Verified       bool    `json:"verified"`
-	RemovalStarted bool    `json:"removal_started"`
-	Removed        bool    `json:"removed"`
+	Location       *domain.ObjectLocation `json:"-"`
+	ObjectKey      string                 `json:"object_key"`
+	ByteSize       *int64                 `json:"byte_size"`
+	SHA256         *string                `json:"sha256"`
+	Verified       bool                   `json:"verified"`
+	RemovalStarted bool                   `json:"removal_started"`
+	Removed        bool                   `json:"removed"`
 }
 
 // PurgeObjects exposes only exact-key operations selected by the media owner.
@@ -55,7 +58,7 @@ func RemovePurgeObjects(ctx context.Context, objects PurgeObjects, intents Purge
 			return err
 		}
 		if object.RemovalStarted {
-			present, err := objects.Exists(ctx, object.ObjectKey)
+			present, err := purgeExists(ctx, objects, object)
 			if err != nil {
 				return errors.Join(ErrPurgeUnknown, err)
 			}
@@ -66,7 +69,7 @@ func RemovePurgeObjects(ctx context.Context, objects PurgeObjects, intents Purge
 				return ErrObjectMismatch
 			}
 		}
-		reader, err := objects.Get(ctx, object.ObjectKey)
+		reader, err := purgeGet(ctx, objects, object)
 		if err != nil {
 			return err
 		}
@@ -84,7 +87,7 @@ func RemovePurgeObjects(ctx context.Context, objects PurgeObjects, intents Purge
 			return err
 		}
 		if object.RemovalStarted {
-			present, err := objects.Exists(ctx, object.ObjectKey)
+			present, err := purgeExists(ctx, objects, object)
 			if err != nil {
 				return errors.Join(ErrPurgeUnknown, err)
 			}
@@ -97,10 +100,10 @@ func RemovePurgeObjects(ctx context.Context, objects PurgeObjects, intents Purge
 		} else if err := intents.BeginPurgeRemoval(ctx, object.ObjectKey); err != nil {
 			return err
 		}
-		if err := objects.Remove(ctx, object.ObjectKey); err != nil {
+		if err := purgeRemove(ctx, objects, object); err != nil {
 			return errors.Join(ErrPurgeUnknown, fmt.Errorf("remove owned media object: %w", err))
 		}
-		present, err := objects.Exists(ctx, object.ObjectKey)
+		present, err := purgeExists(ctx, objects, object)
 		if err != nil {
 			return errors.Join(ErrPurgeUnknown, err)
 		}
@@ -112,4 +115,39 @@ func RemovePurgeObjects(ctx context.Context, objects PurgeObjects, intents Purge
 		}
 	}
 	return nil
+}
+
+// LocatedPurgeObjects consumes only the owning repository's physical receipt.
+type LocatedPurgeObjects interface {
+	GetPurge(context.Context, PurgeObject) (io.ReadCloser, error)
+	ExistsPurge(context.Context, PurgeObject) (bool, error)
+	RemovePurge(context.Context, PurgeObject) error
+}
+
+func purgeGet(ctx context.Context, objects PurgeObjects, o PurgeObject) (io.ReadCloser, error) {
+	if located, ok := objects.(LocatedPurgeObjects); ok {
+		return located.GetPurge(ctx, o)
+	}
+	if o.Location != nil {
+		return nil, ErrUnavailable
+	}
+	return objects.Get(ctx, o.ObjectKey)
+}
+func purgeExists(ctx context.Context, objects PurgeObjects, o PurgeObject) (bool, error) {
+	if located, ok := objects.(LocatedPurgeObjects); ok {
+		return located.ExistsPurge(ctx, o)
+	}
+	if o.Location != nil {
+		return false, ErrUnavailable
+	}
+	return objects.Exists(ctx, o.ObjectKey)
+}
+func purgeRemove(ctx context.Context, objects PurgeObjects, o PurgeObject) error {
+	if located, ok := objects.(LocatedPurgeObjects); ok {
+		return located.RemovePurge(ctx, o)
+	}
+	if o.Location != nil {
+		return ErrUnavailable
+	}
+	return objects.Remove(ctx, o.ObjectKey)
 }

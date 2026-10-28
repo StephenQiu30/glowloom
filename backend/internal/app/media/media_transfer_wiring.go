@@ -26,3 +26,17 @@ func ProvideMediaTransferWorker(database *gorm.DB, storage *objectstorage.Client
 func ProvideMediaTransferWorkerStore(database *gorm.DB) *pgmedia.TransferStore {
 	return pgmedia.NewScopedTransferStore(database, NewMediaLibraryWorkerProjectAccess, provideMediaLibraryWorkGuards, time.Now, NewMediaWorkerScopeAccess)
 }
+
+// ProvideRoutedMediaTransferStore freezes each transfer item's physical target.
+func ProvideRoutedMediaTransferStore(database *gorm.DB) *pgmedia.TransferStore {
+	return ProvideMediaTransferStore(database).WithRoutedStorage()
+}
+
+// ProvideMediaTransferWorkerWithObjects uses only owner-fenced fixed locations.
+func ProvideMediaTransferWorkerWithObjects(database *gorm.DB, registry *objectstorage.Registry, legacy *objectstorage.Client) (*mediaapp.TransferWorker, *pgmedia.TransferStore) {
+	if registry == nil {
+		return ProvideMediaTransferWorker(database, legacy)
+	}
+	store := ProvideMediaTransferWorkerStore(database).WithRoutedStorage()
+	return mediaapp.NewRoutedTransferWorker(store, mediaobjects.NewRoutedCopyObjects(registry, pgmedia.NewStorageRoutes(database)), ""), store
+}

@@ -54,16 +54,18 @@ func (r *IngestRepository) FindOutput(ctx context.Context, operationID uuid.UUID
 
 func findOutput(tx *gorm.DB, operationID uuid.UUID, seq int) (application.IngestOutput, bool, error) {
 	var row struct {
-		OutputID     uuid.UUID
-		MediaAssetID uuid.UUID
-		ObjectKey    string
-		Kind         string
-		MimeType     string
-		ByteSize     int64
-		SHA256       *string
+		OutputID         uuid.UUID
+		ProjectID        uuid.UUID
+		ObjectLocationID *uuid.UUID
+		MediaAssetID     uuid.UUID
+		ObjectKey        string
+		Kind             string
+		MimeType         string
+		ByteSize         int64
+		SHA256           *string
 	}
 	result := tx.Raw(`
-		SELECT o.id AS output_id, a.id AS media_asset_id, a.object_key,
+		SELECT o.id AS output_id, a.id AS media_asset_id, a.project_id, (to_jsonb(a)->>'object_location_id')::uuid AS object_location_id, a.object_key,
 		       a.kind, a.mime_type, a.byte_size, a.sha256
 		FROM operation.operation_output AS o
 		JOIN media.media_asset AS a ON a.id = o.media_asset_id AND a.project_id = o.project_id
@@ -79,7 +81,12 @@ func findOutput(tx *gorm.DB, operationID uuid.UUID, seq int) (application.Ingest
 	if result.RowsAffected != 1 || row.SHA256 == nil {
 		return application.IngestOutput{}, false, ErrOutputConflict
 	}
+	location, err := readRowLocation(tx, row.ObjectLocationID, row.ObjectKey)
+	if err != nil {
+		return application.IngestOutput{}, false, err
+	}
 	return application.IngestOutput{
+		ProjectID: row.ProjectID, ObjectLocation: location,
 		OutputID: row.OutputID.String(), MediaAssetID: row.MediaAssetID.String(),
 		ObjectKey: row.ObjectKey, Kind: row.Kind, MIMEType: row.MimeType,
 		ByteSize: row.ByteSize, SHA256: *row.SHA256,
@@ -167,41 +174,11 @@ func (r *IngestRepository) SaveOutput(ctx context.Context, asset domain.MediaAss
 		if row.Status != "ingesting" {
 			return ErrOperationNotIngesting
 		}
-		result = tx.Exec(`
-			INSERT INTO media.media_asset
-			  (id, project_id, kind, origin, status, object_key, file_name, mime_type,
-			   byte_size, sha256, width, height, duration_ms, fps, audio_channels,
-			   codec, source_operation_id, provider_key, model_key, region,
-			   moderation_status, aigc_marked, contains_real_person, revision,
-			   create_time, update_time)
-			VALUES (?::uuid, ?::uuid, ?, 'generated', 'processing', ?, '', ?,
-			        ?, ?, ?, ?, ?, ?, ?, ?, ?::uuid, ?, ?, ?, 'pending', ?, ?, 1, ?, ?)
-		`, asset.ID.String(), asset.ProjectID.String(), string(asset.Kind), asset.ObjectKey,
-			asset.MimeType, asset.ByteSize, asset.SHA256, asset.Width, asset.Height,
-			asset.DurationMS, asset.FPS, asset.AudioChannels, asset.Codec,
-			asset.SourceOperationID.String(), asset.ProviderKey, asset.ModelKey, asset.Region,
-			asset.AIGCMarked, asset.ContainsRealPerson, asset.CreateTime, asset.UpdateTime)
-		if result.Error != nil {
-			return fmt.Errorf("insert generated media asset: %w", result.Error)
+		if err := acceptIngestLocations(tx, asset, renditions); err != nil {
+			return err
 		}
-		if result.RowsAffected != 1 {
-			return ErrOutputConflict
-		}
-		for _, rendition := range renditions {
-			result = tx.Exec(`
-				INSERT INTO media.rendition
-				  (id, media_asset_id, kind, object_key, width, height, byte_size,
-				   create_time, update_time)
-				VALUES (?::uuid, ?::uuid, ?, ?, ?, ?, ?, ?, ?)
-			`, rendition.ID.String(), asset.ID.String(), string(rendition.Kind),
-				rendition.ObjectKey, rendition.Width, rendition.Height, rendition.ByteSize,
-				rendition.CreateTime, rendition.UpdateTime)
-			if result.Error != nil {
-				return fmt.Errorf("insert media rendition: %w", result.Error)
-			}
-			if result.RowsAffected != 1 {
-				return ErrOutputConflict
-			}
+		if err := insertIngestMedia(tx, asset, renditions); err != nil {
+			return err
 		}
 		result = tx.Exec(`
 			INSERT INTO operation.operation_output
@@ -215,6 +192,7 @@ func (r *IngestRepository) SaveOutput(ctx context.Context, asset domain.MediaAss
 			return ErrOutputConflict
 		}
 		saved = application.IngestOutput{
+			ProjectID: asset.ProjectID, ObjectLocation: asset.ObjectLocation,
 			OutputID: outputID.String(), MediaAssetID: asset.ID.String(),
 			ObjectKey: asset.ObjectKey, Kind: string(asset.Kind), MIMEType: asset.MimeType,
 			ByteSize: asset.ByteSize, SHA256: *asset.SHA256,
@@ -233,20 +211,21 @@ func (r *IngestRepository) findRenditions(ctx context.Context, assetID uuid.UUID
 		return nil, ErrUnavailable
 	}
 	var rows []struct {
-		ID           uuid.UUID
-		MediaAssetID uuid.UUID
-		Kind         string
-		ObjectKey    string
-		Width        *int32
-		Height       *int32
-		ByteSize     *int64
-		CreateTime   time.Time
-		UpdateTime   time.Time
+		ObjectLocationID *uuid.UUID
+		ID               uuid.UUID
+		MediaAssetID     uuid.UUID
+		Kind             string
+		ObjectKey        string
+		Width            *int32
+		Height           *int32
+		ByteSize         *int64
+		CreateTime       time.Time
+		UpdateTime       time.Time
 	}
 	if err := r.db.WithContext(ctx).Raw(`
-		SELECT id, media_asset_id, kind, object_key, width, height, byte_size,
+		SELECT id, media_asset_id, kind, object_key, (to_jsonb(r)->>'object_location_id')::uuid AS object_location_id, width, height, byte_size,
 		       create_time, update_time
-		FROM media.rendition WHERE media_asset_id = ?::uuid AND NOT is_delete
+		FROM media.rendition AS r WHERE media_asset_id = ?::uuid AND NOT is_delete
 		ORDER BY kind
 	`, assetID.String()).Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("read generated media renditions: %w", err)
@@ -258,6 +237,11 @@ func (r *IngestRepository) findRenditions(ctx context.Context, assetID uuid.UUID
 			ObjectKey: row.ObjectKey, Width: row.Width, Height: row.Height,
 			ByteSize: row.ByteSize, CreateTime: row.CreateTime, UpdateTime: row.UpdateTime,
 		}
+		location, err := readRowLocation(r.db.WithContext(ctx), row.ObjectLocationID, row.ObjectKey)
+		if err != nil {
+			return nil, err
+		}
+		rendition.ObjectLocation = location
 		if err := rendition.Validate(); err != nil {
 			return nil, fmt.Errorf("validate stored media rendition: %w", err)
 		}

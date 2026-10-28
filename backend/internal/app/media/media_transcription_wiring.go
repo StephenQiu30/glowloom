@@ -46,3 +46,8 @@ func ProvideTranscriber(cfg config.Config) (toolapp.Transcriber, error) {
 	}
 	return client, nil
 }
+
+// ProvideRoutedMediaTranscriptionStore pins a real output profile at admission.
+func ProvideRoutedMediaTranscriptionStore(database *gorm.DB, enabled bool, scopes pgmedia.ScopeAccessFactory) *pgtool.TranscriptionStore {
+	return ProvideMediaTranscriptionStoreWithAccess(database, enabled, scopes).WithStorageAdmission(func(tx *gorm.DB) toolapp.ToolStorageLedger { return pgmedia.NewStorageRoutes(tx) })
+}

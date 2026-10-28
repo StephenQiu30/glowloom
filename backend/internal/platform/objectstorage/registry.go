@@ -38,7 +38,7 @@ func OpenProfiles(cfg config.ObjectStorageConfig) (*Registry, error) {
 	r := &Registry{cfg: cfg, transport: http.DefaultTransport.(*http.Transport).Clone()}
 	for _, p := range cfg.Profiles {
 		if p.Mode != "disabled" {
-			if _, err := config.ResolveStorageCredentials(p.Credentials); err != nil {
+			if _, err := cfg.ResolveCredentials(p.Credentials); err != nil {
 				r.Close()
 				return nil, err
 			}
@@ -65,7 +65,7 @@ func (r *Registry) resolve(ref Ref, write bool, signing bool) (backend, config.S
 	if p.Mode == "disabled" || write && p.Mode != "read_write" {
 		return nil, config.StorageCredentials{}, ErrAccessDenied
 	}
-	cred, err := config.ResolveStorageCredentials(p.Credentials)
+	cred, err := r.cfg.ResolveCredentials(p.Credentials)
 	if err != nil {
 		return nil, cred, err
 	}
@@ -77,6 +77,16 @@ func (r *Registry) resolve(ref Ref, write bool, signing bool) (backend, config.S
 		return nil, cred, storageError("configure", ref.ProfileID, err)
 	}
 	return b, cred, nil
+}
+
+// CheckWrite resolves the exact immutable route and current credentials without
+// network I/O. A paid producer can reject missing output admission before send.
+func (r *Registry) CheckWrite(ctx context.Context, ref Ref) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	_, _, err := r.resolve(ref, true, false)
+	return err
 }
 
 // PutIfAbsent performs one atomic create. The relay pipeline's bounded objects
@@ -183,7 +193,7 @@ func (r *Registry) PresignGet(ctx context.Context, ref Ref, ttl time.Duration) (
 
 // ListMetadata returns a complete bounded inventory or no data on any failure.
 func (r *Registry) ListMetadata(ctx context.Context, profileID, bucket, prefix string, maxItems int) ([]ObjectMetadata, error) {
-	if maxItems < 1 || maxItems > 50000 || !strings.HasSuffix(prefix, "/") || strings.Count(prefix, "/") < 3 {
+	if maxItems < 1 || maxItems > 50000 || !strings.HasSuffix(prefix, "/") || strings.Count(prefix, "/") < 2 {
 		return nil, ErrInvalidObject
 	}
 	if err := ctx.Err(); err != nil {

@@ -1,0 +1,98 @@
+.unified-subject-settings {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 32px);
+  gap: 16px;
+  padding: 24px;
+  overflow: hidden;
+  background: var(--popover);
+}
+.unified-subject-settings-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.unified-subject-source {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+.unified-subject-main {
+  display: flex;
+  min-width: 0;
+  height: 244px;
+  overflow: hidden;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--muted);
+}
+.unified-subject-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: 24px;
+}
+.unified-subject-cover {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--radius-panel, 12px);
+  background: var(--muted);
+}
+.unified-subject-create {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+@media (max-width: 639px) {
+  .unified-subject-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .unified-subject-new {
+    order: 1;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    background: var(--secondary);
+  }
+  .unified-subject-create {
+    display: none;
+  }
+  .unified-subject-settings [data-slot="button"] {
+    min-height: 44px;
+  }
+  .unified-subject-settings [data-slot="dialog-close"] {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+.unified-subject-settings [data-slot="field-label"] {
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--foreground);
+}
+.unified-subject-settings [data-slot="input"],
+.unified-subject-settings [data-slot="textarea"] {
+  background: var(--background);
+}
+@media (max-width: 639px) {
+  .unified-subject-library [data-slot="button"],
+  .unified-subject-source [data-slot="button"],
+  .unified-subject-source [data-slot="tabs-trigger"],
+  .unified-subject-popover [data-slot="button"],
+  .unified-subject-menu [role^="menuitem"] {
+    min-height: 44px;
+  }
+  .unified-subject-library [data-size="icon"],
+  .unified-subject-settings [data-size="icon"] {
+    min-width: 44px;
+  }
+  .unified-subject-source [data-slot="tabs-list"] {
+    min-height: 44px;
+  }
+}

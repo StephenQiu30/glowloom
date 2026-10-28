@@ -30,16 +30,21 @@ type Config struct {
 	LogLevel                      string
 	DBDSN                         string
 	PartitionMaintenanceDBDSN     string
+	StorageMaintenanceDSN         string
 	RedisURL                      string
 	KafkaBrokers                  string
 	TemporalAddr                  string
 	TemporalNamespace             string
+	ObjectStorageProvider         string
+	ObjectStorageLegacy           StorageEnvironment
 	ObjectStorageEndpoint         string
 	ObjectStorageBucket           string
 	ObjectStorageAccessKey        string
 	ObjectStorageSecretKey        string
 	ObjectStorageRegion           string
 	ObjectStorage                 *ObjectStorageConfig
+	CredentialPublicKeyPEM        string `json:"-" yaml:"-"`
+	CredentialPrivateKeyPEM       string `json:"-" yaml:"-"`
 	CredentialPublicKeyFile       string
 	CredentialKeyID               string
 	CredentialRequestMACKey       string
@@ -111,6 +116,7 @@ func Load() (Config, error) {
 		LogLevel:                      strings.TrimSpace(v.GetString("GLOWLOOM_LOG_LEVEL")),
 		DBDSN:                         strings.TrimSpace(v.GetString("GLOWLOOM_DB_DSN")),
 		PartitionMaintenanceDBDSN:     strings.TrimSpace(v.GetString("GLOWLOOM_PARTITION_MAINTENANCE_DB_DSN")),
+		StorageMaintenanceDSN:         strings.TrimSpace(v.GetString("GLOWLOOM_STORAGE_MAINTENANCE_DSN")),
 		RedisURL:                      strings.TrimSpace(v.GetString("GLOWLOOM_REDIS_URL")),
 		KafkaBrokers:                  strings.TrimSpace(v.GetString("GLOWLOOM_KAFKA_BROKERS")),
 		TemporalAddr:                  strings.TrimSpace(v.GetString("GLOWLOOM_TEMPORAL_ADDR")),
@@ -120,6 +126,8 @@ func Load() (Config, error) {
 		ObjectStorageAccessKey:        v.GetString("GLOWLOOM_OBJECT_STORAGE_ACCESS_KEY"),
 		ObjectStorageSecretKey:        v.GetString("GLOWLOOM_OBJECT_STORAGE_SECRET_KEY"),
 		ObjectStorageRegion:           strings.TrimSpace(v.GetString("GLOWLOOM_OBJECT_STORAGE_REGION")),
+		CredentialPublicKeyPEM:        v.GetString("GLOWLOOM_CREDENTIAL_PUBLIC_KEY_PEM"),
+		CredentialPrivateKeyPEM:       v.GetString("GLOWLOOM_CREDENTIAL_PRIVATE_KEY_PEM"),
 		CredentialPublicKeyFile:       strings.TrimSpace(v.GetString("GLOWLOOM_CREDENTIAL_PUBLIC_KEY_FILE")),
 		CredentialKeyID:               strings.TrimSpace(v.GetString("GLOWLOOM_CREDENTIAL_KEY_ID")),
 		CredentialRequestMACKey:       strings.TrimSpace(v.GetString("GLOWLOOM_CREDENTIAL_REQUEST_MAC_KEY")),
@@ -158,15 +166,11 @@ func Load() (Config, error) {
 		}
 		cfg.IdentityLegacyUpgradeUntil = deadline
 	}
-	if path := strings.TrimSpace(v.GetString("GLOWLOOM_OBJECT_STORAGE_CONFIG")); path != "" {
-		if cfg.ObjectStorageEndpoint != "" || cfg.ObjectStorageBucket != "" || cfg.ObjectStorageAccessKey != "" || cfg.ObjectStorageSecretKey != "" || cfg.ObjectStorageRegion != "" {
-			return Config{}, fmt.Errorf("%w: YAML and legacy object storage settings conflict", ErrInvalid)
-		}
-		storage, err := LoadObjectStorage(path, cfg.Env)
-		if err != nil {
-			return Config{}, err
-		}
-		cfg.ObjectStorage = &storage
+	if strings.TrimSpace(v.GetString("GLOWLOOM_OBJECT_STORAGE_CONFIG")) != "" {
+		return Config{}, fmt.Errorf("%w: use the unified object storage environment settings", ErrInvalid)
+	}
+	if err := cfg.configureStorage(v.GetString); err != nil {
+		return Config{}, err
 	}
 	if err := cfg.validate(); err != nil {
 		return Config{}, err
@@ -175,6 +179,9 @@ func Load() (Config, error) {
 }
 
 func (c Config) validate() error {
+	if c.CredentialPublicKeyPEM != "" && c.CredentialPublicKeyFile != "" || c.CredentialPrivateKeyPEM != "" && c.CredentialPrivateKeyFile != "" || len(c.CredentialPublicKeyPEM) > 16384 || len(c.CredentialPrivateKeyPEM) > 16384 {
+		return fmt.Errorf("%w: conflicting or oversized credential key source", ErrInvalid)
+	}
 	if c.CanvasRuntimeURL != "" || c.CanvasRuntimeToken != "" {
 		endpoint, err := url.Parse(c.CanvasRuntimeURL)
 		if err != nil || endpoint.Host == "" || (endpoint.Scheme != "http" && endpoint.Scheme != "https") || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" || len(c.CanvasRuntimeToken) < 32 {
@@ -217,7 +224,7 @@ func (c Config) validate() error {
 			return fmt.Errorf("%w: video depth requires the verified mps device profile", ErrInvalid)
 		}
 	}
-	if (c.CredentialPublicKeyFile == "") != (c.CredentialKeyID == "") || len(c.CredentialKeyID) > 128 {
+	if (c.CredentialPublicKeyFile == "" && c.CredentialPublicKeyPEM == "") != (c.CredentialKeyID == "") || len(c.CredentialKeyID) > 128 {
 		return fmt.Errorf("%w: credential public key file and key ID must be configured together", ErrInvalid)
 	}
 	if c.MediaAllowTestLoopbackTLS && c.Env != "local" {

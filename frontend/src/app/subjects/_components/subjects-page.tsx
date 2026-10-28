@@ -1,26 +1,18 @@
 "use client";
 import { useState } from "react";
-import { PageLayout } from "@/components/layout/page-layout";
-import { PageHeading } from "@/components/layout/page-heading";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ProjectPicker } from "@/components/projects/project-picker";
-import { type Project } from "@/components/projects/project";
-import { SubjectList } from "@/components/subjects/subject-list";
-import {
-  GenerationDialog,
-  type GenerationSeed,
-} from "@/components/generation/generation-dialog";
-import { subjectText } from "@/components/subjects/contracts";
-import { kinds } from "@/components/subjects/contracts";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { PageLayout } from "@/components/layout/page-layout";
+import { useOptionalSession } from "@/components/auth/session";
+import { useSpace } from "@/components/spaces/space-context";
 import { ContentState } from "@/components/layout/content-state";
-import { FolderOpen } from "lucide-react";
+import { UnifiedSubjectLibrary } from "@/components/subjects/unified-library";
+
 export function SubjectsPage() {
+  const session = useOptionalSession();
+  const space = useSpace();
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
-  const [project, setProject] = useState<Project | null>(null),
-    [kind, setKind] = useState<API.Kind>("character"),
-    [generation, setGeneration] = useState<GenerationSeed | null>(null);
   return (
     <PageLayout
       screen="subjects"
@@ -29,69 +21,30 @@ export function SubjectsPage() {
         onValueChange: setSearch,
         onSearch: setQuery,
         label: "搜索主体",
-        placeholder: "搜索本页主体",
-        disabled: !project,
+        placeholder: "搜索当前空间主体",
+        disabled: !session || !space.selected,
       }}
     >
-      {!project ? (
-        <PageHeading
-          title="主体库"
-          actions={<Button disabled>新建主体</Button>}
-        />
-      ) : null}
-      {project ? (
-        <SubjectList
-          pageTitle="主体库"
-          key={project.id + kind}
-          searchQuery={query}
-          projectID={project.id}
-          kind={kind}
-          filters={
-            <>
-              <ProjectPicker value={project} onChange={setProject} compact />
-              <ToggleGroup
-                type="single"
-                value={kind}
-                onValueChange={(v) => {
-                  if (v in kinds) setKind(v as API.Kind);
-                }}
-                className="subject-tabs"
-                aria-label="主体分类"
-              >
-                {(Object.keys(kinds) as API.Kind[]).map((k) => (
-                  <ToggleGroupItem key={k} value={k}>
-                    {kinds[k]}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-            </>
-          }
-          onGenerate={(subject) => {
-            const text = subjectText(subject);
-            setGeneration({
-              project,
-              subject,
-              prompt: `主体：${text.name}。${text.description ?? ""}`,
-              capability: "image",
-            });
-          }}
+      <h1 className="sr-only">主体</h1>
+      <div className="flex justify-end">
+        <Button asChild variant="ghost" size="sm">
+          <Link href="/subjects/history">项目历史主体</Link>
+        </Button>
+      </div>
+      {session && space.selected ? (
+        <UnifiedSubjectLibrary
+          key={`${session.actor.id}/${space.selected.id}`}
+          actorID={session.actor.id}
+          scopeID={space.selected.id!}
+          query={query}
         />
       ) : (
-        <>
-          <div className="page-toolbar">
-            <ProjectPicker value={project} onChange={setProject} compact />
-          </div>
-          <ContentState
-            icon={FolderOpen}
-            title="选择项目，查看你的主体"
-            description="主体与参考素材保存在所属项目中。"
-          />
-        </>
-      )}
-      {generation && (
-        <GenerationDialog
-          seed={generation}
-          onClose={() => setGeneration(null)}
+        <ContentState
+          state={space.pending ? "loading" : "empty"}
+          title={space.pending ? "正在读取创作空间" : "登录后管理主体"}
+          description={
+            space.error || "在当前空间建立主体，并在不同项目的创作中复用。"
+          }
         />
       )}
     </PageLayout>

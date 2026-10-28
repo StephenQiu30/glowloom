@@ -3,6 +3,8 @@ package postgres
 import (
 	"context"
 
+	"github.com/google/uuid"
+
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -27,7 +29,14 @@ func (s *PurgeStore) PurgeObjects(ctx context.Context, lease application.PurgeLe
 			return err
 		}
 		result = make([]application.PurgeObject, 0, 17)
-		if err := tx.Raw(`SELECT object_key,byte_size,sha256,verified,removal_started,removed FROM media.purge_object WHERE job_id=? AND item_index=? ORDER BY rendition_kind FOR UPDATE`, row.ID, index).Scan(&result).Error; err != nil {
+		var rows []purgeObjectRow
+		if err := tx.Raw(`SELECT object_key,byte_size,sha256,verified,removal_started,removed FROM media.purge_object WHERE job_id=? AND item_index=? ORDER BY rendition_kind FOR UPDATE`, row.ID, index).Scan(&rows).Error; err != nil {
+			return err
+		}
+		for _, r := range rows {
+			result = append(result, r.object())
+		}
+		if err := loadPurgeLocations(tx, row.ID, index, result); err != nil {
 			return err
 		}
 		if frozen.Asset == nil && len(result) != 0 || frozen.Asset != nil && len(result) != len(frozen.Renditions)+1 {
@@ -75,13 +84,17 @@ func (s *PurgeStore) withObject(ctx context.Context, lease application.PurgeLeas
 		if !allowed {
 			return application.ErrObjectMismatch
 		}
-		var object application.PurgeObject
-		read := tx.Raw(`SELECT object_key,byte_size,sha256,verified,removal_started,removed FROM media.purge_object WHERE job_id=? AND item_index=? AND object_key=? FOR UPDATE`, row.ID, index, key).Scan(&object)
+		var objectRow purgeObjectRow
+		read := tx.Raw(`SELECT object_key,byte_size,sha256,verified,removal_started,removed FROM media.purge_object WHERE job_id=? AND item_index=? AND object_key=? FOR UPDATE`, row.ID, index, key).Scan(&objectRow)
 		if read.Error != nil {
 			return read.Error
 		}
 		if read.RowsAffected != 1 {
 			return application.ErrObjectMismatch
+		}
+		object := objectRow.object()
+		if err := loadPurgeLocations(tx, row.ID, index, []application.PurgeObject{object}); err != nil {
+			return err
 		}
 		return consume(tx, row, object)
 	})
@@ -238,3 +251,43 @@ func (s *PurgeStore) FinishPurge(ctx context.Context, lease application.PurgeLea
 }
 
 var _ application.PurgeWorkerRepository = (*PurgeStore)(nil)
+
+func loadPurgeLocations(tx *gorm.DB, job uuid.UUID, index int, objects []application.PurgeObject) error {
+	for i := range objects {
+		var row struct{ ObjectLocationID *uuid.UUID }
+		if err := tx.Raw(`SELECT object_location_id FROM media.purge_object WHERE job_id=? AND item_index=? AND object_key=?`, job, index, objects[i].ObjectKey).Scan(&row).Error; err != nil {
+			return err
+		}
+		if row.ObjectLocationID == nil {
+			continue
+		}
+		l, err := NewStorageRoutes(tx).ReadLocation(tx.Statement.Context, *row.ObjectLocationID)
+		if err != nil {
+			return err
+		}
+		if l.Ref.Key != objects[i].ObjectKey {
+			return application.ErrObjectMismatch
+		}
+		objects[i].Location = &l
+	}
+	return nil
+}
+
+func locationID(l *domain.ObjectLocation) *uuid.UUID {
+	if l == nil {
+		return nil
+	}
+	id := l.ID
+	return &id
+}
+
+type purgeObjectRow struct {
+	ObjectKey                         string
+	ByteSize                          *int64
+	SHA256                            *string
+	Verified, RemovalStarted, Removed bool
+}
+
+func (r purgeObjectRow) object() application.PurgeObject {
+	return application.PurgeObject{ObjectKey: r.ObjectKey, ByteSize: r.ByteSize, SHA256: r.SHA256, Verified: r.Verified, RemovalStarted: r.RemovalStarted, Removed: r.Removed}
+}

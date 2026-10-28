@@ -1,0 +1,36 @@
+{
+  "source": "真实Chrome本地主体菜单下载",
+  "file": "/Users/stephenqiu/Downloads/主体对齐本地验收-20261028.zip",
+  "bytes": 4424,
+  "created_at": "2026-10-28T09:44:37.999113216Z",
+  "crc_errors": false,
+  "entries": [
+    "subjects/fc8ee683-a084-423c-94ba-a55668ccd052/96a2b9b8-2cda-4f2f-9fce-b721568cb39d.png",
+    "manifest.json"
+  ],
+  "format": "glowloom.subjects",
+  "version": 1,
+  "subject_count": 1,
+  "subjects": [
+    {
+      "id": "fc8ee683-a084-423c-94ba-a55668ccd052",
+      "version_id": "008fc3e4-babc-418f-8a58-ba3e34035459",
+      "revision": 1,
+      "name": "主体对齐本地验收-20261028"
+    }
+  ],
+  "media": [
+    {
+      "path": "subjects/fc8ee683-a084-423c-94ba-a55668ccd052/96a2b9b8-2cda-4f2f-9fce-b721568cb39d.png",
+      "bytes": 7435,
+      "sha256": "e9835bb475f301225dfe47ae0e5c70bcd599364ef7ede1f24ef7855dabd74617",
+      "manifest_sha256_matches": true
+    }
+  ],
+  "browser_event": "waitForEvent(download)超时20000ms，实际原生Chrome下载浮层显示完成",
+  "screenshots": [
+    "output/subjects-2026-10-28/local-browser/frontend-12-download-complete.png",
+    "output/subjects-2026-10-28/local-browser/frontend-13-final-subject-page.png"
+  ],
+  "cloud_tos": false
+}

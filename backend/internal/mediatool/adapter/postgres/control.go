@@ -90,6 +90,9 @@ func (s *Store) Control(ctx context.Context, actor identityapp.Principal, projec
 			row.Stage = "queued"
 			row.Progress = 0
 			row.Attempt++
+			if err := pinTool(ctx, tx, s.storage, "export", project, row.ID, row.Attempt); err != nil {
+				return err
+			}
 			row.ActiveWorker = nil
 			row.AssetID = nil
 			row.SHA256 = nil

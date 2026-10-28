@@ -24,6 +24,9 @@ func storageError(err error) error {
 	if errors.Is(err, objectstorage.ErrObjectExists) {
 		return errors.Join(application.ErrObjectExists, err)
 	}
+	if errors.Is(err, objectstorage.ErrObjectMissing) {
+		return errors.Join(application.ErrObjectMissing, err)
+	}
 	response := minio.ToErrorResponse(err)
 	if response.Code == "NoSuchKey" || response.Code == "NoSuchObject" || response.Code == "NotFound" {
 		return errors.Join(application.ErrObjectMissing, err)

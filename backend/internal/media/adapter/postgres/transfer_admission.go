@@ -187,6 +187,19 @@ func (s *TransferStore) CreateTransfer(ctx context.Context, actor identityapp.Pr
 			if err != nil {
 				return err
 			}
+			if s.routed && len(prepared.Objects) > 0 {
+				if err := bindCopyLocations(ctx, tx, transferWorkOwner(jobID, target.ID, len(frozen)), prepared.Objects); err != nil {
+					return err
+				}
+				if prepared.TargetAsset != nil {
+					a := []application.ProjectCopySourceAsset{{Asset: *prepared.TargetAsset, Renditions: prepared.TargetRenditions}}
+					if err := attachCopyAssetLocations(a, prepared.Objects); err != nil {
+						return err
+					}
+					prepared.TargetAsset = &a[0].Asset
+					prepared.TargetRenditions = a[0].Renditions
+				}
+			}
 			prepared.TargetItem.Position = int64(len(frozen))
 			frozen = append(frozen, prepared)
 		}
@@ -207,7 +220,7 @@ func (s *TransferStore) CreateTransfer(ctx context.Context, actor identityapp.Pr
 				return err
 			}
 			for _, object := range item.Objects {
-				if err := libraryChanged(tx, `INSERT INTO media.transfer_object(job_id,item_index,rendition_kind,source_object_key,target_object_key,byte_size,content_type,sha256) VALUES(?,?,?,?,?,?,?,?)`, jobID, index, object.RenditionKind, object.SourceObjectKey, object.TargetObjectKey, object.ByteSize, object.ContentType, object.SHA256); err != nil {
+				if err := libraryChanged(tx, `INSERT INTO media.transfer_object(job_id,item_index,rendition_kind,source_object_key,target_object_key,byte_size,content_type,sha256,source_location_id,target_location_id) VALUES(?,?,?,?,?,?,?,?,?,?)`, jobID, index, object.RenditionKind, object.SourceObjectKey, object.TargetObjectKey, object.ByteSize, object.ContentType, object.SHA256, locationID(object.SourceLocation), locationID(object.TargetLocation)); err != nil {
 					return err
 				}
 			}

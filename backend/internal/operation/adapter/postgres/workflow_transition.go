@@ -99,7 +99,7 @@ func (s *Store) TransitionWorkflowOperation(ctx context.Context, input applicati
 			}
 		}
 		if input.To == domain.StatusSubmitting {
-			if err := checkWorkflowInputsForSubmission(tx, input.OperationID, row.ProjectID); err != nil {
+			if err := s.checkWorkflowInputsForSubmission(tx, input.OperationID, row.ProjectID); err != nil {
 				return err
 			}
 		}

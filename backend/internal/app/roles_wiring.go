@@ -13,6 +13,10 @@ import (
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
 	copywire "github.com/StephenQiu30/glowloom-server/backend/internal/app/projectcopy"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
+	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
+	subjectevent "github.com/StephenQiu30/glowloom-server/backend/internal/subject/adapter/event"
+	subjectflow "github.com/StephenQiu30/glowloom-server/backend/internal/subject/adapter/workflow"
+	subjectapp "github.com/StephenQiu30/glowloom-server/backend/internal/subject/application"
 
 	"go.opentelemetry.io/otel/trace"
 	"go.temporal.io/sdk/activity"
@@ -36,6 +40,7 @@ import (
 	redisrealtime "github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/adapter/redis"
 	realtime "github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/application"
 	mediaevent "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/event"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediastaged "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/staged"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	toolevent "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/event"
@@ -110,10 +115,11 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 			return nil, err
 		}
 	case "provider":
-		if err := catalogwire.RegisterProviderActivities(queueWorker, dbConn.DB, cfg); err != nil {
+		if err := catalogwire.RegisterProviderActivities(ctx, queueWorker, dbConn.DB, cfg); err != nil {
 			return nil, err
 		}
 	case "flow":
+		subjectflow.RegisterWorkflow(queueWorker)
 		if cfg.Env == "local" {
 			queueWorker.RegisterWorkflow(operationflow.TrialWorkflow)
 		}
@@ -131,30 +137,34 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		operationStore := operationwire.ProvideOperationStore(dbConn.DB)
 		finalizer := operationwire.NewOperationFinalizer(dbConn.DB, operationStore, pgbilling.NewStore(dbConn.DB))
 		var recovery operationflow.ProviderImageRecoverer
-		if cfg.ObjectStorageEndpoint != "" {
-			storage, err := objectstorage.Open(cfg.ObjectStorageEndpoint, cfg.ObjectStorageBucket,
-				cfg.ObjectStorageAccessKey, cfg.ObjectStorageSecretKey, cfg.ObjectStorageRegion)
-			if err != nil {
-				return nil, fmt.Errorf("configure flow receipt storage: %w", err)
-			}
-			if err := storage.Ping(ctx); err != nil {
-				return nil, fmt.Errorf("connect flow receipt storage: %w", err)
-			}
-			recovery = operationapp.NewProviderStageService(operationstaging.NewObjects(storage), operationStore)
+		legacy, err := objectstorage.OpenLegacy(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("configure flow receipt storage: %w", err)
+		}
+		objects, err := subjectwire.OpenObjects(cfg, legacy)
+		if err != nil {
+			return nil, err
+		}
+		context.AfterFunc(ctx, objects.Close)
+		if objects.Registry() != nil {
+			recovery = operationapp.NewRoutedProviderStageService(operationstaging.NewRoutedFactory(objects.Registry(), pgmedia.NewStorageRoutes(dbConn.DB)), operationStore)
+		} else if legacy != nil {
+			recovery = operationapp.NewProviderStageService(operationstaging.NewObjects(legacy), operationStore)
 		}
 		operationflow.Register(queueWorker, operationflow.NewActivitiesWithImageRecovery(operationStore, finalizer, operationStore, recovery))
 		operationflow.RegisterBatch(queueWorker, operationflow.NewBatchActivities(operationStore, finalizer))
 		operationflow.RegisterQuoteExpiry(queueWorker,
 			operationflow.NewQuoteExpiryActivities(operationapp.NewQuoteExpiryService(operationStore, 500)))
 	case "media":
-		storage, err := objectstorage.Open(cfg.ObjectStorageEndpoint, cfg.ObjectStorageBucket,
-			cfg.ObjectStorageAccessKey, cfg.ObjectStorageSecretKey, cfg.ObjectStorageRegion)
+		storage, err := objectstorage.OpenLegacy(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("configure media object storage: %w", err)
 		}
-		if err := storage.Ping(ctx); err != nil {
-			return nil, fmt.Errorf("connect media object storage: %w", err)
+		objects, err := subjectwire.OpenObjects(cfg, storage)
+		if err != nil {
+			return nil, err
 		}
+		context.AfterFunc(ctx, objects.Close)
 		var origins []string
 		for _, raw := range strings.Split(cfg.MediaResultAllowedOrigins, ",") {
 			if origin := strings.TrimSpace(raw); origin != "" {
@@ -162,15 +172,30 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 			}
 		}
 		receiptService := operationapp.NewProviderStageService(operationstaging.NewObjects(storage), operationwire.ProvideOperationStore(dbConn.DB))
-		activities, err := mediaflow.NewScopedActivitiesWithStaging(dbConn.DB, storage, mediaflow.DownloadPolicy{
-			AllowedOrigins: origins, AllowTestLoopbackTLS: cfg.MediaAllowTestLoopbackTLS,
-		}, mediastaged.NewReader(receiptService), mediawire.NewMediaWorkerScopeAccess)
+		if objects.Registry() != nil {
+			receiptService = operationapp.NewRoutedProviderStageService(operationstaging.NewRoutedFactory(objects.Registry(), pgmedia.NewStorageRoutes(dbConn.DB)), operationwire.ProvideOperationStore(dbConn.DB))
+		}
+		var activities *mediaflow.Activities
+		if objects.Registry() == nil && storage == nil {
+			activities = mediaflow.NewUnavailableActivities(dbConn.DB, mediawire.NewMediaWorkerScopeAccess)
+		} else if objects.Registry() == nil {
+			activities, err = mediaflow.NewScopedActivitiesWithStaging(dbConn.DB, storage, mediaflow.DownloadPolicy{AllowedOrigins: origins, AllowTestLoopbackTLS: cfg.MediaAllowTestLoopbackTLS}, mediastaged.NewReader(receiptService), mediawire.NewMediaWorkerScopeAccess)
+		}
+		if objects.Registry() != nil {
+			activities, err = mediaflow.NewRoutedScopedActivitiesWithStaging(dbConn.DB, objects.Registry(), mediaflow.DownloadPolicy{AllowedOrigins: origins, AllowTestLoopbackTLS: cfg.MediaAllowTestLoopbackTLS}, mediastaged.NewReader(receiptService), mediawire.NewMediaWorkerScopeAccess)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("configure media activities: %w", err)
 		}
 
 		managedResults := operationapp.NewManagedResults(operationstaging.NewObjects(storage), operationwire.ProvideOperationStore(dbConn.DB))
+		if objects.Registry() != nil {
+			managedResults = operationapp.NewRoutedManagedResults(operationstaging.NewRoutedFactory(objects.Registry(), pgmedia.NewStorageRoutes(dbConn.DB)), operationwire.ProvideOperationStore(dbConn.DB))
+		}
 		managedIngest := managedprovider.NewScopedIngestActivities(dbConn.DB, storage, managedResults, mediawire.NewMediaWorkerScopeAccess, operationwire.ProvideOperationStore(dbConn.DB))
+		if objects.Registry() != nil {
+			managedIngest = managedprovider.NewRoutedIngestActivities(dbConn.DB, objects.Registry(), managedResults, mediawire.NewMediaWorkerScopeAccess, operationwire.ProvideOperationStore(dbConn.DB))
+		}
 		queueWorker.RegisterActivityWithOptions(managedIngest.Ingest, activity.RegisterOptions{Name: "media.IngestManaged"})
 		mediaflow.Register(queueWorker, activities)
 		exportRenderer, err := toolff.NewRenderer(mediaflow.FFProber{})
@@ -179,6 +204,10 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		}
 		exports := mediawire.ProvideMediaExportStoreWithAccess(dbConn.DB, mediawire.NewMediaWorkerScopeAccess)
 		exportWorker := toolapp.NewWorker(exports, toolflow.NewObjects(storage), exportRenderer, mediaflow.FFProber{}, mediaflow.FFUploadRenderer{})
+		if objects.Registry() != nil {
+			exports = mediawire.ProvideRoutedMediaExportStore(dbConn.DB, mediawire.NewMediaWorkerScopeAccess)
+			exportWorker = toolapp.NewRoutedWorker(exports, mediawire.ToolObjects(dbConn.DB, objects.Registry(), storage), exportRenderer, mediaflow.FFProber{}, mediaflow.FFUploadRenderer{})
+		}
 		toolflow.RegisterActivities(queueWorker, toolflow.NewActivities(exportWorker, exports, exports))
 		transcriber, err := mediawire.ProvideTranscriber(cfg)
 		if err != nil {
@@ -190,19 +219,26 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		}
 		transcriptions := mediawire.ProvideMediaTranscriptionStoreWithAccess(dbConn.DB, transcriber != nil, mediawire.NewMediaWorkerScopeAccess)
 		transcriptionWorker := toolapp.NewTranscriptionWorker(transcriptions, toolflow.NewObjects(storage), audioPreprocessor, transcriber)
+		if objects.Registry() != nil {
+			transcriptions = mediawire.ProvideRoutedMediaTranscriptionStore(dbConn.DB, transcriber != nil, mediawire.NewMediaWorkerScopeAccess)
+			transcriptionWorker = toolapp.NewRoutedTranscriptionWorker(transcriptions, mediawire.ToolObjects(dbConn.DB, objects.Registry(), storage), audioPreprocessor, transcriber)
+		}
 		toolflow.RegisterTranscriptionActivities(queueWorker, toolflow.NewTranscriptionActivities(transcriptionWorker, transcriptions))
-		depthWorker, depths, err := mediawire.ProvideMediaDepthWorker(dbConn.DB, storage, cfg)
+		depthWorker, depths, err := mediawire.ProvideMediaDepthWorkerRouted(dbConn.DB, objects.Registry(), storage, cfg)
 		if err != nil {
 			return nil, err
 		}
 		toolflow.RegisterDepthActivities(queueWorker, toolflow.NewDepthActivities(depthWorker, depths))
-		copyWorker, copies := copywire.ProvideProjectCopyWorker(dbConn.DB, storage)
+		copyWorker, copies := copywire.ProvideProjectCopyWorkerWithObjects(dbConn.DB, objects.Registry(), storage)
 		workspaceflow.RegisterProjectCopyActivities(queueWorker, workspaceflow.NewProjectCopyActivities(copyWorker, copies))
-		importWorker, imports := scriptwire.ProvideScriptImportWorker(dbConn.DB, storage)
+		importWorker, imports := scriptwire.ProvideScriptImportWorkerWithObjects(dbConn.DB, objects.Registry(), storage)
 		scriptflow.RegisterImportActivities(queueWorker, scriptflow.NewImportActivities(importWorker, imports))
-		transferWorker, transfers := mediawire.ProvideMediaTransferWorker(dbConn.DB, storage)
+		transferWorker, transfers := mediawire.ProvideMediaTransferWorkerWithObjects(dbConn.DB, objects.Registry(), storage)
 		mediaflow.RegisterTransferActivities(queueWorker, mediaflow.NewTransferActivities(transferWorker, transfers))
 		purgeWorker, purges := mediawire.NewMediaPurgeWorker(dbConn.DB, storage)
+		if objects.Registry() != nil {
+			purgeWorker, purges = mediawire.NewRoutedMediaPurgeWorker(dbConn.DB, objects.Registry())
+		}
 		mediaflow.RegisterPurgeActivities(queueWorker, mediaflow.NewPurgeActivities(purgeWorker, purges))
 	default:
 		return nil, fmt.Errorf("%w: worker queue %q", ErrRoleNotAvailable, queue)
@@ -262,11 +298,15 @@ func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Conn
 		copyHandler := workspaceevent.NewProjectCopyHandler(processed, copywire.ProvideProjectCopyStoreWithAccess(dbConn.DB, mediawire.NewMediaWorkerScopeAccess), workspaceflow.NewProjectCopyStarter(temporalConn.Client))
 		importHandler := scriptevent.NewImportHandler(processed, scriptwire.ProvideScriptImportStore(dbConn.DB), scriptflow.NewImportStarter(temporalConn.Client))
 		transferHandler := mediaevent.NewTransferHandler(processed, mediawire.ProvideMediaTransferWorkerStore(dbConn.DB), mediaflow.NewTransferStarter(temporalConn.Client))
+		// Existing deployments may restart before the additive Subject migration.
+		// Keep established operation recovery running until voice storage exists.
+		voiceSchemaReady := dbConn.DB.Migrator().HasTable("subject.voice_job")
+		voiceHandler := subjectevent.NewVoiceHandler(processed, subjectwire.NewVoiceJobs(dbConn.DB), subjectflow.NewStarter(temporalConn.Client))
 		purgeHandler := mediaevent.NewPurgeHandler(processed, mediawire.ProvideMediaPurgeWorkerStore(dbConn.DB), mediaflow.NewPurgeStarter(temporalConn.Client))
 		runtime.starter, err = kafkainbox.NewConsumer(cfg.KafkaBrokers, workflowStarterGroup,
-			[]string{operationevent.OperationConfirmedTopic, operationevent.BatchConfirmedTopic, operationevent.WorkflowControlTopic, catalogevent.CredentialTestTopic, toolevent.Topic, toolevent.TranscriptionTopic, toolevent.DepthTopic, workspaceevent.ProjectCopyTopic, scriptevent.ImportTopic, mediaevent.TransferTopic, mediaevent.PurgeTopic}, workflowDelivery{
+			[]string{operationevent.OperationConfirmedTopic, operationevent.BatchConfirmedTopic, operationevent.WorkflowControlTopic, catalogevent.CredentialTestTopic, toolevent.Topic, toolevent.TranscriptionTopic, toolevent.DepthTopic, workspaceevent.ProjectCopyTopic, scriptevent.ImportTopic, mediaevent.TransferTopic, mediaevent.PurgeTopic, subjectapp.VoiceTopic}, workflowDelivery{
 				operations: operationevent.NewWorkflowEventHandler(starterHandler, controlHandler), credentials: credentialHandler,
-				exports: exportHandler, transcriptions: transcriptionHandler, depths: depthHandler, copies: copyHandler, imports: importHandler, transfers: transferHandler, purges: purgeHandler,
+				exports: exportHandler, transcriptions: transcriptionHandler, depths: depthHandler, copies: copyHandler, imports: importHandler, transfers: transferHandler, purges: purgeHandler, voices: voiceHandler,
 			})
 		if err != nil {
 			temporalConn.Close()
@@ -279,7 +319,13 @@ func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Conn
 				if err := starterHandler.SweepOnce(ctx, now); err != nil {
 					return err
 				}
-				return starterHandler.SweepBatchesOnce(ctx, now)
+				if err := starterHandler.SweepBatchesOnce(ctx, now); err != nil {
+					return err
+				}
+				if !voiceSchemaReady {
+					return nil
+				}
+				return voiceHandler.SweepOnce(ctx)
 			})
 		}
 	}
@@ -304,9 +350,16 @@ type workflowDelivery struct {
 	imports        inboxapp.Handler
 	transfers      inboxapp.Handler
 	purges         inboxapp.Handler
+	voices         inboxapp.Handler
 }
 
 func (h workflowDelivery) Handle(ctx context.Context, record inboxapp.Record) error {
+	if record.Topic == subjectapp.VoiceTopic {
+		if h.voices == nil {
+			return subjectapp.ErrVoiceUnavailable
+		}
+		return h.voices.Handle(ctx, record)
+	}
 	if record.Topic == mediaevent.PurgeTopic {
 		return h.purges.Handle(ctx, record)
 	}

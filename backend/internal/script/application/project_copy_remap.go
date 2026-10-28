@@ -39,12 +39,13 @@ func RemapProjectHistoryWithCharacters(binding ProjectCopyBinding, history Proje
 	objects := make([]ProjectCopyObject, 0)
 	facts := make(map[string]domain.ObjectFact)
 	replaceObject := func(fact domain.ObjectFact) domain.ObjectFact {
-		if prior, ok := facts[fact.Key]; ok {
+		if prior, ok := facts[copyObjectIdentity(fact)]; ok {
 			return prior
 		}
 		mapped := fact
-		mapped.Key = "projects/" + binding.TargetProjectID.String() + "/script/copy/" + binding.JobID.String() + "/" + domain.ContentSHA([]byte(fact.Key))
-		facts[fact.Key] = mapped
+		mapped.LocationID = uuid.Nil
+		mapped.Key = "projects/" + binding.TargetProjectID.String() + "/script/copy/" + binding.JobID.String() + "/" + domain.ContentSHA([]byte(copyObjectIdentity(fact)))
+		facts[copyObjectIdentity(fact)] = mapped
 		objects = append(objects, ProjectCopyObject{Source: fact, Target: mapped})
 		return mapped
 	}
@@ -86,6 +87,14 @@ func cloneCopyHistory(history ProjectCopyHistory) (ProjectCopyHistory, error) {
 	var result ProjectCopyHistory
 	if err := json.Unmarshal(data, &result); err != nil {
 		return ProjectCopyHistory{}, err
+	}
+	for i := range result.Sources {
+		result.Sources[i].Original.LocationID = history.Sources[i].Original.LocationID
+		result.Sources[i].Rich.LocationID = history.Sources[i].Rich.LocationID
+	}
+	for i := range result.Versions {
+		result.Versions[i].Text.LocationID = history.Versions[i].Text.LocationID
+		result.Versions[i].Rich.LocationID = history.Versions[i].Rich.LocationID
 	}
 	return result, nil
 }
@@ -305,10 +314,10 @@ func validateCopyHistory(binding ProjectCopyBinding, h ProjectCopyHistory) error
 		if err := f.Validate(); err != nil {
 			return err
 		}
-		if prior, ok := objects[f.Key]; ok && prior != f {
+		if prior, ok := objects[copyObjectIdentity(f)]; ok && prior != f {
 			return ErrObjectMismatch
 		}
-		objects[f.Key] = f
+		objects[copyObjectIdentity(f)] = f
 		return nil
 	}
 	for _, s := range h.Sources {
@@ -460,4 +469,11 @@ func validateCopyHistory(binding ProjectCopyBinding, h ProjectCopyHistory) error
 		return fmt.Errorf("script copy version heads: %w", ErrObjectMismatch)
 	}
 	return nil
+}
+
+func copyObjectIdentity(f domain.ObjectFact) string {
+	if f.LocationID == uuid.Nil {
+		return f.Key
+	}
+	return f.LocationID.String() + "/" + f.Key
 }

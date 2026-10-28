@@ -34,10 +34,11 @@ func decodePackageFrozen(data []byte, value any) error {
 // PackageStore owns complete frozen import batches and atomic catalog publication.
 type PackageStore struct {
 	scopeAuthority
-	db      *gorm.DB
-	library *LibraryStore
-	guards  LibraryWorkGuardFactory
-	clock   func() time.Time
+	db        *gorm.DB
+	library   *LibraryStore
+	guards    LibraryWorkGuardFactory
+	clock     func() time.Time
+	locations bool
 }
 
 // NewPackageStore binds workspace ports to the same media-owned transaction.
@@ -110,6 +111,8 @@ func packageJob(row packageJobRow, plan application.PackagePlan) (application.Pa
 }
 
 func packageSameJob(a, b application.PackageJob) bool {
+	a.CreatedAt, b.CreatedAt = a.CreatedAt.UTC(), b.CreatedAt.UTC()
+	a.UpdatedAt, b.UpdatedAt = a.UpdatedAt.UTC(), b.UpdatedAt.UTC()
 	x, xe := json.Marshal(a)
 	y, ye := json.Marshal(b)
 	return xe == nil && ye == nil && bytes.Equal(x, y)
@@ -177,6 +180,9 @@ func (s *PackageStore) FindPackageImport(ctx context.Context, actor identityapp.
 		}
 		decoded, err := decodePackagePlan(row)
 		if err != nil {
+			return err
+		}
+		if err := hydratePackageLocations(ctx, tx, &decoded); err != nil {
 			return err
 		}
 		plan = &decoded
@@ -306,8 +312,16 @@ func (s *PackageStore) AdmitPackageImport(ctx context.Context, actor identityapp
 		if err := libraryChanged(tx, `INSERT INTO media.package_job(id,org_id,actor_id,library_id,library_kind,project_id,idem_key,request_sha256,archive_sha256,archive_bytes,frozen,frozen_sha256,status,revision,library_revision,project_revision,created_at,updated_at)VALUES(?,?,?,?,?,?,?,?,?,?,?,?,'needs_reconciliation',1,?,?,?,?)`, row.ID, row.OrgID, row.ActorID, row.LibraryID, row.LibraryKind, row.ProjectID, row.IdemKey, row.RequestSHA256, row.ArchiveSHA256, row.ArchiveBytes, row.Frozen, row.FrozenSHA256, row.LibraryRevision, row.ProjectRevision, row.CreatedAt, row.UpdatedAt); err != nil {
 			return err
 		}
+		locations := map[string]domain.ObjectLocation{}
+		if s.locations {
+			var err error
+			locations, err = admitPackageLocations(ctx, tx, plan)
+			if err != nil {
+				return err
+			}
+		}
 		for index, object := range plan.Objects {
-			if err := libraryChanged(tx, `INSERT INTO media.package_object(job_id,object_index,object_key,byte_size,content_type,sha256)VALUES(?,?,?,?,?,?)`, row.ID, index, object.Key, object.ByteSize, object.MIMEType, object.SHA256); err != nil {
+			if err := libraryChanged(tx, `INSERT INTO media.package_object(job_id,object_index,object_key,object_location_id,byte_size,content_type,sha256)VALUES(?,?,?,?,?,?,?)`, row.ID, index, object.Key, locationIDForKey(locations, object.Key), object.ByteSize, object.MIMEType, object.SHA256); err != nil {
 				return err
 			}
 		}
@@ -331,6 +345,9 @@ func (s *PackageStore) readPackage(tx *gorm.DB, actor identityapp.Principal, id 
 		return row, application.PackagePlan{}, application.ErrNotFound
 	}
 	plan, err := decodePackagePlan(row)
+	if err == nil {
+		err = hydratePackageLocations(tx.Statement.Context, tx, &plan)
+	}
 	return row, plan, err
 }
 
@@ -541,6 +558,9 @@ func (s *PackageStore) runPackage(ctx context.Context, actor identityapp.Princip
 		objectStatus := "removed"
 		row.Status = "cancelled"
 		if !cancel {
+			if err := acceptPackageLocations(ctx, tx, &plan); err != nil {
+				return err
+			}
 			if err := publishPackage(tx, library, plan); err != nil {
 				return err
 			}
@@ -780,13 +800,13 @@ func (s *PackageStore) InspectPackageExport(ctx context.Context, actor identitya
 		}
 		var expanded int64
 		for _, row := range rows {
-			detail, err := packageExportDetail(row, library.ID)
+			detail, err := packageExportDetail(tx, row, library.ID)
 			if err != nil {
 				return err
 			}
 			item := application.LibraryPackageItem{ID: row.ID.String(), Kind: row.Kind, Metadata: application.LibraryMetadata{PlainText: detail.PlainText, FolderID: row.FolderID, Title: row.Title, Category: row.Category, Tags: detail.Tags, SourceLabel: row.SourceLabel, Note: row.Note, Favorite: row.Favorite}, State: row.CatalogState, TrashedAt: row.TrashedAt, Position: row.Position}
 			if row.AssetID != nil {
-				a, err := decodePackageExportAsset(row.AssetFacts, row.CatalogState)
+				a, err := decodePackageExportAsset(tx, row.AssetFacts, row.CatalogState)
 				if err != nil {
 					return err
 				}
@@ -800,7 +820,7 @@ func (s *PackageStore) InspectPackageExport(ctx context.Context, actor identitya
 				filePath := fmt.Sprintf("files/%s/%s", a.ID, name)
 				item.FilePath = &filePath
 				export.Manifest.Files = append(export.Manifest.Files, application.LibraryPackageFile{Path: filePath, FileName: name, MIMEType: a.MimeType, ByteSize: a.ByteSize, SHA256: *a.SHA256})
-				export.Objects[filePath] = application.PackageObject{Key: a.ObjectKey, MIMEType: a.MimeType, SHA256: *a.SHA256, ByteSize: a.ByteSize}
+				export.Objects[filePath] = application.PackageObject{Location: a.ObjectLocation, Key: a.ObjectKey, MIMEType: a.MimeType, SHA256: *a.SHA256, ByteSize: a.ByteSize}
 				expanded += a.ByteSize
 				if expanded > application.MaxPackageExpandedBytes {
 					return application.ErrInvalidPackage

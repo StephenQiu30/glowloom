@@ -134,7 +134,19 @@ func (s *TranscriptionStore) Claim(ctx context.Context, id application.Transcrip
 			return err
 		}
 		work.Job, work.Actor, work.InferenceState = row.public(), row.actor(), row.InferenceState
-		return json.Unmarshal(row.Frozen, &work.Frozen)
+		if err := json.Unmarshal(row.Frozen, &work.Frozen); err != nil {
+			return err
+		}
+		if s.storage != nil {
+			work.SourceAssets, err = s.media(tx).Sources(ctx, row.actor(), row.ProjectID, []uuid.UUID{work.Frozen.Input.AssetID})
+			if err != nil {
+				return normalize(err)
+			}
+			if len(work.SourceAssets) != 1 || work.SourceAssets[0].ID != work.Frozen.Input.AssetID {
+				return application.ErrConflict
+			}
+		}
+		return nil
 	})
 	if err == nil && cancelled {
 		return application.TranscriptionWork{}, application.ErrCancelled
@@ -290,6 +302,10 @@ func (s *TranscriptionStore) Complete(ctx context.Context, id application.Transc
 				return authorizationErr
 			}
 			if err := s.validateSource(ctx, tx, row.actor(), row); err != nil {
+				return err
+			}
+			row.Result = raw
+			if err := s.acceptTranscript(ctx, tx, row); err != nil {
 				return err
 			}
 			row.Status = "succeeded"

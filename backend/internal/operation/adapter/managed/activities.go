@@ -33,9 +33,20 @@ type Signer interface {
 	PresignGet(context.Context, string, time.Duration) (string, error)
 }
 
+// SubjectInputSigner signs only an exact frozen operation input through its
+// binding owner, including the media's saved physical storage location.
+type SubjectInputSigner interface {
+	ManagedSubjectMediaReference(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (application.ProviderReference, error)
+}
+
 // VideoReader downloads approved content with the original credential when needed.
 type VideoReader interface {
 	Read(context.Context, catalogdomain.ProviderConfig, string, string, string) ([]byte, int64, error)
+}
+
+// ProjectInputSigner preserves exact same-project media and its physical location.
+type ProjectInputSigner interface {
+	ManagedProjectMediaReference(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (application.ProviderReference, bool, error)
 }
 
 // Activities has no environment-based supplier credentials.
@@ -241,11 +252,41 @@ func (a *Activities) request(ctx context.Context, loaded application.WorkflowOpe
 			texts = append(texts, *input.TextValue)
 		}
 		if input.MediaAssetID != nil {
-			key, err := a.store.ManagedMediaKey(ctx, op.ID, op.ProjectID, *input.MediaAssetID)
-			if err != nil {
-				return request, err
+			if input.RefType == "subject_media" {
+				owner, ok := a.store.(SubjectInputSigner)
+				if !ok {
+					return request, application.ErrWorkflowInputNotReady
+				}
+				ref, err := owner.ManagedSubjectMediaReference(ctx, op.ID, op.ProjectID, input.ID)
+				if err != nil {
+					return request, err
+				}
+				if ref.Role != input.Role || ref.MediaKind == "" {
+					return request, application.ErrWorkflowInputNotReady
+				}
+				request.References = append(request.References, ref)
+				continue
 			}
-			url, err := a.signer.PresignGet(ctx, key, 15*time.Minute)
+			if owner, ok := a.store.(ProjectInputSigner); ok {
+				ref, handled, err := owner.ManagedProjectMediaReference(ctx, op.ID, op.ProjectID, input.ID)
+				if handled {
+					if err != nil {
+						return request, err
+					}
+					if ref.Role != input.Role || ref.MediaKind == "" {
+						return request, application.ErrWorkflowInputNotReady
+					}
+					request.References = append(request.References, ref)
+					continue
+				}
+			}
+			var url string
+			var err error
+			var key string
+			key, err = a.store.ManagedMediaKey(ctx, op.ID, op.ProjectID, *input.MediaAssetID)
+			if err == nil {
+				url, err = a.signer.PresignGet(ctx, key, 15*time.Minute)
+			}
 			if err != nil {
 				return request, err
 			}

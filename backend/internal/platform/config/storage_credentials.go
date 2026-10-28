@@ -53,6 +53,10 @@ func (r StorageCredentialsRef) validate() error {
 // ResolveStorageCredentials reads only the explicitly selected secret source.
 // Callers resolve again when refreshing temporary credentials or rotating a file.
 func ResolveStorageCredentials(ref StorageCredentialsRef) (StorageCredentials, error) {
+	return resolveStorageCredentials(ref, os.Getenv)
+}
+
+func resolveStorageCredentials(ref StorageCredentialsRef, get func(string) string) (StorageCredentials, error) {
 	if err := ref.validate(); err != nil {
 		return StorageCredentials{}, err
 	}
@@ -63,9 +67,9 @@ func ResolveStorageCredentials(ref StorageCredentialsRef) (StorageCredentials, e
 		ExpiresAt    time.Time `json:"expires_at"`
 	}
 	if ref.Source == "env" {
-		data.AccessKey, data.SecretKey = os.Getenv(ref.AccessKeyEnv), os.Getenv(ref.SecretKeyEnv)
-		data.SessionToken = os.Getenv(ref.SessionTokenEnv)
-		if value := os.Getenv(ref.ExpiresAtEnv); value != "" {
+		data.AccessKey, data.SecretKey = get(ref.AccessKeyEnv), get(ref.SecretKeyEnv)
+		data.SessionToken = get(ref.SessionTokenEnv)
+		if value := get(ref.ExpiresAtEnv); value != "" {
 			var err error
 			data.ExpiresAt, err = time.Parse(time.RFC3339, value)
 			if err != nil {

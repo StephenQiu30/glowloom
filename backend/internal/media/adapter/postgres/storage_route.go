@@ -46,7 +46,7 @@ func (s *StorageRoutes) RegisterProfiles(ctx context.Context, profiles []applica
 				return fmt.Errorf("register storage profile: %w", err)
 			}
 			var saved string
-			read := tx.Raw(`SELECT id FROM media.storage_profile WHERE id=? AND provider=? AND endpoint=? AND signing_endpoint=? AND region=? AND bucket=? AND addressing_style=? AND resource_identity=? FOR SHARE`, p.ID, p.Provider, p.Endpoint, p.SigningEndpoint, p.Region, p.Bucket, p.AddressingStyle, identity).Scan(&saved)
+			read := tx.Raw(`SELECT id FROM media.storage_profile WHERE id=? AND provider=? AND endpoint=? AND signing_endpoint=? AND region=? AND bucket=? AND addressing_style=? AND resource_identity=?`, p.ID, p.Provider, p.Endpoint, p.SigningEndpoint, p.Region, p.Bucket, p.AddressingStyle, identity).Scan(&saved)
 			if read.Error != nil {
 				return fmt.Errorf("read registered storage profile: %w", read.Error)
 			}
@@ -153,7 +153,7 @@ func (s *StorageRoutes) Activate(ctx context.Context, expected, newRevision, pro
 			return application.ErrStorageRouteConflict
 		}
 		var bucket string
-		read := tx.Raw(`SELECT bucket FROM media.storage_profile WHERE id=? FOR SHARE`, profileID).Scan(&bucket)
+		read := tx.Raw(`SELECT bucket FROM media.storage_profile WHERE id=?`, profileID).Scan(&bucket)
 		if read.Error != nil {
 			return read.Error
 		}

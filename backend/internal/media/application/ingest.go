@@ -37,13 +37,15 @@ type IngestInput struct {
 
 // IngestOutput names the media and candidate records created for one result.
 type IngestOutput struct {
-	OutputID     string `json:"output_id"`
-	MediaAssetID string `json:"media_asset_id"`
-	ObjectKey    string `json:"object_key"`
-	Kind         string `json:"kind"`
-	MIMEType     string `json:"mime_type"`
-	ByteSize     int64  `json:"byte_size"`
-	SHA256       string `json:"sha256"`
+	ProjectID      uuid.UUID              `json:"-"`
+	ObjectLocation *domain.ObjectLocation `json:"-"`
+	OutputID       string                 `json:"output_id"`
+	MediaAssetID   string                 `json:"media_asset_id"`
+	ObjectKey      string                 `json:"object_key"`
+	Kind           string                 `json:"kind"`
+	MIMEType       string                 `json:"mime_type"`
+	ByteSize       int64                  `json:"byte_size"`
+	SHA256         string                 `json:"sha256"`
 }
 
 // SourceOperation holds only the persisted facts needed to bind a generated
@@ -146,13 +148,15 @@ type ObjectInfo struct {
 
 // IngestService owns the order of external transfer and durable registration.
 type IngestService struct {
-	repo       Repository
-	downloader Downloader
-	staged     StagedSource
-	prober     Prober
-	renderer   Renderer
-	objects    ObjectStore
-	now        func() time.Time
+	repo          Repository
+	downloader    Downloader
+	staged        StagedSource
+	prober        Prober
+	renderer      Renderer
+	objects       ObjectStore
+	routedObjects RoutedIngestObjects
+	targets       IngestWorkReader
+	now           func() time.Time
 }
 
 // NewIngestService injects the database and external transfer boundaries.
@@ -167,6 +171,9 @@ func NewStagedIngestService(repo Repository, source StagedSource, prober Prober,
 
 // Ingest transfers one result and atomically registers its media and output rows.
 func (s *IngestService) Ingest(ctx context.Context, input IngestInput) (IngestOutput, error) {
+	if s == nil || s.repo == nil || s.prober == nil || s.renderer == nil || (s.objects == nil && s.routedObjects == nil) {
+		return IngestOutput{}, ErrUnavailable
+	}
 	opID, err := uuid.Parse(input.OperationID)
 	if err != nil || opID == uuid.Nil || input.SeqNo < 1 || input.SeqNo > 8 || (input.URL == "") == (input.Receipt == nil) {
 		return IngestOutput{}, ErrInvalidIngest
@@ -190,7 +197,11 @@ func (s *IngestService) Ingest(ctx context.Context, input IngestInput) (IngestOu
 				return IngestOutput{}, ErrObjectMismatch
 			}
 		}
-		if err := s.verifyObject(ctx, existing.ObjectKey, existing.ByteSize, existing.MIMEType, existing.SHA256); err != nil {
+		target, err := s.ingestTarget(ctx, opID, existing.ProjectID)
+		if err != nil {
+			return IngestOutput{}, err
+		}
+		if err := s.verifyIngestObject(ctx, target, existing.ObjectLocation, existing.ObjectKey, existing.ByteSize, existing.MIMEType, existing.SHA256); err != nil {
 			return IngestOutput{}, err
 		}
 		assetID, parseErr := uuid.Parse(existing.MediaAssetID)
@@ -208,10 +219,19 @@ func (s *IngestService) Ingest(ctx context.Context, input IngestInput) (IngestOu
 			if rendition.ByteSize == nil {
 				return IngestOutput{}, ErrObjectMismatch
 			}
-			// Rendition SHA is kept in the private object's user metadata.
-			stored, err := s.objects.Stat(ctx, rendition.ObjectKey)
-			if err != nil || stored.Size != *rendition.ByteSize || stored.SHA256 == "" {
-				return IngestOutput{}, ErrObjectMismatch
+			if s.routedObjects != nil {
+				loc := rendition.ObjectLocation
+				if loc == nil || loc.MIMEType == nil || loc.SHA256 == nil {
+					return IngestOutput{}, ErrObjectMismatch
+				}
+				if err := s.verifyIngestObject(ctx, target, loc, rendition.ObjectKey, *rendition.ByteSize, *loc.MIMEType, *loc.SHA256); err != nil {
+					return IngestOutput{}, err
+				}
+			} else {
+				stored, err := s.objects.Stat(ctx, rendition.ObjectKey)
+				if err != nil || stored.Size != *rendition.ByteSize || stored.SHA256 == "" {
+					return IngestOutput{}, ErrObjectMismatch
+				}
 			}
 		}
 		return existing, nil
@@ -222,6 +242,10 @@ func (s *IngestService) Ingest(ctx context.Context, input IngestInput) (IngestOu
 	}
 	if input.Receipt != nil && input.Receipt.Identity.ProjectID != op.ProjectID {
 		return IngestOutput{}, ErrInvalidIngest
+	}
+	target, err := s.ingestTarget(ctx, op.ID, op.ProjectID)
+	if err != nil {
+		return IngestOutput{}, err
 	}
 	var downloaded *Downloaded
 	if input.Receipt != nil {
@@ -273,19 +297,18 @@ func (s *IngestService) Ingest(ctx context.Context, input IngestInput) (IngestOu
 	if err := s.authorizeObjectWrite(ctx, op); err != nil {
 		return IngestOutput{}, err
 	}
-	if err := s.objects.PutIfAbsent(ctx, objectKey, downloaded.File, downloaded.Size, downloaded.MIMEType, downloaded.SHA256); err != nil && !errors.Is(err, ErrObjectAlreadyExists) {
-		return IngestOutput{}, fmt.Errorf("store media result: %w", err)
-	}
-	if err := s.verifyObject(ctx, objectKey, downloaded.Size, downloaded.MIMEType, downloaded.SHA256); err != nil {
+	originalLocation, err := s.writeIngestObject(ctx, target, objectKey, downloaded)
+	if err != nil {
 		return IngestOutput{}, err
 	}
+
 	now := s.now().UTC()
 	providerKey, modelKey, region := op.ProviderKey, op.ModelKey, op.Region
 	sha := downloaded.SHA256
 	asset := domain.MediaAsset{
 		ID: assetID, ProjectID: op.ProjectID, Kind: probe.Kind,
 		Origin: domain.OriginGenerated, Status: domain.StatusProcessing,
-		ObjectKey: objectKey, MimeType: downloaded.MIMEType, ByteSize: downloaded.Size,
+		ObjectKey: objectKey, ObjectLocation: originalLocation, MimeType: downloaded.MIMEType, ByteSize: downloaded.Size,
 		SHA256: &sha, Width: probe.Width, Height: probe.Height, DurationMS: probe.DurationMS,
 		FPS: probe.FPS, AudioChannels: probe.AudioChannels, Codec: probe.Codec,
 		SourceOperationID: &opID, ProviderKey: &providerKey, ModelKey: &modelKey,
@@ -307,16 +330,15 @@ func (s *IngestService) Ingest(ctx context.Context, input IngestInput) (IngestOu
 		if err := s.authorizeObjectWrite(ctx, op); err != nil {
 			return IngestOutput{}, err
 		}
-		if err := s.objects.PutIfAbsent(ctx, key, file.Result.File, file.Result.Size, file.Result.MIMEType, file.Result.SHA256); err != nil && !errors.Is(err, ErrObjectAlreadyExists) {
-			return IngestOutput{}, fmt.Errorf("store media preview: %w", err)
-		}
-		if err := s.verifyObject(ctx, key, file.Result.Size, file.Result.MIMEType, file.Result.SHA256); err != nil {
+		location, err := s.writeIngestObject(ctx, target, key, file.Result)
+		if err != nil {
 			return IngestOutput{}, err
 		}
+
 		width, height, size := file.Width, file.Height, file.Result.Size
 		rendition := domain.Rendition{
 			ID:           uuid.NewSHA1(uuid.NameSpaceOID, []byte("media-rendition/"+assetID.String()+"/"+string(file.Kind))),
-			MediaAssetID: assetID, Kind: file.Kind, ObjectKey: key,
+			MediaAssetID: assetID, Kind: file.Kind, ObjectKey: key, ObjectLocation: location,
 			Width: &width, Height: &height, ByteSize: &size,
 			CreateTime: now, UpdateTime: now,
 		}

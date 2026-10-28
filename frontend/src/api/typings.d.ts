@@ -285,9 +285,23 @@ declare namespace API {
     reused_from_id?: string;
   };
 
+  type BatchInput = {
+    action?: string;
+    items?: BatchItem[];
+  };
+
+  type BatchItem = {
+    expected_revision?: number;
+    id?: string;
+  };
+
   type BatchReferenceColumn = {
     id?: string;
     label?: string;
+  };
+
+  type BatchResult = {
+    items?: ItemResult[];
   };
 
   type BatchStatus =
@@ -311,6 +325,19 @@ declare namespace API {
     id?: string;
     input_node_ids?: string[];
     prompt?: string;
+  };
+
+  type BibleDetail = {
+    current?: Version;
+    head?: Head;
+    resolved_id?: string;
+  };
+
+  type BibleVoiceSelection = {
+    expected_model_version?: number;
+    model_key?: string;
+    params?: VoiceParams;
+    voice_key?: string;
   };
 
   type bindBibleVoiceParams = {
@@ -429,6 +456,15 @@ declare namespace API {
     row_id?: string;
   };
 
+  type Capabilities = {
+    intelligent_voice?: Capability;
+  };
+
+  type Capability = {
+    available?: boolean;
+    reason?: string;
+  };
+
   type CapabilityDefault = {
     capability?: string;
     release_id?: string;
@@ -494,6 +530,12 @@ declare namespace API {
     definition?: CharacterDefinition;
     description?: string;
     name?: string;
+  };
+
+  type CommandResult = {
+    batch?: BatchResult;
+    detail?: SubjectDetail;
+    item?: ItemResult;
   };
 
   type completeEmailChangeParams = {
@@ -840,6 +882,15 @@ declare namespace API {
     id: string;
   };
 
+  type CreateVoiceJobInput = {
+    draft_intent_id?: string;
+    name?: string;
+    release_id?: string;
+    speech_rate?: number;
+    text?: string;
+    voice_key?: string;
+  };
+
   type CredentialField = {
     name?: string;
     required?: boolean;
@@ -956,6 +1007,11 @@ declare namespace API {
     id: string;
   };
 
+  type deleteSubjectParams = {
+    /** 主体UUID */
+    id: string;
+  };
+
   type DeletionConfirmRequest = {
     code: string;
     expected_revision: string;
@@ -1048,12 +1104,6 @@ declare namespace API {
     | "failed"
     | "cancel_requested"
     | "cancelled";
-
-  type Detail = {
-    current?: Version;
-    head?: Head;
-    resolved_id?: string;
-  };
 
   type DirectorBoneFrame = {
     easing?: string;
@@ -1507,6 +1557,15 @@ declare namespace API {
     version_id?: string;
   };
 
+  type ExportInput = {
+    items?: ExportItem[];
+  };
+
+  type ExportItem = {
+    id?: string;
+    version_id?: string;
+  };
+
   type ExportJob = {
     asset_id?: string;
     attempt?: number;
@@ -1579,6 +1638,11 @@ declare namespace API {
     code?: string;
     count?: number;
     paragraph?: number;
+  };
+
+  type FavoriteInput = {
+    expected_revision?: number;
+    favorite?: boolean;
   };
 
   type FileImportControlRequest = {
@@ -1901,6 +1965,47 @@ declare namespace API {
     pid: string;
   };
 
+  type getSubjectCommandParams = {
+    /** 原永久命令UUID */
+    key: string;
+  };
+
+  type getSubjectMediaParams = {
+    /** 主体UUID */
+    id: string;
+    /** 不可变版本UUID */
+    version: string;
+    /** 该版本正式媒体绑定UUID */
+    binding: string;
+  };
+
+  type getSubjectParams = {
+    /** 主体UUID */
+    id: string;
+  };
+
+  type getSubjectSourceParams = {
+    /** 资产条目UUID */
+    item_id: string;
+  };
+
+  type getSubjectVersionParams = {
+    /** 主体UUID */
+    id: string;
+    /** 不可变版本UUID */
+    version: string;
+  };
+
+  type getSubjectVoiceCommandParams = {
+    /** 永久命令UUID */
+    key: string;
+  };
+
+  type getSubjectVoiceJobParams = {
+    /** 任务UUID */
+    job_id: string;
+  };
+
   type getTeamMemberExportParams = {
     /** Team ID */
     id: string;
@@ -2111,6 +2216,14 @@ declare namespace API {
 
   type InvitationTokenRequest = {
     token?: string;
+  };
+
+  type ItemResult = {
+    code?: string;
+    favorite?: boolean;
+    id?: string;
+    revision?: number;
+    status?: string;
   };
 
   type Kind = "character" | "location" | "prop";
@@ -2720,6 +2833,40 @@ declare namespace API {
     cursor?: string;
   };
 
+  type listSubjectSourcesParams = {
+    /** image/video/audio */
+    kind: string;
+    /** 完整素材库搜索 */
+    search?: string;
+    /** 仅收藏 */
+    favorite_only?: boolean;
+    /** upscaled；仅真实超清处理结果 */
+    quality?: string;
+    /** 默认1 */
+    page?: number;
+    /** 默认12；最大120 */
+    page_size?: number;
+  };
+
+  type listSubjectsParams = {
+    /** 名称包含搜索 */
+    q?: string;
+    /** 仅收藏 */
+    favorite?: boolean;
+    /** 含开始时间 RFC3339 */
+    from?: string;
+    /** 不含结束时间 RFC3339 */
+    to?: string;
+    /** created或updated */
+    time_field?: string;
+    /** created_asc/created_desc/updated_asc/updated_desc */
+    order?: string;
+    /** 页码1..100000 */
+    page?: number;
+    /** 每页1..120 */
+    page_size?: number;
+  };
+
   type listTeamMembersParams = {
     /** Resource UUID */
     id: string;
@@ -2784,6 +2931,18 @@ declare namespace API {
     href?: string;
   };
 
+  type Media = {
+    asset_id?: string;
+    asset_revision?: number;
+    binding_id?: string;
+    duration_ms?: number;
+    file_name?: string;
+    height?: number;
+    kind?: string;
+    mime_type?: string;
+    width?: number;
+  };
+
   type MediaFact = {
     asset_id?: string;
     byte_size?: number;
@@ -2797,6 +2956,12 @@ declare namespace API {
   type MediaRef = {
     asset_id?: string;
     empty?: boolean;
+  };
+
+  type MediaSelection = {
+    asset_id?: string;
+    binding_id?: string;
+    project_id?: string;
   };
 
   type MediatoolCreateInput = {
@@ -3066,6 +3231,16 @@ declare namespace API {
   type PackageWarning = {
     code?: string;
     item_id?: string;
+  };
+
+  type Page = {
+    capabilities?: Capabilities;
+    current_actor_id?: string;
+    current_scope_id?: string;
+    items?: SubjectDetail[];
+    page?: number;
+    page_size?: number;
+    total?: number;
   };
 
   type PageResponse = {
@@ -3461,6 +3636,11 @@ declare namespace API {
   type previewProviderUpgradeParams = {
     /** 连接ID */
     id: string;
+  };
+
+  type previewSubjectSourceParams = {
+    /** 资产条目UUID */
+    item_id: string;
   };
 
   type PriceUnit =
@@ -3992,6 +4172,7 @@ declare namespace API {
   type QuoteMediaInput = {
     media_asset_id?: string;
     role?: string;
+    subject_binding_id?: string;
   };
 
   type QuoteResponse = {
@@ -4083,6 +4264,11 @@ declare namespace API {
   type recoverAiTrialParams = {
     /** Trial request ID */
     id: string;
+  };
+
+  type Recovery = {
+    result?: CommandResult;
+    state?: string;
   };
 
   type recycleProjectFolderParams = {
@@ -4342,6 +4528,10 @@ declare namespace API {
     job_id: string;
   };
 
+  type RevisionInput = {
+    expected_revision?: number;
+  };
+
   type revokeAccountInvitationParams = {
     /** Invitation ID */
     id: string;
@@ -4400,6 +4590,15 @@ declare namespace API {
     provider_id?: string;
     status?: CredentialStatus;
     update_time?: string;
+  };
+
+  type SaveInput = {
+    description?: string;
+    expected_revision?: number;
+    name?: string;
+    primary?: MediaSelection;
+    references?: MediaSelection[];
+    voice?: SubjectVoiceSelection;
   };
 
   type SavePresetInput = {
@@ -4515,6 +4714,11 @@ declare namespace API {
     status?: ModelStatus;
   };
 
+  type setSubjectFavoriteParams = {
+    /** 主体UUID */
+    id: string;
+  };
+
   type SettingsGovernanceRequest = {
     expected_revision?: string;
     reason?: string;
@@ -4598,6 +4802,7 @@ declare namespace API {
   };
 
   type SourceMedia = {
+    bindingId?: string;
     mediaKind?: string;
     sourceId?: string;
     sourceVersion?: string;
@@ -4888,6 +5093,70 @@ declare namespace API {
     name?: string;
     style_subtype?: string;
     style_type?: string;
+  };
+
+  type SubjectDetail = {
+    created_at?: string;
+    description?: string;
+    favorite?: boolean;
+    id?: string;
+    name?: string;
+    owner_scope_id?: string;
+    primary?: Media;
+    references?: Media[];
+    revision?: number;
+    updated_at?: string;
+    version_id?: string;
+    voice?: Voice;
+  };
+
+  type SubjectSourceCapabilities = {
+    upscaled_filter?: boolean;
+    upscaled_reason?: string;
+  };
+
+  type SubjectSourceItem = {
+    created_at?: string;
+    favorite?: boolean;
+    id?: string;
+    kind?: string;
+    media?: SubjectSourceMedia;
+    project_id?: string;
+    revision?: number;
+    source?: string;
+    title?: string;
+    updated_at?: string;
+    upscaled?: boolean;
+  };
+
+  type SubjectSourceMedia = {
+    byte_size?: number;
+    duration_ms?: number;
+    file_name?: string;
+    height?: number;
+    id?: string;
+    kind?: string;
+    mime_type?: string;
+    origin?: string;
+    revision?: number;
+    width?: number;
+  };
+
+  type SubjectSourcePage = {
+    capabilities?: SubjectSourceCapabilities;
+    current_actor_id?: string;
+    current_scope_id?: string;
+    items?: SubjectSourceItem[];
+    page?: number;
+    page_size?: number;
+    total?: number;
+  };
+
+  type SubjectVoiceSelection = {
+    asset_id?: string;
+    binding_id?: string;
+    name?: string;
+    project_id?: string;
   };
 
   type Submission = {
@@ -5511,6 +5780,11 @@ declare namespace API {
     lineage: string;
   };
 
+  type updateSubjectParams = {
+    /** 主体UUID */
+    id: string;
+  };
+
   type updateTeamSettingsParams = {
     /** Team ID */
     id: string;
@@ -5616,6 +5890,11 @@ declare namespace API {
     text?: string;
   };
 
+  type Voice = {
+    media?: Media;
+    name?: string;
+  };
+
   type VoiceChoice = {
     display_name?: string;
     model_key?: string;
@@ -5631,13 +5910,64 @@ declare namespace API {
   };
 
   type VoiceInput = {
-    catalog?: VoiceSelection;
+    catalog?: BibleVoiceSelection;
     instructions?: string;
     kind?: VoiceKind;
     sample?: SampleInput;
   };
 
+  type VoiceJob = {
+    created_at?: string;
+    current_actor_id?: string;
+    current_scope_id?: string;
+    draft_intent_id?: string;
+    error_code?: string;
+    id?: string;
+    model_version_id?: string;
+    name?: string;
+    release_id?: string;
+    result?: VoiceJobResult;
+    revision?: number;
+    /** queued/dispatching/ingesting/succeeded/failed/unknown */
+    status?: string;
+    text?: string;
+    updated_at?: string;
+    voice_key?: string;
+  };
+
+  type VoiceJobResult = {
+    asset_id?: string;
+    asset_revision?: number;
+    file_name?: string;
+    kind?: string;
+    library_item_id?: string;
+    library_source?: string;
+    mime_type?: string;
+  };
+
   type VoiceKind = "catalog" | "sample";
+
+  type VoiceModelOption = {
+    default_voice_key?: string;
+    display_name?: string;
+    model_key?: string;
+    model_version_id?: string;
+    release_id?: string;
+    voices?: VoiceOption[];
+  };
+
+  type VoiceOption = {
+    key?: string;
+    name?: string;
+  };
+
+  type VoiceOptions = {
+    available?: boolean;
+    current_actor_id?: string;
+    current_scope_id?: string;
+    models?: VoiceModelOption[];
+    reason?: string;
+  };
 
   type VoiceParams = {
     emotion?: string;
@@ -5645,6 +5975,11 @@ declare namespace API {
     pitch?: number;
     speed?: number;
     volume?: number;
+  };
+
+  type VoiceRecovery = {
+    job?: VoiceJob;
+    state?: string;
   };
 
   type VoiceRequest = {
@@ -5655,13 +5990,6 @@ declare namespace API {
   type VoiceResponse = {
     next_cursor?: string;
     voices?: VoiceChoice[];
-  };
-
-  type VoiceSelection = {
-    expected_model_version?: number;
-    model_key?: string;
-    params?: VoiceParams;
-    voice_key?: string;
   };
 
   type WorkflowControlResult = {

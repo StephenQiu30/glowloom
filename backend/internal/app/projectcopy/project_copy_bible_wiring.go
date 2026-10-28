@@ -14,6 +14,7 @@ import (
 	bibleapp "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
 	bibledomain "github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
@@ -136,6 +137,10 @@ func (t projectCopyBibleTransfer) Cleanup(ctx context.Context, actor identityapp
 	}))
 }
 func provideProjectCopyBibleTransfer(database *gorm.DB, storage *objectstorage.Client) workspaceapp.ProjectCopyBibleTransferFactory {
+	return provideProjectCopyBibleTransferWithObjects(database, nil, storage)
+}
+
+func provideProjectCopyBibleTransferWithObjects(database *gorm.DB, registry *objectstorage.Registry, storage *objectstorage.Client) workspaceapp.ProjectCopyBibleTransferFactory {
 	return func(job workspacedomain.ProjectCopyJob, worker uuid.UUID, cleanup bool) workspaceapp.ProjectCopyBibleTransfer {
 		phase := "bible_transfer"
 		if job.Stage == "finalizing" {
@@ -147,6 +152,9 @@ func provideProjectCopyBibleTransfer(database *gorm.DB, storage *objectstorage.C
 		authority := workspaceapp.ProjectCopyAuthority{Binding: workspaceapp.ProjectCopyBinding{JobID: job.ID, OrgID: job.OrgID, SourceProjectID: job.SourceProjectID, TargetProjectID: job.TargetProjectID}, ActorID: job.ExecutionActor(), WorkerID: worker, SourceRevision: job.SourceRevision, Phase: phase, Bible: job.Manifest.Bible}
 		snapshot := mediaapp.ProjectCopySnapshot{ID: job.Manifest.MediaSnapshotID, ManifestSHA256: job.Manifest.MediaSHA256, Assets: job.Manifest.Assets, Renditions: job.Manifest.Renditions}
 		query := mediaapp.NewProjectCopyReferenceQuery(projectCopyBibleMediaReader{database: database, authority: authority}, storage)
+		if registry != nil {
+			query = mediaapp.NewRoutedProjectCopyReferenceQuery(projectCopyBibleMediaReader{database: database, authority: authority}, mediaobjects.NewRoutedReadObjects(registry), storage)
+		}
 		return projectCopyBibleTransfer{owner: bibleapp.NewProjectCopy(provideBibleProjectCopyStore(database, authority, snapshot), projectCopyBibleTransferredMedia{query: query, snapshot: snapshot}), database: database, authority: authority, snapshot: snapshot}
 	}
 }

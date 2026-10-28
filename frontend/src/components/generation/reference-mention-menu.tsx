@@ -7,7 +7,11 @@ import {
   ImageIcon,
   UserRound,
   Video,
+  Plus,
 } from "lucide-react";
+import type { UnifiedSubject } from "@/components/subjects/unified-contracts";
+import { selectedSubjectMedia } from "@/components/subjects/unified-contracts";
+import { UnifiedSubjectMedia } from "@/components/subjects/unified-media";
 import {
   Command,
   CommandEmpty,
@@ -47,6 +51,12 @@ export function ReferenceMentionMenu({
   disabled,
   onReference,
   onSource,
+  subjectCandidates = [],
+  subjectLoading = false,
+  subjectError = "",
+  onSubject,
+  onCreateSubject,
+  onBrowseSubjects,
 }: {
   session: ComposerSession;
   draft: PromptDraft;
@@ -56,6 +66,12 @@ export function ReferenceMentionMenu({
   disabled: boolean;
   onReference: (reference: ReferenceBinding) => void;
   onSource: (source: CanvasReferenceSource) => void;
+  subjectCandidates?: UnifiedSubject[];
+  subjectLoading?: boolean;
+  subjectError?: string;
+  onSubject?: (subject: UnifiedSubject) => void;
+  onCreateSubject?: () => void;
+  onBrowseSubjects?: () => void;
 }) {
   const [category, setCategory] = useState<Category | null>(null);
   const [column, setColumn] = useState<"categories" | "items">("categories");
@@ -129,6 +145,65 @@ export function ReferenceMentionMenu({
         ) ?? [],
     ),
   );
+  function subjectItems() {
+    return onSubject || onCreateSubject ? (
+      <CommandGroup heading="可能@的内容">
+        {onCreateSubject ? (
+          <CommandItem
+            value="create-subject"
+            disabled={disabled || busy}
+            onSelect={onCreateSubject}
+          >
+            <Plus />
+            <span>创建主体</span>
+          </CommandItem>
+        ) : null}
+        {subjectLoading ? (
+          <CommandItem value="subjects-loading" disabled>
+            正在读取主体
+          </CommandItem>
+        ) : null}
+        {subjectError ? (
+          <CommandItem value="subjects-error" disabled>
+            {subjectError}
+          </CommandItem>
+        ) : null}
+        {subjectCandidates.map((subject) => (
+          <CommandItem
+            key={`subject-${subject.id}`}
+            value={`subject-${subject.id}`}
+            disabled={disabled || busy}
+            className="min-h-11"
+            onSelect={() => onSubject?.(subject)}
+          >
+            <span className="relative size-8 shrink-0 overflow-hidden rounded-md bg-muted">
+              <UnifiedSubjectMedia
+                media={selectedSubjectMedia(subject, subject.primary)}
+                label={subject.name}
+              />
+            </span>
+            <span className="truncate">{subject.name}</span>
+          </CommandItem>
+        ))}
+        {!subjectLoading && !subjectError && !subjectCandidates.length ? (
+          <CommandItem value="subjects-empty" disabled>
+            {query ? "没有匹配的主体" : "暂无主体"}
+          </CommandItem>
+        ) : null}
+        {onBrowseSubjects ? (
+          <CommandItem
+            value="browse-subjects"
+            disabled={disabled || busy}
+            onSelect={onBrowseSubjects}
+          >
+            <UserRound />
+            <span>全部主体</span>
+            <ChevronRight className="ml-auto" />
+          </CommandItem>
+        ) : null}
+      </CommandGroup>
+    ) : null;
+  }
   function candidates(kind?: Category) {
     return (
       <Command
@@ -148,6 +223,7 @@ export function ReferenceMentionMenu({
           className="max-h-[min(20rem,var(--radix-popover-content-available-height))]"
         >
           <CommandEmpty>暂无相关节点</CommandEmpty>
+          {!kind || kind === "subject" ? subjectItems() : null}
           {categories
             .filter((c) => !kind || c.kind === kind)
             .map(({ kind: itemKind, label, icon: Icon }) => {
@@ -212,14 +288,20 @@ export function ReferenceMentionMenu({
       className="h-auto"
       shouldFilter={false}
       disablePointerSelection={narrow}
-      value={category ?? "subject"}
-      onValueChange={(value) => setCategory(value as Category)}
+      onValueChange={(value) =>
+        setCategory(
+          categories.some((entry) => entry.kind === value)
+            ? (value as Category)
+            : null,
+        )
+      }
       onMouseDown={(event) => event.preventDefault()}
     >
       <CommandList
         aria-label="引用类型"
         className="max-h-[min(28rem,var(--radix-popover-content-available-height))]"
       >
+        {subjectItems()}
         <CommandGroup heading="引用参考">
           {categories.map(({ kind, label, icon: Icon }) => (
             <Popover

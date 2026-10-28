@@ -1,9 +1,10 @@
 package http
 
 import (
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
 // deleteUser soft-deletes an account under current platform authority.

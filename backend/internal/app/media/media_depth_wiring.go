@@ -45,9 +45,26 @@ func ProvideMediaDepthStoreWithAccess(database *gorm.DB, enabled bool, scopes pg
 		})
 }
 
+// ProvideRoutedMediaDepthStore freezes physical output identity at admission.
+func ProvideRoutedMediaDepthStore(database *gorm.DB, enabled bool, scopes pgmedia.ScopeAccessFactory) *pgtool.DepthStore {
+	return ProvideMediaDepthStoreWithAccess(database, enabled, scopes).WithStorageAdmission(func(tx *gorm.DB) toolapp.ToolStorageLedger {
+		return pgmedia.NewStorageRoutes(tx)
+	})
+}
+
 // ProvideMediaDepthWorker owns one Runner for every native job on this media
 // worker, so concurrent Activities share the same physical inference slot.
 func ProvideMediaDepthWorker(database *gorm.DB, storage *objectstorage.Client, cfg config.Config) (*toolapp.DepthWorker, *pgtool.DepthStore, error) {
+	return provideMediaDepthWorker(database, nil, storage, cfg)
+}
+
+// ProvideMediaDepthWorkerRouted retains one native inference slot while each
+// durable attempt opens a separately pinned physical object view.
+func ProvideMediaDepthWorkerRouted(database *gorm.DB, registry *objectstorage.Registry, legacy *objectstorage.Client, cfg config.Config) (*toolapp.DepthWorker, *pgtool.DepthStore, error) {
+	return provideMediaDepthWorker(database, registry, legacy, cfg)
+}
+
+func provideMediaDepthWorker(database *gorm.DB, registry *objectstorage.Registry, storage *objectstorage.Client, cfg config.Config) (*toolapp.DepthWorker, *pgtool.DepthStore, error) {
 	verifier, err := videodepth.NewPreprocessor("ffmpeg", "ffprobe")
 	if err != nil {
 		return nil, nil, fmt.Errorf("configure video depth verification: %w", err)
@@ -64,6 +81,11 @@ func ProvideMediaDepthWorker(database *gorm.DB, storage *objectstorage.Client, c
 		}
 	}
 	store := ProvideMediaDepthStoreWithAccess(database, processor != nil, NewMediaWorkerScopeAccess)
+	if registry != nil {
+		store = ProvideRoutedMediaDepthStore(database, processor != nil, NewMediaWorkerScopeAccess)
+		consumer := toolapp.NewRoutedDepthWorker(store, ToolObjects(database, registry, storage), processor, mediaflow.FFProber{}, mediaflow.FFUploadRenderer{}, verifier)
+		return consumer, store, nil
+	}
 	consumer := toolapp.NewDepthWorker(store, toolflow.NewObjects(storage), processor, mediaflow.FFProber{}, mediaflow.FFUploadRenderer{}, verifier)
 	return consumer, store, nil
 }

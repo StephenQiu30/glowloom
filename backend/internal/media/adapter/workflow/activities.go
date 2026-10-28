@@ -13,6 +13,7 @@ import (
 	"go.temporal.io/sdk/worker"
 	"gorm.io/gorm"
 
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -103,6 +104,9 @@ func Register(w worker.Worker, activities *Activities) {
 
 // Ingest downloads, validates, stores, and records one provider result.
 func (a *Activities) Ingest(ctx context.Context, input IngestInput) (IngestOutput, error) {
+	if a == nil || a.ingest == nil {
+		return IngestOutput{}, application.ErrStorageNotReady
+	}
 	stop := make(chan struct{})
 	done := make(chan struct{})
 	go func() {
@@ -176,4 +180,24 @@ func (s objectStore) Stat(ctx context.Context, key string) (application.ObjectIn
 		return application.ObjectInfo{}, err
 	}
 	return application.ObjectInfo{Size: info.Size, ContentType: info.ContentType, SHA256: info.SHA256}, nil
+}
+
+// NewRoutedScopedActivitiesWithStaging uses operation-owned locations for both URL and receipt inputs.
+func NewRoutedScopedActivitiesWithStaging(db *gorm.DB, registry *objectstorage.Registry, policy DownloadPolicy, source application.StagedSource, scopes pgmedia.ScopeAccessFactory) (*Activities, error) {
+	if db == nil || registry == nil || source == nil {
+		return nil, fmt.Errorf("configure routed media activities: %w", application.ErrUnavailable)
+	}
+	downloader, err := NewSecureDownloader(policy)
+	if err != nil {
+		return nil, err
+	}
+	repo := pgmedia.NewScopedIngestRepository(db, scopes)
+	routes := pgmedia.NewStorageRoutes(db)
+	objects := mediaobjects.NewGeneratedObjects(registry, routes)
+	return &Activities{repo: repo, ingest: application.NewRoutedIngestService(repo, downloader, FFProber{}, FFRenderer{}, objects, routes), staged: application.NewRoutedStagedIngestService(repo, source, FFProber{}, FFRenderer{}, objects, routes)}, nil
+}
+
+// NewUnavailableActivities keeps moderation recovery available while storage is unconfigured.
+func NewUnavailableActivities(db *gorm.DB, scopes pgmedia.ScopeAccessFactory) *Activities {
+	return &Activities{repo: pgmedia.NewScopedIngestRepository(db, scopes)}
 }

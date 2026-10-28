@@ -1,0 +1,76 @@
+Browser tab: 1980370698, Title: "即梦AI - 一站式AI创作平台", URL: "https://jimeng.jianying.com/ai-tool/elements".
+0 AXWebArea 即梦AI - 一站式AI创作平台, URL: jimeng.jianying.com/ai-tool/elements
+	1 container csr-root
+		2 container dreamina
+			3 container
+				4 text 00
+				5 text :
+				6 text 11
+				7 text :
+				8 text 01
+				9 text :
+				10 text 12
+				11 text ⚡Seedance 2.5低至￥0.177/秒｜年卡4.2折起，再赠2个月会员，最高每个席位连续3个月加赠5.2万积分
+			12 container
+				13 container
+					14 button 去首页
+					15 button (expanded) Description: 收起侧边栏, Secondary Actions: Collapse
+					16 container
+						17 button 创作
+							18 text 创作
+						19 button 探索
+							20 text 探索
+						21 button 资产
+							22 text 资产
+						23 button 主体
+							24 text 主体
+						25 button 短剧工作室
+							26 text 短剧工作室
+					27 container
+						28 container
+							29 button (expanded) 对话, Secondary Actions: Collapse
+							30 button 新建对话
+						31 text 暂无历史对话
+						32 container
+							33 button (expanded) 画布, Secondary Actions: Collapse
+							34 button 全部
+							35 button 新建画布
+						36 button 一致性调研-202610221 打开画布 更多
+							37 container
+								38 text 一致性调研-202610221
+								39 button 打开画布
+								40 button 更多
+						41 button 未命名画布 打开画布 更多
+							42 container
+								43 text 未命名画布
+								44 button 打开画布
+								45 button 更多
+						46 button 一致性调研-20261022 打开画布 更多
+							47 container
+								48 text 一致性调研-20261022
+								49 button 打开画布
+								50 button 更多
+						51 button 未命名画布 打开画布 更多
+							52 container
+								53 text 未命名画布
+								54 button 打开画布
+								55 button 更多
+				56 container
+					76 text 已选择 1 项内容
+					77 button 删除
+					78 button 下载
+					79 button 取消收藏
+					80 button 取消选择
+				67 container dreamina-ui-configuration-content-wrapper
+					68 container
+						69 text 筛选
+						70 text 时间
+						71 text 排序
+						81 button 新建主体
+						73 container
+							82 container
+								83 button 取消收藏
+								84 checkbox Description: 选择 · 素材, Value: 1
+							75 text 主体调研测试-20261028 主体  · 4分钟前修改
+
+The focused UI element is 84 checkbox Description: 选择 · 素材, Value: 1

@@ -133,7 +133,11 @@ func (s *StorageUsageReader) physicalStorageUsage(ctx context.Context, actor ide
 }
 
 // StorageUsageBucket is a declared readable historical bucket, not a write route.
-type StorageUsageBucket struct{ ProfileID, Bucket string }
+type StorageUsageBucket struct {
+	ProfileID, Bucket string
+	// ResourceIdentity binds the configured endpoint namespace to the persisted profile.
+	ResourceIdentity string
+}
 
 // StorageUsageLocationSource supplies scope-authorized intents from installed owners.
 type StorageUsageLocationSource interface {

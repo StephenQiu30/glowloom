@@ -17,7 +17,11 @@ import (
 
 // ValidateDraftSources rechecks pinned source facts inside the owning save/quote transaction.
 // Pending slots are saveable. Resource readiness is derived exclusively from server rows.
-func ValidateDraftSources(tx *gorm.DB, a identityapp.Principal, p uuid.UUID, d domain.Draft, ready bool) error {
+func ValidateDraftSources(tx *gorm.DB, a identityapp.Principal, p uuid.UUID, d domain.Draft, ready bool, subjects ...application.SubjectSources) error {
+	var sourceOwner application.SubjectSources
+	if len(subjects) == 1 {
+		sourceOwner = subjects[0]
+	}
 	for _, r := range d.References {
 		s := r.Source
 		switch s.Kind {
@@ -47,7 +51,23 @@ func ValidateDraftSources(tx *gorm.DB, a identityapp.Principal, p uuid.UUID, d d
 				return err
 			}
 		case "subject":
-			expected, err := subjectSource(tx, p, s.SourceID, s.SourceVersion)
+			var expected domain.ReferenceSource
+			var found bool
+			var err error
+			if sourceOwner != nil {
+				expected, found, err = sourceOwner.ResolveSubject(tx.Statement.Context, a, p, s.SourceID, s.SourceVersion)
+				if err != nil {
+					return err
+				}
+			}
+			if !found {
+				for _, m := range s.Media {
+					if m.BindingID != "" {
+						return domain.ErrReferenceUnavailable
+					}
+				}
+				expected, err = subjectSource(tx, p, s.SourceID, s.SourceVersion)
+			}
 			if err != nil {
 				return err
 			}
@@ -58,7 +78,14 @@ func ValidateDraftSources(tx *gorm.DB, a identityapp.Principal, p uuid.UUID, d d
 				if m != s.Media[i] {
 					return domain.ErrReferenceUnavailable
 				}
-				if err := checkDraftMedia(tx, p, m, ready); err != nil {
+				if m.BindingID != "" {
+					if sourceOwner == nil {
+						return domain.ErrReferenceUnavailable
+					}
+					if err := sourceOwner.ValidateBinding(tx.Statement.Context, a, p, m, ready); err != nil {
+						return err
+					}
+				} else if err := checkDraftMedia(tx, p, m, ready); err != nil {
 					return err
 				}
 			}

@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -28,11 +29,12 @@ type IngestStore interface {
 
 // IngestActivities use the existing media pipeline on its media queue.
 type IngestActivities struct {
-	store   IngestStore
-	scopes  mediapg.ScopeAccessFactory
-	db      *gorm.DB
-	objects *objectstorage.Client
-	results *application.ManagedResults
+	store    IngestStore
+	scopes   mediapg.ScopeAccessFactory
+	db       *gorm.DB
+	objects  *objectstorage.Client
+	results  *application.ManagedResults
+	registry *objectstorage.Registry
 }
 
 // NewIngestActivities shares the private immutable staging store with the worker.
@@ -72,8 +74,14 @@ func (a *IngestActivities) Ingest(ctx context.Context, operationID uuid.UUID) (r
 	if result.Text != "" {
 		return store.IngestManagedText(ctx, identity)
 	}
+	if a.results == nil || a.registry == nil && a.objects == nil {
+		return mediaapp.ErrStorageNotReady
+	}
 	repo := mediapg.NewScopedIngestRepository(a.db, a.scopes)
 	service := mediaapp.NewIngestService(repo, artifactDownload{results: a.results, identity: identity}, mediaflow.FFProber{}, mediaflow.FFRenderer{}, mediaObjects{client: a.objects})
+	if a.registry != nil {
+		service = mediaapp.NewRoutedIngestService(repo, artifactDownload{results: a.results, identity: identity}, mediaflow.FFProber{}, mediaflow.FFRenderer{}, mediaobjects.NewGeneratedObjects(a.registry, mediapg.NewStorageRoutes(a.db)), mediapg.NewStorageRoutes(a.db))
+	}
 	for _, artifact := range result.Artifacts {
 		output, err := service.Ingest(ctx, mediaapp.IngestInput{OperationID: operationID.String(), SeqNo: artifact.Sequence, URL: strconv.Itoa(artifact.Sequence)})
 		if err != nil {
@@ -86,6 +94,9 @@ func (a *IngestActivities) Ingest(ctx context.Context, operationID uuid.UUID) (r
 		if err := repo.RecordModeration(ctx, operationID, outputID, mediadomain.ModerationPassed, ""); err != nil {
 			return err
 		}
+	}
+	if a.registry != nil {
+		return repo.CompleteGeneratedWork(ctx, operationID, len(result.Artifacts))
 	}
 	return nil
 }
@@ -124,4 +135,9 @@ func (s mediaObjects) Stat(ctx context.Context, key string) (mediaapp.ObjectInfo
 // NewScopedIngestActivities supplies current media worker authority explicitly.
 func NewScopedIngestActivities(db *gorm.DB, objects *objectstorage.Client, results *application.ManagedResults, scopes mediapg.ScopeAccessFactory, store IngestStore) *IngestActivities {
 	return &IngestActivities{db: db, objects: objects, results: results, scopes: scopes, store: store}
+}
+
+// NewRoutedIngestActivities keeps originals and previews on the admitted physical route.
+func NewRoutedIngestActivities(db *gorm.DB, registry *objectstorage.Registry, results *application.ManagedResults, scopes mediapg.ScopeAccessFactory, store IngestStore) *IngestActivities {
+	return &IngestActivities{db: db, registry: registry, results: results, scopes: scopes, store: store}
 }

@@ -45,7 +45,7 @@ const links = [
   { id: "home", label: "创作", icon: Sparkles, href: "/" },
   { id: "explore", label: "探索", icon: Compass, href: "/explore" },
   { id: "assets", label: "资产", icon: Folder, href: "/assets" },
-  { id: "subjects", label: "主体库", icon: Contact, href: "/subjects" },
+  { id: "subjects", label: "主体", icon: Contact, href: "/subjects" },
 ];
 
 function PrimaryNavigation({ screen }: { screen: string }) {

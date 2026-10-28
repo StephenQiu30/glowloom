@@ -26,6 +26,7 @@ export type ReferenceSource =
         sourceId: string;
         sourceVersion: string;
         mediaKind: MediaKind;
+        bindingId?: string;
       }[];
     };
 export type ReferenceBinding = {
@@ -136,9 +137,10 @@ export function validateReference(
       requireValue(typeof s.description === "string" && Array.isArray(s.media));
       for (const item of s.media) {
         record(item);
-        keys(item, ["sourceId", "sourceVersion", "mediaKind"]);
+        keys(item, ["sourceId", "sourceVersion", "mediaKind", "bindingId"]);
         id(item.sourceId);
         id(item.sourceVersion);
+        if (item.bindingId !== undefined) id(item.bindingId);
         requireValue(
           ["image", "video", "audio"].includes(item.mediaKind as string),
         );

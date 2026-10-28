@@ -31,7 +31,7 @@ func insertCopyHistory(tx *gorm.DB, h application.ProjectCopyHistory) error {
 		if err != nil {
 			return err
 		}
-		if err := copyInsert(tx, "script.script_source", map[string]any{"id": s.ID, "org_id": s.OrgID, "project_id": s.ProjectID, "source_lineage_id": s.LineageID, "previous_source_id": s.PreviousID, "source_revision": s.Revision, "origin": s.Origin, "source_kind": s.Kind, "title": s.Title, "status": s.Status, "rights_actor_id": s.RightsActorID, "rights_confirmed_at": s.RightsConfirmedAt, "media_asset_id": s.MediaAssetID, "media_revision": s.MediaRevision, "media_sha256": s.MediaSHA256, "original_key": s.Original.Key, "original_sha256": s.Original.SHA256, "original_bytes": s.Original.ByteSize, "original_mime": s.Original.MIME, "rich_key": s.Rich.Key, "rich_sha256": s.Rich.SHA256, "rich_bytes": s.Rich.ByteSize, "content_hash": s.ContentHash, "char_count": s.CharCount, "provenance": provenance, "created_at": s.CreatedAt}); err != nil {
+		if err := copyInsert(tx, "script.script_source", map[string]any{"id": s.ID, "org_id": s.OrgID, "project_id": s.ProjectID, "source_lineage_id": s.LineageID, "previous_source_id": s.PreviousID, "source_revision": s.Revision, "origin": s.Origin, "source_kind": s.Kind, "title": s.Title, "status": s.Status, "rights_actor_id": s.RightsActorID, "rights_confirmed_at": s.RightsConfirmedAt, "media_asset_id": s.MediaAssetID, "media_revision": s.MediaRevision, "media_sha256": s.MediaSHA256, "original_location_id": nullableLocation(s.Original.LocationID), "rich_location_id": nullableLocation(s.Rich.LocationID), "original_key": s.Original.Key, "original_sha256": s.Original.SHA256, "original_bytes": s.Original.ByteSize, "original_mime": s.Original.MIME, "rich_key": s.Rich.Key, "rich_sha256": s.Rich.SHA256, "rich_bytes": s.Rich.ByteSize, "content_hash": s.ContentHash, "char_count": s.CharCount, "provenance": provenance, "created_at": s.CreatedAt}); err != nil {
 			return err
 		}
 	}
@@ -44,7 +44,7 @@ func insertCopyHistory(tx *gorm.DB, h application.ProjectCopyHistory) error {
 		if err != nil {
 			return err
 		}
-		if err := copyInsert(tx, "script.script_version", map[string]any{"id": v.ID, "org_id": v.OrgID, "project_id": v.ProjectID, "version_no": v.VersionNo, "source_ids": gorm.Expr("ARRAY(SELECT jsonb_array_elements_text(?::jsonb)::uuid)", string(ids)), "source_spans": spans, "text_key": v.Text.Key, "text_sha256": v.Text.SHA256, "text_bytes": v.Text.ByteSize, "rich_key": v.Rich.Key, "rich_sha256": v.Rich.SHA256, "rich_bytes": v.Rich.ByteSize, "content_hash": v.ContentHash, "document_sha256": v.DocumentSHA256, "source_manifest_sha256": v.SourceManifestSHA256, "char_count": v.CharCount, "created_at": v.CreatedAt}); err != nil {
+		if err := copyInsert(tx, "script.script_version", map[string]any{"id": v.ID, "org_id": v.OrgID, "project_id": v.ProjectID, "version_no": v.VersionNo, "source_ids": gorm.Expr("ARRAY(SELECT jsonb_array_elements_text(?::jsonb)::uuid)", string(ids)), "source_spans": spans, "text_location_id": nullableLocation(v.Text.LocationID), "rich_location_id": nullableLocation(v.Rich.LocationID), "text_key": v.Text.Key, "text_sha256": v.Text.SHA256, "text_bytes": v.Text.ByteSize, "rich_key": v.Rich.Key, "rich_sha256": v.Rich.SHA256, "rich_bytes": v.Rich.ByteSize, "content_hash": v.ContentHash, "document_sha256": v.DocumentSHA256, "source_manifest_sha256": v.SourceManifestSHA256, "char_count": v.CharCount, "created_at": v.CreatedAt}); err != nil {
 			return err
 		}
 	}

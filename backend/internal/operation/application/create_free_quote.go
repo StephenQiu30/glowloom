@@ -50,8 +50,9 @@ type FreeQuoteItemInput struct {
 
 // FreeQuoteMediaInput names an ordered canvas asset and its model input role.
 type FreeQuoteMediaInput struct {
-	Role         string
-	MediaAssetID uuid.UUID
+	Role             string
+	MediaAssetID     uuid.UUID
+	SubjectBindingID *uuid.UUID `json:"subject_binding_id,omitempty"`
 }
 
 // Validate checks prompt, optional model selection and JSON bounds.
@@ -90,7 +91,7 @@ func (i FreeQuoteItemInput) Validate() error {
 		return ErrInvalidFreeQuote
 	}
 	for _, media := range i.MediaInputs {
-		if media.MediaAssetID == uuid.Nil || strings.TrimSpace(media.Role) == "" || media.Role == "prompt" {
+		if media.MediaAssetID == uuid.Nil || strings.TrimSpace(media.Role) == "" || media.Role == "prompt" || media.SubjectBindingID != nil && *media.SubjectBindingID == uuid.Nil {
 			return ErrInvalidFreeQuote
 		}
 	}
@@ -129,11 +130,13 @@ type FreeQuoteCatalog struct {
 
 // FreeQuoteMediaFact is a project-scoped locked media snapshot supplied by the adapter.
 type FreeQuoteMediaFact struct {
-	ID         uuid.UUID
-	Kind       string
-	SHA256     string
-	ByteSize   int64
-	DurationMS *int64
+	ID                   uuid.UUID
+	Kind                 string
+	SHA256               string
+	ByteSize             int64
+	DurationMS           *int64
+	SubjectBindingID     *uuid.UUID
+	SubjectBindingSHA256 string
 }
 
 // PreparedFreeQuote holds a new immutable quote before the adapter writes it.

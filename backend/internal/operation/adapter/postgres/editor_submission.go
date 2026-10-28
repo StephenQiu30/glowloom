@@ -166,7 +166,15 @@ func compileEditorInput(tx *gorm.DB, input application.CreateFreeQuoteInput, d p
 		if err != nil {
 			return input, promptdomain.ErrReferenceUnavailable
 		}
-		prepared.MediaInputs = append(prepared.MediaInputs, application.FreeQuoteMediaInput{Role: m.Role, MediaAssetID: id})
+		media := application.FreeQuoteMediaInput{Role: m.Role, MediaAssetID: id}
+		if m.BindingID != "" {
+			binding, err := uuid.Parse(m.BindingID)
+			if err != nil || binding == uuid.Nil {
+				return input, promptdomain.ErrReferenceUnavailable
+			}
+			media.SubjectBindingID = &binding
+		}
+		prepared.MediaInputs = append(prepared.MediaInputs, media)
 	}
 	input.FreeQuoteItemInput = prepared
 	return input, input.Validate()

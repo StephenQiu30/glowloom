@@ -46,7 +46,7 @@ func TestDoubaoTTSUsesResourceHeadersAndCollectsAudioChunks(t *testing.T) {
 }
 func TestDoubaoTTSRejectsWrongModelsAndNeverRetriesUnknown(t *testing.T) {
 	calls := 0
-	client := providerhttp.NewClient(&http.Client{Transport: providerTransport(func(r *http.Request) (*http.Response, error) {
+	client := providerhttp.NewClient(&http.Client{Transport: providerTransport(func(_ *http.Request) (*http.Response, error) {
 		calls++
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(io.MultiReader(strings.NewReader(`{"code":0,"data":"SUQz"}`), brokenSpeechReader{})), Header: make(http.Header)}, nil
 	})})

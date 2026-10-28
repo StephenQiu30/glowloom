@@ -5,10 +5,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
-	"github.com/google/uuid"
 )
 
 func TestPlatformDeleteRetainsIdentityAndReplays(t *testing.T) {

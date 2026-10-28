@@ -5,7 +5,7 @@ export const kinds = {
   location: "场景",
   prop: "物品",
 } as const;
-export type Subject = API.Detail & {
+export type Subject = API.BibleDetail & {
   head: API.Head & {
     id: string;
     project_id: string;
@@ -15,7 +15,7 @@ export type Subject = API.Detail & {
   current: API.Version;
 };
 export function requireSubject(
-  v: API.Detail,
+  v: API.BibleDetail,
   project: string,
   kind: API.Kind,
   id?: string,

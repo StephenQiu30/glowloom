@@ -2,6 +2,7 @@ package objectstorage
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"time"
@@ -33,6 +34,12 @@ func (b tosBackend) put(ctx context.Context, key string, reader io.Reader, size 
 func (b tosBackend) stat(ctx context.Context, key string) (ObjectInfo, error) {
 	info, err := b.sdk.HeadObjectV2(ctx, &tos.HeadObjectV2Input{Bucket: b.bucket, Key: key})
 	if err != nil {
+		// TOS HEAD errors have no response body, so the SDK has no Code.
+		// The official existence contract uses the HTTP status for this request.
+		var response *tos.TosServerError
+		if errors.As(err, &response) && response.StatusCode == http.StatusNotFound && response.Code == "" {
+			return ObjectInfo{}, errors.Join(ErrObjectMissing, err)
+		}
 		return ObjectInfo{}, err
 	}
 	sha := ""
@@ -86,4 +93,9 @@ func (b tosBackend) list(ctx context.Context, prefix string, maxItems int) ([]Ob
 		token = page.NextContinuationToken
 		seen[token] = true
 	}
+}
+
+func (b tosBackend) ping(ctx context.Context) error {
+	_, err := b.sdk.HeadBucket(ctx, &tos.HeadBucketInput{Bucket: b.bucket})
+	return err
 }

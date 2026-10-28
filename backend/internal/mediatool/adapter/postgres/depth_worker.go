@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
@@ -95,8 +96,10 @@ func (s *DepthStore) Claim(ctx context.Context, id application.DepthWorkID) (app
 		if id.Reconcile && !r.ReconciliationRequested {
 			return application.ErrConflict
 		}
+		var sourceAssets []mediadomain.MediaAsset
 		if !r.CancellationRequested && !id.Reconcile {
-			if err := s.validateSource(ctx, tx, r.actor(), r); err != nil {
+			sourceAssets, err = s.validateSource(ctx, tx, r.actor(), r)
+			if err != nil {
 				return err
 			}
 		}
@@ -114,7 +117,7 @@ func (s *DepthStore) Claim(ctx context.Context, id application.DepthWorkID) (app
 		if err != nil {
 			return err
 		}
-		work = application.DepthWork{Job: r.job(), Actor: actor, Frozen: f, ProcessState: state.ProcessState}
+		work = application.DepthWork{Job: r.job(), Actor: actor, Frozen: f, ProcessState: state.ProcessState, SourceAssets: sourceAssets}
 		return nil
 	})
 	return work, errors.Join(err, authorityErr)
@@ -183,7 +186,7 @@ func (s *DepthStore) Commit(ctx context.Context, id application.DepthWorkID) (do
 		if r.ProcessState != "ended" {
 			return application.ErrConflict
 		}
-		if err := s.validateSource(ctx, tx, r.actor(), r); err != nil {
+		if _, err := s.validateSource(ctx, tx, r.actor(), r); err != nil {
 			return err
 		}
 		a, found, err := loadDepthArtifact(tx, r)
@@ -194,6 +197,12 @@ func (s *DepthStore) Commit(ctx context.Context, id application.DepthWorkID) (do
 			return application.ErrConflict
 		}
 		if err := verifyDepthObjects(tx, r, "verified"); err != nil {
+			return err
+		}
+		if err := s.verifyDepthStorage(ctx, tx, r); err != nil {
+			return err
+		}
+		if err := acceptToolMedia(ctx, tx, s.storage, application.StorageOwner("depth", r.ProjectID, r.ID, r.Attempt), &a.Asset, a.Renditions); err != nil {
 			return err
 		}
 		if err := s.media(tx).Store(ctx, r.actor(), a.Asset, a.Renditions); err != nil {

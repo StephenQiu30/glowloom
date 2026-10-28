@@ -21,7 +21,7 @@ func (o StorageWorkOwner) Validate() error {
 		return ErrStorageRouteConflict
 	}
 	switch o.Kind {
-	case "operation", "script", "export", "depth", "transcription", "package", "transfer", "project-copy":
+	case "operation", "script", "export", "depth", "transcription", "package", "transfer", "project-copy", "subject-voice":
 		return nil
 	default:
 		return ErrStorageRouteConflict

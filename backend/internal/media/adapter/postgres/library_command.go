@@ -322,6 +322,9 @@ func lockLibraryItems(tx *gorm.DB, actor identityapp.Principal, scope domain.Lib
 		}
 		found := make(map[uuid.UUID]bool, len(binary))
 		for _, row := range binary {
+			if err := row.loadLocation(tx); err != nil {
+				return nil, err
+			}
 			a := row.domain()
 			if a.Validate() != nil {
 				return nil, application.ErrUnavailable

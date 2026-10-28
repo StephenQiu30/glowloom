@@ -23,9 +23,10 @@ type TranscriptionSourceFactory func(*gorm.DB) application.TranscriptionSourceRe
 
 // TranscriptionStore persists speech facts and consumes owning application ports.
 type TranscriptionStore struct {
-	db     *gorm.DB
-	source TranscriptionSourceFactory
-	media  MediaFactory
+	db      *gorm.DB
+	source  TranscriptionSourceFactory
+	media   MediaFactory
+	storage StorageFactory
 }
 
 // NewTranscriptionStore injects existing private media and saved canvas ownership.
@@ -190,6 +191,9 @@ func (s *TranscriptionStore) Create(ctx context.Context, actor identityapp.Princ
 		now := time.Now().UTC()
 		job = domain.TranscriptionJob{ID: uuid.New(), ProjectID: project, Source: domain.TranscriptionSource{CanvasID: input.CanvasID, NodeID: input.NodeID, Revision: input.Revision}, Language: input.Language, Status: domain.TranscriptionQueued, Stage: "queued", Attempt: 1, Revision: 1, CreatedAt: now, UpdatedAt: now}
 		if err := tx.Exec(`INSERT INTO mediatool.transcription_job(id,project_id,org_id,actor_id,actor_role,canvas_id,node_id,source_revision,language,frozen,status,stage,progress,attempt,revision,inference_state,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?::jsonb,'queued','queued',0,1,1,'none',?,?)`, job.ID, project, actor.OrgID, actor.ID, nil, input.CanvasID, input.NodeID, input.Revision, input.Language, string(frozen), now, now).Error; err != nil {
+			return err
+		}
+		if err := pinTool(ctx, tx, s.storage, "transcription", project, job.ID, job.Attempt); err != nil {
 			return err
 		}
 		return recordTranscriptionCommand(tx, actor, key, hash, "requested", job, "start")

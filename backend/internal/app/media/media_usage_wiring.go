@@ -2,6 +2,8 @@ package media
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"sort"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	pgmediatool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
@@ -64,4 +67,35 @@ func ProvideMediaStorageUsage(database *gorm.DB, storage *objectstorage.Client) 
 		}
 	}, NewMediaScopeAccess)
 	return mediaapp.NewStorageUsageReader(source, mediaobjects.NewStorageUsageObjects(storage), time.Now)
+}
+
+// ProvideRoutedMediaStorageUsage accounts for each configured readable resource
+// while the media owner retains current scope authority throughout inventory I/O.
+func ProvideRoutedMediaStorageUsage(database *gorm.DB, registry *objectstorage.Registry, cfg *config.ObjectStorageConfig) *mediaapp.StorageUsageReader {
+	if cfg == nil || registry == nil {
+		return mediaapp.NewRoutedStorageUsageReader(nil, nil, time.Now)
+	}
+	validated, err := cfg.Validated()
+	if err != nil {
+		return mediaapp.NewRoutedStorageUsageReader(nil, nil, time.Now)
+	}
+	buckets := make([]mediaapp.StorageUsageBucket, 0, len(validated.Profiles))
+	ids := make([]string, 0, len(validated.Profiles))
+	for id := range validated.Profiles {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		p := validated.Profiles[id]
+		if p.Mode == "disabled" {
+			continue
+		}
+		sum := sha256.Sum256([]byte(p.ResourceIdentity()))
+		buckets = append(buckets, mediaapp.StorageUsageBucket{ProfileID: id, Bucket: p.Bucket, ResourceIdentity: hex.EncodeToString(sum[:])})
+	}
+	library := pgmedia.NewScopedLibraryStore(database, NewMediaLibraryProjectAccess, time.Now, NewMediaScopeAccess)
+	source := pgmedia.NewRoutedStorageUsageStore(library, buckets, func(tx *gorm.DB) mediaapp.StorageUsageLocationSource {
+		return pgmedia.NewScopedLibraryStore(tx, NewMediaLibraryProjectAccess, time.Now, NewMediaScopeAccess)
+	})
+	return mediaapp.NewRoutedStorageUsageReader(source, mediaobjects.NewRoutedStorageUsageObjects(registry), time.Now)
 }

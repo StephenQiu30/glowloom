@@ -8,7 +8,9 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
 	pgscript "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
@@ -110,5 +112,20 @@ func provideProjectCopyScriptTransfer(database *gorm.DB, storage *objectstorage.
 		}
 		authority := workspaceapp.ProjectCopyAuthority{Binding: workspaceapp.ProjectCopyBinding{JobID: job.ID, OrgID: job.OrgID, SourceProjectID: job.SourceProjectID, TargetProjectID: job.TargetProjectID}, ActorID: job.ExecutionActor(), WorkerID: worker, SourceRevision: job.SourceRevision, Phase: phase, Bible: job.Manifest.Bible}
 		return projectCopyScriptTransfer{owner: scriptapp.NewProjectCopy(provideScriptProjectCopyStore(database, authority), scriptobjects.NewStorage(storage))}
+	}
+}
+
+func withScriptCopyLocations(store *pgscript.ProjectCopyStore) *pgscript.ProjectCopyStore {
+	return store.WithObjectLocations(scriptwire.ProvideScriptObjectLocations)
+}
+
+func provideRoutedProjectCopyScriptTransfer(database *gorm.DB, registry *objectstorage.Registry) workspaceapp.ProjectCopyScriptTransferFactory {
+	return func(job workspacedomain.ProjectCopyJob, worker uuid.UUID, cleanup bool) workspaceapp.ProjectCopyScriptTransfer {
+		phase := "transfer"
+		if cleanup {
+			phase = "cleanup"
+		}
+		authority := workspaceapp.ProjectCopyAuthority{Binding: workspaceapp.ProjectCopyBinding{JobID: job.ID, OrgID: job.OrgID, SourceProjectID: job.SourceProjectID, TargetProjectID: job.TargetProjectID}, ActorID: job.ExecutionActor(), WorkerID: worker, SourceRevision: job.SourceRevision, Phase: phase, Bible: job.Manifest.Bible}
+		return projectCopyScriptTransfer{owner: scriptapp.NewProjectCopy(withScriptCopyLocations(provideScriptProjectCopyStore(database, authority)), scriptobjects.NewRoutedStorage(registry, pgmedia.NewStorageRoutes(database)))}
 	}
 }

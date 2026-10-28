@@ -146,14 +146,6 @@ func acceptUploadLocations(tx *gorm.DB, actor identityapp.Principal, r applicati
 				return application.ErrUploadConflict
 			}
 		}
-		if err := tx.Exec(`UPDATE media.media_asset SET object_location_id=? WHERE id=? AND object_key=?`, asset.ObjectLocation.ID, asset.ID, asset.ObjectKey).Error; err != nil {
-			return err
-		}
-		for _, rend := range rends {
-			if err := tx.Exec(`UPDATE media.rendition SET object_location_id=? WHERE id=? AND object_key=?`, rend.ObjectLocation.ID, rend.ID, rend.ObjectKey).Error; err != nil {
-				return err
-			}
-		}
 	}
 	update := tx.Exec(`UPDATE media.upload_admission SET accepted_asset_id=? WHERE id=? AND (accepted_asset_id IS NULL OR accepted_asset_id=?)`, accepted, target.SessionID, accepted)
 	if update.Error != nil {
@@ -161,6 +153,42 @@ func acceptUploadLocations(tx *gorm.DB, actor identityapp.Principal, r applicati
 	}
 	if update.RowsAffected != 1 {
 		return application.ErrUploadConflict
+	}
+	return nil
+}
+
+// insertReviewedUpload establishes the physical identity in the first INSERT;
+// runtime cannot rewrite accepted asset ownership and finalized columns are NOT NULL.
+func insertReviewedUpload(tx *gorm.DB, a domain.MediaAsset, rends []domain.Rendition) error {
+	row := map[string]any{"id": a.ID, "kind": string(a.Kind), "origin": "upload", "status": "ready", "object_key": a.ObjectKey, "file_name": a.FileName, "mime_type": a.MimeType, "byte_size": a.ByteSize, "sha256": a.SHA256, "width": a.Width, "height": a.Height, "duration_ms": a.DurationMS, "fps": a.FPS, "audio_channels": a.AudioChannels, "codec": a.Codec, "moderation_status": "passed", "moderation_detail": gorm.Expr("?::jsonb", string(a.ModerationDetail)), "revision": 1, "create_time": a.CreateTime, "update_time": a.UpdateTime}
+	if a.Personal != nil {
+		row["personal_org_id"] = a.Personal.OrgID
+		row["personal_actor_id"] = a.Personal.ActorID
+	} else {
+		row["project_id"] = a.ProjectID
+	}
+	if a.ObjectLocation != nil {
+		row["object_location_id"] = a.ObjectLocation.ID
+	}
+	q := tx.Table("media.media_asset").Create(row)
+	if q.Error != nil {
+		return fmt.Errorf("insert reviewed upload: %w", q.Error)
+	}
+	if q.RowsAffected != 1 {
+		return application.ErrUploadConflict
+	}
+	for _, r := range rends {
+		row := map[string]any{"id": r.ID, "media_asset_id": r.MediaAssetID, "kind": string(r.Kind), "object_key": r.ObjectKey, "width": r.Width, "height": r.Height, "byte_size": r.ByteSize, "create_time": r.CreateTime, "update_time": r.UpdateTime}
+		if r.ObjectLocation != nil {
+			row["object_location_id"] = r.ObjectLocation.ID
+		}
+		q := tx.Table("media.rendition").Create(row)
+		if q.Error != nil {
+			return fmt.Errorf("insert upload rendition: %w", q.Error)
+		}
+		if q.RowsAffected != 1 {
+			return application.ErrUploadConflict
+		}
 	}
 	return nil
 }

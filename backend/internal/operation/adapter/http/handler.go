@@ -58,8 +58,9 @@ func (h *Handler) Register(group *gin.RouterGroup) {
 
 // QuoteMediaInput preserves ordered, project-owned reference roles.
 type QuoteMediaInput struct {
-	Role         string    `json:"role"`
-	MediaAssetID uuid.UUID `json:"media_asset_id"`
+	Role             string     `json:"role"`
+	MediaAssetID     uuid.UUID  `json:"media_asset_id"`
+	SubjectBindingID *uuid.UUID `json:"subject_binding_id,omitempty"`
 }
 
 // QuoteItemRequest contains user input; model and price versions freeze server-side.
@@ -105,7 +106,7 @@ func (i *QuoteItemRequest) UnmarshalJSON(body []byte) error {
 func (i QuoteItemRequest) input() application.FreeQuoteItemInput {
 	media := make([]application.FreeQuoteMediaInput, 0, len(i.MediaInputs))
 	for _, item := range i.MediaInputs {
-		media = append(media, application.FreeQuoteMediaInput{Role: item.Role, MediaAssetID: item.MediaAssetID})
+		media = append(media, application.FreeQuoteMediaInput{Role: item.Role, MediaAssetID: item.MediaAssetID, SubjectBindingID: item.SubjectBindingID})
 	}
 	return application.FreeQuoteItemInput{InputSource: i.InputSource, ExpectedSubmissionEpoch: i.ExpectedSubmissionEpoch, ModelKey: i.ModelKey, Capability: i.Capability, Mode: i.Mode, Prompt: i.Prompt, Params: i.Params, OutputCount: i.OutputCount, ForceRegenerate: i.ForceRegenerate, MediaInputs: media, Source: i.Source, PromptTemplate: i.PromptTemplate}
 }

@@ -5,6 +5,7 @@ import { PromptEditor } from "@/components/generation/prompt-editor";
 import type { ComposerSession } from "@/components/generation/composer-session";
 import {
   emptyPromptDraft,
+  referenceLabel,
   type PromptDraft,
 } from "@/components/generation/prompt-document";
 
@@ -25,26 +26,30 @@ function draftText(draft: PromptDraft) {
             ? node.text
             : node.type === "hardBreak"
               ? "\n"
-              : "",
+              : referenceLabel(draft.labelState, node.attrs.referenceId),
         )
         .join(""),
     )
     .join("\n");
 }
 
-/** Before a project is chosen, only text is retained; private references stay project-owned. */
+/** The page can retain space-owned subjects before choosing a generation project. */
 export function HomePrompt({
   value,
   onChange,
   placeholder,
   onSubmit,
   label = "创作提示词",
+  onReady,
+  onDraftChange,
 }: {
   label?: string;
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
   onSubmit: () => void;
+  onReady?: (session: ComposerSession) => void;
+  onDraftChange?: (draft: PromptDraft) => void;
 }) {
   const [replicaId] = useState(() => crypto.randomUUID());
   const [initial] = useState(() => textDraft(value));
@@ -72,8 +77,13 @@ export function HomePrompt({
         placeholder={placeholder}
         className="home-prompt-editor overflow-y-auto outline-none"
         inputGroup
-        onReady={setSession}
+        onReady={(value) => {
+          setSession(value);
+          onReady?.(value);
+          onDraftChange?.(value.snapshot().draft);
+        }}
         onChange={(snapshot) => {
+          onDraftChange?.(snapshot.draft);
           const text = draftText(snapshot.draft);
           if (text !== latestText.current) {
             latestText.current = text;

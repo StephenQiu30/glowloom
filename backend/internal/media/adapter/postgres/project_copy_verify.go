@@ -12,6 +12,26 @@ import (
 )
 
 func equalCopyMedia(want, got any) bool {
+	// An old immutable snapshot predates physical-location metadata. A later
+	// owner-verified backfill may add transport facts without rewriting history.
+	switch expected := want.(type) {
+	case domain.MediaAsset:
+		if current, ok := got.(domain.MediaAsset); ok && expected.ObjectLocation == nil && current.ObjectLocation != nil && current.ObjectLocation.State == "accepted" && current.ObjectLocation.Ref.Key == current.ObjectKey {
+			if expected.SHA256 == nil && current.ObjectLocation.SHA256 != nil && current.SHA256 != nil && *current.ObjectLocation.SHA256 == *current.SHA256 {
+				current.SHA256 = nil
+			}
+			current.ObjectLocation = nil
+			got = current
+		}
+	case domain.Rendition:
+		if current, ok := got.(domain.Rendition); ok && expected.ObjectLocation == nil && current.ObjectLocation != nil && current.ObjectLocation.State == "accepted" && current.ObjectLocation.Ref.Key == current.ObjectKey {
+			if expected.ByteSize == nil && current.ObjectLocation.ByteSize != nil && current.ByteSize != nil && *current.ObjectLocation.ByteSize == *current.ByteSize {
+				current.ByteSize = nil
+			}
+			current.ObjectLocation = nil
+			got = current
+		}
+	}
 	a, err := json.Marshal(canonicalCopyMediaTime(want))
 	if err != nil {
 		return false
@@ -32,6 +52,14 @@ func equalCopyMedia(want, got any) bool {
 func canonicalCopyMediaTime(value any) any {
 	switch item := value.(type) {
 	case domain.MediaAsset:
+		if item.ObjectLocation != nil {
+			l := *item.ObjectLocation
+			l.State = ""
+			l.ByteSize = nil
+			l.SHA256 = nil
+			l.MIMEType = nil
+			item.ObjectLocation = &l
+		}
 		item.CreateTime = item.CreateTime.UTC()
 		item.UpdateTime = item.UpdateTime.UTC()
 		if item.DeleteTime != nil {
@@ -56,6 +84,14 @@ func canonicalCopyMediaTime(value any) any {
 		}
 		return item
 	case domain.Rendition:
+		if item.ObjectLocation != nil {
+			l := *item.ObjectLocation
+			l.State = ""
+			l.ByteSize = nil
+			l.SHA256 = nil
+			l.MIMEType = nil
+			item.ObjectLocation = &l
+		}
 		item.CreateTime = item.CreateTime.UTC()
 		item.UpdateTime = item.UpdateTime.UTC()
 		return item
@@ -78,6 +114,9 @@ func verifyCopiedMedia(tx *gorm.DB, assets []application.ProjectCopySourceAsset,
 		if read.Error != nil {
 			return read.Error
 		}
+		if err := row.loadLocation(tx); err != nil {
+			return err
+		}
 		if read.RowsAffected != 1 || !equalCopyMedia(item.Asset, row.domain()) {
 			return application.ErrObjectMismatch
 		}
@@ -93,6 +132,9 @@ func verifyCopiedMedia(tx *gorm.DB, assets []application.ProjectCopySourceAsset,
 			expected[r.ID] = r
 		}
 		for _, row := range rows {
+			if err := row.loadLocation(tx); err != nil {
+				return err
+			}
 			if !equalCopyMedia(expected[row.ID], row.domain()) {
 				return application.ErrObjectMismatch
 			}

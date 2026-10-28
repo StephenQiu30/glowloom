@@ -25,6 +25,7 @@ var (
 
 // Store keeps the database handle injected by the composition root.
 type Store struct {
+	projectMedia     func(*gorm.DB) application.ProjectMediaSigner
 	storageAdmission OperationStorageFactory
 	db               *gorm.DB
 	requestAccess    ProjectAccessFactory
@@ -32,6 +33,21 @@ type Store struct {
 	platformAccess   PlatformAccessFactory
 	editorSnapshots  func(*gorm.DB) application.EditorSnapshots
 	promptCompiler   func(*gorm.DB) application.QuotePromptCompiler
+	subjectMedia     func(*gorm.DB) application.SubjectMediaAccess
+}
+
+// WithSubjectMedia injects formal binding checks without changing ordinary
+// project-owned media authorization.
+func (s *Store) WithSubjectMedia(factory func(*gorm.DB) application.SubjectMediaAccess) *Store {
+	s.subjectMedia = factory
+	return s
+}
+
+func (s *Store) subjects(tx *gorm.DB) application.SubjectMediaAccess {
+	if s.subjectMedia == nil {
+		return nil
+	}
+	return s.subjectMedia(tx)
 }
 
 // NewStore injects the caller's database handle.

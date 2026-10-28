@@ -19,13 +19,27 @@ import (
 
 // DraftStore persists complete private intent and permanent request receipts.
 type DraftStore struct {
-	db     *gorm.DB
-	access func(*gorm.DB) application.DraftAccess
+	db             *gorm.DB
+	access         func(*gorm.DB) application.DraftAccess
+	subjectSources func(*gorm.DB) application.SubjectSources
 }
 
 // NewDraftStore injects transaction-scoped project authorization.
 func NewDraftStore(db *gorm.DB, access func(*gorm.DB) application.DraftAccess) *DraftStore {
-	return &DraftStore{db, access}
+	return &DraftStore{db: db, access: access}
+}
+
+// WithSubjectSources binds unified subject facts to each owning transaction.
+func (s *DraftStore) WithSubjectSources(factory func(*gorm.DB) application.SubjectSources) *DraftStore {
+	s.subjectSources = factory
+	return s
+}
+
+func (s *DraftStore) sources(tx *gorm.DB) application.SubjectSources {
+	if s.subjectSources == nil {
+		return nil
+	}
+	return s.subjectSources(tx)
 }
 func (s *DraftStore) authorize(ctx context.Context, tx *gorm.DB, a identityapp.Principal, p uuid.UUID, write bool) error {
 	if a.ID == uuid.Nil || p == uuid.Nil {
@@ -127,7 +141,7 @@ func (s *DraftStore) SaveDraft(ctx context.Context, a identityapp.Principal, in 
 				return err
 			}
 		}
-		if err := ValidateDraftSources(tx, a, in.ProjectID, in.Draft, false); err != nil {
+		if err := ValidateDraftSources(tx, a, in.ProjectID, in.Draft, false, s.sources(tx)); err != nil {
 			return err
 		}
 		raw, err := json.Marshal(in.Draft)
@@ -196,6 +210,6 @@ func (s *DraftStore) ValidateFragment(ctx context.Context, a identityapp.Princip
 		if err := s.authorize(ctx, tx, a, p, true); err != nil {
 			return err
 		}
-		return ValidateDraftSources(tx, a, p, d, false)
+		return ValidateDraftSources(tx, a, p, d, false, s.sources(tx))
 	})
 }

@@ -92,7 +92,7 @@ func (s *UploadAdmission) PinUpload(ctx context.Context, actor identityapp.Princ
 		}
 		if !found {
 			var route application.StorageRoute
-			r := tx.Raw(`SELECT r.profile_id,p.bucket,r.revision FROM media.storage_route r JOIN media.storage_profile p ON p.id=r.profile_id WHERE r.singleton=1 FOR SHARE OF r,p`).Scan(&route)
+			r := tx.Raw(`SELECT r.profile_id,p.bucket,r.revision FROM media.storage_route r JOIN media.storage_profile p ON p.id=r.profile_id WHERE r.singleton=1 FOR SHARE OF r`).Scan(&route)
 			if r.Error != nil {
 				return r.Error
 			}
@@ -105,7 +105,7 @@ func (s *UploadAdmission) PinUpload(ctx context.Context, actor identityapp.Princ
 					UploadPolicy      json.RawMessage
 					SessionTTLSeconds int64
 				}
-				read := tx.Raw(`SELECT upload_policy,session_ttl_seconds FROM media.storage_config_revision WHERE revision=? AND profile_id=? FOR SHARE`, route.Revision, route.ProfileID).Scan(&snapshot)
+				read := tx.Raw(`SELECT upload_policy,session_ttl_seconds FROM media.storage_config_revision WHERE revision=? AND profile_id=?`, route.Revision, route.ProfileID).Scan(&snapshot)
 				if read.Error != nil {
 					return read.Error
 				}

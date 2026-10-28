@@ -106,7 +106,18 @@ func (s *Store) Claim(ctx context.Context, id application.WorkID) (application.W
 		}
 		work.Job = row.public()
 		work.Actor = row.actor()
-		return json.Unmarshal(row.Frozen, &work.Frozen)
+		if err := json.Unmarshal(row.Frozen, &work.Frozen); err != nil {
+			return err
+		}
+		if s.storage != nil {
+			ids := make([]uuid.UUID, 0, len(work.Frozen.Inputs))
+			for _, i := range work.Frozen.Inputs {
+				ids = append(ids, i.AssetID)
+			}
+			work.SourceAssets, err = s.media(tx).Sources(ctx, row.actor(), row.ProjectID, ids)
+			return err
+		}
+		return nil
 	})
 	if err == nil && cancelled {
 		return application.Work{}, application.ErrCancelled
@@ -180,6 +191,9 @@ func (s *Store) Commit(ctx context.Context, id application.WorkID, asset mediado
 		if err := s.validateSources(ctx, tx, row.actor(), row); err != nil {
 			return err
 		}
+		if err := acceptToolMedia(ctx, tx, s.storage, application.StorageOwner("export", row.ProjectID, row.ID, row.Attempt), &asset, renditions); err != nil {
+			return err
+		}
 		if err := s.media(tx).Store(ctx, row.actor(), asset, renditions); err != nil {
 			return normalize(err)
 		}
@@ -217,6 +231,16 @@ func (s *Store) Finish(ctx context.Context, id application.WorkID, cancelled boo
 		}
 		if row.ActiveWorker == nil || *row.ActiveWorker != id.ExecutionID {
 			return application.ErrConflict
+		}
+		if s.storage != nil {
+			ledger := s.storage(tx)
+			intent, err := ledger.ReadStorageWork(ctx, application.StorageOwner("export", row.ProjectID, row.ID, row.Attempt))
+			if err != nil {
+				return err
+			}
+			if err = ledger.CancelStorageWork(ctx, intent.ID); err != nil {
+				return err
+			}
 		}
 		row.ActiveWorker = nil
 		if cancelled || row.Status == "cancel_requested" {

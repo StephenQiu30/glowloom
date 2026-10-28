@@ -126,6 +126,9 @@ func (s *TranscriptionStore) Control(ctx context.Context, actor identityapp.Prin
 			row.Stage = "queued"
 			row.Progress = 0
 			row.Attempt++
+			if err := pinTool(ctx, tx, s.storage, "transcription", row.ProjectID, row.ID, row.Attempt); err != nil {
+				return err
+			}
 			row.InferenceState = "none"
 			row.Result = nil
 			row.ResultSHA256 = nil

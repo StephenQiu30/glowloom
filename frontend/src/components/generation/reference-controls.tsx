@@ -1,5 +1,6 @@
 "use client";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import dynamic from "next/dynamic";
 import { cn } from "cn";
 import {
   Plus,
@@ -40,6 +41,20 @@ import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
 import { getMediaPreview } from "@/api/media";
+import { listSubjects } from "@/api/subjects";
+import { useOptionalSession } from "@/components/auth/session";
+import { useSpace } from "@/components/spaces/space-context";
+import {
+  requireUnifiedSubjectPage,
+  subjectError,
+  type UnifiedSubject,
+} from "@/components/subjects/unified-contracts";
+import {
+  unifiedSubjectBinding,
+  unifiedReferencePreview,
+  unifiedSubjectModelIssue,
+} from "@/components/subjects/unified-reference";
+import { UnifiedSubjectMedia } from "@/components/subjects/unified-media";
 import { getScopeGeneration, getSessionGeneration } from "@/lib/request";
 import {
   referenceRoleLabel,
@@ -82,7 +97,6 @@ import {
   ProjectMediaPicker,
   ProjectMediaPreview,
 } from "@/components/media/project-media";
-import { SubjectList } from "@/components/subjects/subject-list";
 import { subjectText, type Subject } from "@/components/subjects/contracts";
 import { uploadMediaAsset } from "@/api/media";
 import { validateUpload } from "@/components/media/library";
@@ -95,6 +109,16 @@ import {
   type PromptDraft,
   type ReferenceBinding,
 } from "./prompt-document";
+const UnifiedSubjectLibrary = dynamic(() =>
+  import("@/components/subjects/unified-library").then(
+    (module) => module.UnifiedSubjectLibrary,
+  ),
+);
+const UnifiedSubjectEditor = dynamic(() =>
+  import("@/components/subjects/unified-editor").then(
+    (module) => module.UnifiedSubjectEditor,
+  ),
+);
 export function mediaBinding(
   asset: API.AssetSummary,
   role: string,
@@ -158,6 +182,7 @@ export function ReferenceControls({
   home = false,
   canvasSources,
   incomingSources,
+  onChooseProject,
 }: {
   session: ComposerSession;
   draft: PromptDraft;
@@ -169,7 +194,10 @@ export function ReferenceControls({
   home?: boolean;
   canvasSources?: CanvasReferenceSource[];
   incomingSources?: (CanvasReferenceSource & { edgeID: string })[];
+  onChooseProject?: () => void;
 }) {
+  const actorID = useOptionalSession()?.actor.id;
+  const scopeID = useSpace().selected?.id;
   const displayLabel = (id: string) =>
     session.referencePending(id)
       ? "待确认引用"
@@ -189,6 +217,17 @@ export function ReferenceControls({
     [error, setError] = useState(""),
     [remove, setRemove] = useState<string | null>(null),
     [review, setReview] = useState(false);
+  const [createSubject, setCreateSubject] = useState(false);
+  const subjectInsertionRange = useRef<
+    { from: number; to: number } | undefined
+  >(undefined);
+  const [subjectRefresh, setSubjectRefresh] = useState(0);
+  const [subjectCatalog, setSubjectCatalog] = useState<{
+    key: string;
+    items: UnifiedSubject[];
+    loading: boolean;
+    error: string;
+  }>({ key: "", items: [], loading: false, error: "" });
   const [lookup, setLookup] = useState<{
     query: string;
     seq: number;
@@ -217,6 +256,68 @@ export function ReferenceControls({
     range: { from: number; to: number };
     index: number;
   } | null>(null);
+  const subjectCatalogOpen =
+    authorized && !!actorID && !!scopeID && !!(menu || mention || subjects);
+  const subjectCatalogKey = `${actorID}/${scopeID}/${search}/${subjectRefresh}`;
+  useEffect(() => {
+    if (!subjectCatalogOpen || !actorID || !scopeID) return;
+    const controller = new AbortController();
+    const key = subjectCatalogKey;
+    void listSubjects(
+      { q: search || undefined, page: 1, page_size: 24, order: "updated_desc" },
+      { signal: controller.signal },
+    )
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        const page = requireUnifiedSubjectPage(result, actorID, scopeID);
+        setSubjectCatalog({
+          key,
+          items: page.items,
+          loading: false,
+          error: "",
+        });
+      })
+      .catch((cause) => {
+        if (!controller.signal.aborted)
+          setSubjectCatalog({
+            key,
+            items: [],
+            loading: false,
+            error: subjectError(cause),
+          });
+      });
+    return () => controller.abort();
+  }, [subjectCatalogOpen, subjectCatalogKey, actorID, scopeID, search]);
+  const currentSubjectCatalog =
+    subjectCatalogOpen && subjectCatalog.key === subjectCatalogKey
+      ? subjectCatalog
+      : { items: [], loading: subjectCatalogOpen, error: "" };
+  function insertUnifiedSubject(subject: UnifiedSubject, inline: boolean) {
+    const original = draft.references.find(
+      (reference) => reference.id === subjectReplace,
+    );
+    const binding = unifiedSubjectBinding(subject, original?.role ?? "subject");
+    if (original) session.replaceReference(original.id, binding);
+    else {
+      const existing = draft.references.find(
+        (reference) =>
+          reference.source.kind === "subject" &&
+          reference.source.sourceId === subject.id &&
+          reference.source.sourceVersion === subject.version_id,
+      );
+      add(
+        existing ?? binding,
+        inline,
+        subjectInsertionRange.current ?? mention?.range,
+      );
+    }
+    setSubjects(false);
+    setCreateSubject(false);
+    setSubjectReplace(null);
+    setMention(null);
+    setMenu(false);
+    subjectInsertionRange.current = undefined;
+  }
   const mentionFrom = mention?.range.from;
   const mentionAnchor = useMemo(
     () => ({
@@ -408,6 +509,10 @@ export function ReferenceControls({
     if (compact) setDetailsID(pending.id);
   }
   const acceptFiles = useEffectEvent((values: File[]) => {
+    if (!projectID) {
+      onChooseProject?.();
+      return;
+    }
     if (!disabled) values.forEach((file) => choose(file, undefined, true));
   });
   useEffect(() => {
@@ -943,7 +1048,36 @@ export function ReferenceControls({
       )}
       <CommandList className="max-h-[min(20rem,calc(var(--radix-popover-content-available-height)_-_3rem))] min-h-0">
         <CommandEmpty>暂无可用参考</CommandEmpty>
-        {sourceKind ? (
+        {!projectID ? (
+          <CommandGroup heading="当前空间">
+            <CommandItem
+              value="subject"
+              disabled={!authorized}
+              onSelect={() => {
+                setSubjectReplace(null);
+                inlineSource.current = inline;
+                setSubjects(true);
+                setAddOpen(false);
+                setMenu(false);
+              }}
+            >
+              <UserRound />
+              添加主体
+            </CommandItem>
+            {onChooseProject ? (
+              <CommandItem
+                value="choose-project"
+                onSelect={() => {
+                  setAddOpen(false);
+                  onChooseProject();
+                }}
+              >
+                <FolderOpen />
+                选择项目后添加项目素材
+              </CommandItem>
+            ) : null}
+          </CommandGroup>
+        ) : sourceKind ? (
           <CommandGroup>
             <CommandItem value="back" onSelect={() => setSourceKind(null)}>
               <ArrowLeft />
@@ -978,7 +1112,7 @@ export function ReferenceControls({
               ))}
           </CommandGroup>
         ) : null}
-        {sourceKind === "canvas" ? (
+        {!projectID ? null : sourceKind === "canvas" ? (
           <CommandGroup heading="当前画布">
             {canvasSources
               ?.filter((source) => source.title.includes(sourceQuery))
@@ -1115,6 +1249,7 @@ export function ReferenceControls({
       </CommandList>
     </Command>
   );
+  const subjectModelIssue = unifiedSubjectModelIssue(draft.references, model);
   return (
     <TooltipProvider>
       <Popover
@@ -1165,6 +1300,7 @@ export function ReferenceControls({
                   const automatic = incomingSources?.some(
                     (source) => source.edgeID === ref.id,
                   );
+                  const subjectPreview = unifiedReferencePreview(ref);
                   return (
                     <Popover
                       key={ref.id}
@@ -1180,9 +1316,16 @@ export function ReferenceControls({
                           className="relative h-16 w-16 shrink-0 flex-col gap-1 overflow-hidden"
                           aria-label={`查看${displayLabel(ref.id)}详情`}
                         >
-                          {authorized &&
-                          ref.source.kind === "media" &&
-                          ref.mediaKind !== "audio" ? (
+                          {authorized && subjectPreview ? (
+                            <span className="absolute inset-0">
+                              <UnifiedSubjectMedia
+                                media={subjectPreview}
+                                label={displayLabel(ref.id)}
+                              />
+                            </span>
+                          ) : authorized &&
+                            ref.source.kind === "media" &&
+                            ref.mediaKind !== "audio" ? (
                             <span className="absolute inset-0">
                               <ProjectMediaPreview
                                 projectID={projectID}
@@ -1358,6 +1501,36 @@ export function ReferenceControls({
                   query={mention ? search : ""}
                   busy={!!readingSource}
                   disabled={disabled}
+                  subjectCandidates={currentSubjectCatalog.items}
+                  subjectLoading={currentSubjectCatalog.loading}
+                  subjectError={currentSubjectCatalog.error}
+                  onSubject={
+                    authorized && actorID && scopeID
+                      ? (subject) => insertUnifiedSubject(subject, true)
+                      : undefined
+                  }
+                  onCreateSubject={
+                    authorized && actorID && scopeID
+                      ? () => {
+                          subjectInsertionRange.current = mention?.range;
+                          inlineSource.current = true;
+                          setMention(null);
+                          setMenu(false);
+                          setCreateSubject(true);
+                        }
+                      : undefined
+                  }
+                  onBrowseSubjects={
+                    authorized && actorID && scopeID
+                      ? () => {
+                          subjectInsertionRange.current = mention?.range;
+                          inlineSource.current = true;
+                          setMention(null);
+                          setMenu(false);
+                          setSubjects(true);
+                        }
+                      : undefined
+                  }
                   onReference={(ref) => add(ref, true)}
                   onSource={(source) => void addCanvasSource(source, true)}
                 />
@@ -1441,6 +1614,11 @@ export function ReferenceControls({
             }}
           />
           {error && <FeedbackToast message={error} />}
+          {subjectModelIssue ? (
+            <p role="status" className="text-xs text-destructive">
+              {subjectModelIssue}
+            </p>
+          ) : null}
           {unavailablePaste !== null && (
             <div className="rounded border p-3">
               <p>
@@ -1493,34 +1671,58 @@ export function ReferenceControls({
             />
           )}
           {subjects && (
-            <Dialog open onOpenChange={setSubjects}>
-              <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-4xl">
-                <DialogTitle>选择主体版本</DialogTitle>
+            <Dialog
+              open
+              onOpenChange={(open) => {
+                setSubjects(open);
+                if (!open) subjectInsertionRange.current = undefined;
+              }}
+            >
+              <DialogContent
+                className="max-h-[85dvh] overflow-y-auto sm:max-w-4xl"
+                onCloseAutoFocus={(event) => {
+                  event.preventDefault();
+                  session.editor.commands.focus();
+                }}
+              >
+                <DialogTitle>选择主体</DialogTitle>
                 <DialogDescription>
-                  保存当前描述和默认造型参考；后续主体更新不会悄悄改变这份草稿。
+                  选择当前空间的主体，固定这份草稿引用的描述、参考素材和音色版本。
                 </DialogDescription>
-                <SubjectList
-                  projectID={projectID}
-                  onSelect={(subject) => {
-                    const original = draft.references.find(
-                      (r) => r.id === subjectReplace,
-                    );
-                    if (original)
-                      session.replaceReference(
-                        original.id,
-                        subjectBinding(subject, original.role),
-                      );
-                    else
-                      add(
-                        subjectBinding(subject, compact ? "subject" : role),
+                {actorID && scopeID ? (
+                  <UnifiedSubjectLibrary
+                    key={`${actorID}/${scopeID}`}
+                    actorID={actorID}
+                    scopeID={scopeID}
+                    onSelect={(subject) =>
+                      insertUnifiedSubject(
+                        subject,
                         compact && inlineSource.current,
-                      );
-                    setSubjects(false);
-                  }}
-                />
+                      )
+                    }
+                  />
+                ) : (
+                  <p>登录并选择创作空间后使用主体。</p>
+                )}
               </DialogContent>
             </Dialog>
           )}
+          {createSubject && actorID && scopeID ? (
+            <UnifiedSubjectEditor
+              key={`${actorID}/${scopeID}`}
+              actorID={actorID}
+              scopeID={scopeID}
+              onClose={() => {
+                setCreateSubject(false);
+                subjectInsertionRange.current = undefined;
+                session.editor.commands.focus();
+              }}
+              onSaved={(subject) => {
+                setSubjectRefresh((value) => value + 1);
+                insertUnifiedSubject(subject, true);
+              }}
+            />
+          ) : null}
           {remove && (
             <Dialog open onOpenChange={() => setRemove(null)}>
               <DialogContent>

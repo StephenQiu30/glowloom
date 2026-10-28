@@ -42,6 +42,7 @@ type PrivateObjects interface {
 // Worker renders real output and previews, then registers only pending media.
 type Worker struct {
 	store    WorkerStore
+	routes   WorkObjectsFactory
 	objects  PrivateObjects
 	renderer Renderer
 	prober   mediaapp.Prober
@@ -53,10 +54,15 @@ func NewWorker(store WorkerStore, objects PrivateObjects, renderer Renderer, pro
 	return &Worker{store: store, objects: objects, renderer: renderer, prober: prober, previews: previews}
 }
 
+// NewRoutedWorker binds storage separately for each claimed durable attempt.
+func NewRoutedWorker(store WorkerStore, routes WorkObjectsFactory, renderer Renderer, prober mediaapp.Prober, previews mediaapp.Renderer) *Worker {
+	return &Worker{store: store, routes: routes, renderer: renderer, prober: prober, previews: previews}
+}
+
 // Execute adopts an already-created original on activity retry; completed attempts
 // return durable facts without rerendering or creating another media asset.
 func (w *Worker) Execute(ctx context.Context, id WorkID) (domain.ExportJob, error) {
-	if w == nil || w.store == nil || w.objects == nil || w.renderer == nil || w.prober == nil || w.previews == nil {
+	if w == nil || w.store == nil || (w.objects == nil && w.routes == nil) || w.renderer == nil || w.prober == nil || w.previews == nil {
 		return domain.ExportJob{}, ErrUnavailable
 	}
 	work, err := w.store.Claim(ctx, id)
@@ -65,6 +71,15 @@ func (w *Worker) Execute(ctx context.Context, id WorkID) (domain.ExportJob, erro
 	}
 	if work.Job.Status == domain.ReviewRequired || work.Job.Status == domain.Succeeded {
 		return work.Job, nil
+	}
+	if w.routes != nil {
+		objects, err := w.routes.Open(ctx, StorageOwner("export", work.Job.ProjectID, id.JobID, id.Attempt), work.SourceAssets)
+		if err != nil {
+			return domain.ExportJob{}, err
+		}
+		local := *w
+		local.objects = objects
+		w = &local
 	}
 	kind := work.Job.OutputKind.Effective()
 	if !kind.Valid() || kind != work.Frozen.OutputKind.Effective() {

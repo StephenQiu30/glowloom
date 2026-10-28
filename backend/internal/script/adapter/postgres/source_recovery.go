@@ -40,6 +40,9 @@ func (s *SourceStore) sourceWriteRecord(tx *gorm.DB, actor identityapp.Principal
 	if err := json.Unmarshal([]byte(row.Plan), &r.Plan); err != nil {
 		return r, application.ErrUnavailable
 	}
+	if err := loadPlanLocations(tx, &r.Plan); err != nil {
+		return r, err
+	}
 	if r.Plan.ActorID != row.ActorID || r.Plan.OrgID != actor.OrgID || r.Plan.Command.ProjectID != project || sourceIntentID(r.Plan) != id {
 		return r, application.ErrUnavailable
 	}
@@ -52,18 +55,19 @@ func (s *SourceStore) sourceWriteRecord(tx *gorm.DB, actor identityapp.Principal
 	}
 	r.View = application.SourceWriteIntent{ID: id, Revision: row.Revision, Action: row.Action, Status: row.Status, ExpectedScriptRevision: r.Plan.Command.ExpectedRevision, BaseVersionID: r.Plan.Command.BaseVersionID, ObjectCount: len(r.Plan.Objects), CancellationRequested: row.CancellationRequested, NeedsReconciliation: row.NeedsReconciliation, ActiveIO: row.IOOwnerID != nil, CanControl: row.Status == "pending", CreatedAt: row.CreatedAt.UTC(), UpdatedAt: row.UpdatedAt.UTC()}
 	var objects []struct {
+		LocationID                     *uuid.UUID
 		ObjectKey, SHA256, MIME        string
 		ByteSize                       int64
 		PutStarted, Confirmed, Removed bool
 	}
-	if err := tx.Raw(`SELECT i.object_key,i.sha256,i.byte_size,i.mime,s.put_started,s.confirmed,s.removed FROM script.object_intent i JOIN script.object_state s USING(object_key) WHERE i.actor_id=? AND i.request_id=? ORDER BY i.object_key`, row.ActorID, r.Plan.Command.Key).Scan(&objects).Error; err != nil {
+	if err := tx.Raw(`SELECT i.object_location_id AS location_id,i.object_key,i.sha256,i.byte_size,i.mime,s.put_started,s.confirmed,s.removed FROM script.object_intent i JOIN script.object_state s ON s.object_key=i.object_key AND s.object_location_id IS NOT DISTINCT FROM i.object_location_id WHERE i.actor_id=? AND i.request_id=? ORDER BY i.object_key`, row.ActorID, r.Plan.Command.Key).Scan(&objects).Error; err != nil {
 		return r, err
 	}
 	if len(objects) != len(r.Plan.Objects) {
 		return r, application.ErrUnavailable
 	}
 	for _, object := range objects {
-		fact := domain.ObjectFact{Key: object.ObjectKey, SHA256: object.SHA256, ByteSize: object.ByteSize, MIME: object.MIME}
+		fact := domain.ObjectFact{LocationID: locationValue(object.LocationID), Key: object.ObjectKey, SHA256: object.SHA256, ByteSize: object.ByteSize, MIME: object.MIME}
 		if !slices.Contains(r.Plan.Objects, fact) {
 			return r, application.ErrObjectMismatch
 		}
@@ -223,7 +227,7 @@ func (s *SourceStore) authorizeRemoval(tx *gorm.DB, actor identityapp.Principal,
 		return err
 	}
 	var referenced bool
-	if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM script.script_source WHERE original_key=? OR rich_key=?) OR EXISTS(SELECT 1 FROM script.script_version WHERE text_key=? OR rich_key=?)`, f.Key, f.Key, f.Key, f.Key).Scan(&referenced).Error; err != nil {
+	if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM script.script_source WHERE original_location_id=? OR rich_location_id=? OR (original_location_id IS NULL AND original_key=?) OR (rich_location_id IS NULL AND rich_key=?)) OR EXISTS(SELECT 1 FROM script.script_version WHERE text_location_id=? OR rich_location_id=? OR (text_location_id IS NULL AND text_key=?) OR (rich_location_id IS NULL AND rich_key=?))`, f.LocationID, f.LocationID, f.Key, f.Key, f.LocationID, f.LocationID, f.Key, f.Key).Scan(&referenced).Error; err != nil {
 		return err
 	}
 	if referenced {
@@ -245,7 +249,19 @@ func (s *SourceStore) ConfirmSourceRemoval(ctx context.Context, actor identityap
 		if err := s.authorizeRemoval(tx, actor, input, f); err != nil {
 			return err
 		}
-		return exactlyOne(tx.Exec(`UPDATE script.object_state SET removed=true,updated_at=? WHERE object_key=?`, now, f.Key))
+		r, err := s.controlProof(tx, actor, input)
+		if err != nil {
+			return err
+		}
+		if r.Plan.StorageIntentID != uuid.Nil {
+			if s.locations == nil || s.locations(tx) == nil {
+				return application.ErrUnavailable
+			}
+			if err := s.locations(tx).ConfirmRemoval(ctx, r.Plan.StorageIntentID, f); err != nil {
+				return err
+			}
+		}
+		return exactlyOne(tx.Exec(`UPDATE script.object_state SET removed=true,updated_at=? WHERE object_key=? AND object_location_id IS NOT DISTINCT FROM ?::uuid`, now, f.Key, nullableLocation(f.LocationID)))
 	})
 }
 
@@ -295,7 +311,21 @@ func (s *SourceStore) BeginSourceRemoval(ctx context.Context, actor identityapp.
 		if err := s.authorizeRemoval(tx, actor, input, f); err != nil {
 			return err
 		}
-		return exactlyOne(tx.Exec(`UPDATE script.object_state SET confirmed=true,updated_at=? WHERE object_key=? AND NOT removed`, now, f.Key))
+		r, err := s.controlProof(tx, actor, input)
+		if err != nil {
+			return err
+		}
+		if r.Plan.StorageIntentID != uuid.Nil {
+			if s.locations == nil || s.locations(tx) == nil {
+				return application.ErrUnavailable
+			}
+			if err := s.locations(tx).BeginRemoval(ctx, r.Plan.StorageIntentID, f); err != nil {
+				return err
+			}
+		} else if f.LocationID != uuid.Nil {
+			return application.ErrNeedsReconciliation
+		}
+		return exactlyOne(tx.Exec(`UPDATE script.object_state SET confirmed=true,updated_at=? WHERE object_key=? AND object_location_id IS NOT DISTINCT FROM ?::uuid AND NOT removed`, now, f.Key, nullableLocation(f.LocationID)))
 	})
 }
 

@@ -61,7 +61,7 @@ export async function getBibleEntry(
   options?: RequestOptions,
 ) {
   const { pid: param0, kind: param1, id: param2, ...queryParams } = params;
-  return request<API.Detail>(
+  return request<API.BibleDetail>(
     `/api/projects/${param0}/bible/${param1}/${param2}`,
     {
       method: "GET",

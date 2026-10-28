@@ -22,6 +22,7 @@ type LibraryWorkGuardFactory func(*gorm.DB) application.LibraryWorkGuards
 
 // TransferStore holds permanent admission, per-item results and private intents.
 type TransferStore struct {
+	routed bool
 	scopeAuthority
 	db      *gorm.DB
 	project LibraryProjectAccessFactory
@@ -297,10 +298,11 @@ func (s *TransferStore) ensureTransferLibraries(tx *gorm.DB, actor identityapp.P
 		if scope.Kind == domain.LibraryPersonal {
 			personal = &actor.ID
 		}
-		if scope.Kind == target.Kind {
-			if err := tx.Exec(`INSERT INTO media.library(id,kind,org_id,project_id,personal_actor_id,revision) VALUES(?,?,?,?,?,0) ON CONFLICT(id) DO NOTHING`, id, string(scope.Kind), sideActor.OrgID, scope.ProjectID, personal).Error; err != nil {
-				return libraryRow{}, libraryRow{}, err
-			}
+		// Legacy originals may have a virtual revision-zero catalogue. Both
+		// durable transfer FKs require that same empty identity to exist;
+		// materializing it changes no source media or catalogue content.
+		if err := tx.Exec(`INSERT INTO media.library(id,kind,org_id,project_id,personal_actor_id,revision) VALUES(?,?,?,?,?,0) ON CONFLICT(id) DO NOTHING`, id, string(scope.Kind), sideActor.OrgID, scope.ProjectID, personal).Error; err != nil {
+			return libraryRow{}, libraryRow{}, err
 		}
 		row, err := readLibrary(tx, sideActor, scope, scope.Kind == target.Kind)
 		if err != nil {
@@ -352,8 +354,14 @@ func transferSourceFile(tx *gorm.DB, actor identityapp.Principal, scope domain.L
 	if len(rends) > 16 {
 		return application.LibraryMediaFile{}, application.ErrUnavailable
 	}
+	if err := hydrateCopySourceAsset(tx, &row); err != nil {
+		return application.LibraryMediaFile{}, err
+	}
 	result := application.LibraryMediaFile{Asset: row.domain(), Renditions: []domain.Rendition{}}
 	for _, r := range rends {
+		if err := hydrateCopySourceRendition(tx, &r); err != nil {
+			return application.LibraryMediaFile{}, err
+		}
 		result.Renditions = append(result.Renditions, r.domain())
 	}
 	return result, nil
@@ -384,4 +392,11 @@ func (s *TransferStore) transferActors(tx *gorm.DB, actor identityapp.Principal,
 		return actor, actor, err
 	}
 	return sa, ta, nil
+}
+
+// WithRoutedStorage pins targets and requires exact saved physical source facts.
+func (s *TransferStore) WithRoutedStorage() *TransferStore {
+	clone := *s
+	clone.routed = true
+	return &clone
 }

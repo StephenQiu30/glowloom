@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -231,17 +232,18 @@ func TestSessionV2RouterConsumesSecurity(t *testing.T) {
 
 type blockedCleanupStore struct {
 	identity.EmailStore
-	entered, ended chan struct{}
+	entered, ended         chan struct{}
+	enteredOnce, endedOnce sync.Once
 }
 
-func (f blockedCleanupStore) EmailTransaction(ctx context.Context, _ func(identity.EmailTx) error) error {
-	close(f.entered)
+func (f *blockedCleanupStore) EmailTransaction(ctx context.Context, _ func(identity.EmailTx) error) error {
+	f.enteredOnce.Do(func() { close(f.entered) })
 	<-ctx.Done()
-	close(f.ended)
+	f.endedOnce.Do(func() { close(f.ended) })
 	return ctx.Err()
 }
 func TestSessionReceiptCleanupJoinsActiveBatch(t *testing.T) {
-	store := blockedCleanupStore{entered: make(chan struct{}), ended: make(chan struct{})}
+	store := &blockedCleanupStore{entered: make(chan struct{}), ended: make(chan struct{})}
 	stop, err := identityruntime.StartSessionReceiptCleanupLoop(t.Context(), identity.NewSessionReceiptCleanup(store, time.Now), zap.NewNop(), time.Millisecond)
 	if err != nil {
 		t.Fatal(err)

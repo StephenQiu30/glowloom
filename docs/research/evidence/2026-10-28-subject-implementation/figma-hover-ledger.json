@@ -1,0 +1,814 @@
+{
+  "hover": {
+    "createdNodeIds": [
+      "3026:45955",
+      "3026:45956",
+      "3026:45957",
+      "3026:45958",
+      "3026:45959",
+      "3026:45984",
+      "3026:45985",
+      "3026:45986",
+      "3026:45987",
+      "3026:45988",
+      "I3026:45988;549:23326",
+      "I3026:45988;549:23326;3026:45956",
+      "I3026:45988;549:23326;3026:45957",
+      "I3026:45988;268:2502",
+      "3026:45989",
+      "3026:45990",
+      "3026:45991",
+      "3026:45992",
+      "3026:45993",
+      "I3026:45993;549:23326",
+      "I3026:45993;549:23326;3026:45956",
+      "I3026:45993;549:23326;3026:45957",
+      "I3026:45993;268:2502",
+      "3026:45960",
+      "I3026:45960;549:23326",
+      "I3026:45960;549:23326;3026:45956",
+      "I3026:45960;549:23326;3026:45957",
+      "I3026:45960;268:2502",
+      "3026:45994"
+    ],
+    "mutatedNodeIds": [
+      "2749:41731",
+      "2988:45803",
+      "2749:41719",
+      "2749:41787",
+      "2749:41886",
+      "2749:41995",
+      "2749:42110",
+      "2749:42232",
+      "2749:43012",
+      "2749:43084",
+      "2749:43192",
+      "2749:43291",
+      "2749:43389",
+      "2749:43553",
+      "2749:43636",
+      "2749:43839",
+      "2749:44033",
+      "2749:44114",
+      "2749:44195",
+      "I2749:44552;3026:45988",
+      "2749:44552",
+      "2798:41500",
+      "2798:41951",
+      "I2798:42348;3026:45988",
+      "2798:42348",
+      "I2798:42751;3026:45988",
+      "2798:42751",
+      "2807:40047",
+      "2807:40357",
+      "I2807:40475;3026:45988",
+      "2807:40475",
+      "I2807:40652;3026:45988",
+      "2807:40652",
+      "2804:40316",
+      "2807:40165",
+      "2807:40292",
+      "I2807:40530;3026:45988",
+      "2807:40530",
+      "I2807:40594;3026:45988",
+      "2807:40594",
+      "2809:40293",
+      "I2809:40408;3026:45988",
+      "2809:40408",
+      "2854:42962",
+      "2854:43277",
+      "2854:43567",
+      "2854:43874",
+      "2854:44164",
+      "2854:44436",
+      "2854:45717",
+      "2854:46020",
+      "2910:45405",
+      "2910:45745",
+      "I2749:43316;268:2494",
+      "2749:43316"
+    ],
+    "createdVariableIds": ["VariableID:3026:45953", "VariableID:3026:45954"],
+    "componentSetId": "3026:45994",
+    "defaultId": "2988:45803",
+    "hoverId": "3026:45984",
+    "passiveId": "3026:45989",
+    "heartId": "3026:45955",
+    "instanceCount": 43,
+    "modes": [
+      {
+        "id": "2749:41719",
+        "state": "Default",
+        "frame": "1446:3086"
+      },
+      {
+        "id": "2749:41787",
+        "state": "Default",
+        "frame": "2749:41732"
+      },
+      {
+        "id": "2749:41886",
+        "state": "Default",
+        "frame": "2749:41831"
+      },
+      {
+        "id": "2749:41995",
+        "state": "Default",
+        "frame": "2749:41940"
+      },
+      {
+        "id": "2749:42110",
+        "state": "Default",
+        "frame": "2749:42055"
+      },
+      {
+        "id": "2749:42232",
+        "state": "Default",
+        "frame": "2749:42177"
+      },
+      {
+        "id": "2749:43012",
+        "state": "Default",
+        "frame": "2749:42957"
+      },
+      {
+        "id": "2749:43084",
+        "state": "Default",
+        "frame": "2749:43029"
+      },
+      {
+        "id": "2749:43192",
+        "state": "Default",
+        "frame": "2749:43137"
+      },
+      {
+        "id": "2749:43291",
+        "state": "Default",
+        "frame": "2749:43236"
+      },
+      {
+        "id": "2749:43389",
+        "state": "Passive",
+        "frame": "2749:43334"
+      },
+      {
+        "id": "2749:43553",
+        "state": "Passive",
+        "frame": "2749:43498"
+      },
+      {
+        "id": "2749:43636",
+        "state": "Default",
+        "frame": "2749:43581"
+      },
+      {
+        "id": "2749:43839",
+        "state": "Default",
+        "frame": "2749:43784"
+      },
+      {
+        "id": "2749:44033",
+        "state": "Default",
+        "frame": "2749:43978"
+      },
+      {
+        "id": "2749:44114",
+        "state": "Default",
+        "frame": "2749:44059"
+      },
+      {
+        "id": "2749:44195",
+        "state": "Default",
+        "frame": "2749:44140"
+      },
+      {
+        "id": "2749:44552",
+        "state": "Hover",
+        "frame": "2749:44447"
+      },
+      {
+        "id": "2798:41500",
+        "state": "Default",
+        "frame": "2798:41439"
+      },
+      {
+        "id": "2798:41951",
+        "state": "Default",
+        "frame": "2798:41890"
+      },
+      {
+        "id": "2798:42348",
+        "state": "Hover",
+        "frame": "2798:42332"
+      },
+      {
+        "id": "2798:42751",
+        "state": "Hover",
+        "frame": "2798:42735"
+      },
+      {
+        "id": "2807:40047",
+        "state": "Default",
+        "frame": "2798:43233"
+      },
+      {
+        "id": "2807:40357",
+        "state": "Default",
+        "frame": "2798:43384"
+      },
+      {
+        "id": "2807:40475",
+        "state": "Hover",
+        "frame": "2798:43693"
+      },
+      {
+        "id": "2807:40652",
+        "state": "Hover",
+        "frame": "2798:43740"
+      },
+      {
+        "id": "2804:40316",
+        "state": "Default",
+        "frame": "2804:40261"
+      },
+      {
+        "id": "2807:40165",
+        "state": "Default",
+        "frame": "2807:39886"
+      },
+      {
+        "id": "2807:40292",
+        "state": "Default",
+        "frame": "2807:39956"
+      },
+      {
+        "id": "2807:40530",
+        "state": "Hover",
+        "frame": "2807:40419"
+      },
+      {
+        "id": "2807:40594",
+        "state": "Hover",
+        "frame": "2807:40440"
+      },
+      {
+        "id": "2809:40293",
+        "state": "Default",
+        "frame": "2809:40229"
+      },
+      {
+        "id": "2809:40408",
+        "state": "Hover",
+        "frame": "2809:40390"
+      },
+      {
+        "id": "2854:42962",
+        "state": "Default",
+        "frame": "2854:42905"
+      },
+      {
+        "id": "2854:43277",
+        "state": "Default",
+        "frame": "2854:43220"
+      },
+      {
+        "id": "2854:43567",
+        "state": "Default",
+        "frame": "2854:43510"
+      },
+      {
+        "id": "2854:43874",
+        "state": "Default",
+        "frame": "2854:43817"
+      },
+      {
+        "id": "2854:44164",
+        "state": "Default",
+        "frame": "2854:44107"
+      },
+      {
+        "id": "2854:44436",
+        "state": "Default",
+        "frame": "2854:44379"
+      },
+      {
+        "id": "2854:45717",
+        "state": "Default",
+        "frame": "2854:45660"
+      },
+      {
+        "id": "2854:46020",
+        "state": "Default",
+        "frame": "2854:45963"
+      },
+      {
+        "id": "2910:45405",
+        "state": "Default",
+        "frame": "2910:45348"
+      },
+      {
+        "id": "2910:45745",
+        "state": "Default",
+        "frame": "2910:45688"
+      }
+    ],
+    "fonts": [
+      {
+        "family": "Geist",
+        "style": "Regular",
+        "variationSettings": {
+          "wght": 400
+        }
+      },
+      {
+        "family": "Geist",
+        "style": "Medium",
+        "variationSettings": {
+          "wght": 500
+        }
+      }
+    ],
+    "bounds": {
+      "x": 6600,
+      "y": 24500,
+      "w": 905,
+      "h": 250.6875
+    },
+    "section": {
+      "w": 8000,
+      "h": 25600
+    },
+    "firstReactions": [
+      {
+        "action": {
+          "type": "NODE",
+          "destinationId": "2749:42055",
+          "navigation": "NAVIGATE",
+          "transition": null,
+          "resetVideoPosition": false,
+          "resetScrollPosition": true
+        },
+        "actions": [
+          {
+            "type": "NODE",
+            "destinationId": "2749:42055",
+            "navigation": "NAVIGATE",
+            "transition": null,
+            "resetVideoPosition": false,
+            "resetScrollPosition": true
+          }
+        ],
+        "trigger": {
+          "type": "ON_CLICK"
+        }
+      },
+      {
+        "action": {
+          "type": "NODE",
+          "destinationId": "3026:45984",
+          "navigation": "CHANGE_TO",
+          "transition": {
+            "type": "DISSOLVE",
+            "easing": {
+              "type": "EASE_OUT"
+            },
+            "duration": 0.11999999731779099
+          },
+          "resetVideoPosition": false
+        },
+        "actions": [
+          {
+            "type": "NODE",
+            "destinationId": "3026:45984",
+            "navigation": "CHANGE_TO",
+            "transition": {
+              "type": "DISSOLVE",
+              "easing": {
+                "type": "EASE_OUT"
+              },
+              "duration": 0.11999999731779099
+            },
+            "resetVideoPosition": false
+          }
+        ],
+        "trigger": {
+          "type": "ON_HOVER"
+        }
+      }
+    ]
+  },
+  "touch": {
+    "createdNodeIds": [
+      "3028:45900",
+      "3028:45901",
+      "3028:45902",
+      "3028:45903",
+      "3028:45904"
+    ],
+    "mutatedNodeIds": [
+      "3028:45904",
+      "2749:44552",
+      "2798:42348",
+      "2798:42751",
+      "2807:40475",
+      "2807:40652",
+      "2807:40530",
+      "2807:40594",
+      "2809:40408",
+      "3026:45955",
+      "3026:45994"
+    ],
+    "touchId": "3028:45900",
+    "familyBounds": {
+      "x": 6600,
+      "y": 24500,
+      "w": 1204,
+      "h": 250.6875
+    },
+    "phones": [
+      {
+        "id": "2749:44552",
+        "state": "Touch",
+        "favorite": {
+          "id": "I2749:44552;3028:45904",
+          "w": 44,
+          "h": 44,
+          "visible": true
+        }
+      },
+      {
+        "id": "2798:42348",
+        "state": "Touch",
+        "favorite": {
+          "id": "I2798:42348;3028:45904",
+          "w": 44,
+          "h": 44,
+          "visible": true
+        }
+      },
+      {
+        "id": "2798:42751",
+        "state": "Touch",
+        "favorite": {
+          "id": "I2798:42751;3028:45904",
+          "w": 44,
+          "h": 44,
+          "visible": true
+        }
+      },
+      {
+        "id": "2807:40475",
+        "state": "Touch",
+        "favorite": {
+          "id": "I2807:40475;3028:45904",
+          "w": 44,
+          "h": 44,
+          "visible": true
+        }
+      },
+      {
+        "id": "2807:40652",
+        "state": "Touch",
+        "favorite": {
+          "id": "I2807:40652;3028:45904",
+          "w": 44,
+          "h": 44,
+          "visible": true
+        }
+      },
+      {
+        "id": "2807:40530",
+        "state": "Touch",
+        "favorite": {
+          "id": "I2807:40530;3028:45904",
+          "w": 44,
+          "h": 44,
+          "visible": true
+        }
+      },
+      {
+        "id": "2807:40594",
+        "state": "Touch",
+        "favorite": {
+          "id": "I2807:40594;3028:45904",
+          "w": 44,
+          "h": 44,
+          "visible": true
+        }
+      },
+      {
+        "id": "2809:40408",
+        "state": "Touch",
+        "favorite": {
+          "id": "I2809:40408;3028:45904",
+          "w": 44,
+          "h": 44,
+          "visible": true
+        }
+      }
+    ]
+  },
+  "finalAudit": {
+    "screenFrames": 77,
+    "targetCount": 1542,
+    "uniqueTargetCount": 88,
+    "missingTargets": [],
+    "assetHoverReferences": 0,
+    "sharedCardCount": 43,
+    "badRatios": [],
+    "phones": [
+      {
+        "id": "2749:44552",
+        "state": "Touch",
+        "favorite": {
+          "id": "I2749:44552;3028:45904",
+          "w": 44,
+          "h": 44,
+          "visible": true
+        },
+        "grid": {
+          "id": "2749:44551",
+          "layout": "VERTICAL",
+          "children": [
+            {
+              "id": "2749:44552",
+              "name": "Subject card / 海边香氛",
+              "w": 358,
+              "h": 265.375
+            },
+            {
+              "id": "2749:44556",
+              "name": "Action / 新建主体",
+              "w": 358,
+              "h": 44
+            }
+          ]
+        }
+      },
+      {
+        "id": "2798:42348",
+        "state": "Touch",
+        "favorite": {
+          "id": "I2798:42348;3028:45904",
+          "w": 44,
+          "h": 44,
+          "visible": true
+        },
+        "grid": {
+          "id": "2798:42347",
+          "layout": "VERTICAL",
+          "children": [
+            {
+              "id": "2798:42348",
+              "name": "Subject card / 海边香氛",
+              "w": 358,
+              "h": 265.375
+            },
+            {
+              "id": "2798:42349",
+              "name": "Action / 新建主体",
+              "w": 358,
+              "h": 44
+            }
+          ]
+        }
+      },
+      {
+        "id": "2798:42751",
+        "state": "Touch",
+        "favorite": {
+          "id": "I2798:42751;3028:45904",
+          "w": 44,
+          "h": 44,
+          "visible": true
+        },
+        "grid": {
+          "id": "2798:42750",
+          "layout": "VERTICAL",
+          "children": [
+            {
+              "id": "2798:42751",
+              "name": "Subject card / 海边香氛",
+              "w": 358,
+              "h": 265.375
+            },
+            {
+              "id": "2798:42752",
+              "name": "Action / 新建主体",
+              "w": 358,
+              "h": 44
+            }
+          ]
+        }
+      },
+      {
+        "id": "2807:40475",
+        "state": "Touch",
+        "favorite": {
+          "id": "I2807:40475;3028:45904",
+          "w": 44,
+          "h": 44,
+          "visible": true
+        },
+        "grid": {
+          "id": "2807:40474",
+          "layout": "VERTICAL",
+          "children": [
+            {
+              "id": "2807:40475",
+              "name": "Subject card / 海边香氛",
+              "w": 358,
+              "h": 265.375
+            },
+            {
+              "id": "2807:40476",
+              "name": "Action / 新建主体",
+              "w": 358,
+              "h": 44
+            }
+          ]
+        }
+      },
+      {
+        "id": "2807:40652",
+        "state": "Touch",
+        "favorite": {
+          "id": "I2807:40652;3028:45904",
+          "w": 44,
+          "h": 44,
+          "visible": true
+        },
+        "grid": {
+          "id": "2807:40651",
+          "layout": "VERTICAL",
+          "children": [
+            {
+              "id": "2807:40652",
+              "name": "Subject card / 海边香氛",
+              "w": 358,
+              "h": 265.375
+            },
+            {
+              "id": "2807:40653",
+              "name": "Action / 新建主体",
+              "w": 358,
+              "h": 44
+            }
+          ]
+        }
+      },
+      {
+        "id": "2807:40530",
+        "state": "Touch",
+        "favorite": {
+          "id": "I2807:40530;3028:45904",
+          "w": 44,
+          "h": 44,
+          "visible": true
+        },
+        "grid": {
+          "id": "2807:40529",
+          "layout": "VERTICAL",
+          "children": [
+            {
+              "id": "2807:40530",
+              "name": "Subject card / 海边香氛",
+              "w": 358,
+              "h": 265.375
+            },
+            {
+              "id": "2807:40531",
+              "name": "Action / 新建主体",
+              "w": 358,
+              "h": 44
+            }
+          ]
+        }
+      },
+      {
+        "id": "2807:40594",
+        "state": "Touch",
+        "favorite": {
+          "id": "I2807:40594;3028:45904",
+          "w": 44,
+          "h": 44,
+          "visible": true
+        },
+        "grid": {
+          "id": "2807:40593",
+          "layout": "VERTICAL",
+          "children": [
+            {
+              "id": "2807:40594",
+              "name": "Subject card / 海边香氛",
+              "w": 358,
+              "h": 265.375
+            },
+            {
+              "id": "2807:40595",
+              "name": "Action / 新建主体",
+              "w": 358,
+              "h": 44
+            }
+          ]
+        }
+      },
+      {
+        "id": "2809:40408",
+        "state": "Touch",
+        "favorite": {
+          "id": "I2809:40408;3028:45904",
+          "w": 44,
+          "h": 44,
+          "visible": true
+        },
+        "grid": {
+          "id": "2809:40407",
+          "layout": "VERTICAL",
+          "children": [
+            {
+              "id": "2809:40408",
+              "name": "Subject card / 海边香氛",
+              "w": 358,
+              "h": 265.375
+            },
+            {
+              "id": "2809:40409",
+              "name": "Action / 新建主体",
+              "w": 358,
+              "h": 44
+            }
+          ]
+        }
+      }
+    ],
+    "variants": [
+      {
+        "id": "2988:45803",
+        "name": "State=Default"
+      },
+      {
+        "id": "3026:45984",
+        "name": "State=Hover"
+      },
+      {
+        "id": "3026:45989",
+        "name": "State=Passive"
+      },
+      {
+        "id": "3028:45900",
+        "name": "State=Touch"
+      }
+    ],
+    "componentSet": "3026:45994",
+    "sampleClick": [
+      {
+        "action": {
+          "type": "SET_VARIABLE",
+          "variableId": "VariableID:2870:44843",
+          "variableValue": {
+            "value": true,
+            "type": "BOOLEAN",
+            "resolvedType": "BOOLEAN"
+          }
+        },
+        "actions": [
+          {
+            "type": "SET_VARIABLE",
+            "variableId": "VariableID:2870:44843",
+            "variableValue": {
+              "value": true,
+              "type": "BOOLEAN",
+              "resolvedType": "BOOLEAN"
+            }
+          },
+          {
+            "type": "SET_VARIABLE",
+            "variableId": "VariableID:2870:44844",
+            "variableValue": {
+              "value": "智能配音2",
+              "type": "STRING",
+              "resolvedType": "STRING"
+            }
+          },
+          {
+            "type": "NODE",
+            "destinationId": "2749:44679",
+            "navigation": "NAVIGATE",
+            "transition": null,
+            "resetVideoPosition": false,
+            "resetScrollPosition": true
+          }
+        ],
+        "trigger": {
+          "type": "ON_CLICK"
+        }
+      }
+    ]
+  },
+  "screenshots": [
+    "output/subjects-2026-10-28/figma-player/67-subject-card-final-family.png",
+    "output/subjects-2026-10-28/figma-player/68-subject-card-touch-final.png"
+  ],
+  "scope": "Figma可编辑组件与结构回读；新卡片状态未逐一重新播放器实点"
+}

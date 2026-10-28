@@ -1,0 +1,24 @@
+Browser tab: 1980370571, Title: "即梦AI - 一站式AI创作平台", URL: "https://jimeng.jianying.com/ai-tool/elements".
+0 AXWebArea 即梦AI - 一站式AI创作平台, URL: jimeng.jianying.com/ai-tool/elements
+	1 container 设置主体 关闭
+		2 container 设置主体 关闭 参考主体 * 主参考图 移除 · 图片 添加音色 移除 · 音频 播放 智能配音1 名称 * 主体调研测试-20261028 15/20 描述 非人物几何图，仅用于主体功能需求调研；不执行生成。 保存
+			3 container arco-dialog-8
+				4 text 设置主体
+				5 button 关闭
+			24 container
+				25 text 参考主体 *
+				26 container
+					27 image 主参考图
+					28 button 移除 · 图片
+				29 text 添加音色
+				36 button 移除 · 音频
+				37 checkbox Description: 播放 智能配音1, Value: 1
+				38 text 名称 *
+				31 container
+					32 text field (settable) Description: 名称, Value: 主体调研测试-20261028
+					33 text 15 / 20
+				34 text 描述
+				35 text entry area (settable) Description: 描述, Value: 非人物几何图，仅用于主体功能需求调研；不执行生成。
+			39 button 保存
+
+The focused UI element is 2 container 设置主体 关闭 参考主体 * 主参考图 移除 · 图片 添加音色 移除 · 音频 播放 智能配音1 名称 * 主体调研测试-20261028 15/20 描述 非人物几何图，仅用于主体功能需求调研；不执行生成。 保存

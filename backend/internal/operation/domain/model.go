@@ -2,6 +2,7 @@ package domain
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -213,6 +214,14 @@ type OperationInput struct {
 
 // Validate rejects missing parent scope and empty input content.
 func (i OperationInput) Validate() error {
+	if i.RefType == "subject_media" && (i.RefID == nil || i.RefVersion == nil || len(*i.RefVersion) != 64 || i.MediaAssetID == nil || i.TextValue != nil || i.MaskAssetID != nil || i.Role == "prompt") {
+		return ErrInvalidOperationInput
+	}
+	if i.RefType == "subject_media" {
+		if _, err := hex.DecodeString(*i.RefVersion); err != nil || *i.RefVersion != strings.ToLower(*i.RefVersion) {
+			return ErrInvalidOperationInput
+		}
+	}
 	if i.ID == uuid.Nil || i.OperationID == uuid.Nil || i.SeqNo < 0 ||
 		strings.TrimSpace(i.Role) == "" || strings.TrimSpace(i.RefType) == "" ||
 		!validUUID(i.RefID) || !validUUID(i.MediaAssetID) || !validUUID(i.MaskAssetID) ||

@@ -22,11 +22,18 @@ type ObjectMetadata struct {
 // ListMetadata reads one concrete private prefix and never returns a partial inventory.
 // The caller must authorize and build the prefix; this platform client has no user context.
 func (c *Client) ListMetadata(ctx context.Context, prefix string, maxItems int) ([]ObjectMetadata, error) {
-	if c == nil || c.sdk == nil || maxItems < 1 || maxItems > 50000 || !strings.HasSuffix(prefix, "/") || strings.Count(prefix, "/") < 3 || !validKey(strings.TrimSuffix(prefix, "/")) || strings.ContainsAny(prefix, "\x00\r\n") {
+	if c == nil || (c.sdk == nil && c.native == nil) {
+		return nil, ErrUnavailable
+	}
+	if maxItems < 1 || maxItems > 50000 || !strings.HasSuffix(prefix, "/") || strings.Count(prefix, "/") < 3 || !validKey(strings.TrimSuffix(prefix, "/")) || strings.ContainsAny(prefix, "\x00\r\n") {
 		return nil, ErrInvalidObject
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	if c.native != nil {
+		out, err := c.native.list(ctx, prefix, maxItems)
+		return out, storageError("list", "legacy", err)
 	}
 	readCtx, cancel := context.WithCancel(ctx)
 	defer cancel()

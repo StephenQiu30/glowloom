@@ -48,3 +48,9 @@ func (g mediaPackageReferences) HasMediaReferences(ctx context.Context, actor id
 	}
 	return g.store.HasPackageReferences(ctx, actor, project, asset)
 }
+
+// ProvideRoutedMediaPackages binds imported ZIPs and all assets to one frozen work profile.
+func ProvideRoutedMediaPackages(database *gorm.DB, registry *objectstorage.Registry, uploads *mediaapp.UploadService) *mediaapp.LibraryPackageService {
+	store := provideMediaPackageStore(database).WithObjectLocations()
+	return mediaapp.NewLibraryPackageService(store, uploads, mediaobjects.NewRoutedPackageObjects(registry, pgmedia.NewStorageRoutes(database)), time.Now)
+}

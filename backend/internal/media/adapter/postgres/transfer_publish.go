@@ -20,14 +20,14 @@ func insertTransferAsset(tx *gorm.DB, asset domain.MediaAsset, renditions []doma
 	} else {
 		personalOrg, personalActor = &asset.Personal.OrgID, &asset.Personal.ActorID
 	}
-	if err := libraryChanged(tx, `INSERT INTO media.media_asset(id,project_id,personal_org_id,personal_actor_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,width,height,duration_ms,fps,audio_channels,codec,moderation_status,moderation_detail,aigc_marked,contains_real_person,revision,create_time,update_time) VALUES(?,?,?,?,?,?,'ready',?,?,?,?,?,?,?,?,?,?,?,'passed',?::jsonb,?,false,1,?,?)`, asset.ID, project, personalOrg, personalActor, string(asset.Kind), string(asset.Origin), asset.ObjectKey, asset.FileName, asset.MimeType, asset.ByteSize, asset.SHA256, asset.Width, asset.Height, asset.DurationMS, asset.FPS, asset.AudioChannels, asset.Codec, nullableJSON(asset.ModerationDetail), asset.AIGCMarked, asset.CreateTime, asset.UpdateTime); err != nil {
+	if err := libraryChanged(tx, `INSERT INTO media.media_asset(id,project_id,personal_org_id,personal_actor_id,kind,origin,status,object_key,object_location_id,file_name,mime_type,byte_size,sha256,width,height,duration_ms,fps,audio_channels,codec,moderation_status,moderation_detail,aigc_marked,contains_real_person,revision,create_time,update_time) VALUES(?,?,?,?,?,?,'ready',?,?,?,?,?,?,?,?,?,?,?,?,'passed',?::jsonb,?,false,1,?,?)`, asset.ID, project, personalOrg, personalActor, string(asset.Kind), string(asset.Origin), asset.ObjectKey, locationID(asset.ObjectLocation), asset.FileName, asset.MimeType, asset.ByteSize, asset.SHA256, asset.Width, asset.Height, asset.DurationMS, asset.FPS, asset.AudioChannels, asset.Codec, nullableJSON(asset.ModerationDetail), asset.AIGCMarked, asset.CreateTime, asset.UpdateTime); err != nil {
 		return err
 	}
 	for _, r := range renditions {
 		if r.Validate() != nil || r.MediaAssetID != asset.ID || r.IsDelete {
 			return application.ErrProjectCopyMediaUnavailable
 		}
-		if err := libraryChanged(tx, `INSERT INTO media.rendition(id,media_asset_id,kind,object_key,width,height,byte_size,create_time,update_time) VALUES(?,?,?,?,?,?,?,?,?)`, r.ID, r.MediaAssetID, string(r.Kind), r.ObjectKey, r.Width, r.Height, r.ByteSize, r.CreateTime, r.UpdateTime); err != nil {
+		if err := libraryChanged(tx, `INSERT INTO media.rendition(id,media_asset_id,kind,object_key,object_location_id,width,height,byte_size,create_time,update_time) VALUES(?,?,?,?,?,?,?,?,?,?)`, r.ID, r.MediaAssetID, string(r.Kind), r.ObjectKey, locationID(r.ObjectLocation), r.Width, r.Height, r.ByteSize, r.CreateTime, r.UpdateTime); err != nil {
 			return err
 		}
 	}
@@ -68,8 +68,20 @@ func (s *TransferStore) PublishTransferItem(ctx context.Context, lease applicati
 			}
 			byKey[object.TargetObjectKey] = object
 		}
+		if len(item.Objects) > 0 && item.Objects[0].TargetLocation != nil {
+			if err := acceptCopyLocations(ctx, tx, transferWorkOwner(row.ID, row.TargetLibraryID, index), item.Objects); err != nil {
+				return err
+			}
+		}
 		if item.TargetAsset != nil {
 			a := item.TargetAsset
+			if a.ObjectLocation != nil {
+				actual, err := NewStorageRoutes(tx).ReadLocation(ctx, a.ObjectLocation.ID)
+				if err != nil {
+					return err
+				}
+				a.ObjectLocation = &actual
+			}
 			object, ok := byKey[a.ObjectKey]
 			if !ok || object.RenditionKind != "" || object.SHA256 == nil || a.SHA256 == nil || *object.SHA256 != *a.SHA256 || object.ByteSize == nil || *object.ByteSize != a.ByteSize {
 				return application.ErrObjectMismatch
@@ -81,6 +93,13 @@ func (s *TransferStore) PublishTransferItem(ctx context.Context, lease applicati
 					return application.ErrObjectMismatch
 				}
 				r.ByteSize = object.ByteSize
+				if r.ObjectLocation != nil {
+					actual, err := NewStorageRoutes(tx).ReadLocation(ctx, r.ObjectLocation.ID)
+					if err != nil {
+						return err
+					}
+					r.ObjectLocation = &actual
+				}
 			}
 			if err := insertTransferAsset(tx, *a, item.TargetRenditions); err != nil {
 				return &application.TransferItemError{Code: "registration_failed", Cause: err}

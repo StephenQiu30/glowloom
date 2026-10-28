@@ -152,7 +152,7 @@ func (s *LibraryPackageService) Import(ctx context.Context, actor identityapp.Pr
 	}
 	defer prepared.close()
 	if found {
-		if !packageEqual(*stored, prepared.plan) {
+		if !packageContentEqual(*stored, prepared.plan) {
 			return job, ErrObjectMismatch
 		}
 	} else {
@@ -162,7 +162,7 @@ func (s *LibraryPackageService) Import(ctx context.Context, actor identityapp.Pr
 		}
 	}
 	return s.repo.WithPackageImport(ctx, actor, job.ID, func(plan PackagePlan) error {
-		if !packageEqual(plan, prepared.plan) {
+		if !packageContentEqual(plan, prepared.plan) {
 			return ErrObjectMismatch
 		}
 		return s.writePackageObjects(ctx, plan, prepared.files)
@@ -192,7 +192,7 @@ func (s *LibraryPackageService) Reconcile(ctx context.Context, actor identityapp
 			return err
 		}
 		defer prepared.close()
-		if !packageEqual(plan, prepared.plan) {
+		if !packageContentEqual(plan, prepared.plan) {
 			return ErrObjectMismatch
 		}
 		return s.writePackageObjects(ctx, plan, prepared.files)
@@ -210,7 +210,44 @@ func (s *LibraryPackageService) Cancel(ctx context.Context, actor identityapp.Pr
 		return PackageJob{}, err
 	}
 	return s.repo.ControlPackageImport(ctx, actor, id, command, true, func(plan PackagePlan) error {
+		if located, ok := s.objects.(LocatedPackageObjects); ok {
+			// Verify every still-present object before the first removal.
+			for _, object := range plan.Objects {
+				present, err := located.ExistsPackage(ctx, object)
+				if err != nil {
+					return err
+				}
+				if present {
+					file, err := s.readPackageObject(ctx, object)
+					if err != nil {
+						return err
+					}
+					if err := file.Close(); err != nil {
+						return err
+					}
+				}
+			}
+			for _, object := range plan.Objects {
+				if err := located.RemovePackage(ctx, object); err != nil {
+					return err
+				}
+				present, err := located.ExistsPackage(ctx, object)
+				if err != nil {
+					return err
+				}
+				if present {
+					return ErrObjectMismatch
+				}
+				if err := located.ConfirmPackageRemoval(ctx, object); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
 		for _, object := range plan.Objects {
+			if object.Location != nil {
+				return ErrStorageNotReady
+			}
 			if err := s.objects.Remove(ctx, object.Key); err != nil {
 				return err
 			}
@@ -420,7 +457,14 @@ func (s *LibraryPackageService) writePackageObjects(ctx context.Context, plan Pa
 		if _, err := file.File.Seek(0, io.SeekStart); err != nil {
 			return err
 		}
-		err := s.objects.PutIfAbsent(ctx, object.Key, file.File, object.ByteSize, object.MIMEType, object.SHA256)
+		var err error
+		if located, ok := s.objects.(LocatedPackageObjects); ok {
+			err = located.PutPackage(ctx, object, io.NewSectionReader(file.File, 0, file.Size))
+		} else if object.Location != nil {
+			return ErrStorageNotReady
+		} else {
+			err = s.objects.PutIfAbsent(ctx, object.Key, io.NewSectionReader(file.File, 0, file.Size), object.ByteSize, object.MIMEType, object.SHA256)
+		}
 		if err != nil && !errors.Is(err, ErrObjectAlreadyExists) {
 			return err
 		}
@@ -431,12 +475,25 @@ func (s *LibraryPackageService) writePackageObjects(ctx context.Context, plan Pa
 		if err := verified.Close(); err != nil {
 			return err
 		}
+		if located, ok := s.objects.(LocatedPackageObjects); ok {
+			if err := located.ConfirmPackageObject(ctx, object); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
 
 func (s *LibraryPackageService) readPackageObject(ctx context.Context, object PackageObject) (*Downloaded, error) {
-	input, err := s.objects.Get(ctx, object.Key)
+	var input io.ReadCloser
+	var err error
+	if located, ok := s.objects.(LocatedPackageObjects); ok {
+		input, err = located.GetPackage(ctx, object)
+	} else if object.Location != nil {
+		return nil, ErrStorageNotReady
+	} else {
+		input, err = s.objects.Get(ctx, object.Key)
+	}
 	if err != nil {
 		return nil, err
 	}

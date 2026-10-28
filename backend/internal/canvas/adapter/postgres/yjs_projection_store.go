@@ -63,12 +63,12 @@ func (s *Store) persistYjsProjection(ctx context.Context, tx *gorm.DB, a identit
 	}
 	for _, n := range sourceNodes {
 		if n.Config.Composer != nil {
-			if err := pgprompt.ValidateDraftSources(tx, a, p, *n.Config.Composer, false); err != nil {
+			if err := pgprompt.ValidateDraftSources(tx, a, p, *n.Config.Composer, false, s.subjectSources(tx)); err != nil {
 				return 0, err
 			}
 		}
 		if domain.IsDraft(n) && n.Config.Draft.Composer != nil {
-			if err := pgprompt.ValidateDraftSources(tx, a, p, *n.Config.Draft.Composer, false); err != nil {
+			if err := pgprompt.ValidateDraftSources(tx, a, p, *n.Config.Draft.Composer, false, s.subjectSources(tx)); err != nil {
 				return 0, err
 			}
 		}

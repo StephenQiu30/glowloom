@@ -36,6 +36,12 @@ import {
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { HomePrompt } from "./home-prompt";
+import { ReferenceControls } from "@/components/generation/reference-controls";
+import type { ComposerSession } from "@/components/generation/composer-session";
+import {
+  emptyPromptDraft,
+  type PromptDraft,
+} from "@/components/generation/prompt-document";
 
 const RichGeneration = dynamic(
   () =>
@@ -117,6 +123,17 @@ export function HomeCreation({
   const guard = useRef<(() => Promise<boolean>) | null>(null);
   const switchFlight = useRef(false);
   const drafts = useRef(new Map<string, string>());
+  const subjectScope = `${session?.actor.id ?? "guest"}/${space?.id ?? "none"}`;
+  const [homeEditor, setHomeEditor] = useState<{
+    key: string;
+    session: ComposerSession;
+  } | null>(null);
+  const [homeDraft, setHomeDraft] = useState<{
+    key: string;
+    draft: PromptDraft;
+  } | null>(null);
+  const currentEditor =
+    homeEditor?.key === subjectScope ? homeEditor.session : null;
   const activeType = creationTypes.find((item) => item.id === type)!;
   const supported = type === "image" || type === "video";
 
@@ -137,7 +154,14 @@ export function HomeCreation({
           ? {
               project: nextProject,
               type: nextType,
-              seed: { project: nextProject, capability: nextType, prompt },
+              seed: {
+                project: nextProject,
+                capability: nextType,
+                prompt,
+                ...(homeDraft?.key === subjectScope
+                  ? { composer: homeDraft.draft }
+                  : {}),
+              },
               draftID: drafts.current.get(`${nextProject.id}/${nextType}`),
             }
           : null,
@@ -278,27 +302,53 @@ export function HomeCreation({
                         <div className="creation-editor-body">
                           <InputGroupAddon
                             align="inline-start"
-                            className="creation-reference-tools"
+                            className="creation-reference-tools max-w-1/2"
                           >
-                            {projectEntry(
-                              <Button
-                                type="button"
-                                variant="reference"
-                                size="reference"
-                                aria-label="添加参考素材"
-                                onClick={supported ? undefined : prepare}
-                                disabled={locked || switching}
-                              >
-                                <Plus data-icon="inline-start" />
-                              </Button>,
-                              "添加参考素材",
-                              "选择项目后，可从参考素材、上传内容或主体库添加参考。",
+                            {currentEditor && session && space ? (
+                              <ReferenceControls
+                                session={currentEditor}
+                                draft={
+                                  homeDraft?.key === subjectScope
+                                    ? homeDraft.draft
+                                    : emptyPromptDraft()
+                                }
+                                projectID=""
+                                authorized
+                                compact
+                                home
+                                onChooseProject={prepare}
+                              />
+                            ) : (
+                              projectEntry(
+                                <Button
+                                  type="button"
+                                  variant="reference"
+                                  size="reference"
+                                  aria-label="添加参考素材"
+                                  onClick={supported ? undefined : prepare}
+                                  disabled={locked || switching}
+                                >
+                                  <Plus data-icon="inline-start" />
+                                </Button>,
+                                "添加参考素材",
+                                "选择项目后，可从项目素材或上传内容添加参考。",
+                              )
                             )}
                           </InputGroupAddon>
                           <HomePrompt
+                            key={subjectScope}
                             value={prompt}
                             onChange={onPromptChange}
                             placeholder={activeType.placeholder}
+                            onReady={(value) =>
+                              setHomeEditor({
+                                key: subjectScope,
+                                session: value,
+                              })
+                            }
+                            onDraftChange={(draft) =>
+                              setHomeDraft({ key: subjectScope, draft })
+                            }
                             onSubmit={() => {
                               if (prompt.trim() || !supported) prepare();
                             }}
@@ -343,20 +393,24 @@ export function HomeCreation({
                             "生成参数",
                             "选择项目和可用模型后，可配置比例、清晰度等生成参数。",
                           )}
-                          {projectEntry(
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              aria-label="添加主体或素材引用"
-                              onClick={supported ? undefined : prepare}
-                              disabled={locked || switching}
-                            >
-                              <AtSign />
-                            </Button>,
-                            "提及素材或主体",
-                            "选择项目后，可在正文中引用该项目的素材或主体。",
-                          )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label="添加主体或素材引用"
+                            onClick={() => {
+                              if (!session) login();
+                              else
+                                currentEditor?.editor
+                                  .chain()
+                                  .focus(undefined, { scrollIntoView: false })
+                                  .insertContent("@")
+                                  .run();
+                            }}
+                            disabled={locked || switching || !currentEditor}
+                          >
+                            <AtSign />
+                          </Button>
                           <div className="creation-project-control">
                             {projectControl}
                           </div>

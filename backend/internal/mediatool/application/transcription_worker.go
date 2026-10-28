@@ -20,6 +20,7 @@ import (
 
 // TranscriptionWorker owns speech staging, actual inference and private draft recovery.
 type TranscriptionWorker struct {
+	routes       WorkObjectsFactory
 	store        TranscriptionWorkerStore
 	objects      PrivateObjects
 	preprocessor AudioPreprocessor
@@ -29,6 +30,11 @@ type TranscriptionWorker struct {
 // NewTranscriptionWorker injects exactly the existing storage and local speech consumers.
 func NewTranscriptionWorker(store TranscriptionWorkerStore, objects PrivateObjects, preprocessor AudioPreprocessor, transcriber Transcriber) *TranscriptionWorker {
 	return &TranscriptionWorker{store: store, objects: objects, preprocessor: preprocessor, transcriber: transcriber}
+}
+
+// NewRoutedTranscriptionWorker fixes input and output storage per claimed attempt.
+func NewRoutedTranscriptionWorker(store TranscriptionWorkerStore, routes WorkObjectsFactory, preprocessor AudioPreprocessor, transcriber Transcriber) *TranscriptionWorker {
+	return &TranscriptionWorker{store: store, routes: routes, preprocessor: preprocessor, transcriber: transcriber}
 }
 
 type transcriptArtifact struct {
@@ -42,7 +48,7 @@ type transcriptArtifact struct {
 // Execute waits for actual native completion after soft cancellation. It cannot
 // turn a disconnected or timed-out HTTP call into confirmed remote cessation.
 func (w *TranscriptionWorker) Execute(ctx context.Context, id TranscriptionWorkID) (domain.TranscriptionJob, error) {
-	if w == nil || w.store == nil || w.objects == nil || w.preprocessor == nil || w.transcriber == nil {
+	if w == nil || w.store == nil || (w.objects == nil && w.routes == nil) || w.preprocessor == nil || w.transcriber == nil {
 		return domain.TranscriptionJob{}, ErrUnavailable
 	}
 	work, err := w.store.Claim(ctx, id)
@@ -51,6 +57,15 @@ func (w *TranscriptionWorker) Execute(ctx context.Context, id TranscriptionWorkI
 	}
 	if work.Job.Status == domain.TranscriptionSucceeded {
 		return work.Job, nil
+	}
+	if w.routes != nil {
+		objects, err := w.routes.Open(ctx, StorageOwner("transcription", work.Job.ProjectID, id.JobID, id.Attempt), work.SourceAssets)
+		if err != nil {
+			return domain.TranscriptionJob{}, err
+		}
+		local := *w
+		local.objects = objects
+		w = &local
 	}
 	prepareCtx, stopPreparation := context.WithTimeout(ctx, TranscriptionPreparationTimeout)
 	defer stopPreparation()

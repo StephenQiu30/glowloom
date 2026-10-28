@@ -136,6 +136,23 @@ func readPurgeItem(tx *gorm.DB, id uuid.UUID, index int) (purgeItemRow, applicat
 	if read.RowsAffected != 1 || strictCopyMedia(row.Frozen, &frozen) != nil || frozen.ItemID != row.ItemID || frozen.CatalogRevision < 1 || len(frozen.Renditions) > 16 {
 		return row, frozen, application.ErrUnavailable
 	}
+	if frozen.Asset != nil {
+		objects := []application.PurgeObject{{ObjectKey: frozen.Asset.ObjectKey}}
+		for _, r := range frozen.Renditions {
+			objects = append(objects, application.PurgeObject{ObjectKey: r.ObjectKey})
+		}
+		if err := loadPurgeLocations(tx, id, index, objects); err != nil {
+			return row, frozen, err
+		}
+		if objects[0].Location != nil {
+			frozen.Asset.ObjectLocation = objects[0].Location
+		}
+		for i := range frozen.Renditions {
+			if objects[i+1].Location != nil {
+				frozen.Renditions[i].ObjectLocation = objects[i+1].Location
+			}
+		}
+	}
 	return row, frozen, nil
 }
 
@@ -165,6 +182,9 @@ func validatePurgeItem(tx *gorm.DB, row purgeJobRow, frozen application.FrozenPu
 	if read.Error != nil {
 		return read.Error
 	}
+	if err := actual.loadLocation(tx); err != nil {
+		return err
+	}
 	if read.RowsAffected != 1 || !equalCopyMedia(actual.domain(), *frozen.Asset) || !actual.IsDelete {
 		return application.ErrObjectMismatch
 	}
@@ -177,6 +197,9 @@ func validatePurgeItem(tx *gorm.DB, row purgeJobRow, frozen application.FrozenPu
 	}
 	byID := make(map[uuid.UUID]domain.Rendition, len(rends))
 	for _, r := range rends {
+		if err := r.loadLocation(tx); err != nil {
+			return err
+		}
 		byID[r.ID] = r.domain()
 	}
 	for _, r := range frozen.Renditions {

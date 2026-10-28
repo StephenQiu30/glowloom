@@ -9,6 +9,7 @@ import (
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
@@ -99,6 +100,7 @@ type TranscriptionWork struct {
 	Actor          identityapp.Principal
 	Frozen         domain.FrozenTranscription
 	InferenceState string
+	SourceAssets   []mediadomain.MediaAsset
 }
 
 // TranscriptionWorkerStore never infers remote cessation from a client timeout.

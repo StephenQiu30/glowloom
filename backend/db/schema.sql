@@ -1984,7 +1984,7 @@ CREATE TABLE media.storage_work_intent (
     closed_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT storage_work_intent_check CHECK ((((state = 'open'::text) AND (closed_at IS NULL)) OR ((state <> 'open'::text) AND (closed_at IS NOT NULL)))),
-    CONSTRAINT storage_work_intent_kind_check CHECK ((kind = ANY (ARRAY['operation'::text, 'script'::text, 'export'::text, 'depth'::text, 'transcription'::text, 'package'::text, 'transfer'::text, 'project-copy'::text]))),
+    CONSTRAINT storage_work_intent_kind_check CHECK ((kind = ANY (ARRAY['operation'::text, 'script'::text, 'export'::text, 'depth'::text, 'transcription'::text, 'package'::text, 'transfer'::text, 'project-copy'::text, 'subject-voice'::text]))),
     CONSTRAINT storage_work_intent_owner_id_check CHECK ((owner_id <> '00000000-0000-0000-0000-000000000000'::uuid)),
     CONSTRAINT storage_work_intent_state_check CHECK ((state = ANY (ARRAY['open'::text, 'accepted'::text, 'cancelled'::text]))),
     CONSTRAINT storage_work_intent_work_id_check CHECK ((work_id <> '00000000-0000-0000-0000-000000000000'::uuid))
@@ -2479,6 +2479,7 @@ CREATE TABLE operation.operation_input (
     update_time timestamp with time zone DEFAULT now() NOT NULL,
     is_delete boolean DEFAULT false NOT NULL,
     CONSTRAINT operation_input_ref_type_check CHECK ((btrim(ref_type) <> ''::text)),
+    CONSTRAINT operation_input_subject_binding_check CHECK (ref_type <> 'subject_media' OR (ref_id IS NOT NULL AND ref_version IS NOT NULL AND ref_version ~ '^[a-f0-9]{64}$' AND media_asset_id IS NOT NULL AND text_value IS NULL AND mask_asset_id IS NULL AND role <> 'prompt')),
     CONSTRAINT operation_input_role_check CHECK ((btrim(role) <> ''::text)),
     CONSTRAINT operation_input_seq_no_check CHECK ((seq_no >= 0))
 );
@@ -6658,22 +6659,94 @@ ALTER TABLE catalog.model_release ADD CONSTRAINT model_release_onboarding_check_
 ALTER TABLE catalog.provider_check ADD CONSTRAINT provider_check_model_fkey FOREIGN KEY(model_id) REFERENCES catalog.model_profile(id);
 ALTER TABLE catalog.provider_check ADD CONSTRAINT provider_check_model_version_fkey FOREIGN KEY(model_version_id) REFERENCES catalog.model_profile_version(id);
 
--- SRC-AI-28: additive bootstrap for the separately authenticated Doubao speech service.
-INSERT INTO catalog.capability(id,key,output_type,modes,input_roles)
-VALUES('6da07a12-0000-4000-8000-000000000004','audio.generate','audio',ARRAY['text2audio'],ARRAY['prompt'])
-ON CONFLICT(key) DO NOTHING;
-INSERT INTO catalog.provider_preset(id,slug,origin)
-VALUES('6da07a10-0000-4000-8000-000000000005','volcengine-speech','builtin')
-ON CONFLICT(slug) DO NOTHING;
-INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash)
-SELECT '6da07a11-0000-4000-8000-000000000005',id,1,'{"schema_version":1,"name":"豆包语音","config":{"adapter_key":"volcengine_speech","base_url":"https://openspeech.bytedance.com/api/v3","region":"domestic","capabilities":["audio"],"timeout_seconds":120,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'eab8b04b9e1de10b21827a6c2603ffed795f326f9b617d801bc99f275f196b0c'
-FROM catalog.provider_preset WHERE slug='volcengine-speech' AND origin='builtin'
-ON CONFLICT(preset_id,version_no) DO NOTHING;
+-- Space-owned subjects are independent of the project Bible. Append-only
+-- versions and bindings retain source-media evidence after product deletion.
+CREATE SCHEMA IF NOT EXISTS subject;
+CREATE TABLE subject.subject_head (
+ id uuid PRIMARY KEY,
+ owner_scope_id uuid NOT NULL REFERENCES workspace.creation_scope(id),
+ physical_scope_id uuid NOT NULL REFERENCES workspace.organization(id),
+ revision bigint NOT NULL CHECK(revision BETWEEN 1 AND 2147483647),
+ current_version_id uuid NOT NULL,
+ created_by uuid NOT NULL,
+ created_at timestamptz NOT NULL,
+ updated_at timestamptz NOT NULL,
+ deleted_at timestamptz,
+ UNIQUE(id,owner_scope_id,physical_scope_id),
+ CHECK(updated_at>=created_at)
+);
+CREATE TABLE subject.subject_version (
+ id uuid PRIMARY KEY,
+ subject_id uuid NOT NULL,
+ owner_scope_id uuid NOT NULL,
+ physical_scope_id uuid NOT NULL,
+ version_no bigint NOT NULL CHECK(version_no BETWEEN 1 AND 2147483647),
+ previous_id uuid REFERENCES subject.subject_version(id),
+ created_by uuid NOT NULL,
+ created_at timestamptz NOT NULL,
+ content jsonb NOT NULL CHECK(jsonb_typeof(content)='object' AND octet_length(content::text)<=1048576),
+ content_sha256 text NOT NULL CHECK(content_sha256 ~ '^[a-f0-9]{64}$'),
+ UNIQUE(subject_id,version_no),
+ UNIQUE(id,subject_id,owner_scope_id,physical_scope_id),
+ FOREIGN KEY(subject_id,owner_scope_id,physical_scope_id) REFERENCES subject.subject_head(id,owner_scope_id,physical_scope_id) DEFERRABLE INITIALLY DEFERRED,
+ CHECK((version_no=1 AND previous_id IS NULL) OR (version_no>1 AND previous_id IS NOT NULL))
+);
+ALTER TABLE subject.subject_head ADD CONSTRAINT subject_current_version_fk
+ FOREIGN KEY(current_version_id,id,owner_scope_id,physical_scope_id)
+ REFERENCES subject.subject_version(id,subject_id,owner_scope_id,physical_scope_id)
+ DEFERRABLE INITIALLY DEFERRED;
+CREATE TABLE subject.media_binding (
+ binding_id uuid PRIMARY KEY,
+ subject_id uuid NOT NULL,
+ version_id uuid NOT NULL,
+ owner_scope_id uuid NOT NULL,
+ physical_scope_id uuid NOT NULL,
+ position integer NOT NULL CHECK(position BETWEEN 0 AND 119),
+ role text NOT NULL CHECK(role IN ('primary','reference','voice')),
+ asset_id uuid NOT NULL REFERENCES media.media_asset(id),
+ asset_revision bigint NOT NULL CHECK(asset_revision>0),
+ kind text NOT NULL CHECK(kind IN ('image','video','audio')),
+ sha256 text NOT NULL CHECK(sha256 ~ '^[a-f0-9]{64}$'),
+ binding_sha256 text NOT NULL CHECK(binding_sha256 ~ '^[a-f0-9]{64}$'),
+ fact jsonb NOT NULL CHECK(jsonb_typeof(fact)='object' AND octet_length(fact::text)<=65536),
+ UNIQUE(version_id,role,position),
+ FOREIGN KEY(version_id,subject_id,owner_scope_id,physical_scope_id)
+ REFERENCES subject.subject_version(id,subject_id,owner_scope_id,physical_scope_id),
+ CHECK((role='primary' AND position=0 AND kind IN ('image','video')) OR (role='reference' AND kind='image') OR (role='voice' AND position=0 AND kind='audio')),
+ CHECK((fact->>'asset_id')::uuid=asset_id AND (fact->>'asset_revision')::bigint=asset_revision AND fact->>'kind'=kind AND fact->>'sha256'=sha256)
+);
+CREATE TABLE subject.favorite (
+ actor_id uuid NOT NULL,
+ subject_id uuid NOT NULL,
+ owner_scope_id uuid NOT NULL,
+ physical_scope_id uuid NOT NULL,
+ favorite boolean NOT NULL,
+ updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ PRIMARY KEY(actor_id,subject_id),
+ FOREIGN KEY(subject_id,owner_scope_id,physical_scope_id) REFERENCES subject.subject_head(id,owner_scope_id,physical_scope_id)
+);
+CREATE TABLE subject.command (
+ actor_id uuid NOT NULL,
+ idem_key uuid NOT NULL,
+ owner_scope_id uuid NOT NULL REFERENCES workspace.creation_scope(id),
+ physical_scope_id uuid NOT NULL REFERENCES workspace.organization(id),
+ request_sha256 text NOT NULL CHECK(request_sha256 ~ '^[a-f0-9]{64}$'),
+ response_body jsonb NOT NULL CHECK(jsonb_typeof(response_body)='object' AND octet_length(response_body::text)<=1048576),
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ PRIMARY KEY(actor_id,idem_key)
+);
+CREATE INDEX subject_head_updated ON subject.subject_head(owner_scope_id,physical_scope_id,updated_at,id) WHERE deleted_at IS NULL;
+CREATE INDEX subject_head_created ON subject.subject_head(owner_scope_id,physical_scope_id,created_at,id) WHERE deleted_at IS NULL;
+CREATE INDEX subject_binding_retained_asset ON subject.media_binding(asset_id);
+CREATE INDEX subject_binding_version ON subject.media_binding(owner_scope_id,physical_scope_id,subject_id,version_id);
+CREATE INDEX subject_favorite_actor ON subject.favorite(actor_id,owner_scope_id,subject_id) WHERE favorite;
+GRANT USAGE ON SCHEMA subject TO glowloom_app;
+GRANT SELECT,INSERT,UPDATE ON subject.subject_head,subject.favorite TO glowloom_app;
+GRANT SELECT,INSERT ON subject.subject_version,subject.media_binding,subject.command TO glowloom_app;
+REVOKE DELETE ON subject.subject_head,subject.subject_version,subject.media_binding,subject.command FROM glowloom_app;
 
--- Seedance 2.5 can consume authorized video/audio references in omni mode.
-UPDATE catalog.capability SET input_roles=ARRAY(
- SELECT DISTINCT role FROM unnest(input_roles || ARRAY['reference_video','reference_audio']) AS role ORDER BY role
-) WHERE key='video.generate';
+ALTER TABLE subject.subject_head ADD CONSTRAINT subject_scope_physical_fk FOREIGN KEY(owner_scope_id,physical_scope_id) REFERENCES workspace.creation_scope(id,physical_scope_id);
+ALTER TABLE subject.command ADD CONSTRAINT subject_command_scope_physical_fk FOREIGN KEY(owner_scope_id,physical_scope_id) REFERENCES workspace.creation_scope(id,physical_scope_id);
 
 
 -- Asset parity: canvas_asset_management_incremental.sql
@@ -6766,6 +6839,77 @@ CREATE TABLE IF NOT EXISTS operation.history_publication_receipt (
 );
 GRANT SELECT,INSERT ON operation.published_work,operation.history_publication_receipt TO glowloom_app;
 
+-- SRC-AI-28: additive bootstrap for the separately authenticated Doubao speech service.
+INSERT INTO catalog.capability(id,key,output_type,modes,input_roles)
+VALUES('6da07a12-0000-4000-8000-000000000004','audio.generate','audio',ARRAY['text2audio'],ARRAY['prompt'])
+ON CONFLICT(key) DO NOTHING;
+INSERT INTO catalog.provider_preset(id,slug,origin)
+VALUES('6da07a10-0000-4000-8000-000000000005','volcengine-speech','builtin')
+ON CONFLICT(slug) DO NOTHING;
+INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash)
+SELECT '6da07a11-0000-4000-8000-000000000005',id,1,'{"schema_version":1,"name":"豆包语音","config":{"adapter_key":"volcengine_speech","base_url":"https://openspeech.bytedance.com/api/v3","region":"domestic","capabilities":["audio"],"timeout_seconds":120,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'eab8b04b9e1de10b21827a6c2603ffed795f326f9b617d801bc99f275f196b0c'
+FROM catalog.provider_preset WHERE slug='volcengine-speech' AND origin='builtin'
+ON CONFLICT(preset_id,version_no) DO NOTHING;
+
+-- Subject-owned Doubao speech sample jobs; no synthetic project identities.
+CREATE TABLE subject.voice_job (
+ id uuid PRIMARY KEY,
+ actor_id uuid NOT NULL REFERENCES identity."user"(id),
+ owner_scope_id uuid NOT NULL,
+ physical_scope_id uuid NOT NULL,
+ personal_scope_id uuid NOT NULL,
+ personal_org_id uuid NOT NULL,
+ draft_intent_id uuid NOT NULL,
+ idem_key uuid NOT NULL,
+ request_sha256 text NOT NULL CHECK(request_sha256 ~ '^[a-f0-9]{64}$'),
+ name text NOT NULL CHECK(char_length(name) BETWEEN 1 AND 20 AND name=btrim(name)),
+ text text NOT NULL CHECK(char_length(text) BETWEEN 1 AND 500),
+ release_id uuid NOT NULL REFERENCES catalog.model_release(id),
+ provider_id uuid NOT NULL REFERENCES catalog.provider(id),
+ config_version_id uuid NOT NULL REFERENCES catalog.provider_config_version(id),
+ credential_id uuid NOT NULL REFERENCES catalog.provider_credential(id),
+ model_version_id uuid NOT NULL REFERENCES catalog.model_profile_version(id),
+ price_version_id uuid NOT NULL REFERENCES catalog.price_rule_version(id),
+ resource_id text NOT NULL CHECK(resource_id='seed-tts-2.0'),
+ voice_key text NOT NULL CHECK(char_length(voice_key) BETWEEN 1 AND 512),
+ speech_rate integer NOT NULL DEFAULT 0 CHECK(speech_rate BETWEEN -50 AND 100),
+ upstream_cost jsonb NOT NULL CHECK(jsonb_typeof(upstream_cost)='object'),
+ moderation text NOT NULL CHECK(moderation='provider'),
+ event_id uuid NOT NULL UNIQUE,
+ asset_id uuid NOT NULL UNIQUE,
+ output_asset_id uuid REFERENCES media.media_asset(id),
+ storage_intent_id uuid,
+ status text NOT NULL DEFAULT 'queued' CHECK(status IN ('queued','dispatching','ingesting','succeeded','failed','unknown')),
+ revision bigint NOT NULL DEFAULT 1 CHECK(revision>0),
+ dispatch_started_at timestamptz,
+ execution_id uuid,
+ provider_log_id text NOT NULL DEFAULT '' CHECK(char_length(provider_log_id)<=256),
+ error_code text NOT NULL DEFAULT '' CHECK(char_length(error_code)<=100),
+ audio_location_id uuid,
+ manifest_location_id uuid,
+ audio_sha256 text CHECK(audio_sha256 IS NULL OR audio_sha256 ~ '^[a-f0-9]{64}$'),
+ audio_byte_size bigint CHECK(audio_byte_size IS NULL OR audio_byte_size BETWEEN 1 AND 104857600),
+ usage jsonb CHECK(usage IS NULL OR jsonb_typeof(usage)='object'),
+ result jsonb CHECK(result IS NULL OR jsonb_typeof(result)='object'),
+ created_at timestamptz NOT NULL,
+ updated_at timestamptz NOT NULL,
+ completed_at timestamptz,
+ UNIQUE(actor_id,idem_key),
+ FOREIGN KEY(owner_scope_id,physical_scope_id) REFERENCES workspace.creation_scope(id,physical_scope_id),
+ FOREIGN KEY(personal_scope_id,personal_org_id) REFERENCES workspace.creation_scope(id,physical_scope_id),
+ CHECK((dispatch_started_at IS NULL)=(execution_id IS NULL)),
+ CHECK(status NOT IN ('dispatching','ingesting','succeeded','unknown') OR dispatch_started_at IS NOT NULL),
+ CHECK((status='succeeded')=(result IS NOT NULL)),
+ CHECK((output_asset_id IS NULL) OR output_asset_id=asset_id),
+ CHECK(status<>'succeeded' OR (output_asset_id IS NOT NULL AND audio_sha256 IS NOT NULL AND audio_byte_size IS NOT NULL AND completed_at IS NOT NULL))
+);
+CREATE INDEX voice_job_owner_idx ON subject.voice_job(owner_scope_id,actor_id,created_at,id);
+CREATE INDEX voice_job_provider_dispatch_idx ON subject.voice_job(provider_id,dispatch_started_at) WHERE dispatch_started_at IS NOT NULL;
+REVOKE UPDATE,DELETE ON subject.voice_job FROM glowloom_app;
+GRANT SELECT,INSERT ON subject.voice_job TO glowloom_app;
+GRANT UPDATE(status,revision,dispatch_started_at,execution_id,provider_log_id,error_code,audio_location_id,manifest_location_id,audio_sha256,audio_byte_size,usage,result,output_asset_id,updated_at,completed_at) ON subject.voice_job TO glowloom_app;
+-- No DELETE or mutation of original actor/scope/intent/key/catalog/voice/cost.
+
 
 -- Asset parity: canvas_asset_creation_incremental.sql
 -- Additive asset-entry creation receipt. Never rewrites existing project/canvas data.
@@ -6781,3 +6925,101 @@ CREATE TABLE IF NOT EXISTS canvas.asset_creation_receipt (
  PRIMARY KEY(actor_id,idem_key)
 );
 GRANT SELECT,INSERT ON canvas.asset_creation_receipt TO glowloom_app;
+
+-- Seedance 2.5 can consume authorized video/audio references in omni mode.
+UPDATE catalog.capability SET input_roles=ARRAY(
+ SELECT DISTINCT role FROM unnest(input_roles || ARRAY['reference_video','reference_audio']) AS role ORDER BY role
+) WHERE key='video.generate';
+
+-- Script physical identity expansion (nullable until verified migration).
+-- Additive script physical identities. Execute explicitly in one transaction.
+-- No guessed location backfill, no route activation or bare-key key removal.
+
+ALTER TABLE script.script_source ADD COLUMN IF NOT EXISTS original_location_id uuid;
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.script_source'::regclass AND conname='script_source_original_location_id_fkey') THEN
+ ALTER TABLE script.script_source ADD CONSTRAINT script_source_original_location_id_fkey FOREIGN KEY(original_location_id,original_key) REFERENCES media.object_location(id,object_key);
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='script.script_source'::regclass AND tgname='keep_original_location_id' AND NOT tgisinternal) THEN
+ CREATE TRIGGER keep_original_location_id BEFORE UPDATE ON script.script_source FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('original_location_id');
+ END IF;
+END $$;
+
+ALTER TABLE script.script_source ADD COLUMN IF NOT EXISTS rich_location_id uuid;
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.script_source'::regclass AND conname='script_source_rich_location_id_fkey') THEN
+ ALTER TABLE script.script_source ADD CONSTRAINT script_source_rich_location_id_fkey FOREIGN KEY(rich_location_id,rich_key) REFERENCES media.object_location(id,object_key);
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='script.script_source'::regclass AND tgname='keep_rich_location_id' AND NOT tgisinternal) THEN
+ CREATE TRIGGER keep_rich_location_id BEFORE UPDATE ON script.script_source FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('rich_location_id');
+ END IF;
+END $$;
+
+ALTER TABLE script.script_version ADD COLUMN IF NOT EXISTS text_location_id uuid;
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.script_version'::regclass AND conname='script_version_text_location_id_fkey') THEN
+ ALTER TABLE script.script_version ADD CONSTRAINT script_version_text_location_id_fkey FOREIGN KEY(text_location_id,text_key) REFERENCES media.object_location(id,object_key);
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='script.script_version'::regclass AND tgname='keep_text_location_id' AND NOT tgisinternal) THEN
+ CREATE TRIGGER keep_text_location_id BEFORE UPDATE ON script.script_version FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('text_location_id');
+ END IF;
+END $$;
+
+ALTER TABLE script.script_version ADD COLUMN IF NOT EXISTS rich_location_id uuid;
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.script_version'::regclass AND conname='script_version_rich_location_id_fkey') THEN
+ ALTER TABLE script.script_version ADD CONSTRAINT script_version_rich_location_id_fkey FOREIGN KEY(rich_location_id,rich_key) REFERENCES media.object_location(id,object_key);
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='script.script_version'::regclass AND tgname='keep_rich_location_id' AND NOT tgisinternal) THEN
+ CREATE TRIGGER keep_rich_location_id BEFORE UPDATE ON script.script_version FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('rich_location_id');
+ END IF;
+END $$;
+
+ALTER TABLE script.copy_object_intent ADD COLUMN IF NOT EXISTS source_location_id uuid;
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.copy_object_intent'::regclass AND conname='copy_object_intent_source_location_id_fkey') THEN
+ ALTER TABLE script.copy_object_intent ADD CONSTRAINT copy_object_intent_source_location_id_fkey FOREIGN KEY(source_location_id,source_key) REFERENCES media.object_location(id,object_key);
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='script.copy_object_intent'::regclass AND tgname='keep_source_location_id' AND NOT tgisinternal) THEN
+ CREATE TRIGGER keep_source_location_id BEFORE UPDATE ON script.copy_object_intent FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('source_location_id');
+ END IF;
+END $$;
+
+ALTER TABLE script.copy_object_intent ADD COLUMN IF NOT EXISTS target_location_id uuid;
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.copy_object_intent'::regclass AND conname='copy_object_intent_target_location_id_fkey') THEN
+ ALTER TABLE script.copy_object_intent ADD CONSTRAINT copy_object_intent_target_location_id_fkey FOREIGN KEY(target_location_id,target_key) REFERENCES media.object_location(id,object_key);
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='script.copy_object_intent'::regclass AND tgname='keep_target_location_id' AND NOT tgisinternal) THEN
+ CREATE TRIGGER keep_target_location_id BEFORE UPDATE ON script.copy_object_intent FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('target_location_id');
+ END IF;
+END $$;
+
+ALTER TABLE script.copy_object_state ADD COLUMN IF NOT EXISTS target_location_id uuid;
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='script.copy_object_state'::regclass AND conname='copy_object_state_target_location_id_fkey') THEN
+ ALTER TABLE script.copy_object_state ADD CONSTRAINT copy_object_state_target_location_id_fkey FOREIGN KEY(target_location_id,target_key) REFERENCES media.object_location(id,object_key);
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='script.copy_object_state'::regclass AND tgname='keep_target_location_id' AND NOT tgisinternal) THEN
+ CREATE TRIGGER keep_target_location_id BEFORE UPDATE ON script.copy_object_state FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding('target_location_id');
+ END IF;
+END $$;
+
+-- Measured empty deployment proof (no invented legacy profile).
+-- Empty deployment proof contains a measured closed inventory, not a provider claim.
+-- Execute explicitly in one transaction. It does not prove a live cloud bucket.
+CREATE TABLE IF NOT EXISTS media.storage_empty_deployment_evidence (
+ config_sha256 text PRIMARY KEY CHECK(config_sha256 ~ '^[a-f0-9]{64}$'),
+ evidence_sha256 text NOT NULL CHECK(evidence_sha256 ~ '^[a-f0-9]{64}$'),
+ inventory jsonb NOT NULL CHECK(jsonb_typeof(inventory)='object'),
+ recorded_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.storage_empty_deployment_evidence'::regclass AND tgname='keep_storage_evidence' AND NOT tgisinternal) THEN
+ CREATE TRIGGER keep_storage_evidence BEFORE UPDATE OR DELETE ON media.storage_empty_deployment_evidence FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
+ END IF;
+END $$;
+GRANT SELECT ON media.storage_empty_deployment_evidence TO glowloom_app;
+
+-- Script copy admission freezes its own output work in the caller transaction.
+ALTER TABLE script.copy_snapshot ADD COLUMN IF NOT EXISTS storage_intent_id uuid REFERENCES media.storage_work_intent(id);

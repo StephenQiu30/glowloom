@@ -158,18 +158,8 @@ func (s *Store) CommitUpload(ctx context.Context, actor identityapp.Principal, r
 			id := duplicate.ID
 			result = application.UploadResult{Asset: application.UploadSummary(duplicate), DuplicateOf: &id}
 		} else {
-			if err := tx.Exec(`INSERT INTO media.media_asset
-				(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,width,height,duration_ms,fps,audio_channels,codec,moderation_status,moderation_detail,revision,create_time,update_time)
-				VALUES(?, ?, ?, 'upload', 'ready', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'passed', ?::jsonb, 1, ?, ?)`,
-				asset.ID, asset.ProjectID, string(asset.Kind), asset.ObjectKey, asset.FileName, asset.MimeType, asset.ByteSize, asset.SHA256,
-				asset.Width, asset.Height, asset.DurationMS, asset.FPS, asset.AudioChannels, asset.Codec, string(asset.ModerationDetail), asset.CreateTime, asset.UpdateTime).Error; err != nil {
-				return fmt.Errorf("insert reviewed upload: %w", err)
-			}
-			for _, rendition := range renditions {
-				if err := tx.Exec(`INSERT INTO media.rendition(id,media_asset_id,kind,object_key,width,height,byte_size,create_time,update_time) VALUES(?,?,?,?,?,?,?,?,?)`,
-					rendition.ID, rendition.MediaAssetID, string(rendition.Kind), rendition.ObjectKey, rendition.Width, rendition.Height, rendition.ByteSize, rendition.CreateTime, rendition.UpdateTime).Error; err != nil {
-					return fmt.Errorf("insert upload rendition: %w", err)
-				}
+			if err := insertReviewedUpload(tx, asset, renditions); err != nil {
+				return err
 			}
 			result = application.UploadResult{Asset: application.UploadSummary(asset)}
 		}

@@ -77,6 +77,9 @@ func (s *ProjectCopyStore) ReadCopyReference(ctx context.Context, actor identity
 	if read.RowsAffected != 1 {
 		return result, application.ErrNotFound
 	}
+	if err := hydrateCopySourceAsset(tx, &source); err != nil {
+		return result, err
+	}
 	result.Source.Asset = source.domain()
 	var rows []renditionRow
 	if err := tx.Raw(`SELECT * FROM media.rendition WHERE media_asset_id=? AND NOT is_delete ORDER BY kind,id LIMIT 17 FOR SHARE`, fact.AssetID).Scan(&rows).Error; err != nil {
@@ -87,6 +90,9 @@ func (s *ProjectCopyStore) ReadCopyReference(ctx context.Context, actor identity
 	}
 	result.Source.Renditions = []domain.Rendition{}
 	for _, r := range rows {
+		if err := hydrateCopySourceRendition(tx, &r); err != nil {
+			return result, err
+		}
 		result.Source.Renditions = append(result.Source.Renditions, r.domain())
 	}
 	var found bool
@@ -171,17 +177,20 @@ func (s *ProjectCopyStore) ReadTransferredCopyReference(ctx context.Context, act
 		}
 		r.ByteSize = object.ByteSize
 	}
-	if err := verifyCopiedReference(tx, result.Target, binding.TargetProjectID); err != nil {
+	if err := verifyCopiedReference(tx, &result.Target, binding.TargetProjectID); err != nil {
 		return result, err
 	}
 	return result, nil
 }
 
-func verifyCopiedReference(tx *gorm.DB, target application.LibraryMediaFile, project uuid.UUID) error {
+func verifyCopiedReference(tx *gorm.DB, target *application.LibraryMediaFile, project uuid.UUID) error {
 	var row assetRow
 	read := tx.Raw(`SELECT * FROM media.media_asset WHERE id=? AND project_id=? AND NOT is_delete FOR SHARE`, target.Asset.ID, project).Scan(&row)
 	if read.Error != nil {
 		return read.Error
+	}
+	if err := row.loadLocation(tx); err != nil {
+		return err
 	}
 	if read.RowsAffected != 1 || !equalCopyMedia(target.Asset, row.domain()) {
 		return application.ErrObjectMismatch
@@ -195,12 +204,17 @@ func verifyCopiedReference(tx *gorm.DB, target application.LibraryMediaFile, pro
 	}
 	byID := make(map[uuid.UUID]domain.Rendition, len(rows))
 	for _, row := range rows {
+		if err := row.loadLocation(tx); err != nil {
+			return err
+		}
 		byID[row.ID] = row.domain()
 	}
-	for _, rendition := range target.Renditions {
+	for i, rendition := range target.Renditions {
 		if !equalCopyMedia(rendition, byID[rendition.ID]) {
 			return application.ErrObjectMismatch
 		}
+		target.Renditions[i] = byID[rendition.ID]
 	}
+	target.Asset = row.domain()
 	return nil
 }

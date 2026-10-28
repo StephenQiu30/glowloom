@@ -1,0 +1,11 @@
+Browser tab: 1980370571, Title: "即梦AI - 一站式AI创作平台", URL: "https://jimeng.jianying.com/ai-tool/elements".
+0 AXWebArea 即梦AI - 一站式AI创作平台, URL: jimeng.jianying.com/ai-tool/elements
+	1 container 确认删除主体
+		2 container
+			3 text 确认删除主体
+			4 text 主体删除后无法恢复，关联的历史作品将无法重新编辑
+			5 button 取消
+			6 button 删除
+			7 button 关闭
+
+The focused UI element is 5 button 取消

@@ -22,6 +22,7 @@ var storageProfileID = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
 // ObjectStorageConfig describes deployment-owned connections, never inline secrets.
 type ObjectStorageConfig struct {
 	environment         string
+	credentialLookup    func(string) string
 	SchemaVersion       int                       `yaml:"schema_version"`
 	Revision            string                    `yaml:"revision"`
 	DefaultWriteProfile string                    `yaml:"default_write_profile"`

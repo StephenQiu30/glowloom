@@ -46,9 +46,21 @@ func ProvideProjectCopyStore(database *gorm.DB) *pgworkspace.ProjectCopyStore {
 
 // ProvideProjectCopyStoreWithAccess assembles project copy storage with explicit scope access.
 func ProvideProjectCopyStoreWithAccess(database *gorm.DB, scopes pgmedia.ScopeAccessFactory) *pgworkspace.ProjectCopyStore {
+	return provideProjectCopyStore(database, scopes, false)
+}
+
+// ProvideProjectCopyStoreWithObjects freezes media and script output destinations.
+func ProvideProjectCopyStoreWithObjects(database *gorm.DB, scopes pgmedia.ScopeAccessFactory) *pgworkspace.ProjectCopyStore {
+	return provideProjectCopyStore(database, scopes, true)
+}
+
+func provideProjectCopyStore(database *gorm.DB, scopes pgmedia.ScopeAccessFactory, routed bool) *pgworkspace.ProjectCopyStore {
 	return pgworkspace.NewScopedProjectCopyStoreWithBible(database, scopewire.ProvideRequestScopeAccess, provideCopyWorkerScopeAccess, workspacewire.ProvideProjectWorkGuard,
 		func(tx *gorm.DB) workspaceapp.ProjectCopyOwners {
 			media := pgmedia.NewScopedProjectCopyStore(tx, scopes)
+			if routed {
+				media = media.WithRoutedStorage()
+			}
 			canvas := pgcanvas.NewScopedProjectCopyStore(tx,
 				func(mediaTx *gorm.DB) canvasapp.MediaReader {
 					return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(mediaTx, scopes), nil)
@@ -62,7 +74,11 @@ func ProvideProjectCopyStoreWithAccess(database *gorm.DB, scopes pgmedia.ScopeAc
 				})
 			return workspaceapp.ProjectCopyOwners{Media: media, Canvas: canvas, Budget: pgbilling.NewScopedStore(tx, func(db *gorm.DB) billingapp.ProjectAccess { return copyBudgetAccess{scopes(db)} }), Cover: projectCopyCoverOwner{tx: tx, scopes: scopes}}
 		}, func(tx *gorm.DB, authority workspaceapp.ProjectCopyAuthority) workspaceapp.ProjectCopyScriptOwner {
-			return projectCopyScriptOwner{store: provideScriptProjectCopyStore(tx, authority)}
+			store := provideScriptProjectCopyStore(tx, authority)
+			if routed {
+				store = withScriptCopyLocations(store)
+			}
+			return projectCopyScriptOwner{store: store}
 		}, func(tx *gorm.DB, authority workspaceapp.ProjectCopyAuthority, mediaSnapshot mediaapp.ProjectCopySnapshot) workspaceapp.ProjectCopyBibleOwner {
 			return projectCopyBibleOwner{store: provideBibleProjectCopyStore(tx, authority, mediaSnapshot)}
 		})
@@ -81,4 +97,16 @@ type copyBudgetAccess struct{ access mediaapp.ScopeAccess }
 
 func (a copyBudgetAccess) AuthorizeBilling(ctx context.Context, actor identityapp.Principal, project uuid.UUID, _ bool) error {
 	return a.access.AuthorizeCopyTarget(ctx, actor, project)
+}
+
+// ProvideProjectCopyWorkerWithObjects routes every owned private object by its frozen location.
+func ProvideProjectCopyWorkerWithObjects(database *gorm.DB, registry *objectstorage.Registry, legacy *objectstorage.Client) (*workspaceapp.ProjectCopyWorker, *pgworkspace.ProjectCopyStore) {
+	if registry == nil {
+		return ProvideProjectCopyWorker(database, legacy)
+	}
+	store := ProvideProjectCopyStoreWithObjects(database, mediawire.NewMediaWorkerScopeAccess)
+	transfer := func(job workspacedomain.ProjectCopyJob, worker uuid.UUID, cleanup bool) *mediaapp.ProjectCopyTransfer {
+		return mediaapp.NewRoutedProjectCopyTransfer(pgworkspace.NewProjectCopyMediaObjects(store, job.ID, worker, cleanup), mediaobjects.NewRoutedCopyObjects(registry, pgmedia.NewStorageRoutes(database)), "")
+	}
+	return workspaceapp.NewProjectCopyWorkerWithBible(store, transfer, provideRoutedProjectCopyScriptTransfer(database, registry), provideProjectCopyBibleTransferWithObjects(database, registry, legacy), time.Now), store
 }

@@ -105,7 +105,12 @@ func storageProfileNeeds(tx *gorm.DB, id string) (readNeeded, writeNeeded bool, 
 
 func storageActivationReady(tx *gorm.DB, in application.StorageActivation) (string, error) {
 	if _, err := readLegacyBinding(tx); err != nil {
-		return "", err
+		if !errors.Is(err, application.ErrStorageNotReady) {
+			return "", err
+		}
+		if err := requireNativeBootstrap(tx, in.ConfigSHA256); err != nil {
+			return "", err
+		}
 	}
 	for _, column := range legacyObjectColumns {
 		var missing bool
@@ -116,15 +121,11 @@ func storageActivationReady(tx *gorm.DB, in application.StorageActivation) (stri
 			return "", application.ErrStorageNotReady
 		}
 	}
-	var unresolvedWork bool
-	if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM operation.operation o WHERE NOT EXISTS(SELECT 1 FROM media.storage_work_intent w WHERE w.kind='operation' AND w.owner_id=o.project_id AND w.work_id=o.id))`).Scan(&unresolvedWork).Error; err != nil {
+	if err := requireFrozenPendingWork(tx); err != nil {
 		return "", err
 	}
-	if unresolvedWork {
-		return "", application.ErrStorageNotReady
-	}
 	var evidence string
-	read := tx.Raw(`SELECT evidence_sha256 FROM media.storage_deployment_evidence WHERE config_sha256=? FOR SHARE`, in.ConfigSHA256).Scan(&evidence)
+	read := tx.Raw(`SELECT evidence_sha256 FROM media.storage_deployment_evidence WHERE config_sha256=?`, in.ConfigSHA256).Scan(&evidence)
 	if read.Error != nil {
 		return "", read.Error
 	}
@@ -159,7 +160,7 @@ func storageActivationReady(tx *gorm.DB, in application.StorageActivation) (stri
 		return "", application.ErrStorageNotReady
 	}
 	var profiles []struct{ ID, ResourceIdentity string }
-	if err := tx.Raw(`SELECT id,resource_identity FROM media.storage_profile ORDER BY id FOR SHARE`).Scan(&profiles).Error; err != nil {
+	if err := tx.Raw(`SELECT id,resource_identity FROM media.storage_profile ORDER BY id`).Scan(&profiles).Error; err != nil {
 		return "", err
 	}
 	for _, p := range profiles {

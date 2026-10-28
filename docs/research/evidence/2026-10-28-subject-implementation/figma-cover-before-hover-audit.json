@@ -1,0 +1,155 @@
+{
+  "screenFrames": 77,
+  "targetCount": 1508,
+  "uniqueTargetCount": 87,
+  "missingTargets": [],
+  "sharedCardCount": 43,
+  "badRatios": [],
+  "unexpectedMobileCreateComponents": [],
+  "mobileGrids": [
+    {
+      "id": "2749:44551",
+      "layout": "VERTICAL",
+      "children": [
+        {
+          "id": "2749:44552",
+          "name": "Subject card / 海边香氛",
+          "w": 358,
+          "h": 265.375
+        },
+        {
+          "id": "2749:44556",
+          "name": "Action / 新建主体",
+          "w": 358,
+          "h": 44
+        }
+      ]
+    },
+    {
+      "id": "2798:42347",
+      "layout": "VERTICAL",
+      "children": [
+        {
+          "id": "2798:42348",
+          "name": "Subject card / 海边香氛",
+          "w": 358,
+          "h": 265.375
+        },
+        {
+          "id": "2798:42349",
+          "name": "Action / 新建主体",
+          "w": 358,
+          "h": 44
+        }
+      ]
+    },
+    {
+      "id": "2798:42750",
+      "layout": "VERTICAL",
+      "children": [
+        {
+          "id": "2798:42751",
+          "name": "Subject card / 海边香氛",
+          "w": 358,
+          "h": 265.375
+        },
+        {
+          "id": "2798:42752",
+          "name": "Action / 新建主体",
+          "w": 358,
+          "h": 44
+        }
+      ]
+    },
+    {
+      "id": "2807:40474",
+      "layout": "VERTICAL",
+      "children": [
+        {
+          "id": "2807:40475",
+          "name": "Subject card / 海边香氛",
+          "w": 358,
+          "h": 265.375
+        },
+        {
+          "id": "2807:40476",
+          "name": "Action / 新建主体",
+          "w": 358,
+          "h": 44
+        }
+      ]
+    },
+    {
+      "id": "2807:40651",
+      "layout": "VERTICAL",
+      "children": [
+        {
+          "id": "2807:40652",
+          "name": "Subject card / 海边香氛",
+          "w": 358,
+          "h": 265.375
+        },
+        {
+          "id": "2807:40653",
+          "name": "Action / 新建主体",
+          "w": 358,
+          "h": 44
+        }
+      ]
+    },
+    {
+      "id": "2807:40529",
+      "layout": "VERTICAL",
+      "children": [
+        {
+          "id": "2807:40530",
+          "name": "Subject card / 海边香氛",
+          "w": 358,
+          "h": 265.375
+        },
+        {
+          "id": "2807:40531",
+          "name": "Action / 新建主体",
+          "w": 358,
+          "h": 44
+        }
+      ]
+    },
+    {
+      "id": "2807:40593",
+      "layout": "VERTICAL",
+      "children": [
+        {
+          "id": "2807:40594",
+          "name": "Subject card / 海边香氛",
+          "w": 358,
+          "h": 265.375
+        },
+        {
+          "id": "2807:40595",
+          "name": "Action / 新建主体",
+          "w": 358,
+          "h": 44
+        }
+      ]
+    },
+    {
+      "id": "2809:40407",
+      "layout": "VERTICAL",
+      "children": [
+        {
+          "id": "2809:40408",
+          "name": "Subject card / 海边香氛",
+          "w": 358,
+          "h": 265.375
+        },
+        {
+          "id": "2809:40409",
+          "name": "Action / 新建主体",
+          "w": 358,
+          "h": 44
+        }
+      ]
+    }
+  ]
+}

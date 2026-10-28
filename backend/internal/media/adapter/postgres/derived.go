@@ -44,14 +44,22 @@ func (s *Store) StoreDerived(ctx context.Context, actor identityapp.Principal, a
 		if asset.Origin != domain.OriginSystem || asset.Status != domain.StatusProcessing || asset.ModerationStatus != domain.ModerationPending {
 			return domain.ErrInvalidMediaAsset
 		}
-		if err := tx.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,width,height,duration_ms,fps,audio_channels,codec,moderation_status,moderation_detail,revision,create_time,update_time) VALUES(?,?,?,'system','processing',?,?,?,?,?,?,?,?,?,?,?,'pending','{}'::jsonb,1,?,?)`, asset.ID, asset.ProjectID, asset.Kind, asset.ObjectKey, asset.FileName, asset.MimeType, asset.ByteSize, asset.SHA256, asset.Width, asset.Height, asset.DurationMS, asset.FPS, asset.AudioChannels, asset.Codec, asset.CreateTime, asset.UpdateTime).Error; err != nil {
+		row := map[string]any{"id": asset.ID, "project_id": asset.ProjectID, "kind": string(asset.Kind), "origin": "system", "status": "processing", "object_key": asset.ObjectKey, "file_name": asset.FileName, "mime_type": asset.MimeType, "byte_size": asset.ByteSize, "sha256": asset.SHA256, "width": asset.Width, "height": asset.Height, "duration_ms": asset.DurationMS, "fps": asset.FPS, "audio_channels": asset.AudioChannels, "codec": asset.Codec, "moderation_status": "pending", "moderation_detail": gorm.Expr("'{}'::jsonb"), "revision": 1, "create_time": asset.CreateTime, "update_time": asset.UpdateTime}
+		if asset.ObjectLocation != nil {
+			row["object_location_id"] = asset.ObjectLocation.ID
+		}
+		if err := tx.Table("media.media_asset").Create(row).Error; err != nil {
 			return fmt.Errorf("store derived media: %w", err)
 		}
 		for _, r := range renditions {
 			if r.Validate() != nil || r.MediaAssetID != asset.ID {
 				return domain.ErrInvalidRendition
 			}
-			if err := tx.Exec(`INSERT INTO media.rendition(id,media_asset_id,kind,object_key,width,height,byte_size,create_time,update_time) VALUES(?,?,?,?,?,?,?,?,?)`, r.ID, r.MediaAssetID, r.Kind, r.ObjectKey, r.Width, r.Height, r.ByteSize, r.CreateTime, r.UpdateTime).Error; err != nil {
+			row := map[string]any{"id": r.ID, "media_asset_id": r.MediaAssetID, "kind": string(r.Kind), "object_key": r.ObjectKey, "width": r.Width, "height": r.Height, "byte_size": r.ByteSize, "create_time": r.CreateTime, "update_time": r.UpdateTime}
+			if r.ObjectLocation != nil {
+				row["object_location_id"] = r.ObjectLocation.ID
+			}
+			if err := tx.Table("media.rendition").Create(row).Error; err != nil {
 				return err
 			}
 		}

@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
@@ -24,9 +25,10 @@ type DepthMediaFactory func(*gorm.DB) application.DepthDerivedMedia
 
 // DepthStore owns native depth facts and consumes the existing canvas/media ports.
 type DepthStore struct {
-	db     *gorm.DB
-	source TranscriptionSourceFactory
-	media  DepthMediaFactory
+	db      *gorm.DB
+	source  TranscriptionSourceFactory
+	media   DepthMediaFactory
+	storage StorageFactory
 }
 
 // NewDepthStore injects transaction-bound saved source and pending media owners.
@@ -150,23 +152,23 @@ func (s *DepthStore) authorize(ctx context.Context, tx *gorm.DB, actor identitya
 	}
 	return normalize(s.media(tx).AuthorizeProject(ctx, actor, project, write))
 }
-func (s *DepthStore) validateSource(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, r depthRow) error {
+func (s *DepthStore) validateSource(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, r depthRow) ([]mediadomain.MediaAsset, error) {
 	f, err := depthFrozen(r)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	assets, err := s.media(tx).Sources(ctx, actor, r.ProjectID, []uuid.UUID{f.Input.AssetID})
 	if err != nil {
-		return normalize(err)
+		return nil, normalize(err)
 	}
 	if len(assets) != 1 {
-		return application.ErrConflict
+		return nil, application.ErrConflict
 	}
 	a := assets[0]
-	if a.Kind != "video" || a.Revision != f.Input.Revision || a.SHA256 == nil || *a.SHA256 != f.Input.SHA256 || a.ObjectKey != f.Input.ObjectKey || a.ByteSize != f.Input.ByteSize || a.MimeType != f.Input.MIMEType {
-		return application.ErrConflict
+	if a.ID != f.Input.AssetID || a.ProjectID != r.ProjectID || a.Kind != "video" || a.Revision != f.Input.Revision || a.SHA256 == nil || *a.SHA256 != f.Input.SHA256 || a.ObjectKey != f.Input.ObjectKey || a.ByteSize != f.Input.ByteSize || a.MimeType != f.Input.MIMEType {
+		return nil, application.ErrConflict
 	}
-	return nil
+	return assets, nil
 }
 func depthCommandLock(tx *gorm.DB, actor, key uuid.UUID) error {
 	if actor == uuid.Nil || key == uuid.Nil {
@@ -267,6 +269,9 @@ func (s *DepthStore) Create(ctx context.Context, actor identityapp.Principal, pr
 		sha := sha256.Sum256(body)
 		now := time.Now().UTC().Truncate(time.Microsecond)
 		job = domain.DepthJob{ID: uuid.New(), ProjectID: project, Source: domain.Source{CanvasID: in.CanvasID, NodeID: in.NodeID, Revision: in.Revision}, SourceAssetID: a.ID, SourceAssetRevision: a.Revision, SourceSHA256: *a.SHA256, ProfileID: domain.DepthProfileID, Status: domain.DepthQueued, Stage: "queued", Attempt: 1, Revision: 1, CreatedAt: now, UpdatedAt: now}
+		if err := pinTool(ctx, tx, s.storage, "depth", project, job.ID, job.Attempt); err != nil {
+			return err
+		}
 		if err := tx.Exec(`INSERT INTO mediatool.depth_job(id,project_id,org_id,actor_id,actor_role,canvas_id,node_id,source_revision,source_asset_id,source_asset_revision,source_sha256,profile_id,frozen,frozen_sha256,status,stage,attempt,revision,process_state,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?::jsonb,?,'queued','queued',1,1,'none',?,?)`, job.ID, project, actor.OrgID, actor.ID, nil, in.CanvasID, in.NodeID, in.Revision, a.ID, a.Revision, *a.SHA256, domain.DepthProfileID, string(body), hex.EncodeToString(sha[:]), now, now).Error; err != nil {
 			return err
 		}

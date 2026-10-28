@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
@@ -26,7 +25,7 @@ import (
 )
 
 // Run executes an explicit maintenance command. It never runs a migration, edits
-// YAML or infers the original bucket from the currently selected write profile.
+// environment configuration or infers the original bucket from the currently selected write profile.
 func Run(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -38,36 +37,28 @@ func Run(args []string) error {
 // ordinary application DSN. Errors do not print DSNs, credentials or signed URLs.
 func Execute(ctx context.Context, args []string, output io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: glowloom storage validate|register|bind-legacy|backfill|backfill-work|reconcile-work|probe|record-deployment|activate --config <path>")
+		return errors.New("usage: glowloom storage validate|register|prove-empty|finalize|bind-legacy|backfill|backfill-work|reconcile-work|probe|record-deployment|activate")
 	}
 	command := args[0]
 	switch command {
-	case "validate", "register", "bind-legacy", "backfill", "backfill-work", "reconcile-work", "probe", "probe-cleanup", "accept-bucket", "record-deployment", "activate":
+	case "validate", "register", "bind-legacy", "backfill", "backfill-work", "reconcile-work", "probe", "probe-cleanup", "accept-bucket", "record-deployment", "activate", "prove-empty", "finalize":
 	default:
 		return errors.New("unknown storage command")
 	}
 	flags := flag.NewFlagSet("storage "+command, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	path := flags.String("config", "", "reviewed storage YAML")
-	environment := flags.String("env", "prod", "local|staging|prod")
 	profile := flags.String("profile", "", "explicit resource profile")
 	expected := flags.String("expected-revision", "", "CAS revision; empty only for first activation")
 	evidence := flags.String("evidence-sha256", "", "reviewed external evidence digest")
 	probeID := flags.String("probe-id", "", "persisted failed diagnostic identity")
 	readKey := flags.String("read-key", "", "retained sentinel for read-only probe")
 	batch := flags.Int("batch", 100, "maximum historical objects to verify")
-	if flags.Parse(args[1:]) != nil || flags.NArg() != 0 || *path == "" {
-		return errors.New("invalid storage arguments")
-	}
-	if *environment == "production" {
-		*environment = "prod"
-	}
-	if *environment != "local" && *environment != "staging" && *environment != "prod" {
+	if flags.Parse(args[1:]) != nil || flags.NArg() != 0 {
 		return errors.New("invalid storage arguments")
 	}
 	visited := make(map[string]bool)
 	flags.Visit(func(f *flag.Flag) { visited[f.Name] = true })
-	allowed := map[string]bool{"config": true, "env": true}
+	allowed := map[string]bool{}
 	switch command {
 	case "bind-legacy", "accept-bucket":
 		allowed["profile"], allowed["evidence-sha256"] = true, true
@@ -90,10 +81,14 @@ func Execute(ctx context.Context, args []string, output io.Writer) error {
 	if command == "activate" && !visited["expected-revision"] || (command == "bind-legacy" || command == "accept-bucket" || command == "probe") && *profile == "" || (command == "backfill" || command == "backfill-work" || command == "reconcile-work") && (*batch < 1 || *batch > 1000) {
 		return errors.New("required storage precondition missing")
 	}
-	cfg, err := config.LoadObjectStorage(*path, *environment)
+	process, err := config.Load()
 	if err != nil {
 		return err
 	}
+	if process.ObjectStorage == nil {
+		return errors.New("native object storage environment is incomplete")
+	}
+	cfg := *process.ObjectStorage
 	in, err := Configuration(cfg, *expected)
 	if err != nil {
 		return err
@@ -102,10 +97,7 @@ func Execute(ctx context.Context, args []string, output io.Writer) error {
 	if command == "validate" {
 		return encode(struct{ Revision, ConfigSHA256, DefaultWriteProfile string }{in.Revision, in.ConfigSHA256, in.DefaultWriteProfile})
 	}
-	dsn, configured := os.LookupEnv("GLOWLOOM_STORAGE_MAINTENANCE_DSN")
-	if !configured {
-		dsn = os.Getenv("LV_STORAGE_MAINTENANCE_DSN")
-	}
+	dsn := process.StorageMaintenanceDSN
 	if dsn == "" {
 		return errors.New("GLOWLOOM_STORAGE_MAINTENANCE_DSN is required for this maintenance command")
 	}
@@ -120,6 +112,14 @@ func Execute(ctx context.Context, args []string, output io.Writer) error {
 		profiles = append(profiles, p.StorageProfile)
 	}
 	switch command {
+	case "prove-empty":
+		proof, proofErr := routes.ProveEmptyStorageDeployment(ctx, in.ConfigSHA256)
+		if proofErr != nil {
+			return proofErr
+		}
+		return encode(struct{ ConfigSHA256, EvidenceSHA256 string }{in.ConfigSHA256, proof})
+	case "finalize":
+		err = routes.FinalizeStorageSchema(ctx, in.ConfigSHA256)
 	case "probe-cleanup":
 		id, parseErr := uuid.Parse(*probeID)
 		if parseErr != nil {

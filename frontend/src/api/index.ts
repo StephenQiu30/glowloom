@@ -16,6 +16,7 @@ import * as projectCopies from "./projectCopies";
 import * as projects from "./projects";
 import * as bible from "./bible";
 import * as promptEditor from "./promptEditor";
+import * as subjects from "./subjects";
 import * as workspace from "./workspace";
 import * as works from "./works";
 export default {
@@ -33,6 +34,7 @@ export default {
   projects,
   bible,
   promptEditor,
+  subjects,
   workspace,
   works,
 };

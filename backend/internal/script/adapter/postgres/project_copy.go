@@ -22,6 +22,7 @@ type ProjectCopyStore struct {
 	db         *gorm.DB
 	access     ProjectCopyAccessFactory
 	characters ProjectCopyCharacterFactory
+	locations  SourceObjectLocationFactory
 }
 
 // NewProjectCopyStore injects caller-owned SQL for Freeze/Register or a pool for transfer.
@@ -110,18 +111,31 @@ func (s *ProjectCopyStore) Freeze(ctx context.Context, actor identityapp.Princip
 		if err != nil {
 			return err
 		}
+		var storageID *uuid.UUID
+		if s.locations != nil && len(manifest.Objects) > 0 {
+			facts := make([]domain.ObjectFact, len(manifest.Objects))
+			for i, o := range manifest.Objects {
+				facts[i] = o.Target
+			}
+			id, bound, err := s.locations(tx).Admit(ctx, b.TargetProjectID, result.ID, facts)
+			if err != nil {
+				return err
+			}
+			storageID = &id
+			bindCopyTargets(&manifest, bound)
+		}
 		data, err := copyManifestJSON(manifest)
 		if err != nil {
 			return err
 		}
-		if err := copyInsert(tx, "script.copy_snapshot", map[string]any{"id": result.ID, "job_id": b.JobID, "org_id": b.OrgID, "source_project_id": b.SourceProjectID, "target_project_id": b.TargetProjectID, "manifest": gorm.Expr("?::jsonb", string(data)), "manifest_sha256": result.ManifestSHA256, "content_sha256": result.ContentSHA256, "created_at": at.UTC()}); err != nil {
+		if err := copyInsert(tx, "script.copy_snapshot", map[string]any{"id": result.ID, "job_id": b.JobID, "org_id": b.OrgID, "source_project_id": b.SourceProjectID, "target_project_id": b.TargetProjectID, "manifest": gorm.Expr("?::jsonb", string(data)), "manifest_sha256": result.ManifestSHA256, "content_sha256": result.ContentSHA256, "created_at": at.UTC(), "storage_intent_id": storageID}); err != nil {
 			return fmt.Errorf("freeze complete script history: %w", err)
 		}
 		for _, object := range manifest.Objects {
-			if err := copyInsert(tx, "script.copy_object_intent", map[string]any{"snapshot_id": result.ID, "source_key": object.Source.Key, "target_key": object.Target.Key, "sha256": object.Source.SHA256, "byte_size": object.Source.ByteSize, "mime": object.Source.MIME}); err != nil {
+			if err := copyInsert(tx, "script.copy_object_intent", map[string]any{"snapshot_id": result.ID, "source_key": object.Source.Key, "target_key": object.Target.Key, "sha256": object.Source.SHA256, "byte_size": object.Source.ByteSize, "mime": object.Source.MIME, "source_location_id": nullableLocation(object.Source.LocationID), "target_location_id": nullableLocation(object.Target.LocationID)}); err != nil {
 				return err
 			}
-			if err := copyInsert(tx, "script.copy_object_state", map[string]any{"target_key": object.Target.Key, "put_started": false, "confirmed": false, "removed": false, "updated_at": at.UTC()}); err != nil {
+			if err := copyInsert(tx, "script.copy_object_state", map[string]any{"target_key": object.Target.Key, "put_started": false, "confirmed": false, "removed": false, "updated_at": at.UTC(), "target_location_id": nullableLocation(object.Target.LocationID)}); err != nil {
 				return err
 			}
 		}
@@ -156,6 +170,9 @@ func readCopyManifest(tx *gorm.DB, b application.ProjectCopyBinding, snapshot ap
 	if m.Binding != b || proof != snapshot {
 		return m, application.ErrObjectMismatch
 	}
+	if err := hydrateCopyLocations(tx, &m, snapshot); err != nil {
+		return m, err
+	}
 	return m, nil
 }
 
@@ -177,7 +194,7 @@ func exactCopyObject(tx *gorm.DB, b application.ProjectCopyBinding, snapshot app
 		ByteSize                       int64
 		PutStarted, Confirmed, Removed bool
 	}
-	read := tx.Raw(`SELECT i.sha256,i.byte_size,i.mime,s.put_started,s.confirmed,s.removed FROM script.copy_object_intent i JOIN script.copy_object_state s ON s.target_key=i.target_key WHERE i.snapshot_id=? AND i.target_key=? FOR UPDATE OF s`, snapshot.ID, fact.Key).Scan(&row)
+	read := tx.Raw(`SELECT i.sha256,i.byte_size,i.mime,s.put_started,s.confirmed,s.removed FROM script.copy_object_intent i JOIN script.copy_object_state s ON s.target_key=i.target_key AND s.target_location_id IS NOT DISTINCT FROM i.target_location_id WHERE i.snapshot_id=? AND i.target_key=? AND i.target_location_id IS NOT DISTINCT FROM ?::uuid FOR UPDATE OF s`, snapshot.ID, fact.Key, nullableLocation(fact.LocationID)).Scan(&row)
 	if read.Error != nil {
 		return copyObjectState{}, read.Error
 	}
@@ -197,7 +214,10 @@ func (s *ProjectCopyStore) BeginObject(ctx context.Context, actor identityapp.Pr
 		if state.Removed {
 			return application.ErrConflict
 		}
-		return exactlyOne(tx.Exec(`UPDATE script.copy_object_state SET put_started=true,updated_at=? WHERE target_key=?`, time.Now().UTC(), fact.Key))
+		if err := s.copyLocationAction(ctx, tx, snapshot, fact, "begin"); err != nil {
+			return err
+		}
+		return exactlyOne(tx.Exec(`UPDATE script.copy_object_state SET put_started=true,updated_at=? WHERE target_key=? AND target_location_id IS NOT DISTINCT FROM ?::uuid`, time.Now().UTC(), fact.Key, nullableLocation(fact.LocationID)))
 	})
 }
 
@@ -211,7 +231,10 @@ func (s *ProjectCopyStore) CompleteObject(ctx context.Context, actor identityapp
 		if !state.PutStarted || state.Removed {
 			return application.ErrConflict
 		}
-		return exactlyOne(tx.Exec(`UPDATE script.copy_object_state SET confirmed=true,updated_at=? WHERE target_key=?`, time.Now().UTC(), fact.Key))
+		if err := s.copyLocationAction(ctx, tx, snapshot, fact, "confirm"); err != nil {
+			return err
+		}
+		return exactlyOne(tx.Exec(`UPDATE script.copy_object_state SET confirmed=true,updated_at=? WHERE target_key=? AND target_location_id IS NOT DISTINCT FROM ?::uuid`, time.Now().UTC(), fact.Key, nullableLocation(fact.LocationID)))
 	})
 }
 func copyObjectsComplete(tx *gorm.DB, snapshot application.ProjectCopySnapshot, removed bool) error {
@@ -220,7 +243,7 @@ func copyObjectsComplete(tx *gorm.DB, snapshot application.ProjectCopySnapshot, 
 	if removed {
 		predicate = "removed"
 	}
-	err := tx.Raw(`SELECT count(*) AS total,count(*) FILTER(WHERE `+predicate+`) AS complete FROM script.copy_object_intent i JOIN script.copy_object_state s ON s.target_key=i.target_key WHERE i.snapshot_id=?`, snapshot.ID).Scan(&row).Error
+	err := tx.Raw(`SELECT count(*) AS total,count(*) FILTER(WHERE `+predicate+`) AS complete FROM script.copy_object_intent i JOIN script.copy_object_state s ON s.target_key=i.target_key AND s.target_location_id IS NOT DISTINCT FROM i.target_location_id WHERE i.snapshot_id=?`, snapshot.ID).Scan(&row).Error
 	if err != nil {
 		return err
 	}
@@ -253,6 +276,23 @@ func (s *ProjectCopyStore) Register(ctx context.Context, actor identityapp.Princ
 			}
 			if actual.State != nil || len(actual.Sources)+len(actual.Versions)+len(actual.Episodes)+len(actual.Structures) != 0 {
 				return application.ErrConflict
+			}
+			var storageRow struct{ StorageIntentID *uuid.UUID }
+			if err := tx.Raw(`SELECT storage_intent_id FROM script.copy_snapshot WHERE id=?`, snapshot.ID).Scan(&storageRow).Error; err != nil {
+				return err
+			}
+			storageID := storageRow.StorageIntentID
+			if storageID != nil {
+				if s.locations == nil || s.locations(tx) == nil {
+					return application.ErrUnavailable
+				}
+				facts := make([]domain.ObjectFact, len(m.Objects))
+				for i, o := range m.Objects {
+					facts[i] = o.Target
+				}
+				if err := s.locations(tx).Accept(ctx, *storageID, facts); err != nil {
+					return err
+				}
 			}
 			if err := insertCopyHistory(tx, m.Target); err != nil {
 				return err
@@ -327,7 +367,10 @@ func (s *ProjectCopyStore) BeginCleanupObject(ctx context.Context, actor identit
 		if _, err := exactCopyObject(tx, b, snapshot, fact); err != nil {
 			return err
 		}
-		return exactlyOne(tx.Exec(`UPDATE script.copy_object_state SET confirmed=true,updated_at=? WHERE target_key=?`, time.Now().UTC(), fact.Key))
+		if err := s.copyLocationAction(ctx, tx, snapshot, fact, "remove"); err != nil {
+			return err
+		}
+		return exactlyOne(tx.Exec(`UPDATE script.copy_object_state SET confirmed=true,updated_at=? WHERE target_key=? AND target_location_id IS NOT DISTINCT FROM ?::uuid`, time.Now().UTC(), fact.Key, nullableLocation(fact.LocationID)))
 	})
 }
 
@@ -341,7 +384,10 @@ func (s *ProjectCopyStore) CompleteCleanupObject(ctx context.Context, actor iden
 		if state.PutStarted && !state.Confirmed {
 			return application.ErrNeedsReconciliation
 		}
-		return exactlyOne(tx.Exec(`UPDATE script.copy_object_state SET removed=true,updated_at=? WHERE target_key=?`, time.Now().UTC(), fact.Key))
+		if err := s.copyLocationAction(ctx, tx, snapshot, fact, "removed"); err != nil {
+			return err
+		}
+		return exactlyOne(tx.Exec(`UPDATE script.copy_object_state SET removed=true,updated_at=? WHERE target_key=? AND target_location_id IS NOT DISTINCT FROM ?::uuid`, time.Now().UTC(), fact.Key, nullableLocation(fact.LocationID)))
 	})
 }
 

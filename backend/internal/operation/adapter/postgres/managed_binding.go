@@ -47,7 +47,7 @@ func freezeManagedRelease(tx *gorm.DB, op domain.Operation) error {
 // admitManagedDispatch runs after the operation is locked and before claiming
 // the one paid send. Catalog lock ordering matches release activation. A
 // completed disable wins over this claim; an already claimed call is never sent again.
-func admitManagedDispatch(tx *gorm.DB, identity application.ProviderDispatchIdentity) error {
+func (s *Store) admitManagedDispatch(tx *gorm.DB, identity application.ProviderDispatchIdentity) error {
 	var row struct {
 		AdapterKey          string
 		ProviderID, ModelID uuid.UUID
@@ -112,6 +112,12 @@ func admitManagedDispatch(tx *gorm.DB, identity application.ProviderDispatchIden
      WHERE key.provider_id=?`, row.ProviderID).Scan(&counts).Error; err != nil {
 		return err
 	}
+	var voice struct{ Active, Recent int64 }
+	if err := tx.Raw(`SELECT count(*) FILTER(WHERE status IN ('dispatching','unknown')) AS active,count(*) FILTER(WHERE dispatch_started_at>now()-interval '1 minute') AS recent FROM subject.voice_job WHERE provider_id=?`, row.ProviderID).Scan(&voice).Error; err != nil {
+		return err
+	}
+	counts.Active += voice.Active
+	counts.Recent += voice.Recent
 	if counts.Active >= connection.ConcurrencyLimit || counts.Recent >= connection.RateLimitPerMin {
 		return application.ErrManagedCapacity
 	}
@@ -132,7 +138,7 @@ func admitManagedDispatch(tx *gorm.DB, identity application.ProviderDispatchIden
 	if r.RowsAffected != 1 {
 		return application.ErrWorkflowModelUnavailable
 	}
-	if err := checkWorkflowInputsForSubmission(tx, identity.OperationID, identity.ProjectID); err != nil {
+	if err := s.checkWorkflowInputsForSubmission(tx, identity.OperationID, identity.ProjectID); err != nil {
 		return err
 	}
 	// This table is insert-only to the application role. No key rotation can rewrite it.

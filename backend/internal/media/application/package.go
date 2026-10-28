@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"time"
 
 	"github.com/google/uuid"
@@ -80,10 +81,12 @@ func (c PackageControl) Validate() error {
 
 // PackageObject is immutable, private write intent before any network write.
 type PackageObject struct {
-	Key      string `json:"key"`
-	MIMEType string `json:"mime_type"`
-	SHA256   string `json:"sha256"`
-	ByteSize int64  `json:"byte_size"`
+	Location        *domain.ObjectLocation `json:"-"`
+	StorageIntentID uuid.UUID              `json:"-"`
+	Key             string                 `json:"key"`
+	MIMEType        string                 `json:"mime_type"`
+	SHA256          string                 `json:"sha256"`
+	ByteSize        int64                  `json:"byte_size"`
 }
 
 // PackagePlan contains only media-owned target facts and complete byte intents.
@@ -135,4 +138,34 @@ func packageEqual(a, b any) bool {
 	x, xe := json.Marshal(a)
 	y, ye := json.Marshal(b)
 	return xe == nil && ye == nil && string(x) == string(y)
+}
+
+// LocatedPackageObjects keeps private technical identity outside portable ZIP manifests.
+type LocatedPackageObjects interface {
+	GetPackage(context.Context, PackageObject) (io.ReadCloser, error)
+	PutPackage(context.Context, PackageObject, io.Reader) error
+	ExistsPackage(context.Context, PackageObject) (bool, error)
+	RemovePackage(context.Context, PackageObject) error
+	ConfirmPackageObject(context.Context, PackageObject) error
+	ConfirmPackageRemoval(context.Context, PackageObject) error
+}
+
+func packageContentEqual(a, b PackagePlan) bool {
+	a.Assets = append([]domain.MediaAsset{}, a.Assets...)
+	b.Assets = append([]domain.MediaAsset{}, b.Assets...)
+	a.Renditions = append([]domain.Rendition{}, a.Renditions...)
+	b.Renditions = append([]domain.Rendition{}, b.Renditions...)
+	for i := range a.Assets {
+		a.Assets[i].ObjectLocation = nil
+	}
+	for i := range b.Assets {
+		b.Assets[i].ObjectLocation = nil
+	}
+	for i := range a.Renditions {
+		a.Renditions[i].ObjectLocation = nil
+	}
+	for i := range b.Renditions {
+		b.Renditions[i].ObjectLocation = nil
+	}
+	return packageEqual(a, b)
 }

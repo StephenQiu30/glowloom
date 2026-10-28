@@ -14,10 +14,11 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
-const sourceColumns = `id,org_id,project_id,source_lineage_id AS lineage_id,previous_source_id AS previous_id,source_revision AS revision,origin,source_kind AS kind,title,status,rights_actor_id,rights_confirmed_at,media_asset_id,media_revision,media_sha256,original_key,original_sha256,original_bytes,original_mime,rich_key,rich_sha256,rich_bytes,content_hash,char_count,provenance::text AS provenance,created_at`
+const sourceColumns = `id,org_id,project_id,source_lineage_id AS lineage_id,previous_source_id AS previous_id,source_revision AS revision,origin,source_kind AS kind,title,status,rights_actor_id,rights_confirmed_at,media_asset_id,media_revision,media_sha256,original_location_id,rich_location_id,original_key,original_sha256,original_bytes,original_mime,rich_key,rich_sha256,rich_bytes,content_hash,char_count,provenance::text AS provenance,created_at`
 
 type sourceRow struct {
 	ID, OrgID, ProjectID, LineageID, RightsActorID                             uuid.UUID
+	OriginalLocationID, RichLocationID                                         *uuid.UUID
 	PreviousID, MediaAssetID                                                   *uuid.UUID
 	Revision                                                                   int64
 	MediaRevision                                                              *int64
@@ -31,8 +32,8 @@ type sourceRow struct {
 
 func (r sourceRow) record() (domain.SourceRecord, error) {
 	result := domain.SourceRecord{ID: r.ID, OrgID: r.OrgID, ProjectID: r.ProjectID, LineageID: r.LineageID, RightsActorID: r.RightsActorID, PreviousID: r.PreviousID, MediaAssetID: r.MediaAssetID, Revision: r.Revision, MediaRevision: r.MediaRevision, MediaSHA256: r.MediaSHA256, Origin: r.Origin, Kind: r.Kind, Title: r.Title, Status: r.Status, ContentHash: r.ContentHash, CharCount: r.CharCount, RightsConfirmedAt: r.RightsConfirmedAt, CreatedAt: r.CreatedAt}
-	result.Original = domain.ObjectFact{Key: r.OriginalKey, SHA256: r.OriginalSHA256, ByteSize: r.OriginalBytes, MIME: r.OriginalMime}
-	result.Rich = domain.ObjectFact{Key: r.RichKey, SHA256: r.RichSHA256, ByteSize: r.RichBytes, MIME: "application/json"}
+	result.Original = domain.ObjectFact{LocationID: locationValue(r.OriginalLocationID), Key: r.OriginalKey, SHA256: r.OriginalSHA256, ByteSize: r.OriginalBytes, MIME: r.OriginalMime}
+	result.Rich = domain.ObjectFact{LocationID: locationValue(r.RichLocationID), Key: r.RichKey, SHA256: r.RichSHA256, ByteSize: r.RichBytes, MIME: "application/json"}
 	if err := json.Unmarshal([]byte(r.Provenance), &result.Provenance); err != nil {
 		return domain.SourceRecord{}, application.ErrUnavailable
 	}
@@ -41,9 +42,10 @@ func (r sourceRow) record() (domain.SourceRecord, error) {
 	return result, nil
 }
 
-const versionColumns = `id,org_id,project_id,version_no,to_json(source_ids)::text AS source_ids,source_spans::text AS spans,text_key,text_sha256,text_bytes,rich_key,rich_sha256,rich_bytes,content_hash,document_sha256,source_manifest_sha256,char_count,created_at`
+const versionColumns = `id,org_id,project_id,version_no,to_json(source_ids)::text AS source_ids,source_spans::text AS spans,text_location_id,rich_location_id,text_key,text_sha256,text_bytes,rich_key,rich_sha256,rich_bytes,content_hash,document_sha256,source_manifest_sha256,char_count,created_at`
 
 type versionRow struct {
+	TextLocationID, RichLocationID                             *uuid.UUID
 	ID, OrgID, ProjectID                                       uuid.UUID
 	VersionNo                                                  int64
 	ContentHash, DocumentSHA256, SourceManifestSHA256          string
@@ -61,8 +63,8 @@ func (r versionRow) record() (domain.ScriptVersion, error) {
 	if err := json.Unmarshal([]byte(r.Spans), &result.Spans); err != nil {
 		return domain.ScriptVersion{}, application.ErrUnavailable
 	}
-	result.Text = domain.ObjectFact{Key: r.TextKey, SHA256: r.TextSHA256, ByteSize: r.TextBytes, MIME: "text/plain; charset=utf-8"}
-	result.Rich = domain.ObjectFact{Key: r.RichKey, SHA256: r.RichSHA256, ByteSize: r.RichBytes, MIME: "application/json"}
+	result.Text = domain.ObjectFact{LocationID: locationValue(r.TextLocationID), Key: r.TextKey, SHA256: r.TextSHA256, ByteSize: r.TextBytes, MIME: "text/plain; charset=utf-8"}
+	result.Rich = domain.ObjectFact{LocationID: locationValue(r.RichLocationID), Key: r.RichKey, SHA256: r.RichSHA256, ByteSize: r.RichBytes, MIME: "application/json"}
 	result.CreatedAt = result.CreatedAt.UTC()
 	return result, nil
 }
@@ -128,7 +130,7 @@ func insertSource(ctx context.Context, tx *gorm.DB, r domain.SourceRecord) error
 	if err != nil {
 		return err
 	}
-	return exactlyOne(tx.WithContext(ctx).Exec(`INSERT INTO script.script_source(id,org_id,project_id,source_lineage_id,previous_source_id,source_revision,origin,source_kind,title,status,rights_actor_id,rights_confirmed_at,media_asset_id,media_revision,media_sha256,original_key,original_sha256,original_bytes,original_mime,rich_key,rich_sha256,rich_bytes,content_hash,char_count,provenance,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?::jsonb,?)`, r.ID, r.OrgID, r.ProjectID, r.LineageID, r.PreviousID, r.Revision, r.Origin, r.Kind, r.Title, r.Status, r.RightsActorID, r.RightsConfirmedAt, r.MediaAssetID, r.MediaRevision, r.MediaSHA256, r.Original.Key, r.Original.SHA256, r.Original.ByteSize, r.Original.MIME, r.Rich.Key, r.Rich.SHA256, r.Rich.ByteSize, r.ContentHash, r.CharCount, string(provenance), r.CreatedAt))
+	return exactlyOne(tx.WithContext(ctx).Exec(`INSERT INTO script.script_source(id,org_id,project_id,source_lineage_id,previous_source_id,source_revision,origin,source_kind,title,status,rights_actor_id,rights_confirmed_at,media_asset_id,media_revision,media_sha256,original_location_id,rich_location_id,original_key,original_sha256,original_bytes,original_mime,rich_key,rich_sha256,rich_bytes,content_hash,char_count,provenance,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?::jsonb,?)`, r.ID, r.OrgID, r.ProjectID, r.LineageID, r.PreviousID, r.Revision, r.Origin, r.Kind, r.Title, r.Status, r.RightsActorID, r.RightsConfirmedAt, r.MediaAssetID, r.MediaRevision, r.MediaSHA256, nullableLocation(r.Original.LocationID), nullableLocation(r.Rich.LocationID), r.Original.Key, r.Original.SHA256, r.Original.ByteSize, r.Original.MIME, r.Rich.Key, r.Rich.SHA256, r.Rich.ByteSize, r.ContentHash, r.CharCount, string(provenance), r.CreatedAt))
 }
 
 func insertVersion(tx *gorm.DB, v domain.ScriptVersion, c domain.SplitSet) error {
@@ -140,7 +142,7 @@ func insertVersion(tx *gorm.DB, v domain.ScriptVersion, c domain.SplitSet) error
 	if err != nil {
 		return err
 	}
-	if err := exactlyOne(tx.Exec(`INSERT INTO script.script_version(id,org_id,project_id,version_no,source_ids,source_spans,text_key,text_sha256,text_bytes,rich_key,rich_sha256,rich_bytes,content_hash,document_sha256,source_manifest_sha256,char_count,created_at) VALUES(?,?,?,?,ARRAY(SELECT jsonb_array_elements_text(?::jsonb)::uuid),?::jsonb,?,?,?,?,?,?,?,?,?,?,?)`, v.ID, v.OrgID, v.ProjectID, v.VersionNo, string(ids), string(spans), v.Text.Key, v.Text.SHA256, v.Text.ByteSize, v.Rich.Key, v.Rich.SHA256, v.Rich.ByteSize, v.ContentHash, v.DocumentSHA256, v.SourceManifestSHA256, v.CharCount, v.CreatedAt)); err != nil {
+	if err := exactlyOne(tx.Exec(`INSERT INTO script.script_version(id,org_id,project_id,version_no,source_ids,source_spans,text_location_id,rich_location_id,text_key,text_sha256,text_bytes,rich_key,rich_sha256,rich_bytes,content_hash,document_sha256,source_manifest_sha256,char_count,created_at) VALUES(?,?,?,?,ARRAY(SELECT jsonb_array_elements_text(?::jsonb)::uuid),?::jsonb,?,?,?,?,?,?,?,?,?,?,?,?,?)`, v.ID, v.OrgID, v.ProjectID, v.VersionNo, string(ids), string(spans), nullableLocation(v.Text.LocationID), nullableLocation(v.Rich.LocationID), v.Text.Key, v.Text.SHA256, v.Text.ByteSize, v.Rich.Key, v.Rich.SHA256, v.Rich.ByteSize, v.ContentHash, v.DocumentSHA256, v.SourceManifestSHA256, v.CharCount, v.CreatedAt)); err != nil {
 		return err
 	}
 	for i, id := range v.SourceIDs {

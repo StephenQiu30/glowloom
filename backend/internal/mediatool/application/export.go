@@ -106,9 +106,10 @@ type WorkID struct {
 
 // Work contains private inputs and the initiating workspace identity.
 type Work struct {
-	Job    domain.ExportJob
-	Actor  identityapp.Principal
-	Frozen domain.FrozenExport
+	Job          domain.ExportJob
+	Actor        identityapp.Principal
+	Frozen       domain.FrozenExport
+	SourceAssets []mediadomain.MediaAsset `json:"-"`
 }
 
 // Delivery is a committed outbox command, verified before Temporal delivery.

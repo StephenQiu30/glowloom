@@ -1,0 +1,350 @@
+Browser tab: 1980370698, Title: "即梦AI - 一站式AI创作平台", URL: "https://jimeng.jianying.com/ai-tool/home".
+0 AXWebArea 即梦AI - 一站式AI创作平台, URL: jimeng.jianying.com/ai-tool/home
+	1 container
+		2 container csr-root
+			3 container dreamina
+				4 container
+					5 text 00
+					6 text :
+					7 text 10
+					8 text :
+					9 text 59
+					10 text :
+					11 text 06
+					12 text ⚡Seedance 2.5低至￥0.177/秒｜年卡4.2折起，再赠2个月会员，最高每个席位连续3个月加赠5.2万积分
+				13 container
+					14 container
+						15 button 去首页
+						16 button (expanded) Description: 收起侧边栏, Secondary Actions: Collapse
+						17 container
+							18 button 创作
+								19 text 创作
+							20 button 探索
+								21 text 探索
+							22 button 资产
+								23 text 资产
+							24 button 主体
+								25 text 主体
+							26 button 短剧工作室
+								27 text 短剧工作室
+						28 container
+							29 container
+								30 button (expanded) 对话, Secondary Actions: Collapse
+								31 button 新建对话
+							32 text 暂无历史对话
+							33 container
+								34 button (expanded) 画布, Secondary Actions: Collapse
+								35 button 全部
+								36 button 新建画布
+							37 button 一致性调研-202610221 打开画布 更多
+								38 container
+									39 text 一致性调研-202610221
+									40 button 打开画布
+									41 button 更多
+							42 button 未命名画布 打开画布 更多
+								43 container
+									44 text 未命名画布
+									45 button 打开画布
+									46 button 更多
+							47 button 一致性调研-20261022 打开画布 更多
+								48 container
+									49 text 一致性调研-20261022
+									50 button 打开画布
+									51 button 更多
+							52 button 未命名画布 打开画布 更多
+								53 container
+									54 text 未命名画布
+									55 button 打开画布
+									56 button 更多
+					61 link Description: 企业服务, Value: jimeng.jianying.com/ai-tool/business
+					69 button 积分超市
+					62 container
+						63 button 消息中心
+						64 text 2
+					65 container
+						66 text 66 开会员 会员低至4.5折
+					67 container js-side-menu-entry-avatar-container
+					68 container dreamina-ui-configuration-content-wrapper
+						70 container
+							71 heading 你好，今天想要 创作 什么?, Value: 1
+								72 text 你好，今天想要 创作 什么?
+							73 container 创作类型
+								74 checkbox 生成, Value: 1
+								75 checkbox 画布, Value: 0
+							76 container
+								77 container
+									78 button 去查看
+								79 container 生成
+									80 container
+										81 button Description: 上传参考, ID: 101e5e31-4a03-443b-98ac-bf5b714996c2-reference-upload-0
+									82 container
+										83 button 移除 · 参考内容
+										84 text entry area (settable) Description: 提示词, Value: 主体调研测试-20261028
+
+
+											360 container
+												361 container
+													362 image
+													363 text 主体调研测试-20261028
+									91 container
+										92 combo box (collapsed) Description: 创作类型, Value: Agent 模式, Secondary Actions: Expand
+											93 text Agent 模式
+										94 button 自动
+										95 combo box (collapsed) Description: 技能, Secondary Actions: Expand
+											96 text 技能
+										97 button
+										98 button
+									99 button 生成
+								100 container 打开对话 · 推荐
+									157 container
+										158 button / 电影级长镜头运镜 New
+											159 text / 电影级长镜头运镜
+											160 text New
+										161 button / 创作分镜 New
+											162 text / 创作分镜
+											163 text New
+										164 button / 风格大师 New
+											165 text / 风格大师
+											166 text New
+										167 button / 叙事短片导演分镜 Hot
+											168 text / 叙事短片导演分镜
+											169 text Hot
+										170 button / 微表情导演 Hot
+											171 text / 微表情导演
+											172 text Hot
+										173 button 更多技能
+							101 container 最近上新
+								102 text 最近上新
+								174 container
+									175 container 最近上新
+										359 button 预览
+									177 container What’s new pages
+										178 button 1 / 5: 即梦精选广告片 · MANGO GLASS PRO
+										179 button 2 / 5
+										180 button 3 / 5
+										181 button 4 / 5: AI短剧创作计划——让灵感在光影里发生
+										182 button 5 / 5: 即梦片场上线——寻找AI时代最敢想象的好故事
+							103 container Tools
+								104 container
+									105 content list
+										106 button 图片多角度
+											107 text 图片多角度
+											108 text 任意变换拍摄角度
+										109 button 智能打光
+											110 text 智能打光
+											111 text 自由布光，重塑氛围
+										112 button 720全景图
+											113 text 720全景图
+											114 text 生成全景图片，自由取景
+										115 button 3D导演台
+											116 text 3D导演台
+											117 text 预演构图与动作
+										118 button 深度动作捕捉
+											119 text 深度动作捕捉
+											120 text 复刻动作与空间
+										121 button 3D渲染插件
+											122 text 3D渲染插件
+											123 text 支持 Blender & Maya
+									124 button 下一个
+							125 container
+								126 container
+									127 checkbox 精选, Value: 1
+									128 checkbox 短剧漫剧, Value: 0
+									129 checkbox 影视作品, Value: 0
+									130 checkbox 动画动漫, Value: 0
+									131 checkbox 广告营销, Value: 0
+									132 checkbox 平面设计, Value: 0
+									133 checkbox 电商, Value: 0
+								134 container
+									135 button 返回
+									136 text field (settable)
+								137 container 短剧漫剧
+									138 heading 短剧漫剧, Value: 2, ID: create-short-video-section-:rp:
+										139 text 短剧漫剧
+									140 content list 短剧漫剧
+										183 container
+											184 button 查看短剧画布
+											185 button 丧尸清道夫, ID: :ru:
+											186 text Mx-Shell 📷
+										187 container
+											188 button 查看创作过程
+											189 button 瑞草学院捉鬼师合集, ID: :rv:
+											190 text 油爆虾
+										191 container
+											192 button 查看创作过程
+											193 button 《苗疆少女插班生》第一集，苗疆圣女插班泰国，只为找到给父亲下绝命降的真凶！, ID: :r10:
+											194 text 依旧如初。。
+										195 container
+											196 button 《非妖哉》第二集 莽夫阿牛-你现在没有力气 不代表以后没有, ID: :r11:
+											197 text 不吃榨菜AIGC
+										198 container
+											199 button 查看创作过程
+											200 button 《零号档案》File Zero【9】（上）, ID: :r12:
+											201 text 白袋子
+										202 container
+											203 button 《反相之地》第四集, ID: :r13:
+											204 text 潘鱼晏
+										205 container
+											206 button 查看创作过程
+											207 button 第2集｜《滞留的夏天》【换座儿】, ID: :r14:
+											208 text 滞夏汽水
+										209 container
+											210 button 查看创作过程
+											211 button 《零号档案》, ID: :r15:
+											212 text 白袋子
+										213 container
+											214 button 查看创作过程
+											215 button 《反相之地》第七集, ID: :r16:
+											216 text 潘鱼晏
+								141 container 短片
+									142 heading 短片, Value: 2, ID: create-short-video-section-:rq:
+										143 text 短片
+									144 content list 短片
+										217 container
+											218 button 查看创作过程
+											219 button 短片《纸人游记》, ID: :r1e:
+											220 text 艺类分子
+										221 container
+											222 button 雨幕真言, ID: :r1f:
+											223 text 烟雨AIGC
+										224 container
+											225 button 查看创作过程
+											226 button 《你骗鬼呢》, ID: :r1g:
+											227 text 空空
+										228 container
+											229 button 查看创作过程
+											230 button 致我们的世纪青春, ID: :r1h:
+											231 text 冬致
+										232 container
+											233 button AI短片《反正也没时间活》, ID: :r1i:
+											234 text 站立起来的影子
+										235 container
+											236 button 查看创作过程
+											237 button 《回潮》, ID: :r1j:
+											238 text 鹿之乐
+										239 container
+											240 button 查看创作过程
+											241 button 《搜山 THE GREAT HUNT》, ID: :r1k:
+											242 text 王炸
+										243 container
+											244 button 查看创作过程
+											245 button 《故乡》, ID: :r1l:
+											246 text 喵酒酒
+										247 container
+											248 button 查看创作过程
+											249 button 《逆行之舟》, ID: :r1m:
+											250 text 疯Max
+								145 container 广告
+									146 heading 广告, Value: 2, ID: create-short-video-section-:rr:
+										147 text 广告
+									148 content list 广告
+										251 container
+											252 button 查看创作过程
+											253 button Seedance2.0 4K TVC, ID: :r1o:
+											254 text 即梦AI
+										255 container
+											256 button 查看创作过程
+											257 button 《Elle fait naître le soleil》｜她让太阳升起, ID: :r1p:
+											258 text 机关枪怪人
+										259 container
+											260 button 查看创作过程
+											261 button 即梦Seedance2.5模型发布TVC, ID: :r1q:
+											262 text 即梦AI
+										263 container
+											264 button 查看创作过程
+											265 button 《灭火总动员》, ID: :r1r:
+											266 text 小死样子。
+										267 container
+											268 button 查看创作过程
+											269 button 《雪境微光》, ID: :r1s:
+											270 text 菲凡创意AIGC
+										271 container
+											272 button 查看创作过程
+											273 button 《牧羊犬日常》, ID: :r1t:
+											274 text 小易小易
+										275 container
+											276 button 查看创作过程
+											277 button 《TIME, IN MOTION》｜时序流转, ID: :r1u:
+											278 text kirito
+										279 container
+											280 button 查看创作过程
+											281 button 《益达竞速嘉年华》, ID: :r1v:
+											282 text SKYLINE
+										283 container
+											284 button 查看创作过程
+											285 button 《雀巢咖啡之八仙过海》, ID: :r20:
+											286 text 小弹簧晓丹
+								149 container 动画
+									150 heading 动画, Value: 2, ID: create-short-video-section-:rs:
+										151 text 动画
+									152 content list 动画
+										287 container
+											288 button 查看创作过程
+											289 button 《完美花园》, ID: :r21:
+											290 text bling不凝
+										291 container
+											292 button 查看创作过程
+											293 button 《贵司有尾》, ID: :r22:
+											294 text Tassi
+										295 container
+											296 button 查看创作过程
+											297 button 《Kite》, ID: :r23:
+											298 text bling不凝
+										299 container
+											300 button 查看创作过程
+											301 button 《捕梦师·老周的虫》, ID: :r24:
+											302 text 橙橙子
+										303 container
+											304 button 查看创作过程
+											305 button 《猫罐头》, ID: :r25:
+											306 text 橘子Niki
+										307 container
+											308 button 查看创作过程
+											309 button 《机魂觉醒》, ID: :r26:
+											310 text 柔树特效｜AIGC动画｜后期
+										311 container
+											312 button 查看创作过程
+											313 button 《空白肺女士》, ID: :r27:
+											314 text 不加班艺术中心
+										315 container
+											316 button 查看创作过程
+											317 button 《任务编号：0924》, ID: :r28:
+											318 text 不加班艺术中心
+										319 container
+											320 button 查看创作过程
+											321 button 《扒皮》, ID: :r29:
+											322 text 赛博镜头手杰丰
+								153 container 音乐 MV
+									154 heading 音乐 MV, Value: 2, ID: create-short-video-section-:rt:
+										155 text 音乐 MV
+									156 content list 音乐 MV
+										323 container
+											324 button 查看创作过程
+											325 button 《ComeWhatMay》, ID: :r17:
+											326 text XEIIZO
+										327 container
+											328 button 查看创作过程
+											329 button 《「路西的世界」拼盘菜》, ID: :r18:
+											330 text 路西
+										331 container
+											332 button 查看创作过程
+											333 button 《keep real》, ID: :r19:
+											334 text 森海荧光
+										335 container
+											336 button 查看创作过程
+											337 button 《友情出演》, ID: :r1a:
+											338 text 整点动静AIGC
+										339 container
+											340 button 查看创作过程
+											341 button 《STORMⅡ-橄榄球队版》, ID: :r1b:
+											342 text 胡赛尼
+										343 container
+											344 button 查看创作过程
+											345 button 《Puzzle Mystic-「好运000」》, ID: :r1c:
+											346 text PuzzleMysti
+										347 container
+											348 button 【MV】仿生小狗会梦见电子天使吗？（爵士说唱《单人狗》）, ID: :r1d:
+											349 text 兰蓝君
+						350 button 客服中心
+
+The focused UI element is 84 text entry area (settable) Description: 提示词, Value: 主体调研测试-20261028

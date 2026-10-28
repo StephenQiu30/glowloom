@@ -48,6 +48,23 @@ func TestScriptCopyRemapsFullIdentityClosureAndPreservesSemanticHashes(t *testin
 	if err != nil || again.ContentSHA256 != manifest.ContentSHA256 || again.Target.Sources[0].ID != copied.Sources[0].ID {
 		t.Fatal("non-deterministic frozen manifest", err)
 	}
+	// Two retained objects may share the same logical key across profiles. The
+	// location IDs identify them independently while semantic JSON stays stable.
+	located := history
+	located.Sources = append([]domain.SourceRecord{}, history.Sources...)
+	located.Versions = append([]domain.ScriptVersion{}, history.Versions...)
+	firstLocation, secondLocation := uuid.New(), uuid.New()
+	located.Sources[0].Original.LocationID = firstLocation
+	located.Sources[0].Rich.LocationID = secondLocation
+	located.Versions[0].Text.LocationID = firstLocation
+	located.Versions[0].Rich.LocationID = secondLocation
+	physical, err := app.RemapProjectHistory(binding, located, nil)
+	if err != nil || len(physical.Objects) != 2 || physical.Objects[0].Target.Key == physical.Objects[1].Target.Key || physical.Objects[0].Target.LocationID != uuid.Nil || physical.Objects[1].Target.LocationID != uuid.Nil {
+		t.Fatal("same key across different physical locations was conflated", err)
+	}
+	if physical.Source.Versions[0].SourceManifestSHA256 != history.Versions[0].SourceManifestSHA256 {
+		t.Fatal("physical migration changed semantic source identity")
+	}
 	file := uuid.New()
 	history.Sources[0].MediaAssetID = &file
 	if _, err := app.RemapProjectHistory(binding, history, nil); err == nil {

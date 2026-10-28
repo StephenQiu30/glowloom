@@ -86,14 +86,15 @@ type DepthDerivedMedia interface {
 
 // DepthObject freezes one server-selected result before any external write.
 type DepthObject struct {
-	Kind          string `json:"kind"`
-	ObjectKey     string `json:"object_key"`
-	SHA256        string `json:"sha256"`
-	ByteSize      int64  `json:"byte_size"`
-	MIMEType      string `json:"mime_type"`
-	WriteStarted  bool   `json:"-"`
-	DeleteStarted bool   `json:"-"`
-	Status        string `json:"-"`
+	Kind             string     `json:"kind"`
+	ObjectKey        string     `json:"object_key"`
+	SHA256           string     `json:"sha256"`
+	ByteSize         int64      `json:"byte_size"`
+	MIMEType         string     `json:"mime_type"`
+	WriteStarted     bool       `json:"-"`
+	DeleteStarted    bool       `json:"-"`
+	Status           string     `json:"-"`
+	ObjectLocationID *uuid.UUID `json:"-"`
 }
 
 // DepthArtifact is a permanent private output manifest, never a public DTO.
@@ -113,6 +114,7 @@ type DepthWork struct {
 	Actor        identityapp.Principal
 	Frozen       domain.FrozenDepth
 	ProcessState domain.DepthProcessState
+	SourceAssets []mediadomain.MediaAsset `json:"-"`
 }
 
 // DepthWorkerStore persists exact native cessation and immutable result intents.

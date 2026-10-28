@@ -70,15 +70,27 @@ func prepareFreeQuoteMedia(requested []FreeQuoteMediaInput, media []FreeQuoteMed
 		seqNo := int32(index + 1)
 		assetID := fact.ID
 		contentHash := strings.ToLower(fact.SHA256)
+		refType, refID, refVersion := "media_asset", assetID, contentHash
+		if request.SubjectBindingID != nil {
+			if fact.SubjectBindingID == nil || *fact.SubjectBindingID != *request.SubjectBindingID || len(fact.SubjectBindingSHA256) != 64 {
+				return nil, nil, ErrFreeQuoteInputNotReady
+			}
+			if _, err := hex.DecodeString(fact.SubjectBindingSHA256); err != nil {
+				return nil, nil, ErrFreeQuoteInputNotReady
+			}
+			refType, refID, refVersion = "subject_media", *request.SubjectBindingID, strings.ToLower(fact.SubjectBindingSHA256)
+		} else if fact.SubjectBindingID != nil || fact.SubjectBindingSHA256 != "" {
+			return nil, nil, ErrFreeQuoteInputNotReady
+		}
 		parts = append(parts, FingerprintPart{
-			SeqNo: seqNo, Role: request.Role, RefType: "media_asset",
-			RefID: &assetID, RefVersion: contentHash,
+			SeqNo: seqNo, Role: request.Role, RefType: refType,
+			RefID: &refID, RefVersion: refVersion,
 			MediaAssetID: &assetID, MediaSHA256: contentHash,
 		})
 		inputs = append(inputs, domain.OperationInput{
 			ID: uuid.New(), OperationID: operationID, SeqNo: seqNo,
-			Role: request.Role, RefType: "media_asset", RefID: &assetID,
-			RefVersion: &contentHash, MediaAssetID: &assetID,
+			Role: request.Role, RefType: refType, RefID: &refID,
+			RefVersion: &refVersion, MediaAssetID: &assetID,
 		})
 	}
 	for name, raw := range limits.Roles {

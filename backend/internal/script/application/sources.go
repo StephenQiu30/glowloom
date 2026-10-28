@@ -92,18 +92,19 @@ type SourceBase struct {
 
 // WritePlan freezes all identifiers and byte manifests before private writes occur.
 type WritePlan struct {
-	Command       SourceCommand         `json:"command"`
-	RequestHash   string                `json:"request_hash"`
-	ActorID       uuid.UUID             `json:"actor_id"`
-	OrgID         uuid.UUID             `json:"org_id"`
-	NewSources    []domain.SourceRecord `json:"new_sources"`
-	Version       domain.ScriptVersion  `json:"version"`
-	Candidate     domain.SplitSet       `json:"candidate"`
-	Mappings      []SourceChange        `json:"mappings"`
-	Objects       []domain.ObjectFact   `json:"objects"`
-	CreatedAt     time.Time             `json:"created_at"`
-	Reuse         bool                  `json:"reuse,omitempty"`
-	HeadUnchanged bool                  `json:"head_unchanged,omitempty"`
+	StorageIntentID uuid.UUID             `json:"storage_intent_id,omitempty"`
+	Command         SourceCommand         `json:"command"`
+	RequestHash     string                `json:"request_hash"`
+	ActorID         uuid.UUID             `json:"actor_id"`
+	OrgID           uuid.UUID             `json:"org_id"`
+	NewSources      []domain.SourceRecord `json:"new_sources"`
+	Version         domain.ScriptVersion  `json:"version"`
+	Candidate       domain.SplitSet       `json:"candidate"`
+	Mappings        []SourceChange        `json:"mappings"`
+	Objects         []domain.ObjectFact   `json:"objects"`
+	CreatedAt       time.Time             `json:"created_at"`
+	Reuse           bool                  `json:"reuse,omitempty"`
+	HeadUnchanged   bool                  `json:"head_unchanged,omitempty"`
 }
 
 // PendingWrite retains an immutable plan and optional immutable first result.
@@ -126,6 +127,14 @@ type PrivateObjects interface {
 	PutIfAbsent(context.Context, string, io.Reader, int64, string, string) error
 	Get(context.Context, string) (io.ReadCloser, error)
 	Remove(context.Context, string) error
+}
+
+// LocatedPrivateObjects consumes an owner-proved physical identity. A located
+// fact must never fall back to a default bucket or a bare-key implementation.
+type LocatedPrivateObjects interface {
+	GetObject(context.Context, domain.ObjectFact) (io.ReadCloser, error)
+	PutObjectIfAbsent(context.Context, domain.ObjectFact, io.Reader) error
+	RemoveObject(context.Context, domain.ObjectFact) error
 }
 
 // SourceService coordinates the actual private bytes and owning persistence port.

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"strings"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -12,6 +13,7 @@ import (
 )
 
 type transferObjectRow struct {
+	SourceLocationID, TargetLocationID                                   *uuid.UUID
 	SourceObjectKey, TargetObjectKey, RenditionKind, ContentType, Status string
 	ByteSize                                                             *int64
 	SHA256                                                               *string
@@ -56,6 +58,18 @@ func (s *TransferStore) TransferObjects(ctx context.Context, lease application.T
 				if frozen.SourceObjectKey == r.SourceObjectKey && frozen.TargetObjectKey == r.TargetObjectKey && frozen.RenditionKind == r.RenditionKind && frozen.ContentType == r.ContentType {
 					frozen.ByteSize, frozen.SHA256, frozen.Status = r.ByteSize, r.SHA256, r.Status
 					frozen.SourceVerified, frozen.WriteStarted = r.SourceVerified, r.WriteStarted
+					source, err := readRowLocation(tx, r.SourceLocationID, r.SourceObjectKey)
+					if err != nil {
+						return err
+					}
+					target, err := readRowLocation(tx, r.TargetLocationID, r.TargetObjectKey)
+					if err != nil {
+						return err
+					}
+					if frozen.SourceLocation != nil && (source == nil || frozen.SourceLocation.ID != source.ID || frozen.SourceLocation.Ref != source.Ref) || frozen.TargetLocation != nil && (target == nil || frozen.TargetLocation.ID != target.ID || frozen.TargetLocation.Ref != target.Ref) {
+						return application.ErrObjectMismatch
+					}
+					frozen.SourceLocation, frozen.TargetLocation = source, target
 					result = append(result, frozen)
 					found = true
 				}
@@ -96,6 +110,11 @@ func (s *TransferStore) BeginTransferWrite(ctx context.Context, lease applicatio
 		if object.Status != "pending" || object.WriteStarted || !object.SourceVerified || object.SHA256 == nil || object.ByteSize == nil || !validTransferDigest(*object.SHA256, *object.ByteSize) {
 			return application.ErrObjectMismatch
 		}
+		if object.TargetLocationID != nil {
+			if err := beginCopyLocation(ctx, tx, transferWorkOwner(row.ID, row.TargetLibraryID, index), object.TargetLocationID, object.TargetObjectKey); err != nil {
+				return err
+			}
+		}
 		return libraryChanged(tx, `UPDATE media.transfer_object SET write_started=true WHERE job_id=? AND item_index=? AND rendition_kind=?`, row.ID, index, kind)
 	})
 }
@@ -109,6 +128,11 @@ func (s *TransferStore) ConfirmTransferObject(ctx context.Context, lease applica
 		}
 		if object.Status != "pending" && object.Status != "verified" || !object.SourceVerified || !object.WriteStarted || object.SHA256 == nil || *object.SHA256 != sha || object.ByteSize == nil || *object.ByteSize != size || !validTransferDigest(sha, size) {
 			return application.ErrObjectMismatch
+		}
+		if object.TargetLocationID != nil {
+			if err := confirmCopyLocation(ctx, tx, transferWorkOwner(row.ID, row.TargetLibraryID, index), object.TargetLocationID, object.TargetObjectKey, object.ContentType, sha, size); err != nil {
+				return err
+			}
 		}
 		return libraryChanged(tx, `UPDATE media.transfer_object SET status='verified' WHERE job_id=? AND item_index=? AND rendition_kind=?`, row.ID, index, kind)
 	})
@@ -124,8 +148,14 @@ func (s *TransferStore) AuthorizeTransferRemoval(ctx context.Context, lease appl
 		if state.Status == "succeeded" {
 			return domain.ErrTransferConflict
 		}
-		_, err = readTransferObject(tx, row, index, kind)
-		return err
+		object, err := readTransferObject(tx, row, index, kind)
+		if err != nil {
+			return err
+		}
+		if object.TargetLocationID != nil {
+			return beginCopyRemoval(ctx, tx, transferWorkOwner(row.ID, row.TargetLibraryID, index), object.TargetLocationID, object.TargetObjectKey)
+		}
+		return nil
 	})
 }
 
@@ -138,6 +168,15 @@ func (s *TransferStore) ConfirmTransferRemoval(ctx context.Context, lease applic
 		}
 		if state.Status == "succeeded" {
 			return domain.ErrTransferConflict
+		}
+		object, err := readTransferObject(tx, row, index, kind)
+		if err != nil {
+			return err
+		}
+		if object.TargetLocationID != nil {
+			if err := confirmCopyRemoval(ctx, tx, transferWorkOwner(row.ID, row.TargetLibraryID, index), object.TargetLocationID, object.TargetObjectKey); err != nil {
+				return err
+			}
 		}
 		return libraryChanged(tx, `UPDATE media.transfer_object SET status='removed' WHERE job_id=? AND item_index=? AND rendition_kind=?`, row.ID, index, kind)
 	})

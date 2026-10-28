@@ -126,11 +126,13 @@ func (s *SourceService) writePrepared(ctx context.Context, actor identityapp.Pri
 		}
 		return s.store.FinishWrite(ctx, actor, staged.Plan)
 	}
-	if !slices.Equal(plan.Objects, staged.Plan.Objects) || plan.Version.SourceManifestSHA256 != staged.Plan.Version.SourceManifestSHA256 {
+	if !equalObjectContent(plan.Objects, staged.Plan.Objects) || plan.Version.SourceManifestSHA256 != staged.Plan.Version.SourceManifestSHA256 {
 		return SourceReceipt{}, ErrIdempotencyConflict
 	}
 	owner := uuid.New()
-	ioCtx, entry := s.io.begin(ctx, owner)
+	bounded, cancelIO := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancelIO()
+	ioCtx, entry := s.io.begin(bounded, owner)
 	if err := s.store.ClaimSourceIO(ctx, actor, staged.Plan, owner, s.now().UTC()); err != nil {
 		s.io.end(owner, entry, true)
 		return SourceReceipt{}, err
@@ -142,7 +144,11 @@ func (s *SourceService) writePrepared(ctx context.Context, actor identityapp.Pri
 		err := s.store.EndSourceIO(exitCtx, staged.Plan, owner, !complete, s.now().UTC())
 		s.io.end(owner, entry, err == nil)
 	}()
-	for _, object := range objects {
+	for i, object := range objects {
+		if i >= len(staged.Plan.Objects) {
+			return SourceReceipt{}, ErrObjectMismatch
+		}
+		object.fact = staged.Plan.Objects[i]
 		if err := s.store.BeginSourceObject(ioCtx, actor, staged.Plan, owner, object.fact); err != nil {
 			return SourceReceipt{}, err
 		}
@@ -165,7 +171,15 @@ func (s *SourceService) readObject(ctx context.Context, fact domain.ObjectFact) 
 	if err := fact.Validate(); err != nil {
 		return nil, err
 	}
-	reader, err := s.objects.Get(ctx, fact.Key)
+	var reader io.ReadCloser
+	var err error
+	if located, ok := s.objects.(LocatedPrivateObjects); ok {
+		reader, err = located.GetObject(ctx, fact)
+	} else if fact.LocationID != uuid.Nil {
+		return nil, ErrUnavailable
+	} else {
+		reader, err = s.objects.Get(ctx, fact.Key)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -189,11 +203,38 @@ func (s *SourceService) ensureObject(ctx context.Context, object objectBytes) er
 	} else if !errors.Is(err, ErrObjectMissing) {
 		return err
 	}
-	if err := s.objects.PutIfAbsent(ctx, object.fact.Key, bytes.NewReader(object.data), object.fact.ByteSize, object.fact.MIME, object.fact.SHA256); err != nil && !errors.Is(err, ErrObjectExists) {
+	if err := putPrivateObject(ctx, s.objects, object.fact, bytes.NewReader(object.data)); err != nil && !errors.Is(err, ErrObjectExists) {
 		return err
 	}
 	_, err := s.readObject(ctx, object.fact)
 	return err
+}
+
+func equalObjectContent(a, b []domain.ObjectFact) bool {
+	return slices.EqualFunc(a, b, func(x, y domain.ObjectFact) bool {
+		x.LocationID, y.LocationID = uuid.Nil, uuid.Nil
+		return x == y
+	})
+}
+
+func putPrivateObject(ctx context.Context, objects PrivateObjects, f domain.ObjectFact, body io.Reader) error {
+	if located, ok := objects.(LocatedPrivateObjects); ok {
+		return located.PutObjectIfAbsent(ctx, f, body)
+	}
+	if f.LocationID != uuid.Nil {
+		return ErrUnavailable
+	}
+	return objects.PutIfAbsent(ctx, f.Key, body, f.ByteSize, f.MIME, f.SHA256)
+}
+
+func removePrivateObject(ctx context.Context, objects PrivateObjects, f domain.ObjectFact) error {
+	if located, ok := objects.(LocatedPrivateObjects); ok {
+		return located.RemoveObject(ctx, f)
+	}
+	if f.LocationID != uuid.Nil {
+		return ErrUnavailable
+	}
+	return objects.Remove(ctx, f.Key)
 }
 
 func frozenObject(project, id uuid.UUID, name, mime string, data []byte) domain.ObjectFact {

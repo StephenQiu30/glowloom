@@ -194,7 +194,7 @@ func (s *Store) prepareFreeQuoteItem(ctx context.Context, tx *gorm.DB, actor ide
 	if err != nil {
 		return QuoteItem{}, "", err
 	}
-	media, err := readFreeQuoteMedia(tx, input.ProjectID, input.MediaInputs)
+	media, err := s.readQuoteMedia(tx, actor, input.ProjectID, input.MediaInputs)
 	if err != nil {
 		return QuoteItem{}, "", err
 	}
@@ -355,6 +355,9 @@ func readFreeQuoteMedia(tx *gorm.DB, projectID uuid.UUID, requested []applicatio
 	}
 	assetIDs := make(map[uuid.UUID]struct{}, len(requested))
 	for _, input := range requested {
+		if input.SubjectBindingID != nil {
+			return nil, application.ErrFreeQuoteInputNotReady
+		}
 		assetIDs[input.MediaAssetID] = struct{}{}
 	}
 	ordered := make([]uuid.UUID, 0, len(assetIDs))
@@ -396,6 +399,42 @@ func readFreeQuoteMedia(tx *gorm.DB, projectID uuid.UUID, requested []applicatio
 	result := make([]application.FreeQuoteMediaFact, 0, len(requested))
 	for _, input := range requested {
 		result = append(result, facts[input.MediaAssetID])
+	}
+	return result, nil
+}
+
+func (s *Store) readQuoteMedia(tx *gorm.DB, actor identityapp.Principal, project uuid.UUID, requested []application.FreeQuoteMediaInput) ([]application.FreeQuoteMediaFact, error) {
+	ordinary := make([]application.FreeQuoteMediaInput, 0, len(requested))
+	for _, input := range requested {
+		if input.SubjectBindingID == nil {
+			ordinary = append(ordinary, input)
+		}
+	}
+	plain, err := readFreeQuoteMedia(tx, project, ordinary)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]application.FreeQuoteMediaFact, 0, len(requested))
+	index := 0
+	for _, input := range requested {
+		if input.SubjectBindingID == nil {
+			result = append(result, plain[index])
+			index++
+			continue
+		}
+		owner := s.subjects(tx)
+		if owner == nil {
+			return nil, application.ErrFreeQuoteInputNotReady
+		}
+		fact, err := owner.ResolveQuote(tx.Statement.Context, actor, project, *input.SubjectBindingID)
+		if err != nil {
+			return nil, err
+		}
+		if fact.BindingID != *input.SubjectBindingID || fact.AssetID != input.MediaAssetID || fact.AssetRevision < 1 {
+			return nil, application.ErrFreeQuoteInputNotReady
+		}
+		id := fact.BindingID
+		result = append(result, application.FreeQuoteMediaFact{ID: fact.AssetID, Kind: fact.Kind, SHA256: fact.SHA256, ByteSize: fact.ByteSize, DurationMS: fact.DurationMS, SubjectBindingID: &id, SubjectBindingSHA256: fact.BindingSHA256})
 	}
 	return result, nil
 }
