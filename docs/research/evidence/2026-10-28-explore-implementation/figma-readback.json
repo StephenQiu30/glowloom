@@ -1,0 +1,278 @@
+[
+  {
+    "id": "1361:272",
+    "name": "探索 / 短剧漫剧 / 桌面 / FIG-EX-01",
+    "width": 1460,
+    "height": 1040,
+    "editableTypes": ["FRAME", "INSTANCE", "VECTOR", "TEXT"],
+    "fonts": ["Geist"],
+    "categoryLabels": [
+      "分类 / 短剧漫剧",
+      "分类 / 影视作品",
+      "分类 / 动画动漫",
+      "分类 / 广告营销",
+      "分类 / 平面设计",
+      "分类 / 电商",
+      "分类 / 其他",
+      "分类 / 技能",
+      "分类 / 活动",
+      "分类 / 短剧作品",
+      "分类 / 漫剧作品"
+    ],
+    "mobileHeader": [],
+    "categoryLinks": [
+      {
+        "id": "3088:46941",
+        "targets": ["3091:47535"]
+      },
+      {
+        "id": "3088:46947",
+        "targets": ["3088:46767"]
+      },
+      {
+        "id": "3088:46955",
+        "targets": ["3091:46957"]
+      },
+      {
+        "id": "3088:46957",
+        "targets": ["3091:47121"]
+      }
+    ],
+    "visibleCards": []
+  },
+  {
+    "id": "3088:46767",
+    "name": "探索 / 广告营销 / 示例内容 / FIG-EX-02",
+    "width": 1460,
+    "height": 1040,
+    "editableTypes": ["FRAME", "INSTANCE", "VECTOR", "TEXT"],
+    "fonts": ["Geist"],
+    "categoryLabels": [
+      "分类 / 短剧漫剧",
+      "分类 / 影视作品",
+      "分类 / 动画动漫",
+      "分类 / 广告营销",
+      "分类 / 平面设计",
+      "分类 / 电商",
+      "分类 / 其他",
+      "分类 / 技能",
+      "分类 / 活动"
+    ],
+    "mobileHeader": [],
+    "categoryLinks": [
+      {
+        "id": "3088:46811",
+        "targets": ["3091:47535"]
+      },
+      {
+        "id": "3088:46818",
+        "targets": ["3091:46957"]
+      },
+      {
+        "id": "3088:46819",
+        "targets": ["3091:47121"]
+      }
+    ],
+    "visibleCards": ["3088:46829", "3088:46830", "3088:46831", "3088:46832"]
+  },
+  {
+    "id": "3091:46799",
+    "name": "探索 / 窄桌面 / FIG-EX-01",
+    "width": 1280,
+    "height": 1040,
+    "editableTypes": ["FRAME", "INSTANCE", "VECTOR", "TEXT"],
+    "fonts": ["Geist"],
+    "categoryLabels": [
+      "分类 / 短剧漫剧",
+      "分类 / 影视作品",
+      "分类 / 动画动漫",
+      "分类 / 广告营销",
+      "分类 / 平面设计",
+      "分类 / 电商",
+      "分类 / 其他",
+      "分类 / 技能",
+      "分类 / 活动"
+    ],
+    "mobileHeader": [],
+    "categoryLinks": [
+      {
+        "id": "3091:46843",
+        "targets": ["3091:47535"]
+      },
+      {
+        "id": "3091:46846",
+        "targets": ["3088:46767"]
+      },
+      {
+        "id": "3091:46850",
+        "targets": ["3091:46957"]
+      },
+      {
+        "id": "3091:46851",
+        "targets": ["3091:47121"]
+      }
+    ],
+    "visibleCards": []
+  },
+  {
+    "id": "3091:46957",
+    "name": "探索 / 技能 / FIG-EX-06",
+    "width": 1460,
+    "height": 1040,
+    "editableTypes": ["FRAME", "INSTANCE", "VECTOR", "TEXT"],
+    "fonts": ["Geist"],
+    "categoryLabels": [
+      "分类 / 短剧漫剧",
+      "分类 / 影视作品",
+      "分类 / 动画动漫",
+      "分类 / 广告营销",
+      "分类 / 平面设计",
+      "分类 / 电商",
+      "分类 / 其他",
+      "分类 / 技能",
+      "分类 / 活动"
+    ],
+    "mobileHeader": [],
+    "categoryLinks": [
+      {
+        "id": "3091:47001",
+        "targets": ["3091:47535"]
+      },
+      {
+        "id": "3091:47004",
+        "targets": ["3088:46767"]
+      },
+      {
+        "id": "3091:47009",
+        "targets": ["3091:47121"]
+      }
+    ],
+    "visibleCards": []
+  },
+  {
+    "id": "3091:47121",
+    "name": "探索 / 活动 / FIG-EX-07",
+    "width": 1460,
+    "height": 1040,
+    "editableTypes": ["FRAME", "INSTANCE", "VECTOR", "TEXT"],
+    "fonts": ["Geist"],
+    "categoryLabels": [
+      "分类 / 短剧漫剧",
+      "分类 / 影视作品",
+      "分类 / 动画动漫",
+      "分类 / 广告营销",
+      "分类 / 平面设计",
+      "分类 / 电商",
+      "分类 / 其他",
+      "分类 / 技能",
+      "分类 / 活动"
+    ],
+    "mobileHeader": [],
+    "categoryLinks": [
+      {
+        "id": "3091:47165",
+        "targets": ["3091:47535"]
+      },
+      {
+        "id": "3091:47168",
+        "targets": ["3088:46767"]
+      },
+      {
+        "id": "3091:47172",
+        "targets": ["3091:46957"]
+      }
+    ],
+    "visibleCards": []
+  },
+  {
+    "id": "3091:47261",
+    "name": "探索 / 手机390 / FIG-EX-10",
+    "width": 390,
+    "height": 844,
+    "editableTypes": ["FRAME", "INSTANCE", "VECTOR", "TEXT"],
+    "fonts": ["Geist"],
+    "categoryLabels": [
+      "分类 / 短剧漫剧",
+      "分类 / 影视作品",
+      "分类 / 动画动漫",
+      "分类 / 广告营销",
+      "分类 / 平面设计",
+      "分类 / 电商",
+      "分类 / 其他",
+      "分类 / 技能",
+      "分类 / 活动"
+    ],
+    "mobileHeader": [
+      {
+        "id": "3100:47750",
+        "width": 390,
+        "height": 64
+      }
+    ],
+    "categoryLinks": [],
+    "visibleCards": []
+  },
+  {
+    "id": "3091:47398",
+    "name": "探索 / 手机320 / FIG-EX-10",
+    "width": 320,
+    "height": 844,
+    "editableTypes": ["FRAME", "INSTANCE", "VECTOR", "TEXT"],
+    "fonts": ["Geist"],
+    "categoryLabels": [
+      "分类 / 短剧漫剧",
+      "分类 / 影视作品",
+      "分类 / 动画动漫",
+      "分类 / 广告营销",
+      "分类 / 平面设计",
+      "分类 / 电商",
+      "分类 / 其他",
+      "分类 / 技能",
+      "分类 / 活动"
+    ],
+    "mobileHeader": [
+      {
+        "id": "3100:47776",
+        "width": 320,
+        "height": 64
+      }
+    ],
+    "categoryLinks": [],
+    "visibleCards": []
+  },
+  {
+    "id": "3091:47535",
+    "name": "探索 / 桌面原型 / FIG-EX-01",
+    "width": 1460,
+    "height": 1040,
+    "editableTypes": ["FRAME", "INSTANCE", "VECTOR", "TEXT"],
+    "fonts": ["Geist"],
+    "categoryLabels": [
+      "分类 / 短剧漫剧",
+      "分类 / 影视作品",
+      "分类 / 动画动漫",
+      "分类 / 广告营销",
+      "分类 / 平面设计",
+      "分类 / 电商",
+      "分类 / 其他",
+      "分类 / 技能",
+      "分类 / 活动"
+    ],
+    "mobileHeader": [],
+    "categoryLinks": [
+      {
+        "id": "3091:47582",
+        "targets": ["3088:46767"]
+      },
+      {
+        "id": "3091:47586",
+        "targets": ["3091:46957"]
+      },
+      {
+        "id": "3091:47587",
+        "targets": ["3091:47121"]
+      }
+    ],
+    "visibleCards": []
+  }
+]
