@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -16,9 +17,23 @@ const library = "22222222-2222-4222-8222-222222222222";
 const state = vi.hoisted(() => ({
   session: null as { actor: { id: string } } | null,
   login: vi.fn(),
+  search: null as {
+    onSearch: (value: string) => void;
+    onValueChange: (value: string) => void;
+    value: string;
+  } | null,
 }));
 vi.mock("@/components/layout/page-layout", () => ({
-  PageLayout: ({ children }: { children: ReactNode }) => children,
+  PageLayout: ({
+    children,
+    search,
+  }: {
+    children: ReactNode;
+    search: typeof state.search;
+  }) => {
+    state.search = search;
+    return children;
+  },
 }));
 vi.mock("@/components/layout/basic-layout", () => ({
   useLoginDialog: () => state.login,
@@ -389,3 +404,157 @@ it("从回收站切换收藏时恢复活动素材范围", async () => {
     ),
   );
 });
+
+it("关闭素材预览恢复到打开它的封面按钮", async () => {
+  vi.mocked(request).mockResolvedValue({
+    ...emptyPage,
+    total: 1,
+    items: [
+      {
+        id: "33333333-3333-4333-8333-333333333333",
+        title: "焦点素材",
+        kind: "image",
+        revision: 0,
+        favorite: false,
+        catalog_state: "active",
+        updated_at: "2026-10-28T00:00:00Z",
+      },
+    ],
+  });
+  render(<AssetsPage />);
+  const opener = await screen.findByRole("button", { name: "查看 焦点素材" });
+  opener.focus();
+  fireEvent.click(opener);
+  fireEvent.click(await screen.findByRole("button", { name: "关闭对话框" }));
+  await waitFor(() => expect(document.activeElement).toBe(opener));
+});
+it("手机管理菜单启动批量模式后关闭菜单", async () => {
+  render(<AssetsPage />);
+  await screen.findByText("这里还没有素材");
+  fireEvent.keyDown(screen.getByRole("button", { name: "筛选素材" }), {
+    key: "Enter",
+  });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "批量操作" }));
+  await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+  expect(
+    screen.getByRole("checkbox", { name: "选择本页全部素材" }),
+  ).toBeTruthy();
+});
+it("空搜索保留关键词并可直接清除且保留其他筛选", async () => {
+  render(<AssetsPage />);
+  await screen.findByText("这里还没有素材");
+  fireEvent.click(screen.getByRole("radio", { name: "视频" }));
+  fireEvent.click(screen.getByRole("button", { name: "最近30天" }));
+  act(() => {
+    state.search?.onValueChange("无匹配素材");
+    state.search?.onSearch("无匹配素材");
+  });
+  await screen.findByText("没有匹配的素材");
+  expect(screen.getByText(/无匹配素材/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "清除搜索" }));
+  await screen.findByText("这里还没有素材");
+  expect(state.search?.value).toBe("");
+  expect(request).toHaveBeenLastCalledWith(
+    "/api/media/library",
+    expect.objectContaining({
+      params: expect.objectContaining({
+        search: "",
+        kind: "video",
+        recent_only: true,
+      }),
+    }),
+  );
+});
+
+it.each(["success", "retry", "reopen"])(
+  "文件夹内上传归档保持文件与命令一致（%s）",
+  async (mode) => {
+    const folder = "44444444-4444-4444-8444-444444444444";
+    const id = "33333333-3333-4333-8333-333333333333";
+    const nextID = "55555555-5555-4555-8555-555555555555";
+    let uploaded = false;
+    let uploadedID = id;
+    let attempts = 0;
+    vi.mocked(request).mockImplementation(async (url) => {
+      if (url.endsWith("/uploads")) {
+        uploaded = true;
+        return { asset: { id: uploadedID } };
+      }
+      if (url.endsWith("/commands")) {
+        if (mode !== "success" && ++attempts === 1)
+          throw new RequestError("dependency_unavailable", 503);
+        return { ...emptyPage, revision: 3, items: [{ id, revision: 1 }] };
+      }
+      if (url.includes("/items/"))
+        return { id: uploadedID, revision: 0, catalog_state: "active" };
+      return {
+        ...emptyPage,
+        revision: uploaded ? 2 : 1,
+        folders: [{ id: folder, name: "目标文件夹", revision: 1 }],
+      };
+    });
+    render(<AssetsPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "目标文件夹" }));
+    await screen.findByRole("button", { name: "返回全部素材" });
+    fireEvent.click(screen.getByRole("button", { name: "上传素材" }));
+    fireEvent.change(screen.getByLabelText("选择素材文件"), {
+      target: {
+        files: [
+          new File([new Uint8Array([1, 2, 3])], "测试.png", {
+            type: "image/png",
+          }),
+        ],
+      },
+    });
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: "上传" }));
+    if (mode === "retry") {
+      fireEvent.click(await screen.findByRole("button", { name: "重试归档" }));
+    }
+    if (mode === "reopen") {
+      await screen.findByRole("button", { name: "重试归档" });
+      fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      uploadedID = nextID;
+      fireEvent.click(screen.getByRole("button", { name: "上传素材" }));
+      fireEvent.change(screen.getByLabelText("选择素材文件"), {
+        target: {
+          files: [
+            new File([new Uint8Array([4, 5, 6])], "new.png", {
+              type: "image/png",
+            }),
+          ],
+        },
+      });
+      fireEvent.click(screen.getByRole("checkbox"));
+      fireEvent.click(screen.getByRole("button", { name: "上传" }));
+    }
+    await screen.findByText("素材上传成功");
+    const uploads = vi
+      .mocked(request)
+      .mock.calls.filter(([url]) => url.endsWith("/uploads"));
+    const commands = vi
+      .mocked(request)
+      .mock.calls.filter(([url]) => url.endsWith("/commands"));
+    expect(uploads).toHaveLength(mode === "reopen" ? 2 : 1);
+    expect(commands).toHaveLength(mode === "success" ? 1 : 2);
+    if (mode === "retry") expect(commands[1]).toEqual(commands[0]);
+    if (mode === "reopen") {
+      expect(commands[1][1]?.data).toEqual(
+        expect.objectContaining({ items: [{ id: nextID, revision: 0 }] }),
+      );
+      expect(commands[1][1]?.headers).not.toEqual(commands[0][1]?.headers);
+    }
+    expect(request).toHaveBeenCalledWith(
+      "/api/media/library/commands",
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "move_items",
+          target_folder_id: folder,
+          expected_revision: 2,
+          items: [{ id, revision: 0 }],
+        }),
+      }),
+    );
+  },
+);

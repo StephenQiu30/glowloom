@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -11,6 +10,8 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
@@ -100,7 +101,8 @@ func (s *Store) ListPublicTasks(ctx context.Context, actor identityapp.Principal
 	if input.ProjectID == uuid.Nil || input.Limit < 1 || input.Limit > 200 {
 		return page, application.ErrInvalidPublicQuery
 	}
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := db.ReadSnapshot(ctx, s.db, func(tx *gorm.DB) error {
+		page = application.TaskPage{Items: []application.TaskSummary{}}
 		if err := s.requirePublicProject(tx, actor, input.ProjectID, false); err != nil {
 			return err
 		}
@@ -139,7 +141,7 @@ func (s *Store) ListPublicTasks(ctx context.Context, actor identityapp.Principal
 			page.Next = &application.TaskCursor{ID: last.ID, CreateTime: last.CreateTime}
 		}
 		return nil
-	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	})
 	return page, err
 }
 
@@ -149,7 +151,8 @@ func (s *Store) ReadPublicTask(ctx context.Context, actor identityapp.Principal,
 	if s == nil || s.db == nil {
 		return result, ErrUnavailable
 	}
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := db.ReadSnapshot(ctx, s.db, func(tx *gorm.DB) error {
+		result = application.TaskDetail{Inputs: []application.TaskInput{}, Outputs: []application.TaskOutput{}, Events: []application.TaskEvent{}}
 		if err := s.requirePublicProject(tx, actor, projectID, false); err != nil {
 			return err
 		}
@@ -229,7 +232,7 @@ func (s *Store) ReadPublicTask(ctx context.Context, actor identityapp.Principal,
 			return fmt.Errorf("read public task history: %w", err)
 		}
 		return nil
-	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	})
 	return result, err
 }
 
@@ -239,7 +242,8 @@ func (s *Store) ReadPublicBatch(ctx context.Context, actor identityapp.Principal
 	if s == nil || s.db == nil {
 		return result, ErrUnavailable
 	}
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := db.ReadSnapshot(ctx, s.db, func(tx *gorm.DB) error {
+		result = application.BatchDetail{Items: []application.TaskSummary{}}
 		if err := s.requirePublicProject(tx, actor, projectID, false); err != nil {
 			return err
 		}
@@ -271,7 +275,7 @@ func (s *Store) ReadPublicBatch(ctx context.Context, actor identityapp.Principal
 			return fmt.Errorf("public batch exceeds bound")
 		}
 		return nil
-	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	})
 	return result, err
 }
 

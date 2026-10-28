@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
 // LibraryProjectAccessFactory binds the workspace consumer to the same transaction.
@@ -148,7 +148,7 @@ func (s *LibraryStore) read(ctx context.Context, actor identityapp.Principal, sc
 	if scope.Validate() != nil {
 		return domain.ErrInvalidLibrary
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return db.ReadSnapshot(ctx, s.db, func(tx *gorm.DB) error {
 		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
@@ -160,7 +160,7 @@ func (s *LibraryStore) read(ctx context.Context, actor identityapp.Principal, sc
 			return err
 		}
 		return consume(tx, row)
-	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	})
 }
 
 // NewScopedLibraryStore binds live scope authority explicitly.

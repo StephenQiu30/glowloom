@@ -242,6 +242,7 @@ func writeLibraryError(c *gin.Context, err error) {
 	case errors.Is(err, domain.ErrInvalidLibrary):
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 	default:
+		httpapi.LogDependencyError(c, err)
 		httpapi.WriteProblem(c, 503, "dependency_unavailable", nil)
 	}
 }

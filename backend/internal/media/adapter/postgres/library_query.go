@@ -153,8 +153,9 @@ func (s *LibraryStore) ListLibrary(ctx context.Context, actor identityapp.Princi
 	if q.Validate(scope) != nil {
 		return application.LibraryPage{}, domain.ErrInvalidLibrary
 	}
-	result := application.LibraryPage{CurrentActorID: actor.ID, CurrentOrgID: actor.OrgID, Scope: scope, Page: q.Page, PageSize: q.PageSize, Items: []application.LibraryItemSummary{}, CategoryCounts: make(map[string]int64), FolderCounts: make(map[string]int64)}
+	var result application.LibraryPage
 	err := s.read(ctx, actor, scope, func(tx *gorm.DB, row libraryRow) error {
+		result = application.LibraryPage{CurrentActorID: actor.ID, CurrentOrgID: actor.OrgID, Scope: scope, Page: q.Page, PageSize: q.PageSize, Items: []application.LibraryItemSummary{}, CategoryCounts: make(map[string]int64), FolderCounts: make(map[string]int64)}
 		result.LibraryID, result.Revision = row.ID, row.Revision
 		folders, err := libraryFolders(tx, row.ID, false)
 		if err != nil {
@@ -230,6 +231,7 @@ func (s *LibraryStore) LibraryDetail(ctx context.Context, actor identityapp.Prin
 	}
 	var result application.LibraryItemDetail
 	err := s.read(ctx, actor, scope, func(tx *gorm.DB, row libraryRow) error {
+		result = application.LibraryItemDetail{}
 		cte, args := libraryEntries(actor, scope, row.ID)
 		var entry libraryEntryRow
 		read := tx.Raw(cte+`SELECT * FROM entries WHERE id=? AND catalog_state IN ('active','trashed')`, append(args, id)...).Scan(&entry)

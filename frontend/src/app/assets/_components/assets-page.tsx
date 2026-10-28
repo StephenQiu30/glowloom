@@ -69,6 +69,7 @@ import {
   listMediaLibrary,
   applyMediaLibraryCommand,
   downloadLibraryMediaAsset,
+  getMediaLibraryItem,
 } from "@/api/media";
 import {
   requireLibraryPage,
@@ -91,12 +92,14 @@ function Library({
   onLock,
   pageSize,
   onPageSizeChange,
+  onClearSearch,
 }: {
   filter: Filter;
   onFilter: (filter: Filter) => void;
   onLock: (locked: boolean) => void;
   pageSize: PageSize;
   onPageSizeChange: (size: PageSize) => void;
+  onClearSearch: () => void;
 }) {
   const session = useOptionalSession();
   const login = useLoginDialog();
@@ -124,6 +127,13 @@ function Library({
     base: LibraryPage;
   } | null>(null);
   const busy = useRef(false);
+  const previewOpener = useRef<HTMLButtonElement | null>(null);
+  const libraryElement = useRef<HTMLElement | null>(null);
+  const uploadPlacement = useRef<{
+    body: API.LibraryCommand;
+    key: string;
+    base: LibraryPage;
+  } | null>(null);
   const actorID = session?.actor.id;
   useEffect(() => () => onLock(false), [onLock]);
   useEffect(() => {
@@ -231,6 +241,62 @@ function Library({
       setSaving(false);
     }
   }
+  async function uploadedIntoFolder(asset?: API.AssetSummary) {
+    if (filter.folder) {
+      if (!asset?.id || !actorID) throw new RequestError("invalid_receipt");
+      if (!uploadPlacement.current) {
+        const [value, item] = await Promise.all([
+          listMediaLibrary({ scope: "personal", page: 1, page_size: 12 }),
+          getMediaLibraryItem({ scope: "personal", item_id: asset.id }),
+        ]);
+        const base = requireLibraryPage(value, actorID);
+        if (!base.folders.some((folder) => folder.id === filter.folder))
+          throw new RequestError("not_found", 404);
+        if (
+          item.id !== asset.id ||
+          !Number.isSafeInteger(item.revision) ||
+          item.revision! < 0 ||
+          item.catalog_state !== "active"
+        )
+          throw new RequestError("invalid_receipt");
+        if (item.folder_id === filter.folder) {
+          reload();
+          return;
+        }
+        uploadPlacement.current = {
+          base,
+          key: crypto.randomUUID(),
+          body: {
+            scope: { kind: "personal" },
+            expected_revision: base.revision,
+            action: "move_items",
+            target_folder_id: filter.folder,
+            items: [{ id: asset.id, revision: item.revision! }],
+          },
+        };
+      }
+      const placement = uploadPlacement.current;
+      try {
+        requireLibraryReceipt(
+          await applyMediaLibraryCommand(placement.body, {
+            headers: { "Idempotency-Key": placement.key },
+          }),
+          placement.base,
+        );
+        uploadPlacement.current = null;
+      } catch (error) {
+        // An uncertain result must replay the frozen command, never upload again.
+        if (
+          error instanceof RequestError &&
+          error.status >= 400 &&
+          error.status < 500
+        )
+          uploadPlacement.current = null;
+        throw error;
+      }
+    }
+    reload();
+  }
   function favorite(item: LibraryItem) {
     if (!page) return;
     void command({
@@ -265,7 +331,12 @@ function Library({
       }}
       asChild
     >
-      <section className="media-library" aria-label="素材库">
+      <section
+        ref={libraryElement}
+        tabIndex={-1}
+        className="media-library"
+        aria-label="素材库"
+      >
         <LibraryToolbar
           filter={filter}
           onFilter={onFilter}
@@ -357,6 +428,27 @@ function Library({
             <GenerationHistory />
           ) : (
             <>
+              {filter.search && (
+                <Item
+                  className="flex-nowrap p-0"
+                  role="group"
+                  aria-label="当前搜索条件"
+                >
+                  <ItemContent className="min-w-0 break-all">
+                    搜索：{filter.search}
+                  </ItemContent>
+                  <ItemActions>
+                    <Button
+                      variant="ghost"
+                      disabled={locked}
+                      onClick={onClearSearch}
+                    >
+                      <X data-icon="inline-start" />
+                      清除搜索
+                    </Button>
+                  </ItemActions>
+                </Item>
+              )}
               {writeError && (
                 <FeedbackToast
                   message={writeError}
@@ -550,14 +642,17 @@ function Library({
                             batch ? selected.includes(item.id) : undefined
                           }
                           disabled={batch && (locked || loading)}
-                          onClick={() => {
+                          onClick={(event) => {
                             if (batch)
                               setSelected((ids) =>
                                 ids.includes(item.id)
                                   ? ids.filter((id) => id !== item.id)
                                   : [...ids, item.id],
                               );
-                            else setDetail(item);
+                            else {
+                              previewOpener.current = event.currentTarget;
+                              setDetail(item);
+                            }
                           }}
                         >
                           <AssetPreview item={item} />
@@ -640,7 +735,16 @@ function Library({
                   if (!v) setDetail(null);
                 }}
               >
-                <DialogContent className="sm:max-w-4xl">
+                <DialogContent
+                  className="sm:max-w-4xl"
+                  onCloseAutoFocus={(event) => {
+                    event.preventDefault();
+                    (previewOpener.current?.isConnected
+                      ? previewOpener.current
+                      : libraryElement.current
+                    )?.focus();
+                  }}
+                >
                   <DialogTitle>{detail?.title}</DialogTitle>
                   <DialogDescription>
                     个人素材 · {detail?.media?.file_name ?? detail?.kind}
@@ -803,8 +907,12 @@ function Library({
               </Dialog>
               {upload && (
                 <UploadDialog
-                  onClose={() => setUpload(false)}
-                  onUploaded={reload}
+                  onClose={() => {
+                    uploadPlacement.current = null;
+                    setUpload(false);
+                  }}
+                  onUploaded={uploadedIntoFolder}
+                  destinationLabel={activeFolder?.name}
                 />
               )}
             </>
@@ -847,6 +955,10 @@ export function AssetsPage() {
         onLock={setLocked}
         pageSize={pageSize}
         onPageSizeChange={setPageSize}
+        onClearSearch={() => {
+          setSearch("");
+          setFilter((current) => ({ ...current, search: "" }));
+        }}
       />
     </PageLayout>
   );

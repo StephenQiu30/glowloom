@@ -29,11 +29,13 @@ export function UploadDialog({
   onUploaded,
   projectID,
   initialFile,
+  destinationLabel,
 }: {
   onClose: () => void;
-  onUploaded: (asset?: API.AssetSummary) => void;
+  onUploaded: (asset?: API.AssetSummary) => void | Promise<void>;
   projectID?: string;
   initialFile?: File;
+  destinationLabel?: string;
 }) {
   const formFieldId = useId();
 
@@ -45,6 +47,7 @@ export function UploadDialog({
   const [unconfirmed, setUnconfirmed] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const key = useRef(crypto.randomUUID());
+  const [uploaded, setUploaded] = useState<API.AssetSummary | null>(null);
   const busy = useRef(false);
   const request = useRef<AbortController | null>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -54,6 +57,7 @@ export function UploadDialog({
     if (!f) return;
     setError(validateUpload(f));
     setFile(f);
+    setUploaded(null);
     setConfirmed(false);
     setProgress(null);
     setDone(false);
@@ -67,6 +71,7 @@ export function UploadDialog({
     setError("");
     const controller = new AbortController();
     request.current = controller;
+    let accepted = uploaded;
     try {
       const sendOptions = {
         headers: { "Idempotency-Key": key.current },
@@ -78,29 +83,33 @@ export function UploadDialog({
             );
         },
       };
-      const r = projectID
-        ? await uploadMediaAsset(
-            { pid: projectID },
-            { local_review_confirmed: true },
-            file,
-            sendOptions,
-          )
-        : await uploadPersonalMediaAsset(
-            { local_review_confirmed: true },
-            file,
-            sendOptions,
-          );
-      if (
-        !isProjectID(r.asset?.id) ||
-        (projectID &&
-          (!r.asset ||
-            !("project_id" in r.asset) ||
-            r.asset.project_id !== projectID))
-      )
-        throw new RequestError("invalid_receipt");
+      if (!accepted) {
+        const r = projectID
+          ? await uploadMediaAsset(
+              { pid: projectID },
+              { local_review_confirmed: true },
+              file,
+              sendOptions,
+            )
+          : await uploadPersonalMediaAsset(
+              { local_review_confirmed: true },
+              file,
+              sendOptions,
+            );
+        if (
+          !isProjectID(r.asset?.id) ||
+          (projectID &&
+            (!r.asset ||
+              !("project_id" in r.asset) ||
+              r.asset.project_id !== projectID))
+        )
+          throw new RequestError("invalid_receipt");
+        accepted = r.asset!;
+        setUploaded(accepted);
+      }
+      await onUploaded(accepted);
       setDone(true);
       setUnconfirmed(false);
-      onUploaded(r.asset);
     } catch (e) {
       setUnconfirmed(
         !(e instanceof RequestError && e.status >= 400 && e.status < 500),
@@ -108,7 +117,9 @@ export function UploadDialog({
       setError(
         controller.signal.aborted
           ? "上传已中止，但服务器可能已接收文件。请重试原上传确认结果。"
-          : mediaError(e),
+          : accepted
+            ? `文件已上传，但归档尚未完成。${mediaError(e)}`
+            : mediaError(e),
       );
     } finally {
       busy.current = false;
@@ -126,7 +137,9 @@ export function UploadDialog({
         <DialogTitle>{done ? "素材上传成功" : "上传素材"}</DialogTitle>
         <DialogDescription>
           {done
-            ? "文件已保存到当前素材库。"
+            ? destinationLabel
+              ? `文件已保存到「${destinationLabel}」。`
+              : "文件已保存到当前素材库。"
             : "图片和文档最多 20 MB，音频 100 MB，视频 500 MB（60 秒），GLB 模型 64 MB。"}
         </DialogDescription>
         {!done && (
@@ -223,7 +236,7 @@ export function UploadDialog({
               }
               onClick={() => void upload()}
             >
-              {unconfirmed ? "重试原上传" : "上传"}
+              {uploaded ? "重试归档" : unconfirmed ? "重试原上传" : "上传"}
             </Button>
           )}
         </DialogFooter>

@@ -623,6 +623,7 @@ func writeError(c *gin.Context, err error) {
 	case errors.Is(err, application.ErrInvalidFreeQuote), errors.Is(err, application.ErrInvalidBatchFreeQuote), errors.Is(err, application.ErrInvalidConfirmSingleQuote), errors.Is(err, application.ErrInvalidConfirmBatchQuote), errors.Is(err, application.ErrInvalidPublicQuery), errors.Is(err, application.ErrInvalidWorkflowControl):
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 	default:
+		httpapi.LogDependencyError(c, err)
 		httpapi.WriteProblem(c, 503, "dependency_unavailable", nil)
 	}
 }
