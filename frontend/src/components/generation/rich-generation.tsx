@@ -194,7 +194,7 @@ function errorText(error: unknown) {
 }
 async function readModelCatalog(
   projectID: string,
-  capability: GenerationSeed["capability"],
+  capability: string,
   signal?: AbortSignal,
 ) {
   const models: API.ModelResponse[] = [];
@@ -204,7 +204,7 @@ async function readModelCatalog(
     const page = await listProjectModels(
       {
         project_id: projectID,
-        capability: capability + ".generate",
+        capability,
         limit: 100,
         ...(cursor ? { cursor } : {}),
       },
@@ -241,7 +241,7 @@ export function RichGeneration(props: Props) {
           getSession({ signal: controller.signal }),
           readModelCatalog(
             props.projectID,
-            props.seed.capability,
+            props.seed.reuse?.capability ?? props.seed.capability + ".generate",
             controller.signal,
           )
             .then((models) => ({ models, error: "" }))
@@ -472,7 +472,7 @@ function EditorWorkspace({
     try {
       const result = await readModelCatalog(
         projectID,
-        seed.capability,
+        seed.reuse?.capability ?? seed.capability + ".generate",
         controller.signal,
       );
       if (!controller.signal.aborted) {
@@ -980,7 +980,7 @@ function EditorWorkspace({
     try {
       const page = await listProjectModels({
         project_id: projectID,
-        capability: seed.capability + ".generate",
+        capability: seed.reuse?.capability ?? seed.capability + ".generate",
         limit: 100,
       });
       let found = page.items?.find((m) => m.current_version?.id === version);
@@ -990,7 +990,7 @@ function EditorWorkspace({
         seen.add(cursor);
         const next = await listProjectModels({
           project_id: projectID,
-          capability: seed.capability + ".generate",
+          capability: seed.reuse?.capability ?? seed.capability + ".generate",
           limit: 100,
           cursor,
         });

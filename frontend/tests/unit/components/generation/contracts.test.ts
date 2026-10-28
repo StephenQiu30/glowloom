@@ -116,3 +116,22 @@ it("仅接受已完成文本任务的已审核有限文本输出", () => {
     ),
   ).toThrow();
 });
+
+it.each(["text.structured", "document.generate"])(
+  "文档能力%s沿用最终审核正文边界",
+  (capability) => {
+    const task: API.TaskDetail = {
+      id,
+      project_id: project,
+      capability,
+      status: "completed",
+      outputs: [
+        { id, kind: "json", moderation_status: "passed", text: "有限真实正文" },
+      ],
+    };
+    expect(requireTask(task, project).outputs?.[0].text).toBe("有限真实正文");
+    expect(() =>
+      requireTask({ ...task, status: "succeeded" }, project),
+    ).toThrow();
+  },
+);

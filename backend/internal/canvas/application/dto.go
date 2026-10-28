@@ -67,6 +67,7 @@ type NodeDTO struct {
 
 // DocumentDTO is a complete shared graph; the camera belongs to the local session.
 type DocumentDTO struct {
+	Kind             string          `json:"kind"`
 	ID               uuid.UUID       `json:"id"`
 	ProjectID        uuid.UUID       `json:"project_id"`
 	Name             string          `json:"name"`
@@ -97,6 +98,7 @@ func nodeDTO(n domain.Node) NodeDTO {
 
 // Snapshot maps authorized internal state without changing persisted content.
 func Snapshot(doc domain.Document) DocumentDTO {
+	kind, _ := domain.ParseDocumentKind(doc.Kind)
 	// Pre-version lifecycle receipts contain the same known graph without schema
 	// metadata. Translate the boundary only; never rewrite their durable payload.
 	if doc.SchemaVersion == 0 {
@@ -113,7 +115,7 @@ func Snapshot(doc domain.Document) DocumentDTO {
 	if doc.ReadOnlyReason != "" {
 		reason = &doc.ReadOnlyReason
 	}
-	return DocumentDTO{ID: doc.ID, ProjectID: doc.ProjectID, Name: doc.Name, Scope: doc.Scope, SchemaVersion: doc.SchemaVersion, OperationVersion: OperationVersion, Revision: Revision(doc.Revision), Permissions: Permissions{Read: true, Write: doc.Writable && reason == nil}, ReadOnlyReason: reason, Nodes: nodes, Edges: doc.Edges}
+	return DocumentDTO{Kind: kind, ID: doc.ID, ProjectID: doc.ProjectID, Name: doc.Name, Scope: doc.Scope, SchemaVersion: doc.SchemaVersion, OperationVersion: OperationVersion, Revision: Revision(doc.Revision), Permissions: Permissions{Read: true, Write: doc.Writable && reason == nil}, ReadOnlyReason: reason, Nodes: nodes, Edges: doc.Edges}
 }
 
 // decodeProjectionOperations maps trusted runtime projection differences to the

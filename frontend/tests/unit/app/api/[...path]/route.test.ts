@@ -43,6 +43,54 @@ const context = (path: string) => ({
   params: Promise.resolve({ path: path.split("/") }),
 });
 
+it.each([
+  [
+    "operations/history",
+    "kind=document&favorite_only=true&process_types=super_resolution&resolutions=2K%2C4K&ratios=16%3A9&generation_modes=multi_frame&search=story&created_from=2026-10-01T00%3A00%3A00Z&order=asc&limit=24&cursor=fixture",
+  ],
+  [
+    "canvases",
+    "kind=short_drama&collection=current&favorite_only=true&sort=created&order=desc&created_before=2026-10-29T00%3A00%3A00Z&limit=24",
+  ],
+])(
+  "asset query %s forwards only its bounded GET contract",
+  async (path, query) => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(new Response('{"items":[],"next_cursor":null}'));
+    vi.stubGlobal("fetch", fetcher);
+    const response = await GET(
+      new Request(`http://localhost/api/${path}?${query}`),
+      context(path),
+    );
+    expect(response.status).toBe(200);
+    expect((fetcher.mock.calls[0][0] as URL).search).toBe(
+      `?${new URLSearchParams(query)}`,
+    );
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    fetcher.mockClear();
+    for (const invalid of [`${query}&actor_id=other`, `${query}&kind=image`]) {
+      expect(
+        (
+          await GET(
+            new Request(`http://localhost/api/${path}?${invalid}`),
+            context(path),
+          )
+        ).status,
+      ).toBe(422);
+    }
+    expect(
+      (
+        await POST(
+          new Request(`http://localhost/api/${path}`, { method: "POST" }),
+          context(path),
+        )
+      ).status,
+    ).toBe(405);
+    expect(fetcher).not.toHaveBeenCalled();
+  },
+);
+
 it("project creation recovery is GET only and recent content order is preserved", async () => {
   const fetcher = vi
     .fn()
@@ -1073,4 +1121,83 @@ it("账号删除仅 POST 透传原始版本、Cookie、CSRF 和幂等键，禁�
     ).status,
   ).toBe(422);
   expect(fetcher).not.toHaveBeenCalled();
+});
+
+it.each([
+  "operations/history/commands",
+  "operations/history/publications",
+  "canvas-assets/commands",
+])("资产命令%s只允许POST且不接受查询注入", async (path) => {
+  const fetcher = vi.fn().mockResolvedValue(new Response("{}"));
+  vi.stubGlobal("fetch", fetcher);
+  expect(
+    (await GET(new Request(`http://localhost/api/${path}`), context(path)))
+      .status,
+  ).toBe(405);
+  expect(
+    (
+      await POST(
+        new Request(`http://localhost/api/${path}?actor_id=other`, {
+          method: "POST",
+        }),
+        context(path),
+      )
+    ).status,
+  ).toBe(422);
+  expect(fetcher).not.toHaveBeenCalled();
+  await POST(
+    new Request(`http://localhost/api/${path}`, {
+      method: "POST",
+      headers: { "Idempotency-Key": "frozen-key" },
+      body: "{}",
+    }),
+    context(path),
+  );
+  expect(fetcher.mock.calls[0][1].headers.get("Idempotency-Key")).toBe(
+    "frozen-key",
+  );
+});
+it("作品公开读取有界且原件下载流使用120秒超时", async () => {
+  const timeout = vi
+    .spyOn(AbortSignal, "timeout")
+    .mockImplementation(() => new AbortController().signal);
+  const fetcher = vi
+    .fn()
+    .mockImplementation(
+      async () =>
+        new Response("file", {
+          headers: {
+            "Content-Type": "video/mp4",
+            "Content-Disposition": 'attachment; filename="result.mp4"',
+            "X-Content-Type-Options": "nosniff",
+          },
+        }),
+    );
+  vi.stubGlobal("fetch", fetcher);
+  const work = "works/00000000-0000-4000-8000-000000000001";
+  expect(
+    (await GET(new Request(`http://localhost/api/${work}`), context(work)))
+      .status,
+  ).toBe(200);
+  expect(
+    (
+      await GET(
+        new Request(`http://localhost/api/${work}?pid=other`),
+        context(work),
+      )
+    ).status,
+  ).toBe(422);
+  const path =
+    "projects/00000000-0000-4000-8000-000000000001/media/00000000-0000-4000-8000-000000000002/original";
+  const response = await GET(
+    new Request(`http://localhost/api/${path}`),
+    context(path),
+  );
+  expect(timeout).toHaveBeenCalledWith(120000);
+  expect(await response.text()).toBe("file");
+  expect(response.headers.get("Content-Disposition")).toBe(
+    'attachment; filename="result.mp4"',
+  );
+  expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+  timeout.mockRestore();
 });

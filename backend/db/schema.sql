@@ -749,6 +749,7 @@ CREATE INDEX canvas_operation_tombstones ON canvas.command_log USING gin(command
 CREATE UNIQUE INDEX canvas_operation_identity ON canvas.command_log(document_id,create_by,op_id) WHERE op_id IS NOT NULL;
 
 CREATE TABLE canvas.document (
+    kind text DEFAULT 'canvas' NOT NULL CHECK (kind IN ('canvas','short_drama')),
     schema_version integer DEFAULT 1 NOT NULL CHECK (schema_version > 0),
     operation_version integer DEFAULT 1 NOT NULL CHECK (operation_version IN (0,1)),
     id uuid NOT NULL,
@@ -4356,6 +4357,7 @@ CREATE INDEX ix_ledger_project_time ON billing.ledger_entry USING btree (project
 CREATE INDEX ix_reservation_held ON billing.reservation USING btree (project_id) WHERE (status = 'held'::text);
 
 CREATE INDEX ix_canvas_document_project ON canvas.document USING btree (project_id) WHERE (NOT is_delete);
+CREATE INDEX ix_canvas_document_asset_kind ON canvas.document(kind,update_time DESC,id DESC) WHERE NOT is_delete;
 
 CREATE INDEX ix_canvas_node_doc ON canvas.node USING btree (document_id);
 
@@ -6672,3 +6674,110 @@ ON CONFLICT(preset_id,version_no) DO NOTHING;
 UPDATE catalog.capability SET input_roles=ARRAY(
  SELECT DISTINCT role FROM unnest(input_roles || ARRAY['reference_video','reference_audio']) AS role ORDER BY role
 ) WHERE key='video.generate';
+
+
+-- Asset parity: canvas_asset_management_incremental.sql
+-- Existing database only; additive metadata, no graph or execution rewrites.
+ALTER TABLE canvas.document
+ ADD COLUMN IF NOT EXISTS asset_collection text NOT NULL DEFAULT 'current';
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='canvas.document'::regclass AND conname='document_asset_collection_check') THEN
+  ALTER TABLE canvas.document ADD CONSTRAINT document_asset_collection_check CHECK(asset_collection IN ('current','legacy'));
+ END IF;
+END $$;
+CREATE TABLE IF NOT EXISTS canvas.asset_preference (
+ actor_id uuid NOT NULL REFERENCES identity."user"(id),
+ scope_id uuid NOT NULL REFERENCES workspace.creation_scope(id),
+ document_id uuid NOT NULL REFERENCES canvas.document(id),
+ favorite boolean NOT NULL DEFAULT false,
+ revision bigint NOT NULL DEFAULT 1 CHECK(revision>0),
+ updated_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(actor_id,scope_id,document_id)
+);
+GRANT SELECT,INSERT,UPDATE ON canvas.asset_preference TO glowloom_app;
+CREATE INDEX IF NOT EXISTS ix_canvas_asset_favorites ON canvas.asset_preference(actor_id,scope_id,document_id) WHERE favorite;
+
+
+-- Asset parity: personal_history_incremental.sql
+-- Personal views never alter operation execution or shared media ownership.
+CREATE TABLE IF NOT EXISTS operation.personal_history_record (
+ actor_id uuid NOT NULL,
+ org_id uuid NOT NULL,
+ scope_id uuid NOT NULL,
+ operation_id uuid NOT NULL REFERENCES operation.operation(id),
+ revision bigint NOT NULL DEFAULT 0 CHECK(revision>=0),
+ deleted_at timestamptz,
+ PRIMARY KEY(actor_id,org_id,scope_id,operation_id)
+);
+CREATE TABLE IF NOT EXISTS operation.personal_history_output (
+ actor_id uuid NOT NULL,
+ org_id uuid NOT NULL,
+ scope_id uuid NOT NULL,
+ operation_id uuid NOT NULL REFERENCES operation.operation(id),
+ output_id uuid NOT NULL REFERENCES operation.operation_output(id),
+ revision bigint NOT NULL DEFAULT 0 CHECK(revision>=0),
+ favorite boolean NOT NULL DEFAULT false,
+ deleted_at timestamptz,
+ PRIMARY KEY(actor_id,org_id,scope_id,operation_id,output_id)
+);
+CREATE INDEX IF NOT EXISTS personal_history_output_favorite_idx
+ ON operation.personal_history_output(actor_id,org_id,scope_id,operation_id) WHERE favorite AND deleted_at IS NULL;
+CREATE TABLE IF NOT EXISTS operation.personal_history_command_receipt (
+ actor_id uuid NOT NULL,
+ org_id uuid NOT NULL,
+ scope_id uuid NOT NULL,
+ request_id uuid NOT NULL,
+ request_hash text NOT NULL,
+ response jsonb NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(actor_id,org_id,scope_id,request_id)
+);
+GRANT SELECT,INSERT,UPDATE ON operation.personal_history_record,operation.personal_history_output TO glowloom_app;
+GRANT SELECT,INSERT ON operation.personal_history_command_receipt TO glowloom_app;
+
+
+-- Asset parity: history_publication_incremental.sql
+-- Explicitly selected public works; project and sibling results stay private.
+CREATE TABLE IF NOT EXISTS operation.published_work (
+ id uuid PRIMARY KEY,
+ actor_id uuid NOT NULL,
+ org_id uuid NOT NULL,
+ scope_id uuid NOT NULL,
+ project_id uuid NOT NULL REFERENCES workspace.project(id),
+ operation_id uuid NOT NULL REFERENCES operation.operation(id),
+ output_id uuid NOT NULL REFERENCES operation.operation_output(id),
+ media_asset_id uuid NOT NULL REFERENCES media.media_asset(id),
+ title text NOT NULL CHECK (char_length(title) BETWEEN 1 AND 120),
+ description text NOT NULL DEFAULT '' CHECK (char_length(description)<=2000),
+ prompt text,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ withdrawn_at timestamptz,
+ UNIQUE(actor_id,output_id)
+);
+CREATE TABLE IF NOT EXISTS operation.history_publication_receipt (
+ actor_id uuid NOT NULL,
+ org_id uuid NOT NULL,
+ scope_id uuid NOT NULL,
+ request_key uuid NOT NULL,
+ request_hash text NOT NULL,
+ response jsonb NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(actor_id,org_id,scope_id,request_key)
+);
+GRANT SELECT,INSERT ON operation.published_work,operation.history_publication_receipt TO glowloom_app;
+
+
+-- Asset parity: canvas_asset_creation_incremental.sql
+-- Additive asset-entry creation receipt. Never rewrites existing project/canvas data.
+CREATE TABLE IF NOT EXISTS canvas.asset_creation_receipt (
+ actor_id uuid NOT NULL REFERENCES identity."user"(id),
+ scope_id uuid NOT NULL REFERENCES workspace.creation_scope(id),
+ idem_key uuid NOT NULL,
+ request_hash text NOT NULL CHECK(length(request_hash)=64),
+ project_id uuid NOT NULL REFERENCES workspace.project(id),
+ document_id uuid NOT NULL REFERENCES canvas.document(id),
+ response_body jsonb NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(actor_id,idem_key)
+);
+GRANT SELECT,INSERT ON canvas.asset_creation_receipt TO glowloom_app;

@@ -428,7 +428,7 @@ export function AssetZipTransfers({
             <DialogDescription>
               保存到：
               {current?.projectId
-                ? (targetLibrary.data?.projectPath ?? "项目素材库")
+                ? (targetLibrary.data?.projectPath ?? "项目参考素材目录")
                 : "通用素材"}
               。
               {current?.sourceArchiveName ||

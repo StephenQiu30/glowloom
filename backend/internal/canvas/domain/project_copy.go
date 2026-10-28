@@ -24,6 +24,12 @@ type ProjectDocumentCopy struct {
 // CopyProjectDocument rebuilds a private graph with stable job-scoped identities.
 // Media mappings must come from verified owning-module copy receipts.
 func CopyProjectDocument(source Document, targetProject, job uuid.UUID, assets map[uuid.UUID]uuid.UUID) (ProjectDocumentCopy, error) {
+	if source.AssetCollection != "" && source.AssetCollection != "current" {
+		return ProjectDocumentCopy{}, ErrUnsupportedProjectCopy
+	}
+	if _, err := ParseDocumentKind(source.Kind); err != nil {
+		return ProjectDocumentCopy{}, ErrUnsupportedProjectCopy
+	}
 	if source.ID == uuid.Nil || source.ProjectID == uuid.Nil || targetProject == uuid.Nil || targetProject == source.ProjectID || job == uuid.Nil || source.Revision < 1 || !validTitle(source.Name) {
 		return ProjectDocumentCopy{}, ErrInvalidProjectCopy
 	}

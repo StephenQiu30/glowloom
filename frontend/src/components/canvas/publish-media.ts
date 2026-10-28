@@ -28,7 +28,7 @@ export async function publishCanvasMedia(
       continue;
     }
     if (!source.startsWith("data:") && !source.startsWith("blob:"))
-      throw new Error("请从项目素材库选择已授权的媒体");
+      throw new Error("请从项目参考素材目录选择已授权的媒体");
     let receipt = receipts.get(node.id);
     if (!receipt || receipt.source !== source) {
       receipt = { source, key: crypto.randomUUID() };

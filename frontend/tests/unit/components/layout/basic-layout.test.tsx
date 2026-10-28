@@ -11,6 +11,7 @@ import {
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AssetWorkspace } from "@/app/assets/_components/asset-workspace";
 import { BasicLayout } from "@/components/layout/basic-layout";
 import { ApplicationLayout } from "@/components/layout/application-layout";
 import { RouteLoading } from "@/components/layout/route-loading";
@@ -110,9 +111,9 @@ it("R6 主导航与画布入口指向真实路由，支持收起和展开", asyn
   expect(
     screen.getByRole("banner", { name: "页面顶栏" }).closest("main"),
   ).toBeNull();
-  expect(
-    screen.getByRole("link", { name: "素材库" }).getAttribute("href"),
-  ).toBe("/assets");
+  expect(screen.getByRole("link", { name: "资产" }).getAttribute("href")).toBe(
+    "/assets",
+  );
   expect(
     screen.getByRole("link", { name: "查看我的画布" }).getAttribute("href"),
   ).toBe("/projects");
@@ -153,9 +154,9 @@ it("素材库允许未登录页面外壳，私人数据仍由页面会话边界�
   );
   expect(await screen.findByText("素材库登录引导")).toBeTruthy();
   expect(mocks.replace).not.toHaveBeenCalled();
-  expect(
-    screen.getByRole("link", { name: "素材库" }).getAttribute("href"),
-  ).toBe("/assets");
+  expect(screen.getByRole("link", { name: "资产" }).getAttribute("href")).toBe(
+    "/assets",
+  );
 });
 
 it("收起后保留可访问导航和当前页，重新挂载保持偏好", async () => {
@@ -300,7 +301,7 @@ it("空间读取期间保留顶栏和侧栏，只阻止正文私有内容", asyn
     </BasicLayout>,
   );
   const header = await screen.findByRole("banner", { name: "页面顶栏" });
-  expect(screen.getByRole("link", { name: "素材库" })).toBeTruthy();
+  expect(screen.getByRole("link", { name: "资产" })).toBeTruthy();
   expect(await screen.findByRole("status")).toHaveProperty(
     "textContent",
     "正在确认创作归属…",
@@ -340,7 +341,7 @@ it("游客侧栏展开和收起均只保留顶栏登录入口", async () => {
   expect(screen.queryByText("登录后保存你的创作")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "收起导航" }));
   expect(screen.getAllByRole("button", { name: "登录" })).toHaveLength(1);
-  expect(screen.getByRole("link", { name: "素材库" })).toBeTruthy();
+  expect(screen.getByRole("link", { name: "资产" })).toBeTruthy();
 });
 
 it("普通页面换页保留同一个页头与侧栏节点，并清理前一页搜索回调", async () => {
@@ -451,4 +452,30 @@ it("管理页切换与路由加载保留同一导航节点和焦点，正文按�
     </ApplicationLayout>,
   );
   expect(screen.queryByRole("navigation", { name: "管理页面" })).toBeNull();
+});
+
+it("asset header options stay stable under the shared login context", async () => {
+  const fallback = await request("/api/session");
+  vi.mocked(request).mockImplementation(async (url) =>
+    url === "/api/operations/history"
+      ? { items: [], next_cursor: null }
+      : fallback,
+  );
+  const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+  render(
+    <BasicLayout screen="assets">
+      <AssetWorkspace />
+    </BasicLayout>,
+  );
+  await screen.findByText("暂无相关资产");
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(screen.getByRole("button", { name: "搜索本人生成历史" })).toBeTruthy();
+  expect(
+    errors.mock.calls.some((args) =>
+      args.some((value) => String(value).includes("Maximum update depth")),
+    ),
+  ).toBe(false);
+  errors.mockRestore();
 });

@@ -132,7 +132,7 @@ export function ProjectAssetDialog({
           data-canvas-picker={canvasPresentation || undefined}
         >
           <DialogHeader className="sr-only">
-            <DialogTitle>{reference ? "选择参考素材" : "资产库"}</DialogTitle>
+            <DialogTitle>{reference ? "选择参考素材" : "参考素材"}</DialogTitle>
             <DialogDescription>
               从当前项目添加素材，或选择主体开始创作。
             </DialogDescription>

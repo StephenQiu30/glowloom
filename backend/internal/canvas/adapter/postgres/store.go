@@ -62,7 +62,7 @@ func (s *Store) List(ctx context.Context, a identityapp.Principal, p uuid.UUID) 
 			return err
 		}
 		var rows []documentRow
-		if err := tx.Raw(`SELECT id,project_id,name,scope,revision,viewport,operation_version,schema_version FROM canvas.document WHERE project_id=? AND NOT is_delete ORDER BY update_time DESC,id`, p).Scan(&rows).Error; err != nil {
+		if err := tx.Raw(`SELECT id,project_id,name,kind,asset_collection,scope,revision,viewport,operation_version,schema_version FROM canvas.document WHERE project_id=? AND NOT is_delete ORDER BY update_time DESC,id`, p).Scan(&rows).Error; err != nil {
 			return err
 		}
 		for _, row := range rows {
@@ -151,9 +151,13 @@ func (s *Store) Create(ctx context.Context, a identityapp.Principal, p uuid.UUID
 		if err != nil || replayed {
 			return err
 		}
-		doc = domain.Document{SchemaVersion: application.SchemaVersion, OperationVersion: application.OperationVersion, Writable: true, ID: uuid.New(), ProjectID: p, Name: input.Name, Scope: input.Scope, Revision: 1, Viewport: domain.Viewport{Zoom: 1}, Nodes: []domain.Node{}, Edges: []domain.Edge{}}
+		doc = domain.Document{Kind: input.Kind, SchemaVersion: application.SchemaVersion, OperationVersion: application.OperationVersion, Writable: true, ID: uuid.New(), ProjectID: p, Name: input.Name, Scope: input.Scope, Revision: 1, Viewport: domain.Viewport{Zoom: 1}, Nodes: []domain.Node{}, Edges: []domain.Edge{}}
 		viewport, _ := json.Marshal(doc.Viewport)
-		if err := tx.Exec(`INSERT INTO canvas.document(id,project_id,name,scope,viewport) VALUES (?,?,?,?::jsonb,?::jsonb)`, doc.ID, p, doc.Name, string(doc.Scope), string(viewport)).Error; err != nil {
+		kind, err := domain.ParseDocumentKind(doc.Kind)
+		if err != nil {
+			return err
+		}
+		if err := tx.Exec(`INSERT INTO canvas.document(id,project_id,name,kind,scope,viewport) VALUES (?,?,?,?,?::jsonb,?::jsonb)`, doc.ID, p, doc.Name, kind, string(doc.Scope), string(viewport)).Error; err != nil {
 			return err
 		}
 		if err := changed(tx, a, doc.ID, p, 1); err != nil {
@@ -168,6 +172,8 @@ func (s *Store) Create(ctx context.Context, a identityapp.Principal, p uuid.UUID
 }
 
 type documentRow struct {
+	AssetCollection  string
+	Kind             string
 	SchemaVersion    int
 	OperationVersion int
 	ID               uuid.UUID
@@ -179,7 +185,19 @@ type documentRow struct {
 }
 
 func (r documentRow) document() (domain.Document, error) {
-	d := domain.Document{SchemaVersion: r.SchemaVersion, OperationVersion: r.OperationVersion, ID: r.ID, ProjectID: r.ProjectID, Name: r.Name, Scope: json.RawMessage(r.Scope), Revision: r.Revision, Nodes: []domain.Node{}, Edges: []domain.Edge{}}
+	kind, err := domain.ParseDocumentKind(r.Kind)
+	if err != nil {
+		return domain.Document{}, err
+	}
+	// Ordinary canvases omit the legacy-internal field to preserve frozen hashes.
+	if kind == "canvas" {
+		kind = ""
+	}
+	collection := r.AssetCollection
+	if collection == "current" {
+		collection = ""
+	}
+	d := domain.Document{AssetCollection: collection, Kind: kind, SchemaVersion: r.SchemaVersion, OperationVersion: r.OperationVersion, ID: r.ID, ProjectID: r.ProjectID, Name: r.Name, Scope: json.RawMessage(r.Scope), Revision: r.Revision, Nodes: []domain.Node{}, Edges: []domain.Edge{}}
 	if err := json.Unmarshal(r.Viewport, &d.Viewport); err != nil {
 		return domain.Document{}, err
 	}
@@ -194,7 +212,7 @@ func load(tx *gorm.DB, id uuid.UUID, write bool) (domain.Document, error) {
 	if write {
 		lock = " FOR UPDATE"
 	}
-	r := tx.Raw(`SELECT id,project_id,name,scope,revision,viewport,operation_version,schema_version FROM canvas.document WHERE id=? AND NOT is_delete`+lock, id).Scan(&row)
+	r := tx.Raw(`SELECT id,project_id,name,kind,asset_collection,scope,revision,viewport,operation_version,schema_version FROM canvas.document WHERE id=? AND NOT is_delete`+lock, id).Scan(&row)
 	if r.Error != nil {
 		return domain.Document{}, r.Error
 	}
@@ -623,6 +641,21 @@ func (s *Store) mutateDocument(ctx context.Context, a identityapp.Principal, id 
 		if doc.Revision != expected {
 			return &application.RevisionConflict{CurrentRevision: doc.Revision}
 		}
+		if !remove {
+			collaboration, err := loadYjsRow(tx, id)
+			if err != nil {
+				return err
+			}
+			if collaboration.DocumentID != uuid.Nil {
+				var admitted bool
+				if err := tx.Raw(`SELECT COALESCE(current_setting('glowloom.yjs_document_id',true),'')=?`, id.String()).Scan(&admitted).Error; err != nil {
+					return err
+				}
+				if !admitted {
+					return application.ErrYjsNotEnabled
+				}
+			}
+		}
 		if doc.Revision == math.MaxInt64 {
 			return domain.ErrInvalidCommand
 		}
@@ -639,6 +672,9 @@ func (s *Store) mutateDocument(ctx context.Context, a identityapp.Principal, id 
 			*result.(*application.DeleteResult) = application.DeleteResult{ID: id, Revision: doc.Revision, Deleted: true}
 		} else {
 			doc.Name = name
+			if err := tx.Exec(`SELECT set_config('glowloom.yjs_document_id',?,true)`, id.String()).Error; err != nil {
+				return err
+			}
 			if err := tx.Exec(`UPDATE canvas.document SET name=?,revision=?,update_time=now() WHERE id=?`, name, doc.Revision, id).Error; err != nil {
 				return err
 			}

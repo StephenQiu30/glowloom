@@ -8,7 +8,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { AssetsPage } from "@/app/assets/_components/assets-page";
+import { ReferenceAssetsPage as AssetsPage } from "@/app/assets/_components/assets-page";
 import { request, RequestError } from "@/lib/request";
 
 // Isolated transport tests. These responses never enter the running application.
@@ -99,21 +99,13 @@ it("收藏预览中的素材后保持弹窗并更新操作状态", async () => {
   expect(screen.getByRole("dialog")).toBeTruthy();
 });
 
-it("未登录保持素材库首位，不读取私人接口，登录由已有弹窗处理", () => {
+it("未登录参考素材保留返回资产入口，不读取私人接口", () => {
   state.session = null;
   render(<AssetsPage />);
   expect(
-    screen
-      .getAllByRole("tab")
-      .slice(0, 2)
-      .map((t) => t.textContent),
-  ).toEqual(["素材", "生成历史"]);
-  expect(
-    screen.getByRole("tab", { name: "素材" }).getAttribute("aria-selected"),
-  ).toBe("true");
-  expect(
-    screen.getByRole("tab", { name: "素材" }).getAttribute("aria-controls"),
-  ).toBe(screen.getByRole("tabpanel", { name: "素材" }).id);
+    screen.getByRole("link", { name: "返回资产" }).getAttribute("href"),
+  ).toBe("/assets");
+  expect(screen.queryByRole("tab", { name: "生成历史" })).toBeNull();
   expect(screen.getByRole("radiogroup", { name: "素材类型" })).toBeTruthy();
   expect(request).not.toHaveBeenCalled();
   expect(
@@ -178,15 +170,11 @@ it("拒绝跨账号回执并在接口返回401时回到登录引导", async () =
   expect(screen.queryByText("共 0 个素材")).toBeNull();
 });
 
-it("生成历史要求选择项目后读取，不虚构跨项目记录", async () => {
+it("参考素材不再包含误导的项目生成历史页签", async () => {
   render(<AssetsPage />);
   await screen.findByText("这里还没有素材");
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "生成历史" }), {
-    button: 0,
-    ctrlKey: false,
-  });
-  expect(await screen.findByText("选择项目，查看生成记录")).toBeTruthy();
-  expect(screen.queryByText("还没有生成记录")).toBeNull();
+  expect(screen.getByRole("heading", { name: "参考素材" })).toBeTruthy();
+  expect(screen.queryByRole("tab", { name: "生成历史" })).toBeNull();
 });
 
 it("创建文件夹携带库版本和幂等键，成功后重新读取列表", async () => {

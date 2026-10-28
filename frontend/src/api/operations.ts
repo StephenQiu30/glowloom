@@ -130,6 +130,57 @@ export async function confirmOperationQuote(
   });
 }
 
+/** 本人发起的生成历史 GET /api/operations/history */
+export async function listPersonalOperationHistory(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.listPersonalOperationHistoryParams,
+  options?: RequestOptions,
+) {
+  return request<API.PersonalHistoryPageResponse>("/api/operations/history", {
+    method: "GET",
+    params: {
+      ...params,
+    },
+    ...(options || {}),
+  });
+}
+
+/** 收藏或删除本人生成历史 POST /api/operations/history/commands */
+export async function applyPersonalHistoryCommand(
+  body: API.PersonalHistoryCommand,
+  options?: RequestOptions,
+) {
+  return request<API.PersonalHistoryCommandReceipt>(
+    "/api/operations/history/commands",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      data: body,
+      ...(options || {}),
+    },
+  );
+}
+
+/** 发布本人生成结果 POST /api/operations/history/publications */
+export async function publishHistoryResults(
+  body: API.HistoryPublicationInput,
+  options?: RequestOptions,
+) {
+  return request<API.HistoryPublicationReceipt>(
+    "/api/operations/history/publications",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      data: body,
+      ...(options || {}),
+    },
+  );
+}
+
 /** 自由生成报价 POST /api/projects/${param0}/free-operations */
 export async function createFreeQuote(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

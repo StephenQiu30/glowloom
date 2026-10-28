@@ -1,0 +1,56 @@
+[
+  {
+    "name": "l5.c8cc879cc4.js",
+    "observed_url": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/dreamina/web/jimeng/static/js/async/l5.c8cc879cc4.js",
+    "sha256": "b5b2f8510c2ce4864ec73bc480311278632b5e7d5b46646be7313d253db00b74",
+    "bytes": 70945
+  },
+  {
+    "name": "xqv.a2ae320825.js",
+    "observed_url": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/dreamina/web/jimeng/static/js/async/xqv.a2ae320825.js",
+    "sha256": "6ab4202565b9bcaef4816cb895f790ef5d24ec7ec76f865a8b0124604fe643e1",
+    "bytes": 110500
+  },
+  {
+    "name": "1ec.8c1454c392.js",
+    "observed_url": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/dreamina/web/jimeng/static/js/async/1ec.8c1454c392.js",
+    "sha256": "cb3c1bdcf9d79ee3d6e3b5d41d63d1ea7b4990a45c352499c8ae35862df614b1",
+    "bytes": 38999
+  },
+  {
+    "name": "0wc.ad32c7a6fa.js",
+    "observed_url": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/dreamina/web/jimeng/static/js/async/0wc.ad32c7a6fa.js",
+    "sha256": "0788238014bb6bf22db58c8d6e56feefdb4dd754f018af51b56b924543900eaa",
+    "bytes": 117308
+  },
+  {
+    "name": "d72.8d23a8625b.js",
+    "observed_url": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/dreamina/web/jimeng/static/js/async/d72.8d23a8625b.js",
+    "sha256": "069985805afa21e43837059afeef1b1d7b640006d7d2670a9e9f91cdd83b23b5",
+    "bytes": 180046
+  },
+  {
+    "name": "Asset-0.33d075ecf0.js",
+    "observed_url": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/dreamina/web/jimeng/static/js/async/Asset-0.33d075ecf0.js",
+    "sha256": "6ebfab9f623fb78ac96b10ec5c4b8c276c00c4a03c68d245ae20ba060fc54023",
+    "bytes": 50687
+  },
+  {
+    "name": "Asset-1.03382db4a7.js",
+    "observed_url": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/dreamina/web/jimeng/static/js/async/Asset-1.03382db4a7.js",
+    "sha256": "c7adb75e86d6977bc63601e3289a08b94170e19ba12187de4da0c811c1140aeb",
+    "bytes": 204232
+  },
+  {
+    "name": "Asset-3.2c061010c3.js",
+    "observed_url": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/dreamina/web/jimeng/static/js/async/Asset-3.2c061010c3.js",
+    "sha256": "34eb8bda1832e104f61da6cba1c6d4589e8ef7593b9e8816785842eb6e452e82",
+    "bytes": 173619
+  },
+  {
+    "name": "Asset-4.c92de55cba.js",
+    "observed_url": "https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/ies/dreamina/web/jimeng/static/js/async/Asset-4.c92de55cba.js",
+    "sha256": "7cf2fb03abbb39863822b7505253b7032ce9144a6b3d440475fb5754e31ffedb",
+    "bytes": 41236
+  }
+]

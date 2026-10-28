@@ -105,7 +105,7 @@ export function AssetLibraryCommandDialog({
           Array.isArray(key) &&
           ["my-assets", "asset-libraries", "asset-library"].includes(key[0]),
       ).catch(() => undefined);
-      toast.success(assets ? "已移动素材" : "项目素材库已就绪");
+      toast.success(assets ? "已移动素材" : "项目参考素材目录已就绪");
       onDone(target);
       onClose();
     } catch (error) {
@@ -134,11 +134,11 @@ export function AssetLibraryCommandDialog({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{assets ? "移动素材" : "新建项目素材库"}</DialogTitle>
+          <DialogTitle>{assets ? "移动素材" : "新建项目参考素材目录"}</DialogTitle>
           <DialogDescription>
             {assets
-              ? `将 ${assets.length} 个素材移动到所选素材库，已保存的画布引用保持有效。`
-              : "选择已有项目，每个项目一个素材库，名称跟随项目。"}
+              ? `将 ${assets.length} 个素材移动到所选参考素材，已保存的画布引用保持有效。`
+              : "选择已有项目，每个项目一个参考素材，名称跟随项目。"}
           </DialogDescription>
         </DialogHeader>
         <AssetLibrarySelect
@@ -146,7 +146,7 @@ export function AssetLibraryCommandDialog({
           includeGeneral={!!assets}
           enabledOnly={!!assets}
           disabled={busy || !!pending}
-          label={assets ? "移动到素材库" : "选择已有项目"}
+          label={assets ? "移动到参考素材" : "选择已有项目"}
           onChange={(value, item) => {
             setTarget(value);
             setProject(item);
@@ -185,8 +185,8 @@ export function AssetLibraryCommandDialog({
                 : assets
                   ? "确认移动"
                   : project?.enabled
-                    ? "进入素材库"
-                    : "创建素材库"}
+                    ? "进入参考素材"
+                    : "创建参考素材"}
           </Button>
         </DialogFooter>
       </DialogContent>

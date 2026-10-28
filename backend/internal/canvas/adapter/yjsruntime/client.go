@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 )
 
@@ -40,6 +42,16 @@ func (c *Client) Prepare(ctx context.Context, state application.YjsState, update
 		RestorationNodes []application.NodeDTO `json:"restorationNodes"`
 	}{state, update.Update, update.UpdateID.String(), update.PayloadHash, state.RestorationNodes})
 }
+
+// Rename produces a title-only delta through the same isolated admission runtime.
+func (c *Client) Rename(ctx context.Context, state application.YjsState, key uuid.UUID, name string) (application.YjsCandidate, error) {
+	return c.call(ctx, "rename", struct {
+		application.YjsState
+		UpdateID uuid.UUID `json:"updateId"`
+		Name     string    `json:"name"`
+	}{state, key, name})
+}
+
 func (c *Client) call(ctx context.Context, action string, input any) (application.YjsCandidate, error) {
 	var result application.YjsCandidate
 	if c.base == "" || len(c.token) < 32 {

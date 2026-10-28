@@ -78,6 +78,8 @@ type Edge struct {
 
 // Document is the authoritative current graph.
 type Document struct {
+	AssetCollection  string          `json:"asset_collection,omitempty"`
+	Kind             string          `json:"kind,omitempty"`
 	SchemaVersion    int             `json:"schema_version,omitempty"`
 	Writable         bool            `json:"-"`
 	OperationVersion int             `json:"operation_version,omitempty"`

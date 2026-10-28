@@ -13,7 +13,7 @@ vi.mock("@/lib/request", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/request")>();
   return { ...actual, request: vi.fn() };
 });
-import { AssetsPage } from "@/app/assets/_components/assets-page";
+import { ReferenceAssetsPage as AssetsPage } from "@/app/assets/_components/assets-page";
 import { TooltipProvider } from "@/components/ui/tooltip";
 const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 vi.mock("next/navigation", () => ({

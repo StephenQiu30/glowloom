@@ -150,6 +150,9 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	socketRoutes.Use(auth.RequireSession())
 	live.Register(socketLifetime, socketRoutes)
 	canvashttp.NewHandler(canvasService).WithNotification(live.Notify).Register(protected)
+	canvashttp.NewAssetHandler(canvasapp.NewAssetQuery(pgcanvas.NewAssetStore(database, canvaswire.AssetAuthority))).Register(protected)
+	canvashttp.NewAssetCreationHandler(canvasapp.NewAssetCreator(pgcanvas.NewAssetCreationStore(database, canvaswire.AssetCreationAuthority))).Register(protected)
+	canvashttp.NewAssetCommandHandler(canvasapp.NewAssetCommands(pgcanvas.NewAssetCommandStore(database, canvaswire.NewAssetMutationAuthority(yjsruntime.New(cfg.CanvasRuntimeURL, cfg.CanvasRuntimeToken))))).WithNotification(live.Notify).Register(protected)
 	mediahttp.NewHandler(mediaapp.NewAssetQuery(pgmedia.NewScopedStore(database, mediawire.NewMediaScopeAccess), storage)).Register(protected)
 	mediahttp.NewDocumentHandler(mediaapp.NewDocumentSources(pgmedia.NewScopedDocumentSourceStore(database, mediawire.NewMediaScopeAccess), storage)).Register(protected)
 	library := pgmedia.NewScopedLibraryStore(database, mediawire.NewMediaLibraryProjectAccess, time.Now, mediawire.NewMediaScopeAccess)
@@ -195,6 +198,12 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		return nil, fmt.Errorf("configure model parameter validation: %w", err)
 	}
 	biblehttp.NewHandler(bibleapp.NewService(biblewire.ProvideBibleStore(database, storage, parameterValidator), time.Now)).Register(protected)
+	assetObjects, err := mediawire.OpenAssetObjects(cfg, storage)
+	if err != nil {
+		return nil, fmt.Errorf("configure asset media: %w", err)
+	}
+	context.AfterFunc(socketLifetime, assetObjects.Close)
+	mediahttp.NewAssetDownloadHandler(mediawire.ProvideAssetDownloads(database, assetObjects.Routed, assetObjects.Legacy)).Register(protected)
 	priceValidator, err := pricevalidation.NewValidator()
 	if err != nil {
 		return nil, fmt.Errorf("configure model price validation: %w", err)
@@ -245,6 +254,9 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		return pgprompt.NewDraftStore(tx, promptwire.DraftAccess)
 	}, operationwire.ProvideOperationProjectAccess, operationwire.ProvideOperationWorkerAccess, operationwire.ProvideOperationPlatformAccess)
 	operationhttp.NewSubmissionHandler(operations).Register(protected)
+	operationhttp.NewPersonalHistoryHandler(operationapp.NewPersonalHistoryQuery(operations)).Register(protected)
+	operationhttp.NewPersonalHistoryCommandHandler(operationapp.NewPersonalHistoryCommander(operations)).Register(protected)
+	operationhttp.NewHistoryPublicationHandler(operationapp.NewHistoryPublisher(operations), operationapp.NewPublishedWorkQuery(operations, operationwire.PublicationMedia(assetObjects.Routed, assetObjects.Legacy))).Register(protected, api)
 	operationhttp.NewProviderTrialHandler(operations).Register(protected)
 	operationhttp.NewHandler(operationhttp.Dependencies{
 		FreeQuote:    operationapp.NewCreateFreeQuoteCommand(operations),

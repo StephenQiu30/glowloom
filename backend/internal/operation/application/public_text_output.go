@@ -11,7 +11,7 @@ import (
 // IncludeReviewedText exposes a bounded, reviewed text result, never the provider payload.
 func (o *TaskOutput) IncludeReviewedText(capability string, status domain.Status, payload json.RawMessage) {
 	o.Text = nil
-	if capability != "text.generate" || status != domain.StatusCompleted || o.Kind != "json" || o.ModerationStatus != "passed" || len(payload) > 1<<20 {
+	if (!strings.HasPrefix(capability, "text.") && !strings.HasPrefix(capability, "document.")) || status != domain.StatusCompleted || o.Kind != "json" || o.ModerationStatus != "passed" || len(payload) > 1<<20 {
 		return
 	}
 	var result struct {

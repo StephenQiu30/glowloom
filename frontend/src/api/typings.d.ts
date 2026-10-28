@@ -142,6 +142,65 @@ declare namespace API {
     id: string;
   };
 
+  type AssetCanvas = {
+    can_copy_project?: boolean;
+    collection?: string;
+    cover_asset_id?: string;
+    cover_unavailable?: boolean;
+    created_at?: string;
+    favorite?: boolean;
+    favorite_revision?: string;
+    id?: string;
+    is_main?: boolean;
+    kind?: string;
+    name?: string;
+    project_id?: string;
+    project_revision?: number;
+    revision?: string;
+    updated_at?: string;
+  };
+
+  type AssetCommandInput = {
+    action?: "favorite" | "rename" | "delete";
+    favorite?: boolean;
+    items?: AssetCommandItem[];
+    name?: string;
+  };
+
+  type AssetCommandItem = {
+    expected_favorite_revision?: string;
+    expected_project_revision?: number;
+    expected_revision?: string;
+    id?: string;
+  };
+
+  type AssetCommandReceipt = {
+    failed?: number;
+    results?: AssetCommandResult[];
+    succeeded?: number;
+  };
+
+  type AssetCommandResult = {
+    code?: string;
+    favorite?: boolean;
+    favorite_revision?: string;
+    id?: string;
+    project_revision?: number;
+    revision?: string;
+    status?: "succeeded" | "failed";
+  };
+
+  type AssetCreationInput = {
+    kind?: "canvas" | "short_drama";
+    name?: string;
+    template_key?: string;
+  };
+
+  type AssetListResponse = {
+    items?: AssetCanvas[];
+    next_cursor?: string;
+  };
+
   type AssetPage = {
     items?: AssetSummary[];
     next_cursor?: string;
@@ -158,6 +217,10 @@ declare namespace API {
     project_id?: string;
     revision?: number;
     width?: number;
+  };
+
+  type AssetTemplateCatalog = {
+    items?: SystemAssetTemplate[];
   };
 
   type AuthorityProposal = {
@@ -341,6 +404,7 @@ declare namespace API {
   };
 
   type CanvasCreateInput = {
+    kind?: "canvas" | "short_drama";
     name?: string;
     scope?: Record<string, any>;
   };
@@ -611,6 +675,18 @@ declare namespace API {
   type createCanvasParams = {
     /** 项目UUID */
     pid: string;
+  };
+
+  type CreatedAssetCanvas = {
+    collection?: string;
+    id?: string;
+    is_template?: boolean;
+    kind?: string;
+    name?: string;
+    project_id?: string;
+    project_revision?: number;
+    revision?: string;
+    template_key?: string;
   };
 
   type CreatedModel = {
@@ -1177,6 +1253,7 @@ declare namespace API {
   type DocumentDTO = {
     edges?: Edge[];
     id?: string;
+    kind?: string;
     name?: string;
     nodes?: NodeDTO[];
     operation_version?: number;
@@ -1223,6 +1300,13 @@ declare namespace API {
     job_id: string;
     /** Project UUID */
     project_id: string;
+  };
+
+  type downloadMediaOriginalParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 媒体资产UUID */
+    asset_id: string;
   };
 
   type downloadMediaTranscriptionSubtitlesParams = {
@@ -1736,6 +1820,11 @@ declare namespace API {
     id: string;
   };
 
+  type getPublishedWorkParams = {
+    /** 作品UUID */
+    work_id: string;
+  };
+
   type getScriptEpisodeSourceTextParams = {
     /** 正式分集UUID */
     eid: string;
@@ -1879,6 +1968,31 @@ declare namespace API {
     redirect_id?: string;
     revision?: number;
     updated_at?: string;
+  };
+
+  type HistoryPublicationInput = {
+    description?: string;
+    publish_prompt?: boolean;
+    targets?: HistoryPublicationTarget[];
+    title?: string;
+  };
+
+  type HistoryPublicationReceipt = {
+    items?: HistoryPublicationResult[];
+  };
+
+  type HistoryPublicationResult = {
+    error_code?: string;
+    operation_id?: string;
+    output_id?: string;
+    status?: string;
+    url?: string;
+    work_id?: string;
+  };
+
+  type HistoryPublicationTarget = {
+    operation_id?: string;
+    output_id?: string;
   };
 
   type HistoryResponse = {
@@ -2192,6 +2306,29 @@ declare namespace API {
     cursor?: string;
   };
 
+  type listAssetCanvasesParams = {
+    /** 当前或历史画布来源，默认current */
+    collection?: "current" | "legacy";
+    /** 仅本人收藏 */
+    favorite_only?: boolean;
+    /** 显式画布分类，默认canvas */
+    kind?: "canvas" | "short_drama";
+    /** 画布名称，最多256字符 */
+    search?: string;
+    /** 排序字段，默认updated */
+    sort?: "updated" | "created";
+    /** 顺序，默认desc */
+    order?: "asc" | "desc";
+    /** 创建时间下界，RFC3339，包含 */
+    created_from?: string;
+    /** 创建时间上界，RFC3339，不包含 */
+    created_before?: string;
+    /** 每页1..200，默认30 */
+    limit?: number;
+    /** 绑定身份、空间和全部筛选的游标 */
+    cursor?: string;
+  };
+
   type listBibleEntriesParams = {
     /** Return soft-deleted entries only */
     deleted?: boolean;
@@ -2225,6 +2362,11 @@ declare namespace API {
     limit?: number;
     /** Opaque page cursor */
     cursor?: string;
+  };
+
+  type listCanvasAssetTemplatesParams = {
+    /** 模板分类，省略返回全部 */
+    kind?: "canvas" | "short_drama";
   };
 
   type listCanvasesParams = {
@@ -2347,6 +2489,35 @@ declare namespace API {
   type listModelReleasesParams = {
     /** 模型ID */
     id: string;
+  };
+
+  type listPersonalOperationHistoryParams = {
+    /** image/video/audio/document；按能力族分类，含处理中与失败 */
+    kind?: string;
+    /** 生成能力 */
+    capability?: string;
+    /** 模型名或冻结输入文本，最长200字符 */
+    search?: string;
+    /** 仅收藏结果 */
+    favorite_only?: boolean;
+    /** super_resolution,frame_interpolation，逗号分隔 */
+    process_types?: string;
+    /** 1K,2K,4K,8K,720P,1080P，逗号分隔 */
+    resolutions?: string;
+    /** 画面比例（如16:9），逗号分隔 */
+    ratios?: string;
+    /** all_reference,first_last_frame,multi_frame,lip_sync,motion_mimic,song,instrumental,tts，逗号分隔 */
+    generation_modes?: string;
+    /** RFC3339创建时间起点，包含 */
+    created_from?: string;
+    /** RFC3339创建时间终点，不包含 */
+    created_before?: string;
+    /** desc/asc，默认desc */
+    order?: string;
+    /** 1..200，默认40 */
+    limit?: number;
+    /** 身份、空间与全部条件绑定的游标 */
+    cursor?: string;
   };
 
   type listPlatformTeamInvitationsParams = {
@@ -2922,6 +3093,86 @@ declare namespace API {
   type Permissions = {
     read?: boolean;
     write?: boolean;
+  };
+
+  type PersonalHistoryCommand = {
+    action?: string;
+    favorited?: boolean;
+    targets?: PersonalHistoryTarget[];
+  };
+
+  type PersonalHistoryCommandReceipt = {
+    action?: string;
+    request_id?: string;
+    results?: PersonalHistoryCommandResult[];
+  };
+
+  type PersonalHistoryCommandResult = {
+    affected_output_ids?: string[];
+    code?: string;
+    ok?: boolean;
+    operation_id?: string;
+    output_id?: string;
+    revision?: number;
+  };
+
+  type PersonalHistoryItem = {
+    batch_id?: string;
+    cancel_requested?: boolean;
+    capability?: string;
+    create_time?: string;
+    failure_code?: string;
+    finished_at?: string;
+    history_revision?: number;
+    id?: string;
+    mode?: string;
+    model_key?: string;
+    model_name?: string;
+    origin?: string;
+    outputs?: PersonalHistoryOutput[];
+    project_id?: string;
+    prompt_preview?: string;
+    quote_micros?: number;
+    retryable?: boolean;
+    settled_micros?: number;
+    source?: CanvasSource;
+    started_at?: string;
+    status?: OperationStatus;
+    target_id?: string;
+    target_type?: string;
+    update_time?: string;
+  };
+
+  type PersonalHistoryOutput = {
+    can_download?: boolean;
+    can_publish?: boolean;
+    create_time?: string;
+    duration_ms?: number;
+    favorite?: boolean;
+    generation_mode?: string;
+    height?: number;
+    id?: string;
+    kind?: string;
+    media_asset_id?: string;
+    metadata_revision?: number;
+    moderation_status?: string;
+    process_types?: string[];
+    ratio?: string;
+    resolution?: string;
+    sequence?: number;
+    text?: string;
+    width?: number;
+  };
+
+  type PersonalHistoryPageResponse = {
+    items?: PersonalHistoryItem[];
+    next_cursor?: string;
+  };
+
+  type PersonalHistoryTarget = {
+    expected_revision?: number;
+    operation_id?: string;
+    output_id?: string;
   };
 
   type PersonalUploadResult = {
@@ -3635,6 +3886,17 @@ declare namespace API {
     model_id?: string;
     revision?: number;
     version_no?: number;
+  };
+
+  type PublishedWork = {
+    created_at?: string;
+    description?: string;
+    id?: string;
+    kind?: string;
+    media_expires_at?: string;
+    media_url?: string;
+    prompt?: string;
+    title?: string;
   };
 
   type PublishPriceRequest = {
@@ -4672,6 +4934,16 @@ declare namespace API {
     id: string;
     /** Resource UUID */
     uid: string;
+  };
+
+  type SystemAssetTemplate = {
+    description?: string;
+    is_template?: boolean;
+    key?: string;
+    kind?: string;
+    name?: string;
+    node_count?: number;
+    requires_model?: boolean;
   };
 
   type TaskDetail = {

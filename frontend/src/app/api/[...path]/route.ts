@@ -483,6 +483,55 @@ async function proxy(
                           : undefined;
   const boundedRoute = [
     {
+      pattern: "operations/history/(commands|publications)",
+      methods: ["POST"],
+      query: [],
+    },
+    { pattern: `works/${identityUUID}`, methods: ["GET"], query: [] },
+    { pattern: "canvas-assets", methods: ["POST"], query: [] },
+    { pattern: "canvas-assets/templates", methods: ["GET"], query: ["kind"] },
+    { pattern: "canvas-assets/commands", methods: ["POST"], query: [] },
+    {
+      pattern: `projects/${identityUUID}/media/${identityUUID}/original`,
+      methods: ["GET"],
+      query: [],
+    },
+    {
+      pattern: "operations/history",
+      methods: ["GET"],
+      query: [
+        "kind",
+        "capability",
+        "favorite_only",
+        "process_types",
+        "resolutions",
+        "ratios",
+        "generation_modes",
+        "search",
+        "created_from",
+        "created_before",
+        "order",
+        "limit",
+        "cursor",
+      ],
+    },
+    {
+      pattern: "canvases",
+      methods: ["GET"],
+      query: [
+        "kind",
+        "collection",
+        "favorite_only",
+        "search",
+        "created_from",
+        "created_before",
+        "sort",
+        "order",
+        "limit",
+        "cursor",
+      ],
+    },
+    {
       pattern: `projects/${identityUUID}/copies`,
       methods: ["GET", "POST"],
       query: ["limit", "cursor"],
@@ -727,7 +776,17 @@ async function proxy(
       body,
       cache: "no-store",
       redirect: "manual",
-      signal: AbortSignal.any([request.signal, AbortSignal.timeout(10000)]),
+      signal: AbortSignal.any([
+        request.signal,
+        AbortSignal.timeout(
+          new RegExp(
+            `^projects/${identityUUID}/media/${identityUUID}/original$`,
+            "i",
+          ).test(resource)
+            ? 120000
+            : 10000,
+        ),
+      ]),
     });
     const outgoing = new Headers(noStore);
     for (const key of [

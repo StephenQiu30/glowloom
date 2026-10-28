@@ -77,7 +77,7 @@ export function CanvasDeleteProjectsDialog({
           </DialogDescription>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          该操作不会自动删除素材库中独立保存的素材。
+          该操作不会自动删除参考素材中独立保存的素材。
         </p>
         {command.error?.code === 40901 && (
           <Button

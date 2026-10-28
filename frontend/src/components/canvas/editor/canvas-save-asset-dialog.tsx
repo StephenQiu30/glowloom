@@ -130,12 +130,12 @@ export function CanvasSaveAssetDialog({
           <DialogHeader>
             <DialogTitle>加入我的资产</DialogTitle>
             <DialogDescription>
-              为素材命名，保存后可在个人素材库中使用。
+              为素材命名，保存后可在个人参考素材中使用。
             </DialogDescription>
           </DialogHeader>
           <FieldGroup className="my-4">
             <Field>
-              <FieldLabel>保存到素材库</FieldLabel>
+              <FieldLabel>保存到参考素材</FieldLabel>
               <AssetLibrarySelect
                 value={target}
                 onChange={setChosenTarget}
@@ -156,7 +156,7 @@ export function CanvasSaveAssetDialog({
           </FieldGroup>
           {project.error && !chosenTarget && !pending && (
             <p role="alert" className="mb-4 text-sm text-destructive">
-              无法读取当前项目的素材库，请重试或明确选择保存位置。
+              无法读取当前项目的参考素材，请重试或明确选择保存位置。
               <Button
                 type="button"
                 variant="link"

@@ -531,6 +531,20 @@ export async function downloadDocumentAsset(
   });
 }
 
+/** 下载图片、视频或音频原件 GET /api/projects/${param0}/media/${param1}/original */
+export async function downloadMediaOriginal(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.downloadMediaOriginalParams,
+  options?: RequestOptions,
+) {
+  const { pid: param0, asset_id: param1, ...queryParams } = params;
+  return request<Blob>(`/api/projects/${param0}/media/${param1}/original`, {
+    method: "GET",
+    params: { ...queryParams },
+    ...(options || { responseType: "blob" }),
+  });
+}
+
 /** 获取媒体预览 GET /api/projects/${param0}/media/${param1}/preview */
 export async function getMediaPreview(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

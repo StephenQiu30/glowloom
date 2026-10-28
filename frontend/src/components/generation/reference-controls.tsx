@@ -491,7 +491,7 @@ export function ReferenceControls({
         throw new Error("上传范围不匹配");
       const source = mediaBinding(result.asset, ref.role).source;
       if (!session.resolveUpload(ticket, source))
-        setError("该上传所属引用已改变；结果保留在素材库，可重新选择。");
+        setError("该上传所属引用已改变；结果保留在参考素材，可重新选择。");
       files.current.delete(id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "上传结果未知，请重试原上传。");
@@ -1042,7 +1042,7 @@ export function ReferenceControls({
                 onSelect={() => setSourceKind("library")}
               >
                 <FolderOpen />
-                从素材库添加
+                从参考素材添加
               </CommandItem>
               <CommandItem
                 value="upload"

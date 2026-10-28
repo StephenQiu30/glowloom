@@ -33,7 +33,7 @@ export function runtimeServer({ token, maxConcurrent = 4 }) {
       }
       if (
         req.method !== "POST" ||
-        !["/v1/initialize", "/v1/prepare"].includes(req.url)
+        !["/v1/initialize", "/v1/prepare", "/v1/rename"].includes(req.url)
       ) {
         send(404, { code: "NOT_FOUND" });
         req.resume();

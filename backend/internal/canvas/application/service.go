@@ -31,6 +31,7 @@ func (e *RevisionConflict) Error() string { return "canvas revision conflict" }
 type CreateInput struct {
 	Name  string          `json:"name"`
 	Scope json.RawMessage `json:"scope" swaggertype:"object"`
+	Kind  string          `json:"kind,omitempty" enums:"canvas,short_drama"`
 }
 
 // RenameInput renames a document at its current revision.
@@ -85,6 +86,15 @@ func (s *Service) Get(ctx context.Context, a identityapp.Principal, id uuid.UUID
 // Create validates project scope and a bounded display name.
 func (s *Service) Create(ctx context.Context, a identityapp.Principal, p uuid.UUID, key string, input CreateInput) (domain.Document, error) {
 	input.Name = strings.TrimSpace(input.Name)
+	kind, err := domain.ParseDocumentKind(input.Kind)
+	if err != nil {
+		return domain.Document{}, err
+	}
+	// Preserve the durable request representation of legacy ordinary canvases.
+	input.Kind = ""
+	if kind == "short_drama" {
+		input.Kind = kind
+	}
 	var scope map[string]any
 	if len(input.Scope) == 0 {
 		input.Scope = json.RawMessage(`{}`)

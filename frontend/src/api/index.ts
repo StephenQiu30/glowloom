@@ -17,6 +17,7 @@ import * as projects from "./projects";
 import * as bible from "./bible";
 import * as promptEditor from "./promptEditor";
 import * as workspace from "./workspace";
+import * as works from "./works";
 export default {
   settings,
   identity,
@@ -33,4 +34,5 @@ export default {
   bible,
   promptEditor,
   workspace,
+  works,
 };

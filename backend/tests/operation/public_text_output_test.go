@@ -17,6 +17,8 @@ func TestPublicTaskTextOnlyExposesReviewedCompletedText(t *testing.T) {
 		want                               bool
 	}{
 		{"approved", "text.generate", "json", "passed", domain.StatusCompleted, `{"text":"真实回复","provider_secret":"private"}`, true},
+		{"structured reviewed text", "text.structured", "json", "passed", domain.StatusCompleted, `{"text":"结构化任务正文"}`, true},
+		{"document reviewed text", "document.generate", "json", "passed", domain.StatusCompleted, `{"text":"文档正文"}`, true},
 		{"pending", "text.generate", "json", "pending", domain.StatusCompleted, `{"text":"未审核"}`, false},
 		{"not complete", "text.generate", "json", "passed", domain.StatusIngesting, `{"text":"处理中"}`, false},
 		{"other capability", "image.generate", "json", "passed", domain.StatusCompleted, `{"text":"provider receipt"}`, false},

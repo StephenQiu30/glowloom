@@ -1,7 +1,10 @@
 import { render, findFeedback } from "../../../feedback";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { GenerationDialog } from "@/components/generation/generation-dialog";
+import {
+  TaskDetail,
+  GenerationDialog,
+} from "@/components/generation/generation-dialog";
 import { RequestError } from "@/lib/request";
 import { RichGeneration } from "@/components/generation/rich-generation";
 import { emptyPromptDraft } from "@/components/generation/prompt-document";
@@ -391,7 +394,7 @@ it("已选项目但没有可用模型时，参数入口显示模型前提且不�
   );
   await screen.findByRole("textbox", { name: "创作提示词" });
   const trigger = screen.getByRole("button", { name: "生成参数" });
-  expect(trigger.hasAttribute("disabled")).toBe(false);
+  await waitFor(() => expect(trigger.hasAttribute("disabled")).toBe(false));
   fireEvent.click(trigger);
   expect(
     await screen.findByText("请先选择可用模型，再配置生成参数。"),
@@ -1013,4 +1016,106 @@ it("画布共享富文本不读写本地恢复分支", async () => {
   expect(api.branchList).not.toHaveBeenCalled();
   expect(api.branchWrite).not.toHaveBeenCalled();
   expect(screen.queryByText(/恢复.*分支/)).toBeNull();
+});
+
+it.each([
+  ["audio", "audio.generate"],
+  ["image", "image.edit"],
+  ["text", "text.structured"],
+] as const)(
+  "再次创作%s使用原始%s能力筛选模型，进入时不报价",
+  async (capability, exactCapability) => {
+    render(
+      <GenerationDialog
+        seed={{
+          project,
+          prompt: "",
+          capability,
+          reuse: {
+            id,
+            project_id: project.id,
+            status: "completed",
+            capability: exactCapability,
+            inputs: [{ role: "prompt", text: "真实历史描述" }],
+            outputs: [],
+          },
+        }}
+        onClose={() => {}}
+      />,
+    );
+    await screen.findByRole("textbox", { name: "创作提示词" });
+    expect(api.models).toHaveBeenCalledWith(
+      expect.objectContaining({ capability: exactCapability }),
+      expect.anything(),
+    );
+    api.list.mockResolvedValue({ items: [] });
+    fireEvent.click(screen.getByRole("button", { name: "查看生成历史" }));
+    await waitFor(() =>
+      expect(api.list).toHaveBeenCalledWith(
+        expect.objectContaining({ capability: exactCapability }),
+      ),
+    );
+    expect(api.quote).not.toHaveBeenCalled();
+    expect(api.confirm).not.toHaveBeenCalled();
+  },
+);
+it("文档详情只展开选定结果，仍保留完整任务作为复用来源", async () => {
+  const other = "55555555-5555-4555-8555-555555555555";
+  const task: API.TaskDetail = {
+    id,
+    project_id: project.id,
+    status: "completed",
+    capability: "text.structured",
+    inputs: [{ role: "prompt", text: "原始提示词" }],
+    params: { seed: 42 },
+    outputs: [
+      { id, kind: "json", moderation_status: "passed", text: "第一个文档" },
+      {
+        id: other,
+        kind: "json",
+        moderation_status: "passed",
+        text: "第二个文档",
+      },
+    ],
+  };
+  api.get.mockResolvedValue(task);
+  const reuse = vi.fn();
+  render(
+    <TaskDetail
+      projectID={project.id}
+      id={id}
+      outputID={other}
+      presentation="asset"
+      onReuse={reuse}
+    />,
+  );
+  await screen.findByText("第二个文档");
+  expect(screen.queryByText("第一个文档")).toBeNull();
+  expect(screen.getByText("原始提示词")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "复用参数重新报价" }));
+  expect(reuse).toHaveBeenCalledWith(task);
+  expect(api.quote).not.toHaveBeenCalled();
+});
+
+it("asset detail accepts a completed official document and explains original-only preview", async () => {
+  api.get.mockResolvedValue({
+    id,
+    project_id: project.id,
+    capability: "document.generate",
+    status: "completed",
+    outputs: [
+      { id, kind: "document", media_asset_id: id, moderation_status: "passed" },
+    ],
+  });
+  render(
+    <TaskDetail
+      projectID={project.id}
+      id={id}
+      outputID={id}
+      presentation="asset"
+    />,
+  );
+  expect(
+    await screen.findByText("正式文档仅提供原件，下载原件以查看。"),
+  ).toBeTruthy();
 });

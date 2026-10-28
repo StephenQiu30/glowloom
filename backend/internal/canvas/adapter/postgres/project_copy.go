@@ -93,7 +93,7 @@ func (s *ProjectCopyStore) Freeze(ctx context.Context, actor identityapp.Princip
 		return application.ProjectCopySnapshot{}, err
 	}
 	var rows []documentRow
-	if err := tx.Raw(`SELECT id,project_id,name,scope,revision,viewport,schema_version FROM canvas.document WHERE project_id=? AND NOT is_delete ORDER BY id LIMIT 257 FOR SHARE`, binding.SourceProjectID).Scan(&rows).Error; err != nil {
+	if err := tx.Raw(`SELECT id,project_id,name,kind,asset_collection,scope,revision,viewport,schema_version FROM canvas.document WHERE project_id=? AND NOT is_delete ORDER BY id LIMIT 257 FOR SHARE`, binding.SourceProjectID).Scan(&rows).Error; err != nil {
 		return application.ProjectCopySnapshot{}, fmt.Errorf("freeze project canvases: %w", err)
 	}
 	if len(rows) > 256 {
@@ -213,7 +213,11 @@ func (s *ProjectCopyStore) Copy(ctx context.Context, actor identityapp.Principal
 		if err != nil {
 			return application.ProjectCopyReceipt{}, err
 		}
-		if err := tx.Exec(`INSERT INTO canvas.document(id,project_id,name,scope,revision,viewport) VALUES(?,?,?,?::jsonb,1,?::jsonb)`, doc.ID, doc.ProjectID, doc.Name, string(doc.Scope), string(viewport)).Error; err != nil {
+		kind, err := domain.ParseDocumentKind(doc.Kind)
+		if err != nil {
+			return application.ProjectCopyReceipt{}, err
+		}
+		if err := tx.Exec(`INSERT INTO canvas.document(id,project_id,name,kind,scope,revision,viewport) VALUES(?,?,?,?,?::jsonb,1,?::jsonb)`, doc.ID, doc.ProjectID, doc.Name, kind, string(doc.Scope), string(viewport)).Error; err != nil {
 			return application.ProjectCopyReceipt{}, fmt.Errorf("insert unpublished canvas: %w", err)
 		}
 		if err := saveGraph(tx, domain.Document{}, doc); err != nil {

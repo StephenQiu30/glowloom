@@ -292,7 +292,7 @@ export function HomeCreation({
                                 <Plus data-icon="inline-start" />
                               </Button>,
                               "添加参考素材",
-                              "选择项目后，可从素材库、上传内容或主体库添加参考。",
+                              "选择项目后，可从参考素材、上传内容或主体库添加参考。",
                             )}
                           </InputGroupAddon>
                           <HomePrompt

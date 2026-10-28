@@ -1,0 +1,749 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import Link from "next/link";
+import { Heart, MoreHorizontal, PanelsTopLeft } from "lucide-react";
+import { applyCanvasAssetCommand, listAssetCanvases } from "@/api/canvases";
+import { getProject } from "@/api/projects";
+import { ProjectCopyDialog } from "@/components/projects/project-copy-dialog";
+import { requireProject, type Project } from "@/components/projects/project";
+import { ProjectMediaPreview } from "@/components/media/project-media";
+import { useSpace } from "@/components/spaces/space-context";
+import { ContentState } from "@/components/layout/content-state";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Field, FieldLabel } from "@/components/ui/field";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { RequestError } from "@/lib/request";
+import { readErrorMessage } from "@/lib/read-error";
+import {
+  assetDateRange,
+  hasAssetFilters,
+  requireAssetCanvases,
+  type AssetFilters,
+  type AssetCanvasItem,
+} from "./asset-query";
+import { CreateAssetCanvas } from "./create-asset-canvas";
+import { AssetCreateProject } from "./asset-create-project";
+import { AssetTemplateList, type AssetTemplate } from "./asset-template-list";
+
+type Intent = {
+  key: string;
+  body: Parameters<typeof applyCanvasAssetCommand>[0];
+  items: AssetCanvasItem[];
+};
+export function AssetCanvasList({
+  kind,
+  collection,
+  filters,
+  onClear,
+  onLock,
+  onBatchMode,
+  toolbarTarget,
+}: {
+  kind: "canvas" | "short_drama";
+  collection: "current" | "legacy";
+  filters: AssetFilters;
+  onClear: () => void;
+  onLock: (locked: boolean) => void;
+  onBatchMode: (batch: boolean) => void;
+  toolbarTarget: HTMLElement | null;
+}) {
+  const [page, setPage] = useState<ReturnType<
+    typeof requireAssetCanvases
+  > | null>(null);
+  const [cursor, setCursor] = useState<string>();
+  const [pending, setPending] = useState(true);
+  const [error, setError] = useState("");
+  const [denied, setDenied] = useState(0);
+  const [retry, setRetry] = useState(0);
+  const [creating, setCreating] = useState<"project" | "existing" | null>(null);
+  const [template, setTemplate] = useState<AssetTemplate | undefined>();
+  const [batch, setBatch] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [deleting, setDeleting] = useState<AssetCanvasItem[] | null>(null);
+  const [renaming, setRenaming] = useState<AssetCanvasItem | null>(null);
+  const [name, setName] = useState("");
+  const [copying, setCopying] = useState<Project | null>(null);
+  const [intent, setIntent] = useState<Intent | null>(null);
+  const [writing, setWriting] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [results, setResults] = useState<
+    { id: string; title: string; ok: boolean; code: string }[]
+  >([]);
+  const space = useSpace();
+  const busy = useRef(false);
+  const flight = useRef<AbortController | null>(null);
+  const locked = writing || !!intent;
+  const writable = !space.pending && !!space.selected?.writable;
+  useEffect(
+    () => () => {
+      flight.current?.abort();
+      onLock(false);
+      onBatchMode(false);
+    },
+    [onLock, onBatchMode],
+  );
+  useEffect(() => {
+    const controller = new AbortController();
+    listAssetCanvases(
+      {
+        kind,
+        collection,
+        favorite_only: filters.favorite || undefined,
+        search: filters.search || undefined,
+        ...assetDateRange(filters.from, filters.through),
+        sort: filters.sort,
+        order: filters.order,
+        limit: 24,
+        cursor,
+      },
+      { signal: controller.signal },
+    )
+      .then((value) => requireAssetCanvases(value, kind, collection))
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        setPage((previous) => ({
+          items: cursor
+            ? [
+                ...(previous?.items ?? []),
+                ...result.items.filter(
+                  (item) => !previous?.items.some((old) => old.id === item.id),
+                ),
+              ]
+            : result.items,
+          next_cursor: result.next_cursor,
+        }));
+        setError("");
+        setDenied(0);
+      })
+      .catch((reason) => {
+        if (controller.signal.aborted) return;
+        if (
+          reason instanceof RequestError &&
+          [401, 403].includes(reason.status)
+        ) {
+          setDenied(reason.status);
+          setPage(null);
+          setSelected([]);
+        }
+        setError(readErrorMessage(reason));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setPending(false);
+      });
+    return () => controller.abort();
+  }, [kind, collection, filters, cursor, retry]);
+  function reload() {
+    setPending(true);
+    setCursor(undefined);
+    setRetry((value) => value + 1);
+  }
+  const selectionLimit = kind === "short_drama" ? 100 : 50;
+  const chosen = page?.items.filter((item) => selected.includes(item.id)) ?? [];
+  function toggle(id: string) {
+    if (!selected.includes(id) && selected.length >= selectionLimit) {
+      setNotice(`最多选择${selectionLimit}项内容。`);
+      return;
+    }
+    setSelected((previous) =>
+      previous.includes(id)
+        ? previous.filter((key) => key !== id)
+        : [...previous, id],
+    );
+  }
+  async function command(
+    action: "favorite" | "rename" | "delete",
+    items: AssetCanvasItem[],
+    favorite?: boolean,
+  ) {
+    if (busy.current || (!intent && (!items.length || items.length > 100)))
+      return;
+    const op: Intent = intent ?? {
+      key: crypto.randomUUID(),
+      items,
+      body: {
+        action,
+        favorite,
+        name: action === "rename" ? name.trim() : undefined,
+        items: items.map((item) => ({
+          id: item.id,
+          expected_revision: item.revision,
+          expected_favorite_revision: item.favorite_revision,
+          expected_project_revision: item.is_main
+            ? item.project_revision
+            : undefined,
+        })),
+      },
+    };
+    busy.current = true;
+    setWriting(true);
+    setIntent(op);
+    setNotice("");
+    onLock(true);
+    const controller = new AbortController();
+    flight.current = controller;
+    try {
+      const response = await applyCanvasAssetCommand(op.body, {
+        signal: controller.signal,
+        headers: { "Idempotency-Key": op.key },
+      });
+      if (
+        !Array.isArray(response.results) ||
+        response.results.length !== op.items.length ||
+        !Number.isSafeInteger(response.succeeded) ||
+        !Number.isSafeInteger(response.failed) ||
+        response.succeeded! + response.failed! !== op.items.length
+      )
+        throw new RequestError("invalid_receipt");
+      const expected = new Set(op.items.map((item) => item.id));
+      for (const item of response.results) {
+        if (
+          !expected.delete(item.id ?? "") ||
+          !["succeeded", "failed"].includes(item.status ?? "") ||
+          typeof item.code !== "string"
+        )
+          throw new RequestError("invalid_receipt");
+      }
+      if (
+        response.results.filter((item) => item.status === "succeeded")
+          .length !== response.succeeded
+      )
+        throw new RequestError("invalid_receipt");
+      if (controller.signal.aborted) return;
+      const outcomes = response.results.map((item) => ({
+        id: item.id!,
+        title: op.items.find((old) => old.id === item.id)!.name,
+        ok: item.status === "succeeded",
+        code: item.code!,
+      }));
+      setResults(outcomes);
+      setSelected((previous) =>
+        previous.filter(
+          (id) => !outcomes.some((item) => item.id === id && item.ok),
+        ),
+      );
+      setIntent(null);
+      setDeleting(null);
+      setRenaming(null);
+      onLock(false);
+      reload();
+    } catch (reason) {
+      if (controller.signal.aborted) return;
+      if (
+        reason instanceof RequestError &&
+        reason.status >= 400 &&
+        reason.status < 500 &&
+        reason.code !== "invalid_receipt"
+      ) {
+        setIntent(null);
+        onLock(false);
+        setNotice(readErrorMessage(reason));
+      } else setNotice("操作结果尚未确认，请重试原操作。");
+    } finally {
+      busy.current = false;
+      if (!controller.signal.aborted) setWriting(false);
+    }
+  }
+  async function copy(item: AssetCanvasItem) {
+    if (busy.current || !item.can_copy_project) return;
+    busy.current = true;
+    setWriting(true);
+    onLock(true);
+    const controller = new AbortController();
+    flight.current = controller;
+    try {
+      const project = requireProject(
+        await getProject(
+          { pid: item.project_id },
+          { signal: controller.signal },
+        ),
+        true,
+      );
+      if (project.id !== item.project_id)
+        throw new RequestError("invalid_receipt");
+      if (!controller.signal.aborted) setCopying(project);
+    } catch (reason) {
+      if (!controller.signal.aborted) setNotice(readErrorMessage(reason));
+    } finally {
+      busy.current = false;
+      if (!controller.signal.aborted) {
+        setWriting(false);
+        onLock(false);
+      }
+    }
+  }
+  const toolbar = (
+    <div className="flex flex-wrap items-center gap-2" aria-label="画布操作">
+      {batch ? (
+        <>
+          <span className="text-sm text-muted-foreground">
+            已选择{chosen.length}项内容
+          </span>
+          <Button
+            variant="ghost"
+            disabled={locked || !page?.items.length}
+            onClick={() =>
+              setSelected(
+                page!.items.slice(0, selectionLimit).map((item) => item.id),
+              )
+            }
+          >
+            全选
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={locked || !chosen.length}
+            onClick={() => setSelected([])}
+          >
+            取消全选
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={locked || !chosen.length || chosen.length > 100}
+            onClick={() =>
+              void command(
+                "favorite",
+                chosen,
+                !chosen.every((item) => item.favorite),
+              )
+            }
+          >
+            {chosen.length && chosen.every((item) => item.favorite)
+              ? "取消收藏"
+              : "收藏"}
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={
+              locked || !writable || !chosen.length || chosen.length > 100
+            }
+            onClick={() => setDeleting(chosen)}
+          >
+            删除
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={locked}
+            onClick={() => {
+              setBatch(false);
+              onBatchMode(false);
+              setSelected([]);
+            }}
+          >
+            取消选择
+          </Button>
+        </>
+      ) : (
+        <>
+          <Button
+            variant="ghost"
+            disabled={locked || pending || !page || !!error}
+            onClick={() => {
+              setBatch(true);
+              onBatchMode(true);
+            }}
+          >
+            批量操作
+          </Button>
+          {collection === "current" && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  disabled={locked || !writable || !page || pending || !!error}
+                  aria-label="更多画布操作"
+                >
+                  <MoreHorizontal />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onSelect={() => setCreating("existing")}>
+                    添加到已有项目
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {collection === "current" && (
+            <Button
+              disabled={locked || !writable || !page || pending || !!error}
+              onClick={() => {
+                setTemplate(undefined);
+                setCreating("project");
+              }}
+            >
+              {kind === "short_drama" ? "新建短剧画布" : "新建画布"}
+            </Button>
+          )}
+        </>
+      )}
+    </div>
+  );
+  return (
+    <div className="grid min-w-0 gap-6">
+      {toolbarTarget ? createPortal(toolbar, toolbarTarget) : toolbar}
+      {intent && !deleting && !renaming && (
+        <Button
+          className="justify-self-start"
+          disabled={writing}
+          onClick={() =>
+            void command(
+              intent.body.action!,
+              intent.items,
+              intent.body.favorite,
+            )
+          }
+        >
+          重试原操作
+        </Button>
+      )}
+      {chosen.length > 100 && (
+        <p className="text-sm text-muted-foreground">
+          本产品每次最多操作100项，请减少选择。
+        </p>
+      )}
+      {error && (
+        <ContentState
+          state="error"
+          title={
+            denied === 403
+              ? "无权查看此空间的画布"
+              : denied === 401
+                ? "请重新登录查看画布"
+                : kind === "short_drama"
+                  ? "暂时无法读取短剧"
+                  : "暂时无法读取画布"
+          }
+          description={error}
+          actions={
+            <Button disabled={pending || locked} onClick={reload}>
+              重试读取
+            </Button>
+          }
+        />
+      )}
+      {pending && !page && (
+        <ContentState state="loading" title="正在读取画布" />
+      )}
+      {!pending && !error && !page?.items.length && (
+        <ContentState
+          title={
+            hasAssetFilters(filters)
+              ? "当前已开启筛选，部分内容可能被隐藏"
+              : "暂无相关资产"
+          }
+          actions={
+            hasAssetFilters(filters) ? (
+              <Button variant="ghost" onClick={onClear}>
+                清除全部条件
+              </Button>
+            ) : undefined
+          }
+        />
+      )}
+      <div className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-6 lg:grid-cols-3 xl:grid-cols-4">
+        {page?.items.map((item) => (
+          <article
+            key={item.id}
+            className="group relative min-w-0"
+            aria-label={item.name}
+          >
+            <Button
+              variant="ghost"
+              className="h-auto w-full min-w-0 flex-col items-stretch gap-2 p-0 text-left font-normal"
+              asChild={!batch && !locked}
+              disabled={locked}
+              onClick={batch ? () => toggle(item.id) : undefined}
+            >
+              {batch || locked ? (
+                <span className="contents">
+                  <CanvasCover item={item} />
+                  <CanvasText item={item} sort={filters.sort} />
+                </span>
+              ) : (
+                <Link
+                  href={`/canvas?project_id=${item.project_id}&canvas_id=${item.id}`}
+                >
+                  <CanvasCover item={item} />
+                  <CanvasText item={item} sort={filters.sort} />
+                </Link>
+              )}
+            </Button>
+            {batch ? (
+              <Checkbox
+                className="absolute top-3 left-3"
+                checked={selected.includes(item.id)}
+                disabled={locked}
+                aria-label={`选择${item.name}`}
+                onCheckedChange={() => toggle(item.id)}
+              />
+            ) : (
+              <div className="absolute top-2 right-2 flex gap-1 rounded-lg bg-popover/90 p-1 text-popover-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="max-md:size-11"
+                  disabled={locked}
+                  aria-label={`${item.favorite ? "取消收藏" : "收藏"}${item.name}`}
+                  onClick={() =>
+                    void command("favorite", [item], !item.favorite)
+                  }
+                >
+                  <Heart
+                    className={item.favorite ? "fill-current" : undefined}
+                  />
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="max-md:size-11"
+                      disabled={locked}
+                      aria-label={`更多 · ${item.name}`}
+                    >
+                      <MoreHorizontal />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem
+                        disabled={!writable}
+                        onSelect={() => {
+                          setRenaming(item);
+                          setName(item.name);
+                        }}
+                      >
+                        重命名
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          void command("favorite", [item], !item.favorite)
+                        }
+                      >
+                        {item.favorite ? "取消收藏" : "收藏"}
+                      </DropdownMenuItem>
+                      {item.can_copy_project && (
+                        <DropdownMenuItem
+                          disabled={!writable}
+                          onSelect={() => void copy(item)}
+                        >
+                          复制项目
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem
+                        disabled={!writable}
+                        onSelect={() => setDeleting([item])}
+                      >
+                        删除
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
+          </article>
+        ))}
+      </div>
+      {page?.next_cursor && (
+        <Button
+          variant="ghost"
+          className="justify-self-center"
+          disabled={pending || locked}
+          onClick={() => {
+            setPending(true);
+            setCursor(page.next_cursor!);
+          }}
+        >
+          更多画布
+        </Button>
+      )}
+      {results.length > 0 && (
+        <section aria-label="画布操作结果" className="grid gap-1 text-sm">
+          {results.map((item) => (
+            <p className="break-words" key={item.id}>
+              {item.title}：
+              {item.ok ? "已完成" : `未完成（${item.code}），请刷新后重试`}
+            </p>
+          ))}
+        </section>
+      )}
+      {collection === "current" && !batch && !!page && !error && (
+        <AssetTemplateList
+          kind={kind}
+          disabled={locked || !writable || pending}
+          onUse={(value) => {
+            setTemplate(value);
+            setCreating("project");
+          }}
+        />
+      )}
+      {creating === "project" && (
+        <AssetCreateProject
+          kind={kind}
+          template={template}
+          onClose={() => setCreating(null)}
+          onLock={onLock}
+        />
+      )}
+      {creating === "existing" && (
+        <CreateAssetCanvas
+          kind={kind}
+          onClose={() => setCreating(null)}
+          onLock={onLock}
+        />
+      )}
+      {copying && (
+        <ProjectCopyDialog
+          project={copying}
+          onClose={() => {
+            setCopying(null);
+            reload();
+          }}
+        />
+      )}
+      {deleting && (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open && !locked) setDeleting(null);
+          }}
+        >
+          <DialogContent showCloseButton={!locked}>
+            <DialogTitle>
+              删除所选{kind === "short_drama" ? "短剧" : "画布"}？
+            </DialogTitle>
+            <DialogDescription>
+              {deleting.some((item) => item.is_main)
+                ? "选择中包含主画布，删除主画布会将其整个所属项目移入项目回收站，并影响该项目的其他画布。"
+                : "所选画布将被移除，其他画布保持不变。"}
+              共{deleting.length}项。
+            </DialogDescription>
+            <DialogFooter>
+              <Button
+                variant="ghost"
+                disabled={locked}
+                onClick={() => setDeleting(null)}
+              >
+                取消
+              </Button>
+              <Button
+                disabled={writing}
+                onClick={() => void command("delete", deleting)}
+              >
+                {writing ? "正在删除…" : intent ? "重试原操作" : "确认删除"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+      {renaming && (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open && !locked) setRenaming(null);
+          }}
+        >
+          <DialogContent showCloseButton={!locked}>
+            <DialogTitle>
+              重命名{kind === "short_drama" ? "短剧" : "画布"}
+            </DialogTitle>
+            <DialogDescription>
+              {renaming.is_main
+                ? "主画布名称将同时更新所属项目名称。"
+                : "更新画布名称。"}
+            </DialogDescription>
+            <form
+              className="grid gap-5"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (name.trim()) void command("rename", [renaming]);
+              }}
+            >
+              <Field>
+                <FieldLabel htmlFor="asset-rename-name">名称</FieldLabel>
+                <Input
+                  id="asset-rename-name"
+                  maxLength={50}
+                  value={name}
+                  disabled={locked}
+                  onChange={(event) => setName(event.target.value)}
+                />
+              </Field>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={locked}
+                  onClick={() => setRenaming(null)}
+                >
+                  取消
+                </Button>
+                <Button type="submit" disabled={writing || !name.trim()}>
+                  {writing ? "正在保存…" : intent ? "重试原操作" : "保存"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+      {notice && <FeedbackToast message={notice} />}
+    </div>
+  );
+}
+function CanvasCover({ item }: { item: AssetCanvasItem }) {
+  return (
+    <span className="flex aspect-video w-full items-center justify-center overflow-hidden rounded-lg bg-muted">
+      {item.cover_asset_id && !item.cover_unavailable ? (
+        <ProjectMediaPreview
+          projectID={item.project_id}
+          id={item.cover_asset_id}
+          kind="image"
+          compact
+          interactive={false}
+        />
+      ) : (
+        <PanelsTopLeft className="size-8 text-muted-foreground" />
+      )}
+    </span>
+  );
+}
+function CanvasText({
+  item,
+  sort,
+}: {
+  item: AssetCanvasItem;
+  sort: AssetFilters["sort"];
+}) {
+  return (
+    <>
+      <span className="line-clamp-2 w-full break-words whitespace-normal">
+        {item.name}
+      </span>
+      <span className="w-full truncate text-xs text-muted-foreground">
+        {new Date(
+          sort === "created" ? item.created_at : item.updated_at,
+        ).toLocaleString("zh-CN")}{" "}
+        {sort === "created" ? "创建" : "修改"}
+      </span>
+    </>
+  );
+}

@@ -42,7 +42,7 @@ export function AssetLibrarySelect({
   includeGeneral = true,
   enabledOnly = true,
   disabled = false,
-  label = "所属素材库",
+  label = "所属参考素材",
   prefix,
 }: {
   value: string;
@@ -118,7 +118,7 @@ export function AssetLibrarySelect({
         className="max-h-[min(32rem,var(--radix-popover-content-available-height))] w-100 max-w-[calc(100vw-2rem)] gap-2 overflow-hidden p-2 [@media(max-height:600px)]:gap-1"
       >
         <Input
-          aria-label="搜索项目素材库"
+          aria-label="搜索项目参考素材目录"
           placeholder="搜索项目名称…"
           className="h-10 shrink-0"
           maxLength={100}
@@ -161,12 +161,12 @@ export function AssetLibrarySelect({
           )}
         </div>
         <p className="shrink-0 px-2 pt-2 text-xs text-muted-foreground [@media(max-height:600px)]:pt-0">
-          {enabledOnly ? "项目素材库" : "选择已有项目"}
+          {enabledOnly ? "项目参考素材目录" : "选择已有项目"}
         </p>
         <div
           key={`${keyword}:${page}`}
           className="max-h-60 min-h-0 space-y-1 overflow-x-hidden overflow-y-auto overscroll-contain"
-          aria-label="可选项目素材库"
+          aria-label="可选项目参考素材目录"
           aria-busy={loading}
         >
           {loading ? (
@@ -188,7 +188,7 @@ export function AssetLibrarySelect({
                 : keyword
                   ? "没有匹配的项目"
                   : enabledOnly
-                    ? "尚未创建项目素材库"
+                    ? "尚未创建项目参考素材目录"
                     : "请先在项目空间创建项目"}
             </p>
           ) : (
@@ -216,7 +216,7 @@ export function AssetLibrarySelect({
         </div>
         <div
           className="flex min-w-0 shrink-0 items-center gap-2"
-          aria-label="项目素材库分页"
+          aria-label="项目参考素材目录分页"
         >
           <span
             className="min-w-0 flex-1 truncate text-xs text-muted-foreground"

@@ -186,7 +186,7 @@ export function ProjectActionsDialog({
         </DialogTitle>
         <DialogDescription>
           {action === "recycle"
-            ? "删除后立即移入回收站，保留30天，截止后不可恢复。素材库中的素材保留。"
+            ? "删除后立即移入回收站，保留30天，截止后不可恢复。参考素材中的素材保留。"
             : action === "archive"
               ? "归档后画布以只读方式保留，可随时取消归档。"
               : action === "restore"

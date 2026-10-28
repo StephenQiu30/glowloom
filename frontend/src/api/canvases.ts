@@ -3,6 +3,51 @@
 import { request } from "@/lib/request";
 import type { RequestOptions } from "@/lib/request";
 
+/** 直接新建画布或短剧 POST /api/canvas-assets */
+export async function createAssetCanvas(
+  body: API.AssetCreationInput,
+  options?: RequestOptions,
+) {
+  return request<API.CreatedAssetCanvas>("/api/canvas-assets", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 画布资产收藏与生命周期操作 POST /api/canvas-assets/commands */
+export async function applyCanvasAssetCommand(
+  body: API.AssetCommandInput,
+  options?: RequestOptions,
+) {
+  return request<API.AssetCommandReceipt>("/api/canvas-assets/commands", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 画布与短剧系统模板 GET /api/canvas-assets/templates */
+export async function listCanvasAssetTemplates(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.listCanvasAssetTemplatesParams,
+  options?: RequestOptions,
+) {
+  return request<API.AssetTemplateCatalog>("/api/canvas-assets/templates", {
+    method: "GET",
+    params: {
+      ...params,
+    },
+    ...(options || {}),
+  });
+}
+
 /** 定位有权访问的画布空间 GET /api/canvas-locations/${param0} */
 export async function locateCanvas(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -13,6 +58,21 @@ export async function locateCanvas(
   return request<API.Location>(`/api/canvas-locations/${param0}`, {
     method: "GET",
     params: { ...queryParams },
+    ...(options || {}),
+  });
+}
+
+/** 资产画布列表 GET /api/canvases */
+export async function listAssetCanvases(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.listAssetCanvasesParams,
+  options?: RequestOptions,
+) {
+  return request<API.AssetListResponse>("/api/canvases", {
+    method: "GET",
+    params: {
+      ...params,
+    },
     ...(options || {}),
   });
 }

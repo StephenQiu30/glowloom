@@ -9,7 +9,7 @@ import {
 import { RichGeneration, type CanvasComposerOwner } from "./rich-generation";
 import type { PromptDraft } from "./prompt-document";
 import { useEffect, useRef, useState } from "react";
-import { History, RotateCw, ChevronDown } from "lucide-react";
+import { History, RotateCw, ChevronDown, FileText } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
@@ -41,7 +41,7 @@ export type GenerationSeed = {
   draftID?: string;
   canvasOwner?: CanvasComposerOwner;
   prompt: string;
-  capability: "image" | "video" | "text";
+  capability: "image" | "video" | "audio" | "text";
   source?: API.CanvasSource;
   project?: Project;
   reuse?: Task;
@@ -186,7 +186,7 @@ function GenerationForm({
       {reuseError && <FeedbackToast message={reuseError} />}
       <TaskHistory
         projectID={project.id}
-        capability={seed.capability + ".generate"}
+        capability={reuse?.capability ?? seed.capability + ".generate"}
         onAdopt={onAdopt}
         onReuse={(task) => {
           void (async () => {
@@ -328,11 +328,15 @@ export function TaskDetail({
   id,
   onAdopt,
   onReuse,
+  outputID,
+  presentation = "default",
 }: {
   projectID: string;
   id: string;
   onAdopt?: (id: string, kind: string) => Promise<void> | void;
   onReuse?: (task: Task) => void;
+  outputID?: string;
+  presentation?: "default" | "asset";
 }) {
   const [task, setTask] = useState<Task | null>(null),
     [error, setError] = useState(""),
@@ -405,89 +409,18 @@ export function TaskDetail({
       setPending(false);
     }
   }
-  return (
-    <section className="task-detail" aria-live="polite">
-      <div className="flex items-center gap-3">
-        <h3>{task ? taskLabels[task.status] : "读取任务…"}</h3>
-        {task && activeTask(task.status) && <Spinner aria-label="任务进行中" />}
-        <Button
-          variant="ghost"
-          className="ml-auto"
-          aria-label="刷新任务"
-          onClick={() => setRetry((n) => n + 1)}
-        >
-          <RotateCw />
-        </Button>
-      </div>
-      {error && <FeedbackToast message={error} />}
-      {task?.editor_draft && (
-        <Collapsible className="rounded border p-3 text-sm">
-          <CollapsibleTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              className="group/collapsible h-auto w-full justify-between whitespace-normal"
-            >
-              <span>当时使用的完整输入</span>
-              <ChevronDown
-                data-icon="inline-end"
-                className="transition-transform group-data-[state=open]/collapsible:rotate-180"
-              />
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent
-            forceMount
-            className="pt-3 data-[state=closed]:hidden"
-          >
-            <p>
-              模式：{task.editor_draft.mode} · 编译：
-              {task.editor_compiler_version}
-            </p>
-            <pre className="max-h-48 overflow-auto whitespace-pre-wrap">
-              {task.inputs
-                ?.filter((i) => i.text)
-                .map((i) => i.text)
-                .join("\n")}
-            </pre>
-            <ul>
-              {task.editor_reference_mapping?.map((m) => (
-                <li key={m.reference_id}>
-                  {m.label} · {m.role} · 媒体位置{" "}
-                  {m.media_seq_nos?.join("、") || "仅描述"}
-                </li>
-              ))}
-            </ul>
-          </CollapsibleContent>
-        </Collapsible>
-      )}
-      {task?.failure_code && (
-        <p>
-          生成未能完成，请核对输入或稍后重试。
-          <small className="block text-muted-foreground">
-            错误编号：{task.failure_code}
-          </small>
-        </p>
-      )}
+  const preview = (
+    <>
       {task?.status === "completed" &&
-        !task.outputs?.some(
-          (o) =>
-            o.moderation_status === "passed" &&
-            (o.media_asset_id || (o.kind === "json" && o.text)),
-        ) && (
-          <p>任务已结束，当前没有通过审核的可用结果。请调整描述后重新生成。</p>
-        )}
-      {task && ["unknown", "reconciling", "manual"].includes(task.status) && (
-        <p>结果正在核对，请保留此任务，避免重复提交。</p>
-      )}
-      {task?.status === "cancelled" && (
-        <p>任务已取消，你可以调整输入重新生成。</p>
-      )}
-      {task?.status === "completed" &&
-        task.capability === "text.generate" &&
+        (task.capability?.startsWith("text.") ||
+          task.capability?.startsWith("document.")) &&
         task.outputs
           ?.filter(
             (o) =>
-              o.kind === "json" && o.moderation_status === "passed" && o.text,
+              (!outputID || o.id === outputID) &&
+              o.kind === "json" &&
+              o.moderation_status === "passed" &&
+              o.text,
           )
           .map((o) => (
             <pre
@@ -498,18 +431,43 @@ export function TaskDetail({
             </pre>
           ))}
       {task?.outputs && (
-        <div className="generation-results">
+        <div
+          className={
+            presentation === "asset"
+              ? "grid min-w-0 gap-4"
+              : "generation-results"
+          }
+        >
           {task.outputs
-            .filter((o) => o.media_asset_id && o.moderation_status === "passed")
+            .filter(
+              (o) =>
+                (!outputID || o.id === outputID) &&
+                o.media_asset_id &&
+                o.moderation_status === "passed",
+            )
             .map((o) => (
               <div key={o.id}>
-                <div className="generation-result-preview">
-                  <ProjectMediaPreview
-                    projectID={projectID}
-                    id={o.media_asset_id!}
-                    kind={o.kind}
-                    large
-                  />
+                <div
+                  className={
+                    presentation === "asset"
+                      ? "relative flex h-[min(55dvh,34rem)] min-h-64 w-full items-center justify-center overflow-hidden rounded-lg bg-muted"
+                      : "generation-result-preview"
+                  }
+                >
+                  {o.kind === "document" ? (
+                    <div className="grid justify-items-center gap-3 p-6 text-center text-muted-foreground">
+                      <FileText className="size-10" />
+                      <p>正式文档仅提供原件，下载原件以查看。</p>
+                    </div>
+                  ) : (
+                    <ProjectMediaPreview
+                      projectID={projectID}
+                      id={o.media_asset_id!}
+                      kind={o.kind}
+                      large
+                      fit={presentation === "asset" ? "contain" : undefined}
+                    />
+                  )}
                 </div>
                 {onAdopt && (
                   <Button
@@ -523,36 +481,178 @@ export function TaskDetail({
             ))}
         </div>
       )}
-      {task && activeTask(task.status) && task.status !== "cancelling" && (
-        <Button variant="outline" onClick={() => setConfirmCancel(true)}>
-          取消任务
-        </Button>
-      )}
-      {task &&
-        ["failed", "cancelled", "expired", "completed"].includes(task.status) &&
-        onReuse && (
-          <Button variant="outline" onClick={() => onReuse(task)}>
-            复用参数重新报价
-          </Button>
-        )}
-      {confirmCancel && (
-        <div className="quote-card">
-          <h4>取消这个任务？</h4>
-          <p>已开始的任务可能仍会完成，取消与费用结果以任务状态为准。</p>
-          <div className="flex gap-3">
-            <Button
-              variant="outline"
-              disabled={pending}
-              onClick={() => setConfirmCancel(false)}
-            >
-              继续等待
-            </Button>
-            <Button disabled={pending} onClick={() => void cancel()}>
-              {pending ? "正在请求…" : "确认取消"}
-            </Button>
-          </div>
+    </>
+  );
+  return (
+    <section
+      className={
+        presentation === "asset"
+          ? "grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]"
+          : "task-detail"
+      }
+      aria-live="polite"
+    >
+      {presentation === "asset" && (
+        <div className="min-w-0" aria-label="选定结果预览">
+          {preview}
+          {!task && <ContentState state="loading" title="正在读取结果" />}
         </div>
       )}
+      <div
+        className={
+          presentation === "asset"
+            ? "grid min-w-0 content-start gap-4"
+            : "contents"
+        }
+      >
+        <div className="flex items-center gap-3">
+          <h3>{task ? taskLabels[task.status] : "读取任务…"}</h3>
+          {task && activeTask(task.status) && (
+            <Spinner aria-label="任务进行中" />
+          )}
+          <Button
+            variant="ghost"
+            className="ml-auto"
+            aria-label="刷新任务"
+            onClick={() => setRetry((n) => n + 1)}
+          >
+            <RotateCw />
+          </Button>
+        </div>
+        {error && <FeedbackToast message={error} />}
+        {task && (
+          <dl className="grid min-w-0 gap-2 text-sm">
+            <div>
+              <dt className="text-muted-foreground">模型与模式</dt>
+              <dd className="break-words">
+                {[task.model_name || task.model_key, task.capability, task.mode]
+                  .filter(Boolean)
+                  .join(" · ") || "未提供"}
+              </dd>
+            </div>
+            {task.inputs?.some(
+              (input) => input.role === "prompt" && input.text,
+            ) && (
+              <div>
+                <dt className="text-muted-foreground">提示词</dt>
+                <dd className="max-h-48 overflow-auto break-words whitespace-pre-wrap">
+                  {task.inputs
+                    .filter((input) => input.role === "prompt" && input.text)
+                    .map((input) => input.text)
+                    .join("\n")}
+                </dd>
+              </div>
+            )}
+            {task.params && Object.keys(task.params).length > 0 && (
+              <div>
+                <dt className="text-muted-foreground">生成参数</dt>
+                <dd>
+                  <pre className="max-h-48 overflow-auto break-words whitespace-pre-wrap">
+                    {JSON.stringify(task.params, null, 2)}
+                  </pre>
+                </dd>
+              </div>
+            )}
+          </dl>
+        )}
+        {task?.editor_draft && (
+          <Collapsible className="rounded border p-3 text-sm">
+            <CollapsibleTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                className="group/collapsible h-auto w-full justify-between whitespace-normal"
+              >
+                <span>当时使用的完整输入</span>
+                <ChevronDown
+                  data-icon="inline-end"
+                  className="transition-transform group-data-[state=open]/collapsible:rotate-180"
+                />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent
+              forceMount
+              className="pt-3 data-[state=closed]:hidden"
+            >
+              <p>
+                模式：{task.editor_draft.mode} · 编译：
+                {task.editor_compiler_version}
+              </p>
+              <pre className="max-h-48 overflow-auto whitespace-pre-wrap">
+                {task.inputs
+                  ?.filter((i) => i.text)
+                  .map((i) => i.text)
+                  .join("\n")}
+              </pre>
+              <ul>
+                {task.editor_reference_mapping?.map((m) => (
+                  <li key={m.reference_id}>
+                    {m.label} · {m.role} · 媒体位置{" "}
+                    {m.media_seq_nos?.join("、") || "仅描述"}
+                  </li>
+                ))}
+              </ul>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+        {task?.failure_code && (
+          <p>
+            生成未能完成，请核对输入或稍后重试。
+            <small className="block text-muted-foreground">
+              错误编号：{task.failure_code}
+            </small>
+          </p>
+        )}
+        {task?.status === "completed" &&
+          !task.outputs?.some(
+            (o) =>
+              o.moderation_status === "passed" &&
+              (o.media_asset_id || (o.kind === "json" && o.text)),
+          ) && (
+            <p>
+              任务已结束，当前没有通过审核的可用结果。请调整描述后重新生成。
+            </p>
+          )}
+        {task && ["unknown", "reconciling", "manual"].includes(task.status) && (
+          <p>结果正在核对，请保留此任务，避免重复提交。</p>
+        )}
+        {task?.status === "cancelled" && (
+          <p>任务已取消，你可以调整输入重新生成。</p>
+        )}
+        {presentation === "default" && preview}
+        {task && activeTask(task.status) && task.status !== "cancelling" && (
+          <Button variant="outline" onClick={() => setConfirmCancel(true)}>
+            取消任务
+          </Button>
+        )}
+        {task &&
+          ["failed", "cancelled", "expired", "completed"].includes(
+            task.status,
+          ) &&
+          onReuse && (
+            <Button variant="outline" onClick={() => onReuse(task)}>
+              复用参数重新报价
+            </Button>
+          )}
+        {confirmCancel && (
+          <div className="quote-card">
+            <h4>取消这个任务？</h4>
+            <p>已开始的任务可能仍会完成，取消与费用结果以任务状态为准。</p>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                disabled={pending}
+                onClick={() => setConfirmCancel(false)}
+              >
+                继续等待
+              </Button>
+              <Button disabled={pending} onClick={() => void cancel()}>
+                {pending ? "正在请求…" : "确认取消"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
     </section>
   );
 }

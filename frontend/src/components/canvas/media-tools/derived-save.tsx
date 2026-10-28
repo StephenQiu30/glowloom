@@ -74,7 +74,7 @@ export function DerivedMediaSave({
         <DialogTitle>保存处理结果</DialogTitle>
         <DialogDescription>
           将 {nodes.length}{" "}
-          张处理后的图片保存到项目素材库并加入画布。已经上传的素材会保留在项目中。
+          张处理后的图片保存到项目参考素材目录并加入画布。已经上传的素材会保留在项目中。
         </DialogDescription>
         <Field orientation="horizontal">
           <Checkbox

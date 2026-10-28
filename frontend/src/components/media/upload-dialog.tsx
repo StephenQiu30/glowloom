@@ -139,7 +139,7 @@ export function UploadDialog({
           {done
             ? destinationLabel
               ? `文件已保存到「${destinationLabel}」。`
-              : "文件已保存到当前素材库。"
+              : "文件已保存到当前参考素材目录。"
             : "图片和文档最多 20 MB，音频 100 MB，视频 500 MB（60 秒），GLB 模型 64 MB。"}
         </DialogDescription>
         {!done && (

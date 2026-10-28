@@ -35,7 +35,7 @@ func verifyCopiedDocuments(tx *gorm.DB, copied []domain.ProjectDocumentCopy, tar
 	}
 	for _, item := range copied {
 		var row documentRow
-		read := tx.Raw(`SELECT id,project_id,name,scope,revision,viewport,schema_version FROM canvas.document WHERE id=? AND project_id=? AND NOT is_delete FOR SHARE`, item.Document.ID, targetID).Scan(&row)
+		read := tx.Raw(`SELECT id,project_id,name,kind,asset_collection,scope,revision,viewport,schema_version FROM canvas.document WHERE id=? AND project_id=? AND NOT is_delete FOR SHARE`, item.Document.ID, targetID).Scan(&row)
 		if read.Error != nil {
 			return read.Error
 		}

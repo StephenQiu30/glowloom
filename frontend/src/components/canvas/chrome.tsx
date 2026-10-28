@@ -363,14 +363,14 @@ export function CanvasToolPalette({
       <div className="h-3 shrink-0" />
       {readOnly ? (
         <Unavailable
-          label="素材库（只读）"
+          label="参考素材（只读）"
           reason="此画布当前为只读，不能添加素材。"
         >
           <Folder />
         </Unavailable>
       ) : (
         <CanvasIconButton
-          label="从素材库添加"
+          label="从参考素材添加"
           disabled={busy}
           onClick={() => onCreate?.("library")}
         >

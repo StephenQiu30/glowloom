@@ -23,6 +23,7 @@ import (
 
 type operationProjectAccess struct {
 	worker bool
+	scopes workspace.RequestScopeResolver
 	store  interface {
 		Authorize(context.Context, identity.Principal, uuid.UUID, bool) (workspace.ProjectContentAccess, error)
 	}
@@ -39,6 +40,22 @@ func (a operationProjectAccess) AuthorizeBilling(ctx context.Context, actor iden
 	return a.AuthorizeOperation(ctx, actor, project, write)
 }
 
+// CanPublishHistory checks the current exact session and writable scope under
+// share locks. It does not turn a list query into a project content mutation.
+func (a operationProjectAccess) CanPublishHistory(ctx context.Context, actor identity.Principal) (bool, error) {
+	if a.worker || a.scopes == nil {
+		return false, nil
+	}
+	scope, err := a.scopes.Resolve(ctx, actor, actor.ScopeID, true)
+	if errors.Is(err, workspace.ErrScopeNotFound) || errors.Is(err, identity.ErrForbidden) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return scope.ID == actor.ScopeID && scope.PhysicalScopeID == actor.OrgID, nil
+}
+
 // ContentProjectAccess adapts a project-content store for callers outside this package.
 func ContentProjectAccess(store interface {
 	Authorize(context.Context, identity.Principal, uuid.UUID, bool) (workspace.ProjectContentAccess, error)
@@ -48,7 +65,7 @@ func ContentProjectAccess(store interface {
 
 // ProvideOperationProjectAccess adapts request project authority for operations.
 func ProvideOperationProjectAccess(tx *gorm.DB) operation.ProjectAccess {
-	return operationProjectAccess{store: scopewire.ProvideProjectContentAccess(tx)}
+	return operationProjectAccess{store: scopewire.ProvideProjectContentAccess(tx), scopes: scopewire.ProvideRequestScopeAccess(tx)}
 }
 
 // ProvideOperationWorkerAccess adapts worker project authority for operations.
@@ -73,7 +90,7 @@ func (a operationProjectAccess) AuthorizeCatalog(ctx context.Context, actor iden
 // NewCatalogStore composes current platform sessions and project scope authorization.
 func NewCatalogStore(db *gorm.DB) *pgcatalog.Store {
 	return pgcatalog.NewScopedStore(db, func(tx *gorm.DB) catalog.ActorAccess { return pgidentity.NewStore(tx) }, func(tx *gorm.DB) catalog.ProjectAccess {
-		return operationProjectAccess{store: scopewire.ProvideProjectContentAccess(tx)}
+		return operationProjectAccess{store: scopewire.ProvideProjectContentAccess(tx), scopes: scopewire.ProvideRequestScopeAccess(tx)}
 	})
 }
 

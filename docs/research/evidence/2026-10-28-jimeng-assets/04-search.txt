@@ -1,0 +1,7 @@
+Browser tab: 1980370695, Title: "即梦AI - 一站式AI创作平台", URL: "https://jimeng.jianying.com/ai-tool/asset".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 80-81
+~				10 text 35
++						105 image 暂无相关资产
++						106 text 暂无相关资产
+The focused UI element is 103 text field (settable) Description: 搜索, Value: 一致性

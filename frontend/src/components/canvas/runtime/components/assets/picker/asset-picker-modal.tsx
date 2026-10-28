@@ -110,7 +110,7 @@ export function AssetPickerModal({
         <DialogHeader className="shrink-0 pr-6">
           <DialogTitle>选择素材</DialogTitle>
           <DialogDescription className="[@media(max-height:600px)]:sr-only">
-            从素材库选择内容，点击即可引用到画布。
+            从参考素材选择内容，点击即可引用到画布。
           </DialogDescription>
         </DialogHeader>
         <LibraryPickerContent

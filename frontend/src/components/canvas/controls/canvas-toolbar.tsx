@@ -281,7 +281,7 @@ export function CanvasToolbar({
                 <Folder data-icon="inline-start" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right">从资产库添加</TooltipContent>
+            <TooltipContent side="right">从参考素材添加</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>

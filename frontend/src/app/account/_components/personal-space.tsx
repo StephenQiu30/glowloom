@@ -92,7 +92,7 @@ export function PersonalSpace() {
           <TabsContent value="works">
             <ContentState
               title="作品发布暂未开放"
-              description="已保存的创作可在素材库和画布中继续编辑。"
+              description="已保存的创作可在参考素材和画布中继续编辑。"
               actions={
                 <Button asChild variant="secondary">
                   <Link href="/">开始创作</Link>

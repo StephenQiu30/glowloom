@@ -562,7 +562,7 @@ function TransferContent({
               {isZip
                 ? "ZIP核验通过后查看原文件名与目录，再确认开始导入。"
                 : (picker?.description ??
-                  "支持图片、视频、音频和文本；服务端核验通过后添加到素材库。")}
+                  "支持图片、视频、音频和文本；服务端核验通过后添加到参考素材。")}
             </DialogDescription>
           </DialogHeader>
           {file && (
@@ -768,7 +768,7 @@ function TransferContent({
                               >
                                 {item.biz === "asset_zip"
                                   ? "准备导入"
-                                  : "添加到素材库"}
+                                  : "添加到参考素材"}
                               </Button>
                             )}
                             <Button

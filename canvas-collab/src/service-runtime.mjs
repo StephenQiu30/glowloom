@@ -1,6 +1,7 @@
 import * as Y from "yjs";
 import { AdmissionGate, digest } from "./admission.mjs";
-import { canonicalJson } from "./canonical.mjs";
+import { canonicalJson, canonicalGraphJson } from "./canonical.mjs";
+import { prepareTitle } from "./metadata.mjs";
 import {
   createCanvasDocument,
   readCanvasDocument,
@@ -128,6 +129,49 @@ export async function computeCandidate(action, request) {
         graphHash: digest(canonicalJson(snapshot)),
         projection,
       };
+    } finally {
+      doc.destroy();
+    }
+  }
+  if (action === "rename") {
+    if (
+      !uuid.test(request.updateId) ||
+      typeof request.name !== "string" ||
+      request.name.trim() !== request.name ||
+      !request.name.length ||
+      [...request.name].length > 50
+    )
+      throw failure("INVALID_RENAME");
+    const state = decodeBinary(request.state, 8 * 1024 * 1024);
+    const doc = new Y.Doc();
+    try {
+      Y.applyUpdate(doc, state);
+      const before = readCanvasDocument(doc);
+      if (
+        canonicalJson(serviceProjection(before, request.document)) !==
+        canonicalJson(request.document)
+      )
+        throw failure("PROJECTION_DRIFT");
+      const prepared = prepareTitle({
+        title: request.name,
+        commandId: request.updateId,
+        state: {
+          epoch: request.epoch,
+          modelVersion: 1,
+          lifecycle: "ACTIVE",
+          commitSeq: request.commitSeq,
+          checkpointSeq: request.commitSeq,
+          checkpoint: request.state,
+          checkpointHash: digest(state),
+          graphHash: digest(canonicalGraphJson(before.graph)),
+          tail: [],
+        },
+      });
+      return await computeCandidate("prepare", {
+        ...request,
+        update: prepared.update,
+        payloadHash: prepared.payloadHash,
+      });
     } finally {
       doc.destroy();
     }

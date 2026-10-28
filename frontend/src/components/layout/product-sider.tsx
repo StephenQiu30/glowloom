@@ -44,7 +44,7 @@ import {
 const links = [
   { id: "home", label: "创作", icon: Sparkles, href: "/" },
   { id: "explore", label: "探索", icon: Compass, href: "/explore" },
-  { id: "assets", label: "素材库", icon: Folder, href: "/assets" },
+  { id: "assets", label: "资产", icon: Folder, href: "/assets" },
   { id: "subjects", label: "主体库", icon: Contact, href: "/subjects" },
 ];
 
