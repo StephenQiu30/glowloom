@@ -11,7 +11,9 @@ import { installDevelopmentTransport } from "../../src/lib/development-transport
 import { RequestError } from "../../src/lib/request";
 import { Toaster } from "../../src/components/ui/sonner";
 import "../../src/app/globals.css";
+let avatarURL = "";
 let actor = {
+  avatar_asset_id: "",
   id: "11111111-1111-4111-8111-111111111111",
   display_name: "织光创作者",
   email: "profile@example.test",
@@ -54,12 +56,32 @@ installDevelopmentTransport({
           ...actor,
           display_name: b.display_name ?? actor.display_name,
           bio: b.bio ?? actor.bio,
+          avatar_asset_id:
+            b.avatar_asset_id === null
+              ? ""
+              : (b.avatar_asset_id ?? actor.avatar_asset_id),
           revision: String(Number(actor.revision) + 1),
         };
       }
       return actor;
     }
-    if (url === "/api/me/avatar") throw new RequestError("not_found", 404);
+    if (url === "/api/me/avatar/uploads") {
+      if (scenario === "upload-error")
+        throw new RequestError("dependency_unavailable", 503);
+      const file = (options.data as FormData).get("file");
+      if (!(file instanceof File))
+        throw new RequestError("invalid_request", 422);
+      if (avatarURL) URL.revokeObjectURL(avatarURL);
+      avatarURL = URL.createObjectURL(file);
+      return { id: "55555555-5555-4555-8555-555555555555" };
+    }
+    if (url === "/api/me/avatar") {
+      if (!actor.avatar_asset_id) throw new RequestError("not_found", 404);
+      return {
+        url: avatarURL,
+        expires_at: new Date(Date.now() + 60000).toISOString(),
+      };
+    }
     if (url.includes("library"))
       return {
         current_actor_id: actor.id,

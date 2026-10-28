@@ -38,6 +38,8 @@ let saved = false;
 beforeEach(() => {
   saved = false;
   vi.clearAllMocks();
+  URL.createObjectURL = vi.fn(() => "blob:avatar");
+  URL.revokeObjectURL = vi.fn();
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -93,8 +95,8 @@ it("profile saved state requires server readback and preserves explicit missing 
   fireEvent.click(screen.getByRole("button", { name: "编辑资料" }));
   expect(screen.getByRole("region", { name: "编辑头像" })).toBeTruthy();
   expect(screen.queryByRole("region", { name: "更换邮箱" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "更换邮箱" }));
-  expect(await screen.findByRole("region", { name: "更换邮箱" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "更换邮箱" })).toBeNull();
+  expect(screen.getByLabelText("邮箱")).toHaveProperty("readOnly", true);
 });
 it("profile conflict preserves unsaved intent and offers reload", async () => {
   const original = vi.mocked(request).getMockImplementation()!;
@@ -208,7 +210,9 @@ it("清除头像经生成客户端传送 HTTP null 并以本人读回结果更�
   });
   render(<Settings initialView="profile" />);
   fireEvent.click(await screen.findByText("恢复默认头像"));
-  await screen.findByText("已恢复默认头像。");
+  expect(removed).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "保存资料" }));
+  await screen.findByText("个人资料已保存并读回。");
   expect(screen.queryByText("恢复默认头像")).toBeNull();
   expect(mocks.update).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -376,4 +380,153 @@ it("embedded profile save closes only after the server readback updates the sess
   fireEvent.click(screen.getByRole("button", { name: "保存资料" }));
   await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
   expect(saved).toBe(true);
+});
+
+it("选非正方形头像后直接保存资料会上传原文件、绑定并读回更新会话", async () => {
+  const original = vi.mocked(request).getMockImplementation()!;
+  let bound = false;
+  const file = new File(["wide-image"], "landscape.png", { type: "image/png" });
+  vi.mocked(request).mockImplementation(async (url, options) => {
+    if (url === "/api/me/avatar/uploads") {
+      expect(options?.data).toBeInstanceOf(FormData);
+      expect((options?.data as FormData).get("file")).toBe(file);
+      return { id: "new-asset" };
+    }
+    if (url === "/api/me") {
+      if (options?.method === "PATCH") {
+        expect(options.data).toMatchObject({
+          avatar_asset_id: "new-asset",
+          expected_revision: "1",
+          display_name: "New name",
+          bio: "New bio",
+        });
+        expect(options.data).not.toHaveProperty("email");
+        bound = true;
+      }
+      return {
+        ...profile,
+        avatar_asset_id: bound ? "new-asset" : "",
+        revision: bound ? "2" : "1",
+      };
+    }
+    return original(url, options);
+  });
+  render(<Settings initialView="profile" />);
+  fireEvent.change(await screen.findByLabelText("显示名"), {
+    target: { value: "New name" },
+  });
+  fireEvent.change(screen.getByLabelText("个人简介"), {
+    target: { value: "New bio" },
+  });
+  fireEvent.change(screen.getByLabelText(/选择头像/), {
+    target: { files: [file] },
+  });
+  expect(screen.queryByRole("checkbox", { name: /裁剪/ })).toBeNull();
+  expect(screen.queryByRole("button", { name: "上传并保存头像" })).toBeNull();
+  expect(bound).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "保存资料" }));
+  await screen.findByText("个人资料已保存并读回。");
+  expect(mocks.update).toHaveBeenCalledWith(
+    expect.objectContaining({
+      actor: expect.objectContaining({
+        avatar_asset_id: "new-asset",
+        revision: "2",
+      }),
+    }),
+  );
+});
+
+it("头像上传失败保留选图和资料，重试成功后才关闭弹窗", async () => {
+  const original = vi.mocked(request).getMockImplementation()!;
+  const onClose = vi.fn();
+  let uploads = 0;
+  let patched = false;
+  vi.mocked(request).mockImplementation(async (url, options) => {
+    if (url === "/api/me/avatar/uploads") {
+      if (++uploads === 1)
+        throw new RequestError("temporarily_unavailable", 503);
+      return { id: "new-asset" };
+    }
+    if (url === "/api/me") {
+      if (options?.method === "PATCH") patched = true;
+      return {
+        ...profile,
+        avatar_asset_id: patched ? "new-asset" : "",
+        revision: patched ? "2" : "1",
+      };
+    }
+    return original(url, options);
+  });
+  render(
+    <Dialog open>
+      <DialogContent>
+        <Settings embedded initialView="profile" onClose={onClose} />
+      </DialogContent>
+    </Dialog>,
+  );
+  fireEvent.change(await screen.findByLabelText("显示名"), {
+    target: { value: "Keep draft" },
+  });
+  fireEvent.change(screen.getByLabelText(/选择头像/), {
+    target: { files: [new File(["pixels"], "a.webp", { type: "image/webp" })] },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存资料" }));
+  await screen.findByRole("alert");
+  expect(patched).toBe(false);
+  expect(onClose).not.toHaveBeenCalled();
+  expect(screen.getByLabelText("显示名")).toHaveProperty("value", "Keep draft");
+  expect(screen.getByText("撤销头像更改")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "保存资料" }));
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  expect(uploads).toBe(2);
+});
+
+it("头像绑定读回不一致不宣布成功并保留弹窗", async () => {
+  const original = vi.mocked(request).getMockImplementation()!;
+  let patched = false;
+  vi.mocked(request).mockImplementation(async (url, options) => {
+    if (url === "/api/me/avatar/uploads") return { id: "new-asset" };
+    if (url === "/api/me") {
+      if (options?.method === "PATCH") patched = true;
+      return {
+        ...profile,
+        revision: patched ? "2" : "1",
+        avatar_asset_id: "old-asset",
+      };
+    }
+    if (url === "/api/me/avatar") return { url: "https://example.com/avatar" };
+    return original(url, options);
+  });
+  const onClose = vi.fn();
+  render(
+    <Dialog open>
+      <DialogContent>
+        <Settings embedded initialView="profile" onClose={onClose} />
+      </DialogContent>
+    </Dialog>,
+  );
+  fireEvent.change(await screen.findByLabelText(/选择头像/), {
+    target: { files: [new File(["pixels"], "a.png", { type: "image/png" })] },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存资料" }));
+  expect(await screen.findByRole("alert")).toBeTruthy();
+  expect(screen.queryByText("个人资料已保存并读回。")).toBeNull();
+  expect(onClose).not.toHaveBeenCalled();
+  expect(mocks.update).not.toHaveBeenCalled();
+});
+
+it("取消选中的头像不上传，再次编辑不保留头像草稿", async () => {
+  render(<Settings initialView="profile" />);
+  fireEvent.change(await screen.findByLabelText(/选择头像/), {
+    target: { files: [new File(["pixels"], "a.png", { type: "image/png" })] },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "取消" }));
+  fireEvent.click(screen.getByRole("button", { name: "编辑资料" }));
+  expect(screen.queryByText("撤销头像更改")).toBeNull();
+  expect(
+    vi
+      .mocked(request)
+      .mock.calls.some(([url]) => url === "/api/me/avatar/uploads"),
+  ).toBe(false);
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:avatar");
 });

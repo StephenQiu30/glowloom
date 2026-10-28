@@ -3,7 +3,12 @@ import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
+import {
+  Field,
+  FieldLabel,
+  FieldGroup,
+  FieldDescription,
+} from "@/components/ui/field";
 import { useEffect, useRef, useState, useId } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -21,9 +26,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useCanvasBackground } from "@/components/canvas/hooks/use-canvas-background";
 import { BoundAvatar } from "@/components/account/avatar-editor";
-import { AvatarEditor } from "@/components/account/avatar-editor";
-import { getMyAvatar } from "@/api/media";
-import { EmailChange } from "./email-change";
+import { ProfileAvatarPicker, type AvatarDraft } from "./profile-avatar-picker";
+import { getMyAvatar, uploadMyAvatar } from "@/api/media";
 import { PageLayout } from "@/components/layout/page-layout";
 import {
   useSession,
@@ -49,11 +53,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Collapsible,
-  CollapsibleTrigger,
-  CollapsibleContent,
-} from "@/components/ui/collapsible";
 import { Checkbox } from "@/components/ui/checkbox";
 
 export function Settings({
@@ -80,6 +79,7 @@ export function Settings({
   const [preferences, setPreferences] = useState<API.PreferencesView | null>(
     null,
   );
+  const [avatarDraft, setAvatarDraft] = useState<AvatarDraft>(null);
   const [bio, setBio] = useState("");
   const [name, setName] = useState("");
   const [theme, changeTheme] = useState("dark");
@@ -179,20 +179,38 @@ export function Settings({
   }
   async function saveProfile(signal: AbortSignal) {
     if (!profile) return;
-    const updated = await updateMe(
-      {
-        expected_revision: profile.revision,
-        display_name: name.trim(),
-        bio: bio.trim(),
+    let avatarID: string | null | undefined;
+    if (avatarDraft instanceof File) {
+      const uploaded = await uploadMyAvatar({}, avatarDraft, { signal });
+      if (signal.aborted) return;
+      if (!uploaded.id) throw new Error("头像上传回执不完整，请重试。");
+      avatarID = uploaded.id;
+    } else if (avatarDraft === "default") avatarID = null;
+    const body = {
+      expected_revision: profile.revision,
+      display_name: name.trim(),
+      bio: bio.trim(),
+    };
+    const updated = await updateMe(body, {
+      signal,
+      data: {
+        ...body,
+        ...(avatarID !== undefined ? { avatar_asset_id: avatarID } : {}),
       },
-      { signal },
-    );
+    });
     const readBack = await getMe({ signal });
     if (signal.aborted) return;
     if (updated.revision !== readBack.revision) {
       setError("资料保存后又发生变化，请重新加载。");
       return;
     }
+    if (
+      avatarID !== undefined &&
+      (readBack.avatar_asset_id || null) !== avatarID
+    ) {
+      throw new Error("头像保存后未读回相同结果，请重新加载后重试。");
+    }
+    setAvatarDraft(null);
     setProfile(readBack);
     if (preferences)
       void publishPreferences({
@@ -242,6 +260,7 @@ export function Settings({
     setNotice("偏好已保存。");
   }
   function refresh() {
+    setAvatarDraft(null);
     setImpact(null);
     setOperation("");
     setCode("");
@@ -298,6 +317,11 @@ export function Settings({
             disabled={busy}
             onClick={() => {
               setError("");
+              setAvatarDraft(null);
+              if (profile) {
+                setName(profile.display_name);
+                setBio(profile.bio ?? "");
+              }
               setTab("home");
             }}
           >
@@ -519,47 +543,12 @@ export function Settings({
             />
           ) : profile ? (
             <>
-              <AvatarEditor
-                label={profile.display_name}
-                compact
-                onBusyChange={setPending}
+              <ProfileAvatarPicker
                 assetID={profile.avatar_asset_id}
-                load={(signal) => getMyAvatar({ signal })}
-                onConflict={async () => {
-                  const readBack = await getMe();
-                  setProfile(readBack);
-                  if (preferences)
-                    void publishPreferences({
-                      ...preferences,
-                      revision: readBack.revision,
-                    });
-                  setPreferences((p) =>
-                    p ? { ...p, revision: readBack.revision } : p,
-                  );
-                  updateSession({ ...session, actor: readBack });
-                }}
-                bind={async (asset, signal) => {
-                  const body = {
-                    expected_revision: profile.revision,
-                    display_name: profile.display_name,
-                  };
-                  await updateMe(body, {
-                    signal,
-                    data: { ...body, avatar_asset_id: asset },
-                  });
-                  const readBack = await getMe({ signal });
-                  if (signal.aborted) return;
-                  setProfile(readBack);
-                  if (preferences)
-                    void publishPreferences({
-                      ...preferences,
-                      revision: readBack.revision,
-                    });
-                  setPreferences((p) =>
-                    p ? { ...p, revision: readBack.revision } : p,
-                  );
-                  updateSession({ ...session, actor: readBack });
-                }}
+                label={profile.display_name}
+                value={avatarDraft}
+                onChange={setAvatarDraft}
+                disabled={pending}
               />
               <form
                 onSubmit={(e) => {
@@ -611,7 +600,11 @@ export function Settings({
                       id={`${formFieldId}-field-2`}
                       value={profile.email}
                       readOnly
+                      aria-describedby={`${formFieldId}-email-description`}
                     />
+                    <FieldDescription id={`${formFieldId}-email-description`}>
+                      此邮箱用于注册和登录，无法在编辑资料中修改。
+                    </FieldDescription>
                   </Field>
 
                   <div className="flex justify-end gap-3">
@@ -621,6 +614,7 @@ export function Settings({
                       className="min-w-20"
                       disabled={pending}
                       onClick={() => {
+                        setAvatarDraft(null);
                         setName(profile.display_name);
                         setBio(profile.bio ?? "");
                         if (embedded && initialView === "profile") onClose();
@@ -643,17 +637,6 @@ export function Settings({
                   </div>
                 </FieldGroup>
               </form>
-              <Collapsible className="mt-6 text-sm">
-                <CollapsibleTrigger asChild>
-                  <Button variant="ghost">更换邮箱</Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <EmailChange
-                    revision={profile.revision}
-                    onConflict={refresh}
-                  />
-                </CollapsibleContent>
-              </Collapsible>
             </>
           ) : null
         ) : tab === "preferences" ? (
