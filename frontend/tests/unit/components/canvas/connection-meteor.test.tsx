@@ -112,3 +112,32 @@ it("does not animate idle connections and cleans up their hover meteor", () => {
   fireEvent.mouseLeave(edge);
   expect(view.container.querySelector(".canvas-connection-meteor")).toBeNull();
 });
+
+it("offsets only dragging anchors outside the node and keeps pending anchors centered", () => {
+  const view = render(
+    <svg>
+      <ActiveConnectionPath
+        node={from}
+        handle={{ nodeId: from.id, handleType: "source" }}
+        mouseWorld={{ x: 500, y: 460 }}
+        target={to}
+        anchorOffset={4 / 0.6}
+      />
+    </svg>,
+  );
+  const path = () =>
+    view.container.querySelector(".canvas-connection-line")!.getAttribute("d")!;
+  expect(Number(path().split(" ")[1])).toBeCloseTo(
+    from.position.x + from.width + 4 / 0.6,
+  );
+  view.rerender(
+    <svg>
+      <ActiveConnectionPath
+        node={from}
+        handle={{ nodeId: from.id, handleType: "source" }}
+        mouseWorld={{ x: 500, y: 460 }}
+      />
+    </svg>,
+  );
+  expect(Number(path().split(" ")[1])).toBe(from.position.x + from.width);
+});

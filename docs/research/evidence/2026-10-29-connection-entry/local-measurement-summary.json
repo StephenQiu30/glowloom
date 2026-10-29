@@ -1,0 +1,13 @@
+{
+  "method": "Consecutive CSS glyph center Y samples, target clientY=130; timestamps from requestAnimationFrame. Includes 0.01 world-unit rounding.",
+  "sampleCount": 24,
+  "medianTauMs": 79.9752368076841,
+  "minTauMs": 75.44943820992022,
+  "maxTauMs": 83.564585840609,
+  "widthCssPx": [
+    19.9998779296875,
+    20.0001220703125
+  ],
+  "allVisible": true,
+  "allHoverWhite": true
+}

@@ -60,7 +60,7 @@
 - z只变换路径坐标及分段屏幕长度。流段S与72间隔在世界坐标中定义，因此屏幕尾长随z缩放；核心宽度与Gaussian sigma保持CSS px不变。
 - backing canvas尺寸 round(CSS尺寸*devicePixelRatio)，抗锯齿最终受DPR及GPU采样影响。
 - 页面registry批次entries.length>1时为fanout；单条detailed。多源只是减少曲线采样数，周期、渐变、S公式、sigma均不变。
-- 页隐藏、用户prefers-reduced-motion或interactionSuspended会挂起、取消帧并清空动画层；静态基线另行保留。
+- 页隐藏或interactionSuspended会挂起、取消帧并清空动画层；静态基线另行保留。更正（2026-10-29入口复核）：源码虽有reduced-motion分支，但Oeg(window)未传默认false的opt-in，不能据分支宣称当前源页面响应系统减少动态偏好。详见../2026-10-29-connection-entry/source-audit.md末节；项目保留响应偏好的可访问性策略。
 
 ## 索引证据
 

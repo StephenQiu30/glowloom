@@ -13,8 +13,29 @@ import {
   type CanvasNodeData,
   type CanvasNodeMetadata,
   type CanvasNodeTypeId,
+  type ConnectionHandle,
   type Position,
 } from "@/components/canvas/types/canvas";
+
+export function connectedNodeCenter(
+  type: CanvasNodeTypeId,
+  pending: {
+    connection: ConnectionHandle;
+    position: Position;
+    placement?: "adjacent";
+  },
+  source?: CanvasNodeData,
+): Position {
+  if (pending.placement !== "adjacent" || !source) return pending.position;
+  const spec = getNodeSpec(type);
+  return {
+    x:
+      pending.connection.handleType === "source"
+        ? source.position.x + source.width + 60 + spec.width / 2
+        : source.position.x - 60 - spec.width / 2,
+    y: source.position.y + source.height / 2,
+  };
+}
 
 export function createCanvasNode(
   type: CanvasNodeTypeId,

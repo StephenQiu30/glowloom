@@ -1,0 +1,314 @@
+[
+  {
+    "point": [
+      687,
+      225
+    ],
+    "handles": [
+      {
+        "after": {
+          "left": "-0.96875px",
+          "scale": "1.40781",
+          "top": "60px",
+          "transform": "matrix(1, 0, 0, 1, -10, -10)",
+          "translate": "0px"
+        },
+        "opacity": "1",
+        "rect": {
+          "bottom": 268.27130126953125,
+          "height": 85.2388916015625,
+          "left": 416.0383605957031,
+          "right": 458.6578369140625,
+          "top": 183.03240966796875,
+          "width": 42.619476318359375,
+          "x": 416.0383605957031,
+          "y": 183.03240966796875
+        },
+        "side": "left",
+        "style": "overflow: visible; pointer-events: none; height: 120px; width: 60px; --octo-flow-node-handle-glyph-x: calc(50% - 22px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-flow-node-handle-glyph-y: 50%;"
+      },
+      {
+        "after": {
+          "left": "61.46px",
+          "scale": "1.40781",
+          "top": "45.56px",
+          "transform": "matrix(1, 0, 0, 1, -10, -10)",
+          "translate": "0px"
+        },
+        "opacity": "1",
+        "rect": {
+          "bottom": 268.27130126953125,
+          "height": 85.2388916015625,
+          "left": 643.3421020507812,
+          "right": 685.9615478515625,
+          "top": 183.03240966796875,
+          "width": 42.61944580078125,
+          "x": 643.3421020507812,
+          "y": 183.03240966796875
+        },
+        "side": "right",
+        "style": "overflow: visible; pointer-events: none; height: 120px; width: 60px; --octo-flow-node-handle-glyph-x: 61.46px; --octo-flow-node-handle-glyph-y: 45.56px;"
+      }
+    ]
+  },
+  {
+    "point": [
+      700,
+      195
+    ],
+    "handles": [
+      {
+        "after": {
+          "left": "-0.96875px",
+          "scale": "1.40781",
+          "top": "60px",
+          "transform": "matrix(1, 0, 0, 1, -10, -10)",
+          "translate": "0px"
+        },
+        "opacity": "1",
+        "rect": {
+          "bottom": 268.27130126953125,
+          "height": 85.2388916015625,
+          "left": 416.0383605957031,
+          "right": 458.6578369140625,
+          "top": 183.03240966796875,
+          "width": 42.619476318359375,
+          "x": 416.0383605957031,
+          "y": 183.03240966796875
+        },
+        "side": "left",
+        "style": "overflow: visible; pointer-events: none; height: 120px; width: 60px; --octo-flow-node-handle-glyph-x: calc(50% - 22px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-flow-node-handle-glyph-y: 50%;"
+      },
+      {
+        "after": {
+          "left": "67.78px",
+          "scale": "1.40781",
+          "top": "36.55px",
+          "transform": "matrix(1, 0, 0, 1, -10, -10)",
+          "translate": "0px"
+        },
+        "opacity": "1",
+        "rect": {
+          "bottom": 268.27130126953125,
+          "height": 85.2388916015625,
+          "left": 643.3421020507812,
+          "right": 685.9615478515625,
+          "top": 183.03240966796875,
+          "width": 42.61944580078125,
+          "x": 643.3421020507812,
+          "y": 183.03240966796875
+        },
+        "side": "right",
+        "style": "overflow: visible; pointer-events: none; height: 120px; width: 60px; --octo-flow-node-handle-glyph-x: 67.78px; --octo-flow-node-handle-glyph-y: 36.55px;"
+      }
+    ]
+  },
+  {
+    "point": [
+      710,
+      215
+    ],
+    "handles": [
+      {
+        "after": {
+          "left": "-0.96875px",
+          "scale": "0.703904",
+          "top": "60px",
+          "transform": "matrix(1, 0, 0, 1, -10, -10)",
+          "translate": "20px"
+        },
+        "opacity": "0",
+        "rect": {
+          "bottom": 268.27130126953125,
+          "height": 85.2388916015625,
+          "left": 416.0383605957031,
+          "right": 458.6578369140625,
+          "top": 183.03240966796875,
+          "width": 42.619476318359375,
+          "x": 416.0383605957031,
+          "y": 183.03240966796875
+        },
+        "side": "left",
+        "style": "overflow: visible; pointer-events: none; height: 120px; width: 60px; --octo-flow-node-handle-glyph-x: calc(50% - 22px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-flow-node-handle-glyph-y: 50%;"
+      },
+      {
+        "after": {
+          "left": "60.9688px",
+          "scale": "0.703904",
+          "top": "60px",
+          "transform": "matrix(1, 0, 0, 1, -10, -10)",
+          "translate": "-20px"
+        },
+        "opacity": "0",
+        "rect": {
+          "bottom": 268.27130126953125,
+          "height": 85.2388916015625,
+          "left": 643.3421020507812,
+          "right": 685.9615478515625,
+          "top": 183.03240966796875,
+          "width": 42.61944580078125,
+          "x": 643.3421020507812,
+          "y": 183.03240966796875
+        },
+        "side": "right",
+        "style": "overflow: visible; pointer-events: none; height: 120px; width: 60px; --octo-flow-node-handle-glyph-x: calc(50% + 22px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-flow-node-handle-glyph-y: 50%;"
+      }
+    ]
+  },
+  {
+    "point": [
+      680,
+      240
+    ],
+    "handles": [
+      {
+        "after": {
+          "left": "-0.96875px",
+          "scale": "1.40781",
+          "top": "60px",
+          "transform": "matrix(1, 0, 0, 1, -10, -10)",
+          "translate": "0px"
+        },
+        "opacity": "1",
+        "rect": {
+          "bottom": 268.27130126953125,
+          "height": 85.2388916015625,
+          "left": 416.0383605957031,
+          "right": 458.6578369140625,
+          "top": 183.03240966796875,
+          "width": 42.619476318359375,
+          "x": 416.0383605957031,
+          "y": 183.03240966796875
+        },
+        "side": "left",
+        "style": "overflow: visible; pointer-events: none; height: 120px; width: 60px; --octo-flow-node-handle-glyph-x: calc(50% - 22px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-flow-node-handle-glyph-y: 50%;"
+      },
+      {
+        "after": {
+          "left": "57.78px",
+          "scale": "1.40781",
+          "top": "66.87px",
+          "transform": "matrix(1, 0, 0, 1, -10, -10)",
+          "translate": "0px"
+        },
+        "opacity": "1",
+        "rect": {
+          "bottom": 268.27130126953125,
+          "height": 85.2388916015625,
+          "left": 643.3421020507812,
+          "right": 685.9615478515625,
+          "top": 183.03240966796875,
+          "width": 42.61944580078125,
+          "x": 643.3421020507812,
+          "y": 183.03240966796875
+        },
+        "side": "right",
+        "style": "overflow: visible; pointer-events: none; height: 120px; width: 60px; --octo-flow-node-handle-glyph-x: 57.78px; --octo-flow-node-handle-glyph-y: 66.87px;"
+      }
+    ]
+  },
+  {
+    "point": [
+      665,
+      225
+    ],
+    "handles": [
+      {
+        "after": {
+          "left": "-0.96875px",
+          "scale": "1.40781",
+          "top": "60px",
+          "transform": "matrix(1, 0, 0, 1, -10, -10)",
+          "translate": "0px"
+        },
+        "opacity": "1",
+        "rect": {
+          "bottom": 268.27130126953125,
+          "height": 85.2388916015625,
+          "left": 416.0383605957031,
+          "right": 458.6578369140625,
+          "top": 183.03240966796875,
+          "width": 42.619476318359375,
+          "x": 416.0383605957031,
+          "y": 183.03240966796875
+        },
+        "side": "left",
+        "style": "overflow: visible; pointer-events: none; height: 120px; width: 60px; --octo-flow-node-handle-glyph-x: calc(50% - 22px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-flow-node-handle-glyph-y: 50%;"
+      },
+      {
+        "after": {
+          "left": "50.5px",
+          "scale": "1.40781",
+          "top": "64.79px",
+          "transform": "matrix(1, 0, 0, 1, -10, -10)",
+          "translate": "0px"
+        },
+        "opacity": "1",
+        "rect": {
+          "bottom": 268.27130126953125,
+          "height": 85.2388916015625,
+          "left": 643.3421020507812,
+          "right": 685.9615478515625,
+          "top": 183.03240966796875,
+          "width": 42.61944580078125,
+          "x": 643.3421020507812,
+          "y": 183.03240966796875
+        },
+        "side": "right",
+        "style": "overflow: visible; pointer-events: none; height: 120px; width: 60px; --octo-flow-node-handle-glyph-x: 50.5px; --octo-flow-node-handle-glyph-y: 64.79px;"
+      }
+    ]
+  },
+  {
+    "point": [
+      740,
+      225
+    ],
+    "handles": [
+      {
+        "after": {
+          "left": "-0.96875px",
+          "scale": "0.703904",
+          "top": "60px",
+          "transform": "matrix(1, 0, 0, 1, -10, -10)",
+          "translate": "20px"
+        },
+        "opacity": "0",
+        "rect": {
+          "bottom": 268.27130126953125,
+          "height": 85.2388916015625,
+          "left": 416.0383605957031,
+          "right": 458.6578369140625,
+          "top": 183.03240966796875,
+          "width": 42.619476318359375,
+          "x": 416.0383605957031,
+          "y": 183.03240966796875
+        },
+        "side": "left",
+        "style": "overflow: visible; pointer-events: none; height: 120px; width: 60px; --octo-flow-node-handle-glyph-x: calc(50% - 22px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-flow-node-handle-glyph-y: 50%;"
+      },
+      {
+        "after": {
+          "left": "60.9688px",
+          "scale": "0.703904",
+          "top": "60px",
+          "transform": "matrix(1, 0, 0, 1, -10, -10)",
+          "translate": "-20px"
+        },
+        "opacity": "0",
+        "rect": {
+          "bottom": 268.27130126953125,
+          "height": 85.2388916015625,
+          "left": 643.3421020507812,
+          "right": 685.9615478515625,
+          "top": 183.03240966796875,
+          "width": 42.61944580078125,
+          "x": 643.3421020507812,
+          "y": 183.03240966796875
+        },
+        "side": "right",
+        "style": "overflow: visible; pointer-events: none; height: 120px; width: 60px; --octo-flow-node-handle-glyph-x: calc(50% + 22px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-flow-node-handle-glyph-y: 50%;"
+      }
+    ]
+  }
+]

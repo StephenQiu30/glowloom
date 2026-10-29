@@ -1,0 +1,38 @@
+[
+  {
+    "point": [
+      550,
+      200
+    ],
+    "styles": {
+      "after": {
+        "background": "rgba(255, 255, 255, 0.04)",
+        "backgroundSize": "8px 1px, 1px 8px",
+        "border": "rgba(255, 255, 255, 0.35)",
+        "color": "rgba(255, 255, 255, 0.35)",
+        "opacity": "1",
+        "transition": "all"
+      },
+      "color": "rgba(255, 255, 255, 0.35)",
+      "opacity": "1"
+    }
+  },
+  {
+    "point": [
+      690,
+      205
+    ],
+    "styles": {
+      "after": {
+        "background": "rgba(255, 255, 255, 0.04)",
+        "backgroundSize": "8px 1px, 1px 8px",
+        "border": "rgb(255, 255, 255)",
+        "color": "rgb(255, 255, 255)",
+        "opacity": "1",
+        "transition": "all"
+      },
+      "color": "rgb(255, 255, 255)",
+      "opacity": "1"
+    }
+  }
+]

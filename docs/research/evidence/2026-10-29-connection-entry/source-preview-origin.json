@@ -1,0 +1,14 @@
+{
+  "menu": {
+    "bottom": 486,
+    "height": 316,
+    "left": 810,
+    "right": 1010,
+    "top": 170,
+    "width": 200,
+    "x": 810,
+    "y": 170
+  },
+  "node": "z-index: 0; transform: translate(614.378px, -241.677px); pointer-events: all; visibility: visible; width: 320px; height: 320px; --octo-canvas-node-external-frame-inset: calc(-1 * 4px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-canvas-node-external-frame-radius: calc(8px + 4px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-canvas-node-external-frame-stroke-width: calc(1px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-canvas-node-chrome-counter-scale: 1.4078080090295495; --octo-canvas-node-surface-stroke-counter-scale: 1.4078080090295495; --octo-canvas-node-tag-hit-area-counter-scale: 1;",
+  "preview": "<svg class=\"react-flow__connection-path pointer-events-none absolute left-0 top-0 overflow-visible [stroke-width:var(--octo-canvas-connection-stroke-world-width,1px)]\" data-connection-line-layer=\"base\" data-connection-preview-phase=\"pending-creation\" data-anchor-node-ids=\"node_cgm1h72hr6\" stroke=\"#008EE5\" preserveAspectRatio=\"none\" aria-hidden=\"true\" color=\"currentColor\" fill=\"none\" focusable=\"false\" height=\"1\" stroke-width=\"1\" viewBox=\"0 0 1 1\" width=\"1\" xmlns=\"http://www.w3.org/2000/svg\" style=\"stroke: rgb(0, 142, 229);\"><path d=\"M934.3779450178204,-81.67736301445012 C1036.6890877574515,-81.67736301445012 1036.6890877574515,-160.02449849073625 1139.0002304970824,-160.02449849073625\" vector-effect=\"non-scaling-stroke\"></path></svg>"
+}

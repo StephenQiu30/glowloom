@@ -116,38 +116,45 @@ export function ActiveConnectionPath({
   mouseWorld,
   target,
   fanout = false,
+  anchorOffset = 0,
 }: {
   node?: CanvasNodeData;
   handle: ConnectionHandle;
   mouseWorld: Position;
   target?: CanvasNodeData;
   fanout?: boolean;
+  anchorOffset?: number;
 }) {
   if (!node) return null;
 
   const startX =
     handle.handleType === "source"
-      ? node.position.x + node.width
+      ? node.position.x + node.width + anchorOffset
       : mouseWorld.x;
   const startY =
     handle.handleType === "source"
       ? node.position.y + node.height / 2
       : mouseWorld.y;
-  const endX = handle.handleType === "source" ? mouseWorld.x : node.position.x;
+  const endX =
+    handle.handleType === "source"
+      ? mouseWorld.x
+      : node.position.x - anchorOffset;
   const endY =
     handle.handleType === "source"
       ? mouseWorld.y
       : node.position.y + node.height / 2;
   const snappedStartX =
     handle.handleType === "target" && target
-      ? target.position.x + target.width
+      ? target.position.x + target.width + anchorOffset
       : startX;
   const snappedStartY =
     handle.handleType === "target" && target
       ? target.position.y + target.height / 2
       : startY;
   const snappedEndX =
-    handle.handleType === "source" && target ? target.position.x : endX;
+    handle.handleType === "source" && target
+      ? target.position.x - anchorOffset
+      : endX;
   const snappedEndY =
     handle.handleType === "source" && target
       ? target.position.y + target.height / 2

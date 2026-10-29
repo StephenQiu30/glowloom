@@ -136,6 +136,10 @@ import {
   ConnectionFlowProvider,
   ConnectionFlowLayer,
 } from "../connections/connection-flow-layer";
+import {
+  updateConnectionGesture,
+  type ConnectionGesture,
+} from "../connections/connection-gesture";
 import { InfiniteCanvas } from "@/components/canvas/editor/infinite-canvas";
 import { registerBuiltinNodes } from "@/components/canvas/nodes/builtin-nodes";
 import { useAppFeedback } from "@/components/canvas/runtime/components/feedback/app-feedback-provider";
@@ -172,6 +176,7 @@ import {
   buildAudioGenerationMetadata,
   buildImageGenerationMetadata,
   createCanvasNode,
+  connectedNodeCenter,
   imageMetadata,
   videoMetadata,
 } from "@/components/canvas/lib/canvas-node-factory";
@@ -736,6 +741,8 @@ function InfiniteCanvasPage({
     | null
   >(null);
   const connectingParamsRef = useRef(connectingParams);
+  const connectionStartRef = useRef<ConnectionGesture | null>(null);
+  const [connectionDragging, setConnectionDragging] = useState(false);
   const connectionTargetNodeIdRef = useRef(connectionTargetNodeId);
   const selectionBoxRef = useRef(selectionBox);
   const pendingConnectionCreateRef = useRef(pendingConnectionCreate);
@@ -1134,7 +1141,9 @@ function InfiniteCanvasPage({
   const setConnecting = useCallback((next: ConnectionHandle | null) => {
     connectingParamsRef.current = next;
     setConnectingParams(next);
+    setConnectionDragging(false);
     if (!next) {
+      connectionStartRef.current = null;
       connectionTargetNodeIdRef.current = null;
       setConnectionTargetNodeId(null);
     }
@@ -1242,7 +1251,13 @@ function InfiniteCanvasPage({
           : undefined;
       const newNode = createCanvasNode(
         type,
-        pending.position,
+        connectedNodeCenter(
+          type,
+          pending,
+          nodesRef.current.find(
+            (node) => node.id === pending.connection.nodeId,
+          ),
+        ),
         metadata,
         nodesRef.current,
       );
@@ -2344,6 +2359,16 @@ function InfiniteCanvasPage({
       }
 
       if (connectingParamsRef.current && !pendingConnectionCreateRef.current) {
+        const start = connectionStartRef.current;
+        if (start) {
+          const next = updateConnectionGesture(start, {
+            x: event.clientX,
+            y: event.clientY,
+          });
+          connectionStartRef.current = next;
+          if (!next.dragged) return;
+          if (!start.dragged) setConnectionDragging(true);
+        }
         const dropTarget = getConnectionDropTarget(
           event.clientX,
           event.clientY,
@@ -2412,6 +2437,27 @@ function InfiniteCanvasPage({
 
       const currentConnection = connectingParamsRef.current;
       if (currentConnection) {
+        if (integrationRef.current?.frozen) {
+          setConnecting(null);
+          return;
+        }
+        const start = connectionStartRef.current;
+        connectionStartRef.current = null;
+        // A plus click opens creation even when another node lies behind the port.
+        if (
+          start &&
+          !updateConnectionGesture(start, {
+            x: event.clientX,
+            y: event.clientY,
+          }).dragged
+        ) {
+          setPendingConnectionCreate({
+            connection: currentConnection,
+            position: screenToCanvas(event.clientX, event.clientY),
+            placement: "adjacent",
+          });
+          return;
+        }
         const dropTarget = getConnectionDropTarget(
           event.clientX,
           event.clientY,
@@ -2423,6 +2469,23 @@ function InfiniteCanvasPage({
         } else if (dropTarget.isNearNode) {
           setConnecting(null);
         } else {
+          const bounds = containerRef.current?.getBoundingClientRect();
+          const blockedSurface =
+            event.target instanceof Element &&
+            event.target.closest(
+              '[data-canvas-no-pan], button, input, textarea, [role="menu"], [role="dialog"]',
+            );
+          if (
+            !bounds ||
+            event.clientX < bounds.left ||
+            event.clientX > bounds.right ||
+            event.clientY < bounds.top ||
+            event.clientY > bounds.bottom ||
+            blockedSurface
+          ) {
+            setConnecting(null);
+            return;
+          }
           setMouseWorld(screenToCanvas(event.clientX, event.clientY));
           setPendingConnectionCreate({
             connection: currentConnection,
@@ -2443,7 +2506,10 @@ function InfiniteCanvasPage({
   useEffect(() => {
     const handlePointerUp = (event: PointerEvent) =>
       finishNodeDrag(event.clientX, event.clientY);
-    const cancelNodeDrag = () => finishNodeDrag();
+    const cancelNodeDrag = () => {
+      finishNodeDrag();
+      if (!pendingConnectionCreateRef.current) setConnecting(null);
+    };
     window.addEventListener("mousemove", handleGlobalMouseMove);
     window.addEventListener("mouseup", handleGlobalMouseUp);
     window.addEventListener("pointerup", handlePointerUp);
@@ -2463,6 +2529,7 @@ function InfiniteCanvasPage({
     handleGlobalMouseMove,
     handleGlobalMouseUp,
     handleGlobalPointerMove,
+    setConnecting,
   ]);
 
   const createTextNodeFromClipboard = useCallback(
@@ -2665,8 +2732,26 @@ function InfiniteCanvasPage({
       handleType: "source" | "target",
     ) => {
       event.stopPropagation();
-      setMouseWorld(screenToCanvas(event.clientX, event.clientY));
-      setConnecting({ nodeId, handleType });
+      if (event.button !== 0 || integrationRef.current?.frozen) return;
+      const keyboard = event.type === "click" && event.detail === 0;
+      const rect = keyboard
+        ? event.currentTarget.getBoundingClientRect()
+        : null;
+      const point = rect
+        ? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+        : { x: event.clientX, y: event.clientY };
+      const connection = { nodeId, handleType };
+      connectionStartRef.current = { ...point, dragged: false };
+      setMouseWorld(screenToCanvas(point.x, point.y));
+      setConnecting(connection);
+      if (keyboard) {
+        connectionStartRef.current = null;
+        setPendingConnectionCreate({
+          connection,
+          position: screenToCanvas(point.x, point.y),
+          placement: "adjacent",
+        });
+      }
       connectionTargetNodeIdRef.current = null;
       setConnectionTargetNodeId(null);
       setSelectedConnectionId(null);
@@ -5542,10 +5627,11 @@ function InfiniteCanvasPage({
                   handle={pendingConnectionCreate.connection}
                   mouseWorld={pendingConnectionCreate.position}
                 />
-              ) : connectingParams ? (
+              ) : connectingParams && connectionDragging ? (
                 <ActiveConnectionPath
                   node={nodeById.get(connectingParams.nodeId)}
                   handle={connectingParams}
+                  anchorOffset={4 / viewport.k}
                   mouseWorld={mouseWorld}
                   target={
                     connectionTargetNodeId

@@ -1,3 +1,4 @@
+import { CanvasConnectionHandle } from "./canvas-connection-handle";
 import { CanvasVideoPlayer } from "./canvas-video-player";
 import { useBoundReferences } from "../hooks/use-bound-references";
 import { cn } from "@/lib/utils";
@@ -37,7 +38,6 @@ import {
   Music2,
   AudioLines,
   Puzzle,
-  Plus,
   RefreshCw,
   Star,
   Trash2,
@@ -852,7 +852,8 @@ export const CanvasNode = React.memo(function CanvasNode({
             {!referenceSelectionState &&
             !isGroup &&
             (connectionTypes?.input ?? true) ? (
-              <ConnectionHandleDot
+              <CanvasConnectionHandle
+                disabled={readOnly}
                 scale={scale}
                 side="left"
                 visible={hovered || isSelected || isConnecting}
@@ -865,7 +866,8 @@ export const CanvasNode = React.memo(function CanvasNode({
             (connectionTypes?.output ??
               ((definition?.hasSourceHandle ?? true) &&
                 data.type !== CanvasNodeType.Config)) ? (
-              <ConnectionHandleDot
+              <CanvasConnectionHandle
+                disabled={readOnly}
                 scale={scale}
                 side="right"
                 visible={hovered || isSelected || isConnecting}
@@ -1875,52 +1877,4 @@ function ResizeHandles({
       </Button>
     );
   });
-}
-
-function ConnectionHandleDot({
-  scale,
-  side,
-  visible,
-  onMouseDown,
-}: {
-  scale: number;
-  side: "left" | "right";
-  visible: boolean;
-  onMouseDown: (event: React.MouseEvent) => void;
-}) {
-  const theme = canvasThemes[useThemeStore((state) => state.theme)];
-  const unit = 1 / Math.max(scale, 0.01);
-
-  return (
-    <div
-      data-canvas-no-pan
-      className={cn(
-        "absolute top-1/2 z-30 flex -translate-y-1/2 cursor-crosshair items-center justify-center transition-opacity duration-150",
-        visible
-          ? "pointer-events-auto opacity-100"
-          : "pointer-events-none opacity-0",
-      )}
-      style={{ width: 36 * unit, height: 36 * unit, [side]: -38 * unit }}
-      onMouseDown={onMouseDown}
-    >
-      <Button
-        variant="outline"
-        size="icon-xs"
-        aria-label={side === "left" ? "连接输入节点" : "连接输出节点"}
-        className="canvas-node-port"
-        style={{
-          background: "transparent",
-          borderColor: theme.node.muted,
-          width: 18 * unit,
-          height: 18 * unit,
-          borderWidth: unit,
-        }}
-      >
-        <Plus
-          aria-hidden="true"
-          style={{ width: 12 * unit, height: 12 * unit }}
-        />
-      </Button>
-    </div>
-  );
 }

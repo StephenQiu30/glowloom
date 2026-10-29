@@ -27,6 +27,7 @@ import { supportsCanvasConnection } from "../lib/canvas-document-connections";
 export type PendingConnectionCreate = {
   connection: ConnectionHandle;
   position: Position;
+  placement?: "adjacent";
 };
 type ReferenceNodeType =
   | CanvasNodeType.Image

@@ -879,16 +879,82 @@ html:has(.canvas-controls-layout) {
     width: 1rem;
     height: 1rem;
   }
+  .canvas-connection-handle {
+    --canvas-handle-foreground: color-mix(
+      in srgb,
+      var(--canvas-reference-foreground) 35%,
+      transparent
+    );
+    --canvas-handle-background: color-mix(
+      in srgb,
+      var(--canvas-reference-foreground) 4%,
+      transparent
+    );
+    position: absolute;
+    top: calc(50% - 60px);
+    z-index: 30;
+    pointer-events: none;
+  }
+  .canvas-connection-handle:hover {
+    --canvas-handle-foreground: var(--canvas-reference-foreground);
+  }
+  .canvas-connection-handle::before {
+    content: "";
+    position: absolute;
+    left: 30px;
+    top: 60px;
+    width: 40px;
+    height: 80px;
+    scale: var(--canvas-handle-counter-scale);
+    transform-origin: 0 0;
+    transform: translate(0, -40px);
+    pointer-events: auto;
+    cursor: crosshair;
+  }
+  .canvas-connection-handle[data-side="left"]::before {
+    transform: translate(-40px, -40px);
+  }
+  .canvas-connection-handle[data-disabled="true"]::before {
+    pointer-events: none;
+  }
   .canvas-node-port[data-slot="button"] {
-    width: 1.75rem;
-    height: 1.75rem;
+    position: absolute;
+    left: 0;
+    top: 0;
     padding: 0;
     border-radius: 50%;
-    color: var(--muted-foreground);
+    border-width: 1px;
+    border-color: var(--canvas-handle-foreground);
+    background: var(--canvas-handle-background);
+    color: var(--canvas-handle-foreground);
+    pointer-events: none;
+    transform-origin: 0 0;
+    translate: none;
+    transition: none;
+    opacity: 0;
   }
-  .canvas-node-port svg {
-    width: 0.875rem;
-    height: 0.875rem;
+  .canvas-connection-handle[data-visible="true"] .canvas-node-port,
+  .canvas-node-port:focus-visible {
+    opacity: 1;
+  }
+  .canvas-node-port-plus {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 8px;
+    height: 1px;
+    transform: translate(-50%, -50%);
+    background: currentColor;
+  }
+  .canvas-node-port-plus::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 1px;
+    height: 8px;
+    transform: translate(-50%, -50%);
+    background: currentColor;
   }
 }
 

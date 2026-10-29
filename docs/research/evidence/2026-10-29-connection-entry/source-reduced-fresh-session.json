@@ -1,0 +1,14 @@
+{
+  "rect": {
+    "bottom": 268.27130126953125,
+    "height": 85.2388916015625,
+    "left": 643.3421020507812,
+    "right": 685.9615478515625,
+    "top": 183.03240966796875,
+    "width": 42.61944580078125,
+    "x": 643.3421020507812,
+    "y": 183.03240966796875
+  },
+  "reduced": true,
+  "style": "overflow: visible; pointer-events: none; height: 120px; width: 60px; --octo-flow-node-handle-glyph-x: 70.7px; --octo-flow-node-handle-glyph-y: 30.11px;"
+}
