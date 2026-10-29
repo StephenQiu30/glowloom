@@ -37,6 +37,13 @@ vi.mock("@/components/subjects/unified-media", () => ({
     <span>{label}预览</span>
   ),
 }));
+vi.mock("@/components/subjects/unified-editor", () => ({
+  UnifiedSubjectEditor: ({ initial }: { initial?: { name: string } }) => (
+    <div role="dialog" aria-label="设置主体">
+      {initial?.name}
+    </div>
+  ),
+}));
 const actorID = "11111111-1111-4111-8111-111111111111",
   scopeID = "22222222-2222-4222-8222-222222222222";
 const first = {
@@ -579,4 +586,80 @@ it("追加后的收藏写入刷新首批，不遗留旧版本和原排序", asyn
     screen.queryByRole("button", { name: "设置主体 海边香氛" }),
   ).toBeNull();
   expect(api.list.mock.calls.map((call) => call[0].page)).toEqual([1, 2, 1]);
+});
+
+it.each([false, true])(
+  "右键主体卡片显示同一管理动作且设置打开该主体，收藏=%s",
+  async (favorite) => {
+    api.list.mockResolvedValue({ ...page, items: [{ ...first, favorite }] });
+    render(<UnifiedSubjectLibrary actorID={actorID} scopeID={scopeID} />);
+    const card = await screen.findByRole("button", {
+      name: "设置主体 海边香氛",
+    });
+    fireEvent.contextMenu(card, { clientX: 100, clientY: 120 });
+    const menu = await screen.findByRole("menu");
+    expect(
+      within(menu)
+        .getAllByRole("menuitem")
+        .map((item) => item.textContent),
+    ).toEqual(["设置主体", "下载", favorite ? "取消收藏" : "收藏", "删除"]);
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "设置主体" }));
+    expect(
+      (await screen.findByRole("dialog", { name: "设置主体" })).textContent,
+    ).toBe(first.name);
+    expect(api.batch).not.toHaveBeenCalled();
+    expect(api.export).not.toHaveBeenCalled();
+  },
+);
+
+it("批量模式右键不弹主体管理菜单", async () => {
+  render(<UnifiedSubjectLibrary actorID={actorID} scopeID={scopeID} />);
+  await screen.findByRole("button", { name: "设置主体 海边香氛" });
+  fireEvent.click(screen.getByRole("button", { name: "批量操作" }));
+  fireEvent.contextMenu(
+    screen.getByRole("button", { name: "选择主体 海边香氛" }),
+  );
+  expect(screen.queryByRole("menu")).toBeNull();
+});
+
+it("引用模式右键不弹主体管理菜单且不误采纳", async () => {
+  const select = vi.fn();
+  render(
+    <UnifiedSubjectLibrary
+      actorID={actorID}
+      scopeID={scopeID}
+      onSelect={select}
+    />,
+  );
+  fireEvent.contextMenu(
+    await screen.findByRole("button", { name: "引用主体 海边香氛" }),
+  );
+  expect(screen.queryByRole("menu")).toBeNull();
+  expect(select).not.toHaveBeenCalled();
+});
+
+it("写入锁定时右键不弹主体管理菜单", async () => {
+  api.batch.mockReturnValue(new Promise(() => {}));
+  render(<UnifiedSubjectLibrary actorID={actorID} scopeID={scopeID} />);
+  const card = await screen.findByRole("button", { name: "设置主体 海边香氛" });
+  fireEvent.click(screen.getByRole("button", { name: "收藏 海边香氛" }));
+  expect(card).toHaveProperty("disabled", true);
+  fireEvent.contextMenu(card.closest("article")!);
+  expect(screen.queryByRole("menu")).toBeNull();
+});
+
+it("搜索无结果只呈现竞品单行空态，不增加操作指导", async () => {
+  api.list.mockResolvedValue({ ...page, items: [], total: 0 });
+  render(
+    <UnifiedSubjectLibrary
+      actorID={actorID}
+      scopeID={scopeID}
+      query="不存在"
+    />,
+  );
+  expect(
+    await screen.findByRole("heading", { name: "暂无相关资产" }),
+  ).toBeTruthy();
+  expect(screen.queryByText("调整筛选条件后重试。")).toBeNull();
+  expect(screen.queryByRole("button", { name: "新建主体" })).toBeNull();
 });

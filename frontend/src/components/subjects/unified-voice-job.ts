@@ -24,7 +24,6 @@ import {
 type Phase =
   | "idle"
   | "options"
-  | "choosing"
   | "submitting"
   | "waiting"
   | "ready"
@@ -42,7 +41,6 @@ type Operation = {
 const isActive = (phase: Phase) =>
   [
     "options",
-    "choosing",
     "submitting",
     "waiting",
     "unknown",
@@ -199,7 +197,7 @@ export function useSubjectVoiceJob({
     name: string,
     text: string,
   ) {
-    if (!["options", "choosing"].includes(phaseRef.current)) return;
+    if (phaseRef.current !== "options") return;
     const model = optionRef.current?.models.find(
       (model) => model.release_id === releaseID,
     );
@@ -258,7 +256,10 @@ export function useSubjectVoiceJob({
           `智能配音${attempt.current}`,
           sample,
         );
-      } else change("choosing");
+      } else {
+        change("unavailable");
+        setError("智能配音暂不可用，请稍后重试。");
+      }
     } catch (reason) {
       if (task.current()) {
         change("unavailable");

@@ -1,0 +1,11 @@
+Browser tab: 1980372043, Title: "主体 · 织光", URL: "http://localhost:1122/subjects".
+0 AXWebArea 主体 · 织光, URL: localhost:1122/subjects
+	1 container
+		2 container 通知 alt+T
+		3 menu
+			4 设置主体
+			5 下载
+			6 收藏
+			7 删除
+
+The focused UI element is 3 menu

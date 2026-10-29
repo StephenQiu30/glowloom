@@ -6,6 +6,7 @@ import {
   Star,
   LoaderCircle,
   MoreHorizontal,
+  Pencil,
   Plus,
   Trash2,
 } from "lucide-react";
@@ -19,6 +20,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import {
   Dialog,
   DialogContent,
@@ -267,6 +275,44 @@ export function UnifiedSubjectLibrary({
     if (batch) cancelBatchTrigger.current?.focus();
   }, [batch]);
   const allFavorites = selected.length > 0 && selected.every((s) => s.favorite);
+  function managementItems(subject: UnifiedSubject, contextMenu = false) {
+    const Item = contextMenu ? ContextMenuItem : DropdownMenuItem;
+    const Separator = contextMenu
+      ? ContextMenuSeparator
+      : DropdownMenuSeparator;
+    return (
+      <>
+        <Item onSelect={() => setEditing(subject)}>
+          <Pencil aria-hidden="true" />
+          设置主体
+        </Item>
+        <Item onSelect={() => void download([subject])}>
+          <Download aria-hidden="true" />
+          下载
+        </Item>
+        <Item
+          onSelect={() =>
+            void mutate(subject.favorite ? "unfavorite" : "favorite", [subject])
+          }
+        >
+          <Star
+            aria-hidden="true"
+            className={
+              subject.favorite
+                ? "fill-current text-[var(--favorite-foreground)]"
+                : undefined
+            }
+          />
+          {subject.favorite ? "取消收藏" : "收藏"}
+        </Item>
+        <Separator />
+        <Item onSelect={() => openDelete([subject])}>
+          <Trash2 aria-hidden="true" />
+          删除
+        </Item>
+      </>
+    );
+  }
   return (
     <section
       className="unified-subject-library flex min-w-0 flex-col gap-6"
@@ -412,136 +458,129 @@ export function UnifiedSubjectLibrary({
               </Button>
             ) : null}
             {page?.items.map((subject) => (
-              <article
-                key={subject.id}
-                className="unified-subject-card group relative min-w-0"
-              >
-                <div className="relative">
-                  <Button
-                    variant="ghost"
-                    className="unified-subject-open h-auto w-full p-0"
-                    disabled={locked}
-                    onClick={() =>
-                      batch
-                        ? toggle(subject)
-                        : onSelect
-                          ? onSelect(subject)
-                          : setEditing(subject)
-                    }
-                    aria-label={`${batch ? "选择" : onSelect ? "引用" : "设置"}主体 ${subject.name}`}
-                  >
-                    <span className="unified-subject-cover">
-                      <UnifiedSubjectMedia
-                        media={selectedSubjectMedia(subject, subject.primary)}
-                        label={subject.name}
-                      />
-                    </span>
-                  </Button>
-                  {!onSelect ? (
-                    <Checkbox
-                      className={`absolute top-2 left-2 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 max-md:opacity-100 ${batch ? "opacity-100" : "opacity-0"}`}
-                      aria-label={`选择主体 ${subject.name}`}
-                      checked={selected.some((s) => s.id === subject.id)}
-                      disabled={locked}
-                      onCheckedChange={() => toggle(subject)}
-                    />
-                  ) : null}
-                  {!(batch && onSelect) ? (
-                    <Button
-                      variant="secondary"
-                      size="icon"
-                      className={`absolute top-2 right-2 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 max-md:opacity-100 ${subject.favorite ? "text-[var(--favorite-foreground)] opacity-100" : "opacity-0"}`}
-                      aria-label={`${subject.favorite ? "取消收藏" : "收藏"} ${subject.name}`}
-                      aria-pressed={subject.favorite}
-                      disabled={locked}
-                      onClick={() =>
-                        void mutate(
-                          subject.favorite ? "unfavorite" : "favorite",
-                          [subject],
-                        )
-                      }
-                    >
-                      <Star
-                        className={
-                          subject.favorite ? "fill-current" : undefined
-                        }
-                      />
-                    </Button>
-                  ) : null}
-                </div>
-                <div className="unified-subject-info pr-12">
-                  <p className="truncate">{subject.name}</p>
-                  <p className="text-muted-foreground" suppressHydrationWarning>
-                    主体 ·{" "}
-                    {subjectRelativeTime(
-                      query.trim() || filter.order.startsWith("created")
-                        ? subject.created_at
-                        : subject.updated_at,
-                      query.trim() || filter.order.startsWith("created")
-                        ? "created"
-                        : "updated",
-                    )}
-                  </p>
-                </div>
-                {!batch && !onSelect ? (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
+              <ContextMenu key={subject.id}>
+                <ContextMenuTrigger
+                  asChild
+                  disabled={batch || !!onSelect || locked}
+                >
+                  <article className="unified-subject-card group relative min-w-0">
+                    <div className="relative">
                       <Button
-                        variant="secondary"
-                        size="icon"
-                        className="absolute right-3 bottom-3 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 max-md:opacity-100"
-                        aria-label={`更多 ${subject.name}`}
+                        variant="ghost"
+                        className="unified-subject-open h-auto w-full p-0"
                         disabled={locked}
-                      >
-                        <MoreHorizontal />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="end"
-                      className="unified-subject-menu"
-                    >
-                      <DropdownMenuItem onSelect={() => setEditing(subject)}>
-                        设置主体
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onSelect={() => void download([subject])}
-                      >
-                        下载
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onSelect={() =>
-                          void mutate(
-                            subject.favorite ? "unfavorite" : "favorite",
-                            [subject],
-                          )
+                        onClick={() =>
+                          batch
+                            ? toggle(subject)
+                            : onSelect
+                              ? onSelect(subject)
+                              : setEditing(subject)
                         }
+                        aria-label={`${batch ? "选择" : onSelect ? "引用" : "设置"}主体 ${subject.name}`}
                       >
-                        {subject.favorite ? "取消收藏" : "收藏"}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onSelect={() => openDelete([subject])}
+                        <span className="unified-subject-cover">
+                          <UnifiedSubjectMedia
+                            media={selectedSubjectMedia(
+                              subject,
+                              subject.primary,
+                            )}
+                            label={subject.name}
+                          />
+                        </span>
+                      </Button>
+                      {!onSelect ? (
+                        <Checkbox
+                          className={`absolute top-2 left-2 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 max-md:opacity-100 ${batch ? "opacity-100" : "opacity-0"}`}
+                          aria-label={`选择主体 ${subject.name}`}
+                          checked={selected.some((s) => s.id === subject.id)}
+                          disabled={locked}
+                          onCheckedChange={() => toggle(subject)}
+                        />
+                      ) : null}
+                      {!(batch && onSelect) ? (
+                        <Button
+                          variant="secondary"
+                          size="icon"
+                          className={`absolute top-2 right-2 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 max-md:opacity-100 ${subject.favorite ? "text-[var(--favorite-foreground)] opacity-100" : "opacity-0"}`}
+                          aria-label={`${subject.favorite ? "取消收藏" : "收藏"} ${subject.name}`}
+                          aria-pressed={subject.favorite}
+                          disabled={locked}
+                          onClick={() =>
+                            void mutate(
+                              subject.favorite ? "unfavorite" : "favorite",
+                              [subject],
+                            )
+                          }
+                        >
+                          <Star
+                            className={
+                              subject.favorite ? "fill-current" : undefined
+                            }
+                          />
+                        </Button>
+                      ) : null}
+                    </div>
+                    <div className="unified-subject-info pr-12">
+                      <p className="truncate">{subject.name}</p>
+                      <p
+                        className="text-muted-foreground"
+                        suppressHydrationWarning
                       >
-                        删除
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                        主体 ·{" "}
+                        {subjectRelativeTime(
+                          query.trim() || filter.order.startsWith("created")
+                            ? subject.created_at
+                            : subject.updated_at,
+                          query.trim() || filter.order.startsWith("created")
+                            ? "created"
+                            : "updated",
+                        )}
+                      </p>
+                    </div>
+                    {!batch && !onSelect ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="secondary"
+                            size="icon"
+                            className="absolute right-3 bottom-3 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 max-md:opacity-100"
+                            aria-label={`更多 ${subject.name}`}
+                            disabled={locked}
+                          >
+                            <MoreHorizontal />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="end"
+                          className="unified-subject-menu"
+                        >
+                          {managementItems(subject)}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : null}
+                  </article>
+                </ContextMenuTrigger>
+                {!batch && !onSelect && !locked ? (
+                  <ContextMenuContent className="unified-subject-menu">
+                    {managementItems(subject, true)}
+                  </ContextMenuContent>
                 ) : null}
-              </article>
+              </ContextMenu>
             ))}
           </div>
           {!page?.items.length &&
           (query || filter.favorite || filter.from || filter.through) ? (
             <ContentState
+              variant={query ? "workspace" : "default"}
+              className={query ? "unified-subject-search-empty" : undefined}
               title={
                 query
-                  ? "没有匹配的主体"
+                  ? "暂无相关资产"
                   : filter.favorite
                     ? "还没有收藏的主体"
                     : "此时间范围内没有主体"
               }
-              description="调整筛选条件后重试。"
+              description={query ? undefined : "调整筛选条件后重试。"}
             />
           ) : null}
           {loading ? (

@@ -101,29 +101,31 @@ it("唯一模型与明确默认音色一键创建真实任务，轮询正式audi
   );
   expect(result.current.active).toBe(false);
 });
-it("缺少默认音色时先明确选择，不随机提交", async () => {
-  api.options.mockResolvedValue({
-    current_actor_id: actor,
-    current_scope_id: scope,
-    available: true,
-    models: [{ ...option, default_voice_key: undefined }],
-  });
-  const { result } = setup();
-  await act(async () => {
-    await result.current.begin();
-  });
-  expect(result.current.phase).toBe("choosing");
-  expect(api.create).not.toHaveBeenCalled();
-  await act(async () => {
-    await result.current.generate(
-      release,
-      "speaker",
-      "智能配音1",
-      "你好，欢迎一起创作。",
-    );
-  });
-  expect(api.create).toHaveBeenCalledOnce();
-});
+it.each(["missing", "ambiguous"])(
+  "默认配音配置%s时不弹技术配置、不猜测或提交",
+  async (kind) => {
+    api.options.mockResolvedValue({
+      current_actor_id: actor,
+      current_scope_id: scope,
+      available: true,
+      models:
+        kind === "missing"
+          ? [{ ...option, default_voice_key: undefined }]
+          : [
+              option,
+              { ...option, release_id: "77777777-7777-4777-8777-777777777777" },
+            ],
+    });
+    const { result } = setup();
+    await act(async () => {
+      await result.current.begin();
+    });
+    expect(result.current.phase).toBe("unavailable");
+    expect(result.current.active).toBe(false);
+    expect(result.current.error).toBe("智能配音暂不可用，请稍后重试。");
+    expect(api.create).not.toHaveBeenCalled();
+  },
+);
 it("未知创建结果只查原command，recorded后恢复同job而不再收费", async () => {
   api.create.mockRejectedValueOnce(new Error("network"));
   const { result } = setup();

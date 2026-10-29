@@ -31,63 +31,20 @@ function owner(phase: Owner["phase"]): Owner {
   };
 }
 afterEach(cleanup);
-it("唯一模型无默认音色时必须明确选择，再生成真实试听文本", () => {
-  const value = owner("choosing");
+it("配置不可用仅提供重试，不显示技术配置或供应商管理入口", () => {
+  const value = {
+    ...owner("unavailable"),
+    active: false,
+    error: "智能配音暂不可用，请稍后重试。",
+  };
   render(<UnifiedSubjectVoiceControls owner={value} />);
-  expect(screen.queryByRole("combobox", { name: "配音模型" })).toBeNull();
-  expect(screen.getByRole("button", { name: "生成音色" })).toHaveProperty(
-    "disabled",
-    true,
-  );
-  fireEvent.keyDown(screen.getByRole("combobox", { name: "配音音色" }), {
-    key: "ArrowDown",
-  });
-  fireEvent.keyDown(screen.getByRole("option", { name: "清晰女声" }), {
-    key: "Enter",
-  });
-  fireEvent.change(screen.getByLabelText("试听文本"), {
-    target: { value: "这是确认过的试听句。" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "生成音色" }));
-  expect(value.generate).toHaveBeenCalledWith(
-    release,
-    "speaker",
-    "智能配音1",
-    "这是确认过的试听句。",
-  );
-  expect(value.begin).not.toHaveBeenCalled();
-});
-it("多模型配置切换会清除不属于新模型的音色，取消不创建任务", () => {
-  const value = owner("choosing");
-  value.options!.models.push({
-    ...model,
-    release_id: "33333333-3333-4333-8333-333333333333",
-    display_name: "豆包语音备选",
-    voices: [{ key: "other", name: "清晰男声" }],
-  });
-  render(<UnifiedSubjectVoiceControls owner={value} />);
-  function select(label: string, option: string) {
-    fireEvent.keyDown(screen.getByRole("combobox", { name: label }), {
-      key: "ArrowDown",
-    });
-    fireEvent.keyDown(screen.getByRole("option", { name: option }), {
-      key: "Enter",
-    });
-  }
-  select("配音模型", "豆包语音");
-  select("配音音色", "清晰女声");
-  expect(screen.getByRole("button", { name: "生成音色" })).toHaveProperty(
-    "disabled",
-    false,
-  );
-  select("配音模型", "豆包语音备选");
-  expect(screen.getByRole("button", { name: "生成音色" })).toHaveProperty(
-    "disabled",
-    true,
-  );
-  fireEvent.click(screen.getByRole("button", { name: "取消" }));
-  expect(value.reset).toHaveBeenCalledOnce();
-  expect(value.generate).not.toHaveBeenCalled();
+  expect(screen.getByRole("alert").textContent).toContain("智能配音暂不可用");
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.queryByRole("combobox")).toBeNull();
+  expect(screen.queryByRole("textbox")).toBeNull();
+  expect(screen.queryByRole("link", { name: "接入语音模型" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "重试" }));
+  expect(value.begin).toHaveBeenCalledOnce();
 });
 it("音频保存待重试展示明确阶段，只恢复原媒体导入", () => {
   const value = {

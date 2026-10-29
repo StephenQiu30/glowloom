@@ -1,0 +1,81 @@
+Browser tab: 1980372040, Title: "即梦AI - 一站式AI创作平台", URL: "https://jimeng.jianying.com/ai-tool/elements".
+0 AXWebArea 即梦AI - 一站式AI创作平台, URL: jimeng.jianying.com/ai-tool/elements
+	1 container
+		2 container csr-root
+			3 container dreamina
+				4 container
+					5 text 00
+					6 text :
+					7 text 04
+					8 text :
+					9 text 54
+					10 text :
+					11 text 10
+					12 text ⚡Seedance 2.5低至￥0.177/秒｜年卡4.2折起，再赠2个月会员，最高每个席位连续3个月加赠5.2万积分
+				13 container
+					14 container
+						15 button 去首页
+						16 button (expanded) Description: 收起侧边栏, Secondary Actions: Collapse
+						17 container
+							18 button 创作
+								19 text 创作
+							20 button 探索
+								21 text 探索
+							22 button 资产
+								23 text 资产
+							24 button 主体
+								25 text 主体
+							26 button 短剧工作室
+								27 text 短剧工作室
+						28 container
+							29 container
+								30 button (expanded) 对话, Secondary Actions: Collapse
+								31 button 新建对话
+							32 text 暂无历史对话
+							33 container
+								34 button (expanded) 画布, Secondary Actions: Collapse
+								35 button 全部
+								36 button 新建画布
+							37 button 一致性调研-202610221 打开画布 更多
+								38 container
+									39 text 一致性调研-202610221
+									40 button 打开画布
+									41 button 更多
+							42 button 未命名画布 打开画布 更多
+								43 container
+									44 text 未命名画布
+									45 button 打开画布
+									46 button 更多
+							47 button 一致性调研-20261022 打开画布 更多
+								48 container
+									49 text 一致性调研-20261022
+									50 button 打开画布
+									51 button 更多
+							52 button 未命名画布 打开画布 更多
+								53 container
+									54 text 未命名画布
+									55 button 打开画布
+									56 button 更多
+					57 container
+						79 text field (settable) Description: 搜索, Value: 不存在的主体核对20261029
+						80 button 清空搜索
+						59 button 批量操作
+						60 button 去剪映剪辑
+					61 link Description: 企业服务, Value: jimeng.jianying.com/ai-tool/business
+					62 container
+						63 button 消息中心
+						64 text 3
+					65 container
+						66 text 88 开会员 会员低至4.5折
+					67 container js-side-menu-entry-avatar-container
+					68 container dreamina-ui-configuration-content-wrapper
+						69 container
+							70 text 筛选
+							71 text 时间
+							72 text 排序
+							81 container
+								82 image 暂无相关资产
+								83 text 暂无相关资产
+						78 button 客服中心
+
+The focused UI element is 79 text field (settable) Description: 搜索, Value: 不存在的主体核对20261029

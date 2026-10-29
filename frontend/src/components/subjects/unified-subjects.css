@@ -1,3 +1,22 @@
+.product-page[data-page="subjects"]:has(.unified-subject-search-empty) {
+  display: flex;
+  flex-direction: column;
+}
+.product-page[data-page="subjects"]:has(.unified-subject-search-empty)
+  > .unified-subject-library {
+  flex: 1;
+}
+.unified-subject-grid:empty {
+  display: none;
+}
+.unified-subject-menu {
+  min-width: 200px;
+}
+.unified-subject-menu [role^="menuitem"] {
+  min-height: 40px;
+  gap: 8px;
+  padding-inline: 12px;
+}
 .unified-subject-settings {
   display: flex;
   flex-direction: column;
