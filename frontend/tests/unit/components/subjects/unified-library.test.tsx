@@ -5,6 +5,7 @@ import {
   type PageActionsRegistration,
 } from "@/components/layout/page-toolbar";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -67,7 +68,7 @@ const page = {
   current_actor_id: actorID,
   current_scope_id: scopeID,
   page: 1,
-  page_size: 12,
+  page_size: 20,
   total: 2,
   items: [first, second],
   capabilities: {
@@ -81,7 +82,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   api.scopeGeneration = 0;
   api.sessionGeneration = 0;
-  api.list.mockResolvedValue(page);
+  api.list.mockReset().mockResolvedValue(page);
 });
 
 it("同一帧重复下载只创建一次导出，失败保留所选版本", async () => {
@@ -154,7 +155,7 @@ it("当前空间无需项目就读取完整库，搜索传给服务端", async (
   await screen.findByRole("button", { name: "设置主体 海边香氛" });
   expect(api.list.mock.calls[0][0]).toMatchObject({
     page: 1,
-    page_size: 12,
+    page_size: 20,
     order: "updated_desc",
   });
   expect(screen.queryByText("角色")).toBeNull();
@@ -361,4 +362,180 @@ it("嵌入式主体库退出批量后恢复入口焦点", async () => {
       screen.getByRole("button", { name: "批量操作" }),
     ),
   );
+});
+
+const observers = new Map<Element, IntersectionObserverCallback>();
+beforeEach(() => {
+  observers.clear();
+  vi.stubGlobal(
+    "IntersectionObserver",
+    class {
+      constructor(private callback: IntersectionObserverCallback) {}
+      observe(target: Element) {
+        observers.set(target, this.callback);
+      }
+      disconnect() {
+        observers.clear();
+      }
+    },
+  );
+});
+afterEach(() => vi.unstubAllGlobals());
+function intersectTail(times = 1) {
+  expect(observers.size).toBe(1);
+  act(() => {
+    for (let i = 0; i < times; i++)
+      for (const [target, callback] of observers)
+        callback(
+          [
+            {
+              target,
+              isIntersecting: true,
+              intersectionRatio: 1,
+            } as IntersectionObserverEntry,
+          ],
+          {} as IntersectionObserver,
+        );
+  });
+}
+
+it("触底按20条追加，重复触发不并发，末批耗尽后无分页或结束提示", async () => {
+  let resolve!: (value: unknown) => void;
+  api.list.mockResolvedValueOnce({ ...page, total: 21, items: [first] });
+  api.list.mockImplementationOnce(
+    () =>
+      new Promise((r) => {
+        resolve = r;
+      }),
+  );
+  render(<UnifiedSubjectLibrary actorID={actorID} scopeID={scopeID} />);
+  await screen.findByRole("button", { name: "设置主体 海边香氛" });
+  intersectTail(2);
+  expect(
+    screen.getByRole("button", { name: "设置主体 海边香氛" }),
+  ).toBeTruthy();
+  expect(api.list).toHaveBeenCalledTimes(2);
+  expect(api.list.mock.calls[1][0]).toMatchObject({ page: 2, page_size: 20 });
+  await act(async () =>
+    resolve({ ...page, page: 2, total: 21, items: [first, second] }),
+  );
+  expect(
+    screen.getAllByRole("button", { name: "设置主体 海边香氛" }),
+  ).toHaveLength(1);
+  expect(screen.getByRole("button", { name: "设置主体 纸飞机" })).toBeTruthy();
+  expect(observers.size).toBe(0);
+  expect(screen.queryByLabelText("主体分页")).toBeNull();
+  expect(screen.queryByText("已经到底")).toBeNull();
+});
+
+it("追加失败保留卡片，点击重试请求同一批次", async () => {
+  api.list.mockResolvedValueOnce({ ...page, total: 21, items: [first] });
+  api.list.mockRejectedValueOnce(new Error("network"));
+  api.list.mockResolvedValueOnce({
+    ...page,
+    page: 2,
+    total: 21,
+    items: [second],
+  });
+  render(<UnifiedSubjectLibrary actorID={actorID} scopeID={scopeID} />);
+  await screen.findByRole("button", { name: "设置主体 海边香氛" });
+  intersectTail();
+  fireEvent.click(await screen.findByRole("button", { name: "重试加载" }));
+  await screen.findByRole("button", { name: "设置主体 纸飞机" });
+  expect(
+    screen.getByRole("button", { name: "设置主体 海边香氛" }),
+  ).toBeTruthy();
+  expect(api.list.mock.calls.map((call) => call[0].page)).toEqual([1, 2, 2]);
+});
+
+it("追加中搜索变化取消请求，晚到旧批次不能污染新查询", async () => {
+  let resolve!: (value: unknown) => void;
+  api.list.mockResolvedValueOnce({ ...page, total: 21, items: [first] });
+  api.list.mockImplementationOnce(
+    () =>
+      new Promise((r) => {
+        resolve = r;
+      }),
+  );
+  api.list.mockResolvedValueOnce({ ...page, total: 1, items: [second] });
+  const view = render(
+    <UnifiedSubjectLibrary actorID={actorID} scopeID={scopeID} />,
+  );
+  await screen.findByRole("button", { name: "设置主体 海边香氛" });
+  intersectTail();
+  view.rerender(
+    <UnifiedSubjectLibrary actorID={actorID} scopeID={scopeID} query="纸" />,
+  );
+  await screen.findByRole("button", { name: "设置主体 纸飞机" });
+  expect(api.list.mock.calls[1][1].signal.aborted).toBe(true);
+  await act(async () => resolve({ ...page, page: 2, items: [first] }));
+  expect(
+    screen.queryByRole("button", { name: "设置主体 海边香氛" }),
+  ).toBeNull();
+});
+
+it("空追加批次停止观察，避免总数变化导致自动请求死循环", async () => {
+  api.list.mockResolvedValueOnce({ ...page, total: 80, items: [first] });
+  api.list.mockResolvedValueOnce({ ...page, page: 2, total: 80, items: [] });
+  render(<UnifiedSubjectLibrary actorID={actorID} scopeID={scopeID} />);
+  await screen.findByRole("button", { name: "设置主体 海边香氛" });
+  intersectTail();
+  await waitFor(() => expect(observers.size).toBe(0));
+  expect(api.list).toHaveBeenCalledTimes(2);
+  expect(
+    screen.getByRole("button", { name: "设置主体 海边香氛" }),
+  ).toBeTruthy();
+});
+
+it("offset并发移动造成整批重复时继续下一批，不提前隐藏后续主体", async () => {
+  api.list.mockResolvedValueOnce({ ...page, total: 41, items: [first] });
+  api.list.mockResolvedValueOnce({
+    ...page,
+    page: 2,
+    total: 41,
+    items: [first],
+  });
+  api.list.mockResolvedValueOnce({
+    ...page,
+    page: 3,
+    total: 41,
+    items: [second],
+  });
+  render(<UnifiedSubjectLibrary actorID={actorID} scopeID={scopeID} />);
+  await screen.findByRole("button", { name: "设置主体 海边香氛" });
+  intersectTail();
+  await waitFor(() => expect(observers.size).toBe(1));
+  intersectTail();
+  await screen.findByRole("button", { name: "设置主体 纸飞机" });
+  expect(
+    screen.getAllByRole("button", { name: "设置主体 海边香氛" }),
+  ).toHaveLength(1);
+  expect(api.list.mock.calls.map((call) => call[0].page)).toEqual([1, 2, 3]);
+});
+
+it("追加后的收藏写入刷新首批，不遗留旧版本和原排序", async () => {
+  api.list.mockResolvedValueOnce({ ...page, total: 21, items: [first] });
+  api.list.mockResolvedValueOnce({
+    ...page,
+    page: 2,
+    total: 21,
+    items: [second],
+  });
+  api.list.mockResolvedValueOnce({
+    ...page,
+    total: 1,
+    items: [{ ...second, favorite: true, revision: 2 }],
+  });
+  api.batch.mockResolvedValue({
+    items: [{ id: second.id, status: "succeeded" }],
+  });
+  render(<UnifiedSubjectLibrary actorID={actorID} scopeID={scopeID} />);
+  await screen.findByRole("button", { name: "设置主体 海边香氛" });
+  intersectTail();
+  fireEvent.click(await screen.findByRole("button", { name: "收藏 纸飞机" }));
+  await screen.findByRole("button", { name: "取消收藏 纸飞机" });
+  expect(
+    screen.queryByRole("button", { name: "设置主体 海边香氛" }),
+  ).toBeNull();
+  expect(api.list.mock.calls.map((call) => call[0].page)).toEqual([1, 2, 1]);
 });

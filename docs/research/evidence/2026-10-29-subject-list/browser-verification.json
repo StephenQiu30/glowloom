@@ -1,0 +1,78 @@
+{
+  "scope": "Source components plus actual IntersectionObserver; synthetic transport; no product writes",
+  "cases": [
+    {
+      "case": "page append",
+      "counts": [
+        20,
+        40,
+        45
+      ],
+      "requested_pages": [
+        1,
+        2,
+        3
+      ],
+      "first_batch_retained": true,
+      "no_pagination": true,
+      "no_tail_after_exhaustion": true
+    },
+    {
+      "case": "reference dialog overflow ancestor",
+      "counts": [
+        20,
+        40
+      ],
+      "requested_pages": [
+        1,
+        2
+      ]
+    },
+    {
+      "case": "tail failure retry",
+      "count_during_failure": 20,
+      "count_after_retry": 40,
+      "requested_pages": [
+        1,
+        2,
+        2
+      ]
+    },
+    {
+      "case": "390px narrow viewport",
+      "final_count": 45,
+      "requested_pages": [
+        1,
+        2,
+        2,
+        3
+      ],
+      "library_horizontal_overflow": false
+    }
+  ],
+  "a11y": {
+    "violations": 0,
+    "incomplete": 0,
+    "scope": ".unified-subject-library"
+  },
+  "real_local": {
+    "url": "http://localhost:1122/subjects",
+    "source": "logged-in Chrome via CUA",
+    "cards": 1,
+    "viewports": [
+      [
+        1869,
+        873
+      ],
+      [
+        390,
+        844
+      ]
+    ],
+    "pagination": false,
+    "history_entry": false,
+    "footer": false,
+    "horizontal_overflow": false
+  },
+  "runner_note": "Default agent-browser session stalled on screenshot/visibility; offline doctor passed. Verification rerun in isolated subject-list-20261029 session passed. Not counted as a product failure."
+}

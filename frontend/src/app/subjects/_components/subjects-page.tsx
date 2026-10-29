@@ -1,7 +1,5 @@
 "use client";
 import { useState } from "react";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { PageLayout } from "@/components/layout/page-layout";
 import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
@@ -43,11 +41,6 @@ export function SubjectsPage() {
           }
         />
       )}
-      <div className="mt-6 flex justify-end">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/subjects/history">项目历史主体</Link>
-        </Button>
-      </div>
     </PageLayout>
   );
 }

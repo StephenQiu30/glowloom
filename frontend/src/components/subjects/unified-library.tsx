@@ -1,8 +1,15 @@
 "use client";
 import { useEffect, useRef, useState, type SetStateAction } from "react";
 import dynamic from "next/dynamic";
-import { Download, Heart, MoreHorizontal, Plus, Trash2 } from "lucide-react";
-import { listSubjects, batchSubjects, exportSubjects } from "@/api/subjects";
+import {
+  Download,
+  Heart,
+  LoaderCircle,
+  MoreHorizontal,
+  Plus,
+  Trash2,
+} from "lucide-react";
+import { batchSubjects, exportSubjects } from "@/api/subjects";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -22,10 +29,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { ContentState } from "@/components/layout/content-state";
 import {
-  DataPagination,
-  type PageSize,
-} from "@/components/media/data-pagination";
-import {
   RequestError,
   getScopeGeneration,
   getSessionGeneration,
@@ -39,17 +42,15 @@ import {
 } from "./unified-toolbar";
 import {
   requireSubjectBatchResult,
-  requireUnifiedSubjectPage,
   selectedSubjectMedia,
-  subjectDateRange,
   subjectError,
   subjectBatchError,
   subjectRelativeTime,
   type UnifiedSubject,
-  type UnifiedSubjectPage,
   type SubjectSelection,
 } from "./unified-contracts";
 import "./unified-subjects.css";
+import { useSubjectList } from "./use-subject-list";
 import { PageToolbar } from "@/components/layout/page-toolbar";
 const Editor = dynamic(() =>
   import("./unified-editor").then((m) => m.UnifiedSubjectEditor),
@@ -73,18 +74,9 @@ export function UnifiedSubjectLibrary({
   onSelect?: (value: UnifiedSubject) => void;
 }) {
   const [filter, setFilter] = useState<SubjectFilter>(defaultSubjectFilter);
-  const [position, setPosition] = useState({ query, page: 1 });
-  const pageIndex = position.query === query ? position.page : 1;
-  function setPageIndex(page: number) {
-    setPosition({ query, page });
-  }
-  const [pageSize, setPageSize] = useState<PageSize>(12);
-  const [result, setResult] = useState<{
-    key: string;
-    page?: UnifiedSubjectPage;
-    error?: string;
-  } | null>(null);
-  const [retry, setRetry] = useState(0);
+  const { page, error, loading, hasMore, loadMore, retry, refresh } =
+    useSubjectList(actorID, scopeID, query, filter);
+  const tail = useRef<HTMLDivElement>(null);
   const [batch, setBatch] = useState(false);
   const [selectionState, setSelectionState] = useState<{
     query: string;
@@ -110,53 +102,24 @@ export function UnifiedSubjectLibrary({
   const flight = useRef<AbortController | null>(null);
   const [exporting, setExporting] = useState(false);
   const exportBusy = useRef(false);
-  const key = JSON.stringify([
-    actorID,
-    scopeID,
-    query,
-    filter,
-    pageIndex,
-    pageSize,
-    retry,
-  ]);
-  const current = result?.key === key ? result : null;
-  const page = current?.page;
   const locked = pending || uncertain || exporting;
   useEffect(() => {
-    const controller = new AbortController();
-    const range = subjectDateRange(filter.from, filter.through);
-    listSubjects(
-      {
-        q: query.trim() || undefined,
-        favorite: filter.favorite || undefined,
-        ...range,
-        time_field: filter.order.startsWith("created") ? "created" : "updated",
-        order: filter.order,
-        page: pageIndex,
-        page_size: pageSize,
+    if (!hasMore || loading || error || locked || !tail.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries.some(
+            (entry) => entry.isIntersecting && entry.intersectionRatio >= 0.2,
+          )
+        )
+          loadMore();
       },
-      { signal: controller.signal },
-    )
-      .then((value) => requireUnifiedSubjectPage(value, actorID, scopeID))
-      .then((value) => {
-        if (controller.signal.aborted) return;
-        const last = Math.max(1, Math.ceil(value.total / pageSize));
-        if (pageIndex > last) {
-          setPosition({ query, page: last });
-          return;
-        }
-        setResult({ key, page: value });
-      })
-      .catch((e) => {
-        if (!controller.signal.aborted)
-          setResult({ key, error: subjectError(e) });
-      });
-    return () => controller.abort();
-  }, [actorID, scopeID, query, filter, pageIndex, pageSize, key]);
+      { threshold: 0.2 },
+    );
+    observer.observe(tail.current);
+    return () => observer.disconnect();
+  }, [hasMore, loading, error, locked, loadMore]);
   useEffect(() => () => flight.current?.abort(), []);
-  function refresh() {
-    setRetry((n) => n + 1);
-  }
   async function mutate(action?: string, subjects?: UnifiedSubject[]) {
     if (busy.current || exportBusy.current) return;
     const op =
@@ -287,7 +250,6 @@ export function UnifiedSubjectLibrary({
   }
   function changeFilter(value: SubjectFilter) {
     setFilter(value);
-    setPageIndex(1);
     setSelected([]);
   }
   const batchTrigger = useRef<HTMLButtonElement>(null);
@@ -408,19 +370,19 @@ export function UnifiedSubjectLibrary({
           ) : null}
         </div>
       ) : null}
-      {!current ? (
+      {!page && loading ? (
         <div className="unified-subject-grid" aria-label="正在读取主体">
           {[0, 1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-60 w-full" />
           ))}
         </div>
-      ) : current.error ? (
+      ) : !page && error ? (
         <ContentState
           state="error"
           title="暂时无法读取主体"
-          description={current.error}
+          description={error}
           actions={
-            <Button variant="outline" onClick={refresh}>
+            <Button variant="outline" onClick={retry}>
               重试读取
             </Button>
           }
@@ -566,19 +528,29 @@ export function UnifiedSubjectLibrary({
               description="调整筛选条件后重试。"
             />
           ) : null}
-          {page && page.total > 0 ? (
-            <DataPagination
-              label="主体分页"
-              page={pageIndex}
-              pageSize={pageSize}
-              total={page.total}
-              disabled={locked}
-              onPageChange={setPageIndex}
-              onPageSizeChange={(size) => {
-                setPageSize(size);
-                setPageIndex(1);
-              }}
-            />
+          {loading ? (
+            <div
+              role="status"
+              aria-label="正在加载更多主体"
+              className="flex justify-center py-4"
+            >
+              <LoaderCircle
+                className="size-5 animate-spin"
+                aria-hidden="true"
+              />
+            </div>
+          ) : error ? (
+            <div
+              className="flex items-center justify-center gap-3 py-4"
+              role="alert"
+            >
+              <span className="text-sm text-muted-foreground">{error}</span>
+              <Button variant="secondary" onClick={retry}>
+                重试加载
+              </Button>
+            </div>
+          ) : hasMore ? (
+            <div ref={tail} className="h-4" aria-hidden="true" />
           ) : null}
         </>
       )}
@@ -590,7 +562,6 @@ export function UnifiedSubjectLibrary({
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
-            setPageIndex(1);
             refresh();
           }}
         />

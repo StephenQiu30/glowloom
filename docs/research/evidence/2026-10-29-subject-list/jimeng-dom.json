@@ -1,0 +1,86 @@
+[
+  {
+    "classes": "create-card-aiNXuN",
+    "display": "flex",
+    "gap": "8px",
+    "grid": "none",
+    "overflowY": "visible",
+    "rect": {
+      "height": 223.609375,
+      "width": 292,
+      "x": 280,
+      "y": 110.03125
+    },
+    "tag": "BUTTON"
+  },
+  {
+    "classes": "grid-wzC_h5",
+    "display": "grid",
+    "gap": "8px",
+    "grid": "292px 292px 292px 292px",
+    "overflowY": "visible",
+    "rect": {
+      "height": 223.609375,
+      "width": 1192,
+      "x": 280,
+      "y": 110.03125
+    },
+    "tag": "DIV"
+  },
+  {
+    "classes": "responsive-container-SZLmFa",
+    "display": "block",
+    "gap": "normal",
+    "grid": "none",
+    "overflowY": "visible",
+    "rect": {
+      "height": 223.609375,
+      "width": 1256,
+      "x": 240,
+      "y": 110.03125
+    },
+    "tag": "DIV"
+  },
+  {
+    "classes": "scroll-container-EhJfIg",
+    "display": "block",
+    "gap": "normal",
+    "grid": "none",
+    "overflowY": "scroll",
+    "rect": {
+      "height": 661.96875,
+      "width": 1272,
+      "x": 240,
+      "y": 110.03125
+    },
+    "tag": "DIV"
+  },
+  {
+    "classes": "content-BAYQ5X",
+    "display": "flex",
+    "gap": "normal",
+    "grid": "none",
+    "overflowY": "visible",
+    "rect": {
+      "height": 661.96875,
+      "width": 1272,
+      "x": 240,
+      "y": 110.03125
+    },
+    "tag": "DIV"
+  },
+  {
+    "classes": "view-cHiNPI",
+    "display": "flex",
+    "gap": "normal",
+    "grid": "none",
+    "overflowY": "visible",
+    "rect": {
+      "height": 713.96875,
+      "width": 1272,
+      "x": 240,
+      "y": 58.03125
+    },
+    "tag": "SECTION"
+  }
+]

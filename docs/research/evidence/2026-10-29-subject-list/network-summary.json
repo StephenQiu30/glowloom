@@ -1,0 +1,25 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/mweb/v1/dreamina_subject/get",
+    "body": {
+      "cursor": 0,
+      "limit": 20,
+      "subject_source": "mine",
+      "sort_field": 0,
+      "sort_order": 1
+    }
+  },
+  "response": {
+    "status": 200,
+    "dataKeys": [
+      "next_cursor",
+      "has_more",
+      "data_list"
+    ],
+    "next_cursor": 1793156028652,
+    "has_more": false,
+    "count": 1
+  },
+  "note": "Only one subject exists. No real second-batch request was observed."
+}

@@ -1,0 +1,62 @@
+[
+  {
+    "cls": "cover-jmdc90",
+    "font": "13.3333px",
+    "gap": "normal",
+    "lineHeight": "15.3333px",
+    "padding": "0px",
+    "radius": "8px",
+    "rect": {
+      "h": 159.609375,
+      "w": 284,
+      "x": 584,
+      "y": 114.03125
+    },
+    "tag": "BUTTON"
+  },
+  {
+    "cls": "cover-wrap-IFVJT2",
+    "font": "14px",
+    "gap": "normal",
+    "lineHeight": "21px",
+    "padding": "0px",
+    "radius": "0px",
+    "rect": {
+      "h": 159.609375,
+      "w": 284,
+      "x": 584,
+      "y": 114.03125
+    },
+    "tag": "DIV"
+  },
+  {
+    "cls": "container-ZaGd6_",
+    "font": "13.3333px",
+    "gap": "normal",
+    "lineHeight": "15.3333px",
+    "padding": "0px",
+    "radius": "0px",
+    "rect": {
+      "h": 159.609375,
+      "w": 284,
+      "x": 584,
+      "y": 114.03125
+    },
+    "tag": "DIV"
+  },
+  {
+    "cls": "cover-image-vqWsSF",
+    "font": "13.3333px",
+    "gap": "normal",
+    "lineHeight": "15.3333px",
+    "padding": "0px",
+    "radius": "0px",
+    "rect": {
+      "h": 159.609375,
+      "w": 284,
+      "x": 584,
+      "y": 114.03125
+    },
+    "tag": "IMG"
+  }
+]

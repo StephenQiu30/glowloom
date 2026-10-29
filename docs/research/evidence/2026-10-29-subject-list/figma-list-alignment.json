@@ -1,0 +1,1192 @@
+{
+  "date": "2026-10-29",
+  "fileKey": "uLqmeRWuQuzfrp9xOYg6FT",
+  "sessionId": "fc4be7ce-2d21-4746-b12f-6ae492f23a09",
+  "scope": "主体列表及使用同一列表背景的关联状态；不修改探索或画布",
+  "status": "updated-and-read-back",
+  "basis": {
+    "source": "Elements.781f4fdba7.js + real first-batch network and DOM evidence supplied by parent task",
+    "layout": "equal-height CSS Grid, 16:9 covers",
+    "loading": "20 items per batch; visible bottom detector appends; spinner while pending; inline retry on failure; no end label",
+    "boundary": "Competitor account currently contains one subject. Multi-batch competitor runtime behavior remains untested; static loading branch and first-batch fields are recorded separately."
+  },
+  "designSystem": {
+    "codeConnectFilesFound": 0,
+    "subscribedLibraries": 0,
+    "wholeViewSearch": "主体列表 returned no component",
+    "reuse": "Existing local components and Geist text retained; no new assets or primitives"
+  },
+  "removedRootCount": 87,
+  "removedNodeCount": 261,
+  "removedRoots": [
+    {
+      "id": "2807:39884",
+      "name": "Compatibility entry",
+      "parentId": "1446:3127"
+    },
+    {
+      "id": "1783:21140",
+      "name": "Footer / 主体",
+      "parentId": "1446:3124"
+    },
+    {
+      "id": "2809:45555",
+      "name": "Compatibility entry",
+      "parentId": "2749:41775"
+    },
+    {
+      "id": "2749:41790",
+      "name": "Footer / 主体",
+      "parentId": "2749:41771"
+    },
+    {
+      "id": "2809:45557",
+      "name": "Compatibility entry",
+      "parentId": "2749:41874"
+    },
+    {
+      "id": "2749:41889",
+      "name": "Footer / 主体",
+      "parentId": "2749:41870"
+    },
+    {
+      "id": "2809:45559",
+      "name": "Compatibility entry",
+      "parentId": "2749:41983"
+    },
+    {
+      "id": "2749:41998",
+      "name": "Footer / 主体",
+      "parentId": "2749:41979"
+    },
+    {
+      "id": "2809:45561",
+      "name": "Compatibility entry",
+      "parentId": "2749:42098"
+    },
+    {
+      "id": "2749:42113",
+      "name": "Footer / 主体",
+      "parentId": "2749:42094"
+    },
+    {
+      "id": "2809:45563",
+      "name": "Compatibility entry",
+      "parentId": "2749:42220"
+    },
+    {
+      "id": "2749:42235",
+      "name": "Footer / 主体",
+      "parentId": "2749:42216"
+    },
+    {
+      "id": "2749:42349",
+      "name": "Footer / 主体",
+      "parentId": "2749:42330"
+    },
+    {
+      "id": "2749:42484",
+      "name": "Footer / 主体",
+      "parentId": "2749:42465"
+    },
+    {
+      "id": "2749:42610",
+      "name": "Footer / 主体",
+      "parentId": "2749:42591"
+    },
+    {
+      "id": "2749:42745",
+      "name": "Footer / 主体",
+      "parentId": "2749:42726"
+    },
+    {
+      "id": "2809:45565",
+      "name": "Compatibility entry",
+      "parentId": "2749:43000"
+    },
+    {
+      "id": "2749:43015",
+      "name": "Footer / 主体",
+      "parentId": "2749:42996"
+    },
+    {
+      "id": "2809:45567",
+      "name": "Compatibility entry",
+      "parentId": "2749:43072"
+    },
+    {
+      "id": "2749:43087",
+      "name": "Footer / 主体",
+      "parentId": "2749:43068"
+    },
+    {
+      "id": "2809:45569",
+      "name": "Compatibility entry",
+      "parentId": "2749:43180"
+    },
+    {
+      "id": "2749:43195",
+      "name": "Footer / 主体",
+      "parentId": "2749:43176"
+    },
+    {
+      "id": "2809:45571",
+      "name": "Compatibility entry",
+      "parentId": "2749:43279"
+    },
+    {
+      "id": "2749:43294",
+      "name": "Footer / 主体",
+      "parentId": "2749:43275"
+    },
+    {
+      "id": "2809:45573",
+      "name": "Compatibility entry",
+      "parentId": "2749:43377"
+    },
+    {
+      "id": "2749:43392",
+      "name": "Footer / 主体",
+      "parentId": "2749:43373"
+    },
+    {
+      "id": "2809:45575",
+      "name": "Compatibility entry",
+      "parentId": "2749:43541"
+    },
+    {
+      "id": "2749:43556",
+      "name": "Footer / 主体",
+      "parentId": "2749:43537"
+    },
+    {
+      "id": "2809:45577",
+      "name": "Compatibility entry",
+      "parentId": "2749:43624"
+    },
+    {
+      "id": "2749:43639",
+      "name": "Footer / 主体",
+      "parentId": "2749:43620"
+    },
+    {
+      "id": "2809:45579",
+      "name": "Compatibility entry",
+      "parentId": "2749:43827"
+    },
+    {
+      "id": "2749:43842",
+      "name": "Footer / 主体",
+      "parentId": "2749:43823"
+    },
+    {
+      "id": "2809:45581",
+      "name": "Compatibility entry",
+      "parentId": "2749:44021"
+    },
+    {
+      "id": "2749:44036",
+      "name": "Footer / 主体",
+      "parentId": "2749:44017"
+    },
+    {
+      "id": "2809:45583",
+      "name": "Compatibility entry",
+      "parentId": "2749:44102"
+    },
+    {
+      "id": "2749:44117",
+      "name": "Footer / 主体",
+      "parentId": "2749:44098"
+    },
+    {
+      "id": "2809:45585",
+      "name": "Compatibility entry",
+      "parentId": "2749:44183"
+    },
+    {
+      "id": "2749:44198",
+      "name": "Footer / 主体",
+      "parentId": "2749:44179"
+    },
+    {
+      "id": "2749:44279",
+      "name": "Footer / 主体",
+      "parentId": "2749:44260"
+    },
+    {
+      "id": "2749:44369",
+      "name": "Footer / 主体",
+      "parentId": "2749:44350"
+    },
+    {
+      "id": "2807:39885",
+      "name": "Compatibility entry",
+      "parentId": "2749:44522"
+    },
+    {
+      "id": "2809:45587",
+      "name": "Compatibility entry",
+      "parentId": "2798:41482"
+    },
+    {
+      "id": "2798:41501",
+      "name": "Footer / 主体",
+      "parentId": "2798:41478"
+    },
+    {
+      "id": "2809:45589",
+      "name": "Compatibility entry",
+      "parentId": "2798:41933"
+    },
+    {
+      "id": "2798:41952",
+      "name": "Footer / 主体",
+      "parentId": "2798:41929"
+    },
+    {
+      "id": "2809:45591",
+      "name": "Compatibility entry",
+      "parentId": "2798:42336"
+    },
+    {
+      "id": "2809:45593",
+      "name": "Compatibility entry",
+      "parentId": "2798:42739"
+    },
+    {
+      "id": "2807:40027",
+      "name": "Compatibility entry",
+      "parentId": "2807:40026"
+    },
+    {
+      "id": "2798:43295",
+      "name": "Footer / 主体",
+      "parentId": "2798:43272"
+    },
+    {
+      "id": "2807:40337",
+      "name": "Compatibility entry",
+      "parentId": "2807:40336"
+    },
+    {
+      "id": "2798:43446",
+      "name": "Footer / 主体",
+      "parentId": "2798:43423"
+    },
+    {
+      "id": "2807:40377",
+      "name": "Compatibility entry",
+      "parentId": "2807:40376"
+    },
+    {
+      "id": "2798:43602",
+      "name": "Footer / 主体",
+      "parentId": "2798:43579"
+    },
+    {
+      "id": "2807:40462",
+      "name": "Compatibility entry",
+      "parentId": "2807:40461"
+    },
+    {
+      "id": "2807:40639",
+      "name": "Compatibility entry",
+      "parentId": "2807:40638"
+    },
+    {
+      "id": "2807:40675",
+      "name": "Compatibility entry",
+      "parentId": "2807:40674"
+    },
+    {
+      "id": "2809:45595",
+      "name": "Compatibility entry",
+      "parentId": "2804:40304"
+    },
+    {
+      "id": "2804:40317",
+      "name": "Footer / 主体",
+      "parentId": "2804:40300"
+    },
+    {
+      "id": "2807:40145",
+      "name": "Compatibility entry",
+      "parentId": "2807:40144"
+    },
+    {
+      "id": "2807:39953",
+      "name": "Footer / 主体",
+      "parentId": "2807:39925"
+    },
+    {
+      "id": "2807:40272",
+      "name": "Compatibility entry",
+      "parentId": "2807:40271"
+    },
+    {
+      "id": "2807:40023",
+      "name": "Footer / 主体",
+      "parentId": "2807:39995"
+    },
+    {
+      "id": "2807:40517",
+      "name": "Compatibility entry",
+      "parentId": "2807:40516"
+    },
+    {
+      "id": "2807:40581",
+      "name": "Compatibility entry",
+      "parentId": "2807:40580"
+    },
+    {
+      "id": "2809:40273",
+      "name": "Compatibility entry",
+      "parentId": "2809:40272"
+    },
+    {
+      "id": "2809:40296",
+      "name": "Footer / 主体",
+      "parentId": "2809:40268"
+    },
+    {
+      "id": "2809:40395",
+      "name": "Compatibility entry",
+      "parentId": "2809:40394"
+    },
+    {
+      "id": "2854:42949",
+      "name": "Compatibility entry",
+      "parentId": "2854:42948"
+    },
+    {
+      "id": "2854:42963",
+      "name": "Footer / 主体",
+      "parentId": "2854:42944"
+    },
+    {
+      "id": "2854:43264",
+      "name": "Compatibility entry",
+      "parentId": "2854:43263"
+    },
+    {
+      "id": "2854:43278",
+      "name": "Footer / 主体",
+      "parentId": "2854:43259"
+    },
+    {
+      "id": "2854:43554",
+      "name": "Compatibility entry",
+      "parentId": "2854:43553"
+    },
+    {
+      "id": "2854:43568",
+      "name": "Footer / 主体",
+      "parentId": "2854:43549"
+    },
+    {
+      "id": "2854:43861",
+      "name": "Compatibility entry",
+      "parentId": "2854:43860"
+    },
+    {
+      "id": "2854:43875",
+      "name": "Footer / 主体",
+      "parentId": "2854:43856"
+    },
+    {
+      "id": "2854:44151",
+      "name": "Compatibility entry",
+      "parentId": "2854:44150"
+    },
+    {
+      "id": "2854:44165",
+      "name": "Footer / 主体",
+      "parentId": "2854:44146"
+    },
+    {
+      "id": "2854:44423",
+      "name": "Compatibility entry",
+      "parentId": "2854:44422"
+    },
+    {
+      "id": "2854:44437",
+      "name": "Footer / 主体",
+      "parentId": "2854:44418"
+    },
+    {
+      "id": "2854:45704",
+      "name": "Compatibility entry",
+      "parentId": "2854:45703"
+    },
+    {
+      "id": "2854:45718",
+      "name": "Footer / 主体",
+      "parentId": "2854:45699"
+    },
+    {
+      "id": "2854:46007",
+      "name": "Compatibility entry",
+      "parentId": "2854:46006"
+    },
+    {
+      "id": "2854:46021",
+      "name": "Footer / 主体",
+      "parentId": "2854:46002"
+    },
+    {
+      "id": "2910:45392",
+      "name": "Compatibility entry",
+      "parentId": "2910:45391"
+    },
+    {
+      "id": "2910:45406",
+      "name": "Footer / 主体",
+      "parentId": "2910:45387"
+    },
+    {
+      "id": "2910:45732",
+      "name": "Compatibility entry",
+      "parentId": "2910:45731"
+    },
+    {
+      "id": "2910:45746",
+      "name": "Footer / 主体",
+      "parentId": "2910:45727"
+    }
+  ],
+  "removedNodeIds": [
+    "2807:39884",
+    "2804:40839",
+    "I2804:40839;268:2494",
+    "1783:21140",
+    "1783:21141",
+    "1783:21142",
+    "2809:45555",
+    "2809:45556",
+    "I2809:45556;268:2494",
+    "2749:41790",
+    "2749:41791",
+    "2749:41792",
+    "2809:45557",
+    "2809:45558",
+    "I2809:45558;268:2494",
+    "2749:41889",
+    "2749:41890",
+    "2749:41891",
+    "2809:45559",
+    "2809:45560",
+    "I2809:45560;268:2494",
+    "2749:41998",
+    "2749:41999",
+    "2749:42000",
+    "2809:45561",
+    "2809:45562",
+    "I2809:45562;268:2494",
+    "2749:42113",
+    "2749:42114",
+    "2749:42115",
+    "2809:45563",
+    "2809:45564",
+    "I2809:45564;268:2494",
+    "2749:42235",
+    "2749:42236",
+    "2749:42237",
+    "2749:42349",
+    "2749:42350",
+    "2749:42351",
+    "2749:42484",
+    "2749:42485",
+    "2749:42486",
+    "2749:42610",
+    "2749:42611",
+    "2749:42612",
+    "2749:42745",
+    "2749:42746",
+    "2749:42747",
+    "2809:45565",
+    "2809:45566",
+    "I2809:45566;268:2494",
+    "2749:43015",
+    "2749:43016",
+    "2749:43017",
+    "2809:45567",
+    "2809:45568",
+    "I2809:45568;268:2494",
+    "2749:43087",
+    "2749:43088",
+    "2749:43089",
+    "2809:45569",
+    "2809:45570",
+    "I2809:45570;268:2494",
+    "2749:43195",
+    "2749:43196",
+    "2749:43197",
+    "2809:45571",
+    "2809:45572",
+    "I2809:45572;268:2494",
+    "2749:43294",
+    "2749:43295",
+    "2749:43296",
+    "2809:45573",
+    "2809:45574",
+    "I2809:45574;268:2494",
+    "2749:43392",
+    "2749:43393",
+    "2749:43394",
+    "2809:45575",
+    "2809:45576",
+    "I2809:45576;268:2494",
+    "2749:43556",
+    "2749:43557",
+    "2749:43558",
+    "2809:45577",
+    "2809:45578",
+    "I2809:45578;268:2494",
+    "2749:43639",
+    "2749:43640",
+    "2749:43641",
+    "2809:45579",
+    "2809:45580",
+    "I2809:45580;268:2494",
+    "2749:43842",
+    "2749:43843",
+    "2749:43844",
+    "2809:45581",
+    "2809:45582",
+    "I2809:45582;268:2494",
+    "2749:44036",
+    "2749:44037",
+    "2749:44038",
+    "2809:45583",
+    "2809:45584",
+    "I2809:45584;268:2494",
+    "2749:44117",
+    "2749:44118",
+    "2749:44119",
+    "2809:45585",
+    "2809:45586",
+    "I2809:45586;268:2494",
+    "2749:44198",
+    "2749:44199",
+    "2749:44200",
+    "2749:44279",
+    "2749:44280",
+    "2749:44281",
+    "2749:44369",
+    "2749:44370",
+    "2749:44371",
+    "2807:39885",
+    "2804:40984",
+    "I2804:40984;268:2494",
+    "2809:45587",
+    "2809:45588",
+    "I2809:45588;268:2494",
+    "2798:41501",
+    "2798:41502",
+    "2798:41503",
+    "2809:45589",
+    "2809:45590",
+    "I2809:45590;268:2494",
+    "2798:41952",
+    "2798:41953",
+    "2798:41954",
+    "2809:45591",
+    "2809:45592",
+    "I2809:45592;268:2494",
+    "2809:45593",
+    "2809:45594",
+    "I2809:45594;268:2494",
+    "2807:40027",
+    "2807:40028",
+    "I2807:40028;268:2494",
+    "2798:43295",
+    "2798:43296",
+    "2798:43297",
+    "2807:40337",
+    "2807:40338",
+    "I2807:40338;268:2494",
+    "2798:43446",
+    "2798:43447",
+    "2798:43448",
+    "2807:40377",
+    "2807:40378",
+    "I2807:40378;268:2494",
+    "2798:43602",
+    "2798:43603",
+    "2798:43604",
+    "2807:40462",
+    "2807:40463",
+    "I2807:40463;268:2494",
+    "2807:40639",
+    "2807:40640",
+    "I2807:40640;268:2494",
+    "2807:40675",
+    "2807:40676",
+    "I2807:40676;268:2494",
+    "2809:45595",
+    "2809:45596",
+    "I2809:45596;268:2494",
+    "2804:40317",
+    "2804:40318",
+    "2804:40319",
+    "2807:40145",
+    "2807:40146",
+    "I2807:40146;268:2494",
+    "2807:39953",
+    "2807:39954",
+    "2807:39955",
+    "2807:40272",
+    "2807:40273",
+    "I2807:40273;268:2494",
+    "2807:40023",
+    "2807:40024",
+    "2807:40025",
+    "2807:40517",
+    "2807:40518",
+    "I2807:40518;268:2494",
+    "2807:40581",
+    "2807:40582",
+    "I2807:40582;268:2494",
+    "2809:40273",
+    "2809:40274",
+    "I2809:40274;268:2494",
+    "2809:40296",
+    "2809:40297",
+    "2809:40298",
+    "2809:40395",
+    "2809:40396",
+    "I2809:40396;268:2494",
+    "2854:42949",
+    "2854:42950",
+    "I2854:42950;268:2494",
+    "2854:42963",
+    "2854:42964",
+    "2854:42965",
+    "2854:43264",
+    "2854:43265",
+    "I2854:43265;268:2494",
+    "2854:43278",
+    "2854:43279",
+    "2854:43280",
+    "2854:43554",
+    "2854:43555",
+    "I2854:43555;268:2494",
+    "2854:43568",
+    "2854:43569",
+    "2854:43570",
+    "2854:43861",
+    "2854:43862",
+    "I2854:43862;268:2494",
+    "2854:43875",
+    "2854:43876",
+    "2854:43877",
+    "2854:44151",
+    "2854:44152",
+    "I2854:44152;268:2494",
+    "2854:44165",
+    "2854:44166",
+    "2854:44167",
+    "2854:44423",
+    "2854:44424",
+    "I2854:44424;268:2494",
+    "2854:44437",
+    "2854:44438",
+    "2854:44439",
+    "2854:45704",
+    "2854:45705",
+    "I2854:45705;268:2494",
+    "2854:45718",
+    "2854:45719",
+    "2854:45720",
+    "2854:46007",
+    "2854:46008",
+    "I2854:46008;268:2494",
+    "2854:46021",
+    "2854:46022",
+    "2854:46023",
+    "2910:45392",
+    "2910:45393",
+    "I2910:45393;268:2494",
+    "2910:45406",
+    "2910:45407",
+    "2910:45408",
+    "2910:45732",
+    "2910:45733",
+    "I2910:45733;268:2494",
+    "2910:45746",
+    "2910:45747",
+    "2910:45748"
+  ],
+  "mutatedNodeIds": [
+    "1446:3127",
+    "1446:3124",
+    "2749:41775",
+    "2749:41771",
+    "2749:41874",
+    "2749:41870",
+    "2749:41983",
+    "2749:41979",
+    "2749:42098",
+    "2749:42094",
+    "2749:42220",
+    "2749:42216",
+    "2749:42330",
+    "2749:42465",
+    "2749:42591",
+    "2749:42726",
+    "2749:43000",
+    "2749:42996",
+    "2749:43072",
+    "2749:43068",
+    "2749:43180",
+    "2749:43176",
+    "2749:43279",
+    "2749:43275",
+    "2749:43377",
+    "2749:43373",
+    "2749:43541",
+    "2749:43537",
+    "2749:43624",
+    "2749:43620",
+    "2749:43827",
+    "2749:43823",
+    "2749:44021",
+    "2749:44017",
+    "2749:44102",
+    "2749:44098",
+    "2749:44183",
+    "2749:44179",
+    "2749:44260",
+    "2749:44350",
+    "2749:44522",
+    "2798:41482",
+    "2798:41478",
+    "2798:41933",
+    "2798:41929",
+    "2798:42336",
+    "2798:42739",
+    "2807:40026",
+    "2798:43272",
+    "2807:40336",
+    "2798:43423",
+    "2807:40376",
+    "2798:43579",
+    "2807:40461",
+    "2807:40638",
+    "2807:40674",
+    "2804:40304",
+    "2804:40300",
+    "2807:40144",
+    "2807:39925",
+    "2807:40271",
+    "2807:39995",
+    "2807:40516",
+    "2807:40580",
+    "2809:40272",
+    "2809:40268",
+    "2809:40394",
+    "2854:42948",
+    "2854:42944",
+    "2854:43263",
+    "2854:43259",
+    "2854:43553",
+    "2854:43549",
+    "2854:43860",
+    "2854:43856",
+    "2854:44150",
+    "2854:44146",
+    "2854:44422",
+    "2854:44418",
+    "2854:45703",
+    "2854:45699",
+    "2854:46006",
+    "2854:46002",
+    "2910:45391",
+    "2910:45387",
+    "2910:45731",
+    "2910:45727",
+    "1446:3086",
+    "2749:44447"
+  ],
+  "scopedStateReadback": [
+    {
+      "id": "1446:3086",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:41732",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:41831",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:41940",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:42055",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:42177",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:42291",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:42426",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:42552",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:42687",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:42957",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:43029",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:43137",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:43236",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:43334",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:43498",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:43581",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:43784",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:43978",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:44059",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:44140",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:44221",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:44311",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:44447",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:44565",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:44679",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:44816",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2749:44937",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2752:38310",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2752:38365",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2752:38408",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2752:38437",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2752:38532",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2752:38609",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2798:41439",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2798:41890",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2798:42332",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2798:42735",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2798:43195",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2798:43233",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2798:43384",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2798:43540",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2798:43693",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2798:43740",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2798:43792",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2804:40261",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2807:39886",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2807:39956",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2807:40419",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2807:40440",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2809:40229",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2809:40390",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2854:42905",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2854:43220",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2854:43510",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2854:43817",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2854:44107",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2854:44379",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2854:44648",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2854:44819",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2854:44990",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2854:45170",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2854:45341",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2854:45502",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2854:45660",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2854:45963",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2854:46221",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2854:46419",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2854:46585",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2910:45348",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2910:45549",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2910:45688",
+      "remainingExtraCount": 0
+    },
+    {
+      "id": "2910:45855",
+      "remainingExtraCount": 0
+    }
+  ],
+  "mainFrames": [
+    {
+      "id": "1446:3086",
+      "name": "主体 / 默认 / 桌面",
+      "width": 1460,
+      "height": 1040,
+      "counts": {
+        "FRAME": 48,
+        "INSTANCE": 28,
+        "VECTOR": 39,
+        "TEXT": 26,
+        "RECTANGLE": 1
+      },
+      "totalDescendants": 142,
+      "images": [
+        {
+          "id": "I2749:41719;2988:45804",
+          "name": "Cover",
+          "type": "RECTANGLE",
+          "width": 275,
+          "height": 154.6875
+        }
+      ],
+      "annotations": [
+        {
+          "label": "主体列表加载合同 · 2026-10-29：等高 CSS Grid（16:9 封面），不是瀑布流。每批20条，底部检测器进入可见区域自动追加；加载中仅底部 spinner，失败保留已有列表并在底部重试；耗尽后不显示页码、每页数量、结束文案或加载更多按钮。当前主体页不展示项目历史主体入口和产品页脚。筛选、搜索或排序改变后重新读取首批。即梦真实账号仅1条，本合同的后续加载来自已发布 Elements.781f4fdba7.js 静态逻辑与首批网络字段，不声称已完成真实多批运行验收。",
+          "labelMarkdown": ""
+        }
+      ],
+      "extraNodes": [],
+      "fontFamilies": [
+        "Geist"
+      ]
+    },
+    {
+      "id": "2749:44447",
+      "name": "主体 / 默认 / 手机390",
+      "width": 390,
+      "height": 844,
+      "counts": {
+        "FRAME": 16,
+        "INSTANCE": 13,
+        "VECTOR": 7,
+        "TEXT": 14,
+        "RECTANGLE": 1
+      },
+      "totalDescendants": 51,
+      "images": [
+        {
+          "id": "I2749:44552;3028:45901",
+          "name": "Cover",
+          "type": "RECTANGLE",
+          "width": 358,
+          "height": 201.37498474121094
+        }
+      ],
+      "annotations": [
+        {
+          "label": "主体列表加载合同 · 2026-10-29：等高 CSS Grid（16:9 封面），不是瀑布流。每批20条，底部检测器进入可见区域自动追加；加载中仅底部 spinner，失败保留已有列表并在底部重试；耗尽后不显示页码、每页数量、结束文案或加载更多按钮。当前主体页不展示项目历史主体入口和产品页脚。筛选、搜索或排序改变后重新读取首批。即梦真实账号仅1条，本合同的后续加载来自已发布 Elements.781f4fdba7.js 静态逻辑与首批网络字段，不声称已完成真实多批运行验收。",
+          "labelMarkdown": ""
+        }
+      ],
+      "extraNodes": [],
+      "fontFamilies": [
+        "Geist"
+      ]
+    }
+  ],
+  "preservedLegacyFrameIds": [
+    "2804:40491",
+    "2804:40642",
+    "2804:40849",
+    "2804:40895"
+  ],
+  "visualValidation": {
+    "desktop": "1460x1040 composition screenshot inspected: shared header retained; no footer/history/pagination; cards retain equal 16:9 covers",
+    "mobile": "390x844 composition screenshot inspected: existing two-row header retained; no history/pagination; existing new-subject action retained",
+    "fonts": "All text in both main frames remains Geist",
+    "editability": "Desktop 142 descendants, mobile 51; only image-filled nodes are discrete card covers, not full UI rasters"
+  },
+  "noNewNodes": true,
+  "limitations": [
+    "No executable pagination prototype added; loading contract recorded in Figma annotations on main desktop/mobile frames.",
+    "Four legacy-history design frames preserved as compatibility records; they no longer have visible entry from current subject-list states.",
+    "This task verifies removal of excess list chrome, not full product pixel parity or provider behavior."
+  ]
+}
