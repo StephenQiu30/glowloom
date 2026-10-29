@@ -2,6 +2,7 @@ package catalog_test
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -83,10 +84,11 @@ func TestHistoricalArkConfigDoesNotAcquireTextCandidates(t *testing.T) {
 
 func TestEachCloudPresetAcceptsAnExplicitPricedTextTemplate(t *testing.T) {
 	for _, preset := range domain.BuiltinPresets() {
-		if preset.Config.AdapterKey == "volcengine_speech" {
-			continue
-		}
 		doc := domain.PresetDocument{SchemaVersion: 1, Name: preset.Name, Config: preset.Config, ModelTemplates: []domain.PresetModelTemplate{presetTextTemplate()}}
-		require.NoError(t, doc.Validate(), preset.Slug)
+		if slices.Contains(preset.Config.Capabilities, "text") {
+			require.NoError(t, doc.Validate(), preset.Slug)
+		} else {
+			require.ErrorIs(t, doc.Validate(), domain.ErrInvalidPreset, preset.Slug)
+		}
 	}
 }

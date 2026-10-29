@@ -10,7 +10,7 @@ import (
 
 // Agent operations carry private conversation context. The immutable quote
 // receipt identifies their initiating actor even before a charge is confirmed.
-const agentOwnerPredicate = `(o.origin<>'agent' OR EXISTS(SELECT 1 FROM operation.quote_request aq WHERE aq.actor_id=? AND aq.result->>'OperationID'=o.id::text))`
+const agentOwnerPredicate = `(o.origin<>'agent' OR EXISTS(SELECT 1 FROM operation.quote_request aq WHERE aq.actor_id=? AND COALESCE(aq.result->>'OperationID',aq.result->>'operation_id')=o.id::text))`
 
 func requireAgentOperationOwner(tx *gorm.DB, actor identity.Principal, project, id uuid.UUID) error {
 	var found int

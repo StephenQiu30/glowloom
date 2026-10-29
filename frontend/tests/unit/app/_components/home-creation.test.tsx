@@ -343,19 +343,24 @@ it("数字人台词与音乐选项各自保留且不进入其他类型", async (
   ).toBe("true");
 });
 
-it("项目音频草稿刷新恢复原ID，并按账号隔离", async () => {
+it("项目音频草稿页面内复用，重新打开不复用本机指针", async () => {
   state.session = { actor: { id: "voice-owner" } };
   state.generatedID = "47b69106-3c3e-44ca-a50a-a89108d1c6c1";
   let view = render(<Page />);
   await tab("音频生成");
   fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
   await screen.findByText("audio 富文本编辑器");
+  await tab("视频生成");
+  await screen.findByText("video 富文本编辑器");
+  await tab("音频生成");
+  await screen.findByText("audio 富文本编辑器");
+  expect(state.opened.at(-1)?.draftID).toBe(state.generatedID);
   view.unmount();
   view = render(<Page />);
   await tab("音频生成");
   fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
   await screen.findByText("audio 富文本编辑器");
-  expect(state.opened.at(-1)?.draftID).toBe(state.generatedID);
+  expect(state.opened.at(-1)?.draftID).toBeUndefined();
   view.unmount();
   state.session = { actor: { id: "other-owner" } };
   render(<Page />);

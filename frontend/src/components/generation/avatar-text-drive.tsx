@@ -32,15 +32,10 @@ export function AvatarTextDrive({
     [error, setError] = useState("");
   const guard = useRef<(() => Promise<boolean>) | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
-  const key = `glowloom:avatar-speech:${contextKey}`;
+  const drafts = useRef(new Map<string, string>());
   function show() {
     setError("");
-    try {
-      const saved = localStorage.getItem(key);
-      setDraftID(saved && /^[0-9a-f-]{36}$/i.test(saved) ? saved : undefined);
-    } catch {
-      setError("本机暂时无法记录草稿位置，配音仍会保存到项目。");
-    }
+    setDraftID(drafts.current.get(contextKey));
     setOpen(true);
   }
   async function close() {
@@ -95,11 +90,7 @@ export function AvatarTextDrive({
                 guard.current = value;
               }}
               onDraftReady={(id) => {
-                try {
-                  localStorage.setItem(key, id);
-                } catch {
-                  setError("配音已保存，本机无法记录恢复位置。");
-                }
+                drafts.current.set(contextKey, id);
               }}
               onAdopt={async (id, kind) => {
                 if (kind !== "audio") throw new Error("请选择配音的音频结果。");

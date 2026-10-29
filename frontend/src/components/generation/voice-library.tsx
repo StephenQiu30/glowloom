@@ -407,6 +407,14 @@ export function VoiceLibrary({
   );
 }
 
+// Only unconfirmed requests are retained in memory for same-request retries.
+// Saved voices are always read from the project API.
+type PendingVoice = {
+  request: Parameters<typeof saveVoice>[1];
+  asset: API.AssetSummary;
+};
+const pendingVoices = new Map<string, PendingVoice>();
+
 function CreateVoice({
   projectID,
   ownerKey,
@@ -420,26 +428,8 @@ function CreateVoice({
   onSaved: (voice: ReferenceVoice) => void;
   onRestoreFocus: () => void;
 }) {
-  const storageKey = `glowloom:pending-voice:${ownerKey}`;
-  const [recovery] = useState(() => {
-    try {
-      const value = JSON.parse(localStorage.getItem(storageKey) ?? "null");
-      if (
-        value?.request?.request_id &&
-        value.request.asset_id === value.asset?.id &&
-        value.asset.project_id === projectID &&
-        value.request.consent === true &&
-        typeof value.request.name === "string"
-      )
-        return value as {
-          request: Parameters<typeof saveVoice>[1];
-          asset: API.AssetSummary;
-        };
-    } catch {
-      /* A malformed local receipt must not authorize a request. */
-    }
-    return null;
-  });
+  const requestKey = `${ownerKey}/${projectID}`;
+  const [recovery] = useState(() => pendingVoices.get(requestKey) ?? null);
   const [tags, setTags] = useState<VoiceTags>(
     recovery
       ? {
@@ -494,13 +484,9 @@ function CreateVoice({
     };
     setRequest(input);
     try {
-      // Retain the exact request through refreshes; storage failure happens before any write.
-      localStorage.setItem(
-        storageKey,
-        JSON.stringify({ request: input, asset }),
-      );
+      pendingVoices.set(requestKey, { request: input, asset });
       const saved = await saveVoice(projectID, input);
-      localStorage.removeItem(storageKey);
+      pendingVoices.delete(requestKey);
       onSaved(saved);
     } catch (e) {
       setError(voiceError(e));
@@ -511,7 +497,7 @@ function CreateVoice({
         )
       ) {
         setRequest(null);
-        localStorage.removeItem(storageKey);
+        pendingVoices.delete(requestKey);
       }
     } finally {
       lock.current = false;
@@ -593,7 +579,7 @@ function CreateVoice({
           {busy ? "正在保存…" : request ? "恢复保存结果" : "保存音色"}
         </Button>
         <p className="text-xs text-muted-foreground">
-          保存为参考音色，不代表已训练供应商音色。
+          保存为参考音色，不代表已训练供应商音色。保存结果未确认时请在本页重试；重新打开页面后可从音色库核对。
         </p>
         {picker && (
           <ProjectMediaPicker

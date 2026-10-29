@@ -20,7 +20,7 @@ func assetKindOperation(t *testing.T, db *gorm.DB, actor identity.Principal, pro
 	if err := db.Exec(`INSERT INTO operation.operation(id,project_id,target_type,capability,mode,input_hash,origin,status,region)VALUES(?,?,'agent_session','text.structured','test',repeat('a',64),'agent','completed','domestic')`, op, project).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec(`INSERT INTO operation.quote_request(org_id,actor_id,request_id,fingerprint,result)VALUES(?,?,?,decode(repeat('ab',32),'hex'),jsonb_build_object('operation_id',?::text))`, actor.OrgID, actor.ID, uuid.New(), op.String()).Error; err != nil {
+	if err := db.Exec(`INSERT INTO operation.quote_request(org_id,actor_id,request_id,fingerprint,result)VALUES(?,?,?,decode(repeat('ab',32),'hex'),jsonb_build_object('OperationID',?::text))`, actor.OrgID, actor.ID, uuid.New(), op.String()).Error; err != nil {
 		t.Fatal(err)
 	}
 	assets, outputs := []uuid.UUID{}, []uuid.UUID{}
@@ -151,5 +151,31 @@ func TestAssetPublicTaskPreservesUnavailableCandidateFactsAndValidSiblings(t *te
 	}
 	if detail.Outputs[5].Text == nil || *detail.Outputs[5].Text != "正式正文" || assetKindSnapshot(t, db, op) != before {
 		t.Fatal("partial media availability changed JSON body or stored evidence")
+	}
+}
+
+func TestAssetQuoteReceiptFieldFormsShareReadAuthority(t *testing.T) {
+	for _, key := range []string{"OperationID", "operation_id"} {
+		t.Run(key, func(t *testing.T) {
+			db := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
+			actor, project := seedCanvasActor(t, db)
+			op, _, _ := assetKindOperation(t, db, actor, project)
+			if err := db.Exec(`UPDATE operation.quote_request SET result=jsonb_build_object(?::text,?::text) WHERE actor_id=? AND result->>'OperationID'=?`, key, op.String(), actor.ID, op.String()).Error; err != nil {
+				t.Fatal(err)
+			}
+			store := operationwire.ProvideOperationStore(db)
+			detail, err := store.ReadPublicTask(t.Context(), actor, project, op)
+			if err != nil || len(detail.Outputs) != 6 {
+				t.Fatalf("receipt detail: %v %v", detail, err)
+			}
+			page, err := store.ListPersonalHistory(t.Context(), actor, operationapp.PersonalHistoryInput{Kind: "document"})
+			if err != nil || len(page.Items) != 1 {
+				t.Fatalf("receipt history: %v %v", page, err)
+			}
+			other, _ := seedCanvasActor(t, db)
+			if _, err := store.ReadPublicTask(t.Context(), other, project, op); err == nil {
+				t.Fatal("receipt granted another actor access")
+			}
+		})
 	}
 }

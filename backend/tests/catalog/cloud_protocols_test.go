@@ -3,6 +3,7 @@ package catalog_test
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -14,7 +15,7 @@ import (
 
 func TestCloudTextProtocolsKeepProviderRoutingIndependent(t *testing.T) {
 	for _, preset := range domain.BuiltinPresets() {
-		if preset.Config.AdapterKey == "volcengine_speech" {
+		if !slices.Contains(preset.Config.Capabilities, "text") {
 			continue
 		}
 		t.Run(preset.Slug, func(t *testing.T) {
@@ -78,7 +79,7 @@ func TestArkImageRequestsUseSingleImageContractWithoutOpenRouterFields(t *testin
 
 func TestCloudDiscoveryDoesNotInventImageOrAccountPermissions(t *testing.T) {
 	for _, preset := range domain.BuiltinPresets() {
-		if preset.Config.AdapterKey == "openrouter" || preset.Config.AdapterKey == "volcengine_speech" {
+		if preset.Config.AdapterKey == "openrouter" || !slices.Contains(preset.Config.Capabilities, "text") {
 			continue
 		}
 		calls := 0

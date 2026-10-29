@@ -22,8 +22,8 @@ const personalOperationIDs = `WITH personal_operation_ids AS (
  JOIN workspace.project submitted_project ON submitted_project.id=ps.project_id
  WHERE ps.actor_id=? AND submitted_project.org_id=?
  UNION
- SELECT qr.result->>'operation_id' FROM operation.quote_request qr
- WHERE qr.actor_id=? AND qr.org_id=? AND jsonb_typeof(qr.result->'operation_id')='string'
+ SELECT COALESCE(qr.result->>'OperationID',qr.result->>'operation_id') FROM operation.quote_request qr
+ WHERE qr.actor_id=? AND qr.org_id=? AND jsonb_typeof(COALESCE(qr.result->'OperationID',qr.result->'operation_id'))='string'
  UNION
  SELECT item->>'operation_id' FROM operation.quote_request qr
  CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(qr.result->'items')='array' THEN qr.result->'items' ELSE '[]'::jsonb END) item

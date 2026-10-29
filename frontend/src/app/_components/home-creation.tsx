@@ -152,32 +152,10 @@ function ScopedHomeCreation() {
   const hasInput = !!prompt.trim() || homeDraft.references.length > 0;
 
   function rememberedDraft(projectID: string, kind: CreationType) {
-    const memory = drafts.current.get(`${projectID}/${kind}`);
-    if (memory) return memory;
-    try {
-      const value = localStorage.getItem(
-        `glowloom:home-draft:${subjectScope}/${projectID}/${kind}`,
-      );
-      return value &&
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          value,
-        )
-        ? value
-        : undefined;
-    } catch {
-      return undefined;
-    }
+    return drafts.current.get(`${subjectScope}/${projectID}/${kind}`);
   }
   function rememberDraft(projectID: string, kind: CreationType, id: string) {
-    drafts.current.set(`${projectID}/${kind}`, id);
-    try {
-      localStorage.setItem(
-        `glowloom:home-draft:${subjectScope}/${projectID}/${kind}`,
-        id,
-      );
-    } catch {
-      setError("草稿已保存，本机暂时无法记录恢复位置。");
-    }
+    drafts.current.set(`${subjectScope}/${projectID}/${kind}`, id);
   }
   async function select(nextType: CreationType, nextProject = project) {
     if (locked || switchFlight.current) return;
