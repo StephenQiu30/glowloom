@@ -1,0 +1,56 @@
+{
+  "baseHead": "8b61c7943a5080c4d4dbd2dec157c9f2e172ba85",
+  "files": [
+    {
+      "path": "frontend/src/components/canvas/connections/canvas-connections.tsx",
+      "sha256": "31c3ee24c58a9d7a70f60ef136c1988b1419af49367e742cf22d7afde5f1482d",
+      "trackedAtHead": true
+    },
+    {
+      "path": "frontend/src/components/canvas/connections/connection-flow-layer.tsx",
+      "sha256": "5e049efba937674152ace175bebb065691450ad7c1604792c34b55aeaafdcd48",
+      "trackedAtHead": false
+    },
+    {
+      "path": "frontend/src/components/canvas/connections/connection-flow-model.ts",
+      "sha256": "dd77ee96c25e6d7a0fd42a5871d6fa7dfe4b0d0f137b30c7f0d10ffcbd2e5225",
+      "trackedAtHead": false
+    },
+    {
+      "path": "frontend/src/components/canvas/connections/connection-flow-surface.ts",
+      "sha256": "65762a292235b4c0fa06b857e16cf26dff12ba606ac36f3af538042aa9505f12",
+      "trackedAtHead": false
+    },
+    {
+      "path": "frontend/tests/unit/components/canvas/connection-meteor.test.tsx",
+      "sha256": "d162f7259282f1d9d646c779c3a20a19d70cad6d5c8e41303b8ca8d471b0783d",
+      "trackedAtHead": false
+    },
+    {
+      "path": "frontend/tests/unit/components/canvas/connection-flow-layer.test.tsx",
+      "sha256": "dbb6542d86208b0a6eb6bbd0f3f9cb6961722262abcbf5a1cd66b30d903381d5",
+      "trackedAtHead": false
+    },
+    {
+      "path": "frontend/tests/unit/components/canvas/connection-flow-model.test.ts",
+      "sha256": "aaf0e17baeec8d40c88451e0eec582e281d74e3bb98612f1afbc35397ea6e52f",
+      "trackedAtHead": false
+    },
+    {
+      "path": "frontend/src/components/canvas/editor/canvas-editor.tsx",
+      "sha256": "6f83a418aef98c2615f8f49e606bf6a07462e0c31d14bd35ad723a7a94026be2",
+      "trackedAtHead": true
+    },
+    {
+      "path": "frontend/src/components/canvas/canvas.css",
+      "sha256": "4ffde20b79e76742cf6f127e903dfe32f700aa1b5672301a17a15daeb15930bd",
+      "trackedAtHead": true
+    },
+    {
+      "path": "frontend/src/app/globals.css",
+      "sha256": "705003ef220496e5eb2122b58cd0d5d46d20a6322096c4d6d350b608fd309df1",
+      "trackedAtHead": true
+    }
+  ],
+  "scope": "Exact dark meteor renderer and HEAD-compatible single-source pending/drag wiring; no multi-selection business changes; one independent globals.css highlight token; all other theme changes excluded."
+}

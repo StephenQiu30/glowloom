@@ -1,0 +1,75 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>即梦连线 shader 同管线精确核对</title>
+<style>
+body{margin:28px;background:#101112;color:#e5e5e5;font:15px/1.6 system-ui}h1{font-size:24px}button{padding:12px 20px;border:1px solid #555;border-radius:8px;background:#242526;color:white;cursor:pointer}canvas{display:block;width:756px;height:386px;border:1px solid #333;margin-top:18px}pre{white-space:pre-wrap;max-width:1400px;font:12px/1.5 monospace}.note{color:#aaa;max-width:1000px}
+</style>
+<h1>即梦连线 shader 同管线精确核对</h1>
+<p class="note">公开 Worker 中实际 GLSL 与当前产品 GLSL，在同一个 WebGL2 context、同一 Float32 mesh、RGBA8 渐变纹理、相位、DPR 和 viewport 下逐像素 readPixels。这里隔离 shader 数值差，不包含浏览器截图、ICC 转换、CSS 合成或 Worker 调度差异。提取 shader 时只替换经独立审计确认的模板常数，没有执行原始 bundle。</p>
+<button id="run">运行同管线核对（37 个场景）</button>
+<p id="status">正在加载 shader</p>
+<canvas width="2000" height="960"></canvas>
+<pre id="result"></pre>
+<script type="module">
+import {connectionFlowMesh,connectionFlowTexture} from './connection-flow-model.js';
+const paths=['reference-vertex.glsl','reference-fragment.glsl','product-vertex.glsl','product-fragment.glsl'];
+const [rv,rf,pv,pf]=await Promise.all(paths.map(async p=>{const r=await fetch(p);if(!r.ok)throw Error(p+': '+r.status);return r.text()}));
+const observed=await(await fetch('isolated-geometry.json')).json();
+const canvas=document.querySelector('canvas');
+const gl=canvas.getContext('webgl2',{alpha:true,antialias:true,depth:false,desynchronized:true,powerPreference:'high-performance',premultipliedAlpha:true,preserveDrawingBuffer:false,stencil:false});
+if(!gl)throw Error('WebGL2 unavailable');
+function program(v,f){
+ const p=gl.createProgram();
+ for(const[type,src]of[[gl.VERTEX_SHADER,v],[gl.FRAGMENT_SHADER,f]]){
+  const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));
+  gl.attachShader(p,s);gl.deleteShader(s);
+ }
+ gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(p));return p;
+}
+const reference=program(rv,rf),product=program(pv,pf);
+const buffer=gl.createBuffer(),vao=gl.createVertexArray(),texture=gl.createTexture();
+gl.bindVertexArray(vao);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+let offset=0;[2,2,1,1,1,1,1].forEach((n,i)=>{gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,n,gl.FLOAT,false,36,offset*4);offset+=n});
+gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,texture);gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);
+for(const[k,v]of[[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR],[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE]])gl.texParameteri(gl.TEXTURE_2D,k,v);
+gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,256,1,0,gl.RGBA,gl.UNSIGNED_BYTE,connectionFlowTexture());
+gl.clearColor(0,0,0,0);gl.enable(gl.BLEND);gl.blendEquation(gl.MAX);gl.blendFunc(gl.ONE,gl.ONE);
+const programs=[{p:reference,n:{size:'u_canvasSize',pan:'u_pan',zoom:'u_zoom',phase:'u_progress',ramp:'u_gradient',light:'u_light'}},{p:product,n:{size:'viewportSize',pan:'pan',zoom:'zoom',phase:'phase',ramp:'colorRamp'}}];
+for(const spec of programs){spec.u={};for(const[k,n]of Object.entries(spec.n))spec.u[k]=gl.getUniformLocation(spec.p,n);gl.useProgram(spec.p);gl.uniform1i(spec.u.ramp,0);if(spec.u.light)gl.uniform1f(spec.u.light,0)}
+function mesh(paths,fanout){const parts=paths.map(p=>connectionFlowMesh(p,fanout));const all=new Float32Array(parts.reduce((n,p)=>n+p.length,0));let o=0;for(const p of parts){all.set(p,o);o+=p.length}return all}
+const shapes=[
+ {name:'short',fanout:false,paths:['M120,160 C150,160 150,220 190,220']},
+ {name:'long',fanout:false,paths:['M20,100 C350,100 350,260 650,260']},
+ {name:'fanout-two',fanout:true,paths:['M20,100 C350,100 350,260 650,260','M20,300 C350,300 350,260 650,260']}
+];
+const cases=[];
+for(const shape of shapes)for(const zoom of [.6,1,1.36])for(const phaseMs of [650,1300,1745.75,1950])cases.push({...shape,zoom,phaseMs,width:1000,height:480,x:20,y:10,dpr:2});
+cases.push({name:'observed-isolated-07',fanout:false,paths:[observed.path],zoom:observed.matrix.a,phaseMs:1745.75,width:1512,height:772,x:observed.matrix.e,y:observed.matrix.f,dpr:observed.dpr});
+function render(spec,c,count,target){
+ gl.clear(gl.COLOR_BUFFER_BIT);gl.useProgram(spec.p);gl.bindVertexArray(vao);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,texture);
+ gl.uniform2f(spec.u.size,c.width,c.height);gl.uniform2f(spec.u.pan,c.x,c.y);gl.uniform1f(spec.u.zoom,c.zoom);gl.uniform1f(spec.u.phase,(c.phaseMs%2600)/2600);
+ gl.drawArrays(gl.TRIANGLES,0,count);gl.readPixels(0,0,canvas.width,canvas.height,gl.RGBA,gl.UNSIGNED_BYTE,target);
+ const error=gl.getError();if(error!==gl.NO_ERROR)throw Error('GL error '+error);
+}
+function compare(c){
+ const width=Math.round(c.width*c.dpr),height=Math.round(c.height*c.dpr);if(canvas.width!==width)canvas.width=width;if(canvas.height!==height)canvas.height=height;gl.viewport(0,0,width,height);
+ const vertices=mesh(c.paths,c.fanout);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,vertices,gl.DYNAMIC_DRAW);
+ const a=new Uint8Array(width*height*4),b=new Uint8Array(a.length);render(programs[0],c,vertices.length/9,a);render(programs[1],c,vertices.length/9,b);
+ let affected=0,changed=0,abs=0,sq=0,max=0,alphaMax=0,alphaAbs=0,worst=null;
+ for(let i=0;i<a.length;i+=4){if(a[i+3]===0&&b[i+3]===0)continue;affected++;let isChanged=false;
+  for(let k=0;k<4;k++){const d=Math.abs(a[i+k]-b[i+k]);if(d)isChanged=true;if(k===3){alphaMax=Math.max(alphaMax,d);alphaAbs+=d;}else{abs+=d;sq+=d*d;if(d>max){max=d;worst={x:(i/4)%width,y:height-1-Math.floor(i/4/width),channel:k,reference:Array.from(a.slice(i,i+4)),product:Array.from(b.slice(i,i+4))}}}}
+  if(isChanged)changed++;
+ }
+ return {name:c.name,zoom:c.zoom,phaseMs:c.phaseMs,dpr:c.dpr,samplesPerCurve:c.fanout?16:64,curveCount:c.paths.length,affectedPixels:affected,changedPixels:changed,exactRgbaFraction:affected?1-changed/affected:1,meanAbsoluteRgbError:affected?abs/(affected*3):0,rmsRgbError:affected?Math.sqrt(sq/(affected*3)):0,maxRgbError:max,maxAlphaError:alphaMax,meanAlphaError:affected?alphaAbs/affected:0,worst};
+}
+const status=document.querySelector('#status'),result=document.querySelector('#result'),button=document.querySelector('#run');status.textContent='已就绪：37 个场景';
+button.onclick=async()=>{
+ button.disabled=true;result.textContent='';const output=[];
+ try{
+  for(const c of cases){status.textContent=`核对 ${output.length+1}/${cases.length}：${c.name} zoom ${c.zoom} phase ${c.phaseMs}ms`;output.push(compare(c));await new Promise(r=>setTimeout(r,0));}
+  const report={method:'same-context same-mesh same-texture raw premultiplied RGBA readPixels; no ICC or screenshots',referenceWorker:'octo-canvas-rendering.3800953894.js',referenceSha256:'d9970f672832d62c1e90f47f49bc1378771e69b79ced734228ffc78560d73651',theme:'dark',environment:{context:gl.getContextAttributes(),samples:gl.getParameter(gl.SAMPLES),version:gl.getParameter(gl.VERSION),renderer:gl.getParameter(gl.RENDERER),drawingBufferColorSpace:gl.drawingBufferColorSpace},summary:{cases:output.length,nonidenticalCases:output.filter(x=>x.changedPixels>0).length,maxRgbError:Math.max(...output.map(x=>x.maxRgbError)),maxAlphaError:Math.max(...output.map(x=>x.maxAlphaError)),totalAffectedPixels:output.reduce((n,x)=>n+x.affectedPixels,0),totalChangedPixels:output.reduce((n,x)=>n+x.changedPixels,0)},results:output};
+  result.textContent=JSON.stringify(report,null,2);status.textContent=`完成：${report.summary.nonidenticalCases}/${output.length} 场景存在差异，最大 RGB 差 ${report.summary.maxRgbError}，最大 alpha 差 ${report.summary.maxAlphaError}`;
+ }catch(e){status.textContent='核对失败';result.textContent=String(e?.stack??e)}finally{button.disabled=false}
+};
+</script>

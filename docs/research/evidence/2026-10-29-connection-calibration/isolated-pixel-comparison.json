@@ -1,0 +1,9 @@
+{
+  "phaseMs": 1745.75,
+  "maskPixels": 6896,
+  "meanAbsoluteRgbError": 2.0153228924980664,
+  "rmsRgbError": 3.908298476800192,
+  "maxChannelError": 21,
+  "exactChannelFraction": 0.4804717710750193,
+  "periodMs": 2600
+}

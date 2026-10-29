@@ -1,0 +1,28 @@
+{
+  "workerSha256": "d9970f672832d62c1e90f47f49bc1378771e69b79ced734228ffc78560d73651",
+  "productSha256": "65762a292235b4c0fa06b857e16cf26dff12ba606ac36f3af538042aa9505f12",
+  "method": "Static literal extraction and fixed audited constant substitution; no third-party execution",
+  "outputs": [
+    {
+      "path": "/tmp/meteor-repro-check/reference-vertex.glsl",
+      "bytes": 1333,
+      "sha256": "920206a0c16c3b7d2f52c2d69975721d334891b12ebcd4c3ac6b58fbb2d61b12"
+    },
+    {
+      "path": "/tmp/meteor-repro-check/reference-fragment.glsl",
+      "bytes": 2223,
+      "sha256": "07644e8865f7f7625dca8b522062379bb4807776c617bc6dd9e8f0cd4aab0b8c"
+    },
+    {
+      "path": "/tmp/meteor-repro-check/product-vertex.glsl",
+      "bytes": 1078,
+      "sha256": "cb447e2ed954d17270efc3bf7fd3b82016fc915d8a0c71ec9010def8a0fd44a5"
+    },
+    {
+      "path": "/tmp/meteor-repro-check/product-fragment.glsl",
+      "bytes": 1433,
+      "sha256": "1f66ee0597f434287c2fc68f0ae77d24d091bd7f6b251387a52fd1d841c2bf98"
+    }
+  ]
+}
+Ready. Serve this directory on 127.0.0.1 and open /shader-parity.html or /isolated.html.

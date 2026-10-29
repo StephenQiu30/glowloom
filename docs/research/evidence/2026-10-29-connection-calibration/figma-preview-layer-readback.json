@@ -1,0 +1,106 @@
+{
+  "mutatedNodeIds": [
+    "1510:101109",
+    "1510:101141",
+    "1510:101177",
+    "1510:102094",
+    "3153:58317",
+    "3153:58319",
+    "3159:54500",
+    "3159:54511",
+    "3159:54534",
+    "3159:54557",
+    "3159:54580"
+  ],
+  "layers": [
+    {
+      "base": "1510:101109",
+      "overlay": "3159:54371",
+      "parent": "1510:101083",
+      "baseIndex": 17,
+      "overlayIndex": 16,
+      "baseAbove": true
+    },
+    {
+      "base": "1510:101141",
+      "overlay": "3159:54386",
+      "parent": "1510:101117",
+      "baseIndex": 16,
+      "overlayIndex": 15,
+      "baseAbove": true
+    },
+    {
+      "base": "1510:101177",
+      "overlay": "3159:54401",
+      "parent": "1510:101150",
+      "baseIndex": 16,
+      "overlayIndex": 15,
+      "baseAbove": true
+    },
+    {
+      "base": "1510:102094",
+      "overlay": "3159:54416",
+      "parent": "1510:102068",
+      "baseIndex": 11,
+      "overlayIndex": 10,
+      "baseAbove": true
+    },
+    {
+      "base": "3153:58317",
+      "overlay": "3159:54446",
+      "parent": "3153:58316",
+      "baseIndex": 1,
+      "overlayIndex": 0,
+      "baseAbove": true
+    },
+    {
+      "base": "3153:58319",
+      "overlay": "3159:54461",
+      "parent": "3153:58318",
+      "baseIndex": 1,
+      "overlayIndex": 0,
+      "baseAbove": true
+    },
+    {
+      "base": "3159:54500",
+      "overlay": "3159:54501",
+      "parent": "3159:54494",
+      "baseIndex": 5,
+      "overlayIndex": 3,
+      "baseAbove": true
+    },
+    {
+      "base": "3159:54511",
+      "overlay": "3159:54512",
+      "parent": "3159:54505",
+      "baseIndex": 5,
+      "overlayIndex": 3,
+      "baseAbove": true
+    },
+    {
+      "base": "3159:54534",
+      "overlay": "3159:54535",
+      "parent": "3159:54528",
+      "baseIndex": 5,
+      "overlayIndex": 3,
+      "baseAbove": true
+    },
+    {
+      "base": "3159:54557",
+      "overlay": "3159:54558",
+      "parent": "3159:54551",
+      "baseIndex": 5,
+      "overlayIndex": 3,
+      "baseAbove": true
+    },
+    {
+      "base": "3159:54580",
+      "overlay": "3159:54581",
+      "parent": "3159:54574",
+      "baseIndex": 5,
+      "overlayIndex": 3,
+      "baseAbove": true
+    }
+  ],
+  "notes": "周期：p = (RAF 时间戳 % 2600) / 2600；所有连线共享相位，新增连线不重新起步。\n尾长：S = clamp(0.55 × L, 120, 312)；L 为世界坐标弧长。头 H = p × (L + S + 72)，尾 T = H − S。\n基线：#008EE5、100% 视图下 1px、alpha 1；预览态蓝色基线置于彩色流段上方。流段核心直径 = 1 + sin(πq) CSS px，alpha 1，无白色亮头。\n渐变：0% #008EE5 → 13% #018FE5 → 27% #14A7EC → 41% #1CB1E5 → 52% #75CCB9 → 60% #D6B20A → 68% #E29618。\n渐变：71% #E48120 → 75% #E29618 → 80% #D6B20A → 85% #75CCB9 → 95% #18ACE9 → 100% #008EE5。\n辉光：#008EE5、alpha 0.22、Gaussian σ 1.5 CSS px；运行时采用预乘 alpha 与 MAX 合成，重叠处不累加亮度。\n缩放：路径、尾长与 72 单位间隔随画布缩放；shader 核心、辉光保持 CSS px。SVG 基线还受外层 CSS zoom 影响，不保证所有缩放下均为 1 CSS px。单源 64 段，多源 16 段。\n可访问性：减少动态效果、页面隐藏或交互暂停时清空动画层；减少动态效果时保留基线。\n设计表示：本板以原生分段矢量表示渐变和宽度；模糊辉光仅为参考，Gaussian 距离场、抗锯齿与 MAX 合成以运行时代码为准。"
+}

@@ -1,0 +1,399 @@
+ M BACKLOG.md
+ M backend/db/schema.sql
+ M backend/internal/app/media/canvas_access.go
+ M backend/internal/app/projectcopy/project_copy_wiring.go
+ M backend/internal/app/public_api.go
+ M backend/internal/app/roles_wiring.go
+ M backend/internal/app/subject/generation.go
+ M backend/internal/canvas/adapter/http/handler.go
+ M backend/internal/canvas/adapter/postgres/draft_save.go
+ M backend/internal/canvas/adapter/postgres/project_copy.go
+ M backend/internal/canvas/adapter/postgres/project_retention.go
+ M backend/internal/canvas/adapter/postgres/reference_guard.go
+ M backend/internal/canvas/adapter/postgres/store.go
+ M backend/internal/canvas/adapter/postgres/subject_sources.go
+ M backend/internal/canvas/adapter/postgres/yjs_history.go
+ M backend/internal/canvas/adapter/postgres/yjs_projection_store.go
+ M backend/internal/canvas/application/project_presentation.go
+ M backend/internal/canvas/application/yjs_projection.go
+ M backend/internal/canvas/domain/director.go
+ M backend/internal/canvas/domain/document.go
+ M backend/internal/canvas/domain/draft.go
+ M backend/internal/canvas/domain/editor_config.go
+ M backend/internal/canvas/domain/editor_connections.go
+ M backend/internal/canvas/domain/graph.go
+ M backend/internal/canvas/domain/operation_collections.go
+ M backend/internal/canvas/domain/operation_fields.go
+ M backend/internal/canvas/domain/operations.go
+ M backend/internal/canvas/domain/project_copy.go
+ M backend/internal/canvas/domain/rich_text.go
+ M backend/internal/canvas/domain/timeline.go
+ M backend/internal/media/adapter/http/library.go
+ M backend/internal/media/adapter/postgres/library_query.go
+ M backend/internal/media/adapter/workflow/probe.go
+ M backend/internal/media/adapter/workflow/render.go
+ M backend/internal/media/application/library.go
+ M backend/internal/mediatool/adapter/ffmpeg/plan.go
+ M backend/internal/mediatool/adapter/ffmpeg/render.go
+ M backend/internal/mediatool/adapter/http/handler.go
+ M backend/internal/mediatool/adapter/postgres/control.go
+ M backend/internal/mediatool/adapter/postgres/retained_media.go
+ M backend/internal/mediatool/adapter/postgres/store.go
+ M backend/internal/mediatool/adapter/postgres/worker.go
+ M backend/internal/mediatool/application/export.go
+ M backend/internal/mediatool/application/freeze.go
+ M backend/internal/mediatool/application/preview.go
+ M backend/internal/mediatool/application/worker.go
+ M backend/internal/mediatool/domain/export.go
+ M backend/internal/operation/adapter/postgres/editor_submission.go
+ M backend/internal/prompt/adapter/postgres/draft_sources.go
+ M backend/internal/prompt/adapter/postgres/input_source.go
+ M backend/internal/prompt/application/subject_sources.go
+ M backend/internal/prompt/domain/draft.go
+ M backend/internal/workspace/adapter/postgres/project_navigation.go
+ M backend/internal/workspace/adapter/postgres/script_access.go
+ M backend/internal/workspace/application/project_navigation.go
+ M backend/internal/workspace/application/script_access.go
+ M backend/tests/canvas/editor_persistence_test.go
+ M canvas-collab/package.json
+ M canvas-collab/pnpm-lock.yaml
+ M canvas-collab/src/rich-text-schema.mjs
+ M canvas-collab/src/service-runtime.mjs
+ M canvas-collab/tests/tiptap.test.mjs
+ M "docs/design/00-\350\256\276\350\256\241\345\257\274\350\210\252.md"
+ M "docs/design/09-\347\273\237\344\270\200\351\241\266\346\240\217\344\270\216\351\230\266\346\256\265\345\205\245\345\217\243\350\256\276\350\256\241.md"
+ M "docs/design/10-\347\224\273\345\270\203\344\272\244\344\272\222\350\256\276\350\256\241.md"
+ M "docs/design/25-\347\273\237\344\270\200\344\270\273\344\275\223\345\272\223\344\270\216\345\210\233\344\275\234\345\274\225\347\224\250\350\256\276\350\256\241.md"
+ M "docs/design/27-\346\227\240\351\231\220\347\224\273\345\270\203\344\270\200\350\207\264\346\200\247\346\224\271\351\200\240\350\256\276\350\256\241.md"
+ M "docs/plan/00-Plan\345\257\274\350\210\252.md"
+ M "docs/plan/16-Figma\350\256\276\350\256\241\350\220\275\345\234\260\345\256\236\346\226\275\350\256\241\345\210\222.md"
+ M "docs/plan/21-\347\273\237\344\270\200\344\270\273\344\275\223\345\272\223\344\270\216\345\210\233\344\275\234\345\274\225\347\224\250\345\256\236\346\226\275\350\256\241\345\210\222.md"
+ M "docs/plan/23-\346\227\240\351\231\220\347\224\273\345\270\203\344\270\200\350\207\264\346\200\247\346\224\271\351\200\240\345\256\236\346\226\275\350\256\241\345\210\222.md"
+ M "docs/prd/00-PRD\345\257\274\350\210\252.md"
+ M "docs/prd/12-\347\273\237\344\270\200\344\270\273\344\275\223\345\272\223\344\270\216\345\210\233\344\275\234\345\274\225\347\224\250.md"
+ M "docs/prd/14-\346\227\240\351\231\220\347\224\273\345\270\203\344\270\200\350\207\264\346\200\247\346\224\271\351\200\240.md"
+ M "docs/requirement/00-\351\234\200\346\261\202\345\257\274\350\210\252.md"
+ M "docs/requirement/12-\344\270\273\344\275\223\345\212\237\350\203\275\345\257\271\351\275\220\351\234\200\346\261\202.md"
+ M "docs/requirement/14-\346\227\240\351\231\220\347\224\273\345\270\203\345\257\271\351\275\220\345\215\263\346\242\246\351\234\200\346\261\202.md"
+ M "docs/requirement/16-\345\210\233\344\275\234\345\257\271\351\275\220\345\215\263\346\242\246\344\270\216\345\205\250\347\253\231\345\205\254\345\205\261\347\273\204\344\273\266\351\234\200\346\261\202.md"
+ M docs/research/evidence/2026-10-28-canvas-implementation/figma-visual-correction-ledger.json
+ M docs/research/evidence/2026-10-29-creation/parity-matrix.csv
+ M frontend/pnpm-lock.yaml
+ M frontend/src/api/canvases.ts
+ M frontend/src/api/index.ts
+ M frontend/src/api/typings.d.ts
+ M frontend/src/app/_components/home-creation.tsx
+ M frontend/src/app/_components/home-page.tsx
+ M frontend/src/app/_components/home-prompt.tsx
+ M frontend/src/app/api/[...path]/route.ts
+ M frontend/src/app/globals.css
+ M frontend/src/app/subjects/_components/subjects-page.tsx
+ M frontend/src/components/canvas/canvas-participants.tsx
+ M frontend/src/components/canvas/canvas.css
+ M frontend/src/components/canvas/connections/canvas-connections.tsx
+ M frontend/src/components/canvas/constants/canvas-input-ports.ts
+ M frontend/src/components/canvas/constants/canvas.ts
+ M frontend/src/components/canvas/controls/canvas-context-menu.tsx
+ M frontend/src/components/canvas/controls/canvas-create-menus.tsx
+ M frontend/src/components/canvas/controls/canvas-node-summary.tsx
+ M frontend/src/components/canvas/controls/canvas-selection-toolbar.tsx
+ M frontend/src/components/canvas/controls/canvas-toolbar.tsx
+ M frontend/src/components/canvas/controls/canvas-top-bar.tsx
+ M frontend/src/components/canvas/editor/canvas-editor.tsx
+ M frontend/src/components/canvas/lib/canvas-asset-replacement.ts
+ M frontend/src/components/canvas/lib/canvas-document-connections.ts
+ M frontend/src/components/canvas/lib/canvas-node-factory.ts
+ M frontend/src/components/canvas/lib/canvas-node-geometry.ts
+ M frontend/src/components/canvas/lib/canvas-resource-references.ts
+ M frontend/src/components/canvas/nodes/builtin-nodes.tsx
+ M frontend/src/components/canvas/nodes/canvas-node.tsx
+ M frontend/src/components/canvas/runtime/components/assets/library/asset-library-command-dialog.tsx
+ M frontend/src/components/canvas/runtime/components/assets/picker/asset-picker-modal.tsx
+ M frontend/src/components/canvas/runtime/components/editor/lib/rich-text-document.ts
+ M frontend/src/components/canvas/runtime/components/editor/rich-text/rich-text-content.tsx
+ M frontend/src/components/canvas/runtime/components/editor/rich-text/rich-text-editor.tsx
+ M frontend/src/components/canvas/runtime/components/editor/types/rich-text.ts
+ M frontend/src/components/canvas/service-graph.ts
+ M frontend/src/components/canvas/text-preview.tsx
+ M frontend/src/components/canvas/types/canvas-document-integration.ts
+ M frontend/src/components/canvas/types/canvas.ts
+ M frontend/src/components/canvas/yjs-live-session.ts
+ M frontend/src/components/canvas/yjs-workspace.tsx
+ M frontend/src/components/generation/draft-save.ts
+ M frontend/src/components/generation/editor-capabilities.ts
+ M frontend/src/components/generation/generation-dialog.tsx
+ M frontend/src/components/generation/prompt-document.ts
+ M frontend/src/components/generation/prompt-editor.tsx
+ M frontend/src/components/generation/reference-controls.tsx
+ M frontend/src/components/generation/reference-mention-menu.tsx
+ M frontend/src/components/generation/reference-mode.ts
+ M frontend/src/components/generation/reference-source.ts
+ M frontend/src/components/generation/rich-generation.tsx
+ M frontend/src/components/layout/product-header-actions.tsx
+ M frontend/src/components/layout/product-header.tsx
+ M frontend/src/components/layout/product-search.tsx
+ M frontend/src/components/layout/routes.ts
+ M frontend/src/components/media/project-asset-dialog.tsx
+ M frontend/src/components/subjects/subject-date-range.tsx
+ M frontend/src/components/subjects/unified-editor.tsx
+ M frontend/src/components/subjects/unified-library.tsx
+ M frontend/src/components/subjects/unified-reference.ts
+ M frontend/src/components/subjects/unified-source-picker.tsx
+ M frontend/src/components/subjects/unified-subjects.css
+ M frontend/src/components/subjects/unified-toolbar.tsx
+ M frontend/tests/unit/app/_components/home-creation.test.tsx
+ M frontend/tests/unit/app/_components/home-page.test.tsx
+ M frontend/tests/unit/app/_components/home-subjects.test.tsx
+ M frontend/tests/unit/app/api/[...path]/route.test.ts
+ M frontend/tests/unit/components/canvas/canvas-participants.test.tsx
+ M frontend/tests/unit/components/canvas/nodes/canvas-node-resize.test.tsx
+ M frontend/tests/unit/components/canvas/publish-media.test.ts
+ M frontend/tests/unit/components/canvas/runtime/components/assets/picker/asset-picker-modal.test.tsx
+ M frontend/tests/unit/components/canvas/runtime/components/editor/rich-text/rich-text-content.test.tsx
+ M frontend/tests/unit/components/canvas/runtime/components/editor/rich-text/rich-text-editor.test.tsx
+ M frontend/tests/unit/components/canvas/service-graph.test.ts
+ M frontend/tests/unit/components/canvas/yjs-live-session.test.ts
+ M frontend/tests/unit/components/generation/generation-dialog.test.tsx
+ M frontend/tests/unit/components/layout/basic-layout.test.tsx
+ M frontend/tests/unit/components/media/project-asset-dialog.test.tsx
+ M frontend/tests/unit/components/subjects/subject-date-range.test.tsx
+ M frontend/tests/unit/components/subjects/unified-editor.test.tsx
+ M frontend/tests/unit/components/subjects/unified-library.test.tsx
+ M frontend/tests/unit/components/subjects/unified-source-picker.test.tsx
+?? backend/db/media_project_export_incremental.sql
+?? backend/internal/app/canvas/information.go
+?? backend/internal/app/subject/canvas_copy.go
+?? backend/internal/app/subject/canvas_input.go
+?? backend/internal/billing/adapter/postgres/canvas_usage.go
+?? backend/internal/billing/application/canvas_usage.go
+?? backend/internal/canvas/adapter/http/assistant.go
+?? backend/internal/canvas/adapter/http/information.go
+?? backend/internal/canvas/adapter/postgres/assistant.go
+?? backend/internal/canvas/adapter/postgres/information.go
+?? backend/internal/canvas/adapter/postgres/subject_input.go
+?? backend/internal/canvas/application/assistant.go
+?? backend/internal/canvas/application/information.go
+?? backend/internal/canvas/application/subject_sources.go
+?? backend/internal/canvas/domain/cinema_kit.go
+?? backend/internal/canvas/domain/container.go
+?? backend/internal/canvas/domain/director_scene.go
+?? backend/internal/canvas/domain/subject.go
+?? backend/internal/canvas/domain/subject_connections.go
+?? backend/internal/canvas/domain/timeline_aspect.go
+?? backend/internal/media/adapter/http/library_picker.go
+?? backend/internal/media/adapter/postgres/library_picker.go
+?? backend/internal/media/application/library_picker.go
+?? backend/internal/mediatool/adapter/editproject/
+?? backend/internal/mediatool/adapter/postgres/project_export.go
+?? backend/internal/mediatool/application/project_contract.go
+?? backend/internal/mediatool/application/project_export.go
+?? backend/internal/mediatool/domain/artifact.go
+?? backend/internal/prompt/adapter/postgres/subject_connections.go
+?? backend/internal/prompt/domain/cinema_catalog.json
+?? backend/internal/prompt/domain/cinema_kit.go
+?? backend/tests/canvas/assistant_session_test.go
+?? backend/tests/canvas/cinema_kit_integration_test.go
+?? backend/tests/canvas/cinema_kit_test.go
+?? backend/tests/canvas/color_tags_test.go
+?? backend/tests/canvas/container_integration_test.go
+?? backend/tests/canvas/container_test.go
+?? backend/tests/canvas/director_scene_integration_test.go
+?? backend/tests/canvas/director_scene_test.go
+?? backend/tests/canvas/information_integration_test.go
+?? backend/tests/canvas/project_copy_input_test.go
+?? backend/tests/canvas/resource_input_integration_test.go
+?? backend/tests/canvas/resource_input_test.go
+?? backend/tests/canvas/subject_connections_test.go
+?? backend/tests/canvas/subject_local_test.go
+?? backend/tests/canvas/subject_node_test.go
+?? backend/tests/canvas/subject_sources_test.go
+?? backend/tests/canvas/text_alignment_test.go
+?? backend/tests/canvas/timeline_aspect_integration_test.go
+?? backend/tests/canvas/timeline_aspect_test.go
+?? backend/tests/canvasfixture/history.go
+?? backend/tests/media/export_aspect_integration_test.go
+?? backend/tests/media/export_aspect_test.go
+?? backend/tests/media/library_picker_http_test.go
+?? backend/tests/media/library_picker_integration_test.go
+?? backend/tests/media/library_picker_test.go
+?? backend/tests/media/project_export_av_test.go
+?? backend/tests/media/project_export_integration_test.go
+?? backend/tests/media/project_export_routed_test.go
+?? backend/tests/media/project_export_test.go
+?? backend/tests/prompt/canvas_subject_test.go
+?? backend/tests/subject/canvas_subject_connections_test.go
+?? backend/tests/subject/canvas_subject_copy_test.go
+?? backend/tests/subject/canvas_subject_local_test.go
+?? backend/tests/subject/canvas_subject_node_test.go
+?? canvas-collab/tests/text-alignment.test.mjs
+?? "docs/design/29-\345\210\233\344\275\234\344\270\200\350\207\264\346\200\247\344\270\216\345\205\254\345\205\261\347\273\204\344\273\266\350\256\276\350\256\241.md"
+?? "docs/plan/25-\345\210\233\344\275\234\344\270\200\350\207\264\346\200\247\344\270\216\345\205\254\345\205\261\347\273\204\344\273\266\345\256\236\346\226\275\350\256\241\345\210\222.md"
+?? "docs/prd/16-\345\210\233\344\275\234\344\270\200\350\207\264\346\200\247\344\270\216\345\205\254\345\205\261\347\273\204\344\273\266.md"
+?? "docs/research/2026-10-29-\345\215\263\346\242\246\346\227\266\351\227\264\347\272\277\351\234\200\346\261\202\345\210\206\346\236\220.md"
+?? "docs/research/2026-10-29-\346\227\266\351\227\264\347\272\277\351\252\214\346\224\266\345\234\272\346\231\257.md"
+?? docs/research/evidence/2026-10-28-canvas-implementation/advanced-figma-validation.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/advanced-figma/
+?? docs/research/evidence/2026-10-28-canvas-implementation/advanced-parity-contracts.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/advanced-source/
+?? docs/research/evidence/2026-10-28-canvas-implementation/assistant-additive-schema-receipt.txt
+?? docs/research/evidence/2026-10-28-canvas-implementation/assistant-additive-schema.sql
+?? docs/research/evidence/2026-10-28-canvas-implementation/assistant-validation.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-assistant-compact.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-assistant-draft-reopened.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-cinema-linked-reopened.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-cinema-linked.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-color-tags-reopened.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-connected-placement.json
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-cross-canvas-final-refreshed.jpg
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-cross-canvas-generation-input.jpg
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-cross-canvas-history-passed.json
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-cross-canvas-receipt.json
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-cross-canvas-redo-passed.jpg
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-cross-canvas-refreshed.jpg
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-cross-canvas-undo-conflict.jpg
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-cross-canvas-undo-passed.jpg
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-director-webgl.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-empty-boot-red.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-formal-generator.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-group-purple.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-integration-20261029.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-multi-created.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-project-information.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-project-usage.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-search-popover.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-stack-gallery.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-subject-connected.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-subject-local-reopened.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-text-fullscreen.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-text-palette.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/browser-timeline-fullscreen.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/cinema-kit-validation.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/container-figma-native.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/container-validation.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/creation-history-validation.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/cross-canvas-copy-validation.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/director-workspace-validation.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/document-links-validation.json
+?? docs/research/evidence/2026-10-28-canvas-implementation/figma-cinema-kit.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/figma-color-tags.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/figma-context-menu.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/figma-meteor-add-node.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/figma-meteor-keyframes.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/figma-meteor-multi-source.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/figma-multi-selection.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/figma-project-information.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/figma-search-popover.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/figma-text-fullscreen.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/figma-text-palette.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/formal-generator-validation.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/full-parity-matrix.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/generation-input-validation.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/integrated-validation-20261029.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/meteor-browser-samples.json
+?? docs/research/evidence/2026-10-28-canvas-implementation/meteor-connection-figma-readback.json
+?? docs/research/evidence/2026-10-28-canvas-implementation/meteor-connection-figma-validation.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/meteor-connection-validation.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/meteor-local-0.jpg
+?? docs/research/evidence/2026-10-28-canvas-implementation/meteor-local-1.jpg
+?? docs/research/evidence/2026-10-28-canvas-implementation/meteor-local-2.jpg
+?? docs/research/evidence/2026-10-28-canvas-implementation/meteor-preview-final.jpg
+?? docs/research/evidence/2026-10-28-canvas-implementation/meteor-preview.gif
+?? docs/research/evidence/2026-10-28-canvas-implementation/meteor-reduced-motion.jpg
+?? docs/research/evidence/2026-10-28-canvas-implementation/meteor-scale-checks.json
+?? docs/research/evidence/2026-10-28-canvas-implementation/meteor-source-a.jpg
+?? docs/research/evidence/2026-10-28-canvas-implementation/meteor-source-b.jpg
+?? docs/research/evidence/2026-10-28-canvas-implementation/meteor-worktree-status.txt
+?? docs/research/evidence/2026-10-28-canvas-implementation/multi-selection-figma-validation.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/project-export-validation.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/project-information-validation.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/project-picker-figma-native.png
+?? docs/research/evidence/2026-10-28-canvas-implementation/project-picker-validation.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/resource-input-validation.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/search-accessibility-validation.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/subject-node-validation.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/text-actions-validation.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/text-actions-worktree.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/text-alignment-validation.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/timeline-aspect-validation.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/timeline-ui-gap-audit.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/timeline-workspace-validation.md
+?? docs/research/evidence/2026-10-28-canvas-implementation/worktree-status-20261029.txt
+?? docs/research/evidence/2026-10-28-subject-implementation/worktree-status.txt
+?? docs/research/evidence/2026-10-29-connection-calibration/
+?? docs/research/evidence/2026-10-29-creation/implementation-audit.md
+?? docs/research/evidence/2026-10-29-creation/public-account-implementation.md
+?? docs/research/evidence/2026-10-29-creation/seven-type-capability-audit.md
+?? docs/research/evidence/2026-10-29-subject-parity/
+?? docs/research/evidence/2026-10-29-timeline/
+?? frontend/public/__director_validation/
+?? frontend/src/api/canvasAssistant.ts
+?? frontend/src/app/_components/home-draft-recovery.tsx
+?? frontend/src/components/canvas/assistant/
+?? frontend/src/components/canvas/cinema-kit/
+?? frontend/src/components/canvas/connections/connection-flow-layer.tsx
+?? frontend/src/components/canvas/connections/connection-flow-model.ts
+?? frontend/src/components/canvas/connections/connection-flow-surface.ts
+?? frontend/src/components/canvas/containers/
+?? frontend/src/components/canvas/controls/canvas-color-tags.tsx
+?? frontend/src/components/canvas/director/
+?? frontend/src/components/canvas/editor/canvas-transfer-dialog.tsx
+?? frontend/src/components/canvas/information/
+?? frontend/src/components/canvas/lib/canvas-clipboard.ts
+?? frontend/src/components/canvas/lib/canvas-color-tags.ts
+?? frontend/src/components/canvas/lib/canvas-containers.ts
+?? frontend/src/components/canvas/lib/canvas-media-selection.ts
+?? frontend/src/components/canvas/lib/canvas-node-accessibility.ts
+?? frontend/src/components/canvas/lib/canvas-remote-application.ts
+?? frontend/src/components/canvas/lib/canvas-subject-source.ts
+?? frontend/src/components/canvas/lib/canvas-text-background.ts
+?? frontend/src/components/canvas/lib/canvas-transfer-state.ts
+?? frontend/src/components/canvas/nodes/canvas-generation-panel.tsx
+?? frontend/src/components/canvas/nodes/canvas-text-actions.tsx
+?? frontend/src/components/canvas/runtime/components/editor/lib/rich-text-download.ts
+?? frontend/src/components/canvas/search/
+?? frontend/src/components/canvas/subject/
+?? frontend/src/components/canvas/timeline/
+?? frontend/src/components/layout/product-account-actions.tsx
+?? frontend/src/components/layout/product-inline-search.tsx
+?? frontend/src/components/media/project-picker-filters.tsx
+?? frontend/src/components/media/project-picker-sources.tsx
+?? frontend/src/components/media/project-picker.ts
+?? frontend/src/components/subjects/use-subject-sources.ts
+?? frontend/tests/unit/app/_components/home-draft-recovery.test.tsx
+?? frontend/tests/unit/components/canvas/assistant-adoption.test.ts
+?? frontend/tests/unit/components/canvas/assistant-panel.test.tsx
+?? frontend/tests/unit/components/canvas/assistant-state.test.ts
+?? frontend/tests/unit/components/canvas/canvas-container-ui.test.tsx
+?? frontend/tests/unit/components/canvas/canvas-containers.test.ts
+?? frontend/tests/unit/components/canvas/canvas-node-search.test.tsx
+?? frontend/tests/unit/components/canvas/canvas-remote-application.test.ts
+?? frontend/tests/unit/components/canvas/canvas-subject-source.test.ts
+?? frontend/tests/unit/components/canvas/canvas-transfer-dialog.test.tsx
+?? frontend/tests/unit/components/canvas/canvas-transfer.test.ts
+?? frontend/tests/unit/components/canvas/cinema-kit-picker.test.tsx
+?? frontend/tests/unit/components/canvas/cinema-kit.test.ts
+?? frontend/tests/unit/components/canvas/clipboard.test.ts
+?? frontend/tests/unit/components/canvas/color-tags.test.tsx
+?? frontend/tests/unit/components/canvas/connected-node-placement.test.ts
+?? frontend/tests/unit/components/canvas/connection-create-focus.test.tsx
+?? frontend/tests/unit/components/canvas/connection-flow-layer.test.tsx
+?? frontend/tests/unit/components/canvas/connection-flow-model.test.ts
+?? frontend/tests/unit/components/canvas/connection-meteor.test.tsx
+?? frontend/tests/unit/components/canvas/context-menu.test.tsx
+?? frontend/tests/unit/components/canvas/director/
+?? frontend/tests/unit/components/canvas/information.test.tsx
+?? frontend/tests/unit/components/canvas/multi-connections.test.ts
+?? frontend/tests/unit/components/canvas/nodes/canvas-generation-panel.test.tsx
+?? frontend/tests/unit/components/canvas/nodes/canvas-node-accessibility.test.tsx
+?? frontend/tests/unit/components/canvas/nodes/canvas-text-actions.test.tsx
+?? frontend/tests/unit/components/canvas/rich-text-download.test.ts
+?? frontend/tests/unit/components/canvas/subject-connections.test.tsx
+?? frontend/tests/unit/components/canvas/subject/
+?? frontend/tests/unit/components/canvas/timeline/
+?? frontend/tests/unit/components/generation/canvas-subject-reference.test.tsx
+?? frontend/tests/unit/components/layout/product-inline-search.test.tsx
+?? frontend/tests/unit/components/media/project-picker-filters.test.tsx
+?? frontend/tests/unit/components/media/project-picker-sources.test.tsx
+?? frontend/tests/unit/components/media/project-picker-subject.test.tsx
+?? frontend/tests/unit/components/media/project-picker.test.ts
+?? frontend/tests/unit/components/subjects/use-subject-sources.test.ts

@@ -1,0 +1,9 @@
+{
+  "pipeline": "CDP Page.captureScreenshot for both source and local; original identical ICC; raw encoded RGB comparison",
+  "phaseMs": 1745.75,
+  "maskPixels": 7217,
+  "meanAbsoluteRgbError": 0.03787353932843748,
+  "rmsRgbError": 0.20969085677600313,
+  "maxChannelError": 5,
+  "exactChannelFraction": 0.9647129462842363
+}

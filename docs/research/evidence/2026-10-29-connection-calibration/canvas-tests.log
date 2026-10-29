@@ -1,0 +1,17 @@
+npm notice run glowloom-frontend@0.1.0 npx
+npm notice run 'vitest' run tests/unit/components/canvas
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.2 /Users/stephenqiu/Desktop/StephenQiu/Glowloom/glowloom-server/frontend
+
+
+ Test Files  67 passed (67)
+      Tests  382 passed (382)
+   Start at  09:18:01
+   Duration  14.30s (environment 49%, tests 24%, import 20%, transform 6%, setup 1%)
+
+Environment  jsdom was created 67 times · 56.32s total, 49% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments

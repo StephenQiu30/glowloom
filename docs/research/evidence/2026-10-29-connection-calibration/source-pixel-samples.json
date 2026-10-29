@@ -1,0 +1,1127 @@
+{
+  "length": 692.2074081148427,
+  "tailLength": 312,
+  "zoom": 0.7103241086006165,
+  "rows": [
+    {
+      "index": 0,
+      "before": 201585.9400000001,
+      "after": 201631.9450000001,
+      "time": 201608.9425000001,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        68,
+        92,
+        141
+      ]
+    },
+    {
+      "index": 1,
+      "before": 201755.33499999996,
+      "after": 201797.20500000007,
+      "time": 201776.27000000002,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        68,
+        92,
+        141
+      ]
+    },
+    {
+      "index": 2,
+      "before": 201892,
+      "after": 201934.42500000005,
+      "time": 201913.21250000002,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        88,
+        122,
+        183
+      ]
+    },
+    {
+      "index": 3,
+      "before": 202028.55000000005,
+      "after": 202080.58999999997,
+      "time": 202054.57,
+      "orangeCount": 5,
+      "orangeMin": 6.464912417350098,
+      "orangeMax": 8.3120302508787,
+      "peak": 8.3120302508787,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        164,
+        159,
+        101
+      ]
+    },
+    {
+      "index": 4,
+      "before": 202171.79500000004,
+      "after": 202213.90500000003,
+      "time": 202192.85000000003,
+      "orangeCount": 6,
+      "orangeMin": 6.464912417350098,
+      "orangeMax": 57.72243229776874,
+      "peak": 7.388471334114398,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        174,
+        170,
+        104
+      ]
+    },
+    {
+      "index": 5,
+      "before": 202302.245,
+      "after": 202343.135,
+      "time": 202322.69,
+      "orangeCount": 1,
+      "orangeMin": 57.72243229776874,
+      "orangeMax": 57.72243229776874,
+      "peak": 57.72243229776874,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        171,
+        170,
+        105
+      ]
+    },
+    {
+      "index": 6,
+      "before": 202430.9450000001,
+      "after": 202468.85,
+      "time": 202449.89750000005,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 140.8427348065557,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        148,
+        147,
+        141
+      ]
+    },
+    {
+      "index": 7,
+      "before": 202555.73,
+      "after": 202585.755,
+      "time": 202570.7425,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 183.78822443609567,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        149,
+        150,
+        142
+      ]
+    },
+    {
+      "index": 8,
+      "before": 202675.24,
+      "after": 202719.30000000005,
+      "time": 202697.27000000002,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 218.4216838147569,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        148,
+        159,
+        143
+      ]
+    },
+    {
+      "index": 9,
+      "before": 202808.70999999996,
+      "after": 202877.96499999997,
+      "time": 202843.33749999997,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        68,
+        92,
+        141
+      ]
+    },
+    {
+      "index": 10,
+      "before": 202978.33999999997,
+      "after": 203025.635,
+      "time": 203001.9875,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 398.9774520421775,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        148,
+        156,
+        142
+      ]
+    },
+    {
+      "index": 11,
+      "before": 203116.98,
+      "after": 203155.28500000003,
+      "time": 203136.1325,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 427.6077784618708,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        148,
+        142,
+        141
+      ]
+    },
+    {
+      "index": 12,
+      "before": 203243.29500000004,
+      "after": 203277.26,
+      "time": 203260.27750000003,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 472.40038592493937,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        149,
+        149,
+        142
+      ]
+    },
+    {
+      "index": 13,
+      "before": 203365.4,
+      "after": 203393.41000000003,
+      "time": 203379.40500000003,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 513.0369782625685,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        149,
+        152,
+        142
+      ]
+    },
+    {
+      "index": 14,
+      "before": 203484.855,
+      "after": 203527.96999999997,
+      "time": 203506.41249999998,
+      "orangeCount": 4,
+      "orangeMin": 570.2976311019552,
+      "orangeMax": 614.6284591066415,
+      "peak": 570.2976311019552,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        171,
+        152,
+        101
+      ]
+    },
+    {
+      "index": 15,
+      "before": 203616.15,
+      "after": 203651.395,
+      "time": 203633.7725,
+      "orangeCount": 16,
+      "orangeMin": 600.3132958967948,
+      "orangeMax": 662.6535227783851,
+      "peak": 618.7844742320808,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        173,
+        159,
+        101
+      ]
+    },
+    {
+      "index": 16,
+      "before": 203738.08000000007,
+      "after": 203770.45500000007,
+      "time": 203754.26750000007,
+      "orangeCount": 22,
+      "orangeMin": 644.6441239014813,
+      "orangeMax": 692.2074081148427,
+      "peak": 692.2074081148427,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        177,
+        133,
+        57
+      ]
+    },
+    {
+      "index": 17,
+      "before": 203858.24,
+      "after": 203900.39,
+      "time": 203879.315,
+      "orangeCount": 1,
+      "orangeMin": 692.2074081148427,
+      "orangeMax": 692.2074081148427,
+      "peak": 692.2074081148427,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        157,
+        181,
+        125
+      ]
+    },
+    {
+      "index": 18,
+      "before": 203986.615,
+      "after": 204021.79000000004,
+      "time": 204004.2025,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        68,
+        92,
+        141
+      ]
+    },
+    {
+      "index": 19,
+      "before": 204117.02,
+      "after": 204153.0700000001,
+      "time": 204135.04500000004,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        68,
+        92,
+        141
+      ]
+    },
+    {
+      "index": 20,
+      "before": 204246.92000000004,
+      "after": 204297.45500000007,
+      "time": 204272.18750000006,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        68,
+        92,
+        141
+      ]
+    },
+    {
+      "index": 21,
+      "before": 204398.30500000005,
+      "after": 204455.615,
+      "time": 204426.96000000002,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        68,
+        92,
+        141
+      ]
+    },
+    {
+      "index": 22,
+      "before": 204552.88,
+      "after": 204627.17000000004,
+      "time": 204590.02500000002,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        100,
+        125,
+        157
+      ]
+    },
+    {
+      "index": 23,
+      "before": 204721.67500000005,
+      "after": 204774.56000000008,
+      "time": 204748.11750000005,
+      "orangeCount": 6,
+      "orangeMin": 6.464912417350098,
+      "orangeMax": 57.72243229776874,
+      "peak": 8.3120302508787,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        174,
+        156,
+        101
+      ]
+    },
+    {
+      "index": 24,
+      "before": 204865.015,
+      "after": 204908.90500000003,
+      "time": 204886.96000000002,
+      "orangeCount": 1,
+      "orangeMin": 57.72243229776874,
+      "orangeMax": 57.72243229776874,
+      "peak": 57.72243229776874,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        174,
+        161,
+        103
+      ]
+    },
+    {
+      "index": 25,
+      "before": 204999.68000000005,
+      "after": 205052.15500000003,
+      "time": 205025.91750000004,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 118.67732080421251,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        149,
+        151,
+        142
+      ]
+    },
+    {
+      "index": 26,
+      "before": 205140.74,
+      "after": 205180.8200000001,
+      "time": 205160.78000000003,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 182.40288606094919,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        149,
+        149,
+        142
+      ]
+    },
+    {
+      "index": 27,
+      "before": 205268.29500000004,
+      "after": 205312.92500000005,
+      "time": 205290.61000000004,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 218.4216838147569,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        148,
+        158,
+        143
+      ]
+    },
+    {
+      "index": 28,
+      "before": 205405.90500000003,
+      "after": 205465.42000000004,
+      "time": 205435.66250000003,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        68,
+        92,
+        141
+      ]
+    },
+    {
+      "index": 29,
+      "before": 205557.08000000007,
+      "after": 205595.92000000004,
+      "time": 205576.50000000006,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        68,
+        92,
+        141
+      ]
+    },
+    {
+      "index": 30,
+      "before": 205685.28500000003,
+      "after": 205721.225,
+      "time": 205703.255,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 398.9774520421775,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        149,
+        152,
+        142
+      ]
+    },
+    {
+      "index": 31,
+      "before": 205809.755,
+      "after": 205844.18500000008,
+      "time": 205826.97000000003,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 457.1616637983284,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        149,
+        149,
+        142
+      ]
+    },
+    {
+      "index": 32,
+      "before": 205931.93000000005,
+      "after": 205971.66500000004,
+      "time": 205951.79750000004,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 508.41918367874706,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        149,
+        149,
+        142
+      ]
+    },
+    {
+      "index": 33,
+      "before": 206058.525,
+      "after": 206105.135,
+      "time": 206081.83000000002,
+      "orangeCount": 3,
+      "orangeMin": 570.2976311019552,
+      "orangeMax": 603.5457521054699,
+      "peak": 570.2976311019552,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        169,
+        144,
+        100
+      ]
+    },
+    {
+      "index": 34,
+      "before": 206192.86,
+      "after": 206227.80500000005,
+      "time": 206210.33250000002,
+      "orangeCount": 16,
+      "orangeMin": 600.3132958967948,
+      "orangeMax": 662.6535227783851,
+      "peak": 618.7844742320808,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        173,
+        150,
+        101
+      ]
+    },
+    {
+      "index": 35,
+      "before": 206314.55000000005,
+      "after": 206344.355,
+      "time": 206329.4525,
+      "orangeCount": 24,
+      "orangeMin": 638.1792114841312,
+      "orangeMax": 692.2074081148427,
+      "peak": 692.2074081148427,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        174,
+        143,
+        58
+      ]
+    },
+    {
+      "index": 36,
+      "before": 206434.31000000008,
+      "after": 206477.255,
+      "time": 206455.78250000003,
+      "orangeCount": 1,
+      "orangeMin": 692.2074081148427,
+      "orangeMax": 692.2074081148427,
+      "peak": 692.2074081148427,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        174,
+        172,
+        75
+      ]
+    },
+    {
+      "index": 37,
+      "before": 206567.6,
+      "after": 206604.30500000005,
+      "time": 206585.9525,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        68,
+        92,
+        141
+      ]
+    },
+    {
+      "index": 38,
+      "before": 206692.885,
+      "after": 206763.40500000003,
+      "time": 206728.14500000002,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        68,
+        92,
+        141
+      ]
+    },
+    {
+      "index": 39,
+      "before": 206852.3200000001,
+      "after": 206885.125,
+      "time": 206868.72250000003,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        68,
+        92,
+        141
+      ]
+    },
+    {
+      "index": 40,
+      "before": 206975.05000000005,
+      "after": 207013.53500000003,
+      "time": 206994.29250000004,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        68,
+        92,
+        141
+      ]
+    },
+    {
+      "index": 41,
+      "before": 207102.3150000001,
+      "after": 207144.14,
+      "time": 207123.22750000004,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        89,
+        123,
+        181
+      ]
+    },
+    {
+      "index": 42,
+      "before": 207232.46499999997,
+      "after": 207272.45000000007,
+      "time": 207252.45750000002,
+      "orangeCount": 5,
+      "orangeMin": 6.464912417350098,
+      "orangeMax": 8.3120302508787,
+      "peak": 8.3120302508787,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        164,
+        159,
+        101
+      ]
+    },
+    {
+      "index": 43,
+      "before": 207360.735,
+      "after": 207402.45500000007,
+      "time": 207381.59500000003,
+      "orangeCount": 6,
+      "orangeMin": 6.464912417350098,
+      "orangeMax": 57.72243229776874,
+      "peak": 7.388471334114398,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        174,
+        167,
+        103
+      ]
+    },
+    {
+      "index": 44,
+      "before": 207498.04500000004,
+      "after": 207536.88,
+      "time": 207517.46250000002,
+      "orangeCount": 1,
+      "orangeMin": 57.72243229776874,
+      "orangeMax": 57.72243229776874,
+      "peak": 57.72243229776874,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        171,
+        170,
+        105
+      ]
+    },
+    {
+      "index": 45,
+      "before": 207629.92500000005,
+      "after": 207663.225,
+      "time": 207646.575,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 140.8427348065557,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        148,
+        143,
+        141
+      ]
+    },
+    {
+      "index": 46,
+      "before": 207751.02,
+      "after": 207787.31000000008,
+      "time": 207769.16500000004,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 183.78822443609567,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        149,
+        149,
+        142
+      ]
+    },
+    {
+      "index": 47,
+      "before": 207874.65500000003,
+      "after": 207918.74,
+      "time": 207896.6975,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 218.4216838147569,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        148,
+        159,
+        143
+      ]
+    },
+    {
+      "index": 48,
+      "before": 208008.61,
+      "after": 208043.17500000005,
+      "time": 208025.89250000002,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        68,
+        92,
+        141
+      ]
+    },
+    {
+      "index": 49,
+      "before": 208131.145,
+      "after": 208159.245,
+      "time": 208145.195,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        68,
+        92,
+        141
+      ]
+    },
+    {
+      "index": 50,
+      "before": 208246.34499999997,
+      "after": 208275.57500000007,
+      "time": 208260.96000000002,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 398.9774520421775,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        148,
+        140,
+        141
+      ]
+    },
+    {
+      "index": 51,
+      "before": 208366.45500000007,
+      "after": 208409.11,
+      "time": 208387.78250000003,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 468.2443707995,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        149,
+        148,
+        141
+      ]
+    },
+    {
+      "index": 52,
+      "before": 208496.3150000001,
+      "after": 208527.95500000007,
+      "time": 208512.13500000007,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 488.1008875099325,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        149,
+        151,
+        142
+      ]
+    },
+    {
+      "index": 53,
+      "before": 208616.985,
+      "after": 208662.135,
+      "time": 208639.56,
+      "orangeCount": 1,
+      "orangeMin": 570.2976311019552,
+      "orangeMax": 570.2976311019552,
+      "peak": 570.2976311019552,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        165,
+        144,
+        99
+      ]
+    },
+    {
+      "index": 54,
+      "before": 208750.39,
+      "after": 208794.995,
+      "time": 208772.6925,
+      "orangeCount": 11,
+      "orangeMin": 570.2976311019552,
+      "orangeMax": 645.1059033598634,
+      "peak": 600.3132958967948,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        173,
+        155,
+        102
+      ]
+    },
+    {
+      "index": 55,
+      "before": 208884.92500000005,
+      "after": 208921.52,
+      "time": 208903.22250000003,
+      "orangeCount": 26,
+      "orangeMin": 622.9404893575202,
+      "orangeMax": 692.2074081148427,
+      "peak": 692.2074081148427,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        169,
+        154,
+        58
+      ]
+    },
+    {
+      "index": 56,
+      "before": 209009.73,
+      "after": 209047.21999999997,
+      "time": 209028.47499999998,
+      "orangeCount": 14,
+      "orangeMin": 674.6597886963209,
+      "orangeMax": 692.2074081148427,
+      "peak": 692.2074081148427,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        184,
+        160,
+        60
+      ]
+    },
+    {
+      "index": 57,
+      "before": 209135.9450000001,
+      "after": 209170.93000000005,
+      "time": 209153.43750000006,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        68,
+        92,
+        141
+      ]
+    },
+    {
+      "index": 58,
+      "before": 209259.6,
+      "after": 209296.375,
+      "time": 209277.9875,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        68,
+        92,
+        141
+      ]
+    },
+    {
+      "index": 59,
+      "before": 209383.3150000001,
+      "after": 209424.24,
+      "time": 209403.77750000003,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        68,
+        92,
+        141
+      ]
+    },
+    {
+      "index": 60,
+      "before": 209512.855,
+      "after": 209553.43000000005,
+      "time": 209533.14250000002,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        68,
+        92,
+        141
+      ]
+    },
+    {
+      "index": 61,
+      "before": 209644.93000000005,
+      "after": 209684.45999999996,
+      "time": 209664.695,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        68,
+        92,
+        141
+      ]
+    },
+    {
+      "index": 62,
+      "before": 209779.005,
+      "after": 209835.25,
+      "time": 209807.1275,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        100,
+        125,
+        157
+      ]
+    },
+    {
+      "index": 63,
+      "before": 209930.05500000005,
+      "after": 209986.765,
+      "time": 209958.41000000003,
+      "orangeCount": 6,
+      "orangeMin": 6.464912417350098,
+      "orangeMax": 57.72243229776874,
+      "peak": 8.3120302508787,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        173,
+        159,
+        101
+      ]
+    },
+    {
+      "index": 64,
+      "before": 210080.895,
+      "after": 210130.43500000008,
+      "time": 210105.66500000004,
+      "orangeCount": 1,
+      "orangeMin": 57.72243229776874,
+      "orangeMax": 57.72243229776874,
+      "peak": 57.72243229776874,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        174,
+        166,
+        104
+      ]
+    },
+    {
+      "index": 65,
+      "before": 210223.49,
+      "after": 210268.1,
+      "time": 210245.79499999998,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 140.8427348065557,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        148,
+        143,
+        141
+      ]
+    },
+    {
+      "index": 66,
+      "before": 210361.36,
+      "after": 210409.1950000001,
+      "time": 210385.27750000003,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 192.5620341453565,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        149,
+        149,
+        142
+      ]
+    },
+    {
+      "index": 67,
+      "before": 210499.755,
+      "after": 210539.99,
+      "time": 210519.8725,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 227.65727298239992,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        148,
+        158,
+        144
+      ]
+    },
+    {
+      "index": 68,
+      "before": 210631.15500000003,
+      "after": 210685.645,
+      "time": 210658.40000000002,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 0.0,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        68,
+        92,
+        141
+      ]
+    },
+    {
+      "index": 69,
+      "before": 210783.56000000008,
+      "after": 210833.33499999996,
+      "time": 210808.4475,
+      "orangeCount": 0,
+      "orangeMin": null,
+      "orangeMax": null,
+      "peak": 398.9774520421775,
+      "maxRed": 192,
+      "rgbAtPeak": [
+        149,
+        153,
+        142
+      ]
+    }
+  ]
+}

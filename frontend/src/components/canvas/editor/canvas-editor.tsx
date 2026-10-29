@@ -132,6 +132,10 @@ import {
 } from "@/components/canvas/lib/canvas-spatial-index";
 import { CanvasTopBar } from "@/components/canvas/controls/canvas-top-bar";
 import { CanvasZoomControls } from "@/components/canvas/controls/canvas-zoom-controls";
+import {
+  ConnectionFlowProvider,
+  ConnectionFlowLayer,
+} from "../connections/connection-flow-layer";
 import { InfiniteCanvas } from "@/components/canvas/editor/infinite-canvas";
 import { registerBuiltinNodes } from "@/components/canvas/nodes/builtin-nodes";
 import { useAppFeedback } from "@/components/canvas/runtime/components/feedback/app-feedback-provider";
@@ -5486,63 +5490,72 @@ function InfiniteCanvasPage({
             className="pointer-events-none absolute top-0 left-0 z-[60] overflow-visible"
             style={{ color: theme.node.activeStroke, width: 1, height: 1 }}
           />
-          <svg
-            className="w-reference-panel h-reference-panel absolute top-0 left-0 overflow-visible"
-            style={{
-              pointerEvents: "none",
-              transform: "translateZ(0)",
-              zIndex: 0,
-            }}
-          >
-            {showConnections &&
-              visibleConnections.map(({ connection, from, to }) => (
-                <ConnectionPath
-                  key={connection.id}
-                  connection={connection}
-                  from={from}
-                  to={to}
-                  selected={selectedConnectionId === connection.id}
-                  active={relatedHighlight.connectionIds.has(connection.id)}
-                  generating={
-                    documentIntegration
-                      ? documentIntegration.generation?.runs.some(
-                          (run) =>
-                            run.nodeId === to.id &&
-                            run.pending &&
-                            matchesFrozenNode(to, run),
-                        )
-                      : to.metadata?.status === NODE_STATUS_LOADING
-                  }
-                  onSelect={() => {
-                    setSelectedConnectionId(connection.id);
-                    setSelectedNodeIds(new Set());
-                    setContextMenu(null);
-                  }}
-                  onContextMenu={(event) => {
-                    setSelectedConnectionId(connection.id);
-                    setSelectedNodeIds(new Set());
-                    setContextMenu({
-                      type: "connection",
-                      x: event.clientX,
-                      y: event.clientY,
-                      connectionId: connection.id,
-                    });
-                  }}
+          <ConnectionFlowProvider>
+            <svg
+              className="w-reference-panel h-reference-panel absolute top-0 left-0 overflow-visible"
+              style={{
+                pointerEvents: "none",
+                transform: "translateZ(0)",
+                zIndex: 0,
+              }}
+            >
+              {showConnections &&
+                visibleConnections.map(({ connection, from, to }) => (
+                  <ConnectionPath
+                    key={connection.id}
+                    connection={connection}
+                    from={from}
+                    to={to}
+                    selected={selectedConnectionId === connection.id}
+                    active={relatedHighlight.connectionIds.has(connection.id)}
+                    generating={
+                      documentIntegration
+                        ? documentIntegration.generation?.runs.some(
+                            (run) =>
+                              run.nodeId === to.id &&
+                              run.pending &&
+                              matchesFrozenNode(to, run),
+                          )
+                        : to.metadata?.status === NODE_STATUS_LOADING
+                    }
+                    onSelect={() => {
+                      setSelectedConnectionId(connection.id);
+                      setSelectedNodeIds(new Set());
+                      setContextMenu(null);
+                    }}
+                    onContextMenu={(event) => {
+                      setSelectedConnectionId(connection.id);
+                      setSelectedNodeIds(new Set());
+                      setContextMenu({
+                        type: "connection",
+                        x: event.clientX,
+                        y: event.clientY,
+                        connectionId: connection.id,
+                      });
+                    }}
+                  />
+                ))}
+              <ConnectionFlowLayer containerRef={containerRef} />
+              {pendingConnectionCreate ? (
+                <ActiveConnectionPath
+                  node={nodeById.get(pendingConnectionCreate.connection.nodeId)}
+                  handle={pendingConnectionCreate.connection}
+                  mouseWorld={pendingConnectionCreate.position}
                 />
-              ))}
-            {connectingParams ? (
-              <ActiveConnectionPath
-                node={nodeById.get(connectingParams.nodeId)}
-                handle={connectingParams}
-                mouseWorld={mouseWorld}
-                target={
-                  connectionTargetNodeId
-                    ? nodeById.get(connectionTargetNodeId)
-                    : undefined
-                }
-              />
-            ) : null}
-          </svg>
+              ) : connectingParams ? (
+                <ActiveConnectionPath
+                  node={nodeById.get(connectingParams.nodeId)}
+                  handle={connectingParams}
+                  mouseWorld={mouseWorld}
+                  target={
+                    connectionTargetNodeId
+                      ? nodeById.get(connectionTargetNodeId)
+                      : undefined
+                  }
+                />
+              ) : null}
+            </svg>
+          </ConnectionFlowProvider>
 
           {visibleNodes.map((node) => (
             <CanvasNode

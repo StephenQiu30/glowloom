@@ -706,11 +706,13 @@ html:has(.canvas-controls-layout) {
       stroke-opacity 150ms ease;
   }
   .canvas-connection:hover .canvas-connection-line {
-    stroke: var(--ring);
+    stroke: var(--canvas-connection-highlight);
     stroke-opacity: 1;
   }
-  .canvas-connection-flow {
-    animation: canvas-connection-flow 2.8s linear infinite;
+  @media (prefers-reduced-motion: reduce) {
+    .canvas-connection-line {
+      transition: none;
+    }
   }
   .canvas-prompt-input .rich-text-surface {
     min-height: 5.25rem;
