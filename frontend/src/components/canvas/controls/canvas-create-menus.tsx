@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -11,7 +11,16 @@ import {
   PopoverAnchor,
   PopoverContent,
 } from "@/components/ui/popover";
-import { ImageIcon, FileText, Video, X } from "lucide-react";
+import {
+  ImageIcon,
+  Type,
+  SquarePlay,
+  AudioLines,
+  Clapperboard,
+  Contact,
+  Box,
+  X,
+} from "lucide-react";
 import {
   listNodeDefinitions,
   useNodeRegistryVersion,
@@ -19,6 +28,7 @@ import {
 import {
   CanvasNodeType,
   type ConnectionHandle,
+  type CanvasNodeData,
   type Position,
 } from "@/components/canvas/types/canvas";
 
@@ -28,6 +38,7 @@ export type PendingConnectionCreate = {
   connection: ConnectionHandle;
   position: Position;
   placement?: "adjacent";
+  sourceNodeIds?: string[];
 };
 type ReferenceNodeType =
   | CanvasNodeType.Image
@@ -38,34 +49,59 @@ type ReferenceNodeType =
 export function ConnectionCreateMenu({
   pending,
   existingType,
+  existingNode,
+  existingNodes,
   onCreate,
   onClose,
 }: {
   pending: PendingConnectionCreate;
   existingType: string;
-  onCreate: (type: ReferenceNodeType) => void;
+  existingNode?: CanvasNodeData;
+  existingNodes?: CanvasNodeData[];
+  onCreate: (type: ReferenceNodeType) => string | void;
   onClose: () => void;
 }) {
   const options = [
-    { type: CanvasNodeType.Text, title: "文本", icon: <FileText /> },
+    { type: CanvasNodeType.Text, title: "文本", icon: <Type /> },
     { type: CanvasNodeType.Image, title: "图片", icon: <ImageIcon /> },
-    { type: CanvasNodeType.Video, title: "视频", icon: <Video /> },
+    { type: CanvasNodeType.Video, title: "视频", icon: <SquarePlay /> },
+    { type: CanvasNodeType.Audio, title: "音频", icon: <AudioLines /> },
+    { type: "timeline", title: "时间线", icon: <Clapperboard /> },
+    { type: "subject", title: "主体", icon: <Contact /> },
+    { type: "director", title: "导演台", icon: <Box /> },
   ] as const;
   return (
     <CanvasCreateMenu
-      title="引用该节点生成"
+      title="添加节点"
       position={pending.position}
       onClose={onClose}
-      options={options
-        .filter((item) =>
+      options={options.map((item) => {
+        const supported =
           pending.connection.handleType === "source"
-            ? supportsCanvasConnection(existingType, item.type)
-            : supportsCanvasConnection(item.type, existingType),
-        )
-        .map((item) => ({
+            ? (existingNodes?.length ? existingNodes : [existingNode]).every(
+                (node) =>
+                  supportsCanvasConnection(
+                    node?.type ?? existingType,
+                    item.type,
+                  ) &&
+                  !(
+                    (node?.type ?? existingType) === "text" &&
+                    item.type === "audio"
+                  ),
+              )
+            : supportsCanvasConnection(item.type, existingType);
+        const reason = !supported
+          ? existingType === "cinema_studio" && item.type === "video"
+            ? "暂不支持这些设置的模型"
+            : "无法连接这些节点"
+          : undefined;
+        return {
           ...item,
-          onSelect: () => onCreate(item.type),
-        }))}
+          disabled: !supported,
+          reason,
+          onSelect: () => onCreate(item.type as ReferenceNodeType),
+        };
+      })}
       reference
     />
   );
@@ -114,10 +150,13 @@ function CanvasCreateMenu({
     type: string;
     title: string;
     icon: ReactNode;
-    onSelect: () => void;
+    onSelect: () => string | void;
+    disabled?: boolean;
+    reason?: string;
   }[];
 }) {
   const command = useRef<HTMLDivElement>(null);
+  const [keyboardNavigation, setKeyboardNavigation] = useState(false);
   return (
     <Popover
       open
@@ -133,8 +172,18 @@ function CanvasCreateMenu({
       </PopoverAnchor>
       <PopoverContent
         align="start"
-        sideOffset={8}
-        className="w-60 p-1"
+        sideOffset={reference ? 0 : 8}
+        className={
+          reference
+            ? "canvas-connection-create-menu w-[200px] gap-0 rounded-xl border-0 p-1 ring-0 data-open:animate-none data-closed:animate-none"
+            : "w-60 p-1"
+        }
+        data-keyboard-navigation={keyboardNavigation}
+        onKeyDownCapture={(event) => {
+          if (["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key))
+            setKeyboardNavigation(true);
+        }}
+        onMouseMove={() => setKeyboardNavigation(false)}
         data-connection-create-menu={reference ? "" : undefined}
         data-canvas-no-zoom
         onEscapeKeyDown={(event) => event.stopPropagation()}
@@ -151,35 +200,62 @@ function CanvasCreateMenu({
         onMouseDown={(event) => event.stopPropagation()}
         onPointerDown={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-2 px-2 py-1">
-          <span className="text-xs text-muted-foreground">{title}</span>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={onClose}
-            aria-label="关闭"
-          >
-            <X />
-          </Button>
-        </div>
+        {reference ? (
+          <div className="canvas-connection-create-heading">{title}</div>
+        ) : (
+          <div className="flex items-center justify-between gap-2 px-2 py-1">
+            <span className="text-xs text-muted-foreground">{title}</span>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={onClose}
+              aria-label="关闭"
+            >
+              <X />
+            </Button>
+          </div>
+        )}
         <Command
           ref={command}
           tabIndex={0}
           label={title}
-          className="h-auto"
+          className={reference ? "h-auto p-0" : "h-auto"}
           loop
         >
-          <CommandList>
-            <CommandGroup>
+          <CommandList className={reference ? "max-h-none" : undefined}>
+            <CommandGroup
+              className={
+                reference
+                  ? "p-0 [&_[cmdk-group-items]]:flex [&_[cmdk-group-items]]:flex-col [&_[cmdk-group-items]]:gap-1"
+                  : undefined
+              }
+            >
               {options.map((option) => (
                 <CommandItem
                   key={option.type}
                   value={option.title}
-                  className="h-9 gap-2"
+                  className={
+                    reference
+                      ? "canvas-connection-create-item h-9 min-h-9 gap-2 rounded-lg px-3 py-[9px] text-[13px] leading-[22px]"
+                      : "min-h-9 gap-2"
+                  }
+                  title={option.reason}
+                  disabled={option.disabled}
                   onSelect={option.onSelect}
                 >
                   {option.icon}
                   <span>{option.title}</span>
+                  {option.reason ? (
+                    <span
+                      className={
+                        reference
+                          ? "sr-only"
+                          : "ml-auto text-xs text-muted-foreground"
+                      }
+                    >
+                      {option.reason}
+                    </span>
+                  ) : null}
                 </CommandItem>
               ))}
             </CommandGroup>

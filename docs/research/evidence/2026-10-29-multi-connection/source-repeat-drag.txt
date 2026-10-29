@@ -1,0 +1,9 @@
+Browser tab: 1980372061, Title: "连线完整验收-20261029 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/52298cdd-795e-4f5a-af85-47eb2fb84b6e".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
++												129 image
++													130 container Edge from node_d3r6v7t91j to node_6w6800e9q2
++												131 image
++													132 container Edge from node_5hqbc3zxwk to node_6w6800e9q2
++			133 text 无法连接这些节点
++		134 text Notifications 无法连接这些节点
+The focused UI element is 26 container Canvas

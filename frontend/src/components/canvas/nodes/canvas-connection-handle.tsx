@@ -22,6 +22,7 @@ import {
 
 type Props = {
   scale: number;
+  variant?: "node" | "aggregate";
   side: ConnectionHandleSide;
   visible: boolean;
   disabled?: boolean;
@@ -30,20 +31,26 @@ type Props = {
 
 export function CanvasConnectionHandle({
   scale,
+  variant = "node",
   side,
   visible,
   disabled = false,
   onMouseDown,
 }: Props) {
   const field = useRef<HTMLDivElement>(null);
-  const glyph = useRef<HTMLButtonElement>(null);
+  const glyph = useRef<HTMLElement | null>(null);
   const frame = useRef<number | null>(null);
   const lastFrame = useRef<number | null>(null);
   const pointer = useRef<HandlePoint | null>(null);
-  const current = useRef(connectionHandleRest(side, scale));
+  const aggregate = variant === "aggregate";
+  const rest = useCallback(
+    () => (aggregate ? { x: 30, y: 60 } : connectionHandleRest(side, scale)),
+    [aggregate, scale, side],
+  );
+  const current = useRef(rest());
   const reduced = useRef(false);
   const [hovered, setHovered] = useState(false);
-  const counterScale = connectionHandleCounterScale(scale);
+  const counterScale = aggregate ? 1 : connectionHandleCounterScale(scale);
   const shown = visible || (hovered && !disabled);
 
   const write = useCallback(
@@ -68,8 +75,8 @@ export function CanvasConnectionHandle({
     stop();
     pointer.current = null;
     field.current?.removeAttribute("data-canvas-connection-glyph-tracking");
-    write(connectionHandleRest(side, scale));
-  }, [scale, side, stop, write]);
+    write(rest());
+  }, [rest, stop, write]);
 
   // Keep animation writes outside React rendering, including zoom/availability resets.
   useLayoutEffect(() => {
@@ -135,6 +142,7 @@ export function CanvasConnectionHandle({
       data-canvas-no-pan
       data-canvas-connection-handle
       data-side={side}
+      data-variant={variant}
       data-visible={shown}
       data-disabled={disabled}
       className="canvas-connection-handle"
@@ -164,30 +172,62 @@ export function CanvasConnectionHandle({
         if (!disabled && event.button === 0) onMouseDown(event);
       }}
     >
-      <Button
-        ref={glyph}
-        variant="outline"
-        size="icon-xs"
-        aria-label={side === "left" ? "连接输入节点" : "连接输出节点"}
-        aria-haspopup="menu"
-        disabled={disabled}
-        tabIndex={shown && !disabled ? 0 : -1}
-        data-canvas-connection-glyph
-        className="canvas-node-port"
-        style={{
-          width: 20,
-          height: 20,
-          transform: connectionHandleTransform(
-            connectionHandleRest(side, scale),
-            counterScale,
-          ),
-        }}
-        onClick={(event) => {
-          if (!disabled && event.detail === 0) onMouseDown(event);
-        }}
-      >
-        <span aria-hidden="true" className="canvas-node-port-plus" />
-      </Button>
+      {aggregate ? (
+        <>
+          <span
+            ref={(element) => {
+              glyph.current = element;
+            }}
+            aria-hidden="true"
+            data-canvas-connection-glyph
+            data-slot="button"
+            className="canvas-node-port"
+            style={{
+              width: 20,
+              height: 20,
+              transform: connectionHandleTransform(rest(), counterScale),
+            }}
+          >
+            <span className="canvas-node-port-plus" />
+          </span>
+          <Button
+            variant="ghost"
+            aria-label="为选中节点创建后接节点"
+            aria-haspopup="menu"
+            disabled={disabled}
+            tabIndex={shown && !disabled ? 0 : -1}
+            className="canvas-aggregate-connection-button"
+            style={{ width: 36, height: 36 }}
+            onClick={(event) => {
+              if (!disabled && event.detail === 0) onMouseDown(event);
+            }}
+          />
+        </>
+      ) : (
+        <Button
+          ref={(element) => {
+            glyph.current = element;
+          }}
+          variant="outline"
+          size="icon-xs"
+          aria-label={side === "left" ? "连接输入节点" : "连接输出节点"}
+          aria-haspopup="menu"
+          disabled={disabled}
+          tabIndex={shown && !disabled ? 0 : -1}
+          data-canvas-connection-glyph
+          className="canvas-node-port"
+          style={{
+            width: 20,
+            height: 20,
+            transform: connectionHandleTransform(rest(), counterScale),
+          }}
+          onClick={(event) => {
+            if (!disabled && event.detail === 0) onMouseDown(event);
+          }}
+        >
+          <span aria-hidden="true" className="canvas-node-port-plus" />
+        </Button>
+      )}
     </div>
   );
 }

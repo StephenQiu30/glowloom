@@ -1,0 +1,68 @@
+[
+  {
+    "type": "yjs_ack",
+    "epoch": "e756d143-f5f6-47b5-9253-d90a4ced2901",
+    "commitSeq": "6",
+    "contentRevision": "7",
+    "graphHash": "3ea4d008e6300381a4cf388b1e3274825ebb39dcb7e5490cf938dbe032a018f0",
+    "updateId": "abdbffd3-bfdd-4691-af99-691b1f3c01ea",
+    "payloadHash": "6fb13fe9b654bc7d1342af3f1e73ae5f9bfe11b25dec2764a931b7a19aa6606d",
+    "effect": "VISIBLE_CHANGE",
+    "status": "accepted"
+  },
+  {
+    "type": "yjs_ack",
+    "epoch": "e756d143-f5f6-47b5-9253-d90a4ced2901",
+    "commitSeq": "7",
+    "contentRevision": "8",
+    "graphHash": "67814c84aecc286b4a450a80e859ee9e3c773c8ef4592e29fe5473ee88bada6d",
+    "updateId": "62c6c4cf-f9e6-4bb1-8c3e-2cb58017f044",
+    "payloadHash": "84e88621243b343b04ace41238fad19a71f9bfffe75647565e05e789cde05ab0",
+    "effect": "VISIBLE_CHANGE",
+    "status": "accepted"
+  },
+  {
+    "type": "yjs_ack",
+    "epoch": "e756d143-f5f6-47b5-9253-d90a4ced2901",
+    "commitSeq": "8",
+    "contentRevision": "9",
+    "graphHash": "537cfdc59f9ba75f1b606cb75684f590eb4feb4b8ada00e382b55aa56f977893",
+    "updateId": "8a11c9d5-0b14-4309-ab64-8e623b7cc758",
+    "payloadHash": "a123a82bb64ae51a824d4e3488a08fc8af68cb8374bbbfdb24ca99544bbfb47c",
+    "effect": "VISIBLE_CHANGE",
+    "status": "accepted"
+  },
+  {
+    "type": "yjs_ack",
+    "epoch": "e756d143-f5f6-47b5-9253-d90a4ced2901",
+    "commitSeq": "9",
+    "contentRevision": "10",
+    "graphHash": "67814c84aecc286b4a450a80e859ee9e3c773c8ef4592e29fe5473ee88bada6d",
+    "updateId": "ea404a43-2e96-47cb-b28f-3cb774e170e1",
+    "payloadHash": "a98ac2968b54026d30162d8d5e84e6992c9b15267f15b237542fcfadf44c11d9",
+    "effect": "VISIBLE_CHANGE",
+    "status": "accepted"
+  },
+  {
+    "type": "yjs_ack",
+    "epoch": "e756d143-f5f6-47b5-9253-d90a4ced2901",
+    "commitSeq": "10",
+    "contentRevision": "11",
+    "graphHash": "537cfdc59f9ba75f1b606cb75684f590eb4feb4b8ada00e382b55aa56f977893",
+    "updateId": "663ea723-edab-4e5f-bafc-7501b19694cf",
+    "payloadHash": "ebc810e783e0454b62e9f29a05abac5074d0a1a36c448a822762332c6fc27516",
+    "effect": "VISIBLE_CHANGE",
+    "status": "accepted"
+  },
+  {
+    "type": "yjs_ack",
+    "epoch": "e756d143-f5f6-47b5-9253-d90a4ced2901",
+    "commitSeq": "11",
+    "contentRevision": "12",
+    "graphHash": "67814c84aecc286b4a450a80e859ee9e3c773c8ef4592e29fe5473ee88bada6d",
+    "updateId": "ff97fddd-a9e1-4921-9337-7bd3b77eb528",
+    "payloadHash": "6db96898ace0479f4f2a02165098f8846d3ecef900a69c8bd92cd180b824d189",
+    "effect": "VISIBLE_CHANGE",
+    "status": "accepted"
+  }
+]

@@ -1,0 +1,29 @@
+{
+  "pushedCommit": "25a9f4d63344e711b34423e9f280d3cbdf4cb509",
+  "followupCommitted": false,
+  "touchedPaths": [
+    "frontend/src/components/canvas/editor/canvas-editor.tsx",
+    "frontend/src/components/canvas/connections/canvas-connections.tsx",
+    "frontend/src/components/canvas/controls/canvas-create-menus.tsx",
+    "frontend/src/components/canvas/controls/canvas-selection-toolbar.tsx",
+    "frontend/src/components/canvas/nodes/canvas-connection-handle.tsx",
+    "frontend/src/components/canvas/lib/canvas-document-connections.ts",
+    "frontend/src/components/canvas/lib/canvas-connection-selection.ts",
+    "frontend/src/components/canvas/lib/canvas-graph-commit.ts",
+    "frontend/src/components/canvas/canvas.css",
+    "frontend/src/app/globals.css",
+    "frontend/tests/unit/components/canvas/multi-connections.test.ts",
+    "frontend/tests/unit/components/canvas/canvas-connection-selection.test.ts",
+    "frontend/tests/unit/components/canvas/canvas-graph-commit.test.ts",
+    "frontend/tests/unit/components/canvas/connection-target-attraction.test.tsx",
+    "frontend/tests/unit/components/canvas/selection-connection-handle.test.tsx",
+    "frontend/tests/unit/components/canvas/nodes/canvas-connection-handle.test.tsx",
+    "docs/requirement/14-无限画布对齐即梦需求.md",
+    "docs/design/27-无限画布一致性改造设计.md",
+    "docs/prd/14-无限画布一致性改造.md",
+    "docs/plan/23-无限画布一致性改造实施计划.md",
+    "BACKLOG.md"
+  ],
+  "evidenceDirectory": "docs/research/evidence/2026-10-29-multi-connection",
+  "note": "Shared files also contain pre-existing or parallel work. This list is an involvement manifest, not permission to stage entire files."
+}

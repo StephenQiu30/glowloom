@@ -1,0 +1,188 @@
+[
+  {
+    "after": {
+      "background": "rgba(255, 255, 255, 0.04)",
+      "color": "rgba(255, 255, 255, 0.35)",
+      "height": "20px",
+      "left": "4.72656px",
+      "top": "60px",
+      "width": "20px"
+    },
+    "before": {
+      "background": "rgba(0, 0, 0, 0)",
+      "height": "80px",
+      "left": "30px",
+      "top": "60px",
+      "width": "40px"
+    },
+    "class": "react-flow__handle react-flow__handle-left nodrag nopan !top-1/2 !z-10 !rounded-none !border-0 !bg-transparent !p-0 before:absolute before:top-1/2 before:h-canvas-connection-handle-hotspot before:w-canvas-connection-handle-hotspot before:-translate-y-1/2 before:content-[''] after:pointer-events-none after:absolute after:left-[--octo-flow-node-handle-glyph-x] after:top-[--octo-flow-node-handle-glyph-y] after:size-5 after:-translate-x-1/2 after:-translate-y-1/2 after:rounded-full after:bg-[linear-gradient(currentColor,currentColor),linear-gradient(currentColor,currentColor)] after:bg-canvas-connection-handle-glyph after:bg-center after:bg-no-repeat after:content-[''] before:origin-top-left after:origin-top-left before:[scale:var(--octo-canvas-node-chrome-counter-scale,1)] after:[scale:calc(var(--octo-canvas-node-chrome-counter-scale,1)*0.5)] after:opacity-dreamina-media-action-hidden [.react-flow\\_\\_node:hover_&]:after:[scale:var(--octo-canvas-node-chrome-counter-scale,1)] [.react-flow\\_\\_node:hover_&]:after:[translate:0_0] [.react-flow\\_\\_node:hover_&]:after:opacity-dreamina-media-action-visible data-[node-selected-visible=true]:after:[scale:var(--octo-canvas-node-chrome-counter-scale,1)] data-[node-selected-visible=true]:after:[translate:0_0] data-[node-selected-visible=true]:after:opacity-dreamina-media-action-visible after:[translate:20px_0] text-canvas-connection-handle-default after:border-canvas-connection-handle after:border-current after:bg-dreamina-block-secondary-default [.react-flow\\_\\_node:hover_&]:after:backdrop-blur-dreamina-floating-control data-[node-selected-visible=true]:after:backdrop-blur-dreamina-floating-control hover:opacity-100 hover:text-dreamina-text-primary hover:after:border-dreamina-text-primary before:pointer-events-auto before:left-1/2 before:-translate-x-full !left-0 !-translate-x-1/2 !-translate-y-1/2 opacity-0 target connectable connectablestart connectableend connectionindicator",
+    "rect": {
+      "bottom": 384.9786376953125,
+      "height": 104.45932006835938,
+      "left": 982.1853637695312,
+      "right": 1034.4149169921875,
+      "top": 280.5193176269531,
+      "width": 52.22955322265625,
+      "x": 982.1853637695312,
+      "y": 280.5193176269531
+    },
+    "style": "overflow: visible; pointer-events: none; height: 120px; width: 60px; --octo-flow-node-handle-glyph-x: calc(50% - 22px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-flow-node-handle-glyph-y: 50%;",
+    "tag": "DIV",
+    "testid": "flow-node-target-handle"
+  },
+  {
+    "after": {
+      "background": "rgba(255, 255, 255, 0.04)",
+      "color": "rgba(255, 255, 255, 0.35)",
+      "height": "20px",
+      "left": "55.2656px",
+      "top": "60px",
+      "width": "20px"
+    },
+    "before": {
+      "background": "rgba(0, 0, 0, 0)",
+      "height": "80px",
+      "left": "30px",
+      "top": "60px",
+      "width": "40px"
+    },
+    "class": "react-flow__handle react-flow__handle-right nodrag nopan !top-1/2 !z-10 !rounded-none !border-0 !bg-transparent !p-0 before:absolute before:top-1/2 before:h-canvas-connection-handle-hotspot before:w-canvas-connection-handle-hotspot before:-translate-y-1/2 before:content-[''] after:pointer-events-none after:absolute after:left-[--octo-flow-node-handle-glyph-x] after:top-[--octo-flow-node-handle-glyph-y] after:size-5 after:-translate-x-1/2 after:-translate-y-1/2 after:rounded-full after:bg-[linear-gradient(currentColor,currentColor),linear-gradient(currentColor,currentColor)] after:bg-canvas-connection-handle-glyph after:bg-center after:bg-no-repeat after:content-[''] before:origin-top-left after:origin-top-left before:[scale:var(--octo-canvas-node-chrome-counter-scale,1)] after:[scale:calc(var(--octo-canvas-node-chrome-counter-scale,1)*0.5)] after:opacity-dreamina-media-action-hidden [.react-flow\\_\\_node:hover_&]:after:[scale:var(--octo-canvas-node-chrome-counter-scale,1)] [.react-flow\\_\\_node:hover_&]:after:[translate:0_0] [.react-flow\\_\\_node:hover_&]:after:opacity-dreamina-media-action-visible data-[node-selected-visible=true]:after:[scale:var(--octo-canvas-node-chrome-counter-scale,1)] data-[node-selected-visible=true]:after:[translate:0_0] data-[node-selected-visible=true]:after:opacity-dreamina-media-action-visible after:[translate:-20px_0] text-canvas-connection-handle-default after:border-canvas-connection-handle after:border-current after:bg-dreamina-block-secondary-default [.react-flow\\_\\_node:hover_&]:after:backdrop-blur-dreamina-floating-control data-[node-selected-visible=true]:after:backdrop-blur-dreamina-floating-control hover:opacity-100 hover:text-dreamina-text-primary hover:after:border-dreamina-text-primary before:pointer-events-auto before:left-1/2 !right-0 !translate-x-1/2 !-translate-y-1/2 opacity-0 source connectable connectablestart connectableend connectionindicator",
+    "rect": {
+      "bottom": 384.9786376953125,
+      "height": 104.45932006835938,
+      "left": 1260.743408203125,
+      "right": 1312.97314453125,
+      "top": 280.5193176269531,
+      "width": 52.229736328125,
+      "x": 1260.743408203125,
+      "y": 280.5193176269531
+    },
+    "style": "overflow: visible; pointer-events: none; height: 120px; width: 60px; --octo-flow-node-handle-glyph-x: calc(50% + 22px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-flow-node-handle-glyph-y: 50%;",
+    "tag": "DIV",
+    "testid": "flow-node-source-handle"
+  },
+  {
+    "after": {
+      "background": "rgba(255, 255, 255, 0.04)",
+      "color": "rgba(255, 255, 255, 0.35)",
+      "height": "20px",
+      "left": "4.72656px",
+      "top": "60px",
+      "width": "20px"
+    },
+    "before": {
+      "background": "rgba(0, 0, 0, 0)",
+      "height": "80px",
+      "left": "30px",
+      "top": "60px",
+      "width": "40px"
+    },
+    "class": "react-flow__handle react-flow__handle-left nodrag nopan !top-1/2 !z-10 !rounded-none !border-0 !bg-transparent !p-0 before:absolute before:top-1/2 before:h-canvas-connection-handle-hotspot before:w-canvas-connection-handle-hotspot before:-translate-y-1/2 before:content-[''] after:pointer-events-none after:absolute after:left-[--octo-flow-node-handle-glyph-x] after:top-[--octo-flow-node-handle-glyph-y] after:size-5 after:-translate-x-1/2 after:-translate-y-1/2 after:rounded-full after:bg-[linear-gradient(currentColor,currentColor),linear-gradient(currentColor,currentColor)] after:bg-canvas-connection-handle-glyph after:bg-center after:bg-no-repeat after:content-[''] before:origin-top-left after:origin-top-left before:[scale:var(--octo-canvas-node-chrome-counter-scale,1)] after:[scale:calc(var(--octo-canvas-node-chrome-counter-scale,1)*0.5)] after:opacity-dreamina-media-action-hidden [.react-flow\\_\\_node:hover_&]:after:[scale:var(--octo-canvas-node-chrome-counter-scale,1)] [.react-flow\\_\\_node:hover_&]:after:[translate:0_0] [.react-flow\\_\\_node:hover_&]:after:opacity-dreamina-media-action-visible data-[node-selected-visible=true]:after:[scale:var(--octo-canvas-node-chrome-counter-scale,1)] data-[node-selected-visible=true]:after:[translate:0_0] data-[node-selected-visible=true]:after:opacity-dreamina-media-action-visible after:[translate:20px_0] text-canvas-connection-handle-default after:border-canvas-connection-handle after:border-current after:bg-dreamina-block-secondary-default [.react-flow\\_\\_node:hover_&]:after:backdrop-blur-dreamina-floating-control data-[node-selected-visible=true]:after:backdrop-blur-dreamina-floating-control hover:opacity-100 hover:text-dreamina-text-primary hover:after:border-dreamina-text-primary before:pointer-events-auto before:left-1/2 before:-translate-x-full !left-0 !-translate-x-1/2 !-translate-y-1/2 opacity-0 target connectable connectablestart connectableend connectionindicator",
+    "rect": {
+      "bottom": 383.5929565429687,
+      "height": 104.45932006835938,
+      "left": 1282.973388671875,
+      "right": 1335.2030029296875,
+      "top": 279.1336364746094,
+      "width": 52.2296142578125,
+      "x": 1282.973388671875,
+      "y": 279.1336364746094
+    },
+    "style": "overflow: visible; pointer-events: none; height: 120px; width: 60px; --octo-flow-node-handle-glyph-x: calc(50% - 22px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-flow-node-handle-glyph-y: 50%;",
+    "tag": "DIV",
+    "testid": "flow-node-target-handle"
+  },
+  {
+    "after": {
+      "background": "rgba(255, 255, 255, 0.04)",
+      "color": "rgba(255, 255, 255, 0.35)",
+      "height": "20px",
+      "left": "55.2656px",
+      "top": "60px",
+      "width": "20px"
+    },
+    "before": {
+      "background": "rgba(0, 0, 0, 0)",
+      "height": "80px",
+      "left": "30px",
+      "top": "60px",
+      "width": "40px"
+    },
+    "class": "react-flow__handle react-flow__handle-right nodrag nopan !top-1/2 !z-10 !rounded-none !border-0 !bg-transparent !p-0 before:absolute before:top-1/2 before:h-canvas-connection-handle-hotspot before:w-canvas-connection-handle-hotspot before:-translate-y-1/2 before:content-[''] after:pointer-events-none after:absolute after:left-[--octo-flow-node-handle-glyph-x] after:top-[--octo-flow-node-handle-glyph-y] after:size-5 after:-translate-x-1/2 after:-translate-y-1/2 after:rounded-full after:bg-[linear-gradient(currentColor,currentColor),linear-gradient(currentColor,currentColor)] after:bg-canvas-connection-handle-glyph after:bg-center after:bg-no-repeat after:content-[''] before:origin-top-left after:origin-top-left before:[scale:var(--octo-canvas-node-chrome-counter-scale,1)] after:[scale:calc(var(--octo-canvas-node-chrome-counter-scale,1)*0.5)] after:opacity-dreamina-media-action-hidden [.react-flow\\_\\_node:hover_&]:after:[scale:var(--octo-canvas-node-chrome-counter-scale,1)] [.react-flow\\_\\_node:hover_&]:after:[translate:0_0] [.react-flow\\_\\_node:hover_&]:after:opacity-dreamina-media-action-visible data-[node-selected-visible=true]:after:[scale:var(--octo-canvas-node-chrome-counter-scale,1)] data-[node-selected-visible=true]:after:[translate:0_0] data-[node-selected-visible=true]:after:opacity-dreamina-media-action-visible after:[translate:-20px_0] text-canvas-connection-handle-default after:border-canvas-connection-handle after:border-current after:bg-dreamina-block-secondary-default [.react-flow\\_\\_node:hover_&]:after:backdrop-blur-dreamina-floating-control data-[node-selected-visible=true]:after:backdrop-blur-dreamina-floating-control hover:opacity-100 hover:text-dreamina-text-primary hover:after:border-dreamina-text-primary before:pointer-events-auto before:left-1/2 !right-0 !translate-x-1/2 !-translate-y-1/2 opacity-0 source connectable connectablestart connectableend connectionindicator",
+    "rect": {
+      "bottom": 383.5929565429687,
+      "height": 104.45932006835938,
+      "left": 1561.531494140625,
+      "right": 1613.7611083984375,
+      "top": 279.1336364746094,
+      "width": 52.2296142578125,
+      "x": 1561.531494140625,
+      "y": 279.1336364746094
+    },
+    "style": "overflow: visible; pointer-events: none; height: 120px; width: 60px; --octo-flow-node-handle-glyph-x: calc(50% + 22px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-flow-node-handle-glyph-y: 50%;",
+    "tag": "DIV",
+    "testid": "flow-node-source-handle"
+  },
+  {
+    "after": {
+      "background": "rgb(255, 255, 255)",
+      "color": "rgb(18, 18, 18)",
+      "height": "20px",
+      "left": "30px",
+      "top": "60px",
+      "width": "20px"
+    },
+    "before": {
+      "background": "rgba(0, 0, 0, 0)",
+      "height": "80px",
+      "left": "30px",
+      "top": "60px",
+      "width": "40px"
+    },
+    "class": "react-flow__handle react-flow__handle-right nodrag nopan !top-1/2 !z-10 !rounded-none !border-0 !bg-transparent !p-0 before:absolute before:top-1/2 before:h-canvas-connection-handle-hotspot before:w-canvas-connection-handle-hotspot before:-translate-y-1/2 before:content-[''] after:pointer-events-none after:absolute after:left-[--octo-flow-node-handle-glyph-x] after:top-[--octo-flow-node-handle-glyph-y] after:size-5 after:-translate-x-1/2 after:-translate-y-1/2 after:rounded-full after:bg-[linear-gradient(currentColor,currentColor),linear-gradient(currentColor,currentColor)] after:bg-canvas-connection-handle-glyph after:bg-center after:bg-no-repeat after:content-[''] before:origin-top-left after:origin-top-left before:[scale:var(--octo-canvas-node-chrome-counter-scale,1)] after:[scale:var(--octo-canvas-node-chrome-counter-scale,1)] text-canvas-connection-handle-inverted after:bg-dreamina-on-media-text-primary hover:after:bg-dreamina-on-media-text-secondary active:after:bg-dreamina-on-media-text-primary before:pointer-events-auto before:left-1/2 !right-0 !translate-x-1/2 !-translate-y-1/2 opacity-100 source connectable connectablestart connectableend connectionindicator",
+    "rect": {
+      "bottom": 392.74896240234375,
+      "height": 120,
+      "left": 980.3722534179688,
+      "right": 1040.372314453125,
+      "top": 272.74896240234375,
+      "width": 60.00006103515625,
+      "x": 980.3722534179688,
+      "y": 272.74896240234375
+    },
+    "style": "overflow: visible; pointer-events: none; height: 120px; width: 60px; --octo-flow-node-handle-glyph-x: 50%; --octo-flow-node-handle-glyph-y: 50%; --octo-canvas-node-chrome-counter-scale: 1;",
+    "tag": "DIV",
+    "testid": "flow-node-multi-selection-source-handle"
+  },
+  {
+    "after": {
+      "background": "rgba(0, 0, 0, 0)",
+      "color": "rgb(255, 255, 255)",
+      "height": "auto",
+      "left": "auto",
+      "top": "auto",
+      "width": "auto"
+    },
+    "before": {
+      "background": "rgba(0, 0, 0, 0)",
+      "height": "auto",
+      "left": "auto",
+      "top": "auto",
+      "width": "auto"
+    },
+    "class": "inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-transparent p-2 text-dreamina-text-primary motion-safe:transition-colors motion-safe:duration-dreamina-instant motion-safe:ease-dreamina-soft hover:bg-dreamina-block-primary-hover active:bg-dreamina-block-primary-pressed aria-pressed:bg-dreamina-block-primary-default disabled:cursor-not-allowed disabled:text-dreamina-text-disabled disabled:hover:bg-transparent disabled:active:bg-transparent disabled:aria-pressed:bg-transparent aria-disabled:cursor-not-allowed aria-disabled:text-dreamina-text-disabled aria-disabled:hover:bg-transparent aria-disabled:active:bg-transparent aria-disabled:aria-pressed:bg-transparent [&_svg]:size-5 [&_svg]:shrink-0 nodrag nopan absolute top-1/2 -translate-y-1/2 pointer-events-none translate-x-1/2 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:[box-shadow:none] focus-visible:[&::before]:[box-shadow:none] focus-visible:[&::after]:[box-shadow:none]",
+    "rect": {
+      "bottom": 350.74896240234375,
+      "height": 36,
+      "left": 992.3722534179688,
+      "right": 1028.372314453125,
+      "top": 314.74896240234375,
+      "width": 36.00006103515625,
+      "x": 992.3722534179688,
+      "y": 314.74896240234375
+    },
+    "style": "scale: 1; right: 0px;",
+    "tag": "BUTTON",
+    "testid": "flow-node-multi-selection-source-connection-menu-button"
+  }
+]

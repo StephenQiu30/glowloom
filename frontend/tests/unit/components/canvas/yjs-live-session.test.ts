@@ -1,3 +1,4 @@
+import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
 import { afterEach, expect, it, vi } from "vitest";
 import * as Y from "yjs";
 import {
@@ -698,5 +699,96 @@ it.each(["missing", "epoch", "document", "revision"])(
     expect(sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
       1,
     );
+  },
+);
+
+it.each([false, true])(
+  "allows creation undo after server label allocation but protects foreign links: %s",
+  async (foreignLink) => {
+    const f = setup();
+    await vi.waitFor(() =>
+      expect(f.client.getSnapshot().document).not.toBeNull(),
+    );
+    const { connectCanvasDocumentSources } =
+      await import("@/components/canvas/lib/canvas-document-connections");
+    const original = f.client.getSnapshot().document!;
+    const image = createCanvasNode("image", { x: 400, y: 0 });
+    f.client.change(
+      connectCanvasDocumentSources(
+        { ...original, nodes: [...original.nodes, image] },
+        [f.nodeID],
+        image.id,
+      ),
+      true,
+    );
+    await vi.waitFor(() =>
+      expect(f.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(true),
+    );
+    const packet = f.sockets[0].sent.find((p) => p.type === "yjs_submit")!;
+    const remote = new Y.Doc();
+    Y.applyUpdate(remote, Buffer.from(f.state.state, "base64"));
+    Y.applyUpdate(
+      remote,
+      Buffer.from((packet.body as { update: string }).update, "base64"),
+    );
+    const root = remote.getMap("canvas");
+    const nodes = root.get("nodes") as Y.Map<Y.Map<unknown>>;
+    (nodes.get(image.id)!.get("data") as Y.Map<unknown>).set(
+      "referenceLabels",
+      { [f.nodeID]: { kind: "text", ordinal: 1 } },
+    );
+    if (foreignLink) {
+      const edges = root.get("connections") as Y.Map<Y.Map<unknown>>;
+      const id = crypto.randomUUID();
+      edges.set(
+        id,
+        new Y.Map(
+          Object.entries({
+            data: {
+              id,
+              fromNodeId: image.id,
+              toNodeId: f.nodeID,
+              native: {
+                id,
+                source_node_id: image.id,
+                target_node_id: f.nodeID,
+                edge_type: "annotation",
+              },
+            },
+            order: 1,
+          }),
+        ),
+      );
+    }
+    const document = serviceProjection(
+      readCanvasDocument(remote),
+      f.state.document as unknown as ServiceDocument,
+    );
+    f.sockets[0].receive({
+      type: "yjs_snapshot",
+      actor_id: f.actorID,
+      yjs_state: {
+        ...f.state,
+        commitSeq: "1",
+        state: Buffer.from(Y.encodeStateAsUpdate(remote)).toString("base64"),
+        document: { ...document, revision: "2" },
+      },
+    });
+    await vi.waitFor(() => expect(f.client.commitSeq).toBe("1"));
+    f.client.history("undo");
+    expect(
+      f.client.getSnapshot().document!.nodes.some((n) => n.id === image.id),
+    ).toBe(foreignLink);
+    if (foreignLink)
+      expect(f.client.getSnapshot().message).toContain("已有其他编辑");
+    else {
+      expect(f.client.getSnapshot().document!.connections).toHaveLength(0);
+      f.client.history("redo");
+      expect(
+        f.client.getSnapshot().document!.nodes.some((n) => n.id === image.id),
+      ).toBe(true);
+      expect(f.client.getSnapshot().document!.connections).toHaveLength(1);
+    }
+    remote.destroy();
   },
 );

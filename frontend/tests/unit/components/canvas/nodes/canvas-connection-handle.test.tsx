@@ -244,3 +244,55 @@ it("cancels work on zoom, disable and unmount; disabled handles cannot activate"
   expect(frames.size).toBe(0);
   expect(motion.removeEventListener).toHaveBeenCalled();
 });
+it("moves the aggregate glyph from its centered rest point and preserves fixed chrome across zoom", () => {
+  const view = render(
+    <CanvasConnectionHandle
+      variant="aggregate"
+      scale={0.71}
+      side="right"
+      visible
+      onMouseDown={vi.fn()}
+    />,
+  );
+  const button = screen.getByRole("button", { name: "为选中节点创建后接节点" });
+  const field = button.parentElement!;
+  const glyph = field.querySelector<HTMLElement>(
+    "[data-canvas-connection-glyph]",
+  )!;
+  vi.spyOn(field, "getBoundingClientRect").mockReturnValue({
+    left: 100,
+    top: 200,
+    width: 60,
+    height: 120,
+  } as DOMRect);
+  fireEvent.pointerMove(field, { clientX: 170, clientY: 300 });
+  frame(100);
+  expect(glyph.style.transform).toBe(
+    connectionHandleTransform(
+      advanceConnectionHandle({ x: 30, y: 60 }, { x: 70, y: 100 }, null).point,
+      1,
+    ),
+  );
+  fireEvent.pointerLeave(field);
+  expect(glyph.style.transform).toBe(
+    connectionHandleTransform({ x: 30, y: 60 }, 1),
+  );
+  expect(frames.size).toBe(0);
+  view.rerender(
+    <CanvasConnectionHandle
+      variant="aggregate"
+      scale={0.25}
+      side="right"
+      visible
+      onMouseDown={vi.fn()}
+    />,
+  );
+  expect(glyph.style.transform).toBe(
+    connectionHandleTransform({ x: 30, y: 60 }, 1),
+  );
+  expect(field.style.getPropertyValue("--canvas-handle-counter-scale")).toBe(
+    "1",
+  );
+  view.unmount();
+  expect(frames.size).toBe(0);
+});

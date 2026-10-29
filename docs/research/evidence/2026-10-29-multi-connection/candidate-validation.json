@@ -1,0 +1,12 @@
+{
+  "base": "90485fdb48ec00a09cfbe518b030a6f788c272ee",
+  "checks": {
+    "targeted": "7 files 63 tests passed",
+    "typegen": "passed",
+    "tsc": "passed",
+    "scoped_eslint": "passed",
+    "full_checks": "pending"
+  },
+  "production_build_exit": 0,
+  "full_suite": "running at commit preparation; already has failures outside changed files; no full pass claimed"
+}

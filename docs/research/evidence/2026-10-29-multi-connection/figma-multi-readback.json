@@ -1,0 +1,880 @@
+{
+  "date": "2026-10-29",
+  "fileKey": "uLqmeRWuQuzfrp9xOYg6FT",
+  "boardId": "3153:57117",
+  "mutation": {
+    "createdNodeIds": [
+      "3217:59949",
+      "3217:59950",
+      "3217:59951",
+      "3217:59952",
+      "3217:59953",
+      "3217:59954"
+    ],
+    "mutatedNodeIds": [
+      "3153:57340",
+      "3153:57689",
+      "3153:57899",
+      "3153:58105",
+      "3153:58150",
+      "3153:58110",
+      "3153:58114",
+      "3153:58115",
+      "3153:58119",
+      "3153:58120",
+      "3153:58123",
+      "3153:58124",
+      "3153:58131",
+      "3153:58132",
+      "3153:58137",
+      "3153:58138",
+      "3153:58144",
+      "3153:58145",
+      "3153:58149",
+      "3153:58109",
+      "3153:58493"
+    ],
+    "ports": [
+      {
+        "id": "3153:57340",
+        "center": {
+          "x": 1258.4000244140625,
+          "y": 420
+        },
+        "union": {
+          "right": 1188,
+          "centerY": 420
+        },
+        "zoom": 1.36
+      },
+      {
+        "id": "3153:57689",
+        "center": {
+          "x": 1258.4000244140625,
+          "y": 420
+        },
+        "union": {
+          "right": 1188,
+          "centerY": 420
+        },
+        "zoom": 1.36
+      },
+      {
+        "id": "3153:57899",
+        "center": {
+          "x": 1258.4000244140625,
+          "y": 420
+        },
+        "union": {
+          "right": 1188,
+          "centerY": 420
+        },
+        "zoom": 1.36
+      },
+      {
+        "id": "3153:58105",
+        "center": {
+          "x": 1258.4000244140625,
+          "y": 420
+        },
+        "union": {
+          "right": 1188,
+          "centerY": 420
+        },
+        "zoom": 1.36
+      }
+    ],
+    "menu": {
+      "id": "3153:58109",
+      "x": 1258.40625,
+      "y": 420,
+      "width": 230,
+      "height": 310
+    },
+    "note": {
+      "id": "3153:58493",
+      "height": 297
+    },
+    "boardId": "3153:57117"
+  },
+  "readback": [
+    {
+      "id": "3153:57340",
+      "name": "聚合后接 / 20px / union.right + 40×zoom + 16",
+      "type": "FRAME",
+      "x": 1248.4000244140625,
+      "y": 410,
+      "width": 20,
+      "height": 20,
+      "fills": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 1,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          },
+          "boundVariables": {}
+        }
+      ],
+      "strokes": [],
+      "strokeWeight": 1,
+      "children": [
+        {
+          "id": "3217:59949",
+          "name": "加号 / 8px / #121212",
+          "type": "VECTOR",
+          "x": 6,
+          "y": 6,
+          "width": 8,
+          "height": 8,
+          "opacity": 1,
+          "fills": [],
+          "strokes": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 1,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 0.07058823853731155,
+                "g": 0.07058823853731155,
+                "b": 0.07058823853731155
+              },
+              "boundVariables": {}
+            }
+          ],
+          "strokeWeight": 1
+        }
+      ],
+      "imageFills": 0
+    },
+    {
+      "id": "3153:57689",
+      "name": "聚合后接 / 20px / union.right + 40×zoom + 16",
+      "type": "FRAME",
+      "x": 1248.4000244140625,
+      "y": 410,
+      "width": 20,
+      "height": 20,
+      "fills": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 1,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          },
+          "boundVariables": {}
+        }
+      ],
+      "strokes": [],
+      "strokeWeight": 1,
+      "children": [
+        {
+          "id": "3217:59950",
+          "name": "加号 / 8px / #121212",
+          "type": "VECTOR",
+          "x": 6,
+          "y": 6,
+          "width": 8,
+          "height": 8,
+          "opacity": 1,
+          "fills": [],
+          "strokes": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 1,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 0.07058823853731155,
+                "g": 0.07058823853731155,
+                "b": 0.07058823853731155
+              },
+              "boundVariables": {}
+            }
+          ],
+          "strokeWeight": 1
+        }
+      ],
+      "imageFills": 0
+    },
+    {
+      "id": "3153:57899",
+      "name": "聚合后接 / 20px / union.right + 40×zoom + 16",
+      "type": "FRAME",
+      "x": 1248.4000244140625,
+      "y": 410,
+      "width": 20,
+      "height": 20,
+      "fills": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 1,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          },
+          "boundVariables": {}
+        }
+      ],
+      "strokes": [],
+      "strokeWeight": 1,
+      "children": [
+        {
+          "id": "3217:59951",
+          "name": "加号 / 8px / #121212",
+          "type": "VECTOR",
+          "x": 6,
+          "y": 6,
+          "width": 8,
+          "height": 8,
+          "opacity": 1,
+          "fills": [],
+          "strokes": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 1,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 0.07058823853731155,
+                "g": 0.07058823853731155,
+                "b": 0.07058823853731155
+              },
+              "boundVariables": {}
+            }
+          ],
+          "strokeWeight": 1
+        }
+      ],
+      "imageFills": 0
+    },
+    {
+      "id": "3153:58105",
+      "name": "聚合后接 / 20px / union.right + 40×zoom + 16",
+      "type": "FRAME",
+      "x": 1248.4000244140625,
+      "y": 410,
+      "width": 20,
+      "height": 20,
+      "fills": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 1,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          },
+          "boundVariables": {}
+        }
+      ],
+      "strokes": [],
+      "strokeWeight": 1,
+      "children": [
+        {
+          "id": "3217:59952",
+          "name": "加号 / 8px / #121212",
+          "type": "VECTOR",
+          "x": 6,
+          "y": 6,
+          "width": 8,
+          "height": 8,
+          "opacity": 1,
+          "fills": [],
+          "strokes": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 1,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 0.07058823853731155,
+                "g": 0.07058823853731155,
+                "b": 0.07058823853731155
+              },
+              "boundVariables": {}
+            }
+          ],
+          "strokeWeight": 1
+        }
+      ],
+      "imageFills": 0
+    },
+    {
+      "id": "3153:58109",
+      "name": "统一创建目标",
+      "type": "FRAME",
+      "x": 1258.40625,
+      "y": 420,
+      "width": 230,
+      "height": 310,
+      "fills": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 1,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 0.15000000596046448,
+            "g": 0.15000000596046448,
+            "b": 0.15000000596046448
+          },
+          "boundVariables": {}
+        }
+      ],
+      "strokes": [],
+      "strokeWeight": 1,
+      "children": [
+        {
+          "id": "3153:58110",
+          "name": "Frame",
+          "type": "FRAME",
+          "x": 12,
+          "y": 48,
+          "width": 16,
+          "height": 16,
+          "opacity": 1,
+          "fills": [
+            {
+              "type": "SOLID",
+              "visible": false,
+              "opacity": 1,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {}
+            }
+          ],
+          "strokes": [],
+          "strokeWeight": 1
+        },
+        {
+          "id": "3153:58114",
+          "name": "文本",
+          "type": "TEXT",
+          "x": 40,
+          "y": 45,
+          "width": 178,
+          "height": 24,
+          "opacity": 1,
+          "characters": "文本",
+          "fills": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 1,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {
+                "color": {
+                  "type": "VARIABLE_ALIAS",
+                  "id": "VariableID:3064:46581"
+                }
+              }
+            }
+          ],
+          "strokes": [],
+          "strokeWeight": 1
+        },
+        {
+          "id": "3153:58115",
+          "name": "Frame",
+          "type": "FRAME",
+          "x": 12,
+          "y": 84,
+          "width": 16,
+          "height": 16,
+          "opacity": 1,
+          "fills": [
+            {
+              "type": "SOLID",
+              "visible": false,
+              "opacity": 1,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {}
+            }
+          ],
+          "strokes": [],
+          "strokeWeight": 1
+        },
+        {
+          "id": "3153:58119",
+          "name": "图片",
+          "type": "TEXT",
+          "x": 40,
+          "y": 81,
+          "width": 178,
+          "height": 24,
+          "opacity": 1,
+          "characters": "图片",
+          "fills": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 1,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {
+                "color": {
+                  "type": "VARIABLE_ALIAS",
+                  "id": "VariableID:3064:46581"
+                }
+              }
+            }
+          ],
+          "strokes": [],
+          "strokeWeight": 1
+        },
+        {
+          "id": "3153:58120",
+          "name": "Frame",
+          "type": "FRAME",
+          "x": 12,
+          "y": 120,
+          "width": 16,
+          "height": 16,
+          "opacity": 1,
+          "fills": [
+            {
+              "type": "SOLID",
+              "visible": false,
+              "opacity": 1,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {}
+            }
+          ],
+          "strokes": [],
+          "strokeWeight": 1
+        },
+        {
+          "id": "3153:58123",
+          "name": "视频",
+          "type": "TEXT",
+          "x": 40,
+          "y": 117,
+          "width": 178,
+          "height": 24,
+          "opacity": 1,
+          "characters": "视频",
+          "fills": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 1,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {
+                "color": {
+                  "type": "VARIABLE_ALIAS",
+                  "id": "VariableID:3064:46581"
+                }
+              }
+            }
+          ],
+          "strokes": [],
+          "strokeWeight": 1
+        },
+        {
+          "id": "3153:58124",
+          "name": "Frame",
+          "type": "FRAME",
+          "x": 12,
+          "y": 156,
+          "width": 16,
+          "height": 16,
+          "opacity": 0.30000001192092896,
+          "fills": [
+            {
+              "type": "SOLID",
+              "visible": false,
+              "opacity": 1,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {}
+            }
+          ],
+          "strokes": [],
+          "strokeWeight": 1
+        },
+        {
+          "id": "3153:58131",
+          "name": "音频",
+          "type": "TEXT",
+          "x": 40,
+          "y": 153,
+          "width": 178,
+          "height": 24,
+          "opacity": 0.30000001192092896,
+          "characters": "音频",
+          "fills": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 1,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {
+                "color": {
+                  "type": "VARIABLE_ALIAS",
+                  "id": "VariableID:3064:46581"
+                }
+              }
+            }
+          ],
+          "strokes": [],
+          "strokeWeight": 1
+        },
+        {
+          "id": "3153:58132",
+          "name": "Frame",
+          "type": "FRAME",
+          "x": 12,
+          "y": 192,
+          "width": 16,
+          "height": 16,
+          "opacity": 0.30000001192092896,
+          "fills": [
+            {
+              "type": "SOLID",
+              "visible": false,
+              "opacity": 1,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {}
+            }
+          ],
+          "strokes": [],
+          "strokeWeight": 1
+        },
+        {
+          "id": "3153:58137",
+          "name": "时间线",
+          "type": "TEXT",
+          "x": 40,
+          "y": 189,
+          "width": 178,
+          "height": 24,
+          "opacity": 0.30000001192092896,
+          "characters": "时间线",
+          "fills": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 1,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {
+                "color": {
+                  "type": "VARIABLE_ALIAS",
+                  "id": "VariableID:3064:46581"
+                }
+              }
+            }
+          ],
+          "strokes": [],
+          "strokeWeight": 1
+        },
+        {
+          "id": "3153:58138",
+          "name": "Frame",
+          "type": "FRAME",
+          "x": 12,
+          "y": 228,
+          "width": 16,
+          "height": 16,
+          "opacity": 0.30000001192092896,
+          "fills": [
+            {
+              "type": "SOLID",
+              "visible": false,
+              "opacity": 1,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {}
+            }
+          ],
+          "strokes": [],
+          "strokeWeight": 1
+        },
+        {
+          "id": "3153:58144",
+          "name": "主体",
+          "type": "TEXT",
+          "x": 40,
+          "y": 225,
+          "width": 178,
+          "height": 24,
+          "opacity": 0.30000001192092896,
+          "characters": "主体",
+          "fills": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 1,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {
+                "color": {
+                  "type": "VARIABLE_ALIAS",
+                  "id": "VariableID:3064:46581"
+                }
+              }
+            }
+          ],
+          "strokes": [],
+          "strokeWeight": 1
+        },
+        {
+          "id": "3153:58145",
+          "name": "Frame",
+          "type": "FRAME",
+          "x": 12,
+          "y": 264,
+          "width": 16,
+          "height": 16,
+          "opacity": 0.30000001192092896,
+          "fills": [
+            {
+              "type": "SOLID",
+              "visible": false,
+              "opacity": 1,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {}
+            }
+          ],
+          "strokes": [],
+          "strokeWeight": 1
+        },
+        {
+          "id": "3153:58149",
+          "name": "导演台",
+          "type": "TEXT",
+          "x": 40,
+          "y": 261,
+          "width": 178,
+          "height": 24,
+          "opacity": 0.30000001192092896,
+          "characters": "导演台",
+          "fills": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 1,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {
+                "color": {
+                  "type": "VARIABLE_ALIAS",
+                  "id": "VariableID:3064:46581"
+                }
+              }
+            }
+          ],
+          "strokes": [],
+          "strokeWeight": 1
+        },
+        {
+          "id": "3153:58150",
+          "name": "添加节点",
+          "type": "TEXT",
+          "x": 12,
+          "y": 10,
+          "width": 206,
+          "height": 24,
+          "opacity": 0.47999998927116394,
+          "characters": "添加节点",
+          "fills": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 1,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {
+                "color": {
+                  "type": "VARIABLE_ALIAS",
+                  "id": "VariableID:3064:46581"
+                }
+              }
+            }
+          ],
+          "strokes": [],
+          "strokeWeight": 1
+        }
+      ],
+      "imageFills": 0
+    },
+    {
+      "id": "3153:58493",
+      "name": "多选连线 / 精确合同与验收边界 / 2026-10-29",
+      "type": "TEXT",
+      "x": 1953,
+      "y": 2060,
+      "width": 3650,
+      "height": 297,
+      "fills": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 1,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          },
+          "boundVariables": {
+            "color": {
+              "type": "VARIABLE_ALIAS",
+              "id": "VariableID:3064:46581"
+            }
+          }
+        }
+      ],
+      "strokes": [],
+      "strokeWeight": 1,
+      "characters": "2026-10-29 实测：两文本点击统一后接，创建 1 个图片节点 + 2 条引用；一次撤销 / 重做整体移除 / 恢复。拖到已有文本目标，批量新增 2 条边，亦整体撤销 / 重做；重复整批拒绝，提示“无法连接这些节点”。\n\n聚合入口屏幕中心 = union.right + 40 × zoom + 16，Y = union.centerY；本板 zoom = 136%，union.right = 1188，故入口中心 (1258.4, 420)。固定 20 px 白底 #FFFFFF / 黑色 #121212 加号；60 × 120 逻辑盒，默认 local (30,60)，仅右侧 40 × 80 热区。80 ms 指数跟随，离开立即复位；不使用单源外 22 px 或 0.5 缩放下限。\n\n空白拖拽 / pending：每个来源右边中点直达同一落点，没有聚合主干。drag 起点外扩 4 CSS px，pending 为边缘中点；已吸附已有目标时只绘制 anchor 单条预览，最终仍整批提交。05 原位图显示 pending 的 phase 0 静态关键帧，两个来源在同一水平线，第一条在第二节点下面遮挡。\n\n手势开始冻结来源列表；目标能力采用全来源交集，不静默丢弃不兼容来源。重复、自连、环或任一来源失败均整批拒绝。anchor 按渲染顺序取有 source handle 的较低中位项，不等于最右节点。\n\n写入 receipt / 边立即出现不等于远端确认。异步保存需等待明确保存状态并刷新 / 重开核验全部边和 reference；只读、未持久化节点与并发来源变化仍按运行时验收结果记录，不在静态设计中宣称完成。\n\n选区圆角、描边与边距尚缺完整尺寸合同，保持原设计并列为差异；本次不借截图估算。原工具条、节点和结果生成器位置保持。分镜成功态、原生字体和下载产物仍不纳入本次一致性完成声明。",
+      "imageFills": 0
+    },
+    {
+      "id": "3217:59953",
+      "name": "多源 pending / 各源右中点→共同落点 / phase 0",
+      "type": "VECTOR",
+      "x": 908,
+      "y": 420,
+      "width": 350.3999938964844,
+      "height": 0,
+      "fills": [],
+      "strokes": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 1,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 0,
+            "g": 0.5568627715110779,
+            "b": 0.8980392217636108
+          },
+          "boundVariables": {}
+        }
+      ],
+      "strokeWeight": 1,
+      "vectorPaths": [
+        {
+          "windingRule": "NONZERO",
+          "data": "M 0 0 C 20 0 330.3999938964844 0 350.3999938964844 0"
+        }
+      ],
+      "imageFills": 0
+    },
+    {
+      "id": "3217:59954",
+      "name": "多源 pending / 各源右中点→共同落点 / phase 0",
+      "type": "VECTOR",
+      "x": 1188,
+      "y": 420,
+      "width": 70.4000015258789,
+      "height": 0,
+      "fills": [],
+      "strokes": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 1,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 0,
+            "g": 0.5568627715110779,
+            "b": 0.8980392217636108
+          },
+          "boundVariables": {}
+        }
+      ],
+      "strokeWeight": 1,
+      "vectorPaths": [
+        {
+          "windingRule": "NONZERO",
+          "data": "M 0 0 C 20 0 50.400001525878906 0 70.4000015258789 0"
+        }
+      ],
+      "imageFills": 0
+    }
+  ]
+}

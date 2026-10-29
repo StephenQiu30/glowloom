@@ -1,0 +1,24 @@
+{
+  "url": "http://localhost:1122/canvas?project_id=6836c671-a532-44d9-9b79-b661d2f61b62&canvas_id=2da104f4-b745-4e70-ab80-1fc99750bc3e&scope_id=a6c05c02-8821-40f9-b00e-b841f9be90d0",
+  "single": {
+    "afterSaveAndReload": {
+      "nodes": 2,
+      "edges": 1
+    }
+  },
+  "multiCreate": {
+    "nodes": 3,
+    "edges": 3
+  },
+  "undo": {
+    "shortcut": "super+z",
+    "nodes": 2,
+    "edges": 1
+  },
+  "redo": {
+    "via": "更多画布操作→重做",
+    "nodes": 3,
+    "edges": 3
+  },
+  "note": "super+Shift+z native command had no effect; product redo button succeeded; keyboard parity not yet accepted"
+}

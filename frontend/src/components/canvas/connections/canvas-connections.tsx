@@ -115,6 +115,7 @@ export function ActiveConnectionPath({
   handle,
   mouseWorld,
   target,
+  targetAttraction = 1,
   fanout = false,
   anchorOffset = 0,
 }: {
@@ -122,6 +123,7 @@ export function ActiveConnectionPath({
   handle: ConnectionHandle;
   mouseWorld: Position;
   target?: CanvasNodeData;
+  targetAttraction?: number;
   fanout?: boolean;
   anchorOffset?: number;
 }) {
@@ -145,19 +147,29 @@ export function ActiveConnectionPath({
       : node.position.y + node.height / 2;
   const snappedStartX =
     handle.handleType === "target" && target
-      ? target.position.x + target.width + anchorOffset
+      ? startX +
+        (target.position.x +
+          target.width +
+          (targetAttraction === 1 ? anchorOffset : 0) -
+          startX) *
+          targetAttraction
       : startX;
   const snappedStartY =
     handle.handleType === "target" && target
-      ? target.position.y + target.height / 2
+      ? startY +
+        (target.position.y + target.height / 2 - startY) * targetAttraction
       : startY;
   const snappedEndX =
     handle.handleType === "source" && target
-      ? target.position.x - anchorOffset
+      ? endX +
+        (target.position.x -
+          (targetAttraction === 1 ? anchorOffset : 0) -
+          endX) *
+          targetAttraction
       : endX;
   const snappedEndY =
     handle.handleType === "source" && target
-      ? target.position.y + target.height / 2
+      ? endY + (target.position.y + target.height / 2 - endY) * targetAttraction
       : endY;
   const { path: pathD } = canvasConnectionGeometry(
     { x: snappedStartX, y: snappedStartY },

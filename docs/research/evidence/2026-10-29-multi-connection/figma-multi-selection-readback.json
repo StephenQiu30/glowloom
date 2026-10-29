@@ -1,0 +1,628 @@
+{
+  "date": "2026-10-29",
+  "mutation": {
+    "mutatedNodeIds": [
+      "3153:57291",
+      "3153:57484",
+      "3153:57640",
+      "3153:57850",
+      "3153:58056",
+      "3153:58109",
+      "3153:58114",
+      "3153:58119",
+      "3153:58123",
+      "3153:58131",
+      "3153:58137",
+      "3153:58144",
+      "3153:58149",
+      "3153:58150",
+      "3153:58493"
+    ],
+    "boxes": [
+      {
+        "id": "3153:57291",
+        "x": 613.59375,
+        "y": 245.60000610351562,
+        "width": 628.7999877929688,
+        "height": 348.79998779296875,
+        "radius": 54.400001525878906,
+        "stroke": 1,
+        "dash": [
+          3,
+          3
+        ],
+        "fill": [
+          {
+            "type": "SOLID",
+            "visible": true,
+            "opacity": 0.03921568766236305,
+            "blendMode": "NORMAL",
+            "color": {
+              "r": 1,
+              "g": 1,
+              "b": 1
+            },
+            "boundVariables": {}
+          }
+        ],
+        "border": [
+          {
+            "type": "SOLID",
+            "visible": true,
+            "opacity": 0.20000000298023224,
+            "blendMode": "NORMAL",
+            "color": {
+              "r": 1,
+              "g": 1,
+              "b": 1
+            },
+            "boundVariables": {}
+          }
+        ]
+      },
+      {
+        "id": "3153:57484",
+        "x": 613.59375,
+        "y": 245.60000610351562,
+        "width": 628.7999877929688,
+        "height": 348.79998779296875,
+        "radius": 54.400001525878906,
+        "stroke": 1,
+        "dash": [
+          3,
+          3
+        ],
+        "fill": [
+          {
+            "type": "SOLID",
+            "visible": true,
+            "opacity": 0.03921568766236305,
+            "blendMode": "NORMAL",
+            "color": {
+              "r": 1,
+              "g": 1,
+              "b": 1
+            },
+            "boundVariables": {}
+          }
+        ],
+        "border": [
+          {
+            "type": "SOLID",
+            "visible": true,
+            "opacity": 0.20000000298023224,
+            "blendMode": "NORMAL",
+            "color": {
+              "r": 1,
+              "g": 1,
+              "b": 1
+            },
+            "boundVariables": {}
+          }
+        ]
+      },
+      {
+        "id": "3153:57640",
+        "x": 613.59375,
+        "y": 245.60000610351562,
+        "width": 628.7999877929688,
+        "height": 348.79998779296875,
+        "radius": 54.400001525878906,
+        "stroke": 1,
+        "dash": [
+          3,
+          3
+        ],
+        "fill": [
+          {
+            "type": "SOLID",
+            "visible": true,
+            "opacity": 0.03921568766236305,
+            "blendMode": "NORMAL",
+            "color": {
+              "r": 1,
+              "g": 1,
+              "b": 1
+            },
+            "boundVariables": {}
+          }
+        ],
+        "border": [
+          {
+            "type": "SOLID",
+            "visible": true,
+            "opacity": 0.20000000298023224,
+            "blendMode": "NORMAL",
+            "color": {
+              "r": 1,
+              "g": 1,
+              "b": 1
+            },
+            "boundVariables": {}
+          }
+        ]
+      },
+      {
+        "id": "3153:57850",
+        "x": 613.59375,
+        "y": 245.5999755859375,
+        "width": 628.7999877929688,
+        "height": 348.79998779296875,
+        "radius": 54.400001525878906,
+        "stroke": 1,
+        "dash": [
+          3,
+          3
+        ],
+        "fill": [
+          {
+            "type": "SOLID",
+            "visible": true,
+            "opacity": 0.03921568766236305,
+            "blendMode": "NORMAL",
+            "color": {
+              "r": 1,
+              "g": 1,
+              "b": 1
+            },
+            "boundVariables": {}
+          }
+        ],
+        "border": [
+          {
+            "type": "SOLID",
+            "visible": true,
+            "opacity": 0.20000000298023224,
+            "blendMode": "NORMAL",
+            "color": {
+              "r": 1,
+              "g": 1,
+              "b": 1
+            },
+            "boundVariables": {}
+          }
+        ]
+      },
+      {
+        "id": "3153:58056",
+        "x": 613.59375,
+        "y": 245.5999755859375,
+        "width": 628.7999877929688,
+        "height": 348.79998779296875,
+        "radius": 54.400001525878906,
+        "stroke": 1,
+        "dash": [
+          3,
+          3
+        ],
+        "fill": [
+          {
+            "type": "SOLID",
+            "visible": true,
+            "opacity": 0.03921568766236305,
+            "blendMode": "NORMAL",
+            "color": {
+              "r": 1,
+              "g": 1,
+              "b": 1
+            },
+            "boundVariables": {}
+          }
+        ],
+        "border": [
+          {
+            "type": "SOLID",
+            "visible": true,
+            "opacity": 0.20000000298023224,
+            "blendMode": "NORMAL",
+            "color": {
+              "r": 1,
+              "g": 1,
+              "b": 1
+            },
+            "boundVariables": {}
+          }
+        ]
+      }
+    ],
+    "menu": {
+      "id": "3153:58109",
+      "cornerRadius": 12,
+      "width": 200,
+      "height": 316
+    },
+    "noteHeight": 405
+  },
+  "readback": [
+    {
+      "id": "3153:57291",
+      "name": "多选范围 / 2 文本 / CSS 40world @136% / dash为Figma近似",
+      "x": 613.59375,
+      "y": 245.60000610351562,
+      "width": 628.7999877929688,
+      "height": 348.79998779296875,
+      "cornerRadius": 54.400001525878906,
+      "strokeWeight": 1,
+      "strokeAlign": "OUTSIDE",
+      "strokes": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 0.20000000298023224,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          },
+          "boundVariables": {}
+        }
+      ],
+      "fills": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 0.03921568766236305,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          },
+          "boundVariables": {}
+        }
+      ],
+      "dashPattern": [
+        3,
+        3
+      ],
+      "children": []
+    },
+    {
+      "id": "3153:57484",
+      "name": "多选范围 / 2 文本 / CSS 40world @136% / dash为Figma近似",
+      "x": 613.59375,
+      "y": 245.60000610351562,
+      "width": 628.7999877929688,
+      "height": 348.79998779296875,
+      "cornerRadius": 54.400001525878906,
+      "strokeWeight": 1,
+      "strokeAlign": "OUTSIDE",
+      "strokes": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 0.20000000298023224,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          },
+          "boundVariables": {}
+        }
+      ],
+      "fills": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 0.03921568766236305,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          },
+          "boundVariables": {}
+        }
+      ],
+      "dashPattern": [
+        3,
+        3
+      ],
+      "children": []
+    },
+    {
+      "id": "3153:57640",
+      "name": "多选范围 / 2 文本 / CSS 40world @136% / dash为Figma近似",
+      "x": 613.59375,
+      "y": 245.60000610351562,
+      "width": 628.7999877929688,
+      "height": 348.79998779296875,
+      "cornerRadius": 54.400001525878906,
+      "strokeWeight": 1,
+      "strokeAlign": "OUTSIDE",
+      "strokes": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 0.20000000298023224,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          },
+          "boundVariables": {}
+        }
+      ],
+      "fills": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 0.03921568766236305,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          },
+          "boundVariables": {}
+        }
+      ],
+      "dashPattern": [
+        3,
+        3
+      ],
+      "children": []
+    },
+    {
+      "id": "3153:57850",
+      "name": "多选范围 / 2 文本 / CSS 40world @136% / dash为Figma近似",
+      "x": 613.59375,
+      "y": 245.5999755859375,
+      "width": 628.7999877929688,
+      "height": 348.79998779296875,
+      "cornerRadius": 54.400001525878906,
+      "strokeWeight": 1,
+      "strokeAlign": "OUTSIDE",
+      "strokes": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 0.20000000298023224,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          },
+          "boundVariables": {}
+        }
+      ],
+      "fills": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 0.03921568766236305,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          },
+          "boundVariables": {}
+        }
+      ],
+      "dashPattern": [
+        3,
+        3
+      ],
+      "children": []
+    },
+    {
+      "id": "3153:58056",
+      "name": "多选范围 / 2 文本 / CSS 40world @136% / dash为Figma近似",
+      "x": 613.59375,
+      "y": 245.5999755859375,
+      "width": 628.7999877929688,
+      "height": 348.79998779296875,
+      "cornerRadius": 54.400001525878906,
+      "strokeWeight": 1,
+      "strokeAlign": "OUTSIDE",
+      "strokes": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 0.20000000298023224,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          },
+          "boundVariables": {}
+        }
+      ],
+      "fills": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 0.03921568766236305,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          },
+          "boundVariables": {}
+        }
+      ],
+      "dashPattern": [
+        3,
+        3
+      ],
+      "children": []
+    },
+    {
+      "id": "3153:58109",
+      "name": "统一创建目标",
+      "x": 1270.0279541015625,
+      "y": 420.2510070800781,
+      "width": 200,
+      "height": 316,
+      "cornerRadius": 12,
+      "strokeWeight": 1,
+      "strokeAlign": "INSIDE",
+      "strokes": [],
+      "fills": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 1,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 0.15000000596046448,
+            "g": 0.15000000596046448,
+            "b": 0.15000000596046448
+          },
+          "boundVariables": {}
+        }
+      ],
+      "dashPattern": [],
+      "children": [
+        {
+          "id": "3153:58114",
+          "x": 40,
+          "y": 43,
+          "width": 144,
+          "height": 22,
+          "fontSize": 13,
+          "lineHeight": {
+            "unit": "PIXELS",
+            "value": 22
+          },
+          "characters": "文本"
+        },
+        {
+          "id": "3153:58119",
+          "x": 40,
+          "y": 83,
+          "width": 144,
+          "height": 22,
+          "fontSize": 13,
+          "lineHeight": {
+            "unit": "PIXELS",
+            "value": 22
+          },
+          "characters": "图片"
+        },
+        {
+          "id": "3153:58123",
+          "x": 40,
+          "y": 123,
+          "width": 144,
+          "height": 22,
+          "fontSize": 13,
+          "lineHeight": {
+            "unit": "PIXELS",
+            "value": 22
+          },
+          "characters": "视频"
+        },
+        {
+          "id": "3153:58131",
+          "x": 40,
+          "y": 163,
+          "width": 144,
+          "height": 22,
+          "fontSize": 13,
+          "lineHeight": {
+            "unit": "PIXELS",
+            "value": 22
+          },
+          "characters": "音频"
+        },
+        {
+          "id": "3153:58137",
+          "x": 40,
+          "y": 203,
+          "width": 144,
+          "height": 22,
+          "fontSize": 13,
+          "lineHeight": {
+            "unit": "PIXELS",
+            "value": 22
+          },
+          "characters": "时间线"
+        },
+        {
+          "id": "3153:58144",
+          "x": 40,
+          "y": 243,
+          "width": 144,
+          "height": 22,
+          "fontSize": 13,
+          "lineHeight": {
+            "unit": "PIXELS",
+            "value": 22
+          },
+          "characters": "主体"
+        },
+        {
+          "id": "3153:58149",
+          "x": 40,
+          "y": 283,
+          "width": 144,
+          "height": 22,
+          "fontSize": 13,
+          "lineHeight": {
+            "unit": "PIXELS",
+            "value": 22
+          },
+          "characters": "导演台"
+        },
+        {
+          "id": "3153:58150",
+          "x": 16,
+          "y": 9,
+          "width": 168,
+          "height": 22,
+          "fontSize": 13,
+          "lineHeight": {
+            "unit": "PIXELS",
+            "value": 22
+          },
+          "characters": "添加节点"
+        }
+      ]
+    },
+    {
+      "id": "3153:58493",
+      "name": "多选连线 / 精确合同与验收边界 / 2026-10-29",
+      "x": 1953,
+      "y": 2060,
+      "width": 3650,
+      "height": 405,
+      "strokeWeight": 1,
+      "strokeAlign": "OUTSIDE",
+      "strokes": [],
+      "fills": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 1,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          },
+          "boundVariables": {
+            "color": {
+              "type": "VARIABLE_ALIAS",
+              "id": "VariableID:3064:46581"
+            }
+          }
+        }
+      ],
+      "dashPattern": [],
+      "characters": "2026-10-29 实测：两文本点击统一后接，创建 1 个图片节点 + 2 条引用；一次撤销 / 重做整体移除 / 恢复。拖到已有文本目标，批量新增 2 条边，亦整体撤销 / 重做；重复整批拒绝，提示“无法连接这些节点”。\n\n聚合入口屏幕中心 = union.right + 40 × zoom + 16，Y = union.centerY；本板 zoom = 136%，union.right = 1188，故入口中心 (1258.4, 420)。固定 20 px 白底 #FFFFFF / 黑色 #121212 加号；60 × 120 逻辑盒，默认 local (30,60)，仅右侧 40 × 80 热区。80 ms 指数跟随，离开立即复位；不使用单源外 22 px 或 0.5 缩放下限。\n\n空白拖拽 / pending：每个来源右边中点直达同一落点，没有聚合主干。drag 起点外扩 4 CSS px，pending 为边缘中点；已吸附已有目标时只绘制 anchor 单条预览，最终仍整批提交。05 原位图显示 pending 的 phase 0 静态关键帧，两个来源在同一水平线，第一条在第二节点下面遮挡。\n\n手势开始冻结来源列表；目标能力采用全来源交集，不静默丢弃不兼容来源。重复、自连、环或任一来源失败均整批拒绝。anchor 按渲染顺序取有 source handle 的较低中位项，不等于最右节点。\n\n写入 receipt / 边立即出现不等于远端确认。异步保存需等待明确保存状态并刷新 / 重开核验全部边和 reference；只读、未持久化节点与并发来源变化仍按运行时验收结果记录，不在静态设计中宣称完成。\n\n选区已按已加载 CSS 原位修正：union margin −40 world / padding 40 world，radius 40 world；136% 时屏幕外扩与圆角均 54.4。白色边框 alpha 20%，填充 alpha 10/255；authored border = 1/zoom world，屏幕约 1 px（浏览器量化）。CSS dashed 无显式段长，Figma [3,3] 为静态近似，不冒充源 dash 参数。原工具条、节点和结果生成器位置保持。分镜成功态、原生字体和下载产物仍不纳入本次一致性完成声明。\n\nPending 补证：聚合 DOM opacity=1、白色 glyph 保留；菜单按实际指针点击位置定位，不是强制对齐聚合中心，也不强制隐藏入口。源实测菜单 200 × 316；本图复用该尺寸及实测相对点击偏移 (+11.628, +0.251)。\n\n菜单精确合同：width 200，height 316 = 上下 padding 4×2 + heading 32 + 7×item 36 + 6×gap 4；radius 12、border 0；font 13 / 400 / line 22。"
+    }
+  ],
+  "sourceCSS": [
+    "canvas-view.523722e333.css @16248",
+    "main.8ac605db3f.css @49515"
+  ],
+  "limitations": "CSS dashed is browser defined; Figma [3,3] is a static approximation. Toolbar and tag geometry kept awaiting source contract."
+}

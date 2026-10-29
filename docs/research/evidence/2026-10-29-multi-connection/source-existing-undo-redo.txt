@@ -1,0 +1,16 @@
+UNDO
+Browser tab: 1980372061, Title: "连线完整验收-20261029 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/52298cdd-795e-4f5a-af85-47eb2fb84b6e".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 123-126
+~									25 text 4 nodes, 4 edges, 2 selected. Editable. Room connected. 已保存.
+The focused UI element is 26 container Canvas
+REDO
+Browser tab: 1980372061, Title: "连线完整验收-20261029 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/52298cdd-795e-4f5a-af85-47eb2fb84b6e".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 129-132, 134
+~									25 text 4 nodes, 6 edges, 2 selected. Editable. Room connected. 已保存.
++												134 image
++													135 container Reference connection from 文本 node: 文本 1 to 文本 node: 文本 3
++												136 image
++													137 container Reference connection from 文本 node: 文本 2 to 文本 node: 文本 3
+The focused UI element is 26 container Canvas

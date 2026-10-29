@@ -1,0 +1,59 @@
+{
+  "nodes": [
+    {
+      "label": "文本 node: 文本 1",
+      "rect": {
+        "bottom": 310.2986755371094,
+        "height": 209.14059448242188,
+        "left": 430.900146484375,
+        "right": 640.0407104492188,
+        "top": 101.1580810546875,
+        "width": 209.14056396484375,
+        "x": 430.900146484375,
+        "y": 101.1580810546875
+      },
+      "style": "z-index: 8; transform: translate(614.378px, -241.677px); pointer-events: all; visibility: visible; width: 320px; height: 320px; --octo-canvas-node-external-frame-inset: calc(-1 * 4px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-canvas-node-external-frame-radius: calc(8px + 4px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-canvas-node-external-frame-stroke-width: calc(1px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-canvas-node-chrome-counter-scale: 1.5300711196867895; --octo-canvas-node-surface-stroke-counter-scale: 1.5300711196867895;"
+    },
+    {
+      "label": "文本 node: 文本 2",
+      "rect": {
+        "bottom": 318.5484313964844,
+        "height": 209.14060974121097,
+        "left": 188.94032287597656,
+        "right": 398.0809326171875,
+        "top": 109.40782165527344,
+        "width": 209.14060974121097,
+        "x": 188.94032287597656,
+        "y": 109.40782165527344
+      },
+      "style": "z-index: 9; transform: translate(244.162px, -229.055px); pointer-events: all; visibility: visible; width: 320px; height: 320px; --octo-canvas-node-external-frame-inset: calc(-1 * 4px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-canvas-node-external-frame-radius: calc(8px + 4px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-canvas-node-external-frame-stroke-width: calc(1px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-canvas-node-chrome-counter-scale: 1.5300711196867895; --octo-canvas-node-surface-stroke-counter-scale: 1.5300711196867895;"
+    },
+    {
+      "label": "文本 node: 文本 3",
+      "rect": {
+        "bottom": 767.8308715820312,
+        "height": 209.140625,
+        "left": 1087.9127197265625,
+        "right": 1297.0533447265625,
+        "top": 558.6902465820312,
+        "width": 209.140625,
+        "x": 1087.9127197265625,
+        "y": 558.6902465820312
+      },
+      "style": "z-index: 2; transform: translate(1619.65px, 458.379px); pointer-events: all; visibility: visible; width: 320px; height: 320px; --octo-canvas-node-external-frame-inset: calc(-1 * 4px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-canvas-node-external-frame-radius: calc(8px + 4px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-canvas-node-external-frame-stroke-width: calc(1px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-canvas-node-chrome-counter-scale: 1.5300711196867895; --octo-canvas-node-surface-stroke-counter-scale: 1.5300711196867895; --octo-canvas-node-tag-hit-area-counter-scale: 1;"
+    }
+  ],
+  "port": {
+    "html": "<button aria-haspopup=\"menu\" data-canvas-connection-handle-interactive=\"true\" data-canvas-connection-handle-type=\"source\" data-canvas-connection-node-id=\"node_cgm1h72hr6\" data-testid=\"flow-node-multi-selection-source-connection-menu-button\" aria-label=\"Create connected node after selected nodes\" class=\"inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-transparent p-2 text-dreamina-text-primary motion-safe:transition-colors motion-safe:duration-dreamina-instant motion-safe:ease-dreamina-soft hover:bg-dreamina-block-primary-hover active:bg-dreamina-block-primary-pressed aria-pressed:bg-dreamina-block-primary-default disabled:cursor-not-allowed disabled:text-dreamina-text-disabled disabled:hover:bg-transparent disabled:active:bg-transparent disabled:aria-pressed:bg-transparent aria-disabled:cursor-not-allowed aria-disabled:text-dreamina-text-disabled aria-disabled:hover:bg-transparent aria-disabled:active:bg-transparent aria-disabled:aria-pressed:bg-transparent [&amp;_svg]:size-5 [&amp;_svg]:shrink-0 nodrag nopan absolute top-1/2 -translate-y-1/2 pointer-events-none translate-x-1/2 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:[box-shadow:none] focus-visible:[&amp;::before]:[box-shadow:none] focus-visible:[&amp;::after]:[box-shadow:none]\" type=\"button\" style=\"scale: 1; right: 0px;\"><span aria-hidden=\"true\" class=\"contents\"></span></button>",
+    "rect": {
+      "bottom": 227.85324096679688,
+      "height": 36,
+      "left": 664.1832885742188,
+      "right": 700.1832885742188,
+      "top": 191.85324096679688,
+      "width": 36,
+      "x": 664.1832885742188,
+      "y": 191.85324096679688
+    }
+  }
+}

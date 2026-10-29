@@ -1,0 +1,48 @@
+{
+  "edges": [
+    "11c5ce51-9b81-4315-a4d5-3fd65f4f7101",
+    "60fc33cb-cfa6-4927-8cd9-7d4ef015d8df",
+    "a6cd0a0a-e962-4abb-a049-b359618d1134",
+    "4b60f549-dbf9-4ad0-83ad-92446e01fb40",
+    "c5e43654-e376-4ed0-8f45-4698f8b2761e",
+    "c789723f-dec7-4a5b-aa5f-f3c5a79148fb"
+  ],
+  "frame": {
+    "bottom": 507.9671630859375,
+    "height": 242.1312255859375,
+    "left": 268.3671875,
+    "right": 738.8107299804688,
+    "top": 265.8359375,
+    "width": 470.4435424804687,
+    "x": 268.3671875,
+    "y": 265.8359375
+  },
+  "frameStyle": "position: absolute; left: -24.0329px; top: -24.0329px; width: 700px; height: 320px; box-sizing: content-box; padding: 40px; border-radius: 40px; border-style: dashed; border-width: 1.66439px; border-color: color-mix(in srgb, var(--canvas-reference-foreground) 20%, transparent); background: color-mix(in srgb, var(--canvas-reference-foreground) 3.9215686274509802%, transparent); transform: scale(0.600822); transform-origin: 0px 0px;",
+  "handle": {
+    "bottom": 446,
+    "height": 120,
+    "left": 723.0078125,
+    "right": 783.0078125,
+    "top": 326,
+    "width": 60,
+    "x": 723.0078125,
+    "y": 326
+  },
+  "menu": {
+    "bottom": 702,
+    "height": 316,
+    "left": 753,
+    "right": 953,
+    "top": 386,
+    "width": 200,
+    "x": 753,
+    "y": 386
+  },
+  "nodes": [
+    "031068e5-d63f-4965-a78c-eaf81d049001",
+    "9f8e0525-4c33-4487-80b2-b969866bb198",
+    "a7f29ffe-d929-4f85-aa3f-3193ecb412cf",
+    "0d16ceea-c92c-475a-9813-cc8d8dd2cdce"
+  ],
+  "previews": 2
+}

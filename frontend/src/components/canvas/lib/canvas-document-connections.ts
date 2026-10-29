@@ -18,6 +18,28 @@ export function canvasConnectionDirection(
     : { fromNodeId: handle.nodeId, toNodeId: otherId };
 }
 
+/** Build the whole selection before the host accepts any graph change. */
+export function connectCanvasDocumentSources(
+  state: CanvasEditorState,
+  sourceIDs: string[],
+  targetID: string,
+): CanvasEditorState {
+  if (!sourceIDs.length) throw new Error("请选择来源节点");
+  if (new Set(sourceIDs).size !== sourceIDs.length)
+    throw new Error("来源节点重复，请调整选择");
+  return sourceIDs.reduce((next, sourceID) => {
+    // A batch is one relation-creation gesture: an existing relation rejects
+    // the entire selection, even when another source could add a fresh edge.
+    if (
+      next.connections.some(
+        (edge) => edge.fromNodeId === sourceID && edge.toNodeId === targetID,
+      )
+    )
+      throw new Error("这项内容已经关联，请勿重复连接");
+    return connectCanvasDocument(next, sourceID, targetID);
+  }, state);
+}
+
 /** 草稿引用能力来自图协议，不由当前模型或执行通道缩窄。 */
 export function supportsCanvasConnection(source: string, target: string) {
   return canvasPortsFor(source, target).length > 0;

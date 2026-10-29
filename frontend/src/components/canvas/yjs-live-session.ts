@@ -88,6 +88,30 @@ const localSource = (node: CanvasEditorState["nodes"][number]) =>
     : undefined;
 
 /** One page-memory Y.Doc queue and one socket. Heartbeats resolve immutable originals. */
+// Display ordinals and mention labels are allocated by the authority on accept.
+// Compare author-owned content so that this bookkeeping does not block undo.
+function historyNodeFingerprint(node: ServiceGraph["nodes"][number]) {
+  const value = structuredClone(node) as Record<string, unknown>;
+  delete value.referenceLabels;
+  delete value.labelState;
+  const normalize = (part: {
+    type?: string;
+    attrs?: Record<string, unknown>;
+    content?: unknown[];
+  }) => {
+    if (part.type === "mention" && part.attrs?.id) {
+      delete part.attrs.label;
+      delete part.attrs.token;
+    }
+    part.content?.forEach((child) =>
+      normalize(child as Parameters<typeof normalize>[0]),
+    );
+  };
+  if (node.textDocument)
+    normalize((value.textDocument as typeof node.textDocument).content);
+  return canvasGraphFingerprint(value);
+}
+
 export class CanvasYjsLiveSession {
   readonly clientID = crypto.randomUUID();
   private socket: WebSocket | null = null;
@@ -948,7 +972,44 @@ export class CanvasYjsLiveSession {
     if (frame) {
       const from = direction === "undo" ? frame.after : frame.before,
         to = direction === "undo" ? frame.before : frame.after;
+      const removing = new Set(
+        from.graph.nodes
+          .filter((node) => !to.graph.nodes.some((next) => next.id === node.id))
+          .map((node) => node.id),
+      );
+      const knownEdges = new Set(from.graph.connections.map((edge) => edge.id));
+      const foreignDependency =
+        (
+          this.session.snapshot.graph
+            .connections as ServiceGraph["connections"][number][]
+        ).some(
+          (edge) =>
+            !knownEdges.has(edge.id) &&
+            (removing.has(edge.fromNodeId) || removing.has(edge.toNodeId)),
+        ) ||
+        (
+          this.session.snapshot.graph.nodes as ServiceGraph["nodes"][number][]
+        ).some(
+          (node) =>
+            node.parentId &&
+            removing.has(node.parentId) &&
+            !removing.has(node.id) &&
+            !(from.graph.nodes as ServiceGraph["nodes"][number][]).some(
+              (previous) =>
+                previous.id === node.id && previous.parentId === node.parentId,
+            ),
+        );
+      if (foreignDependency) {
+        this.emit({
+          message: "该对象已有其他编辑，无法单独撤销创建。协作者的内容已保留",
+        });
+        return;
+      }
       for (const collection of ["nodes", "connections"] as const) {
+        const fingerprint = (item: unknown) =>
+          collection === "nodes"
+            ? historyNodeFingerprint(item as ServiceGraph["nodes"][number])
+            : canvasGraphFingerprint(item);
         const previous = new Map(
           from.graph[collection].map((item) => [item.id, item]),
         );
@@ -966,8 +1027,7 @@ export class CanvasYjsLiveSession {
             ([id, item]) =>
               !target.has(id) &&
               current.has(id) &&
-              canvasGraphFingerprint(current.get(id)) !==
-                canvasGraphFingerprint(item),
+              fingerprint(current.get(id)!) !== fingerprint(item),
           )
         ) {
           this.emit({

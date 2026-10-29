@@ -13,7 +13,8 @@ import {
   Copy,
   Trash2,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
+import { CanvasConnectionHandle } from "../nodes/canvas-connection-handle";
 
 import { canvasThemes } from "@/components/canvas/runtime/lib/theme";
 import { nodeBounds } from "@/components/canvas/lib/canvas-node-geometry";
@@ -37,6 +38,8 @@ export function CanvasSelectionToolbar({
   runDisabled = false,
   readOnly = false,
   onLayout,
+  onConnectAfter,
+  onConnectStart,
   onCopy,
   onDelete,
 }: {
@@ -51,6 +54,8 @@ export function CanvasSelectionToolbar({
   runDisabled?: boolean;
   readOnly?: boolean;
   onLayout?: (mode: "grid" | "smart") => void;
+  onConnectAfter?: () => void;
+  onConnectStart?: (event: MouseEvent) => void;
   onCopy?: () => void;
   onDelete?: () => void;
 }) {
@@ -61,36 +66,50 @@ export function CanvasSelectionToolbar({
   const left = viewport.x + bounds.left * viewport.k - SELECTION_PAD;
   const top = viewport.y + bounds.top * viewport.k - SELECTION_PAD;
   const width = (bounds.right - bounds.left) * viewport.k + SELECTION_PAD * 2;
-  const height = (bounds.bottom - bounds.top) * viewport.k + SELECTION_PAD * 2;
   const showActions = showToolbar && !readOnly;
 
   return (
     <>
-      <svg
+      <div
         data-canvas-drag-selection
-        className="pointer-events-none absolute z-[65] overflow-visible"
-        style={{ left, top, width, height }}
+        aria-hidden="true"
+        className="pointer-events-none absolute z-[65]"
+        style={{
+          left: viewport.x + bounds.left * viewport.k,
+          top: viewport.y + bounds.top * viewport.k,
+          width: 0,
+          height: 0,
+        }}
       >
-        <rect
-          x={1}
-          y={1}
-          width={Math.max(width - 2, 0)}
-          height={Math.max(height - 2, 0)}
-          rx={16}
-          ry={16}
-          fill={theme.canvas.selectionFill}
-          stroke={theme.canvas.selectionStroke}
-          strokeOpacity={0.55}
-          strokeWidth={1.5}
-          strokeDasharray="7 5"
-          strokeLinecap="round"
+        <div
+          data-canvas-selection-frame
+          style={{
+            position: "absolute",
+            left: -40 * viewport.k,
+            top: -40 * viewport.k,
+            width: bounds.right - bounds.left,
+            height: bounds.bottom - bounds.top,
+            boxSizing: "content-box",
+            padding: 40,
+            borderRadius: 40,
+            borderStyle: "dashed",
+            borderWidth: 1 / viewport.k,
+            borderColor:
+              "color-mix(in srgb, var(--canvas-reference-foreground) 20%, transparent)",
+            background:
+              "color-mix(in srgb, var(--canvas-reference-foreground) 3.9215686274509802%, transparent)",
+            transform: `scale(${viewport.k})`,
+            transformOrigin: "0 0",
+          }}
         />
-      </svg>
+      </div>
       {showActions ? (
         <div
+          role="toolbar"
+          aria-label="多选节点操作"
           className="shadow-overlay absolute z-[70] flex min-h-12 max-w-[calc(100%-1.5rem)] flex-wrap justify-center rounded-xl border text-sm"
           style={{
-            left: "50%",
+            left: left + width / 2,
             transform: "translateX(-50%)",
             top: Math.max(116, top - 60),
             background: theme.toolbar.panel,
@@ -159,6 +178,30 @@ export function CanvasSelectionToolbar({
           ) : null}
         </div>
       ) : null}
+      {showActions && (onConnectStart || onConnectAfter) && (
+        <div
+          data-canvas-selection-connection
+          className="absolute z-[70]"
+          style={{
+            left: viewport.x + bounds.right * viewport.k + 40 * viewport.k + 16,
+            top: viewport.y + ((bounds.top + bounds.bottom) / 2) * viewport.k,
+            width: 0,
+            height: 0,
+          }}
+        >
+          <CanvasConnectionHandle
+            variant="aggregate"
+            scale={viewport.k}
+            side="right"
+            visible
+            onMouseDown={(event) => {
+              event.stopPropagation();
+              if (onConnectStart) onConnectStart(event);
+              else onConnectAfter?.();
+            }}
+          />
+        </div>
+      )}
     </>
   );
 }

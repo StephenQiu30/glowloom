@@ -1,0 +1,321 @@
+{
+  "date": "2026-10-29",
+  "supersedes": "figma-multi-readback.json menu placement and dimensions",
+  "mutation": {
+    "mutatedNodeIds": [
+      "3153:58109",
+      "3153:58110",
+      "3153:58114",
+      "3153:58115",
+      "3153:58119",
+      "3153:58120",
+      "3153:58123",
+      "3153:58124",
+      "3153:58131",
+      "3153:58132",
+      "3153:58137",
+      "3153:58138",
+      "3153:58144",
+      "3153:58145",
+      "3153:58149",
+      "3153:58150",
+      "3153:58105",
+      "3217:59953",
+      "3217:59954",
+      "3153:58493"
+    ],
+    "menu": {
+      "id": "3153:58109",
+      "x": 1270.0279541015625,
+      "y": 420.2510070800781,
+      "width": 200,
+      "height": 316
+    },
+    "glyph": {
+      "id": "3153:58105",
+      "visible": true,
+      "opacity": 1
+    },
+    "noteHeight": 351
+  },
+  "readback": [
+    {
+      "id": "3153:58109",
+      "name": "统一创建目标",
+      "x": 1270.0279541015625,
+      "y": 420.2510070800781,
+      "width": 200,
+      "height": 316,
+      "visible": true,
+      "opacity": 1,
+      "cornerRadius": 8,
+      "fills": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 1,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 0.15000000596046448,
+            "g": 0.15000000596046448,
+            "b": 0.15000000596046448
+          },
+          "boundVariables": {}
+        }
+      ],
+      "strokes": [],
+      "strokeWeight": 1,
+      "dashPattern": [],
+      "children": [
+        {
+          "id": "3153:58110",
+          "type": "FRAME",
+          "x": 16,
+          "y": 46,
+          "width": 16,
+          "height": 16
+        },
+        {
+          "id": "3153:58114",
+          "type": "TEXT",
+          "x": 40,
+          "y": 42,
+          "width": 144,
+          "height": 24,
+          "characters": "文本"
+        },
+        {
+          "id": "3153:58115",
+          "type": "FRAME",
+          "x": 16,
+          "y": 86,
+          "width": 16,
+          "height": 16
+        },
+        {
+          "id": "3153:58119",
+          "type": "TEXT",
+          "x": 40,
+          "y": 82,
+          "width": 144,
+          "height": 24,
+          "characters": "图片"
+        },
+        {
+          "id": "3153:58120",
+          "type": "FRAME",
+          "x": 16,
+          "y": 126,
+          "width": 16,
+          "height": 16
+        },
+        {
+          "id": "3153:58123",
+          "type": "TEXT",
+          "x": 40,
+          "y": 122,
+          "width": 144,
+          "height": 24,
+          "characters": "视频"
+        },
+        {
+          "id": "3153:58124",
+          "type": "FRAME",
+          "x": 16,
+          "y": 166,
+          "width": 16,
+          "height": 16
+        },
+        {
+          "id": "3153:58131",
+          "type": "TEXT",
+          "x": 40,
+          "y": 162,
+          "width": 144,
+          "height": 24,
+          "characters": "音频"
+        },
+        {
+          "id": "3153:58132",
+          "type": "FRAME",
+          "x": 16,
+          "y": 206,
+          "width": 16,
+          "height": 16
+        },
+        {
+          "id": "3153:58137",
+          "type": "TEXT",
+          "x": 40,
+          "y": 202,
+          "width": 144,
+          "height": 24,
+          "characters": "时间线"
+        },
+        {
+          "id": "3153:58138",
+          "type": "FRAME",
+          "x": 16,
+          "y": 246,
+          "width": 16,
+          "height": 16
+        },
+        {
+          "id": "3153:58144",
+          "type": "TEXT",
+          "x": 40,
+          "y": 242,
+          "width": 144,
+          "height": 24,
+          "characters": "主体"
+        },
+        {
+          "id": "3153:58145",
+          "type": "FRAME",
+          "x": 16,
+          "y": 286,
+          "width": 16,
+          "height": 16
+        },
+        {
+          "id": "3153:58149",
+          "type": "TEXT",
+          "x": 40,
+          "y": 282,
+          "width": 144,
+          "height": 24,
+          "characters": "导演台"
+        },
+        {
+          "id": "3153:58150",
+          "type": "TEXT",
+          "x": 16,
+          "y": 10,
+          "width": 168,
+          "height": 24,
+          "characters": "添加节点"
+        }
+      ]
+    },
+    {
+      "id": "3153:58105",
+      "name": "聚合后接 / 20px / union.right + 40×zoom + 16",
+      "x": 1248.4000244140625,
+      "y": 410,
+      "width": 20,
+      "height": 20,
+      "visible": true,
+      "opacity": 1,
+      "cornerRadius": 10,
+      "fills": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 1,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          },
+          "boundVariables": {}
+        }
+      ],
+      "strokes": [],
+      "strokeWeight": 1,
+      "dashPattern": [],
+      "children": [
+        {
+          "id": "3217:59952",
+          "type": "VECTOR",
+          "x": 6,
+          "y": 6,
+          "width": 8,
+          "height": 8
+        }
+      ]
+    },
+    {
+      "id": "3153:58493",
+      "name": "多选连线 / 精确合同与验收边界 / 2026-10-29",
+      "x": 1953,
+      "y": 2060,
+      "width": 3650,
+      "height": 351,
+      "visible": true,
+      "opacity": 0.6000000238418579,
+      "fills": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 1,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          },
+          "boundVariables": {
+            "color": {
+              "type": "VARIABLE_ALIAS",
+              "id": "VariableID:3064:46581"
+            }
+          }
+        }
+      ],
+      "strokes": [],
+      "strokeWeight": 1,
+      "dashPattern": [],
+      "characters": "2026-10-29 实测：两文本点击统一后接，创建 1 个图片节点 + 2 条引用；一次撤销 / 重做整体移除 / 恢复。拖到已有文本目标，批量新增 2 条边，亦整体撤销 / 重做；重复整批拒绝，提示“无法连接这些节点”。\n\n聚合入口屏幕中心 = union.right + 40 × zoom + 16，Y = union.centerY；本板 zoom = 136%，union.right = 1188，故入口中心 (1258.4, 420)。固定 20 px 白底 #FFFFFF / 黑色 #121212 加号；60 × 120 逻辑盒，默认 local (30,60)，仅右侧 40 × 80 热区。80 ms 指数跟随，离开立即复位；不使用单源外 22 px 或 0.5 缩放下限。\n\n空白拖拽 / pending：每个来源右边中点直达同一落点，没有聚合主干。drag 起点外扩 4 CSS px，pending 为边缘中点；已吸附已有目标时只绘制 anchor 单条预览，最终仍整批提交。05 原位图显示 pending 的 phase 0 静态关键帧，两个来源在同一水平线，第一条在第二节点下面遮挡。\n\n手势开始冻结来源列表；目标能力采用全来源交集，不静默丢弃不兼容来源。重复、自连、环或任一来源失败均整批拒绝。anchor 按渲染顺序取有 source handle 的较低中位项，不等于最右节点。\n\n写入 receipt / 边立即出现不等于远端确认。异步保存需等待明确保存状态并刷新 / 重开核验全部边和 reference；只读、未持久化节点与并发来源变化仍按运行时验收结果记录，不在静态设计中宣称完成。\n\n选区圆角、描边与边距尚缺完整尺寸合同，保持原设计并列为差异；本次不借截图估算。原工具条、节点和结果生成器位置保持。分镜成功态、原生字体和下载产物仍不纳入本次一致性完成声明。\n\nPending 补证：聚合 DOM opacity=1、白色 glyph 保留；菜单按实际指针点击位置定位，不是强制对齐聚合中心，也不强制隐藏入口。源实测菜单 200 × 316；本图复用该尺寸及实测相对点击偏移 (+11.628, +0.251)。"
+    },
+    {
+      "id": "3153:58056",
+      "name": "多选范围 / 2 文本",
+      "x": 654,
+      "y": 286,
+      "width": 548,
+      "height": 268,
+      "visible": true,
+      "opacity": 1,
+      "cornerRadius": 16,
+      "fills": [],
+      "strokes": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 1,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 0.6666666865348816,
+            "g": 0.6666666865348816,
+            "b": 0.6666666865348816
+          },
+          "boundVariables": {}
+        }
+      ],
+      "strokeWeight": 1.5,
+      "dashPattern": [
+        7,
+        5
+      ],
+      "children": []
+    }
+  ],
+  "pathsFinal": [
+    {
+      "id": "3217:59953",
+      "x": 908,
+      "y": 420,
+      "endX": 1270.028,
+      "endY": 420.251
+    },
+    {
+      "id": "3217:59954",
+      "x": 1188,
+      "y": 420,
+      "endX": 1270.028,
+      "endY": 420.251
+    }
+  ],
+  "sourceEvidence": "source-multi-pending-handle.png"
+}

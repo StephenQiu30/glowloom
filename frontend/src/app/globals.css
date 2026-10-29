@@ -57,6 +57,10 @@
 
 :root {
   --canvas-connection-highlight: #008ee5;
+  --canvas-connection-aggregate-foreground: #121212;
+  --canvas-connection-aggregate-background: #ffffff;
+  --canvas-connection-menu-background: #262626;
+  --canvas-connection-menu-shadow: 0 8px 56px 0 rgb(0 0 0 / 8%);
   --favorite-foreground: #ff9500;
   --workspace-foreground: var(--foreground);
   --workspace-muted-foreground: var(--muted-foreground);

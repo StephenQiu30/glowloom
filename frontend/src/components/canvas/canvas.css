@@ -937,6 +937,34 @@ html:has(.canvas-controls-layout) {
   .canvas-node-port:focus-visible {
     opacity: 1;
   }
+  .canvas-connection-handle[data-variant="aggregate"] {
+    --canvas-handle-foreground: var(--canvas-connection-aggregate-foreground);
+    --canvas-handle-background: var(--canvas-connection-aggregate-background);
+  }
+  .canvas-connection-handle[data-variant="aggregate"] .canvas-node-port {
+    border-width: 0;
+  }
+  .canvas-connection-handle[data-variant="aggregate"]:hover {
+    --canvas-handle-background: color-mix(
+      in srgb,
+      var(--canvas-connection-aggregate-background) 88%,
+      transparent
+    );
+  }
+  .canvas-connection-handle[data-variant="aggregate"]:active {
+    --canvas-handle-background: var(--canvas-connection-aggregate-background);
+  }
+  .canvas-aggregate-connection-button[data-slot="button"] {
+    position: absolute;
+    left: 30px;
+    top: 60px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    border-radius: 50%;
+  }
   .canvas-node-port-plus {
     position: absolute;
     left: 50%;
@@ -1506,4 +1534,64 @@ html:has(.canvas-controls-layout) {
   .node-element[data-node-type="text"] .canvas-node-body {
     border-radius: 8px;
   }
+}
+
+/* Compact connection-drop menu uses the canvas surface tokens. */
+.canvas-connection-create-menu {
+  font-family:
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+  background: var(--canvas-connection-menu-background);
+  color: var(--canvas-reference-foreground);
+  box-shadow: var(--canvas-connection-menu-shadow);
+  backdrop-filter: blur(20px);
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+}
+.canvas-connection-create-menu [cmdk-root],
+.canvas-connection-create-menu [cmdk-group] {
+  background: transparent;
+  color: inherit;
+}
+.canvas-connection-create-heading {
+  height: 32px;
+  padding: 8px 12px 4px;
+  font-size: 12px;
+  line-height: 20px;
+  color: color-mix(
+    in srgb,
+    var(--canvas-reference-foreground) 35%,
+    transparent
+  );
+}
+.canvas-connection-create-item[data-slot="command-item"] {
+  background: transparent;
+  color: inherit;
+  font-weight: 400;
+  transition:
+    color 100ms cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 100ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.canvas-connection-create-item[data-slot="command-item"] > svg {
+  color: inherit;
+  width: 16px;
+  height: 16px;
+}
+.canvas-connection-create-item[data-slot="command-item"][data-disabled="true"] {
+  opacity: 1;
+  color: color-mix(
+    in srgb,
+    var(--canvas-reference-foreground) 20%,
+    transparent
+  );
+}
+.canvas-connection-create-item[data-slot="command-item"]:not(
+    [data-disabled="true"]
+  ):hover,
+.canvas-connection-create-menu[data-keyboard-navigation="true"]
+  .canvas-connection-create-item[data-selected="true"] {
+  background: color-mix(
+    in srgb,
+    var(--canvas-reference-foreground) 8%,
+    transparent
+  );
 }

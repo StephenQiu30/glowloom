@@ -1,0 +1,134 @@
+[
+  {
+    "commitSeq": "11",
+    "graphHash": "67814c84aecc286b4a450a80e859ee9e3c773c8ef4592e29fe5473ee88bada6d",
+    "revision": "12",
+    "nodes": [
+      {
+        "id": "031068e5-d63f-4965-a78c-eaf81d049001",
+        "type": "text"
+      },
+      {
+        "id": "0d16ceea-c92c-475a-9813-cc8d8dd2cdce",
+        "type": "text"
+      },
+      {
+        "id": "9f8e0525-4c33-4487-80b2-b969866bb198",
+        "type": "text"
+      },
+      {
+        "id": "a7f29ffe-d929-4f85-aa3f-3193ecb412cf",
+        "type": "image"
+      }
+    ],
+    "edges": [
+      {
+        "id": "11c5ce51-9b81-4315-a4d5-3fd65f4f7101",
+        "edge_type": "annotation",
+        "source_node_id": "031068e5-d63f-4965-a78c-eaf81d049001",
+        "target_node_id": "9f8e0525-4c33-4487-80b2-b969866bb198",
+        "binding": {
+          "order": 0,
+          "binding": {
+            "kind": "NODE_VALUE"
+          },
+          "purpose": "PROMPT",
+          "toPortId": "prompt",
+          "fromPortId": "text",
+          "schemaVersion": 1
+        }
+      },
+      {
+        "id": "4b60f549-dbf9-4ad0-83ad-92446e01fb40",
+        "edge_type": "annotation",
+        "source_node_id": "a7f29ffe-d929-4f85-aa3f-3193ecb412cf",
+        "target_node_id": "0d16ceea-c92c-475a-9813-cc8d8dd2cdce",
+        "binding": {
+          "order": 0,
+          "binding": {
+            "kind": "RUN_OUTPUT",
+            "selection": {
+              "mode": "ALL"
+            }
+          },
+          "purpose": "REFERENCE_IMAGE",
+          "toPortId": "reference_images",
+          "fromPortId": "image",
+          "schemaVersion": 1
+        }
+      },
+      {
+        "id": "60fc33cb-cfa6-4927-8cd9-7d4ef015d8df",
+        "edge_type": "annotation",
+        "source_node_id": "031068e5-d63f-4965-a78c-eaf81d049001",
+        "target_node_id": "a7f29ffe-d929-4f85-aa3f-3193ecb412cf",
+        "binding": {
+          "order": 0,
+          "binding": {
+            "kind": "NODE_VALUE"
+          },
+          "purpose": "PROMPT",
+          "toPortId": "prompt",
+          "fromPortId": "text",
+          "schemaVersion": 1
+        }
+      },
+      {
+        "id": "a6cd0a0a-e962-4abb-a049-b359618d1134",
+        "edge_type": "annotation",
+        "source_node_id": "9f8e0525-4c33-4487-80b2-b969866bb198",
+        "target_node_id": "a7f29ffe-d929-4f85-aa3f-3193ecb412cf",
+        "binding": {
+          "order": 1,
+          "binding": {
+            "kind": "RUN_OUTPUT",
+            "selection": {
+              "mode": "ITEM",
+              "index": 1
+            }
+          },
+          "purpose": "PROMPT",
+          "toPortId": "prompt",
+          "fromPortId": "text",
+          "schemaVersion": 1
+        }
+      },
+      {
+        "id": "c5e43654-e376-4ed0-8f45-4698f8b2761e",
+        "edge_type": "annotation",
+        "source_node_id": "031068e5-d63f-4965-a78c-eaf81d049001",
+        "target_node_id": "0d16ceea-c92c-475a-9813-cc8d8dd2cdce",
+        "binding": {
+          "order": 0,
+          "binding": {
+            "kind": "NODE_VALUE"
+          },
+          "purpose": "PROMPT",
+          "toPortId": "prompt",
+          "fromPortId": "text",
+          "schemaVersion": 1
+        }
+      },
+      {
+        "id": "c789723f-dec7-4a5b-aa5f-f3c5a79148fb",
+        "edge_type": "annotation",
+        "source_node_id": "9f8e0525-4c33-4487-80b2-b969866bb198",
+        "target_node_id": "0d16ceea-c92c-475a-9813-cc8d8dd2cdce",
+        "binding": {
+          "order": 1,
+          "binding": {
+            "kind": "RUN_OUTPUT",
+            "selection": {
+              "mode": "ITEM",
+              "index": 1
+            }
+          },
+          "purpose": "PROMPT",
+          "toPortId": "prompt",
+          "fromPortId": "text",
+          "schemaVersion": 1
+        }
+      }
+    ]
+  }
+]

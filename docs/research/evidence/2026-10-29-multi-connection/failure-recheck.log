@@ -1,0 +1,53 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.2 /Users/stephenqiu/Desktop/StephenQiu/Glowloom/glowloom-server/frontend
+
+ ❯ tests/unit/theme-policy.test.ts (3 tests | 1 failed) 196ms
+   × business UI uses shared colors instead of separate palettes or rich toast colors 89ms
+ ❯ tests/unit/app/_components/home-creation.test.tsx (13 tests | 1 failed) 3510ms
+   × Agent 入口先登录和选择项目，不再显示暂未开放 321ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/unit/theme-policy.test.ts > business UI uses shared colors instead of separate palettes or rich toast colors
+AssertionError: expected [ …(3) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "components/canvas/director/canvas-director-workspace.tsx: inline literal color",
++   "components/canvas/director/director-asset-library.css: literal color",
++   "components/canvas/director/director-viewport.tsx: independent palette",
++ ]
+
+ ❯ tests/unit/theme-policy.test.ts:85:22
+     83|       violations.push(`${file}: nonsemantic accent`);
+     84|   }
+     85|   expect(violations).toEqual([]);
+       |                      ^
+     86| });
+     87|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/unit/app/_components/home-creation.test.tsx > Agent 入口先登录和选择项目，不再显示暂未开放
+AssertionError: expected "vi.fn()" to be called once, but got 0 times
+ ❯ tests/unit/app/_components/home-creation.test.tsx:171:23
+    169|   });
+    170|   fireEvent.click(screen.getByRole("button", { name: "开始生成" }));
+    171|   expect(state.login).toHaveBeenCalledOnce();
+       |                       ^
+    172| });
+    173|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed | 2 passed (4)
+      Tests  2 failed | 54 passed (56)
+   Start at  12:39:19
+   Duration  7.47s (tests 70%, environment 13%, import 11%, transform 5%)

@@ -1,0 +1,31 @@
+UNDO
+Browser tab: 1980372061, Title: "连线完整验收-20261029 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/52298cdd-795e-4f5a-af85-47eb2fb84b6e".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 58-67, 103-149
+~					45 pop up button (collapsed) Description: Canvas node summary: 节点 2, Secondary Actions: Expand
+~									56 text 2 nodes, 1 edge, 0 selected. Editable. Room connected. 已保存.
++										103 container
++											104 image
++												105 container Reference connection from 文本 node: 文本 1 to 文本 node: 文本 2
++											106 container 文本 node: 文本 1
++												107 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_d3r6v7t91j
++												108 text 文本 1
++											109 container 文本 node: 文本 2
++												110 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_5hqbc3zxwk
++												111 text 文本 2
+~								98 pop up button (collapsed) Description: Zoom options, 92%, ID: radix-:modern-js-r1o:, Secondary Actions: Expand
+The focused UI element is 57 container Canvas
+REDO
+Browser tab: 1980372061, Title: "连线完整验收-20261029 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/52298cdd-795e-4f5a-af85-47eb2fb84b6e".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+~					45 pop up button (collapsed) Description: Canvas node summary: 节点 3, Secondary Actions: Expand
+~									56 text 3 nodes, 3 edges, 0 selected. Editable. Room connected. 已保存.
++											112 image
++												113 container Reference connection from 文本 node: 文本 1 to 图片 node: 图片 1
++											114 image
++												115 container Reference connection from 文本 node: 文本 2 to 图片 node: 图片 1
++											116 container 图片 node: 图片 1
++												117 container
++													118 image Description: 暂无图片. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_ya065vajj2
++													119 text 图片 1
+The focused UI element is 57 container Canvas
