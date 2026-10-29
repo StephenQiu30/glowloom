@@ -1,6 +1,6 @@
 # 织光工程规则
 
-项目为 Glowloom（织光），仓库 `StephenQiu30/glowloom-server`；内部为 `frontend/`、`backend/` 和 `docs/`。Go 模块使用 `github.com/StephenQiu30/glowloom-server/backend`。配置统一使用 `GLOWLOOM_*`，旧 `LV_*` 在过渡期兼容读取；运行资源与数据库名称以实际部署为准。
+项目为 Glowloom（织光），仓库 `StephenQiu30/glowloom`；内部为 `frontend/`、`backend/` 和 `docs/`。Go 模块暂保留 `github.com/StephenQiu30/glowloom-server/backend`，不随 GitHub 仓库更名改动现有导入与生成合同。配置统一使用 `GLOWLOOM_*`，旧 `LV_*` 在过渡期兼容读取；运行资源与数据库名称以实际部署为准。
 
 ## 1. 当前阶段与文件职责
 
