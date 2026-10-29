@@ -298,7 +298,10 @@ export function PersonalHistoryList({
       if (!controller.signal.aborted) setWriting(false);
     }
   }
-  async function download(targets: HistoryCardTarget[]) {
+  async function download(
+    targets: HistoryCardTarget[],
+    format = downloadFormat,
+  ) {
     if (busy.current || locked || !canBatchDownload(targets, kind)) return;
     busy.current = true;
     setWriting(true);
@@ -311,7 +314,7 @@ export function PersonalHistoryList({
     try {
       const outcomes = await downloadHistoryCards(
         targets,
-        downloadFormat,
+        format,
         controller.signal,
         (done, total) => setNotice(`正在准备下载 ${done}/${total}`),
       );
@@ -420,24 +423,62 @@ export function PersonalHistoryList({
           </span>
           <Button
             variant="ghost"
-            disabled={locked || !cards.length}
+            disabled={
+              locked || !selected.length || selected.length > smallActionLimit
+            }
             onClick={() => {
-              setChosen(cards.slice(0, selectionLimit).map((card) => card.key));
-              if (cards.length > selectionLimit) {
-                setNoticeTone("info");
-                setNotice(`已选择前${selectionLimit}项内容。`);
-              }
+              setNotice("");
+              setDeleting(selected);
             }}
           >
-            全选
+            删除
           </Button>
-          <Button
-            variant="ghost"
-            disabled={locked || !selected.length}
-            onClick={() => setChosen([])}
-          >
-            取消全选
-          </Button>
+          {canChooseFormat ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  disabled={locked || !canBatchDownload(selected, kind)}
+                >
+                  下载
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuGroup>
+                  {(["pdf", "md"] as const).map((format) => (
+                    <DropdownMenuItem
+                      key={format}
+                      onSelect={() => void download(selected, format)}
+                    >
+                      {format === "pdf" ? "下载 PDF" : "下载 Markdown"}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button
+              variant="ghost"
+              disabled={locked || !canBatchDownload(selected, kind)}
+              onClick={() => void download(selected)}
+            >
+              {originalOnly ? "下载原件" : "下载"}
+            </Button>
+          )}
+          {(kind === "image" || kind === "video") && (
+            <Button
+              variant="ghost"
+              disabled={locked || !canPublish}
+              title={
+                kind === "image" && selected.length > 7
+                  ? "最多选择7项发布"
+                  : undefined
+              }
+              onClick={() => setPublishing(selected)}
+            >
+              发布
+            </Button>
+          )}
           <Button
             variant="ghost"
             disabled={locked || !canFavorite}
@@ -457,39 +498,6 @@ export function PersonalHistoryList({
             {selected.length > 0 && selected.every((card) => card.favorite)
               ? "取消收藏"
               : "收藏"}
-          </Button>
-          <Button
-            variant="ghost"
-            disabled={locked || !canBatchDownload(selected, kind)}
-            onClick={() => void download(selected)}
-          >
-            {originalOnly ? "下载原件" : "下载"}
-          </Button>
-          {(kind === "image" || kind === "video") && (
-            <Button
-              variant="ghost"
-              disabled={locked || !canPublish}
-              title={
-                kind === "image" && selected.length > 7
-                  ? "最多选择7项发布"
-                  : undefined
-              }
-              onClick={() => setPublishing(selected)}
-            >
-              发布
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            disabled={
-              locked || !selected.length || selected.length > smallActionLimit
-            }
-            onClick={() => {
-              setNotice("");
-              setDeleting(selected);
-            }}
-          >
-            删除
           </Button>
           <Button
             data-batch-focus
@@ -516,32 +524,6 @@ export function PersonalHistoryList({
             onBatchMode(true);
           }}
         />
-      )}
-      {kind === "document" && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" disabled={locked || !canChooseFormat}>
-              下载格式 ·{" "}
-              {originalOnly
-                ? "原件"
-                : downloadFormat === "pdf"
-                  ? "PDF"
-                  : "Markdown"}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuGroup>
-              {(["pdf", "md"] as const).map((format) => (
-                <DropdownMenuItem
-                  key={format}
-                  onSelect={() => setDownloadFormat(format)}
-                >
-                  {format === "pdf" ? "PDF" : "Markdown"}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
       )}
     </div>
   );

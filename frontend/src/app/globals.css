@@ -2793,3 +2793,23 @@ button:not(:disabled),
     max-width: 100%;
   }
 }
+
+/* Selection replaces the asset tools and account area, matching the source state. */
+.product-header[data-asset-layout]:has([data-asset-batch]) [data-asset-account-group],
+.product-header[data-asset-layout]:has([data-asset-batch]) [data-asset-search] {
+  display: none;
+}
+@media (min-width: 1101px) {
+  .product-header[data-asset-layout]:has([data-asset-batch]) {
+    --asset-actions-display: flex;
+    --asset-tools-row: auto;
+    --asset-tools-column: auto;
+  }
+}
+
+@media (min-width: 768px) {
+  .product-header[data-asset-layout],
+  .workspace-page[data-page="assets"] {
+    --layout-content-x: 44px;
+  }
+}

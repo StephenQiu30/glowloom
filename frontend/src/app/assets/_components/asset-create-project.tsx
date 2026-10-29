@@ -15,7 +15,7 @@ import {
 import { RequestError } from "@/lib/request";
 import { readErrorMessage } from "@/lib/read-error";
 
-/** Default creation owns a new project; the existing-project dialog remains a separate action. */
+/** The creation tile opens a new project and its main canvas. */
 export function AssetCreateProject({
   kind,
   template,

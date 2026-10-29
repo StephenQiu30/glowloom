@@ -10,6 +10,8 @@ const buttonGroupVariants = cva(
     variants: {
       variant: {
         default: "",
+        "asset-tools":
+          "items-center rounded-lg border border-input bg-background p-0.5 has-[[data-asset-batch]]:border-transparent has-[[data-asset-batch]]:bg-transparent",
         outline:
           "items-center rounded-lg border border-input bg-background p-0.5",
       },

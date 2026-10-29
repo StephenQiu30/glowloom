@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
+import { Scan } from "lucide-react";
 import { listCanvasAssetTemplates } from "@/api/canvases";
-import { PanelsTopLeft } from "lucide-react";
+import { AssetCardCover, AssetCardTitle } from "./asset-card-parts";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ContentState } from "@/components/layout/content-state";
@@ -62,12 +63,10 @@ export function AssetTemplateList({
       });
     return () => controller.abort();
   }, [kind, retry]);
-  return (
-    <section aria-label="系统模板" className="grid min-w-0 gap-4">
-      <h2 className="text-sm font-medium">系统模板</h2>
-      {pending ? (
-        <ContentState state="loading" title="正在读取模板" />
-      ) : error ? (
+  if (pending) return null;
+  if (error)
+    return (
+      <div className="col-span-full">
         <ContentState
           state="error"
           title="暂时无法读取模板"
@@ -84,36 +83,28 @@ export function AssetTemplateList({
             </Button>
           }
         />
-      ) : (
-        <div className="grid min-w-0 grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
-          {items.map((item) => (
-            <article
-              key={item.key}
-              className="grid min-w-0 gap-3 rounded-lg border p-4"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <PanelsTopLeft className="size-6 text-muted-foreground" />
-                <Badge variant="secondary">模板</Badge>
-              </div>
-              <h3 className="text-sm font-medium break-words">{item.name}</h3>
-              <p className="text-xs break-words text-muted-foreground">
-                {item.description}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {item.node_count}个可编辑节点
-                {item.requires_model ? " · 需自行选择模型" : ""}
-              </p>
-              <Button
-                variant="secondary"
-                disabled={disabled}
-                onClick={() => onUse(item)}
-              >
-                使用模板
-              </Button>
-            </article>
-          ))}
-        </div>
-      )}
-    </section>
+      </div>
+    );
+  return (
+    <>
+      {items.map((item) => (
+        <Button
+          key={item.key}
+          variant="asset-card"
+          size="asset-card"
+          disabled={disabled}
+          aria-label={`使用模板 · ${item.name}`}
+          onClick={() => onUse(item)}
+        >
+          <AssetCardCover>
+            <Scan aria-hidden="true" />
+            <Badge variant="secondary" className="absolute top-2 left-2">
+              模板
+            </Badge>
+          </AssetCardCover>
+          <AssetCardTitle>{item.name}</AssetCardTitle>
+        </Button>
+      ))}
+    </>
   );
 }

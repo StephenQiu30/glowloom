@@ -62,12 +62,14 @@ export function ProductHeaderActions({
     return (
       <div className="product-header-actions" data-asset-header-actions>
         <ButtonGroup
-          variant="outline"
+          variant="asset-tools"
           data-asset-tool-group
           aria-label="资产工具"
           className="max-w-full flex-wrap"
         >
-          <ProductSearch search={search} isMobile={isMobile} />
+          <div data-asset-search className="contents">
+            <ProductSearch search={search} isMobile={isMobile} />
+          </div>
           {pageActions}
         </ButtonGroup>
         <ButtonGroup

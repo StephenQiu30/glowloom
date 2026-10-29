@@ -6,7 +6,7 @@ import { useBatchToolbarFocus } from "./use-batch-toolbar-focus";
 import { AssetToolbarButton } from "./asset-toolbar-button";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { Heart, MoreHorizontal, PanelsTopLeft } from "lucide-react";
+import { Heart, MoreHorizontal, Plus, Trash2, X } from "lucide-react";
 import { applyCanvasAssetCommand, listAssetCanvases } from "@/api/canvases";
 import { getProject } from "@/api/projects";
 import { ProjectCopyDialog } from "@/components/projects/project-copy-dialog";
@@ -53,9 +53,14 @@ import {
   type AssetFilters,
   type AssetCanvasItem,
 } from "./asset-query";
-import { CreateAssetCanvas } from "./create-asset-canvas";
 import { AssetCreateProject } from "./asset-create-project";
 import { AssetTemplateList, type AssetTemplate } from "./asset-template-list";
+import {
+  AssetCardCover,
+  AssetCardTitle,
+  AssetCardMeta,
+} from "./asset-card-parts";
+import { formatAssetTime } from "./asset-time";
 import { assetActionFeedback } from "./asset-action-feedback";
 
 type Intent = {
@@ -88,7 +93,7 @@ export function AssetCanvasList({
   const [error, setError] = useState("");
   const [denied, setDenied] = useState(0);
   const [retry, setRetry] = useState(0);
-  const [creating, setCreating] = useState<"project" | "existing" | null>(null);
+  const [creating, setCreating] = useState(false);
   const [template, setTemplate] = useState<AssetTemplate | undefined>();
   const [batch, setBatch] = useState(false);
   const batchToolbar = useBatchToolbarFocus(batch);
@@ -332,22 +337,19 @@ export function AssetCanvasList({
             已选择{chosen.length}项内容
           </span>
           <Button
+            onPointerDown={rememberDialogTrigger}
+            onFocus={rememberDialogTrigger}
             variant="ghost"
-            disabled={locked || !page?.items.length}
-            onClick={() =>
-              setSelected(
-                page!.items.slice(0, selectionLimit).map((item) => item.id),
-              )
+            disabled={
+              locked || !writable || !chosen.length || chosen.length > 100
             }
+            onClick={() => {
+              setNotice("");
+              setDeleting(chosen);
+            }}
           >
-            全选
-          </Button>
-          <Button
-            variant="ghost"
-            disabled={locked || !chosen.length}
-            onClick={() => setSelected([])}
-          >
-            取消全选
+            <Trash2 data-icon="inline-start" />
+            删除
           </Button>
           <Button
             variant="ghost"
@@ -360,23 +362,10 @@ export function AssetCanvasList({
               )
             }
           >
+            <Heart data-icon="inline-start" />
             {chosen.length && chosen.every((item) => item.favorite)
               ? "取消收藏"
               : "收藏"}
-          </Button>
-          <Button
-            onPointerDown={rememberDialogTrigger}
-            onFocus={rememberDialogTrigger}
-            variant="ghost"
-            disabled={
-              locked || !writable || !chosen.length || chosen.length > 100
-            }
-            onClick={() => {
-              setNotice("");
-              setDeleting(chosen);
-            }}
-          >
-            删除
           </Button>
           <Button
             data-batch-focus
@@ -388,6 +377,7 @@ export function AssetCanvasList({
               setSelected([]);
             }}
           >
+            <X data-icon="inline-start" />
             取消选择
           </Button>
         </>
@@ -404,37 +394,6 @@ export function AssetCanvasList({
               onBatchMode(true);
             }}
           />
-          {collection === "current" && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  disabled={locked || !writable || !page || pending || !!error}
-                  aria-label="更多画布操作"
-                >
-                  <MoreHorizontal />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuGroup>
-                  <DropdownMenuItem onSelect={() => setCreating("existing")}>
-                    添加到已有项目
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-          {collection === "current" && (
-            <Button
-              disabled={locked || !writable || !page || pending || !!error}
-              onClick={() => {
-                setTemplate(undefined);
-                setCreating("project");
-              }}
-            >
-              {kind === "short_drama" ? "新建短剧画布" : "新建画布"}
-            </Button>
-          )}
         </>
       )}
     </div>
@@ -485,24 +444,40 @@ export function AssetCanvasList({
       {pending && !page && (
         <ContentState state="loading" title="正在读取画布" />
       )}
-      {!pending && !error && !page?.items.length && (
-        <ContentState
-          variant="workspace"
-          title={
-            hasAssetFilters(filters)
-              ? "当前已开启筛选，部分内容可能被隐藏"
-              : "暂无相关资产"
-          }
-          actions={
-            hasAssetFilters(filters) ? (
+      {!pending &&
+        !error &&
+        !page?.items.length &&
+        hasAssetFilters(filters) && (
+          <ContentState
+            variant="workspace"
+            title="当前已开启筛选，部分内容可能被隐藏"
+            actions={
               <Button variant="ghost" onClick={onClear}>
                 清除全部条件
               </Button>
-            ) : undefined
-          }
-        />
-      )}
+            }
+          />
+        )}
       <div className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-6 lg:grid-cols-3 xl:grid-cols-4">
+        {!!page && !error && !hasAssetFilters(filters) && (
+          <Button
+            variant="asset-card"
+            size="asset-card"
+            aria-label={kind === "short_drama" ? "新建短剧画布" : "新建画布"}
+            disabled={locked || !writable || pending}
+            onClick={() => {
+              setTemplate(undefined);
+              setCreating(true);
+            }}
+          >
+            <AssetCardCover variant="create">
+              <Plus aria-hidden="true" />
+            </AssetCardCover>
+            <AssetCardTitle>
+              {kind === "short_drama" ? "新建短剧画布" : "新建项目"}
+            </AssetCardTitle>
+          </Button>
+        )}
         {page?.items.map((item) => (
           <article
             key={item.id}
@@ -510,8 +485,8 @@ export function AssetCanvasList({
             aria-label={item.name}
           >
             <Button
-              variant="ghost"
-              className="h-auto w-full min-w-0 flex-col items-stretch gap-2 p-0 text-left font-normal"
+              variant="asset-card"
+              size="asset-card"
               asChild={!batch && !locked}
               disabled={locked}
               aria-pressed={batch ? selected.includes(item.id) : undefined}
@@ -540,11 +515,11 @@ export function AssetCanvasList({
                 onCheckedChange={() => toggle(item.id)}
               />
             ) : (
-              <div className="absolute top-2 right-2 flex gap-1 rounded-lg bg-popover/90 p-1 text-popover-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none max-md:opacity-100">
+              <div className="opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none max-md:opacity-100">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="max-md:size-11"
+                  className="absolute top-2 right-2 max-md:size-11"
                   disabled={locked}
                   aria-pressed={item.favorite}
                   aria-label={`${item.favorite ? "取消收藏" : "收藏"}${item.name}`}
@@ -562,7 +537,7 @@ export function AssetCanvasList({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="max-md:size-11"
+                      className="absolute right-1 bottom-3 max-md:size-11"
                       disabled={locked}
                       onPointerDown={rememberDialogTrigger}
                       onFocus={rememberDialogTrigger}
@@ -613,6 +588,20 @@ export function AssetCanvasList({
             )}
           </article>
         ))}
+        {collection === "current" &&
+          !batch &&
+          !!page &&
+          !error &&
+          !hasAssetFilters(filters) && (
+            <AssetTemplateList
+              kind={kind}
+              disabled={locked || !writable || pending}
+              onUse={(value) => {
+                setTemplate(value);
+                setCreating(true);
+              }}
+            />
+          )}
       </div>
       {page?.next_cursor && (
         <Button
@@ -646,28 +635,11 @@ export function AssetCanvasList({
           </Alert>
         ))}
       </section>
-      {collection === "current" && !batch && !!page && !error && (
-        <AssetTemplateList
-          kind={kind}
-          disabled={locked || !writable || pending}
-          onUse={(value) => {
-            setTemplate(value);
-            setCreating("project");
-          }}
-        />
-      )}
-      {creating === "project" && (
+      {creating && (
         <AssetCreateProject
           kind={kind}
           template={template}
-          onClose={() => setCreating(null)}
-          onLock={onLock}
-        />
-      )}
-      {creating === "existing" && (
-        <CreateAssetCanvas
-          kind={kind}
-          onClose={() => setCreating(null)}
+          onClose={() => setCreating(false)}
           onLock={onLock}
         />
       )}
@@ -781,22 +753,18 @@ export function AssetCanvasList({
 }
 function CanvasCover({ item }: { item: AssetCanvasItem }) {
   return (
-    <span className="relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-lg bg-muted">
+    <AssetCardCover>
       {item.cover_asset_id && !item.cover_unavailable ? (
         <ProjectMediaPreview
           projectID={item.project_id}
           id={item.cover_asset_id}
           kind="image"
           compact
+          fit="contain"
           interactive={false}
         />
-      ) : (
-        <PanelsTopLeft
-          className="size-8 text-muted-foreground"
-          aria-hidden="true"
-        />
-      )}
-    </span>
+      ) : undefined}
+    </AssetCardCover>
   );
 }
 function CanvasText({
@@ -806,17 +774,15 @@ function CanvasText({
   item: AssetCanvasItem;
   sort: AssetFilters["sort"];
 }) {
+  const time = sort === "created" ? item.created_at : item.updated_at;
   return (
     <>
-      <span className="line-clamp-2 w-full break-words whitespace-normal">
-        {item.name}
-      </span>
-      <span className="w-full truncate text-xs text-muted-foreground">
-        {new Date(
-          sort === "created" ? item.created_at : item.updated_at,
-        ).toLocaleString("zh-CN")}{" "}
+      <AssetCardTitle reserveAction>{item.name}</AssetCardTitle>
+      <AssetCardMeta title={new Date(time).toLocaleString("zh-CN")}>
+        {item.collection === "legacy" ? "画布 · " : ""}
+        {formatAssetTime(time)}
         {sort === "created" ? "创建" : "修改"}
-      </span>
+      </AssetCardMeta>
     </>
   );
 }

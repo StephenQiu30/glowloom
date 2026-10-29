@@ -169,7 +169,7 @@ it("media and legacy-canvas state survive URL navigation back to the asset sourc
     button: 0,
     ctrlKey: false,
   });
-  await screen.findByText("暂无相关资产");
+  await screen.findByRole("button", { name: "新建画布" });
   fireEvent.click(screen.getByRole("radio", { name: "历史画布" }));
   await waitFor(() =>
     expect(new URLSearchParams(location.search).get("collection")).toBe(
@@ -245,7 +245,7 @@ it("默认读取本人图片生成历史，原上传素材不冒充历史", asyn
     "画布",
     "短剧",
   ]);
-  expect(screen.getByRole("button", { name: "参考素材" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "参考素材" })).toBeNull();
   expect(state.canvases).not.toHaveBeenCalled();
 });
 
@@ -433,43 +433,36 @@ it("画布卡片使用实际画布ID和项目上下文打开", async () => {
 });
 
 it("显式创建短剧，未知结果重试保持原命令和幂等键", async () => {
-  state.create
+  state.createAsset
     .mockRejectedValueOnce(new RequestError("unavailable", 503))
     .mockResolvedValueOnce({
       id: task.id,
       project_id: task.project_id,
       kind: "short_drama",
+      name: "created",
+      revision: "1",
+      project_revision: 1,
+      collection: "current",
+      template_key: "",
+      is_template: false,
     });
   render(<AssetWorkspace initialView="short_drama" />);
-  await screen.findByText("暂无相关资产");
-  fireEvent.pointerDown(screen.getByRole("button", { name: "更多画布操作" }), {
-    button: 0,
-    ctrlKey: false,
-  });
-  fireEvent.click(
-    await screen.findByRole("menuitem", { name: "添加到已有项目" }),
-  );
-  act(() => state.pickProject?.({ id: task.project_id }));
-  fireEvent.click(screen.getByRole("button", { name: "创建" }));
-  await screen.findByRole("button", { name: "重试原操作" });
-  expect(state.create.mock.calls[0][1]).toEqual({
-    name: "未命名短剧",
-    kind: "short_drama",
-  });
-  expect(
-    screen.getByRole("textbox", { name: "名称" }).hasAttribute("disabled"),
-  ).toBe(true);
-  fireEvent.click(screen.getByRole("button", { name: "重试原操作" }));
+  fireEvent.click(await screen.findByRole("button", { name: "新建短剧画布" }));
+  fireEvent.click(await screen.findByRole("button", { name: "重试原操作" }));
   await waitFor(() =>
     expect(state.push).toHaveBeenCalledWith(
       `/canvas?project_id=${task.project_id}&canvas_id=${task.id}`,
     ),
   );
-  expect(state.create.mock.calls[1].slice(0, 2)).toEqual(
-    state.create.mock.calls[0].slice(0, 2),
+  expect(state.createAsset.mock.calls[0][0]).toEqual({
+    kind: "short_drama",
+    template_key: undefined,
+  });
+  expect(state.createAsset.mock.calls[1][0]).toEqual(
+    state.createAsset.mock.calls[0][0],
   );
-  expect(state.create.mock.calls[1][2].headers).toEqual(
-    state.create.mock.calls[0][2].headers,
+  expect(state.createAsset.mock.calls[1][1].headers).toEqual(
+    state.createAsset.mock.calls[0][1].headers,
   );
 });
 
@@ -477,35 +470,26 @@ it("新画布查询不可用时不允许通过旧创建端点误建短剧", asyn
   state.canvases.mockRejectedValueOnce(new RequestError("not_found", 404));
   render(<AssetWorkspace initialView="short_drama" />);
   await screen.findByText("暂时无法读取短剧");
-  expect(
-    screen
-      .getByRole("button", { name: "新建短剧画布" })
-      .hasAttribute("disabled"),
-  ).toBe(true);
+  expect(screen.queryByRole("button", { name: "新建短剧画布" })).toBeNull();
   expect(state.create).not.toHaveBeenCalled();
 });
 
 it("短剧创建回执类别错误时保持原操作冻结，不假成功导航", async () => {
-  state.create.mockResolvedValueOnce({
+  state.createAsset.mockResolvedValueOnce({
     id: task.id,
     project_id: task.project_id,
     kind: "canvas",
+    name: "created",
+    revision: "1",
+    project_revision: 1,
+    collection: "current",
+    template_key: "",
+    is_template: false,
   });
   render(<AssetWorkspace initialView="short_drama" />);
-  await screen.findByText("暂无相关资产");
-  fireEvent.pointerDown(screen.getByRole("button", { name: "更多画布操作" }), {
-    button: 0,
-    ctrlKey: false,
-  });
-  fireEvent.click(
-    await screen.findByRole("menuitem", { name: "添加到已有项目" }),
-  );
-  act(() => state.pickProject?.({ id: task.project_id }));
-  fireEvent.click(screen.getByRole("button", { name: "创建" }));
+  fireEvent.click(await screen.findByRole("button", { name: "新建短剧画布" }));
   await screen.findByRole("button", { name: "重试原操作" });
-  expect(
-    screen.getByRole("textbox", { name: "名称" }).hasAttribute("disabled"),
-  ).toBe(true);
+  expect(screen.queryByRole("button", { name: "关闭" })).toBeNull();
   expect(state.push).not.toHaveBeenCalled();
 });
 
@@ -552,7 +536,9 @@ it("多图结果分别计数，批量收藏部分失败后仅保留失败项并�
   render(<AssetWorkspace />);
   await screen.findByRole("article", { name: "本人的创作记录 · 结果2" });
   fireEvent.click(screen.getByRole("button", { name: "批量操作" }));
-  fireEvent.click(screen.getByRole("button", { name: "全选" }));
+  screen
+    .getAllByRole("checkbox", { name: /^选择/ })
+    .forEach((item) => fireEvent.click(item));
   expect(screen.getByText("已选择2项内容")).toBeTruthy();
   expect(
     within(screen.getByRole("article", { name: "本人的创作记录 · 结果2" }))
@@ -611,7 +597,9 @@ it("没有输出的进行中记录不可收藏，删除只提交记录修订且�
   render(<AssetWorkspace />);
   await screen.findByRole("article", { name: task.prompt_preview });
   fireEvent.click(screen.getByRole("button", { name: "批量操作" }));
-  fireEvent.click(screen.getByRole("button", { name: "全选" }));
+  screen
+    .getAllByRole("checkbox", { name: /^选择/ })
+    .forEach((item) => fireEvent.click(item));
   expect(
     screen.getByRole("button", { name: "收藏" }).hasAttribute("disabled"),
   ).toBe(true);
@@ -660,9 +648,9 @@ it("高级筛选按组发CSV，切换媒体清理不兼容条件", async () => {
     ),
   );
 });
-it("历史画布查询绑定legacy而非归档，不提供旧画布新建", async () => {
+it("历史画布查询绑定legacy，新建入口仍创建current", async () => {
   render(<AssetWorkspace initialView="canvas" />);
-  await screen.findByText("暂无相关资产");
+  await screen.findByRole("button", { name: "新建画布" });
   fireEvent.click(screen.getByRole("radio", { name: "历史画布" }));
   await waitFor(() =>
     expect(state.canvases).toHaveBeenLastCalledWith(
@@ -670,7 +658,7 @@ it("历史画布查询绑定legacy而非归档，不提供旧画布新建", asyn
       expect.anything(),
     ),
   );
-  expect(screen.queryByRole("button", { name: "新建画布" })).toBeNull();
+  expect(screen.getByRole("button", { name: "新建画布" })).toBeTruthy();
 });
 it("主画布删除明确项目影响，并通过统一命令携带项目CAS", async () => {
   state.canvases.mockResolvedValue({
@@ -703,7 +691,9 @@ it("主画布删除明确项目影响，并通过统一命令携带项目CAS", a
   render(<AssetWorkspace initialView="canvas" />);
   await screen.findByRole("link", { name: /主画布/ });
   fireEvent.click(screen.getByRole("button", { name: "批量操作" }));
-  fireEvent.click(screen.getByRole("button", { name: "全选" }));
+  screen
+    .getAllByRole("checkbox", { name: /^选择/ })
+    .forEach((item) => fireEvent.click(item));
   fireEvent.click(screen.getByRole("button", { name: "删除" }));
   expect(screen.getByRole("alertdialog").textContent).toContain("整个所属项目");
   fireEvent.click(
@@ -764,7 +754,9 @@ it("画布删除未知结果保留确认框和幂等重试，明确失败展示�
   render(<AssetWorkspace initialView="canvas" />);
   await screen.findByRole("link", { name: /主画布/ });
   fireEvent.click(screen.getByRole("button", { name: "批量操作" }));
-  fireEvent.click(screen.getByRole("button", { name: "全选" }));
+  screen
+    .getAllByRole("checkbox", { name: /^选择/ })
+    .forEach((item) => fireEvent.click(item));
   fireEvent.click(screen.getByRole("button", { name: "删除" }));
   expect(screen.getByRole("alertdialog").textContent).toContain("整个所属项目");
   fireEvent.click(
@@ -825,7 +817,7 @@ it("默认新建直接创建当前空间项目与主画布，不依赖已有项�
     is_template: false,
   });
   render(<AssetWorkspace initialView="short_drama" />);
-  await screen.findByText("暂无相关资产");
+  await screen.findByRole("button", { name: "新建短剧画布" });
   fireEvent.click(screen.getByRole("button", { name: "新建短剧画布" }));
   await waitFor(() =>
     expect(state.push).toHaveBeenCalledWith(
@@ -867,7 +859,9 @@ it("系统模板有明确标记，使用时创建真实预填副本而不执行�
     is_template: false,
   });
   render(<AssetWorkspace initialView="canvas" />);
-  fireEvent.click(await screen.findByRole("button", { name: "使用模板" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "使用模板 · 文字生图" }),
+  );
   await waitFor(() =>
     expect(state.createAsset).toHaveBeenCalledWith(
       { kind: "canvas", template_key: "text-to-image-v1" },
@@ -890,7 +884,9 @@ it("图片可选择200但收藏删除超过50禁用，超过7只禁用发布", a
   await screen.findByText("本人的创作记录 · 结果51");
   const toolbar = within(screen.getByLabelText("生成历史操作"));
   fireEvent.click(toolbar.getByRole("button", { name: "批量操作" }));
-  fireEvent.click(toolbar.getByRole("button", { name: "全选" }));
+  screen
+    .getAllByRole("checkbox", { name: /^选择/ })
+    .forEach((item) => fireEvent.click(item));
   expect(screen.getByText("已选择51项内容")).toBeTruthy();
   expect(
     toolbar.getByRole("button", { name: "收藏" }).hasAttribute("disabled"),
@@ -916,7 +912,7 @@ it("direct creation aborts its old-scope request and never navigates from a late
       }),
   );
   const view = render(<AssetWorkspace initialView="canvas" />);
-  await screen.findByText("暂无相关资产");
+  await screen.findByRole("button", { name: "新建画布" });
   fireEvent.click(screen.getByRole("button", { name: "新建画布" }));
   await waitFor(() => expect(state.createAsset).toHaveBeenCalledOnce());
   const signal = state.createAsset.mock.calls[0][1].signal as AbortSignal;
@@ -982,11 +978,10 @@ it("original-only documents expose real original downloads in card, detail and b
     );
     render(<AssetWorkspace />);
     fireEvent.click(screen.getByRole("radio", { name: "文档" }));
+    await screen.findByRole("article", { name: task.prompt_preview });
     expect(
-      (
-        await screen.findByRole("button", { name: "下载格式 · 原件" })
-      ).hasAttribute("disabled"),
-    ).toBe(true);
+      screen.queryByRole("button", { name: "下载格式 · 原件" }),
+    ).toBeNull();
     fireEvent.click(
       screen
         .getByRole("article", { name: task.prompt_preview })
@@ -1011,7 +1006,9 @@ it("original-only documents expose real original downloads in card, detail and b
     fireEvent.click(await screen.findByRole("menuitem", { name: "下载原件" }));
     await waitFor(() => expect(click).toHaveBeenCalledTimes(2));
     fireEvent.click(screen.getByRole("button", { name: "批量操作" }));
-    fireEvent.click(screen.getByRole("button", { name: "全选" }));
+    screen
+      .getAllByRole("checkbox", { name: /^选择/ })
+      .forEach((item) => fireEvent.click(item));
     fireEvent.click(screen.getByRole("button", { name: "下载原件" }));
     await waitFor(() => expect(click).toHaveBeenCalledTimes(3));
     expect(screen.getByLabelText("下载结果").textContent).toContain("原件");
@@ -1031,7 +1028,13 @@ it.each(["history", "canvas", "short_drama"] as const)(
   "%s batch mode keeps keyboard focus on a usable control and restores the trigger",
   async (initialView) => {
     render(<AssetWorkspace initialView={initialView} />);
-    await screen.findByText("暂无相关资产");
+    await waitFor(() =>
+      expect(
+        screen
+          .getByRole("button", { name: "批量操作" })
+          .hasAttribute("disabled"),
+      ).toBe(false),
+    );
     const trigger = screen.getByRole("button", { name: "批量操作" });
     act(() => trigger.focus());
     fireEvent.click(trigger);
@@ -1043,3 +1046,61 @@ it.each(["history", "canvas", "short_drama"] as const)(
     );
   },
 );
+
+it("默认画布只在网格提供新建和模板，不在工具栏叠加辅助入口", async () => {
+  state.templates.mockResolvedValue({
+    items: [
+      {
+        key: "text-to-image-v1",
+        kind: "canvas",
+        name: "文生图工作流",
+        description: "不应出现在卡片上的工程说明",
+        is_template: true,
+        node_count: 2,
+        requires_model: true,
+      },
+    ],
+  });
+  render(<AssetWorkspace initialView="canvas" />);
+  const create = await screen.findByRole("button", { name: "新建画布" });
+  const template = await screen.findByRole("button", {
+    name: "使用模板 · 文生图工作流",
+  });
+  expect(create.parentElement).toBe(template.parentElement);
+  expect(create.parentElement?.firstElementChild).toBe(create);
+  expect(screen.queryByText("系统模板")).toBeNull();
+  expect(screen.queryByText("不应出现在卡片上的工程说明")).toBeNull();
+  for (const name of [
+    "参考素材",
+    "更多画布操作",
+    "添加到已有项目",
+    "全选",
+    "取消全选",
+  ])
+    expect(screen.queryByRole("button", { name })).toBeNull();
+  expect(
+    within(screen.getByLabelText("画布操作"))
+      .getAllByRole("button")
+      .map((b) => b.getAttribute("aria-label")),
+  ).toEqual(["批量操作"]);
+  fireEvent.click(screen.getByRole("button", { name: "批量操作" }));
+  expect(state.search).toMatchObject({ disabled: true });
+  expect(
+    within(screen.getByLabelText("画布操作"))
+      .getAllByRole("button")
+      .map((b) => b.textContent),
+  ).toEqual(["删除", "收藏", "取消选择"]);
+});
+
+it("收藏筛选不混入创建卡片和模板目录", async () => {
+  render(
+    <AssetWorkspace
+      initialLocation={readAssetLocation(
+        new URLSearchParams("view=canvas&favorite=1"),
+      )}
+    />,
+  );
+  await screen.findByText("当前已开启筛选，部分内容可能被隐藏");
+  expect(screen.queryByRole("button", { name: "新建画布" })).toBeNull();
+  expect(state.templates).not.toHaveBeenCalled();
+});

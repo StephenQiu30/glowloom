@@ -2,7 +2,7 @@
 
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { ChevronDown, PanelsTopLeft, FolderInput } from "lucide-react";
+import { ChevronDown, PanelsTopLeft } from "lucide-react";
 import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
 import { useLoginDialog } from "@/components/layout/basic-layout";
@@ -44,7 +44,6 @@ import {
   defaultAssetFilters as defaultFilters,
   hasAssetFilters,
 } from "./asset-query";
-import { AssetToolbarButton } from "./asset-toolbar-button";
 import { AssetFilterMenu } from "./asset-filter-menu";
 import { PersonalHistoryList } from "./personal-history-list";
 import { AssetCanvasList } from "./asset-canvas-list";
@@ -162,7 +161,7 @@ function WorkspaceScope({
       value: search,
       onValueChange: setSearch,
       onSearch: (value: string) => {
-        if (!locked)
+        if (!locked && !batch)
           setFilters((current) => ({ ...current, search: value.trim() }));
       },
       label:
@@ -171,9 +170,9 @@ function WorkspaceScope({
           : view === "short_drama"
             ? "搜索短剧"
             : "搜索画布",
-      disabled: !authenticated || locked,
+      disabled: !authenticated || locked || batch,
     }),
-    [search, view, authenticated, locked],
+    [search, view, authenticated, locked, batch],
   );
   if (view === "reference")
     return (
@@ -204,7 +203,7 @@ function WorkspaceScope({
       <Tabs
         value={view}
         onValueChange={(value) => changeView(value as AssetSource)}
-        className="asset-workspace-tabs gap-3"
+        className="asset-workspace-tabs gap-6"
       >
         <PageToolbar inHeader>
           <div
@@ -235,14 +234,6 @@ function WorkspaceScope({
             data-asset-page-actions
           >
             <div ref={setToolbarTarget} className="min-w-0" />
-            {!batch && (
-              <AssetToolbarButton
-                label="参考素材"
-                icon={FolderInput}
-                disabled={locked}
-                onClick={() => changeView("reference")}
-              />
-            )}
           </div>
         </PageToolbar>
         <div
@@ -294,16 +285,10 @@ function WorkspaceScope({
               }}
               aria-label="画布类型"
             >
-              <ToggleGroupItem
-                value="current"
-                disabled={locked}
-              >
+              <ToggleGroupItem value="current" disabled={locked}>
                 画布
               </ToggleGroupItem>
-              <ToggleGroupItem
-                value="legacy"
-                disabled={locked}
-              >
+              <ToggleGroupItem value="legacy" disabled={locked}>
                 历史画布
               </ToggleGroupItem>
             </ToggleGroup>
