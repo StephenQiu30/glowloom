@@ -1,0 +1,66 @@
+{
+  "date": "2026-10-29",
+  "scope": "SUB-016; local isolated 45-item fixture, not a real-provider acceptance",
+  "browser": "agent-browser session subject-card-20261029",
+  "desktop": {
+    "grid_gap_px": 8,
+    "card_padding_px": 4,
+    "cover_radius_px": 8,
+    "caption_y_px": {
+      "create": 323.265625,
+      "subject": 323.265625
+    },
+    "favorite_visible_without_hover": true,
+    "favorite_icon": "star",
+    "created_sort_metadata": "主体 · 1天前创建"
+  },
+  "mobile": {
+    "viewport": [
+      390,
+      844
+    ],
+    "horizontal_overflow": false,
+    "more_button_height_px": 44,
+    "favorite_button_size_px": [
+      44,
+      44
+    ],
+    "favorite_color": "rgb(255, 149, 0)",
+    "date_filter_keeps_create": true
+  },
+  "accessibility": {
+    "scope": ".unified-subject-library",
+    "violations": 0,
+    "incomplete": 0
+  },
+  "screenshots": [
+    "../../../../../output/subject-list-2026-10-29/card-desktop.png",
+    "../../../../../output/subject-list-2026-10-29/card-mobile.png"
+  ],
+  "tests": {
+    "subject": {
+      "files": 16,
+      "passed": 104
+    },
+    "full_unit_at_observation": {
+      "files": 199,
+      "passed_files": 196,
+      "tests": 1304,
+      "passed": 1300,
+      "failed": 4
+    },
+    "remaining_failures": [
+      "theme-policy: canvas.css literal color and canvas-connections.tsx inline literal color (subject palette fixed and rechecked)",
+      "connection-meteor: 2 assertions",
+      "basic-layout: asset header 参考素材 assertion"
+    ],
+    "eslint": "full pass",
+    "typecheck": "pass",
+    "production_build": "pass"
+  },
+  "limits": [
+    "Fixture does not establish real supplier or backend persistence.",
+    "Real Jimeng second batch unavailable because source account contains one subject.",
+    "Full suite remains non-green due parallel changes outside this scoped commit."
+  ]
+}

@@ -227,10 +227,15 @@ export function subjectBatchError(code?: string) {
     return "参考素材已不可用";
   return "暂时无法完成，请重试";
 }
-export function subjectRelativeTime(value: string, now = Date.now()) {
+export function subjectRelativeTime(
+  value: string,
+  field: "created" | "updated" = "updated",
+  now = Date.now(),
+) {
+  const action = field === "created" ? "创建" : "修改";
   const minutes = Math.max(0, Math.floor((now - Date.parse(value)) / 60000));
-  if (minutes < 1) return "刚刚修改";
-  if (minutes < 60) return `${minutes}分钟前修改`;
-  if (minutes < 1440) return `${Math.floor(minutes / 60)}小时前修改`;
-  return `${Math.floor(minutes / 1440)}天前修改`;
+  if (minutes < 1) return `刚刚${action}`;
+  if (minutes < 60) return `${minutes}分钟前${action}`;
+  if (minutes < 1440) return `${Math.floor(minutes / 60)}小时前${action}`;
+  return `${Math.floor(minutes / 1440)}天前${action}`;
 }

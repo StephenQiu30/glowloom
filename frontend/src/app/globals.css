@@ -56,6 +56,7 @@
 }
 
 :root {
+  --favorite-foreground: #ff9500;
   --workspace-foreground: var(--foreground);
   --workspace-muted-foreground: var(--muted-foreground);
   --workspace-subtle-foreground: var(--subtle-foreground);

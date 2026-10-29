@@ -192,6 +192,11 @@ it.each([
       page: 1,
     }),
   );
+  expect(
+    screen.getAllByText(
+      timeField === "created" ? /主体 · .*创建/ : /主体 · .*修改/,
+    ),
+  ).toHaveLength(2);
 });
 
 it("取消删除不发送命令并保留明确选中的主体", async () => {

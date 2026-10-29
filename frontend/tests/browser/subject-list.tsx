@@ -22,7 +22,7 @@ const items = Array.from({ length: 45 }, (_, i) => ({
   version_id: uuid(200 + i),
   name: `合成主体 ${String(i + 1).padStart(2, "0")}`,
   description: "合成回执，仅验证列表加载",
-  favorite: false,
+  favorite: i === 0,
   primary: {
     binding_id: uuid(300 + i),
     asset_id: uuid(400 + i),

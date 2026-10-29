@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type SetStateAction } from "react";
 import dynamic from "next/dynamic";
 import {
   Download,
-  Heart,
+  Star,
   LoaderCircle,
   MoreHorizontal,
   Plus,
@@ -315,7 +315,7 @@ export function UnifiedSubjectLibrary({
                 void mutate(allFavorites ? "unfavorite" : "favorite", selected)
               }
             >
-              <Heart />
+              <Star />
               {allFavorites ? "取消收藏" : "收藏"}
             </Button>
             <Button
@@ -390,29 +390,34 @@ export function UnifiedSubjectLibrary({
       ) : (
         <>
           <div className="unified-subject-grid">
-            {!query &&
-            !filter.favorite &&
-            !filter.from &&
-            !filter.through &&
-            !onSelect ? (
+            {!query && !filter.favorite && !onSelect ? (
               <Button
                 variant="ghost"
-                className="unified-subject-new h-auto min-w-0 flex-col items-stretch justify-start gap-3 p-0 text-left"
+                className="unified-subject-new h-auto min-w-0 flex-col items-stretch justify-start text-left"
                 disabled={locked}
                 onClick={() => setEditing("new")}
               >
                 <span className="unified-subject-cover unified-subject-create">
                   <Plus className="size-6 text-muted-foreground" />
                 </span>
-                <span className="px-1 text-sm">新建主体</span>
+                <span className="unified-subject-info">
+                  <span className="block">新建主体</span>
+                  <span
+                    className="unified-subject-meta-placeholder block h-5"
+                    aria-hidden="true"
+                  />
+                </span>
               </Button>
             ) : null}
             {page?.items.map((subject) => (
-              <article key={subject.id} className="group min-w-0">
+              <article
+                key={subject.id}
+                className="unified-subject-card group relative min-w-0"
+              >
                 <div className="relative">
                   <Button
                     variant="ghost"
-                    className="h-auto w-full p-0"
+                    className="unified-subject-open h-auto w-full p-0"
                     disabled={locked}
                     onClick={() =>
                       batch
@@ -442,8 +447,9 @@ export function UnifiedSubjectLibrary({
                     <Button
                       variant="secondary"
                       size="icon"
-                      className="absolute top-2 left-2 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 max-md:opacity-100"
+                      className={`absolute top-2 right-2 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 max-md:opacity-100 ${subject.favorite ? "text-[var(--favorite-foreground)] opacity-100" : "opacity-0"}`}
                       aria-label={`${subject.favorite ? "取消收藏" : "收藏"} ${subject.name}`}
+                      aria-pressed={subject.favorite}
                       disabled={locked}
                       onClick={() =>
                         void mutate(
@@ -452,66 +458,73 @@ export function UnifiedSubjectLibrary({
                         )
                       }
                     >
-                      <Heart
+                      <Star
                         className={
                           subject.favorite ? "fill-current" : undefined
                         }
                       />
                     </Button>
                   )}
-                  {!batch && !onSelect ? (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="secondary"
-                          size="icon"
-                          className="absolute top-2 right-2 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 max-md:opacity-100"
-                          aria-label={`更多 ${subject.name}`}
-                          disabled={locked}
-                        >
-                          <MoreHorizontal />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        align="end"
-                        className="unified-subject-menu"
-                      >
-                        <DropdownMenuItem onSelect={() => setEditing(subject)}>
-                          设置主体
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onSelect={() => void download([subject])}
-                        >
-                          下载
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onSelect={() =>
-                            void mutate(
-                              subject.favorite ? "unfavorite" : "favorite",
-                              [subject],
-                            )
-                          }
-                        >
-                          {subject.favorite ? "取消收藏" : "收藏"}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          variant="destructive"
-                          onSelect={() => openDelete([subject])}
-                        >
-                          删除
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  ) : null}
                 </div>
-                <p className="mt-2 truncate text-sm">{subject.name}</p>
-                <p
-                  className="mt-1 text-xs text-muted-foreground"
-                  suppressHydrationWarning
-                >
-                  主体 · {subjectRelativeTime(subject.updated_at)}
-                </p>
+                <div className="unified-subject-info pr-12">
+                  <p className="truncate">{subject.name}</p>
+                  <p className="text-muted-foreground" suppressHydrationWarning>
+                    主体 ·{" "}
+                    {subjectRelativeTime(
+                      filter.order.startsWith("created")
+                        ? subject.created_at
+                        : subject.updated_at,
+                      filter.order.startsWith("created")
+                        ? "created"
+                        : "updated",
+                    )}
+                  </p>
+                </div>
+                {!batch && !onSelect ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="secondary"
+                        size="icon"
+                        className="absolute right-3 bottom-3 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 max-md:opacity-100"
+                        aria-label={`更多 ${subject.name}`}
+                        disabled={locked}
+                      >
+                        <MoreHorizontal />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      className="unified-subject-menu"
+                    >
+                      <DropdownMenuItem onSelect={() => setEditing(subject)}>
+                        设置主体
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() => void download([subject])}
+                      >
+                        下载
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          void mutate(
+                            subject.favorite ? "unfavorite" : "favorite",
+                            [subject],
+                          )
+                        }
+                      >
+                        {subject.favorite ? "取消收藏" : "收藏"}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onSelect={() => openDelete([subject])}
+                      >
+                        删除
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : null}
               </article>
             ))}
           </div>
