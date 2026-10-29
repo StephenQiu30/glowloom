@@ -3,6 +3,21 @@
 import { request } from "@/lib/request";
 import type { RequestOptions } from "@/lib/request";
 
+/** Read native editor launch envelope Requires an unexpired export capability rather than a browser session. Missing, malformed or unavailable capabilities return not_found. GET /api/media-export-launch */
+export async function readMediaExportLaunch(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.readMediaExportLaunchParams,
+  options?: RequestOptions,
+) {
+  return request<Record<string, any>>("/api/media-export-launch", {
+    method: "GET",
+    params: {
+      ...params,
+    },
+    ...(options || {}),
+  });
+}
+
 /** Get local media export GET /api/media-exports/${param0} */
 export async function getMediaExport(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

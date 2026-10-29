@@ -4425,6 +4425,11 @@ declare namespace API {
     nid: string;
   };
 
+  type readMediaExportLaunchParams = {
+    /** Opaque short-lived export capability */
+    token: string;
+  };
+
   type readPromptDraftParams = {
     /** 项目 */
     pid: string;

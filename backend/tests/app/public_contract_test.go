@@ -112,6 +112,10 @@ func TestPublicBusinessRoutesRequireSession(t *testing.T) {
 			path := route.Path
 			wantStatus, wantCode := http.StatusUnauthorized, "session_invalid"
 			switch route.Method + " " + route.Path {
+			case "GET /api/media-export-launch":
+				// Native editors use an expiring capability instead of session
+				// cookies. A missing capability must disclose no export data.
+				wantStatus, wantCode = http.StatusNotFound, "not_found"
 			case "GET /api/works/:work_id":
 				// Published work projections are anonymous; all publication writes
 				// still take the default session-required assertion below.
