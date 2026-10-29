@@ -1,0 +1,449 @@
+- banner "Canvas top bar":
+  - link:
+    - /url: /ai-tool/home
+  - button:
+    - generic: 一致性调研-202610221
+  - button:
+  - button:
+    - text: 节点
+    - generic: "5"
+  - status: 已保存
+  - button:
+  - button:
+  - button:
+    - generic: 分享
+  - button:
+  - button:
+    - generic: "88"
+    - generic: 开会员
+  - button
+- main "Canvas workspace":
+  - region "Canvas editing area":
+    - generic: 5 nodes, 0 edges, 1 selected. Editable. Room connected. 已保存.
+    - application "Canvas":
+      - paragraph: 双击编辑文本
+      - generic: 文本 1
+      - paragraph: 双击编辑文本
+      - generic: 文本 2
+      - paragraph: 双击编辑文本
+      - generic: 文本 3
+      - button:
+        - generic: 导演台
+      - button:
+      - paragraph: 在 3D 空间中设计角色、机位与镜头
+      - button: 进入导演台
+      - generic: "No resources: 0 ready, 0 processing, 0 failed. Selected."
+      - generic: 视频 1
+      - generic: "No resources: 0 ready, 0 processing, 0 failed. Not selected."
+      - status
+  - complementary
+  - complementary "Canvas left toolbar":
+    - toolbar "Canvas toolbar":
+      - generic: 文本
+      - button
+      - generic: 图片
+      - button
+      - generic: 视频
+      - button
+      - generic: 音频
+      - button
+      - generic: 时间线
+      - button
+      - generic: 主体
+      - button
+      - generic: 导演工具箱
+      - button
+      - generic: 导演台
+      - button
+      - generic: 资产库
+      - button
+      - generic: 上传
+      - button
+  - group "Canvas viewport controls":
+    - button:
+    - button:
+    - button [pressed]:
+    - button: 75%
+    - status
+  - generic: 与 AI 对话
+  - button
+- status
+- dialog "导演台":
+  - heading "导演台" [level=2]
+  - banner:
+    - generic: 3D导演台
+    - button "快捷键":
+    - button "保存":
+    - status: 未保存
+    - tablist "3D导演台":
+      - tab "静态预演" [selected]
+      - tab "动态预演"
+    - button "拍摄":
+    - button "镜头素材":
+    - button "返回画布":
+  - generic "3D viewport"
+  - button "机位 · 实时预览":
+    - generic: 分屏预览 ↗
+  - button "机位 · 实时预览":
+    - generic: 机位
+  - button "收起机位预览":
+  - slider "拖动调整预览大小":
+  - button "导演视角":
+    - generic: 导演视角
+  - navigation "对象":
+    - button "选择 · 0":
+      - generic: "0"
+    - button "移动 · 1" [pressed]:
+      - generic: "1"
+    - button "旋转 · 2":
+      - generic: "2"
+    - button "缩放 · 3":
+      - generic: "3"
+    - button "落到地面 · G" [disabled]:
+      - generic: G
+    - button "视图设置":
+  - complementary:
+    - heading "资产" [level=2]
+    - button "关闭":
+    - separator "资产"
+    - tablist "资产":
+      - tab "角色":
+      - tab "物体" [active] [selected]:
+      - tab "背景":
+      - tab "机位":
+    - textbox "搜索素材 · 物体":
+      - /placeholder: 搜索素材
+    - tablist:
+      - tab "全部" [selected]
+      - tab "几何体"
+      - tab "物体"
+      - tab "我的"
+    - generic: 我的
+    - button "添加物体":
+      - generic: 添加物体
+    - generic: 几何体
+    - button "简化人体 几何体":
+      - generic: 简化人体
+      - generic: 几何体
+    - button "立方体 几何体":
+      - generic: 立方体
+      - generic: 几何体
+    - button "球体 几何体":
+      - generic: 球体
+      - generic: 几何体
+    - button "长方体 几何体":
+      - generic: 长方体
+      - generic: 几何体
+    - button "圆柱体 几何体":
+      - generic: 圆柱体
+      - generic: 几何体
+    - button "圆锥体 几何体":
+      - generic: 圆锥体
+      - generic: 几何体
+    - button "四棱锥 几何体":
+      - generic: 四棱锥
+      - generic: 几何体
+    - button "圆环体 几何体":
+      - generic: 圆环体
+      - generic: 几何体
+    - button "基础平面 几何体":
+      - generic: 基础平面
+      - generic: 几何体
+    - button "胶囊体 几何体":
+      - generic: 胶囊体
+      - generic: 几何体
+    - button "圆盘 几何体":
+      - generic: 圆盘
+      - generic: 几何体
+    - button "半圆弧 几何体":
+      - generic: 半圆弧
+      - generic: 几何体
+    - button "半圆柱 几何体":
+      - generic: 半圆柱
+      - generic: 几何体
+    - generic: 简模物体
+    - button "椅子 家具 · 高 0.9 m":
+      - generic: 椅子
+      - generic: 家具 · 高 0.9 m
+    - button "圆凳 家具 · 高 0.48 m":
+      - generic: 圆凳
+      - generic: 家具 · 高 0.48 m
+    - button "扶手椅 家具 · 高 0.88 m":
+      - generic: 扶手椅
+      - generic: 家具 · 高 0.88 m
+    - button "沙发 家具 · 高 0.88 m":
+      - generic: 沙发
+      - generic: 家具 · 高 0.88 m
+    - button "方桌 家具 · 高 0.75 m":
+      - generic: 方桌
+      - generic: 家具 · 高 0.75 m
+    - button "长桌 家具 · 高 0.75 m":
+      - generic: 长桌
+      - generic: 家具 · 高 0.75 m
+    - button "圆桌 家具 · 高 0.75 m":
+      - generic: 圆桌
+      - generic: 家具 · 高 0.75 m
+    - button "床 家具 · 高 0.55 m":
+      - generic: 床
+      - generic: 家具 · 高 0.55 m
+    - button "书架 家具 · 高 1.8 m":
+      - generic: 书架
+      - generic: 家具 · 高 1.8 m
+    - button "矮柜 家具 · 高 0.72 m":
+      - generic: 矮柜
+      - generic: 家具 · 高 0.72 m
+    - button "衣柜 家具 · 高 2 m":
+      - generic: 衣柜
+      - generic: 家具 · 高 2 m
+    - button "电视 家具 · 高 0.68 m":
+      - generic: 电视
+      - generic: 家具 · 高 0.68 m
+    - button "壁挂电视 家具 · 高 0.7 m":
+      - generic: 壁挂电视
+      - generic: 家具 · 高 0.7 m
+    - button "落地灯 家具 · 高 1.65 m":
+      - generic: 落地灯
+      - generic: 家具 · 高 1.65 m
+    - button "台灯 家具 · 高 0.5 m":
+      - generic: 台灯
+      - generic: 家具 · 高 0.5 m
+    - button "地毯 家具 · 高 0.02 m":
+      - generic: 地毯
+      - generic: 家具 · 高 0.02 m
+    - button "墙体 建筑 · 高 2.6 m":
+      - generic: 墙体
+      - generic: 建筑 · 高 2.6 m
+    - button "立柱 建筑 · 高 2.8 m":
+      - generic: 立柱
+      - generic: 建筑 · 高 2.8 m
+    - button "楼梯 建筑 · 高 1.5 m":
+      - generic: 楼梯
+      - generic: 建筑 · 高 1.5 m
+    - button "坡道 建筑 · 高 0.8 m":
+      - generic: 坡道
+      - generic: 建筑 · 高 0.8 m
+    - button "平台 建筑 · 高 0.3 m":
+      - generic: 平台
+      - generic: 建筑 · 高 0.3 m
+    - button "拱门 建筑 · 高 2.6 m":
+      - generic: 拱门
+      - generic: 建筑 · 高 2.6 m
+    - button "门 建筑 · 高 2.1 m":
+      - generic: 门
+      - generic: 建筑 · 高 2.1 m
+    - button "围栏 建筑 · 高 1.1 m":
+      - generic: 围栏
+      - generic: 建筑 · 高 1.1 m
+    - button "梯子 建筑 · 高 2.4 m":
+      - generic: 梯子
+      - generic: 建筑 · 高 2.4 m
+    - button "抽象雕像 建筑 · 高 2 m":
+      - generic: 抽象雕像
+      - generic: 建筑 · 高 2 m
+    - button "小树 自然 · 高 3.5 m":
+      - generic: 小树
+      - generic: 自然 · 高 3.5 m
+    - button "大树 自然 · 高 7 m":
+      - generic: 大树
+      - generic: 自然 · 高 7 m
+    - button "石头 自然 · 高 0.8 m":
+      - generic: 石头
+      - generic: 自然 · 高 0.8 m
+    - button "灌木 自然 · 高 1 m":
+      - generic: 灌木
+      - generic: 自然 · 高 1 m
+    - button "盆栽 自然 · 高 1.2 m":
+      - generic: 盆栽
+      - generic: 自然 · 高 1.2 m
+    - button "树桩 自然 · 高 0.6 m":
+      - generic: 树桩
+      - generic: 自然 · 高 0.6 m
+    - button "花坛 自然 · 高 0.5 m":
+      - generic: 花坛
+      - generic: 自然 · 高 0.5 m
+    - button "轿车 街道 · 高 1.5 m":
+      - generic: 轿车
+      - generic: 街道 · 高 1.5 m
+    - button "卡车 街道 · 高 2.6 m":
+      - generic: 卡车
+      - generic: 街道 · 高 2.6 m
+    - button "自行车 街道 · 高 1.15 m":
+      - generic: 自行车
+      - generic: 街道 · 高 1.15 m
+    - button "摩托车 街道 · 高 1.2 m":
+      - generic: 摩托车
+      - generic: 街道 · 高 1.2 m
+    - button "路灯 街道 · 高 3.8 m":
+      - generic: 路灯
+      - generic: 街道 · 高 3.8 m
+    - button "长椅 街道 · 高 0.85 m":
+      - generic: 长椅
+      - generic: 街道 · 高 0.85 m
+    - button "垃圾桶 街道 · 高 1 m":
+      - generic: 垃圾桶
+      - generic: 街道 · 高 1 m
+    - button "路锥 街道 · 高 0.7 m":
+      - generic: 路锥
+      - generic: 街道 · 高 0.7 m
+    - button "水马 街道 · 高 1 m":
+      - generic: 水马
+      - generic: 街道 · 高 1 m
+    - button "路牌 街道 · 高 2.4 m":
+      - generic: 路牌
+      - generic: 街道 · 高 2.4 m
+    - button "消防栓 街道 · 高 0.85 m":
+      - generic: 消防栓
+      - generic: 街道 · 高 0.85 m
+    - button "油桶 街道 · 高 0.9 m":
+      - generic: 油桶
+      - generic: 街道 · 高 0.9 m
+    - button "木箱 街道 · 高 0.65 m":
+      - generic: 木箱
+      - generic: 街道 · 高 0.65 m
+    - button "书桌 办公 · 高 0.75 m":
+      - generic: 书桌
+      - generic: 办公 · 高 0.75 m
+    - button "茶几 家具 · 高 0.42 m":
+      - generic: 茶几
+      - generic: 家具 · 高 0.42 m
+    - button "边桌 家具 · 高 0.55 m":
+      - generic: 边桌
+      - generic: 家具 · 高 0.55 m
+    - button "冰箱 厨房 · 高 1.85 m":
+      - generic: 冰箱
+      - generic: 厨房 · 高 1.85 m
+    - button "灶台 厨房 · 高 0.9 m":
+      - generic: 灶台
+      - generic: 厨房 · 高 0.9 m
+    - button "厨房水槽 厨房 · 高 1.2 m":
+      - generic: 厨房水槽
+      - generic: 厨房 · 高 1.2 m
+    - button "厨房台面 厨房 · 高 0.9 m":
+      - generic: 厨房台面
+      - generic: 厨房 · 高 0.9 m
+    - button "厨房岛台 厨房 · 高 0.92 m":
+      - generic: 厨房岛台
+      - generic: 厨房 · 高 0.92 m
+    - button "微波炉 厨房 · 高 0.3 m":
+      - generic: 微波炉
+      - generic: 厨房 · 高 0.3 m
+    - button "吊柜 厨房 · 高 0.7 m":
+      - generic: 吊柜
+      - generic: 厨房 · 高 0.7 m
+    - button "马桶 卫浴 · 高 0.8 m":
+      - generic: 马桶
+      - generic: 卫浴 · 高 0.8 m
+    - button "洗手盆 卫浴 · 高 0.85 m":
+      - generic: 洗手盆
+      - generic: 卫浴 · 高 0.85 m
+    - button "浴缸 卫浴 · 高 0.6 m":
+      - generic: 浴缸
+      - generic: 卫浴 · 高 0.6 m
+    - button "淋浴间 卫浴 · 高 2.1 m":
+      - generic: 淋浴间
+      - generic: 卫浴 · 高 2.1 m
+    - button "洗衣机 卫浴 · 高 0.9 m":
+      - generic: 洗衣机
+      - generic: 卫浴 · 高 0.9 m
+    - button "显示器 办公 · 高 0.48 m":
+      - generic: 显示器
+      - generic: 办公 · 高 0.48 m
+    - button "笔记本电脑 办公 · 高 0.22 m":
+      - generic: 笔记本电脑
+      - generic: 办公 · 高 0.22 m
+    - button "窗户 建筑 · 高 1.2 m":
+      - generic: 窗户
+      - generic: 建筑 · 高 1.2 m
+    - button "栏杆 建筑 · 高 1.05 m":
+      - generic: 栏杆
+      - generic: 建筑 · 高 1.05 m
+    - button "纸箱 日用 · 高 0.5 m":
+      - generic: 纸箱
+      - generic: 日用 · 高 0.5 m
+    - button "行李箱 日用 · 高 0.75 m":
+      - generic: 行李箱
+      - generic: 日用 · 高 0.75 m
+    - button "马克杯 日用 · 高 0.1 m":
+      - generic: 马克杯
+      - generic: 日用 · 高 0.1 m
+    - button "镜子 日用 · 高 0.9 m":
+      - generic: 镜子
+      - generic: 日用 · 高 0.9 m
+    - button "吊灯 日用 · 高 0.9 m":
+      - generic: 吊灯
+      - generic: 日用 · 高 0.9 m
+    - button "吊扇 日用 · 高 0.25 m":
+      - generic: 吊扇
+      - generic: 日用 · 高 0.25 m
+  - complementary:
+    - separator "属性"
+    - complementary:
+      - heading "对象" [level=2]
+      - searchbox "搜索对象"
+      - button "机位 1" [expanded]:
+        - generic: 机位
+        - generic: "1"
+      - button "展开 机位":
+      - button "机位":
+        - generic: 机位
+      - button "聚焦选中对象 机位":
+      - button "锁定对象 机位":
+      - button "实时预览 机位":
+      - status
+    - separator "对象 / 属性"
+    - complementary:
+      - heading "属性" [level=2]
+      - generic: 环境预设
+      - button "环境预设":
+        - generic: 影棚
+      - generic: 背景颜色
+      - textbox "背景颜色": "#171717"
+      - textbox "背景颜色": "#171717"
+      - generic: 地面颜色
+      - textbox "地面颜色": "#242424"
+      - textbox "地面颜色": "#242424"
+      - generic: 显示地面
+      - switch "显示地面" [checked]
+      - group "地面不透明度":
+        - button "地面不透明度, drag horizontally to adjust": 地面不透明度
+        - spinbutton "地面不透明度": "50"
+        - generic: "%"
+      - group "曝光":
+        - button "曝光, drag horizontally to adjust": 曝光
+        - spinbutton "曝光": "1.05"
+      - generic: 显示网格
+      - switch "显示网格" [checked]
+      - heading "主光" [level=3]
+      - generic: 灯光颜色
+      - textbox "灯光颜色": "#ffffff"
+      - textbox "灯光颜色": "#ffffff"
+      - group "强度":
+        - button "强度, drag horizontally to adjust": 强度
+        - spinbutton "强度": "3.4"
+      - group "水平角度":
+        - button "水平角度, drag horizontally to adjust": 水平角度
+        - spinbutton "水平角度": "-34"
+        - generic: °
+      - group "仰角":
+        - button "仰角, drag horizontally to adjust": 仰角
+        - spinbutton "仰角": "51"
+        - generic: °
+      - generic: 阴影
+      - switch "阴影" [checked]
+      - heading "补光" [level=3]
+      - generic: 灯光颜色
+      - textbox "灯光颜色": "#ffffff"
+      - textbox "灯光颜色": "#ffffff"
+      - group "强度":
+        - button "强度, drag horizontally to adjust": 强度
+        - spinbutton "强度": "2.1"
+      - heading "轮廓光" [level=3]
+      - generic: 灯光颜色
+      - textbox "灯光颜色": "#ffffff"
+      - textbox "灯光颜色": "#ffffff"
+      - group "强度":
+        - button "强度, drag horizontally to adjust": 强度
+        - spinbutton "强度": "1.1"
+    - button "收起对象与属性面板" [expanded]:
+  - button "对象操作"
+- tooltip "物体"

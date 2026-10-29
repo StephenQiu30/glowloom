@@ -1,0 +1,1 @@
+{"content":[{"type":"text","text":"tool call error: tool call failed for `codex_apps/figma.use_figma`\n\nCaused by:\n    Transport closed"}],"isError":true}

@@ -1,0 +1,308 @@
+- banner "Canvas top bar":
+  - link:
+    - /url: /ai-tool/home
+  - button:
+    - generic: 一致性调研-202610221
+  - button:
+  - button:
+    - text: 节点
+    - generic: "5"
+  - status: 已保存
+  - button:
+  - button:
+  - button:
+    - generic: 分享
+  - button:
+  - button:
+    - generic: "88"
+    - generic: 开会员
+  - button
+- main "Canvas workspace":
+  - region "Canvas editing area":
+    - generic: 5 nodes, 0 edges, 1 selected. Editable. Room connected. 已保存.
+    - application "Canvas":
+      - paragraph: 双击编辑文本
+      - generic: 文本 1
+      - paragraph: 双击编辑文本
+      - generic: 文本 2
+      - paragraph: 双击编辑文本
+      - generic: 文本 3
+      - button:
+        - generic: 导演台
+      - button:
+      - paragraph: 在 3D 空间中设计角色、机位与镜头
+      - button: 进入导演台
+      - generic: "No resources: 0 ready, 0 processing, 0 failed. Selected."
+      - generic: 视频 1
+      - generic: "No resources: 0 ready, 0 processing, 0 failed. Not selected."
+      - status
+  - complementary
+  - complementary "Canvas left toolbar":
+    - toolbar "Canvas toolbar":
+      - generic: 文本
+      - button
+      - generic: 图片
+      - button
+      - generic: 视频
+      - button
+      - generic: 音频
+      - button
+      - generic: 时间线
+      - button
+      - generic: 主体
+      - button
+      - generic: 导演工具箱
+      - button
+      - generic: 导演台
+      - button
+      - generic: 资产库
+      - button
+      - generic: 上传
+      - button
+  - group "Canvas viewport controls":
+    - button:
+    - button:
+    - button [pressed]:
+    - button: 75%
+    - status
+  - generic: 与 AI 对话
+  - button
+- status
+- dialog "导演台":
+  - heading [level=2]: 导演台
+  - banner:
+    - generic: 3D导演台
+    - button:
+    - button:
+    - status: 未保存
+    - tablist:
+      - tab: 静态预演
+      - tab [selected]: 动态预演
+    - button:
+      - generic: 导出视频
+    - button:
+    - button:
+    - button:
+  - generic: 男性 · 标准
+  - button:
+    - generic: 分屏预览 ↗
+  - button:
+    - generic: 机位
+  - button:
+  - slider:
+  - button:
+    - generic: 导演视角
+  - navigation:
+    - button:
+      - generic: "0"
+    - button [pressed]:
+      - generic: "1"
+    - button:
+      - generic: "2"
+    - button:
+      - generic: "3"
+    - button:
+      - generic: G
+    - button:
+  - complementary:
+    - heading [level=2]: 资产
+    - button:
+    - separator
+    - tablist:
+      - tab [selected]:
+      - tab:
+      - tab:
+      - tab:
+    - textbox:
+      - /placeholder: 搜索素材
+    - tablist:
+      - tab [selected]: 全部
+      - tab: 我的
+    - generic: 我的
+    - button:
+      - generic: 添加角色
+    - generic: 预设
+    - button:
+      - generic: 男性 · 标准
+      - generic: 预设
+    - button:
+      - generic: 女性 · 标准
+      - generic: 预设
+    - button:
+      - generic: 男性 · 少年
+      - generic: 预设
+    - button:
+      - generic: 女性 · 少年
+      - generic: 预设
+    - button:
+      - generic: 男性·儿童
+      - generic: 预设
+    - button:
+      - generic: 女性·儿童
+      - generic: 预设
+    - button:
+      - generic: 男性·纤瘦
+      - generic: 预设
+    - button:
+      - generic: 女性·纤瘦
+      - generic: 预设
+    - button:
+      - generic: 男性·健壮
+      - generic: 预设
+    - button:
+      - generic: 女性·健壮
+      - generic: 预设
+    - button:
+      - generic: 男性·丰腴
+      - generic: 预设
+    - button:
+      - generic: 女性·丰腴
+      - generic: 预设
+  - complementary:
+    - separator
+    - complementary:
+      - heading [level=2]: 对象
+      - searchbox
+      - button [expanded]:
+        - generic: 机位
+        - generic: "1"
+      - button [expanded]:
+      - button:
+        - generic: 机位
+      - button:
+      - button:
+      - button:
+      - button:
+        - generic: 注视点
+      - button:
+      - button [expanded]:
+        - generic: 角色
+        - generic: "1"
+      - button:
+        - generic: 男性 · 标准
+      - button:
+      - button:
+      - button:
+      - status
+    - separator
+    - complementary:
+      - heading [level=2]: 属性
+      - region:
+        - button [expanded]:
+          - generic: 位置
+        - button
+        - button: X
+        - spinbutton: "-0.172"
+        - generic: m
+        - button: "Y"
+        - spinbutton: "0"
+        - generic: m
+        - button: Z
+        - spinbutton: "-0.069"
+        - generic: m
+      - region:
+        - button [expanded]:
+          - generic: 旋转
+        - button
+        - button: X
+        - spinbutton: "0"
+        - generic: °
+        - button: "Y"
+        - spinbutton: "0"
+        - generic: °
+        - button: Z
+        - spinbutton: "0"
+        - generic: °
+      - region:
+        - button [expanded]:
+          - generic: 缩放
+        - button
+        - button: X
+        - spinbutton: "1"
+        - button: "Y"
+        - spinbutton: "1"
+        - button: Z
+        - spinbutton: "1"
+      - generic: 颜色
+      - textbox: "#6f8f96"
+      - textbox:
+        - /placeholder: 原色
+        - text: "#6f8f96"
+      - button:
+      - button: 不透明度
+      - spinbutton: "100"
+      - generic: "%"
+      - generic: 沿路径自动转向
+      - generic: 沿路径移动时自动调整朝向，其他动作仍可自由旋转。
+      - switch [checked]
+    - button [expanded]:
+  - region:
+    - generic: FOV 50°
+    - button:
+      - generic: 重置视角
+  - button
+  - separator
+  - button [expanded]:
+    - generic: 时间轴
+  - button [disabled]:
+  - button [pressed]:
+  - button [pressed]:
+  - generic: 0:00.00 · 0f / 0:20.0
+  - generic: 帧率
+  - button:
+    - generic: "30"
+  - button: 总时长
+  - spinbutton: "20"
+  - generic: 秒
+  - button:
+  - slider
+  - button:
+  - button: 1×
+  - generic: 当前时间
+  - button:
+  - button:
+    - generic: 机位
+  - button:
+  - button:
+  - button [pressed]:
+    - generic: 男性 · 标准
+  - button:
+  - slider: "0"
+  - generic: 0s
+  - generic: 0.5s
+  - generic: 1s
+  - generic: 1.5s
+  - generic: 2s
+  - generic: 2.5s
+  - generic: 3s
+  - generic: 3.5s
+  - generic: 4s
+  - generic: 4.5s
+  - generic: 5s
+  - generic: 5.5s
+  - generic: 6s
+  - generic: 6.5s
+  - generic: 7s
+  - generic: 7.5s
+  - generic: 8s
+  - generic: 8.5s
+  - generic: 分镜编排
+  - button:
+  - generic: 选择机位并添加分镜
+- dialog "添加动作":
+  - heading "添加动作" [level=2]
+  - tablist "添加动作":
+    - tab "动作" [selected]: 动作
+    - tab "静态姿势"
+  - heading "动作库" [level=3]
+  - button "动作从播放头位置开始。同一角色的动作片段不能重叠。":
+  - tablist "动作库":
+    - tab "预设" [selected]
+    - tab "我的 · 0"
+  - searchbox "搜索动作" [active]
+  - button "新建动作":
+    - text: 新建动作
+  - status:
+    - generic: 正在读取预设动作…
+  - button "关闭":
+    - generic: 关闭

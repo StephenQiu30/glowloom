@@ -1,0 +1,228 @@
+- banner "Canvas top bar":
+  - link:
+    - /url: /ai-tool/home
+  - button:
+    - generic: 一致性调研-202610221
+  - button:
+  - button:
+    - text: 节点
+    - generic: "5"
+  - status: 已保存
+  - button:
+  - button:
+  - button:
+    - generic: 分享
+  - button:
+  - button:
+    - generic: "88"
+    - generic: 开会员
+  - button
+- main "Canvas workspace":
+  - region "Canvas editing area":
+    - generic: 5 nodes, 0 edges, 1 selected. Editable. Room connected. 已保存.
+    - application "Canvas":
+      - paragraph: 双击编辑文本
+      - generic: 文本 1
+      - paragraph: 双击编辑文本
+      - generic: 文本 2
+      - paragraph: 双击编辑文本
+      - generic: 文本 3
+      - button:
+        - generic: 导演台
+      - button:
+      - paragraph: 在 3D 空间中设计角色、机位与镜头
+      - button: 进入导演台
+      - generic: "No resources: 0 ready, 0 processing, 0 failed. Selected."
+      - generic: 视频 1
+      - generic: "No resources: 0 ready, 0 processing, 0 failed. Not selected."
+      - status
+  - complementary
+  - complementary "Canvas left toolbar":
+    - toolbar "Canvas toolbar":
+      - generic: 文本
+      - button
+      - generic: 图片
+      - button
+      - generic: 视频
+      - button
+      - generic: 音频
+      - button
+      - generic: 时间线
+      - button
+      - generic: 主体
+      - button
+      - generic: 导演工具箱
+      - button
+      - generic: 导演台
+      - button
+      - generic: 资产库
+      - button
+      - generic: 上传
+      - button
+  - group "Canvas viewport controls":
+    - button:
+    - button:
+    - button [pressed]:
+    - button: 75%
+    - status
+  - generic: 与 AI 对话
+  - button
+- status
+- dialog "导演台":
+  - heading [level=2]: 导演台
+  - banner:
+    - generic: 3D导演台
+    - button:
+    - button:
+    - status: 未保存
+    - tablist:
+      - tab [selected]: 静态预演
+      - tab: 动态预演
+    - button:
+    - button:
+    - button:
+  - generic: 2.20m
+  - button:
+    - generic: 分屏预览 ↗
+  - button:
+    - generic: 机位
+  - button:
+  - slider:
+  - button:
+    - generic: 导演视角
+  - navigation:
+    - button:
+      - generic: "0"
+    - button [pressed]:
+      - generic: "1"
+    - button:
+      - generic: "2"
+    - button:
+      - generic: "3"
+    - button [disabled]:
+      - generic: G
+    - button:
+  - complementary:
+    - heading [level=2]: 资产
+    - button:
+    - separator
+    - tablist:
+      - tab:
+      - tab:
+      - tab:
+      - tab [selected]:
+    - textbox:
+      - /placeholder: 搜索素材
+    - region:
+      - paragraph: 全部
+      - button:
+        - generic: 当前视角
+        - generic: 机位
+      - button:
+        - generic: 正面中景
+        - generic: 选择拍摄对象
+      - button:
+        - generic: 正面特写
+        - generic: 选择拍摄对象
+      - button:
+        - generic: 正面全景
+        - generic: 选择拍摄对象
+      - button:
+        - generic: 侧面跟拍
+        - generic: 选择拍摄对象
+      - button:
+        - generic: 侧面近景
+        - generic: 选择拍摄对象
+      - button:
+        - generic: 背面中景
+        - generic: 选择拍摄对象
+      - button:
+        - generic: 俯拍全景
+        - generic: 选择拍摄对象
+      - button:
+        - generic: 45° 俯拍
+        - generic: 选择拍摄对象
+      - button:
+        - generic: 低角度仰拍
+        - generic: 选择拍摄对象
+      - button:
+        - generic: 低角度广角
+        - generic: 选择拍摄对象
+      - button:
+        - generic: 过肩镜头
+        - generic: 选择前景角色和注视点
+      - button:
+        - generic: 鸟瞰
+        - generic: 选择拍摄对象
+      - button:
+        - generic: 荷兰角
+        - generic: 选择拍摄对象
+  - complementary:
+    - separator
+    - complementary:
+      - heading [level=2]: 对象
+      - searchbox
+      - button [expanded]:
+        - generic: 机位
+        - generic: "1"
+      - button [expanded]:
+      - button [pressed]:
+        - generic: 机位
+      - button:
+      - button:
+      - button:
+      - button:
+        - generic: 注视点
+      - button:
+      - status
+    - separator
+    - complementary:
+      - heading [level=2]: 属性
+      - generic: 机位
+      - region:
+        - button [expanded]:
+          - generic: 机位位置
+        - button: X
+        - spinbutton: "0"
+        - generic: m
+        - button: "Y"
+        - spinbutton: "2.2"
+        - generic: m
+        - button: Z
+        - spinbutton: "7"
+        - generic: m
+      - region:
+        - button [expanded]:
+          - generic: 注视点
+        - button: X
+        - spinbutton: "0"
+        - generic: m
+        - button: "Y"
+        - spinbutton: "1"
+        - generic: m
+        - button: Z
+        - spinbutton: "0"
+        - generic: m
+      - region:
+        - button [expanded]:
+          - generic: 镜头
+        - button: 视野
+        - spinbutton: "50"
+        - generic: °
+        - button: 画面倾斜
+        - spinbutton: "0"
+        - generic: °
+      - generic: 画幅比例
+      - button:
+        - generic: 16:9
+    - button [expanded]:
+  - button
+- dialog "将静态预演场景应用于动态预演？":
+  - heading "将静态预演场景应用于动态预演？" [level=2]
+  - paragraph: 复制静态预演中的内容，保留演出时间轴，不复制角色姿势。时间轴中的角色须仍在静态预演中。
+  - checkbox "确认覆盖动态预演场景"
+  - generic: 确认覆盖动态预演场景
+  - button "不同步，直接切换" [active]
+  - button "覆盖并切换" [disabled]
+  - button "关闭":
+    - generic: 关闭

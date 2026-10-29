@@ -1,0 +1,237 @@
+- banner "Canvas top bar":
+  - link:
+    - /url: /ai-tool/home
+  - button:
+    - generic: 一致性调研-202610221
+  - button:
+  - button:
+    - text: 节点
+    - generic: "5"
+  - status: 已保存
+  - button:
+  - button:
+  - button:
+    - generic: 分享
+  - button:
+  - button:
+    - generic: "88"
+    - generic: 开会员
+  - button
+- main "Canvas workspace":
+  - region "Canvas editing area":
+    - generic: 5 nodes, 0 edges, 1 selected. Editable. Room connected. 已保存.
+    - application "Canvas":
+      - paragraph: 双击编辑文本
+      - generic: 文本 1
+      - paragraph: 双击编辑文本
+      - generic: 文本 2
+      - paragraph: 双击编辑文本
+      - generic: 文本 3
+      - button:
+        - generic: 导演台
+      - button:
+      - paragraph: 在 3D 空间中设计角色、机位与镜头
+      - button: 进入导演台
+      - generic: "No resources: 0 ready, 0 processing, 0 failed. Selected."
+      - generic: 视频 1
+      - generic: "No resources: 0 ready, 0 processing, 0 failed. Not selected."
+      - status
+  - complementary
+  - complementary "Canvas left toolbar":
+    - toolbar "Canvas toolbar":
+      - generic: 文本
+      - button
+      - generic: 图片
+      - button
+      - generic: 视频
+      - button
+      - generic: 音频
+      - button
+      - generic: 时间线
+      - button
+      - generic: 主体
+      - button
+      - generic: 导演工具箱
+      - button
+      - generic: 导演台
+      - button
+      - generic: 资产库
+      - button
+      - generic: 上传
+      - button
+  - group "Canvas viewport controls":
+    - button:
+    - button:
+    - button [pressed]:
+    - button: 75%
+    - status
+  - generic: 与 AI 对话
+  - button
+- status
+- dialog "导演台" [active]:
+  - heading "导演台" [level=2]
+  - banner:
+    - generic: 3D导演台
+    - button "快捷键":
+    - button "保存":
+    - status: 未保存
+    - tablist "3D导演台":
+      - tab "静态预演" [selected]
+      - tab "动态预演"
+    - button "拍摄":
+    - button "镜头素材":
+    - button "返回画布":
+  - generic "3D viewport"
+  - button "机位 · 实时预览":
+    - generic: 分屏预览 ↗
+  - button "机位 · 实时预览":
+    - generic: 机位
+  - button "收起机位预览":
+  - slider "拖动调整预览大小":
+  - button "导演视角":
+    - generic: 导演视角
+  - navigation "对象":
+    - button "选择 · 0":
+      - generic: "0"
+    - button "移动 · 1" [pressed]:
+      - generic: "1"
+    - button "旋转 · 2":
+      - generic: "2"
+    - button "缩放 · 3":
+      - generic: "3"
+    - button "落到地面 · G" [disabled]:
+      - generic: G
+    - button "视图设置":
+  - complementary:
+    - heading "资产" [level=2]
+    - button "关闭":
+    - separator "资产"
+    - tablist "资产":
+      - tab "角色" [selected]:
+      - tab "物体":
+      - tab "背景":
+      - tab "机位":
+    - textbox "搜索素材 · 角色":
+      - /placeholder: 搜索素材
+    - tablist:
+      - tab "全部" [selected]
+      - tab "我的"
+    - generic: 我的
+    - button "添加角色":
+      - generic: 添加角色
+    - generic: 预设
+    - button "男性 · 标准 预设":
+      - generic: 男性 · 标准
+      - generic: 预设
+    - button "女性 · 标准 预设":
+      - generic: 女性 · 标准
+      - generic: 预设
+    - button "男性 · 少年 预设":
+      - generic: 男性 · 少年
+      - generic: 预设
+    - button "女性 · 少年 预设":
+      - generic: 女性 · 少年
+      - generic: 预设
+    - button "男性·儿童 预设":
+      - generic: 男性·儿童
+      - generic: 预设
+    - button "女性·儿童 预设":
+      - generic: 女性·儿童
+      - generic: 预设
+    - button "男性·纤瘦 预设":
+      - generic: 男性·纤瘦
+      - generic: 预设
+    - button "女性·纤瘦 预设":
+      - generic: 女性·纤瘦
+      - generic: 预设
+    - button "男性·健壮 预设":
+      - generic: 男性·健壮
+      - generic: 预设
+    - button "女性·健壮 预设":
+      - generic: 女性·健壮
+      - generic: 预设
+    - button "男性·丰腴 预设":
+      - generic: 男性·丰腴
+      - generic: 预设
+    - button "女性·丰腴 预设":
+      - generic: 女性·丰腴
+      - generic: 预设
+  - complementary:
+    - separator "属性"
+    - complementary:
+      - heading "对象" [level=2]
+      - searchbox "搜索对象"
+      - button "机位 1" [expanded]:
+        - generic: 机位
+        - generic: "1"
+      - button "折叠 机位" [expanded]:
+      - button "机位":
+        - generic: 机位
+      - button "聚焦选中对象 机位":
+      - button "锁定对象 机位":
+      - button "实时预览 机位":
+      - button "注视点":
+        - generic: 注视点
+      - button "聚焦选中对象 机位 注视点":
+      - status
+    - separator "对象 / 属性"
+    - complementary:
+      - heading "属性" [level=2]
+      - generic: 环境预设
+      - button "环境预设":
+        - generic: 影棚
+      - generic: 背景颜色
+      - textbox "背景颜色": "#171717"
+      - textbox "背景颜色": "#171717"
+      - generic: 地面颜色
+      - textbox "地面颜色": "#242424"
+      - textbox "地面颜色": "#242424"
+      - generic: 显示地面
+      - switch "显示地面" [checked]
+      - group "地面不透明度":
+        - button "地面不透明度, drag horizontally to adjust": 地面不透明度
+        - spinbutton "地面不透明度": "50"
+        - generic: "%"
+      - group "曝光":
+        - button "曝光, drag horizontally to adjust": 曝光
+        - spinbutton "曝光": "1.05"
+      - generic: 显示网格
+      - switch "显示网格" [checked]
+      - heading "主光" [level=3]
+      - generic: 灯光颜色
+      - textbox "灯光颜色": "#ffffff"
+      - textbox "灯光颜色": "#ffffff"
+      - group "强度":
+        - button "强度, drag horizontally to adjust": 强度
+        - spinbutton "强度": "3.4"
+      - group "水平角度":
+        - button "水平角度, drag horizontally to adjust": 水平角度
+        - spinbutton "水平角度": "-34"
+        - generic: °
+      - group "仰角":
+        - button "仰角, drag horizontally to adjust": 仰角
+        - spinbutton "仰角": "51"
+        - generic: °
+      - generic: 阴影
+      - switch "阴影" [checked]
+      - heading "补光" [level=3]
+      - generic: 灯光颜色
+      - textbox "灯光颜色": "#ffffff"
+      - textbox "灯光颜色": "#ffffff"
+      - group "强度":
+        - button "强度, drag horizontally to adjust": 强度
+        - spinbutton "强度": "2.1"
+      - heading "轮廓光" [level=3]
+      - generic: 灯光颜色
+      - textbox "灯光颜色": "#ffffff"
+      - textbox "灯光颜色": "#ffffff"
+      - group "强度":
+        - button "强度, drag horizontally to adjust": 强度
+        - spinbutton "强度": "1.1"
+    - button "收起对象与属性面板" [expanded]:
+  - region "视角指示器":
+    - 'img "视角指示器: -35° / -18°"'
+    - generic: FOV 50°
+    - button "重置视角":
+      - generic: 重置视角
+  - button "对象操作"

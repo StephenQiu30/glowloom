@@ -1,0 +1,316 @@
+- banner "Canvas top bar":
+  - link:
+    - /url: /ai-tool/home
+  - button:
+    - generic: 一致性调研-202610221
+  - button:
+  - button:
+    - text: 节点
+    - generic: "5"
+  - status: 已保存
+  - button:
+  - button:
+  - button:
+    - generic: 分享
+  - button:
+  - button:
+    - generic: "88"
+    - generic: 开会员
+  - button
+- main "Canvas workspace":
+  - region "Canvas editing area":
+    - generic: 5 nodes, 0 edges, 1 selected. Editable. Room connected. 已保存.
+    - application "Canvas":
+      - paragraph: 双击编辑文本
+      - generic: 文本 1
+      - paragraph: 双击编辑文本
+      - generic: 文本 2
+      - paragraph: 双击编辑文本
+      - generic: 文本 3
+      - button:
+        - generic: 导演台
+      - button:
+      - paragraph: 在 3D 空间中设计角色、机位与镜头
+      - button: 进入导演台
+      - generic: "No resources: 0 ready, 0 processing, 0 failed. Selected."
+      - generic: 视频 1
+      - generic: "No resources: 0 ready, 0 processing, 0 failed. Not selected."
+      - status
+  - complementary
+  - complementary "Canvas left toolbar":
+    - toolbar "Canvas toolbar":
+      - generic: 文本
+      - button
+      - generic: 图片
+      - button
+      - generic: 视频
+      - button
+      - generic: 音频
+      - button
+      - generic: 时间线
+      - button
+      - generic: 主体
+      - button
+      - generic: 导演工具箱
+      - button
+      - generic: 导演台
+      - button
+      - generic: 资产库
+      - button
+      - generic: 上传
+      - button
+  - group "Canvas viewport controls":
+    - button:
+    - button:
+    - button [pressed]:
+    - button: 75%
+    - status
+  - generic: 与 AI 对话
+  - button
+- status
+- dialog "导演台":
+  - heading [level=2]: 导演台
+  - banner:
+    - generic: 3D导演台
+    - button:
+    - button:
+    - status: 未保存
+    - tablist:
+      - tab: 静态预演
+      - tab [selected]: 动态预演
+    - button:
+      - generic: 导出视频
+    - button:
+    - button:
+    - button:
+  - button:
+    - generic: 分屏预览 ↗
+  - button:
+    - generic: 机位
+  - button:
+  - slider:
+  - button:
+    - generic: 导演视角
+  - navigation:
+    - button:
+      - generic: "0"
+    - button [pressed]:
+      - generic: "1"
+    - button:
+      - generic: "2"
+    - button:
+      - generic: "3"
+    - button [disabled]:
+      - generic: G
+    - button:
+  - complementary:
+    - heading [level=2]: 资产
+    - button:
+    - separator
+    - tablist:
+      - tab:
+      - tab:
+      - tab:
+      - tab [selected]:
+    - textbox:
+      - /placeholder: 搜索素材
+    - tablist:
+      - tab: 机位
+      - tab [selected]: 运镜
+    - generic: 运镜预设
+    - region:
+      - heading [level=3]: 固定注视点
+      - button:
+        - generic: 推近
+      - button:
+        - generic: 拉远
+      - button:
+        - generic: 横移
+      - button:
+        - generic: 上升
+      - button:
+        - generic: 下降
+      - button:
+        - generic: 环绕
+      - button:
+        - generic: 半弧
+      - button:
+        - generic: 螺旋上升
+      - button:
+        - generic: 滑动变焦
+      - button:
+        - generic: 倾斜镜头
+    - region:
+      - heading [level=3]: 固定机位
+      - button:
+        - generic: 镜头左摇
+      - button:
+        - generic: 镜头右摇
+      - button:
+        - generic: 镜头上摇
+      - button:
+        - generic: 镜头下摇
+    - generic: 自定义路径
+    - button:
+      - generic: 固定注视点
+      - generic: 固定注视点，让机位沿路径移动。
+    - button:
+      - generic: 固定机位
+      - generic: 固定机位位置，让注视点沿路径移动。
+    - button:
+      - generic: 自由运镜
+      - generic: 先绘制注视点路径，再绘制机位路径。两者在同一时间范围内移动。
+  - complementary:
+    - separator
+    - complementary:
+      - heading [level=2]: 对象
+      - searchbox
+      - button [expanded]:
+        - generic: 机位
+        - generic: "1"
+      - button [expanded]:
+      - button:
+        - generic: 机位
+      - button:
+      - button:
+      - button:
+      - button:
+        - generic: 注视点
+      - button:
+      - status
+    - separator
+    - complementary:
+      - heading [level=2]: 属性
+      - generic: 环境预设
+      - button:
+        - generic: 影棚
+      - generic: 背景颜色
+      - textbox: "#171717"
+      - textbox: "#171717"
+      - generic: 地面颜色
+      - textbox: "#242424"
+      - textbox: "#242424"
+      - generic: 显示地面
+      - switch [checked]
+      - button: 地面不透明度
+      - spinbutton: "50"
+      - generic: "%"
+      - button: 曝光
+      - spinbutton: "1.05"
+      - generic: 显示网格
+      - switch [checked]
+      - heading [level=3]: 主光
+      - generic: 灯光颜色
+      - textbox: "#ffffff"
+      - textbox: "#ffffff"
+      - button: 强度
+      - spinbutton: "3.4"
+      - button: 水平角度
+      - spinbutton: "-34"
+      - generic: °
+      - button: 仰角
+      - spinbutton: "51"
+      - generic: °
+      - generic: 阴影
+      - switch [checked]
+      - heading [level=3]: 补光
+      - generic: 灯光颜色
+      - textbox: "#ffffff"
+      - textbox: "#ffffff"
+      - button: 强度
+      - spinbutton: "2.1"
+      - heading [level=3]: 轮廓光
+      - generic: 灯光颜色
+      - textbox: "#ffffff"
+      - textbox: "#ffffff"
+      - button: 强度
+      - spinbutton: "1.1"
+    - button [expanded]:
+  - region:
+    - generic: FOV 50°
+    - button:
+      - generic: 重置视角
+  - button
+  - separator
+  - button [expanded]:
+    - generic: 时间轴
+  - button [disabled]:
+  - button [pressed]:
+  - button [pressed]:
+  - generic: 0:00.00 · 0f / 0:20.0
+  - generic: 帧率
+  - button:
+    - generic: "30"
+  - button: 总时长
+  - spinbutton: "20"
+  - generic: 秒
+  - button:
+  - slider
+  - button:
+  - button: 1×
+  - generic: 当前时间
+  - button:
+  - button:
+    - generic: 机位
+  - button:
+  - slider: "0"
+  - generic: 0s
+  - generic: 0.5s
+  - generic: 1s
+  - generic: 1.5s
+  - generic: 2s
+  - generic: 2.5s
+  - generic: 3s
+  - generic: 3.5s
+  - generic: 4s
+  - generic: 4.5s
+  - generic: 5s
+  - generic: 5.5s
+  - generic: 6s
+  - generic: 6.5s
+  - generic: 7s
+  - generic: 7.5s
+  - generic: 8s
+  - generic: 8.5s
+  - generic: 分镜编排
+  - button:
+  - generic: 选择机位并添加分镜
+- dialog "导出视频":
+  - heading "导出视频" [level=2]:
+    - text: 导出视频
+  - paragraph: 选择一个机位导出完整动态预演
+  - generic: 机位来源
+  - button "机位来源":
+    - generic: 机位
+  - checkbox "简化角色外形 推荐 用无四肢的简化人体替代角色，更适合为 Seedance 2.5 模型提供视频生成的构图与走位参考。"
+  - text: 简化角色外形
+  - generic: 推荐
+  - generic: 用无四肢的简化人体替代角色，更适合为 Seedance 2.5 模型提供视频生成的构图与走位参考。
+  - generic: 画幅
+  - generic: 16:9 · 1280 × 720
+  - generic: 时长
+  - generic: 00:20.0
+  - generic: 清晰度
+  - button "清晰度":
+    - generic: 标准 · 长边 1280 px
+  - generic: 帧率
+  - button "帧率" [expanded]:
+    - generic: 30 FPS
+  - paragraph: 全程使用“机位”，保留该机位的运镜和角色动作。
+  - paragraph: 成片不包含辅助线、控制点或编辑界面。
+  - region "Notifications"
+  - button "取消"
+  - button "导出"
+  - button "关闭":
+    - generic: 关闭
+- menu "帧率" [active]:
+  - menuitemradio "24 FPS":
+    - generic: 24 FPS
+  - menuitemradio "25 FPS":
+    - generic: 25 FPS
+  - menuitemradio "30 FPS" [checked]:
+    - generic: 30 FPS
+  - menuitemradio "50 FPS":
+    - generic: 50 FPS
+  - menuitemradio "60 FPS":
+    - generic: 60 FPS

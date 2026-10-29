@@ -1,0 +1,361 @@
+{
+  "date": "2026-10-29",
+  "target": "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e",
+  "capture": "Chrome CUA + tab-scoped CDP Page.getResourceContent; REA static JavaScript analysis",
+  "reaParentEvidence": "ev_0cad67fb66afd060610e265808bb2abbfa6e6db22f49d9dbac65889822150b0f",
+  "limitations": [
+    "REA graph partial/truncated; dependencies not analyzed",
+    "No cloud save, AI generation, real export or canvas writeback performed",
+    "Temporary actors added separately to static/dynamic scenes, then undone; original scene restored; original browser tab not modified"
+  ],
+  "files": [
+    {
+      "file": "actor-animation-library-loaded.txt",
+      "sha256": "f5bd7f54dc10185eb550b282f4b7a16f00afbab3b40cbf02892f3f3d76d074f7",
+      "bytes": 14364
+    },
+    {
+      "file": "actor-animation-library.txt",
+      "sha256": "ff08604e19e4895c9bd80f1f55b7dddcac3aa13d83ebdf68b85c3d763ddbfb5e",
+      "bytes": 7004
+    },
+    {
+      "file": "actor-track-add.txt",
+      "sha256": "93260e0b5cad4961dc03d05212ac180135b971eb36fb6bb971aaafe28776045d",
+      "bytes": 9606
+    },
+    {
+      "file": "background-import.txt",
+      "sha256": "00b49c32a06bad45918c3f9b45f1d02271ee68906c8cc48f3f266f4ce06e741c",
+      "bytes": 6064
+    },
+    {
+      "file": "backgrounds.txt",
+      "sha256": "0fbc07d1699e267008beb94c460a098cc9695a609b6861f05c99f157ea207c11",
+      "bytes": 5920
+    },
+    {
+      "file": "beeftv-audit.md",
+      "sha256": "02262c5ee7f2a4e6e79f7a6838a16b03d9598212123f330c76c0120fc93f261c",
+      "bytes": 14071
+    },
+    {
+      "file": "camera-aspects.txt",
+      "sha256": "fe91ab37f754625be6569b19ea70ce69ec98beb380c9a3fbd69ef602eadfdb1b",
+      "bytes": 7665
+    },
+    {
+      "file": "camera-assets.txt",
+      "sha256": "4f6e0794215a84caf427af4c6c905d9592a79a314334fd128545b7b911a80d0a",
+      "bytes": 7296
+    },
+    {
+      "file": "camera-motion.txt",
+      "sha256": "a3f0481bbc6bf21fb36d5683a18ec2e9d47b07946ff928a1d1b8a19f515c29d8",
+      "bytes": 9519
+    },
+    {
+      "file": "camera-properties.txt",
+      "sha256": "c63030a101f0c1ea9a619a8b8097b88d0d1d2116e3d9e45f5605ed94bf35fc2d",
+      "bytes": 7347
+    },
+    {
+      "file": "dynamic-actor-loaded.txt",
+      "sha256": "abc9afe9cd2a46c6480ef0168ec6d02b3aab3aac4052f024bae63bcf319eb05b",
+      "bytes": 9348
+    },
+    {
+      "file": "dynamic-actor-properties.txt",
+      "sha256": "812c4f06557172a845abd5e741eba21bc17803cbdabbc27e23296cef309407ce",
+      "bytes": 9186
+    },
+    {
+      "file": "dynamic-character-library.txt",
+      "sha256": "76758dcd83bd2d3b59fbb242c01adbb07d7eaa1b7860e4eb91caca28f072ee82",
+      "bytes": 8534
+    },
+    {
+      "file": "dynamic-to-static.txt",
+      "sha256": "49648dc112496c9825a0d5a3c8f3b14563140ffd18bf39668fcab83224cdddc8",
+      "bytes": 6636
+    },
+    {
+      "file": "dynamic-workspace.jpg",
+      "sha256": "65b10f74f036fa1fbfb08de7128bb1f024cec8dcb7d744ef961686dce6f9c670",
+      "bytes": 87109
+    },
+    {
+      "file": "dynamic-workspace.txt",
+      "sha256": "6bfb105d6f73ace559a4e39860aa0d4fdf4173ae0bca64cf0d751acb89a8ab7d",
+      "bytes": 8989
+    },
+    {
+      "file": "dynamic.jpg",
+      "sha256": "c9f1752ca434cee65fa4995eae4ae2d625f3cb4c4bed27a8ab12d3a32ebea89b",
+      "bytes": 40317
+    },
+    {
+      "file": "dynamic.txt",
+      "sha256": "011017274a5a5f893dcc13b738598cf2a7d09dcc379c588d5bff73774ba62e2d",
+      "bytes": 5693
+    },
+    {
+      "file": "export-fps.txt",
+      "sha256": "831edff460d652b05b7cf25ca127715eb3204153c3e4a5a9dc91d225958e474a",
+      "bytes": 7773
+    },
+    {
+      "file": "export-resolutions.txt",
+      "sha256": "47cfcda2e3b0986e298e5ce642d1fc09ac89fd202c4534d5a71b0466fb5cfb6d",
+      "bytes": 7698
+    },
+    {
+      "file": "export-video.txt",
+      "sha256": "78477c7f1b4c44f8d3416c05d935d6b68bc07dda1cf257e6e2bf9e8c678c7fe0",
+      "bytes": 7485
+    },
+    {
+      "file": "jimeng-static-analysis.md",
+      "sha256": "23bd08bef2d8964f5f06d611ca3e714e448d5c9cd48b9cdf22900a1995e96384",
+      "bytes": 11826
+    },
+    {
+      "file": "new-animation.txt",
+      "sha256": "cf98464566fce6622dd1f44f4f090d188a7c0471a2e7bd8882cf11bc2c9d08cd",
+      "bytes": 11778
+    },
+    {
+      "file": "objects.txt",
+      "sha256": "3e9201540963a57009500019430fc9b74e8eff64738c65b0fa4bf4083fc3e962",
+      "bytes": 14548
+    },
+    {
+      "file": "pose-library.txt",
+      "sha256": "5e183528e5eb981d10d2a642e14a01f7a9ed8c7160caa37b32fed3c976eacd5b",
+      "bytes": 14625
+    },
+    {
+      "file": "shortcuts.txt",
+      "sha256": "4cada0f3c8b0dd172b105380cc4299c822746fffc99a09bcba30c705b1341f30",
+      "bytes": 10961
+    },
+    {
+      "file": "shots-gallery.txt",
+      "sha256": "0edd7c8d3cadefbf7a353ebfd90dfd1b945e44935f421894d10f4a2c6ab7ef40",
+      "bytes": 7587
+    },
+    {
+      "file": "static-camera.jpg",
+      "sha256": "d8d7715617af8b401b08e40fbaa0c009339f8fae3a85e0df0f763bde14bff825",
+      "bytes": 85989
+    },
+    {
+      "file": "static-pose-presets.txt",
+      "sha256": "aeb91f0f820358e9c319a4b8514497126bc1cefcf8e349fc2e9f4c1285b8e6c1",
+      "bytes": 6306
+    },
+    {
+      "file": "static-pose-properties.txt",
+      "sha256": "2ba5c27ca0638ffb55853d5367746ff5324a09094c8c970bec57e992caa464f8",
+      "bytes": 7760
+    },
+    {
+      "file": "static-pose.jpg",
+      "sha256": "048fcb75b7c081382fa0f67caae6c48136751e9742cefd9ce985ce26e0274f7f",
+      "bytes": 90754
+    },
+    {
+      "file": "static-restored.jpg",
+      "sha256": "604802478caaa4e4f7d53b280f396c23df44e2221c5f1f09db306cdc08c9842b",
+      "bytes": 82877
+    },
+    {
+      "file": "static-restored.txt",
+      "sha256": "d1f01a114fe912d9efb228f32f6914f9659a96f24590de5d1fca48c5025eabd1",
+      "bytes": 7151
+    },
+    {
+      "file": "temporary-actor-undo.txt",
+      "sha256": "e7a5cd00dc8b2a025895dc8a009032bb913bde45c346cf4885426601d6ae0f8e",
+      "bytes": 8515
+    },
+    {
+      "file": "view-selector.txt",
+      "sha256": "8a7e98cfe821d6f7ee1a808eeaf6e394fd97e66cd42f6f2b7c41e1095560c458",
+      "bytes": 7287
+    },
+    {
+      "file": "view-settings.txt",
+      "sha256": "50b1b00ef62aa2666cf5f8e295d2b0c538580345e781568c21a37f0459e1fcab",
+      "bytes": 7722
+    }
+  ],
+  "derivedFiles": [
+    {
+      "file": "figma-action-library.png",
+      "sha256": "fbc14cfd32a6527e33eacc33e8e6be0db0f0ef71dd6b314a1a624230ba3e6916",
+      "bytes": 120290
+    },
+    {
+      "file": "figma-build-flows.json",
+      "sha256": "591ee2ad0dfb5171171bf588a17f569358c8801e27564382cedd2cd9630d5c38",
+      "bytes": 157
+    },
+    {
+      "file": "figma-build-workspaces.json",
+      "sha256": "fa37c0c2495b86e71a209cad0b659398dffe8fa284792c48b87972d7f970f42e",
+      "bytes": 42181
+    },
+    {
+      "file": "figma-draft-recovery.png",
+      "sha256": "5b64ba345ad78b9e36b1f79fcbeab1dec642cd89fdd13bfc68fad733cf58af7f",
+      "bytes": 205962
+    },
+    {
+      "file": "figma-dynamic-timeline.png",
+      "sha256": "0c3e4e453f8a35e83f151d99914966d19c44a9f346bcb8bc0c9981aadac19f37",
+      "bytes": 224719
+    },
+    {
+      "file": "figma-export-config.png",
+      "sha256": "57c29f1d73bfc5ecda56bdcd8fb53d0c25df0545655c18ab7a81a0dcded06722",
+      "bytes": 121953
+    },
+    {
+      "file": "figma-extension-action-import.png",
+      "sha256": "002f75c58127e9f1690ddbe26854a883930c402bde761017f5a012e2619c624d",
+      "bytes": 125417
+    },
+    {
+      "file": "figma-extension-catalog.json",
+      "sha256": "6a90c24532e231bf0a12f43bd201b141581cadcd47544cfe3ac8216c3bd5c144",
+      "bytes": 52567
+    },
+    {
+      "file": "figma-extension-entry.png",
+      "sha256": "e03c216fdd8eb336d38ebeea074a91ac1ecc5fd03a84d38af1cefbd2eb16dbb1",
+      "bytes": 68222
+    },
+    {
+      "file": "figma-extension-flows.json",
+      "sha256": "35be89f098e4c2a11421460c166fd10672b6f5f947ac12d86439e0b2d99cb482",
+      "bytes": 33598
+    },
+    {
+      "file": "figma-extension-narrow.png",
+      "sha256": "769b57c2ae2520b871c3bd702c46907859cb7ebd7f05c96ddbf1f507d41bf5dd",
+      "bytes": 220203
+    },
+    {
+      "file": "figma-extension-path.png",
+      "sha256": "6e3a1b237fefca166a4bb0ef29ec22a30cafcc3890530f5d1cac2b3f6b79d2f3",
+      "bytes": 234464
+    },
+    {
+      "file": "figma-extension-polish.json",
+      "sha256": "c7c76756183cb0f57298c44f7f6fb6bdfd8e15e489440e40d61db8c76ee9b818",
+      "bytes": 636
+    },
+    {
+      "file": "figma-extension-readback.json",
+      "sha256": "3042268d9a167b9f3fccc0cb5b4aca9b942a6433d2050c99650f8cb00a697d29",
+      "bytes": 29174
+    },
+    {
+      "file": "figma-extension-token-fix.json",
+      "sha256": "d12c436ee84859584c611ff7248888f71d50521790b042dd25c49ea5e7225054",
+      "bytes": 1788
+    },
+    {
+      "file": "figma-extension-workspaces.json",
+      "sha256": "1331c5c1e2b4dc9af743c932de885ce304d1565b718ef26dfaaeed2195f6832a",
+      "bytes": 28930
+    },
+    {
+      "file": "figma-final-readback.json",
+      "sha256": "7cb255761d083b83c33c5738660f9b1c555af99107191e5deccc294b6b85e94e",
+      "bytes": 20739
+    },
+    {
+      "file": "figma-flows-1.json",
+      "sha256": "ac00ebdf19d87d522de1b2553c1466666b96cc08db8f6885a5feffa293880af4",
+      "bytes": 32939
+    },
+    {
+      "file": "figma-flows-2.json",
+      "sha256": "4a54090da51240e258c0ede12f6106ac796c386d02945578bc39ab8fdf476f65",
+      "bytes": 30458
+    },
+    {
+      "file": "figma-flows-3.json",
+      "sha256": "3d9a3f1a253d66d82ef247940b47d1a2b1b6864b5ce60c9f7a28079173d724d3",
+      "bytes": 25062
+    },
+    {
+      "file": "figma-layout-fix.json",
+      "sha256": "30bbe679cf28297c0c34717632ea2b71fd4c87d5dbee346fcc4f4e7c443d6849",
+      "bytes": 2851
+    },
+    {
+      "file": "figma-motion-preview.png",
+      "sha256": "65823cff78c2d3e9eec9da2267172a41eea3a8c8aa3d6dff79263203999f826a",
+      "bytes": 151560
+    },
+    {
+      "file": "figma-preview-fix.json",
+      "sha256": "39bb43bb3890f55a9c188e5633980727b0c7629d52f6b44a0ae3a47ad1eb8392",
+      "bytes": 1204
+    },
+    {
+      "file": "figma-prototype-final.json",
+      "sha256": "2ec78e7b6407b032c5b2de9139d93481b7880efb25ad271cf8d9230c5163cec5",
+      "bytes": 18299
+    },
+    {
+      "file": "figma-prototype-links.json",
+      "sha256": "4419aed15c834207566b5709cc3097ced457bffc124e264d8608353549d15234",
+      "bytes": 993
+    },
+    {
+      "file": "figma-report.md",
+      "sha256": "293777b4b7e2b63028aa5668d04a051f7a12339146587f95ea90d2a408d150d1",
+      "bytes": 16170
+    },
+    {
+      "file": "figma-review-fixes.json",
+      "sha256": "e301235b6318175e140f7e33a3aa77d1ac9bb53cff3f6c51deae7678fe18d8f7",
+      "bytes": 2551
+    },
+    {
+      "file": "figma-shot-gallery.png",
+      "sha256": "0dc3943ece6e33dc650f68dcfc041bdc69075566fedb2f055cbe6a584ce3fd33",
+      "bytes": 160438
+    },
+    {
+      "file": "figma-static-pose.png",
+      "sha256": "26f5fdd38c2b8586903afc36655ba0f752aea8e594eefe08b4806ece846fb516",
+      "bytes": 307746
+    },
+    {
+      "file": "figma-structure-readback.json",
+      "sha256": "7da214e0a1c5a670dd516a5b62de413afa1842c25325e6a1144f63190cf1d361",
+      "bytes": 17297
+    },
+    {
+      "file": "figma-visual-polish.json",
+      "sha256": "30e9457f1ded159e394b3f129d067c8d1f47f3182f9d8e2a2dcbaa834ebd81e1",
+      "bytes": 21179
+    },
+    {
+      "file": "implementation-gap-audit.md",
+      "sha256": "6bbc719bd827c7d5e60fcdc2b6249b8d8c6cf9d81e03b6f889c81dd93796a9a0",
+      "bytes": 21257
+    },
+    {
+      "file": "validation.md",
+      "sha256": "9153e90f0038688bfda6e0d9bbd1a5a19ed535ad59210b00832d68b1159bea7a",
+      "bytes": 1985
+    }
+  ],
+  "derivedScope": "Implementation audit, Figma tool receipts/screenshots and documentation validation; static design evidence does not imply product runtime acceptance."
+}

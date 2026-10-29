@@ -1,0 +1,244 @@
+- banner "Canvas top bar":
+  - link:
+    - /url: /ai-tool/home
+  - button:
+    - generic: 一致性调研-202610221
+  - button:
+  - button:
+    - text: 节点
+    - generic: "5"
+  - status: 已保存
+  - button:
+  - button:
+  - button:
+    - generic: 分享
+  - button:
+  - button:
+    - generic: "88"
+    - generic: 开会员
+  - button
+- main "Canvas workspace":
+  - region "Canvas editing area":
+    - generic: 5 nodes, 0 edges, 1 selected. Editable. Room connected. 已保存.
+    - application "Canvas":
+      - paragraph: 双击编辑文本
+      - generic: 文本 1
+      - paragraph: 双击编辑文本
+      - generic: 文本 2
+      - paragraph: 双击编辑文本
+      - generic: 文本 3
+      - button:
+        - generic: 导演台
+      - button:
+      - paragraph: 在 3D 空间中设计角色、机位与镜头
+      - button: 进入导演台
+      - generic: "No resources: 0 ready, 0 processing, 0 failed. Selected."
+      - generic: 视频 1
+      - generic: "No resources: 0 ready, 0 processing, 0 failed. Not selected."
+      - status
+  - complementary
+  - complementary "Canvas left toolbar":
+    - toolbar "Canvas toolbar":
+      - generic: 文本
+      - button
+      - generic: 图片
+      - button
+      - generic: 视频
+      - button
+      - generic: 音频
+      - button
+      - generic: 时间线
+      - button
+      - generic: 主体
+      - button
+      - generic: 导演工具箱
+      - button
+      - generic: 导演台
+      - button
+      - generic: 资产库
+      - button
+      - generic: 上传
+      - button
+  - group "Canvas viewport controls":
+    - button:
+    - button:
+    - button [pressed]:
+    - button: 75%
+    - status
+  - generic: 与 AI 对话
+  - button
+- status
+- dialog "导演台":
+  - heading "导演台" [level=2]
+  - banner:
+    - generic: 3D导演台
+    - button "快捷键":
+    - button "保存":
+    - status: 未保存
+    - tablist "3D导演台":
+      - tab "静态预演" [selected]
+      - tab "动态预演"
+    - button "拍摄":
+    - button "镜头素材":
+    - button "返回画布":
+  - generic "3D viewport"
+  - generic: 2.20m
+  - button "机位 · 实时预览":
+    - generic: 分屏预览 ↗
+  - button "机位 · 实时预览":
+    - generic: 机位
+  - button "收起机位预览":
+  - slider "拖动调整预览大小":
+  - button "导演视角":
+    - generic: 导演视角
+  - navigation "对象":
+    - button "选择 · 0":
+      - generic: "0"
+    - button "移动 · 1" [pressed]:
+      - generic: "1"
+    - button "旋转 · 2":
+      - generic: "2"
+    - button "缩放 · 3":
+      - generic: "3"
+    - button "落到地面 · G" [disabled]:
+      - generic: G
+    - button "视图设置":
+  - complementary:
+    - heading "资产" [level=2]
+    - button "关闭":
+    - separator "资产"
+    - tablist "资产":
+      - tab "角色":
+      - tab "物体":
+      - tab "背景":
+      - tab "机位" [selected]:
+    - textbox "搜索素材 · 机位":
+      - /placeholder: 搜索素材
+    - region "机位":
+      - paragraph: 全部
+      - button "当前视角 机位":
+        - generic: 当前视角
+        - generic: 机位
+      - button "正面中景 选择拍摄对象":
+        - generic: 正面中景
+        - generic: 选择拍摄对象
+      - button "正面特写 选择拍摄对象":
+        - generic: 正面特写
+        - generic: 选择拍摄对象
+      - button "正面全景 选择拍摄对象":
+        - generic: 正面全景
+        - generic: 选择拍摄对象
+      - button "侧面跟拍 选择拍摄对象":
+        - generic: 侧面跟拍
+        - generic: 选择拍摄对象
+      - button "侧面近景 选择拍摄对象":
+        - generic: 侧面近景
+        - generic: 选择拍摄对象
+      - button "背面中景 选择拍摄对象":
+        - generic: 背面中景
+        - generic: 选择拍摄对象
+      - button "俯拍全景 选择拍摄对象":
+        - generic: 俯拍全景
+        - generic: 选择拍摄对象
+      - button "45° 俯拍 选择拍摄对象":
+        - generic: 45° 俯拍
+        - generic: 选择拍摄对象
+      - button "低角度仰拍 选择拍摄对象":
+        - generic: 低角度仰拍
+        - generic: 选择拍摄对象
+      - button "低角度广角 选择拍摄对象":
+        - generic: 低角度广角
+        - generic: 选择拍摄对象
+      - button "过肩镜头 选择前景角色和注视点":
+        - generic: 过肩镜头
+        - generic: 选择前景角色和注视点
+      - button "鸟瞰 选择拍摄对象":
+        - generic: 鸟瞰
+        - generic: 选择拍摄对象
+      - button "荷兰角 选择拍摄对象":
+        - generic: 荷兰角
+        - generic: 选择拍摄对象
+  - complementary:
+    - separator "属性"
+    - complementary:
+      - heading "对象" [level=2]
+      - searchbox "搜索对象"
+      - button "机位 1" [expanded]:
+        - generic: 机位
+        - generic: "1"
+      - button "折叠 机位" [expanded]:
+      - button "机位" [pressed]:
+        - generic: 机位
+      - button "聚焦选中对象 机位":
+      - button "锁定对象 机位":
+      - button "实时预览 机位":
+      - button "注视点":
+        - generic: 注视点
+      - button "聚焦选中对象 机位 注视点":
+      - status
+    - separator "对象 / 属性"
+    - complementary:
+      - heading "属性" [level=2]
+      - generic: 机位
+      - region "机位位置":
+        - button "机位位置" [expanded]:
+          - generic: 机位位置
+        - group "机位位置":
+          - group "机位位置 X":
+            - button "机位位置 X, drag horizontally to adjust": X
+            - spinbutton "机位位置 X": "0"
+            - generic: m
+          - group "机位位置 Y":
+            - button "机位位置 Y, drag horizontally to adjust": "Y"
+            - spinbutton "机位位置 Y": "2.2"
+            - generic: m
+          - group "机位位置 Z":
+            - button "机位位置 Z, drag horizontally to adjust": Z
+            - spinbutton "机位位置 Z": "7"
+            - generic: m
+      - region "注视点":
+        - button "注视点" [expanded]:
+          - generic: 注视点
+        - group "注视点":
+          - group "注视点 X":
+            - button "注视点 X, drag horizontally to adjust": X
+            - spinbutton "注视点 X": "0"
+            - generic: m
+          - group "注视点 Y":
+            - button "注视点 Y, drag horizontally to adjust": "Y"
+            - spinbutton "注视点 Y": "1"
+            - generic: m
+          - group "注视点 Z":
+            - button "注视点 Z, drag horizontally to adjust": Z
+            - spinbutton "注视点 Z": "0"
+            - generic: m
+      - region "镜头":
+        - button "镜头" [expanded]:
+          - generic: 镜头
+        - group "镜头":
+          - group "视野":
+            - button "视野, drag horizontally to adjust": 视野
+            - spinbutton "视野": "50"
+            - generic: °
+          - group "画面倾斜":
+            - button "画面倾斜, drag horizontally to adjust": 画面倾斜
+            - spinbutton "画面倾斜": "0"
+            - generic: °
+      - generic: 画幅比例
+      - button "画幅比例" [expanded]:
+        - generic: 16:9
+    - button "收起对象与属性面板" [expanded]:
+  - button "对象操作"
+- menu "画幅比例" [active]:
+  - menuitemradio "1:1":
+    - generic: 1:1
+  - menuitemradio "4:3":
+    - generic: 4:3
+  - menuitemradio "3:4":
+    - generic: 3:4
+  - menuitemradio "16:9" [checked]:
+    - generic: 16:9
+  - menuitemradio "9:16":
+    - generic: 9:16
+  - menuitemradio "2.39:1":
+    - generic: 2.39:1

@@ -1,0 +1,486 @@
+- banner "Canvas top bar":
+  - link:
+    - /url: /ai-tool/home
+  - button:
+    - generic: 一致性调研-202610221
+  - button:
+  - button:
+    - text: 节点
+    - generic: "5"
+  - status: 已保存
+  - button:
+  - button:
+  - button:
+    - generic: 分享
+  - button:
+  - button:
+    - generic: "88"
+    - generic: 开会员
+  - button
+- main "Canvas workspace":
+  - region "Canvas editing area":
+    - generic: 5 nodes, 0 edges, 1 selected. Editable. Room connected. 已保存.
+    - application "Canvas":
+      - paragraph: 双击编辑文本
+      - generic: 文本 1
+      - paragraph: 双击编辑文本
+      - generic: 文本 2
+      - paragraph: 双击编辑文本
+      - generic: 文本 3
+      - button:
+        - generic: 导演台
+      - button:
+      - paragraph: 在 3D 空间中设计角色、机位与镜头
+      - button: 进入导演台
+      - generic: "No resources: 0 ready, 0 processing, 0 failed. Selected."
+      - generic: 视频 1
+      - generic: "No resources: 0 ready, 0 processing, 0 failed. Not selected."
+      - status
+  - complementary
+  - complementary "Canvas left toolbar":
+    - toolbar "Canvas toolbar":
+      - generic: 文本
+      - button
+      - generic: 图片
+      - button
+      - generic: 视频
+      - button
+      - generic: 音频
+      - button
+      - generic: 时间线
+      - button
+      - generic: 主体
+      - button
+      - generic: 导演工具箱
+      - button
+      - generic: 导演台
+      - button
+      - generic: 资产库
+      - button
+      - generic: 上传
+      - button
+  - group "Canvas viewport controls":
+    - button:
+    - button:
+    - button [pressed]:
+    - button: 75%
+    - status
+  - generic: 与 AI 对话
+  - button
+- status
+- dialog "导演台":
+  - heading [level=2]: 导演台
+  - banner:
+    - generic: 3D导演台
+    - button:
+    - button:
+    - status: 未保存
+    - tablist:
+      - tab: 静态预演
+      - tab [selected]: 动态预演
+    - button:
+      - generic: 导出视频
+    - button:
+    - button:
+    - button:
+  - generic: 男性 · 标准
+  - button:
+    - generic: 分屏预览 ↗
+  - button:
+    - generic: 机位
+  - button:
+  - slider:
+  - button:
+    - generic: 导演视角
+  - navigation:
+    - button:
+      - generic: "0"
+    - button [pressed]:
+      - generic: "1"
+    - button:
+      - generic: "2"
+    - button:
+      - generic: "3"
+    - button:
+      - generic: G
+    - button:
+  - complementary:
+    - heading [level=2]: 资产
+    - button:
+    - separator
+    - tablist:
+      - tab [selected]:
+      - tab:
+      - tab:
+      - tab:
+    - textbox:
+      - /placeholder: 搜索素材
+    - tablist:
+      - tab [selected]: 全部
+      - tab: 我的
+    - generic: 我的
+    - button:
+      - generic: 添加角色
+    - generic: 预设
+    - button:
+      - generic: 男性 · 标准
+      - generic: 预设
+    - button:
+      - generic: 女性 · 标准
+      - generic: 预设
+    - button:
+      - generic: 男性 · 少年
+      - generic: 预设
+    - button:
+      - generic: 女性 · 少年
+      - generic: 预设
+    - button:
+      - generic: 男性·儿童
+      - generic: 预设
+    - button:
+      - generic: 女性·儿童
+      - generic: 预设
+    - button:
+      - generic: 男性·纤瘦
+      - generic: 预设
+    - button:
+      - generic: 女性·纤瘦
+      - generic: 预设
+    - button:
+      - generic: 男性·健壮
+      - generic: 预设
+    - button:
+      - generic: 女性·健壮
+      - generic: 预设
+    - button:
+      - generic: 男性·丰腴
+      - generic: 预设
+    - button:
+      - generic: 女性·丰腴
+      - generic: 预设
+  - complementary:
+    - separator
+    - complementary:
+      - heading [level=2]: 对象
+      - searchbox
+      - button [expanded]:
+        - generic: 机位
+        - generic: "1"
+      - button [expanded]:
+      - button:
+        - generic: 机位
+      - button:
+      - button:
+      - button:
+      - button:
+        - generic: 注视点
+      - button:
+      - button [expanded]:
+        - generic: 角色
+        - generic: "1"
+      - button:
+        - generic: 男性 · 标准
+      - button:
+      - button:
+      - button:
+      - status
+    - separator
+    - complementary:
+      - heading [level=2]: 属性
+      - region:
+        - button [expanded]:
+          - generic: 位置
+        - button
+        - button: X
+        - spinbutton: "-0.172"
+        - generic: m
+        - button: "Y"
+        - spinbutton: "0"
+        - generic: m
+        - button: Z
+        - spinbutton: "-0.069"
+        - generic: m
+      - region:
+        - button [expanded]:
+          - generic: 旋转
+        - button
+        - button: X
+        - spinbutton: "0"
+        - generic: °
+        - button: "Y"
+        - spinbutton: "0"
+        - generic: °
+        - button: Z
+        - spinbutton: "0"
+        - generic: °
+      - region:
+        - button [expanded]:
+          - generic: 缩放
+        - button
+        - button: X
+        - spinbutton: "1"
+        - button: "Y"
+        - spinbutton: "1"
+        - button: Z
+        - spinbutton: "1"
+      - generic: 颜色
+      - textbox: "#6f8f96"
+      - textbox:
+        - /placeholder: 原色
+        - text: "#6f8f96"
+      - button:
+      - button: 不透明度
+      - spinbutton: "100"
+      - generic: "%"
+      - generic: 沿路径自动转向
+      - generic: 沿路径移动时自动调整朝向，其他动作仍可自由旋转。
+      - switch [checked]
+    - button [expanded]:
+  - region:
+    - generic: FOV 50°
+    - button:
+      - generic: 重置视角
+  - button
+  - separator
+  - button [expanded]:
+    - generic: 时间轴
+  - button [disabled]:
+  - button [pressed]:
+  - button [pressed]:
+  - generic: 0:00.00 · 0f / 0:20.0
+  - generic: 帧率
+  - button:
+    - generic: "30"
+  - button: 总时长
+  - spinbutton: "20"
+  - generic: 秒
+  - button:
+  - slider
+  - button:
+  - button: 1×
+  - generic: 当前时间
+  - button:
+  - button:
+    - generic: 机位
+  - button:
+  - button:
+  - button [pressed]:
+    - generic: 男性 · 标准
+  - button:
+  - slider: "0"
+  - generic: 0s
+  - generic: 0.5s
+  - generic: 1s
+  - generic: 1.5s
+  - generic: 2s
+  - generic: 2.5s
+  - generic: 3s
+  - generic: 3.5s
+  - generic: 4s
+  - generic: 4.5s
+  - generic: 5s
+  - generic: 5.5s
+  - generic: 6s
+  - generic: 6.5s
+  - generic: 7s
+  - generic: 7.5s
+  - generic: 8s
+  - generic: 8.5s
+  - generic: 分镜编排
+  - button:
+  - generic: 选择机位并添加分镜
+- dialog "添加动作":
+  - heading "添加动作" [level=2]
+  - tablist "添加动作":
+    - tab "动作" [selected]: 动作
+    - tab "静态姿势"
+  - heading "动作库" [level=3]
+  - button "动作从播放头位置开始。同一角色的动作片段不能重叠。":
+  - tablist "动作库":
+    - tab "预设 · 742" [selected]
+    - tab "我的 · 0"
+  - searchbox "搜索动作" [active]
+  - button "新建动作":
+    - text: 新建动作
+  - button "跺脚 · 跺脚。":
+    - generic: 跺脚
+    - generic: 跺脚。
+  - button "坐姿 · 坐在马桶上。":
+    - generic: 坐姿
+    - generic: 坐在马桶上。
+  - button "祈祷 · 站着摇晃身体祈祷。":
+    - generic: 祈祷
+    - generic: 站着摇晃身体祈祷。
+  - button "祈祷 · 跪姿祈祷后起身站立。":
+    - generic: 祈祷
+    - generic: 跪姿祈祷后起身站立。
+  - button "祈祷 · 跪着祈祷。":
+    - generic: 祈祷
+    - generic: 跪着祈祷。
+  - button "祈祷 · 屈膝站立并祈祷。":
+    - generic: 祈祷
+    - generic: 屈膝站立并祈祷。
+  - button "听音乐 · 男性戴耳机听音乐。":
+    - generic: 听音乐
+    - generic: 男性戴耳机听音乐。
+  - button "低头闪避 · 坐在车内低头躲避。":
+    - generic: 低头闪避
+    - generic: 坐在车内低头躲避。
+  - button "站姿叫喊 · 站姿身体前倾叫喊。":
+    - generic: 站姿叫喊
+    - generic: 站姿身体前倾叫喊。
+  - button "重心转移手势 · 角色转移重心并做手势。":
+    - generic: 重心转移手势
+    - generic: 角色转移重心并做手势。
+  - button "胜利待机 · 角色胜利后的待机动作。":
+    - generic: 胜利待机
+    - generic: 角色胜利后的待机动作。
+  - button "威胁 · 站立时做出威胁姿态。":
+    - generic: 威胁
+    - generic: 站立时做出威胁姿态。
+  - button "思考 · 站立时思考。":
+    - generic: 思考
+    - generic: 站立时思考。
+  - button "感谢 · 站立时表达感谢。":
+    - generic: 感谢
+    - generic: 站立时表达感谢。
+  - button "交谈 · 提问。":
+    - generic: 交谈
+    - generic: 提问。
+  - button "讲悄悄话 · 讲悄悄话。":
+    - generic: 讲悄悄话
+    - generic: 讲悄悄话。
+  - button "站姿叫喊 · 站姿短促叫喊。":
+    - generic: 站姿叫喊
+    - generic: 站姿短促叫喊。
+  - button "站姿争论 · 站着与他人争论。":
+    - generic: 站姿争论
+    - generic: 站着与他人争论。
+  - button "坐姿叫喊 · 坐姿前倾叫喊。":
+    - generic: 坐姿叫喊
+    - generic: 坐姿前倾叫喊。
+  - button "坐姿叫喊 · 坐直身体叫喊。":
+    - generic: 坐姿叫喊
+    - generic: 坐直身体叫喊。
+  - button "坐姿胜利庆祝 · 坐着庆祝胜利。":
+    - generic: 坐姿胜利庆祝
+    - generic: 坐着庆祝胜利。
+  - button "坐姿交谈 · 坐着与另一人交谈。":
+    - generic: 坐姿交谈
+    - generic: 坐着与另一人交谈。
+  - button "坐姿叫喊 · 坐姿后靠叫喊。":
+    - generic: 坐姿叫喊
+    - generic: 坐姿后靠叫喊。
+  - button "开会 · 在办公桌旁与另一人开会。":
+    - generic: 开会
+    - generic: 在办公桌旁与另一人开会。
+  - button "阴谋谋划 · 阴险地谋划。":
+    - generic: 阴谋谋划
+    - generic: 阴险地谋划。
+  - button "悲伤待机 · 悲伤待机，变体1。":
+    - generic: 悲伤待机
+    - generic: 悲伤待机，变体1。
+  - button "否定 · 表示否定。":
+    - generic: 否定
+    - generic: 表示否定。
+  - button "紧张张望 · 紧张地从左向右张望（循环）。":
+    - generic: 紧张张望
+    - generic: 紧张地从左向右张望（循环）。
+  - button "失望 · 失望地做出“哎呀”的反应。":
+    - generic: 失望
+    - generic: 失望地做出“哎呀”的反应。
+  - button "开心待机 · 开心待机，变体1。":
+    - generic: 开心待机
+    - generic: 开心待机，变体1。
+  - button "坐姿欢呼 · 坐着极为热烈地欢呼。":
+    - generic: 坐姿欢呼
+    - generic: 坐着极为热烈地欢呼。
+  - button "欢呼 · 男性甩头欢呼。":
+    - generic: 欢呼
+    - generic: 男性甩头欢呼。
+  - button "重心转移 · 左右转移重心。":
+    - generic: 重心转移
+    - generic: 左右转移重心。
+  - button "徒手待机张望变体2 · 四处张望。":
+    - generic: 徒手待机张望变体2
+    - generic: 四处张望。
+  - button "站起 · 从俯卧姿态站起。":
+    - generic: 站起
+    - generic: 从俯卧姿态站起。
+  - button "站起 · 站起并四处张望。":
+    - generic: 站起
+    - generic: 站起并四处张望。
+  - button "站姿转蹲姿 · 从站立冒险待机转为蹲姿。":
+    - generic: 站姿转蹲姿
+    - generic: 从站立冒险待机转为蹲姿。
+  - button "站立待机转蹲姿 · 从站立待机过渡到蹲姿待机。":
+    - generic: 站立待机转蹲姿
+    - generic: 从站立待机过渡到蹲姿待机。
+  - button "站立待机02 · 站立待机并四处张望。":
+    - generic: 站立待机02
+    - generic: 站立待机并四处张望。
+  - button "标准待机 · 标准待机。":
+    - generic: 标准待机
+    - generic: 标准待机。
+  - button "站立 · 从双手撑地的蹲姿起立。":
+    - generic: 站立
+    - generic: 从双手撑地的蹲姿起立。
+  - button "站姿转蹲姿 · 从站姿过渡到蹲姿。":
+    - generic: 站姿转蹲姿
+    - generic: 从站姿过渡到蹲姿。
+  - button "坐姿待机 · 坐在椅子上，双手放在大腿上。":
+    - generic: 坐姿待机
+    - generic: 坐在椅子上，双手放在大腿上。
+  - button "坐姿 · 坐下，双臂位于扶手外侧。":
+    - generic: 坐姿
+    - generic: 坐下，双臂位于扶手外侧。
+  - button "坐姿起立 · 从坐姿起立。":
+    - generic: 坐姿起立
+    - generic: 从坐姿起立。
+  - button "坐姿待机 · 坐姿待机，双手放在桌上。":
+    - generic: 坐姿待机
+    - generic: 坐姿待机，双手放在桌上。
+  - button "反向卧姿转俯卧 · 从反向卧姿过渡到俯卧。":
+    - generic: 反向卧姿转俯卧
+    - generic: 从反向卧姿过渡到俯卧。
+  - button "俯卧转反向卧姿 · 从俯卧过渡到反向卧姿。":
+    - generic: 俯卧转反向卧姿
+    - generic: 从俯卧过渡到反向卧姿。
+  - button "单肩倚靠 · 以不同姿态倚墙。":
+    - generic: 单肩倚靠
+    - generic: 以不同姿态倚墙。
+  - button "忍者待机 · 女忍者待机。":
+    - generic: 忍者待机
+    - generic: 女忍者待机。
+  - button "中性待机姿态 · 中性待机姿态。":
+    - generic: 中性待机姿态
+    - generic: 中性待机姿态。
+  - button "向后看 · 站立待机，从右侧向后看。":
+    - generic: 向后看
+    - generic: 站立待机，从右侧向后看。
+  - button "四处张望 · 查看自身各处。":
+    - generic: 四处张望
+    - generic: 查看自身各处。
+  - button "倚墙 · 小女孩倚墙听音乐。":
+    - generic: 倚墙
+    - generic: 小女孩倚墙听音乐。
+  - button "倚靠 · 正面朝外倚墙，一条腿抬起。":
+    - generic: 倚靠
+    - generic: 正面朝外倚墙，一条腿抬起。
+  - button "躺卧睡眠 · 躺在床上睡觉。":
+    - generic: 躺卧睡眠
+    - generic: 躺在床上睡觉。
+  - button "卧姿待机 · 仰卧并四处张望。":
+    - generic: 卧姿待机
+    - generic: 仰卧并四处张望。
+  - button "躺卧 · 仰卧待机。":
+    - generic: 躺卧
+    - generic: 仰卧待机。
+  - button "卧姿待机 · 躺在床上待机。":
+    - generic: 卧姿待机
+    - generic: 躺在床上待机。
+  - button "待机 · 站姿短待机动作。":
+    - generic: 待机
+    - generic: 站姿短待机动作。
+  - button "关闭":
+    - generic: 关闭
