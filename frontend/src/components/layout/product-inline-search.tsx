@@ -77,8 +77,9 @@ export function ProductInlineSearch({
   return (
     <div
       role="search"
+      data-inline-page-search
       aria-label={search.label}
-      className="flex h-11 w-[min(240px,45vw)] min-w-0 items-center gap-1 rounded-md bg-secondary px-2"
+      className="flex h-11 w-[min(240px,45vw)] min-w-0 items-center gap-1 rounded-md bg-secondary px-2 max-[360px]:w-[calc(100vw-180px)] min-[361px]:max-md:w-[min(240px,calc(100vw-224px))]"
     >
       <Search
         className="size-4 shrink-0 text-muted-foreground"

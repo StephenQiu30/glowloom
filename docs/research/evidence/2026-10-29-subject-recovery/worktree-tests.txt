@@ -1,0 +1,58 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.2 /Users/stephenqiu/Desktop/StephenQiu/Glowloom/glowloom-server/frontend
+
+(node:34893) TimeoutNaNWarning: NaN is not a number.
+Timeout duration was set to 1.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Not implemented: navigation to another Document
+ ❯ tests/unit/components/canvas/nodes/canvas-node-accessibility.test.tsx (6 tests | 1 failed) 98ms
+   × keeps a world-space hover field around each port rather than a fixed square hit box 8ms
+ ❯ tests/unit/components/canvas/connection-meteor.test.tsx (4 tests | 1 failed) 23ms
+   × offsets only dragging anchors outside the node and keeps pending anchors centered 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/unit/components/canvas/connection-meteor.test.tsx > offsets only dragging anchors outside the node and keeps pending anchors centered
+AssertionError: expected 'M 330 180 C 415 180, 415 460, 500 460' to contain 'M336.6666666666667,'
+
+Expected: "M336.6666666666667,"
+Received: "M 330 180 C 415 180, 415 460, 500 460"
+
+ ❯ tests/unit/components/canvas/connection-meteor.test.tsx:119:18
+    117|   const view = render(<svg><ActiveConnectionPath node={from} handle={{…
+    118|   const path = () => view.container.querySelector(".canvas-connection-…
+    119|   expect(Number(path().split(" ")[1])).toBeCloseTo(from.position.x + f…
+       |                  ^
+    120|   view.rerender(<svg><ActiveConnectionPath node={from} handle={{nodeId…
+    121|   expect(Number(path().split(" ")[1])).toBe(from.position.x + from.wid…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/unit/components/canvas/nodes/canvas-node-accessibility.test.tsx > keeps a world-space hover field around each port rather than a fixed square hit box
+AssertionError: expected '50.70422535211268px' to be '60px' // Object.is equality
+
+Expected: "60px"
+Received: "50.70422535211268px"
+
+ ❯ tests/unit/components/canvas/nodes/canvas-node-accessibility.test.tsx:204:29
+    202|   const button = screen.getByRole("button", { name: "连接输出节点" });
+    203|   const field = button.parentElement!;
+    204|   expect(field.style.width).toBe("60px");
+       |                             ^
+    205|   expect(field.style.height).toBe("120px");
+    206|   expect(button.style.width).toBe("20px");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed | 218 passed (220)
+      Tests  2 failed | 1461 passed (1463)
+   Start at  11:38:14
+   Duration  228.09s (tests 48%, environment 32%, import 17%, transform 2%)
+
+Environment  jsdom was created 220 times · 68.28s total, 32% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments

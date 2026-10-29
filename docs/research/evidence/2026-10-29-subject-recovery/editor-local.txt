@@ -1,0 +1,32 @@
+Browser tab: 1980372013, Title: "主体 · 织光", URL: "http://localhost:1122/subjects".
+0 AXWebArea 主体 · 织光, URL: localhost:1122/subjects
+	1 container
+		2 container 通知 alt+T
+		3 container 设置主体, ID: radix-_r_27_
+			4 heading 设置主体, Value: 2, ID: radix-_r_28_
+				5 text 设置主体
+			6 text 设置主参考、名称、描述和可选音色，以便在当前空间创作中复用。
+			7 container
+				8 text 参考主体
+				9 container
+					10 image 主参考图
+					11 button 移除主参考
+				12 container 补充参考
+					13 container
+						14 image 补充参考1
+						15 button 移除补充参考1
+					16 container
+						17 image 补充参考2
+						18 button 移除补充参考2
+					19 pop up button (collapsed) Description: 添加补充参考, ID: radix-_r_2a_, Secondary Actions: Expand
+				20 pop up button (collapsed) Description: 添加音色, ID: radix-_r_2c_, Secondary Actions: Expand
+				21 text 名称
+				22 container
+					23 text field (settable) Description: 名称, Value: 主体对齐本地验收-20261028
+					24 text 17  / 20
+				25 text 描述
+				26 text entry area (settable) Description: 描述, Value: 合成几何图，用于本地对象库的主体保存、回读与导出验收。
+				27 button 保存
+			28 button 关闭对话框
+
+The focused UI element is 11 button 移除主参考

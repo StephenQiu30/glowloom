@@ -132,6 +132,7 @@ export function ThemeToggle() {
           variant="ghost"
           size="icon-lg"
           className="max-md:size-11"
+          data-theme-trigger
           aria-label="切换主题"
           title="切换主题"
           disabled={!hydrated || pending}

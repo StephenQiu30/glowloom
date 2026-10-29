@@ -1,0 +1,65 @@
+Browser tab: 1980371798, Title: "主体 · 织光", URL: "http://localhost:1122/subjects".
+0 AXWebArea 主体 · 织光, URL: localhost:1122/subjects
+	1 container
+		3 link Description: 跳转到主要内容, Value: localhost:1122/subjects#main-content
+		4 container 侧栏导航
+			5 link Description: 织光首页, Value: localhost:1122/
+			6 button (expanded) Description: 收起导航, Secondary Actions: Collapse
+			7 container product-sidebar-navigation
+				8 container 主导航
+					9 content list
+						10 link Description: 创作, Value: localhost:1122/
+						11 link Description: 探索, Value: localhost:1122/explore
+						12 link Description: 资产, Value: localhost:1122/assets
+						13 link Description: 主体, Value: localhost:1122/subjects
+				14 container
+					15 text 对话
+					16 link Description: 新建创作, Value: localhost:1122/
+					17 text 对话功能待开放
+				18 container
+					19 link Description: 查看我的画布, Value: localhost:1122/projects
+					20 button 新建画布
+					21 content list 最近画布
+						22 link Description: 未命名画布, Value: localhost:1122/canvas?project_id=f76532a2-3aa6-4dd6-bced-ff3ac3c8e901&canvas_id=e2c90c40-8361-4501-ac25-c12a531d2c42
+						23 link Description: 未命名画布, Value: localhost:1122/canvas?project_id=b0bb8394-a9a6-4c54-b058-71ac965513ad&canvas_id=6b4b26fa-f20e-4949-baab-53e43746d511
+						24 link Description: 未命名画布, Value: localhost:1122/canvas?project_id=7fe2cb76-b42b-4fd9-abd4-e70a93173e87&canvas_id=24969728-69d3-4326-b360-c591b018f42d
+						25 link Description: 未命名短剧, Value: localhost:1122/canvas?project_id=167519c4-b910-4ad4-b821-c6bffaa01c87&canvas_id=3ef3fd10-5955-42ee-9711-b327e5212195
+						26 link Description: 即梦画布验收 2026-10-18 R11, Value: localhost:1122/canvas?project_id=766d1bcc-b2ef-4ab5-b449-dd02d72057e2&canvas_id=c36cf3f6-181c-4cd8-bdb5-72e77982b6b5
+						27 link Description: 未命名画布, Value: localhost:1122/canvas?project_id=deca74c9-403f-4fb2-afb3-ac3a58048bb8&canvas_id=a5fd817d-7f64-43be-99fc-8d41b27f7ea3
+						28 link Description: 未命名画布, Value: localhost:1122/canvas?project_id=be161d5e-fcdc-4f3c-9ae3-6b687d0218e5&canvas_id=f4655121-68e8-449c-8a9e-72095e89b4bd
+		29 container 页面顶栏
+			30 container
+				31 pop up button (collapsed) 筛选, ID: radix-_r_n_, Secondary Actions: Expand
+				32 pop up button (expanded) Description: 时间, Secondary Actions: Collapse
+				61 button 清空时间
+				33 pop up button (collapsed) 排序, ID: radix-_r_q_, Secondary Actions: Expand
+			34 button 批量操作
+			35 button 搜索主体
+			36 container 通知与账号
+				37 button 消息中心
+				38 pop up button (collapsed) Description: 积分余额, Secondary Actions: Expand
+				39 link Description: 会员中心, Value: localhost:1122/billing/membership
+				40 pop up button (collapsed) Description: 账号菜单, Help: StephenQiu, ID: radix-_r_c_, Secondary Actions: Expand
+		41 container main-content
+			42 heading 主体, Value: 1
+				43 text 主体
+			44 container 主体
+				62 button 新建主体
+				63 container
+					64 button 设置主体 主体对齐本地验收-20261028
+						65 image 主体对齐本地验收-20261028
+					66 checkbox Description: 选择主体 主体对齐本地验收-20261028, Value: 0
+					67 checkbox Description: 收藏 主体对齐本地验收-20261028, Value: 0
+					68 text 主体对齐本地验收-20261028 主体 · 49分钟前修改
+					69 pop up button (collapsed) Description: 更多 主体对齐本地验收-20261028, ID: radix-_r_1b_, Secondary Actions: Expand
+		2 container 通知 alt+T
+		53 container Description: 主体时间范围, ID: radix-_r_p_
+			54 pop up button (collapsed) Description: 开始日期, Secondary Actions: Expand
+			55 text -
+			56 pop up button (collapsed) Description: 结束日期, Secondary Actions: Expand
+			57 checkbox 全部, Value: 0
+			58 checkbox 最近一周, Value: 1
+			59 checkbox 最近一个月, Value: 0
+			60 checkbox 最近三个月, Value: 0
+
+The focused UI element is 58 checkbox 最近一周, Value: 1

@@ -485,7 +485,9 @@ it("asset header options stay stable under the shared login context", async () =
     within(tools).getByRole("button", { name: "搜索本人生成历史" }),
   ).toBeTruthy();
   expect(within(tools).getByRole("button", { name: "批量操作" })).toBeTruthy();
-  expect(within(tools).getByRole("button", { name: "参考素材" })).toBeTruthy();
+  expect(within(header).getByRole("tab", { name: "生成历史" })).toBeTruthy();
+  expect(within(header).getByRole("tab", { name: "画布" })).toBeTruthy();
+  expect(within(header).getByRole("tab", { name: "短剧" })).toBeTruthy();
   const account = within(header).getByRole("group", { name: "通知与账号" });
   expect(
     within(account).getByRole("button", { name: "账号菜单" }),

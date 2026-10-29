@@ -313,8 +313,12 @@ export function AuthView({
       if (input) input.focus();
     }
   }, [error, feedbackAttempt]);
+  const returnToEmail = useRef(false);
   useEffect(() => {
-    if (registrationComplete) loginButton.current?.focus();
+    if (register && !operation && returnToEmail.current) {
+      returnToEmail.current = false;
+      emailInput.current?.focus();
+    } else if (registrationComplete) loginButton.current?.focus();
     else if (register && operation)
       form.current
         ?.querySelector<HTMLInputElement>(
@@ -325,6 +329,7 @@ export function AuthView({
   const remaining = Math.max(0, Math.ceil((retryAt - now) / 1000));
   function changeRegistrationEmail() {
     if (lock.current) return;
+    returnToEmail.current = true;
     setOperation("");
     setGrant("");
     setCode("");
@@ -336,7 +341,6 @@ export function AuthView({
     setNotice("");
     setError("");
     setInvalidField("");
-    emailInput.current?.focus();
   }
   async function switchAccount() {
     if (!session || lock.current) return;

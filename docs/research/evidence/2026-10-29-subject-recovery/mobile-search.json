@@ -1,0 +1,25 @@
+{
+  "brandWidth": 0,
+  "navigation": {
+    "bottom": 54,
+    "height": 44,
+    "left": 16,
+    "right": 60,
+    "top": 10,
+    "width": 44,
+    "x": 16,
+    "y": 10
+  },
+  "scroll": 390,
+  "search": {
+    "bottom": 54,
+    "height": 44,
+    "left": 70,
+    "right": 236,
+    "top": 10,
+    "width": 166,
+    "x": 70,
+    "y": 10
+  },
+  "width": 390
+}

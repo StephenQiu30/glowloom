@@ -1151,6 +1151,17 @@ button:not(:disabled),
   .product-header-location {
     gap: 4px;
   }
+  .product-header:has([data-inline-page-search])
+    .product-header-location
+    .product-brand {
+    display: none;
+  }
+  .product-header:has([data-inline-page-search]) [data-theme-trigger] {
+    display: none;
+  }
+  .product-header:has([data-inline-page-search]) .product-account-slot {
+    flex-basis: 44px;
+  }
   .mobile-navigation-trigger,
   [data-mobile="true"] .sidebar-toggle {
     width: 44px;

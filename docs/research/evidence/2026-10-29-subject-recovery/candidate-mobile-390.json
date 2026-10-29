@@ -1,0 +1,34 @@
+{
+  "input": {
+    "bottom": 54,
+    "height": 44,
+    "left": 148,
+    "right": 230,
+    "top": 10,
+    "width": 82,
+    "x": 148,
+    "y": 10
+  },
+  "nav": {
+    "bottom": 54,
+    "height": 44,
+    "left": 16,
+    "right": 60,
+    "top": 10,
+    "width": 44,
+    "x": 16,
+    "y": 10
+  },
+  "scroll": 390,
+  "search": {
+    "bottom": 54,
+    "height": 44,
+    "left": 120,
+    "right": 286,
+    "top": 10,
+    "width": 166,
+    "x": 120,
+    "y": 10
+  },
+  "width": 390
+}
