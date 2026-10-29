@@ -35,7 +35,6 @@ import {
 } from "@/lib/request";
 import { UnifiedSubjectMedia } from "./unified-media";
 import {
-  AppliedSubjectTimeRange,
   UnifiedSubjectToolbar,
   defaultSubjectFilter,
   type SubjectFilter,
@@ -78,6 +77,11 @@ export function UnifiedSubjectLibrary({
     useSubjectList(actorID, scopeID, query, filter);
   const tail = useRef<HTMLDivElement>(null);
   const [batch, setBatch] = useState(false);
+  const [batchQuery, setBatchQuery] = useState(query);
+  if (batchQuery !== query) {
+    setBatchQuery(query);
+    setBatch(false);
+  }
   const [selectionState, setSelectionState] = useState<{
     query: string;
     items: UnifiedSubject[];
@@ -171,6 +175,7 @@ export function UnifiedSubjectLibrary({
       operation.current = null;
       setUncertain(false);
       setDeleting(null);
+      if (!failures.length) setBatch(false);
       refresh();
     } catch (e) {
       if (!controller.signal.aborted) {
@@ -222,6 +227,8 @@ export function UnifiedSubjectLibrary({
       document.body.append(link);
       link.click();
       link.remove();
+      setBatch(false);
+      setSelected([]);
     } catch (e) {
       if (!controller.signal.aborted) setWriteError(subjectError(e));
     } finally {
@@ -238,6 +245,7 @@ export function UnifiedSubjectLibrary({
       setWriteError("每次最多选择 120 个主体。");
       return;
     }
+    setBatch(true);
     setSelected((items) =>
       items.some((i) => i.id === subject.id)
         ? items.filter((i) => i.id !== subject.id)
@@ -251,6 +259,7 @@ export function UnifiedSubjectLibrary({
   function changeFilter(value: SubjectFilter) {
     setFilter(value);
     setSelected([]);
+    setBatch(false);
   }
   const batchTrigger = useRef<HTMLButtonElement>(null);
   const cancelBatchTrigger = useRef<HTMLButtonElement>(null);
@@ -268,7 +277,7 @@ export function UnifiedSubjectLibrary({
           <UnifiedSubjectToolbar
             batchTriggerRef={batchTrigger}
             showBatchAction={!toolbarInHeader}
-            showAppliedRange={!toolbarInHeader}
+            searching={!!query.trim()}
             value={filter}
             disabled={locked}
             onChange={changeFilter}
@@ -345,13 +354,6 @@ export function UnifiedSubjectLibrary({
           </Button>
         ) : null}
       </PageToolbar>
-      {toolbarInHeader ? (
-        <AppliedSubjectTimeRange
-          value={filter}
-          disabled={locked}
-          onChange={changeFilter}
-        />
-      ) : null}
       {writeError ? (
         <div
           role="alert"
@@ -435,15 +437,16 @@ export function UnifiedSubjectLibrary({
                       />
                     </span>
                   </Button>
-                  {batch ? (
+                  {!onSelect ? (
                     <Checkbox
-                      className="absolute top-2 left-2"
+                      className={`absolute top-2 left-2 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 max-md:opacity-100 ${batch ? "opacity-100" : "opacity-0"}`}
                       aria-label={`选择主体 ${subject.name}`}
                       checked={selected.some((s) => s.id === subject.id)}
                       disabled={locked}
                       onCheckedChange={() => toggle(subject)}
                     />
-                  ) : (
+                  ) : null}
+                  {!(batch && onSelect) ? (
                     <Button
                       variant="secondary"
                       size="icon"
@@ -464,17 +467,17 @@ export function UnifiedSubjectLibrary({
                         }
                       />
                     </Button>
-                  )}
+                  ) : null}
                 </div>
                 <div className="unified-subject-info pr-12">
                   <p className="truncate">{subject.name}</p>
                   <p className="text-muted-foreground" suppressHydrationWarning>
                     主体 ·{" "}
                     {subjectRelativeTime(
-                      filter.order.startsWith("created")
+                      query.trim() || filter.order.startsWith("created")
                         ? subject.created_at
                         : subject.updated_at,
-                      filter.order.startsWith("created")
+                      query.trim() || filter.order.startsWith("created")
                         ? "created"
                         : "updated",
                     )}
@@ -595,9 +598,6 @@ export function UnifiedSubjectLibrary({
             <DialogDescription>
               主体删除后无法恢复，关联的历史作品将无法重新编辑。
             </DialogDescription>
-            <p className="text-sm break-words">
-              {deleting.map((s) => s.name).join("、")}
-            </p>
             {writeError ? (
               <p role="alert" className="text-sm text-destructive">
                 {writeError}

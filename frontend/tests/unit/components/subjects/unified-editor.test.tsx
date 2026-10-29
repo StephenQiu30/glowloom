@@ -97,6 +97,25 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
+it("普通未保存修改直接关闭，不提交也不增加离开确认", () => {
+  const onClose = vi.fn();
+  render(
+    <UnifiedSubjectEditor
+      actorID={actorID}
+      scopeID={scopeID}
+      initial={initial}
+      onClose={onClose}
+      onSaved={vi.fn()}
+    />,
+  );
+  fireEvent.change(screen.getByRole("textbox", { name: "描述" }), {
+    target: { value: "未保存" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "关闭对话框" }));
+  expect(onClose).toHaveBeenCalledOnce();
+  expect(api.update).not.toHaveBeenCalled();
+  expect(screen.queryByText("离开主体设置？")).toBeNull();
+});
 it("未知保存结果冻结原请求，重试同键并回读，不重复创建", async () => {
   const saved = { ...initial, revision: 2, name: "蓝色香氛" };
   api.update

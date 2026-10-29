@@ -1,0 +1,3 @@
+Browser tab: 1980371710, Title: "主体 · 织光", URL: "http://localhost:1122/subjects".
+There has been no change in the accessibility tree.
+The focused UI element is 1 AXWebArea 主体 · 织光, URL: localhost:1122/subjects

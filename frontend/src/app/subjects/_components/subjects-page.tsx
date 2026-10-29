@@ -15,11 +15,12 @@ export function SubjectsPage() {
     <PageLayout
       screen="subjects"
       search={{
+        mode: "inline",
         value: search,
         onValueChange: setSearch,
         onSearch: setQuery,
         label: "搜索主体",
-        placeholder: "搜索当前空间主体",
+        placeholder: "搜索",
         disabled: !session || !space.selected,
       }}
     >

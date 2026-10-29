@@ -1,0 +1,84 @@
+{
+  "date": "2026-10-29",
+  "scope": "SUB-018 主体来源选择器",
+  "status": "implemented_unit_verified_browser_pending_parent",
+  "rea": {
+    "summary_evidence_id": "ev_0146093d5090f88ab932de58ef3a22747a4c9378c3761b8cca91ec045b189fa2",
+    "parent_evidence_id": "ev_dfde8dd64c87a1bab8f9473d28e52061adb29bc57199d01843b9beaae749bd9f",
+    "artifact": "output/subject-parity-2026-10-29/shipped/clo.b503e73c4a.js",
+    "sha256": "a1add7f17ea511f69ac6c6c77e3d6a84bf5db82984ec4fe8e50e803c03755928",
+    "boundary": "实际目标页面已加载脚本静态分析；不执行bundle。module zI，语义图partial；不等于真实非空列表运行证明。",
+    "observations": [
+      {
+        "topic": "layout",
+        "finding": "列表chunk(5)、固定行高，图片160+8/视频90+8；不是masonry，无页码UI。"
+      },
+      {
+        "topic": "loading",
+        "finding": "容器scrollHeight-scrollTop < (bottomThreshold ?? 2*clientHeight)触发onReachBottom；原站200ms节流，虚拟行。"
+      },
+      {
+        "topic": "batch",
+        "finding": "图片网络count30，视频count50；loadMore目标12条raw history/22条去重转换项目不能混为请求count。"
+      },
+      {
+        "topic": "selection",
+        "finding": "同类型跨group保留选择，切换类型清空；maskClosable:false。"
+      },
+      {
+        "topic": "card",
+        "finding": "图片renderer R仅checkbox/img/禁选mask；视频renderer F仅checkbox/video/cover/selected border/mask/duration；均无可见文件名行。"
+      }
+    ]
+  },
+  "implementation": {
+    "files": [
+      "frontend/src/components/subjects/unified-source-picker.tsx",
+      "frontend/src/components/subjects/use-subject-sources.ts"
+    ],
+    "contract": "保留现有page/page_size服务端接口，图片30/视频50；前端累积/去重/空批和total耗尽停止/同帧防重/AbortController取消；失败批次尾部重试且不清空前批。",
+    "ui": "移除搜索、分页器、常驻能力说明和可见文件名；5列等高网格，头尾固定，内部滚动，空超清真实空态，遮罩不关闭。",
+    "selection": "onSelectMany提供时图片多选；同kind跨group保留；切kind清空；视频/音频与旧onSelect单选兼容。",
+    "limits": "backend/internal/subject/domain/content.go MaxReferences=120；maxSelection默认120，上界121容纳一张primary+120 references；调用方传剩余额度。",
+    "confirm": "全部选项并行逐项getSubjectSource并核验来源ID、来源类别、项目、revision、media ID/revision/kind；全部成功后一次采纳，失败不部分采纳；scope/session变化不采纳。",
+    "engineering_adaptations": [
+      "现有有界page接口没有改成即梦内部cursor历史接口。",
+      "本地使用内部滚动+IntersectionObserver，未引入原站虚拟列表依赖。",
+      "音频30条批次/单选为本地既有能力适配，不作为即梦图片视频选择器事实。"
+    ],
+    "remaining_unknowns": [
+      "真实竞品账号素材为空，非空列表/多批滚动未由该账号实测。",
+      "视频来源DTO不含duration；本次没有伪造时长。"
+    ]
+  },
+  "verification": {
+    "red": {
+      "command": "pnpm exec vitest run tests/unit/components/subjects/unified-source-picker.test.tsx",
+      "result": "10 tests: 6 failed, 4 passed before implementation",
+      "failures": [
+        "old request page_size12 vs30",
+        "extra search",
+        "cross-group image multi-selection",
+        "capacity guard",
+        "atomic multi-item confirmation",
+        "scope-change cancellation"
+      ]
+    },
+    "green": {
+      "command": "pnpm exec vitest run tests/unit/components/subjects/use-subject-sources.test.ts tests/unit/components/subjects/unified-source-picker.test.tsx tests/unit/components/subjects/unified-source-contracts.test.ts",
+      "result": "3 files / 24 tests passed"
+    },
+    "lint": {
+      "command": "pnpm exec eslint src/components/subjects/unified-source-picker.tsx src/components/subjects/use-subject-sources.ts tests/unit/components/subjects/unified-source-picker.test.tsx tests/unit/components/subjects/use-subject-sources.test.ts",
+      "result": "passed"
+    },
+    "typecheck": {
+      "command": "pnpm exec tsc --noEmit --pretty false --incremental false",
+      "result": "exit2: one out-of-scope error in unified-library.test.tsx:377 toHaveAttribute; no owned-file errors",
+      "log": "output/subject-parity-2026-10-29/source-picker-typecheck.txt"
+    },
+    "diff_check": "passed scoped git diff --check",
+    "browser": "delegated to parent; this record does not assert real-browser verification or provider persistence"
+  },
+  "git": "No commit or staging by this worker; shared parallel work preserved."
+}

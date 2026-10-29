@@ -1,0 +1,5 @@
+Browser tab: 1980371710, Title: "主体 · 织光", URL: "http://localhost:1122/subjects".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 63
++						68 image 主体对齐本地验收-20261028
+The focused UI element is 56 checkbox 最近一周, Value: 1

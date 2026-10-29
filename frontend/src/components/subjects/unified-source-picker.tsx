@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { listSubjectSources, getSubjectSource } from "@/api/subjects";
+import { Check } from "lucide-react";
+import { getSubjectSource } from "@/api/subjects";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -13,10 +13,6 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ContentState } from "@/components/layout/content-state";
 import {
-  DataPagination,
-  type PageSize,
-} from "@/components/media/data-pagination";
-import {
   getScopeGeneration,
   getSessionGeneration,
   RequestError,
@@ -24,11 +20,10 @@ import {
 import { UnifiedSubjectMedia } from "./unified-media";
 import { subjectError, type SelectedSubjectMedia } from "./unified-contracts";
 import {
-  requireSubjectSourcePage,
   requireSubjectSourceItem,
-  type SubjectSourcePage,
   type SubjectSourceItem,
 } from "./unified-source-contracts";
+import { useSubjectSources } from "./use-subject-sources";
 
 export function UnifiedSubjectSourcePicker({
   actorID,
@@ -36,112 +31,166 @@ export function UnifiedSubjectSourcePicker({
   allowedKinds,
   onClose,
   onSelect,
+  onSelectMany,
+  maxSelection = 120,
 }: {
   actorID: string;
   scopeID: string;
   allowedKinds: readonly ("image" | "video" | "audio")[];
   onClose: () => void;
   onSelect: (value: SelectedSubjectMedia) => string | void;
+  onSelectMany?: (values: SelectedSubjectMedia[]) => string | void;
+  // backend/internal/subject/domain/content.go: MaxReferences=120; a primary batch may add one primary.
+  maxSelection?: number;
 }) {
   const [kind, setKind] = useState(allowedKinds[0]);
   const [group, setGroup] = useState("all");
-  const [query, setQuery] = useState("");
-  const [index, setIndex] = useState(1);
-  const [pageSize, setPageSize] = useState<PageSize>(12);
-  const [page, setPage] = useState<SubjectSourcePage | null>(null);
-  const [selected, setSelected] = useState<SubjectSourceItem | null>(null);
-  const [error, setError] = useState("");
-  const [pending, setPending] = useState(false);
-  const [retry, setRetry] = useState(0);
+  const owner = JSON.stringify([actorID, scopeID]);
+  const [selection, setSelection] = useState({
+    owner,
+    kind,
+    items: [] as SubjectSourceItem[],
+  });
+  const selected =
+    selection.owner === owner && selection.kind === kind ? selection.items : [];
+  const [issue, setIssue] = useState({ owner, message: "" });
+  const error = issue.owner === owner ? issue.message : "";
+  const [pendingOwner, setPendingOwner] = useState<string | null>(null);
+  if (selection.owner !== owner) setSelection({ owner, kind, items: [] });
+  if (issue.owner !== owner) setIssue({ owner, message: "" });
+  if (pendingOwner !== null && pendingOwner !== owner) setPendingOwner(null);
+  const pending = pendingOwner === owner;
   const flight = useRef<AbortController | null>(null);
+  const scrollRoot = useRef<HTMLDivElement>(null);
+  const sentinel = useRef<HTMLDivElement>(null);
+  const sources = useSubjectSources(actorID, scopeID, kind, group);
+  const { page, loadMore } = sources;
+  const multiple = kind === "image" && !!onSelectMany;
+  const limit = multiple
+    ? Math.max(0, Math.min(121, Math.floor(maxSelection)))
+    : 1;
+  const selectedIDs = new Set(selected.map((item) => item.id));
+
+  useEffect(
+    () => () => {
+      flight.current?.abort();
+      flight.current = null;
+    },
+    [actorID, scopeID],
+  );
   useEffect(() => {
-    const controller = new AbortController();
-    listSubjectSources(
-      {
-        kind,
-        search: query,
-        favorite_only: group === "favorite" || undefined,
-        quality: group === "upscaled" ? "upscaled" : undefined,
-        page: index,
-        page_size: pageSize,
-      },
-      { signal: controller.signal },
+    if (
+      !scrollRoot.current ||
+      !sentinel.current ||
+      typeof IntersectionObserver === "undefined"
     )
-      .then((v) => requireSubjectSourcePage(v, actorID, scopeID, kind))
-      .then((v) => {
-        if (!controller.signal.aborted) {
-          setPage(v);
-          setError("");
-        }
-      })
-      .catch((e) => {
-        if (!controller.signal.aborted) setError(subjectError(e));
-      });
-    return () => controller.abort();
-  }, [actorID, scopeID, kind, group, query, index, pageSize, retry]);
-  useEffect(() => () => flight.current?.abort(), []);
-  function reset() {
-    setIndex(1);
-    setPage(null);
-    setSelected(null);
-    setError("");
-  }
+      return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!pending && entries.some((entry) => entry.isIntersecting))
+          loadMore();
+      },
+      {
+        root: scrollRoot.current,
+        rootMargin: `0px 0px ${scrollRoot.current.clientHeight}px 0px`,
+      },
+    );
+    observer.observe(sentinel.current);
+    return () => observer.disconnect();
+  }, [loadMore, pending, page, group, kind]);
+
   function changeKind(value: string) {
     if (!allowedKinds.includes(value as typeof kind)) return;
     setKind(value as typeof kind);
     setGroup("all");
-    reset();
+    setSelection({ owner, kind: value as typeof kind, items: [] });
+    setIssue({ owner, message: "" });
+  }
+  function select(item: SubjectSourceItem) {
+    setIssue({ owner, message: "" });
+    setSelection((previous) => {
+      const items =
+        previous.owner === owner && previous.kind === kind
+          ? previous.items
+          : [];
+      if (items.some((value) => value.id === item.id))
+        return {
+          owner,
+          kind,
+          items: items.filter((value) => value.id !== item.id),
+        };
+      if (!multiple) return { owner, kind, items: [item] };
+      return items.length < limit
+        ? { owner, kind, items: [...items, item] }
+        : previous;
+    });
   }
   async function confirm() {
-    if (!selected || pending) return;
-    setPending(true);
-    setError("");
+    if (
+      !selected.length ||
+      selected.length > limit ||
+      pending ||
+      flight.current
+    )
+      return;
+    setPendingOwner(owner);
+    setIssue({ owner, message: "" });
     const controller = new AbortController();
     flight.current = controller;
     const scope = getScopeGeneration(),
       session = getSessionGeneration();
     try {
-      const detail = requireSubjectSourceItem(
-        await getSubjectSource(
-          { item_id: selected.id },
-          { signal: controller.signal },
-        ),
+      const values = await Promise.all(
+        selected.map(async (item): Promise<SelectedSubjectMedia> => {
+          const detail = requireSubjectSourceItem(
+            await getSubjectSource(
+              { item_id: item.id },
+              { signal: controller.signal },
+            ),
+          );
+          const m = detail.media;
+          if (
+            detail.id !== item.id ||
+            detail.revision !== item.revision ||
+            detail.source !== item.source ||
+            detail.project_id !== item.project_id ||
+            m.kind !== item.kind ||
+            m.id !== item.media.id ||
+            m.revision !== item.media.revision ||
+            !allowedKinds.includes(m.kind as typeof kind)
+          )
+            throw new RequestError("invalid_receipt");
+          return {
+            asset_id: m.id,
+            asset_revision: m.revision,
+            kind: detail.kind,
+            file_name: m.file_name,
+            mime_type: m.mime_type,
+            library_item_id: item.id,
+            library_source: "subject",
+            ...(detail.project_id ? { project_id: detail.project_id } : {}),
+          };
+        }),
       );
-      const m = detail.media;
-      if (
-        detail.id !== selected.id ||
-        detail.revision !== selected.revision ||
-        detail.source !== selected.source ||
-        detail.project_id !== selected.project_id ||
-        m?.kind !== selected.kind ||
-        m.id !== selected.media.id ||
-        m.revision !== selected.media.revision ||
-        !allowedKinds.includes(m!.kind as typeof kind) ||
-        !m?.mime_type ||
-        typeof m.file_name !== "string"
-      )
-        throw new RequestError("invalid_receipt");
       if (
         !controller.signal.aborted &&
         scope === getScopeGeneration() &&
         session === getSessionGeneration()
       ) {
-        const issue = onSelect({
-          asset_id: m.id!,
-          asset_revision: m.revision!,
-          kind: m.kind as typeof kind,
-          file_name: m.file_name,
-          mime_type: m.mime_type,
-          library_item_id: selected.id,
-          library_source: "subject",
-          ...(detail.project_id ? { project_id: detail.project_id } : {}),
-        });
-        if (issue) setError(issue);
+        const message =
+          multiple && onSelectMany ? onSelectMany(values) : onSelect(values[0]);
+        if (message) setIssue({ owner, message });
       }
-    } catch (e) {
-      if (!controller.signal.aborted) setError(subjectError(e));
+    } catch (reason) {
+      if (!controller.signal.aborted)
+        setIssue({ owner, message: subjectError(reason) });
     } finally {
-      if (!controller.signal.aborted) setPending(false);
+      // A failed item cancels any still-running sibling checks; no partial selection is adopted.
+      controller.abort();
+      if (flight.current === controller) {
+        flight.current = null;
+        setPendingOwner(null);
+      }
     }
   }
   const mediaLabel =
@@ -155,13 +204,14 @@ export function UnifiedSubjectSourcePicker({
     >
       <DialogContent
         showCloseButton={false}
-        className="unified-subject-source max-h-[calc(100dvh-32px)] w-[calc(100vw-32px)] overflow-hidden sm:max-w-[800px]"
+        onInteractOutside={(event) => event.preventDefault()}
+        className="unified-subject-source h-[min(680px,calc(100dvh-32px))] w-[calc(100vw-32px)] overflow-hidden! sm:max-w-[848px]"
       >
         <DialogTitle className="sr-only">从资产添加</DialogTitle>
         <DialogDescription className="sr-only">
-          选择本人有权使用的参考资产；无需切换当前创作空间。
+          选择参考资产后确认添加。
         </DialogDescription>
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex shrink-0 items-center justify-between gap-2">
           <Tabs value={kind} onValueChange={changeKind}>
             <TabsList variant="line" aria-label="资产类型">
               {allowedKinds.map((k) => (
@@ -187,9 +237,10 @@ export function UnifiedSubjectSourcePicker({
         </div>
         <Tabs
           value={group}
+          className="shrink-0"
           onValueChange={(value) => {
             setGroup(value);
-            reset();
+            setIssue({ owner, message: "" });
           }}
         >
           <TabsList variant="line" aria-label={`${mediaLabel}分组`}>
@@ -197,10 +248,7 @@ export function UnifiedSubjectSourcePicker({
               所有{mediaLabel}
             </TabsTrigger>
             {kind === "image" ? (
-              <TabsTrigger
-                value="upscaled"
-                disabled={pending || !page?.capabilities.upscaled_filter}
-              >
+              <TabsTrigger value="upscaled" disabled={pending}>
                 超清
               </TabsTrigger>
             ) : null}
@@ -209,59 +257,60 @@ export function UnifiedSubjectSourcePicker({
             </TabsTrigger>
           </TabsList>
         </Tabs>
-        {kind === "image" && page && !page.capabilities.upscaled_filter ? (
-          <p className="text-xs text-muted-foreground">暂无可用的超清来源。</p>
-        ) : null}
-        <Input
-          aria-label="搜索资产"
-          placeholder="搜索资产"
-          value={query}
-          disabled={pending}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            reset();
+        <div
+          key={`${owner}:${kind}:${group}`}
+          ref={scrollRoot}
+          role="region"
+          aria-label="资产列表"
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain"
+          onScroll={(event) => {
+            const element = event.currentTarget;
+            if (
+              !pending &&
+              element.scrollHeight - element.scrollTop <
+                2 * element.clientHeight
+            )
+              loadMore();
           }}
-        />
-        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain">
+        >
           {error ? (
             <ContentState
               state="error"
               title="暂时无法读取资产"
               description={error}
-              actions={
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setPage(null);
-                    setError("");
-                    setRetry((n) => n + 1);
-                  }}
-                >
-                  重试
-                </Button>
-              }
             />
-          ) : !page ? (
+          ) : null}
+          {!page && !sources.error ? (
             <ContentState state="loading" title="正在读取资产" />
-          ) : !page.items.length ? (
+          ) : null}
+          {page && !page.items.length && !sources.error ? (
             <ContentState title="暂未找到相关内容" />
-          ) : (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          ) : null}
+          {page?.items.length ? (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
               {page.items.map((item) => (
                 <Button
                   key={item.id}
                   variant="ghost"
-                  className="h-auto min-w-0 flex-col items-stretch p-0"
-                  aria-pressed={selected?.id === item.id}
-                  onClick={() => setSelected(item)}
-                  disabled={pending}
+                  className="h-auto min-w-0 flex-col items-stretch gap-1 p-0"
+                  aria-label={item.title}
+                  aria-pressed={selectedIDs.has(item.id)}
+                  onClick={() => select(item)}
+                  disabled={
+                    pending ||
+                    (multiple &&
+                      !selectedIDs.has(item.id) &&
+                      selected.length >= limit)
+                  }
                 >
-                  <span className="relative block aspect-[275/180] w-full overflow-hidden rounded-lg bg-muted">
+                  <span
+                    className={`relative block w-full overflow-hidden rounded-lg bg-muted ${kind === "video" ? "aspect-video" : "aspect-square"}`}
+                  >
                     <UnifiedSubjectMedia
                       media={{
                         asset_id: item.media.id,
                         asset_revision: item.media.revision,
-                        kind: item.kind as SelectedSubjectMedia["kind"],
+                        kind: item.kind,
                         file_name: item.media.file_name,
                         mime_type: item.media.mime_type,
                         library_item_id: item.id,
@@ -269,36 +318,48 @@ export function UnifiedSubjectSourcePicker({
                       }}
                       label={item.title}
                     />
-                  </span>
-                  <span className="w-full truncate px-1 pb-2 text-left">
-                    {item.title}
+                    <span
+                      aria-hidden="true"
+                      className={`absolute top-2 right-2 flex size-5 items-center justify-center rounded border ${selectedIDs.has(item.id) ? "border-primary bg-primary text-primary-foreground" : "border-white/60 bg-black/30"}`}
+                    >
+                      {selectedIDs.has(item.id) ? (
+                        <Check className="size-4" />
+                      ) : null}
+                    </span>
                   </span>
                 </Button>
               ))}
             </div>
-          )}
+          ) : null}
+          {sources.error ? (
+            <ContentState
+              state="error"
+              title="暂时无法读取资产"
+              description={sources.error}
+              actions={
+                <Button
+                  variant="outline"
+                  disabled={pending}
+                  onClick={sources.retry}
+                >
+                  重试
+                </Button>
+              }
+            />
+          ) : null}
+          {page && sources.loading ? (
+            <p
+              role="status"
+              className="py-4 text-center text-sm text-muted-foreground"
+            >
+              正在读取资产…
+            </p>
+          ) : null}
+          <div ref={sentinel} aria-hidden="true" className="h-px" />
         </div>
-        {page && page.total > pageSize ? (
-          <DataPagination
-            label="主体资产分页"
-            page={index}
-            pageSize={pageSize}
-            total={page.total}
-            disabled={pending}
-            onPageChange={(n) => {
-              setIndex(n);
-              setPage(null);
-              setSelected(null);
-            }}
-            onPageSizeChange={(size) => {
-              setPageSize(size);
-              reset();
-            }}
-          />
-        ) : null}
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           <span className="mr-auto text-sm text-muted-foreground">
-            已选 {selected ? 1 : 0}{" "}
+            已选 {selected.length}{" "}
             {kind === "image"
               ? "张图片"
               : kind === "video"
@@ -306,7 +367,7 @@ export function UnifiedSubjectSourcePicker({
                 : "个音频"}
           </span>
           <Button
-            disabled={!selected || pending}
+            disabled={!selected.length || selected.length > limit || pending}
             onClick={() => void confirm()}
           >
             {pending ? "正在核验…" : "确认"}

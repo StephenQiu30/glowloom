@@ -31,6 +31,10 @@ export function useSubjectList(
   const pageIndex = position.key === key ? position.page : 1;
   const attempt = position.key === key ? position.attempt : 0;
   const [result, setResult] = useState<Result | null>(null);
+  if (position.key !== key) {
+    setPosition({ key, page: 1, attempt: 0 });
+    setResult(null);
+  }
   const current = result?.key === key ? result : null;
   const error = current?.failedAttempt === attempt ? current.error : undefined;
   const loading = !error && (!current?.page || current.page.page < pageIndex);

@@ -1,0 +1,3 @@
+Browser tab: 1980371645, Title: "即梦AI - 一站式AI创作平台", URL: "https://jimeng.jianying.com/ai-tool/elements".
+There has been no change in the accessibility tree.
+The focused UI element is 80 text field (settable) Description: 搜索, Value: 主体调研

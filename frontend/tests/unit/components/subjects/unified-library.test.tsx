@@ -148,6 +148,40 @@ it("导出等待时切换空间，晚到Blob不得触发下载", async () => {
   }
 });
 afterEach(cleanup);
+it("搜索结果禁用排序并展示创建时间", async () => {
+  render(
+    <UnifiedSubjectLibrary actorID={actorID} scopeID={scopeID} query="海边" />,
+  );
+  await screen.findByRole("button", { name: "设置主体 海边香氛" });
+  expect(screen.getByRole("button", { name: "排序" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  expect(screen.getAllByText(/主体 · .*创建/)).toHaveLength(2);
+});
+
+it("改变筛选退出批量，普通卡片勾选直接进入批量", async () => {
+  render(
+    <UnifiedSubjectLibrary
+      actorID={actorID}
+      scopeID={scopeID}
+      toolbarInHeader
+    />,
+  );
+  await screen.findByRole("button", { name: "设置主体 海边香氛" });
+  fireEvent.click(screen.getByRole("checkbox", { name: "选择主体 海边香氛" }));
+  expect(screen.getByText("已选择 1 项内容")).toBeTruthy();
+  fireEvent.keyDown(screen.getByRole("button", { name: "筛选" }), {
+    key: "ArrowDown",
+  });
+  fireEvent.click(
+    await screen.findByRole("menuitemcheckbox", { name: "收藏" }),
+  );
+  await waitFor(() =>
+    expect(screen.queryByText(/已选择 .* 项内容/)).toBeNull(),
+  );
+  expect(screen.getByRole("button", { name: "批量操作" })).toBeTruthy();
+});
 it("当前空间无需项目就读取完整库，搜索传给服务端", async () => {
   const view = render(
     <UnifiedSubjectLibrary actorID={actorID} scopeID={scopeID} />,
@@ -339,8 +373,10 @@ it("主体筛选和批量选择共用顶栏，保留业务状态且路由卸载�
     ),
   );
   expect(
-    screen.queryByRole("checkbox", { name: "选择主体 海边香氛" }),
-  ).toBeNull();
+    screen
+      .queryByRole("checkbox", { name: "选择主体 海边香氛" })
+      ?.getAttribute("aria-checked"),
+  ).toBe("false");
   view.rerender(<HeaderLibraryHarness show={false} />);
   expect(within(header).queryByRole("button", { name: "筛选" })).toBeNull();
   expect(within(header).getByRole("button", { name: "账号菜单" })).toBeTruthy();

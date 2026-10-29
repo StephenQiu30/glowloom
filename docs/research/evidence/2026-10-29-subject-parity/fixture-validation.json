@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-29",
+  "kind": "synthetic_transport_real_browser",
+  "tool": "agent-browser 0.33.0",
+  "url": "http://127.0.0.1:5196/tests/browser/subject-list.html",
+  "batches": [
+    1,
+    2,
+    3
+  ],
+  "cards": 45,
+  "afterAdditionalScrollBatches": [
+    1,
+    2,
+    3
+  ],
+  "pagination": false,
+  "axe": {
+    "inapplicable": 41,
+    "incomplete": 0,
+    "passes": 19,
+    "violations": 0
+  },
+  "formalBackend": false
+}

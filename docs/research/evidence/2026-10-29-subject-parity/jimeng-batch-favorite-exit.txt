@@ -1,0 +1,5 @@
+Browser tab: 1980371645, Title: "即梦AI - 一站式AI创作平台", URL: "https://jimeng.jianying.com/ai-tool/elements".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+~					10 text 37
+~					12 text 59
+The focused UI element is 1 AXWebArea 即梦AI - 一站式AI创作平台, URL: jimeng.jianying.com/ai-tool/elements

@@ -1,0 +1,59 @@
+{
+  "date": "2026-10-29",
+  "tool": "Chrome extension via cua_repl",
+  "kind": "live_authenticated_UI_observations",
+  "source": "jimeng.jianying.com/ai-tool/elements",
+  "target": "localhost:1122/subjects",
+  "localTab": "1980371710",
+  "checks": [
+    {
+      "action": "Select 2 real image assets, switch to upscaled group",
+      "observed": "selected count remains 2; confirmation enabled"
+    },
+    {
+      "action": "Confirm selection",
+      "observed": "Both references shown to right of primary; local-multi-reference.png"
+    },
+    {
+      "action": "Save existing test subject, reload, reopen",
+      "observed": "supplemental reference 1 and 2 present after reload"
+    },
+    {
+      "action": "Change description to temporary text, close, reopen",
+      "observed": "No dirty confirmation; original saved description restored"
+    },
+    {
+      "action": "Select subject then favorite filter",
+      "observed": "Batch toolbar exits; normal search/account group restored"
+    },
+    {
+      "action": "Batch favorite then normal card unfavorite",
+      "observed": "Successful batch exits and favorite true; final original favorite false restored"
+    },
+    {
+      "action": "390x844 viewport",
+      "observed": {
+        "documentScrollWidth": 390,
+        "editorWidth": 358,
+        "pickerWidth": 358,
+        "left": 16,
+        "right": 374,
+        "confirmationVisible": true
+      }
+    },
+    {
+      "action": "Desktop measure",
+      "observed": {
+        "viewportWidth": 1512,
+        "documentScrollWidth": 1512,
+        "filterTimeSortAvatarTop": 14,
+        "controlHeight": 36,
+        "pagination": false,
+        "footer": false
+      }
+    }
+  ],
+  "persistentTestData": "Existing 主体对齐本地验收-20261028 now retains two added supplemental references. Description unchanged, favorite false. No paid generation or subject deletion.",
+  "captureNote": "Some AX txt files are incremental no-change snapshots, not full trees; this record summarizes the actual tool observations and screenshots in the conversation.",
+  "laterBlock": "Shared director changes introduce mediabunny module-not-found overlay; subsequent final route reload blocked."
+}

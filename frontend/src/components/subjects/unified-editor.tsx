@@ -2,8 +2,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import {
-  ArrowLeft,
-  ArrowRight,
   AudioLines,
   FolderPlus,
   ImagePlus,
@@ -141,27 +139,9 @@ export function UnifiedSubjectEditor({
   useEffect(() => () => request.current?.abort(), []);
   const locked = pending || frozen || (!!source && !source.suspended);
   const mediaLocked = locked || !!source || voiceJob.active;
-  const initialMedia = initial
-    ? [
-        initial.primary.asset_id,
-        ...initial.references.map((m) => m.asset_id),
-        initial.voice?.media.asset_id ?? "",
-      ].join("/")
-    : "";
-  const currentMedia = primary
-    ? [
-        primary.asset_id,
-        ...references.map((m) => m.asset_id),
-        voice?.media.asset_id ?? "",
-      ].join("/")
-    : "";
-  const dirty =
-    name !== (initial?.name ?? "") ||
-    description !== (initial?.description ?? "") ||
-    initialMedia !== currentMedia;
   function close() {
     if (pending) return;
-    if (frozen || dirty) setLeave(true);
+    if (frozen) setLeave(true);
     else onClose();
   }
   function choose(target: Target, media: SelectedSubjectMedia) {
@@ -192,6 +172,32 @@ export function UnifiedSubjectEditor({
     ) {
       return "此图片已经在参考主体中。";
     } else setReferences((items) => [...items, media]);
+    setError("");
+    setSource(null);
+  }
+  function chooseImages(target: Target, items: SelectedSubjectMedia[]) {
+    if (voiceJob.active) return "请等待当前音色任务完成。";
+    if (!items.length || items.some((item) => item.kind !== "image"))
+      return "请选择图片。";
+    const unique = Array.from(
+      new Map(items.map((item) => [item.asset_id, item])).values(),
+    );
+    const nextPrimary = target === "primary" ? unique[0] : primary;
+    if (!nextPrimary) return "请先添加主参考。";
+    const additions = target === "primary" ? unique.slice(1) : unique;
+    const nextReferences = Array.from(
+      new Map(
+        [...(target === "primary" ? [] : references), ...additions]
+          .filter((item) => item.asset_id !== nextPrimary.asset_id)
+          .map((item) => [item.asset_id, item]),
+      ).values(),
+    );
+    if (nextReferences.length > 120) return "补充参考最多120张。";
+    if (target === "primary") {
+      voiceJob.reset();
+      setPrimary(nextPrimary);
+    }
+    setReferences(nextReferences);
     setError("");
     setSource(null);
   }
@@ -326,6 +332,9 @@ export function UnifiedSubjectEditor({
             size={icon ? "icon" : "default"}
             disabled={mediaLocked}
             aria-label={label}
+            className={
+              target === "reference" ? "h-16 w-full shrink-0" : undefined
+            }
           >
             {icon ? (
               <Plus />
@@ -378,7 +387,7 @@ export function UnifiedSubjectEditor({
             close();
           }}
         >
-          <DialogTitle className="text-2xl leading-[34px] font-medium">
+          <DialogTitle className="text-base leading-6 font-medium">
             设置主体
           </DialogTitle>
           <DialogDescription className="sr-only">
@@ -438,7 +447,39 @@ export function UnifiedSubjectEditor({
                         </Button>
                       </div>
                       {primary.kind === "image" ? (
-                        <div className="flex h-full items-center px-2">
+                        <div
+                          className="unified-subject-references"
+                          aria-label="补充参考"
+                        >
+                          {references.map((reference, index) => (
+                            <div
+                              key={reference.asset_id}
+                              className="relative h-16 w-full shrink-0 overflow-hidden rounded-md bg-muted"
+                            >
+                              <UnifiedSubjectMedia
+                                media={reference}
+                                label={`补充参考${index + 1}`}
+                              />
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="icon"
+                                className="absolute top-0 right-0 size-6"
+                                aria-label={`移除补充参考${index + 1}`}
+                                disabled={mediaLocked}
+                                onClick={() =>
+                                  setReferences((items) =>
+                                    items.filter(
+                                      (item) =>
+                                        item.asset_id !== reference.asset_id,
+                                    ),
+                                  )
+                                }
+                              >
+                                <X />
+                              </Button>
+                            </div>
+                          ))}
                           {sourceMenu("reference", "添加补充参考", true)}
                         </div>
                       ) : null}
@@ -505,80 +546,6 @@ export function UnifiedSubjectEditor({
                   >
                     不采纳此文件
                   </Button>
-                </div>
-              ) : null}
-              {references.length ? (
-                <div className="flex flex-wrap gap-2" aria-label="补充参考">
-                  {references.map((r, index) => (
-                    <div
-                      key={`${r.asset_id}/${index}`}
-                      className="flex w-28 flex-col gap-1"
-                    >
-                      <div className="relative h-24 overflow-hidden rounded-lg bg-muted">
-                        <UnifiedSubjectMedia
-                          media={r}
-                          label={`补充参考${index + 1}`}
-                        />
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="icon"
-                          className="absolute top-0 right-0"
-                          aria-label={`移除补充参考${index + 1}`}
-                          disabled={mediaLocked}
-                          onClick={() =>
-                            setReferences((items) =>
-                              items.filter((_, i) => i !== index),
-                            )
-                          }
-                        >
-                          <X />
-                        </Button>
-                      </div>
-                      <div className="flex justify-between">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          disabled={mediaLocked || index === 0}
-                          aria-label={`前移补充参考${index + 1}`}
-                          onClick={() =>
-                            setReferences((items) => {
-                              const next = [...items];
-                              [next[index - 1], next[index]] = [
-                                next[index],
-                                next[index - 1],
-                              ];
-                              return next;
-                            })
-                          }
-                        >
-                          <ArrowLeft />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          disabled={
-                            mediaLocked || index === references.length - 1
-                          }
-                          aria-label={`后移补充参考${index + 1}`}
-                          onClick={() =>
-                            setReferences((items) => {
-                              const next = [...items];
-                              [next[index], next[index + 1]] = [
-                                next[index + 1],
-                                next[index],
-                              ];
-                              return next;
-                            })
-                          }
-                        >
-                          <ArrowRight />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
                 </div>
               ) : null}
               {primary ? (
@@ -708,6 +675,18 @@ export function UnifiedSubjectEditor({
           }
           onClose={() => setSource(null)}
           onSelect={(media) => choose(source.target, media)}
+          onSelectMany={
+            source.target === "voice"
+              ? undefined
+              : (items) => chooseImages(source.target, items)
+          }
+          maxSelection={
+            source.target === "primary"
+              ? 121
+              : source.target === "reference"
+                ? Math.max(0, 120 - references.length)
+                : 1
+          }
         />
       ) : null}
       {source?.mode === "upload" ? (

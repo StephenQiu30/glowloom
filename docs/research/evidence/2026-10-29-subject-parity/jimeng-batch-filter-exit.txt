@@ -1,0 +1,6 @@
+Browser tab: 1980371645, Title: "即梦AI - 一站式AI创作平台", URL: "https://jimeng.jianying.com/ai-tool/elements".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+~								111 button 主体 · 主体调研测试-20261028
+~								112 button 取消收藏
++								113 text 主体调研测试-20261028 主体  · 22小时前修改
+The focused UI element is 94 checkbox 全部, Value: 1

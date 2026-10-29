@@ -32,11 +32,11 @@ export function UnifiedSubjectToolbar({
   onChange,
   onBatch,
   batchTriggerRef,
-  showAppliedRange = true,
+  searching = false,
   showBatchAction = true,
 }: {
   batchTriggerRef?: Ref<HTMLButtonElement>;
-  showAppliedRange?: boolean;
+  searching?: boolean;
   showBatchAction?: boolean;
   value: SubjectFilter;
   disabled: boolean;
@@ -73,7 +73,7 @@ export function UnifiedSubjectToolbar({
         />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" disabled={disabled}>
+            <Button variant="ghost" disabled={disabled || searching}>
               排序
               <ChevronDown />
             </Button>
@@ -126,51 +126,6 @@ export function UnifiedSubjectToolbar({
           </Button>
         ) : null}
       </div>
-      {showAppliedRange ? (
-        <AppliedSubjectTimeRange
-          value={value}
-          disabled={disabled}
-          onChange={onChange}
-        />
-      ) : null}
     </div>
   );
-}
-
-export function AppliedSubjectTimeRange({
-  value,
-  disabled,
-  onChange,
-}: {
-  value: SubjectFilter;
-  disabled: boolean;
-  onChange: (filter: SubjectFilter) => void;
-}) {
-  return value.from || value.through ? (
-    <div
-      className="flex flex-wrap items-start gap-2"
-      aria-label="已应用时间范围"
-    >
-      <span className="w-12 text-xs leading-[18px] text-muted-foreground">
-        时间：
-      </span>
-      <span className="w-[110px] text-xs leading-[18px] text-muted-foreground">
-        {value.from || "不限"}
-      </span>
-      <span className="w-5 text-xs leading-[18px] text-muted-foreground">
-        至
-      </span>
-      <span className="w-[110px] text-xs leading-[18px] text-muted-foreground">
-        {value.through || "不限"}
-      </span>
-      <Button
-        variant="ghost"
-        className="min-h-11 w-25"
-        disabled={disabled}
-        onClick={() => onChange({ ...value, from: "", through: "" })}
-      >
-        清除时间
-      </Button>
-    </div>
-  ) : null;
 }

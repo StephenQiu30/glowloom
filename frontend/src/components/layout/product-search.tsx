@@ -21,8 +21,10 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import { screens, screenHref } from "./routes";
+import { ProductInlineSearch } from "./product-inline-search";
 
 export type PageSearch = {
+  mode?: "command" | "inline";
   value: string;
   onValueChange: (value: string) => void;
   onSearch: (value: string) => void;
@@ -40,6 +42,20 @@ const getServerPlatformKey = () => "Ctrl";
 
 /** One command palette per BasicLayout; result data stays in its owning page. */
 export function ProductSearch({
+  search,
+  isMobile = false,
+}: {
+  search?: PageSearch;
+  isMobile?: boolean;
+}) {
+  return search?.mode === "inline" ? (
+    <ProductInlineSearch search={search} isMobile={isMobile} />
+  ) : (
+    <ProductCommandSearch search={search} isMobile={isMobile} />
+  );
+}
+
+function ProductCommandSearch({
   search,
   isMobile = false,
 }: {
