@@ -130,6 +130,9 @@ func CopyProjectDocument(source Document, targetProject, job uuid.UUID, assets m
 			}
 		}
 		if c := node.Config.Timeline; c != nil {
+			for j := range c.ImportedAssets {
+				c.ImportedAssets[j] = assetID(c.ImportedAssets[j])
+			}
 			for j := range c.Tracks {
 				c.Tracks[j].ID = identity(nodeScope+"/track", c.Tracks[j].ID)
 			}

@@ -437,6 +437,9 @@ func applyOperations(document Document, operations []Operation, final bool) (Ope
 		if err := ValidateGraph(doc); err != nil {
 			return OperationOutcome{}, err
 		}
+		if err := validateTimelineRelationChanges(document, doc); err != nil {
+			return OperationOutcome{}, err
+		}
 	}
 	out.Effects = DocumentEffects(document, doc)
 	out.Document = doc

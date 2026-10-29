@@ -79,14 +79,3 @@ func audioEnvelope(clip canvasdomain.TimelineClip, elapsedMS float64) string {
 	parts = append(parts, "asetpts=PTS-STARTPTS")
 	return strings.Join(parts, ",")
 }
-
-func dimensions(aspect string) (int, int) {
-	switch aspect {
-	case "9:16":
-		return 1080, 1920
-	case "1:1":
-		return 1080, 1080
-	default:
-		return 1920, 1080
-	}
-}

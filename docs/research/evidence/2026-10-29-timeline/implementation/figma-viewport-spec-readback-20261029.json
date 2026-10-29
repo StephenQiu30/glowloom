@@ -1,0 +1,54 @@
+{
+  "createdNodeIds": [],
+  "mutatedNodeIds": [
+    "3231:61473",
+    "3231:61594"
+  ],
+  "viewport": {
+    "id": "3231:61472",
+    "width": 1428,
+    "height": 56,
+    "clipsContent": true,
+    "contentId": "3231:61473",
+    "contentWidth": 1676,
+    "paddingRight": 0,
+    "fullAxisScrollWidth": 1736,
+    "zeroGutter": 52,
+    "appendButton": 56,
+    "rightMargin": 8,
+    "children": [
+      {
+        "id": "3231:61474",
+        "width": 720,
+        "height": 56,
+        "x": 0
+      },
+      {
+        "id": "3231:61500",
+        "width": 900,
+        "height": 56,
+        "x": 720
+      },
+      {
+        "id": "3231:61311",
+        "width": 56,
+        "height": 56,
+        "x": 1620
+      }
+    ]
+  },
+  "note": {
+    "id": "3231:61594",
+    "text": "F16 · 全屏高倍 180px/s：无裁剪留白时全轴 scrollWidth = max(viewport, max(960, ceil(时长秒 × pps)) + 116)。源站16秒 = 2996px；项目9秒 = 1736px（均已实测）。\n116px = 左侧零点 gutter 52px（44 + 8）+ 追加按钮56px + 右边距8px。当前媒体视口从x64起、宽1428px，已排除左右60px；内部媒体内容为1620 + 56 = 1676px，paddingRight为0。\n视频槽720×56 / 媒体718×56，图片槽900×56 / 媒体898×56，尾隙均2px；1秒主刻度 / 0.1秒次刻度，水平裁切。中心缩放保持时间锚定；Ctrl/Meta + 滚轮以鼠标位置锚定。\n首个视觉视频的源入点产生可向左扩展裁剪的 headroom：正常scroll最小值为headroom，裁剪临时可回0，默认不展示隐藏留白。当前源入点0，不添加猜测画面。\n紧凑模式独立：默认32.1px/s、标尺至少30秒，不套用全屏内容宽合同。合成缩略图仅作可编辑示例；Figma静态规范与运行验收分开记录。",
+    "x": 3272,
+    "y": 4162,
+    "width": 1512,
+    "height": 95,
+    "endsAt": 4257
+  },
+  "inventory": {
+    "states": 17,
+    "components": 19,
+    "instances": 717
+  }
+}

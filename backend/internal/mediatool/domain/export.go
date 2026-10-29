@@ -17,8 +17,11 @@ type OutputKind string
 
 // The request default is video; audio produces M4A and an actual waveform.
 const (
-	OutputVideo OutputKind = "video"
-	OutputAudio OutputKind = "audio"
+	OutputVideo       OutputKind = "video"
+	OutputAudio       OutputKind = "audio"
+	OutputMediaBundle OutputKind = "media_bundle"
+	OutputFCPXML      OutputKind = "fcpxml"
+	OutputXMEML       OutputKind = "xmeml"
 )
 
 // Effective applies the creation request's documented video default.
@@ -30,7 +33,7 @@ func (k OutputKind) Effective() OutputKind {
 }
 
 // Valid reports whether a resolved output kind has a supported encoding.
-func (k OutputKind) Valid() bool { return k == OutputVideo || k == OutputAudio }
+func (k OutputKind) Valid() bool { return k == OutputVideo || k == OutputAudio || k.IsArtifact() }
 
 // Export statuses never imply supplier generation or billing facts.
 const (
@@ -53,39 +56,62 @@ type Source struct {
 // ExportJob is the safe public projection; private inputs and object keys remain
 // within the local worker. Progress uses integer percentage units, 0 through 100.
 type ExportJob struct {
-	ID          uuid.UUID  `json:"id"`
-	ProjectID   uuid.UUID  `json:"project_id"`
-	OutputKind  OutputKind `json:"output_kind" enums:"video,audio"`
-	Source      Source     `json:"source"`
-	Status      Status     `json:"status"`
-	Stage       string     `json:"stage"`
-	Progress    int        `json:"progress"`
-	Attempt     int        `json:"attempt"`
-	Revision    int64      `json:"revision"`
-	AssetID     *uuid.UUID `json:"asset_id" extensions:"x-nullable"`
-	SHA256      *string    `json:"sha256" extensions:"x-nullable"`
-	FailureCode *string    `json:"failure_code" extensions:"x-nullable"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	Settings    *ExportSettings `json:"settings,omitempty"`
+	ID          uuid.UUID       `json:"id"`
+	ProjectID   uuid.UUID       `json:"project_id"`
+	OutputKind  OutputKind      `json:"output_kind" enums:"video,audio,media_bundle,fcpxml,xmeml"`
+	Source      Source          `json:"source"`
+	Status      Status          `json:"status"`
+	Stage       string          `json:"stage"`
+	Progress    int             `json:"progress"`
+	Attempt     int             `json:"attempt"`
+	Revision    int64           `json:"revision"`
+	ArtifactID  *uuid.UUID      `json:"artifact_id" extensions:"x-nullable"`
+	AssetID     *uuid.UUID      `json:"asset_id" extensions:"x-nullable"`
+	SHA256      *string         `json:"sha256" extensions:"x-nullable"`
+	FailureCode *string         `json:"failure_code" extensions:"x-nullable"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
 }
 
 // FrozenSource binds a private original's verified metadata to its asset ID.
 type FrozenSource struct {
-	AssetID    uuid.UUID `json:"asset_id"`
-	Revision   int64     `json:"revision"`
-	Kind       string    `json:"kind"`
-	ObjectKey  string    `json:"object_key"`
-	MIMEType   string    `json:"mime_type"`
-	ByteSize   int64     `json:"byte_size"`
-	SHA256     string    `json:"sha256"`
-	DurationMS *int32    `json:"duration_ms"`
-	Width      *int32    `json:"width"`
-	Height     *int32    `json:"height"`
+	AssetID       uuid.UUID `json:"asset_id"`
+	Revision      int64     `json:"revision"`
+	Kind          string    `json:"kind"`
+	ObjectKey     string    `json:"object_key"`
+	MIMEType      string    `json:"mime_type"`
+	ByteSize      int64     `json:"byte_size"`
+	SHA256        string    `json:"sha256"`
+	DurationMS    *int32    `json:"duration_ms"`
+	Width         *int32    `json:"width"`
+	Height        *int32    `json:"height"`
+	FPS           *float64  `json:"fps,omitempty"`
+	AudioChannels *int32    `json:"audio_channels,omitempty"`
 }
 
 // FrozenExport is the immutable rendering input stored with the local job.
 type FrozenExport struct {
+	Settings   *ExportSettings             `json:"settings,omitempty"`
+	Width      int                         `json:"width,omitempty"`
+	Height     int                         `json:"height,omitempty"`
+	Source     *Source                     `json:"source,omitempty"`
 	OutputKind OutputKind                  `json:"output_kind"`
 	Timeline   canvasdomain.TimelineConfig `json:"timeline"`
 	Inputs     []FrozenSource              `json:"inputs"`
+}
+
+// ExportSettings is frozen with the source; delivery does not alter render identity.
+type ExportSettings struct {
+	FileName    string `json:"file_name"`
+	Destination string `json:"destination" enums:"canvas,local" default:"canvas"`
+	Resolution  int    `json:"resolution" enums:"480,720,1080,1440,2160" default:"720"`
+}
+
+// VideoDimensions reads the frozen encoding plan, preserving legacy job dimensions.
+func (f FrozenExport) VideoDimensions() (int, int, error) {
+	if f.Settings != nil && f.Width >= 2 && f.Height >= 2 && f.Width%2 == 0 && f.Height%2 == 0 {
+		return f.Width, f.Height, nil
+	}
+	return f.Timeline.VideoDimensions()
 }

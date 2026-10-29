@@ -1,3 +1,6 @@
+import type { CanvasNodeData } from "./types/canvas";
+import { reconcileTimelineConnections } from "./lib/canvas-timeline-connections";
+import { readTimeline, type Timeline } from "./timeline/timeline-model";
 import { directorFingerprint } from "./director/director-model";
 import { validateDirectorDocument } from "./director/director-workspaces";
 import {
@@ -114,6 +117,28 @@ function historyNodeFingerprint(node: ServiceGraph["nodes"][number]) {
   return canvasGraphFingerprint(value);
 }
 
+const timelineFingerprint = (value: API.TimelineConfig | undefined) => {
+  if (!value) return canvasGraphFingerprint(null);
+  return canvasGraphFingerprint({
+    ...value,
+    imported_assets: [
+      ...new Set([
+        ...(value.imported_assets ?? []),
+        ...(value.clips ?? []).flatMap((clip) =>
+          clip.asset_id ? [clip.asset_id] : [],
+        ),
+      ]),
+    ],
+    clips: value.clips?.map((clip) => ({
+      ...clip,
+      asset_id: clip.asset_id ?? null,
+      node_id: clip.node_id ?? null,
+      source_duration_ms: clip.source_duration_ms ?? null,
+      crop: clip.crop ?? null,
+    })),
+  });
+};
+
 export class CanvasYjsLiveSession {
   readonly clientID = crypto.randomUUID();
   private socket: WebSocket | null = null;
@@ -126,6 +151,37 @@ export class CanvasYjsLiveSession {
     }
   >();
   private undoManager: Y.UndoManager | null = null;
+  private timelineUndoManagers = new Map<string, Y.UndoManager>();
+  private editingTimeline: string | null = null;
+  private destroyTimelineHistory() {
+    for (const manager of this.timelineUndoManagers.values()) manager.destroy();
+    this.timelineUndoManagers.clear();
+    this.editingTimeline = null;
+  }
+  private timelineUndoManager(nodeID: string) {
+    let manager = this.timelineUndoManagers.get(nodeID);
+    if (!manager && this.session) {
+      manager = canvasUndoManager(this.session.doc);
+      const owned = manager;
+      manager.captureTransaction = (transaction) =>
+        this.editingTimeline === nodeID || transaction.origin === owned;
+      this.timelineUndoManagers.set(nodeID, manager);
+    }
+    return manager;
+  }
+  timelineHistoryState = (nodeID: string) => {
+    const manager = this.timelineUndoManagers.get(nodeID);
+    return { canUndo: !!manager?.canUndo(), canRedo: !!manager?.canRedo() };
+  };
+  timelineHistory = (nodeID: string, direction: "undo" | "redo") => {
+    if (
+      !this.view.document?.nodes.some(
+        (node) => node.id === nodeID && node.type === "timeline",
+      )
+    )
+      return;
+    this.applyHistory(this.timelineUndoManagers.get(nodeID) ?? null, direction);
+  };
   private historyFrame: {
     before: ReturnType<typeof serviceSnapshot>;
     after: ReturnType<typeof serviceSnapshot>;
@@ -316,6 +372,124 @@ export class CanvasYjsLiveSession {
       this.retainedDirectorEdits.set(nodeID, director);
       throw error;
     }
+  };
+
+  private retainedTimelineEdits = new Map<string, Timeline>();
+  retainedTimeline = (nodeID: string) => {
+    const value = this.retainedTimelineEdits.get(nodeID);
+    return value ? structuredClone(value) : null;
+  };
+  discardRetainedTimeline = (nodeID: string) => {
+    this.retainedTimelineEdits.delete(nodeID);
+  };
+  changeTimeline = (nodeID: string, input: Timeline, expected: Timeline) => {
+    const timeline = readTimeline(input);
+    try {
+      const graph = this.view.document;
+      const node = graph?.nodes.find((item) => item.id === nodeID);
+      if (
+        !graph ||
+        node?.type !== "timeline" ||
+        !node?.serviceData?.config?.timeline ||
+        !this.canAccept(graph) ||
+        this.inputEditing()
+      )
+        throw problem("时间线当前不可编辑，请结束其他编辑或恢复连接权限");
+      if (
+        timelineFingerprint(node.serviceData.config.timeline) !==
+        timelineFingerprint(expected)
+      )
+        throw problem("时间线已由其他协作者修改，请检查最新内容后重试");
+      if (timelineFingerprint(timeline) === timelineFingerprint(expected)) {
+        this.retainedTimelineEdits.delete(nodeID);
+        return;
+      }
+      const manager = this.timelineUndoManager(nodeID);
+      manager?.stopCapturing();
+      this.editingTimeline = nodeID;
+      try {
+        this.change(
+          reconcileTimelineConnections({
+            ...graph,
+            nodes: graph.nodes.map((item) =>
+              item.id !== nodeID
+                ? item
+                : {
+                    ...item,
+                    serviceData: {
+                      ...item.serviceData!,
+                      config: { ...item.serviceData!.config, timeline },
+                    },
+                  },
+            ),
+          }),
+          true,
+        );
+      } finally {
+        this.editingTimeline = null;
+        manager?.stopCapturing();
+      }
+      if (
+        timelineFingerprint(
+          this.view.document?.nodes.find((item) => item.id === nodeID)
+            ?.serviceData?.config?.timeline,
+        ) !== timelineFingerprint(timeline)
+      )
+        throw problem("时间线未能写入，请检查保存状态");
+      this.retainedTimelineEdits.delete(nodeID);
+    } catch (cause) {
+      // Keep rejected intent in the canvas session so closing the workspace does not lose it.
+      this.retainedTimelineEdits.set(nodeID, timeline);
+      throw cause;
+    }
+  };
+  prepareTimeline = async (
+    nodeID: string,
+  ): Promise<
+    Required<
+      Pick<API.MediatoolCreateInput, "canvas_id" | "node_id" | "revision">
+    >
+  > => {
+    if (this.retainedTimelineEdits.has(nodeID))
+      throw problem("请先处理保留的时间线编辑");
+    const current = this.view.document?.nodes.find((node) => node.id === nodeID)
+      ?.serviceData?.config?.timeline;
+    const timeline = readTimeline(current);
+    if (!timeline.clips.length) throw problem("请先添加素材");
+    const fingerprint = timelineFingerprint(current);
+    const check = () => {
+      if (this.retainedTimelineEdits.has(nodeID))
+        throw problem("请先处理保留的时间线编辑");
+      if (
+        timelineFingerprint(
+          this.view.document?.nodes.find((node) => node.id === nodeID)
+            ?.serviceData?.config?.timeline,
+        ) !== fingerprint
+      )
+        throw problem("时间线已变化，请重新导出");
+    };
+    const dto = await this.waitForSaved(check);
+    check();
+    const revision = Number(dto.revision);
+    if (
+      this.disposed ||
+      !this.view.writable ||
+      !this.online ||
+      this.view.dirty ||
+      this.draining ||
+      this.inputEditing() ||
+      this.session?.status !== "CLEAN" ||
+      this.session.inFlight ||
+      this.dto?.revision !== dto.revision ||
+      this.session.confirmed.contentRevision !== dto.revision ||
+      !Number.isSafeInteger(revision) ||
+      revision < 1 ||
+      timelineFingerprint(
+        dto.nodes?.find((node) => node.id === nodeID)?.config?.timeline,
+      ) !== fingerprint
+    )
+      throw problem("时间线的保存版本尚未确认");
+    return { canvas_id: this.config.canvasID, node_id: nodeID, revision };
   };
 
   waitForSaved = (check: () => void = () => {}): Promise<API.DocumentDTO> => {
@@ -598,6 +772,7 @@ export class CanvasYjsLiveSession {
     // Replacing a rejected/deleted editor ends its gesture. Its readable
     // composition has already been archived; it must not block recovery saves.
     this.gesture = false;
+    this.destroyTimelineHistory();
     this.undoManager?.destroy();
     this.session?.destroy();
     this.session = new CollaborationSession<ServiceGraph>({
@@ -622,6 +797,7 @@ export class CanvasYjsLiveSession {
       recovery,
     });
     this.undoManager = canvasUndoManager(this.session.doc);
+    this.undoManager.captureTransaction = () => this.editingTimeline === null;
     const recordFrame = ({
       stackItem,
     }: {
@@ -919,6 +1095,54 @@ export class CanvasYjsLiveSession {
     this.session.pending.length < 128 &&
     new TextEncoder().encode(JSON.stringify(state)).byteLength <
       16 * 1024 * 1024;
+  /** Expose durable media identity without changing the page-local upload preview. */
+  connectionMediaNode = (node: CanvasNodeData): CanvasNodeData => {
+    const source = localSource(node);
+    if (!source) return node;
+    const receipt = this.receipts.get(node.id);
+    if (
+      receipt?.source !== source ||
+      !receipt.asset ||
+      !node.documentData?.fileReferences?.some(
+        (ref) => ref.purpose === "CONTENT" && ref.fileId === receipt.asset!.id,
+      )
+    )
+      throw problem("来源素材尚未上传完成");
+    const metadata = { ...node.metadata };
+    delete metadata.content;
+    return { ...node, metadata };
+  };
+
+  /** Connection gestures must publish their complete graph, never the upload-ready subset. */
+  canAcceptConnectionGraph = (state: CanvasEditorState): boolean => {
+    if (
+      !this.rendered ||
+      this.session?.status === "UNKNOWN" ||
+      this.session?.inFlight ||
+      !this.canAccept(state)
+    )
+      return false;
+    try {
+      for (const node of state.nodes) {
+        this.connectionMediaNode(node);
+        const config = node.serviceData?.config;
+        const composers = [config?.composer, config?.draft?.composer];
+        if (
+          composers.some((composer) =>
+            composer?.references?.some(
+              (reference) => reference.source?.kind === "pending_upload",
+            ),
+          )
+        )
+          return false;
+      }
+      // Run the same full projection as change(), before the editor publishes it.
+      serviceDocumentFromEditor(this.rendered, state);
+      return true;
+    } catch {
+      return false;
+    }
+  };
   change = (state: CanvasEditorState, stable: boolean) => {
     if (!this.session || !this.rendered || !this.canAccept(state)) return;
     this.draft = state;
@@ -1107,11 +1331,14 @@ export class CanvasYjsLiveSession {
     this.render();
   };
   history = (direction: "undo" | "redo") => {
-    if (!this.view.writable || !this.undoManager || !this.session) return;
-    const stack =
-      direction === "undo"
-        ? this.undoManager.undoStack
-        : this.undoManager.redoStack;
+    this.applyHistory(this.undoManager, direction);
+  };
+  private applyHistory(
+    manager: Y.UndoManager | null,
+    direction: "undo" | "redo",
+  ) {
+    if (!this.view.writable || !manager || !this.session) return;
+    const stack = direction === "undo" ? manager.undoStack : manager.redoStack;
     const frame = stack
       .at(-1)
       ?.meta.get("canvas-frame") as typeof this.historyFrame;
@@ -1183,10 +1410,10 @@ export class CanvasYjsLiveSession {
         }
       }
     }
-    this.undoManager.stopCapturing();
+    manager.stopCapturing();
     this.historyFrame = frame;
     try {
-      applyCanvasHistory(this.session.doc, this.undoManager, direction, {
+      applyCanvasHistory(this.session.doc, manager, direction, {
         epoch: this.session.confirmed.epoch,
         commitSeq: this.session.confirmed.commitSeq,
       });
@@ -1195,7 +1422,7 @@ export class CanvasYjsLiveSession {
     }
     this.render();
     this.schedule();
-  };
+  }
   private control(
     type: string,
     body: Record<string, unknown>,
@@ -1296,6 +1523,7 @@ export class CanvasYjsLiveSession {
     this.rejectRPC(problem("页面已关闭"));
     for (const upload of this.uploads.values()) upload.abort.abort();
     this.uploads.clear();
+    this.destroyTimelineHistory();
     this.undoManager?.destroy();
     this.session?.destroy();
     this.session = null;

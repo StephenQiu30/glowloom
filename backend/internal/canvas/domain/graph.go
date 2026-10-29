@@ -36,7 +36,7 @@ func ValidateGraph(doc Document) error {
 			return ErrInvalidCommand
 		}
 	}
-	if !validParents(doc.Nodes) || !validToolReferences(doc.Nodes) {
+	if !validParents(doc.Nodes) || !validToolReferences(doc.Nodes) || !validTimelineRelations(doc) {
 		return ErrInvalidCommand
 	}
 	ids := make(map[uuid.UUID]bool, len(doc.Edges))

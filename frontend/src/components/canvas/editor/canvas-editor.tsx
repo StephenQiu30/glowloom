@@ -1,4 +1,9 @@
 "use client";
+import { admitCanvasConnectionGraph } from "../types/canvas-document-integration";
+import {
+  isCanvasDomainTarget,
+  validateCanvasDomainConnectionPreview,
+} from "../lib/canvas-domain-connection-preview";
 
 import { snapshotCanvasConnectionSelection } from "../lib/canvas-connection-selection";
 import {
@@ -776,7 +781,8 @@ function InfiniteCanvasPage({
     (result: CanvasGraphResult) => {
       const accepted = commitCanvasGraphResult(
         result,
-        (candidate) => admitGraph(candidate.nodes, candidate.connections),
+        (candidate) =>
+          admitCanvasConnectionGraph(integrationRef.current, candidate),
         (candidate) => {
           // The complete candidate has passed admission. React batches both state
           // writes; gesture and admission refs must see that same graph immediately.
@@ -791,7 +797,22 @@ function InfiniteCanvasPage({
       if (!accepted) message.warning("画布暂时无法接收修改，请稍后重试");
       return accepted;
     },
-    [admitGraph, message],
+    [message],
+  );
+
+  const connectionGraphReady = useMemo(
+    () =>
+      admitCanvasConnectionGraph(documentIntegration, { nodes, connections }),
+    // Pointer movement does not change these graph/admission identities.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Other integration callbacks are unrelated to connection admission.
+    [
+      nodes,
+      connections,
+      documentIntegration?.initialState,
+      documentIntegration?.frozen,
+      documentIntegration?.admitConnectionGraph,
+      documentIntegration?.admit,
+    ],
   );
 
   const createHistoryEntry = useCallback(
@@ -1234,6 +1255,36 @@ function InfiniteCanvasPage({
     [applyConnectionGraph, backgroundMode, showImageInfo],
   );
 
+  const connectDomainNodes = useCallback(
+    (
+      sourceNodeIds: string[],
+      targetNodeId?: string,
+      newTarget?: CanvasNodeData,
+    ) => {
+      const connect = integrationRef.current?.connectDomain;
+      if (!connect) {
+        message.warning("当前画布暂不支持此连接");
+        return;
+      }
+      setPendingConnectionCreate(null);
+      setConnecting(null);
+      void connect({
+        sourceNodeIds: [...sourceNodeIds],
+        targetNodeId,
+        newTarget,
+      })
+        .then((id) => {
+          setSelectedNodeIds(new Set([id]));
+          setSelectedConnectionId(null);
+          document
+            .querySelector<HTMLElement>(`[data-node-id="${CSS.escape(id)}"]`)
+            ?.focus({ preventScroll: true });
+        })
+        .catch((error) => notifyError(error, "无法添加素材，请重试"));
+    },
+    [message, setConnecting],
+  );
+
   const connectNodes = useCallback(
     (current: ConnectionHandle, targetNodeId: string) => {
       if (current.nodeId === targetNodeId) return;
@@ -1242,7 +1293,13 @@ function InfiniteCanvasPage({
           current,
           targetNodeId,
         );
-        connectDocumentNodes(fromNodeId, toNodeId);
+        if (
+          isCanvasDomainTarget(
+            nodesRef.current.find((node) => node.id === toNodeId)?.type ?? "",
+          )
+        )
+          connectDomainNodes([fromNodeId], toNodeId);
+        else connectDocumentNodes(fromNodeId, toNodeId);
         setContextMenu(null);
         return;
       }
@@ -1268,7 +1325,7 @@ function InfiniteCanvasPage({
       }
       setContextMenu(null);
     },
-    [connectDocumentNodes, message, setConnections],
+    [connectDocumentNodes, connectDomainNodes, message, setConnections],
   );
 
   const createConnectedNode = useCallback(
@@ -1278,7 +1335,8 @@ function InfiniteCanvasPage({
         | CanvasNodeType.Text
         | CanvasNodeType.Config
         | CanvasNodeType.Video
-        | CanvasNodeType.Audio,
+        | CanvasNodeType.Audio
+        | "timeline",
       pending: PendingConnectionCreate,
     ) => {
       const metadata =
@@ -1312,6 +1370,17 @@ function InfiniteCanvasPage({
         metadata,
         nodesRef.current,
       );
+      if (
+        isCanvasDomainTarget(type) &&
+        pending.connection.handleType === "source"
+      ) {
+        connectDomainNodes(
+          pending.sourceNodeIds ?? [pending.connection.nodeId],
+          undefined,
+          newNode,
+        );
+        return;
+      }
       const connection = integrationRef.current
         ? canvasConnectionDirection(pending.connection, newNode.id)
         : normalizeConnection(
@@ -1379,6 +1448,7 @@ function InfiniteCanvasPage({
       setConnecting,
       message,
       connectDocumentNodes,
+      connectDomainNodes,
       setNodes,
       setConnections,
     ],
@@ -1465,7 +1535,18 @@ function InfiniteCanvasPage({
                   showImageInfo,
                   viewport: viewportRef.current,
                 };
-                if (sourceIds.length > 1)
+                const direction = canvasConnectionDirection(current, node.id);
+                const domainTarget = state.nodes.find(
+                  (item) => item.id === direction.toNodeId,
+                );
+                if (domainTarget && isCanvasDomainTarget(domainTarget.type))
+                  validateCanvasDomainConnectionPreview(
+                    state,
+                    sourceIds.length > 1 ? sourceIds : [direction.fromNodeId],
+                    direction.toNodeId,
+                    documentIntegration?.resolveConnectionMedia,
+                  );
+                else if (sourceIds.length > 1)
                   connectCanvasDocumentSources(state, sourceIds, node.id);
                 else {
                   const direction = canvasConnectionDirection(current, node.id);
@@ -1496,7 +1577,7 @@ function InfiniteCanvasPage({
 
       return { nodeId: bestNodeId, isNearNode, error: rejection, attraction };
     },
-    [screenToCanvas, backgroundMode, showImageInfo],
+    [screenToCanvas, backgroundMode, showImageInfo, documentIntegration],
   );
 
   const viewBounds = useMemo(() => {
@@ -2599,7 +2680,16 @@ function InfiniteCanvasPage({
         );
         if (dropTarget.nodeId) {
           const sourceIds = connectionSourceNodeIdsRef.current;
-          if (sourceIds.length > 1 && integrationRef.current) {
+          if (
+            sourceIds.length > 1 &&
+            integrationRef.current &&
+            isCanvasDomainTarget(
+              nodesRef.current.find((node) => node.id === dropTarget.nodeId)
+                ?.type ?? "",
+            )
+          ) {
+            connectDomainNodes(sourceIds, dropTarget.nodeId);
+          } else if (sourceIds.length > 1 && integrationRef.current) {
             try {
               applyConnectionGraph(
                 connectCanvasDocumentSources(
@@ -2658,6 +2748,7 @@ function InfiniteCanvasPage({
       backgroundMode,
       showImageInfo,
       connectNodes,
+      connectDomainNodes,
       finishNodeDrag,
       getConnectionDropTarget,
       screenToCanvas,
@@ -2896,6 +2987,15 @@ function InfiniteCanvasPage({
     ) => {
       event.stopPropagation();
       if (event.button !== 0 || integrationRef.current?.frozen) return;
+      if (
+        !admitCanvasConnectionGraph(integrationRef.current, {
+          nodes: nodesRef.current,
+          connections: connectionsRef.current,
+        })
+      ) {
+        message.warning("请先完成素材上传或恢复当前画布编辑");
+        return;
+      }
       event.preventDefault();
       containerRef.current?.focus({ preventScroll: true });
       const keyboard = event.type === "click" && event.detail === 0;
@@ -2926,7 +3026,7 @@ function InfiniteCanvasPage({
       setConnectionTargetNodeId(null);
       setSelectedConnectionId(null);
     },
-    [screenToCanvas, setConnecting],
+    [screenToCanvas, setConnecting, message],
   );
 
   const handleNodeResize = useCallback(
@@ -5881,14 +5981,16 @@ function InfiniteCanvasPage({
               }
               isMobile={isMobile}
               connectionTypes={
-                documentIntegration
-                  ? {
-                      ...canvasConnectionHandles(node.type),
-                      input:
-                        !isFixedCanvasMedia(node) &&
-                        canvasConnectionHandles(node.type).input,
-                    }
-                  : undefined
+                !connectionGraphReady
+                  ? { input: false, output: false }
+                  : documentIntegration
+                    ? {
+                        ...canvasConnectionHandles(node.type),
+                        input:
+                          !isFixedCanvasMedia(node) &&
+                          canvasConnectionHandles(node.type).input,
+                      }
+                    : undefined
               }
               groupChildCount={groupChildCountById.get(node.id) || 0}
               isGroupDropTarget={dropTargetGroupId === node.id}
@@ -5999,6 +6101,7 @@ function InfiniteCanvasPage({
           ) : null}
           {pendingConnectionCreate ? (
             <ConnectionCreateMenu
+              resolveMedia={documentIntegration?.resolveConnectionMedia}
               pending={pendingConnectionCreate}
               existingNode={nodeById.get(
                 pendingConnectionCreate.connection.nodeId,

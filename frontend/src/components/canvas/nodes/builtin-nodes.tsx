@@ -1,5 +1,6 @@
 import {
   Type,
+  Clapperboard,
   Box,
   Group,
   Image as ImageIcon,
@@ -100,9 +101,20 @@ let registered = false;
 export function registerBuiltinNodes() {
   if (registered) return;
   registered = true;
+  const timeline: CanvasNodeDefinition = {
+    type: "timeline",
+    title: "时间线",
+    icon: <Clapperboard className={iconClass} />,
+    defaultSize: { width: 1200, height: 220 },
+    defaultMetadata: {},
+    hidePanel: true,
+    hasSourceHandle: false,
+  };
   registerNodeDefinitions(
     [
-      ...BUILTIN_DEFINITIONS,
+      ...BUILTIN_DEFINITIONS.slice(0, 4),
+      timeline,
+      ...BUILTIN_DEFINITIONS.slice(4),
       {
         type: "director",
         title: "导演台",

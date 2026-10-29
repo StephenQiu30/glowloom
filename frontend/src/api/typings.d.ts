@@ -142,6 +142,20 @@ declare namespace API {
     id: string;
   };
 
+  type Artifact = {
+    attempt?: number;
+    byte_size?: number;
+    created_at?: string;
+    file_name?: string;
+    format?: OutputKind;
+    format_version?: string;
+    id?: string;
+    job_id?: string;
+    mime_type?: string;
+    project_id?: string;
+    sha256?: string;
+  };
+
   type AssetCanvas = {
     can_copy_project?: boolean;
     collection?: string;
@@ -1661,15 +1675,17 @@ declare namespace API {
   };
 
   type ExportJob = {
+    artifact_id?: string;
     asset_id?: string;
     attempt?: number;
     created_at?: string;
     failure_code?: string;
     id?: string;
-    output_kind?: "video" | "audio";
+    output_kind?: "video" | "audio" | "media_bundle" | "fcpxml" | "xmeml";
     progress?: number;
     project_id?: string;
     revision?: number;
+    settings?: ExportSettings;
     sha256?: string;
     source?: Source;
     stage?: string;
@@ -1678,15 +1694,17 @@ declare namespace API {
   };
 
   type ExportJobResponse = {
+    artifact_id?: string;
     asset_id?: string;
     attempt?: number;
     created_at?: string;
     failure_code?: string;
     id?: string;
-    output_kind?: "video" | "audio";
+    output_kind?: "video" | "audio" | "media_bundle" | "fcpxml" | "xmeml";
     progress?: number;
     project_id?: string;
     revision?: number;
+    settings?: ExportSettings;
     sha256?: string;
     source?: Source;
     stage?: string;
@@ -1707,6 +1725,7 @@ declare namespace API {
   };
 
   type ExportPreview = {
+    artifact?: Artifact;
     asset?: AssetSummary;
     expires_at?: string;
     job_id?: string;
@@ -1719,6 +1738,12 @@ declare namespace API {
   type exportProviderPresetParams = {
     /** 预设ID */
     id: string;
+  };
+
+  type ExportSettings = {
+    destination?: "canvas" | "local";
+    file_name?: string;
+    resolution?: 480 | 720 | 1080 | 1440 | 2160;
   };
 
   type ExportWaveformPreview = {
@@ -3061,8 +3086,9 @@ declare namespace API {
   type MediatoolCreateInput = {
     canvas_id?: string;
     node_id?: string;
-    output_kind?: "video" | "audio";
+    output_kind?: "video" | "audio" | "media_bundle" | "fcpxml" | "xmeml";
     revision?: number;
+    settings?: ExportSettings;
   };
 
   type MediatoolStatus =
@@ -3292,7 +3318,7 @@ declare namespace API {
     word_count: "500" | "800" | "1200" | "2000";
   };
 
-  type OutputKind = "video" | "audio";
+  type OutputKind = "video" | "audio" | "media_bundle" | "fcpxml" | "xmeml";
 
   type PackageControl = {
     expected_revision?: number;
@@ -5608,6 +5634,7 @@ declare namespace API {
     aspect_ratio?: string;
     clips?: TimelineClip[];
     fps?: number;
+    imported_assets?: string[];
     snapping?: boolean;
     subtitle_style?: SubtitleStyle;
     tracks?: TimelineTrack[];

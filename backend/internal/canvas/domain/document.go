@@ -181,6 +181,9 @@ func Apply(document Document, commands []Command) (Document, error) {
 	if err := ValidateGraph(doc); err != nil {
 		return Document{}, &CommandError{Index: len(commands) - 1, Cause: err}
 	}
+	if err := validateTimelineRelationChanges(document, doc); err != nil {
+		return Document{}, &CommandError{Index: len(commands) - 1, Cause: err}
+	}
 	return doc, nil
 }
 func applyOne(doc *Document, c Command) error {

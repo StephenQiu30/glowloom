@@ -8,9 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -39,6 +41,27 @@ func (FFRenderer) Render(ctx context.Context, source *application.Downloaded, pr
 	case domain.KindVideo:
 		width, height := "1280", "720"
 		switch aspectRatio {
+		case "auto":
+			if probe.Width == nil || probe.Height == nil || *probe.Width < 1 || *probe.Height < 1 {
+				return nil, ErrUnsupportedMedia
+			}
+			scale := 720 / float64(min(*probe.Width, *probe.Height))
+			width = strconv.Itoa(max(2, int(math.Round(float64(*probe.Width)*scale/2))*2))
+			height = strconv.Itoa(max(2, int(math.Round(float64(*probe.Height)*scale/2))*2))
+		case "2.35:1":
+			width, height = "1692", "720"
+		case "21:9":
+			width, height = "1680", "720"
+		case "1.85:1":
+			width, height = "1332", "720"
+		case "3:2":
+			width, height = "1080", "720"
+		case "4:3":
+			width, height = "960", "720"
+		case "3:4":
+			width, height = "720", "960"
+		case "2:3":
+			width, height = "720", "1080"
 		case "9:16":
 			width, height = "720", "1280"
 		case "1:1":

@@ -487,6 +487,21 @@ async function proxy(
                           ? ["GET"]
                           : undefined;
   const boundedRoute = [
+    {
+      pattern: `projects/${identityUUID}/media-exports`,
+      methods: ["GET", "POST"],
+      query: ["canvas_id", "node_id", "limit", "cursor"],
+    },
+    {
+      pattern: `media-exports/${identityUUID}(/(preview|download|subtitles))?`,
+      methods: ["GET"],
+      query: ["project_id"],
+    },
+    {
+      pattern: `media-exports/${identityUUID}/(cancel|retry|review)`,
+      methods: ["POST"],
+      query: [],
+    },
     { pattern: "subjects/voice-options", methods: ["GET"], query: [] },
     { pattern: "subjects/voice-jobs", methods: ["POST"], query: [] },
     {
@@ -858,7 +873,7 @@ async function proxy(
           new RegExp(
             `^projects/${identityUUID}/media/${identityUUID}/original$`,
             "i",
-          ).test(resource)
+          ).test(resource) || matches(`media-exports/${identityUUID}/download`)
             ? 120000
             : 10000,
         ),

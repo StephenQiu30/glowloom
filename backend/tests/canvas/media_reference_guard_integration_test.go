@@ -39,7 +39,7 @@ func TestCanvasMediaReferenceGuardRetainsSoftRemovedNodesAndCompleteConfigHistor
 	if err != nil {
 		t.Fatal(err)
 	}
-	assets := []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()}
+	assets := []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()}
 	config, err := json.Marshal(domain.NodeConfig{Text: ptr("历史保留")})
 	if err != nil {
 		t.Fatal(err)
@@ -51,6 +51,7 @@ func TestCanvasMediaReferenceGuardRetainsSoftRemovedNodesAndCompleteConfigHistor
 	generation.Generation.Inputs = []domain.GenerationReference{{Role: "reference", MediaAssetID: assets[1]}}
 	timeline := timelineNode().Config
 	timeline.Timeline.Clips[0].AssetID = &assets[2]
+	timeline.Timeline.ImportedAssets = []uuid.UUID{assets[7]}
 	director := directorNode().Config
 	director.Director.Cover = &domain.DirectorCover{AssetID: assets[3], ShotID: director.Director.Shots[0].ID}
 	director.Director.Panorama = &domain.DirectorPanorama{AssetID: assets[4]}

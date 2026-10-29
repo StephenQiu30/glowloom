@@ -1,0 +1,212 @@
+- banner "Canvas top bar":
+  - link:
+    - /url: /ai-tool/home
+  - button:
+    - generic: 一致性调研-202610221
+  - button:
+  - button:
+    - text: 节点
+    - generic: "7"
+  - status: 已保存
+  - button:
+  - button:
+  - button:
+    - generic: 分享
+  - button:
+  - button:
+    - generic: "88"
+    - generic: 开会员
+  - button
+- main "Canvas workspace":
+  - region "Canvas editing area":
+    - generic: 7 nodes, 0 edges, 1 selected. Editable. Room connected. 已保存.
+    - application "Canvas":
+      - paragraph: 双击编辑文本
+      - generic: 文本 1
+      - paragraph: 双击编辑文本
+      - generic: 文本 2
+      - paragraph: 双击编辑文本
+      - generic: 文本 3
+      - generic: 导演台
+      - paragraph: 在 3D 空间中设计角色、机位与镜头
+      - generic: 进入导演台
+      - generic: "No resources: 0 ready, 0 processing, 0 failed. Not selected."
+      - generic: 视频 1
+      - generic: "No resources: 0 ready, 0 processing, 0 failed. Not selected."
+      - generic: 时间线 1
+      - generic: 00:00
+      - generic: /
+      - generic: 00:00
+      - button:
+      - button:
+        - generic: 全屏编辑
+      - button:
+      - generic: 00:00
+      - generic: 00:05
+      - generic: 00:10
+      - generic: 00:15
+      - generic: 00:20
+      - generic: 00:25
+      - generic: 00:30
+      - button:
+        - generic: 添加素材到时间线
+      - generic: "时间线: 1 visual track, 0 audio tracks, 0 clips. Not selected."
+      - button
+      - button:
+        - generic: 时间线核验-20261029
+      - button:
+      - button [disabled]:
+      - button [disabled]:
+      - generic: 00:00
+      - generic: /
+      - generic: 00:09
+      - button:
+      - button:
+        - generic: 全屏编辑
+      - button:
+      - generic: 00:00
+      - generic: 00:05
+      - generic: 00:10
+      - generic: 00:15
+      - generic: 00:20
+      - generic: 00:25
+      - generic: 00:30
+      - button:
+        - generic: 00:04
+      - button:
+        - generic: 00:05
+      - button:
+      - generic: Drag clips to reorder them. With the keyboard, press Shift + Left or Right Arrow.
+      - separator
+      - generic: "时间线: 1 visual track, 1 audio tracks, 4 clips. Selected."
+      - status
+  - complementary
+  - complementary "Canvas left toolbar":
+    - toolbar "Canvas toolbar":
+      - generic: 文本
+      - button
+      - generic: 图片
+      - button
+      - generic: 视频
+      - button
+      - generic: 音频
+      - button
+      - generic: 时间线
+      - button
+      - generic: 主体
+      - button
+      - generic: 导演工具箱
+      - button
+      - generic: 导演台
+      - button
+      - generic: 资产库
+      - button
+      - generic: 上传
+      - button
+  - group "Canvas viewport controls":
+    - button:
+    - button:
+    - button [pressed]:
+    - button: 66%
+    - status
+  - generic: 与 AI 对话
+  - button
+- dialog "时间线":
+  - heading [level=2]: 时间线
+  - paragraph: Edit the main visual track and multiple audio tracks
+  - button:
+    - text: 导出
+  - button [expanded]:
+  - button:
+  - complementary:
+    - tablist:
+      - tab [selected]: 已导入资产
+      - tab: 画布资产
+    - tablist:
+      - tab [selected]:
+        - generic: 全部
+      - tab:
+        - generic: 图片
+      - tab:
+        - generic: 视频
+      - tab:
+        - generic: 音频
+    - button:
+      - generic: 导入
+    - list:
+      - button:
+        - generic: 已添加
+      - button:
+        - generic: 已添加
+        - generic: 00:07
+      - button:
+        - generic: 已添加
+        - generic: 00:04
+    - separator
+    - button:
+  - region "Edit the main visual track and multiple audio tracks":
+    - status
+    - status
+    - generic: Timeline playhead
+    - button:
+    - generic: 00:01:00
+    - generic: /
+    - generic: 00:09:00
+    - button:
+      - generic: 自动
+    - generic: Timeline preview volume
+    - button:
+    - slider
+    - button:
+  - status
+  - region:
+    - separator
+    - toolbar:
+      - button:
+      - button:
+      - button:
+      - button:
+      - button:
+      - button:
+    - button [pressed]:
+    - button:
+    - slider
+    - button:
+    - generic: 00:00
+    - generic: 00:05
+    - generic: 00:10
+    - generic: 00:15
+    - generic: 00:20
+    - generic: 00:25
+    - generic: 00:30
+    - generic: 00:35
+    - generic: 00:40
+    - generic: 00:45
+    - generic: 00:50
+    - generic: 00:55
+    - generic: 01:00
+    - generic: 01:05
+    - generic: 01:10
+    - button:
+    - button [pressed]:
+      - generic: 00:04
+    - button
+    - button
+    - button:
+      - generic: 00:05
+    - button:
+    - button:
+    - button:
+    - button:
+    - slider
+- menu "更多导出方式" [active]:
+  - menuitem "导出为 XML"
+  - menuitem "批量导出时间线素材"
+  - separator
+  - menuitem "导出到剪映":
+    - generic: 导出到剪映
+  - menuitem "导出到 DaVinci Resolve"
+  - menuitem "导出到 Premiere"
+  - menuitem "导出到 Final Cut Pro"
+- tooltip "更多导出方式":
+  - generic: 更多导出方式

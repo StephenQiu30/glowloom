@@ -116,6 +116,16 @@ func probeFile(ctx context.Context, file *application.Downloaded, upload bool) (
 		}
 		break
 	}
+	if probe.Kind == domain.KindVideo {
+		// Video selection above must not hide the original file's audio stream.
+		for _, stream := range parsed.Streams {
+			if stream.CodecType == "audio" && stream.Channels > 0 {
+				channels := stream.Channels
+				probe.AudioChannels = &channels
+				break
+			}
+		}
+	}
 	if !matched || (probe.Kind != domain.KindAudio && (probe.Width == nil || probe.Height == nil)) {
 		return application.ProbeResult{}, ErrUnsupportedMedia
 	}

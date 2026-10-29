@@ -251,6 +251,7 @@ func configMediaReferences(config domain.NodeConfig) ([]uuid.UUID, error) {
 		}
 	}
 	if c := config.Timeline; c != nil {
+		ids = append(ids, c.ImportedAssets...)
 		for _, clip := range c.Clips {
 			if clip.AssetID != nil {
 				ids = append(ids, *clip.AssetID)

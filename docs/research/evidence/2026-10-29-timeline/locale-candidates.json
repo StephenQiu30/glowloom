@@ -1,0 +1,542 @@
+[
+  {
+    "key": "octo_canvas_command_timeline_audio_overlap",
+    "value": "同一轨道上的音频片段不能重叠"
+  },
+  {
+    "key": "octo_canvas_timeline_add_imported_asset_menu_label",
+    "value": "添加到时间线"
+  },
+  {
+    "key": "octo_canvas_timeline_add_source_label",
+    "value": "添加素材到时间线"
+  },
+  {
+    "key": "octo_canvas_timeline_ai_watermark_cn_label",
+    "value": "AI 生成"
+  },
+  {
+    "key": "octo_canvas_timeline_ai_watermark_label",
+    "value": "AI"
+  },
+  {
+    "key": "octo_canvas_timeline_all_tracks_mute_control_label",
+    "value": "静音"
+  },
+  {
+    "key": "octo_canvas_timeline_asset_source_label",
+    "value": "从资产库添加"
+  },
+  {
+    "key": "octo_canvas_timeline_asset_source_unavailable_reason",
+    "value": "当前资源不可用。"
+  },
+  {
+    "key": "octo_canvas_timeline_cancel_label",
+    "value": "取消"
+  },
+  {
+    "key": "octo_canvas_timeline_canvas_asset_added_label",
+    "value": "已添加"
+  },
+  {
+    "key": "octo_canvas_timeline_canvas_asset_readonly_reason",
+    "value": "无法将画布资源添加到只读画布。"
+  },
+  {
+    "key": "octo_canvas_timeline_canvas_asset_unavailable_reason",
+    "value": "目前无法将画布资源添加到时间线。"
+  },
+  {
+    "key": "octo_canvas_timeline_canvas_assets_empty",
+    "value": "没有可添加的画布资源。"
+  },
+  {
+    "key": "octo_canvas_timeline_canvas_assets_filter_all",
+    "value": "全部"
+  },
+  {
+    "key": "octo_canvas_timeline_canvas_assets_filter_audio",
+    "value": "音频"
+  },
+  {
+    "key": "octo_canvas_timeline_canvas_assets_filter_image",
+    "value": "图片"
+  },
+  {
+    "key": "octo_canvas_timeline_canvas_assets_filter_video",
+    "value": "视频"
+  },
+  {
+    "key": "octo_canvas_timeline_canvas_assets_panel_label",
+    "value": "画布资产"
+  },
+  {
+    "key": "octo_canvas_timeline_canvas_source_label",
+    "value": "从画布选择"
+  },
+  {
+    "key": "octo_canvas_timeline_collapse_canvas_assets_label",
+    "value": "隐藏资产库"
+  },
+  {
+    "key": "octo_canvas_timeline_cut_left_label",
+    "value": "向左剪裁"
+  },
+  {
+    "key": "octo_canvas_timeline_cut_right_label",
+    "value": "向右剪裁"
+  },
+  {
+    "key": "octo_canvas_timeline_download_label",
+    "value": "导出时间线"
+  },
+  {
+    "key": "octo_canvas_timeline_download_packaging_resources_status",
+    "value": "正在导出..."
+  },
+  {
+    "key": "octo_canvas_timeline_download_preparing_resources_status",
+    "value": "正在导出..."
+  },
+  {
+    "key": "octo_canvas_timeline_edit_target_changed",
+    "value": "目标已更改，请重试。"
+  },
+  {
+    "key": "octo_canvas_timeline_empty_track_label",
+    "value": "添加素材到时间线"
+  },
+  {
+    "key": "octo_canvas_timeline_expand_canvas_assets_label",
+    "value": "展示资产库"
+  },
+  {
+    "key": "octo_canvas_timeline_export_batch_materials_label",
+    "value": "批量导出时间线素材"
+  },
+  {
+    "key": "octo_canvas_timeline_export_browser_unsupported_reason",
+    "value": "您的浏览器不支持本地渲染。请使用最新版本的 Chrome 或 Edge 浏览器"
+  },
+  {
+    "key": "octo_canvas_timeline_export_button_text",
+    "value": "导出"
+  },
+  {
+    "key": "octo_canvas_timeline_export_cancel_label",
+    "value": "取消"
+  },
+  {
+    "key": "octo_canvas_timeline_export_cancelled_label",
+    "value": "导出已取消"
+  },
+  {
+    "key": "octo_canvas_timeline_export_cancelling_label",
+    "value": "取消导出"
+  },
+  {
+    "key": "octo_canvas_timeline_export_davinci_label",
+    "value": "导出到 DaVinci Resolve"
+  },
+  {
+    "key": "octo_canvas_timeline_export_empty_reason",
+    "value": "导出前，请将媒体添加到主视觉轨道"
+  },
+  {
+    "key": "octo_canvas_timeline_export_final_cut_label",
+    "value": "导出到 Final Cut Pro"
+  },
+  {
+    "key": "octo_canvas_timeline_export_in_progress_reason",
+    "value": "时间线导出正在进行中"
+  },
+  {
+    "key": "octo_canvas_timeline_export_long_duration_confirm_label",
+    "value": "仍然导出"
+  },
+  {
+    "key": "octo_canvas_timeline_export_long_duration_warning",
+    "value": "此时间线较长，因此导出可能需要一些时间或失败。请再次单击以继续"
+  },
+  {
+    "key": "octo_canvas_timeline_export_material_missing_reason",
+    "value": "时间线包含缺失或占位符媒体"
+  },
+  {
+    "key": "octo_canvas_timeline_export_material_pending_reason",
+    "value": "媒体仍在处理中。请稍后再导出。"
+  },
+  {
+    "key": "octo_canvas_timeline_export_material_unavailable_reason",
+    "value": "部分媒体目前无法导出。"
+  },
+  {
+    "key": "octo_canvas_timeline_export_node_failed",
+    "value": "导出失败，请重新尝试"
+  },
+  {
+    "key": "octo_canvas_timeline_export_node_processing",
+    "value": "导出中…"
+  },
+  {
+    "key": "octo_canvas_timeline_export_output_unsupported_label",
+    "value": "此设备不支持此导出格式"
+  },
+  {
+    "key": "octo_canvas_timeline_export_panel_auto_ratio",
+    "value": "自动"
+  },
+  {
+    "key": "octo_canvas_timeline_export_panel_cancel",
+    "value": "取消"
+  },
+  {
+    "key": "octo_canvas_timeline_export_panel_canvas_destination",
+    "value": "添加到画布"
+  },
+  {
+    "key": "octo_canvas_timeline_export_panel_canvas_ready",
+    "value": "视频已添加到画布"
+  },
+  {
+    "key": "octo_canvas_timeline_export_panel_confirm",
+    "value": "确认"
+  },
+  {
+    "key": "octo_canvas_timeline_export_panel_delivery_pending",
+    "value": "添加失败，请重试"
+  },
+  {
+    "key": "octo_canvas_timeline_export_panel_destination",
+    "value": "导出位置"
+  },
+  {
+    "key": "octo_canvas_timeline_export_panel_download_destination",
+    "value": "下载到本地"
+  },
+  {
+    "key": "octo_canvas_timeline_export_panel_file_name",
+    "value": "文件名"
+  },
+  {
+    "key": "octo_canvas_timeline_export_panel_more",
+    "value": "更多导出方式"
+  },
+  {
+    "key": "octo_canvas_timeline_export_panel_ratio",
+    "value": "画面比例"
+  },
+  {
+    "key": "octo_canvas_timeline_export_panel_resolution",
+    "value": "分辨率"
+  },
+  {
+    "key": "octo_canvas_timeline_export_panel_settings_description",
+    "value": "选择导出位置、分辨率和格式"
+  },
+  {
+    "key": "octo_canvas_timeline_export_panel_settings_title",
+    "value": "导出设置"
+  },
+  {
+    "key": "octo_canvas_timeline_export_panel_unavailable",
+    "value": "导出失败，请重试"
+  },
+  {
+    "key": "octo_canvas_timeline_export_panel_writing_canvas",
+    "value": "正在添加视频到画布…"
+  },
+  {
+    "key": "octo_canvas_timeline_export_premiere_label",
+    "value": "导出到 Premiere"
+  },
+  {
+    "key": "octo_canvas_timeline_export_preparing_progress_label",
+    "value": "资源准备中..."
+  },
+  {
+    "key": "octo_canvas_timeline_export_source_range_out_of_bounds_reason",
+    "value": "媒体时长已更改。请重新修剪超出媒体时长的片段。"
+  },
+  {
+    "key": "octo_canvas_timeline_export_succeeded_label",
+    "value": "时间线已导出"
+  },
+  {
+    "key": "octo_canvas_timeline_export_toast_processing",
+    "value": "正在导出视频…"
+  },
+  {
+    "key": "octo_canvas_timeline_export_toast_view_canvas",
+    "value": "去画布查看"
+  },
+  {
+    "key": "octo_canvas_timeline_export_xml_label",
+    "value": "导出为 XML"
+  },
+  {
+    "key": "octo_canvas_timeline_fullscreen_button_text",
+    "value": "全屏编辑"
+  },
+  {
+    "key": "octo_canvas_timeline_fullscreen_label",
+    "value": "全屏编辑"
+  },
+  {
+    "key": "octo_canvas_timeline_fullscreen_title",
+    "value": "时间线"
+  },
+  {
+    "key": "octo_canvas_timeline_fullscreen_view_button_text",
+    "value": "查看"
+  },
+  {
+    "key": "octo_canvas_timeline_imported_asset_missing",
+    "value": "媒体文件已丢失"
+  },
+  {
+    "key": "octo_canvas_timeline_imported_assets_drop_hint",
+    "value": "将文件拖至此处添加"
+  },
+  {
+    "key": "octo_canvas_timeline_imported_assets_import_label",
+    "value": "导入"
+  },
+  {
+    "key": "octo_canvas_timeline_imported_assets_loading",
+    "value": "正在加载导入的资源…"
+  },
+  {
+    "key": "octo_canvas_timeline_imported_assets_panel_label",
+    "value": "已导入资产"
+  },
+  {
+    "key": "octo_canvas_timeline_imported_assets_refreshing",
+    "value": "正在刷新导入的资源…"
+  },
+  {
+    "key": "octo_canvas_timeline_imported_assets_retry_label",
+    "value": "重试加载导入的资源"
+  },
+  {
+    "key": "octo_canvas_timeline_jianying_draft_generate_label",
+    "value": "导出到剪映"
+  },
+  {
+    "key": "octo_canvas_timeline_jianying_draft_generating",
+    "value": "正在导出剪映草稿..."
+  },
+  {
+    "key": "octo_canvas_timeline_jianying_launch_confirm",
+    "value": "打开剪映专业版"
+  },
+  {
+    "key": "octo_canvas_timeline_jianying_launch_dialog_description",
+    "value": "请确认剪映专业版已升级至最新版本"
+  },
+  {
+    "key": "octo_canvas_timeline_jianying_launch_dialog_title",
+    "value": "打开剪映专业版"
+  },
+  {
+    "key": "octo_canvas_timeline_jianying_launch_dont_remind",
+    "value": "不再提醒"
+  },
+  {
+    "key": "octo_canvas_timeline_preview_failed_label",
+    "value": "无法加载预览"
+  },
+  {
+    "key": "octo_canvas_timeline_preview_loading_label",
+    "value": "正在准备预览"
+  },
+  {
+    "key": "octo_canvas_timeline_preview_mute_control_label",
+    "value": "开启原声"
+  },
+  {
+    "key": "octo_canvas_timeline_preview_source_range_out_of_bounds_label",
+    "value": "媒体时长已更改，且片段超出时长。请重新修剪片段。"
+  },
+  {
+    "key": "octo_canvas_timeline_preview_unavailable_label",
+    "value": "没有媒体可供预览"
+  },
+  {
+    "key": "octo_canvas_timeline_redo_label",
+    "value": "重做"
+  },
+  {
+    "key": "octo_canvas_timeline_remove_clip_label",
+    "value": "删除"
+  },
+  {
+    "key": "octo_canvas_timeline_remove_clip_readonly_reason",
+    "value": "无法从只读画布中删除片段。"
+  },
+  {
+    "key": "octo_canvas_timeline_remove_clip_unavailable_reason",
+    "value": "此片段无法删除。"
+  },
+  {
+    "key": "octo_canvas_timeline_render_download_video",
+    "value": "导出为 MP4"
+  },
+  {
+    "key": "octo_canvas_timeline_render_label",
+    "value": "在云端渲染视频"
+  },
+  {
+    "key": "octo_canvas_timeline_render_play",
+    "value": "播放视频"
+  },
+  {
+    "key": "octo_canvas_timeline_render_user_busy",
+    "value": "渲染正在进行中。请等待渲染完成后再试"
+  },
+  {
+    "key": "octo_canvas_timeline_snap_disable_label",
+    "value": "关闭自动吸附"
+  },
+  {
+    "key": "octo_canvas_timeline_snap_enable_label",
+    "value": "开启自动吸附"
+  },
+  {
+    "key": "octo_canvas_timeline_snap_label",
+    "value": "打开自动吸附"
+  },
+  {
+    "key": "octo_canvas_timeline_source_metadata_not_ready",
+    "value": "素材信息仍在加载中，请稍后重试。"
+  },
+  {
+    "key": "octo_canvas_timeline_source_picker_completed_label",
+    "value": "添加完成"
+  },
+  {
+    "key": "octo_canvas_timeline_source_picker_empty",
+    "value": "没有可添加的媒体节点。"
+  },
+  {
+    "key": "octo_canvas_timeline_source_picker_interrupted_not_ready",
+    "value": "画布尚未准备好进行编辑，因此无法再添加媒体。"
+  },
+  {
+    "key": "octo_canvas_timeline_source_picker_interrupted_readonly",
+    "value": "画布为只读，因此无法再添加媒体。"
+  },
+  {
+    "key": "octo_canvas_timeline_source_picker_locate_failed_label",
+    "value": "无法找到时间线"
+  },
+  {
+    "key": "octo_canvas_timeline_source_picker_locate_label",
+    "value": "定位时间线"
+  },
+  {
+    "key": "octo_canvas_timeline_source_picker_media_not_ready",
+    "value": "此媒体尚未准备就绪。请稍后重试。"
+  },
+  {
+    "key": "octo_canvas_timeline_source_picker_metadata_not_ready",
+    "value": "添加 0。{skippedSourceCount} 未添加，因为其媒体详细信息尚未准备就绪。请稍后重试。"
+  },
+  {
+    "key": "octo_canvas_timeline_source_picker_return_label",
+    "value": "回到时间线"
+  },
+  {
+    "key": "octo_canvas_timeline_split_clip_invalid_point_reason",
+    "value": "将播放头移动到目标片段内进行剪切。"
+  },
+  {
+    "key": "octo_canvas_timeline_split_clip_label",
+    "value": "分割"
+  },
+  {
+    "key": "octo_canvas_timeline_track_mute_control_label",
+    "value": "静音"
+  },
+  {
+    "key": "octo_canvas_timeline_trim_end_label",
+    "value": "向右裁剪"
+  },
+  {
+    "key": "octo_canvas_timeline_trim_start_label",
+    "value": "向左裁剪"
+  },
+  {
+    "key": "octo_canvas_timeline_undo_label",
+    "value": "撤销"
+  },
+  {
+    "key": "octo_canvas_timeline_upload_action_unavailable",
+    "value": "目前无法将片段添加到时间线。"
+  },
+  {
+    "key": "octo_canvas_timeline_upload_batch_limit",
+    "value": "最多可批量上传 50 个素材"
+  },
+  {
+    "key": "octo_canvas_timeline_upload_failed",
+    "value": "上传失败请重试"
+  },
+  {
+    "key": "octo_canvas_timeline_upload_failed_with_name",
+    "value": "上传 {fileName} 失败。请重试。"
+  },
+  {
+    "key": "octo_canvas_timeline_upload_file_too_large",
+    "value": "文件超出上传大小限制。"
+  },
+  {
+    "key": "octo_canvas_timeline_upload_file_too_large_with_name",
+    "value": "{fileName} 超出上传大小限制。"
+  },
+  {
+    "key": "octo_canvas_timeline_upload_policy_unavailable",
+    "value": "上传规则不可用。请稍后重试。"
+  },
+  {
+    "key": "octo_canvas_timeline_upload_source_label",
+    "value": "本地上传"
+  },
+  {
+    "key": "octo_canvas_timeline_upload_source_unavailable_reason",
+    "value": "当前上传功能不可用。"
+  },
+  {
+    "key": "octo_canvas_timeline_upload_unsupported",
+    "value": "请选择受支持的图片、视频或音频文件。"
+  },
+  {
+    "key": "octo_canvas_timeline_upload_unsupported_with_name",
+    "value": "{fileName} 不是受支持的图片、视频或音频文件。"
+  },
+  {
+    "key": "octo_canvas_timeline_visual_track_mute_control_label",
+    "value": "静音"
+  },
+  {
+    "key": "octo_common_timeline_action_unavailable",
+    "value": "当前时间线暂不支持此操作"
+  },
+  {
+    "key": "octo_shortcut_timeline_scroll_zoom",
+    "value": "缩放时间线"
+  },
+  {
+    "key": "octo_shortcut_timeline_split_clip",
+    "value": "分割片段"
+  },
+  {
+    "key": "octo_shortcut_timeline_trim_left",
+    "value": "向左裁剪"
+  },
+  {
+    "key": "octo_shortcut_timeline_trim_right",
+    "value": "向右裁剪"
+  }
+]

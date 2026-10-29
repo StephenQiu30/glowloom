@@ -85,6 +85,9 @@ func (w *Worker) Execute(ctx context.Context, id WorkID) (domain.ExportJob, erro
 	if !kind.Valid() || kind != work.Frozen.OutputKind.Effective() {
 		return domain.ExportJob{}, ErrInvalidExport
 	}
+	if kind.IsArtifact() {
+		return w.executeArtifact(ctx, id, work)
+	}
 	mediaKind, mime, extension := mediadomain.KindVideo, "video/mp4", "mp4"
 	if kind == domain.OutputAudio {
 		mediaKind, mime, extension = mediadomain.KindAudio, "audio/mp4", "m4a"
@@ -140,12 +143,12 @@ func (w *Worker) Execute(ctx context.Context, id WorkID) (domain.ExportJob, erro
 	if err != nil || output.MIMEType != mime || probe.Kind != mediaKind || probe.DurationMS == nil {
 		return domain.ExportJob{}, ErrInvalidExport
 	}
-	width, height := int32(1920), int32(1080)
-	switch work.Frozen.Timeline.AspectRatio {
-	case "9:16":
-		width, height = 1080, 1920
-	case "1:1":
-		width, height = 1080, 1080
+	var width, height int
+	if kind == domain.OutputVideo {
+		width, height, err = work.Frozen.VideoDimensions()
+		if err != nil {
+			return domain.ExportJob{}, fmt.Errorf("%w: %w", ErrInvalidExport, err)
+		}
 	}
 	var duration int64
 	visible := make(map[uuid.UUID]bool)
@@ -160,7 +163,7 @@ func (w *Worker) Execute(ctx context.Context, id WorkID) (domain.ExportJob, erro
 	if absDuration(int64(*probe.DurationMS)-duration) > int64(1000/work.Frozen.Timeline.FPS)+25 {
 		return domain.ExportJob{}, ErrInvalidExport
 	}
-	if kind == domain.OutputVideo && (probe.Width == nil || probe.Height == nil || *probe.Width != width || *probe.Height != height) || kind == domain.OutputAudio && (probe.Width != nil || probe.Height != nil || probe.FPS != nil || probe.AudioChannels == nil || *probe.AudioChannels != 2) {
+	if kind == domain.OutputVideo && (probe.Width == nil || probe.Height == nil || int(*probe.Width) != width || int(*probe.Height) != height) || kind == domain.OutputAudio && (probe.Width != nil || probe.Height != nil || probe.FPS != nil || probe.AudioChannels == nil || *probe.AudioChannels != 2) {
 		return domain.ExportJob{}, ErrInvalidExport
 	}
 	if err := w.store.Progress(ctx, id, 85, "previews"); err != nil {
@@ -191,7 +194,11 @@ func (w *Worker) Execute(ctx context.Context, id WorkID) (domain.ExportJob, erro
 	}
 	now := time.Now().UTC()
 	sha := output.SHA256
-	asset := mediadomain.MediaAsset{ID: assetID, ProjectID: work.Job.ProjectID, Kind: mediaKind, Origin: mediadomain.OriginSystem, Status: mediadomain.StatusProcessing, ObjectKey: key, FileName: "timeline-" + id.JobID.String() + "." + extension, MimeType: output.MIMEType, ByteSize: output.Size, SHA256: &sha, Width: probe.Width, Height: probe.Height, DurationMS: probe.DurationMS, FPS: probe.FPS, AudioChannels: probe.AudioChannels, Codec: probe.Codec, ModerationStatus: mediadomain.ModerationPending, Revision: 1, CreateTime: now, UpdateTime: now}
+	fileName := "timeline-" + id.JobID.String() + "." + extension
+	if work.Frozen.Settings != nil {
+		fileName = work.Frozen.Settings.FileName + "." + extension
+	}
+	asset := mediadomain.MediaAsset{ID: assetID, ProjectID: work.Job.ProjectID, Kind: mediaKind, Origin: mediadomain.OriginSystem, Status: mediadomain.StatusProcessing, ObjectKey: key, FileName: fileName, MimeType: output.MIMEType, ByteSize: output.Size, SHA256: &sha, Width: probe.Width, Height: probe.Height, DurationMS: probe.DurationMS, FPS: probe.FPS, AudioChannels: probe.AudioChannels, Codec: probe.Codec, ModerationStatus: mediadomain.ModerationPending, Revision: 1, CreateTime: now, UpdateTime: now}
 	renditions := make([]mediadomain.Rendition, 0, len(rendered))
 	for _, file := range rendered {
 		if file.Result == nil || file.Result.File == nil || file.Width < 1 || file.Height < 1 {

@@ -338,6 +338,7 @@ function projectionDifferences(
           "audio",
           "config",
           "director",
+          "timeline",
         ].includes(node.type)
       )
         throw new Error("此节点的保存接口尚未接入，修改已保留");
@@ -347,7 +348,9 @@ function projectionDifferences(
           ...(source ?? {}),
           id: node.id,
           node_type: node.type,
-          node_action: node.type === "director" ? "tool" : "resource",
+          node_action: ["director", "timeline"].includes(node.type)
+            ? "tool"
+            : "resource",
           title: node.title,
           x: node.position.x,
           y: node.position.y,
@@ -360,6 +363,9 @@ function projectionDifferences(
               ? { collapsed: node.documentData?.collapsed ?? false }
               : {
                   ...(node.type === "text" ? richTextConfig(node) : {}),
+                  ...(node.type === "timeline"
+                    ? { timeline: source?.config?.timeline }
+                    : {}),
                   ...(node.type === "director"
                     ? { director: source?.config?.director }
                     : {}),
@@ -371,6 +377,15 @@ function projectionDifferences(
       continue;
     }
     if (node.type !== previous.type) throw new Error("不能改变已有节点类型");
+    if (
+      node.type === "timeline" &&
+      JSON.stringify(node.serviceData?.config?.timeline) !==
+        JSON.stringify(previous.serviceData?.config?.timeline)
+    ) {
+      const timeline = node.serviceData?.config?.timeline;
+      if (!timeline) throw new Error("时间线配置不能被移除");
+      set(["config", "timeline"], timeline);
+    }
     if (
       node.type === "director" &&
       JSON.stringify(node.serviceData?.config?.director) !==

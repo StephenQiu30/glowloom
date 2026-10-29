@@ -36,6 +36,13 @@ export type CanvasDocumentIntegration = {
   canNavigate: boolean;
   frozen: boolean;
   admit?: (state: CanvasEditorState) => boolean;
+  admitConnectionGraph?: (state: CanvasEditorState) => boolean;
+  resolveConnectionMedia?: (
+    node: CanvasEditorState["nodes"][number],
+  ) => CanvasEditorState["nodes"][number];
+  connectDomain?: (
+    request: import("../lib/canvas-domain-connection").CanvasDomainConnectionRequest,
+  ) => Promise<string>;
   onChange: (state: CanvasEditorState, stable: boolean) => void;
   pendingForms?: CanvasPendingForms;
   onPendingForm?: (
@@ -63,3 +70,22 @@ export type CanvasDocumentIntegration = {
     ) => Promise<void>;
   };
 };
+/** Recheck the whole connection candidate before a gesture or a visible graph commit. */
+export function admitCanvasConnectionGraph(
+  integration:
+    | Pick<
+        CanvasDocumentIntegration,
+        "initialState" | "frozen" | "admit" | "admitConnectionGraph"
+      >
+    | undefined,
+  candidate: Pick<CanvasEditorState, "nodes" | "connections">,
+): boolean {
+  if (!integration) return true;
+  if (integration.frozen) return false;
+  try {
+    const admit = integration.admitConnectionGraph ?? integration.admit;
+    return admit?.({ ...integration.initialState, ...candidate }) ?? true;
+  } catch {
+    return false;
+  }
+}

@@ -59,6 +59,7 @@ type ExportPreview struct {
 	URL       string                 `json:"url"`
 	ExpiresAt time.Time              `json:"expires_at"`
 	Asset     mediaapp.AssetSummary  `json:"asset"`
+	Artifact  *domain.Artifact       `json:"artifact,omitempty"`
 	Waveform  *ExportWaveformPreview `json:"waveform,omitempty"`
 }
 
@@ -72,10 +73,11 @@ type ExportWaveformPreview struct {
 
 // CreateInput accepts saved source identity only, never a URL or local path.
 type CreateInput struct {
-	OutputKind domain.OutputKind `json:"output_kind,omitempty" enums:"video,audio" default:"video"`
-	CanvasID   uuid.UUID         `json:"canvas_id"`
-	NodeID     uuid.UUID         `json:"node_id"`
-	Revision   int64             `json:"revision"`
+	Settings   *domain.ExportSettings `json:"settings,omitempty"`
+	OutputKind domain.OutputKind      `json:"output_kind,omitempty" enums:"video,audio,media_bundle,fcpxml,xmeml" default:"video"`
+	CanvasID   uuid.UUID              `json:"canvas_id"`
+	NodeID     uuid.UUID              `json:"node_id"`
+	Revision   int64                  `json:"revision"`
 }
 
 // ReviewInput confirms the exact produced file at the current job revision.

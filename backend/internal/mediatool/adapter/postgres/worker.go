@@ -23,6 +23,14 @@ func (s *Store) validateSources(ctx context.Context, tx *gorm.DB, actor identity
 	if !kind.Valid() || kind != frozen.OutputKind.Effective() || kind == domain.OutputAudio && !application.HasAudibleClip(frozen.Timeline) {
 		return application.ErrInvalidExport
 	}
+	if kind.IsArtifact() {
+		if err := application.ValidateProjectExport(frozen); err != nil {
+			return err
+		}
+		if frozen.Source == nil || frozen.Source.CanvasID != row.CanvasID || frozen.Source.NodeID != row.NodeID || frozen.Source.Revision != row.SourceRevision {
+			return application.ErrConflict
+		}
+	}
 	ids := make([]uuid.UUID, 0, len(frozen.Inputs))
 	for _, input := range frozen.Inputs {
 		ids = append(ids, input.AssetID)
@@ -197,9 +205,32 @@ func (s *Store) Commit(ctx context.Context, id application.WorkID, asset mediado
 		if err := s.media(tx).Store(ctx, row.actor(), asset, renditions); err != nil {
 			return normalize(err)
 		}
+
 		row.Status = "review_required"
 		row.Stage = "review"
 		row.Progress = 95
+		var frozen domain.FrozenExport
+		if err := json.Unmarshal(row.Frozen, &frozen); err != nil {
+			return err
+		}
+		if frozen.Settings != nil {
+			finalizer, ok := s.media(tx).(interface {
+				Finalize(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, string, []uuid.UUID, time.Time) error
+			})
+			if !ok {
+				return application.ErrUnavailable
+			}
+			ids, err := application.SourceIDs(frozen.Timeline)
+			if err != nil {
+				return err
+			}
+			if err = finalizer.Finalize(ctx, row.actor(), row.ProjectID, asset.ID, *asset.SHA256, ids, time.Now().UTC()); err != nil {
+				return normalize(err)
+			}
+			row.Status = "succeeded"
+			row.Stage = "complete"
+			row.Progress = 100
+		}
 		row.AssetID = &asset.ID
 		row.SHA256 = asset.SHA256
 		row.Revision++

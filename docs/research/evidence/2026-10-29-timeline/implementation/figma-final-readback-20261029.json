@@ -1,0 +1,4401 @@
+{
+  "inventory": [
+    {
+      "id": "3091:47697",
+      "name": "TL-F01 · 时间线 / 全屏空态 · TL-01–14",
+      "width": 1512,
+      "height": 772,
+      "counts": {
+        "FRAME": 45,
+        "TEXT": 28,
+        "INSTANCE": 39,
+        "VECTOR": 45,
+        "RECTANGLE": 3,
+        "GROUP": 6
+      },
+      "components": []
+    },
+    {
+      "id": "3180:57142",
+      "name": "时间线 · 即梦一致性 / 状态设计",
+      "width": 4816,
+      "height": 5480,
+      "counts": {
+        "FRAME": 824,
+        "COMPONENT": 19,
+        "GROUP": 101,
+        "VECTOR": 705,
+        "RECTANGLE": 1458,
+        "TEXT": 546,
+        "INSTANCE": 717,
+        "ELLIPSE": 1
+      },
+      "components": [
+        {
+          "id": "3180:57148",
+          "name": "时间线 / 分割",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "id": "3180:57153",
+          "name": "时间线 / 向左剪裁",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "id": "3180:57158",
+          "name": "时间线 / 向右剪裁",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "id": "3180:57163",
+          "name": "时间线 / 删除",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "id": "3180:57168",
+          "name": "时间线 / 音量",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "id": "3181:57141",
+          "name": "时间线 / 按钮",
+          "width": 72,
+          "height": 32
+        },
+        {
+          "id": "3181:57143",
+          "name": "时间线 / 图标按钮",
+          "width": 28,
+          "height": 28
+        },
+        {
+          "id": "3181:57147",
+          "name": "时间线 / 资产卡片",
+          "width": 160,
+          "height": 90
+        },
+        {
+          "id": "3181:57159",
+          "name": "时间线 / 主视觉片段",
+          "width": 106,
+          "height": 56
+        },
+        {
+          "id": "3181:57162",
+          "name": "时间线 / 音频片段",
+          "width": 150,
+          "height": 32
+        },
+        {
+          "id": "3185:59096",
+          "name": "时间线 / 自动吸附",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "id": "3185:59100",
+          "name": "时间线 / 缩小时间轴",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "id": "3185:59105",
+          "name": "时间线 / 放大时间轴",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "id": "3185:59108",
+          "name": "时间线 / 画面比例",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "id": "3189:59191",
+          "name": "时间线 / 导入按钮",
+          "width": 68,
+          "height": 32
+        },
+        {
+          "id": "3197:59585",
+          "name": "时间线 / 比例入口",
+          "width": 64,
+          "height": 32
+        },
+        {
+          "id": "3199:59454",
+          "name": "时间线 / 画面比例 / 9:16",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "id": "3216:59949",
+          "name": "时间线 / 音频卡片波形",
+          "width": 144,
+          "height": 48
+        },
+        {
+          "id": "3235:61509",
+          "name": "派生自项目Dialog / 上传素材 / 部分失败（750:28193），按timeline-upload-dialog.tsx同步560宽和当前文案；本项目local_review_confirmed合同，非即梦实测。",
+          "width": 560,
+          "height": 554
+        }
+      ]
+    }
+  ],
+  "states": [
+    {
+      "id": "3091:47697",
+      "name": "TL-F01 · 时间线 / 全屏空态 · TL-01–14",
+      "width": 1512,
+      "height": 772,
+      "assets": {
+        "width": 360,
+        "import": 1,
+        "collapse": 1,
+        "tabs": [
+          {
+            "width": 97,
+            "height": 36,
+            "text": [
+              {
+                "text": "已导入资产",
+                "size": 13
+              }
+            ]
+          },
+          {
+            "width": 84,
+            "height": 36,
+            "text": [
+              {
+                "text": "画布资产",
+                "size": 13
+              }
+            ]
+          }
+        ],
+        "filter": [
+          {
+            "x": 0,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 46,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 92,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 138,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          }
+        ]
+      },
+      "toolbar": [
+        {
+          "height": 44,
+          "y": 0
+        }
+      ],
+      "ruler": [
+        {
+          "height": 22,
+          "y": 44,
+          "hasMinorTicks": true
+        }
+      ],
+      "audioTracks": [],
+      "ratio": [
+        {
+          "width": 64,
+          "height": 32,
+          "icons": [
+            {
+              "width": 16,
+              "height": 16,
+              "main": "3185:59108"
+            }
+          ]
+        }
+      ],
+      "play": [
+        [
+          {
+            "fills": 1,
+            "strokes": 0
+          }
+        ]
+      ],
+      "zoom": [
+        {
+          "width": 78,
+          "height": 10,
+          "thumb": [
+            {
+              "width": 4,
+              "height": 16
+            }
+          ]
+        }
+      ],
+      "menu": null,
+      "modal": null
+    },
+    {
+      "id": "3181:57373",
+      "name": "TL-F02 · 时间线 / 混合主轨与音频 · TL-15–35",
+      "width": 1512,
+      "height": 772,
+      "assets": {
+        "width": 360,
+        "import": 1,
+        "collapse": 1,
+        "tabs": [
+          {
+            "width": 97,
+            "height": 36,
+            "text": [
+              {
+                "text": "已导入资产",
+                "size": 13
+              }
+            ]
+          },
+          {
+            "width": 84,
+            "height": 36,
+            "text": [
+              {
+                "text": "画布资产",
+                "size": 13
+              }
+            ]
+          }
+        ],
+        "filter": [
+          {
+            "x": 0,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 46,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 92,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 138,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          }
+        ]
+      },
+      "toolbar": [
+        {
+          "height": 44,
+          "y": 0
+        }
+      ],
+      "ruler": [
+        {
+          "height": 22,
+          "y": 44,
+          "hasMinorTicks": true
+        }
+      ],
+      "audioTracks": [
+        {
+          "height": 32,
+          "y": 60,
+          "opacity": 0.07999999821186066
+        }
+      ],
+      "ratio": [
+        {
+          "width": 64,
+          "height": 32,
+          "icons": [
+            {
+              "width": 16,
+              "height": 16,
+              "main": "3185:59108"
+            }
+          ]
+        }
+      ],
+      "play": [
+        [
+          {
+            "fills": 1,
+            "strokes": 0
+          }
+        ]
+      ],
+      "zoom": [
+        {
+          "width": 78,
+          "height": 10,
+          "thumb": [
+            {
+              "width": 4,
+              "height": 16
+            }
+          ]
+        }
+      ],
+      "menu": null,
+      "modal": null
+    },
+    {
+      "id": "3181:57675",
+      "name": "TL-F03 · 时间线 / 音频选中与多音轨 · TL-35",
+      "width": 1512,
+      "height": 772,
+      "assets": {
+        "width": 360,
+        "import": 1,
+        "collapse": 1,
+        "tabs": [
+          {
+            "width": 97,
+            "height": 36,
+            "text": [
+              {
+                "text": "已导入资产",
+                "size": 13
+              }
+            ]
+          },
+          {
+            "width": 84,
+            "height": 36,
+            "text": [
+              {
+                "text": "画布资产",
+                "size": 13
+              }
+            ]
+          }
+        ],
+        "filter": [
+          {
+            "x": 0,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 46,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 92,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 138,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          }
+        ]
+      },
+      "toolbar": [
+        {
+          "height": 44,
+          "y": 0
+        }
+      ],
+      "ruler": [
+        {
+          "height": 22,
+          "y": 44,
+          "hasMinorTicks": true
+        }
+      ],
+      "audioTracks": [
+        {
+          "height": 32,
+          "y": 60,
+          "opacity": 0.11999999731779099
+        },
+        {
+          "height": 32,
+          "y": 96,
+          "opacity": 0.07999999821186066
+        }
+      ],
+      "ratio": [
+        {
+          "width": 64,
+          "height": 32,
+          "icons": [
+            {
+              "width": 16,
+              "height": 16,
+              "main": "3185:59108"
+            }
+          ]
+        }
+      ],
+      "play": [
+        [
+          {
+            "fills": 1,
+            "strokes": 0
+          }
+        ]
+      ],
+      "zoom": [
+        {
+          "width": 78,
+          "height": 10,
+          "thumb": [
+            {
+              "width": 4,
+              "height": 16
+            }
+          ]
+        }
+      ],
+      "menu": null,
+      "modal": null
+    },
+    {
+      "id": "3181:58043",
+      "name": "TL-F04 · 时间线 / 9:16 留边预览 · TL-36",
+      "width": 1512,
+      "height": 772,
+      "assets": {
+        "width": 360,
+        "import": 1,
+        "collapse": 1,
+        "tabs": [
+          {
+            "width": 97,
+            "height": 36,
+            "text": [
+              {
+                "text": "已导入资产",
+                "size": 13
+              }
+            ]
+          },
+          {
+            "width": 84,
+            "height": 36,
+            "text": [
+              {
+                "text": "画布资产",
+                "size": 13
+              }
+            ]
+          }
+        ],
+        "filter": [
+          {
+            "x": 0,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 46,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 92,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 138,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          }
+        ]
+      },
+      "toolbar": [
+        {
+          "height": 44,
+          "y": 0
+        }
+      ],
+      "ruler": [
+        {
+          "height": 22,
+          "y": 44,
+          "hasMinorTicks": true
+        }
+      ],
+      "audioTracks": [
+        {
+          "height": 32,
+          "y": 60,
+          "opacity": 0.07999999821186066
+        }
+      ],
+      "ratio": [
+        {
+          "width": 64,
+          "height": 32,
+          "icons": [
+            {
+              "width": 16,
+              "height": 16,
+              "main": "3199:59454"
+            }
+          ]
+        }
+      ],
+      "play": [
+        [
+          {
+            "fills": 1,
+            "strokes": 0
+          }
+        ]
+      ],
+      "zoom": [
+        {
+          "width": 78,
+          "height": 10,
+          "thumb": [
+            {
+              "width": 4,
+              "height": 16
+            }
+          ]
+        }
+      ],
+      "menu": null,
+      "modal": null
+    },
+    {
+      "id": "3184:57802",
+      "name": "TL-F05 · 导出设置 / 默认720P · TL-38–41",
+      "width": 1512,
+      "height": 772,
+      "assets": {
+        "width": 360,
+        "import": 1,
+        "collapse": 1,
+        "tabs": [
+          {
+            "width": 97,
+            "height": 36,
+            "text": [
+              {
+                "text": "已导入资产",
+                "size": 13
+              }
+            ]
+          },
+          {
+            "width": 84,
+            "height": 36,
+            "text": [
+              {
+                "text": "画布资产",
+                "size": 13
+              }
+            ]
+          }
+        ],
+        "filter": [
+          {
+            "x": 0,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 46,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 92,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 138,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          }
+        ]
+      },
+      "toolbar": [
+        {
+          "height": 44,
+          "y": 0
+        }
+      ],
+      "ruler": [
+        {
+          "height": 22,
+          "y": 44,
+          "hasMinorTicks": true
+        }
+      ],
+      "audioTracks": [
+        {
+          "height": 32,
+          "y": 60,
+          "opacity": 0.07999999821186066
+        }
+      ],
+      "ratio": [
+        {
+          "width": 64,
+          "height": 32,
+          "icons": [
+            {
+              "width": 16,
+              "height": 16,
+              "main": "3185:59108"
+            }
+          ]
+        }
+      ],
+      "play": [
+        [
+          {
+            "fills": 1,
+            "strokes": 0
+          }
+        ]
+      ],
+      "zoom": [
+        {
+          "width": 78,
+          "height": 10,
+          "thumb": [
+            {
+              "width": 4,
+              "height": 16
+            }
+          ]
+        }
+      ],
+      "menu": null,
+      "modal": null
+    },
+    {
+      "id": "3184:57913",
+      "name": "TL-F06 · 更多导出方式 · TL-43–45",
+      "width": 1512,
+      "height": 772,
+      "assets": {
+        "width": 360,
+        "import": 1,
+        "collapse": 1,
+        "tabs": [
+          {
+            "width": 97,
+            "height": 36,
+            "text": [
+              {
+                "text": "已导入资产",
+                "size": 13
+              }
+            ]
+          },
+          {
+            "width": 84,
+            "height": 36,
+            "text": [
+              {
+                "text": "画布资产",
+                "size": 13
+              }
+            ]
+          }
+        ],
+        "filter": [
+          {
+            "x": 0,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 46,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 92,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 138,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          }
+        ]
+      },
+      "toolbar": [
+        {
+          "height": 44,
+          "y": 0
+        }
+      ],
+      "ruler": [
+        {
+          "height": 22,
+          "y": 44,
+          "hasMinorTicks": true
+        }
+      ],
+      "audioTracks": [
+        {
+          "height": 32,
+          "y": 60,
+          "opacity": 0.07999999821186066
+        }
+      ],
+      "ratio": [
+        {
+          "width": 64,
+          "height": 32,
+          "icons": [
+            {
+              "width": 16,
+              "height": 16,
+              "main": "3185:59108"
+            }
+          ]
+        }
+      ],
+      "play": [
+        [
+          {
+            "fills": 1,
+            "strokes": 0
+          }
+        ]
+      ],
+      "zoom": [
+        {
+          "width": 78,
+          "height": 10,
+          "thumb": [
+            {
+              "width": 4,
+              "height": 16
+            }
+          ]
+        }
+      ],
+      "menu": null,
+      "modal": null
+    },
+    {
+      "id": "3184:58005",
+      "name": "TL-F07 · 下载中 / 取消 · TL-42",
+      "width": 1512,
+      "height": 772,
+      "assets": {
+        "width": 360,
+        "import": 1,
+        "collapse": 1,
+        "tabs": [
+          {
+            "width": 97,
+            "height": 36,
+            "text": [
+              {
+                "text": "已导入资产",
+                "size": 13
+              }
+            ]
+          },
+          {
+            "width": 84,
+            "height": 36,
+            "text": [
+              {
+                "text": "画布资产",
+                "size": 13
+              }
+            ]
+          }
+        ],
+        "filter": [
+          {
+            "x": 0,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 46,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 92,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 138,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          }
+        ]
+      },
+      "toolbar": [
+        {
+          "height": 44,
+          "y": 0
+        }
+      ],
+      "ruler": [
+        {
+          "height": 22,
+          "y": 44,
+          "hasMinorTicks": true
+        }
+      ],
+      "audioTracks": [
+        {
+          "height": 32,
+          "y": 60,
+          "opacity": 0.07999999821186066
+        }
+      ],
+      "ratio": [
+        {
+          "width": 64,
+          "height": 32,
+          "icons": [
+            {
+              "width": 16,
+              "height": 16,
+              "main": "3185:59108"
+            }
+          ]
+        }
+      ],
+      "play": [
+        [
+          {
+            "fills": 1,
+            "strokes": 0
+          }
+        ]
+      ],
+      "zoom": [
+        {
+          "width": 78,
+          "height": 10,
+          "thumb": [
+            {
+              "width": 4,
+              "height": 16
+            }
+          ]
+        }
+      ],
+      "menu": null,
+      "modal": null
+    },
+    {
+      "id": "3184:58097",
+      "name": "TL-F08 · 素材加载失败 / 局部重试 · TL-46",
+      "width": 1512,
+      "height": 772,
+      "assets": {
+        "width": 360,
+        "import": 1,
+        "collapse": 1,
+        "tabs": [
+          {
+            "width": 97,
+            "height": 36,
+            "text": [
+              {
+                "text": "已导入资产",
+                "size": 13
+              }
+            ]
+          },
+          {
+            "width": 84,
+            "height": 36,
+            "text": [
+              {
+                "text": "画布资产",
+                "size": 13
+              }
+            ]
+          }
+        ],
+        "filter": [
+          {
+            "x": 0,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 46,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 92,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 138,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          }
+        ]
+      },
+      "toolbar": [
+        {
+          "height": 44,
+          "y": 0
+        }
+      ],
+      "ruler": [
+        {
+          "height": 22,
+          "y": 44,
+          "hasMinorTicks": true
+        }
+      ],
+      "audioTracks": [
+        {
+          "height": 32,
+          "y": 60,
+          "opacity": 0.07999999821186066
+        }
+      ],
+      "ratio": [
+        {
+          "width": 64,
+          "height": 32,
+          "icons": [
+            {
+              "width": 16,
+              "height": 16,
+              "main": "3185:59108"
+            }
+          ]
+        }
+      ],
+      "play": [
+        [
+          {
+            "fills": 1,
+            "strokes": 0
+          }
+        ]
+      ],
+      "zoom": [
+        {
+          "width": 78,
+          "height": 10,
+          "thumb": [
+            {
+              "width": 4,
+              "height": 16
+            }
+          ]
+        }
+      ],
+      "menu": null,
+      "modal": null
+    },
+    {
+      "id": "3184:58270",
+      "name": "TL-F09 · 只读工作区 · 约束状态",
+      "width": 1512,
+      "height": 772,
+      "assets": {
+        "width": 360,
+        "import": 1,
+        "collapse": 1,
+        "tabs": [
+          {
+            "width": 97,
+            "height": 36,
+            "text": [
+              {
+                "text": "已导入资产",
+                "size": 13
+              }
+            ]
+          },
+          {
+            "width": 84,
+            "height": 36,
+            "text": [
+              {
+                "text": "画布资产",
+                "size": 13
+              }
+            ]
+          }
+        ],
+        "filter": [
+          {
+            "x": 0,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 46,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 92,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 138,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          }
+        ]
+      },
+      "toolbar": [
+        {
+          "height": 44,
+          "y": 0
+        }
+      ],
+      "ruler": [
+        {
+          "height": 22,
+          "y": 44,
+          "hasMinorTicks": true
+        }
+      ],
+      "audioTracks": [
+        {
+          "height": 32,
+          "y": 60,
+          "opacity": 0.07999999821186066
+        }
+      ],
+      "ratio": [
+        {
+          "width": 64,
+          "height": 32,
+          "icons": [
+            {
+              "width": 16,
+              "height": 16,
+              "main": "3185:59108"
+            }
+          ]
+        }
+      ],
+      "play": [
+        [
+          {
+            "fills": 1,
+            "strokes": 0
+          }
+        ]
+      ],
+      "zoom": [
+        {
+          "width": 78,
+          "height": 10,
+          "thumb": [
+            {
+              "width": 4,
+              "height": 16
+            }
+          ]
+        }
+      ],
+      "menu": null,
+      "modal": null
+    },
+    {
+      "id": "3184:58547",
+      "name": "TL-F10 · 导入素材 / 来源菜单",
+      "width": 1512,
+      "height": 772,
+      "assets": {
+        "width": 360,
+        "import": 1,
+        "collapse": 1,
+        "tabs": [
+          {
+            "width": 97,
+            "height": 36,
+            "text": [
+              {
+                "text": "已导入资产",
+                "size": 13
+              }
+            ]
+          },
+          {
+            "width": 84,
+            "height": 36,
+            "text": [
+              {
+                "text": "画布资产",
+                "size": 13
+              }
+            ]
+          }
+        ],
+        "filter": [
+          {
+            "x": 0,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 46,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 92,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 138,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          }
+        ]
+      },
+      "toolbar": [
+        {
+          "height": 44,
+          "y": 0
+        }
+      ],
+      "ruler": [
+        {
+          "height": 22,
+          "y": 44,
+          "hasMinorTicks": true
+        }
+      ],
+      "audioTracks": [
+        {
+          "height": 32,
+          "y": 60,
+          "opacity": 0.07999999821186066
+        }
+      ],
+      "ratio": [
+        {
+          "width": 64,
+          "height": 32,
+          "icons": [
+            {
+              "width": 16,
+              "height": 16,
+              "main": "3185:59108"
+            }
+          ]
+        }
+      ],
+      "play": [
+        [
+          {
+            "fills": 1,
+            "strokes": 0
+          }
+        ]
+      ],
+      "zoom": [
+        {
+          "width": 78,
+          "height": 10,
+          "thumb": [
+            {
+              "width": 4,
+              "height": 16
+            }
+          ]
+        }
+      ],
+      "menu": null,
+      "modal": null
+    },
+    {
+      "id": "3184:58631",
+      "name": "TL-F11 · 画布紧凑时间线节点",
+      "width": 1512,
+      "height": 390,
+      "assets": null,
+      "toolbar": [],
+      "ruler": [],
+      "audioTracks": [
+        {
+          "height": 32,
+          "y": 60,
+          "opacity": 0.07999999821186066
+        }
+      ],
+      "ratio": [],
+      "play": [
+        [
+          {
+            "fills": 1,
+            "strokes": 0
+          }
+        ]
+      ],
+      "zoom": [],
+      "menu": null,
+      "modal": null
+    },
+    {
+      "id": "3184:58703",
+      "name": "TL-F12 · 导出失败与交付状态",
+      "width": 1512,
+      "height": 390,
+      "assets": null,
+      "toolbar": [],
+      "ruler": [],
+      "audioTracks": [],
+      "ratio": [],
+      "play": [],
+      "zoom": [],
+      "menu": null,
+      "modal": null
+    },
+    {
+      "id": "3184:58724",
+      "name": "TL-F13 · 分辨率与比例选项",
+      "width": 1512,
+      "height": 390,
+      "assets": null,
+      "toolbar": [],
+      "ruler": [],
+      "audioTracks": [],
+      "ratio": [],
+      "play": [],
+      "zoom": [],
+      "menu": null,
+      "modal": null
+    },
+    {
+      "id": "3191:59202",
+      "name": "TL-F14 · 打开剪映专业版 / 实测确认弹窗",
+      "width": 1512,
+      "height": 772,
+      "assets": {
+        "width": 360,
+        "import": 1,
+        "collapse": 1,
+        "tabs": [
+          {
+            "width": 97,
+            "height": 36,
+            "text": [
+              {
+                "text": "已导入资产",
+                "size": 13
+              }
+            ]
+          },
+          {
+            "width": 84,
+            "height": 36,
+            "text": [
+              {
+                "text": "画布资产",
+                "size": 13
+              }
+            ]
+          }
+        ],
+        "filter": [
+          {
+            "x": 0,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 46,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 92,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 138,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          }
+        ]
+      },
+      "toolbar": [
+        {
+          "height": 44,
+          "y": 0
+        }
+      ],
+      "ruler": [
+        {
+          "height": 22,
+          "y": 44,
+          "hasMinorTicks": true
+        }
+      ],
+      "audioTracks": [
+        {
+          "height": 32,
+          "y": 60,
+          "opacity": 0.07999999821186066
+        }
+      ],
+      "ratio": [
+        {
+          "width": 64,
+          "height": 32,
+          "icons": [
+            {
+              "width": 16,
+              "height": 16,
+              "main": "3199:59454"
+            }
+          ]
+        }
+      ],
+      "play": [
+        [
+          {
+            "fills": 1,
+            "strokes": 0
+          }
+        ]
+      ],
+      "zoom": [
+        {
+          "width": 78,
+          "height": 10,
+          "thumb": [
+            {
+              "width": 4,
+              "height": 16
+            }
+          ]
+        }
+      ],
+      "menu": null,
+      "modal": {
+        "width": 480,
+        "height": 270,
+        "text": [
+          "打开剪映专业版",
+          "请确认剪映专业版已升级至最新版本",
+          "不再提醒",
+          "打开剪映专业版"
+        ],
+        "close": 1
+      }
+    },
+    {
+      "id": "3200:59612",
+      "name": "TL-F15 · 画面比例 / 11选项菜单",
+      "width": 1512,
+      "height": 772,
+      "assets": {
+        "width": 360,
+        "import": 1,
+        "collapse": 1,
+        "tabs": [
+          {
+            "width": 97,
+            "height": 36,
+            "text": [
+              {
+                "text": "已导入资产",
+                "size": 13
+              }
+            ]
+          },
+          {
+            "width": 84,
+            "height": 36,
+            "text": [
+              {
+                "text": "画布资产",
+                "size": 13
+              }
+            ]
+          }
+        ],
+        "filter": [
+          {
+            "x": 0,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 46,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 92,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          },
+          {
+            "x": 138,
+            "y": 0,
+            "width": 42,
+            "height": 36
+          }
+        ]
+      },
+      "toolbar": [
+        {
+          "height": 44,
+          "y": 0
+        }
+      ],
+      "ruler": [
+        {
+          "height": 22,
+          "y": 44,
+          "hasMinorTicks": true
+        }
+      ],
+      "audioTracks": [
+        {
+          "height": 32,
+          "y": 60,
+          "opacity": 0.07999999821186066
+        }
+      ],
+      "ratio": [
+        {
+          "width": 64,
+          "height": 32,
+          "icons": [
+            {
+              "width": 16,
+              "height": 16,
+              "main": "3199:59454"
+            }
+          ]
+        }
+      ],
+      "play": [
+        [
+          {
+            "fills": 1,
+            "strokes": 0
+          }
+        ]
+      ],
+      "zoom": [
+        {
+          "width": 78,
+          "height": 10,
+          "thumb": [
+            {
+              "width": 4,
+              "height": 16
+            }
+          ]
+        }
+      ],
+      "menu": {
+        "width": 200,
+        "height": 444,
+        "rows": [
+          {
+            "name": "比例 / 自动",
+            "y": 4,
+            "height": 36
+          },
+          {
+            "name": "比例 / 2.35:1",
+            "y": 44,
+            "height": 36
+          },
+          {
+            "name": "比例 / 21:9",
+            "y": 84,
+            "height": 36
+          },
+          {
+            "name": "比例 / 1.85:1",
+            "y": 124,
+            "height": 36
+          },
+          {
+            "name": "比例 / 16:9",
+            "y": 164,
+            "height": 36
+          },
+          {
+            "name": "比例 / 3:2",
+            "y": 204,
+            "height": 36
+          },
+          {
+            "name": "比例 / 4:3",
+            "y": 244,
+            "height": 36
+          },
+          {
+            "name": "比例 / 1:1",
+            "y": 284,
+            "height": 36
+          },
+          {
+            "name": "比例 / 3:4",
+            "y": 324,
+            "height": 36
+          },
+          {
+            "name": "比例 / 2:3",
+            "y": 364,
+            "height": 36
+          },
+          {
+            "name": "比例 / 9:16",
+            "y": 404,
+            "height": 36
+          }
+        ]
+      },
+      "modal": null
+    },
+    {
+      "id": "3231:61232",
+      "name": "TL-F16 · 时间线 / 高倍缩放 180px每秒",
+      "x": 3272,
+      "y": 3370,
+      "width": 1512,
+      "height": 772,
+      "highZoom": {
+        "pps": 180,
+        "majorSeconds": 1,
+        "minorSeconds": 0.1,
+        "labels": [
+          {
+            "text": "00:00",
+            "x": 52
+          },
+          {
+            "text": "00:01",
+            "x": 232
+          },
+          {
+            "text": "00:02",
+            "x": 412
+          },
+          {
+            "text": "00:03",
+            "x": 592
+          },
+          {
+            "text": "00:04",
+            "x": 772
+          },
+          {
+            "text": "00:05",
+            "x": 952
+          },
+          {
+            "text": "00:06",
+            "x": 1132
+          },
+          {
+            "text": "00:07",
+            "x": 1312
+          }
+        ],
+        "tickVector": [
+          {
+            "windingRule": "NONZERO",
+            "data": "M 0 0 L 0 8 M 18 0 L 18 4 M 36 0 L 36 4 M 54 0 L 54 4 M 72 0 L 72 4 M 90 0 L 90 4 M 108 0 L 108 4 M 126 0 L 126 4 M 144 0 L 144 4 M 162 0 L 162 4 M 180 0 L 180 8 M 198 0 L 198 4 M 216 0 L 216 4 M 234 0 L 234 4 M 252 0 L 252 4 M 270 0 L 270 4 M 288 0 L 288 4 M 306 0 L 306 4 M 324 0 L 324 4 M 342 0 L 342 4 M 360 0 L 360 8 M 378 0 L 378 4 M 396 0 L 396 4 M 414 0 L 414 4 M 432 0 L 432 4 M 450 0 L 450 4 M 468 0 L 468 4 M 486 0 L 486 4 M 504 0 L 504 4 M 522 0 L 522 4 M 540 0 L 540 8 M 558 0 L 558 4 M 576 0 L 576 4 M 594 0 L 594 4 M 612 0 L 612 4 M 630 0 L 630 4 M 648 0 L 648 4 M 666 0 L 666 4 M 684 0 L 684 4 M 702 0 L 702 4 M 720 0 L 720 8 M 738 0 L 738 4 M 756 0 L 756 4 M 774 0 L 774 4 M 792 0 L 792 4 M 810 0 L 810 4 M 828 0 L 828 4 M 846 0 L 846 4 M 864 0 L 864 4 M 882 0 L 882 4 M 900 0 L 900 8 M 918 0 L 918 4 M 936 0 L 936 4 M 954 0 L 954 4 M 972 0 L 972 4 M 990 0 L 990 4 M 1008 0 L 1008 4 M 1026 0 L 1026 4 M 1044 0 L 1044 4 M 1062 0 L 1062 4 M 1080 0 L 1080 8 M 1098 0 L 1098 4 M 1116 0 L 1116 4 M 1134 0 L 1134 4 M 1152 0 L 1152 4 M 1170 0 L 1170 4 M 1188 0 L 1188 4 M 1206 0 L 1206 4 M 1224 0 L 1224 4 M 1242 0 L 1242 4 M 1260 0 L 1260 8 M 1278 0 L 1278 4 M 1296 0 L 1296 4 M 1314 0 L 1314 4 M 1332 0 L 1332 4 M 1350 0 L 1350 4 M 1368 0 L 1368 4 M 1386 0 L 1386 4 M 1404 0 L 1404 4 M 1422 0 L 1422 4"
+          }
+        ]
+      },
+      "clips": [
+        {
+          "id": "3231:61474",
+          "width": 720,
+          "height": 56,
+          "x": 0,
+          "clipsContent": true,
+          "tiles": [
+            {
+              "id": "3231:61475",
+              "x": 2,
+              "width": 99.55555725097656,
+              "height": 56,
+              "imageHash": "cb9925173338c54f7e6ea7ae477bf81f05f0f810"
+            },
+            {
+              "id": "3231:61478",
+              "x": 101.55555725097656,
+              "width": 99.55555725097656,
+              "height": 56,
+              "imageHash": "cb9925173338c54f7e6ea7ae477bf81f05f0f810"
+            },
+            {
+              "id": "3231:61481",
+              "x": 201.11111450195312,
+              "width": 99.55555725097656,
+              "height": 56,
+              "imageHash": "cb9925173338c54f7e6ea7ae477bf81f05f0f810"
+            },
+            {
+              "id": "3231:61484",
+              "x": 300.66668701171875,
+              "width": 99.55555725097656,
+              "height": 56,
+              "imageHash": "cb9925173338c54f7e6ea7ae477bf81f05f0f810"
+            },
+            {
+              "id": "3231:61487",
+              "x": 400.22222900390625,
+              "width": 99.55555725097656,
+              "height": 56,
+              "imageHash": "cb9925173338c54f7e6ea7ae477bf81f05f0f810"
+            },
+            {
+              "id": "3231:61490",
+              "x": 499.77777099609375,
+              "width": 99.55555725097656,
+              "height": 56,
+              "imageHash": "cb9925173338c54f7e6ea7ae477bf81f05f0f810"
+            },
+            {
+              "id": "3231:61493",
+              "x": 599.3333129882812,
+              "width": 99.55555725097656,
+              "height": 56,
+              "imageHash": "cb9925173338c54f7e6ea7ae477bf81f05f0f810"
+            },
+            {
+              "id": "3231:61496",
+              "x": 698.8888549804688,
+              "width": 99.55555725097656,
+              "height": 56,
+              "imageHash": "cb9925173338c54f7e6ea7ae477bf81f05f0f810"
+            }
+          ]
+        },
+        {
+          "id": "3231:61500",
+          "width": 900,
+          "height": 56,
+          "x": 720,
+          "clipsContent": true,
+          "tiles": [
+            {
+              "id": "3231:61501",
+              "x": 0,
+              "width": 99.55555725097656,
+              "height": 56,
+              "imageHash": "e282ce1e5eeade8c37b1fd1149d9d87712b0c233"
+            },
+            {
+              "id": "3231:61504",
+              "x": 99.55555725097656,
+              "width": 99.55555725097656,
+              "height": 56,
+              "imageHash": "e282ce1e5eeade8c37b1fd1149d9d87712b0c233"
+            },
+            {
+              "id": "3231:61507",
+              "x": 199.11111450195312,
+              "width": 99.55555725097656,
+              "height": 56,
+              "imageHash": "e282ce1e5eeade8c37b1fd1149d9d87712b0c233"
+            },
+            {
+              "id": "3231:61510",
+              "x": 298.66668701171875,
+              "width": 99.55555725097656,
+              "height": 56,
+              "imageHash": "e282ce1e5eeade8c37b1fd1149d9d87712b0c233"
+            },
+            {
+              "id": "3231:61513",
+              "x": 398.22222900390625,
+              "width": 99.55555725097656,
+              "height": 56,
+              "imageHash": "e282ce1e5eeade8c37b1fd1149d9d87712b0c233"
+            },
+            {
+              "id": "3231:61516",
+              "x": 497.77777099609375,
+              "width": 99.55555725097656,
+              "height": 56,
+              "imageHash": "e282ce1e5eeade8c37b1fd1149d9d87712b0c233"
+            },
+            {
+              "id": "3231:61519",
+              "x": 597.3333129882812,
+              "width": 99.55555725097656,
+              "height": 56,
+              "imageHash": "e282ce1e5eeade8c37b1fd1149d9d87712b0c233"
+            },
+            {
+              "id": "3231:61522",
+              "x": 696.8888549804688,
+              "width": 99.55555725097656,
+              "height": 56,
+              "imageHash": "e282ce1e5eeade8c37b1fd1149d9d87712b0c233"
+            },
+            {
+              "id": "3231:61525",
+              "x": 796.4443969726562,
+              "width": 99.55555725097656,
+              "height": 56,
+              "imageHash": "e282ce1e5eeade8c37b1fd1149d9d87712b0c233"
+            },
+            {
+              "id": "3231:61528",
+              "x": 895.9999389648438,
+              "width": 99.55555725097656,
+              "height": 56,
+              "imageHash": "e282ce1e5eeade8c37b1fd1149d9d87712b0c233"
+            }
+          ]
+        }
+      ],
+      "viewport": {
+        "id": "3231:61472",
+        "width": 1428,
+        "height": 56,
+        "clipsContent": true,
+        "contentId": "3231:61473",
+        "contentWidth": 1676,
+        "paddingRight": 0,
+        "fullAxisScrollWidth": 1736,
+        "zeroGutter": 52,
+        "appendButton": 56,
+        "rightMargin": 8,
+        "children": [
+          {
+            "id": "3231:61474",
+            "width": 720,
+            "height": 56,
+            "x": 0
+          },
+          {
+            "id": "3231:61500",
+            "width": 900,
+            "height": 56,
+            "x": 720
+          },
+          {
+            "id": "3231:61311",
+            "width": 56,
+            "height": 56,
+            "x": 1620
+          }
+        ]
+      },
+      "evidenceBoundary": "源站视频高倍实测 + 公开模块图片平铺与标尺静态合同。Figma静态验收；新代码真实复验因Mac锁屏待完成。",
+      "finalMediaGeometry": [
+        {
+          "slotId": "3231:61474",
+          "slotWidth": 720,
+          "slotHeight": 56,
+          "mediaId": "3236:61648",
+          "mediaWidth": 718,
+          "mediaHeight": 56,
+          "border": 0,
+          "trailingGap": 2,
+          "tiles": [
+            {
+              "id": "3231:61475",
+              "x": 0,
+              "y": 0,
+              "width": 99.55555725097656,
+              "height": 56
+            },
+            {
+              "id": "3231:61478",
+              "x": 99.55555725097656,
+              "y": 0,
+              "width": 99.55555725097656,
+              "height": 56
+            },
+            {
+              "id": "3231:61481",
+              "x": 199.11111450195312,
+              "y": 0,
+              "width": 99.55555725097656,
+              "height": 56
+            },
+            {
+              "id": "3231:61484",
+              "x": 298.66668701171875,
+              "y": 0,
+              "width": 99.55555725097656,
+              "height": 56
+            },
+            {
+              "id": "3231:61487",
+              "x": 398.22222900390625,
+              "y": 0,
+              "width": 99.55555725097656,
+              "height": 56
+            },
+            {
+              "id": "3231:61490",
+              "x": 497.77777099609375,
+              "y": 0,
+              "width": 99.55555725097656,
+              "height": 56
+            },
+            {
+              "id": "3231:61493",
+              "x": 597.3333129882812,
+              "y": 0,
+              "width": 99.55555725097656,
+              "height": 56
+            },
+            {
+              "id": "3231:61496",
+              "x": 696.8888549804688,
+              "y": 0,
+              "width": 99.55555725097656,
+              "height": 56
+            }
+          ]
+        },
+        {
+          "slotId": "3231:61500",
+          "slotWidth": 900,
+          "slotHeight": 56,
+          "mediaId": "3236:61649",
+          "mediaWidth": 898,
+          "mediaHeight": 56,
+          "border": 0,
+          "trailingGap": 2,
+          "tiles": [
+            {
+              "id": "3231:61501",
+              "x": 0,
+              "y": 0,
+              "width": 99.55555725097656,
+              "height": 56
+            },
+            {
+              "id": "3231:61504",
+              "x": 99.55555725097656,
+              "y": 0,
+              "width": 99.55555725097656,
+              "height": 56
+            },
+            {
+              "id": "3231:61507",
+              "x": 199.11111450195312,
+              "y": 0,
+              "width": 99.55555725097656,
+              "height": 56
+            },
+            {
+              "id": "3231:61510",
+              "x": 298.66668701171875,
+              "y": 0,
+              "width": 99.55555725097656,
+              "height": 56
+            },
+            {
+              "id": "3231:61513",
+              "x": 398.22222900390625,
+              "y": 0,
+              "width": 99.55555725097656,
+              "height": 56
+            },
+            {
+              "id": "3231:61516",
+              "x": 497.77777099609375,
+              "y": 0,
+              "width": 99.55555725097656,
+              "height": 56
+            },
+            {
+              "id": "3231:61519",
+              "x": 597.3333129882812,
+              "y": 0,
+              "width": 99.55555725097656,
+              "height": 56
+            },
+            {
+              "id": "3231:61522",
+              "x": 696.8888549804688,
+              "y": 0,
+              "width": 99.55555725097656,
+              "height": 56
+            },
+            {
+              "id": "3231:61525",
+              "x": 796.4443969726562,
+              "y": 0,
+              "width": 99.55555725097656,
+              "height": 56
+            },
+            {
+              "id": "3231:61528",
+              "x": 895.9999389648438,
+              "y": 0,
+              "width": 99.55555725097656,
+              "height": 56
+            }
+          ]
+        }
+      ],
+      "viewportSpec": "F16 · 全屏高倍 180px/s：无裁剪留白时全轴 scrollWidth = max(viewport, max(960, ceil(时长秒 × pps)) + 116)。源站16秒 = 2996px；项目9秒 = 1736px（均已实测）。\n116px = 左侧零点 gutter 52px（44 + 8）+ 追加按钮56px + 右边距8px。当前媒体视口从x64起、宽1428px，已排除左右60px；内部媒体内容为1620 + 56 = 1676px，paddingRight为0。\n视频槽720×56 / 媒体718×56，图片槽900×56 / 媒体898×56，尾隙均2px；1秒主刻度 / 0.1秒次刻度，水平裁切。中心缩放保持时间锚定；Ctrl/Meta + 滚轮以鼠标位置锚定。\n首个视觉视频的源入点产生可向左扩展裁剪的 headroom：正常scroll最小值为headroom，裁剪临时可回0，默认不展示隐藏留白。当前源入点0，不添加猜测画面。\n紧凑模式独立：默认32.1px/s、标尺至少30秒，不套用全屏内容宽合同。合成缩略图仅作可编辑示例；Figma静态规范与运行验收分开记录。"
+    },
+    {
+      "id": "3235:61422",
+      "name": "TL-F17 · 批量导入 / 部分失败 · 本项目既有合同",
+      "width": 1512,
+      "height": 772,
+      "x": 32,
+      "y": 4640,
+      "dialog": {
+        "id": "3235:61509",
+        "width": 560,
+        "height": 554,
+        "padding": 24,
+        "gap": 16,
+        "radius": 12,
+        "description": "派生自项目Dialog / 上传素材 / 部分失败（750:28193），按timeline-upload-dialog.tsx同步560宽和当前文案；本项目local_review_confirmed合同，非即梦实测。",
+        "texts": [
+          {
+            "id": "3235:61538",
+            "text": "导入素材",
+            "size": 16
+          },
+          {
+            "id": "3235:61539",
+            "text": "每批最多50个 · 图片≤20MB · 音频≤100MB · 视频≤500MB/60秒",
+            "size": 14
+          },
+          {
+            "id": "3235:61543",
+            "text": "选择文件或拖至此处",
+            "size": 14
+          },
+          {
+            "id": "3235:61544",
+            "text": "共3个 · 已就绪1个 · 失败2个",
+            "size": 12
+          },
+          {
+            "id": "3235:61548",
+            "text": "时间线测试视频.mp4",
+            "size": 14
+          },
+          {
+            "id": "3235:61549",
+            "text": "已就绪",
+            "size": 12
+          },
+          {
+            "id": "3235:61552",
+            "text": "时间线测试音频.wav",
+            "size": 14
+          },
+          {
+            "id": "3235:61553",
+            "text": "失败",
+            "size": 12
+          },
+          {
+            "id": "3235:61554",
+            "text": "操作结果未确认，请保留当前内容并重试原请求。",
+            "size": 12
+          },
+          {
+            "id": "I3235:61555;268:2494",
+            "text": "重试",
+            "size": 12.800000190734863
+          },
+          {
+            "id": "3235:61566",
+            "text": "说明.txt",
+            "size": 14
+          },
+          {
+            "id": "3235:61567",
+            "text": "失败",
+            "size": 12
+          },
+          {
+            "id": "3235:61568",
+            "text": "时间线仅支持图片、视频和音频文件。",
+            "size": 12
+          },
+          {
+            "id": "I3235:61570;268:2502",
+            "text": "关闭",
+            "size": 14
+          },
+          {
+            "id": "I3235:61584;268:2514",
+            "text": "开始上传",
+            "size": 14
+          }
+        ],
+        "rows": [
+          {
+            "id": "3235:61546",
+            "name": "Upload item / 时间线测试视频.mp4",
+            "height": 44,
+            "retry": []
+          },
+          {
+            "id": "3235:61550",
+            "name": "Upload item / 时间线测试音频.wav",
+            "height": 100,
+            "retry": [
+              "Button / 重试"
+            ]
+          },
+          {
+            "id": "3235:61564",
+            "name": "Upload item / 说明.txt",
+            "height": 66,
+            "retry": []
+          }
+        ]
+      },
+      "evidenceBoundary": "本项目既有local_review_confirmed确认合同，非即梦实测；确认仅待上传时出现，结果态不显示。已上传归档失败只重试归档。Figma静态验收，不证明网络上传运行成功。"
+    }
+  ],
+  "icons": [
+    {
+      "id": "3185:59096",
+      "name": "时间线 / 自动吸附",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "id": "3185:59100",
+      "name": "时间线 / 缩小时间轴",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "id": "3185:59105",
+      "name": "时间线 / 放大时间轴",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "id": "3185:59108",
+      "name": "时间线 / 画面比例",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "id": "3199:59454",
+      "name": "时间线 / 画面比例 / 9:16",
+      "width": 16,
+      "height": 16
+    }
+  ],
+  "panelVariable": {
+    "id": "VariableID:3189:59190",
+    "name": "timeline/panel",
+    "values": {
+      "3064:0": {
+        "r": 0.10196078568696976,
+        "g": 0.10196078568696976,
+        "b": 0.10196078568696976,
+        "a": 1
+      }
+    }
+  },
+  "originalToolbarVariable": {
+    "id": "VariableID:3064:46575",
+    "values": {
+      "3064:0": {
+        "type": "VARIABLE_ALIAS",
+        "id": "VariableID:3064:46574"
+      }
+    }
+  },
+  "uiIsEditable": true,
+  "unexpectedBrandText": [],
+  "finalVisualPolish": {
+    "sliderRailsClipContent": false,
+    "emptyVolumeAndFullscreenOpacity": 1,
+    "trackAppendIconOpacity": 0.6
+  },
+  "mediaDetails": {
+    "inventory": [
+      {
+        "id": "3091:47697",
+        "name": "TL-F01 · 时间线 / 全屏空态 · TL-01–14",
+        "width": 1512,
+        "height": 772,
+        "counts": {
+          "FRAME": 45,
+          "TEXT": 28,
+          "INSTANCE": 39,
+          "VECTOR": 45,
+          "RECTANGLE": 3,
+          "GROUP": 6
+        },
+        "components": []
+      },
+      {
+        "id": "3180:57142",
+        "name": "时间线 · 即梦一致性 / 状态设计",
+        "width": 4816,
+        "height": 4540,
+        "counts": {
+          "FRAME": 701,
+          "COMPONENT": 18,
+          "GROUP": 88,
+          "VECTOR": 605,
+          "RECTANGLE": 1304,
+          "TEXT": 464,
+          "INSTANCE": 597,
+          "ELLIPSE": 1
+        },
+        "components": [
+          {
+            "id": "3180:57148",
+            "name": "时间线 / 分割",
+            "width": 16,
+            "height": 16
+          },
+          {
+            "id": "3180:57153",
+            "name": "时间线 / 向左剪裁",
+            "width": 16,
+            "height": 16
+          },
+          {
+            "id": "3180:57158",
+            "name": "时间线 / 向右剪裁",
+            "width": 16,
+            "height": 16
+          },
+          {
+            "id": "3180:57163",
+            "name": "时间线 / 删除",
+            "width": 16,
+            "height": 16
+          },
+          {
+            "id": "3180:57168",
+            "name": "时间线 / 音量",
+            "width": 16,
+            "height": 16
+          },
+          {
+            "id": "3181:57141",
+            "name": "时间线 / 按钮",
+            "width": 72,
+            "height": 32
+          },
+          {
+            "id": "3181:57143",
+            "name": "时间线 / 图标按钮",
+            "width": 28,
+            "height": 28
+          },
+          {
+            "id": "3181:57147",
+            "name": "时间线 / 资产卡片",
+            "width": 160,
+            "height": 90
+          },
+          {
+            "id": "3181:57159",
+            "name": "时间线 / 主视觉片段",
+            "width": 106,
+            "height": 56
+          },
+          {
+            "id": "3181:57162",
+            "name": "时间线 / 音频片段",
+            "width": 150,
+            "height": 32
+          },
+          {
+            "id": "3185:59096",
+            "name": "时间线 / 自动吸附",
+            "width": 16,
+            "height": 16
+          },
+          {
+            "id": "3185:59100",
+            "name": "时间线 / 缩小时间轴",
+            "width": 16,
+            "height": 16
+          },
+          {
+            "id": "3185:59105",
+            "name": "时间线 / 放大时间轴",
+            "width": 16,
+            "height": 16
+          },
+          {
+            "id": "3185:59108",
+            "name": "时间线 / 画面比例",
+            "width": 16,
+            "height": 16
+          },
+          {
+            "id": "3189:59191",
+            "name": "时间线 / 导入按钮",
+            "width": 64,
+            "height": 32
+          },
+          {
+            "id": "3197:59585",
+            "name": "时间线 / 比例入口",
+            "width": 64,
+            "height": 32
+          },
+          {
+            "id": "3199:59454",
+            "name": "时间线 / 画面比例 / 9:16",
+            "width": 16,
+            "height": 16
+          },
+          {
+            "id": "3216:59949",
+            "name": "时间线 / 音频卡片波形",
+            "width": 144,
+            "height": 48
+          }
+        ]
+      }
+    ],
+    "previews": [
+      {
+        "id": "3091:47697",
+        "stage": {
+          "id": "3181:57246",
+          "x": 4,
+          "y": 4,
+          "right": 4,
+          "bottom": 0,
+          "innerRadius": 10,
+          "outerRadius": 12,
+          "children": [
+            {
+              "id": "3181:57247"
+            }
+          ]
+        }
+      },
+      {
+        "id": "3181:57373",
+        "stage": {
+          "id": "3181:57487",
+          "x": 4,
+          "y": 4,
+          "right": 4,
+          "bottom": 0,
+          "innerRadius": 10,
+          "outerRadius": 12,
+          "children": [
+            {
+              "id": "3181:57488",
+              "cornerRadius": 10
+            }
+          ]
+        }
+      },
+      {
+        "id": "3181:57675",
+        "stage": {
+          "id": "3181:57789",
+          "x": 4,
+          "y": 4,
+          "right": 4,
+          "bottom": 0,
+          "innerRadius": 10,
+          "outerRadius": 12,
+          "children": [
+            {
+              "id": "3181:57790",
+              "cornerRadius": 10
+            }
+          ]
+        }
+      },
+      {
+        "id": "3181:58043",
+        "stage": {
+          "id": "3181:58157",
+          "x": 4,
+          "y": 4,
+          "right": 4,
+          "bottom": 0,
+          "innerRadius": 10,
+          "outerRadius": 12,
+          "children": [
+            {
+              "id": "3181:58158",
+              "cornerRadius": 10
+            }
+          ]
+        }
+      },
+      {
+        "id": "3184:57802",
+        "stage": {
+          "id": "3184:57828",
+          "x": 4,
+          "y": 4,
+          "right": 4,
+          "bottom": 0,
+          "innerRadius": 10,
+          "outerRadius": 12,
+          "children": [
+            {
+              "id": "3184:57829",
+              "cornerRadius": 10
+            }
+          ]
+        }
+      },
+      {
+        "id": "3184:57913",
+        "stage": {
+          "id": "3184:57939",
+          "x": 4,
+          "y": 4,
+          "right": 4,
+          "bottom": 0,
+          "innerRadius": 10,
+          "outerRadius": 12,
+          "children": [
+            {
+              "id": "3184:57940",
+              "cornerRadius": 10
+            }
+          ]
+        }
+      },
+      {
+        "id": "3184:58005",
+        "stage": {
+          "id": "3184:58031",
+          "x": 4,
+          "y": 4,
+          "right": 4,
+          "bottom": 0,
+          "innerRadius": 10,
+          "outerRadius": 12,
+          "children": [
+            {
+              "id": "3184:58032",
+              "cornerRadius": 10
+            }
+          ]
+        }
+      },
+      {
+        "id": "3184:58097",
+        "stage": {
+          "id": "3184:58123",
+          "x": 4,
+          "y": 4,
+          "right": 4,
+          "bottom": 0,
+          "innerRadius": 10,
+          "outerRadius": 12,
+          "children": [
+            {
+              "id": "3184:58261"
+            },
+            {
+              "id": "3184:58262"
+            },
+            {
+              "id": "3184:58263",
+              "cornerRadius": 10
+            }
+          ]
+        }
+      },
+      {
+        "id": "3184:58270",
+        "stage": {
+          "id": "3184:58296",
+          "x": 4,
+          "y": 4,
+          "right": 4,
+          "bottom": 0,
+          "innerRadius": 10,
+          "outerRadius": 12,
+          "children": [
+            {
+              "id": "3184:58297",
+              "cornerRadius": 10
+            }
+          ]
+        }
+      },
+      {
+        "id": "3184:58547",
+        "stage": {
+          "id": "3184:58573",
+          "x": 4,
+          "y": 4,
+          "right": 4,
+          "bottom": 0,
+          "innerRadius": 10,
+          "outerRadius": 12,
+          "children": [
+            {
+              "id": "3184:58574",
+              "cornerRadius": 10
+            }
+          ]
+        }
+      },
+      {
+        "id": "3191:59202",
+        "stage": {
+          "id": "3191:59229",
+          "x": 4,
+          "y": 4,
+          "right": 4,
+          "bottom": 0,
+          "innerRadius": 10,
+          "outerRadius": 12,
+          "children": [
+            {
+              "id": "3191:59230",
+              "cornerRadius": 10
+            }
+          ]
+        }
+      },
+      {
+        "id": "3200:59612",
+        "stage": {
+          "id": "3200:59639",
+          "x": 4,
+          "y": 4,
+          "right": 4,
+          "bottom": 0,
+          "innerRadius": 10,
+          "outerRadius": 12,
+          "children": [
+            {
+              "id": "3200:59640",
+              "cornerRadius": 10
+            }
+          ]
+        }
+      }
+    ],
+    "audioCard": {
+      "id": "3181:57429",
+      "component": "3216:59949",
+      "width": 144,
+      "height": 48,
+      "cardInsetX": 8,
+      "cardInsetY": 21,
+      "waveHeights": [
+        48
+      ],
+      "waveColor": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 1,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 0,
+            "g": 0.6196078658103943,
+            "b": 0.9803921580314636
+          },
+          "boundVariables": {}
+        }
+      ],
+      "background": [
+        {
+          "type": "SOLID",
+          "visible": true,
+          "opacity": 0.11999999731779099,
+          "blendMode": "NORMAL",
+          "color": {
+            "r": 0,
+            "g": 0.5568627715110779,
+            "b": 0.8980392217636108
+          },
+          "boundVariables": {}
+        }
+      ]
+    },
+    "tracks": [
+      {
+        "id": "3181:57626",
+        "width": 150,
+        "height": 32,
+        "wave": [
+          {
+            "id": "I3181:57626;3217:59955",
+            "x": 6,
+            "y": 9,
+            "width": 138,
+            "height": 22,
+            "right": 6,
+            "bottom": 1,
+            "color": [
+              {
+                "type": "SOLID",
+                "visible": true,
+                "opacity": 1,
+                "blendMode": "NORMAL",
+                "color": {
+                  "r": 0,
+                  "g": 0.6196078658103943,
+                  "b": 0.9803921580314636
+                },
+                "boundVariables": {}
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "3181:57994",
+        "width": 120,
+        "height": 32,
+        "wave": [
+          {
+            "id": "I3181:57994;3217:59955",
+            "x": 6,
+            "y": 9,
+            "width": 108,
+            "height": 22,
+            "right": 6,
+            "bottom": 1,
+            "color": [
+              {
+                "type": "SOLID",
+                "visible": true,
+                "opacity": 1,
+                "blendMode": "NORMAL",
+                "color": {
+                  "r": 0,
+                  "g": 0.6196078658103943,
+                  "b": 0.9803921580314636
+                },
+                "boundVariables": {}
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "assetAffordances": {
+    "mutatedNodeIds": [
+      "3189:59192",
+      "3189:59191",
+      "3189:59203",
+      "3189:59197",
+      "3189:59214",
+      "3189:59208",
+      "3189:59225",
+      "3189:59219",
+      "3189:59236",
+      "3189:59230",
+      "3189:59247",
+      "3189:59241",
+      "3189:59258",
+      "3189:59252",
+      "3189:59269",
+      "3189:59263",
+      "3189:59280",
+      "3189:59274",
+      "3189:59291",
+      "3189:59285",
+      "3189:59302",
+      "3189:59296",
+      "3191:59227",
+      "3191:59222",
+      "3200:59637",
+      "3200:59632"
+    ],
+    "states": 15,
+    "components": 18,
+    "checks": [
+      {
+        "screen": "3091:47697",
+        "fold": {
+          "id": "3189:59203",
+          "width": 16,
+          "height": 16,
+          "centerX": 380,
+          "centerY": 311,
+          "geometry": [
+            {
+              "id": "I3189:59203;268:2388",
+              "width": 12,
+              "height": 12
+            },
+            {
+              "id": "I3189:59203;268:2389",
+              "width": 0,
+              "height": 12
+            },
+            {
+              "id": "I3189:59203;268:2390",
+              "width": 2,
+              "height": 4
+            }
+          ]
+        },
+        "import": {
+          "id": "3189:59197",
+          "width": 68,
+          "height": 32,
+          "padding": [
+            12,
+            12
+          ],
+          "cornerRadius": 8,
+          "strokeWeight": 1,
+          "strokes": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 0.07999999821186066,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {}
+            }
+          ]
+        }
+      },
+      {
+        "screen": "3181:57373",
+        "fold": {
+          "id": "3189:59214",
+          "width": 16,
+          "height": 16,
+          "centerX": 380,
+          "centerY": 311,
+          "geometry": [
+            {
+              "id": "I3189:59214;268:2388",
+              "width": 12,
+              "height": 12
+            },
+            {
+              "id": "I3189:59214;268:2389",
+              "width": 0,
+              "height": 12
+            },
+            {
+              "id": "I3189:59214;268:2390",
+              "width": 2,
+              "height": 4
+            }
+          ]
+        },
+        "import": {
+          "id": "3189:59208",
+          "width": 68,
+          "height": 32,
+          "padding": [
+            12,
+            12
+          ],
+          "cornerRadius": 8,
+          "strokeWeight": 1,
+          "strokes": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 0.07999999821186066,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {}
+            }
+          ]
+        }
+      },
+      {
+        "screen": "3181:57675",
+        "fold": {
+          "id": "3189:59225",
+          "width": 16,
+          "height": 16,
+          "centerX": 380,
+          "centerY": 311,
+          "geometry": [
+            {
+              "id": "I3189:59225;268:2388",
+              "width": 12,
+              "height": 12
+            },
+            {
+              "id": "I3189:59225;268:2389",
+              "width": 0,
+              "height": 12
+            },
+            {
+              "id": "I3189:59225;268:2390",
+              "width": 2,
+              "height": 4
+            }
+          ]
+        },
+        "import": {
+          "id": "3189:59219",
+          "width": 68,
+          "height": 32,
+          "padding": [
+            12,
+            12
+          ],
+          "cornerRadius": 8,
+          "strokeWeight": 1,
+          "strokes": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 0.07999999821186066,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {}
+            }
+          ]
+        }
+      },
+      {
+        "screen": "3181:58043",
+        "fold": {
+          "id": "3189:59236",
+          "width": 16,
+          "height": 16,
+          "centerX": 380,
+          "centerY": 311,
+          "geometry": [
+            {
+              "id": "I3189:59236;268:2388",
+              "width": 12,
+              "height": 12
+            },
+            {
+              "id": "I3189:59236;268:2389",
+              "width": 0,
+              "height": 12
+            },
+            {
+              "id": "I3189:59236;268:2390",
+              "width": 2,
+              "height": 4
+            }
+          ]
+        },
+        "import": {
+          "id": "3189:59230",
+          "width": 68,
+          "height": 32,
+          "padding": [
+            12,
+            12
+          ],
+          "cornerRadius": 8,
+          "strokeWeight": 1,
+          "strokes": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 0.07999999821186066,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {}
+            }
+          ]
+        }
+      },
+      {
+        "screen": "3184:57802",
+        "fold": {
+          "id": "3189:59247",
+          "width": 16,
+          "height": 16,
+          "centerX": 380,
+          "centerY": 311,
+          "geometry": [
+            {
+              "id": "I3189:59247;268:2388",
+              "width": 12,
+              "height": 12
+            },
+            {
+              "id": "I3189:59247;268:2389",
+              "width": 0,
+              "height": 12
+            },
+            {
+              "id": "I3189:59247;268:2390",
+              "width": 2,
+              "height": 4
+            }
+          ]
+        },
+        "import": {
+          "id": "3189:59241",
+          "width": 68,
+          "height": 32,
+          "padding": [
+            12,
+            12
+          ],
+          "cornerRadius": 8,
+          "strokeWeight": 1,
+          "strokes": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 0.07999999821186066,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {}
+            }
+          ]
+        }
+      },
+      {
+        "screen": "3184:57913",
+        "fold": {
+          "id": "3189:59258",
+          "width": 16,
+          "height": 16,
+          "centerX": 380,
+          "centerY": 311,
+          "geometry": [
+            {
+              "id": "I3189:59258;268:2388",
+              "width": 12,
+              "height": 12
+            },
+            {
+              "id": "I3189:59258;268:2389",
+              "width": 0,
+              "height": 12
+            },
+            {
+              "id": "I3189:59258;268:2390",
+              "width": 2,
+              "height": 4
+            }
+          ]
+        },
+        "import": {
+          "id": "3189:59252",
+          "width": 68,
+          "height": 32,
+          "padding": [
+            12,
+            12
+          ],
+          "cornerRadius": 8,
+          "strokeWeight": 1,
+          "strokes": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 0.07999999821186066,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {}
+            }
+          ]
+        }
+      },
+      {
+        "screen": "3184:58005",
+        "fold": {
+          "id": "3189:59269",
+          "width": 16,
+          "height": 16,
+          "centerX": 380,
+          "centerY": 311,
+          "geometry": [
+            {
+              "id": "I3189:59269;268:2388",
+              "width": 12,
+              "height": 12
+            },
+            {
+              "id": "I3189:59269;268:2389",
+              "width": 0,
+              "height": 12
+            },
+            {
+              "id": "I3189:59269;268:2390",
+              "width": 2,
+              "height": 4
+            }
+          ]
+        },
+        "import": {
+          "id": "3189:59263",
+          "width": 68,
+          "height": 32,
+          "padding": [
+            12,
+            12
+          ],
+          "cornerRadius": 8,
+          "strokeWeight": 1,
+          "strokes": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 0.07999999821186066,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {}
+            }
+          ]
+        }
+      },
+      {
+        "screen": "3184:58097",
+        "fold": {
+          "id": "3189:59280",
+          "width": 16,
+          "height": 16,
+          "centerX": 380,
+          "centerY": 311,
+          "geometry": [
+            {
+              "id": "I3189:59280;268:2388",
+              "width": 12,
+              "height": 12
+            },
+            {
+              "id": "I3189:59280;268:2389",
+              "width": 0,
+              "height": 12
+            },
+            {
+              "id": "I3189:59280;268:2390",
+              "width": 2,
+              "height": 4
+            }
+          ]
+        },
+        "import": {
+          "id": "3189:59274",
+          "width": 68,
+          "height": 32,
+          "padding": [
+            12,
+            12
+          ],
+          "cornerRadius": 8,
+          "strokeWeight": 1,
+          "strokes": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 0.07999999821186066,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {}
+            }
+          ]
+        }
+      },
+      {
+        "screen": "3184:58270",
+        "fold": {
+          "id": "3189:59291",
+          "width": 16,
+          "height": 16,
+          "centerX": 380,
+          "centerY": 311,
+          "geometry": [
+            {
+              "id": "I3189:59291;268:2388",
+              "width": 12,
+              "height": 12
+            },
+            {
+              "id": "I3189:59291;268:2389",
+              "width": 0,
+              "height": 12
+            },
+            {
+              "id": "I3189:59291;268:2390",
+              "width": 2,
+              "height": 4
+            }
+          ]
+        },
+        "import": {
+          "id": "3189:59285",
+          "width": 68,
+          "height": 32,
+          "padding": [
+            12,
+            12
+          ],
+          "cornerRadius": 8,
+          "strokeWeight": 1,
+          "strokes": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 0.07999999821186066,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {}
+            }
+          ]
+        }
+      },
+      {
+        "screen": "3184:58547",
+        "fold": {
+          "id": "3189:59302",
+          "width": 16,
+          "height": 16,
+          "centerX": 380,
+          "centerY": 311,
+          "geometry": [
+            {
+              "id": "I3189:59302;268:2388",
+              "width": 12,
+              "height": 12
+            },
+            {
+              "id": "I3189:59302;268:2389",
+              "width": 0,
+              "height": 12
+            },
+            {
+              "id": "I3189:59302;268:2390",
+              "width": 2,
+              "height": 4
+            }
+          ]
+        },
+        "import": {
+          "id": "3189:59296",
+          "width": 68,
+          "height": 32,
+          "padding": [
+            12,
+            12
+          ],
+          "cornerRadius": 8,
+          "strokeWeight": 1,
+          "strokes": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 0.07999999821186066,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {}
+            }
+          ]
+        }
+      },
+      {
+        "screen": "3191:59202",
+        "fold": {
+          "id": "3191:59227",
+          "width": 16,
+          "height": 16,
+          "centerX": 380,
+          "centerY": 311,
+          "geometry": [
+            {
+              "id": "I3191:59227;268:2388",
+              "width": 12,
+              "height": 12
+            },
+            {
+              "id": "I3191:59227;268:2389",
+              "width": 0,
+              "height": 12
+            },
+            {
+              "id": "I3191:59227;268:2390",
+              "width": 2,
+              "height": 4
+            }
+          ]
+        },
+        "import": {
+          "id": "3191:59222",
+          "width": 68,
+          "height": 32,
+          "padding": [
+            12,
+            12
+          ],
+          "cornerRadius": 8,
+          "strokeWeight": 1,
+          "strokes": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 0.07999999821186066,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {}
+            }
+          ]
+        }
+      },
+      {
+        "screen": "3200:59612",
+        "fold": {
+          "id": "3200:59637",
+          "width": 16,
+          "height": 16,
+          "centerX": 380,
+          "centerY": 311,
+          "geometry": [
+            {
+              "id": "I3200:59637;268:2388",
+              "width": 12,
+              "height": 12
+            },
+            {
+              "id": "I3200:59637;268:2389",
+              "width": 0,
+              "height": 12
+            },
+            {
+              "id": "I3200:59637;268:2390",
+              "width": 2,
+              "height": 4
+            }
+          ]
+        },
+        "import": {
+          "id": "3200:59632",
+          "width": 68,
+          "height": 32,
+          "padding": [
+            12,
+            12
+          ],
+          "cornerRadius": 8,
+          "strokeWeight": 1,
+          "strokes": [
+            {
+              "type": "SOLID",
+              "visible": true,
+              "opacity": 0.07999999821186066,
+              "blendMode": "NORMAL",
+              "color": {
+                "r": 1,
+                "g": 1,
+                "b": 1
+              },
+              "boundVariables": {}
+            }
+          ]
+        }
+      }
+    ],
+    "clipping": {
+      "mutatedNodeIds": [
+        "3181:57230",
+        "3181:57229",
+        "3181:57395",
+        "3181:57394",
+        "3181:57697",
+        "3181:57696",
+        "3181:58065",
+        "3181:58064",
+        "3184:57812",
+        "3184:57811",
+        "3184:57923",
+        "3184:57922",
+        "3184:58015",
+        "3184:58014",
+        "3184:58107",
+        "3184:58106",
+        "3184:58280",
+        "3184:58279",
+        "3184:58557",
+        "3184:58556",
+        "3191:59212",
+        "3191:59211",
+        "3200:59622",
+        "3200:59621"
+      ],
+      "checks": [
+        {
+          "asset": "3181:57230",
+          "clipsContent": false,
+          "parent": "3181:57229",
+          "itemReverseZIndex": true,
+          "fold": "3189:59203",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "asset": "3181:57395",
+          "clipsContent": false,
+          "parent": "3181:57394",
+          "itemReverseZIndex": true,
+          "fold": "3189:59214",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "asset": "3181:57697",
+          "clipsContent": false,
+          "parent": "3181:57696",
+          "itemReverseZIndex": true,
+          "fold": "3189:59225",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "asset": "3181:58065",
+          "clipsContent": false,
+          "parent": "3181:58064",
+          "itemReverseZIndex": true,
+          "fold": "3189:59236",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "asset": "3184:57812",
+          "clipsContent": false,
+          "parent": "3184:57811",
+          "itemReverseZIndex": true,
+          "fold": "3189:59247",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "asset": "3184:57923",
+          "clipsContent": false,
+          "parent": "3184:57922",
+          "itemReverseZIndex": true,
+          "fold": "3189:59258",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "asset": "3184:58015",
+          "clipsContent": false,
+          "parent": "3184:58014",
+          "itemReverseZIndex": true,
+          "fold": "3189:59269",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "asset": "3184:58107",
+          "clipsContent": false,
+          "parent": "3184:58106",
+          "itemReverseZIndex": true,
+          "fold": "3189:59280",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "asset": "3184:58280",
+          "clipsContent": false,
+          "parent": "3184:58279",
+          "itemReverseZIndex": true,
+          "fold": "3189:59291",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "asset": "3184:58557",
+          "clipsContent": false,
+          "parent": "3184:58556",
+          "itemReverseZIndex": true,
+          "fold": "3189:59302",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "asset": "3191:59212",
+          "clipsContent": false,
+          "parent": "3191:59211",
+          "itemReverseZIndex": true,
+          "fold": "3191:59227",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "asset": "3200:59622",
+          "clipsContent": false,
+          "parent": "3200:59621",
+          "itemReverseZIndex": true,
+          "fold": "3200:59637",
+          "width": 16,
+          "height": 16
+        }
+      ]
+    }
+  },
+  "highZoom": {
+    "state": {
+      "id": "3231:61232",
+      "name": "TL-F16 · 时间线 / 高倍缩放 180px每秒",
+      "x": 3272,
+      "y": 3370,
+      "width": 1512,
+      "height": 772
+    },
+    "inventory": {
+      "states": 16,
+      "components": 18,
+      "sheetInstances": 660
+    },
+    "descendantCount": 249,
+    "counts": {
+      "FRAME": 53,
+      "TEXT": 27,
+      "INSTANCE": 63,
+      "VECTOR": 47,
+      "RECTANGLE": 53,
+      "GROUP": 6
+    },
+    "clips": [
+      {
+        "id": "3231:61474",
+        "width": 720,
+        "height": 56,
+        "x": 0,
+        "clipsContent": true,
+        "tiles": [
+          {
+            "id": "3231:61475",
+            "x": 2,
+            "width": 99.55555725097656,
+            "height": 56,
+            "imageHash": "cb9925173338c54f7e6ea7ae477bf81f05f0f810"
+          },
+          {
+            "id": "3231:61478",
+            "x": 101.55555725097656,
+            "width": 99.55555725097656,
+            "height": 56,
+            "imageHash": "cb9925173338c54f7e6ea7ae477bf81f05f0f810"
+          },
+          {
+            "id": "3231:61481",
+            "x": 201.11111450195312,
+            "width": 99.55555725097656,
+            "height": 56,
+            "imageHash": "cb9925173338c54f7e6ea7ae477bf81f05f0f810"
+          },
+          {
+            "id": "3231:61484",
+            "x": 300.66668701171875,
+            "width": 99.55555725097656,
+            "height": 56,
+            "imageHash": "cb9925173338c54f7e6ea7ae477bf81f05f0f810"
+          },
+          {
+            "id": "3231:61487",
+            "x": 400.22222900390625,
+            "width": 99.55555725097656,
+            "height": 56,
+            "imageHash": "cb9925173338c54f7e6ea7ae477bf81f05f0f810"
+          },
+          {
+            "id": "3231:61490",
+            "x": 499.77777099609375,
+            "width": 99.55555725097656,
+            "height": 56,
+            "imageHash": "cb9925173338c54f7e6ea7ae477bf81f05f0f810"
+          },
+          {
+            "id": "3231:61493",
+            "x": 599.3333129882812,
+            "width": 99.55555725097656,
+            "height": 56,
+            "imageHash": "cb9925173338c54f7e6ea7ae477bf81f05f0f810"
+          },
+          {
+            "id": "3231:61496",
+            "x": 698.8888549804688,
+            "width": 99.55555725097656,
+            "height": 56,
+            "imageHash": "cb9925173338c54f7e6ea7ae477bf81f05f0f810"
+          }
+        ]
+      },
+      {
+        "id": "3231:61500",
+        "width": 900,
+        "height": 56,
+        "x": 720,
+        "clipsContent": true,
+        "tiles": [
+          {
+            "id": "3231:61501",
+            "x": 0,
+            "width": 99.55555725097656,
+            "height": 56,
+            "imageHash": "e282ce1e5eeade8c37b1fd1149d9d87712b0c233"
+          },
+          {
+            "id": "3231:61504",
+            "x": 99.55555725097656,
+            "width": 99.55555725097656,
+            "height": 56,
+            "imageHash": "e282ce1e5eeade8c37b1fd1149d9d87712b0c233"
+          },
+          {
+            "id": "3231:61507",
+            "x": 199.11111450195312,
+            "width": 99.55555725097656,
+            "height": 56,
+            "imageHash": "e282ce1e5eeade8c37b1fd1149d9d87712b0c233"
+          },
+          {
+            "id": "3231:61510",
+            "x": 298.66668701171875,
+            "width": 99.55555725097656,
+            "height": 56,
+            "imageHash": "e282ce1e5eeade8c37b1fd1149d9d87712b0c233"
+          },
+          {
+            "id": "3231:61513",
+            "x": 398.22222900390625,
+            "width": 99.55555725097656,
+            "height": 56,
+            "imageHash": "e282ce1e5eeade8c37b1fd1149d9d87712b0c233"
+          },
+          {
+            "id": "3231:61516",
+            "x": 497.77777099609375,
+            "width": 99.55555725097656,
+            "height": 56,
+            "imageHash": "e282ce1e5eeade8c37b1fd1149d9d87712b0c233"
+          },
+          {
+            "id": "3231:61519",
+            "x": 597.3333129882812,
+            "width": 99.55555725097656,
+            "height": 56,
+            "imageHash": "e282ce1e5eeade8c37b1fd1149d9d87712b0c233"
+          },
+          {
+            "id": "3231:61522",
+            "x": 696.8888549804688,
+            "width": 99.55555725097656,
+            "height": 56,
+            "imageHash": "e282ce1e5eeade8c37b1fd1149d9d87712b0c233"
+          },
+          {
+            "id": "3231:61525",
+            "x": 796.4443969726562,
+            "width": 99.55555725097656,
+            "height": 56,
+            "imageHash": "e282ce1e5eeade8c37b1fd1149d9d87712b0c233"
+          },
+          {
+            "id": "3231:61528",
+            "x": 895.9999389648438,
+            "width": 99.55555725097656,
+            "height": 56,
+            "imageHash": "e282ce1e5eeade8c37b1fd1149d9d87712b0c233"
+          }
+        ]
+      }
+    ],
+    "viewport": {
+      "id": "3231:61472",
+      "width": 1428,
+      "height": 56,
+      "clipsContent": true,
+      "contentId": "3231:61473",
+      "contentWidth": 1676,
+      "paddingRight": 0,
+      "fullAxisScrollWidth": 1736,
+      "zeroGutter": 52,
+      "appendButton": 56,
+      "rightMargin": 8,
+      "children": [
+        {
+          "id": "3231:61474",
+          "width": 720,
+          "height": 56,
+          "x": 0
+        },
+        {
+          "id": "3231:61500",
+          "width": 900,
+          "height": 56,
+          "x": 720
+        },
+        {
+          "id": "3231:61311",
+          "width": 56,
+          "height": 56,
+          "x": 1620
+        }
+      ]
+    },
+    "ruler": {
+      "pps": 180,
+      "majorSeconds": 1,
+      "minorSeconds": 0.1,
+      "labels": [
+        {
+          "text": "00:00",
+          "x": 52
+        },
+        {
+          "text": "00:01",
+          "x": 232
+        },
+        {
+          "text": "00:02",
+          "x": 412
+        },
+        {
+          "text": "00:03",
+          "x": 592
+        },
+        {
+          "text": "00:04",
+          "x": 772
+        },
+        {
+          "text": "00:05",
+          "x": 952
+        },
+        {
+          "text": "00:06",
+          "x": 1132
+        },
+        {
+          "text": "00:07",
+          "x": 1312
+        }
+      ],
+      "tickVector": [
+        {
+          "windingRule": "NONZERO",
+          "data": "M 0 0 L 0 8 M 18 0 L 18 4 M 36 0 L 36 4 M 54 0 L 54 4 M 72 0 L 72 4 M 90 0 L 90 4 M 108 0 L 108 4 M 126 0 L 126 4 M 144 0 L 144 4 M 162 0 L 162 4 M 180 0 L 180 8 M 198 0 L 198 4 M 216 0 L 216 4 M 234 0 L 234 4 M 252 0 L 252 4 M 270 0 L 270 4 M 288 0 L 288 4 M 306 0 L 306 4 M 324 0 L 324 4 M 342 0 L 342 4 M 360 0 L 360 8 M 378 0 L 378 4 M 396 0 L 396 4 M 414 0 L 414 4 M 432 0 L 432 4 M 450 0 L 450 4 M 468 0 L 468 4 M 486 0 L 486 4 M 504 0 L 504 4 M 522 0 L 522 4 M 540 0 L 540 8 M 558 0 L 558 4 M 576 0 L 576 4 M 594 0 L 594 4 M 612 0 L 612 4 M 630 0 L 630 4 M 648 0 L 648 4 M 666 0 L 666 4 M 684 0 L 684 4 M 702 0 L 702 4 M 720 0 L 720 8 M 738 0 L 738 4 M 756 0 L 756 4 M 774 0 L 774 4 M 792 0 L 792 4 M 810 0 L 810 4 M 828 0 L 828 4 M 846 0 L 846 4 M 864 0 L 864 4 M 882 0 L 882 4 M 900 0 L 900 8 M 918 0 L 918 4 M 936 0 L 936 4 M 954 0 L 954 4 M 972 0 L 972 4 M 990 0 L 990 4 M 1008 0 L 1008 4 M 1026 0 L 1026 4 M 1044 0 L 1044 4 M 1062 0 L 1062 4 M 1080 0 L 1080 8 M 1098 0 L 1098 4 M 1116 0 L 1116 4 M 1134 0 L 1134 4 M 1152 0 L 1152 4 M 1170 0 L 1170 4 M 1188 0 L 1188 4 M 1206 0 L 1206 4 M 1224 0 L 1224 4 M 1242 0 L 1242 4 M 1260 0 L 1260 8 M 1278 0 L 1278 4 M 1296 0 L 1296 4 M 1314 0 L 1314 4 M 1332 0 L 1332 4 M 1350 0 L 1350 4 M 1368 0 L 1368 4 M 1386 0 L 1386 4 M 1404 0 L 1404 4 M 1422 0 L 1422 4"
+        }
+      ]
+    },
+    "fonts": [
+      "Noto Sans SC",
+      "Geist"
+    ],
+    "imageNodes": [
+      {
+        "id": "I3231:61258;3181:57148",
+        "name": "媒体缩略图",
+        "type": "RECTANGLE",
+        "width": 160,
+        "height": 90
+      },
+      {
+        "id": "I3231:61261;3181:57148",
+        "name": "媒体缩略图",
+        "type": "RECTANGLE",
+        "width": 160,
+        "height": 90
+      },
+      {
+        "id": "3231:61265",
+        "name": "视频画面",
+        "type": "RECTANGLE",
+        "width": 756,
+        "height": 426
+      },
+      {
+        "id": "3231:61475",
+        "name": "重复首帧 / 1",
+        "type": "INSTANCE",
+        "width": 99.55555725097656,
+        "height": 56
+      },
+      {
+        "id": "3231:61478",
+        "name": "重复首帧 / 2",
+        "type": "INSTANCE",
+        "width": 99.55555725097656,
+        "height": 56
+      },
+      {
+        "id": "3231:61481",
+        "name": "重复首帧 / 3",
+        "type": "INSTANCE",
+        "width": 99.55555725097656,
+        "height": 56
+      },
+      {
+        "id": "3231:61484",
+        "name": "重复首帧 / 4",
+        "type": "INSTANCE",
+        "width": 99.55555725097656,
+        "height": 56
+      },
+      {
+        "id": "3231:61487",
+        "name": "重复首帧 / 5",
+        "type": "INSTANCE",
+        "width": 99.55555725097656,
+        "height": 56
+      },
+      {
+        "id": "3231:61490",
+        "name": "重复首帧 / 6",
+        "type": "INSTANCE",
+        "width": 99.55555725097656,
+        "height": 56
+      },
+      {
+        "id": "3231:61493",
+        "name": "重复首帧 / 7",
+        "type": "INSTANCE",
+        "width": 99.55555725097656,
+        "height": 56
+      },
+      {
+        "id": "3231:61496",
+        "name": "重复首帧 / 8",
+        "type": "INSTANCE",
+        "width": 99.55555725097656,
+        "height": 56
+      },
+      {
+        "id": "3231:61501",
+        "name": "重复首帧 / 1",
+        "type": "INSTANCE",
+        "width": 99.55555725097656,
+        "height": 56
+      },
+      {
+        "id": "3231:61504",
+        "name": "重复首帧 / 2",
+        "type": "INSTANCE",
+        "width": 99.55555725097656,
+        "height": 56
+      },
+      {
+        "id": "3231:61507",
+        "name": "重复首帧 / 3",
+        "type": "INSTANCE",
+        "width": 99.55555725097656,
+        "height": 56
+      },
+      {
+        "id": "3231:61510",
+        "name": "重复首帧 / 4",
+        "type": "INSTANCE",
+        "width": 99.55555725097656,
+        "height": 56
+      },
+      {
+        "id": "3231:61513",
+        "name": "重复首帧 / 5",
+        "type": "INSTANCE",
+        "width": 99.55555725097656,
+        "height": 56
+      },
+      {
+        "id": "3231:61516",
+        "name": "重复首帧 / 6",
+        "type": "INSTANCE",
+        "width": 99.55555725097656,
+        "height": 56
+      },
+      {
+        "id": "3231:61519",
+        "name": "重复首帧 / 7",
+        "type": "INSTANCE",
+        "width": 99.55555725097656,
+        "height": 56
+      },
+      {
+        "id": "3231:61522",
+        "name": "重复首帧 / 8",
+        "type": "INSTANCE",
+        "width": 99.55555725097656,
+        "height": 56
+      },
+      {
+        "id": "3231:61525",
+        "name": "重复首帧 / 9",
+        "type": "INSTANCE",
+        "width": 99.55555725097656,
+        "height": 56
+      },
+      {
+        "id": "3231:61528",
+        "name": "重复首帧 / 10",
+        "type": "INSTANCE",
+        "width": 99.55555725097656,
+        "height": 56
+      }
+    ],
+    "evidenceBoundary": "源站视频高倍实测 + 公开模块图片平铺与标尺静态合同。Figma静态验收；新代码真实复验因Mac锁屏待完成。"
+  },
+  "batchImport": {
+    "state": {
+      "id": "3235:61422",
+      "name": "TL-F17 · 批量导入 / 部分失败 · 本项目既有合同",
+      "width": 1512,
+      "height": 772,
+      "x": 32,
+      "y": 4640
+    },
+    "inventory": {
+      "states": 17,
+      "components": 19,
+      "sheetInstances": 717,
+      "sheetCounts": {
+        "FRAME": 822,
+        "COMPONENT": 19,
+        "GROUP": 101,
+        "VECTOR": 705,
+        "RECTANGLE": 1458,
+        "TEXT": 546,
+        "INSTANCE": 717,
+        "ELLIPSE": 1
+      },
+      "sheetHeight": 5480
+    },
+    "descendantCount": 338,
+    "counts": {
+      "FRAME": 66,
+      "TEXT": 53,
+      "INSTANCE": 57,
+      "VECTOR": 53,
+      "RECTANGLE": 101,
+      "GROUP": 7,
+      "COMPONENT": 1
+    },
+    "dialog": {
+      "id": "3235:61509",
+      "width": 560,
+      "height": 554,
+      "padding": 24,
+      "gap": 16,
+      "radius": 12,
+      "description": "派生自项目Dialog / 上传素材 / 部分失败（750:28193），按timeline-upload-dialog.tsx同步560宽和当前文案；本项目local_review_confirmed合同，非即梦实测。",
+      "texts": [
+        {
+          "id": "3235:61538",
+          "text": "导入素材",
+          "size": 16
+        },
+        {
+          "id": "3235:61539",
+          "text": "每批最多50个 · 图片≤20MB · 音频≤100MB · 视频≤500MB/60秒",
+          "size": 14
+        },
+        {
+          "id": "3235:61543",
+          "text": "选择文件或拖至此处",
+          "size": 14
+        },
+        {
+          "id": "3235:61544",
+          "text": "共3个 · 已就绪1个 · 失败2个",
+          "size": 12
+        },
+        {
+          "id": "3235:61548",
+          "text": "时间线测试视频.mp4",
+          "size": 14
+        },
+        {
+          "id": "3235:61549",
+          "text": "已就绪",
+          "size": 12
+        },
+        {
+          "id": "3235:61552",
+          "text": "时间线测试音频.wav",
+          "size": 14
+        },
+        {
+          "id": "3235:61553",
+          "text": "失败",
+          "size": 12
+        },
+        {
+          "id": "3235:61554",
+          "text": "操作结果未确认，请保留当前内容并重试原请求。",
+          "size": 12
+        },
+        {
+          "id": "I3235:61555;268:2494",
+          "text": "重试",
+          "size": 12.800000190734863
+        },
+        {
+          "id": "3235:61566",
+          "text": "说明.txt",
+          "size": 14
+        },
+        {
+          "id": "3235:61567",
+          "text": "失败",
+          "size": 12
+        },
+        {
+          "id": "3235:61568",
+          "text": "时间线仅支持图片、视频和音频文件。",
+          "size": 12
+        },
+        {
+          "id": "I3235:61570;268:2502",
+          "text": "关闭",
+          "size": 14
+        },
+        {
+          "id": "I3235:61584;268:2514",
+          "text": "开始上传",
+          "size": 14
+        }
+      ],
+      "rows": [
+        {
+          "id": "3235:61546",
+          "name": "Upload item / 时间线测试视频.mp4",
+          "height": 44,
+          "retry": []
+        },
+        {
+          "id": "3235:61550",
+          "name": "Upload item / 时间线测试音频.wav",
+          "height": 100,
+          "retry": [
+            "Button / 重试"
+          ]
+        },
+        {
+          "id": "3235:61564",
+          "name": "Upload item / 说明.txt",
+          "height": 66,
+          "retry": []
+        }
+      ]
+    },
+    "fonts": [
+      "Geist"
+    ],
+    "controls": [
+      {
+        "id": "3235:61555",
+        "width": 46,
+        "height": 28,
+        "main": "268:2493"
+      },
+      {
+        "id": "3235:61570",
+        "width": 52,
+        "height": 36,
+        "main": "268:2501"
+      },
+      {
+        "id": "3235:61584",
+        "width": 80,
+        "height": 36,
+        "main": "268:2513"
+      },
+      {
+        "id": "3235:61608",
+        "width": 16,
+        "height": 16,
+        "main": "737:26388"
+      }
+    ],
+    "imageNodes": [
+      {
+        "id": "I3235:61448;3181:57148",
+        "name": "媒体缩略图",
+        "type": "RECTANGLE",
+        "width": 160,
+        "height": 90
+      },
+      {
+        "id": "I3235:61451;3181:57148",
+        "name": "媒体缩略图",
+        "type": "RECTANGLE",
+        "width": 160,
+        "height": 90
+      },
+      {
+        "id": "3235:61455",
+        "name": "视频画面",
+        "type": "RECTANGLE",
+        "width": 756,
+        "height": 426
+      },
+      {
+        "id": "I3235:61499;3181:57160",
+        "name": "片段缩略图",
+        "type": "RECTANGLE",
+        "width": 106,
+        "height": 56
+      },
+      {
+        "id": "I3235:61500;3181:57160",
+        "name": "片段缩略图",
+        "type": "RECTANGLE",
+        "width": 106,
+        "height": 56
+      }
+    ],
+    "evidenceBoundary": "本项目既有local_review_confirmed确认合同，非即梦实测；确认仅待上传时出现，结果态不显示。已上传归档失败只重试归档。Figma静态验收，不证明网络上传运行成功。",
+    "inlineReadback": {
+      "mutatedNodeIds": [
+        "3235:61548",
+        "3235:61549",
+        "3235:61552",
+        "3235:61553",
+        "3235:61566",
+        "3235:61567",
+        "3235:61543",
+        "3235:61544"
+      ],
+      "inline": [
+        {
+          "id": "3235:61548",
+          "text": "时间线测试视频.mp4",
+          "width": 130,
+          "height": 20,
+          "x": 0
+        },
+        {
+          "id": "3235:61549",
+          "text": "已就绪",
+          "width": 36,
+          "height": 16,
+          "x": 452
+        },
+        {
+          "id": "3235:61552",
+          "text": "时间线测试音频.wav",
+          "width": 127,
+          "height": 20,
+          "x": 0
+        },
+        {
+          "id": "3235:61553",
+          "text": "失败",
+          "width": 24,
+          "height": 16,
+          "x": 464
+        },
+        {
+          "id": "3235:61566",
+          "text": "说明.txt",
+          "width": 49,
+          "height": 20,
+          "x": 0
+        },
+        {
+          "id": "3235:61567",
+          "text": "失败",
+          "width": 24,
+          "height": 16,
+          "x": 464
+        },
+        {
+          "id": "3235:61543",
+          "text": "选择文件或拖至此处",
+          "width": 126,
+          "height": 20,
+          "x": 205
+        },
+        {
+          "id": "3235:61544",
+          "text": "共3个 · 已就绪1个 · 失败2个",
+          "width": 145,
+          "height": 16,
+          "x": 24
+        }
+      ]
+    }
+  },
+  "highZoomTwoPixel": {
+    "createdNodeIds": [
+      "3236:61648",
+      "3236:61649"
+    ],
+    "mutatedNodeIds": [
+      "3231:61474",
+      "3231:61475",
+      "3231:61478",
+      "3231:61481",
+      "3231:61484",
+      "3231:61487",
+      "3231:61490",
+      "3231:61493",
+      "3231:61496",
+      "3231:61499",
+      "3231:61500",
+      "3231:61501",
+      "3231:61504",
+      "3231:61507",
+      "3231:61510",
+      "3231:61513",
+      "3231:61516",
+      "3231:61519",
+      "3231:61522",
+      "3231:61525",
+      "3231:61528",
+      "3231:61531"
+    ],
+    "checks": [
+      {
+        "slotId": "3231:61474",
+        "slotWidth": 720,
+        "slotHeight": 56,
+        "mediaId": "3236:61648",
+        "mediaWidth": 718,
+        "mediaHeight": 56,
+        "border": 0,
+        "trailingGap": 2,
+        "tiles": [
+          {
+            "id": "3231:61475",
+            "x": 0,
+            "y": 0,
+            "width": 99.55555725097656,
+            "height": 56
+          },
+          {
+            "id": "3231:61478",
+            "x": 99.55555725097656,
+            "y": 0,
+            "width": 99.55555725097656,
+            "height": 56
+          },
+          {
+            "id": "3231:61481",
+            "x": 199.11111450195312,
+            "y": 0,
+            "width": 99.55555725097656,
+            "height": 56
+          },
+          {
+            "id": "3231:61484",
+            "x": 298.66668701171875,
+            "y": 0,
+            "width": 99.55555725097656,
+            "height": 56
+          },
+          {
+            "id": "3231:61487",
+            "x": 398.22222900390625,
+            "y": 0,
+            "width": 99.55555725097656,
+            "height": 56
+          },
+          {
+            "id": "3231:61490",
+            "x": 497.77777099609375,
+            "y": 0,
+            "width": 99.55555725097656,
+            "height": 56
+          },
+          {
+            "id": "3231:61493",
+            "x": 597.3333129882812,
+            "y": 0,
+            "width": 99.55555725097656,
+            "height": 56
+          },
+          {
+            "id": "3231:61496",
+            "x": 696.8888549804688,
+            "y": 0,
+            "width": 99.55555725097656,
+            "height": 56
+          }
+        ]
+      },
+      {
+        "slotId": "3231:61500",
+        "slotWidth": 900,
+        "slotHeight": 56,
+        "mediaId": "3236:61649",
+        "mediaWidth": 898,
+        "mediaHeight": 56,
+        "border": 0,
+        "trailingGap": 2,
+        "tiles": [
+          {
+            "id": "3231:61501",
+            "x": 0,
+            "y": 0,
+            "width": 99.55555725097656,
+            "height": 56
+          },
+          {
+            "id": "3231:61504",
+            "x": 99.55555725097656,
+            "y": 0,
+            "width": 99.55555725097656,
+            "height": 56
+          },
+          {
+            "id": "3231:61507",
+            "x": 199.11111450195312,
+            "y": 0,
+            "width": 99.55555725097656,
+            "height": 56
+          },
+          {
+            "id": "3231:61510",
+            "x": 298.66668701171875,
+            "y": 0,
+            "width": 99.55555725097656,
+            "height": 56
+          },
+          {
+            "id": "3231:61513",
+            "x": 398.22222900390625,
+            "y": 0,
+            "width": 99.55555725097656,
+            "height": 56
+          },
+          {
+            "id": "3231:61516",
+            "x": 497.77777099609375,
+            "y": 0,
+            "width": 99.55555725097656,
+            "height": 56
+          },
+          {
+            "id": "3231:61519",
+            "x": 597.3333129882812,
+            "y": 0,
+            "width": 99.55555725097656,
+            "height": 56
+          },
+          {
+            "id": "3231:61522",
+            "x": 696.8888549804688,
+            "y": 0,
+            "width": 99.55555725097656,
+            "height": 56
+          },
+          {
+            "id": "3231:61525",
+            "x": 796.4443969726562,
+            "y": 0,
+            "width": 99.55555725097656,
+            "height": 56
+          },
+          {
+            "id": "3231:61528",
+            "x": 895.9999389648438,
+            "y": 0,
+            "width": 99.55555725097656,
+            "height": 56
+          }
+        ]
+      }
+    ],
+    "inventory": {
+      "states": 17,
+      "components": 19,
+      "instances": 717
+    },
+    "source": "源站解锁后实测：slot720×56，button718×56，border0，8张99.555×56，尾部2px。图片slot900/button898。仅F16。"
+  },
+  "highZoomViewportSpec": {
+    "createdNodeIds": [],
+    "mutatedNodeIds": [
+      "3231:61473",
+      "3231:61594"
+    ],
+    "viewport": {
+      "id": "3231:61472",
+      "width": 1428,
+      "height": 56,
+      "clipsContent": true,
+      "contentId": "3231:61473",
+      "contentWidth": 1676,
+      "paddingRight": 0,
+      "fullAxisScrollWidth": 1736,
+      "zeroGutter": 52,
+      "appendButton": 56,
+      "rightMargin": 8,
+      "children": [
+        {
+          "id": "3231:61474",
+          "width": 720,
+          "height": 56,
+          "x": 0
+        },
+        {
+          "id": "3231:61500",
+          "width": 900,
+          "height": 56,
+          "x": 720
+        },
+        {
+          "id": "3231:61311",
+          "width": 56,
+          "height": 56,
+          "x": 1620
+        }
+      ]
+    },
+    "note": {
+      "id": "3231:61594",
+      "text": "F16 · 全屏高倍 180px/s：无裁剪留白时全轴 scrollWidth = max(viewport, max(960, ceil(时长秒 × pps)) + 116)。源站16秒 = 2996px；项目9秒 = 1736px（均已实测）。\n116px = 左侧零点 gutter 52px（44 + 8）+ 追加按钮56px + 右边距8px。当前媒体视口从x64起、宽1428px，已排除左右60px；内部媒体内容为1620 + 56 = 1676px，paddingRight为0。\n视频槽720×56 / 媒体718×56，图片槽900×56 / 媒体898×56，尾隙均2px；1秒主刻度 / 0.1秒次刻度，水平裁切。中心缩放保持时间锚定；Ctrl/Meta + 滚轮以鼠标位置锚定。\n首个视觉视频的源入点产生可向左扩展裁剪的 headroom：正常scroll最小值为headroom，裁剪临时可回0，默认不展示隐藏留白。当前源入点0，不添加猜测画面。\n紧凑模式独立：默认32.1px/s、标尺至少30秒，不套用全屏内容宽合同。合成缩略图仅作可编辑示例；Figma静态规范与运行验收分开记录。",
+      "x": 3272,
+      "y": 4162,
+      "width": 1512,
+      "height": 95,
+      "endsAt": 4257
+    },
+    "inventory": {
+      "states": 17,
+      "components": 19,
+      "instances": 717
+    }
+  }
+}

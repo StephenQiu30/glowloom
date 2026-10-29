@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"strconv"
 
@@ -351,7 +352,7 @@ func (h *Handler) control(c *gin.Context, action string) {
 // @Summary Download reviewed media export
 // @ID downloadMediaExport
 // @Tags media-exports
-// @Produce video/mp4,audio/mp4
+// @Produce video/mp4,audio/mp4,application/zip
 // @Param job_id path string true "Export UUID"
 // @Param project_id query string true "Project UUID"
 // @Success 200 {file} binary
@@ -378,11 +379,18 @@ func (h *Handler) Download(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	mime, ext := "video/mp4", "mp4"
+	mimeType, ext := "video/mp4", "mp4"
 	if job.OutputKind == domain.OutputAudio {
-		mime, ext = "audio/mp4", "m4a"
+		mimeType, ext = "audio/mp4", "m4a"
 	}
-	c.DataFromReader(200, size, mime, io.LimitReader(reader, size), map[string]string{"Content-Disposition": "attachment; filename=timeline-" + id.String() + "." + ext})
+	if job.OutputKind.IsArtifact() {
+		mimeType, ext = "application/zip", "zip"
+	}
+	fileName := "timeline-" + id.String() + "." + ext
+	if job.Settings != nil {
+		fileName = job.Settings.FileName + "." + ext
+	}
+	c.DataFromReader(200, size, mimeType, io.LimitReader(reader, size), map[string]string{"Content-Disposition": mime.FormatMediaType("attachment", map[string]string{"filename": fileName})})
 }
 
 // Subtitles downloads SRT from visible frozen captions without a transcription claim.

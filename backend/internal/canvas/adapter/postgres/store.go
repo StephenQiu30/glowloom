@@ -20,6 +20,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 // Store owns database transactions and current project access checks.
@@ -425,10 +426,16 @@ type identityConflict struct {
 func (e *identityConflict) Error() string { return "canvas identity unavailable" }
 func (e *identityConflict) Unwrap() error { return application.ErrNotFound }
 func (s *Store) checkMediaReferences(ctx context.Context, tx *gorm.DB, a identityapp.Principal, p uuid.UUID, commands []domain.Command, document domain.Document) error {
-	checked := make(map[uuid.UUID]string)
+	checked := make(map[uuid.UUID]mediaapp.AssetSummary)
+	mediaKindMatches := func(actual, expected string) bool {
+		if expected != "" {
+			return actual == expected
+		}
+		return actual == "image" || actual == "video" || actual == "audio"
+	}
 	check := func(id uuid.UUID, kind string, index int) error {
 		if previous, ok := checked[id]; ok {
-			if previous != kind {
+			if !mediaKindMatches(previous.Kind, kind) {
 				return &domain.CommandError{Index: index, Cause: domain.ErrInvalidCommand}
 			}
 			return nil
@@ -440,15 +447,20 @@ func (s *Store) checkMediaReferences(ctx context.Context, tx *gorm.DB, a identit
 		if err != nil {
 			return &domain.CommandError{Index: index, Cause: err}
 		}
-		if asset.Kind != kind {
+		if !mediaKindMatches(asset.Kind, kind) {
 			return &domain.CommandError{Index: index, Cause: domain.ErrInvalidCommand}
 		}
-		checked[id] = kind
+		checked[id] = asset
 		return nil
 	}
-	checkTimeline := func(config *domain.TimelineConfig, index int) error {
+	checkTimeline := func(config *domain.TimelineConfig, index int, targetID uuid.UUID) error {
 		if config == nil {
 			return nil
+		}
+		for _, id := range config.ImportedAssets {
+			if err := check(id, "", index); err != nil {
+				return err
+			}
 		}
 		for _, clip := range config.Clips {
 			assetID := clip.AssetID
@@ -463,6 +475,16 @@ func (s *Store) checkMediaReferences(ctx context.Context, tx *gorm.DB, a identit
 			if assetID != nil {
 				if err := check(*assetID, clip.Kind, index); err != nil {
 					return err
+				}
+				if clip.NodeID != nil {
+					for _, edge := range document.Edges {
+						if edge.SourceNodeID == *clip.NodeID && edge.TargetNodeID == targetID && edge.EdgeType == "annotation" && edge.Role == "" && len(edge.Binding) == 0 {
+							if err := domain.ValidateTimelineSourceDuration(clip, checked[*assetID].DurationMS); err != nil {
+								return &domain.CommandError{Index: index, Cause: err}
+							}
+							break
+						}
+					}
 				}
 			}
 		}
@@ -545,7 +567,7 @@ func (s *Store) checkMediaReferences(ctx context.Context, tx *gorm.DB, a identit
 			if err := checkDirector(c.Config.Director, index); err != nil {
 				return err
 			}
-			if err := checkTimeline(c.Config.Timeline, index); err != nil {
+			if err := checkTimeline(c.Config.Timeline, index, c.ID); err != nil {
 				return err
 			}
 		}
@@ -573,7 +595,7 @@ func (s *Store) checkMediaReferences(ctx context.Context, tx *gorm.DB, a identit
 			if err := checkDirector(n.Config.Director, index); err != nil {
 				return err
 			}
-			if err := checkTimeline(n.Config.Timeline, index); err != nil {
+			if err := checkTimeline(n.Config.Timeline, index, n.ID); err != nil {
 				return err
 			}
 			if n.RefType != "media_asset" || n.RefID == nil {

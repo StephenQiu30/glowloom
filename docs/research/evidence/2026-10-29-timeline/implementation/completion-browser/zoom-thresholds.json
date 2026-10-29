@@ -1,0 +1,52 @@
+[
+  {
+    "labels": [
+      "00:00",
+      "00:02",
+      "00:04",
+      "00:06"
+    ],
+    "ticks": "background-size: 12px 5px;",
+    "zoom": "24"
+  },
+  {
+    "labels": [
+      "00:00",
+      "00:01",
+      "00:02",
+      "00:03"
+    ],
+    "ticks": "background-size: 24px 5px;",
+    "zoom": "48"
+  },
+  {
+    "labels": [
+      "00:00",
+      "00:01",
+      "00:02",
+      "00:03"
+    ],
+    "ticks": "background-size: 12px 5px;",
+    "zoom": "60"
+  },
+  {
+    "labels": [
+      "00:00",
+      "00:01",
+      "00:02",
+      "00:03"
+    ],
+    "ticks": "background-size: 20px 5px;",
+    "zoom": "100"
+  },
+  {
+    "labels": [
+      "00:00",
+      "00:01",
+      "00:02",
+      "00:03"
+    ],
+    "ticks": "background-size: 12px 5px;",
+    "zoom": "120"
+  }
+]

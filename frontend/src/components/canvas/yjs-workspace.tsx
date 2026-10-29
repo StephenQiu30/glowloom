@@ -1,6 +1,13 @@
 "use client";
+import { createCanvasDomainConnector } from "./lib/canvas-domain-connection";
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { toast } from "sonner";
 import { CanvasYjsLiveSession } from "./yjs-live-session";
 import { CanvasParticipants } from "./canvas-participants";
@@ -35,6 +42,19 @@ import { getProject } from "@/api/projects";
 import { requireProject, type Project } from "@/components/projects/project";
 import { ProjectRenameDialog } from "@/components/projects/project-rename-dialog";
 
+const CanvasTimelineWorkspace = dynamic(
+  () =>
+    import("./timeline/canvas-timeline-workspace").then(
+      (module) => module.CanvasTimelineWorkspace,
+    ),
+  {
+    loading: () => (
+      <p role="status" className="p-4 text-sm">
+        正在打开时间线…
+      </p>
+    ),
+  },
+);
 const CanvasDirectorWorkspace = dynamic(
   () =>
     import("./director/canvas-director-workspace").then(
@@ -88,6 +108,14 @@ function CollaborativeEditor({
     client.getSnapshot,
     client.getSnapshot,
   );
+  const domainConnector = useMemo(
+    () => createCanvasDomainConnector(client, projectID),
+    [client, projectID],
+  );
+  useEffect(() => {
+    domainConnector.start();
+    return () => domainConnector.dispose();
+  }, [domainConnector]);
   const [rename, setRename] = useState<string | null>(null);
   const [renameProject, setRenameProject] = useState<Project | null>(null);
   const renameRequest = useRef<AbortController | null>(null);
@@ -161,10 +189,21 @@ function CollaborativeEditor({
             canNavigate: !view.dirty,
             frozen: !view.writable || view.migration,
             admit: client.canAccept,
+            admitConnectionGraph: client.canAcceptConnectionGraph,
+            resolveConnectionMedia: client.connectionMediaNode,
+            connectDomain: domainConnector.connect,
             onChange: client.change,
             textBinding: client.textBinding,
             renderToolNode: (nodeID, type) =>
-              type === "director" ? (
+              type === "timeline" ? (
+                <CanvasTimelineWorkspace
+                  client={client}
+                  nodeID={nodeID}
+                  canvasID={canvasID}
+                  projectID={projectID}
+                  compact
+                />
+              ) : type === "director" ? (
                 <CanvasDirectorWorkspace
                   client={client}
                   nodeID={nodeID}

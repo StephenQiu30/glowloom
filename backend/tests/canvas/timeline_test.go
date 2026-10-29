@@ -1,6 +1,7 @@
 package canvas_test
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -8,6 +9,37 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 )
+
+func TestTimelineMixedVisualLaneAndIndependentImportedAssets(t *testing.T) {
+	node := timelineNode()
+	c := node.Config.Timeline
+	c.Tracks[0].Kind = "video"
+	c.Clips[0].Kind = "video"
+	c.Clips[0].AssetID = ptr(uuid.New())
+	image := c.Clips[0]
+	image.ID, image.Kind, image.StartMS = uuid.New(), "image", 1000
+	image.AssetID = ptr(uuid.New())
+	c.Clips = append(c.Clips, image)
+	c.ImportedAssets = []uuid.UUID{*c.Clips[0].AssetID, *image.AssetID, uuid.New()}
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(c)
+	var reopened domain.TimelineConfig
+	if err := json.Unmarshal(raw, &reopened); err != nil || len(reopened.ImportedAssets) != 3 {
+		t.Fatalf("lost imported shelf: %s %v", raw, err)
+	}
+	reopened.Clips = nil
+	if err := reopened.Validate(); err != nil || len(reopened.ImportedAssets) != 3 {
+		t.Fatal("clip removal lost imported shelf", err)
+	}
+	for _, ids := range [][]uuid.UUID{{uuid.Nil}, {c.ImportedAssets[0], c.ImportedAssets[0]}, make([]uuid.UUID, 1001)} {
+		reopened.ImportedAssets = ids
+		if reopened.Validate() == nil {
+			t.Fatal("invalid imported asset identities accepted")
+		}
+	}
+}
 
 func timelineNode() domain.Node {
 	track := uuid.New()

@@ -186,7 +186,9 @@ export function CanvasToolbar({
               {definitions
                 .filter(
                   (item) =>
-                    !["text", "image", "video", "audio"].includes(item.type),
+                    !["text", "image", "video", "audio", "timeline"].includes(
+                      item.type,
+                    ),
                 )
                 .map((definition) => (
                   <Button
@@ -229,12 +231,16 @@ export function CanvasToolbar({
         <div className="canvas-dock-surface flex flex-col items-center">
           {definitions
             .filter((item) =>
-              ["text", "image", "video", "audio"].includes(item.type),
+              ["text", "image", "video", "audio", "timeline"].includes(
+                item.type,
+              ),
             )
             .sort(
               (a, b) =>
-                ["text", "image", "video", "audio"].indexOf(a.type) -
-                ["text", "image", "video", "audio"].indexOf(b.type),
+                ["text", "image", "video", "audio", "timeline"].indexOf(
+                  a.type,
+                ) -
+                ["text", "image", "video", "audio", "timeline"].indexOf(b.type),
             )
             .map((definition) => (
               <Tooltip key={definition.type}>

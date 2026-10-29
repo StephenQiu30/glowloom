@@ -95,6 +95,7 @@ func (s *Store) Control(ctx context.Context, actor identityapp.Principal, projec
 			}
 			row.ActiveWorker = nil
 			row.AssetID = nil
+			row.ArtifactID = nil
 			row.SHA256 = nil
 			row.FailureCode = nil
 			row.ActorID = actor.ID
@@ -144,10 +145,17 @@ func (s *Store) Review(ctx context.Context, actor identityapp.Principal, id, key
 		if err != nil {
 			return err
 		}
-		if row.Revision != input.Revision || row.Status != "review_required" || row.AssetID == nil || row.SHA256 == nil || *row.SHA256 != input.SHA256 {
+		if row.Revision != input.Revision || row.Status != "review_required" || (row.AssetID == nil && row.ArtifactID == nil) || row.SHA256 == nil || *row.SHA256 != input.SHA256 {
 			return application.ErrConflict
 		}
-		if err := s.media(tx).Review(ctx, actor, row.ProjectID, *row.AssetID, input.SHA256, time.Now().UTC()); err != nil {
+		if row.ArtifactID != nil {
+			if _, err := s.readArtifact(ctx, tx, row); err != nil {
+				return err
+			}
+			if err := s.validateSources(ctx, tx, actor, row); err != nil {
+				return err
+			}
+		} else if err := s.media(tx).Review(ctx, actor, row.ProjectID, *row.AssetID, input.SHA256, time.Now().UTC()); err != nil {
 			return normalize(err)
 		}
 		row.Status = "succeeded"
@@ -214,5 +222,5 @@ func (s *Store) Frozen(ctx context.Context, actor identityapp.Principal, project
 	return frozen, err
 }
 func updateJob(tx *gorm.DB, row jobRow) error {
-	return tx.Exec(`UPDATE mediatool.export_job SET status=?,stage=?,progress=?,attempt=?,revision=?,asset_id=?,sha256=?,failure_code=?,actor_id=?,actor_role=?,updated_at=?,active_worker=? WHERE id=?`, row.Status, row.Stage, row.Progress, row.Attempt, row.Revision, row.AssetID, row.SHA256, row.FailureCode, row.ActorID, row.ActorRole, row.UpdatedAt, row.ActiveWorker, row.ID).Error
+	return tx.Exec(`UPDATE mediatool.export_job SET status=?,stage=?,progress=?,attempt=?,revision=?,asset_id=?,artifact_id=?,sha256=?,failure_code=?,actor_id=?,actor_role=?,updated_at=?,active_worker=? WHERE id=?`, row.Status, row.Stage, row.Progress, row.Attempt, row.Revision, row.AssetID, row.ArtifactID, row.SHA256, row.FailureCode, row.ActorID, row.ActorRole, row.UpdatedAt, row.ActiveWorker, row.ID).Error
 }

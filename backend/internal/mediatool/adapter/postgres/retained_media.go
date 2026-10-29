@@ -172,7 +172,7 @@ func (r *RetainedMediaReader) read(ctx context.Context, actor identityapp.Princi
 }
 
 func readRetainedExports(tx *gorm.DB, actor identityapp.Principal, project uuid.UUID, facts *retainedMediaFacts) error {
-	return eachRetainedRow(tx, `SELECT id,attempt,created_at,output_kind,asset_id,CASE WHEN octet_length(frozen::text)<=1048576 THEN frozen ELSE NULL END AS frozen FROM mediatool.export_job WHERE org_id=? AND project_id=? ORDER BY id LIMIT ?`, []any{actor.OrgID, project, retainedMediaLimit + 1}, func(row jobRow) error {
+	return eachRetainedRow(tx, `SELECT id,attempt,created_at,output_kind,asset_id,artifact_id,CASE WHEN octet_length(frozen::text)<=1048576 THEN frozen ELSE NULL END AS frozen FROM mediatool.export_job WHERE org_id=? AND project_id=? ORDER BY id LIMIT ?`, []any{actor.OrgID, project, retainedMediaLimit + 1}, func(row jobRow) error {
 		var frozen domain.FrozenExport
 		if facts.body(row.Frozen, &frozen) != nil || row.ID == uuid.Nil || row.Attempt < 1 || row.Attempt > 100 || row.CreatedAt.IsZero() {
 			return application.ErrUnavailable
@@ -193,10 +193,30 @@ func readRetainedExports(tx *gorm.DB, actor identityapp.Principal, project uuid.
 			// FrozenSource predates any current catalog visibility. This local
 			// projection validates the retained input geometry without rereading
 			// mutable media state or asserting that the source is still available.
-			assets = append(assets, mediadomain.MediaAsset{ID: source.AssetID, ProjectID: project, Kind: mediadomain.Kind(source.Kind), Origin: mediadomain.OriginSystem, Status: mediadomain.StatusReady, ModerationStatus: mediadomain.ModerationPassed, ObjectKey: source.ObjectKey, FileName: path.Base(source.ObjectKey), MimeType: source.MIMEType, ByteSize: source.ByteSize, SHA256: &source.SHA256, Revision: source.Revision, Width: source.Width, Height: source.Height, DurationMS: source.DurationMS, CreateTime: row.CreatedAt, UpdateTime: row.CreatedAt})
+			assets = append(assets, mediadomain.MediaAsset{ID: source.AssetID, ProjectID: project, Kind: mediadomain.Kind(source.Kind), Origin: mediadomain.OriginSystem, Status: mediadomain.StatusReady, ModerationStatus: mediadomain.ModerationPassed, ObjectKey: source.ObjectKey, FileName: path.Base(source.ObjectKey), MimeType: source.MIMEType, ByteSize: source.ByteSize, SHA256: &source.SHA256, Revision: source.Revision, Width: source.Width, Height: source.Height, DurationMS: source.DurationMS, FPS: source.FPS, AudioChannels: source.AudioChannels, CreateTime: row.CreatedAt, UpdateTime: row.CreatedAt})
 		}
 		if _, err := application.FreezeInputs(frozen.Timeline, assets); err != nil {
 			return application.ErrUnavailable
+		}
+		if kind.IsArtifact() {
+			if application.ValidateProjectExport(frozen) != nil || row.AssetID != nil {
+				return application.ErrUnavailable
+			}
+			own := row.ArtifactID == nil
+			for attempt := 1; attempt <= row.Attempt; attempt++ {
+				id := uuid.NewSHA1(row.ID, []byte("export-artifact/"+strconv.Itoa(attempt)))
+				if row.ArtifactID != nil && *row.ArtifactID == id {
+					own = true
+				}
+				key := path.Join("projects", project.String(), "exports", row.CreatedAt.UTC().Format("2006/01"), id.String()+".zip")
+				if facts.key(key) != nil {
+					return application.ErrUnavailable
+				}
+			}
+			if !own {
+				return application.ErrUnavailable
+			}
+			return nil
 		}
 		mediaKind, ext := "video", ".mp4"
 		if kind == domain.OutputAudio {

@@ -61,11 +61,15 @@ func (r *Renderer) Render(ctx context.Context, frozen domain.FrozenExport, paths
 		return nil, application.ErrUnavailable
 	}
 	kind := frozen.OutputKind.Effective()
-	if !kind.Valid() {
+	if !kind.Valid() || kind.IsArtifact() {
 		return nil, application.ErrInvalidExport
 	}
 	if kind == domain.OutputAudio {
 		return r.renderAudio(ctx, frozen, paths, progress)
+	}
+	width, height, err := frozen.VideoDimensions()
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", application.ErrInvalidExport, err)
 	}
 	parts, err := renderSegments(frozen.Timeline)
 	if err != nil {
@@ -107,7 +111,7 @@ func (r *Renderer) Render(ctx context.Context, frozen domain.FrozenExport, paths
 			}
 		}
 		name := fmt.Sprintf("segment-%04d.mkv", i)
-		if err := r.renderPart(ctx, root, name, frozen.Timeline, part, paths, hasAudio); err != nil {
+		if err := r.renderPart(ctx, root, name, frozen.Timeline, part, paths, hasAudio, width, height); err != nil {
 			return nil, err
 		}
 		info, err := os.Stat(filepath.Join(root, name))
@@ -172,7 +176,6 @@ func (r *Renderer) Render(ctx context.Context, frozen domain.FrozenExport, paths
 		return nil, err
 	}
 	probe, err := r.prober.Probe(ctx, result)
-	width, height := dimensions(frozen.Timeline.AspectRatio)
 	expectedMS := parts[len(parts)-1].end * 1000 / int64(frozen.Timeline.FPS)
 	if err != nil || probe.Width == nil || probe.Height == nil || int(*probe.Width) != width || int(*probe.Height) != height || probe.DurationMS == nil || abs(int64(*probe.DurationMS)-expectedMS) > int64(1000/frozen.Timeline.FPS)+25 {
 		return nil, fmt.Errorf("%w: export output facts", application.ErrInvalidExport)
@@ -181,8 +184,7 @@ func (r *Renderer) Render(ctx context.Context, frozen domain.FrozenExport, paths
 	return result, nil
 }
 
-func (r *Renderer) renderPart(ctx context.Context, root, name string, config canvasdomain.TimelineConfig, part segment, paths map[uuid.UUID]string, audio map[uuid.UUID]bool) error {
-	width, height := dimensions(config.AspectRatio)
+func (r *Renderer) renderPart(ctx context.Context, root, name string, config canvasdomain.TimelineConfig, part segment, paths map[uuid.UUID]string, audio map[uuid.UUID]bool, width, height int) error {
 	duration := frameSeconds(part.end-part.start, config.FPS)
 	args := []string{"-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", fmt.Sprintf("color=c=black:s=%dx%d:r=%d:d=%s", width, height, config.FPS, duration)}
 	tracks := make(map[uuid.UUID]canvasdomain.TimelineTrack, len(config.Tracks))

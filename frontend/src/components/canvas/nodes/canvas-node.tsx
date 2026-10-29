@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/sheet";
 import {
   ChevronRight,
+  Clapperboard,
   Copy,
   Download,
   FileText,
@@ -583,6 +584,8 @@ export const CanvasNode = React.memo(function CanvasNode({
                       <AudioLines />
                     ) : data.type === CanvasNodeType.Text ? (
                       <Type />
+                    ) : data.type === "timeline" ? (
+                      <Clapperboard />
                     ) : (
                       <FileText />
                     )}

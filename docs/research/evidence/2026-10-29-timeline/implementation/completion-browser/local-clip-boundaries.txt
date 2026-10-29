@@ -1,0 +1,12 @@
+Browser 1980372019; real UI observed 2026-10-29.
+Import A/B/C via library cross-kind selection: 3 assets, 0 clips; click cards: A4+B5+C7 -> total9.
+Audio split at1: [0,1]+[1,7], undo7 redo1+6.
+Selected image4..9 at playhead1: split/trim disabled.
+Video lefttrim1: A3 B@3 length5. Righttrim1: A1 B@1 length5. Undo restored4+5.
+ShiftLeft image reordered B@0,A@5. Undo restored.
+Audio6sec dragged before1sec: six@0 one@6; undo restored.
+Add audio track2, drag six@1 fromtrack1totrack2 keptstart1; oneundo restoredtrack1.
+Right trim drag beyondstart: A100ms B@100ms. Drag beyondsource: A4000ms. ArrowLeft:righttrim4000->3900, Meta+Z whilehandlefocused->4000.
+Cardmeasure160x90;visual56,audio32;nonemptyvisualappend56.
+Refresh restored3assets,4clips,total9,node name.
+Preview StrictMode missing-src bug reproduced andfixed; playbacktime6.41 actualaudio6.383 ready4, stops9.

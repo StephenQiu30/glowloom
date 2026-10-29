@@ -81,7 +81,7 @@ func FreezeInputs(config canvasdomain.TimelineConfig, assets []mediadomain.Media
 		if total > 2<<30 {
 			return domain.FrozenExport{}, fmt.Errorf("%w: source byte budget", ErrInvalidExport)
 		}
-		result.Inputs = append(result.Inputs, domain.FrozenSource{AssetID: id, Revision: asset.Revision, Kind: string(asset.Kind), ObjectKey: asset.ObjectKey, MIMEType: asset.MimeType, ByteSize: asset.ByteSize, SHA256: *asset.SHA256, DurationMS: asset.DurationMS, Width: asset.Width, Height: asset.Height})
+		result.Inputs = append(result.Inputs, domain.FrozenSource{AssetID: id, Revision: asset.Revision, Kind: string(asset.Kind), ObjectKey: asset.ObjectKey, MIMEType: asset.MimeType, ByteSize: asset.ByteSize, SHA256: *asset.SHA256, DurationMS: asset.DurationMS, Width: asset.Width, Height: asset.Height, FPS: asset.FPS, AudioChannels: asset.AudioChannels})
 	}
 	for _, clip := range config.Clips {
 		if clip.AssetID == nil {

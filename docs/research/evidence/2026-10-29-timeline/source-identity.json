@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-29",
+  "timezone": "Asia/Shanghai",
+  "page": "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e",
+  "browserTab": "1980371660",
+  "runtimeMethod": "Chrome extension via cua_repl; not REA CDP runtime",
+  "scripts": [
+    {
+      "file": "canvas-view.e4df37de47.js",
+      "sha256": "4b927f82c62b6386ec6ddb5f91a8c2d92c20590dc06e03bd9d1831dca3a23e0b",
+      "bytes": 761642
+    },
+    {
+      "file": "zh-Hans.2ee5c282a72094ee.js",
+      "sha256": "3ea89f03993e769a11b2460e1f4aabefebbd7789a15da5300ffcde3d8eb53239",
+      "bytes": 1224787
+    }
+  ],
+  "reaEvidence": {
+    "discovery": "ev_3461c443e405cd0b51e7ef3d88492bb0ba4ab10e40180d4359497f0047fec83e",
+    "locale": "ev_d42e7f3c3dbda0470568c9505390f6a85a6c90e9d28f6b893569d0a1d647eb08",
+    "canvasView": "ev_ca7b0053ee913cdd44e37d9d9ce48f4414caa55704548d8de5a8c8911030af87"
+  }
+}

@@ -12,16 +12,17 @@ import (
 
 // TimelineConfig persists editable tracks and clips; render progress is separate.
 type TimelineConfig struct {
-	Version       int             `json:"version"`
-	AspectRatio   string          `json:"aspect_ratio"`
-	FPS           int             `json:"fps"`
-	Tracks        []TimelineTrack `json:"tracks"`
-	Clips         []TimelineClip  `json:"clips"`
-	SubtitleStyle SubtitleStyle   `json:"subtitle_style"`
-	Snapping      bool            `json:"snapping"`
+	Version        int             `json:"version"`
+	AspectRatio    string          `json:"aspect_ratio"`
+	FPS            int             `json:"fps"`
+	Tracks         []TimelineTrack `json:"tracks"`
+	Clips          []TimelineClip  `json:"clips"`
+	ImportedAssets []uuid.UUID     `json:"imported_assets,omitempty"`
+	SubtitleStyle  SubtitleStyle   `json:"subtitle_style"`
+	Snapping       bool            `json:"snapping"`
 }
 
-// TimelineTrack is one nonoverlapping lane of clips of the same kind.
+// TimelineTrack is a nonoverlapping lane; the main video lane also accepts images.
 type TimelineTrack struct {
 	ID      uuid.UUID `json:"id"`
 	Kind    string    `json:"kind"`
@@ -78,8 +79,23 @@ func (c TimelineConfig) Validate() error {
 }
 
 func validTimeline(c TimelineConfig) bool {
-	if c.Version != 1 || !slices.Contains([]string{"16:9", "9:16", "1:1"}, c.AspectRatio) || !slices.Contains([]int{24, 25, 30, 60}, c.FPS) || len(c.Tracks) > 32 || len(c.Clips) > 1000 ||
+	if c.Version != 1 || !validTimelineAspect(c.AspectRatio) || !slices.Contains([]int{24, 25, 30, 60}, c.FPS) || len(c.Tracks) > 32 || len(c.Clips) > 1000 ||
 		c.SubtitleStyle.FontSize < 12 || c.SubtitleStyle.FontSize > 96 || !subtitleColor.MatchString(c.SubtitleStyle.Color) || !slices.Contains([]string{"top", "center", "bottom"}, c.SubtitleStyle.Position) {
+		return false
+	}
+	imports := make(map[uuid.UUID]bool, len(c.ImportedAssets))
+	for _, id := range c.ImportedAssets {
+		if id == uuid.Nil || imports[id] {
+			return false
+		}
+		imports[id] = true
+	}
+	for _, clip := range c.Clips {
+		if clip.AssetID != nil {
+			imports[*clip.AssetID] = true
+		}
+	}
+	if len(imports) > 1000 {
 		return false
 	}
 	tracks := make(map[uuid.UUID]TimelineTrack, len(c.Tracks))
@@ -93,7 +109,7 @@ func validTimeline(c TimelineConfig) bool {
 	ids := make(map[uuid.UUID]bool, len(c.Clips))
 	for _, clip := range c.Clips {
 		track, ok := tracks[clip.TrackID]
-		if clip.ID == uuid.Nil || ids[clip.ID] || !ok || track.Kind != clip.Kind || !validTitle(clip.Title) || clip.StartMS < 0 || clip.DurationMS < 100 || clip.DurationMS > timelineLimitMS || clip.StartMS > timelineLimitMS-clip.DurationMS ||
+		if clip.ID == uuid.Nil || ids[clip.ID] || !ok || (track.Kind != clip.Kind && (track.Kind != "video" || clip.Kind != "image")) || !validTitle(clip.Title) || clip.StartMS < 0 || clip.DurationMS < 100 || clip.DurationMS > timelineLimitMS || clip.StartMS > timelineLimitMS-clip.DurationMS ||
 			clip.SourceStartMS < 0 || clip.SourceStartMS > timelineLimitMS || (clip.SourceDurationMS != nil && (*clip.SourceDurationMS < 100 || *clip.SourceDurationMS > timelineLimitMS || clip.SourceStartMS > *clip.SourceDurationMS || ((clip.Kind == "video" || clip.Kind == "audio") && clip.DurationMS > *clip.SourceDurationMS-clip.SourceStartMS))) ||
 			math.IsNaN(clip.Volume) || math.IsInf(clip.Volume, 0) || clip.Volume < 0 || clip.Volume > 2 || clip.FadeInMS < 0 || clip.FadeOutMS < 0 || clip.FadeInMS > clip.DurationMS || clip.FadeOutMS > clip.DurationMS || !validPrompt(clip.Text) || (clip.NodeID != nil && *clip.NodeID == uuid.Nil) || (clip.AssetID != nil && *clip.AssetID == uuid.Nil) {
 			return false

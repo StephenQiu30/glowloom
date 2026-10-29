@@ -1,3 +1,4 @@
+import { emptyTimelineConfig } from "../timeline/timeline-model";
 import { migrateDirectorDocument } from "../director/director-workspaces";
 import { emptyDirectorConfig } from "../director/director-model";
 import {
@@ -51,6 +52,16 @@ export function createCanvasNode(
   return {
     id,
     type,
+    ...(type === "timeline"
+      ? {
+          serviceData: {
+            id,
+            node_type: "timeline",
+            node_action: "tool",
+            config: { timeline: emptyTimelineConfig() },
+          },
+        }
+      : {}),
     ...(type === "director"
       ? {
           serviceData: {

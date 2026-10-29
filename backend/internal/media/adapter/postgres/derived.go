@@ -123,3 +123,47 @@ func (s *Store) RejectDerived(ctx context.Context, actor identityapp.Principal, 
 		return nil
 	})
 }
+
+// FinalizeDerived inherits reference eligibility only after checking every source
+// in the publication transaction. No user inspection or consent is invented.
+func (s *Store) FinalizeDerived(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID, sha string, sources []uuid.UUID, now time.Time) error {
+	if s == nil || s.db == nil {
+		return ErrUnavailable
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
+			return err
+		}
+		if err := s.requireProject(tx, actor, project, true); err != nil {
+			return err
+		}
+		scoped := *s
+		scoped.db = tx
+		for _, sourceID := range sources {
+			source, err := scoped.FindAsset(ctx, actor, project, sourceID)
+			if err != nil {
+				return err
+			}
+			if !source.CanReference() || source.ContainsRealPerson || source.ConsentRecordID != nil {
+				return domain.ErrInvalidMediaAsset
+			}
+		}
+		detail, err := json.Marshal(struct {
+			Method     string      `json:"method"`
+			VerifiedAt time.Time   `json:"verified_at"`
+			SHA256     string      `json:"sha256"`
+			Sources    []uuid.UUID `json:"source_asset_ids"`
+		}{"deterministic_timeline_source_validation", now, sha, sources})
+		if err != nil {
+			return err
+		}
+		result := tx.Exec(`UPDATE media.media_asset SET status='ready',moderation_status='passed',moderation_detail=?::jsonb,revision=revision+1,update_time=? WHERE id=? AND project_id=? AND origin='system' AND status='processing' AND moderation_status='pending' AND sha256=? AND NOT is_delete`, string(detail), now, id, project, sha)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrOutputConflict
+		}
+		return nil
+	})
+}

@@ -43,6 +43,7 @@ import (
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediastaged "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/staged"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	toolproject "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/editproject"
 	toolevent "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/event"
 	toolff "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/ffmpeg"
 	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/workflow"
@@ -203,10 +204,10 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 			return nil, fmt.Errorf("configure media export renderer: %w", err)
 		}
 		exports := mediawire.ProvideMediaExportStoreWithAccess(dbConn.DB, mediawire.NewMediaWorkerScopeAccess)
-		exportWorker := toolapp.NewWorker(exports, toolflow.NewObjects(storage), exportRenderer, mediaflow.FFProber{}, mediaflow.FFUploadRenderer{})
+		exportWorker := toolapp.NewWorker(exports, toolflow.NewObjects(storage), toolproject.NewRenderer(exportRenderer), mediaflow.FFProber{}, mediaflow.FFUploadRenderer{})
 		if objects.Registry() != nil {
 			exports = mediawire.ProvideRoutedMediaExportStore(dbConn.DB, mediawire.NewMediaWorkerScopeAccess)
-			exportWorker = toolapp.NewRoutedWorker(exports, mediawire.ToolObjects(dbConn.DB, objects.Registry(), storage), exportRenderer, mediaflow.FFProber{}, mediaflow.FFUploadRenderer{})
+			exportWorker = toolapp.NewRoutedWorker(exports, mediawire.ToolObjects(dbConn.DB, objects.Registry(), storage), toolproject.NewRenderer(exportRenderer), mediaflow.FFProber{}, mediaflow.FFUploadRenderer{})
 		}
 		toolflow.RegisterActivities(queueWorker, toolflow.NewActivities(exportWorker, exports, exports))
 		transcriber, err := mediawire.ProvideTranscriber(cfg)

@@ -68,6 +68,7 @@ const mediaKinds = [
 
 export function ProjectAssetDialog({
   projectID,
+  dialogTitle,
   initialTab = "assets",
   initialKind = "image",
   onClose,
@@ -81,6 +82,7 @@ export function ProjectAssetDialog({
   initialUpload = false,
 }: {
   projectID: string;
+  dialogTitle?: string;
   initialTab?: "assets" | "subjects";
   initialKind?: string;
   onClose: () => void;
@@ -132,7 +134,9 @@ export function ProjectAssetDialog({
           data-canvas-picker={canvasPresentation || undefined}
         >
           <DialogHeader className="sr-only">
-            <DialogTitle>{reference ? "选择参考素材" : "参考素材"}</DialogTitle>
+            <DialogTitle>
+              {dialogTitle ?? (reference ? "选择参考素材" : "参考素材")}
+            </DialogTitle>
             <DialogDescription>
               从当前项目添加素材，或选择主体开始创作。
             </DialogDescription>

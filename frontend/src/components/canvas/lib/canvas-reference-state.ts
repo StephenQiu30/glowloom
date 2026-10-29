@@ -1,3 +1,4 @@
+import { detachTimelineSources } from "./canvas-timeline-connections";
 import {
   documentText,
   parseRichTextDocument,
@@ -66,7 +67,16 @@ export function removeCanvasReferences(
         : node,
     );
   return {
-    nodes: reconcileCanvasReferences(nextNodes, nextConnections),
+    nodes: reconcileCanvasReferences(
+      detachTimelineSources(
+        nextNodes,
+        connections,
+        nextConnections,
+        removal.nodeIds,
+        nodes,
+      ),
+      nextConnections,
+    ),
     connections: nextConnections,
   };
 }

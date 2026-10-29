@@ -33,6 +33,10 @@ import {
 } from "@/components/canvas/types/canvas";
 
 import { supportsCanvasConnection } from "../lib/canvas-document-connections";
+import {
+  assertCanvasDomainSources,
+  isCanvasDomainTarget,
+} from "../lib/canvas-domain-connection-preview";
 
 export type PendingConnectionCreate = {
   connection: ConnectionHandle;
@@ -44,13 +48,15 @@ type ReferenceNodeType =
   | CanvasNodeType.Image
   | CanvasNodeType.Text
   | CanvasNodeType.Video
-  | CanvasNodeType.Audio;
+  | CanvasNodeType.Audio
+  | "timeline";
 
 export function ConnectionCreateMenu({
   pending,
   existingType,
   existingNode,
   existingNodes,
+  resolveMedia = (node) => node,
   onCreate,
   onClose,
 }: {
@@ -58,6 +64,7 @@ export function ConnectionCreateMenu({
   existingType: string;
   existingNode?: CanvasNodeData;
   existingNodes?: CanvasNodeData[];
+  resolveMedia?: (node: CanvasNodeData) => CanvasNodeData;
   onCreate: (type: ReferenceNodeType) => string | void;
   onClose: () => void;
 }) {
@@ -76,7 +83,8 @@ export function ConnectionCreateMenu({
       position={pending.position}
       onClose={onClose}
       options={options.map((item) => {
-        const supported =
+        let domainReason: string | undefined;
+        let supported =
           pending.connection.handleType === "source"
             ? (existingNodes?.length ? existingNodes : [existingNode]).every(
                 (node) =>
@@ -90,11 +98,34 @@ export function ConnectionCreateMenu({
                   ),
               )
             : supportsCanvasConnection(item.type, existingType);
-        const reason = !supported
-          ? existingType === "cinema_studio" && item.type === "video"
-            ? "暂不支持这些设置的模型"
-            : "无法连接这些节点"
-          : undefined;
+        if (
+          pending.connection.handleType === "source" &&
+          isCanvasDomainTarget(item.type)
+        ) {
+          try {
+            assertCanvasDomainSources(
+              (existingNodes?.length
+                ? existingNodes
+                : existingNode
+                  ? [existingNode]
+                  : []
+              ).map(resolveMedia),
+              item.type,
+            );
+            supported = true;
+          } catch (error) {
+            supported = false;
+            domainReason =
+              error instanceof Error ? error.message : "素材尚未就绪";
+          }
+        }
+        const reason =
+          domainReason ??
+          (!supported
+            ? existingType === "cinema_studio" && item.type === "video"
+              ? "暂不支持这些设置的模型"
+              : "无法连接这些节点"
+            : undefined);
         return {
           ...item,
           disabled: !supported,
@@ -157,6 +188,7 @@ function CanvasCreateMenu({
 }) {
   const command = useRef<HTMLDivElement>(null);
   const [keyboardNavigation, setKeyboardNavigation] = useState(false);
+  const createdNodeId = useRef<string | void>(undefined);
   return (
     <Popover
       open
@@ -190,7 +222,11 @@ function CanvasCreateMenu({
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           document
-            .querySelector<HTMLElement>("[data-canvas-viewport]")
+            .querySelector<HTMLElement>(
+              createdNodeId.current
+                ? `[data-node-id="${CSS.escape(createdNodeId.current)}"]`
+                : "[data-canvas-viewport]",
+            )
             ?.focus({ preventScroll: true });
         }}
         onOpenAutoFocus={(event) => {
@@ -241,7 +277,9 @@ function CanvasCreateMenu({
                   }
                   title={option.reason}
                   disabled={option.disabled}
-                  onSelect={option.onSelect}
+                  onSelect={() => {
+                    createdNodeId.current = option.onSelect();
+                  }}
                 >
                   {option.icon}
                   <span>{option.title}</span>

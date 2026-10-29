@@ -52,12 +52,15 @@ type jobRow struct {
 	Revision                                        int64
 	ActiveWorker                                    *uuid.UUID
 	AssetID                                         *uuid.UUID
+	ArtifactID                                      *uuid.UUID
 	SHA256, FailureCode                             *string
 	CreatedAt, UpdatedAt                            time.Time
 }
 
 func (r jobRow) public() domain.ExportJob {
-	return domain.ExportJob{ID: r.ID, ProjectID: r.ProjectID, OutputKind: domain.OutputKind(r.OutputKind).Effective(), Source: domain.Source{CanvasID: r.CanvasID, NodeID: r.NodeID, Revision: r.SourceRevision}, Status: domain.Status(r.Status), Stage: r.Stage, Progress: r.Progress, Attempt: r.Attempt, Revision: r.Revision, AssetID: r.AssetID, SHA256: r.SHA256, FailureCode: r.FailureCode, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+	var frozen domain.FrozenExport
+	_ = json.Unmarshal(r.Frozen, &frozen)
+	return domain.ExportJob{Settings: frozen.Settings, ID: r.ID, ProjectID: r.ProjectID, OutputKind: domain.OutputKind(r.OutputKind).Effective(), Source: domain.Source{CanvasID: r.CanvasID, NodeID: r.NodeID, Revision: r.SourceRevision}, Status: domain.Status(r.Status), Stage: r.Stage, Progress: r.Progress, Attempt: r.Attempt, Revision: r.Revision, AssetID: r.AssetID, ArtifactID: r.ArtifactID, SHA256: r.SHA256, FailureCode: r.FailureCode, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
 func (r jobRow) actor() identityapp.Principal {
 	return identityapp.Principal{ID: r.ActorID, OrgID: r.OrgID}
@@ -189,11 +192,12 @@ func recordCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash
 		Attempt        int               `json:"attempt"`
 		Revision       int64             `json:"revision"`
 		AssetID        *uuid.UUID        `json:"asset_id"`
+		ArtifactID     *uuid.UUID        `json:"artifact_id"`
 		SHA256         *string           `json:"sha256"`
 		FailureCode    *string           `json:"failure_code"`
 		CreatedAt      string            `json:"created_at"`
 		UpdatedAt      string            `json:"updated_at"`
-	}{job.ID, job.ProjectID, job.OutputKind, job.Source.CanvasID, job.Source.NodeID, job.Source.Revision, job.Status, job.Stage, job.Progress, job.Attempt, job.Revision, job.AssetID, job.SHA256, job.FailureCode, job.CreatedAt.Format(time.RFC3339Nano), job.UpdatedAt.Format(time.RFC3339Nano)})
+	}{job.ID, job.ProjectID, job.OutputKind, job.Source.CanvasID, job.Source.NodeID, job.Source.Revision, job.Status, job.Stage, job.Progress, job.Attempt, job.Revision, job.AssetID, job.ArtifactID, job.SHA256, job.FailureCode, job.CreatedAt.Format(time.RFC3339Nano), job.UpdatedAt.Format(time.RFC3339Nano)})
 	if err != nil {
 		return err
 	}
@@ -218,6 +222,13 @@ func (s *Store) Create(ctx context.Context, actor identityapp.Principal, project
 	kind := input.OutputKind.Effective()
 	if !kind.Valid() {
 		return job, application.ErrInvalidExport
+	}
+	if input.Settings != nil {
+		settings, err := application.NormalizeExportSettings(*input.Settings)
+		if err != nil {
+			return job, err
+		}
+		input.Settings = &settings
 	}
 	canonical := input
 	canonical.OutputKind = kind
@@ -259,6 +270,11 @@ func (s *Store) Create(ctx context.Context, actor identityapp.Principal, project
 		if err != nil {
 			return normalize(err)
 		}
+		if kind == domain.OutputVideo && input.Settings == nil {
+			if _, _, err := timeline.VideoDimensions(); err != nil {
+				return fmt.Errorf("%w: %w", application.ErrInvalidExport, err)
+			}
+		}
 		ids, err := application.SourceIDs(timeline)
 		if err != nil {
 			return err
@@ -272,6 +288,17 @@ func (s *Store) Create(ctx context.Context, actor identityapp.Principal, project
 			return err
 		}
 		frozen.OutputKind = kind
+		if input.Settings != nil {
+			if err := application.ApplyExportSettings(&frozen, *input.Settings); err != nil {
+				return err
+			}
+		}
+		if kind.IsArtifact() {
+			frozen.Source = &domain.Source{CanvasID: input.CanvasID, NodeID: input.NodeID, Revision: input.Revision}
+			if err := application.ValidateProjectExport(frozen); err != nil {
+				return err
+			}
+		}
 		if kind == domain.OutputAudio && !application.HasAudibleClip(timeline) {
 			return application.ErrNoAudio
 		}
@@ -280,7 +307,7 @@ func (s *Store) Create(ctx context.Context, actor identityapp.Principal, project
 			return err
 		}
 		now := time.Now().UTC()
-		job = domain.ExportJob{ID: uuid.New(), ProjectID: project, OutputKind: kind, Source: domain.Source{CanvasID: input.CanvasID, NodeID: input.NodeID, Revision: input.Revision}, Status: domain.Queued, Stage: "queued", Attempt: 1, Revision: 1, CreatedAt: now, UpdatedAt: now}
+		job = domain.ExportJob{Settings: frozen.Settings, ID: uuid.New(), ProjectID: project, OutputKind: kind, Source: domain.Source{CanvasID: input.CanvasID, NodeID: input.NodeID, Revision: input.Revision}, Status: domain.Queued, Stage: "queued", Attempt: 1, Revision: 1, CreatedAt: now, UpdatedAt: now}
 		if err := tx.Exec(`INSERT INTO mediatool.export_job(id,project_id,org_id,actor_id,actor_role,canvas_id,node_id,source_revision,frozen,output_kind,status,stage,progress,attempt,revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?::jsonb,?,'queued','queued',0,1,1,?,?)`, job.ID, project, actor.OrgID, actor.ID, nil, input.CanvasID, input.NodeID, input.Revision, string(raw), kind, now, now).Error; err != nil {
 			return err
 		}
@@ -311,7 +338,7 @@ func (s *Store) Get(ctx context.Context, actor identityapp.Principal, project, i
 	return job, err
 }
 
-// List uses an ID keyset and never places private frozen media keys in responses.
+// List restores newest creation first with a stable time/ID keyset; private inputs stay private.
 func (s *Store) List(ctx context.Context, actor identityapp.Principal, input application.ListInput) ([]domain.ExportJob, error) {
 	if s == nil || s.db == nil {
 		return nil, application.ErrUnavailable
@@ -329,17 +356,17 @@ func (s *Store) List(ctx context.Context, actor identityapp.Principal, input app
 		for _, f := range []struct {
 			col string
 			id  uuid.UUID
-		}{{"canvas_id", input.CanvasID}, {"node_id", input.NodeID}, {"id", input.After}} {
+		}{{"canvas_id", input.CanvasID}, {"node_id", input.NodeID}} {
 			if f.id != uuid.Nil {
-				op := "="
-				if f.col == "id" {
-					op = "<"
-				}
-				q += " AND " + f.col + op + "?"
+				q += " AND " + f.col + "=?"
 				args = append(args, f.id)
 			}
 		}
-		q += ` ORDER BY id DESC LIMIT ?`
+		if input.After != uuid.Nil {
+			q += ` AND (created_at,id)<(SELECT created_at,id FROM mediatool.export_job WHERE id=? AND project_id=?)`
+			args = append(args, input.After, input.ProjectID)
+		}
+		q += ` ORDER BY created_at DESC,id DESC LIMIT ?`
 		args = append(args, input.Limit)
 		return tx.Raw(q, args...).Scan(&rows).Error
 	})

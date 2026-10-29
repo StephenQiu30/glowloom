@@ -118,3 +118,21 @@ func (s *DerivedService) Renditions(ctx context.Context, actor identityapp.Princ
 	}
 	return s.repo.FindRenditions(ctx, actor, project, id)
 }
+
+// Finalize publishes a verified deterministic composition of currently approved
+// sources. It records source validation, not a fabricated owner review.
+func (s *DerivedService) Finalize(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID, sha string, sources []uuid.UUID, now time.Time) error {
+	if s == nil || s.repo == nil {
+		return ErrUnavailable
+	}
+	repo, ok := s.repo.(interface {
+		FinalizeDerived(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, string, []uuid.UUID, time.Time) error
+	})
+	if !ok {
+		return ErrUnavailable
+	}
+	if id == uuid.Nil || project == uuid.Nil || len(sha) != 64 || len(sources) > 1000 || now.IsZero() {
+		return ErrInvalidQuery
+	}
+	return repo.FinalizeDerived(ctx, actor, project, id, sha, sources, now)
+}

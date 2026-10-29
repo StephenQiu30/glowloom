@@ -1,0 +1,195 @@
+- generic: 已选中。 可编辑。 无媒体资源。
+- button:
+  - generic: 时间线完整验收-1029
+- button:
+- region:
+  - button [disabled]:
+  - button [disabled]:
+  - button:
+  - generic: 00:00 / 00:09
+  - button:
+  - button:
+    - text: 全屏编辑
+  - generic: 00:00
+  - generic: 00:05
+  - generic: 00:10
+  - generic: 00:15
+  - generic: 00:20
+  - generic: 00:25
+  - generic: 00:30
+  - generic: 00:35
+  - generic: 00:40
+  - generic: 00:45
+  - generic: 00:50
+  - generic: 00:55
+  - generic: 01:00
+  - button:
+  - button:
+  - button:
+    - generic: 00:04
+  - button:
+    - generic: 00:05
+  - button:
+  - button:
+  - button:
+  - slider
+- button
+- button
+- button
+- button
+- button:
+- button
+- button
+- button
+- generic: 未选中。 可编辑。 无媒体资源。
+- button:
+  - generic: 时间线历史隔离-1029
+- region:
+  - button [disabled]:
+  - button [disabled]:
+  - button [disabled]:
+  - generic: 00:00 / 00:00
+  - button [disabled]:
+  - button:
+    - text: 全屏编辑
+  - paragraph: 没有媒体可供预览
+  - generic: 00:00
+  - generic: 00:05
+  - generic: 00:10
+  - generic: 00:15
+  - generic: 00:20
+  - generic: 00:25
+  - generic: 00:30
+  - generic: 00:35
+  - generic: 00:40
+  - generic: 00:45
+  - generic: 00:50
+  - generic: 00:55
+  - generic: 01:00
+  - button:
+  - button:
+    - generic: 添加素材到时间线
+  - slider [disabled]
+- toolbar:
+  - button:
+- button:
+- button:
+  - generic: 未命名画布
+- button: 节点 2
+- status: 已保存
+- button:
+  - generic: S
+- button:
+- button:
+- button:
+  - generic: 分享
+- link:
+  - /url: /account
+- button:
+- button:
+- button:
+- button:
+- button:
+- button:
+- button:
+- button:
+- button:
+- button:
+- button:
+- button:
+- button:
+- button [pressed]:
+- button: 73%
+- button:
+  - generic: 与 AI 对话
+- region "通知 alt+T"
+- alert
+- dialog "时间线":
+  - heading "时间线" [level=2]
+  - paragraph: 编辑视觉轨和音频轨
+  - region "时间线工作区":
+    - heading "时间线" [level=2]
+    - button "导出":
+      - text: 导出
+    - button "更多导出方式":
+    - button "关闭时间线编辑器" [active]:
+    - complementary:
+      - tablist:
+        - tab "已导入资产" [selected]
+        - tab "画布资产"
+      - tablist:
+        - tab "全部" [selected]
+        - tab "图片"
+        - tab "视频"
+        - tab "音频"
+      - button "导入":
+        - text: 导入
+      - generic: timeline-test-4s.mp4
+      - generic: 00:04
+      - generic: 已添加
+      - button "添加 timeline-test-4s.mp4 到时间线":
+      - generic: timeline-test-image.png
+      - generic: 已添加
+      - button "添加 timeline-test-image.png 到时间线":
+      - img "音频波形"
+      - generic: timeline-test-7s.wav
+      - generic: 00:07
+      - generic: 已添加
+      - button "添加 timeline-test-7s.wav 到时间线":
+      - button "隐藏资产库":
+      - separator "调整资产栏宽度"
+    - generic "时间线预览画面"
+    - button "播放时间线预览":
+    - text: 00:00:00
+    - generic: / 00:09:00
+    - button "画面比例":
+      - text: 自动
+    - button "开启原声" [pressed]:
+    - generic "预览音量":
+      - slider "预览音量"
+    - button "全屏播放":
+    - separator "调整轨道编辑区高度"
+    - toolbar "时间线剪辑工具":
+      - button "撤销" [disabled]:
+      - button "重做" [disabled]:
+      - button "分割" [disabled]:
+      - button "向左剪裁" [disabled]:
+      - button "向右剪裁" [disabled]:
+      - button "删除":
+      - button "静音片段":
+      - generic "片段音量":
+        - slider "片段音量"
+      - button "关闭自动吸附" [pressed]:
+      - button "缩小视图":
+      - generic "时间线缩放":
+        - slider "时间线缩放"
+      - button "放大视图":
+    - generic: 00:00
+    - generic: 00:05
+    - generic: 00:10
+    - generic: 00:15
+    - generic: 00:20
+    - generic: 00:25
+    - generic: 00:30
+    - generic: 00:35
+    - generic: 00:40
+    - generic: 00:45
+    - generic: 00:50
+    - generic: 00:55
+    - generic: 01:00
+    - generic "主视觉轨":
+      - button "静音 主视觉轨":
+      - button "添加素材到 主视觉轨":
+      - button "timeline-test-4s.mp4，00:00:00，时长4.00秒":
+        - generic: 00:04
+      - button "timeline-test-image.png，00:04:00，时长5.00秒":
+        - generic: 00:05
+    - generic "音频轨 1":
+      - button "静音 音频轨 1":
+      - button "timeline-test-7s.wav，00:00:00，时长1.00秒":
+        - img "音频波形"
+      - button "timeline-test-7s.wav，00:01:00，时长6.00秒" [pressed]:
+        - img "音频波形"
+      - slider "左边缘裁剪 timeline-test-7s.wav"
+      - slider "右边缘裁剪 timeline-test-7s.wav"
+    - slider "时间线播放头"

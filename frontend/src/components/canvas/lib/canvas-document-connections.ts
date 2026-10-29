@@ -89,9 +89,30 @@ export function connectCanvasDocument(
   );
   const graph = toCanvasGraph({
     ...state,
+    nodes: state.nodes.filter(
+      (node) => !["timeline", "director"].includes(node.type),
+    ),
     connections: state.connections.filter(
       (edge) => edge.documentData || !edge.serviceData,
     ),
+  });
+  const projected = new Map(graph.nodes.map((n) => [n.id, n]));
+  graph.nodes = state.nodes.map((n) => {
+    const base = projected.get(n.id);
+    if (base) return base;
+    if (!["timeline", "director"].includes(n.type))
+      throw new Error("节点类型不支持连接");
+    return {
+      ...n.documentData,
+      id: n.id,
+      type: n.type,
+      nodeTypeVersion: 1,
+      title: n.title,
+      position: n.position,
+      width: n.width,
+      height: n.height,
+      zIndex: n.documentData?.zIndex ?? 0,
+    };
   });
   if (graph.nodes.length > 500)
     throw new Error("画布节点数量已达上限，请先移除不需要的节点");

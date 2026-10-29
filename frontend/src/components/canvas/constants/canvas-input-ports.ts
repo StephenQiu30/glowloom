@@ -80,9 +80,11 @@ export function canvasInputPort(id: string) {
 
 export function canvasConnectionHandles(type: string) {
   return {
-    input: canvasInputPorts.some((port) =>
-      port.targets.some((target) => target === type),
-    ),
+    input:
+      type === "timeline" ||
+      canvasInputPorts.some((port) =>
+        port.targets.some((target) => target === type),
+      ),
     output: canvasInputPorts.some((port) => port.source === type),
   };
 }

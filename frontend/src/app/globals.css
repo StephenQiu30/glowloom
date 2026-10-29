@@ -78,6 +78,16 @@
   --canvas-tool-secondary-foreground: #bbb;
   --canvas-tool-subtle-foreground: #666;
   --canvas-tool-border: #333;
+  --canvas-timeline-hover: #292929;
+  --canvas-timeline-waveform: #009efa;
+  --canvas-timeline-audio: rgb(0 142 229 / 12%);
+  --canvas-timeline-audio-clip: rgb(0 158 250 / 12.5%);
+  --canvas-timeline-snap: #00b5ef;
+  --canvas-timeline-ruler-border: #3a3a3a;
+  --canvas-timeline-lane: #2c2c2c;
+  --canvas-timeline-lane-selected: #353535;
+  --canvas-timeline-clip: #37434f;
+  --canvas-timeline-clip-border: #536675;
   --canvas-director-secondary: #2b2b2b;
   --canvas-tool-input: #444;
   --canvas-director-border: #393939;
@@ -2803,7 +2813,8 @@ button:not(:disabled),
   }
 }
 @media (min-width: 768px) {
-  .product-header[data-asset-layout]:has(.product-header-toolbar:not(:empty)) .product-header-actions {
+  .product-header[data-asset-layout]:has(.product-header-toolbar:not(:empty))
+    .product-header-actions {
     display: var(--asset-actions-display, flex);
   }
   .product-header[data-asset-layout] .product-header-toolbar {
@@ -2824,7 +2835,8 @@ button:not(:disabled),
 }
 
 /* Selection replaces the asset tools and account area, matching the source state. */
-.product-header[data-asset-layout]:has([data-asset-batch]) [data-asset-account-group],
+.product-header[data-asset-layout]:has([data-asset-batch])
+  [data-asset-account-group],
 .product-header[data-asset-layout]:has([data-asset-batch]) [data-asset-search] {
   display: none;
 }

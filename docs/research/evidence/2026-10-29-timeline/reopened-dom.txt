@@ -1,0 +1,208 @@
+- banner "Canvas top bar":
+  - link:
+    - /url: /ai-tool/home
+  - button:
+    - generic: 一致性调研-202610221
+  - button:
+  - button:
+    - text: 节点
+    - generic: "7"
+  - status: 已保存
+  - button:
+  - button:
+  - button:
+    - generic: 分享
+  - button:
+  - button:
+    - generic: "88"
+    - generic: 开会员
+  - button
+- main "Canvas workspace":
+  - region "Canvas editing area":
+    - generic: 7 nodes, 0 edges, 1 selected. Editable. Room connected. 已保存.
+    - application "Canvas":
+      - paragraph: 双击编辑文本
+      - generic: 文本 1
+      - paragraph: 双击编辑文本
+      - generic: 文本 2
+      - paragraph: 双击编辑文本
+      - generic: 文本 3
+      - generic: 导演台
+      - paragraph: 在 3D 空间中设计角色、机位与镜头
+      - generic: 进入导演台
+      - generic: "No resources: 0 ready, 0 processing, 0 failed. Not selected."
+      - generic: 视频 1
+      - generic: "No resources: 0 ready, 0 processing, 0 failed. Not selected."
+      - generic: 时间线 1
+      - generic: 00:00
+      - generic: /
+      - generic: 00:00
+      - button:
+      - button:
+        - generic: 全屏编辑
+      - button:
+      - generic: 00:00
+      - generic: 00:05
+      - generic: 00:10
+      - generic: 00:15
+      - generic: 00:20
+      - generic: 00:25
+      - generic: 00:30
+      - button:
+        - generic: 添加素材到时间线
+      - generic: "时间线: 1 visual track, 0 audio tracks, 0 clips. Not selected."
+      - button
+      - button:
+        - generic: 时间线核验-20261029
+      - button:
+      - button [disabled]:
+      - button [disabled]:
+      - generic: 00:00
+      - generic: /
+      - generic: 00:09
+      - button:
+      - button:
+        - generic: 全屏编辑
+      - button:
+      - generic: 00:00
+      - generic: 00:05
+      - generic: 00:10
+      - generic: 00:15
+      - generic: 00:20
+      - generic: 00:25
+      - generic: 00:30
+      - button:
+        - generic: 00:04
+      - button:
+        - generic: 00:05
+      - button:
+      - generic: Drag clips to reorder them. With the keyboard, press Shift + Left or Right Arrow.
+      - separator
+      - generic: "时间线: 1 visual track, 1 audio tracks, 4 clips. Selected."
+      - status
+  - complementary
+  - complementary "Canvas left toolbar":
+    - toolbar "Canvas toolbar":
+      - generic: 文本
+      - button
+      - generic: 图片
+      - button
+      - generic: 视频
+      - button
+      - generic: 音频
+      - button
+      - generic: 时间线
+      - button
+      - generic: 主体
+      - button
+      - generic: 导演工具箱
+      - button
+      - generic: 导演台
+      - button
+      - generic: 资产库
+      - button
+      - generic: 上传
+      - button
+  - group "Canvas viewport controls":
+    - button:
+    - button:
+    - button [pressed]:
+    - button: 66%
+    - status
+  - generic: 与 AI 对话
+  - button
+- dialog "时间线" [active]:
+  - heading "时间线" [level=2]
+  - paragraph: Edit the main visual track and multiple audio tracks
+  - button "导出":
+    - text: 导出
+  - button "更多导出方式":
+  - button "Close timeline editor":
+  - complementary "画布资产":
+    - tablist "已导入资产":
+      - tab "已导入资产" [selected]
+      - tab "画布资产"
+    - tablist "画布资产":
+      - tab "全部" [selected]:
+        - generic: 全部
+      - tab "图片":
+        - generic: 图片
+      - tab "视频":
+        - generic: 视频
+      - tab "音频":
+        - generic: 音频
+    - button "导入":
+      - generic: 导入
+    - list:
+      - button "Add timeline-test-image.png to the timeline":
+        - generic: 已添加
+      - button "Add timeline-test-7s.wav to the timeline":
+        - generic: 已添加
+        - generic: 00:07
+      - button "Add timeline-test-4s.mp4 to the timeline":
+        - generic: 已添加
+        - generic: 00:04
+    - separator "Resize canvas assets panel"
+    - button "隐藏资产库":
+    - region "Timeline media addition results"
+  - region "Edit the main visual track and multiple audio tracks":
+    - status
+    - status
+    - generic: Timeline playhead
+    - button "Play timeline preview":
+    - generic: 00:00:00
+    - generic: /
+    - generic: 00:09:00
+    - button "画面比例":
+      - generic: 9:16
+    - generic: Timeline preview volume
+    - button "开启原声":
+    - slider "Timeline preview volume"
+    - button "Play video in full screen":
+  - status
+  - region "Edit the main visual track and multiple audio tracks":
+    - separator "Resize timeline editor height"
+    - toolbar "Timeline editing tools":
+      - button "撤销" [disabled]:
+      - button "重做" [disabled]:
+      - button "分割" [disabled]:
+      - generic: 将播放头移动到目标片段内进行剪切。
+      - button "向左剪裁" [disabled]:
+      - generic: 将播放头移动到目标片段内进行剪切。
+      - button "向右剪裁" [disabled]:
+      - generic: 将播放头移动到目标片段内进行剪切。
+      - button "删除" [disabled]:
+    - group "Timeline playback controls":
+      - button "关闭自动吸附" [pressed]:
+      - button "缩小视图":
+      - slider "Timeline zoom"
+      - button "放大视图":
+    - generic: 00:00
+    - generic: 00:05
+    - generic: 00:10
+    - generic: 00:15
+    - generic: 00:20
+    - generic: 00:25
+    - generic: 00:30
+    - generic: 00:35
+    - generic: 00:40
+    - generic: 00:45
+    - generic: 00:50
+    - generic: 00:55
+    - generic: 01:00
+    - generic: 01:05
+    - generic: 01:10
+    - group "Main visual track":
+      - button "静音":
+      - button "Clip 1, 视频, 4.0 seconds":
+        - generic: 00:04
+      - button "Clip 2, 图片, 5.0 seconds":
+        - generic: 00:05
+      - button "添加素材到时间线":
+    - group "Audio track 1":
+      - button "静音":
+      - button "Clip 1, 音频, 1.0 seconds":
+      - button "Clip 2, 音频, 6.0 seconds":
+    - slider "Timeline playhead"
+  - region "Canvas notifications"
+  - region "Canvas notifications"

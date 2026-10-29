@@ -44,6 +44,15 @@ func (q *ExportQuery) Preview(ctx context.Context, actor identityapp.Principal, 
 	if q == nil || q.store == nil || (q.signer == nil && q.storage == nil) {
 		return ExportPreview{}, ErrUnavailable
 	}
+	if store, ok := q.store.(ArtifactStore); ok {
+		job, err := q.store.Get(ctx, actor, project, id)
+		if err != nil {
+			return ExportPreview{}, err
+		}
+		if job.OutputKind.IsArtifact() {
+			return q.artifactPreview(ctx, store, actor, project, id)
+		}
+	}
 	job, asset, err := q.store.PreviewAsset(ctx, actor, project, id)
 	if err != nil {
 		return ExportPreview{}, err
@@ -78,6 +87,15 @@ func (q *ExportQuery) Preview(ctx context.Context, actor identityapp.Principal, 
 func (q *ExportQuery) Download(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID) (io.ReadCloser, int64, error) {
 	if q == nil || q.store == nil || (q.reader == nil && q.storage == nil) {
 		return nil, 0, ErrUnavailable
+	}
+	if store, ok := q.store.(ArtifactStore); ok {
+		job, err := q.store.Get(ctx, actor, project, id)
+		if err != nil {
+			return nil, 0, err
+		}
+		if job.OutputKind.IsArtifact() {
+			return q.artifactDownload(ctx, store, actor, project, id)
+		}
 	}
 	job, asset, err := q.store.PreviewAsset(ctx, actor, project, id)
 	if err != nil {

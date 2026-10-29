@@ -1,4 +1,9 @@
 import {
+  emptyTimelineConfig,
+  editTimeline,
+  readTimeline,
+} from "@/components/canvas/timeline/timeline-model";
+import {
   emptyDirectorConfig,
   editDirector,
   readDirector,
@@ -979,3 +984,412 @@ it.each([false, true])(
     remote.destroy();
   },
 );
+
+function timelineFixture(legacy = false) {
+  return setup(false, undefined, (document) => {
+    const timeline = editTimeline(emptyTimelineConfig(), {
+      type: "add",
+      assets: [
+        {
+          asset: {
+            id: crypto.randomUUID(),
+            project_id: document.project_id,
+            kind: "video",
+            duration_ms: 5000,
+          },
+        },
+      ],
+    });
+    if (legacy) delete (timeline as API.TimelineConfig).imported_assets;
+    document.nodes![0].node_type = "timeline";
+    document.nodes![0].node_action = "tool";
+    document.nodes![0].config = { timeline };
+  });
+}
+it("timeline legacy import normalization does not cause a false CAS conflict", async () => {
+  const f = timelineFixture(true);
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const before = liveTimeline(f);
+  expect(before.imported_assets).toEqual([before.clips[0].asset_id]);
+  expect(() =>
+    f.client.changeTimeline(
+      f.nodeID,
+      { ...before, aspect_ratio: "1:1" },
+      before,
+    ),
+  ).not.toThrow();
+  expect(liveTimeline(f).aspect_ratio).toBe("1:1");
+});
+const liveTimeline = (f: ReturnType<typeof setup>) =>
+  readTimeline(
+    f.client.getSnapshot().document!.nodes[0].serviceData!.config!.timeline,
+  );
+it("timeline CAS rejects stale edits without overwriting the current shared configuration", async () => {
+  const f = timelineFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const before = liveTimeline(f),
+    next = { ...before, aspect_ratio: "1:1" };
+  f.client.changeTimeline(f.nodeID, next, before);
+  expect(() =>
+    f.client.changeTimeline(f.nodeID, { ...before, fps: 60 }, before),
+  ).toThrow("其他协作者");
+  expect(liveTimeline(f).aspect_ratio).toBe("1:1");
+  expect(liveTimeline(f).fps).toBe(30);
+  expect(f.client.retainedTimeline(f.nodeID)?.fps).toBe(60);
+  await expect(f.client.prepareTimeline(f.nodeID)).rejects.toThrow(
+    "保留的时间线编辑",
+  );
+  f.client.discardRetainedTimeline(f.nodeID);
+  expect(f.client.retainedTimeline(f.nodeID)).toBeNull();
+});
+
+it("keeps timeline history independent per node and from canvas history", async () => {
+  const f = setup(true, undefined, (document) => {
+    for (const node of document.nodes!) {
+      node.node_type = "timeline";
+      node.node_action = "tool";
+      node.config = { timeline: emptyTimelineConfig() };
+    }
+  });
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const nodes = f.client.getSnapshot().document!.nodes;
+  const a = nodes[0].id,
+    b = nodes[1].id;
+  const read = (id: string) =>
+    readTimeline(
+      f.client.getSnapshot().document!.nodes.find((n) => n.id === id)!
+        .serviceData!.config!.timeline,
+    );
+  const initial = read(a),
+    initialB = read(b);
+  f.client.changeTimeline(a, { ...initial, aspect_ratio: "1:1" }, initial);
+  f.client.changeTimeline(b, { ...read(b), aspect_ratio: "9:16" }, read(b));
+  expect(f.client.getSnapshot().canUndo).toBe(false);
+  expect(f.client.timelineHistoryState(a)).toEqual({
+    canUndo: true,
+    canRedo: false,
+  });
+  f.client.timelineHistory(a, "undo");
+  expect(read(a)).toEqual(initial);
+  expect(read(b).aspect_ratio).toBe("9:16");
+  expect(f.client.timelineHistoryState(a)).toEqual({
+    canUndo: false,
+    canRedo: true,
+  });
+  f.client.timelineHistory(a, "redo");
+  expect(read(a).aspect_ratio).toBe("1:1");
+  f.client.timelineHistory(b, "undo");
+  expect(read(b)).toEqual(initialB);
+  f.client.timelineHistory(a, "undo");
+  f.client.changeTimeline(a, { ...initial, fps: 60 }, initial);
+  expect(f.client.timelineHistoryState(a).canRedo).toBe(false);
+  expect(f.client.timelineHistoryState(b).canRedo).toBe(true);
+  f.client.stop();
+  expect(f.client.timelineHistoryState(a)).toEqual({
+    canUndo: false,
+    canRedo: false,
+  });
+});
+
+it("records each completed timeline gesture separately even within the 500 ms canvas capture window", async () => {
+  const f = timelineFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const before = liveTimeline(f);
+  const first = editTimeline(before, {
+    type: "trim-left",
+    id: before.clips[0].id,
+    at: 1000,
+  });
+  f.client.changeTimeline(f.nodeID, first, before);
+  const second = editTimeline(first, {
+    type: "split",
+    id: first.clips[0].id,
+    at: 1000,
+  });
+  f.client.changeTimeline(f.nodeID, second, first);
+  f.client.timelineHistory(f.nodeID, "undo");
+  expect(liveTimeline(f)).toEqual(first);
+  f.client.timelineHistory(f.nodeID, "undo");
+  expect(liveTimeline(f)).toEqual(before);
+});
+
+it("timeline removal and its local undo restore the clip and native source relation together", async () => {
+  const f = setup(true, undefined, (document) => {
+    const [target, source] = document.nodes!;
+    const assetID = crypto.randomUUID();
+    source.node_type = "video";
+    source.ref_type = "media_asset";
+    source.ref_id = assetID;
+    source.config = {};
+    target.node_type = "timeline";
+    target.node_action = "tool";
+    target.config = {
+      timeline: editTimeline(emptyTimelineConfig(), {
+        type: "add",
+        assets: [
+          {
+            nodeID: source.id,
+            asset: {
+              id: assetID,
+              project_id: document.project_id,
+              kind: "video",
+              duration_ms: 5000,
+            },
+          },
+        ],
+      }),
+    };
+    document.edges = [
+      {
+        id: crypto.randomUUID(),
+        edge_type: "annotation",
+        source_node_id: source.id,
+        target_node_id: target.id,
+      },
+    ];
+  });
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const before = liveTimeline(f);
+  const edgeID = f.client.getSnapshot().document!.connections[0].id;
+  f.client.changeTimeline(
+    f.nodeID,
+    editTimeline(before, { type: "remove", id: before.clips[0].id }),
+    before,
+  );
+  expect(liveTimeline(f).clips).toEqual([]);
+  expect(f.client.getSnapshot().document!.connections).toEqual([]);
+  f.client.timelineHistory(f.nodeID, "undo");
+  expect(liveTimeline(f)).toEqual(before);
+  expect(
+    f.client.getSnapshot().document!.connections.map((edge) => edge.id),
+  ).toEqual([edgeID]);
+  f.client.timelineHistory(f.nodeID, "redo");
+  expect(liveTimeline(f).clips).toEqual([]);
+  expect(f.client.getSnapshot().document!.connections).toEqual([]);
+});
+
+it("refuses timeline writes after permission loss while preserving the unaccepted intention", async () => {
+  const f = timelineFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const before = liveTimeline(f);
+  f.sockets[0].receive({
+    type: "heartbeat",
+    permissions: { read: true, write: false },
+  });
+  await vi.waitFor(() => expect(f.client.getSnapshot().writable).toBe(false));
+  const next = { ...before, aspect_ratio: "1:1" };
+  expect(() => f.client.changeTimeline(f.nodeID, next, before)).toThrow(
+    "不可编辑",
+  );
+  expect(liveTimeline(f)).toEqual(before);
+  expect(f.client.retainedTimeline(f.nodeID)).toEqual(next);
+  expect(f.sockets[0].sent.some((packet) => packet.type === "yjs_submit")).toBe(
+    false,
+  );
+});
+
+it("timeline undo never overwrites a later collaborator's accepted timeline configuration", async () => {
+  const f = timelineFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const before = liveTimeline(f);
+  f.client.changeTimeline(f.nodeID, { ...before, aspect_ratio: "1:1" }, before);
+  await vi.waitFor(() =>
+    expect(
+      f.sockets[0].sent.some((packet) => packet.type === "yjs_submit"),
+    ).toBe(true),
+  );
+  const submitted = f.sockets[0].sent.find(
+    (packet) => packet.type === "yjs_submit",
+  )!.body as { update: string };
+  const remote = new Y.Doc();
+  Y.applyUpdate(remote, Buffer.from(f.state.state, "base64"));
+  Y.applyUpdate(remote, Buffer.from(submitted.update, "base64"));
+  const nodes = remote.getMap("canvas").get("nodes") as Y.Map<Y.Map<unknown>>;
+  const data = nodes.get(f.nodeID)!.get("data") as Y.Map<unknown>;
+  const native = structuredClone(data.get("native")) as {
+    config: { timeline: API.TimelineConfig };
+  };
+  native.config.timeline.aspect_ratio = "9:16";
+  data.set("native", native);
+  f.sockets[0].receive({
+    type: "yjs_snapshot",
+    actor_id: f.actorID,
+    yjs_state: {
+      ...f.state,
+      commitSeq: "2",
+      state: Buffer.from(Y.encodeStateAsUpdate(remote)).toString("base64"),
+      document: {
+        ...serviceProjection(
+          readCanvasDocument(remote),
+          f.state.document as unknown as ServiceDocument,
+        ),
+        revision: "3",
+      },
+    },
+  });
+  await vi.waitFor(() => expect(liveTimeline(f).aspect_ratio).toBe("9:16"));
+  f.client.timelineHistory(f.nodeID, "undo");
+  expect(liveTimeline(f).aspect_ratio).toBe("9:16");
+  remote.destroy();
+});
+it("timeline freeze waits for accepted authority and normalizes Go null optional fields", async () => {
+  const f = timelineFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const before = liveTimeline(f);
+  f.client.changeTimeline(
+    f.nodeID,
+    { ...before, aspect_ratio: "9:16" },
+    before,
+  );
+  let finished = false;
+  const pointer = f.client.prepareTimeline(f.nodeID).then((value) => {
+    finished = true;
+    return value;
+  });
+  await vi.waitFor(() =>
+    expect(f.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(true),
+  );
+  expect(finished).toBe(false);
+  await acceptDirectorUpdate(f, (doc) => {
+    const clip = doc.nodes![0].config!.timeline!.clips![0];
+    Object.assign(clip, { node_id: null, crop: null });
+  });
+  await expect(pointer).resolves.toEqual({
+    canvas_id: f.state.documentId,
+    node_id: f.nodeID,
+    revision: 2,
+  });
+  expect(f.sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
+    1,
+  );
+});
+it("timeline changes during save invalidate the frozen export intention", async () => {
+  const f = timelineFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const before = liveTimeline(f),
+    next = { ...before, aspect_ratio: "1:1" };
+  f.client.changeTimeline(f.nodeID, next, before);
+  const rejected = expect(f.client.prepareTimeline(f.nodeID)).rejects.toThrow(
+    "时间线已变化",
+  );
+  f.client.changeTimeline(f.nodeID, { ...next, fps: 60 }, next);
+  await rejected;
+});
+it.each(["unknown", "epoch", "permission"])(
+  "timeline freeze rejects %s during a pending save",
+  async (reason) => {
+    const f = timelineFixture();
+    await vi.waitFor(() =>
+      expect(f.client.getSnapshot().document).not.toBeNull(),
+    );
+    const before = liveTimeline(f);
+    f.client.changeTimeline(
+      f.nodeID,
+      { ...before, aspect_ratio: "1:1" },
+      before,
+    );
+    const rejected = expect(
+      f.client.prepareTimeline(f.nodeID),
+    ).rejects.toThrow();
+    await vi.waitFor(() =>
+      expect(f.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(true),
+    );
+    if (reason === "unknown")
+      f.sockets[0].receive({ type: "error", status: 503, code: "unavailable" });
+    else if (reason === "permission")
+      f.sockets[0].receive({
+        type: "heartbeat",
+        permissions: { read: true, write: false },
+      });
+    else
+      f.sockets[0].receive({
+        type: "yjs_snapshot",
+        actor_id: f.actorID,
+        yjs_state: {
+          ...f.state,
+          epoch: crypto.randomUUID(),
+          document: { ...f.state.document, revision: "2" },
+        },
+      });
+    await rejected;
+    await expect(f.client.prepareTimeline(f.nodeID)).rejects.toThrow();
+    expect(
+      f.sockets[0].sent.filter((p) => p.type === "yjs_submit"),
+    ).toHaveLength(1);
+  },
+);
+it("timeline freeze refuses empty timelines and absent timeline nodes", async () => {
+  const f = timelineFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const before = liveTimeline(f);
+  f.client.changeTimeline(f.nodeID, { ...before, clips: [] }, before);
+  await expect(f.client.prepareTimeline(f.nodeID)).rejects.toThrow(
+    "请先添加素材",
+  );
+  await expect(f.client.prepareTimeline(crypto.randomUUID())).rejects.toThrow();
+});
+
+it("document epoch identity changes on same-ID restoration and is unavailable after stop", async () => {
+  const f = timelineFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getDocumentEpoch()).toBe(f.state.epoch),
+  );
+  const captured = f.client.getDocumentEpoch(),
+    replacement = crypto.randomUUID();
+  f.sockets[0].receive({
+    type: "yjs_snapshot",
+    actor_id: f.actorID,
+    yjs_state: {
+      ...f.state,
+      epoch: replacement,
+      document: { ...f.state.document, revision: "2" },
+    },
+  });
+  await vi.waitFor(() => expect(f.client.getDocumentEpoch()).toBe(replacement));
+  expect(f.client.getDocumentEpoch()).not.toBe(captured);
+  f.client.stop();
+  expect(f.client.getDocumentEpoch()).toBeNull();
+});
+
+it("undoes audio clip deletion and automatic lane cleanup as one timeline history item", async () => {
+  const f = timelineFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const before = liveTimeline(f);
+  const added = editTimeline(before, {
+    type: "add",
+    assets: [
+      { asset: { id: crypto.randomUUID(), kind: "audio", duration_ms: 7000 } },
+    ],
+  });
+  f.client.changeTimeline(f.nodeID, added, before);
+  const clip = added.clips.find((item) => item.kind === "audio")!;
+  const removed = editTimeline(added, { type: "remove", id: clip.id });
+  f.client.changeTimeline(f.nodeID, removed, added);
+  expect(liveTimeline(f).tracks).toHaveLength(1);
+  f.client.timelineHistory(f.nodeID, "undo");
+  expect(liveTimeline(f)).toEqual(added);
+  f.client.timelineHistory(f.nodeID, "redo");
+  expect(liveTimeline(f)).toEqual(removed);
+});
