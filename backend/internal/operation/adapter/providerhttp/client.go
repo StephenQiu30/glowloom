@@ -66,6 +66,15 @@ func (c *Client) request(ctx context.Context, config catalogdomain.ProviderConfi
 
 // Submit translates a validated request and makes exactly one charged POST.
 func (c *Client) Submit(ctx context.Context, input application.GenerationRequest, key string) (application.GenerationResult, error) {
+	if input.Config.AdapterKey == "volcengine_music" {
+		return c.submitMusic(ctx, input, key)
+	}
+	if input.Config.AdapterKey == "volcengine_avatar" || input.Config.AdapterKey == "volcengine_motion" {
+		return c.submitVisual(ctx, input, key)
+	}
+	if input.Config.AdapterKey == "volcengine_speech" && input.ModelID == "seed-audio-1.0" {
+		return c.submitOmniAudio(ctx, input, key)
+	}
 	if input.Config.AdapterKey == "volcengine_speech" {
 		return c.submitSpeech(ctx, input, key)
 	}
@@ -192,6 +201,12 @@ func safeUsage(raw json.RawMessage) json.RawMessage {
 
 // Query uses only the original adapter/account and constructs its own task URL.
 func (c *Client) Query(ctx context.Context, config catalogdomain.ProviderConfig, taskID, key string) (application.GenerationResult, error) {
+	if config.AdapterKey == "volcengine_music" {
+		return c.queryMusic(ctx, config, taskID, key)
+	}
+	if config.AdapterKey == "volcengine_avatar" || config.AdapterKey == "volcengine_motion" {
+		return c.queryVisual(ctx, config, taskID, key)
+	}
 	if config.Validate() != nil || (config.AdapterKey != "openrouter" && config.AdapterKey != "volcengine_ark") || !validKey(key) || !validTaskID(taskID) {
 		return unknownResult(), nil
 	}

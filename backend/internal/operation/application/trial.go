@@ -37,10 +37,10 @@ func (r TrialRequest) Validate() error {
 	if r.Kind == "probe" && r.Source == "codex" && r.Model == "" && r.Prompt == "" && r.ProviderID == uuid.Nil && len(r.Params) == 0 && len(r.References) == 0 && r.Mode == "" {
 		return nil
 	}
-	if r.Kind != "chat" && r.Kind != "image" && r.Kind != "video" {
+	if r.Kind != "chat" && r.Kind != "image" && r.Kind != "video" && r.Kind != "audio" {
 		return ErrInvalidTrial
 	}
-	if strings.TrimSpace(r.Prompt) == "" || len(r.Prompt) > 32*1024 || strings.TrimSpace(r.Model) == "" || len(r.Model) > 200 {
+	if (strings.TrimSpace(r.Prompt) == "" && (r.Kind != "video" || (r.Mode != "avatar" && r.Mode != "motion"))) || len(r.Prompt) > 32*1024 || strings.TrimSpace(r.Model) == "" || len(r.Model) > 200 {
 		return ErrInvalidTrial
 	}
 	encodedPrompt, _ := json.Marshal(r.Prompt)
@@ -51,7 +51,7 @@ func (r TrialRequest) Validate() error {
 	if err != nil || len(raw) > 4096 || len(r.References) > 4 {
 		return ErrInvalidTrial
 	}
-	if r.Source == "codex" && (r.Kind == "video" || r.ProviderID != uuid.Nil || len(r.Params) != 0 || len(r.References) != 0) {
+	if r.Source == "codex" && (r.Kind == "video" || r.Kind == "audio" || r.ProviderID != uuid.Nil || len(r.Params) != 0 || len(r.References) != 0) {
 		return ErrInvalidTrial
 	}
 	if r.Source == "cloud" && (r.ProviderID == uuid.Nil || r.Kind == "chat") {

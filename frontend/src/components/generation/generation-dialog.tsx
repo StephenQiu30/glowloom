@@ -1,4 +1,5 @@
 "use client";
+import { AudioSubtitles } from "./audio-subtitles";
 import { ContentState } from "@/components/layout/content-state";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import {
@@ -37,6 +38,7 @@ import {
   type Task,
 } from "./contracts";
 export type GenerationSeed = {
+  creationType?: "image" | "video" | "audio" | "music" | "avatar" | "motion";
   composer?: PromptDraft;
   draftID?: string;
   canvasOwner?: CanvasComposerOwner;
@@ -98,12 +100,16 @@ export function GenerationDialog({
         <DialogTitle>
           {seed.capability === "video"
             ? "视频生成"
-            : seed.capability === "text"
-              ? "文本创作"
-              : "图片生成"}
+            : seed.capability === "audio"
+              ? "音频生成"
+              : seed.capability === "text"
+                ? "文本创作"
+                : "图片生成"}
         </DialogTitle>
         <DialogDescription>
-          选择模型与参考素材，确认报价后开始生成。任务保留在所选项目中。
+          {seed.capability === "audio"
+            ? "输入朗读文本并选择模型与音色，确认报价后开始生成。任务保留在所选项目中。"
+            : "选择模型与参考素材，确认报价后开始生成。任务保留在所选项目中。"}
         </DialogDescription>
         {closeFailed && (
           <Alert>
@@ -324,6 +330,7 @@ function TaskHistory({
   );
 }
 export function TaskDetail({
+  adoptLabel = "采用结果到画布",
   projectID,
   id,
   onAdopt,
@@ -332,6 +339,7 @@ export function TaskDetail({
   presentation = "default",
   onAvailabilityChange,
 }: {
+  adoptLabel?: string;
   projectID: string;
   id: string;
   onAdopt?: (id: string, kind: string) => Promise<void> | void;
@@ -445,6 +453,9 @@ export function TaskDetail({
     );
   const preview = (
     <>
+      {task?.status === "completed" && task.audio_subtitle && (
+        <AudioSubtitles subtitle={task.audio_subtitle} />
+      )}
       {task?.status === "completed" &&
         (task.capability?.startsWith("text.") ||
           task.capability?.startsWith("document.")) &&
@@ -512,7 +523,7 @@ export function TaskDetail({
                     disabled={adopting}
                     onClick={() => void adopt(o.media_asset_id!, o.kind!)}
                   >
-                    {adopting ? "正在保存结果…" : "采用结果到画布"}
+                    {adopting ? "正在保存结果…" : adoptLabel}
                   </Button>
                 )}
               </div>

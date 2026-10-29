@@ -104,10 +104,8 @@ func (r *Runner) Run(ctx context.Context, input application.TrialInput) (applica
 		return result, nil
 	}
 	defer clear(raw)
-	var key struct {
-		APIKey string `json:"api_key"`
-	}
-	if json.Unmarshal(raw, &key) != nil {
+	providerKey, keyErr := binding.Config.CredentialValue(raw)
+	if keyErr != nil {
 		return result, nil
 	}
 	if r.Store.Authorize(ctx, input.Actor) != nil {
@@ -115,7 +113,7 @@ func (r *Runner) Run(ctx context.Context, input application.TrialInput) (applica
 	}
 	var generated application.GenerationResult
 	if input.Action == "query" {
-		generated, err = r.Cloud.Query(ctx, binding.Config, input.TaskID, key.APIKey)
+		generated, err = r.Cloud.Query(ctx, binding.Config, input.TaskID, providerKey)
 	} else {
 		mode := input.Request.Mode
 		if mode == "" {
@@ -124,7 +122,7 @@ func (r *Runner) Run(ctx context.Context, input application.TrialInput) (applica
 				mode = "text2video"
 			}
 		}
-		generated, err = r.Cloud.Submit(ctx, application.GenerationRequest{Config: binding.Config, ModelID: input.Request.Model, Capability: input.Request.Kind + ".generate", Mode: mode, Prompt: input.Request.Prompt, Params: input.Request.Params, References: input.Request.References, OutputCount: 1}, key.APIKey)
+		generated, err = r.Cloud.Submit(ctx, application.GenerationRequest{Config: binding.Config, ModelID: input.Request.Model, Capability: input.Request.Kind + ".generate", Mode: mode, Prompt: input.Request.Prompt, Params: input.Request.Params, References: input.Request.References, OutputCount: 1}, providerKey)
 	}
 	if err != nil {
 		result.State = "unknown"
@@ -151,8 +149,13 @@ func (r *Runner) Run(ctx context.Context, input application.TrialInput) (applica
 			data = generated.Images[0].Bytes
 			mime = generated.Images[0].MediaType
 			err = validateImage(data, mime)
+		case len(generated.URLs) == 1 && binding.Config.AdapterKey == "volcengine_music":
+			data, _, err = managed.NewVideos().ReadAudio(ctx, binding.Config, result.TaskID, generated.URLs[0])
+			mime = "audio/mpeg"
+		case len(generated.Audio) == 1:
+			data, mime = generated.Audio[0].Bytes, generated.Audio[0].MediaType
 		case len(generated.URLs) == 1:
-			data, _, err = managed.NewVideos().Read(ctx, binding.Config, result.TaskID, generated.URLs[0], key.APIKey)
+			data, _, err = managed.NewVideos().Read(ctx, binding.Config, result.TaskID, generated.URLs[0], providerKey)
 			mime = "video/mp4"
 		default:
 			err = application.ErrInvalidProviderCall

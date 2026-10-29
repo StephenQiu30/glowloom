@@ -26,6 +26,7 @@ func quoteRequestFingerprint(input application.CreateFreeQuoteInput) ([sha256.Si
 		return [sha256.Size]byte{}, application.ErrInvalidFreeQuote
 	}
 	encoded, err := json.Marshal(struct {
+		AgentContext    *application.AgentQuoteContext    `json:"agent_context,omitempty"`
 		Kind            string                            `json:"kind"`
 		ProjectID       uuid.UUID                         `json:"project_id"`
 		ModelKey        string                            `json:"model_key"`
@@ -39,8 +40,9 @@ func quoteRequestFingerprint(input application.CreateFreeQuoteInput) ([sha256.Si
 		Source          *domain.CanvasSource              `json:"source"`
 		PromptTemplate  *promptapp.TemplateRequest        `json:"prompt_template,omitempty"`
 	}{
-		Kind:      "free_single",
-		ProjectID: input.ProjectID, ModelKey: input.ModelKey,
+		AgentContext: input.AgentContext,
+		Kind:         "free_single",
+		ProjectID:    input.ProjectID, ModelKey: input.ModelKey,
 		Capability: input.Capability, Mode: input.Mode, Prompt: input.Prompt,
 		MediaInputs: input.MediaInputs,
 		Params:      params, OutputCount: input.OutputCount,

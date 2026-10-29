@@ -34,6 +34,25 @@ func instantiateOnboardingModel(tx *gorm.DB, actor identityapp.Principal, id, co
 	if err := appendPriceRuleInTx(tx, price, 2); err != nil {
 		return err
 	}
+	if candidate.ProviderModelID == "seed-audio-1.0" || candidate.AdapterKey == "volcengine_music" || candidate.AdapterKey == "volcengine_avatar" || candidate.AdapterKey == "volcengine_motion" {
+		// These media protocols require a real per-mode trial with authorized
+		// inputs. They must not use metadata/accepted-only onboarding activation.
+		maxMicros := int64(480000)
+		if candidate.ProviderModelID == "seed-audio-1.0" {
+			maxMicros = 2000000
+		}
+		if candidate.AdapterKey == "volcengine_avatar" {
+			maxMicros = 60000000
+		}
+		if candidate.AdapterKey == "volcengine_motion" {
+			maxMicros = 12000000
+		}
+		cost, err := json.Marshal(domain.PresetModelCost{Currency: "CNY", MaxMicros: maxMicros, Source: candidate.SourceURL, ReviewedAt: time.Date(2026, 10, 29, 0, 0, 0, 0, time.UTC)})
+		if err != nil {
+			return err
+		}
+		return tx.Exec(`INSERT INTO catalog.model_release(id,model_id,model_version_id,price_version_id,config_version_id,upstream_cost) VALUES(?,?,?,?,?,?::jsonb)`, uuid.New(), id, version.ID, price.ID, configID, string(cost)).Error
+	}
 	return tx.Exec(`INSERT INTO catalog.model_release(id,model_id,model_version_id,price_version_id,config_version_id,upstream_cost) VALUES(?,?,?,?,?, '{}'::jsonb)`, uuid.New(), id, version.ID, price.ID, configID).Error
 }
 

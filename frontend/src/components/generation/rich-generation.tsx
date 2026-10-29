@@ -1,4 +1,6 @@
 "use client";
+import dynamic from "next/dynamic";
+import { modelsForCreation, creationModeLabel } from "./creation-contract";
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
 
@@ -102,6 +104,11 @@ import { canonical } from "./draft-save";
 import { PromptEditor } from "./prompt-editor";
 import { ModelPicker } from "./model-picker";
 import { GenerationParameters } from "./generation-parameters";
+import { AvatarTextDrive } from "./avatar-text-drive";
+import type { VoiceSelection } from "./voice-library-api";
+const VoiceLibrary = dynamic(() =>
+  import("./voice-library").then((m) => m.VoiceLibrary),
+);
 import { referenceMode, referenceGeneration } from "./reference-mode";
 import { ComposerSession, type ComposerSnapshot } from "./composer-session";
 import {
@@ -138,6 +145,7 @@ export type CanvasComposerOwner = {
   incomingSources?: (CanvasReferenceSource & { edgeID: string })[];
 };
 type Props = {
+  adoptLabel?: string;
   projectID: string;
   seed: GenerationSeed;
   onLock?: (locked: boolean) => void;
@@ -279,7 +287,11 @@ export function RichGeneration(props: Props) {
               draft = structuredClone(props.seed.reuse.editor_draft);
             }
             draft = structuredClone(draft);
-            if (preferences.prompt_suffix)
+            if (
+              preferences.prompt_suffix &&
+              props.seed.capability !== "audio" &&
+              !["avatar", "motion"].includes(props.seed.creationType ?? "")
+            )
               draft.document.content.push({
                 type: "paragraph",
                 content: [{ type: "text", text: preferences.prompt_suffix }],
@@ -352,7 +364,7 @@ export function RichGeneration(props: Props) {
           setReady({
             snapshot,
             actor: identity.actor.id,
-            models: catalog.models,
+            models: modelsForCreation(catalog.models, props.seed.creationType),
             initialModelError: catalog.error,
             current,
           });
@@ -414,6 +426,7 @@ export function RichGeneration(props: Props) {
   );
 }
 function EditorWorkspace({
+  adoptLabel,
   projectID,
   seed,
   onLock,
@@ -438,6 +451,8 @@ function EditorWorkspace({
   onOpen: (id: string) => void;
 }) {
   const formFieldId = useId();
+  const [voiceLibraryOpen, setVoiceLibraryOpen] = useState(false);
+  const voiceLibraryButton = useRef<HTMLButtonElement>(null);
   const compact = presentation === "canvas" || presentation === "home";
   const [quoteReviewOpen, setQuoteReviewOpen] = useState(true);
 
@@ -476,7 +491,7 @@ function EditorWorkspace({
         controller.signal,
       );
       if (!controller.signal.aborted) {
-        setModels(result);
+        setModels(modelsForCreation(result, seed.creationType));
         setModelError("");
       }
     } catch (error) {
@@ -1131,58 +1146,185 @@ function EditorWorkspace({
     );
     onOpen(serverConflict.draft_id);
   }
+  const textOnlyAudio =
+    seed.capability === "audio" && draft.mode !== "omni_audio";
+  const motionInput = seed.creationType === "motion";
   const promptControl = (
-    <PromptEditor
-      inputGroup={compact}
-      className={
-        compact
-          ? "max-h-80 min-h-16 overflow-y-auto"
-          : "max-h-80 min-h-24 overflow-y-auto"
-      }
-      placeholder={compact ? "描述创意，@ 引用素材" : undefined}
-      resolveGeneration={compact ? resolveReferenceGeneration : undefined}
-      contextKey={contextKey}
-      replicaId={replicaId}
-      draft={snapshot.draft}
-      collaboration={canvas?.collaboration}
-      onDispose={() => {
-        ownerSessionCleanup.current?.();
-        ownerSessionCleanup.current = undefined;
-      }}
-      onReady={(value) => {
-        sessionRef.current = value;
-        setSession(value);
-        ownerSessionCleanup.current?.();
-        ownerSessionCleanup.current = canvas?.onSession?.(value) || undefined;
-        const current = value.snapshot();
-        latest.current = current;
-        setDraft(current.draft);
-        setSeq(current.localSeq);
-        canvas?.onChange(current.draft);
-      }}
-      onChange={changed}
-      onRequestSave={() =>
-        void run(async () => {
-          await flush();
-        })
-      }
-      onRequestSubmit={() => void getQuote()}
-    />
+    <div
+      hidden={motionInput}
+      aria-hidden={motionInput || undefined}
+      className={motionInput ? "hidden" : "contents"}
+    >
+      <PromptEditor
+        inputGroup={compact}
+        className={
+          compact
+            ? "max-h-80 min-h-16 overflow-y-auto"
+            : "max-h-80 min-h-24 overflow-y-auto"
+        }
+        placeholder={
+          seed.creationType === "music"
+            ? draft.mode === "music_song" &&
+              draft.params.music_input === "lyrics"
+              ? "填写歌词。"
+              : "描述曲风、情绪与节奏。"
+            : seed.creationType === "avatar"
+              ? "描述表情、姿态与动作（可选）。"
+              : draft.mode === "omni_audio"
+                ? "描述角色、台词、音效与时间段，@ 引用音频。"
+                : textOnlyAudio
+                  ? "输入需要朗读的文字。"
+                  : compact
+                    ? "描述创意，@ 引用素材"
+                    : undefined
+        }
+        resolveGeneration={compact ? resolveReferenceGeneration : undefined}
+        contextKey={contextKey}
+        replicaId={replicaId}
+        draft={snapshot.draft}
+        collaboration={canvas?.collaboration}
+        onDispose={() => {
+          ownerSessionCleanup.current?.();
+          ownerSessionCleanup.current = undefined;
+        }}
+        onReady={(value) => {
+          sessionRef.current = value;
+          setSession(value);
+          ownerSessionCleanup.current?.();
+          ownerSessionCleanup.current = canvas?.onSession?.(value) || undefined;
+          const current = value.snapshot();
+          latest.current = current;
+          setDraft(current.draft);
+          setSeq(current.localSeq);
+          canvas?.onChange(current.draft);
+        }}
+        onChange={changed}
+        onRequestSave={() =>
+          void run(async () => {
+            await flush();
+          })
+        }
+        onRequestSubmit={() => void getQuote()}
+      />
+    </div>
   );
-  const referenceControls = session ? (
-    <ReferenceControls
-      session={session}
-      draft={draft}
-      projectID={projectID}
-      model={model}
-      disabled={frozen}
-      authorized={sourceReady}
-      compact={compact}
-      home={presentation === "home"}
-      canvasSources={canvas?.referenceSources}
-      incomingSources={canvas?.incomingSources}
-    />
-  ) : null;
+  async function adoptDrivingAudio(id: string) {
+    if (!session || frozen) throw new Error("请先完成当前提交。");
+    const preview = await getMediaPreview({ pid: projectID, asset_id: id });
+    const asset = preview.asset;
+    if (
+      !asset ||
+      asset.project_id !== projectID ||
+      asset.kind !== "audio" ||
+      !asset.duration_ms ||
+      asset.duration_ms >= 60000
+    )
+      throw new Error("请选择少于 60 秒的项目音频。");
+    const binding = mediaBinding(asset, "driving_audio");
+    const old = session
+      .snapshot()
+      .draft.references.find((r) => r.role === "driving_audio");
+    if (old) session.replaceReference(old.id, binding);
+    else session.insertReferences([binding]);
+    await flush();
+  }
+  async function useVoice(selection: VoiceSelection) {
+    if (!session || frozen) throw new Error("请先完成当前提交。");
+    const mode = selection.kind === "system" ? "text2audio" : "omni_audio";
+    const before = session.snapshot().draft;
+    if (!before.modelVersion && before.mode !== mode) {
+      // Choosing an input mode is valid before any supplier model is available.
+      // The server still requires a verified release before quoting generation.
+      session.adoptDraft({ ...before, mode });
+    } else if (before.mode && before.mode !== mode) {
+      const next = models.find((m) => m.current_version?.modes?.includes(mode));
+      if (!next?.current_version?.id)
+        throw new Error(
+          mode === "omni_audio"
+            ? "音色已保留。启用全能配音模型后可以引用。"
+            : "音色已保留。启用文字配音模型后可以使用。",
+        );
+      await selectMode(next.current_version.id, mode);
+      if (session.snapshot().draft.mode !== mode)
+        throw new Error("请先完成配音模式切换。");
+    }
+    if (selection.kind === "system")
+      session.updateParams({
+        ...session.snapshot().draft.params,
+        speaker: selection.voice.id,
+      });
+    else {
+      const preview = await getMediaPreview({
+        pid: projectID,
+        asset_id: selection.voice.asset_id,
+      });
+      if (
+        !preview.asset ||
+        preview.asset.project_id !== projectID ||
+        preview.asset.kind !== "audio" ||
+        preview.asset.revision !== selection.voice.asset_revision
+      )
+        throw new Error("参考音色已变化，请重新创建或选择。");
+      const current = session.snapshot().draft.references;
+      if (
+        current.some((r) => r.mediaKind === "image") ||
+        current.filter((r) => r.mediaKind === "audio").length >= 3
+      )
+        throw new Error("全能配音最多引用三段音频，不能与图片混用。");
+      session.insertReferences([
+        mediaBinding(preview.asset, "reference_audio"),
+      ]);
+    }
+    await flush();
+    setVoiceLibraryOpen(false);
+  }
+  const voiceControls =
+    seed.creationType === "audio" ? (
+      <>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={frozen}
+          onClick={() => setVoiceLibraryOpen(true)}
+          ref={voiceLibraryButton}
+        >
+          音色库
+        </Button>
+        {voiceLibraryOpen && (
+          <VoiceLibrary
+            ownerKey={contextKey}
+            key={contextKey}
+            projectID={projectID}
+            onClose={() => setVoiceLibraryOpen(false)}
+            onSelect={useVoice}
+            onRestoreFocus={() => voiceLibraryButton.current?.focus()}
+          />
+        )}
+      </>
+    ) : seed.creationType === "avatar" ? (
+      <AvatarTextDrive
+        key={contextKey}
+        projectID={projectID}
+        contextKey={contextKey}
+        disabled={frozen}
+        onAdopt={adoptDrivingAudio}
+      />
+    ) : null;
+  const referenceControls =
+    session && !textOnlyAudio ? (
+      <ReferenceControls
+        session={session}
+        draft={draft}
+        projectID={projectID}
+        model={model}
+        disabled={frozen}
+        authorized={sourceReady}
+        compact={compact}
+        home={presentation === "home"}
+        canvasSources={canvas?.referenceSources}
+        incomingSources={canvas?.incomingSources}
+      />
+    ) : null;
   const collaborativeNegativeField =
     canvas?.collaboration && model
       ? (() => {
@@ -1422,7 +1564,17 @@ function EditorWorkspace({
       data-presentation={presentation}
       role={full ? "dialog" : undefined}
       aria-modal={full || undefined}
-      aria-label="多参考创作编辑器"
+      aria-label={
+        seed.creationType === "music"
+          ? "音乐创作编辑器"
+          : seed.creationType === "avatar"
+            ? "数字人创作编辑器"
+            : seed.creationType === "motion"
+              ? "动作模仿创作编辑器"
+              : textOnlyAudio
+                ? "音频创作编辑器"
+                : "多参考创作编辑器"
+      }
     >
       <div
         className={cn(
@@ -1567,6 +1719,7 @@ function EditorWorkspace({
               }
             >
               {referenceControls}
+              {voiceControls}
               {presentation === "home" && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -1699,25 +1852,59 @@ function EditorWorkspace({
                     )}
                   </PopoverContent>
                 </Popover>
-                {presentation !== "home" && (
-                  <span className="shrink-0 px-2 text-xs text-muted-foreground">
-                    全能参考
+                {seed.creationType === "music" && model ? (
+                  <Select
+                    value={draft.mode ?? "music_song"}
+                    disabled={frozen || !session}
+                    onValueChange={(mode) =>
+                      selectMode(draft.modelVersion!, mode)
+                    }
+                  >
+                    <SelectTrigger aria-label="音乐模式" className="w-auto">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {model.current_version?.modes?.map((mode) => (
+                          <SelectItem key={mode} value={mode}>
+                            {creationModeLabel(mode)}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                ) : seed.creationType === "music" ? (
+                  <span className="px-2 text-xs text-muted-foreground">
+                    {creationModeLabel(draft.mode ?? "music_song")}
                   </span>
+                ) : seed.creationType === "audio" ? (
+                  <span className="px-2 text-xs text-muted-foreground">
+                    {creationModeLabel(draft.mode ?? "text2audio")}
+                  </span>
+                ) : (
+                  presentation !== "home" && (
+                    <span className="shrink-0 px-2 text-xs text-muted-foreground">
+                      全能参考
+                    </span>
+                  )
                 )}
-                <InputGroupButton
-                  aria-label="提及素材或主体"
-                  size="icon-sm"
-                  disabled={frozen || !session}
-                  onClick={() =>
-                    session?.editor
-                      .chain()
-                      .focus(undefined, { scrollIntoView: false })
-                      .insertContent("@")
-                      .run()
-                  }
-                >
-                  <AtSign />
-                </InputGroupButton>
+                {!textOnlyAudio &&
+                  !["avatar", "motion"].includes(seed.creationType ?? "") && (
+                    <InputGroupButton
+                      aria-label="提及素材或主体"
+                      size="icon-sm"
+                      disabled={frozen || !session}
+                      onClick={() =>
+                        session?.editor
+                          .chain()
+                          .focus(undefined, { scrollIntoView: false })
+                          .insertContent("@")
+                          .run()
+                      }
+                    >
+                      <AtSign />
+                    </InputGroupButton>
+                  )}
                 {presentation === "home" && projectControl}
               </div>
               {current.submission ? (
@@ -1817,13 +2004,15 @@ function EditorWorkspace({
                     aria-label="生成模式"
                     className="w-full"
                   >
-                    <SelectValue placeholder={"请选择模式"} />
+                    <SelectValue placeholder={"请选择模式"}>
+                      {draft.mode ? creationModeLabel(draft.mode) : undefined}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
                       {model?.current_version?.modes?.map((m) => (
                         <SelectItem key={m} value={m}>
-                          {m}
+                          {creationModeLabel(m)}
                         </SelectItem>
                       ))}
                     </SelectGroup>
@@ -1856,6 +2045,7 @@ function EditorWorkspace({
                   </Button>
                 </div>
                 {referenceControls}
+                {voiceControls}
               </>
             )}
             {parameterControls}
@@ -1998,7 +2188,12 @@ function EditorWorkspace({
               </DialogDescription>
               {submissionPanel}
               {task && (
-                <TaskDetail projectID={projectID} id={task} onAdopt={onAdopt} />
+                <TaskDetail
+                  projectID={projectID}
+                  id={task}
+                  onAdopt={onAdopt}
+                  adoptLabel={adoptLabel}
+                />
               )}
             </DialogContent>
           </Dialog>
@@ -2037,7 +2232,12 @@ function EditorWorkspace({
           </Button>
         )}
         {!compact && task && (
-          <TaskDetail projectID={projectID} id={task} onAdopt={onAdopt} />
+          <TaskDetail
+            projectID={projectID}
+            id={task}
+            onAdopt={onAdopt}
+            adoptLabel={adoptLabel}
+          />
         )}
       </div>
     </section>

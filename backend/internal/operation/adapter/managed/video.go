@@ -54,7 +54,7 @@ func (v *Videos) Read(ctx context.Context, c catalogdomain.ProviderConfig, taskI
 		downloaded, err = tempArtifact(data, "video/mp4")
 	} else {
 		u, e := url.Parse(raw)
-		if e != nil || u.Scheme != "https" || u.User != nil || u.Port() != "" || !strings.HasSuffix(u.Hostname(), ".tos-cn-beijing.volces.com") {
+		if e != nil || u.Scheme != "https" || u.User != nil || u.Port() != "" || (!strings.HasSuffix(u.Hostname(), ".tos-cn-beijing.volces.com") && !catalogdomain.ValidCreationResultURL(c.AdapterKey, raw)) {
 			return nil, 0, mediaflow.ErrUnsafeResultURL
 		}
 		downloader, e := mediaflow.NewSecureDownloader(mediaflow.DownloadPolicy{AllowedOrigins: []string{"https://" + u.Host}, MaxBytes: 512 << 20})

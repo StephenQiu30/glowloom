@@ -130,7 +130,7 @@ func compileEditorInput(tx *gorm.DB, input application.CreateFreeQuoteInput, d p
 	r := tx.Raw(`SELECT m.model_key,m.capability FROM catalog.model_profile m
  JOIN catalog.provider p ON p.id=m.provider_id
  LEFT JOIN catalog.model_release r ON r.id=m.active_release_id AND r.status='active' AND r.model_id=m.id
- WHERE CASE WHEN p.adapter_key IN ('openrouter','volcengine_ark','byteplus','deepseek','volcengine_speech') THEN r.model_version_id ELSE m.current_version_id END=?
+ WHERE CASE WHEN p.adapter_key IN ('openrouter','volcengine_ark','byteplus','deepseek','volcengine_speech','volcengine_music','volcengine_avatar','volcengine_motion') THEN r.model_version_id ELSE m.current_version_id END=?
  AND m.status='active' AND NOT m.is_delete AND NOT p.is_delete FOR SHARE OF m,p`, version).Scan(&model)
 	if r.Error != nil {
 		return input, r.Error

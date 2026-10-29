@@ -500,13 +500,7 @@ button:not(:disabled),
   align-items: center;
   gap: 8px;
 }
-.product-account-slot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 64px;
-  height: var(--control-height);
-}
+
 .product-header-actions > button svg {
   width: 20px;
   height: 20px;
@@ -2784,7 +2778,7 @@ button:not(:disabled),
     grid-column: 1 / -1;
     max-width: 100%;
   }
-  .product-header[data-asset-layout] [data-asset-account-group] {
+  .product-header[data-asset-layout] [data-account-actions] {
     grid-row: 1;
     grid-column: 2;
     justify-self: end;
@@ -2821,7 +2815,7 @@ button:not(:disabled),
     grid-row: 1;
     grid-column: 1;
   }
-  .product-header[data-asset-layout] [data-asset-account-group] {
+  .product-header[data-asset-layout] [data-account-actions] {
     grid-row: 1;
     grid-column: 2;
     justify-self: end;
@@ -2836,7 +2830,7 @@ button:not(:disabled),
 
 /* Selection replaces the asset tools and account area, matching the source state. */
 .product-header[data-asset-layout]:has([data-asset-batch])
-  [data-asset-account-group],
+  [data-account-actions],
 .product-header[data-asset-layout]:has([data-asset-batch]) [data-asset-search] {
   display: none;
 }

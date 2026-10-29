@@ -84,3 +84,18 @@ func TestReferenceSourceRejectsFieldsFromOtherVariants(t *testing.T) {
 		}
 	}
 }
+
+func TestOmniAudioCompileReindexesDeletedDisplayLabels(t *testing.T) {
+	d := editorDraft(t)
+	mode := "omni_audio"
+	d.Mode = &mode
+	d.References = []domain.Reference{{ID: "voice", BindingGeneration: 1, MediaKind: "audio", Role: "reference_audio", Order: 0, Source: domain.ReferenceSource{Kind: "media", SourceID: "audio", SourceVersion: "1"}}}
+	d.LabelState.HighWater["audio"] = 3
+	d.LabelState.Allocations["removed"] = domain.LabelAllocation{LabelKind: "audio", Ordinal: 1}
+	d.LabelState.Allocations["voice"] = domain.LabelAllocation{LabelKind: "audio", Ordinal: 3}
+	d.Document.Content[0].Content = []domain.Inline{{Type: "reference", Attrs: &domain.ReferenceAttrs{ReferenceID: "voice"}}, {Type: "text", Text: " 说你好"}}
+	out, err := d.Compile()
+	if err != nil || out.Prompt != "@音频1 说你好" || len(out.Media) != 1 || out.Mapping[0].Label != "音频3" {
+		t.Fatalf("compile = %+v, %v", out, err)
+	}
+}

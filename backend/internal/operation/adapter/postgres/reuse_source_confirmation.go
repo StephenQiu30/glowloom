@@ -93,7 +93,7 @@ func lockReusableSourceOutputs(tx *gorm.DB, identity reuseSourceIdentity) ([]reu
 	var source struct{ OutputCount int32 }
 	result := tx.Raw(`
 		SELECT output_count FROM operation.operation
-		WHERE id = ?::uuid AND project_id = ?::uuid AND input_hash = ?
+		WHERE id = ?::uuid AND project_id = ?::uuid AND input_hash = ? AND origin<>'agent'
 		  AND status = 'completed' AND NOT is_delete
 		FOR UPDATE
 	`, identity.SourceID.String(), identity.ProjectID.String(), identity.InputHash).Scan(&source)

@@ -53,7 +53,10 @@ func volcengineModelCatalog() ModelCandidateCatalog {
 }
 
 func doubaoSpeechCatalog() ModelCandidateCatalog {
-	return ModelCandidateCatalog{Version: "2026-10-28.1", Models: []ModelCandidatePreset{{Key: "speech-tts-20", AdapterKey: "volcengine_speech", DisplayName: "豆包语音合成 2.0", ProviderModelID: "seed-tts-2.0", Capability: "audio.generate", Modes: []string{"text2audio"}, SourceURL: "https://docs.volcengine.com/docs/doubao-voice/unidirectional-streaming-text-to-speech-http?lang=zh", ReviewedAt: "2026-10-28", Lifecycle: "active"}}}
+	return ModelCandidateCatalog{Version: "2026-10-29.1", Models: []ModelCandidatePreset{
+		{Key: "speech-tts-20", AdapterKey: "volcengine_speech", DisplayName: "豆包语音合成 2.0", ProviderModelID: "seed-tts-2.0", Capability: "audio.generate", Modes: []string{"text2audio"}, SourceURL: "https://docs.volcengine.com/docs/doubao-voice/unidirectional-streaming-text-to-speech-http?lang=zh", ReviewedAt: "2026-10-28", Lifecycle: "active"},
+		{Key: "speech-omni-10", AdapterKey: "volcengine_speech", DisplayName: "Seed-Audio 1.0 · 全能配音", ProviderModelID: "seed-audio-1.0", Capability: "audio.generate", Modes: []string{"omni_audio"}, SourceURL: "https://docs.volcengine.com/docs/doubao-voice/audio-generation-http?lang=zh", ReviewedAt: "2026-10-29", Lifecycle: "active"},
+	}}
 }
 
 func configureSeedance25(version *ModelVersion) {

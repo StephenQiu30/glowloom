@@ -19,13 +19,13 @@ type ProbeResult struct {
 // Probe performs read-only authentication and discovery; it cannot generate output.
 func (c *Client) Probe(ctx context.Context, config catalogdomain.ProviderConfig, key string) ProbeResult {
 	result := ProbeResult{Auth: "unknown", Adapter: "ok", Discovery: "unsupported", Candidates: []catalogapp.ModelCandidate{}}
-	if config.Validate() != nil || !validKey(key) {
+	if config.Validate() != nil || (!validKey(key) && config.AdapterKey != "volcengine_music") {
 		result.Adapter = "unsupported"
 		return result
 	}
 	// Speech has no supported read-only Key probe. Generating audio is allowed
 	// only through an explicit management model validation.
-	if config.AdapterKey == "volcengine_speech" {
+	if config.AdapterKey == "volcengine_speech" || config.AdapterKey == "volcengine_music" || config.AdapterKey == "volcengine_avatar" || config.AdapterKey == "volcengine_motion" {
 		result.Adapter = "ok"
 		return result
 	}

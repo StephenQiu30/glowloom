@@ -301,14 +301,14 @@ func readFreeQuoteCatalog(tx *gorm.DB, input application.CreateFreeQuoteInput, a
 		JOIN catalog.capability AS capability
 		  ON capability.key = m.capability AND NOT capability.is_delete
 		JOIN catalog.model_profile_version AS v
-		  ON v.id = CASE WHEN provider.adapter_key IN ('volcengine_ark','openrouter','byteplus','deepseek','volcengine_speech') THEN published.model_version_id ELSE m.current_version_id END AND v.model_profile_id = m.id AND NOT v.is_delete
+		  ON v.id = CASE WHEN provider.adapter_key IN ('volcengine_ark','openrouter','byteplus','deepseek','volcengine_speech','volcengine_music','volcengine_avatar','volcengine_motion') THEN published.model_version_id ELSE m.current_version_id END AND v.model_profile_id = m.id AND NOT v.is_delete
 		JOIN LATERAL (
 		  SELECT id, version_no, unit, rule, currency, fx_rate_to_cny, effective_from
 		  FROM catalog.price_rule_version
-		  WHERE (provider.adapter_key NOT IN ('volcengine_ark','openrouter','byteplus','deepseek','volcengine_speech') OR id=published.price_version_id) AND model_profile_id = m.id AND effective_from <= ? AND NOT is_delete
+		  WHERE (provider.adapter_key NOT IN ('volcengine_ark','openrouter','byteplus','deepseek','volcengine_speech','volcengine_music','volcengine_avatar','volcengine_motion') OR id=published.price_version_id) AND model_profile_id = m.id AND effective_from <= ? AND NOT is_delete
 		  ORDER BY effective_from DESC, version_no DESC LIMIT 1
 		) AS price ON true
-		WHERE m.model_key = ? AND (provider.adapter_key NOT IN ('volcengine_ark','openrouter','byteplus','deepseek','volcengine_speech') OR EXISTS (SELECT 1 FROM catalog.provider_config_version pc JOIN catalog.provider_preset_version pv ON pv.id=pc.preset_version_id JOIN catalog.provider_preset preset ON preset.id=pv.preset_id WHERE pc.id=published.config_version_id AND NOT preset.emergency_disabled)) AND m.capability = ? AND m.status = 'active'
+		WHERE m.model_key = ? AND (provider.adapter_key NOT IN ('volcengine_ark','openrouter','byteplus','deepseek','volcengine_speech','volcengine_music','volcengine_avatar','volcengine_motion') OR EXISTS (SELECT 1 FROM catalog.provider_config_version pc JOIN catalog.provider_preset_version pv ON pv.id=pc.preset_version_id JOIN catalog.provider_preset preset ON preset.id=pv.preset_id WHERE pc.id=published.config_version_id AND NOT preset.emergency_disabled)) AND m.capability = ? AND m.status = 'active'
 		  AND NOT m.is_delete AND ? = ANY(v.modes) AND ? = ANY(capability.modes)
 		  AND 'prompt' = ANY(capability.input_roles)
 		  AND (? OR provider.region = 'domestic')
@@ -368,6 +368,8 @@ func readFreeQuoteMedia(tx *gorm.DB, projectID uuid.UUID, requested []applicatio
 	facts := make(map[uuid.UUID]application.FreeQuoteMediaFact, len(ordered))
 	for _, id := range ordered {
 		var row struct {
+			MIMEType           string
+			Width, Height      *int32
 			ID                 uuid.UUID
 			Kind               string
 			Status             string
@@ -380,7 +382,7 @@ func readFreeQuoteMedia(tx *gorm.DB, projectID uuid.UUID, requested []applicatio
 		}
 		read := tx.Raw(`
 			SELECT id, kind, status, moderation_status, contains_real_person,
-			       consent_record_id, sha256, byte_size, duration_ms
+			       consent_record_id, sha256, byte_size, duration_ms, mime_type, width, height
 			FROM media.media_asset
 			WHERE id = ?::uuid AND project_id = ?::uuid AND NOT is_delete FOR SHARE
 		`, id.String(), projectID.String()).Scan(&row)
@@ -392,7 +394,7 @@ func readFreeQuoteMedia(tx *gorm.DB, projectID uuid.UUID, requested []applicatio
 			return nil, application.ErrFreeQuoteInputNotReady
 		}
 		facts[id] = application.FreeQuoteMediaFact{
-			ID: id, Kind: row.Kind, SHA256: *row.SHA256, ByteSize: row.ByteSize,
+			MIMEType: row.MIMEType, Width: row.Width, Height: row.Height, ID: id, Kind: row.Kind, SHA256: *row.SHA256, ByteSize: row.ByteSize,
 			DurationMS: row.DurationMS,
 		}
 	}
@@ -434,7 +436,7 @@ func (s *Store) readQuoteMedia(tx *gorm.DB, actor identityapp.Principal, project
 			return nil, application.ErrFreeQuoteInputNotReady
 		}
 		id := fact.BindingID
-		result = append(result, application.FreeQuoteMediaFact{ID: fact.AssetID, Kind: fact.Kind, SHA256: fact.SHA256, ByteSize: fact.ByteSize, DurationMS: fact.DurationMS, SubjectBindingID: &id, SubjectBindingSHA256: fact.BindingSHA256})
+		result = append(result, application.FreeQuoteMediaFact{MIMEType: fact.MIMEType, Width: fact.Width, Height: fact.Height, ID: fact.AssetID, Kind: fact.Kind, SHA256: fact.SHA256, ByteSize: fact.ByteSize, DurationMS: fact.DurationMS, SubjectBindingID: &id, SubjectBindingSHA256: fact.BindingSHA256})
 	}
 	return result, nil
 }

@@ -42,7 +42,7 @@ type PresetModelTemplate struct {
 
 // Version assigns fresh model identities and fixed, implemented execution behavior.
 func (t PresetModelTemplate) Version(modelID, actorID uuid.UUID) ModelVersion {
-	return ModelVersion{ID: uuid.New(), ModelID: modelID, VersionNo: 1, ProviderModelID: t.ProviderModelID, Modes: slices.Clone(t.Modes), Limits: slices.Clone(t.Limits), ParamSchema: slices.Clone(t.ParamSchema), SupportsQuery: t.Capability == "video.generate", ExpectedMaxMS: t.ExpectedMaxMS, Moderation: ModerationProvider, Queue: "provider", CreateBy: actorID}
+	return ModelVersion{ID: uuid.New(), ModelID: modelID, VersionNo: 1, ProviderModelID: t.ProviderModelID, Modes: slices.Clone(t.Modes), Limits: slices.Clone(t.Limits), ParamSchema: slices.Clone(t.ParamSchema), SupportsQuery: t.Capability == "video.generate" || slices.Contains(t.Modes, "music_song") || slices.Contains(t.Modes, "music_instrumental"), ExpectedMaxMS: t.ExpectedMaxMS, Moderation: ModerationProvider, Queue: "provider", CreateBy: actorID}
 }
 
 // PriceVersion binds the copied rule to a new model and creation time.
@@ -63,8 +63,8 @@ func (t PresetModelTemplate) validate(config ProviderConfig) error {
 	if t.Capability != capability+".generate" || !slices.Contains(config.Capabilities, capability) {
 		return ErrInvalidPreset
 	}
-	allowedModes := map[string][]string{"text.generate": {"text_to_text"}, "image.generate": {"text2image", "image2image"}, "video.generate": {"text2video", "image2video", "omni_reference"}, "audio.generate": {"text2audio"}}[t.Capability]
-	units := map[string][]PriceUnit{"text.generate": {PricePerRequest, PricePer1KTokens}, "image.generate": {PricePerRequest, PricePerImage}, "video.generate": {PricePerRequest, PricePerSecond}, "audio.generate": {PricePerRequest, PricePer1KChars}}[t.Capability]
+	allowedModes := map[string][]string{"text.generate": {"text_to_text"}, "image.generate": {"text2image", "image2image"}, "video.generate": {"text2video", "image2video", "omni_reference", "avatar", "motion"}, "audio.generate": {"omni_audio", "text2audio", "music_song", "music_instrumental"}}[t.Capability]
+	units := map[string][]PriceUnit{"text.generate": {PricePerRequest, PricePer1KTokens}, "image.generate": {PricePerRequest, PricePerImage}, "video.generate": {PricePerRequest, PricePerSecond}, "audio.generate": {PricePerRequest, PricePer1KChars, PricePerSecond}}[t.Capability]
 	if !slices.Contains(units, t.Price.Unit) {
 		return ErrInvalidPreset
 	}

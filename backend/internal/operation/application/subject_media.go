@@ -12,6 +12,8 @@ import (
 
 // SubjectMediaFact preserves an owning binding proof independently of input role.
 type SubjectMediaFact struct {
+	MIMEType      string
+	Width, Height *int32
 	BindingID     uuid.UUID
 	BindingSHA256 string
 	AssetID       uuid.UUID

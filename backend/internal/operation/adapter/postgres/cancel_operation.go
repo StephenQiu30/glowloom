@@ -56,6 +56,11 @@ func (s *Store) RequestWorkflowControl(ctx context.Context, actor identityapp.Pr
 			}
 			return nil
 		}
+		if input.TargetType == "operation" {
+			if err := requireAgentOperationOwner(tx, actor, input.ProjectID, input.TargetID); err != nil {
+				return err
+			}
+		}
 		status, err := lockControlTarget(tx, input)
 		if err != nil {
 			return err

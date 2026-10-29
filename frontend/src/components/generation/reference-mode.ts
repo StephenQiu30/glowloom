@@ -49,8 +49,25 @@ export function referenceMode(
       return (inputs.get(name)?.size ?? 0) >= role.min_count;
     });
   });
+  if (
+    draft.mode &&
+    [
+      "music_song",
+      "music_instrumental",
+      "avatar",
+      "motion",
+      "omni_audio",
+    ].includes(draft.mode) &&
+    modes.includes(draft.mode)
+  )
+    return draft.mode;
   if (eligible.includes("omni_reference")) return "omni_reference";
-  return eligible[0] ?? null;
+  return (
+    eligible[0] ??
+    (modes.length === 1 && ["avatar", "motion"].includes(modes[0])
+      ? modes[0]
+      : null)
+  );
 }
 
 /** A model/mode owns its parameter schema. Replace that schema atomically with selection. */

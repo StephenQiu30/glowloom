@@ -2,76 +2,47 @@
 
 import { useEffect, useRef, useState } from "react";
 import { PromptEditor } from "@/components/generation/prompt-editor";
+import { canonical } from "@/components/generation/draft-save";
 import type { ComposerSession } from "@/components/generation/composer-session";
-import {
-  emptyPromptDraft,
-  referenceLabel,
-  type PromptDraft,
-} from "@/components/generation/prompt-document";
-
-function textDraft(text: string) {
-  const draft = emptyPromptDraft();
-  draft.document.content = text.split("\n").map((line) => ({
-    type: "paragraph",
-    ...(line ? { content: [{ type: "text" as const, text: line }] } : {}),
-  }));
-  return draft;
-}
-function draftText(draft: PromptDraft) {
-  return draft.document.content
-    .map((paragraph) =>
-      (paragraph.content ?? [])
-        .map((node) =>
-          node.type === "text"
-            ? node.text
-            : node.type === "hardBreak"
-              ? "\n"
-              : referenceLabel(draft.labelState, node.attrs.referenceId),
-        )
-        .join(""),
-    )
-    .join("\n");
-}
+import { type PromptDraft } from "@/components/generation/prompt-document";
 
 /** The page can retain space-owned subjects before choosing a generation project. */
 export function HomePrompt({
-  value,
+  draft,
+  contextKey,
   onChange,
   placeholder,
   onSubmit,
   label = "创作提示词",
   onReady,
-  onDraftChange,
 }: {
   label?: string;
-  value: string;
-  onChange: (value: string) => void;
+  draft: PromptDraft;
+  contextKey: string;
+  onChange: (value: PromptDraft) => void;
   placeholder: string;
   onSubmit: () => void;
   onReady?: (session: ComposerSession) => void;
-  onDraftChange?: (draft: PromptDraft) => void;
 }) {
   const [replicaId] = useState(() => crypto.randomUUID());
-  const [initial] = useState(() => textDraft(value));
+  const [initial] = useState(() => structuredClone(draft));
+  const lastDraft = useRef(canonical(initial));
   const [session, setSession] = useState<ComposerSession | null>(null);
-  const latestText = useRef(value);
   useEffect(() => {
     if (
       !session ||
       session.editor.isDestroyed ||
-      draftText(session.snapshot().draft) === value
+      canonical(session.snapshot().draft) === canonical(draft)
     )
       return;
-    latestText.current = value;
-    session.adoptDraft(textDraft(value));
-  }, [session, value]);
+    lastDraft.current = canonical(draft);
+    session.adoptDraft(draft);
+  }, [session, draft]);
   return (
     <div className="home-prompt">
       <PromptEditor
         label={label}
-        contextKey={
-          label === "画布创作想法" ? "home-canvas-input" : "home-input"
-        }
+        contextKey={contextKey}
         replicaId={replicaId}
         draft={initial}
         placeholder={placeholder}
@@ -80,15 +51,12 @@ export function HomePrompt({
         onReady={(value) => {
           setSession(value);
           onReady?.(value);
-          onDraftChange?.(value.snapshot().draft);
         }}
         onChange={(snapshot) => {
-          onDraftChange?.(snapshot.draft);
-          const text = draftText(snapshot.draft);
-          if (text !== latestText.current) {
-            latestText.current = text;
-            onChange(text);
-          }
+          const serialized = canonical(snapshot.draft);
+          if (lastDraft.current === serialized) return;
+          lastDraft.current = serialized;
+          onChange(snapshot.draft);
         }}
         onRequestSubmit={onSubmit}
       />

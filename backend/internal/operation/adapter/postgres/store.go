@@ -301,3 +301,15 @@ func NewScopedStoreWithEditor(db *gorm.DB, compiler func(*gorm.DB) application.Q
 	s.editorSnapshots = snapshots
 	return s
 }
+
+// BindTransaction preserves configured dependencies in a caller-owned transaction.
+// Session state and operation side effects then commit atomically.
+func (s *Store) BindTransaction(tx *gorm.DB) *Store {
+	if tx == nil {
+		return nil
+	}
+	if _, ok := tx.Statement.ConnPool.(gorm.TxCommitter); !ok {
+		return nil
+	}
+	return s.withDB(tx)
+}

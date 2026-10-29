@@ -13,6 +13,9 @@ export function referenceRoleLabel(role: string) {
     (
       {
         reference_image: "参考图片",
+        character_image: "角色图片",
+        driving_audio: "讲话音频",
+        driving_video: "动作视频",
         reference_video: "参考视频",
         reference_audio: "参考音频",
         first_frame: "首帧",

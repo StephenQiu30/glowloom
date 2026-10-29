@@ -14,8 +14,10 @@ import * as mediaTranscriptions from "./mediaTranscriptions";
 import * as models from "./models";
 import * as projectCopies from "./projectCopies";
 import * as projects from "./projects";
+import * as agent from "./agent";
 import * as bible from "./bible";
 import * as promptEditor from "./promptEditor";
+import * as voiceLibrary from "./voiceLibrary";
 import * as subjects from "./subjects";
 import * as workspace from "./workspace";
 import * as works from "./works";
@@ -32,8 +34,10 @@ export default {
   models,
   projectCopies,
   projects,
+  agent,
   bible,
   promptEditor,
+  voiceLibrary,
   subjects,
   workspace,
   works,

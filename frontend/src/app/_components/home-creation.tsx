@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useRef, useState, type ReactElement, type ReactNode } from "react";
+import { useRef, useState, type ReactElement } from "react";
 import {
   ArrowUp,
   AtSign,
@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useHomeDraftRecovery } from "./home-draft-recovery";
 import { HomePrompt } from "./home-prompt";
 import { ReferenceControls } from "@/components/generation/reference-controls";
 import type { ComposerSession } from "@/components/generation/composer-session";
@@ -42,6 +43,12 @@ import {
   emptyPromptDraft,
   type PromptDraft,
 } from "@/components/generation/prompt-document";
+
+const AgentWorkspace = dynamic(() =>
+  import("@/components/generation/agent-workspace").then(
+    (module) => module.AgentWorkspace,
+  ),
+);
 
 const RichGeneration = dynamic(
   () =>
@@ -57,57 +64,33 @@ const RichGeneration = dynamic(
     ),
   },
 );
-const creationTypes = [
-  {
-    id: "agent",
-    label: "Agent 模式",
-    placeholder: "描述你的创作目标，或添加参考素材。",
-  },
-  {
-    id: "image",
-    label: "图片生成",
-    placeholder: "描述你的想法，或添加参考素材。",
-  },
-  {
-    id: "video",
-    label: "视频生成",
-    placeholder: "描述画面、动作与镜头，或添加参考素材。",
-  },
-  { id: "music", label: "音乐生成", placeholder: "描述曲风、情绪与节奏。" },
-  {
-    id: "audio",
-    label: "音频生成",
-    placeholder: "输入台词，描述音色与表达方式。",
-  },
-  {
-    id: "avatar",
-    label: "数字人",
-    placeholder: "描述数字人的形象、台词与表演。",
-  },
-  {
-    id: "motion",
-    label: "动作模仿",
-    placeholder: "描述你希望主体模仿的动作。",
-  },
-] as const;
-type CreationType = (typeof creationTypes)[number]["id"];
+import {
+  creationTypes,
+  creationCapability,
+  executableCreationType,
+  type CreationType,
+} from "./creation-types";
+import { CreationTypeFields } from "./creation-type-fields";
+
 type Workspace = {
   project: Project;
-  type: "image" | "video";
+  type: Exclude<CreationType, "agent">;
   seed: GenerationSeed;
   draftID?: string;
 };
 
 /** Page-owned entry; generation, references and pricing remain owned by RichGeneration. */
-export function HomeCreation({
-  prompt,
-  onPromptChange,
-  recovery,
-}: {
-  prompt: string;
-  onPromptChange: (value: string) => void;
-  recovery?: ReactNode;
-}) {
+export function HomeCreation() {
+  const session = useOptionalSession();
+  const { selected: space } = useSpace();
+  return (
+    <ScopedHomeCreation
+      key={`${session?.actor.id ?? "guest"}/${space?.id ?? "none"}/${space?.writable !== false}`}
+    />
+  );
+}
+
+function ScopedHomeCreation() {
   const session = useOptionalSession();
   const login = useLoginDialog();
   const { selected: space } = useSpace();
@@ -128,15 +111,74 @@ export function HomeCreation({
     key: string;
     session: ComposerSession;
   } | null>(null);
-  const [homeDraft, setHomeDraft] = useState<{
-    key: string;
-    draft: PromptDraft;
-  } | null>(null);
+  const [inputs, setInputs] = useState<
+    Partial<Record<CreationType | "canvas", PromptDraft>>
+  >({});
+  const [empty] = useState(emptyPromptDraft);
+  const inputKey = `${subjectScope}/home-input:${type}`;
+  const homeDraft = inputs[type] ?? empty;
+  const canvasDraft = inputs.canvas ?? empty;
+  const prompt = homeDraft.document.content
+    .map((p) =>
+      (p.content ?? [])
+        .map((n) =>
+          n.type === "text" ? n.text : n.type === "hardBreak" ? "\n" : "",
+        )
+        .join(""),
+    )
+    .join("\n");
+  const canvasPrompt = canvasDraft.document.content
+    .map((p) =>
+      (p.content ?? []).map((n) => (n.type === "text" ? n.text : "")).join(""),
+    )
+    .join("\n");
+  const canRecover = !!session && !!space?.writable;
+  const inputRecovery = useHomeDraftRecovery(
+    canRecover ? inputKey : null,
+    (draft) => setInputs((current) => ({ ...current, [type]: draft })),
+  );
+  const canvasRecovery = useHomeDraftRecovery(
+    canRecover ? `${subjectScope}/home-input:canvas` : null,
+    (draft) => setInputs((current) => ({ ...current, canvas: draft })),
+  );
   const currentEditor =
-    homeEditor?.key === subjectScope ? homeEditor.session : null;
+    homeEditor?.key === inputKey ? homeEditor.session : null;
   const activeType = creationTypes.find((item) => item.id === type)!;
-  const supported = type === "image" || type === "video";
+  const supported = true;
+  const acceptsReferences =
+    type === "image" ||
+    type === "video" ||
+    (type === "audio" && homeDraft.mode === "omni_audio");
+  const hasInput = !!prompt.trim() || homeDraft.references.length > 0;
 
+  function rememberedDraft(projectID: string, kind: CreationType) {
+    const memory = drafts.current.get(`${projectID}/${kind}`);
+    if (memory) return memory;
+    try {
+      const value = localStorage.getItem(
+        `glowloom:home-draft:${subjectScope}/${projectID}/${kind}`,
+      );
+      return value &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          value,
+        )
+        ? value
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  function rememberDraft(projectID: string, kind: CreationType, id: string) {
+    drafts.current.set(`${projectID}/${kind}`, id);
+    try {
+      localStorage.setItem(
+        `glowloom:home-draft:${subjectScope}/${projectID}/${kind}`,
+        id,
+      );
+    } catch {
+      setError("草稿已保存，本机暂时无法记录恢复位置。");
+    }
+  }
   async function select(nextType: CreationType, nextProject = project) {
     if (locked || switchFlight.current) return;
     switchFlight.current = true;
@@ -150,19 +192,18 @@ export function HomeCreation({
       setType(nextType);
       setProject(nextProject);
       setWorkspace(
-        nextProject && (nextType === "image" || nextType === "video")
+        nextProject && executableCreationType(nextType)
           ? {
               project: nextProject,
               type: nextType,
               seed: {
                 project: nextProject,
-                capability: nextType,
-                prompt,
-                ...(homeDraft?.key === subjectScope
-                  ? { composer: homeDraft.draft }
-                  : {}),
+                capability: creationCapability(nextType),
+                creationType: nextType,
+                prompt: "",
+                composer: creationComposer(nextType, inputs[nextType] ?? empty),
               },
-              draftID: drafts.current.get(`${nextProject.id}/${nextType}`),
+              draftID: rememberedDraft(nextProject.id, nextType),
             }
           : null,
       );
@@ -229,7 +270,6 @@ export function HomeCreation({
           {creationTypes.map((item) => (
             <SelectItem key={item.id} value={item.id}>
               {item.label}
-              {!["image", "video"].includes(item.id) ? " · 暂未开放" : ""}
             </SelectItem>
           ))}
         </SelectGroup>
@@ -240,7 +280,7 @@ export function HomeCreation({
   return (
     <section className="creation-hero" aria-label="开始创作">
       <h1>你好，今天想要创作什么？</h1>
-      {recovery}
+      {mode === "canvas" ? canvasRecovery.notice : inputRecovery.notice}
       {error ? <FeedbackToast message={error} /> : null}
       <ToggleGroup
         type="single"
@@ -262,7 +302,26 @@ export function HomeCreation({
           <div className="creation-tabs">
             {/* One active panel, owned by the selected type; switching first flushes its saved draft. */}
             <div>
-              {workspace ? (
+              {type === "agent" && project ? (
+                <AgentWorkspace
+                  key={`${subjectScope}/${project.id}`}
+                  projectID={project.id}
+                  initialMessage={prompt}
+                  onMessageChange={(message) => {
+                    const draft = emptyPromptDraft();
+                    draft.document.content = message
+                      .split("\n")
+                      .map((text) => ({
+                        type: "paragraph" as const,
+                        content: text ? [{ type: "text" as const, text }] : [],
+                      }));
+                    inputRecovery.change(draft);
+                  }}
+                  headerActions={typeControl}
+                  projectControl={projectControl}
+                  onLock={setLocked}
+                />
+              ) : workspace ? (
                 <RichGeneration
                   key={`${workspace.project.id}/${workspace.type}`}
                   projectID={workspace.project.id}
@@ -277,10 +336,7 @@ export function HomeCreation({
                   }
                   onLock={setLocked}
                   onDraftReady={(id) =>
-                    drafts.current.set(
-                      `${workspace.project.id}/${workspace.type}`,
-                      id,
-                    )
+                    rememberDraft(workspace.project.id, workspace.type, id)
                   }
                   onCloseGuard={(next) => {
                     guard.current = next;
@@ -290,7 +346,7 @@ export function HomeCreation({
                 <form
                   onSubmit={(event) => {
                     event.preventDefault();
-                    if (prompt.trim() || !supported) prepare();
+                    if (hasInput || !supported) prepare();
                   }}
                 >
                   <FieldGroup>
@@ -299,61 +355,76 @@ export function HomeCreation({
                         variant="composer"
                         className="creation-composer"
                       >
-                        <div className="creation-editor-body">
-                          <InputGroupAddon
-                            align="inline-start"
-                            className="creation-reference-tools max-w-1/2"
-                          >
-                            {currentEditor && session && space ? (
-                              <ReferenceControls
-                                session={currentEditor}
-                                draft={
-                                  homeDraft?.key === subjectScope
-                                    ? homeDraft.draft
-                                    : emptyPromptDraft()
-                                }
-                                projectID=""
-                                authorized
-                                compact
-                                home
-                                onChooseProject={prepare}
-                              />
-                            ) : (
-                              projectEntry(
-                                <Button
-                                  type="button"
-                                  variant="reference"
-                                  size="reference"
-                                  aria-label="添加参考素材"
-                                  onClick={supported ? undefined : prepare}
-                                  disabled={locked || switching}
-                                >
-                                  <Plus data-icon="inline-start" />
-                                </Button>,
-                                "添加参考素材",
-                                "选择项目后，可从项目素材或上传内容添加参考。",
-                              )
-                            )}
-                          </InputGroupAddon>
-                          <HomePrompt
-                            key={subjectScope}
-                            value={prompt}
-                            onChange={onPromptChange}
-                            placeholder={activeType.placeholder}
-                            onReady={(value) =>
-                              setHomeEditor({
-                                key: subjectScope,
-                                session: value,
-                              })
-                            }
-                            onDraftChange={(draft) =>
-                              setHomeDraft({ key: subjectScope, draft })
-                            }
-                            onSubmit={() => {
-                              if (prompt.trim() || !supported) prepare();
-                            }}
-                          />
+                        <div
+                          className={
+                            type === "motion"
+                              ? "hidden"
+                              : "creation-editor-body"
+                          }
+                        >
+                          {acceptsReferences && (
+                            <InputGroupAddon
+                              align="inline-start"
+                              className="creation-reference-tools max-w-1/2"
+                            >
+                              {currentEditor && session && space ? (
+                                <ReferenceControls
+                                  session={currentEditor}
+                                  draft={homeDraft}
+                                  projectID=""
+                                  authorized
+                                  compact
+                                  home
+                                  onChooseProject={prepare}
+                                />
+                              ) : (
+                                projectEntry(
+                                  <Button
+                                    type="button"
+                                    variant="reference"
+                                    size="reference"
+                                    aria-label="添加参考素材"
+                                    onClick={supported ? undefined : prepare}
+                                    disabled={locked || switching}
+                                  >
+                                    <Plus data-icon="inline-start" />
+                                  </Button>,
+                                  "添加参考素材",
+                                  "选择项目后，可从项目素材或上传内容添加参考。",
+                                )
+                              )}
+                            </InputGroupAddon>
+                          )}
+                          {type !== "motion" && (
+                            <HomePrompt
+                              key={inputKey}
+                              contextKey={inputKey}
+                              draft={homeDraft}
+                              onChange={inputRecovery.change}
+                              placeholder={
+                                type === "audio" &&
+                                homeDraft.mode === "omni_audio"
+                                  ? "描述角色、台词、音效与时间段，@ 引用音频。"
+                                  : activeType.placeholder
+                              }
+                              onReady={(value) =>
+                                setHomeEditor({
+                                  key: inputKey,
+                                  session: value,
+                                })
+                              }
+                              onSubmit={() => {
+                                if (hasInput || !supported) prepare();
+                              }}
+                            />
+                          )}
                         </div>
+                        <CreationTypeFields
+                          type={type}
+                          draft={homeDraft}
+                          onChange={inputRecovery.change}
+                          onUnavailable={setFeature}
+                        />
                         <InputGroupAddon
                           align="block-end"
                           className="creation-tools"
@@ -393,24 +464,26 @@ export function HomeCreation({
                             "生成参数",
                             "选择项目和可用模型后，可配置比例、清晰度等生成参数。",
                           )}
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            aria-label="添加主体或素材引用"
-                            onClick={() => {
-                              if (!session) login();
-                              else
-                                currentEditor?.editor
-                                  .chain()
-                                  .focus(undefined, { scrollIntoView: false })
-                                  .insertContent("@")
-                                  .run();
-                            }}
-                            disabled={locked || switching || !currentEditor}
-                          >
-                            <AtSign />
-                          </Button>
+                          {acceptsReferences && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label="添加主体或素材引用"
+                              onClick={() => {
+                                if (!session) login();
+                                else
+                                  currentEditor?.editor
+                                    .chain()
+                                    .focus(undefined, { scrollIntoView: false })
+                                    .insertContent("@")
+                                    .run();
+                              }}
+                              disabled={locked || switching || !currentEditor}
+                            >
+                              <AtSign />
+                            </Button>
+                          )}
                           <div className="creation-project-control">
                             {projectControl}
                           </div>
@@ -421,7 +494,7 @@ export function HomeCreation({
                             type="submit"
                             size="icon"
                             className="creation-submit"
-                            disabled={supported && !prompt.trim()}
+                            disabled={supported && !hasInput}
                             aria-label={
                               supported
                                 ? "开始生成"
@@ -464,7 +537,7 @@ export function HomeCreation({
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              if (!prompt.trim()) return;
+              if (!canvasPrompt.trim()) return;
               if (!session) login();
               else setFeature("从提示词创建画布");
             }}
@@ -472,11 +545,12 @@ export function HomeCreation({
             <InputGroup variant="composer" className="canvas-idea">
               <HomePrompt
                 label="画布创作想法"
-                value={prompt}
-                onChange={onPromptChange}
+                contextKey={`${subjectScope}/home-input:canvas`}
+                draft={canvasDraft}
+                onChange={canvasRecovery.change}
                 placeholder="输入想法或上传参考，和 Agent 一起创作"
                 onSubmit={() => {
-                  if (!prompt.trim()) return;
+                  if (!canvasPrompt.trim()) return;
                   if (!session) login();
                   else setFeature("从提示词创建画布");
                 }}
@@ -486,7 +560,7 @@ export function HomeCreation({
                   type="submit"
                   size="icon"
                   className="creation-submit"
-                  disabled={!prompt.trim()}
+                  disabled={!canvasPrompt.trim()}
                   aria-label="从想法创建画布"
                 >
                   <ArrowUp />
@@ -499,4 +573,33 @@ export function HomeCreation({
       <UnavailableDialog feature={feature} onClose={() => setFeature(null)} />
     </section>
   );
+}
+
+function creationComposer(type: CreationType, value: PromptDraft): PromptDraft {
+  const draft = structuredClone(value);
+  if (type === "music") {
+    draft.mode =
+      draft.params.music_mode === "instrumental"
+        ? "music_instrumental"
+        : "music_song";
+    delete draft.params.music_mode;
+    delete draft.params.music_auto_duration;
+    draft.params.duration_ms ??= 60000;
+  }
+  if (type === "avatar" || type === "motion") {
+    draft.mode = type;
+    if (
+      type === "avatar" &&
+      typeof draft.params.avatar_action === "string" &&
+      draft.params.avatar_action
+    )
+      draft.document.content = [
+        {
+          type: "paragraph",
+          content: [{ type: "text", text: draft.params.avatar_action }],
+        },
+      ];
+    delete draft.params.avatar_action;
+  }
+  return draft;
 }

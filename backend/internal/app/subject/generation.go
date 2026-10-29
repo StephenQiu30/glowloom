@@ -82,7 +82,7 @@ func (g generationAccess) ResolveQuote(ctx context.Context, a identity.Principal
 	if err != nil {
 		return operation.SubjectMediaFact{}, err
 	}
-	return operation.SubjectMediaFact{BindingID: b.BindingID, BindingSHA256: b.BindingSHA256, AssetID: b.Media.AssetID, AssetRevision: b.Media.Revision, Kind: b.Media.Kind, SHA256: b.Media.SHA256, ByteSize: b.Media.ByteSize, DurationMS: b.Media.DurationMS}, nil
+	return operation.SubjectMediaFact{MIMEType: b.Media.MIMEType, Width: b.Media.Width, Height: b.Media.Height, BindingID: b.BindingID, BindingSHA256: b.BindingSHA256, AssetID: b.Media.AssetID, AssetRevision: b.Media.Revision, Kind: b.Media.Kind, SHA256: b.Media.SHA256, ByteSize: b.Media.ByteSize, DurationMS: b.Media.DurationMS}, nil
 }
 
 func (g generationAccess) VerifyInput(ctx context.Context, a identity.Principal, op, project uuid.UUID, in operationdomain.OperationInput) error {

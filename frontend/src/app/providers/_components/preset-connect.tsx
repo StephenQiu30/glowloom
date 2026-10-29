@@ -72,6 +72,7 @@ export function PresetConnect({
     };
   }, []);
   const [apiKey, setAPIKey] = useState("");
+  const [accessKeyID, setAccessKeyID] = useState("");
   const [category, setCategory] = useState(
     () =>
       presets.find((p) => p.id === initialPreset)?.model_catalog?.models?.[0]
@@ -108,6 +109,8 @@ export function PresetConnect({
       ? create.pending.target
       : presetID;
   const preset = presets.find((p) => p.id === selectedPreset);
+  const musicCredential =
+    preset?.document?.config?.adapter_key === "volcengine_music";
   const complete =
     confirmed ||
     (!!targetID &&
@@ -141,7 +144,10 @@ export function PresetConnect({
           return;
         const connectionName = "";
         setPresetID(selectedPreset);
-        const secret = apiKey;
+        const secret: Record<string, string> = musicCredential
+          ? { access_key_id: accessKeyID, secret_access_key: apiKey }
+          : { api_key: apiKey };
+        setAccessKeyID("");
         setAPIKey("");
         setVisible(false);
         let id = targetID;
@@ -169,7 +175,7 @@ export function PresetConnect({
         await credential.run("credential.set", id, (requestID) =>
           setAdminCredential(
             { id },
-            { label: "平台统一 Key", secret: { api_key: secret } },
+            { label: "平台统一 Key", secret },
             { headers: { "Idempotency-Key": requestID } },
           ).then((result) => {
             if (
@@ -239,9 +245,27 @@ export function PresetConnect({
               <FieldDescription>暂无可用预设，请先新建预设。</FieldDescription>
             ) : null}
           </FieldSet>
+          {musicCredential && (
+            <Field>
+              <FieldLabel htmlFor={`${fieldID}-access-key`}>
+                Access Key ID
+              </FieldLabel>
+              <InputGroup>
+                <InputGroupInput
+                  id={`${fieldID}-access-key`}
+                  type="password"
+                  required
+                  autoComplete="off"
+                  value={accessKeyID}
+                  disabled={complete || busy}
+                  onChange={(event) => setAccessKeyID(event.target.value)}
+                />
+              </InputGroup>
+            </Field>
+          )}
           <Field>
             <FieldLabel variant="title" htmlFor={`${fieldID}-key`}>
-              API Key
+              {musicCredential ? "Secret Access Key" : "API Key"}
             </FieldLabel>
             <InputGroup className="h-10 max-md:h-11">
               <InputGroupInput
@@ -255,9 +279,12 @@ export function PresetConnect({
                 spellCheck={false}
                 disabled={complete || busy || (!preset && !targetID)}
                 placeholder={
-                  preset?.document?.config?.adapter_key === "volcengine_speech"
-                    ? "输入豆包语音 API Key"
-                    : "输入 API Key"
+                  musicCredential
+                    ? "输入 Secret Access Key"
+                    : preset?.document?.config?.adapter_key ===
+                        "volcengine_speech"
+                      ? "输入豆包语音 API Key"
+                      : "输入 API Key"
                 }
               />
               <InputGroupAddon
@@ -268,7 +295,15 @@ export function PresetConnect({
                   type="button"
                   size="icon-sm"
                   className="max-md:size-11"
-                  aria-label={visible ? "隐藏 API Key" : "显示 API Key"}
+                  aria-label={
+                    musicCredential
+                      ? visible
+                        ? "隐藏 Secret Access Key"
+                        : "显示 Secret Access Key"
+                      : visible
+                        ? "隐藏 API Key"
+                        : "显示 API Key"
+                  }
                   aria-pressed={visible}
                   disabled={complete || busy || (!preset && !targetID)}
                   onClick={() => setVisible((v) => !v)}

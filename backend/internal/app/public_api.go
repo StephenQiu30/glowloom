@@ -8,6 +8,10 @@ import (
 	"net/url"
 	"time"
 
+	agenthttp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/http"
+	agentpg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
+	agentapp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
+
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/yjsruntime"
 
 	trialwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/aitrial"
@@ -180,6 +184,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		documents = mediaapp.NewRoutedDocumentSources(documentReader, subjectObjects.Routed)
 	}
 	mediahttp.NewHandler(assetQuery).Register(protected)
+	mediahttp.NewVoiceLibraryHandler(assetReader).Register(protected)
 	mediahttp.NewDocumentHandler(documents).Register(protected)
 	library := pgmedia.NewScopedLibraryStore(database, mediawire.NewMediaLibraryProjectAccess, time.Now, mediawire.NewMediaScopeAccess)
 	mediahttp.NewLibraryHandler(library).Register(protected)
@@ -308,6 +313,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 			return operationstaging.NewRoutedFactory(registry, pgmedia.NewStorageRoutes(tx))
 		})
 	}
+	agenthttp.NewHandler(&agentapp.Service{Store: agentpg.NewStore(database, operationwire.ProvideOperationProjectAccess, func(tx *gorm.DB) agentapp.Operations { return operations.BindTransaction(tx) })}).Register(protected)
 	operationhttp.NewSubmissionHandler(operations).Register(protected)
 	operationhttp.NewPersonalHistoryHandler(operationapp.NewPersonalHistoryQuery(operations)).Register(protected)
 	operationhttp.NewPersonalHistoryCommandHandler(operationapp.NewPersonalHistoryCommander(operations)).Register(protected)

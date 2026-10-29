@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"math"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -342,12 +343,31 @@ func (d Draft) Compile() (CompiledDraft, error) {
 			case "hardBreak":
 				text.WriteByte('\n')
 			case "reference":
-				text.WriteString("[" + d.Label(n.Attrs.ReferenceID) + "]")
+				if d.Mode != nil && *d.Mode == "omni_audio" {
+					for _, mapping := range out.Mapping {
+						if mapping.ReferenceID == n.Attrs.ReferenceID {
+							if len(mapping.MediaSeqNos) != 1 {
+								return CompiledDraft{}, ErrInvalidDraft
+							}
+							seq := mapping.MediaSeqNos[0]
+							if out.Media[seq-1].MediaKind == "audio" {
+								text.WriteString("@音频" + strconv.Itoa(seq))
+							}
+							break
+						}
+					}
+				} else if d.Mode == nil || (*d.Mode != "avatar" && *d.Mode != "motion") {
+					text.WriteString("[" + d.Label(n.Attrs.ReferenceID) + "]")
+				}
 			}
 		}
 	}
 	out.Prompt = text.String()
-	if len(subjects) > 0 {
+	if d.Mode != nil && *d.Mode == "motion" {
+		out.Prompt = ""
+	}
+	visualInput := d.Mode != nil && (*d.Mode == "avatar" || *d.Mode == "motion" || *d.Mode == "omni_audio")
+	if len(subjects) > 0 && !visualInput {
 		out.Prompt += "\n" + strings.Join(subjects, "\n")
 	}
 	return out, nil

@@ -25,7 +25,7 @@ func (r *Registry) Supports(adapterKey string) bool {
 		return false
 	}
 	switch adapterKey {
-	case "volcengine_ark", "minimax", "openrouter", "byteplus", "deepseek", "volcengine_speech":
+	case "volcengine_ark", "minimax", "openrouter", "byteplus", "deepseek", "volcengine_speech", "volcengine_music", "volcengine_avatar", "volcengine_motion":
 		return true
 	default:
 		return false
@@ -36,6 +36,9 @@ func (r *Registry) Supports(adapterKey string) bool {
 func (r *Registry) Fields(adapterKey string) ([]application.CredentialField, bool) {
 	if !r.Supports(adapterKey) {
 		return nil, false
+	}
+	if adapterKey == "volcengine_music" {
+		return []application.CredentialField{{Name: "access_key_id", Type: "password", Required: true}, {Name: "secret_access_key", Type: "password", Required: true}}, true
 	}
 	fields := []application.CredentialField{{Name: "api_key", Type: "password", Required: true}}
 	if adapterKey == "minimax" {
@@ -67,6 +70,13 @@ func (r *Registry) Validate(adapterKey string, secret json.RawMessage) (string, 
 		}
 		switch name {
 		case "api_key":
+			if adapterKey == "volcengine_music" {
+				return "", ErrInvalidSecret
+			}
+		case "access_key_id", "secret_access_key":
+			if adapterKey != "volcengine_music" {
+				return "", ErrInvalidSecret
+			}
 		case "group_id":
 			if !requireGroup {
 				return "", ErrInvalidSecret
@@ -91,6 +101,12 @@ func (r *Registry) Validate(adapterKey string, secret json.RawMessage) (string, 
 		return "", ErrInvalidSecret
 	}
 	apiKey := fields["api_key"]
+	if adapterKey == "volcengine_music" {
+		if len(fields["access_key_id"]) < 4 || len(fields["access_key_id"]) > 256 {
+			return "", ErrInvalidSecret
+		}
+		apiKey = fields["secret_access_key"]
+	}
 	if len(apiKey) < 4 || len(apiKey) > 4096 || (requireGroup && (len(fields["group_id"]) == 0 || len(fields["group_id"]) > 128)) {
 		return "", ErrInvalidSecret
 	}

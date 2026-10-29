@@ -82,8 +82,12 @@ export function ProductHeader({
         ) : null}
       </div>
       {isMobile
-        ? [common, navigation, assetLayout ? null : pageActions]
-        : [navigation, assetLayout ? null : pageActions, common]}
+        ? [common, navigation, assetLayout && !replaceBase ? null : pageActions]
+        : [
+            navigation,
+            assetLayout && !replaceBase ? null : pageActions,
+            common,
+          ]}
     </header>
   );
 }

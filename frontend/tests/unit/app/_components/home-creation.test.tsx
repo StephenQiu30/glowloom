@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import {
   cleanup,
   fireEvent,
@@ -16,6 +16,7 @@ const state = vi.hoisted(() => ({
   save: vi.fn<() => Promise<boolean>>(),
   opened: [] as { capability: string; draftID?: string }[],
   login: vi.fn(),
+  generatedID: undefined as string | undefined,
 }));
 vi.mock("@/components/auth/session", () => ({
   useOptionalSession: () => state.session,
@@ -26,7 +27,12 @@ vi.mock("@/components/layout/basic-layout", () => ({
 vi.mock("@/components/projects/new-canvas-button", () => ({
   NewCanvasButton: () => <Button>新建画布</Button>,
 }));
-vi.mock("next/dynamic", () => ({ default: () => WorkspaceStub }));
+vi.mock("next/dynamic", () => ({
+  default: (loader: () => unknown) =>
+    loader.toString().includes("agent-workspace")
+      ? () => <p>Agent 会话</p>
+      : WorkspaceStub,
+}));
 vi.mock("@/components/projects/project-picker", () => ({
   ProjectPicker: ({
     onChange,
@@ -53,7 +59,9 @@ function WorkspaceStub(props: React.ComponentProps<typeof RichGeneration>) {
       capability: props.seed.capability,
       draftID: props.draftID,
     });
-    props.onDraftReady?.(props.draftID ?? `${props.seed.capability}-draft`);
+    props.onDraftReady?.(
+      props.draftID ?? state.generatedID ?? `${props.seed.capability}-draft`,
+    );
     // This test verifies the page's save-before-switch contract; editor persistence has its own real tests.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -71,11 +79,12 @@ function WorkspaceStub(props: React.ComponentProps<typeof RichGeneration>) {
   );
 }
 function Page() {
-  const [prompt, setPrompt] = useState("");
-  return <HomeCreation prompt={prompt} onPromptChange={setPrompt} />;
+  return <HomeCreation />;
 }
 beforeEach(() => {
   state.session = null;
+  state.generatedID = undefined;
+  localStorage.clear();
   state.opened = [];
   state.save.mockReset().mockResolvedValue(true);
   state.login.mockReset();
@@ -152,25 +161,24 @@ it("使用紧凑类型菜单，游客切换输入不丢失且没有推荐技能�
       screen.getByRole("combobox", { name: "创作类型" }).textContent,
     ).toContain("视频生成"),
   );
-  expect(screen.getByLabelText("创作提示词")).toHaveProperty(
-    "textContent",
-    "保留这段想法",
-  );
+  expect(screen.getByLabelText("创作提示词")).toHaveProperty("textContent", "");
+  await tab("图片生成");
+  expect(screen.getByLabelText("创作提示词").textContent).toBe("保留这段想法");
   fireEvent.click(screen.getByRole("button", { name: "开始生成" }));
   expect(state.login).toHaveBeenCalledOnce();
   expect(screen.queryByLabelText("推荐提示技能")).toBeNull();
   expect(state.opened).toEqual([]);
 });
 
-it("未接入类型直接解释未开放状态，不要求先登录或提交生成", async () => {
+it("Agent 入口先登录和选择项目，不再显示暂未开放", async () => {
   render(<Page />);
-  await tab("音乐生成");
-  fireEvent.click(
-    await screen.findByRole("button", { name: "音乐生成暂未开放" }),
-  );
-  expect(await screen.findByRole("dialog")).toBeTruthy();
-  expect(state.login).not.toHaveBeenCalled();
-  expect(state.opened).toEqual([]);
+  await tab("Agent 模式");
+  expect(screen.queryByText(/暂未开放/)).toBeNull();
+  fireEvent.paste(screen.getByLabelText("创作提示词"), {
+    clipboardData: { files: [], getData: () => "海边海报" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "开始生成" }));
+  expect(state.login).toHaveBeenCalledOnce();
 });
 
 it("保存未确认禁止切换，确认后按类型恢复原草稿指针", async () => {
@@ -220,18 +228,139 @@ it("切换画布后保留输入，再切回生成仍可编辑且不提交请求"
   });
   fireEvent.click(screen.getByRole("radio", { name: "画布" }));
   await waitFor(() =>
-    expect(screen.getByLabelText("画布创作想法").textContent).toBe(
-      "一片安静的海",
-    ),
+    expect(screen.getByLabelText("画布创作想法").textContent).toBe(""),
   );
   fireEvent.paste(screen.getByLabelText("画布创作想法"), {
     clipboardData: { files: [], getData: () => "，傍晚" },
   });
-  const text = screen.getByLabelText("画布创作想法").textContent;
+  expect(screen.getByLabelText("画布创作想法").textContent).toBe("，傍晚");
   fireEvent.click(screen.getByRole("radio", { name: "生成" }));
   await waitFor(() =>
-    expect(screen.getByLabelText("创作提示词").textContent).toBe(text),
+    expect(screen.getByLabelText("创作提示词").textContent).toBe(
+      "一片安静的海",
+    ),
   );
   expect(state.login).not.toHaveBeenCalled();
   expect(state.opened).toEqual([]);
+});
+
+it("六类文字草稿往返隔离，首次选择目标类型为空", async () => {
+  render(<Page />);
+  for (const name of [
+    "图片生成",
+    "视频生成",
+    "Agent 模式",
+    "音乐生成",
+    "音频生成",
+    "数字人",
+  ]) {
+    await tab(name);
+    const editor = await screen.findByLabelText("创作提示词");
+    expect(editor.textContent).toBe("");
+    fireEvent.paste(editor, {
+      clipboardData: { files: [], getData: () => name + "独立内容" },
+    });
+  }
+  for (const name of [
+    "图片生成",
+    "视频生成",
+    "Agent 模式",
+    "音乐生成",
+    "音频生成",
+    "数字人",
+  ]) {
+    await tab(name);
+    expect(screen.getByLabelText("创作提示词").textContent).toBe(
+      name + "独立内容",
+    );
+  }
+});
+
+it("账号切换立即隔离所有类型文字和项目指针", async () => {
+  state.session = { actor: { id: "account-a" } };
+  const page = render(<Page />);
+  fireEvent.paste(await screen.findByLabelText("创作提示词"), {
+    clipboardData: { files: [], getData: () => "A的私有内容" },
+  });
+  state.session = { actor: { id: "account-b" } };
+  page.rerender(<Page />);
+  expect(screen.getByLabelText("创作提示词").textContent).toBe("");
+  fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
+  await screen.findByText("image 富文本编辑器");
+  expect(state.opened.at(-1)?.draftID).toBeUndefined();
+});
+
+it("音频独立进入 audio 工作区且未选项目时没有素材引用入口", async () => {
+  state.session = { actor: { id: "test-actor" } };
+  render(<Page />);
+  await tab("音频生成");
+  expect(screen.queryByRole("button", { name: "添加参考素材" })).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "添加主体或素材引用" }),
+  ).toBeNull();
+  expect(screen.getByText("文本朗读")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
+  await screen.findByText("audio 富文本编辑器");
+  await tab("视频生成");
+  await screen.findByText("video 富文本编辑器");
+  await tab("音频生成");
+  await screen.findByText("audio 富文本编辑器");
+  expect(state.opened.at(-1)).toEqual({
+    capability: "audio",
+    draftID: "audio-draft",
+  });
+});
+
+it("动作模仿未选项目时解释双参考要求，选择项目后进入视频工作区", async () => {
+  state.session = { actor: { id: "test-actor" } };
+  render(<Page />);
+  await tab("动作模仿");
+  expect(screen.queryByRole("textbox", { name: "创作提示词" })).toBeNull();
+  expect(screen.getByText(/选择项目后添加角色图片与动作视频/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
+  await screen.findByText("video 富文本编辑器");
+  expect(state.opened.at(-1)?.capability).toBe("video");
+});
+
+it("数字人台词与音乐选项各自保留且不进入其他类型", async () => {
+  render(<Page />);
+  await tab("数字人");
+  fireEvent.paste(await screen.findByLabelText("创作提示词"), {
+    clipboardData: { files: [], getData: () => "你好，欢迎来到这里" },
+  });
+  expect(screen.getByText(/选择项目后添加角色图片与讲话音频/)).toBeTruthy();
+  await tab("音乐生成");
+  expect(screen.getByLabelText("创作提示词").textContent).toBe("");
+  fireEvent.click(screen.getByRole("radio", { name: "纯音乐" }));
+  await tab("数字人");
+  expect(screen.getByLabelText("创作提示词").textContent).toBe(
+    "你好，欢迎来到这里",
+  );
+  expect(screen.queryByRole("radio", { name: "纯音乐" })).toBeNull();
+  await tab("音乐生成");
+  expect(
+    screen.getByRole("radio", { name: "纯音乐" }).getAttribute("aria-checked"),
+  ).toBe("true");
+});
+
+it("项目音频草稿刷新恢复原ID，并按账号隔离", async () => {
+  state.session = { actor: { id: "voice-owner" } };
+  state.generatedID = "47b69106-3c3e-44ca-a50a-a89108d1c6c1";
+  let view = render(<Page />);
+  await tab("音频生成");
+  fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
+  await screen.findByText("audio 富文本编辑器");
+  view.unmount();
+  view = render(<Page />);
+  await tab("音频生成");
+  fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
+  await screen.findByText("audio 富文本编辑器");
+  expect(state.opened.at(-1)?.draftID).toBe(state.generatedID);
+  view.unmount();
+  state.session = { actor: { id: "other-owner" } };
+  render(<Page />);
+  await tab("音频生成");
+  fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
+  await screen.findByText("audio 富文本编辑器");
+  expect(state.opened.at(-1)?.draftID).toBeUndefined();
 });

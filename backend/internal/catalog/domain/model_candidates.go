@@ -69,6 +69,8 @@ func BuiltinModelCatalog(adapter string) ModelCandidateCatalog {
 		add("or-seedream", "Seedream 4.5", "bytedance-seed/seedream-4.5", "image.generate", source, "active", "text2image", "image2image")
 	case "volcengine_ark":
 		return volcengineModelCatalog()
+	case "volcengine_music", "volcengine_avatar", "volcengine_motion":
+		return creationModelCatalog(adapter)
 	case "volcengine_speech":
 		return doubaoSpeechCatalog()
 	case "byteplus":
@@ -141,6 +143,9 @@ func (m ModelCandidatePreset) OnboardingVersion(modelID, actorID uuid.UUID) (Mod
 		return ModelVersion{}, ErrInvalidPreset
 	}
 	version := ModelVersion{ID: uuid.New(), ModelID: modelID, VersionNo: 1, ProviderModelID: m.ProviderModelID, Modes: slices.Clone(m.Modes), Limits: json.RawMessage(`{"max_outputs":1}`), ParamSchema: json.RawMessage(`[]`), ExpectedMaxMS: 120000, Moderation: ModerationProvider, Queue: "provider", CreateBy: actorID}
+	if configureOmniAudioVersion(m, &version) || configureCreationVersion(m, &version) {
+		return version, version.Validate()
+	}
 	switch m.Capability {
 	case "text.generate":
 		version.ParamSchema = json.RawMessage(`[{"field":"max_tokens","label":"最大输出 Token","component":"input","type":"integer","min":1,"max":32768,"default":4096}]`)

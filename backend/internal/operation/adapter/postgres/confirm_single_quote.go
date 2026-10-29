@@ -59,6 +59,9 @@ func (s *Store) confirmSingleQuote(ctx context.Context, actor identityapp.Princi
 		if err := s.requireProject(tx, actor, input.ProjectID, true); err != nil {
 			return err
 		}
+		if err := requireAgentOperationOwner(tx, actor, input.ProjectID, input.OperationID); err != nil {
+			return err
+		}
 		submissionID, err := s.lockEditorConfirmation(ctx, tx, actor, input)
 		if err != nil {
 			return err

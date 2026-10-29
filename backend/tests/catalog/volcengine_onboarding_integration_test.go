@@ -46,8 +46,12 @@ func TestVolcengineWholeCatalogAndSpeechOnboardingUseRealStores(t *testing.T) {
 			}
 			require.NotEqual(t, uuid.Nil, preset.ID)
 			keys := []string{}
+			quickModels := 0
 			for _, m := range preset.ModelCatalog.Models {
 				keys = append(keys, m.Key)
+				if m.ProviderModelID != "seed-audio-1.0" {
+					quickModels++
+				}
 			}
 			if slug == "volcengine-ark" {
 				require.Greater(t, len(keys), 16)
@@ -57,7 +61,7 @@ func TestVolcengineWholeCatalogAndSpeechOnboardingUseRealStores(t *testing.T) {
 			onboarding := catalogapp.NewProviderOnboarding(store)
 			state, err := onboarding.Read(ctx, actor, connected.ProviderID)
 			require.NoError(t, err)
-			require.Len(t, state.Models, len(keys))
+			require.Len(t, state.Models, quickModels)
 			require.Equal(t, "disabled", state.Status)
 			private, public := testCredentialKey(t)
 			der, err := x509.MarshalPKCS8PrivateKey(private)
@@ -103,7 +107,7 @@ func TestVolcengineWholeCatalogAndSpeechOnboardingUseRealStores(t *testing.T) {
 			require.NoError(t, err)
 			enabled, err := onboarding.Activate(ctx, actor, connected.ProviderID, catalogapp.ActivateOnboardingInput{RequestID: uuid.New(), CheckID: accepted.CheckID, ExpectedRevision: state.Revision})
 			require.NoError(t, err)
-			require.Len(t, enabled.Models, len(keys))
+			require.Len(t, enabled.Models, quickModels)
 			count := 0
 			modelKey := ""
 			query := catalogapp.ListModelsInput{ProjectID: project, Limit: 200}
@@ -122,8 +126,12 @@ func TestVolcengineWholeCatalogAndSpeechOnboardingUseRealStores(t *testing.T) {
 				}
 				query.After = catalog.Next
 			}
-			require.Equal(t, len(keys), count)
+			require.Equal(t, quickModels, count)
 			if slug == "volcengine-speech" {
+				// Seed-Audio requires a real trial; a TTS credential check cannot publish it.
+				var guarded int64
+				require.NoError(t, database.Raw(`SELECT count(*) FROM catalog.model_profile m JOIN catalog.model_profile_version v ON v.id=m.current_version_id WHERE m.provider_id=? AND v.provider_model_id='seed-audio-1.0' AND m.status='disabled' AND m.active_release_id IS NULL`, connected.ProviderID).Scan(&guarded).Error)
+				require.Equal(t, int64(1), guarded)
 				quote, err := operationwire.ProvideOperationStore(database).CreateFreeQuote(ctx, actor, operationapp.CreateFreeQuoteInput{ProjectID: project, RequestID: uuid.NewString(), FreeQuoteItemInput: operationapp.FreeQuoteItemInput{ModelKey: modelKey, Capability: "audio.generate", Mode: "text2audio", Prompt: "你好", Params: json.RawMessage(`{}`), OutputCount: 1}})
 				require.NoError(t, err)
 				require.NotEqual(t, uuid.Nil, quote.OperationID)

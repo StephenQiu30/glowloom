@@ -39,6 +39,16 @@ func (c ProviderConfig) Validate() error {
 			return ErrInvalidPreset
 		}
 		allowed = []string{"text", "image", "video"}
+	case "volcengine_music":
+		if c.BaseURL != "https://open.volcengineapi.com" || c.Region != RegionDomestic {
+			return ErrInvalidPreset
+		}
+		allowed = []string{"audio"}
+	case "volcengine_avatar", "volcengine_motion":
+		if c.BaseURL != "https://openapi.cv.volces.com" || c.Region != RegionDomestic {
+			return ErrInvalidPreset
+		}
+		allowed = []string{"video"}
 	case "volcengine_speech":
 		if c.BaseURL != "https://openspeech.bytedance.com/api/v3" || c.Region != RegionDomestic {
 			return ErrInvalidPreset
@@ -197,7 +207,10 @@ func BuiltinPresets() []BuiltinPreset {
 		{Slug: "openrouter", Name: "OpenRouter", Config: ProviderConfig{AdapterKey: "openrouter", BaseURL: "https://openrouter.ai/api/v1", Region: RegionOverseas, Capabilities: []string{"text", "image", "video"}, TimeoutSeconds: 120, ConcurrencyLimit: 2, RateLimitPerMin: 30}},
 		{Slug: "byteplus", Name: "BytePlus", Config: ProviderConfig{AdapterKey: "byteplus", BaseURL: "https://ark.ap-southeast.bytepluses.com/api/v3", Region: RegionOverseas, Capabilities: []string{"text", "image"}, TimeoutSeconds: 120, ConcurrencyLimit: 2, RateLimitPerMin: 30}},
 		{Slug: "deepseek", Name: "DeepSeek", Config: ProviderConfig{AdapterKey: "deepseek", BaseURL: "https://api.deepseek.com", Region: RegionDomestic, Capabilities: []string{"text"}, TimeoutSeconds: 120, ConcurrencyLimit: 2, RateLimitPerMin: 30}},
-		{Slug: "volcengine-speech", Name: "豆包语音", Config: ProviderConfig{AdapterKey: "volcengine_speech", BaseURL: "https://openspeech.bytedance.com/api/v3", Region: RegionDomestic, Capabilities: []string{"audio"}, TimeoutSeconds: 120, ConcurrencyLimit: 2, RateLimitPerMin: 30}},
+		{Slug: "volcengine-music", Name: "火山音乐", Config: ProviderConfig{AdapterKey: "volcengine_music", BaseURL: "https://open.volcengineapi.com", Region: RegionDomestic, Capabilities: []string{"audio"}, TimeoutSeconds: 120, ConcurrencyLimit: 1, RateLimitPerMin: 60}},
+		{Slug: "volcengine-avatar", Name: "即梦数字人", Config: ProviderConfig{AdapterKey: "volcengine_avatar", BaseURL: "https://openapi.cv.volces.com", Region: RegionDomestic, Capabilities: []string{"video"}, TimeoutSeconds: 120, ConcurrencyLimit: 1, RateLimitPerMin: 30}},
+		{Slug: "volcengine-motion", Name: "即梦动作模仿", Config: ProviderConfig{AdapterKey: "volcengine_motion", BaseURL: "https://openapi.cv.volces.com", Region: RegionDomestic, Capabilities: []string{"video"}, TimeoutSeconds: 120, ConcurrencyLimit: 1, RateLimitPerMin: 30}},
+		{Slug: "volcengine-speech", Name: "豆包语音", Config: ProviderConfig{AdapterKey: "volcengine_speech", BaseURL: "https://openspeech.bytedance.com/api/v3", Region: RegionDomestic, Capabilities: []string{"audio"}, TimeoutSeconds: 300, ConcurrencyLimit: 2, RateLimitPerMin: 30}},
 	}
 }
 

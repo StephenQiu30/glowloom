@@ -465,7 +465,9 @@ const pageBranchJournal = {
     try {
       if (
         found.every((branch) => branch.inputScope === "space") &&
-        draft === "home-input"
+        /^home-input(?::(?:agent|image|video|music|audio|avatar|motion|canvas))?$/.test(
+          draft,
+        )
       ) {
         const spaces = await listMySpaces();
         if (

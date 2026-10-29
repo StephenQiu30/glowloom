@@ -21,6 +21,7 @@ type ManagedArtifact struct {
 // ManagedResult is private durable evidence, never a workflow payload. It is
 // written after every artifact; recovering it cannot issue another paid request.
 type ManagedResult struct {
+	Subtitle      *AudioSubtitle           `json:"subtitle,omitempty"`
 	Identity      ProviderDispatchIdentity `json:"identity"`
 	State         string                   `json:"state"`
 	TaskID        string                   `json:"task_id,omitempty"`
@@ -35,8 +36,11 @@ func (r ManagedResult) Validate() error {
 	if r.Identity.Validate() != nil || r.Identity.Attempt != 1 || len(r.TaskID) > 256 || len(r.Text) > 1<<20 || len(r.SupplierUsage) > 16384 || len(r.Artifacts) > 8 {
 		return ErrInvalidProviderCall
 	}
+	if !r.Subtitle.Valid(240000) {
+		return ErrInvalidProviderCall
+	}
 	if r.State == "accepted" {
-		if r.TaskID == "" || r.Text != "" || len(r.Artifacts) > 0 || len(r.Usage) > 0 {
+		if r.Subtitle != nil || r.TaskID == "" || r.Text != "" || len(r.Artifacts) > 0 || len(r.Usage) > 0 {
 			return ErrInvalidProviderCall
 		}
 		return nil

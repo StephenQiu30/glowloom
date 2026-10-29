@@ -78,6 +78,7 @@ type TaskEvent struct {
 
 // TaskDetail is the persisted task snapshot used after refresh or reconnection.
 type TaskDetail struct {
+	AudioSubtitle          *AudioSubtitle                  `json:"audio_subtitle,omitempty"`
 	EditorCompilerVersion  string                          `json:"editor_compiler_version,omitempty"`
 	EditorReferenceMapping []promptdomain.ReferenceMapping `json:"editor_reference_mapping,omitempty"`
 	EditorDraft            *promptdomain.Draft             `json:"editor_draft,omitempty"`

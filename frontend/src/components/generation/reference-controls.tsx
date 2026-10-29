@@ -296,7 +296,13 @@ export function ReferenceControls({
     const original = draft.references.find(
       (reference) => reference.id === subjectReplace,
     );
-    const binding = unifiedSubjectBinding(subject, original?.role ?? "subject");
+    const binding = unifiedSubjectBinding(
+      subject,
+      original?.role ??
+        (draft.mode === "avatar" || draft.mode === "motion"
+          ? "character_image"
+          : "subject"),
+    );
     if (original) session.replaceReference(original.id, binding);
     else {
       const existing = draft.references.find(
@@ -388,6 +394,16 @@ export function ReferenceControls({
       role,
     ]),
   ];
+  function roleForKind(kind: string) {
+    if (draft.mode === "avatar" || draft.mode === "motion") {
+      return kind === "image"
+        ? "character_image"
+        : kind === "audio"
+          ? "driving_audio"
+          : "driving_video";
+    }
+    return `reference_${kind}`;
+  }
   function add(
     binding: ReferenceBinding,
     inline = false,
@@ -455,7 +471,7 @@ export function ReferenceControls({
         )
       )
         throw new Error("参考连接或来源已变化，请重新选择。");
-      const binding = mediaBinding(preview.asset, `reference_${source.kind}`);
+      const binding = mediaBinding(preview.asset, roleForKind(source.kind));
       if (
         connection &&
         !session.snapshot().draft.labelState.allocations[connection.edgeID]
@@ -490,7 +506,7 @@ export function ReferenceControls({
       order: 0,
       bindingGeneration: 1,
       mediaKind: kind,
-      role: replace?.role ?? (compact ? `reference_${kind}` : role),
+      role: replace?.role ?? (compact ? roleForKind(kind) : role),
       source: {
         kind: "pending_upload",
         clientUploadId: crypto.randomUUID(),
@@ -1288,6 +1304,33 @@ export function ReferenceControls({
                 className="flex w-full min-w-0 items-start gap-2 overflow-x-auto pb-1"
                 aria-label="参考内容"
               >
+                {(draft.mode === "avatar" || draft.mode === "motion") &&
+                  (
+                    [
+                      "image",
+                      draft.mode === "avatar" ? "audio" : "video",
+                    ] as const
+                  ).map((kind) => {
+                    const inputRole = roleForKind(kind);
+                    if (draft.references.some((ref) => ref.role === inputRole))
+                      return null;
+                    return (
+                      <Button
+                        key={kind}
+                        type="button"
+                        variant="outline"
+                        className="h-16 min-w-28 shrink-0 flex-col gap-1"
+                        disabled={disabled}
+                        onClick={() => {
+                          if (!projectID) onChooseProject?.();
+                          else setPicker({ kind });
+                        }}
+                      >
+                        <Plus />
+                        {referenceRoleLabel(inputRole)}
+                      </Button>
+                    );
+                  })}
                 {draft.references.map((ref) => {
                   const Icon =
                     ref.source.kind === "subject"
@@ -1574,12 +1617,17 @@ export function ReferenceControls({
                           ? mediaBinding(
                               candidate.media,
                               compact
-                                ? `reference_${candidate.media.kind}`
+                                ? roleForKind(candidate.media.kind ?? "image")
                                 : role,
                             )
                           : subjectBinding(
                               candidate.subject!,
-                              compact ? "subject" : role,
+                              compact
+                                ? draft.mode === "avatar" ||
+                                  draft.mode === "motion"
+                                  ? "character_image"
+                                  : "subject"
+                                : role,
                             ),
                       );
                       session.insertReferences(bindings, lookup.range);
@@ -1652,7 +1700,7 @@ export function ReferenceControls({
                 try {
                   const binding = mediaBinding(
                     asset,
-                    compact ? `reference_${asset.kind}` : role,
+                    compact ? roleForKind(asset.kind ?? "image") : role,
                   );
                   if (picker.replace) {
                     const original = draft.references.find(

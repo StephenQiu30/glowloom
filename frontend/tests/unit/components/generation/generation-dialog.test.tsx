@@ -182,6 +182,56 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
+it("音乐空目录保留纯音乐草稿，不显示文本朗读", async () => {
+  api.models.mockResolvedValue({ items: [] });
+  const composer = {
+    ...emptyPromptDraft(),
+    mode: "music_instrumental",
+    params: { duration_ms: 60000 },
+  };
+  render(
+    <RichGeneration
+      projectID={project.id}
+      seed={{
+        project,
+        capability: "audio",
+        creationType: "music",
+        prompt: "",
+        composer,
+      }}
+      presentation="home"
+    />,
+  );
+  await screen.findByLabelText("音乐创作编辑器");
+  expect(screen.getByText("纯音乐")).toBeTruthy();
+  expect(screen.queryByText("文本朗读")).toBeNull();
+  expect(api.create.mock.calls[0][1].draft.mode).toBe("music_instrumental");
+  expect(api.quote).not.toHaveBeenCalled();
+});
+
+it("动作模仿显示角色图片和动作视频槽且没有可见正文", async () => {
+  api.models.mockResolvedValue({ items: [] });
+  const composer = { ...emptyPromptDraft(), mode: "motion" };
+  render(
+    <RichGeneration
+      projectID={project.id}
+      seed={{
+        project,
+        capability: "video",
+        creationType: "motion",
+        prompt: "",
+        composer,
+      }}
+      presentation="home"
+    />,
+  );
+  await screen.findByLabelText("动作模仿创作编辑器");
+  expect(screen.getByRole("button", { name: "角色图片" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "动作视频" })).toBeTruthy();
+  expect(screen.queryByRole("textbox", { name: "创作提示词" })).toBeNull();
+  expect(api.quote).not.toHaveBeenCalled();
+});
+
 it("首页内联富文本保存正文并保留草稿找回入口，不触发报价", async () => {
   const onDraftReady = vi.fn();
   api.drafts.mockResolvedValue({ items: [] });
@@ -1118,4 +1168,77 @@ it("asset detail accepts a completed official document and explains original-onl
   expect(
     await screen.findByText("正式文档仅提供原件，下载原件以查看。"),
   ).toBeTruthy();
+});
+
+it("音频目录与标题独立，朗读原文不追加视觉偏好且不显示素材入口", async () => {
+  api.preferences.mockResolvedValue({ prompt_suffix: "视觉风格后缀" });
+  api.models.mockResolvedValue({ items: [] });
+  render(
+    <GenerationDialog
+      seed={{ project, prompt: "你好，欢迎回来。", capability: "audio" }}
+      onClose={() => {}}
+    />,
+  );
+  expect(screen.getByRole("heading", { name: "音频生成" })).toBeTruthy();
+  await screen.findByRole("textbox", { name: "创作提示词" });
+  expect(api.models.mock.calls[0][0].capability).toBe("audio.generate");
+  expect(JSON.stringify(api.create.mock.calls[0][1])).not.toContain(
+    "视觉风格后缀",
+  );
+  expect(screen.queryByRole("button", { name: "添加参考" })).toBeNull();
+});
+
+it("音频草稿保存后按来源指针报价，正文引用为空且不自动确认", async () => {
+  const draft = emptyPromptDraft();
+  draft.document.content[0].content = [{ type: "text", text: "欢迎回来。" }];
+  draft.modelVersion = version;
+  draft.mode = "text2audio";
+  draft.params = { speaker: "fixture_voice", output_count: 1 };
+  api.models.mockResolvedValue({
+    items: [
+      {
+        id,
+        key: "audio",
+        display_name: "配音模型",
+        capability: "audio.generate",
+        status: "active",
+        provider_status: "active",
+        credential_present: true,
+        current_version: {
+          id: version,
+          modes: ["text2audio"],
+          limits: { max_outputs: 1 },
+          param_schema: [
+            {
+              field: "speaker",
+              label: "音色",
+              type: "string",
+              component: "input",
+              default: "fixture_voice",
+              required: true,
+            },
+          ],
+        },
+      },
+    ],
+  });
+  render(
+    <RichGeneration
+      projectID={project.id}
+      presentation="home"
+      seed={{ project, prompt: "", composer: draft, capability: "audio" }}
+    />,
+  );
+  await screen.findByRole("textbox", { name: "创作提示词" });
+  fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
+  await screen.findByRole("button", { name: "确认费用并生成" });
+  expect(api.quote.mock.calls[0][1]).toMatchObject({
+    input_source: { kind: "prompt_draft", draft_id: id },
+  });
+  expect(api.models.mock.calls[0][0].capability).toBe("audio.generate");
+  expect(api.quote.mock.calls[0][1].capability).toBeUndefined();
+  expect(api.create.mock.calls[0][1].draft.references).toEqual([]);
+  expect(api.create.mock.calls[0][1].draft.mode).toBe("text2audio");
+  expect(api.quote.mock.calls[0][1].media_inputs).toBeUndefined();
+  expect(api.confirm).not.toHaveBeenCalled();
 });

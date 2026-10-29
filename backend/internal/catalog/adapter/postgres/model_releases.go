@@ -88,15 +88,19 @@ func (s *Store) CreateModelRelease(ctx context.Context, actor identityapp.Princi
  WHERE m.id=? AND v.id=? AND price.id=? AND config.id=? AND NOT m.is_delete
  AND ((m.capability='text.generate' AND price.unit IN ('per_request','per_1k_tokens') AND v.modes <@ ARRAY['text_to_text']::text[])
  OR (m.capability='audio.generate' AND config.config->>'adapter_key'='volcengine_speech' AND v.provider_model_id='seed-tts-2.0' AND v.modes=ARRAY['text2audio']::text[] AND price.unit IN ('per_request','per_1k_chars') AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('speaker','speech_rate','loudness_rate')))
+ OR (m.capability='audio.generate' AND config.config->>'adapter_key'='volcengine_speech' AND v.provider_model_id='seed-audio-1.0' AND v.modes=ARRAY['omni_audio']::text[] AND price.unit IN ('per_request','per_second') AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('speech_rate','loudness_rate','pitch_rate','enable_subtitle')))
+ OR (m.capability='audio.generate' AND config.config->>'adapter_key'='volcengine_music' AND v.provider_model_id='v5.0' AND v.modes <@ ARRAY['music_song','music_instrumental']::text[] AND price.unit IN ('per_request','per_second') AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('duration_ms','music_input')))
  OR (m.capability='image.generate' AND price.unit IN ('per_request','per_image') AND v.modes <@ ARRAY['text2image','image2image']::text[])
- OR (m.capability='video.generate' AND price.unit IN ('per_request','per_second') AND v.modes <@ ARRAY['text2video','image2video','omni_reference']::text[]))
+ OR (m.capability='video.generate' AND price.unit IN ('per_request','per_second') AND v.modes <@ ARRAY['text2video','image2video','omni_reference','avatar','motion']::text[]))
  AND (m.capability='image.generate' OR (v.limits->>'max_outputs')::int=1)
- AND v.supports_query=(m.capability='video.generate')
+ AND v.supports_query=(m.capability='video.generate' OR config.config->>'adapter_key'='volcengine_music')
  AND (NOT v.limits ? 'provider_endpoint' OR (config.config->>'adapter_key'='openrouter' AND m.capability IN ('text.generate','image.generate')))
  AND v.queue='provider' AND v.moderation='provider' AND NOT v.supports_cancel AND NOT v.supports_callback
  AND ((m.capability='video.generate' AND config.config->>'adapter_key' IN ('openrouter','volcengine_ark'))
+ OR (m.capability='video.generate' AND config.config->>'adapter_key'='volcengine_avatar' AND v.provider_model_id='jimeng_realman_avatar_picture_omni_v15' AND v.modes=ARRAY['avatar']::text[] AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('output_resolution','pe_fast_mode')))
+ OR (m.capability='video.generate' AND config.config->>'adapter_key'='volcengine_motion' AND v.provider_model_id='jimeng_dreamactor_m20_gen_video' AND v.modes=ARRAY['motion']::text[] AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('cut_result_first_second_switch')))
  OR (m.capability='text.generate' AND config.config->>'adapter_key' IN ('openrouter','volcengine_ark','byteplus','deepseek'))
- OR (m.capability='audio.generate' AND config.config->>'adapter_key'='volcengine_speech')
+ OR (m.capability='audio.generate' AND config.config->>'adapter_key' IN ('volcengine_speech','volcengine_music'))
  OR (m.capability='image.generate' AND (config.config->>'adapter_key'='openrouter' OR (config.config->>'adapter_key' IN ('volcengine_ark','byteplus') AND (v.limits->>'max_outputs')::int=1))))
  FOR SHARE OF preset,m`, id, input.ModelVersionID, input.PriceVersionID, input.ConfigVersionID).Scan(&found)
 		if r.Error != nil {

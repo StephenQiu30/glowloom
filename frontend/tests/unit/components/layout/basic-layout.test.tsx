@@ -258,7 +258,7 @@ it("游客仅从顶栏登录，手机抽屉只展示导航，关闭认证后恢�
   await waitFor(() => expect(document.activeElement).toBe(login));
 });
 
-it("手机顶栏保留主题与通知，积分入口不显示虚构会员促销", async () => {
+it("手机顶栏使用共享账号组，主题归入账号菜单且不虚构会员促销", async () => {
   vi.stubGlobal(
     "matchMedia",
     vi.fn().mockImplementation(() => ({
@@ -277,10 +277,10 @@ it("手机顶栏保留主题与通知，积分入口不显示虚构会员促销"
   expect(within(header).getByRole("button", { name: "消息中心" })).toBeTruthy();
   expect(within(header).queryByRole("button", { name: "积分商城" })).toBeNull();
   expect(within(header).getByRole("button", { name: "账号菜单" })).toBeTruthy();
-  expect(within(header).getByRole("button", { name: "切换主题" })).toBeTruthy();
+  expect(within(header).queryByRole("button", { name: "切换主题" })).toBeNull();
   expect(within(header).queryByRole("button", { name: "更多操作" })).toBeNull();
   expect(within(header).queryByText("开通会员")).toBeNull();
-  expect(within(header).queryByRole("button", { name: "积分余额" })).toBeNull();
+  expect(within(header).getByRole("button", { name: "积分余额" })).toBeTruthy();
   fireEvent.click(within(header).getByRole("button", { name: "消息中心" }));
   expect(
     await screen.findByRole("dialog", { name: "消息中心暂未开放" }),
@@ -569,4 +569,55 @@ it("replacing public actions closes its search portal and releases shortcuts; un
   fireEvent.keyDown(document, { key: "k", metaKey: true });
   expect(await screen.findByRole("combobox")).toBeTruthy();
   expect(screen.getAllByRole("combobox")).toHaveLength(1);
+});
+
+it("普通页面与资产复用同一账号组，切换路由保留积分弹层及账号节点", async () => {
+  const view = render(
+    <BasicLayout screen="home">
+      <p>创作</p>
+    </BasicLayout>,
+  );
+  const account = await screen.findByRole("button", { name: "账号菜单" });
+  const group = screen.getByRole("group", { name: "通知与账号" });
+  expect(within(group).getByRole("link", { name: "会员中心" })).toBeTruthy();
+  fireEvent.click(within(group).getByRole("button", { name: "积分余额" }));
+  expect(await screen.findByText("积分服务暂未开放")).toBeTruthy();
+  for (const page of [
+    "assets",
+    "subjects",
+    "explore",
+    "account",
+    "users",
+  ] as const) {
+    view.rerender(
+      <BasicLayout screen={page}>
+        <p>{page}</p>
+      </BasicLayout>,
+    );
+    expect(screen.getByRole("button", { name: "账号菜单" })).toBe(account);
+    expect(screen.getByRole("group", { name: "通知与账号" })).toBe(group);
+    expect(screen.getByText("积分服务暂未开放")).toBeTruthy();
+  }
+});
+
+it("资产使用replace-base动作槽时保留批量操作并在退出后恢复公共账号", async () => {
+  const view = render(
+    <BasicLayout screen="assets">
+      <BatchHeaderPage batch={false} />
+    </BasicLayout>,
+  );
+  await screen.findByRole("button", { name: "账号菜单" });
+  view.rerender(
+    <BasicLayout screen="assets">
+      <BatchHeaderPage batch />
+    </BasicLayout>,
+  );
+  expect(screen.getByRole("button", { name: "Page action" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "账号菜单" })).toBeNull();
+  view.rerender(
+    <BasicLayout screen="assets">
+      <BatchHeaderPage batch={false} />
+    </BasicLayout>,
+  );
+  expect(await screen.findByRole("button", { name: "账号菜单" })).toBeTruthy();
 });

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"strings"
 	"time"
 
@@ -124,10 +125,8 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 		return unknown, application.ErrWorkflowModelUnavailable
 	}
 	defer clear(secret)
-	var key struct {
-		APIKey string `json:"api_key"`
-	}
-	if json.Unmarshal(secret, &key) != nil || key.APIKey == "" {
+	providerKey, keyErr := config.CredentialValue(secret)
+	if keyErr != nil {
 		return unknown, application.ErrWorkflowModelUnavailable
 	}
 	var result application.GenerationResult
@@ -136,9 +135,9 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 		if requestErr != nil {
 			return application.ManagedProgress{State: "not_submitted", ErrorCode: "input_unavailable"}, nil
 		}
-		result, err = a.client.Submit(ctx, request, key.APIKey)
+		result, err = a.client.Submit(ctx, request, providerKey)
 	} else {
-		result, err = a.client.Query(ctx, config, saved.TaskID, key.APIKey)
+		result, err = a.client.Query(ctx, config, saved.TaskID, providerKey)
 	}
 	if err != nil {
 		return unknown, nil
@@ -157,13 +156,13 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 	}
 	if result.State != "succeeded" {
 		switch result.State {
-		case "pending", "running":
-			return application.ManagedProgress{State: result.State, TaskID: saved.TaskID}, nil
+		case "pending", "running", "failed":
+			return application.ManagedProgress{State: result.State, TaskID: saved.TaskID, ErrorCode: result.ErrorCode}, nil
 		default:
 			return unknown, nil
 		}
 	}
-	evidence := application.ManagedResult{Identity: identity, State: "succeeded", TaskID: result.TaskID, Text: result.Text, SupplierUsage: result.Usage}
+	evidence := application.ManagedResult{Identity: identity, State: "succeeded", TaskID: result.TaskID, Text: result.Text, SupplierUsage: result.Usage, Subtitle: result.Subtitle}
 	var duration int64
 	for index, item := range result.Images {
 		output, e := a.results.StageArtifact(ctx, identity, index+1, item.Bytes, item.MediaType)
@@ -182,11 +181,29 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 		}
 		evidence.Artifacts = append(evidence.Artifacts, output)
 	}
+	if op.Capability == "audio.generate" && config.AdapterKey == "volcengine_music" {
+		reader, ok := a.video.(interface {
+			ReadAudio(context.Context, catalogdomain.ProviderConfig, string, string) ([]byte, int64, error)
+		})
+		if !ok || len(result.URLs) != 1 || len(evidence.Artifacts) != 0 {
+			return unknown, application.ErrInvalidProviderCall
+		}
+		data, ms, e := reader.ReadAudio(ctx, config, result.TaskID, result.URLs[0])
+		if e != nil {
+			return unknown, e
+		}
+		duration = ms
+		output, e := a.results.StageArtifact(ctx, identity, 1, data, "audio/mpeg")
+		if e != nil {
+			return unknown, e
+		}
+		evidence.Artifacts = append(evidence.Artifacts, output)
+	}
 	if op.Capability == "video.generate" {
 		if len(result.URLs) != 1 || a.video == nil {
 			return unknown, application.ErrInvalidProviderCall
 		}
-		data, ms, e := a.video.Read(ctx, config, result.TaskID, result.URLs[0], key.APIKey)
+		data, ms, e := a.video.Read(ctx, config, result.TaskID, result.URLs[0], providerKey)
 		if e != nil {
 			return unknown, e
 		}
@@ -205,6 +222,24 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 		return unknown, application.ErrInvalidProviderCall
 	}
 	usage := map[string]int64{"billable_requests": 1, "output_count": count}
+	if config.AdapterKey == "volcengine_music" {
+		var receipt struct {
+			Duration float64 `json:"duration_seconds"`
+		}
+		if json.Unmarshal(result.Usage, &receipt) != nil || receipt.Duration <= 0 || receipt.Duration > 240 {
+			return unknown, application.ErrInvalidProviderCall
+		}
+		duration = int64(math.Ceil(receipt.Duration * 1000))
+	}
+	if config.AdapterKey == "volcengine_speech" && op.Mode == "omni_audio" {
+		var receipt struct {
+			Duration float64 `json:"original_duration"`
+		}
+		if json.Unmarshal(result.Usage, &receipt) != nil || receipt.Duration <= 0 || receipt.Duration > 120 {
+			return unknown, application.ErrInvalidProviderCall
+		}
+		duration = int64(math.Ceil(receipt.Duration * 1000))
+	}
 	if duration > 0 {
 		usage["billed_duration_ms"] = duration
 	}

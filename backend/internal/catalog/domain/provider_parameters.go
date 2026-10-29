@@ -4,8 +4,18 @@ package domain
 // cannot advertise parameters that the deployed protocol refuses to submit.
 // It returns fresh slices and never admits credential or routing headers.
 func (c ProviderConfig) ParameterFields(capability string) []string {
+	if c.AdapterKey == "volcengine_music" && capability == "audio.generate" {
+		return []string{"duration_ms", "music_input"}
+	}
+	if c.AdapterKey == "volcengine_avatar" && capability == "video.generate" {
+		return []string{"output_resolution", "pe_fast_mode"}
+	}
+	if c.AdapterKey == "volcengine_motion" && capability == "video.generate" {
+		return []string{"cut_result_first_second_switch"}
+	}
+
 	if c.AdapterKey == "volcengine_speech" && capability == "audio.generate" {
-		return []string{"speaker", "speech_rate", "loudness_rate"}
+		return []string{"speaker", "speech_rate", "loudness_rate", "pitch_rate", "enable_subtitle"}
 	}
 	if capability == "text.generate" && IsManagedCloud(c.AdapterKey) {
 		return []string{"temperature", "top_p", "max_tokens", "seed", "response_format"}
@@ -34,7 +44,7 @@ func (c ProviderConfig) ParameterFields(capability string) []string {
 // IsManagedCloud identifies protocols that require a frozen catalog release.
 func IsManagedCloud(adapter string) bool {
 	switch adapter {
-	case "volcengine_ark", "openrouter", "byteplus", "deepseek", "volcengine_speech":
+	case "volcengine_ark", "openrouter", "byteplus", "deepseek", "volcengine_speech", "volcengine_music", "volcengine_avatar", "volcengine_motion":
 		return true
 	default:
 		return false

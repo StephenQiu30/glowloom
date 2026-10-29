@@ -6,6 +6,27 @@ const identityRoutes: {
   methods: string[];
   query: string[];
 }[] = [
+  {
+    pattern: `projects/${identityUUID}/voice-library`,
+    methods: ["GET", "POST"],
+    query: ["cursor"],
+  },
+  {
+    pattern: `projects/${identityUUID}/voice-library/${identityUUID}`,
+    methods: ["PATCH"],
+    query: [],
+  },
+  {
+    pattern: `projects/${identityUUID}/system-voices`,
+    methods: ["GET"],
+    query: [],
+  },
+  {
+    pattern: `projects/${identityUUID}/system-voices/[a-zA-Z0-9_-]{1,128}/favorite`,
+    methods: ["PUT"],
+    query: [],
+  },
+
   { pattern: `sessions`, methods: ["POST"], query: [] },
   { pattern: `session/(refresh|upgrade)`, methods: ["POST"], query: [] },
   { pattern: `session`, methods: ["GET"], query: [] },
@@ -273,6 +294,22 @@ const identityRoutes: {
 
 // Explicit editor and catalog contracts; authorization remains with the backend.
 const editorCatalogRoutes: typeof identityRoutes = [
+  {
+    pattern: `projects/${identityUUID}/agent-sessions`,
+    methods: ["GET", "POST"],
+    query: [],
+  },
+  {
+    pattern: `projects/${identityUUID}/agent-sessions/${identityUUID}`,
+    methods: ["GET"],
+    query: [],
+  },
+  {
+    pattern: `projects/${identityUUID}/agent-sessions/${identityUUID}/(turns|advance|confirm|stop)`,
+    methods: ["POST"],
+    query: [],
+  },
+
   {
     pattern: `projects/${identityUUID}/prompt-drafts`,
     methods: ["GET", "POST"],

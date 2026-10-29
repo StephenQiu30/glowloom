@@ -95,6 +95,9 @@ export function ProviderTrial({
     () => "server",
   );
   const pending = parse(snapshot);
+  const [selectedMode, setSelectedMode] = useState(
+    release.required_modes?.[0] ?? "",
+  );
   const [projects, setProjects] = useState<API.ProjectResponse[]>([]);
   const [task, setTask] = useState<API.TaskDetail | null>(null);
   const [message, setMessage] = useState("");
@@ -230,7 +233,7 @@ export function ProviderTrial({
                     project_id: project,
                     request_id: state.request,
                     mode: String(form.get("mode")),
-                    prompt: String(form.get("prompt")),
+                    prompt: String(form.get("prompt") ?? ""),
                     params,
                     media_inputs: references,
                     max_charge_micros: charge,
@@ -282,7 +285,8 @@ export function ProviderTrial({
                 <Select
                   name="mode"
                   required
-                  defaultValue={release.required_modes?.[0]}
+                  value={selectedMode}
+                  onValueChange={setSelectedMode}
                 >
                   <SelectTrigger
                     id={`${formFieldId}-field-2`}
@@ -308,7 +312,8 @@ export function ProviderTrial({
                 <Textarea
                   id={`${formFieldId}-field-3`}
                   name="prompt"
-                  required
+                  required={!["avatar", "motion"].includes(selectedMode)}
+                  disabled={selectedMode === "motion"}
                   maxLength={65536}
                   className="mt-1 min-h-24 w-full"
                 />

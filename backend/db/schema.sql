@@ -7075,3 +7075,89 @@ ALTER TABLE mediatool.export_job DROP CONSTRAINT IF EXISTS export_job_artifact_i
 ALTER TABLE mediatool.export_job ADD CONSTRAINT export_job_artifact_identity_fkey FOREIGN KEY(artifact_id,id,project_id,attempt) REFERENCES mediatool.export_artifact(id,job_id,project_id,attempt);
 GRANT SELECT,INSERT ON mediatool.export_artifact TO glowloom_app;
 GRANT UPDATE(artifact_id) ON mediatool.export_job TO glowloom_app;
+
+-- Volcengine creation adapters: volcengine_creation_incremental.sql
+-- Additive capability catalog; preserve other modes/roles installed in parallel.
+UPDATE catalog.capability SET modes=ARRAY(SELECT DISTINCT x FROM unnest(modes || ARRAY['music_song','music_instrumental']) x) WHERE key='audio.generate';
+UPDATE catalog.capability SET modes=ARRAY(SELECT DISTINCT x FROM unnest(modes || ARRAY['avatar','motion']) x), input_roles=ARRAY(SELECT DISTINCT x FROM unnest(input_roles || ARRAY['character_image','driving_audio','driving_video']) x) WHERE key='video.generate';
+INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8000-000000000006','volcengine-music','builtin') ON CONFLICT(slug) DO NOTHING;
+INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash)
+SELECT '6da07a11-0000-4000-8000-000000000006',id,1,'{"schema_version":1,"name":"火山音乐","config":{"adapter_key":"volcengine_music","base_url":"https://open.volcengineapi.com","region":"domestic","capabilities":["audio"],"timeout_seconds":120,"concurrency_limit":1,"rate_limit_per_min":60}}'::jsonb,'8af0295bcce95bb3160c92bce6a4dda84ed9f66959b53f389d6501c1f1f83ad3' FROM catalog.provider_preset WHERE slug='volcengine-music' AND origin='builtin' ON CONFLICT(preset_id,version_no) DO NOTHING;
+INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8000-000000000007','volcengine-avatar','builtin') ON CONFLICT(slug) DO NOTHING;
+INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash)
+SELECT '6da07a11-0000-4000-8000-000000000007',id,1,'{"schema_version":1,"name":"即梦数字人","config":{"adapter_key":"volcengine_avatar","base_url":"https://openapi.cv.volces.com","region":"domestic","capabilities":["video"],"timeout_seconds":120,"concurrency_limit":1,"rate_limit_per_min":30}}'::jsonb,'2bd16ed1469e578935a2de777add2d627c799db26d84d4202bb1d01919ac95e2' FROM catalog.provider_preset WHERE slug='volcengine-avatar' AND origin='builtin' ON CONFLICT(preset_id,version_no) DO NOTHING;
+INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8000-000000000008','volcengine-motion','builtin') ON CONFLICT(slug) DO NOTHING;
+INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash)
+SELECT '6da07a11-0000-4000-8000-000000000008',id,1,'{"schema_version":1,"name":"即梦动作模仿","config":{"adapter_key":"volcengine_motion","base_url":"https://openapi.cv.volces.com","region":"domestic","capabilities":["video"],"timeout_seconds":120,"concurrency_limit":1,"rate_limit_per_min":30}}'::jsonb,'7df763c7f974d3654c6ef0de51c17e95ee6bb50737cd7101ef4afb7919e243a5' FROM catalog.provider_preset WHERE slug='volcengine-motion' AND origin='builtin' ON CONFLICT(preset_id,version_no) DO NOTHING;
+
+-- Seed-Audio adds a distinct mode; keep all existing capability contracts.
+UPDATE catalog.capability SET modes=ARRAY(SELECT DISTINCT x FROM unnest(modes || ARRAY['omni_audio']) x), input_roles=ARRAY(SELECT DISTINCT x FROM unnest(input_roles || ARRAY['reference_audio','reference_image']) x) WHERE key='audio.generate';
+
+-- A new immutable preset version; existing connection snapshots stay unchanged.
+INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash)
+SELECT '6da07a12-0000-4000-8000-000000000005',id,2,'{"schema_version":1,"name":"豆包语音","config":{"adapter_key":"volcengine_speech","base_url":"https://openspeech.bytedance.com/api/v3","region":"domestic","capabilities":["audio"],"timeout_seconds":300,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'76c0029f543321dec270d711133d523c3ad91eb8819eab84eca7459780986682' FROM catalog.provider_preset WHERE slug='volcengine-speech' AND origin='builtin' ON CONFLICT(preset_id,version_no) DO NOTHING;
+
+-- Private, bounded Agent sessions. No supplier credentials or temporary URLs.
+CREATE SCHEMA IF NOT EXISTS agent;
+CREATE TABLE IF NOT EXISTS agent.session (
+ id uuid PRIMARY KEY,
+ project_id uuid NOT NULL REFERENCES workspace.project(id),
+ actor_id uuid NOT NULL REFERENCES identity."user"(id),
+ request_id uuid NOT NULL,
+ title text NOT NULL CHECK(length(title)>0 AND octet_length(title)<=240),
+ revision bigint NOT NULL DEFAULT 1 CHECK(revision>0),
+ turns jsonb NOT NULL DEFAULT '[]'::jsonb CHECK(jsonb_typeof(turns)='array' AND jsonb_array_length(turns)<=20 AND octet_length(turns::text)<=1048576),
+ created_at timestamptz NOT NULL DEFAULT now(),
+ updated_at timestamptz NOT NULL DEFAULT now(),
+ UNIQUE(project_id,actor_id,request_id)
+);
+CREATE INDEX IF NOT EXISTS agent_session_owner_updated ON agent.session(project_id,actor_id,updated_at DESC,id);
+GRANT USAGE ON SCHEMA agent TO glowloom_app;
+GRANT SELECT,INSERT,UPDATE ON agent.session TO glowloom_app;
+
+-- Private reference voices; supplier training is a separate, explicit operation.
+CREATE TABLE IF NOT EXISTS media.voice_profile (
+ id uuid PRIMARY KEY,
+ project_id uuid NOT NULL REFERENCES workspace.project(id),
+ actor_id uuid NOT NULL REFERENCES identity."user"(id),
+ request_id uuid NOT NULL,
+ name text NOT NULL CHECK(length(name) BETWEEN 1 AND 60),
+ request_name text NOT NULL CHECK(length(request_name) BETWEEN 1 AND 60),
+ asset_id uuid NOT NULL REFERENCES media.media_asset(id),
+ asset_revision bigint NOT NULL CHECK(asset_revision>0),
+ consent_at timestamptz NOT NULL,
+ revision bigint NOT NULL DEFAULT 1 CHECK(revision>0),
+ favorite boolean NOT NULL DEFAULT false,
+ is_delete boolean NOT NULL DEFAULT false,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ updated_at timestamptz NOT NULL DEFAULT now(),
+ UNIQUE(project_id,actor_id,request_id)
+);
+CREATE INDEX IF NOT EXISTS voice_profile_owner ON media.voice_profile(project_id,actor_id,id) WHERE NOT is_delete;
+GRANT SELECT,INSERT,UPDATE ON media.voice_profile TO glowloom_app;
+
+CREATE TABLE IF NOT EXISTS media.voice_favorite (
+ project_id uuid NOT NULL REFERENCES workspace.project(id),
+ actor_id uuid NOT NULL REFERENCES identity."user"(id),
+ speaker text NOT NULL CHECK(length(speaker) BETWEEN 1 AND 128),
+ favorite boolean NOT NULL,
+ PRIMARY KEY(project_id,actor_id,speaker)
+);
+GRANT SELECT,INSERT,UPDATE ON media.voice_favorite TO glowloom_app;
+
+ALTER TABLE media.voice_profile ADD COLUMN IF NOT EXISTS gender text NOT NULL DEFAULT '未标注' CHECK(gender IN ('未标注','男声','女声'));
+ALTER TABLE media.voice_profile ADD COLUMN IF NOT EXISTS age text NOT NULL DEFAULT '未标注' CHECK(age IN ('未标注','儿童','青年','中年','老年'));
+ALTER TABLE media.voice_profile ADD COLUMN IF NOT EXISTS language text NOT NULL DEFAULT '未标注' CHECK(language IN ('未标注','中文','英文','日文','其他'));
+ALTER TABLE media.voice_profile ADD COLUMN IF NOT EXISTS style text NOT NULL DEFAULT '未标注' CHECK(style IN ('未标注','自然','温柔','活泼','沉稳','旁白'));
+
+-- Voice library metadata expires with its owning project, account or source asset.
+ALTER TABLE media.voice_profile DROP CONSTRAINT IF EXISTS voice_profile_project_id_fkey;
+ALTER TABLE media.voice_profile ADD CONSTRAINT voice_profile_project_id_fkey FOREIGN KEY (project_id) REFERENCES workspace.project(id) ON DELETE CASCADE;
+ALTER TABLE media.voice_profile DROP CONSTRAINT IF EXISTS voice_profile_actor_id_fkey;
+ALTER TABLE media.voice_profile ADD CONSTRAINT voice_profile_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES identity."user"(id) ON DELETE CASCADE;
+ALTER TABLE media.voice_profile DROP CONSTRAINT IF EXISTS voice_profile_asset_id_fkey;
+ALTER TABLE media.voice_profile ADD CONSTRAINT voice_profile_asset_id_fkey FOREIGN KEY (asset_id) REFERENCES media.media_asset(id) ON DELETE CASCADE;
+ALTER TABLE media.voice_favorite DROP CONSTRAINT IF EXISTS voice_favorite_project_id_fkey;
+ALTER TABLE media.voice_favorite ADD CONSTRAINT voice_favorite_project_id_fkey FOREIGN KEY (project_id) REFERENCES workspace.project(id) ON DELETE CASCADE;
+ALTER TABLE media.voice_favorite DROP CONSTRAINT IF EXISTS voice_favorite_actor_id_fkey;
+ALTER TABLE media.voice_favorite ADD CONSTRAINT voice_favorite_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES identity."user"(id) ON DELETE CASCADE;

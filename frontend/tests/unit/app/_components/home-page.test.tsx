@@ -62,9 +62,7 @@ it("游客可浏览首页，提交时打开登录弹窗，关闭和切换模式�
     "保留这份创作想法",
   );
   fireEvent.click(screen.getByRole("radio", { name: "画布" }));
-  expect(screen.getByLabelText("画布创作想法").textContent).toBe(
-    "保留这份创作想法",
-  );
+  expect(screen.getByLabelText("画布创作想法").textContent).toBe("");
   fireEvent.click(screen.getByRole("radio", { name: "生成" }));
   expect(screen.getByLabelText("创作提示词").textContent).toBe(
     "保留这份创作想法",

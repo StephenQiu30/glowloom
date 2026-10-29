@@ -215,6 +215,14 @@ func runManagedProvider(ctx, flowCtx workflow.Context, loaded application.Workfl
 			if isApplicationErrorType(queryErr, "execution_authority_revoked") {
 				return queryErr
 			}
+			if queryErr == nil && result.State == "failed" && status == domain.StatusSubmitted {
+				// Generation failure is known, supplier charge is not. Preserve the
+				// original task and hold rather than inventing a zero-cost refund.
+				if err := transition(flowCtx, id, []domain.Status{status}, domain.StatusReconciling, "provider_failed_cost_unknown", nil, nil); err != nil {
+					return err
+				}
+				status = domain.StatusReconciling
+			}
 			if evidence.State == "succeeded" {
 				if err := transition(flowCtx, id, []domain.Status{status}, domain.StatusSucceeded, "provider_succeeded", nil, nil); err != nil {
 					return err

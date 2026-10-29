@@ -34,6 +34,8 @@ var (
 
 // FreeQuoteItemInput describes one canvas request without project metadata.
 type FreeQuoteItemInput struct {
+	// AgentContext is set only by the server-owned Agent use case, never HTTP input.
+	AgentContext            *AgentQuoteContext `json:"agent_context,omitempty"`
 	InputSource             *promptdomain.InputSource
 	ExpectedSubmissionEpoch *int64
 	ModelKey                string
@@ -57,6 +59,9 @@ type FreeQuoteMediaInput struct {
 
 // Validate checks prompt, optional model selection and JSON bounds.
 func (i FreeQuoteItemInput) Validate() error {
+	if i.AgentContext != nil && (!i.AgentContext.Valid() || i.Source != nil || i.InputSource != nil || i.PromptTemplate != nil || !i.ForceRegenerate) {
+		return ErrInvalidFreeQuote
+	}
 	if i.InputSource != nil {
 		if !i.InputSource.Valid() || i.ExpectedSubmissionEpoch == nil || *i.ExpectedSubmissionEpoch < 0 || i.ModelKey != "" || i.Capability != "" || i.Mode != "" || i.Prompt != "" || len(i.Params) != 0 || i.OutputCount != 0 || len(i.MediaInputs) != 0 || i.Source != nil || i.PromptTemplate != nil {
 			return ErrInvalidFreeQuote
@@ -76,7 +81,7 @@ func (i FreeQuoteItemInput) Validate() error {
 		return ErrInvalidFreeQuote
 	}
 	if strings.TrimSpace(i.Capability) == "" || strings.TrimSpace(i.Mode) == "" ||
-		strings.TrimSpace(i.Prompt) == "" || len(i.Prompt) > 64*1024 ||
+		(strings.TrimSpace(i.Prompt) == "" && (i.Capability != "video.generate" || (i.Mode != "avatar" && i.Mode != "motion"))) || len(i.Prompt) > 64*1024 ||
 		!utf8.ValidString(i.Prompt) || i.OutputCount < 1 || i.OutputCount > 8 ||
 		len(i.Params) > 64*1024 {
 		return ErrInvalidFreeQuote
@@ -130,6 +135,8 @@ type FreeQuoteCatalog struct {
 
 // FreeQuoteMediaFact is a project-scoped locked media snapshot supplied by the adapter.
 type FreeQuoteMediaFact struct {
+	MIMEType             string
+	Width, Height        *int32
 	ID                   uuid.UUID
 	Kind                 string
 	SHA256               string
@@ -199,15 +206,18 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 		}
 	}
 	operationID := uuid.New()
-	part := FingerprintPart{SeqNo: 0, Role: "prompt", RefType: "text", TextValue: input.Prompt}
-	parts := []FingerprintPart{part}
-	text := input.Prompt
-	inputs := []domain.OperationInput{{
-		ID: uuid.New(), OperationID: operationID, SeqNo: 0,
-		Role: "prompt", RefType: "text", TextValue: &text,
-	}}
+	parts := []FingerprintPart{}
+	inputs := []domain.OperationInput{}
+	if strings.TrimSpace(input.Prompt) != "" {
+		parts = append(parts, FingerprintPart{SeqNo: 0, Role: "prompt", RefType: "text", TextValue: input.Prompt})
+		text := input.Prompt
+		inputs = append(inputs, domain.OperationInput{ID: uuid.New(), OperationID: operationID, SeqNo: 0, Role: "prompt", RefType: "text", TextValue: &text})
+	}
 	mediaParts, mediaInputs, err := prepareFreeQuoteMedia(input.MediaInputs, media, catalog.InputRoles, catalog.Limits, operationID, input.Mode)
 	if err != nil {
+		return PreparedFreeQuote{}, err
+	}
+	if err := validateCreationMedia(input.FreeQuoteItemInput, media); err != nil {
 		return PreparedFreeQuote{}, err
 	}
 	parts = append(parts, mediaParts...)
@@ -239,6 +249,24 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 			return PreparedFreeQuote{}, ErrFreeQuoteInputNotReady
 		}
 		pricing.TargetDurationMS = exact.Num().Int64()
+	}
+	if input.Mode == "avatar" || input.Mode == "motion" {
+		role := "driving_audio"
+		if input.Mode == "motion" {
+			role = "driving_video"
+		}
+		for index, ref := range input.MediaInputs {
+			if ref.Role == role && media[index].DurationMS != nil {
+				pricing.TargetDurationMS = *media[index].DurationMS
+			}
+		}
+	}
+	// Seed-Audio only accepts a natural-language duration; reserve its hard maximum.
+	if input.Mode == "omni_audio" {
+		pricing.TargetDurationMS = 120000
+	}
+	if input.Mode == "music_instrumental" && pricing.TargetDurationMS > 120000 {
+		return PreparedFreeQuote{}, ErrFreeQuoteInputNotReady
 	}
 	if catalog.ReleaseID != uuid.Nil && catalog.Price.Unit == catalogdomain.PricePer1KTokens {
 		// Byte length is a tokenizer-independent estimate, not supplier usage or
@@ -291,6 +319,10 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 		QuoteMicros: &amount, QuoteDetail: quoteDetail, QuoteExpiresAt: &expires,
 		ReusedFromID: candidate, ForceRegenerate: input.ForceRegenerate,
 		Region: &region, CreateTime: now,
+	}
+	if input.AgentContext != nil {
+		op.Origin = "agent"
+		reusable = false
 	}
 	prepared := PreparedFreeQuote{Operation: op, Reusable: reusable,
 		Inputs: inputs,

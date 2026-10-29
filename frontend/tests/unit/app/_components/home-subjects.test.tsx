@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   cleanup,
   fireEvent,
@@ -56,8 +55,7 @@ vi.mock("next/dynamic", () => ({
         ),
 }));
 function Page() {
-  const [prompt, setPrompt] = useState("");
-  return <HomeCreation prompt={prompt} onPromptChange={setPrompt} />;
+  return <HomeCreation />;
 }
 const subject = {
   id: "33333333-3333-4333-8333-333333333333",
@@ -180,4 +178,41 @@ it("未选项目工具栏可引用当前空间主体，选项目时完整绑定�
     sourceVersion: subject.version_id,
     media: [{ bindingId: subject.primary.binding_id }],
   });
+});
+
+it("图片主体引用切至视频不泄漏，返回图片仍有同一引用", async () => {
+  render(<Page />);
+  const trigger = await screen.findByRole("button", {
+    name: "添加主体或素材引用",
+  });
+  await waitFor(() => expect(trigger).toHaveProperty("disabled", false));
+  fireEvent.click(trigger);
+  fireEvent.click(await screen.findByRole("option", { name: /几何主体/ }));
+  await waitFor(() =>
+    expect(screen.getByLabelText("创作提示词").textContent).toBe("主体1"),
+  );
+  expect(screen.getByRole("button", { name: "开始生成" })).toHaveProperty(
+    "disabled",
+    false,
+  );
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "创作类型" }), {
+    key: "ArrowDown",
+  });
+  fireEvent.click(await screen.findByRole("option", { name: "视频生成" }));
+  await waitFor(() =>
+    expect(screen.getByLabelText("创作提示词").textContent).toBe(""),
+  );
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "创作类型" }), {
+    key: "ArrowDown",
+  });
+  fireEvent.click(await screen.findByRole("option", { name: "图片生成" }));
+  await waitFor(() =>
+    expect(screen.getByLabelText("创作提示词").textContent).toBe("主体1"),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "选择验证项目" }));
+  await screen.findByText("项目创作编辑器");
+  expect(state.seed?.composer?.references).toHaveLength(1);
+  expect(JSON.stringify(state.seed?.composer?.references)).toContain(
+    subject.id,
+  );
 });

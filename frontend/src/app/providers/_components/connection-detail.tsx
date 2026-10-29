@@ -94,6 +94,7 @@ export function ConnectionDetail({
     API.ProviderCredentialSummary[]
   >([]);
   const [apiKey, setAPIKey] = useState("");
+  const [accessKeyID, setAccessKeyID] = useState("");
   const [visible, setVisible] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState("");
@@ -163,6 +164,7 @@ export function ConnectionDetail({
     };
   }, [checkID]);
   const provider = detail?.provider;
+  const musicCredential = provider?.adapter_key === "volcengine_music";
   return (
     <section className="flex min-w-0 flex-col gap-6" aria-label="连接详情">
       <h2 className="text-lg font-medium">{provider?.name ?? "连接详情"}</h2>
@@ -233,14 +235,24 @@ export function ConnectionDetail({
                   </Badge>
                 </ItemActions>
               </Item>
-              <ConnectionOnboarding
-                id={id}
-                revision={revision + attempt}
-                onSaved={() => {
-                  onSaved();
-                  setAttempt((v) => v + 1);
-                }}
-              />
+              {[
+                "volcengine_music",
+                "volcengine_avatar",
+                "volcengine_motion",
+              ].includes(provider?.adapter_key ?? "") ? (
+                <p className="text-sm text-muted-foreground">
+                  请在模型管理中逐项试运行。完成生成与归档后，可启用已验证的发布。
+                </p>
+              ) : (
+                <ConnectionOnboarding
+                  id={id}
+                  revision={revision + attempt}
+                  onSaved={() => {
+                    onSaved();
+                    setAttempt((v) => v + 1);
+                  }}
+                />
+              )}
               <Button
                 variant="outline"
                 asChild
@@ -398,13 +410,16 @@ export function ConnectionDetail({
                 onSubmit={async (event) => {
                   event.preventDefault();
                   if (onboardingPending) return;
-                  const key = apiKey;
+                  const secret: Record<string, string> = musicCredential
+                    ? { access_key_id: accessKeyID, secret_access_key: apiKey }
+                    : { api_key: apiKey };
+                  setAccessKeyID("");
                   setAPIKey("");
                   setVisible(false);
                   await mutation.run("credential.set", id, (requestID) =>
                     setAdminCredential(
                       { id },
-                      { label: "平台统一 Key", secret: { api_key: key } },
+                      { label: "平台统一 Key", secret },
                       { headers: { "Idempotency-Key": requestID } },
                     ).then((result) => {
                       if (
@@ -421,9 +436,31 @@ export function ConnectionDetail({
                 }}
               >
                 <FieldGroup className="gap-3">
+                  {musicCredential && (
+                    <Field>
+                      <FieldLabel htmlFor={`${formFieldId}-access-key`}>
+                        Access Key ID
+                      </FieldLabel>
+                      <InputGroup>
+                        <InputGroupInput
+                          id={`${formFieldId}-access-key`}
+                          type="password"
+                          required
+                          autoComplete="off"
+                          value={accessKeyID}
+                          disabled={onboardingPending || mutation.busy}
+                          onChange={(event) =>
+                            setAccessKeyID(event.target.value)
+                          }
+                        />
+                      </InputGroup>
+                    </Field>
+                  )}
                   <Field>
                     <FieldLabel htmlFor={`${formFieldId}-field-1`}>
-                      <span>平台 API Key</span>
+                      <span>
+                        {musicCredential ? "Secret Access Key" : "平台 API Key"}
+                      </span>
                     </FieldLabel>
                     <InputGroup className="h-10 max-md:h-11">
                       <InputGroupInput

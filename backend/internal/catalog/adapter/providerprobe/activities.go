@@ -81,10 +81,8 @@ func (a *Activities) TestCredential(ctx context.Context, input catalogflow.Agent
 		return unsupported, nil
 	}
 	defer clear(secret)
-	var credential struct {
-		APIKey string `json:"api_key"`
-	}
-	if json.Unmarshal(secret, &credential) != nil {
+	providerKey, keyErr := configuration.CredentialValue(secret)
+	if keyErr != nil {
 		return unsupported, nil
 	}
 	if err := authorize(); err != nil {
@@ -115,7 +113,7 @@ func (a *Activities) TestCredential(ctx context.Context, input catalogflow.Agent
 		if claimed.RowsAffected != 1 {
 			return catalogflow.AgentTestOutput{Result: catalogdomain.TestUnreachable, AuthResult: "unknown", AdapterResult: "ok", DiscoveryResult: "unsupported", ModelResult: "unknown"}, nil
 		}
-		probe := a.client.ProbeModel(ctx, configuration, selected.ProviderModelID, selected.Capability, credential.APIKey)
+		probe := a.client.ProbeModel(ctx, configuration, selected.ProviderModelID, selected.Capability, providerKey)
 		result := catalogflow.AgentTestOutput{Result: catalogdomain.TestUnreachable, AuthResult: "unknown", AdapterResult: "ok", DiscoveryResult: "unsupported", ModelResult: probe.Result, TaskID: probe.TaskID}
 		switch probe.Result {
 		case "completed", "accepted":
@@ -139,7 +137,7 @@ func (a *Activities) TestCredential(ctx context.Context, input catalogflow.Agent
 	if isModel {
 		return unsupported, nil
 	}
-	result := a.client.Probe(ctx, configuration, credential.APIKey)
+	result := a.client.Probe(ctx, configuration, providerKey)
 	category := catalogdomain.TestUnreachable
 	switch result.Auth {
 	case "ok":

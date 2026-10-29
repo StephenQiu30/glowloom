@@ -686,7 +686,7 @@ func managedBillableUsage(tx *gorm.DB, priceID uuid.UUID, raw []byte) (json.RawM
 	if err := tx.Raw(`SELECT unit FROM catalog.price_rule_version WHERE id=?`, priceID).Scan(&unit).Error; err != nil {
 		return nil, err
 	}
-	keys := map[string][]string{"per_request": {"billable_requests"}, "per_image": {"output_count"}, "per_second": {"billed_duration_ms"}, "per_1k_tokens": {"input_tokens", "output_tokens"}}[unit]
+	keys := map[string][]string{"per_request": {"billable_requests"}, "per_image": {"output_count"}, "per_second": {"billed_duration_ms"}, "per_1k_tokens": {"input_tokens", "output_tokens"}, "per_1k_chars": {"character_count"}}[unit]
 	var original map[string]json.RawMessage
 	if len(keys) == 0 || json.Unmarshal(raw, &original) != nil {
 		return nil, application.ErrProviderCostUnknown

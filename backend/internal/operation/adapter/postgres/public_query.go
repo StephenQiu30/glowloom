@@ -106,9 +106,9 @@ func (s *Store) ListPublicTasks(ctx context.Context, actor identityapp.Principal
 		if err := s.requirePublicProject(tx, actor, input.ProjectID, false); err != nil {
 			return err
 		}
-		query := publicTaskSelect + publicTaskJoin + ` WHERE o.project_id=?::uuid AND NOT o.is_delete
+		query := publicTaskSelect + publicTaskJoin + ` WHERE o.project_id=?::uuid AND NOT o.is_delete AND ` + agentOwnerPredicate + `
  AND (?='' OR o.status=?) AND (?='' OR o.capability=?) AND (?='' OR m.model_key=?) AND (?='' OR o.origin=?)`
-		args := []any{input.ProjectID, input.Status, input.Status, input.Capability, input.Capability, input.ModelKey, input.ModelKey, input.Origin, input.Origin}
+		args := []any{input.ProjectID, actor.ID, input.Status, input.Status, input.Capability, input.Capability, input.ModelKey, input.ModelKey, input.Origin, input.Origin}
 		for _, field := range []struct {
 			name string
 			id   *uuid.UUID
@@ -158,7 +158,7 @@ func (s *Store) ReadPublicTask(ctx context.Context, actor identityapp.Principal,
 		}
 		var task publicTaskDetailRow
 		row := tx.Raw(publicTaskSelect+`,o.params::text AS params,o.output_count,o.quote_detail::text AS quote_detail,
- o.quote_expires_at,o.reused_from_id,o.prompt_preparation::text AS prompt_preparation_json`+publicTaskJoin+` WHERE o.id=?::uuid AND o.project_id=?::uuid AND NOT o.is_delete`, operationID, projectID).Scan(&task)
+ o.quote_expires_at,o.reused_from_id,o.prompt_preparation::text AS prompt_preparation_json`+publicTaskJoin+` WHERE o.id=?::uuid AND o.project_id=?::uuid AND NOT o.is_delete AND `+agentOwnerPredicate, operationID, projectID, actor.ID).Scan(&task)
 		if row.Error != nil {
 			return fmt.Errorf("read public task: %w", row.Error)
 		}
@@ -236,6 +236,20 @@ func (s *Store) ReadPublicTask(ctx context.Context, actor identityapp.Principal,
 		for _, output := range outputs {
 			output.IncludeReviewedText(result.Capability, result.Status, output.Payload)
 			result.Outputs = append(result.Outputs, output.TaskOutput)
+		}
+		if result.Status == "completed" && result.Capability == "audio.generate" && result.Mode == "omni_audio" {
+			var subtitle struct{ Value []byte }
+			if err := tx.Raw(`SELECT r.result->'subtitle' AS value FROM operation.provider_result r
+              WHERE r.operation_id=? AND EXISTS(SELECT 1 FROM operation.operation_output o WHERE o.operation_id=r.operation_id AND o.project_id=? AND o.kind='media' AND o.moderation_status='passed' AND NOT o.is_delete)`, operationID, projectID).Scan(&subtitle).Error; err != nil {
+				return err
+			}
+			if len(subtitle.Value) > 0 && string(subtitle.Value) != "null" {
+				var value application.AudioSubtitle
+				if json.Unmarshal(subtitle.Value, &value) != nil || !value.Valid(240000) {
+					return application.ErrProviderCallConflict
+				}
+				result.AudioSubtitle = &value
+			}
 		}
 		if err := tx.Raw(`SELECT id,from_status,to_status,reason,create_time FROM operation.operation_event
  WHERE operation_id=?::uuid AND NOT is_delete ORDER BY create_time,id LIMIT 1000`, operationID).Scan(&result.Events).Error; err != nil {

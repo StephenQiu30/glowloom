@@ -1,5 +1,6 @@
 import { fieldsForMode, initialParams } from "./contracts";
 import { referenceLabel, type PromptDraft } from "./prompt-document";
+import { referenceRoleLabel } from "./reference-source";
 export function editorIssues(
   draft: PromptDraft,
   model?: API.ModelResponse,
@@ -42,7 +43,7 @@ export function editorIssues(
       !role.types?.includes(ref.mediaKind) ||
       (role.for_modes && !role.for_modes.includes(draft.mode ?? ""))
     )
-      issues.push(`${label} 的 ${ref.role} 角色不适用当前模式。`);
+      issues.push(`${label} 的${referenceRoleLabel(ref.role)}不适用当前模式。`);
     if (ref.source.kind !== "pending_upload")
       for (const m of ref.source.kind === "subject"
         ? ref.source.media
@@ -66,8 +67,9 @@ export function editorIssues(
       k.startsWith(name + "/"),
     ).length;
     if (count > (role.max_count ?? 255))
-      issues.push(`${name} 超出参考数量上限。`);
-    if (count < (role.min_count ?? 0)) issues.push(`${name} 需要补充参考。`);
+      issues.push(`${referenceRoleLabel(name)}超出参考数量上限。`);
+    if (count < (role.min_count ?? 0))
+      issues.push(`请添加${referenceRoleLabel(name)}。`);
   }
   try {
     const fields = fieldsForMode(
@@ -107,6 +109,7 @@ export function editorIssues(
   )
     issues.push("候选数量超出当前模型范围。");
   if (
+    !["avatar", "motion"].includes(draft.mode ?? "") &&
     !draft.document.content.some((p) =>
       p.content?.some(
         (n) => n.type === "reference" || (n.type === "text" && n.text.trim()),
@@ -114,6 +117,22 @@ export function editorIssues(
     )
   )
     issues.push("请填写提示词。");
+  if (
+    draft.mode === "music_instrumental" &&
+    Number(draft.params.duration_ms) > 120000
+  )
+    issues.push("纯音乐时长最长为 120 秒。");
+  if (draft.mode === "omni_audio") {
+    if (new Set(physical.values()).size > 1)
+      issues.push("全能配音不能混用图片与音频参考。");
+    const text = draft.document.content
+      .flatMap((p) => p.content ?? [])
+      .filter((n) => n.type === "text")
+      .map((n) => n.text)
+      .join("");
+    if (Array.from(text).length > 3000)
+      issues.push("全能配音提示词最多 3000 字符。");
+  }
   return issues;
 }
 export function compatibleParams(draft: PromptDraft, model: API.ModelResponse) {

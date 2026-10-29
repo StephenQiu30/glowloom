@@ -120,6 +120,13 @@ declare namespace API {
     expected_split_revision?: number;
   };
 
+  type advanceAgentSessionParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 会话UUID */
+    sid: string;
+  };
+
   type ApplyConfigInput = {
     preview_hash?: string;
     request_id?: string;
@@ -235,6 +242,24 @@ declare namespace API {
 
   type AssetTemplateCatalog = {
     items?: SystemAssetTemplate[];
+  };
+
+  type AudioSentence = {
+    end_time?: number;
+    start_time?: number;
+    text?: string;
+    words?: AudioWord[];
+  };
+
+  type AudioSubtitle = {
+    sentences?: AudioSentence[];
+    text?: string;
+  };
+
+  type AudioWord = {
+    end_time?: number;
+    start_time?: number;
+    text?: string;
   };
 
   type AuthorityProposal = {
@@ -583,6 +608,13 @@ declare namespace API {
     revision?: number;
   };
 
+  type confirmAgentStageParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 会话UUID */
+    sid: string;
+  };
+
   type ConfirmationPage = {
     items?: ConfirmationSummary[];
     next_revision?: number;
@@ -628,6 +660,12 @@ declare namespace API {
     kind: "character" | "location" | "prop";
     /** Identity UUID */
     id: string;
+  };
+
+  type ConfirmInput = {
+    expected_revision?: number;
+    operation_id?: string;
+    turn_id?: string;
   };
 
   type confirmOperationQuoteParams = {
@@ -694,6 +732,11 @@ declare namespace API {
   type ControlRequest = {
     acknowledged_impact?: ImpactProof;
     expected_revision?: number;
+  };
+
+  type createAgentSessionParams = {
+    /** 项目UUID */
+    pid: string;
   };
 
   type CreateBatchFreeQuoteResult = {
@@ -868,12 +911,22 @@ declare namespace API {
     id: string;
   };
 
+  type createReferenceVoiceParams = {
+    /** 项目UUID */
+    pid: string;
+  };
+
   type CreateReleaseInput = {
     config_version_id?: string;
     model_version_id?: string;
     price_version_id?: string;
     request_id?: string;
     upstream_cost?: UpstreamCost;
+  };
+
+  type CreateRequest = {
+    request_id?: string;
+    title?: string;
   };
 
   type createScriptFileImportParams = {
@@ -1764,6 +1817,13 @@ declare namespace API {
     favorite?: boolean;
   };
 
+  type favoriteSystemVoiceParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 系统音色 */
+    speaker: string;
+  };
+
   type FileImportControlRequest = {
     expected_revision?: number;
   };
@@ -1804,6 +1864,13 @@ declare namespace API {
   type getAdminProviderParams = {
     /** 渠道UUID */
     id: string;
+  };
+
+  type getAgentSessionParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 会话UUID */
+    sid: string;
   };
 
   type getAiTrialArtifactParams = {
@@ -2538,6 +2605,11 @@ declare namespace API {
     cursor?: string;
   };
 
+  type listAgentSessionsParams = {
+    /** 项目UUID */
+    pid: string;
+  };
+
   type listAssetCanvasesParams = {
     /** 当前或历史画布来源，默认current */
     collection?: "current" | "legacy";
@@ -2865,6 +2937,13 @@ declare namespace API {
     id: string;
   };
 
+  type listReferenceVoicesParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 分页游标 */
+    cursor?: string;
+  };
+
   type listScriptEpisodesParams = {
     /** 项目UUID */
     pid: string;
@@ -2984,6 +3063,11 @@ declare namespace API {
     page?: number;
     /** 每页1..120 */
     page_size?: number;
+  };
+
+  type listSystemVoicesParams = {
+    /** 项目UUID */
+    pid: string;
   };
 
   type listTeamMembersParams = {
@@ -3160,6 +3244,12 @@ declare namespace API {
   type ModelCandidateSelection = {
     catalog_version?: string;
     model?: ModelCandidatePreset;
+  };
+
+  type ModelChoice = {
+    key?: string;
+    mode?: string;
+    params?: Record<string, any>;
   };
 
   type ModelDefaults = {
@@ -3473,6 +3563,12 @@ declare namespace API {
   type PersonalUploadResult = {
     asset?: LibraryAssetSummary;
     duplicate_of?: string;
+  };
+
+  type Plan = {
+    action?: string;
+    message?: string;
+    prompt?: string;
   };
 
   type platformDeleteUserParams = {
@@ -4804,6 +4900,15 @@ declare namespace API {
     team_id: string;
   };
 
+  type Session = {
+    id?: string;
+    project_id?: string;
+    revision?: number;
+    title?: string;
+    turns?: Turn[];
+    updated_at?: string;
+  };
+
   type SessionGovernanceRequest = {
     expected_revision?: string;
     reason?: string;
@@ -5143,6 +5248,32 @@ declare namespace API {
     warnings?: string[];
   };
 
+  type Stage = {
+    expires_at?: string;
+    operation_id?: string;
+    phase?: string;
+    quote_micros?: number;
+    status?: string;
+  };
+
+  type startAgentTurnParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 会话UUID */
+    sid: string;
+  };
+
+  type stopAgentSessionParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 会话UUID */
+    sid: string;
+  };
+
+  type StopRequest = {
+    expected_revision?: number;
+  };
+
   type StorageUsage = {
     calculated_at?: string;
     current_actor_id?: string;
@@ -5356,7 +5487,18 @@ declare namespace API {
     requires_model?: boolean;
   };
 
+  type SystemVoice = {
+    age?: string;
+    favorite?: boolean;
+    gender?: string;
+    id?: string;
+    language?: string;
+    name?: string;
+    style?: string;
+  };
+
   type TaskDetail = {
+    audio_subtitle?: AudioSubtitle;
     batch_id?: string;
     cancel_requested?: boolean;
     capability?: string;
@@ -5842,6 +5984,29 @@ declare namespace API {
     thread_id?: string;
   };
 
+  type Turn = {
+    created_at?: string;
+    failure_code?: string;
+    id?: string;
+    input?: TurnInput;
+    media_asset_id?: string;
+    output_id?: string;
+    phase?: string;
+    plan?: Plan;
+    policy?: string;
+    reply?: string;
+    stages?: Stage[];
+    status?: string;
+  };
+
+  type TurnInput = {
+    expected_revision?: number;
+    image?: ModelChoice;
+    message?: string;
+    planner?: ModelChoice;
+    request_id?: string;
+  };
+
   type unarchiveProjectParams = {
     /** 项目UUID */
     pid: string;
@@ -5913,6 +6078,13 @@ declare namespace API {
     expected_revision?: number;
     rate_limit_per_min?: number;
     status?: ProviderStatus;
+  };
+
+  type updateReferenceVoiceParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 音色UUID */
+    vid: string;
   };
 
   type updateScriptSourceParams = {
@@ -6051,6 +6223,21 @@ declare namespace API {
     sample?: SampleVoice;
   };
 
+  type VoiceCreate = {
+    age?: string;
+    asset_id?: string;
+    consent?: boolean;
+    gender?: string;
+    language?: string;
+    name?: string;
+    request_id?: string;
+    style?: string;
+  };
+
+  type VoiceFavoriteRequest = {
+    favorite?: boolean;
+  };
+
   type VoiceInput = {
     catalog?: BibleVoiceSelection;
     instructions?: string;
@@ -6111,12 +6298,32 @@ declare namespace API {
     reason?: string;
   };
 
+  type VoicePage = {
+    items?: VoiceProfile[];
+    next_cursor?: string;
+  };
+
   type VoiceParams = {
     emotion?: string;
     language?: string;
     pitch?: number;
     speed?: number;
     volume?: number;
+  };
+
+  type VoiceProfile = {
+    age?: string;
+    asset_id?: string;
+    asset_revision?: number;
+    favorite?: boolean;
+    gender?: string;
+    id?: string;
+    language?: string;
+    name?: string;
+    project_id?: string;
+    revision?: number;
+    style?: string;
+    updated_at?: string;
   };
 
   type VoiceRecovery = {
@@ -6132,6 +6339,13 @@ declare namespace API {
   type VoiceResponse = {
     next_cursor?: string;
     voices?: VoiceChoice[];
+  };
+
+  type VoiceUpdate = {
+    delete?: boolean;
+    favorite?: boolean;
+    name?: string;
+    revision?: number;
   };
 
   type WorkflowControlResult = {

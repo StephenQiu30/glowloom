@@ -30,7 +30,7 @@ func (s *Store) FindReusableCompleted(ctx context.Context, actor identityapp.Pri
 			SELECT o.id
 			FROM operation.operation AS o
 			JOIN workspace.project AS p ON p.id = o.project_id
-			WHERE o.project_id = ?::uuid AND o.input_hash = ?
+			WHERE o.project_id = ?::uuid AND o.input_hash = ? AND o.origin<>'agent'
 			  AND o.status = 'completed' AND NOT o.is_delete
 			  AND p.org_id = ?::uuid AND p.status = 'active' AND NOT p.is_delete
 			  AND EXISTS (
