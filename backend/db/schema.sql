@@ -7023,3 +7023,19 @@ GRANT SELECT ON media.storage_empty_deployment_evidence TO glowloom_app;
 
 -- Script copy admission freezes its own output work in the caller transaction.
 ALTER TABLE script.copy_snapshot ADD COLUMN IF NOT EXISTS storage_intent_id uuid REFERENCES media.storage_work_intent(id);
+
+-- Private director recovery does not alter the authoritative Yjs document.
+CREATE SEQUENCE IF NOT EXISTS canvas.director_recovery_revision AS integer NO CYCLE;
+GRANT USAGE ON SEQUENCE canvas.director_recovery_revision TO glowloom_app;
+CREATE TABLE IF NOT EXISTS canvas.director_recovery (
+ actor_id uuid NOT NULL,
+ document_id uuid NOT NULL REFERENCES canvas.document(id) ON DELETE CASCADE,
+ node_id uuid NOT NULL,
+ revision bigint NOT NULL CHECK(revision BETWEEN 1 AND 2147483647),
+ epoch uuid NOT NULL,
+ base_fingerprint text NOT NULL CHECK(base_fingerprint ~ '^[0-9a-f]{64}$'),
+ director jsonb NOT NULL CHECK(octet_length(director::text)<=600000),
+ updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ PRIMARY KEY(actor_id,document_id,node_id)
+);
+GRANT SELECT,INSERT,UPDATE,DELETE ON canvas.director_recovery TO glowloom_app;

@@ -17,8 +17,12 @@ import (
 )
 
 const (
-	maxMediaReferenceFacts        = 50000
-	maxMediaReferencePayloadBytes = 1 << 20
+	maxMediaReferenceFacts = 50000
+	// A director scene is bounded at 512 KiB. Its atomic projection audit retains
+	// before/after values in operations, effects and touches: roughly six scene
+	// copies. Keep those semantics and allow a bounded 4 MiB stored JSONB record,
+	// including formatting overhead; the aggregate history budget stays unchanged.
+	maxMediaReferencePayloadBytes = 4 << 20
 	maxMediaReferenceHistoryBytes = 64 << 20
 )
 
@@ -253,21 +257,23 @@ func configMediaReferences(config domain.NodeConfig) ([]uuid.UUID, error) {
 			}
 		}
 	}
-	if c := config.Director; c != nil {
-		if c.Cover != nil {
-			ids = append(ids, c.Cover.AssetID)
-		}
-		if c.Panorama != nil {
-			ids = append(ids, c.Panorama.AssetID)
-		}
-		for _, object := range c.Objects {
-			if object.AssetID != nil {
-				ids = append(ids, *object.AssetID)
+	if director := config.Director; director != nil {
+		for _, c := range domain.DirectorScenes(*director) {
+			if c.Cover != nil {
+				ids = append(ids, c.Cover.AssetID)
 			}
-		}
-		for _, shot := range c.Shots {
-			for _, screenshot := range shot.Screenshots {
-				ids = append(ids, screenshot.AssetID)
+			if c.Panorama != nil {
+				ids = append(ids, c.Panorama.AssetID)
+			}
+			for _, object := range c.Objects {
+				if object.AssetID != nil {
+					ids = append(ids, *object.AssetID)
+				}
+			}
+			for _, shot := range c.Shots {
+				for _, screenshot := range shot.Screenshots {
+					ids = append(ids, screenshot.AssetID)
+				}
 			}
 		}
 	}

@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { GET, POST, PUT } from "@/app/api/[...path]/route";
+import { GET, POST, PUT, DELETE } from "@/app/api/[...path]/route";
 afterEach(() => vi.unstubAllGlobals());
 
 it("项目查询只透传允许的筛选参数，详情只读且必须是UUID", async () => {
@@ -1278,3 +1278,48 @@ it("作品公开读取有界且原件下载流使用120秒超时", async () => {
   expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
   timeout.mockRestore();
 });
+
+it.each([GET, PUT, DELETE])(
+  "proxies director recovery only on exact document/node UUID routes",
+  async (handler) => {
+    const fetcher = vi
+      .fn()
+      .mockImplementation(() => Promise.resolve(new Response("{}")));
+    vi.stubGlobal("fetch", fetcher);
+    const path =
+      "canvases/00000000-0000-4000-8000-000000000001/director-recovery/00000000-0000-4000-8000-000000000002";
+    const method = handler === GET ? "GET" : handler === PUT ? "PUT" : "DELETE";
+    const response = await handler(
+      new Request(`http://localhost/api/${path}`, {
+        method,
+        ...(method !== "GET" ? { body: '{"expected_revision":1}' } : {}),
+      }),
+      context(path),
+    );
+    expect(response.status).toBe(200);
+    expect(fetcher.mock.calls[0][0].pathname).toBe(`/api/${path}`);
+    expect(fetcher.mock.calls[0][0].search).toBe("");
+    expect(
+      (
+        await handler(
+          new Request(`http://localhost/api/${path}?actor_id=other`, {
+            method,
+          }),
+          context(path),
+        )
+      ).status,
+    ).toBe(422);
+    const invalid = path.replace(
+      "00000000-0000-4000-8000-000000000002",
+      "wrong",
+    );
+    expect(
+      (
+        await handler(
+          new Request(`http://localhost/api/${invalid}`, { method }),
+          context(invalid),
+        )
+      ).status,
+    ).toBe(404);
+  },
+);

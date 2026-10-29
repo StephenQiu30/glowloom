@@ -1,0 +1,404 @@
+.canvas-director-dialog {
+  display: block;
+  overflow: hidden;
+  inset: 0 !important;
+  left: 0 !important;
+  top: 0 !important;
+  transform: none !important;
+  translate: none !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  max-width: none !important;
+  max-height: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  gap: 0 !important;
+  background: var(--canvas-director-background);
+  color: var(--canvas-reference-foreground);
+}
+.canvas-director {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  height: 100%;
+  min-height: 0;
+  background: var(--canvas-director-background);
+  color: var(--canvas-tool-foreground);
+  font-size: 12px;
+  --background: var(--canvas-director-background);
+  --foreground: var(--canvas-tool-foreground);
+  --muted: var(--canvas-reference-text-start);
+  --muted-foreground: var(--canvas-tool-muted-foreground);
+  --secondary: var(--canvas-director-secondary);
+  --secondary-foreground: var(--canvas-tool-foreground);
+  --accent: var(--canvas-tool-border);
+  --accent-foreground: var(--canvas-reference-foreground);
+  --input: var(--canvas-tool-input);
+  --border: var(--canvas-director-border);
+  --popover: var(--canvas-director-popover);
+  --popover-foreground: var(--canvas-tool-foreground);
+}
+.canvas-director button svg {
+  width: 16px;
+  height: 16px;
+}
+.director-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  min-height: 52px;
+  border-bottom: 1px solid var(--canvas-director-divider);
+}
+.director-main {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.director-assets {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 247px;
+  min-width: 180px;
+  padding: 16px;
+  border-right: 1px solid var(--canvas-tool-border);
+  overflow: auto;
+}
+.director-palette {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr 1fr;
+}
+.director-palette button {
+  height: 64px;
+  flex-direction: column;
+  white-space: normal;
+}
+.director-stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.director-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.director-viewport canvas {
+  display: block;
+  touch-action: none;
+}
+.director-stage-tools {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--canvas-director-overlay);
+  border: 1px solid var(--canvas-tool-input);
+  border-radius: 8px;
+}
+.director-preview-label {
+  position: absolute;
+  bottom: 8px;
+  right: 20px;
+  font-size: 10px;
+  pointer-events: none;
+  color: var(--canvas-tool-secondary-foreground);
+}
+.director-properties {
+  width: 300px;
+  min-width: 240px;
+  border-left: 1px solid var(--canvas-tool-border);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+.director-properties h3,
+.director-assets h3 {
+  font-size: 13px;
+  font-weight: 500;
+}
+.director-tree {
+  max-height: 220px;
+  min-height: 80px;
+  overflow: auto;
+}
+.director-tree-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.director-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.director-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 400;
+}
+.director-field input {
+  max-width: 140px;
+  height: 30px;
+  min-width: 0;
+}
+.director-field [role="combobox"] {
+  height: 30px;
+  min-width: 80px;
+}
+.director-vector {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+.director-vector label {
+  flex-direction: column;
+  gap: 2px;
+  align-items: start;
+  font-size: 9px;
+  color: var(--canvas-tool-muted-foreground);
+}
+.director-vector input {
+  width: 100%;
+  font-size: 11px;
+  padding: 4px;
+}
+.director-timeline {
+  flex-shrink: 0;
+  min-height: 110px;
+  max-height: 280px;
+  overflow: auto;
+  border-top: 1px solid var(--canvas-tool-border);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.director-playback {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.director-playback .director-field input {
+  width: 75px;
+}
+.director-keyframes {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow-x: auto;
+  min-height: 40px;
+}
+.director-compact .director-header {
+  padding: 4px 8px;
+  min-height: 34px;
+  gap: 6px;
+}
+.director-compact .director-main {
+  min-height: 160px;
+}
+.director-compact .director-header [role="status"] {
+  display: none;
+}
+@media (max-width: 900px) {
+  .director-assets {
+    width: 170px;
+    min-width: 140px;
+    padding: 8px;
+  }
+  .director-properties {
+    width: 230px;
+    min-width: 200px;
+    padding: 8px;
+  }
+}
+.director-assets[hidden],
+.director-properties[hidden] {
+  display: none;
+}
+@media (max-width: 767px) {
+  .director-assets,
+  .director-properties {
+    position: absolute;
+    z-index: 8;
+    top: 0;
+    bottom: 0;
+    width: min(300px, calc(100% - 40px));
+    min-width: 0;
+    background: var(--canvas-director-background);
+    box-shadow: 0 4px 24px var(--canvas-director-overlay);
+  }
+  .director-assets {
+    left: 0;
+  }
+  .director-properties {
+    right: 0;
+  }
+  .director-preview-controls {
+    gap: 3px;
+    padding: 3px;
+    max-width: calc(100% - 24px);
+    flex-wrap: wrap;
+  }
+  .director-preview-controls [data-slot="slider"] {
+    display: none;
+  }
+
+  .director-header {
+    flex-wrap: wrap;
+  }
+  .director-vector {
+    grid-template-columns: 1fr;
+  }
+  .director-stage-tools {
+    flex-wrap: wrap;
+    max-width: 150px;
+  }
+  .director-timeline {
+    max-height: 180px;
+  }
+}
+
+.director-card {
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  width: 100%;
+  min-height: 180px;
+  text-align: center;
+  border-radius: 8px;
+}
+.director-card p {
+  color: var(--canvas-tool-muted-foreground);
+}
+.director-card-icon {
+  width: 28px;
+  height: 28px;
+  color: var(--canvas-tool-secondary-foreground);
+}
+.director-placement-banner {
+  position: absolute;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--canvas-director-overlay);
+  border: 1px solid var(--canvas-director-border);
+  white-space: nowrap;
+}
+.director-track-editor {
+  width: 100%;
+  min-width: 0;
+}
+.director-track-scroll {
+  max-height: 220px;
+  overflow: auto;
+  border-top: 1px solid var(--canvas-director-border);
+}
+.director-track-row {
+  display: flex;
+  min-height: 30px;
+  border-bottom: 1px solid var(--canvas-director-border);
+}
+.director-track-label {
+  position: sticky;
+  left: 0;
+  width: 164px;
+  min-width: 164px;
+  justify-content: flex-start;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  background: var(--canvas-director-background);
+  z-index: 2;
+  padding: 4px 8px;
+}
+.director-track-lane {
+  flex: 1;
+  position: relative;
+  min-width: 200px;
+  margin: 0 12px;
+  background-image: linear-gradient(
+    to right,
+    var(--canvas-director-border) 1px,
+    transparent 1px
+  );
+  background-size: 10% 100%;
+}
+.director-diamond {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  color: var(--canvas-tool-foreground);
+  width: 24px;
+  height: 28px;
+}
+.director-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--canvas-tool-foreground);
+  pointer-events: none;
+}
+.director-motion-block {
+  position: absolute;
+  height: 26px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.director-view-switch {
+  position: absolute;
+  z-index: 2;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 180px;
+  padding: 6px 10px;
+  background: var(--canvas-director-overlay);
+  border: 1px solid var(--canvas-director-border);
+  border-radius: 8px;
+}
+.director-preview-controls {
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  background: var(--canvas-director-overlay);
+  border: 1px solid var(--canvas-director-border);
+  border-radius: 8px;
+}
+.director-preview-controls [data-slot="slider"] {
+  width: 75px;
+}
+.director-assets [data-slot="tabs-list"] {
+  width: 100%;
+  height: auto;
+  flex-wrap: wrap;
+}

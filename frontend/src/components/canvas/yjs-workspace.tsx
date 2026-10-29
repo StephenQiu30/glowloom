@@ -1,4 +1,5 @@
 "use client";
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { CanvasYjsLiveSession } from "./yjs-live-session";
@@ -34,6 +35,13 @@ import { getProject } from "@/api/projects";
 import { requireProject, type Project } from "@/components/projects/project";
 import { ProjectRenameDialog } from "@/components/projects/project-rename-dialog";
 
+const CanvasDirectorWorkspace = dynamic(
+  () =>
+    import("./director/canvas-director-workspace").then(
+      (module) => module.CanvasDirectorWorkspace,
+    ),
+  { loading: () => <p role="status">正在打开导演台…</p> },
+);
 export function YjsCanvasWorkspace(props: {
   canvasID: string;
   projectID: string;
@@ -155,6 +163,16 @@ function CollaborativeEditor({
             admit: client.canAccept,
             onChange: client.change,
             textBinding: client.textBinding,
+            renderToolNode: (nodeID, type) =>
+              type === "director" ? (
+                <CanvasDirectorWorkspace
+                  client={client}
+                  nodeID={nodeID}
+                  canvasID={canvasID}
+                  projectID={projectID}
+                  compact
+                />
+              ) : null,
             onCursor: client.setCursor,
             presenceOverlay: <YjsPresence client={client} cursors />,
             undo: {

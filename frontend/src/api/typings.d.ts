@@ -980,6 +980,17 @@ declare namespace API {
     id: string;
   };
 
+  type DeleteDirectorRecoveryInput = {
+    expected_revision?: number;
+  };
+
+  type deleteDirectorRecoveryParams = {
+    /** 画布UUID */
+    id: string;
+    /** 导演节点UUID */
+    nid: string;
+  };
+
   type DeleteDTO = {
     expected_revision?: string;
   };
@@ -1127,10 +1138,12 @@ declare namespace API {
     fov?: number;
     id?: string;
     keyframes?: DirectorKeyframe[];
+    locked?: boolean;
     look_at_mode?: string;
     look_at_object_id?: string;
     name?: string;
     near?: number;
+    roll?: number;
     target?: number[];
     transform?: DirectorTransform;
   };
@@ -1142,12 +1155,14 @@ declare namespace API {
     cameras?: DirectorCamera[];
     cover?: DirectorCover;
     environment_intensity?: number;
+    exposure?: number;
     grid_snap?: boolean;
     grid_visible?: boolean;
     ground?: DirectorGround;
     id?: string;
     labels_visible?: boolean;
     lights?: DirectorLight[];
+    mode?: string;
     objects?: DirectorObject[];
     panorama?: DirectorPanorama;
     panorama_radius?: number;
@@ -1156,6 +1171,7 @@ declare namespace API {
     stage_transform?: DirectorStageTransform;
     title?: string;
     version?: number;
+    workspaces?: DirectorWorkspaces;
   };
 
   type DirectorCover = {
@@ -1163,7 +1179,13 @@ declare namespace API {
     shot_id?: string;
   };
 
+  type DirectorFrozenNode = {
+    morph_weights?: number[];
+    transform?: DirectorTransform;
+  };
+
   type DirectorGround = {
+    color?: string;
     height?: number;
     opacity?: number;
     visible?: boolean;
@@ -1171,7 +1193,13 @@ declare namespace API {
 
   type DirectorKeyframe = {
     easing?: string;
+    fov?: number;
     id?: string;
+    position_keyed?: boolean;
+    roll?: number;
+    rotation_keyed?: boolean;
+    scale_keyed?: boolean;
+    target?: number[];
     time?: number;
     transform?: DirectorTransform;
   };
@@ -1182,6 +1210,7 @@ declare namespace API {
     color?: string;
     id?: string;
     intensity?: number;
+    locked?: boolean;
     name?: string;
     penumbra?: number;
     transform?: DirectorTransform;
@@ -1189,28 +1218,54 @@ declare namespace API {
   };
 
   type DirectorMotionClip = {
+    blend_in?: number;
     duration?: number;
     id?: string;
     loop?: boolean;
     name?: string;
     playback_rate?: number;
     source_animation?: string;
+    /** SourceOffset is the in-point in source seconds, before playback-rate scaling. */
+    source_offset?: number;
     start?: number;
+  };
+
+  type DirectorMotionSource = {
+    duration?: number;
+    id?: string;
+    kind?: string;
+    name?: string;
+    rest?: Record<string, any>;
+    tracks?: DirectorMotionTrack[];
+  };
+
+  type DirectorMotionTrack = {
+    bone?: string;
+    property?: string;
+    times?: number[];
+    values?: number[];
   };
 
   type DirectorObject = {
     active_motion_clip_id?: string;
     asset_id?: string;
+    body_profile?: Record<string, any>;
     bone_overrides?: Record<string, any>;
     bone_tracks?: DirectorBoneTrack[];
     builtin_actor?: string;
+    builtin_model?: string;
     cast_shadow?: boolean;
     color?: string;
+    frozen_bones?: Record<string, any>;
+    frozen_nodes?: Record<string, any>;
     id?: string;
     keyframes?: DirectorKeyframe[];
     kind?: string;
+    locked?: boolean;
     motion_clips?: DirectorMotionClip[];
+    motion_library?: DirectorMotionSource[];
     name?: string;
+    opacity?: number;
     pose?: string;
     primitive?: string;
     receive_shadow?: boolean;
@@ -1227,15 +1282,49 @@ declare namespace API {
     rotation?: number;
   };
 
+  type DirectorRecovery = {
+    base_fingerprint?: string;
+    director?: DirectorConfig;
+    epoch?: string;
+    revision?: number;
+    updated_at?: string;
+  };
+
+  type DirectorRecoveryResult = {
+    draft?: DirectorRecovery;
+  };
+
   type DirectorRig = {
     animation_names?: string[];
     bone_map?: Record<string, any>;
+  };
+
+  type DirectorSceneData = {
+    active_shot_id?: string;
+    aspect_ratio?: string;
+    background?: string;
+    cameras?: DirectorCamera[];
+    cover?: DirectorCover;
+    environment_intensity?: number;
+    exposure?: number;
+    grid_snap?: boolean;
+    grid_visible?: boolean;
+    ground?: DirectorGround;
+    labels_visible?: boolean;
+    lights?: DirectorLight[];
+    objects?: DirectorObject[];
+    panorama?: DirectorPanorama;
+    panorama_radius?: number;
+    panorama_rotation?: number;
+    shots?: DirectorShot[];
+    stage_transform?: DirectorStageTransform;
   };
 
   type DirectorScreenshot = {
     asset_id?: string;
     created_at?: string;
     id?: string;
+    kind?: string;
     name?: string;
   };
 
@@ -1261,6 +1350,11 @@ declare namespace API {
     position?: number[];
     rotation?: number[];
     scale?: number[];
+  };
+
+  type DirectorWorkspaces = {
+    dynamic?: DirectorSceneData;
+    static?: DirectorSceneData;
   };
 
   type DirectoryExportFilter = {
@@ -4197,6 +4291,13 @@ declare namespace API {
     items?: QuoteItemRequest[];
   };
 
+  type readDirectorRecoveryParams = {
+    /** 画布UUID */
+    id: string;
+    /** 导演节点UUID */
+    nid: string;
+  };
+
   type readPromptDraftParams = {
     /** 项目 */
     pid: string;
@@ -4590,6 +4691,20 @@ declare namespace API {
     provider_id?: string;
     status?: CredentialStatus;
     update_time?: string;
+  };
+
+  type SaveDirectorRecoveryInput = {
+    base_fingerprint?: string;
+    director?: DirectorConfig;
+    epoch?: string;
+    expected_revision?: number;
+  };
+
+  type saveDirectorRecoveryParams = {
+    /** 画布UUID */
+    id: string;
+    /** 导演节点UUID */
+    nid: string;
   };
 
   type SaveInput = {

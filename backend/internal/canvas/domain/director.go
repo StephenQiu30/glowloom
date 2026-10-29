@@ -3,6 +3,7 @@ package domain
 import (
 	"encoding/json"
 	"math"
+	"regexp"
 	"slices"
 	"unicode/utf8"
 
@@ -11,6 +12,8 @@ import (
 
 // DirectorConfig stores bounded scene inputs; rendered media belongs to media assets.
 type DirectorConfig struct {
+	Exposure             *float64                `json:"exposure,omitempty"`
+	Mode                 string                  `json:"mode,omitempty"`
 	ID                   uuid.UUID               `json:"id"`
 	Version              int                     `json:"version"`
 	Title                string                  `json:"title"`
@@ -31,6 +34,7 @@ type DirectorConfig struct {
 	Shots                []DirectorShot          `json:"shots"`
 	ActiveShotID         uuid.UUID               `json:"active_shot_id"`
 	Cover                *DirectorCover          `json:"cover,omitempty"`
+	Workspaces           *DirectorWorkspaces     `json:"workspaces,omitempty"`
 }
 
 // DirectorTransform is an explicit position, rotation and positive scale.
@@ -42,6 +46,7 @@ type DirectorTransform struct {
 
 // DirectorGround describes the editing ground plane.
 type DirectorGround struct {
+	Color   string  `json:"color,omitempty"`
 	Visible bool    `json:"visible"`
 	Opacity float64 `json:"opacity"`
 	Height  float64 `json:"height"`
@@ -63,10 +68,16 @@ type DirectorPanorama struct {
 
 // DirectorKeyframe stores one transform and interpolation choice.
 type DirectorKeyframe struct {
-	ID        uuid.UUID         `json:"id"`
-	Time      float64           `json:"time"`
-	Transform DirectorTransform `json:"transform"`
-	Easing    string            `json:"easing,omitempty"`
+	PositionKeyed *bool             `json:"position_keyed,omitempty"`
+	RotationKeyed *bool             `json:"rotation_keyed,omitempty"`
+	ScaleKeyed    *bool             `json:"scale_keyed,omitempty"`
+	Target        []float64         `json:"target,omitempty"`
+	FOV           *float64          `json:"fov,omitempty"`
+	Roll          *float64          `json:"roll,omitempty"`
+	ID            uuid.UUID         `json:"id"`
+	Time          float64           `json:"time"`
+	Transform     DirectorTransform `json:"transform"`
+	Easing        string            `json:"easing,omitempty"`
 }
 
 // DirectorRig maps the closed humanoid bone names to imported model nodes.
@@ -77,6 +88,9 @@ type DirectorRig struct {
 
 // DirectorMotionClip schedules an imported model animation.
 type DirectorMotionClip struct {
+	BlendIn float64 `json:"blend_in,omitempty"`
+	// SourceOffset is the in-point in source seconds, before playback-rate scaling.
+	SourceOffset    float64   `json:"source_offset,omitempty"`
 	ID              uuid.UUID `json:"id"`
 	Name            string    `json:"name"`
 	SourceAnimation string    `json:"source_animation"`
@@ -100,32 +114,50 @@ type DirectorBoneTrack struct {
 	Keyframes []DirectorBoneFrame `json:"keyframes"`
 }
 
+// DirectorFrozenNode preserves imported local transforms by stable child-index path.
+// MorphWeights preserves GLTF morph-target animation alongside node transforms.
+type DirectorFrozenNode struct {
+	Transform    DirectorTransform `json:"transform"`
+	MorphWeights []float64         `json:"morph_weights,omitempty"`
+}
+
+var directorNodePath = regexp.MustCompile(`^root(/(0|[1-9][0-9]{0,5}))*$`)
+
 // DirectorObject contains no executable source URLs or runtime task state.
 type DirectorObject struct {
-	ID                 uuid.UUID            `json:"id"`
-	Name               string               `json:"name"`
-	Kind               string               `json:"kind"`
-	Primitive          string               `json:"primitive,omitempty"`
-	Transform          DirectorTransform    `json:"transform"`
-	Color              string               `json:"color"`
-	UniformScale       *float64             `json:"uniform_scale,omitempty"`
-	Visible            bool                 `json:"visible"`
-	CastShadow         bool                 `json:"cast_shadow"`
-	ReceiveShadow      bool                 `json:"receive_shadow"`
-	Pose               string               `json:"pose,omitempty"`
-	Rig                *DirectorRig         `json:"rig,omitempty"`
-	MotionClips        []DirectorMotionClip `json:"motion_clips,omitempty"`
-	ActiveMotionClipID *uuid.UUID           `json:"active_motion_clip_id,omitempty"`
-	BoneOverrides      map[string][]float64 `json:"bone_overrides,omitempty" swaggertype:"object"`
-	BoneTracks         []DirectorBoneTrack  `json:"bone_tracks,omitempty"`
-	SourceNodeID       *uuid.UUID           `json:"source_node_id,omitempty"`
-	AssetID            *uuid.UUID           `json:"asset_id,omitempty"`
-	BuiltinActor       string               `json:"builtin_actor,omitempty"`
-	Keyframes          []DirectorKeyframe   `json:"keyframes"`
+	BuiltinModel       string                        `json:"builtin_model,omitempty"`
+	MotionLibrary      []DirectorMotionSource        `json:"motion_library,omitempty"`
+	BodyProfile        map[string]float64            `json:"body_profile,omitempty"`
+	FrozenNodes        map[string]DirectorFrozenNode `json:"frozen_nodes,omitempty"`
+	Opacity            *float64                      `json:"opacity,omitempty"`
+	FrozenBones        map[string]DirectorTransform  `json:"frozen_bones,omitempty"`
+	Locked             *bool                         `json:"locked,omitempty"`
+	ID                 uuid.UUID                     `json:"id"`
+	Name               string                        `json:"name"`
+	Kind               string                        `json:"kind"`
+	Primitive          string                        `json:"primitive,omitempty"`
+	Transform          DirectorTransform             `json:"transform"`
+	Color              string                        `json:"color"`
+	UniformScale       *float64                      `json:"uniform_scale,omitempty"`
+	Visible            bool                          `json:"visible"`
+	CastShadow         bool                          `json:"cast_shadow"`
+	ReceiveShadow      bool                          `json:"receive_shadow"`
+	Pose               string                        `json:"pose,omitempty"`
+	Rig                *DirectorRig                  `json:"rig,omitempty"`
+	MotionClips        []DirectorMotionClip          `json:"motion_clips,omitempty"`
+	ActiveMotionClipID *uuid.UUID                    `json:"active_motion_clip_id,omitempty"`
+	BoneOverrides      map[string][]float64          `json:"bone_overrides,omitempty" swaggertype:"object"`
+	BoneTracks         []DirectorBoneTrack           `json:"bone_tracks,omitempty"`
+	SourceNodeID       *uuid.UUID                    `json:"source_node_id,omitempty"`
+	AssetID            *uuid.UUID                    `json:"asset_id,omitempty"`
+	BuiltinActor       string                        `json:"builtin_actor,omitempty"`
+	Keyframes          []DirectorKeyframe            `json:"keyframes"`
 }
 
 // DirectorCamera stores render optics and stable object follow identities.
 type DirectorCamera struct {
+	Roll           float64            `json:"roll,omitempty"`
+	Locked         *bool              `json:"locked,omitempty"`
 	ID             uuid.UUID          `json:"id"`
 	Name           string             `json:"name"`
 	Transform      DirectorTransform  `json:"transform"`
@@ -145,6 +177,7 @@ type DirectorCamera struct {
 
 // DirectorLight records a supported light type and its physical parameters.
 type DirectorLight struct {
+	Locked     *bool             `json:"locked,omitempty"`
 	ID         uuid.UUID         `json:"id"`
 	Name       string            `json:"name"`
 	Type       string            `json:"type"`
@@ -205,7 +238,7 @@ func directorFrames(frames []DirectorKeyframe) bool {
 	}
 	seen := make(map[uuid.UUID]bool, len(frames))
 	for _, frame := range frames {
-		if frame.ID == uuid.Nil || seen[frame.ID] || !directorRange(frame.Time, 0, 3600) || !directorTransform(frame.Transform) || !directorEasing(frame.Easing) {
+		if frame.ID == uuid.Nil || seen[frame.ID] || !directorRange(frame.Time, 0, 3600) || !directorTransform(frame.Transform) || !directorEasing(frame.Easing) || len(frame.Target) > 0 && !directorVector(frame.Target, -10000, 10000) || frame.FOV != nil && !directorRange(*frame.FOV, 1, 179) || frame.Roll != nil && !directorRange(*frame.Roll, -math.Pi, math.Pi) {
 			return false
 		}
 		seen[frame.ID] = true
@@ -224,7 +257,16 @@ func directorIDs[T any](items []T, id func(T) uuid.UUID) (map[uuid.UUID]bool, bo
 	return seen, true
 }
 func validDirector(c DirectorConfig) bool {
-	if c.ID == uuid.Nil || c.Version != 1 || !validTitle(c.Title) || !subtitleColor.MatchString(c.Background) || !directorRange(c.EnvironmentIntensity, 0, 10) || c.Objects == nil || c.Lights == nil || len(c.Objects) > 128 || len(c.Cameras) < 1 || len(c.Cameras) > 16 || len(c.Lights) > 32 || len(c.Shots) < 1 || len(c.Shots) > 128 || !directorChoice(c.AspectRatio, "", "adaptive", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16") || !directorOptionalRange(c.PanoramaRotation, -360, 360) || !directorOptionalRange(c.PanoramaRadius, 1, 200) {
+	if c.Exposure != nil && !directorRange(*c.Exposure, .1, 5) {
+		return false
+	}
+	if c.Version == 2 {
+		return validDirectorWorkspaces(c)
+	}
+	if c.Workspaces != nil {
+		return false
+	}
+	if !validDirectorSceneControls(c) || c.ID == uuid.Nil || c.Version != 1 || !validTitle(c.Title) || !subtitleColor.MatchString(c.Background) || !directorRange(c.EnvironmentIntensity, 0, 10) || c.Objects == nil || c.Lights == nil || len(c.Objects) > 128 || len(c.Cameras) < 1 || len(c.Cameras) > 16 || len(c.Lights) > 32 || len(c.Shots) < 1 || len(c.Shots) > 128 || !directorChoice(c.AspectRatio, "", "adaptive", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16", "2.39:1") || !directorOptionalRange(c.PanoramaRotation, -360, 360) || !directorOptionalRange(c.PanoramaRadius, 1, 200) {
 		return false
 	}
 	if c.Ground != nil && (!directorRange(c.Ground.Opacity, 0, 1) || !directorRange(c.Ground.Height, -2, 2)) {
@@ -257,7 +299,7 @@ func validDirector(c DirectorConfig) bool {
 		}
 	}
 	for _, camera := range c.Cameras {
-		if !validTitle(camera.Name) || !directorTransform(camera.Transform) || !directorVector(camera.Target, -10000, 10000) || len(camera.FollowAnchor) > 0 && !directorVector(camera.FollowAnchor, -10000, 10000) || !directorChoice(camera.LookAtMode, "", "coordinates", "rotation", "object") || camera.FollowObjectID != nil && !objects[*camera.FollowObjectID] || camera.LookAtObjectID != nil && !objects[*camera.LookAtObjectID] || !directorRange(camera.FocalLength, 1, 1000) || !directorRange(camera.FOV, 1, 179) || !directorRange(camera.Aperture, 0.5, 64) || !directorRange(camera.FocusDistance, 0.01, 10000) || !directorRange(camera.Near, 0.001, 100) || !directorRange(camera.Far, 0.01, 10000) || camera.Near >= camera.Far || !directorFrames(camera.Keyframes) {
+		if !directorRange(camera.Roll, -math.Pi, math.Pi) || !validTitle(camera.Name) || !directorTransform(camera.Transform) || !directorVector(camera.Target, -10000, 10000) || len(camera.FollowAnchor) > 0 && !directorVector(camera.FollowAnchor, -10000, 10000) || !directorChoice(camera.LookAtMode, "", "coordinates", "rotation", "object") || camera.FollowObjectID != nil && !objects[*camera.FollowObjectID] || camera.LookAtObjectID != nil && !objects[*camera.LookAtObjectID] || !directorRange(camera.FocalLength, 1, 1000) || !directorRange(camera.FOV, 1, 179) || !directorRange(camera.Aperture, 0.5, 64) || !directorRange(camera.FocusDistance, 0.01, 10000) || !directorRange(camera.Near, 0.001, 100) || !directorRange(camera.Far, 0.01, 10000) || camera.Near >= camera.Far || !directorFrames(camera.Keyframes) {
 			return false
 		}
 	}
@@ -267,7 +309,7 @@ func validDirector(c DirectorConfig) bool {
 		}
 	}
 	for _, shot := range c.Shots {
-		if !validTitle(shot.Name) || !cameras[shot.CameraID] || !directorRange(shot.Duration, 0.1, 3600) || !slices.Contains([]int{24, 25, 30}, shot.FPS) || !directorChoice(shot.ShotSize, "extreme_wide", "wide", "full", "medium", "close_up", "extreme_close_up") || !directorChoice(shot.CameraMove, "static", "push_in", "pull_out", "pan_left", "pan_right", "tilt_up", "tilt_down", "orbit_left", "orbit_right", "handheld") || !validPrompt(shot.Prompt) {
+		if !validTitle(shot.Name) || !cameras[shot.CameraID] || !directorRange(shot.Duration, 0.1, 3600) || !slices.Contains([]int{24, 25, 30, 50, 60}, shot.FPS) || !directorChoice(shot.ShotSize, "extreme_wide", "wide", "full", "medium", "close_up", "extreme_close_up") || !directorChoice(shot.CameraMove, "static", "push_in", "pull_out", "pan_left", "pan_right", "tilt_up", "tilt_down", "orbit_left", "orbit_right", "handheld") || !validPrompt(shot.Prompt) {
 			return false
 		}
 	}
@@ -279,10 +321,51 @@ func validDirector(c DirectorConfig) bool {
 }
 
 func validDirectorObject(o DirectorObject) bool {
-	if !validTitle(o.Name) || !directorChoice(o.Kind, "primitive", "model", "actor", "billboard") || !directorTransform(o.Transform) || !subtitleColor.MatchString(o.Color) || !directorOptionalRange(o.UniformScale, 0.1, 10) || !directorFrames(o.Keyframes) || (o.AssetID != nil && *o.AssetID == uuid.Nil) || (o.SourceNodeID != nil && *o.SourceNodeID == uuid.Nil) || !directorChoice(o.Primitive, "", "box", "sphere", "cylinder", "plane", "character") || !directorChoice(o.BuiltinActor, "", "mannequin") || !directorChoice(o.Pose, "", "neutral", "stand", "t_pose", "walk", "run", "sit", "squat", "kneel_single", "kneel_double", "hands_hips", "lean", "bow", "think", "fight", "kick", "throw", "push", "wave", "reach", "arms_crossed", "phone") {
+	if !validDirectorMotionLibrary(o) {
 		return false
 	}
-	if o.Kind == "primitive" && o.Primitive == "" || o.Kind == "model" && o.AssetID == nil || o.Kind == "actor" && o.AssetID == nil && o.BuiltinActor == "" || o.Kind == "billboard" && o.AssetID == nil && o.SourceNodeID == nil || len(o.MotionClips) > 128 || len(o.BoneOverrides) > len(directorBones) || len(o.BoneTracks) > len(directorBones) {
+	if o.BuiltinModel != "" && (o.Kind != "model" || o.AssetID != nil || o.BuiltinActor != "" || o.Primitive != "" || !directorBuiltinModels[o.BuiltinModel]) {
+		return false
+	}
+	if o.BodyProfile != nil {
+		if o.Kind != "actor" || o.AssetID != nil || !directorChoice(o.BuiltinActor, "male_standard", "male_teen", "male_child", "male_slim", "male_athletic", "male_broad", "female_standard", "female_teen", "female_child", "female_slim", "female_athletic", "female_broad") {
+			return false
+		}
+		for key, value := range o.BodyProfile {
+			if !directorChoice(key, "leg", "torso", "headHeight", "shoulders", "waist", "hips", "arms", "headWidth", "chestDepth", "bellyDepth", "leftArm", "rightArm", "leftLeg", "rightLeg") || !directorRange(value, .25, 1.6) {
+				return false
+			}
+		}
+	}
+
+	if o.Opacity != nil && !directorRange(*o.Opacity, 0, 1) {
+		return false
+	}
+	if len(o.FrozenNodes) > 1024 {
+		return false
+	}
+	for path, node := range o.FrozenNodes {
+		if len(path) > 256 || !directorNodePath.MatchString(path) || !directorVector(node.Transform.Position, -10000, 10000) || !directorVector(node.Transform.Rotation, -10000, 10000) || !directorVector(node.Transform.Scale, -10000, 10000) || len(node.MorphWeights) > 256 {
+			return false
+		}
+		for _, weight := range node.MorphWeights {
+			if !directorRange(weight, -10000, 10000) {
+				return false
+			}
+		}
+	}
+	if len(o.FrozenBones) > 256 {
+		return false
+	}
+	for name, transform := range o.FrozenBones {
+		if !directorString(name) || !directorTransform(transform) {
+			return false
+		}
+	}
+	if !validTitle(o.Name) || !directorChoice(o.Kind, "primitive", "model", "actor", "billboard") || !directorTransform(o.Transform) || !subtitleColor.MatchString(o.Color) || !directorOptionalRange(o.UniformScale, 0.1, 10) || !directorFrames(o.Keyframes) || (o.AssetID != nil && *o.AssetID == uuid.Nil) || (o.SourceNodeID != nil && *o.SourceNodeID == uuid.Nil) || !directorChoice(o.Primitive, "", "box", "sphere", "cylinder", "plane", "character", "cone", "torus", "capsule", "circle", "ring", "tetrahedron", "octahedron", "dodecahedron", "icosahedron", "cuboid", "pyramid", "half_arc", "half_cylinder") || !directorChoice(o.BuiltinActor, "", "mannequin", "male_standard", "male_teen", "male_child", "male_slim", "male_athletic", "male_broad", "female_standard", "female_teen", "female_child", "female_slim", "female_athletic", "female_broad") || !directorChoice(o.Pose, "", "neutral", "stand", "t_pose", "walk", "run", "sit", "squat", "kneel_single", "kneel_double", "hands_hips", "lean", "bow", "think", "fight", "kick", "throw", "push", "wave", "reach", "arms_crossed", "phone") {
+		return false
+	}
+	if o.Kind == "primitive" && o.Primitive == "" || o.Kind == "model" && o.AssetID == nil && o.BuiltinModel == "" || o.Kind == "actor" && o.AssetID == nil && o.BuiltinActor == "" || o.Kind == "billboard" && o.AssetID == nil && o.SourceNodeID == nil || len(o.MotionClips) > 128 || len(o.BoneOverrides) > len(directorBones) || len(o.BoneTracks) > len(directorBones) {
 		return false
 	}
 	if o.Rig != nil {
@@ -324,7 +407,7 @@ func validDirectorObject(o DirectorObject) bool {
 		return false
 	}
 	for _, clip := range o.MotionClips {
-		if !validTitle(clip.Name) || !directorString(clip.SourceAnimation) || !directorRange(clip.Start, 0, 3600) || !directorRange(clip.Duration, 0.1, 3600) || clip.Start+clip.Duration > 3600 || !directorRange(clip.PlaybackRate, 0.1, 4) {
+		if !validTitle(clip.Name) || !directorString(clip.SourceAnimation) || !directorRange(clip.Start, 0, 3600) || !directorRange(clip.Duration, 0.1, 3600) || clip.Start+clip.Duration > 3600 || !directorRange(clip.PlaybackRate, 0.1, 4) || !directorRange(clip.SourceOffset, 0, 3600) {
 			return false
 		}
 	}
@@ -332,6 +415,14 @@ func validDirectorObject(o DirectorObject) bool {
 }
 
 func validDirectorReferences(c DirectorConfig, nodes map[uuid.UUID]Node) bool {
+	for _, scene := range DirectorScenes(c) {
+		if !validDirectorSceneReferences(scene, nodes) {
+			return false
+		}
+	}
+	return true
+}
+func validDirectorSceneReferences(c DirectorConfig, nodes map[uuid.UUID]Node) bool {
 	for _, object := range c.Objects {
 		if object.SourceNodeID == nil {
 			continue
@@ -360,13 +451,17 @@ func clearDirectorReferences(nodes []Node, removed map[uuid.UUID]bool) {
 			continue
 		}
 		config := *node.Config.Director
-		config.Objects = slices.Clone(config.Objects)
-		for j, object := range config.Objects {
-			if object.SourceNodeID != nil && removed[*object.SourceNodeID] {
-				config.Objects[j].AssetID = assets[*object.SourceNodeID]
-				config.Objects[j].SourceNodeID = nil
+		updateDirectorScenes(&config, func(scene *DirectorConfig) {
+			scene.Objects = slices.Clone(scene.Objects)
+			for j, object := range scene.Objects {
+				if object.SourceNodeID != nil && removed[*object.SourceNodeID] {
+					scene.Objects[j].AssetID = assets[*object.SourceNodeID]
+					scene.Objects[j].SourceNodeID = nil
+				}
 			}
-		}
+		})
 		nodes[i].Config.Director = &config
 	}
 }
+
+var directorBuiltinModels = map[string]bool{"kenney-chair": true, "kenney-sofa": true, "kenney-table": true, "kenney-bed": true, "kenney-wall": true, "kenney-doorway": true, "kenney-stairs": true, "kenney-platform": true, "kenney-tree": true, "kenney-rock": true, "kenney-bush": true, "kenney-flower": true, "kenney-bench": true, "kenney-trashcan": true, "kenney-fence": true, "kenney-sign": true, "kenney-fridge": true, "kenney-stove": true, "kenney-sink": true, "kenney-toaster": true, "kenney-bathtub": true, "kenney-toilet": true, "kenney-shower": true, "kenney-bathroom-sink": true, "kenney-desk": true, "kenney-office-chair": true, "kenney-monitor": true, "kenney-laptop": true, "kenney-cardboard-box": true, "kenney-books": true, "kenney-table-lamp": true, "kenney-coat-rack": true}

@@ -40,6 +40,9 @@ func (h *Handler) Register(group *gin.RouterGroup) {
 	group.GET("/projects/:pid/canvases", h.List)
 	group.POST("/projects/:pid/canvases", h.Create)
 	group.GET("/canvases/:id", h.Get)
+	group.GET("/canvases/:id/director-recovery/:nid", h.ReadDirectorRecovery)
+	group.PUT("/canvases/:id/director-recovery/:nid", h.SaveDirectorRecovery)
+	group.DELETE("/canvases/:id/director-recovery/:nid", h.DeleteDirectorRecovery)
 	group.PATCH("/canvases/:id", h.Rename)
 	group.DELETE("/canvases/:id", h.Delete)
 }

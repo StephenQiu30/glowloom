@@ -182,6 +182,11 @@ func validateCopiedGraph(doc Document) error {
 }
 
 func copyDirectorIdentities(c *DirectorConfig, scope string, identity func(string, uuid.UUID) uuid.UUID, assetID func(uuid.UUID) uuid.UUID) {
+	if c.Workspaces != nil {
+		updateDirectorScenes(c, func(scene *DirectorConfig) { copyDirectorIdentities(scene, scope, identity, assetID) })
+		c.ID = identity(scope+"/director/scene", c.ID)
+		return
+	}
 	id := func(kind string, old uuid.UUID) uuid.UUID { return identity(scope+"/director/"+kind, old) }
 	nodeID := func(old uuid.UUID) uuid.UUID { return identity("node", old) }
 	c.ID = id("scene", c.ID)

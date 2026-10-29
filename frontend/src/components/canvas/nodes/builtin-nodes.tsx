@@ -1,5 +1,6 @@
 import {
   Type,
+  Box,
   Group,
   Image as ImageIcon,
   AudioLines,
@@ -99,5 +100,19 @@ let registered = false;
 export function registerBuiltinNodes() {
   if (registered) return;
   registered = true;
-  registerNodeDefinitions(BUILTIN_DEFINITIONS, "builtin");
+  registerNodeDefinitions(
+    [
+      ...BUILTIN_DEFINITIONS,
+      {
+        type: "director",
+        title: "导演台",
+        icon: <Box className={iconClass} />,
+        defaultSize: { width: 480, height: 320 },
+        defaultMetadata: {},
+        hidePanel: true,
+        hasSourceHandle: false,
+      },
+    ],
+    "builtin",
+  );
 }

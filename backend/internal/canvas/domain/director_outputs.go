@@ -15,6 +15,7 @@ import (
 // DirectorScreenshot retains a gallery entry by durable media identity.
 // CreatedAt is user supplied presentation metadata, not execution evidence.
 type DirectorScreenshot struct {
+	Kind      string    `json:"kind,omitempty"`
 	ID        uuid.UUID `json:"id"`
 	AssetID   uuid.UUID `json:"asset_id"`
 	Name      string    `json:"name"`
@@ -36,6 +37,7 @@ func (s *DirectorScreenshot) UnmarshalJSON(raw []byte) error {
 		return fmt.Errorf("%w: director screenshot encoding", ErrInvalidCommand)
 	}
 	var fields struct {
+		Kind      string    `json:"kind,omitempty"`
 		ID        uuid.UUID `json:"id"`
 		AssetID   uuid.UUID `json:"asset_id"`
 		Name      string    `json:"name"`
@@ -53,7 +55,7 @@ func (s *DirectorScreenshot) UnmarshalJSON(raw []byte) error {
 	if err != nil {
 		return fmt.Errorf("parse director screenshot timestamp: %w", err)
 	}
-	*s = DirectorScreenshot{ID: fields.ID, AssetID: fields.AssetID, Name: fields.Name, CreatedAt: createdAt}
+	*s = DirectorScreenshot{Kind: fields.Kind, ID: fields.ID, AssetID: fields.AssetID, Name: fields.Name, CreatedAt: createdAt}
 	return nil
 }
 
@@ -67,7 +69,7 @@ func validDirectorOutputs(config DirectorConfig, shots map[uuid.UUID]bool) bool 
 			return false
 		}
 		for _, screenshot := range shot.Screenshots {
-			if screenshot.ID == uuid.Nil || seen[screenshot.ID] || screenshot.AssetID == uuid.Nil || !utf8.ValidString(screenshot.Name) || strings.TrimSpace(screenshot.Name) == "" || utf8.RuneCountInString(screenshot.Name) > 128 || strings.ContainsRune(screenshot.Name, '\x00') || screenshot.CreatedAt.IsZero() {
+			if !directorChoice(screenshot.Kind, "", "image", "video") || screenshot.ID == uuid.Nil || seen[screenshot.ID] || screenshot.AssetID == uuid.Nil || !utf8.ValidString(screenshot.Name) || strings.TrimSpace(screenshot.Name) == "" || utf8.RuneCountInString(screenshot.Name) > 128 || strings.ContainsRune(screenshot.Name, '\x00') || screenshot.CreatedAt.IsZero() {
 				return false
 			}
 			// MarshalJSON enforces the RFC3339 year and timezone bounds even for

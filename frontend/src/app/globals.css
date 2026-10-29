@@ -72,6 +72,18 @@
   --canvas-reference-text-end: #141414;
   --canvas-reference-foreground: #ffffff;
   --canvas-presence-online: #16a34a;
+  --canvas-director-background: #171717;
+  --canvas-tool-foreground: #eee;
+  --canvas-tool-muted-foreground: #999;
+  --canvas-tool-secondary-foreground: #bbb;
+  --canvas-tool-subtle-foreground: #666;
+  --canvas-tool-border: #333;
+  --canvas-director-secondary: #2b2b2b;
+  --canvas-tool-input: #444;
+  --canvas-director-border: #393939;
+  --canvas-director-popover: #252525;
+  --canvas-director-divider: #303030;
+  --canvas-director-overlay: #222c;
   --layout-header: 64px;
   --layout-sidebar: 240px;
   --layout-sidebar-collapsed: 64px;

@@ -11,7 +11,10 @@ const files = (path: string): string[] =>
         : [],
   );
 it("all application business modules avoid browser durable storage; only the view preference whitelist remains", () => {
-  const allowed = new Set(["components/canvas/hooks/use-canvas-view-state.ts"]);
+  const allowed = new Set([
+    "components/canvas/hooks/use-canvas-view-state.ts",
+    "components/canvas/director/director-view-preferences.ts",
+  ]);
   const violations = files("src")
     .filter((path) => !allowed.has(relative("src", path)))
     .filter((path) =>

@@ -1,0 +1,24 @@
+{
+  "errors": [],
+  "image": {
+    "width": 1920,
+    "height": 1080,
+    "bytes": 61571,
+    "brightPixels": 7472
+  },
+  "frozen": {
+    "objects": 1,
+    "bones": 65,
+    "position": [
+      0.5,
+      0,
+      0
+    ],
+    "keys": 0
+  },
+  "video": {
+    "type": "video/webm",
+    "bytes": 11121
+  },
+  "pageErrors": []
+}

@@ -330,9 +330,15 @@ function projectionDifferences(
         (ref) => ref.purpose === "CONTENT",
       );
       if (
-        !["text", "group", "image", "video", "audio", "config"].includes(
-          node.type,
-        )
+        ![
+          "text",
+          "group",
+          "image",
+          "video",
+          "audio",
+          "config",
+          "director",
+        ].includes(node.type)
       )
         throw new Error("此节点的保存接口尚未接入，修改已保留");
       result.push({
@@ -341,7 +347,7 @@ function projectionDifferences(
           ...(source ?? {}),
           id: node.id,
           node_type: node.type,
-          node_action: "resource",
+          node_action: node.type === "director" ? "tool" : "resource",
           title: node.title,
           x: node.position.x,
           y: node.position.y,
@@ -354,6 +360,9 @@ function projectionDifferences(
               ? { collapsed: node.documentData?.collapsed ?? false }
               : {
                   ...(node.type === "text" ? richTextConfig(node) : {}),
+                  ...(node.type === "director"
+                    ? { director: source?.config?.director }
+                    : {}),
                   editor: editorConfig(node),
                 },
           ...(asset ? { media_ref: { asset_id: asset.fileId } } : {}),
@@ -362,6 +371,15 @@ function projectionDifferences(
       continue;
     }
     if (node.type !== previous.type) throw new Error("不能改变已有节点类型");
+    if (
+      node.type === "director" &&
+      JSON.stringify(node.serviceData?.config?.director) !==
+        JSON.stringify(previous.serviceData?.config?.director)
+    ) {
+      const director = node.serviceData?.config?.director;
+      if (!director) throw new Error("导演场景不能被移除");
+      set(["config", "director"], director);
+    }
     if (
       node.type !== "group" &&
       JSON.stringify(editorConfig(node)) !==

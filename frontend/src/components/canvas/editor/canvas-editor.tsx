@@ -5567,6 +5567,11 @@ function InfiniteCanvasPage({
 
   const renderNodeContentPanel = useCallback(
     (contentNode: CanvasNodeData) => {
+      const tool = integrationRef.current?.renderToolNode?.(
+        contentNode.id,
+        contentNode.type,
+      );
+      if (tool != null) return tool;
       if (contentNode.type !== CanvasNodeType.Config) {
         const generation = documentIntegration?.generation;
         if (!generation) return null;

@@ -1,0 +1,530 @@
+[
+  {
+    "asset": "male_standard",
+    "node": "3217:61473",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "9f982db74c6b8dd8cee654f9a3584d8c2b1969c9",
+      "sizeBytes": 10357,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61473"
+    }
+  },
+  {
+    "asset": "male_teen",
+    "node": "3217:61478",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "4826008671fee808f4e0ccfb7b4e54813563bad3",
+      "sizeBytes": 10967,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61478"
+    }
+  },
+  {
+    "asset": "male_child",
+    "node": "3217:61484",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "a93e13a9cc078e549fc45d84a6b87cb8582c43e2",
+      "sizeBytes": 12715,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61484"
+    }
+  },
+  {
+    "asset": "male_slim",
+    "node": "3217:61489",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "0ea14c5f4764d4be96dd2f8863bb0a1742ab635f",
+      "sizeBytes": 10021,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61489"
+    }
+  },
+  {
+    "asset": "male_athletic",
+    "node": "3217:61495",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "99ea182c22504d72a70c2393694f7d56cde04fc9",
+      "sizeBytes": 10529,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61495"
+    }
+  },
+  {
+    "asset": "male_broad",
+    "node": "3217:61500",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "a83eca6bd1b4a8bba639f7c669c145c0c588b7fa",
+      "sizeBytes": 11603,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61500"
+    }
+  },
+  {
+    "asset": "female_standard",
+    "node": "3217:61506",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "9889b15299b0b57b3ea1c5f077f49980d4bcab6b",
+      "sizeBytes": 9877,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61506"
+    }
+  },
+  {
+    "asset": "female_teen",
+    "node": "3217:61511",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "e2ab5ca5d27f727a0a82cd60e7865015cb4be5bf",
+      "sizeBytes": 10463,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61511"
+    }
+  },
+  {
+    "asset": "female_child",
+    "node": "3217:61517",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "628721fcbb3d69cb345d27608498202bbd858f15",
+      "sizeBytes": 11954,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61517"
+    }
+  },
+  {
+    "asset": "female_slim",
+    "node": "3217:61522",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "c24e570f116f904a9b3f2437be55c4560418603e",
+      "sizeBytes": 9474,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61522"
+    }
+  },
+  {
+    "asset": "female_athletic",
+    "node": "3217:61528",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "40b670116751f8e159d75f37a0115493296790ba",
+      "sizeBytes": 10095,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61528"
+    }
+  },
+  {
+    "asset": "female_broad",
+    "node": "3217:61533",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "688229993e91bb1f858892d03d4940682d09e982",
+      "sizeBytes": 10953,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61533"
+    }
+  },
+  {
+    "asset": "kenney-chair",
+    "node": "3217:61646",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "0d3b4c45f5b1c49e6552f78d31c902bc0d942483",
+      "sizeBytes": 3784,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61646"
+    }
+  },
+  {
+    "asset": "kenney-sofa",
+    "node": "3217:61651",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "54c9c6d1c45c0952bea0983b68521f06d12270fe",
+      "sizeBytes": 3995,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61651"
+    }
+  },
+  {
+    "asset": "kenney-table",
+    "node": "3217:61657",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "5aa78ff8bbe845cde221ac317f57e8152a9045b0",
+      "sizeBytes": 4032,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61657"
+    }
+  },
+  {
+    "asset": "kenney-bed",
+    "node": "3217:61662",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "a1f9a0eeda1b4da8d4537318ebc4058531670004",
+      "sizeBytes": 4948,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61662"
+    }
+  },
+  {
+    "asset": "kenney-wall",
+    "node": "3217:61668",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "eb7d84a17de84826d7390b5139e164589654b306",
+      "sizeBytes": 2183,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61668"
+    }
+  },
+  {
+    "asset": "kenney-doorway",
+    "node": "3217:61673",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "9e692fc0497fe1030a74ab8445fc713857454b4d",
+      "sizeBytes": 3312,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61673"
+    }
+  },
+  {
+    "asset": "kenney-stairs",
+    "node": "3217:61679",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "f4ba4d29ffd199b6b1ef8723a1a14b24266ef104",
+      "sizeBytes": 3666,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61679"
+    }
+  },
+  {
+    "asset": "kenney-platform",
+    "node": "3217:61684",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "728f990982c6bdb1b195ba0ad14659beef9663fb",
+      "sizeBytes": 2939,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61684"
+    }
+  },
+  {
+    "asset": "kenney-tree",
+    "node": "3217:61690",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "bf8fe34d80094a3aab3fdff636790cb9583550fb",
+      "sizeBytes": 3680,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61690"
+    }
+  },
+  {
+    "asset": "kenney-rock",
+    "node": "3217:61695",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "32f3166aefa69ee472e8565bd1347270fc9fb39d",
+      "sizeBytes": 4035,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61695"
+    }
+  },
+  {
+    "asset": "kenney-bush",
+    "node": "3217:61701",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "1e408d804463abd91bef8b98fb16a47c12610dab",
+      "sizeBytes": 4139,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61701"
+    }
+  },
+  {
+    "asset": "kenney-flower",
+    "node": "3217:61706",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "7d0eb31a3b5930dce31716d69ada2b4cb62a5d93",
+      "sizeBytes": 3970,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61706"
+    }
+  },
+  {
+    "asset": "kenney-bench",
+    "node": "3217:61712",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "dac58a152616ab833cf9e27c68ac1a516905db85",
+      "sizeBytes": 4139,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61712"
+    }
+  },
+  {
+    "asset": "kenney-trashcan",
+    "node": "3217:61717",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "d7e15125c70232db3b131a31e134fb696ead585b",
+      "sizeBytes": 3104,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61717"
+    }
+  },
+  {
+    "asset": "kenney-fence",
+    "node": "3217:61723",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "a3c13d6b5078a81dd6d9f6d569799bf67171bbf3",
+      "sizeBytes": 3391,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61723"
+    }
+  },
+  {
+    "asset": "kenney-sign",
+    "node": "3217:61728",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "edf61075f06b793b8bb669d27ffd978b7a42272a",
+      "sizeBytes": 2476,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61728"
+    }
+  },
+  {
+    "asset": "kenney-fridge",
+    "node": "3217:61734",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "a858497ca3f1415045e523af5b7914b0b7eff89a",
+      "sizeBytes": 2917,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61734"
+    }
+  },
+  {
+    "asset": "kenney-stove",
+    "node": "3217:61739",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "3d0bb2251d2c7c2ae298d5f7f9059f9b344ae0f6",
+      "sizeBytes": 8522,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61739"
+    }
+  },
+  {
+    "asset": "kenney-sink",
+    "node": "3217:61745",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "0aa4b79a40745687f5866e3b8dc9013f2a2b8a77",
+      "sizeBytes": 4999,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61745"
+    }
+  },
+  {
+    "asset": "kenney-toaster",
+    "node": "3217:61750",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "80e2b9578ee9cb6066a2e4f7ed48ba3ef458628c",
+      "sizeBytes": 5147,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61750"
+    }
+  },
+  {
+    "asset": "kenney-bathtub",
+    "node": "3217:61756",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "14b3eaa9f15ebf70e48eef208a877092c27d0802",
+      "sizeBytes": 5175,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61756"
+    }
+  },
+  {
+    "asset": "kenney-toilet",
+    "node": "3217:61761",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "b5aad0d3e0134ddfc96a69744c01d44fb1c6f65f",
+      "sizeBytes": 6390,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61761"
+    }
+  },
+  {
+    "asset": "kenney-shower",
+    "node": "3217:61767",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "0794e1a75483893cd7844d88937127f1438704f5",
+      "sizeBytes": 4664,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61767"
+    }
+  },
+  {
+    "asset": "kenney-bathroom-sink",
+    "node": "3217:61772",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "53ab8d00d94eeecb4123d623c157992437a2ccae",
+      "sizeBytes": 4676,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61772"
+    }
+  },
+  {
+    "asset": "kenney-desk",
+    "node": "3217:61778",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "ae52b13ef5cb9b6e373eefb7bde309cbf061fb4d",
+      "sizeBytes": 3529,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61778"
+    }
+  },
+  {
+    "asset": "kenney-office-chair",
+    "node": "3217:61783",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "01105ae3c8ce78851327d620192d80031958cc16",
+      "sizeBytes": 6541,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61783"
+    }
+  },
+  {
+    "asset": "kenney-monitor",
+    "node": "3217:61789",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "74ac529da2d6a041eb1d55204b13a0e1e87528a5",
+      "sizeBytes": 4019,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61789"
+    }
+  },
+  {
+    "asset": "kenney-laptop",
+    "node": "3217:61794",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "198919a7793a88c95d9805e0bc610e04b24f04c8",
+      "sizeBytes": 4612,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61794"
+    }
+  },
+  {
+    "asset": "kenney-cardboard-box",
+    "node": "3217:61800",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "47f1dcb1b9c4d70686ef6663f2de009e0b1bab2f",
+      "sizeBytes": 3565,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61800"
+    }
+  },
+  {
+    "asset": "kenney-books",
+    "node": "3217:61805",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "fd4b0ceb3d4c3d135688d34baa8cce325bfb3e7a",
+      "sizeBytes": 4164,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61805"
+    }
+  },
+  {
+    "asset": "kenney-table-lamp",
+    "node": "3217:61811",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "16c249d8f5886b269284fc0f15c5629b261cc3f2",
+      "sizeBytes": 3617,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61811"
+    }
+  },
+  {
+    "asset": "kenney-coat-rack",
+    "node": "3217:61816",
+    "ok": true,
+    "result": {
+      "success": true,
+      "imageHash": "db217ac29e49e530dd0349ee42df674f5f5becf8",
+      "sizeBytes": 4294,
+      "contentType": "image/png",
+      "placedOnNodeId": "3217:61816"
+    }
+  }
+]

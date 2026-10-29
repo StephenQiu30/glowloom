@@ -73,9 +73,11 @@ func inputSources(node Node, visit func(uuid.UUID)) {
 		}
 	}
 	if c := node.Config.Director; c != nil {
-		for _, object := range c.Objects {
-			if object.SourceNodeID != nil {
-				visit(*object.SourceNodeID)
+		for _, scene := range DirectorScenes(*c) {
+			for _, object := range scene.Objects {
+				if object.SourceNodeID != nil {
+					visit(*object.SourceNodeID)
+				}
 			}
 		}
 	}

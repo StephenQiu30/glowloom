@@ -1,3 +1,5 @@
+import { migrateDirectorDocument } from "../director/director-workspaces";
+import { emptyDirectorConfig } from "../director/director-model";
 import {
   getNodeSpec,
   NODE_DEFAULT_SIZE,
@@ -49,6 +51,18 @@ export function createCanvasNode(
   return {
     id,
     type,
+    ...(type === "director"
+      ? {
+          serviceData: {
+            id,
+            node_type: "director",
+            node_action: "tool",
+            config: {
+              director: migrateDirectorDocument(emptyDirectorConfig()),
+            },
+          },
+        }
+      : {}),
     title: nextCanvasNodeTitle(spec.title, type, existingNodes),
     position: {
       x: position.x - spec.width / 2,

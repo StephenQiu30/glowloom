@@ -122,8 +122,8 @@ func TestCanvasMediaReferenceGuardBoundsCombinedRetainedHistory(t *testing.T) {
 		name                 string
 		nodes, logs, padding int
 	}{
-		{"node_body", 1, 0, 1 << 20},
-		{"command_body", 0, 1, 1 << 20},
+		{"node_body", 1, 0, 4 << 20},
+		{"command_body", 0, 1, 4 << 20},
 		{"combined_bytes", 60, 60, 600 << 10},
 		{"combined_facts", 25000, 25001, 0},
 	} {

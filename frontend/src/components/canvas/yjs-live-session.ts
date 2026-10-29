@@ -1,3 +1,5 @@
+import { directorFingerprint } from "./director/director-model";
+import { validateDirectorDocument } from "./director/director-workspaces";
 import {
   CollaborationSession,
   type CommittedState,
@@ -230,6 +232,150 @@ export class CanvasYjsLiveSession {
     };
   };
   getSnapshot = () => this.view;
+  private inputEditing() {
+    return (
+      this.gesture ||
+      [...this.draftReaders.values()].some(
+        (entry) => entry.session === this.session && entry.read() !== null,
+      )
+    );
+  }
+  /** Capture alongside async intent; compare again before writing into this document. */
+  getDocumentEpoch = (): string | null =>
+    this.disposed ||
+    !this.view.document ||
+    this.epochPending ||
+    this.switchingEpoch
+      ? null
+      : (this.session?.confirmed.epoch ?? null);
+
+  private retainedDirectorEdits = new Map<string, API.DirectorConfig>();
+  retainedDirector = (nodeID: string) => {
+    const draft = this.retainedDirectorEdits.get(nodeID);
+    return draft ? structuredClone(draft) : null;
+  };
+  retainDirector = (nodeID: string, draft: API.DirectorConfig) => {
+    this.retainedDirectorEdits.set(nodeID, validateDirectorDocument(draft));
+  };
+  discardRetainedDirector = (nodeID: string) => {
+    this.retainedDirectorEdits.delete(nodeID);
+  };
+  changeDirector = (
+    nodeID: string,
+    input: API.DirectorConfig,
+    expected: API.DirectorConfig,
+    epoch: string | null,
+  ) => {
+    const director = validateDirectorDocument(input);
+    try {
+      const graph = this.view.document,
+        node = graph?.nodes.find((item) => item.id === nodeID);
+      if (
+        !epoch ||
+        this.getDocumentEpoch() !== epoch ||
+        !graph ||
+        node?.type !== "director" ||
+        !node.serviceData?.config?.director ||
+        !this.canAccept(graph) ||
+        this.inputEditing()
+      )
+        throw problem("导演场景当前不可编辑或已恢复到其他版本");
+      if (
+        directorFingerprint(node.serviceData.config.director) !==
+        directorFingerprint(expected)
+      )
+        throw problem("导演场景已由其他协作者修改，请检查后重试");
+      if (directorFingerprint(director) !== directorFingerprint(expected)) {
+        this.change(
+          {
+            ...graph,
+            nodes: graph.nodes.map((item) =>
+              item.id !== nodeID
+                ? item
+                : {
+                    ...item,
+                    serviceData: {
+                      ...item.serviceData!,
+                      config: { ...item.serviceData!.config, director },
+                    },
+                  },
+            ),
+          },
+          true,
+        );
+        if (
+          directorFingerprint(
+            this.view.document?.nodes.find((item) => item.id === nodeID)
+              ?.serviceData?.config?.director,
+          ) !== directorFingerprint(director)
+        )
+          throw problem("导演场景未能写入，请检查保存状态");
+      }
+      this.retainedDirectorEdits.delete(nodeID);
+    } catch (error) {
+      this.retainedDirectorEdits.set(nodeID, director);
+      throw error;
+    }
+  };
+
+  waitForSaved = (check: () => void = () => {}): Promise<API.DocumentDTO> => {
+    return new Promise((resolve, reject) => {
+      let finished = false;
+      let requestedRevision = "";
+      const originalSession = this.session;
+      const originalEpoch = originalSession?.confirmed.epoch;
+      let unsubscribe: () => void = () => {};
+      const timer = setTimeout(
+        () => finish(problem("保存尚未确认，请稍后重试")),
+        15000,
+      );
+      const finish = (error?: Error, dto?: API.DocumentDTO) => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        unsubscribe();
+        if (error) reject(error);
+        else resolve(structuredClone(dto!));
+      };
+      const inspect = () => {
+        try {
+          check();
+          const session = this.session;
+          if (
+            this.disposed ||
+            session !== originalSession ||
+            session?.confirmed.epoch !== originalEpoch ||
+            !this.online ||
+            this.socket?.readyState !== WebSocket.OPEN ||
+            !this.view.writable ||
+            !session ||
+            this.inputEditing() ||
+            this.epochPending ||
+            this.switchingEpoch ||
+            this.uploads.size ||
+            this.uploadErrors.size ||
+            Object.keys(session.textDrafts).length ||
+            session.status === "UNKNOWN" ||
+            this.view.recovery.length
+          )
+            throw problem("请先完成或恢复当前画布编辑，再开始生成");
+          if (session.status !== "CLEAN" || session.inFlight || this.draining)
+            return;
+          if (this.dto?.revision === session.confirmed.contentRevision) {
+            finish(undefined, this.dto);
+          } else if (requestedRevision !== session.confirmed.contentRevision) {
+            requestedRevision = session.confirmed.contentRevision;
+            this.socket?.send(JSON.stringify({ type: "sync" }));
+          }
+        } catch (error) {
+          finish(error instanceof Error ? error : problem("保存确认失败"));
+        }
+      };
+      unsubscribe = this.subscribe(inspect);
+      inspect();
+      if (!finished) this.schedule();
+    });
+  };
   private emit(patch: Partial<YjsView> = {}) {
     const session = this.session;
     const recovery =

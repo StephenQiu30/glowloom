@@ -10,6 +10,11 @@ const identityRoutes: {
   { pattern: `session/(refresh|upgrade)`, methods: ["POST"], query: [] },
   { pattern: `session`, methods: ["GET"], query: [] },
   { pattern: `auth-policy`, methods: ["GET"], query: [] },
+  {
+    pattern: `canvases/${identityUUID}/director-recovery/${identityUUID}`,
+    methods: ["GET", "PUT", "DELETE"],
+    query: [],
+  },
   { pattern: `registrations`, methods: ["POST"], query: [] },
   {
     pattern: `registrations/${identityUUID}/(resend|verify|complete)`,

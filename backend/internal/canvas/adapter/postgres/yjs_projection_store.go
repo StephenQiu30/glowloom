@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"slices"
 
@@ -136,7 +137,17 @@ func (s *Store) persistYjsProjection(ctx context.Context, tx *gorm.DB, a identit
 	if err != nil {
 		return 0, err
 	}
-	if len(body) > maxMediaReferencePayloadBytes {
+	tooLarge := len(body) > maxMediaReferencePayloadBytes
+	if !tooLarge {
+		// Reference admission measures jsonb::text, whose spaces and expanded
+		// numeric literals can be larger than compact encoding/json output.
+		var storedBytes int64
+		if err := tx.Raw(`SELECT octet_length(?::jsonb::text)`, string(body)).Scan(&storedBytes).Error; err != nil {
+			return 0, fmt.Errorf("measure projection audit payload: %w", err)
+		}
+		tooLarge = storedBytes > maxMediaReferencePayloadBytes
+	}
+	if tooLarge {
 		if err := tx.RollbackTo("yjs_projection").Error; err != nil {
 			return 0, err
 		}

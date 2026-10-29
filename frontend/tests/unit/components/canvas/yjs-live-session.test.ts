@@ -1,3 +1,8 @@
+import {
+  emptyDirectorConfig,
+  editDirector,
+  readDirector,
+} from "@/components/canvas/director/director-model";
 import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
 import { afterEach, expect, it, vi } from "vitest";
 import * as Y from "yjs";
@@ -39,6 +44,7 @@ afterEach(() => {
 function setup(
   twoNodes = false,
   renew: (signal: AbortSignal) => Promise<void> = async () => {},
+  configure?: (document: API.DocumentDTO) => void,
 ) {
   vi.stubGlobal("crypto", webcrypto);
   const actorID = crypto.randomUUID(),
@@ -77,6 +83,7 @@ function setup(
       id: crypto.randomUUID(),
       title: "参考源",
     });
+  configure?.(document);
   const doc = createCanvasDocument(
     serviceSnapshot(document as unknown as ServiceDocument),
   );
@@ -702,6 +709,186 @@ it.each(["missing", "epoch", "document", "revision"])(
   },
 );
 
+async function acceptDirectorUpdate(
+  f: ReturnType<typeof setup>,
+  alter?: (document: API.DocumentDTO) => void,
+) {
+  const { client, sockets, state, actorID } = f;
+  await vi.waitFor(() =>
+    expect(sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(true),
+  );
+  const request = sockets[0].sent.find((p) => p.type === "yjs_submit")!;
+  const frozen = request.body as { update: string; payloadHash: string };
+  const accepted = new Y.Doc();
+  Y.applyUpdate(accepted, Buffer.from(state.state, "base64"));
+  Y.applyUpdate(accepted, Buffer.from(frozen.update, "base64"));
+  const document = {
+    ...serviceProjection(
+      readCanvasDocument(accepted),
+      state.document as unknown as ServiceDocument,
+    ),
+    revision: "2",
+  } as API.DocumentDTO;
+  alter?.(document);
+  sockets[0].receive({
+    type: "yjs_snapshot",
+    actor_id: actorID,
+    yjs_state: {
+      ...state,
+      commitSeq: "1",
+      state: Buffer.from(Y.encodeStateAsUpdate(accepted)).toString("base64"),
+      document,
+    },
+  });
+  sockets[0].receive({
+    type: "yjs_ack",
+    op_id: request.op_id,
+    yjs_receipt: {
+      ...frozen,
+      status: "accepted",
+      epoch: state.epoch,
+      updateId: request.op_id,
+      commitSeq: "1",
+      contentRevision: "2",
+      graphHash: state.graphHash,
+      effect: "VISIBLE_CHANGE",
+    },
+  });
+  accepted.destroy();
+  await vi.waitFor(() => expect(client.getSnapshot().dirty).toBe(false));
+}
+function directorFixture() {
+  return setup(false, undefined, (document) => {
+    document.nodes![0].node_type = "director";
+    document.nodes![0].node_action = "tool";
+    document.nodes![0].config = { director: emptyDirectorConfig() };
+  });
+}
+const liveDirector = (f: ReturnType<typeof setup>) =>
+  readDirector(
+    f.client.getSnapshot().document!.nodes[0].serviceData!.config!.director,
+  );
+it("director edits use an atomic scene CAS and retain a rejected concurrent intention", async () => {
+  const f = directorFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const before = liveDirector(f),
+    next = editDirector(before, { type: "add-object", primitive: "box" });
+  f.client.changeDirector(f.nodeID, next, before, f.client.getDocumentEpoch());
+  expect(() =>
+    f.client.changeDirector(
+      f.nodeID,
+      { ...before, background: "#ffffff" },
+      before,
+      f.client.getDocumentEpoch(),
+    ),
+  ).toThrow("其他协作者");
+  expect(liveDirector(f).objects).toHaveLength(1);
+  expect(f.client.retainedDirector(f.nodeID)?.background).toBe("#ffffff");
+  f.client.discardRetainedDirector(f.nodeID);
+  expect(f.client.retainedDirector(f.nodeID)).toBeNull();
+});
+it("director scene save is accepted on the original queue and survives authoritative readback", async () => {
+  const f = directorFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const before = liveDirector(f),
+    next = editDirector(before, { type: "add-light", light: "point" });
+  f.client.changeDirector(f.nodeID, next, before, f.client.getDocumentEpoch());
+  const saved = f.client.waitForSaved();
+  await acceptDirectorUpdate(f);
+  await expect(saved).resolves.toMatchObject({ revision: "2" });
+  expect(liveDirector(f).lights[0].id).toBe(next.lights[0].id);
+  expect(f.sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
+    1,
+  );
+});
+it("director gesture from an old epoch cannot write identical restored scene content", async () => {
+  const f = directorFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const before = liveDirector(f),
+    epoch = f.client.getDocumentEpoch(),
+    replacement = crypto.randomUUID();
+  f.sockets[0].receive({
+    type: "yjs_snapshot",
+    actor_id: f.actorID,
+    yjs_state: {
+      ...f.state,
+      epoch: replacement,
+      document: { ...f.state.document, revision: "2" },
+    },
+  });
+  await vi.waitFor(() => expect(f.client.getDocumentEpoch()).toBe(replacement));
+  expect(() =>
+    f.client.changeDirector(
+      f.nodeID,
+      { ...before, background: "#ffffff" },
+      before,
+      epoch,
+    ),
+  ).toThrow("其他版本");
+  expect(liveDirector(f).background).toBe(before.background);
+  expect(f.sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
+    0,
+  );
+});
+it("director permission loss refuses transform writes without submitting", async () => {
+  const f = directorFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const before = liveDirector(f);
+  f.sockets[0].receive({
+    type: "heartbeat",
+    permissions: { read: true, write: false },
+  });
+  await vi.waitFor(() => expect(f.client.getSnapshot().writable).toBe(false));
+  expect(() =>
+    f.client.changeDirector(
+      f.nodeID,
+      { ...before, mode: "dynamic" },
+      before,
+      f.client.getDocumentEpoch(),
+    ),
+  ).toThrow();
+  expect(f.sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
+    0,
+  );
+});
+
+it("director pending confirmation refuses an unfinished rich-text input", async () => {
+  const f = setup();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const remove = f.client.textBinding(f.nodeID)!.registerDraftReader!(() => ({
+    schemaVersion: 1,
+    content: {
+      type: "doc",
+      content: [
+        { type: "paragraph", content: [{ type: "text", text: "未完成输入" }] },
+      ],
+    },
+  }));
+  await expect(f.client.waitForSaved()).rejects.toThrow();
+  remove();
+});
+it("retains a validated director failure through workspace remount in the same session", async () => {
+  const f = directorFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const draft = liveDirector(f);
+  f.client.retainDirector(f.nodeID, draft);
+  const reopened = f.client.retainedDirector(f.nodeID)!;
+  expect(reopened.id).toBe(draft.id);
+  reopened.title = "changed";
+  expect(f.client.retainedDirector(f.nodeID)!.title).toBe(draft.title);
+});
 it.each([false, true])(
   "allows creation undo after server label allocation but protects foreign links: %s",
   async (foreignLink) => {

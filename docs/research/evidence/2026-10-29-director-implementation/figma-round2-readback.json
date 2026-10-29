@@ -1,0 +1,1285 @@
+{
+  "capturedAtUTC": "2026-10-29T04:34:19Z",
+  "fileKey": "uLqmeRWuQuzfrp9xOYg6FT",
+  "page": "1361:10",
+  "frames": [
+    {
+      "id": "3093:47499",
+      "name": "DIR-F02 · 动态预演 / 空场景",
+      "x": 205844,
+      "y": 40,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 439,
+      "autoLayouts": 60,
+      "instances": 27,
+      "nativeTexts": 103,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 86
+    },
+    {
+      "id": "3093:47908",
+      "name": "DIR-F01 · 静态预演 / 空场景",
+      "x": 205844,
+      "y": 932,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 338,
+      "autoLayouts": 60,
+      "instances": 26,
+      "nativeTexts": 80,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 84
+    },
+    {
+      "id": "3116:47733",
+      "name": "DIR-F03 · 静态预演 / 角色姿势",
+      "x": 209300,
+      "y": 40,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 346,
+      "autoLayouts": 71,
+      "instances": 33,
+      "nativeTexts": 86,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 122
+    },
+    {
+      "id": "3116:48241",
+      "name": "DIR-F04 · 静态预演 / 机位属性",
+      "x": 210972,
+      "y": 40,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 292,
+      "autoLayouts": 48,
+      "instances": 40,
+      "nativeTexts": 67,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 0,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 100
+    },
+    {
+      "id": "3116:48799",
+      "name": "DIR-F05 · 静态预演 / 物体库与放置",
+      "x": 212644,
+      "y": 40,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 433,
+      "autoLayouts": 121,
+      "instances": 33,
+      "nativeTexts": 123,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 32,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 163
+    },
+    {
+      "id": "3116:49335",
+      "name": "DIR-F06 · 静态预演 / 背景资产",
+      "x": 209300,
+      "y": 972,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 253,
+      "autoLayouts": 37,
+      "instances": 30,
+      "nativeTexts": 56,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 0,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 65
+    },
+    {
+      "id": "3116:49794",
+      "name": "DIR-F07 · 动态预演 / 动作、关键帧与分镜",
+      "x": 210972,
+      "y": 972,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 456,
+      "autoLayouts": 86,
+      "instances": 42,
+      "nativeTexts": 115,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 220
+    },
+    {
+      "id": "3116:50540",
+      "name": "DIR-F08 · 动态预演 / 角色路径",
+      "x": 212644,
+      "y": 972,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 466,
+      "autoLayouts": 90,
+      "instances": 46,
+      "nativeTexts": 118,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 226
+    },
+    {
+      "id": "3117:55800",
+      "name": "DIR-F09 · 动作库 / 43 个预设",
+      "x": 209300,
+      "y": 1904,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 697,
+      "autoLayouts": 214,
+      "instances": 128,
+      "nativeTexts": 238,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 378
+    },
+    {
+      "id": "3117:56529",
+      "name": "DIR-F10 · 动态预演 / 运镜预览确认",
+      "x": 210972,
+      "y": 1904,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 591,
+      "autoLayouts": 99,
+      "instances": 52,
+      "nativeTexts": 137,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 247
+    },
+    {
+      "id": "3117:57233",
+      "name": "DIR-F11 · 模式切换 / 静态覆盖动态",
+      "x": 212644,
+      "y": 1904,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 452,
+      "autoLayouts": 65,
+      "instances": 30,
+      "nativeTexts": 110,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 98
+    },
+    {
+      "id": "3117:57684",
+      "name": "DIR-F12 · 私有恢复稿 / 恢复确认",
+      "x": 209300,
+      "y": 2836,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 348,
+      "autoLayouts": 64,
+      "instances": 28,
+      "nativeTexts": 85,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 93
+    },
+    {
+      "id": "3117:58052",
+      "name": "DIR-F13 · 镜头素材 / 多选回写",
+      "x": 210972,
+      "y": 2836,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 400,
+      "autoLayouts": 75,
+      "instances": 36,
+      "nativeTexts": 93,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 133
+    },
+    {
+      "id": "3117:58613",
+      "name": "DIR-F14 · 导出视频 / 配置",
+      "x": 212644,
+      "y": 2836,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 524,
+      "autoLayouts": 97,
+      "instances": 54,
+      "nativeTexts": 138,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 226
+    },
+    {
+      "id": "3117:59278",
+      "name": "DIR-F15 · 导出视频 / 进度与取消",
+      "x": 209300,
+      "y": 3768,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 452,
+      "autoLayouts": 63,
+      "instances": 29,
+      "nativeTexts": 108,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 97
+    },
+    {
+      "id": "3117:59715",
+      "name": "DIR-F16 · 导出视频 / 失败重试",
+      "x": 210972,
+      "y": 3768,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 451,
+      "autoLayouts": 65,
+      "instances": 30,
+      "nativeTexts": 109,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 97
+    },
+    {
+      "id": "3117:60165",
+      "name": "DIR-F17 · 导演视角 / 操作说明",
+      "x": 212644,
+      "y": 3768,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 353,
+      "autoLayouts": 66,
+      "instances": 27,
+      "nativeTexts": 88,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 97
+    },
+    {
+      "id": "3117:60519",
+      "name": "DIR-F18 · 关键帧 / 曲线调整",
+      "x": 209300,
+      "y": 4700,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 497,
+      "autoLayouts": 93,
+      "instances": 49,
+      "nativeTexts": 129,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 217
+    },
+    {
+      "id": "3117:61201",
+      "name": "DIR-F19 · 添加资产 / 选择文件与格式",
+      "x": 210972,
+      "y": 4700,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 358,
+      "autoLayouts": 68,
+      "instances": 30,
+      "nativeTexts": 90,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 101
+    },
+    {
+      "id": "3117:61574",
+      "name": "DIR-F20 · 退出 / 保存未确认",
+      "x": 212644,
+      "y": 4700,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 350,
+      "autoLayouts": 65,
+      "instances": 29,
+      "nativeTexts": 86,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 95
+    },
+    {
+      "id": "3117:61939",
+      "name": "DIR-F21 · 模式切换 / 动态当前帧覆盖静态",
+      "x": 209300,
+      "y": 5632,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 482,
+      "autoLayouts": 88,
+      "instances": 45,
+      "nativeTexts": 125,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 209
+    },
+    {
+      "id": "3117:62584",
+      "name": "DIR-F22 · 资源加载失败 / 重试",
+      "x": 210972,
+      "y": 5632,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 348,
+      "autoLayouts": 64,
+      "instances": 28,
+      "nativeTexts": 85,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 93
+    },
+    {
+      "id": "3117:62940",
+      "name": "DIR-F23 · 保存冲突 / 版本选择",
+      "x": 212644,
+      "y": 5632,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 362,
+      "autoLayouts": 69,
+      "instances": 31,
+      "nativeTexts": 92,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 103
+    },
+    {
+      "id": "3129:49790",
+      "name": "DIR-F24 · 画布 / 导演台节点与打开入口",
+      "x": 214500,
+      "y": 40,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 90,
+      "autoLayouts": 13,
+      "instances": 9,
+      "nativeTexts": 12,
+      "fonts": [
+        "Geist / Medium",
+        "Geist / Regular"
+      ],
+      "assetCount": 0,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 27
+    },
+    {
+      "id": "3129:50404",
+      "name": "DIR-F25 · 只读工作区",
+      "x": 216172,
+      "y": 40,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 339,
+      "autoLayouts": 68,
+      "instances": 30,
+      "nativeTexts": 84,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 120
+    },
+    {
+      "id": "3129:50791",
+      "name": "DIR-F26 · 窄屏 1024 / 面板收起",
+      "x": 217844,
+      "y": 40,
+      "width": 1024,
+      "height": 768,
+      "nodeCount": 199,
+      "autoLayouts": 12,
+      "instances": 13,
+      "nativeTexts": 22,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 0,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 30
+    },
+    {
+      "id": "3129:51196",
+      "name": "DIR-F27 · 窄屏 1024 / 资产抽屉打开",
+      "x": 214500,
+      "y": 1040,
+      "width": 1024,
+      "height": 768,
+      "nodeCount": 295,
+      "autoLayouts": 55,
+      "instances": 23,
+      "nativeTexts": 61,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 88
+    },
+    {
+      "id": "3129:51484",
+      "name": "DIR-F28 · 对象树 / 多选、显隐与锁定菜单",
+      "x": 216172,
+      "y": 1040,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 329,
+      "autoLayouts": 69,
+      "instances": 30,
+      "nativeTexts": 79,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 111
+    },
+    {
+      "id": "3129:51898",
+      "name": "DIR-F29 · 角色路径 / 控制点与时间冲突",
+      "x": 217844,
+      "y": 1040,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 468,
+      "autoLayouts": 89,
+      "instances": 43,
+      "nativeTexts": 119,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 229
+    },
+    {
+      "id": "3130:50209",
+      "name": "DIR-F30 · 静态动作预览 / 保存姿势",
+      "x": 214500,
+      "y": 2040,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 328,
+      "autoLayouts": 67,
+      "instances": 32,
+      "nativeTexts": 78,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 113
+    },
+    {
+      "id": "3130:50698",
+      "name": "DIR-F31 · 动作库 / 导入独立动作",
+      "x": 216172,
+      "y": 2040,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 421,
+      "autoLayouts": 67,
+      "instances": 31,
+      "nativeTexts": 100,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 104
+    },
+    {
+      "id": "3130:51187",
+      "name": "DIR-F32 · 资产导入 / 解析进度",
+      "x": 217844,
+      "y": 2040,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 350,
+      "autoLayouts": 64,
+      "instances": 27,
+      "nativeTexts": 86,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 95
+    },
+    {
+      "id": "3130:51539",
+      "name": "DIR-F33 · 资产导入 / 格式校验失败",
+      "x": 214500,
+      "y": 3040,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 354,
+      "autoLayouts": 66,
+      "instances": 29,
+      "nativeTexts": 88,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 97
+    },
+    {
+      "id": "3130:51902",
+      "name": "DIR-F34 · 镜头素材 / 空态",
+      "x": 216172,
+      "y": 3040,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 349,
+      "autoLayouts": 64,
+      "instances": 28,
+      "nativeTexts": 86,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 94
+    },
+    {
+      "id": "3130:52260",
+      "name": "DIR-F35 · 画布 / 镜头素材添加成功",
+      "x": 217844,
+      "y": 3040,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 109,
+      "autoLayouts": 12,
+      "instances": 6,
+      "nativeTexts": 14,
+      "fonts": [
+        "Geist / Medium",
+        "Geist / Regular"
+      ],
+      "assetCount": 0,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 46
+    },
+    {
+      "id": "3130:52531",
+      "name": "DIR-F36 · 导出 / 帧率下拉展开",
+      "x": 214500,
+      "y": 4040,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 535,
+      "autoLayouts": 103,
+      "instances": 59,
+      "nativeTexts": 143,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 233
+    },
+    {
+      "id": "3221:60659",
+      "name": "DIR-F37 · 物体资产 / 八类简模筛选",
+      "x": 263652,
+      "y": 40,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 452,
+      "autoLayouts": 131,
+      "instances": 42,
+      "nativeTexts": 132,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 32,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 173
+    },
+    {
+      "id": "3221:61159",
+      "name": "DIR-F38 · 我的角色 / 当前项目空态",
+      "x": 265324,
+      "y": 40,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 271,
+      "autoLayouts": 30,
+      "instances": 26,
+      "nativeTexts": 55,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 0,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 47
+    },
+    {
+      "id": "3221:61552",
+      "name": "DIR-F40 · 私有恢复稿 / 备份失败与下载",
+      "x": 265324,
+      "y": 972,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 347,
+      "autoLayouts": 65,
+      "instances": 29,
+      "nativeTexts": 84,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 12,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 91
+    },
+    {
+      "id": "3221:61893",
+      "name": "DIR-F39 · 分屏与机位注视对象",
+      "x": 263652,
+      "y": 972,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 238,
+      "autoLayouts": 45,
+      "instances": 38,
+      "nativeTexts": 55,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 0,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 101
+    },
+    {
+      "id": "3222:61284",
+      "name": "DIR-F41 · 几何体资产 / 13 个预设",
+      "x": 263652,
+      "y": 1904,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 327,
+      "autoLayouts": 73,
+      "instances": 32,
+      "nativeTexts": 84,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 13,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 105
+    },
+    {
+      "id": "3223:61138",
+      "name": "DIR-F42 · 物体资产 / 搜索结果",
+      "x": 265324,
+      "y": 1904,
+      "width": 1512,
+      "height": 772,
+      "nodeCount": 274,
+      "autoLayouts": 49,
+      "instances": 33,
+      "nativeTexts": 65,
+      "fonts": [
+        "Geist / Regular",
+        "Geist / Medium"
+      ],
+      "assetCount": 3,
+      "unfilledAssets": [],
+      "badClaims": [],
+      "boundPaintNodes": 76
+    }
+  ],
+  "motions": [
+    {
+      "id": "3220:60487",
+      "name": "动作 / T形站姿"
+    },
+    {
+      "id": "3220:60507",
+      "name": "动作 / 蹲姿前进"
+    },
+    {
+      "id": "3220:60527",
+      "name": "动作 / 蹲姿待机"
+    },
+    {
+      "id": "3220:60547",
+      "name": "动作 / 舞蹈"
+    },
+    {
+      "id": "3220:60567",
+      "name": "动作 / 倒地"
+    },
+    {
+      "id": "3220:60587",
+      "name": "动作 / 驾驶"
+    },
+    {
+      "id": "3220:60607",
+      "name": "动作 / 跪姿修理"
+    },
+    {
+      "id": "3220:60627",
+      "name": "动作 / 胸部受击"
+    },
+    {
+      "id": "3220:60647",
+      "name": "动作 / 头部受击"
+    },
+    {
+      "id": "3220:60667",
+      "name": "动作 / 待机"
+    },
+    {
+      "id": "3220:60687",
+      "name": "动作 / 站立交谈"
+    },
+    {
+      "id": "3220:60707",
+      "name": "动作 / 举火把"
+    },
+    {
+      "id": "3220:60727",
+      "name": "动作 / 互动"
+    },
+    {
+      "id": "3220:60747",
+      "name": "动作 / 慢跑"
+    },
+    {
+      "id": "3220:60767",
+      "name": "动作 / 跳跃落地"
+    },
+    {
+      "id": "3220:60787",
+      "name": "动作 / 空中跳跃"
+    },
+    {
+      "id": "3220:60807",
+      "name": "动作 / 起跳"
+    },
+    {
+      "id": "3220:60827",
+      "name": "动作 / 桌面拾取"
+    },
+    {
+      "id": "3220:60847",
+      "name": "动作 / 持枪下瞄"
+    },
+    {
+      "id": "3220:60867",
+      "name": "动作 / 持枪平瞄"
+    },
+    {
+      "id": "3220:60887",
+      "name": "动作 / 持枪上瞄"
+    },
+    {
+      "id": "3220:60907",
+      "name": "动作 / 持枪待机"
+    },
+    {
+      "id": "3220:60927",
+      "name": "动作 / 换弹"
+    },
+    {
+      "id": "3220:60947",
+      "name": "动作 / 射击"
+    },
+    {
+      "id": "3220:60967",
+      "name": "动作 / 后手直拳"
+    },
+    {
+      "id": "3220:60987",
+      "name": "动作 / 前手刺拳"
+    },
+    {
+      "id": "3220:61007",
+      "name": "动作 / 推物"
+    },
+    {
+      "id": "3220:61027",
+      "name": "动作 / 翻滚"
+    },
+    {
+      "id": "3220:61047",
+      "name": "动作 / 坐下"
+    },
+    {
+      "id": "3220:61067",
+      "name": "动作 / 起身"
+    },
+    {
+      "id": "3220:61087",
+      "name": "动作 / 坐姿待机"
+    },
+    {
+      "id": "3220:61107",
+      "name": "动作 / 坐姿交谈"
+    },
+    {
+      "id": "3220:61127",
+      "name": "动作 / 施法起手"
+    },
+    {
+      "id": "3220:61147",
+      "name": "动作 / 施法收手"
+    },
+    {
+      "id": "3220:61167",
+      "name": "动作 / 施法待机"
+    },
+    {
+      "id": "3220:61187",
+      "name": "动作 / 施法发射"
+    },
+    {
+      "id": "3220:61207",
+      "name": "动作 / 冲刺"
+    },
+    {
+      "id": "3220:61227",
+      "name": "动作 / 游泳前进"
+    },
+    {
+      "id": "3220:61247",
+      "name": "动作 / 游泳待机"
+    },
+    {
+      "id": "3220:61267",
+      "name": "动作 / 挥剑"
+    },
+    {
+      "id": "3220:61287",
+      "name": "动作 / 持剑待机"
+    },
+    {
+      "id": "3220:61307",
+      "name": "动作 / 正式步行"
+    },
+    {
+      "id": "3220:61327",
+      "name": "动作 / 行走"
+    }
+  ],
+  "imageHashes": [
+    "9f982db74c6b8dd8cee654f9a3584d8c2b1969c9",
+    "4826008671fee808f4e0ccfb7b4e54813563bad3",
+    "a93e13a9cc078e549fc45d84a6b87cb8582c43e2",
+    "0ea14c5f4764d4be96dd2f8863bb0a1742ab635f",
+    "99ea182c22504d72a70c2393694f7d56cde04fc9",
+    "a83eca6bd1b4a8bba639f7c669c145c0c588b7fa",
+    "9889b15299b0b57b3ea1c5f077f49980d4bcab6b",
+    "e2ab5ca5d27f727a0a82cd60e7865015cb4be5bf",
+    "628721fcbb3d69cb345d27608498202bbd858f15",
+    "c24e570f116f904a9b3f2437be55c4560418603e",
+    "40b670116751f8e159d75f37a0115493296790ba",
+    "688229993e91bb1f858892d03d4940682d09e982",
+    "0d3b4c45f5b1c49e6552f78d31c902bc0d942483",
+    "54c9c6d1c45c0952bea0983b68521f06d12270fe",
+    "5aa78ff8bbe845cde221ac317f57e8152a9045b0",
+    "a1f9a0eeda1b4da8d4537318ebc4058531670004",
+    "eb7d84a17de84826d7390b5139e164589654b306",
+    "9e692fc0497fe1030a74ab8445fc713857454b4d",
+    "f4ba4d29ffd199b6b1ef8723a1a14b24266ef104",
+    "728f990982c6bdb1b195ba0ad14659beef9663fb",
+    "bf8fe34d80094a3aab3fdff636790cb9583550fb",
+    "32f3166aefa69ee472e8565bd1347270fc9fb39d",
+    "1e408d804463abd91bef8b98fb16a47c12610dab",
+    "7d0eb31a3b5930dce31716d69ada2b4cb62a5d93",
+    "dac58a152616ab833cf9e27c68ac1a516905db85",
+    "d7e15125c70232db3b131a31e134fb696ead585b",
+    "a3c13d6b5078a81dd6d9f6d569799bf67171bbf3",
+    "edf61075f06b793b8bb669d27ffd978b7a42272a",
+    "a858497ca3f1415045e523af5b7914b0b7eff89a",
+    "3d0bb2251d2c7c2ae298d5f7f9059f9b344ae0f6",
+    "0aa4b79a40745687f5866e3b8dc9013f2a2b8a77",
+    "80e2b9578ee9cb6066a2e4f7ed48ba3ef458628c",
+    "14b3eaa9f15ebf70e48eef208a877092c27d0802",
+    "b5aad0d3e0134ddfc96a69744c01d44fb1c6f65f",
+    "0794e1a75483893cd7844d88937127f1438704f5",
+    "53ab8d00d94eeecb4123d623c157992437a2ccae",
+    "ae52b13ef5cb9b6e373eefb7bde309cbf061fb4d",
+    "01105ae3c8ce78851327d620192d80031958cc16",
+    "74ac529da2d6a041eb1d55204b13a0e1e87528a5",
+    "198919a7793a88c95d9805e0bc610e04b24f04c8",
+    "47f1dcb1b9c4d70686ef6663f2de009e0b1bab2f",
+    "fd4b0ceb3d4c3d135688d34baa8cce325bfb3e7a",
+    "16c249d8f5886b269284fc0f15c5629b261cc3f2",
+    "db217ac29e49e530dd0349ee42df674f5f5becf8",
+    "3b4213ee7c0fe844211b7600b9b60f53ea9343bb",
+    "bfc01c81c74835704cedf5c06ddcc02f6f681baf",
+    "03e1377e5f94e8f7500baaa49225fae9c16dd85b",
+    "833d6070e71e9f2d6be6ed57744bf60ed2c1366f",
+    "549c6bf83916857b4664e45b358e614ce464e792",
+    "d4febef9355a64ae1b9b59fdc467b30e9b01a687",
+    "893e2fbb4891e5cb2d91ac79dd71352f2121bd16",
+    "0de6c1063d590805fdfabb9e0f9f930bf969b391",
+    "52c540bc93b1894eb53522418b3e3c3d7c208b56",
+    "29b413886e0fbd672c4774f6b46563f099531b77",
+    "304d6084eb8561b4209361867f8da69f0acf0cf0",
+    "e1bfcb1fc5af268c541f264a6f6b42486cb2034d",
+    "26bbc94f73b5ff20cf0fb6944e7fc8d95a18eeda"
+  ],
+  "splitOptions": [
+    {
+      "id": "3221:62386",
+      "x": 0,
+      "w": 84,
+      "texts": [
+        {
+          "s": "坐标",
+          "x": 28,
+          "w": 28
+        }
+      ]
+    },
+    {
+      "id": "3221:62395",
+      "x": 92,
+      "w": 84,
+      "texts": [
+        {
+          "s": "旋转",
+          "x": 28,
+          "w": 28
+        }
+      ]
+    },
+    {
+      "id": "3221:62404",
+      "x": 184,
+      "w": 84,
+      "texts": [
+        {
+          "s": "对象",
+          "x": 28,
+          "w": 28
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "path": "frontend/src/components/canvas/director/director-assets.ts",
+      "sha256": "7f96d2e4de6fc0f4ec4d28711f8b362a1ba06ee434705b7c5e8b018df3ebbbcd"
+    },
+    {
+      "path": "frontend/src/components/canvas/director/director-model-catalog.ts",
+      "sha256": "42c5d626d7c08795b960a5d1bd0fedf23b86b4a2064d563fe7419f8225e1e9a7"
+    },
+    {
+      "path": "frontend/src/components/canvas/director/director-asset-library.tsx",
+      "sha256": "c2f4c6da039ac7c187f9655c31534c109f6bca2f5750232beaa834306f5fc4e9"
+    },
+    {
+      "path": "frontend/src/components/canvas/director/director-project-assets.tsx",
+      "sha256": "7595a906897c31c831e8ca4e776aac7c2e577e9f8df60299ea788db69c6b27be"
+    },
+    {
+      "path": "frontend/src/components/canvas/director/director-motion-catalog.ts",
+      "sha256": "be9f5ab5d8d72645b83782bb03a597d2846312a041d5f0237ed63d5acedd6b1b"
+    },
+    {
+      "path": "frontend/src/components/canvas/director/director-motion-library.tsx",
+      "sha256": "301d17fe39757e477beb81f008376887196a6212596cc9fcb7b8aff89b55fd7a"
+    },
+    {
+      "path": "frontend/src/components/canvas/director/director-import-dialog.tsx",
+      "sha256": "c3fb8602ab1b5b0d24f0928df5c098d04bc54d2565e3edc325d11cd6d5707702"
+    },
+    {
+      "path": "frontend/src/components/canvas/director/canvas-director-workspace.tsx",
+      "sha256": "33204ddb35ec324a27d50b0195f7740105bebf6e9b8b8d0ec6adc9e6c9de09b3"
+    },
+    {
+      "path": "frontend/src/components/canvas/director/director-recovery.ts",
+      "sha256": "ebfa515fd9ebb76b316f156aa42c3ead96e0f632352b20074d200caa2b6fc7d0"
+    }
+  ],
+  "screenshots": [
+    {
+      "label": "actors",
+      "nodeId": "3093:47908",
+      "file": "figma-round2-actors.png"
+    },
+    {
+      "label": "objects",
+      "nodeId": "3116:48799",
+      "file": "figma-round2-objects.png"
+    },
+    {
+      "label": "categories",
+      "nodeId": "3221:60659",
+      "file": "figma-round2-categories.png"
+    },
+    {
+      "label": "mine",
+      "nodeId": "3221:61159",
+      "file": "figma-round2-mine.png"
+    },
+    {
+      "label": "motions",
+      "nodeId": "3117:55800",
+      "file": "figma-round2-motions.png"
+    },
+    {
+      "label": "recovery",
+      "nodeId": "3117:57684",
+      "file": "figma-round2-recovery.png"
+    },
+    {
+      "label": "split",
+      "nodeId": "3221:61893",
+      "file": "figma-round2-split.png"
+    },
+    {
+      "label": "recovery-failure",
+      "nodeId": "3221:61552",
+      "file": "figma-round2-recovery-failure.png"
+    },
+    {
+      "label": "motion-preview",
+      "nodeId": "3130:50209",
+      "file": "figma-round2-motion-preview.png"
+    },
+    {
+      "label": "motion-import",
+      "nodeId": "3130:50698",
+      "file": "figma-round2-motion-import.png"
+    },
+    {
+      "label": "geometries",
+      "nodeId": "3222:61284",
+      "file": "figma-round2-geometries.png"
+    },
+    {
+      "label": "search",
+      "nodeId": "3223:61138",
+      "file": "figma-round2-search.png"
+    }
+  ],
+  "geometryUploads": [
+    {
+      "id": "character",
+      "nodeId": "3222:61783",
+      "exit": 0
+    },
+    {
+      "id": "box",
+      "nodeId": "3222:61788",
+      "exit": 0
+    },
+    {
+      "id": "sphere",
+      "nodeId": "3222:61794",
+      "exit": 0
+    },
+    {
+      "id": "cuboid",
+      "nodeId": "3222:61799",
+      "exit": 0
+    },
+    {
+      "id": "cylinder",
+      "nodeId": "3222:61805",
+      "exit": 0
+    },
+    {
+      "id": "cone",
+      "nodeId": "3222:61810",
+      "exit": 0
+    },
+    {
+      "id": "pyramid",
+      "nodeId": "3222:61816",
+      "exit": 0
+    },
+    {
+      "id": "torus",
+      "nodeId": "3222:61821",
+      "exit": 0
+    },
+    {
+      "id": "plane",
+      "nodeId": "3222:61827",
+      "exit": 0
+    },
+    {
+      "id": "capsule",
+      "nodeId": "3222:61832",
+      "exit": 0
+    },
+    {
+      "id": "circle",
+      "nodeId": "3222:61838",
+      "exit": 0
+    },
+    {
+      "id": "half_arc",
+      "nodeId": "3222:61843",
+      "exit": 0
+    },
+    {
+      "id": "half_cylinder",
+      "nodeId": "3222:61849",
+      "exit": 0
+    }
+  ]
+}

@@ -147,3 +147,14 @@ R6 画布重建保留上节登记的指针、坐标与节点交互算法，改�
 | `history/history.ts`       | `pages/canvas/use-canvas-history.ts` 的操作边界与有界历史机制                                      | 本地不可变图引用、合法命令检查、保存后限制及引用编号保护；不迁入上游持久store |
 
 编辑器新增文字、分组、标注线及相机保存沿现有生成API和Go合同实现；未引入上游Wails、SQLite、供应商调用或远程插件运行时。来源说明不代表上游全部功能、容量性能或真实业务验收完成。
+
+
+## 3D 导演台实现整理（2026-10-29）
+
+固定参考：[BeefTV `2327ee2d80282b10dd8bef0f26b48990d46f5c3b`](https://github.com/glanderness/BeefTV/tree/2327ee2d80282b10dd8bef0f26b48990d46f5c3b)，MIT。完整版权与许可继续随应用分发于[BeefTV许可](/licenses/beeftv.txt)和[上游NOTICE](/licenses/beeftv-notice.txt)。整理范围为独立通道插值、路径重定时、机位绑定、可取消拖拽、资源生命周期与异步保存身份语义，目标为 `frontend/src/components/canvas/director/`。Glowloom沿用自身Yjs权威保存、Go领域合同、项目媒体服务和shadcn组件，没有复制整个上游工作台。
+
+Quaternius Standard男女模型及Universal Animation Library Standard中的Standard 全部43条动作（含待机、行走、慢跑等）使用CC0来源；模型声明位于 `/director/models/`，动作[来源与变更说明](/director/motions/README.md)和[原许可](/director/motions/Quaternius-CC0.txt)随资源分发。体型变形和旋转重定向由本项目实现，不将路径动画或静态姿势冒称为上游完整动作库。
+
+逐帧WebM编码依赖未修改的 **mediabunny 1.62.1**，MPL-2.0；[完整许可](/licenses/mediabunny-MPL-2.0.txt)随应用提供。[上游源代码](https://github.com/Vanilagy/mediabunny)和[固定版本源码包](https://registry.npmjs.org/mediabunny/-/mediabunny-1.62.1.tgz)可获取该库对应源码；本项目未修改该依赖的源文件。
+
+导演台简模目录使用 Kenney Furniture Kit / Nature Kit 的32款 CC0 模型；转换清单、源文件与哈希见 `/director/catalog/manifest.json`，许可见 `/director/catalog/` 随附声明。

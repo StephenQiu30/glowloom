@@ -3,21 +3,12 @@ package domain
 import (
 	"bytes"
 	"encoding/json"
-	"reflect"
 	"slices"
 	"strings"
 
 	"github.com/google/uuid"
 )
 
-func equalJSON(a, b []byte) bool {
-	var x, y any
-	left := json.NewDecoder(bytes.NewReader(a))
-	left.UseNumber()
-	right := json.NewDecoder(bytes.NewReader(b))
-	right.UseNumber()
-	return left.Decode(&x) == nil && right.Decode(&y) == nil && reflect.DeepEqual(x, y)
-}
 func itemIdentity(object map[string]any) string {
 	if id, ok := object["id"].(string); ok {
 		return id

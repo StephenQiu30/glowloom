@@ -1,0 +1,866 @@
+[
+  {
+    "id": "kenney-chair",
+    "name": "椅子",
+    "category": "furniture",
+    "categoryLabel": "家具",
+    "url": "/director/catalog/kenney-chair.glb",
+    "thumbnail": "/director/catalog/kenney-chair.png",
+    "heightM": 0.9,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/chair.glb",
+    "sourceSha256": "c8a11eec93e89e31250ba91afc1b8d56c3bec7ae86640fd1239f595ff4180883",
+    "sha256": "6cac61536b4bf8bb63960c7d316ff7c9f0ca88cb90d371371a92822e22c62b27",
+    "sourceBounds": {
+      "min": [
+        0.0,
+        0.0,
+        -0.20000000298023224
+      ],
+      "max": [
+        0.20000000298023224,
+        0.4699999988079071,
+        0.0
+      ]
+    },
+    "scale": 1.9148936218781514,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-sofa",
+    "name": "沙发",
+    "category": "furniture",
+    "categoryLabel": "家具",
+    "url": "/director/catalog/kenney-sofa.glb",
+    "thumbnail": "/director/catalog/kenney-sofa.png",
+    "heightM": 0.88,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/loungeSofa.glb",
+    "sourceSha256": "1886b811c0d3ad0d8525a4fd43adf4112c497c8e0ed906f06877ca3517f4c7dd",
+    "sha256": "667d6cf5801145ff12ae72d1da348cf5053b46c061efc894236952b06bb8414e",
+    "sourceBounds": {
+      "min": [
+        0.0,
+        0.0,
+        -0.4100000262260437
+      ],
+      "max": [
+        0.9799999594688416,
+        0.46000000834465027,
+        0.0
+      ]
+    },
+    "scale": 1.9130434435572208,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-table",
+    "name": "方桌",
+    "category": "furniture",
+    "categoryLabel": "家具",
+    "url": "/director/catalog/kenney-table.glb",
+    "thumbnail": "/director/catalog/kenney-table.png",
+    "heightM": 0.75,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/table.glb",
+    "sourceSha256": "ff1a94498d023957f4bc3ff6f55a7a82977d336dbf01a573b3364f03afe5ff61",
+    "sha256": "61a031b299150b9e9dea648ad82082c6b118e8d408fd3aa29ae931285f87e5bb",
+    "sourceBounds": {
+      "min": [
+        0.0,
+        0.0,
+        -0.44737333059310913
+      ],
+      "max": [
+        0.8414879441261292,
+        0.3267339766025543,
+        0.0
+      ]
+    },
+    "scale": 2.2954453889327673,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-bed",
+    "name": "双人床",
+    "category": "furniture",
+    "categoryLabel": "家具",
+    "url": "/director/catalog/kenney-bed.glb",
+    "thumbnail": "/director/catalog/kenney-bed.png",
+    "heightM": 0.65,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/bedDouble.glb",
+    "sourceSha256": "c49b33e7d797d2ba1111895587dba7ff63b17a712eb9b4ceeb40a598f73e476c",
+    "sha256": "c08d3b5dea0f61b64d5a78acd6644375726f0820416f744a20b751ee403e9584",
+    "sourceBounds": {
+      "min": [
+        -8.79283526197816e-10,
+        0.0,
+        -1.125
+      ],
+      "max": [
+        0.9559999920426173,
+        0.375,
+        0.0
+      ]
+    },
+    "scale": 1.7333333333333334,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-wall",
+    "name": "墙体",
+    "category": "architecture",
+    "categoryLabel": "建筑",
+    "url": "/director/catalog/kenney-wall.glb",
+    "thumbnail": "/director/catalog/kenney-wall.png",
+    "heightM": 2.6,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/wall.glb",
+    "sourceSha256": "69273d5d623bddfce41d12d4e5eeb5621ea04f1edcbd8f35c00a60c2fd3258b7",
+    "sha256": "ce09f5e5318328fda6d0656e1f87ccde39c1d1b0c2bee673aa98aee8b8a0c02d",
+    "sourceBounds": {
+      "min": [
+        0.0,
+        0.0,
+        -0.05000000074505806
+      ],
+      "max": [
+        1.0,
+        1.2895317077636719,
+        0.0
+      ]
+    },
+    "scale": 2.0162358043207522,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-doorway",
+    "name": "门框",
+    "category": "architecture",
+    "categoryLabel": "建筑",
+    "url": "/director/catalog/kenney-doorway.glb",
+    "thumbnail": "/director/catalog/kenney-doorway.png",
+    "heightM": 2.6,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/doorway.glb",
+    "sourceSha256": "08983e299822140d580eb55d4b4e4e4552c37bb6e88571e41d2b7b5d2eef987e",
+    "sha256": "8323bd27281e8c099c39f14aac2b43647f7d0aeba58b58fda28c933b8c43a05f",
+    "sourceBounds": {
+      "min": [
+        0.0,
+        0.0,
+        -0.10124999285148659
+      ],
+      "max": [
+        0.4859999716281891,
+        1.0095317363739014,
+        0.012149997051486588
+      ]
+    },
+    "scale": 2.5754514754918367,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-stairs",
+    "name": "楼梯",
+    "category": "architecture",
+    "categoryLabel": "建筑",
+    "url": "/director/catalog/kenney-stairs.glb",
+    "thumbnail": "/director/catalog/kenney-stairs.png",
+    "heightM": 1.5,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/stairs.glb",
+    "sourceSha256": "b442f997583e417fcb32ec89470ecc441b0556f416d3afe00e3f18c806e556a0",
+    "sha256": "c1fee072b2185e5b675c3628c355a81b1980ac2bd6011652f69ae7fdc90fa20f",
+    "sourceBounds": {
+      "min": [
+        0.0,
+        1.2319242949701808e-15,
+        -0.7899999618530273
+      ],
+      "max": [
+        1.823434829711914,
+        1.339531660079956,
+        0.0
+      ]
+    },
+    "scale": 1.1197943614938277,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-platform",
+    "name": "平台",
+    "category": "architecture",
+    "categoryLabel": "建筑",
+    "url": "/director/catalog/kenney-platform.glb",
+    "thumbnail": "/director/catalog/kenney-platform.png",
+    "heightM": 0.2,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/floorFull.glb",
+    "sourceSha256": "99fc5df646d8dc605d6fe35001fe5b15bb7b269cc5c65f4f7793fbc76ff3d822",
+    "sha256": "428929bb95680818f43e720b825038ef6fcc3dcbff41d7c44c6496cd2031165e",
+    "sourceBounds": {
+      "min": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "max": [
+        1.0,
+        0.05000000074505806,
+        0.0
+      ]
+    },
+    "scale": 3.999999940395356,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-tree",
+    "name": "树木",
+    "category": "nature",
+    "categoryLabel": "自然",
+    "url": "/director/catalog/kenney-tree.glb",
+    "thumbnail": "/director/catalog/kenney-tree.png",
+    "heightM": 4,
+    "source": "https://kenney.nl/assets/nature-kit",
+    "sourceFile": "Models/GLTF format/tree_default.glb",
+    "sourceSha256": "562d29638c902de3c7bee465d3a53bb77117efbc392ae04ed894faf6b5dc691d",
+    "sha256": "14fcb09edf2a16a6d63db02955142cda7d093a94ae39399bde5f3111a1bf550e",
+    "sourceBounds": {
+      "min": [
+        -0.3775000274181366,
+        -0.05,
+        -0.32692450284957886
+      ],
+      "max": [
+        0.3775000274181366,
+        1.6578874111175537,
+        0.32692450284957886
+      ]
+    },
+    "scale": 2.3420747608781807,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-rock",
+    "name": "岩石",
+    "category": "nature",
+    "categoryLabel": "自然",
+    "url": "/director/catalog/kenney-rock.glb",
+    "thumbnail": "/director/catalog/kenney-rock.png",
+    "heightM": 1.2,
+    "source": "https://kenney.nl/assets/nature-kit",
+    "sourceFile": "Models/GLTF format/rock_largeA.glb",
+    "sourceSha256": "6dd15390fd96501dcd1454765a17ba61dbbd8d47705dfe5149c8dd92b353ce25",
+    "sha256": "951dac752093563fbefe96328faa0aa18e69d9871731db0aac1719547eb06c31",
+    "sourceBounds": {
+      "min": [
+        -0.3924533426761627,
+        -0.050000000000000294,
+        -0.5077307224273682
+      ],
+      "max": [
+        0.3924533426761627,
+        0.20977596640586854,
+        0.5077307224273682
+      ]
+    },
+    "scale": 4.619364972836415,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-bush",
+    "name": "灌木",
+    "category": "nature",
+    "categoryLabel": "自然",
+    "url": "/director/catalog/kenney-bush.glb",
+    "thumbnail": "/director/catalog/kenney-bush.png",
+    "heightM": 0.8,
+    "source": "https://kenney.nl/assets/nature-kit",
+    "sourceFile": "Models/GLTF format/plant_bush.glb",
+    "sourceSha256": "ae7b1beb39e242b13f5f29e3ec23ef21034b814f82297b8aa00a9bf4e1b09590",
+    "sha256": "839b10d7532672d5217e617eb814681eecebe5ec421c1dd47bc9cea99ee7a1b6",
+    "sourceBounds": {
+      "min": [
+        -0.1979999989271164,
+        -0.05,
+        -0.1979999989271164
+      ],
+      "max": [
+        0.1979999989271164,
+        0.19444358050823213,
+        0.1979999989271164
+      ]
+    },
+    "scale": 3.272738839517442,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-flower",
+    "name": "花卉",
+    "category": "nature",
+    "categoryLabel": "自然",
+    "url": "/director/catalog/kenney-flower.glb",
+    "thumbnail": "/director/catalog/kenney-flower.png",
+    "heightM": 0.4,
+    "source": "https://kenney.nl/assets/nature-kit",
+    "sourceFile": "Models/GLTF format/flower_redA.glb",
+    "sourceSha256": "171930b7789ddbf735af3745576b5393750beb9133b9ff4a444bb6bb2986c020",
+    "sha256": "c6093368100d67b367ac8efa1ba919367220c25bf2e925f6ed685ef84c6c8e91",
+    "sourceBounds": {
+      "min": [
+        -0.10453449934720993,
+        -0.05,
+        -0.09052953124046326
+      ],
+      "max": [
+        0.054563019424676895,
+        0.24249998927116395,
+        0.09052953124046326
+      ]
+    },
+    "scale": 1.3675214176817543,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-bench",
+    "name": "长椅",
+    "category": "street",
+    "categoryLabel": "街道",
+    "url": "/director/catalog/kenney-bench.glb",
+    "thumbnail": "/director/catalog/kenney-bench.png",
+    "heightM": 0.8,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/bench.glb",
+    "sourceSha256": "ba05a6d23a5a5a44da016757632070e47ff7587ce10e2f6d6d52328b4cf5489b",
+    "sha256": "82a43c6c196ad50b07798093b2aca5a4ad1daddb3896738d5649ee4ed4de9071",
+    "sourceBounds": {
+      "min": [
+        0.0,
+        0.0,
+        -0.20000000298023224
+      ],
+      "max": [
+        0.4000000059604645,
+        0.4699999988079071,
+        0.0
+      ]
+    },
+    "scale": 1.70212766389169,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-trashcan",
+    "name": "垃圾桶",
+    "category": "street",
+    "categoryLabel": "街道",
+    "url": "/director/catalog/kenney-trashcan.glb",
+    "thumbnail": "/director/catalog/kenney-trashcan.png",
+    "heightM": 0.8,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/trashcan.glb",
+    "sourceSha256": "e0ccc1fe50cbd05386477fdff527171d1cf7c0de2ba7ff3233f8d9561feb2561",
+    "sha256": "37db85b4ae731a604b9a40f3f42a416707512ef35e46bf8b966ee3f498904241",
+    "sourceBounds": {
+      "min": [
+        -0.10384674055672745,
+        -2.5062356547304757e-18,
+        -0.11163647732263945
+      ],
+      "max": [
+        0.10384674055672745,
+        0.42786596956182327,
+        0.12248776774529391
+      ]
+    },
+    "scale": 1.8697443987407518,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-fence",
+    "name": "木栅栏",
+    "category": "street",
+    "categoryLabel": "街道",
+    "url": "/director/catalog/kenney-fence.glb",
+    "thumbnail": "/director/catalog/kenney-fence.png",
+    "heightM": 1.2,
+    "source": "https://kenney.nl/assets/nature-kit",
+    "sourceFile": "Models/GLTF format/fence_planks.glb",
+    "sourceSha256": "2db68f60d24443dbeab05dedd92fcc665d0e21bd261c6a668ea9022a732a06a9",
+    "sha256": "f96341ca1ed8fe942182d661a29e11355598e274bd68288583be52524ad82046",
+    "sourceBounds": {
+      "min": [
+        -0.5,
+        -0.05,
+        -0.5259000062942505
+      ],
+      "max": [
+        0.5,
+        0.29502729773521424,
+        -0.4300000071525574
+      ]
+    },
+    "scale": 3.4779856778779314,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-sign",
+    "name": "路牌",
+    "category": "street",
+    "categoryLabel": "街道",
+    "url": "/director/catalog/kenney-sign.glb",
+    "thumbnail": "/director/catalog/kenney-sign.png",
+    "heightM": 1.8,
+    "source": "https://kenney.nl/assets/nature-kit",
+    "sourceFile": "Models/GLTF format/sign.glb",
+    "sourceSha256": "c658c21672ecd63c5d3e53f06f875d68e6509edb1ab7e3b75374df7c61e7dd0c",
+    "sha256": "244215a071dda3013b573fbc5c41f8f0912ea1c9fecd68a76b9ee9ac64760ac4",
+    "sourceBounds": {
+      "min": [
+        -0.15000000596046448,
+        -0.05,
+        -0.05249999836087227
+      ],
+      "max": [
+        0.15000000596046448,
+        0.35877050161361695,
+        0.017499998211860657
+      ]
+    },
+    "scale": 4.4034488616339,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-fridge",
+    "name": "冰箱",
+    "category": "kitchen",
+    "categoryLabel": "厨房",
+    "url": "/director/catalog/kenney-fridge.glb",
+    "thumbnail": "/director/catalog/kenney-fridge.png",
+    "heightM": 1.8,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/kitchenFridge.glb",
+    "sourceSha256": "8af4f4bbb1b5525ad8226e97926a5af60fa8fb20a3cb74dbda5328a9d320dbab",
+    "sha256": "f66ff56627298a0fc069a27ea2903790cd57daee6dc8482949cd76d8d2f5e33e",
+    "sourceBounds": {
+      "min": [
+        0.0,
+        0.0,
+        -0.28193390369415283
+      ],
+      "max": [
+        0.4300000071525574,
+        0.9200000166893005,
+        0.01000000014901161
+      ]
+    },
+    "scale": 1.9565217036380667,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-stove",
+    "name": "灶台",
+    "category": "kitchen",
+    "categoryLabel": "厨房",
+    "url": "/director/catalog/kenney-stove.glb",
+    "thumbnail": "/director/catalog/kenney-stove.png",
+    "heightM": 0.9,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/kitchenStove.glb",
+    "sourceSha256": "3239edb36295dfca9530a9b9a6ad0aff98ce62e7cf8d13ca2a5a1a6b2a904656",
+    "sha256": "05f6593f280bda312268f2436a40b76f3f755110e3d4c5f641d4aff6d23f0c4c",
+    "sourceBounds": {
+      "min": [
+        0.0,
+        0.0,
+        -0.44999998807907104
+      ],
+      "max": [
+        0.4300000071525574,
+        0.44999998807907104,
+        0.0
+      ]
+    },
+    "scale": 2.0000000529819077,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-sink",
+    "name": "厨房水槽",
+    "category": "kitchen",
+    "categoryLabel": "厨房",
+    "url": "/director/catalog/kenney-sink.glb",
+    "thumbnail": "/director/catalog/kenney-sink.png",
+    "heightM": 0.9,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/kitchenSink.glb",
+    "sourceSha256": "7b9610277d71f00dcf1bba49cf4d98d77ce5177e84bf76c7da2f8893e542f743",
+    "sha256": "40f0c0d359049eb01092d14831e3b1841a576c0c6916cfcdec03d7f1673c4666",
+    "sourceBounds": {
+      "min": [
+        0.0,
+        0.0,
+        -0.44999998807907104
+      ],
+      "max": [
+        0.4300000071525574,
+        0.4899999797344208,
+        0.0
+      ]
+    },
+    "scale": 1.8367347698418246,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-toaster",
+    "name": "烤面包机",
+    "category": "kitchen",
+    "categoryLabel": "厨房",
+    "url": "/director/catalog/kenney-toaster.glb",
+    "thumbnail": "/director/catalog/kenney-toaster.png",
+    "heightM": 0.25,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/toaster.glb",
+    "sourceSha256": "38c1fb7b122be9997758c8ee855d87f28014cf282f24d66d39f4e8d8b236d2af",
+    "sha256": "6dda63f3de7d733a4931902d2ae41a690d2d7921bf1029f97787286092ec75b6",
+    "sourceBounds": {
+      "min": [
+        -0.09399186819791794,
+        0.0,
+        -0.05000000074505806
+      ],
+      "max": [
+        0.09399186819791794,
+        0.12999999523162842,
+        0.05000000074505806
+      ]
+    },
+    "scale": 1.9230769936149668,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-bathtub",
+    "name": "浴缸",
+    "category": "bathroom",
+    "categoryLabel": "卫浴",
+    "url": "/director/catalog/kenney-bathtub.glb",
+    "thumbnail": "/director/catalog/kenney-bathtub.png",
+    "heightM": 0.6,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/bathtub.glb",
+    "sourceSha256": "54c405c7035aab63dc41e709dc3c50fc5bcfbc4cddc91ffc54188075a6d25d01",
+    "sha256": "33dbf6d093b4d8dd3b2789e628a609ab5dcd03213975a693e5cca453cb6af291",
+    "sourceBounds": {
+      "min": [
+        0.0,
+        -3.1583624553714476e-16,
+        -0.5600000023841858
+      ],
+      "max": [
+        1.190000057220459,
+        0.41999998688697815,
+        0.0
+      ]
+    },
+    "scale": 1.428571473173544,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-toilet",
+    "name": "马桶",
+    "category": "bathroom",
+    "categoryLabel": "卫浴",
+    "url": "/director/catalog/kenney-toilet.glb",
+    "thumbnail": "/director/catalog/kenney-toilet.png",
+    "heightM": 0.75,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/toilet.glb",
+    "sourceSha256": "16165cfd03c56c2cb443b800570810a22ef770f65e7a468f6761d9dc14eaaeae",
+    "sha256": "d4b0926bc2b51e3f262a439179ac949d9ed7b00d3aa028673f9f1981ee4dc35c",
+    "sourceBounds": {
+      "min": [
+        9.916778898055867e-09,
+        0.0,
+        -1.0619307710957315e-08
+      ],
+      "max": [
+        0.31255000922199083,
+        0.4509650036692619,
+        0.4771767008210499
+      ]
+    },
+    "scale": 1.6631002270634079,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-shower",
+    "name": "淋浴间",
+    "category": "bathroom",
+    "categoryLabel": "卫浴",
+    "url": "/director/catalog/kenney-shower.glb",
+    "thumbnail": "/director/catalog/kenney-shower.png",
+    "heightM": 2.1,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/shower.glb",
+    "sourceSha256": "25c1cebad681fe369dc04839a8f08f5da2ccbd99b3a70aa83fe2e4d1590c6951",
+    "sha256": "2f18dbf75b86b07829e120723bff8fbcf6b024fa226781f7782e2bb9891a46b6",
+    "sourceBounds": {
+      "min": [
+        -0.5617919927080053,
+        0.0,
+        -0.561792012072279
+      ],
+      "max": [
+        1.9364273851074643e-08,
+        1.0940332029104234,
+        0.01999999684707815
+      ]
+    },
+    "scale": 1.9195029862105042,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-bathroom-sink",
+    "name": "洗手池",
+    "category": "bathroom",
+    "categoryLabel": "卫浴",
+    "url": "/director/catalog/kenney-bathroom-sink.glb",
+    "thumbnail": "/director/catalog/kenney-bathroom-sink.png",
+    "heightM": 0.85,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/bathroomSink.glb",
+    "sourceSha256": "39d4f19608cab7e0fed52303b2c689f5f51fae1bad9b6913cb53d838875e797e",
+    "sha256": "a7e0a1a5dc23417d1ccad3936040b0a3d0c0114a2c1bda27bf2f6a91edb0b9ce",
+    "sourceBounds": {
+      "min": [
+        0.0,
+        -0.4000000059604645,
+        -0.28999999165534973
+      ],
+      "max": [
+        0.3400000035762787,
+        0.1599999964237213,
+        0.0
+      ]
+    },
+    "scale": 1.5178571363949045,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-desk",
+    "name": "办公桌",
+    "category": "office",
+    "categoryLabel": "办公",
+    "url": "/director/catalog/kenney-desk.glb",
+    "thumbnail": "/director/catalog/kenney-desk.png",
+    "heightM": 0.75,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/desk.glb",
+    "sourceSha256": "0164fe828f028b321730fb8c74502e353583f751be74da1682d42fff7d3c5a42",
+    "sha256": "bb0e09a8ef87ebc8f9e25db99f5811bd4cf7383c2a44b794f450c94e865a4105",
+    "sourceBounds": {
+      "min": [
+        -0.009999999776482582,
+        0.0,
+        -0.3799999952316284
+      ],
+      "max": [
+        0.7244754433631897,
+        0.38440755009651184,
+        0.012299999223480212
+      ]
+    },
+    "scale": 1.9510542907174955,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-office-chair",
+    "name": "办公椅",
+    "category": "office",
+    "categoryLabel": "办公",
+    "url": "/director/catalog/kenney-office-chair.glb",
+    "thumbnail": "/director/catalog/kenney-office-chair.png",
+    "heightM": 1.1,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/chairDesk.glb",
+    "sourceSha256": "46406619186034cbe92b19b79a5f1a8e3f442a17a70a7524ef2c0ad0f35095c6",
+    "sha256": "a34b7112a21993ecc74345ef3457446b30052c41ec7901b9d0aca92da6749f69",
+    "sourceBounds": {
+      "min": [
+        -2.3841845164795927e-11,
+        0.0,
+        -0.31429903566837314
+      ],
+      "max": [
+        0.3349500000238419,
+        0.6075999760627746,
+        -3.5762786898541066e-09
+      ]
+    },
+    "scale": 1.81040165131006,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-monitor",
+    "name": "显示器",
+    "category": "office",
+    "categoryLabel": "办公",
+    "url": "/director/catalog/kenney-monitor.glb",
+    "thumbnail": "/director/catalog/kenney-monitor.png",
+    "heightM": 0.5,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/computerScreen.glb",
+    "sourceSha256": "5942cbad29a2d2b956619569926e81d50a4174403d592fece6556e57632dc643",
+    "sha256": "0398a2f2de817d20a3dfbeb8eb903018dd922512ba4ed99129776d759d58b47c",
+    "sourceBounds": {
+      "min": [
+        -1.4438228216156449e-15,
+        -8.014826700184745e-32,
+        -0.10400399565696716
+      ],
+      "max": [
+        0.39268800616264343,
+        0.29428520798683167,
+        -5.414335713407566e-16
+      ]
+    },
+    "scale": 1.6990320492845614,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-laptop",
+    "name": "笔记本电脑",
+    "category": "office",
+    "categoryLabel": "办公",
+    "url": "/director/catalog/kenney-laptop.glb",
+    "thumbnail": "/director/catalog/kenney-laptop.png",
+    "heightM": 0.25,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/laptop.glb",
+    "sourceSha256": "5fa8a1f4a71ab8d82ef64da77a6973ffd350c6d4557516069a4ffd4bb8d808af",
+    "sha256": "059880d363ba5a9ba3b054d103d502942b9f719f557822e340ebf609d8a13e7e",
+    "sourceBounds": {
+      "min": [
+        0.0,
+        0.0,
+        -0.24006515264511108
+      ],
+      "max": [
+        0.2640000104904175,
+        0.16180940508842467,
+        0.0
+      ]
+    },
+    "scale": 1.5450276197689587,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-cardboard-box",
+    "name": "纸箱",
+    "category": "everyday",
+    "categoryLabel": "日用",
+    "url": "/director/catalog/kenney-cardboard-box.glb",
+    "thumbnail": "/director/catalog/kenney-cardboard-box.png",
+    "heightM": 0.5,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/cardboardBoxClosed.glb",
+    "sourceSha256": "4af079dca52960912764574950f0549ff2ae1224b3db1528718629473a2d5d81",
+    "sha256": "1f4b75c4899ccabc6cfdbcb465a4a243d3b034d7a8c1445af4c8736eaaffd1fd",
+    "sourceBounds": {
+      "min": [
+        0.0,
+        0.0,
+        -0.21249999105930328
+      ],
+      "max": [
+        0.21249999105930328,
+        0.2809999883174896,
+        9.02389263509778e-17
+      ]
+    },
+    "scale": 1.7793595045814443,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-books",
+    "name": "书籍",
+    "category": "everyday",
+    "categoryLabel": "日用",
+    "url": "/director/catalog/kenney-books.glb",
+    "thumbnail": "/director/catalog/kenney-books.png",
+    "heightM": 0.25,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/books.glb",
+    "sourceSha256": "b8dc56e5d29f6fc1f4727fccb1b9642627fee9942c48060a00034e98df02701c",
+    "sha256": "a33be5f935ded56855e4c94696298f588e866c8fd06ab9875db14689c5bceff1",
+    "sourceBounds": {
+      "min": [
+        0.0,
+        0.0,
+        -0.09449999779462814
+      ],
+      "max": [
+        0.15044759213924408,
+        0.10390225797891617,
+        0.0
+      ]
+    },
+    "scale": 2.40610747892245,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-table-lamp",
+    "name": "台灯",
+    "category": "everyday",
+    "categoryLabel": "日用",
+    "url": "/director/catalog/kenney-table-lamp.glb",
+    "thumbnail": "/director/catalog/kenney-table-lamp.png",
+    "heightM": 0.5,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/lampRoundTable.glb",
+    "sourceSha256": "75bb644caaa3da003b4fcad7a931722dd61cd2858aab70cf660021d5061fa1b2",
+    "sha256": "7fe7d2d8256818a29d3dcd2ac5e2904cbc7425fdb20b8564fdd005a10a34f59a",
+    "sourceBounds": {
+      "min": [
+        -0.016019709408283234,
+        0.0,
+        -0.14778000116348267
+      ],
+      "max": [
+        0.13601970672607422,
+        0.31424999237060547,
+        0.027779998257756233
+      ]
+    },
+    "scale": 1.5910899352078054,
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "kenney-coat-rack",
+    "name": "衣帽架",
+    "category": "everyday",
+    "categoryLabel": "日用",
+    "url": "/director/catalog/kenney-coat-rack.glb",
+    "thumbnail": "/director/catalog/kenney-coat-rack.png",
+    "heightM": 1.75,
+    "source": "https://kenney.nl/assets/furniture-kit",
+    "sourceFile": "Models/GLTF format/coatRackStanding.glb",
+    "sourceSha256": "d8231c22dab63ceb9fc8678f6c8ceafc62afa8726b51a73b4ce349043d3cdc91",
+    "sha256": "28df66da5296bafa3b28f1a2f8849e348ed73a4538602b5f21d969c244b070a7",
+    "sourceBounds": {
+      "min": [
+        -0.1363999992609024,
+        3.0776935281025807e-29,
+        -0.1363999992609024
+      ],
+      "max": [
+        0.1363999992609024,
+        0.7699999809265137,
+        0.1363999992609024
+      ]
+    },
+    "scale": 2.2727273290244594,
+    "license": "CC0-1.0"
+  }
+]

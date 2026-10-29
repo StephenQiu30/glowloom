@@ -35,6 +35,45 @@ function document(): API.DocumentDTO {
   };
 }
 describe("Yjs editor projection boundary", () => {
+  it("keeps director scene edits and object identity through save and reopen", () => {
+    const dto = document();
+    const state = serviceGraph(dto, canvas, project);
+    const director = createCanvasNode("director", { x: 800, y: 200 });
+    state.nodes.push(director);
+    const saved = serviceDocumentFromEditor(dto, state);
+    const tool = saved.nodes!.find((item) => item.id === director.id)!;
+    expect(tool.node_type).toBe("director");
+    expect(tool.node_action).toBe("tool");
+    const sceneID = tool.config!.director!.id;
+    const reopened = serviceGraph(saved, canvas, project);
+    const config = reopened.nodes.find((item) => item.id === director.id)!
+      .serviceData!.config!.director!;
+    config.mode = "dynamic";
+    config.workspaces!.dynamic!.background = "#112233";
+    config.workspaces!.dynamic!.shots![0].fps = 60;
+    const modified = serviceDocumentFromEditor(saved, reopened);
+    const scene = modified.nodes!.find((item) => item.id === director.id)!
+      .config!.director!;
+    expect(scene).toMatchObject({
+      id: sceneID,
+      mode: "dynamic",
+      version: 2,
+      workspaces: {
+        dynamic: {
+          background: "#112233",
+          shots: [expect.objectContaining({ fps: 60 })],
+        },
+      },
+    });
+    expect(
+      serviceDocumentFromEditor(
+        modified,
+        serviceGraph(modified, canvas, project),
+      ),
+    ).toEqual(modified);
+    expect(modified.nodes![0]).toEqual(dto.nodes![0]);
+  });
+
   it("roundtrips without changing protected state or bigint revision", () => {
     const dto = document();
     expect(

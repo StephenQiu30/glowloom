@@ -354,8 +354,12 @@ export function CanvasToolPalette({
         <Contact />
       </Unavailable>
       <Unavailable
-        label="3D 导演"
-        reason="3D 导演暂不可用。"
+        label={readOnly ? "导演台（只读）" : "导演台"}
+        reason={
+          readOnly
+            ? "此画布当前为只读，不能添加导演台。"
+            : "请在画布节点菜单中添加导演台。"
+        }
         className="opacity-40"
       >
         <Box />

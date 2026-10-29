@@ -129,6 +129,64 @@ export async function renameCanvas(
   });
 }
 
+/** 读取导演台私有恢复稿 GET /api/canvases/${param0}/director-recovery/${param1} */
+export async function readDirectorRecovery(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.readDirectorRecoveryParams,
+  options?: RequestOptions,
+) {
+  const { id: param0, nid: param1, ...queryParams } = params;
+  return request<API.DirectorRecoveryResult>(
+    `/api/canvases/${param0}/director-recovery/${param1}`,
+    {
+      method: "GET",
+      params: { ...queryParams },
+      ...(options || {}),
+    },
+  );
+}
+
+/** 保存导演台私有恢复稿 PUT /api/canvases/${param0}/director-recovery/${param1} */
+export async function saveDirectorRecovery(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.saveDirectorRecoveryParams,
+  body: API.SaveDirectorRecoveryInput,
+  options?: RequestOptions,
+) {
+  const { id: param0, nid: param1, ...queryParams } = params;
+  return request<API.DirectorRecovery>(
+    `/api/canvases/${param0}/director-recovery/${param1}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    },
+  );
+}
+
+/** 删除指定版本导演台恢复稿 DELETE /api/canvases/${param0}/director-recovery/${param1} */
+export async function deleteDirectorRecovery(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.deleteDirectorRecoveryParams,
+  body: API.DeleteDirectorRecoveryInput,
+  options?: RequestOptions,
+) {
+  const { id: param0, nid: param1, ...queryParams } = params;
+  return request<any>(`/api/canvases/${param0}/director-recovery/${param1}`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    params: { ...queryParams },
+    data: body,
+    ...(options || {}),
+  });
+}
+
 /** 项目画布列表 GET /api/projects/${param0}/canvases */
 export async function listCanvases(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
