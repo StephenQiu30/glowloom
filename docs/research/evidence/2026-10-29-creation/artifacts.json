@@ -1,0 +1,172 @@
+{
+  "observed_date": "2026-10-29",
+  "timezone": "Asia/Shanghai",
+  "scope": "Local external research evidence; third-party raw artifacts are not application assets. Login-state CUA observations are summarized separately, not raw replay files.",
+  "artifacts": [
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-audio.html",
+      "bytes": 653359,
+      "sha256": "4ad6eb0eb15c3db4f9501a2ff25251263fcde26fd9b6224a9023b417fbe0d4c6"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-audio.png",
+      "bytes": 796343,
+      "sha256": "65d1bc241592b143b4799120fedf4d005a8885457161d0b96aca6505b01f417c"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-audio.txt",
+      "bytes": 10082,
+      "sha256": "d514383e9286b6ea7e12509db0d3f089cbb97ecebeba499abc6d8ee3ba980b2a"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-desktop-close-promo.html",
+      "bytes": 656179,
+      "sha256": "9022cd9970813aec8c62ff51bc3aa05ad964d514505dea4c654fbb6cd2cd4b15"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-desktop-close-promo.png",
+      "bytes": 794633,
+      "sha256": "4917a3a63869175f8603845991e9a21e880f0c0591e549d355146b28bfe1bbed"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-desktop-close-promo.txt",
+      "bytes": 9577,
+      "sha256": "12be409acef4b3e322e6ea8578cf22e8ec8d538e77e6ea5e6ebdd043d619ffb5"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-desktop-open-types.html",
+      "bytes": 655861,
+      "sha256": "884b986b5f87fd89c61db1258dcb46e59ffae9837eab921a284e29823f7ea2f5"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-desktop-open-types.png",
+      "bytes": 1166366,
+      "sha256": "384b9736c67f86633cf5d858abcc6828ba10fdf15f5296e0164b656d257a4565"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-desktop-open-types.txt",
+      "bytes": 9422,
+      "sha256": "9df9cba15b59637dcaeaf3b9bf7e194ed5f8448f3b316efe9173121856995844"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-desktop-scenario_start.html",
+      "bytes": 789498,
+      "sha256": "5c6378551dbff598c3179660286ee842f7422445c570c5c1a602b63245b5143a"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-desktop-scenario_start.png",
+      "bytes": 736804,
+      "sha256": "f5f8f0b5e5e28d72ee6bf7c4268bbdeebfa1229bf781e36740ff1cf863267af6"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-desktop-scenario_start.txt",
+      "bytes": 4436,
+      "sha256": "970e70301382c65a508ac10fa3b745dd3f8d306b8bc884ba7f94dad97994e410"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-desktop-settle.html",
+      "bytes": 656230,
+      "sha256": "4902c00c86744254b6bb9fb3f52f1179e8c049dbd407bbe80ccdd86f00327f12"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-desktop-settle.png",
+      "bytes": 404494,
+      "sha256": "b98df2552b622792a181e2ca640fec866e170f8f22341ff370015e3f2fe2ff32"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-desktop-settle.txt",
+      "bytes": 9577,
+      "sha256": "12be409acef4b3e322e6ea8578cf22e8ec8d538e77e6ea5e6ebdd043d619ffb5"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-findings.md",
+      "bytes": 4999,
+      "sha256": "d999fa39ddb670d90d8165ff03596c28296fde2944d5c5f57b250ffd7356b460"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-music.html",
+      "bytes": 647429,
+      "sha256": "77cadff466b3566df4507ecc820237ed5aeb81a165d4d6cdc17f6f8c10e6b1b7"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-music.png",
+      "bytes": 793471,
+      "sha256": "375abdf24e4b6bfa097f02bccf5efddd7aa840cff61b3d129bbaab1a46fca3ab"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-music.txt",
+      "bytes": 9223,
+      "sha256": "75620ef1afb31a99b7223d28bc011232d4ccc4914719e939a060b36a2a87aced"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-narrow-close-promo.html",
+      "bytes": 657142,
+      "sha256": "0fe8f27ce5ff131e5104aa470ae32e6f46c38ec47ac856fea7d28601029e224b"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-narrow-close-promo.png",
+      "bytes": 139393,
+      "sha256": "77803afcb8f751860284d2019b8ebfa08d89a775067024c36e9d137ebd0dc657"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-narrow-close-promo.txt",
+      "bytes": 9642,
+      "sha256": "5afb88b7f26d228e34ed76d25ee76422742ff424fdd398f0880e229ee39b46c9"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-narrow-scenario_start.html",
+      "bytes": 635794,
+      "sha256": "f25b33d3e4d546a4156ab482a2a24ef6f1e17d6995daeb4c5c660c5e3dff9217"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-narrow-scenario_start.png",
+      "bytes": 158598,
+      "sha256": "0d1b8bd6d44784f4ead79c6b6586c6658602fc76b94601bd56b11a21fb1c70fe"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-narrow-scenario_start.txt",
+      "bytes": 9239,
+      "sha256": "630932742c3f23a27703d77c12ac11dc9b18121cf1f61cea2dc5b8f94bcc992e"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-narrow-settle.html",
+      "bytes": 657193,
+      "sha256": "921cacb844eb870ae112c019991a9bb36b8c1f393f3f0b654fc6a0540419ab63"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-narrow-settle.png",
+      "bytes": 159136,
+      "sha256": "e5a807996ec90931a365fa32f38ce052e79f755db83b2d2adf1a58a12bc9be93"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-narrow-settle.txt",
+      "bytes": 9642,
+      "sha256": "5afb88b7f26d228e34ed76d25ee76422742ff424fdd398f0880e229ee39b46c9"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-types.html",
+      "bytes": 663547,
+      "sha256": "a6951fdeaf989f5a7ec858d20055557d6746835f01d16b6e4646912d31d35a62"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-types.png",
+      "bytes": 763198,
+      "sha256": "536962907e3c73e9657e502a385aa2da52afedb6f286122ec5d86b9d96018f85"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/public-types.txt",
+      "bytes": 9639,
+      "sha256": "a2bbd6fd7d7a82d309e315c747a421d691bc768a640feba63420f2f6d9e33ee1"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/rea-evidence.json",
+      "bytes": 1249564,
+      "sha256": "281880e866ad34b1e5fce95d64c697cdada150cc7e5618dd4a7de7f59ef96f82"
+    },
+    {
+      "path": "output/jimeng-creation-2026-10-29/rea-public-evidence.json",
+      "bytes": 15062038,
+      "sha256": "67b52bcd3142ef856daa6922d1659f60e983286d1727b915c5d4b3c41001566a"
+    }
+  ]
+}
