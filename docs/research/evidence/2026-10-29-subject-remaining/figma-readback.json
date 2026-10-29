@@ -1,0 +1,650 @@
+{
+  "states": [
+    {
+      "id": "2749:44447",
+      "name": "主体 / 默认 / 手机390",
+      "width": 390,
+      "height": 844,
+      "descendantCount": 73,
+      "types": {
+        "FRAME": 26,
+        "INSTANCE": 17,
+        "VECTOR": 19,
+        "TEXT": 10,
+        "RECTANGLE": 1
+      },
+      "imageFilledNodeCount": 1,
+      "fontFamilies": [
+        "Geist"
+      ],
+      "panel": null,
+      "grid": [
+        {
+          "name": "Action / 新建主体",
+          "width": 358,
+          "height": 260.875
+        },
+        {
+          "name": "Subject card / 海边香氛",
+          "width": 358,
+          "height": 260.875
+        }
+      ],
+      "empty": null
+    },
+    {
+      "id": "2749:42687",
+      "name": "主体 / 收藏为空 / 桌面",
+      "width": 1460,
+      "height": 1040,
+      "descendantCount": 125,
+      "types": {
+        "FRAME": 42,
+        "INSTANCE": 25,
+        "VECTOR": 38,
+        "TEXT": 20
+      },
+      "imageFilledNodeCount": 0,
+      "fontFamilies": [
+        "Geist"
+      ],
+      "panel": null,
+      "grid": null,
+      "empty": {
+        "width": 1172,
+        "height": 928,
+        "text": "当前已开启筛选，部分内容可能被隐藏",
+        "textWidth": 1172
+      }
+    },
+    {
+      "id": "3239:61654",
+      "name": "主体 / 收藏为空 / 手机390",
+      "width": 390,
+      "height": 844,
+      "descendantCount": 51,
+      "types": {
+        "FRAME": 19,
+        "INSTANCE": 11,
+        "VECTOR": 15,
+        "TEXT": 6
+      },
+      "imageFilledNodeCount": 0,
+      "fontFamilies": [
+        "Geist"
+      ],
+      "panel": null,
+      "grid": null,
+      "empty": {
+        "width": 358,
+        "height": 696,
+        "text": "当前已开启筛选，部分内容可能被隐藏",
+        "textWidth": 358
+      }
+    },
+    {
+      "id": "3239:61683",
+      "name": "主体 / 收藏与搜索为空 / 桌面",
+      "width": 1460,
+      "height": 1040,
+      "descendantCount": 132,
+      "types": {
+        "FRAME": 44,
+        "INSTANCE": 27,
+        "VECTOR": 38,
+        "TEXT": 23
+      },
+      "imageFilledNodeCount": 0,
+      "fontFamilies": [
+        "Geist"
+      ],
+      "panel": null,
+      "grid": null,
+      "empty": {
+        "width": 1172,
+        "height": 928,
+        "text": "当前已开启筛选，部分内容可能被隐藏",
+        "textWidth": 1172
+      }
+    },
+    {
+      "id": "3239:61743",
+      "name": "主体 / 收藏与搜索为空 / 手机390",
+      "width": 390,
+      "height": 844,
+      "descendantCount": 51,
+      "types": {
+        "FRAME": 18,
+        "INSTANCE": 12,
+        "VECTOR": 13,
+        "TEXT": 8
+      },
+      "imageFilledNodeCount": 0,
+      "fontFamilies": [
+        "Geist"
+      ],
+      "panel": null,
+      "grid": null,
+      "empty": {
+        "width": 358,
+        "height": 696,
+        "text": "当前已开启筛选，部分内容可能被隐藏",
+        "textWidth": 358
+      }
+    },
+    {
+      "id": "3239:61947",
+      "name": "主体 / 日期筛选为空 / 桌面",
+      "width": 1460,
+      "height": 1040,
+      "descendantCount": 131,
+      "types": {
+        "FRAME": 46,
+        "INSTANCE": 26,
+        "VECTOR": 38,
+        "TEXT": 21
+      },
+      "imageFilledNodeCount": 0,
+      "fontFamilies": [
+        "Geist"
+      ],
+      "panel": null,
+      "grid": [
+        {
+          "name": "Action / 新建主体",
+          "width": 287,
+          "height": 220.9375
+        }
+      ],
+      "empty": null
+    },
+    {
+      "id": "3239:62008",
+      "name": "主体 / 日期筛选为空 / 手机390",
+      "width": 390,
+      "height": 844,
+      "descendantCount": 45,
+      "types": {
+        "FRAME": 18,
+        "INSTANCE": 10,
+        "VECTOR": 10,
+        "TEXT": 7
+      },
+      "imageFilledNodeCount": 0,
+      "fontFamilies": [
+        "Geist"
+      ],
+      "panel": null,
+      "grid": [
+        {
+          "name": "Action / 新建主体",
+          "width": 358,
+          "height": 260.875
+        }
+      ],
+      "empty": null
+    },
+    {
+      "id": "3241:61925",
+      "name": "主体 / 本地多图 · 权限待确认 / 桌面",
+      "width": 1460,
+      "height": 1040,
+      "descendantCount": 213,
+      "types": {
+        "FRAME": 67,
+        "INSTANCE": 46,
+        "VECTOR": 53,
+        "TEXT": 43,
+        "RECTANGLE": 4
+      },
+      "imageFilledNodeCount": 2,
+      "fontFamilies": [
+        "Geist"
+      ],
+      "panel": {
+        "id": "3241:62176",
+        "width": 440,
+        "height": 360,
+        "text": [
+          "上传参考",
+          "",
+          "已选择 3 个文件",
+          "主参考.png\n补充-01.png\n补充-02.png",
+          "我有使用权限，且无待授权真人内容。",
+          "首张图片作为主参考，其余图片作为补充参考。",
+          "取消",
+          "上传"
+        ]
+      },
+      "grid": [
+        {
+          "name": "Action / 新建主体",
+          "width": 287,
+          "height": 220.9375
+        },
+        {
+          "name": "Subject card / 海边香氛",
+          "width": 287,
+          "height": 220.9375
+        }
+      ],
+      "empty": null
+    },
+    {
+      "id": "3241:62238",
+      "name": "主体 / 本地多图 · 权限已确认 / 桌面",
+      "width": 1460,
+      "height": 1040,
+      "descendantCount": 216,
+      "types": {
+        "FRAME": 68,
+        "INSTANCE": 47,
+        "VECTOR": 54,
+        "TEXT": 43,
+        "RECTANGLE": 4
+      },
+      "imageFilledNodeCount": 2,
+      "fontFamilies": [
+        "Geist"
+      ],
+      "panel": {
+        "id": "3241:62489",
+        "width": 440,
+        "height": 360,
+        "text": [
+          "上传参考",
+          "",
+          "已选择 3 个文件",
+          "主参考.png\n补充-01.png\n补充-02.png",
+          "我有使用权限，且无待授权真人内容。",
+          "首张图片作为主参考，其余图片作为补充参考。",
+          "取消",
+          "上传"
+        ]
+      },
+      "grid": [
+        {
+          "name": "Action / 新建主体",
+          "width": 287,
+          "height": 220.9375
+        },
+        {
+          "name": "Subject card / 海边香氛",
+          "width": 287,
+          "height": 220.9375
+        }
+      ],
+      "empty": null
+    },
+    {
+      "id": "3241:62541",
+      "name": "主体 / 本地多图 · 上传中 / 桌面",
+      "width": 1460,
+      "height": 1040,
+      "descendantCount": 216,
+      "types": {
+        "FRAME": 68,
+        "INSTANCE": 47,
+        "VECTOR": 54,
+        "TEXT": 43,
+        "RECTANGLE": 4
+      },
+      "imageFilledNodeCount": 2,
+      "fontFamilies": [
+        "Geist"
+      ],
+      "panel": {
+        "id": "3241:62792",
+        "width": 440,
+        "height": 360,
+        "text": [
+          "上传参考",
+          "",
+          "已选择 3 个文件",
+          "主参考.png · 已完成\n补充-01.png · 正在上传\n补充-02.png · 等待上传",
+          "我有使用权限，且无待授权真人内容。",
+          "正在上传 2 / 3…",
+          "返回设置",
+          "上传中…"
+        ]
+      },
+      "grid": [
+        {
+          "name": "Action / 新建主体",
+          "width": 287,
+          "height": 220.9375
+        },
+        {
+          "name": "Subject card / 海边香氛",
+          "width": 287,
+          "height": 220.9375
+        }
+      ],
+      "empty": null
+    },
+    {
+      "id": "3241:62844",
+      "name": "主体 / 本地多图 · 部分失败 / 桌面",
+      "width": 1460,
+      "height": 1040,
+      "descendantCount": 216,
+      "types": {
+        "FRAME": 68,
+        "INSTANCE": 47,
+        "VECTOR": 54,
+        "TEXT": 43,
+        "RECTANGLE": 4
+      },
+      "imageFilledNodeCount": 2,
+      "fontFamilies": [
+        "Geist"
+      ],
+      "panel": {
+        "id": "3241:63095",
+        "width": 440,
+        "height": 360,
+        "text": [
+          "上传参考",
+          "",
+          "已选择 3 个文件",
+          "主参考.png · 已完成\n补充-01.png · 上传失败\n补充-02.png · 未上传",
+          "我有使用权限，且无待授权真人内容。",
+          "部分文件上传失败。重试将继续剩余文件。",
+          "返回设置",
+          "重试上传"
+        ]
+      },
+      "grid": [
+        {
+          "name": "Action / 新建主体",
+          "width": 287,
+          "height": 220.9375
+        },
+        {
+          "name": "Subject card / 海边香氛",
+          "width": 287,
+          "height": 220.9375
+        }
+      ],
+      "empty": null
+    },
+    {
+      "id": "3241:63193",
+      "name": "主体 / 本地多图 · 权限待确认 / 手机390",
+      "width": 390,
+      "height": 844,
+      "descendantCount": 87,
+      "types": {
+        "FRAME": 23,
+        "TEXT": 23,
+        "INSTANCE": 21,
+        "VECTOR": 17,
+        "RECTANGLE": 3
+      },
+      "imageFilledNodeCount": 1,
+      "fontFamilies": [
+        "Geist"
+      ],
+      "panel": {
+        "id": "3241:63306",
+        "width": 358,
+        "height": 360,
+        "text": [
+          "上传参考",
+          "",
+          "已选择 3 个文件",
+          "主参考.png\n补充-01.png\n补充-02.png",
+          "我有使用权限，且无待授权真人内容。",
+          "首张图片作为主参考，其余图片作为补充参考。",
+          "取消",
+          "上传"
+        ]
+      },
+      "grid": null,
+      "empty": null
+    },
+    {
+      "id": "3241:63358",
+      "name": "主体 / 本地多图 · 权限已确认 / 手机390",
+      "width": 390,
+      "height": 844,
+      "descendantCount": 90,
+      "types": {
+        "FRAME": 24,
+        "TEXT": 23,
+        "INSTANCE": 22,
+        "VECTOR": 18,
+        "RECTANGLE": 3
+      },
+      "imageFilledNodeCount": 1,
+      "fontFamilies": [
+        "Geist"
+      ],
+      "panel": {
+        "id": "3241:63471",
+        "width": 358,
+        "height": 360,
+        "text": [
+          "上传参考",
+          "",
+          "已选择 3 个文件",
+          "主参考.png\n补充-01.png\n补充-02.png",
+          "我有使用权限，且无待授权真人内容。",
+          "首张图片作为主参考，其余图片作为补充参考。",
+          "取消",
+          "上传"
+        ]
+      },
+      "grid": null,
+      "empty": null
+    },
+    {
+      "id": "3241:63523",
+      "name": "主体 / 本地多图 · 上传中 / 手机390",
+      "width": 390,
+      "height": 844,
+      "descendantCount": 90,
+      "types": {
+        "FRAME": 24,
+        "TEXT": 23,
+        "INSTANCE": 22,
+        "VECTOR": 18,
+        "RECTANGLE": 3
+      },
+      "imageFilledNodeCount": 1,
+      "fontFamilies": [
+        "Geist"
+      ],
+      "panel": {
+        "id": "3241:63636",
+        "width": 358,
+        "height": 360,
+        "text": [
+          "上传参考",
+          "",
+          "已选择 3 个文件",
+          "主参考.png · 已完成\n补充-01.png · 正在上传\n补充-02.png · 等待上传",
+          "我有使用权限，且无待授权真人内容。",
+          "正在上传 2 / 3…",
+          "返回设置",
+          "上传中…"
+        ]
+      },
+      "grid": null,
+      "empty": null
+    },
+    {
+      "id": "3241:63688",
+      "name": "主体 / 本地多图 · 部分失败 / 手机390",
+      "width": 390,
+      "height": 844,
+      "descendantCount": 90,
+      "types": {
+        "FRAME": 24,
+        "TEXT": 23,
+        "INSTANCE": 22,
+        "VECTOR": 18,
+        "RECTANGLE": 3
+      },
+      "imageFilledNodeCount": 1,
+      "fontFamilies": [
+        "Geist"
+      ],
+      "panel": {
+        "id": "3241:63801",
+        "width": 358,
+        "height": 360,
+        "text": [
+          "上传参考",
+          "",
+          "已选择 3 个文件",
+          "主参考.png · 已完成\n补充-01.png · 上传失败\n补充-02.png · 未上传",
+          "我有使用权限，且无待授权真人内容。",
+          "部分文件上传失败。重试将继续剩余文件。",
+          "返回设置",
+          "重试上传"
+        ]
+      },
+      "grid": null,
+      "empty": null
+    },
+    {
+      "id": "2910:45688",
+      "name": "主体 / 上传 · 结果未知 / 桌面",
+      "width": 1460,
+      "height": 1040,
+      "descendantCount": 216,
+      "types": {
+        "FRAME": 68,
+        "INSTANCE": 47,
+        "VECTOR": 54,
+        "TEXT": 43,
+        "RECTANGLE": 4
+      },
+      "imageFilledNodeCount": 2,
+      "fontFamilies": [
+        "Geist"
+      ],
+      "panel": {
+        "id": "3241:63144",
+        "width": 440,
+        "height": 360,
+        "text": [
+          "上传参考",
+          "",
+          "已选择 3 个文件",
+          "主参考.png · 已完成\n补充-01.png · 待确认\n补充-02.png · 未上传",
+          "我有使用权限，且无待授权真人内容。",
+          "上传结果待确认，重试不会重复上传。",
+          "返回设置",
+          "重试上传"
+        ]
+      },
+      "grid": [
+        {
+          "name": "Action / 新建主体",
+          "width": 287,
+          "height": 220.9375
+        },
+        {
+          "name": "Subject card / 海边香氛",
+          "width": 287,
+          "height": 220.9375
+        }
+      ],
+      "empty": null
+    },
+    {
+      "id": "2910:45855",
+      "name": "主体 / 上传 · 结果未知 / 手机390",
+      "width": 390,
+      "height": 844,
+      "descendantCount": 90,
+      "types": {
+        "FRAME": 24,
+        "TEXT": 23,
+        "INSTANCE": 22,
+        "VECTOR": 18,
+        "RECTANGLE": 3
+      },
+      "imageFilledNodeCount": 1,
+      "fontFamilies": [
+        "Geist"
+      ],
+      "panel": {
+        "id": "3241:63850",
+        "width": 358,
+        "height": 360,
+        "text": [
+          "上传参考",
+          "",
+          "已选择 3 个文件",
+          "主参考.png · 已完成\n补充-01.png · 待确认\n补充-02.png · 未上传",
+          "我有使用权限，且无待授权真人内容。",
+          "上传结果待确认，重试不会重复上传。",
+          "返回设置",
+          "重试上传"
+        ]
+      },
+      "grid": null,
+      "empty": null
+    }
+  ],
+  "entries": [
+    {
+      "id": "I2749:41794;2746:39904",
+      "name": "Action / 从本地添加",
+      "reactions": [],
+      "annotations": [
+        {
+          "label": "直接打开系统文件选择器；图片允许多选，首图为主参考、其余为补充；补充入口允许多图。选中后显示文件名、数量及权限确认。取消后无空白二次上传弹窗。Figma不模拟系统选择器。",
+          "labelMarkdown": ""
+        }
+      ]
+    },
+    {
+      "id": "2749:44041",
+      "name": "Action / 从本地添加",
+      "reactions": [],
+      "annotations": [
+        {
+          "label": "直接打开系统文件选择器；图片允许多选，首图为主参考、其余为补充；补充入口允许多图。选中后显示文件名、数量及权限确认。取消后无空白二次上传弹窗。Figma不模拟系统选择器。",
+          "labelMarkdown": ""
+        }
+      ]
+    },
+    {
+      "id": "2749:44122",
+      "name": "Action / 上传音色",
+      "reactions": [],
+      "annotations": [
+        {
+          "label": "打开系统音频文件选择器，单选；取消后保持设置。选中后进入权限确认。Figma不模拟原生文件选择器，也不直接跳转上传成功。",
+          "labelMarkdown": ""
+        }
+      ]
+    },
+    {
+      "id": "I2749:44642;3174:59871",
+      "name": "Action / 从本地添加",
+      "reactions": [],
+      "annotations": [
+        {
+          "label": "直接打开系统文件选择器；图片允许多选，首图为主参考、其余为补充；补充入口允许多图。选中后显示文件名、数量及权限确认。取消后无空白二次上传弹窗。Figma不模拟系统选择器。",
+          "labelMarkdown": ""
+        }
+      ]
+    },
+    {
+      "id": "2854:46593",
+      "name": "Action / 上传音色",
+      "reactions": [],
+      "annotations": [
+        {
+          "label": "打开系统音频文件选择器，单选；取消后保持设置。选中后进入权限确认。Figma不模拟原生文件选择器，也不直接跳转上传成功。",
+          "labelMarkdown": ""
+        }
+      ]
+    }
+  ]
+}

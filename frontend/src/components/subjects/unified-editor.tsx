@@ -114,7 +114,7 @@ export function UnifiedSubjectEditor({
   const [source, setSource] = useState<{
     target: Target;
     mode: "upload" | "library";
-    file?: File;
+    files?: File[];
     suspended?: boolean;
   } | null>(null);
   const [error, setError] = useState("");
@@ -136,6 +136,9 @@ export function UnifiedSubjectEditor({
   const request = useRef<AbortController | null>(null);
   const busy = useRef(false);
   const uploadReturnFocus = useRef<HTMLButtonElement>(null);
+  const localInputs = useRef<Partial<Record<Target, HTMLInputElement | null>>>(
+    {},
+  );
   useEffect(() => () => request.current?.abort(), []);
   const locked = pending || frozen || (!!source && !source.suspended);
   const mediaLocked = locked || !!source || voiceJob.active;
@@ -322,6 +325,10 @@ export function UnifiedSubjectEditor({
       if (!controller.signal.aborted) setPending(false);
     }
   }
+  function chooseLocal(target: Target, files: File[]) {
+    if (!files.length || mediaLocked) return;
+    setSource({ target, mode: "upload", files });
+  }
   function sourceMenu(target: Target, label: string, icon = false) {
     return (
       <DropdownMenu>
@@ -348,7 +355,7 @@ export function UnifiedSubjectEditor({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="unified-subject-menu">
           <DropdownMenuItem
-            onSelect={() => setSource({ target, mode: "upload" })}
+            onSelect={() => localInputs.current[target]?.click()}
           >
             <Upload />
             {target === "voice" ? "上传音色" : "从本地添加"}
@@ -393,6 +400,37 @@ export function UnifiedSubjectEditor({
           <DialogDescription className="sr-only">
             设置主参考、名称、描述和可选音色，以便在当前空间创作中复用。
           </DialogDescription>
+          {(["primary", "reference", "voice"] as const).map((target) => (
+            <Input
+              key={target}
+              ref={(element) => {
+                localInputs.current[target] = element;
+              }}
+              type="file"
+              className="hidden"
+              tabIndex={-1}
+              aria-label={
+                target === "primary"
+                  ? "选择主参考文件"
+                  : target === "reference"
+                    ? "选择补充参考文件"
+                    : "选择音色文件"
+              }
+              accept={
+                target === "voice"
+                  ? ".mp3,.wav,.m4a,.ogg,.flac"
+                  : target === "reference"
+                    ? ".png,.jpg,.jpeg,.webp"
+                    : ".png,.jpg,.jpeg,.webp,.mp4,.webm,.mov"
+              }
+              multiple={target !== "voice"}
+              disabled={mediaLocked}
+              onChange={(event) => {
+                chooseLocal(target, Array.from(event.target.files ?? []));
+                event.target.value = "";
+              }}
+            />
+          ))}
           <form
             className="flex min-h-0 flex-col gap-4"
             onSubmit={(e) => {
@@ -411,13 +449,7 @@ export function UnifiedSubjectEditor({
                   onDrop={(e) => {
                     e.preventDefault();
                     if (mediaLocked) return;
-                    if (e.dataTransfer.files.length !== 1) {
-                      setError("请每次上传一个文件。");
-                      return;
-                    }
-                    const file = e.dataTransfer.files[0];
-                    if (file)
-                      setSource({ target: "primary", mode: "upload", file });
+                    chooseLocal("primary", Array.from(e.dataTransfer.files));
                   }}
                 >
                   {primary ? (
@@ -495,9 +527,7 @@ export function UnifiedSubjectEditor({
                           type="button"
                           variant="secondary"
                           disabled={mediaLocked}
-                          onClick={() =>
-                            setSource({ target: "primary", mode: "upload" })
-                          }
+                          onClick={() => localInputs.current.primary?.click()}
                         >
                           <Upload />
                           从本地添加
@@ -692,7 +722,15 @@ export function UnifiedSubjectEditor({
       {source?.mode === "upload" ? (
         <SourceUpload
           open={!source.suspended}
-          initialFile={source.file}
+          initialFile={source.files?.[0]}
+          initialFiles={source.files}
+          maxFiles={
+            source.target === "primary"
+              ? 121
+              : source.target === "reference"
+                ? Math.max(0, 120 - references.length)
+                : 1
+          }
           allowedKinds={
             source.target === "voice"
               ? ["audio"]
@@ -708,6 +746,11 @@ export function UnifiedSubjectEditor({
           }
           onReturnFocus={() => uploadReturnFocus.current?.focus()}
           onUploaded={(media) => choose(source.target, media)}
+          onUploadedMany={
+            source.target === "voice"
+              ? undefined
+              : (items) => chooseImages(source.target, items)
+          }
         />
       ) : null}
       {leave ? (

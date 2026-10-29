@@ -568,19 +568,15 @@ export function UnifiedSubjectLibrary({
               </ContextMenu>
             ))}
           </div>
-          {!page?.items.length &&
-          (query || filter.favorite || filter.from || filter.through) ? (
+          {!page?.items.length && (query || filter.favorite) ? (
             <ContentState
-              variant={query ? "workspace" : "default"}
-              className={query ? "unified-subject-search-empty" : undefined}
+              variant="workspace"
+              className="unified-subject-empty"
               title={
-                query
-                  ? "暂无相关资产"
-                  : filter.favorite
-                    ? "还没有收藏的主体"
-                    : "此时间范围内没有主体"
+                filter.favorite
+                  ? "当前已开启筛选，部分内容可能被隐藏"
+                  : "暂无相关资产"
               }
-              description={query ? undefined : "调整筛选条件后重试。"}
             />
           ) : null}
           {loading ? (

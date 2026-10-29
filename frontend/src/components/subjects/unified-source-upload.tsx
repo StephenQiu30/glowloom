@@ -34,28 +34,50 @@ export function UnifiedSubjectSourceUpload({
   open = true,
   allowedKinds,
   initialFile,
+  initialFiles,
+  maxFiles = 1,
   onClose,
   onUploaded,
+  onUploadedMany,
   onSuspend,
   onReturnFocus,
 }: {
   open?: boolean;
   allowedKinds: readonly ("image" | "video" | "audio")[];
   initialFile?: File;
+  initialFiles?: readonly File[];
+  maxFiles?: number;
   onClose: () => void;
   onUploaded: (media: SelectedSubjectMedia) => string | void;
+  onUploadedMany?: (media: SelectedSubjectMedia[]) => string | void;
   onSuspend?: () => void;
   onReturnFocus?: () => void;
 }) {
   const id = useId();
-  const [file, setFile] = useState<File | null>(initialFile ?? null);
+  const [entries, setEntries] = useState<
+    {
+      file: File;
+      key: string;
+      media?: SelectedSubjectMedia;
+    }[]
+  >(() =>
+    (initialFiles ?? (initialFile ? [initialFile] : [])).map((file) => ({
+      file,
+      key: crypto.randomUUID(),
+    })),
+  );
+  const file = entries[0]?.file ?? null;
+  const selectionLimit = onUploadedMany ? maxFiles : 1;
+  const identity = useRef({
+    scope: getScopeGeneration(),
+    session: getSessionGeneration(),
+  });
   const [reviewed, setReviewed] = useState(false);
   const [pending, setPending] = useState(false);
   const [uncertain, setUncertain] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState("");
-  const [accepted, setAccepted] = useState<SelectedSubjectMedia | null>(null);
-  const key = useRef(crypto.randomUUID());
+  const accepted = entries.length > 0 && entries.every((entry) => entry.media);
   const busy = useRef(false);
   const request = useRef<AbortController | null>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -71,17 +93,41 @@ export function UnifiedSubjectSourceUpload({
           : "请选择图片或视频文件。";
     return validateUpload(value);
   }
-  function choose(value?: File) {
-    if (!value || pending || uncertain) return;
-    setFile(value);
+  function validateBatch(files: readonly File[]) {
+    if (!files.length) return "请选择文件。";
+    if (files.length > selectionLimit)
+      return `本次最多可添加${selectionLimit}个文件。`;
+    if (
+      files.length > 1 &&
+      files.some((file) => subjectSourceKind(file) !== "image")
+    )
+      return "图片可多选，视频或音频请单独选择。";
+    return files.map(validate).find(Boolean) ?? "";
+  }
+  function chooseFiles(files: readonly File[]) {
+    if (!files.length || pending || uncertain) return;
+    setEntries(files.map((file) => ({ file, key: crypto.randomUUID() })));
     setReviewed(false);
-    setAccepted(null);
-    setError(validate(value));
+    setError(validateBatch(files));
     setProgress(null);
-    key.current = crypto.randomUUID();
+  }
+  function choose(value?: File) {
+    if (value) chooseFiles([value]);
   }
   async function send() {
-    if (!file || !reviewed || validate(file) || busy.current) return;
+    if (
+      !reviewed ||
+      validateBatch(entries.map((entry) => entry.file)) ||
+      busy.current
+    )
+      return;
+    if (
+      identity.current.scope !== getScopeGeneration() ||
+      identity.current.session !== getSessionGeneration()
+    ) {
+      setError("当前登录或空间已变化，请返回设置后重新选择文件。");
+      return;
+    }
     busy.current = true;
     setPending(true);
     setError("");
@@ -90,55 +136,72 @@ export function UnifiedSubjectSourceUpload({
     request.current = controller;
     const scope = getScopeGeneration(),
       session = getSessionGeneration();
+    const current = () =>
+      !controller.signal.aborted &&
+      scope === getScopeGeneration() &&
+      session === getSessionGeneration();
+    const batch = [...entries];
     try {
-      let value = accepted;
-      if (!value) {
+      for (let index = 0; index < batch.length; index++) {
+        if (!current()) return;
+        const entry = batch[index];
+        if (entry.media) continue;
         const result = await uploadSubjectSource(
           { local_review_confirmed: true },
-          file,
+          entry.file,
           {
-            headers: { "Idempotency-Key": key.current },
+            headers: { "Idempotency-Key": entry.key },
             signal: controller.signal,
             onUploadProgress: (event) => {
-              if (!controller.signal.aborted && event.total)
+              if (current() && event.total)
                 setProgress(
-                  Math.min(100, Math.round((event.loaded / event.total) * 100)),
+                  Math.min(
+                    100,
+                    Math.round(
+                      ((index + event.loaded / event.total) / batch.length) *
+                        100,
+                    ),
+                  ),
                 );
             },
           },
         );
+        if (!current()) return;
         const asset = result.asset;
         if (
           !isProjectID(asset?.id) ||
           !Number.isSafeInteger(asset?.revision) ||
           asset!.revision! < 1 ||
+          asset?.kind !== subjectSourceKind(entry.file) ||
           !allowedKinds.includes(asset!.kind as SelectedSubjectMedia["kind"]) ||
           !asset?.mime_type ||
           typeof asset.file_name !== "string"
         )
           throw new RequestError("invalid_receipt");
-        value = {
-          asset_id: asset.id!,
-          asset_revision: asset.revision!,
-          kind: asset.kind as SelectedSubjectMedia["kind"],
-          mime_type: asset.mime_type,
-          file_name: asset.file_name,
-          library_item_id: asset.id!,
-          library_source: "subject",
+        batch[index] = {
+          ...entry,
+          media: {
+            asset_id: asset.id!,
+            asset_revision: asset.revision!,
+            kind: asset.kind as SelectedSubjectMedia["kind"],
+            mime_type: asset.mime_type,
+            file_name: asset.file_name,
+            library_item_id: asset.id!,
+            library_source: "subject",
+          },
         };
+        setEntries([...batch]);
       }
-      if (
-        controller.signal.aborted ||
-        scope !== getScopeGeneration() ||
-        session !== getSessionGeneration()
-      )
-        return;
-      setAccepted(value);
-      const issue = onUploaded(value);
+      if (!current()) return;
+      const media = batch.map((entry) => entry.media!);
+      const issue =
+        media.length > 1 && onUploadedMany
+          ? onUploadedMany(media)
+          : onUploaded(media[0]);
       setUncertain(false);
       if (issue) setError(issue);
     } catch (reason) {
-      if (!controller.signal.aborted) {
+      if (current()) {
         setError(
           reason instanceof RequestError && reason.status === 403
             ? "当前空间没有上传权限。"
@@ -157,7 +220,9 @@ export function UnifiedSubjectSourceUpload({
       if (!controller.signal.aborted) setPending(false);
     }
   }
-  const invalid = file ? validate(file) : "";
+  const invalid = entries.length
+    ? validateBatch(entries.map((entry) => entry.file))
+    : "";
   const audio = allowedKinds.length === 1 && allowedKinds[0] === "audio";
   const locked = pending || uncertain;
   function close() {
@@ -199,7 +264,11 @@ export function UnifiedSubjectSourceUpload({
             accept={allowedKinds.map((k) => extensions[k]).join(",")}
             aria-label={audio ? "选择音色文件" : "选择主体参考文件"}
             disabled={locked}
-            onChange={(event) => choose(event.target.files?.[0])}
+            multiple={selectionLimit > 1 && !audio}
+            onChange={(event) => {
+              chooseFiles(Array.from(event.target.files ?? []));
+              event.target.value = "";
+            }}
           />
           <UploadDropzone
             file={file}
@@ -209,6 +278,23 @@ export function UnifiedSubjectSourceUpload({
             onChoose={choose}
             onError={setError}
           />
+          {entries.length > 1 ? (
+            <ul
+              className="max-h-40 space-y-1 overflow-y-auto text-sm text-muted-foreground"
+              aria-label="已选择文件"
+            >
+              {entries.map((entry, index) => (
+                <li
+                  key={entry.key}
+                  className="truncate"
+                  title={entry.file.name}
+                >
+                  {index + 1}. {entry.file.name}
+                  {entry.media ? " · 已上传" : ""}
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <Field orientation="horizontal" data-disabled={locked || undefined}>
             <Checkbox
               id={`${id}-review`}

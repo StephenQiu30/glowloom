@@ -1,0 +1,11 @@
+--- a/frontend/src/components/generation/agent-workspace.tsx
++++ b/frontend/src/components/generation/agent-workspace.tsx
+@@ -159,1 +159,7 @@
+-    setSession((current) => current?.id === saved.id && (current.revision ?? 0) > (saved.revision ?? 0) ? current : saved);
++    setSession((current) =>
++      current &&
++      current.id === saved.id &&
++      (current.revision ?? 0) > (saved.revision ?? 0)
++        ? current
++        : saved,
++    );

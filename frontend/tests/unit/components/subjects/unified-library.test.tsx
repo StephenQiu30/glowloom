@@ -663,3 +663,62 @@ it("搜索无结果只呈现竞品单行空态，不增加操作指导", async (
   expect(screen.queryByText("调整筛选条件后重试。")).toBeNull();
   expect(screen.queryByRole("button", { name: "新建主体" })).toBeNull();
 });
+
+it.each(["", "不存在"])(
+  "收藏无结果优先显示筛选提示，搜索=%s",
+  async (query) => {
+    api.list.mockResolvedValue({ ...page, items: [], total: 0 });
+    render(
+      <UnifiedSubjectLibrary
+        actorID={actorID}
+        scopeID={scopeID}
+        query={query}
+      />,
+    );
+    await screen.findByRole("button", { name: "筛选" });
+    fireEvent.keyDown(screen.getByRole("button", { name: "筛选" }), {
+      key: "ArrowDown",
+    });
+    fireEvent.click(
+      await screen.findByRole("menuitemcheckbox", { name: "收藏" }),
+    );
+    expect(
+      await screen.findByRole("heading", {
+        name: "当前已开启筛选，部分内容可能被隐藏",
+      }),
+    ).toBeTruthy();
+    expect(screen.queryByText("调整筛选条件后重试。")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "暂无相关资产" })).toBeNull();
+    expect(screen.getByRole("button", { name: "收藏" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "清空筛选" }));
+    expect(screen.getByRole("button", { name: "筛选" })).toBeTruthy();
+    await waitFor(() =>
+      expect(api.list.mock.lastCall?.[0].favorite).toBeUndefined(),
+    );
+  },
+);
+
+it("仅日期筛选无结果保留新建卡，清空收藏不影响日期", async () => {
+  api.list.mockResolvedValue({ ...page, items: [], total: 0 });
+  render(<UnifiedSubjectLibrary actorID={actorID} scopeID={scopeID} />);
+  fireEvent.click(await screen.findByRole("button", { name: "时间" }));
+  fireEvent.click(await screen.findByRole("button", { name: "最近一周" }));
+  await waitFor(() => expect(api.list.mock.lastCall?.[0].from).toBeTruthy());
+  const from = api.list.mock.lastCall?.[0].from;
+  expect(screen.getByRole("button", { name: "新建主体" })).toBeTruthy();
+  expect(screen.queryByText("此时间范围内没有主体")).toBeNull();
+  expect(screen.queryByText("调整筛选条件后重试。")).toBeNull();
+  fireEvent.keyDown(screen.getByRole("button", { name: "筛选" }), {
+    key: "ArrowDown",
+  });
+  fireEvent.click(
+    await screen.findByRole("menuitemcheckbox", { name: "收藏" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "清空筛选" }));
+  await waitFor(() =>
+    expect(api.list.mock.lastCall?.[0]).toMatchObject({
+      favorite: undefined,
+      from,
+    }),
+  );
+});

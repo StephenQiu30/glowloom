@@ -1,8 +1,8 @@
-.product-page[data-page="subjects"]:has(.unified-subject-search-empty) {
+.product-page[data-page="subjects"]:has(.unified-subject-empty) {
   display: flex;
   flex-direction: column;
 }
-.product-page[data-page="subjects"]:has(.unified-subject-search-empty)
+.product-page[data-page="subjects"]:has(.unified-subject-empty)
   > .unified-subject-library {
   flex: 1;
 }
@@ -108,21 +108,6 @@
   .unified-subject-grid {
     grid-template-columns: minmax(0, 1fr);
     gap: 16px;
-  }
-  .unified-subject-new {
-    order: 1;
-    min-height: 44px;
-    align-items: center;
-    justify-content: center;
-    gap: 0;
-    background: var(--secondary);
-  }
-  .unified-subject-new .unified-subject-info {
-    padding: 0;
-  }
-  .unified-subject-meta-placeholder,
-  .unified-subject-create {
-    display: none;
   }
   .unified-subject-settings [data-slot="button"] {
     min-height: 44px;

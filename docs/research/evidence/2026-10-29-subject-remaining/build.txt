@@ -1,0 +1,59 @@
+▲ Next.js 16.3.6 (Turbopack)
+✓ Running next.config.ts took 83ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 1411ms
+  Running TypeScript ...
+  Finished TypeScript in 2.5s ...
+  Collecting page data using 9 workers ...
+  Generating static pages using 9 workers (0/34) ...
+  Generating static pages using 9 workers (8/34)
+  Generating static pages using 9 workers (16/34)
+  Generating static pages using 9 workers (25/34)
+✓ Generating static pages using 9 workers (34/34) in 166ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ƒ /
+├ ƒ /_not-found
+├ ƒ /account
+├ ƒ /analytics
+├ ƒ /api/[...path]
+├ ƒ /assets
+├ ƒ /audit
+├ ƒ /bible
+├ ƒ /billing
+├ ƒ /billing/membership
+├ ƒ /billing/recharge
+├ ƒ /billing/transactions
+├ ƒ /canvas
+├ ƒ /explore
+├ ƒ /health
+├ ƒ /healthz
+├ ƒ /invitations
+├ ƒ /login
+├ ○ /manifest.webmanifest
+├ ƒ /models
+├ ƒ /platform/settings
+├ ƒ /platform/teams
+├ ƒ /privacy
+├ ƒ /projects
+├ ƒ /providers
+├ ƒ /recover
+├ ƒ /register
+├ ƒ /reset-password
+├ ƒ /shot
+├ ƒ /storyboard
+├ ƒ /subjects
+├ ƒ /subjects/history
+├ ƒ /teams
+├ ƒ /teams/[teamId]
+├ ƒ /terms
+├ ƒ /users
+└ ƒ /works/[id]
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand

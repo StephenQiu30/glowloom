@@ -1,0 +1,125 @@
+- link:
+  - /url: "#main-content"
+  - text: 跳转到主要内容
+- complementary:
+  - link:
+    - /url: /
+    - generic: 织光 Glowloom
+  - button [expanded]:
+  - navigation:
+    - list:
+      - link:
+        - /url: /
+        - generic: 创作
+      - link:
+        - /url: /explore
+        - generic: 探索
+      - link:
+        - /url: /assets
+        - generic: 资产
+      - link:
+        - /url: /subjects
+        - generic: 主体
+  - generic: 对话
+  - link:
+    - /url: /
+  - generic: 对话功能待开放
+  - link:
+    - /url: /projects
+    - text: 画布
+  - button:
+  - list:
+    - link:
+      - /url: /canvas?project_id=b0bb8394-a9a6-4c54-b058-71ac965513ad&canvas_id=6b4b26fa-f20e-4949-baab-53e43746d511
+      - generic: 未命名画布
+    - link:
+      - /url: /canvas?project_id=f76532a2-3aa6-4dd6-bced-ff3ac3c8e901&canvas_id=e2c90c40-8361-4501-ac25-c12a531d2c42
+      - generic: 未命名画布
+    - link:
+      - /url: /canvas?project_id=6836c671-a532-44d9-9b79-b661d2f61b62&canvas_id=2da104f4-b745-4e70-ab80-1fc99750bc3e
+      - generic: 连线完整验收-20261029
+    - link:
+      - /url: /canvas?project_id=7fe2cb76-b42b-4fd9-abd4-e70a93173e87&canvas_id=24969728-69d3-4326-b360-c591b018f42d
+      - generic: 未命名画布
+    - link:
+      - /url: /canvas?project_id=167519c4-b910-4ad4-b821-c6bffaa01c87&canvas_id=3ef3fd10-5955-42ee-9711-b327e5212195
+      - generic: 未命名短剧
+    - link:
+      - /url: /canvas?project_id=766d1bcc-b2ef-4ab5-b449-dd02d72057e2&canvas_id=c36cf3f6-181c-4cd8-bdb5-72e77982b6b5
+      - generic: 即梦画布验收 2026-10-18 R11
+    - link:
+      - /url: /canvas?project_id=deca74c9-403f-4fb2-afb3-ac3a58048bb8&canvas_id=a5fd817d-7f64-43be-99fc-8d41b27f7ea3
+      - generic: 未命名画布
+    - link:
+      - /url: /canvas?project_id=be161d5e-fcdc-4f3c-9ae3-6b687d0218e5&canvas_id=f4655121-68e8-449c-8a9e-72095e89b4bd
+      - generic: 未命名画布
+- banner:
+  - button:
+    - text: 筛选
+  - button:
+    - generic: 时间
+  - button:
+    - text: 排序
+  - button: 批量操作
+  - button:
+  - button:
+  - button:
+    - generic: 积分
+  - link:
+    - /url: /billing/membership
+    - text: 会员中心
+  - button:
+- main:
+  - heading [level=1]: 主体
+  - region:
+    - button:
+      - generic: 新建主体
+    - article:
+      - button:
+      - checkbox
+      - button:
+      - paragraph: 主体对齐本地验收-20261028
+      - paragraph: 主体 · 3小时前修改
+      - button:
+- region "通知 alt+T"
+- alert
+- dialog "设置主体":
+  - heading [level=2]: 设置主体
+  - paragraph: 设置主参考、名称、描述和可选音色，以便在当前空间创作中复用。
+  - text: 参考主体
+  - generic: "*"
+  - paragraph: 上传主图，将素材拖拽至此处或从以下选择
+  - button [disabled]:
+    - text: 从本地添加
+  - button [disabled]:
+    - text: 从资产添加
+  - text: 名称
+  - generic: "*"
+  - textbox [disabled]:
+    - /placeholder: 请输入名称
+  - generic: 0 / 20
+  - generic: 描述
+  - textbox [disabled]:
+    - /placeholder: 请输入描述
+  - button [disabled]: 保存
+  - button:
+    - generic: 关闭对话框
+- dialog "上传参考" [active]:
+  - heading "上传参考" [level=2]
+  - paragraph: 图片 ≤20 MB · 视频 ≤500 MB / 60秒
+  - button "选择主体参考文件" [disabled]
+  - group "文件上传区域":
+    - button "更换上传文件" [disabled]
+    - generic: 文件已保留
+    - generic "subject-image-a.png"
+    - generic: 0.03 MB
+  - list "已选择文件":
+    - listitem "subject-image-a.png": 1. subject-image-a.png
+    - listitem "subject-image-b.png": 2. subject-image-b.png
+  - checkbox "我有使用权限，且无待授权真人内容。" [checked] [disabled]:
+  - generic: 我有使用权限，且无待授权真人内容。
+  - status: 结果待确认，重试不会重复上传。
+  - button "返回设置"
+  - button "重试原上传"
+  - button "关闭对话框":
+    - generic: 关闭对话框

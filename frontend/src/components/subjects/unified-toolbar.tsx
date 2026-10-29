@@ -1,6 +1,6 @@
 "use client";
 import type { Ref } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -47,15 +47,36 @@ export function UnifiedSubjectToolbar({
     <div className="unified-subject-toolbar flex min-w-0 flex-1 flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant={value.favorite ? "secondary" : "ghost"}
-              disabled={disabled}
-            >
-              筛选
-              <ChevronDown />
-            </Button>
-          </DropdownMenuTrigger>
+          <div className="group relative inline-flex min-w-0">
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant={value.favorite ? "secondary" : "ghost"}
+                disabled={disabled}
+                className={value.favorite ? "pr-9" : undefined}
+              >
+                {value.favorite ? "收藏" : "筛选"}
+                <ChevronDown
+                  className={
+                    value.favorite
+                      ? "pointer-events-none absolute right-3 group-focus-within:opacity-0 group-hover:opacity-0 max-md:opacity-0"
+                      : undefined
+                  }
+                />
+              </Button>
+            </DropdownMenuTrigger>
+            {value.favorite ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={disabled}
+                aria-label="清空筛选"
+                className="absolute top-0 right-0 h-full w-9 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100"
+                onClick={() => onChange({ ...value, favorite: false })}
+              >
+                <X />
+              </Button>
+            ) : null}
+          </div>
           <DropdownMenuContent align="start" className="unified-subject-menu">
             <DropdownMenuCheckboxItem
               checked={value.favorite}

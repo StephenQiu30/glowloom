@@ -1,0 +1,74 @@
+Browser tab: 1980372095, Title: "无限画布", URL: "http://localhost:1122/canvas?project_id=6836c671-a532-44d9-9b79-b661d2f61b62&canvas_id=2da104f4-b745-4e70-ab80-1fc99750bc3e&scope_id=a6c05c02-8821-40f9-b00e-b841f9be90d0".
+0 AXWebArea 无限画布, URL: localhost:1122/canvas?project_id=6836c671-a532-44d9-9b79-b661d2f61b62&canvas_id=2da104f4-b745-4e70-ab80-1fc99750bc3e&scope_id=a6c05c02-8821-40f9-b00e-b841f9be90d0
+	4 container
+		5 container 创作画布
+			6 container
+				7 container 协作者光标
+				8 image
+					9 image
+					10 image
+					11 image
+					12 image
+					13 image
+					14 image
+				15 container 文本节点：文本 1
+					16 text 未选中。 可编辑。 无媒体资源。 双击或按 Enter、空格编辑文本。
+					17 button 文本 1, Help: 双击或按 Enter 修改节点名称
+					18 button 编辑文本节点内容
+						19 text 双击编辑文本
+					20 pop up button 连接输入节点
+					21 pop up button 连接输出节点
+				22 container 文本节点：文本 2
+					23 text 未选中。 可编辑。 无媒体资源。 双击或按 Enter、空格编辑文本。
+					24 button 文本 2, Help: 双击或按 Enter 修改节点名称
+					25 button 编辑文本节点内容
+						26 text 双击编辑文本
+					27 pop up button 连接输入节点
+					28 pop up button 连接输出节点
+				29 container 图片节点：图片 1
+					30 text 未选中。 可编辑。 无媒体资源。
+					31 button 图片 1, Help: 双击或按 Enter 修改节点名称
+					32 text 输入画面描述，或添加参考图片开始创作
+					33 pop up button 连接输入节点
+					34 pop up button 连接输出节点
+				35 container 文本节点：文本 3
+					36 text 未选中。 可编辑。 无媒体资源。 双击或按 Enter、空格编辑文本。
+					37 button 文本 3, Help: 双击或按 Enter 修改节点名称
+					38 button 编辑文本节点内容
+						39 text 双击编辑文本
+					40 pop up button 连接输入节点
+					41 pop up button 连接输出节点
+		42 container
+			43 pop up button (collapsed) Description: 打开导航菜单, ID: radix-_r_1t_, Secondary Actions: Expand
+			44 pop up button (collapsed) Description: 打开画布菜单, ID: radix-_r_1v_, Secondary Actions: Expand
+			45 pop up button (collapsed) Description: 节点统计，共 4 个节点, Secondary Actions: Expand
+			46 text 已保存
+			72 container 1 位参与者在线
+				73 pop up button (collapsed) Description: 查看参与者 StephenQiu（你）, Secondary Actions: Expand
+			49 pop up button (collapsed) Description: 搜索画布, Secondary Actions: Expand
+			50 pop up button (collapsed) Description: 生成历史, Secondary Actions: Expand
+			51 button 复制画布链接
+			52 link Description: 账号设置, Value: localhost:1122/account
+			53 pop up button (collapsed) Description: 更多画布操作, Secondary Actions: Expand
+		54 container 画布工具栏
+			55 button 添加文本节点
+			56 button 添加图片节点
+			57 button 添加视频节点
+			58 button 添加音频节点
+			59 button 添加时间线节点
+			60 button 添加主体节点
+			61 pop up button (collapsed) Description: 导演工具箱, Secondary Actions: Expand
+			62 button 添加导演台节点
+			63 button 资产管理
+			64 button 本地上传
+		65 container
+			66 container 画布视图控制
+				67 pop up button (collapsed) Description: 画布操作模式：选择, Help: 操作模式（V / H）, ID: radix-_r_2j_, Secondary Actions: Expand
+				68 checkbox Description: 小地图, Value: 0
+				69 checkbox Description: 显示连线, Value: 1
+				70 pop up button (collapsed) Description: 缩放选项，当前 60%, Secondary Actions: Expand
+			71 button 与 AI 对话
+	3 container 通知 alt+T
+	74 text 无限画布
+
+The focused UI element is 0 AXWebArea 无限画布, URL: localhost:1122/canvas?project_id=6836c671-a532-44d9-9b79-b661d2f61b62&canvas_id=2da104f4-b745-4e70-ab80-1fc99750bc3e&scope_id=a6c05c02-8821-40f9-b00e-b841f9be90d0

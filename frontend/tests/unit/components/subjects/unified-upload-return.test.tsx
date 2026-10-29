@@ -46,7 +46,10 @@ const existing: UnifiedSubject = {
   updated_at: "2026-10-28T00:00:00Z",
 };
 beforeEach(() => api.upload.mockReset());
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 async function uploadUnknown(initial?: UnifiedSubject) {
   api.upload.mockRejectedValueOnce(new Error("network"));
   render(
@@ -115,4 +118,130 @@ it("明确不采纳未知上传只放弃本表单意图，保留原主参考与�
     false,
   );
   expect(api.upload).toHaveBeenCalledOnce();
+});
+
+it("从本地添加先打开原生选择器，取消选择不弹空白上传对话框", async () => {
+  const nativeClick = vi.spyOn(HTMLInputElement.prototype, "click");
+  render(
+    <UnifiedSubjectEditor
+      actorID={actorID}
+      scopeID={scopeID}
+      onClose={vi.fn()}
+      onSaved={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "从本地添加" }));
+  expect(nativeClick).toHaveBeenCalledOnce();
+  expect(screen.queryByRole("heading", { name: "上传参考" })).toBeNull();
+  const input = screen.getByLabelText("选择主参考文件");
+  expect(input).toHaveProperty("multiple", true);
+  expect(screen.getByLabelText("选择音色文件")).toHaveProperty(
+    "multiple",
+    false,
+  );
+  fireEvent.change(input, { target: { files: [] } });
+  expect(screen.queryByRole("heading", { name: "上传参考" })).toBeNull();
+  fireEvent.change(input, {
+    target: {
+      files: [
+        new File(["png"], "主图.png", { type: "image/png" }),
+        new File(["png"], "补充.png", { type: "image/png" }),
+      ],
+    },
+  });
+  expect(await screen.findByRole("heading", { name: "上传参考" })).toBeTruthy();
+  expect(api.upload).not.toHaveBeenCalled();
+  nativeClick.mockRestore();
+});
+
+it("原生多图上传按首张主图其余补充采用，不在第一张完成后提前关闭", async () => {
+  const secondAsset = "77777777-7777-4777-8777-777777777777";
+  api.upload
+    .mockResolvedValueOnce({
+      asset: {
+        id: asset,
+        revision: 1,
+        kind: "image",
+        mime_type: "image/png",
+        file_name: "主图.png",
+      },
+    })
+    .mockResolvedValueOnce({
+      asset: {
+        id: secondAsset,
+        revision: 1,
+        kind: "image",
+        mime_type: "image/png",
+        file_name: "补充.png",
+      },
+    });
+  render(
+    <UnifiedSubjectEditor
+      actorID={actorID}
+      scopeID={scopeID}
+      onClose={vi.fn()}
+      onSaved={vi.fn()}
+    />,
+  );
+  fireEvent.change(screen.getByLabelText("选择主参考文件"), {
+    target: {
+      files: [
+        new File(["png"], "主图.png", { type: "image/png" }),
+        new File(["png"], "补充.png", { type: "image/png" }),
+      ],
+    },
+  });
+  await screen.findByRole("heading", { name: "上传参考" });
+  fireEvent.click(screen.getByRole("checkbox"));
+  fireEvent.click(screen.getByRole("button", { name: "上传" }));
+  expect(await screen.findByText("主参考图")).toBeTruthy();
+  expect(screen.getByText("补充参考1")).toBeTruthy();
+  expect(api.upload).toHaveBeenCalledTimes(2);
+  expect(screen.queryByRole("heading", { name: "上传参考" })).toBeNull();
+});
+
+it("补充入口多图上传追加到原主参考，不替换主图", async () => {
+  api.upload
+    .mockResolvedValueOnce({
+      asset: {
+        id: "77777777-7777-4777-8777-777777777777",
+        revision: 1,
+        kind: "image",
+        mime_type: "image/png",
+        file_name: "补充1.png",
+      },
+    })
+    .mockResolvedValueOnce({
+      asset: {
+        id: "88888888-8888-4888-8888-888888888888",
+        revision: 1,
+        kind: "image",
+        mime_type: "image/png",
+        file_name: "补充2.png",
+      },
+    });
+  render(
+    <UnifiedSubjectEditor
+      actorID={actorID}
+      scopeID={scopeID}
+      initial={existing}
+      onClose={vi.fn()}
+      onSaved={vi.fn()}
+    />,
+  );
+  fireEvent.change(screen.getByLabelText("选择补充参考文件"), {
+    target: {
+      files: [
+        new File(["png"], "补充1.png", { type: "image/png" }),
+        new File(["png"], "补充2.png", { type: "image/png" }),
+      ],
+    },
+  });
+  await screen.findByRole("heading", { name: "上传参考" });
+  fireEvent.click(screen.getByRole("checkbox"));
+  fireEvent.click(screen.getByRole("button", { name: "上传" }));
+  expect(await screen.findByText("补充参考2")).toBeTruthy();
+  expect(screen.getByText("主参考图")).toBeTruthy();
+  expect(screen.getByLabelText("名称")).toHaveProperty("value", "原主体");
+  expect(api.upload).toHaveBeenCalledTimes(2);
 });
