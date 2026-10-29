@@ -1,0 +1,533 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.2 /Users/stephenqiu/Desktop/StephenQiu/Glowloom/.worktrees/director-standalone/frontend
+
+stderr | tests/unit/components/canvas/director/director-workspace-placement.test.tsx > blocks uploaded-model handoff after epoch changes
+An update to DirectorWorkspace inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to DirectorWorkspace inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | tests/unit/components/canvas/director/director-workspace-placement.test.tsx > blocks uploaded-model handoff after epoch changes
+An update to DirectorWorkspace inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to DirectorWorkspace inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | tests/unit/components/canvas/director/director-workspace-placement.test.tsx > blocks uploaded-model handoff after mode changes
+An update to DirectorWorkspace inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | tests/unit/components/canvas/director/director-workspace-placement.test.tsx > blocks uploaded-model handoff after mode changes
+An update to DirectorWorkspace inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to DirectorWorkspace inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ❯ tests/unit/components/canvas/director/director-workspace-placement.test.tsx (26 tests | 7 failed) 110719ms
+   × stages an uploaded model, places it once at the ground coordinate and records undo/redo 16461ms
+   × cancels uploaded-model placement without inserting or removing its asset 19083ms
+   × blocks uploaded-model handoff after epoch changes 15166ms
+   × blocks uploaded-model handoff after mode changes 8822ms
+   × does not insert a staged model after epoch changes 8783ms
+   × queues project models as actors and preserves remaining assets when placement is cancelled 3222ms
+   × cancels a canvas background request when mode changes and ignores late failures 6671ms
+ ❯ tests/unit/components/canvas/director/director-path-preview.test.tsx (2 tests | 1 failed) 10872ms
+   × previews the entire extended path without saving and restores the original duration on cancel (loop=true) 6560ms
+ ❯ tests/unit/components/canvas/director/director-builtin-motion.test.ts (8 tests | 1 failed) 8466ms
+   × binds real CC0 clips to all 12 actual actor shapes without changing their bone lengths or scale 7867ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/unit/components/canvas/director/director-builtin-motion.test.ts > binds real CC0 clips to all 12 actual actor shapes without changing their bone lengths or scale
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/unit/components/canvas/director/director-builtin-motion.test.ts:173:1
+    171| });
+    172|
+    173| it("binds real CC0 clips to all 12 actual actor shapes without changin…
+       | ^
+    174|   vi.mocked(fetch).mockResolvedValue(
+    175|     new Response(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  tests/unit/components/canvas/director/director-path-preview.test.tsx > previews the entire extended path without saving and restores the original duration on cancel (loop=true)
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/unit/components/canvas/director/director-path-preview.test.tsx:45:23
+     43| });
+     44|
+     45| it.each([true, false])(
+       |                       ^
+     46|   "previews the entire extended path without saving and restores the o…
+     47|   async (loop) => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+
+ FAIL  tests/unit/components/canvas/director/director-workspace-placement.test.tsx > stages an uploaded model, places it once at the ground coordinate and records undo/redo
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/unit/components/canvas/director/director-workspace-placement.test.tsx:192:1
+    190| afterEach(cleanup);
+    191|
+    192| it("stages an uploaded model, places it once at the ground coordinate …
+       | ^
+    193|   const { client, scene } = mount();
+    194|   await importModel();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+
+ FAIL  tests/unit/components/canvas/director/director-workspace-placement.test.tsx > cancels uploaded-model placement without inserting or removing its asset
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/unit/components/canvas/director/director-workspace-placement.test.tsx:217:1
+    215| });
+    216|
+    217| it("cancels uploaded-model placement without inserting or removing its…
+       | ^
+    218|   const { client, scene } = mount();
+    219|   await importModel();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯
+
+ FAIL  tests/unit/components/canvas/director/director-workspace-placement.test.tsx > blocks uploaded-model handoff after epoch changes
+ FAIL  tests/unit/components/canvas/director/director-workspace-placement.test.tsx > blocks uploaded-model handoff after mode changes
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/unit/components/canvas/director/director-workspace-placement.test.tsx:226:48
+    224| });
+    225|
+    226| it.each(["epoch", "mode", "readonly"] as const)(
+       |                                                ^
+    227|   "blocks uploaded-model handoff after %s changes",
+    228|   async (scope) => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/9]⎯
+
+ FAIL  tests/unit/components/canvas/director/director-workspace-placement.test.tsx > does not insert a staged model after epoch changes
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/unit/components/canvas/director/director-workspace-placement.test.tsx:238:60
+    236| );
+    237|
+    238| it.each(["epoch", "mode", "readonly", "conflict"] as const)(
+       |                                                            ^
+    239|   "does not insert a staged model after %s changes",
+    240|   async (scope) => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/9]⎯
+
+ FAIL  tests/unit/components/canvas/director/director-workspace-placement.test.tsx > queues project models as actors and preserves remaining assets when placement is cancelled
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      "director",
+      Object {
+        "id": "1db60ce6-0e7a-49d7-b11c-f31cc3982ab0",
+        "mode": "static",
+        "title": "场景",
+        "version": 2,
+        "workspaces": Object {
+          "dynamic": Object {
+            "active_shot_id": "1db60ce6-0e7a-49d7-b11c-9775b1982ab4",
+            "aspect_ratio": "16:9",
+            "background": "#171717",
+            "cameras": Array [
+              Object {
+                "aperture": 2.8,
+                "far": 1000,
+                "focal_length": 35,
+                "focus_distance": 8,
+                "fov": 50,
+                "id": "1db60ce6-0e7a-49d7-b11c-9775b1982ab2",
+                "keyframes": Array [],
+                "locked": false,
+                "look_at_mode": "coordinates",
+                "name": "机位",
+                "near": 0.1,
+                "target": Array [
+                  0,
+                  1,
+                  0,
+                ],
+                "transform": Object {
+                  "position": Array [
+                    5,
+                    3,
+                    7,
+                  ],
+                  "rotation": Array [
+                    0,
+                    0,
+                    0,
+                  ],
+                  "scale": Array [
+                    1,
+                    1,
+                    1,
+                  ],
+                },
+              },
+            ],
+            "environment_intensity": 1,
+            "grid_snap": false,
+            "grid_visible": true,
+            "ground": Object {
+              "color": "#242424",
+              "height": 0,
+              "opacity": 1,
+              "visible": true,
+            },
+            "labels_visible": true,
+            "lights": Array [],
+            "objects": Array [],
+            "shots": Array [
+              Object {
+                "camera_id": "1db60ce6-0e7a-49d7-b11c-9775b1982ab2",
+                "camera_move": "static",
+                "duration": 20,
+                "fps": 30,
+                "id": "1db60ce6-0e7a-49d7-b11c-9775b1982ab4",
+                "name": "镜头",
+                "prompt": "",
+                "shot_size": "medium",
+              },
+            ],
+          },
+          "static": Object {
+            "active_shot_id": "29ae1921-26ba-46b2-8088-71dd974629bd",
+            "aspect_ratio": "16:9",
+            "background": "#171717",
+            "cameras": Array [
+              Object {
+                "aperture": 2.8,
+                "far": 1000,
+                "focal_length": 35,
+                "focus_distance": 8,
+                "fov": 50,
+                "id": "acf3b7ff-2557-45ca-a1b8-65e910243550",
+                "keyframes": Array [],
+                "locked": false,
+                "look_at_mode": "coordinates",
+                "name": "机位",
+                "near": 0.1,
+                "target": Array [
+                  0,
+                  1,
+                  0,
+                ],
+                "transform": Object {
+                  "position": Array [
+                    5,
+                    3,
+                    7,
+                  ],
+                  "rotation": Array [
+                    0,
+                    0,
+                    0,
+                  ],
+                  "scale": Array [
+                    1,
+                    1,
+                    1,
+                  ],
+                },
+              },
+            ],
+            "environment_intensity": 1,
+            "grid_snap": false,
+            "grid_visible": true,
+            "ground": Object {
+              "color": "#242424",
+              "height": 0,
+              "opacity": 1,
+              "visible": true,
+            },
+            "labels_visible": true,
+            "lights": Array [],
+            "objects": Array [
+              Object {
+                "asset_id": "10000000-0000-4000-8000-000000000002",
+                "cast_shadow": true,
+                "color": "#ffffff",
+                "id": "e4612dce-4d94-416c-ad64-00914fdcd347",
+                "keyframes": Array [],
+                "kind": "actor",
+                "name": "模型.glb",
+                "receive_shadow": true,
+                "transform": Object {
+                  "position": Array [
+                    3,
+                    0.5,
+                    7,
+                  ],
+                  "rotation": Array [
+                    0,
+                    0,
+                    0,
+                  ],
+                  "scale": Array [
+                    1,
+                    1,
+                    1,
+                  ],
+                },
+                "visible": true,
+              },
+            ],
+            "shots": Array [
+              Object {
+                "camera_id": "acf3b7ff-2557-45ca-a1b8-65e910243550",
+                "camera_move": "static",
+                "duration": 20,
+                "fps": 30,
+                "id": "29ae1921-26ba-46b2-8088-71dd974629bd",
+                "name": "镜头",
+                "prompt": "",
+                "shot_size": "medium",
+              },
+            ],
+          },
+        },
+      },
+      Object {
+        "id": "1db60ce6-0e7a-49d7-b11c-f31cc3982ab0",
+        "mode": "static",
+        "title": "场景",
+        "version": 2,
+        "workspaces": Object {
+          "dynamic": Object {
+            "active_shot_id": "1db60ce6-0e7a-49d7-b11c-9775b1982ab4",
+            "aspect_ratio": "16:9",
+            "background": "#171717",
+            "cameras": Array [
+              Object {
+                "aperture": 2.8,
+                "far": 1000,
+                "focal_length": 35,
+                "focus_distance": 8,
+                "fov": 50,
+                "id": "1db60ce6-0e7a-49d7-b11c-9775b1982ab2",
+                "keyframes": Array [],
+                "locked": false,
+                "look_at_mode": "coordinates",
+                "name": "机位",
+                "near": 0.1,
+                "target": Array [
+                  0,
+                  1,
+                  0,
+                ],
+                "transform": Object {
+                  "position": Array [
+                    5,
+                    3,
+                    7,
+                  ],
+                  "rotation": Array [
+                    0,
+                    0,
+                    0,
+                  ],
+                  "scale": Array [
+                    1,
+                    1,
+                    1,
+                  ],
+                },
+              },
+            ],
+            "environment_intensity": 1,
+            "grid_snap": false,
+            "grid_visible": true,
+            "ground": Object {
+              "color": "#242424",
+              "height": 0,
+              "opacity": 1,
+              "visible": true,
+            },
+            "labels_visible": true,
+            "lights": Array [],
+            "objects": Array [],
+            "shots": Array [
+              Object {
+                "camera_id": "1db60ce6-0e7a-49d7-b11c-9775b1982ab2",
+                "camera_move": "static",
+                "duration": 20,
+                "fps": 30,
+                "id": "1db60ce6-0e7a-49d7-b11c-9775b1982ab4",
+                "name": "镜头",
+                "prompt": "",
+                "shot_size": "medium",
+              },
+            ],
+          },
+          "static": Object {
+            "active_shot_id": "29ae1921-26ba-46b2-8088-71dd974629bd",
+            "aspect_ratio": "16:9",
+            "background": "#171717",
+            "cameras": Array [
+              Object {
+                "aperture": 2.8,
+                "far": 1000,
+                "focal_length": 35,
+                "focus_distance": 8,
+                "fov": 50,
+                "id": "acf3b7ff-2557-45ca-a1b8-65e910243550",
+                "keyframes": Array [],
+                "locked": false,
+                "look_at_mode": "coordinates",
+                "name": "机位",
+                "near": 0.1,
+                "target": Array [
+                  0,
+                  1,
+                  0,
+                ],
+                "transform": Object {
+                  "position": Array [
+                    5,
+                    3,
+                    7,
+                  ],
+                  "rotation": Array [
+                    0,
+                    0,
+                    0,
+                  ],
+                  "scale": Array [
+                    1,
+                    1,
+                    1,
+                  ],
+                },
+              },
+            ],
+            "environment_intensity": 1,
+            "grid_snap": false,
+            "grid_visible": true,
+            "ground": Object {
+              "color": "#242424",
+              "height": 0,
+              "opacity": 1,
+              "visible": true,
+            },
+            "labels_visible": true,
+            "lights": Array [],
+            "objects": Array [],
+            "shots": Array [
+              Object {
+                "camera_id": "acf3b7ff-2557-45ca-a1b8-65e910243550",
+                "camera_move": "static",
+                "duration": 20,
+                "fps": 30,
+                "id": "29ae1921-26ba-46b2-8088-71dd974629bd",
+                "name": "镜头",
+                "prompt": "",
+                "shot_size": "medium",
+              },
+            ],
+          },
+        },
+      },
+      "opening-epoch",
+    ]
+
+
+Number of calls: 1
+
+ ❯ tests/unit/components/canvas/director/director-workspace-placement.test.tsx:260:37
+    258|   );
+    259|   expect(screen.queryByTestId("asset-picker")).toBeNull();
+    260|   expect(client.changeDirector).not.toHaveBeenCalled();
+       |                                     ^
+    261|   act(() => captured.viewport!.onPlace!([1, 0, 2]));
+    262|   expect(scene().objects).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/9]⎯
+
+ FAIL  tests/unit/components/canvas/director/director-workspace-placement.test.tsx > cancels a canvas background request when mode changes and ignores late failures
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/unit/components/canvas/director/director-workspace-placement.test.tsx:422:48
+    420|   expect(scene().panorama).toBeUndefined();
+    421| });
+    422| it.each(["epoch", "mode", "readonly"] as const)(
+       |                                                ^
+    423|   "cancels a canvas background request when %s changes and ignores lat…
+    424|   async (scope) => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/9]⎯
+
+
+ Test Files  3 failed | 3 passed (6)
+      Tests  9 failed | 85 passed (94)
+   Start at  15:26:23
+   Duration  270.45s (tests 58%, environment 15%, import 15%, transform 12%)
+
+    Isolate  6 workers spawned · ~7.95s startup each (spawn + environment, per file)
+             at least ~39.76s faster with isolate: false — reuses workers across files instead of one per file

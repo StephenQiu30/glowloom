@@ -1,0 +1,41 @@
+[
+  {
+    "method": "Network.webSocketCreated"
+  },
+  {
+    "method": "Network.webSocketHandshakeResponseReceived",
+    "status": 101
+  },
+  {
+    "method": "Network.webSocketFrameSent",
+    "type": "join"
+  },
+  {
+    "method": "Network.webSocketFrameReceived",
+    "type": "yjs_snapshot"
+  },
+  {
+    "method": "Network.webSocketFrameReceived",
+    "type": "heartbeat"
+  },
+  {
+    "method": "Network.webSocketFrameReceived",
+    "type": "yjs_presence"
+  },
+  {
+    "method": "Network.webSocketFrameReceived",
+    "type": "heartbeat"
+  },
+  {
+    "method": "Network.webSocketFrameReceived",
+    "type": "yjs_presence"
+  },
+  {
+    "method": "Network.webSocketFrameReceived",
+    "type": "heartbeat"
+  },
+  {
+    "method": "Network.webSocketFrameReceived",
+    "type": "yjs_presence"
+  }
+]

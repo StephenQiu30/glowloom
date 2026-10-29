@@ -450,6 +450,29 @@ function DirectorWorkspace({
     mode: DirectorMode;
     projectID: string;
   } | null>(null);
+  const backgroundRequest = useRef<AbortController | null>(null);
+  const backgroundEpoch = client.getDocumentEpoch();
+  const cancelBackgroundRequest = useCallback(() => {
+    backgroundRequest.current?.abort();
+    backgroundRequest.current = null;
+  }, []);
+  useEffect(
+    () => cancelBackgroundRequest,
+    [
+      cancelBackgroundRequest,
+      canvasBackground,
+      client,
+      nodeID,
+      projectID,
+      backgroundEpoch,
+      scene?.mode,
+      readOnly,
+    ],
+  );
+  function closeCanvasBackground() {
+    cancelBackgroundRequest();
+    setCanvasBackground(null);
+  }
   const [localImport, setLocalImport] = useState<{
     epoch: string | null;
     mode: DirectorMode;
@@ -482,8 +505,11 @@ function DirectorWorkspace({
     [placement],
   );
   const shot = scene?.shots.find((s) => s.id === scene.active_shot_id),
-    duration = shot?.duration ?? 20,
-    fps = shot?.fps ?? 30,
+    playbackShot =
+      previewScene?.shots.find((s) => s.id === previewScene.active_shot_id) ??
+      shot,
+    duration = playbackShot?.duration ?? 20,
+    fps = playbackShot?.fps ?? 30,
     currentTime = Math.min(time, duration);
   const playhead = useRef(0);
   useEffect(() => {
@@ -1294,14 +1320,15 @@ function DirectorWorkspace({
                     projectID,
                   })
                 }
-                onCanvasPicker={(kind) =>
+                onCanvasPicker={(kind) => {
+                  cancelBackgroundRequest();
                   setCanvasBackground({
                     kind,
                     epoch: client.getDocumentEpoch(),
                     mode: scene.mode ?? "static",
                     projectID,
-                  })
-                }
+                  });
+                }}
               />
             )}
             {tab === "backgrounds" && scene.panorama && (
@@ -2682,7 +2709,7 @@ function DirectorWorkspace({
         <Dialog
           open
           onOpenChange={(open) => {
-            if (!open) setCanvasBackground(null);
+            if (!open) closeCanvasBackground();
           }}
         >
           <DialogContent>
@@ -2713,8 +2740,18 @@ function DirectorWorkspace({
                     const scope = canvasBackground;
                     const assetID = node.serviceData?.media_ref?.asset_id;
                     if (!assetID) return;
-                    void getMediaPreview({ pid: projectID, asset_id: assetID })
+                    cancelBackgroundRequest();
+                    const request = new AbortController();
+                    backgroundRequest.current = request;
+                    const isCurrent = () =>
+                      backgroundRequest.current === request &&
+                      !request.signal.aborted;
+                    void getMediaPreview(
+                      { pid: projectID, asset_id: assetID },
+                      { signal: request.signal },
+                    )
                       .then((result) => {
+                        if (!isCurrent()) return;
                         importBaseline(scope);
                         const current = client
                           .getSnapshot()
@@ -2732,15 +2769,20 @@ function DirectorWorkspace({
                           kind: "image",
                           objectKind: scope.kind,
                         });
-                        setCanvasBackground(null);
+                        closeCanvasBackground();
                       })
-                      .catch((cause) =>
+                      .catch((cause) => {
+                        if (!isCurrent()) return;
                         setError(
                           cause instanceof Error
                             ? cause.message
                             : "背景读取失败",
-                        ),
-                      );
+                        );
+                      })
+                      .finally(() => {
+                        if (backgroundRequest.current === request)
+                          backgroundRequest.current = null;
+                      });
                   }}
                 >
                   {node.title || "图片"}

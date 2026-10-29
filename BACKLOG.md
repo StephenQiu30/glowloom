@@ -2382,6 +2382,7 @@ EX-REQ-05/06补充反馈已落实到设计28、PRD15 AC02和Plan24 CASE02。已�
 - T-DIR-08：最新候选前端33文件294项通过，最后下载修复capture12项（其中新增5项）通过；tsc、范围ESLint、生产构建、API契约、Go全包编译、真实PG26项及精确数字/边界回归通过。Go Race/vet/范围lint/govulncheck另有记录。共享主工作区未宣称整仓通过。
 - 范围确认：用户同意文字生成动作预留能力，当前如实标识未接入，不作为本次交付阻塞。动作资源/设备/权限故障组合尚未穷举，边界逐项保留在矩阵。
 - 后续跟踪：独立standalone启动使用同Origin时WebSocket连接未通过，未修改安全配置；已恢复正式开发服务，真实页面验收在该服务完成。较早弹窗异常未确定归因，后续取消关闭/素材完整链路已通过，不覆盖旧观察。
+- 第四轮生产补验：隔离standalone取得真实101、保存ACK及刷新回读，完成自由双路径、2:1全景上传、平面多选取消、14运镜预览取消和720×1280/25fps成片上传下载回画布；补修背景异步取消竞争与预览时长截断。新增真实构建传输smoke并接入CI。保留高负载迟到确认、重连与本地大组失败记录，旧无握手根因未确证；最终CI作为交付检查。[生产证据](docs/research/evidence/2026-10-29-director-production/validation.md)。
 - 证据：[第三轮真实验收](docs/research/evidence/2026-10-29-director-implementation/validation-round3.md)、[第二轮验证](docs/research/evidence/2026-10-29-director-implementation/validation-round2.md)、[35项矩阵](docs/research/evidence/2026-10-29-director-implementation/acceptance-matrix.md)、[来源适配](docs/research/evidence/2026-10-29-director-implementation/source-mapping.md)、[Figma回读](docs/research/evidence/2026-10-29-director-implementation/figma-round2.md)。
 
 ### 2026-10-29 主体列表去分页与去过度设计（SUB-015）

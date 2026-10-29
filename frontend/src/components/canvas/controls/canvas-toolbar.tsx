@@ -23,7 +23,6 @@ import {
 } from "@/components/canvas/lib/node-registry";
 import {
   Sparkles,
-  Box,
   Contact,
   Folder,
   Eraser,
@@ -186,9 +185,14 @@ export function CanvasToolbar({
               {definitions
                 .filter(
                   (item) =>
-                    !["text", "image", "video", "audio", "timeline"].includes(
-                      item.type,
-                    ),
+                    ![
+                      "text",
+                      "image",
+                      "video",
+                      "audio",
+                      "timeline",
+                      "director",
+                    ].includes(item.type),
                 )
                 .map((definition) => (
                   <Button
@@ -231,16 +235,33 @@ export function CanvasToolbar({
         <div className="canvas-dock-surface flex flex-col items-center">
           {definitions
             .filter((item) =>
-              ["text", "image", "video", "audio", "timeline"].includes(
-                item.type,
-              ),
+              [
+                "text",
+                "image",
+                "video",
+                "audio",
+                "timeline",
+                "director",
+              ].includes(item.type),
             )
             .sort(
               (a, b) =>
-                ["text", "image", "video", "audio", "timeline"].indexOf(
-                  a.type,
-                ) -
-                ["text", "image", "video", "audio", "timeline"].indexOf(b.type),
+                [
+                  "text",
+                  "image",
+                  "video",
+                  "audio",
+                  "timeline",
+                  "director",
+                ].indexOf(a.type) -
+                [
+                  "text",
+                  "image",
+                  "video",
+                  "audio",
+                  "timeline",
+                  "director",
+                ].indexOf(b.type),
             )
             .map((definition) => (
               <Tooltip key={definition.type}>
@@ -258,10 +279,7 @@ export function CanvasToolbar({
                 <TooltipContent side="right">{definition.title}</TooltipContent>
               </Tooltip>
             ))}
-          {[
-            { label: "主体", icon: Contact },
-            { label: "3D 导演", icon: Box },
-          ].map(({ label, icon: Icon }) => (
+          {[{ label: "主体", icon: Contact }].map(({ label, icon: Icon }) => (
             <Tooltip key={label}>
               <TooltipTrigger asChild>
                 <span tabIndex={0} aria-label={`${label}暂不可用`}>

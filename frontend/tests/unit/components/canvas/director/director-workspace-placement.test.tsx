@@ -23,7 +23,9 @@ const captured = vi.hoisted(() => ({
   viewport: null as ComponentProps<typeof DirectorViewport> | null,
   importer: null as DirectorImportDialogProps | null,
   picker: null as ComponentProps<typeof ProjectAssetDialog> | null,
+  preview: vi.fn(),
 }));
+vi.mock("@/api/media", () => ({ getMediaPreview: captured.preview }));
 vi.mock("@/api/canvases", () => ({
   readDirectorRecovery: vi.fn().mockResolvedValue({ draft: null }),
   saveDirectorRecovery: vi.fn().mockResolvedValue({ revision: 1 }),
@@ -66,6 +68,15 @@ const model = {
   kind: "model",
   file_name: "模型.glb",
 } as API.AssetSummary;
+const imageAssets = ["背景甲", "背景乙"].map(
+  (name, index) =>
+    ({
+      ...model,
+      id: `10000000-0000-4000-8000-00000000000${index + 3}`,
+      kind: "image",
+      file_name: name,
+    }) as API.AssetSummary,
+);
 function mount() {
   let config: API.DirectorConfig = migrateDirectorDocument(
     emptyDirectorConfig(),
@@ -79,6 +90,12 @@ function mount() {
     document: {
       nodes: [
         { id: "director", serviceData: { config: { director: config } } },
+        ...imageAssets.map((asset) => ({
+          id: asset.id!,
+          type: "image",
+          title: asset.file_name,
+          serviceData: { media_ref: { asset_id: asset.id } },
+        })),
       ],
     },
   });
@@ -116,7 +133,7 @@ function mount() {
       },
     ),
   };
-  render(
+  const rendered = render(
     <CanvasDirectorWorkspace
       client={
         client as unknown as ComponentProps<
@@ -129,6 +146,7 @@ function mount() {
     />,
   );
   return {
+    unmount: rendered.unmount,
     client,
     scene: () => activeDirectorScene(migrateDirectorDocument(config)),
     changeScope: (scope: "epoch" | "mode" | "readonly" | "conflict") =>
@@ -167,6 +185,7 @@ beforeEach(() => {
   captured.viewport = null;
   captured.importer = null;
   captured.picker = null;
+  captured.preview.mockReset();
 });
 afterEach(cleanup);
 
@@ -341,4 +360,99 @@ it("saves a panorama directly with undo, without creating a ground-placement obj
   expect(captured.viewport!.placement).toBeUndefined();
   fireEvent.click(undo());
   expect(scene().panorama).toBeUndefined();
+});
+
+function openCanvasBackground(kind: "billboard" | "panorama" = "panorama") {
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "背景" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  fireEvent.click(screen.getByRole("button", { name: "添加背景" }));
+  fireEvent.mouseDown(
+    within(screen.getByRole("dialog")).getByRole("tab", {
+      name: kind === "panorama" ? "全景背景" : "平面背景",
+    }),
+    { button: 0, ctrlKey: false },
+  );
+  fireEvent.click(screen.getByRole("button", { name: "从画布选择" }));
+}
+function pendingPreview() {
+  let resolve!: (value: API.Preview) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<API.Preview>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  captured.preview.mockReturnValueOnce(promise);
+  return { resolve, reject };
+}
+function previewSignal(index = 0): AbortSignal | undefined {
+  return captured.preview.mock.calls[index]?.[1]?.signal;
+}
+it.each(["billboard", "panorama"] as const)(
+  "cancels a pending canvas %s after closing without applying its late response",
+  async (kind) => {
+    const { client, scene } = mount();
+    const pending = pendingPreview();
+    openCanvasBackground(kind);
+    fireEvent.click(screen.getByRole("button", { name: "背景甲" }));
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await act(async () => pending.resolve({ asset: imageAssets[0] }));
+    expect(client.changeDirector).not.toHaveBeenCalled();
+    expect(scene().panorama).toBeUndefined();
+    expect(captured.viewport!.placement).toBeUndefined();
+    expect(previewSignal()?.aborted).toBe(true);
+  },
+);
+it("only applies the latest canvas background selection when responses arrive out of order", async () => {
+  const { client, scene } = mount();
+  const first = pendingPreview();
+  const second = pendingPreview();
+  openCanvasBackground();
+  fireEvent.click(screen.getByRole("button", { name: "背景甲" }));
+  fireEvent.click(screen.getByRole("button", { name: "背景乙" }));
+  await act(async () => second.resolve({ asset: imageAssets[1] }));
+  await act(async () => first.resolve({ asset: imageAssets[0] }));
+  expect(client.changeDirector).toHaveBeenCalledOnce();
+  expect(scene().panorama?.asset_id).toBe(imageAssets[1].id);
+  expect(previewSignal()?.aborted).toBe(true);
+  fireEvent.click(undo());
+  expect(scene().panorama).toBeUndefined();
+});
+it.each(["epoch", "mode", "readonly"] as const)(
+  "cancels a canvas background request when %s changes and ignores late failures",
+  async (scope) => {
+    const { client, changeScope } = mount();
+    const pending = pendingPreview();
+    openCanvasBackground();
+    fireEvent.click(screen.getByRole("button", { name: "背景甲" }));
+    changeScope(scope);
+    await act(async () => pending.reject(new Error("过期请求失败")));
+    expect(client.changeDirector).not.toHaveBeenCalled();
+    expect(screen.queryByText("过期请求失败")).toBeNull();
+    expect(previewSignal()?.aborted).toBe(true);
+  },
+);
+it("cancels canvas background loading on unmount", async () => {
+  const { client, unmount } = mount();
+  const pending = pendingPreview();
+  openCanvasBackground();
+  fireEvent.click(screen.getByRole("button", { name: "背景甲" }));
+  unmount();
+  await act(async () => pending.resolve({ asset: imageAssets[0] }));
+  expect(client.changeDirector).not.toHaveBeenCalled();
+  expect(previewSignal()?.aborted).toBe(true);
+});
+it("keeps an active canvas background failure retryable", async () => {
+  const { client, scene } = mount();
+  const first = pendingPreview();
+  openCanvasBackground();
+  fireEvent.click(screen.getByRole("button", { name: "背景甲" }));
+  await act(async () => first.reject(new Error("图片读取失败")));
+  expect(screen.getByText("图片读取失败")).toBeTruthy();
+  const retry = pendingPreview();
+  fireEvent.click(screen.getByRole("button", { name: "背景甲" }));
+  await act(async () => retry.resolve({ asset: imageAssets[0] }));
+  expect(client.changeDirector).toHaveBeenCalledOnce();
+  expect(scene().panorama?.asset_id).toBe(imageAssets[0].id);
 });
