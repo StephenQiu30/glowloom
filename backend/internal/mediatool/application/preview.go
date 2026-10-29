@@ -23,10 +23,11 @@ type ResultReader interface {
 
 // ExportQuery signs pending output for inspection and serves finalized downloads.
 type ExportQuery struct {
-	store   ExportStore
-	signer  mediaapp.PreviewSigner
-	reader  ResultReader
-	storage *resultAccess
+	launchOrigin string
+	store        ExportStore
+	signer       mediaapp.PreviewSigner
+	reader       ResultReader
+	storage      *resultAccess
 }
 
 // NewExportQuery injects authorization, bounded signed URLs and private result bytes.

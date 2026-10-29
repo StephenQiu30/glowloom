@@ -24,7 +24,7 @@ function PreviewMedia({
   playing: boolean;
   muted: boolean;
   volume: number;
-  onError: (message: string) => void;
+  onError: (message: string, source?: TimelineMedia) => void;
 }) {
   const element = useRef<HTMLMediaElement | null>(null);
   const [failedURL, setFailedURL] = useState<string | null>(null);
@@ -35,8 +35,8 @@ function PreviewMedia({
     reportedURL.current = media.url;
     element.current?.pause();
     setFailedURL(media.url);
-    onError(`无法播放：${clip.title}`);
-  }, [clip.title, media.url, onError]);
+    onError(`无法播放：${clip.title}`, media);
+  }, [clip.title, media, onError]);
   useEffect(() => {
     const value = element.current;
     if (!value) return;
@@ -143,7 +143,7 @@ export function TimelinePreview({
   playing: boolean;
   muted: boolean;
   volume: number;
-  onError: (message: string) => void;
+  onError: (message: string, source?: TimelineMedia) => void;
 }) {
   const active = timeline.tracks.flatMap((track) =>
     !track.visible

@@ -31,6 +31,9 @@ func document(frozen domain.FrozenExport) (string, []byte, error) {
 	case domain.OutputFCPXML:
 		data, e := fcpDocument(frozen)
 		return "timeline.fcpxmld/Info.fcpxml", data, e
+	case domain.OutputJianying:
+		data, e := jianyingDocument(frozen)
+		return "template.json", data, e
 	case domain.OutputXMEML:
 		data, e := xmemlDocument(frozen)
 		return "timeline.xml", data, e
@@ -222,6 +225,11 @@ func Verify(ctx context.Context, file *os.File, size int64, frozen domain.Frozen
 			case entry.Name == "manifest.json":
 				var value Manifest
 				if e = json.Unmarshal(actual, &value); e != nil || value.Source != *frozen.Source {
+					return application.ErrInvalidExport
+				}
+			case frozen.OutputKind == domain.OutputJianying:
+				var value jianyingDraft
+				if e = json.Unmarshal(actual, &value); e != nil || value.NewVersion != frozen.OutputKind.FormatVersion() || len(value.Tracks) != len(frozen.Timeline.Tracks) {
 					return application.ErrInvalidExport
 				}
 			case frozen.OutputKind == domain.OutputFCPXML:

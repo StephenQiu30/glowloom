@@ -53,6 +53,7 @@ type DerivedMedia interface {
 
 // ExportPreview exposes one actual private result for the explicit owner review.
 type ExportPreview struct {
+	LaunchURL string                 `json:"launch_url,omitempty"`
 	JobID     uuid.UUID              `json:"job_id"`
 	Revision  int64                  `json:"revision"`
 	SHA256    string                 `json:"sha256"`
@@ -74,7 +75,7 @@ type ExportWaveformPreview struct {
 // CreateInput accepts saved source identity only, never a URL or local path.
 type CreateInput struct {
 	Settings   *domain.ExportSettings `json:"settings,omitempty"`
-	OutputKind domain.OutputKind      `json:"output_kind,omitempty" enums:"video,audio,media_bundle,fcpxml,xmeml" default:"video"`
+	OutputKind domain.OutputKind      `json:"output_kind,omitempty" enums:"video,audio,media_bundle,fcpxml,xmeml,jianying" default:"video"`
 	CanvasID   uuid.UUID              `json:"canvas_id"`
 	NodeID     uuid.UUID              `json:"node_id"`
 	Revision   int64                  `json:"revision"`

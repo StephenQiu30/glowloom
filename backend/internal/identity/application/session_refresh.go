@@ -16,6 +16,12 @@ import (
 // ErrRefreshRaced means the current chain has advanced past a recoverable child.
 var ErrRefreshRaced = errors.New("refresh_raced")
 
+const (
+	// Leave response delivery time within the BFF's ten-second upstream budget.
+	refreshRequestTimeout  = 8 * time.Second
+	refreshOptionalTimeout = 250 * time.Millisecond
+)
+
 type refreshReceipt struct {
 	Access, Refresh        string
 	Expires, After, Server time.Time
@@ -58,6 +64,8 @@ func (a *Auth) recoverRefresh(u domain.User, s domain.AuthSession, parent, child
 
 // Refresh consumes under PG locks, with all Redis work before or after transactions.
 func (a *Auth) Refresh(ctx context.Context, token, csrf, source string, operation uuid.UUID) (AuthResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, refreshRequestTimeout)
+	defer cancel()
 	if !a.sessionSecurityReady() {
 		return AuthResult{}, ErrRefreshDependency
 	}
@@ -72,10 +80,16 @@ func (a *Auth) Refresh(ctx context.Context, token, csrf, source string, operatio
 	if err != nil {
 		return AuthResult{}, err
 	}
-	defer func() { _ = release(ctx) }()
+	defer func() {
+		releaseCtx, cancel := context.WithTimeout(ctx, refreshOptionalTimeout)
+		defer cancel()
+		_ = release(releaseCtx)
+	}()
 	// Optional cache reads happen before PG locks; only matching durable ciphertext
 	// can be used after the locked generation and recovery deadline checks.
-	cached, _ := a.security.coordinator.ReadReceipt(ctx, candidate.SessionID, candidate.Generation)
+	cacheCtx, cancelCache := context.WithTimeout(ctx, refreshOptionalTimeout)
+	cached, _ := a.security.coordinator.ReadReceipt(cacheCtx, candidate.SessionID, candidate.Generation)
+	cancelCache()
 	var result AuthResult
 	var rejected error
 	var revoked bool
@@ -185,11 +199,15 @@ func (a *Auth) Refresh(ctx context.Context, token, csrf, source string, operatio
 		return AuthResult{}, err
 	}
 	if revoked {
-		_ = a.security.coordinator.MarkRevoked(ctx, result.Session.ID, result.Session.AbsoluteExpiresAt)
+		hintCtx, cancelHint := context.WithTimeout(ctx, refreshOptionalTimeout)
+		_ = a.security.coordinator.MarkRevoked(hintCtx, result.Session.ID, result.Session.AbsoluteExpiresAt)
+		cancelHint()
 		return AuthResult{}, rejected
 	}
 	if len(receipt) > 0 {
-		_ = a.security.coordinator.WriteReceipt(ctx, result.Session.ID, generation, receipt, replayUntil)
+		cacheCtx, cancelCache := context.WithTimeout(ctx, refreshOptionalTimeout)
+		_ = a.security.coordinator.WriteReceipt(cacheCtx, result.Session.ID, generation, receipt, replayUntil)
+		cancelCache()
 	}
 	return result, nil
 }

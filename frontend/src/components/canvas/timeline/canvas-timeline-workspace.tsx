@@ -7,6 +7,7 @@ import {
   useState,
   useSyncExternalStore,
   type ReactNode,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import dynamic from "next/dynamic";
 import {
@@ -53,6 +54,8 @@ import {
   timelineDuration,
   timelineTime,
   timelineRulerTime,
+  timelineMoveSnap,
+  type TimelineSnap,
   type Timeline,
   type TimelineEdit,
   type TimelineClip,
@@ -64,6 +67,7 @@ import { TimelineExport } from "./timeline-export";
 import { timelinePointerDelta, timelineElementScale } from "./timeline-gesture";
 import { TimelineThumbnail } from "./timeline-thumbnail";
 import { timelineResultGraph, type TimelineResult } from "./timeline-delivery";
+import { timelineCanvasAssets } from "./timeline-canvas-assets";
 import { TimelineUploadDialog } from "./timeline-upload-dialog";
 import "./timeline.css";
 const ProjectAssetDialog = dynamic(
@@ -208,6 +212,15 @@ function TimelineWorkspace({
     }
   }, [source]);
   const readOnly = !view.writable || view.migration;
+  const [playbackFailures, setPlaybackFailures] = useState<
+    Record<
+      string,
+      {
+        message: string;
+        media: TimelineMedia;
+      }
+    >
+  >({});
   const [error, setError] = useState(""),
     [selected, setSelected] = useState<string | null>(null),
     [position, setPlayhead] = useState(0),
@@ -287,33 +300,69 @@ function TimelineWorkspace({
     start: number;
     baseline: Timeline;
     epoch: string | null;
+    snap: TimelineSnap | null;
   } | null>(null);
+  const seekGesture = useRef<{
+    pointerID: number;
+    element: HTMLDivElement;
+    initial: number;
+  } | null>(null);
+  const documentEpoch = client.getDocumentEpoch();
   useEffect(() => {
     const cancel = () => {
       drag.current = null;
       setDragOffset(null);
       setDropAfter(null);
     };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !drag.current) return;
+      // Radix dismisses at document capture; consume the active gesture first.
+      event.preventDefault();
+      event.stopPropagation();
+      cancel();
+    };
+    window.addEventListener("keydown", escape, true);
     window.addEventListener("blur", cancel);
     document.addEventListener("visibilitychange", cancel);
     return () => {
+      window.removeEventListener("keydown", escape, true);
       window.removeEventListener("blur", cancel);
       document.removeEventListener("visibilitychange", cancel);
+      cancel();
     };
-  }, []);
+  }, [readOnly, suspended, timeline, documentEpoch]);
+  useEffect(() => {
+    const cancel = () => {
+      const gesture = seekGesture.current;
+      seekGesture.current = null;
+      if (gesture) setPlayhead(gesture.initial);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !seekGesture.current) return;
+      event.preventDefault();
+      event.stopPropagation();
+      cancel();
+    };
+    window.addEventListener("keydown", escape, true);
+    window.addEventListener("blur", cancel);
+    document.addEventListener("visibilitychange", cancel);
+    return () => {
+      window.removeEventListener("keydown", escape, true);
+      window.removeEventListener("blur", cancel);
+      document.removeEventListener("visibilitychange", cancel);
+      cancel();
+    };
+  }, [documentEpoch, suspended, timeline]);
+  const canvasAssets = timelineCanvasAssets(view.document?.nodes ?? [], nodeID);
   const nodeAssets = new Map(
-    (view.document?.nodes ?? [])
-      .filter((item) => item.serviceData?.ref_type === "media_asset")
-      .map((item) => [item.id, item.serviceData?.ref_id]),
+    canvasAssets.map((item) => [item.nodeID, item.assetID]),
   );
   const clipIDs = JSON.stringify(
     [
       ...new Set(
         [
           ...(timeline?.imported_assets ?? []),
-          ...(view.document?.nodes ?? [])
-            .filter((n) => n.serviceData?.ref_type === "media_asset")
-            .map((n) => n.serviceData?.ref_id),
+          ...canvasAssets.map((item) => item.assetID),
           ...(timeline?.clips ?? []).map(
             (c) =>
               c.asset_id ?? (c.node_id ? nodeAssets.get(c.node_id) : undefined),
@@ -329,6 +378,24 @@ function TimelineWorkspace({
     const assetID = nodeAssets.get(clip.node_id);
     if (assetID && media[assetID]) media[clip.node_id] = media[assetID];
   }
+  const mediaFailures = useMemo(
+    () => ({
+      ...previewMedia.errors,
+      ...Object.fromEntries(
+        Object.entries(playbackFailures)
+          .filter(([id, failure]) => previewMedia.media[id] === failure.media)
+          .map(([id, failure]) => [id, failure.message]),
+      ),
+    }),
+    [previewMedia.errors, previewMedia.media, playbackFailures],
+  );
+  const previouslySuspended = useRef(suspended);
+  useEffect(() => {
+    const resumed = previouslySuspended.current && !suspended;
+    previouslySuspended.current = suspended;
+    if (!resumed) return;
+    for (const id of Object.keys(mediaFailures)) previewMedia.retry(id);
+  }, [suspended, mediaFailures, previewMedia]);
   useEffect(() => {
     const activeRequests = requests.current;
     return () => {
@@ -354,6 +421,62 @@ function TimelineWorkspace({
   );
   const playhead = Math.min(position, duration);
   const playingNow = playing && playhead < duration && !suspended;
+  function seekAt(event: ReactPointerEvent<HTMLDivElement>) {
+    const element = event.currentTarget;
+    const next = timelinePointerDelta(
+      event.clientX - element.getBoundingClientRect().left,
+      zoom,
+      timelineElementScale(element),
+    );
+    setPlayhead(Math.max(0, Math.min(duration, Math.round(next))));
+  }
+  const seekHandlers = {
+    onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!duration || event.button !== 0) return;
+      if (event.currentTarget.getAttribute("role") === "slider")
+        event.currentTarget.focus({ preventScroll: true });
+      seekGesture.current = {
+        pointerID: event.pointerId,
+        element: event.currentTarget,
+        initial: playhead,
+      };
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setPlaying(false);
+      seekAt(event);
+    },
+    onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (
+        seekGesture.current?.element !== event.currentTarget ||
+        seekGesture.current.pointerID !== event.pointerId
+      )
+        return;
+      event.stopPropagation();
+      seekAt(event);
+    },
+    onPointerUp: (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (
+        seekGesture.current?.element !== event.currentTarget ||
+        seekGesture.current.pointerID !== event.pointerId
+      )
+        return;
+      event.stopPropagation();
+      seekAt(event);
+      seekGesture.current = null;
+    },
+    onPointerCancel: () => {
+      const gesture = seekGesture.current;
+      seekGesture.current = null;
+      if (gesture) setPlayhead(gesture.initial);
+    },
+    onLostPointerCapture: () => {
+      const gesture = seekGesture.current;
+      seekGesture.current = null;
+      if (gesture) setPlayhead(gesture.initial);
+    },
+  };
+
   useEffect(() => {
     if (!playingNow || !duration) return;
     let frame = 0,
@@ -370,10 +493,18 @@ function TimelineWorkspace({
     return () => cancelAnimationFrame(frame);
   }, [playingNow, duration]);
   const onPreviewError = useCallback(
-    (message: string) => {
-      setError(message);
+    (message: string, source?: TimelineMedia) => {
+      const id = source?.asset.id;
+      if (!id || !source) {
+        setError(message);
+        return;
+      }
+      setPlaybackFailures((current) => ({
+        ...current,
+        [id]: { message, media: source },
+      }));
     },
-    [setError],
+    [],
   );
   function save(next: Timeline, expected = timeline) {
     if (!expected) return;
@@ -531,7 +662,10 @@ function TimelineWorkspace({
       const currentNode = client
         .getSnapshot()
         .document?.nodes.find((item) => item.id === sourceNodeID);
-      if (currentNode?.serviceData?.ref_id !== assetID)
+      if (
+        !currentNode ||
+        timelineCanvasAssets([currentNode], nodeID)[0]?.assetID !== assetID
+      )
         throw new Error("画布素材已变化，请重新选择");
       await add([{ asset: value.asset, nodeID: sourceNodeID }]);
     } catch (cause) {
@@ -570,13 +704,6 @@ function TimelineWorkspace({
     !selectedTrack?.locked &&
     playhead - selectedClip.start_ms >= 100 &&
     selectedClip.start_ms + selectedClip.duration_ms - playhead >= 100;
-  const canvasAssets = (view.document?.nodes ?? []).filter(
-    (item) =>
-      item.id !== nodeID &&
-      ["video", "image", "audio"].includes(item.type) &&
-      item.serviceData?.ref_type === "media_asset" &&
-      item.serviceData.ref_id,
-  );
   const importedAssets = timeline.imported_assets.map((assetID) => ({
     assetID,
     title:
@@ -590,12 +717,7 @@ function TimelineWorkspace({
   }));
   const visibleAssets = (
     assetSource === "canvas"
-      ? canvasAssets.map((item) => ({
-          assetID: item.serviceData!.ref_id!,
-          title: item.title,
-          kind: item.type,
-          nodeID: item.id,
-        }))
+      ? canvasAssets
       : importedAssets.map((item) => ({ ...item, nodeID: undefined }))
   ).filter((item) => filter === "all" || item.kind === filter);
   const displayTimeline = trimPreview ?? timeline;
@@ -890,6 +1012,7 @@ function TimelineWorkspace({
         <div className="flex-1" />
         <TimelineExport
           compact={compact}
+          suspended={suspended}
           client={client}
           nodeID={nodeID}
           canvasID={canvasID}
@@ -933,24 +1056,35 @@ function TimelineWorkspace({
           {error}
         </p>
       )}
-      {previewMedia.error && (
-        <div
-          role="alert"
-          className="flex items-center gap-2 px-3 text-xs text-destructive"
-        >
-          <span>{previewMedia.error}</span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setPlaying(false);
-              previewMedia.retry();
-            }}
+      {Object.entries(mediaFailures).map(([assetID, message]) => {
+        const title =
+          media[assetID]?.asset.file_name ??
+          timeline.clips.find((clip) => clip.asset_id === assetID)?.title ??
+          "素材";
+        return (
+          <div
+            key={assetID}
+            role="alert"
+            className="flex items-center gap-2 px-3 text-xs text-destructive"
           >
-            重新读取素材
-          </Button>
-        </div>
-      )}
+            <span>{message}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setPlaybackFailures((current) => {
+                  const next = { ...current };
+                  delete next[assetID];
+                  return next;
+                });
+                previewMedia.retry(assetID);
+              }}
+            >
+              重新读取 {title}
+            </Button>
+          </div>
+        );
+      })}
       {retainedEdit && (
         <div
           role="status"
@@ -1308,6 +1442,7 @@ function TimelineWorkspace({
           >
             <div
               className="timeline-ruler"
+              {...seekHandlers}
               style={{
                 marginLeft: trackGeometry.offset,
                 backgroundSize: `${zoom * rulerIntervals.minor}px 5px`,
@@ -1439,26 +1574,53 @@ function TimelineWorkspace({
                               start: clip.start_ms,
                               baseline: timeline,
                               epoch: client.getDocumentEpoch(),
+                              snap: null,
                             };
                           }}
                           onPointerMove={(event) => {
-                            if (drag.current?.id === clip.id)
-                              setDragOffset({
-                                id: clip.id,
-                                px:
-                                  (event.clientX - drag.current.startX) /
-                                  drag.current.scale,
-                                py:
-                                  clip.kind === "audio"
-                                    ? (event.clientY - drag.current.startY) /
-                                      drag.current.scale
-                                    : 0,
-                              });
-                            if (drag.current && clip.kind === "audio") {
+                            const intent = drag.current;
+                            if (!intent || intent.id !== clip.id) return;
+                            const raw = Math.max(
+                              0,
+                              intent.start +
+                                timelinePointerDelta(
+                                  event.clientX - intent.startX,
+                                  intent.zoom,
+                                  intent.scale,
+                                ),
+                            );
+                            const snapped =
+                              clip.kind === "audio"
+                                ? timelineMoveSnap(
+                                    intent.baseline,
+                                    clip,
+                                    raw,
+                                    playhead,
+                                    8000 / intent.zoom / intent.scale,
+                                    intent.snap,
+                                    12000 / intent.zoom / intent.scale,
+                                  )
+                                : { start: raw, snap: null };
+                            intent.snap = snapped.snap;
+                            setDragOffset({
+                              id: clip.id,
+                              px:
+                                clip.kind === "audio"
+                                  ? ((snapped.start - intent.start) / 1000) *
+                                    intent.zoom
+                                  : (event.clientX - intent.startX) /
+                                    intent.scale,
+                              py:
+                                clip.kind === "audio"
+                                  ? (event.clientY - intent.startY) /
+                                    intent.scale
+                                  : 0,
+                            });
+                            if (clip.kind === "audio") {
                               const target = audioDropTarget(
                                 event.currentTarget,
                                 event.clientY,
-                                drag.current.scale,
+                                intent.scale,
                               );
                               setDropAfter(
                                 target?.newAudioTrack?.afterTrackID ?? null,
@@ -1505,7 +1667,10 @@ function TimelineWorkspace({
                                   type: "move",
                                   id: clip.id,
                                   start: Math.max(0, intent.start + delta),
-                                  tolerance: 6000 / intent.zoom / intent.scale,
+                                  tolerance: 8000 / intent.zoom / intent.scale,
+                                  releaseTolerance:
+                                    12000 / intent.zoom / intent.scale,
+                                  previousSnap: intent.snap,
                                   playhead,
                                   ...target,
                                 }),
@@ -1518,6 +1683,11 @@ function TimelineWorkspace({
                                   : "移动未完成",
                               );
                             }
+                          }}
+                          onLostPointerCapture={() => {
+                            setDragOffset(null);
+                            setDropAfter(null);
+                            drag.current = null;
                           }}
                           onPointerCancel={() => {
                             setDragOffset(null);
@@ -1619,41 +1789,7 @@ function TimelineWorkspace({
               tabIndex={duration ? 0 : -1}
               className="timeline-playhead-slider"
               style={{ left: trackGeometry.offset, width: trackWidth }}
-              onPointerDown={(event) => {
-                if (!duration) return;
-                event.currentTarget.setPointerCapture(event.pointerId);
-                const rect = event.currentTarget.getBoundingClientRect();
-                setPlayhead(
-                  Math.max(
-                    0,
-                    Math.min(
-                      duration,
-                      ((((event.clientX - rect.left) / rect.width) *
-                        trackWidth) /
-                        zoom) *
-                        1000,
-                    ),
-                  ),
-                );
-                setPlaying(false);
-              }}
-              onPointerMove={(event) => {
-                if (!event.currentTarget.hasPointerCapture(event.pointerId))
-                  return;
-                const rect = event.currentTarget.getBoundingClientRect();
-                setPlayhead(
-                  Math.max(
-                    0,
-                    Math.min(
-                      duration,
-                      ((((event.clientX - rect.left) / rect.width) *
-                        trackWidth) /
-                        zoom) *
-                        1000,
-                    ),
-                  ),
-                );
-              }}
+              {...seekHandlers}
               onKeyDown={(event) => {
                 if (
                   !duration ||
@@ -1829,15 +1965,18 @@ function TimelineTrimHandle({
       gesture.current?.preview(null);
       gesture.current = null;
     };
-    const escape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") cancel();
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !gesture.current) return;
+      event.preventDefault();
+      event.stopPropagation();
+      cancel();
     };
     window.addEventListener("blur", cancel);
-    window.addEventListener("keydown", escape);
+    window.addEventListener("keydown", escape, true);
     document.addEventListener("visibilitychange", cancel);
     return () => {
       window.removeEventListener("blur", cancel);
-      window.removeEventListener("keydown", escape);
+      window.removeEventListener("keydown", escape, true);
       document.removeEventListener("visibilitychange", cancel);
       cancel();
     };

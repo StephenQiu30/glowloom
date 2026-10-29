@@ -51,6 +51,8 @@ func Open(url string) (*Connection, error) {
 	opts.DialTimeout = 2 * time.Second
 	opts.ReadTimeout = 2 * time.Second
 	opts.WriteTimeout = 2 * time.Second
+	// Command-specific budgets must also bound socket I/O, not just pool waits.
+	opts.ContextTimeoutEnabled = true
 	return &Connection{Client: redis.NewClient(opts)}, nil
 }
 

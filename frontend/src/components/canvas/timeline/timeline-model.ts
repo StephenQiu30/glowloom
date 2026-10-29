@@ -221,11 +221,74 @@ export type TimelineEdit =
       start: number;
       trackID?: string;
       tolerance?: number;
+      releaseTolerance?: number;
+      previousSnap?: TimelineSnap | null;
       playhead?: number;
       newAudioTrack?: { afterTrackID: string };
     }
   | { type: "reorder"; id: string; direction: -1 | 1 }
   | { type: "remove"; id: string };
+export type TimelineSnap = {
+  edge: "start" | "end";
+  kind: "playhead" | "clip";
+  at: number;
+};
+/** Resolve one transient audio gesture; retain only a still-valid snap target. */
+export function timelineMoveSnap(
+  timeline: Timeline,
+  clip: TimelineClip,
+  start: number,
+  playhead: number | undefined,
+  tolerance: number,
+  previous?: TimelineSnap | null,
+  releaseTolerance = tolerance,
+): { start: number; snap: TimelineSnap | null } {
+  if (!timeline.snapping) return { start, snap: null };
+  const anchors = new Set([
+    0,
+    ...timeline.clips
+      .filter((item) => item.id !== clip.id)
+      .flatMap((item) => [item.start_ms, item.start_ms + item.duration_ms]),
+  ]);
+  const position = (snap: TimelineSnap) =>
+    snap.at - (snap.edge === "end" ? clip.duration_ms : 0);
+  if (previous) {
+    const valid =
+      previous.kind === "playhead"
+        ? previous.at === playhead
+        : anchors.has(previous.at);
+    const retained = position(previous);
+    if (
+      valid &&
+      retained >= 0 &&
+      Math.abs(retained - start) <= releaseTolerance
+    )
+      return { start: retained, snap: previous };
+  }
+  for (const kind of ["playhead", "clip"] as const) {
+    const targets =
+      kind === "playhead"
+        ? playhead === undefined
+          ? []
+          : [playhead]
+        : [...anchors];
+    let best: TimelineSnap | null = null;
+    let distance = Infinity;
+    for (const edge of ["start", "end"] as const) {
+      for (const at of targets) {
+        const candidate = { edge, kind, at };
+        const next = position(candidate);
+        const difference = Math.abs(next - start);
+        if (next >= 0 && difference <= tolerance && difference < distance) {
+          best = candidate;
+          distance = difference;
+        }
+      }
+    }
+    if (best) return { start: position(best), snap: best };
+  }
+  return { start, snap: null };
+}
 const newTrack = (kind: string, count: number): TimelineTrack => ({
   id: crypto.randomUUID(),
   kind,
@@ -386,20 +449,15 @@ export function editTimeline(value: Timeline, edit: TimelineEdit): Timeline {
             edit.playhead === undefined ? undefined : Math.round(edit.playhead);
           if (playhead !== undefined && !integer(playhead))
             throw new Error("播放头位置无效");
-          const anchors = [
-            0,
-            ...(playhead === undefined ? [] : [playhead]),
-            ...next.clips
-              .filter((c) => c.id !== clip.id)
-              .flatMap((c) => [c.start_ms, c.start_ms + c.duration_ms]),
-          ];
-          const candidates = [
-            ...new Set(anchors.flatMap((a) => [a, a - clip.duration_ms])),
-          ].filter(
-            (a) => a >= 0 && Math.abs(a - start) <= (edit.tolerance ?? 100),
-          );
-          candidates.sort((a, b) => Math.abs(a - start) - Math.abs(b - start));
-          if (candidates.length) start = candidates[0];
+          start = timelineMoveSnap(
+            next,
+            clip,
+            start,
+            playhead,
+            edit.tolerance ?? 100,
+            edit.previousSnap,
+            edit.releaseTolerance,
+          ).start;
         }
         clip.start_ms = start;
         clip.track_id = destination.id;

@@ -25,6 +25,7 @@ func NewRouter(logger *zap.Logger, ready ReadyCheck, tracerProvider trace.Tracer
 		gin.Recovery(),
 		otelgin.Middleware("glowloom-backend-api",
 			otelgin.WithTracerProvider(tracerProvider),
+			otelgin.WithFilter(func(r *http.Request) bool { return r.URL.Path != "/api/media-export-launch" }),
 			otelgin.WithMeterProvider(metricnoop.NewMeterProvider()),
 			otelgin.WithPropagators(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{})),
 		),

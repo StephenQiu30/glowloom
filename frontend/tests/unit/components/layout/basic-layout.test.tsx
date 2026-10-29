@@ -18,6 +18,99 @@ import { ApplicationLayout } from "@/components/layout/application-layout";
 import { RouteLoading } from "@/components/layout/route-loading";
 import { PageLayout } from "@/components/layout/page-layout";
 import { request, RequestError } from "@/lib/request";
+
+it("restored identity leaves login and returns to the original canvas without submitting credentials", async () => {
+  const destination =
+    "/canvas?project_id=project&canvas_id=canvas&scope_id=scope";
+  window.history.replaceState(
+    null,
+    "",
+    `/login?returnTo=${encodeURIComponent(destination)}`,
+  );
+  mocks.pathname = "/login";
+  try {
+    render(
+      <ApplicationLayout>
+        <p>Public login entry</p>
+      </ApplicationLayout>,
+    );
+    const { waitFor } = await import("@testing-library/react");
+    await waitFor(() =>
+      expect(mocks.replace).toHaveBeenCalledWith(destination),
+    );
+    expect(screen.queryByRole("dialog", { name: "登录织光" })).toBeNull();
+    expect(
+      vi.mocked(request).mock.calls.some(([url]) => url === "/api/sessions"),
+    ).toBe(false);
+  } finally {
+    window.history.replaceState(null, "", "/");
+  }
+});
+
+it.each([
+  "https://outside.example/canvas",
+  "//outside.example/canvas",
+  "/\\outside.example/canvas",
+  "/login?returnTo=/login",
+])(
+  "restored identity refuses unsafe or recursive login return %s",
+  async (destination) => {
+    window.history.replaceState(
+      null,
+      "",
+      `/login?returnTo=${encodeURIComponent(destination)}`,
+    );
+    mocks.pathname = "/login";
+    try {
+      render(
+        <ApplicationLayout>
+          <p>Public login entry</p>
+        </ApplicationLayout>,
+      );
+      const { waitFor } = await import("@testing-library/react");
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/"));
+      expect(screen.queryByRole("dialog", { name: "登录织光" })).toBeNull();
+    } finally {
+      window.history.replaceState(null, "", "/");
+    }
+  },
+);
+
+it("login dialog closes when a foreground session check restores the existing account", async () => {
+  const active = await request("/api/session");
+  let reads = 0;
+  vi.mocked(request).mockImplementation(async (url) => {
+    if (url === "/api/session" && ++reads === 1)
+      throw new RequestError("unauthenticated", 401);
+    return active;
+  });
+  const destination = "/canvas?project_id=project&canvas_id=canvas";
+  window.history.replaceState(
+    null,
+    "",
+    `/login?returnTo=${encodeURIComponent(destination)}`,
+  );
+  mocks.pathname = "/login";
+  try {
+    render(
+      <ApplicationLayout>
+        <p>Public login entry</p>
+      </ApplicationLayout>,
+    );
+    await screen.findByRole("dialog", { name: "登录织光" });
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    const { waitFor } = await import("@testing-library/react");
+    await waitFor(() =>
+      expect(mocks.replace).toHaveBeenCalledWith(destination),
+    );
+    expect(screen.queryByRole("dialog", { name: "登录织光" })).toBeNull();
+    expect(
+      vi.mocked(request).mock.calls.some(([url]) => url === "/api/sessions"),
+    ).toBe(false);
+  } finally {
+    window.history.replaceState(null, "", "/");
+  }
+});
 vi.mock("@/lib/request", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/request")>();
   return { ...actual, request: vi.fn() };

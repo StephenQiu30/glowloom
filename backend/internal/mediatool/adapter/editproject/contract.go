@@ -60,7 +60,7 @@ func manifest(frozen domain.FrozenExport) Manifest {
 	for _, input := range frozen.Inputs {
 		m.Media = append(m.Media, MediaEntry{AssetID: input.AssetID, Revision: input.Revision, Path: mediaPath(frozen.OutputKind, sourceName(input)), Kind: input.Kind, MIMEType: input.MIMEType, ByteSize: input.ByteSize, SHA256: input.SHA256})
 	}
-	if frozen.OutputKind != domain.OutputMediaBundle {
+	if frozen.OutputKind != domain.OutputMediaBundle && frozen.OutputKind != domain.OutputJianying {
 		m.Notes = append(m.Notes, "Edit endpoints are rounded to the nearest sequence/source frame; the exact millisecond timeline remains in this manifest.", "Interchange validation is not target-application import acceptance.")
 	}
 	if frozen.OutputKind == domain.OutputXMEML {

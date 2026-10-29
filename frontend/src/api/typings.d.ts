@@ -1734,7 +1734,8 @@ declare namespace API {
     created_at?: string;
     failure_code?: string;
     id?: string;
-    output_kind?: "video" | "audio" | "media_bundle" | "fcpxml" | "xmeml";
+    output_kind?:
+      "video" | "audio" | "media_bundle" | "fcpxml" | "xmeml" | "jianying";
     progress?: number;
     project_id?: string;
     revision?: number;
@@ -1753,7 +1754,8 @@ declare namespace API {
     created_at?: string;
     failure_code?: string;
     id?: string;
-    output_kind?: "video" | "audio" | "media_bundle" | "fcpxml" | "xmeml";
+    output_kind?:
+      "video" | "audio" | "media_bundle" | "fcpxml" | "xmeml" | "jianying";
     progress?: number;
     project_id?: string;
     revision?: number;
@@ -1782,6 +1784,7 @@ declare namespace API {
     asset?: AssetSummary;
     expires_at?: string;
     job_id?: string;
+    launch_url?: string;
     revision?: number;
     sha256?: string;
     url?: string;
@@ -3170,7 +3173,8 @@ declare namespace API {
   type MediatoolCreateInput = {
     canvas_id?: string;
     node_id?: string;
-    output_kind?: "video" | "audio" | "media_bundle" | "fcpxml" | "xmeml";
+    output_kind?:
+      "video" | "audio" | "media_bundle" | "fcpxml" | "xmeml" | "jianying";
     revision?: number;
     settings?: ExportSettings;
   };
@@ -3408,7 +3412,8 @@ declare namespace API {
     word_count: "500" | "800" | "1200" | "2000";
   };
 
-  type OutputKind = "video" | "audio" | "media_bundle" | "fcpxml" | "xmeml";
+  type OutputKind =
+    "video" | "audio" | "media_bundle" | "fcpxml" | "xmeml" | "jianying";
 
   type PackageControl = {
     expected_revision?: number;

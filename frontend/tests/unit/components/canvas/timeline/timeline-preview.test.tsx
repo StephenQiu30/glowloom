@@ -236,6 +236,10 @@ it("isolates a failed playing audio source without restarting it on every clock 
   expect(view.container.contains(good)).toBe(true);
   expect(pause.mock.instances).not.toContain(good);
   expect(props.onError).toHaveBeenCalledTimes(1);
+  expect(props.onError).toHaveBeenCalledWith(
+    `无法播放：${timeline.clips[0].title}`,
+    props.media[first.id!],
+  );
 });
 
 it("retries a failed media element when the user reloads the same authorized URL", () => {

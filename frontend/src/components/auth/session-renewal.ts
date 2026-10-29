@@ -123,7 +123,9 @@ export function ensureSessionFresh(
             }
             try {
               value = await (upgrading ? upgradeSession : refreshSession)(
-                options,
+                // Include frontend queueing and receipt delivery while retaining
+                // the same identity lock and cancellation signal.
+                { ...options, timeout: 30_000 },
               );
               break;
             } catch (error) {

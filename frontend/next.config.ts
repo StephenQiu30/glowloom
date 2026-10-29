@@ -4,6 +4,12 @@ const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
   devIndicators: false,
+  // Native launch capabilities are short-lived secrets; do not log their query.
+  logging: {
+    incomingRequests: {
+      ignore: [/^(?:https?:\/\/[^/]+)?\/api\/mediaexports\/launch(?:\/|\?|$)/],
+    },
+  },
   allowedDevOrigins: ["127.0.0.1", "[::1]"],
   async rewrites() {
     // Upgrade requests must reach Go before the fetch-only API catch-all.

@@ -25,6 +25,9 @@ func ValidateProjectExport(frozen domain.FrozenExport) error {
 	if !frozen.OutputKind.IsArtifact() || frozen.Timeline.Validate() != nil || frozen.Source == nil || frozen.Source.CanvasID == uuid.Nil || frozen.Source.NodeID == uuid.Nil || frozen.Source.Revision < 1 {
 		return ErrInvalidExport
 	}
+	if frozen.OutputKind == domain.OutputJianying && (frozen.ExportID == nil || *frozen.ExportID == uuid.Nil) {
+		return ErrInvalidExport
+	}
 	ids, err := SourceIDs(frozen.Timeline)
 	if err != nil || len(ids) == 0 || len(ids) != len(frozen.Inputs) {
 		return ErrInvalidExport

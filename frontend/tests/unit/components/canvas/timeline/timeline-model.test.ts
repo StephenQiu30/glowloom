@@ -6,6 +6,7 @@ import {
   timelineDuration,
   timelineTime,
   timelineRulerTime,
+  timelineMoveSnap,
 } from "@/components/canvas/timeline/timeline-model";
 const asset = (kind = "video"): API.AssetSummary => ({
   id: crypto.randomUUID(),
@@ -631,4 +632,88 @@ it("snaps a moved audio boundary to the playhead only while snapping is enabled"
       (c) => c.id === id,
     )?.start_ms,
   ).toBe(2112);
+});
+
+it.each([
+  { start: 1200, playhead: 1500, snapping: true, expected: 1500 },
+  { start: 1250, playhead: 1500, snapping: true, expected: 1500 },
+  { start: 1200, playhead: 7500, snapping: true, expected: 1500 },
+  { start: 1200, playhead: 0, snapping: true, expected: 1000 },
+  { start: 1200, playhead: 1500, snapping: false, expected: 1200 },
+])(
+  "prioritizes an eligible playhead over nearer audio endpoints: $start / $playhead / $snapping",
+  ({ start, playhead, snapping, expected }) => {
+    let base = editTimeline(emptyTimelineConfig(), {
+      type: "add",
+      assets: [{ asset: { ...asset("audio"), duration_ms: 7000 } }],
+    });
+    base = editTimeline(base, {
+      type: "split",
+      id: base.clips[0].id,
+      at: 1000,
+    });
+    const moving = base.clips[1].id;
+    base = editTimeline(base, {
+      type: "add",
+      assets: [{ asset: { ...asset("audio"), duration_ms: 7000 } }],
+    });
+    base = editTimeline(base, { type: "move", id: moving, start: 3000 });
+    base = { ...base, snapping };
+    const before = structuredClone(base);
+    expect(base.clips.map((c) => [c.start_ms, c.duration_ms])).toEqual([
+      [0, 1000],
+      [3000, 6000],
+      [9000, 7000],
+    ]);
+    const next = editTimeline(base, {
+      type: "move",
+      id: moving,
+      start,
+      playhead,
+      tolerance: 8000 / 21.4,
+    });
+    expect(next.clips.map((c) => [c.start_ms, c.duration_ms])).toEqual([
+      [0, 1000],
+      [expected, 6000],
+      [9000, 7000],
+    ]);
+    expect(base).toEqual(before);
+  },
+);
+
+it("retains only the current valid snap inside its release threshold and clears it beyond the threshold", () => {
+  const base = editTimeline(emptyTimelineConfig(), {
+    type: "add",
+    assets: [{ asset: asset("audio") }],
+  });
+  const clip = base.clips[0];
+  const entering = timelineMoveSnap(base, clip, 1920, 2000, 80, null, 120);
+  expect(entering).toEqual({
+    start: 2000,
+    snap: { edge: "start", kind: "playhead", at: 2000 },
+  });
+  expect(
+    timelineMoveSnap(base, clip, 1880, 2000, 80, entering.snap, 120),
+  ).toEqual(entering);
+  expect(
+    timelineMoveSnap(base, clip, 1879, 2000, 80, entering.snap, 120),
+  ).toEqual({ start: 1879, snap: null });
+  expect(timelineMoveSnap(base, clip, 1880, 2000, 80, null, 120)).toEqual({
+    start: 1880,
+    snap: null,
+  });
+  expect(
+    timelineMoveSnap(base, clip, 1880, 2500, 80, entering.snap, 120),
+  ).toEqual({ start: 1880, snap: null });
+  expect(
+    timelineMoveSnap(
+      { ...base, snapping: false },
+      clip,
+      1880,
+      2000,
+      80,
+      entering.snap,
+      120,
+    ),
+  ).toEqual({ start: 1880, snap: null });
 });

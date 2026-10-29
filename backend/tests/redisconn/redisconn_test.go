@@ -3,6 +3,8 @@ package redisconn_test
 import (
 	"context"
 	"errors"
+	"io"
+	"net"
 	"os"
 	"strings"
 	"testing"
@@ -10,6 +12,44 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/redisconn"
 )
+
+func TestRequestDeadlineBoundsUnresponsiveRedis(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		accepted <- conn
+		_, _ = io.Copy(io.Discard, conn)
+	}()
+	client, err := redisconn.Open("redis://" + listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	err = client.Ping(ctx)
+	select {
+	case conn := <-accepted:
+		_ = conn.Close()
+	default:
+		t.Fatal("Redis command did not reach the loopback transport")
+	}
+	if err == nil {
+		t.Fatal("unresponsive Redis returned success")
+	}
+	if elapsed := time.Since(start); elapsed >= time.Second {
+		t.Fatalf("100ms request deadline was ignored: elapsed %s", elapsed)
+	}
+}
 
 func TestOpenRejectsMissingURL(t *testing.T) {
 	_, err := redisconn.Open(" ")

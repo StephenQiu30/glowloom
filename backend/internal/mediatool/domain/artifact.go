@@ -27,7 +27,7 @@ type Artifact struct {
 
 // IsArtifact distinguishes a ZIP package from playable video/audio outputs.
 func (k OutputKind) IsArtifact() bool {
-	return k == OutputMediaBundle || k == OutputFCPXML || k == OutputXMEML
+	return k == OutputMediaBundle || k == OutputFCPXML || k == OutputXMEML || k == OutputJianying
 }
 
 // FormatVersion pins each supported serializer independently of target applications.
@@ -39,6 +39,8 @@ func (k OutputKind) FormatVersion() string {
 		return "1.10"
 	case OutputXMEML:
 		return "5"
+	case OutputJianying:
+		return "134.0.0"
 	default:
 		return ""
 	}

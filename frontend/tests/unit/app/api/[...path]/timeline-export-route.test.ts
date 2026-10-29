@@ -73,15 +73,17 @@ it("时间线导出创建、恢复、控制与交付经过精确同站代理合�
 });
 
 it("导出拒绝未知字段、重复范围、越界方法及伪造子路由，二进制附件保持流和响应头", async () => {
-  const fetcher = vi.fn().mockImplementation(
-    async () =>
-      new Response(new Uint8Array([0, 255, 1]), {
-        headers: {
-          "Content-Type": "video/mp4",
-          "Content-Disposition": "attachment; filename=timeline.mp4",
-        },
-      }),
-  );
+  const fetcher = vi
+    .fn()
+    .mockImplementation(
+      async () =>
+        new Response(new Uint8Array([0, 255, 1]), {
+          headers: {
+            "Content-Type": "video/mp4",
+            "Content-Disposition": "attachment; filename=timeline.mp4",
+          },
+        }),
+    );
   vi.stubGlobal("fetch", fetcher);
   const path = `media-exports/${id}/download`;
   for (const query of [

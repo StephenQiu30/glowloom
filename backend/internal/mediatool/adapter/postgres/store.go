@@ -287,6 +287,10 @@ func (s *Store) Create(ctx context.Context, actor identityapp.Principal, project
 		if err != nil {
 			return err
 		}
+		jobID := uuid.New()
+		if kind == domain.OutputJianying {
+			frozen.ExportID = &jobID
+		}
 		frozen.OutputKind = kind
 		if input.Settings != nil {
 			if err := application.ApplyExportSettings(&frozen, *input.Settings); err != nil {
@@ -307,7 +311,7 @@ func (s *Store) Create(ctx context.Context, actor identityapp.Principal, project
 			return err
 		}
 		now := time.Now().UTC()
-		job = domain.ExportJob{Settings: frozen.Settings, ID: uuid.New(), ProjectID: project, OutputKind: kind, Source: domain.Source{CanvasID: input.CanvasID, NodeID: input.NodeID, Revision: input.Revision}, Status: domain.Queued, Stage: "queued", Attempt: 1, Revision: 1, CreatedAt: now, UpdatedAt: now}
+		job = domain.ExportJob{Settings: frozen.Settings, ID: jobID, ProjectID: project, OutputKind: kind, Source: domain.Source{CanvasID: input.CanvasID, NodeID: input.NodeID, Revision: input.Revision}, Status: domain.Queued, Stage: "queued", Attempt: 1, Revision: 1, CreatedAt: now, UpdatedAt: now}
 		if err := tx.Exec(`INSERT INTO mediatool.export_job(id,project_id,org_id,actor_id,actor_role,canvas_id,node_id,source_revision,frozen,output_kind,status,stage,progress,attempt,revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?::jsonb,?,'queued','queued',0,1,1,?,?)`, job.ID, project, actor.OrgID, actor.ID, nil, input.CanvasID, input.NodeID, input.Revision, string(raw), kind, now, now).Error; err != nil {
 			return err
 		}

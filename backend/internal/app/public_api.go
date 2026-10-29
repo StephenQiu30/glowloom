@@ -221,7 +221,10 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		exports = mediawire.ProvideRoutedMediaExportStore(database, mediawire.NewMediaScopeAccess)
 		exportQuery = toolapp.NewRoutedExportQuery(exports, subjectObjects.Routed, subjectObjects.Routed, subjectObjects.Legacy, subjectObjects.Legacy)
 	}
-	toolhttp.NewHandler(exports, exportQuery).Register(protected)
+	exportQuery.WithLaunchOrigin(cfg.PublicOrigin)
+	exportHandler := toolhttp.NewHandler(exports, exportQuery)
+	exportHandler.Register(protected)
+	exportHandler.RegisterLaunch(api)
 	transcriber, err := mediawire.ProvideTranscriber(cfg)
 	if err != nil {
 		return nil, err
@@ -327,5 +330,9 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		Query:        operationapp.NewPublicQuery(operations),
 		Control:      operationapp.NewWorkflowControlCommand(operations),
 	}).Register(protected)
+	if len(lifetime) > 0 {
+		stopLaunchCleanup := mediawire.StartExportLaunchCleanup(socketLifetime, exports, logger)
+		context.AfterFunc(socketLifetime, stopLaunchCleanup)
+	}
 	return router, nil
 }

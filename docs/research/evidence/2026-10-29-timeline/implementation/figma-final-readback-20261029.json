@@ -21,13 +21,13 @@
       "width": 4816,
       "height": 5480,
       "counts": {
-        "FRAME": 824,
+        "FRAME": 827,
         "COMPONENT": 19,
         "GROUP": 101,
         "VECTOR": 705,
         "RECTANGLE": 1458,
-        "TEXT": 546,
-        "INSTANCE": 717,
+        "TEXT": 553,
+        "INSTANCE": 721,
         "ELLIPSE": 1
       },
       "components": [
@@ -1320,7 +1320,7 @@
       "id": "3184:58703",
       "name": "TL-F12 · 导出失败与交付状态",
       "width": 1512,
-      "height": 390,
+      "height": 460,
       "assets": null,
       "toolbar": [],
       "ruler": [],
@@ -1329,7 +1329,38 @@
       "play": [],
       "zoom": [],
       "menu": null,
-      "modal": null
+      "modal": null,
+      "nativeExportDelivery": {
+        "id": "3184:58703",
+        "width": 1512,
+        "height": 460,
+        "y": 2868,
+        "bottom": 3328,
+        "notificationRowId": "3271:64080",
+        "texts": [
+          {
+            "id": "3271:64082",
+            "text": "正在导出剪映草稿..."
+          },
+          {
+            "id": "I3271:64083;3181:57142",
+            "text": "取消"
+          },
+          {
+            "id": "3271:64086",
+            "text": "已请求打开剪映专业版"
+          },
+          {
+            "id": "I3271:64087;3181:57142",
+            "text": "再次打开剪映"
+          },
+          {
+            "id": "I3271:64089;3181:57142",
+            "text": "无法打开？"
+          }
+        ],
+        "note": "确认框与导出中通知按即梦实测；项目仅确认已请求打开，不能据此宣称原生已导入。无法打开？→下载工程包。主任务已完成原生链路验收；此稿仅表达界面，运行证据见验收记录。"
+      }
     },
     {
       "id": "3184:58724",
@@ -1468,6 +1499,28 @@
           "打开剪映专业版"
         ],
         "close": 1
+      },
+      "nativeExportConfirmation": {
+        "id": "3191:59202",
+        "dialogId": "3191:59487",
+        "cancelId": "3271:64078",
+        "checkboxDefault": false,
+        "buttons": [
+          {
+            "id": "3271:64078",
+            "name": "取消 / 剪映确认",
+            "width": 64,
+            "height": 36,
+            "opacity": 1
+          },
+          {
+            "id": "3191:59498",
+            "name": "打开剪映专业版",
+            "width": 176,
+            "height": 36,
+            "opacity": 1
+          }
+        ]
       }
     },
     {
@@ -4396,6 +4449,135 @@
       "states": 17,
       "components": 19,
       "instances": 717
+    }
+  },
+  "jianyingNativeExport": {
+    "before": {
+      "f14": {
+        "x": 32,
+        "y": 3370,
+        "w": 1512,
+        "h": 772
+      },
+      "f12": {
+        "x": 1652,
+        "y": 2868,
+        "w": 1512,
+        "h": 390
+      },
+      "footerChildren": [
+        {
+          "id": "3191:59498",
+          "name": "打开剪映专业版"
+        }
+      ]
+    },
+    "createdNodeIds": [
+      "3271:64078",
+      "I3271:64078;3181:57142",
+      "3271:64080",
+      "3271:64081",
+      "3271:64082",
+      "3271:64083",
+      "I3271:64083;3181:57142",
+      "3271:64085",
+      "3271:64086",
+      "3271:64087",
+      "I3271:64087;3181:57142",
+      "3271:64089",
+      "I3271:64089;3181:57142",
+      "3271:64091"
+    ],
+    "mutatedNodeIds": [
+      "3191:59497",
+      "3271:64078",
+      "3191:59498",
+      "3271:64091",
+      "3184:58703"
+    ],
+    "states": 17,
+    "components": 19,
+    "instances": 721,
+    "counts": {
+      "FRAME": 827,
+      "COMPONENT": 19,
+      "GROUP": 101,
+      "VECTOR": 705,
+      "RECTANGLE": 1458,
+      "TEXT": 553,
+      "INSTANCE": 721,
+      "ELLIPSE": 1
+    },
+    "confirm": {
+      "id": "3191:59202",
+      "dialogId": "3191:59487",
+      "cancelId": "3271:64078",
+      "checkboxDefault": false,
+      "buttons": [
+        {
+          "id": "3271:64078",
+          "name": "取消 / 剪映确认",
+          "width": 64,
+          "height": 36,
+          "opacity": 1
+        },
+        {
+          "id": "3191:59498",
+          "name": "打开剪映专业版",
+          "width": 176,
+          "height": 36,
+          "opacity": 1
+        }
+      ]
+    },
+    "delivery": {
+      "id": "3184:58703",
+      "width": 1512,
+      "height": 460,
+      "y": 2868,
+      "bottom": 3328,
+      "notificationRowId": "3271:64080",
+      "texts": [
+        {
+          "id": "3271:64082",
+          "text": "正在导出剪映草稿..."
+        },
+        {
+          "id": "I3271:64083;3181:57142",
+          "text": "取消"
+        },
+        {
+          "id": "3271:64086",
+          "text": "已请求打开剪映专业版"
+        },
+        {
+          "id": "I3271:64087;3181:57142",
+          "text": "再次打开剪映"
+        },
+        {
+          "id": "I3271:64089;3181:57142",
+          "text": "无法打开？"
+        }
+      ],
+      "note": "确认框与导出中通知按即梦实测；项目仅确认已请求打开，不能据此宣称原生已导入。无法打开？→下载工程包。主任务已完成原生链路验收；此稿仅表达界面，运行证据见验收记录。"
+    },
+    "menu": {
+      "id": "3184:57996",
+      "opacity": 1
+    },
+    "evidenceBoundary": "Figma static only; source confirm/progress observed, project delivery request differs from native import acknowledgement. Runtime integration evidence is recorded separately by the main task.",
+    "completedAt": "2026-10-29T08:13:59.522358+00:00",
+    "screenshots": [
+      "figma-timeline-jianying.png",
+      "figma-timeline-jianying-delivery.png"
+    ],
+    "visualReview": {
+      "passed": true,
+      "notes": [
+        "F14 cancel/primary aligned, no clipping",
+        "F12 notifications and note within460px frame;42px before next row",
+        "Existing component styling reused; no complete UI raster added"
+      ]
     }
   }
 }

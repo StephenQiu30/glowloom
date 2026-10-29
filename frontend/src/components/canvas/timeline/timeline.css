@@ -550,6 +550,11 @@
 }
 .timeline-clip-shell .timeline-clip {
   position: relative;
+  width: 100%;
+}
+.timeline-lane:is([data-kind="video"], [data-kind="image"])
+  .timeline-clip-shell
+  .timeline-clip {
   width: calc(100% - 2px);
 }
 .timeline-header {
@@ -610,6 +615,7 @@
   background-position: left bottom;
 }
 
+.timeline-ruler,
 .timeline-playhead-slider {
   touch-action: none;
   cursor: pointer;

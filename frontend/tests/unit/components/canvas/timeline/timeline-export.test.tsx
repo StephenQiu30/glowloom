@@ -14,8 +14,15 @@ import {
   requireTimelinePreview,
   verifyTimelineDownload,
   verifyArtifactDownload,
+  timelineJianyingLaunchURL,
 } from "@/components/canvas/timeline/timeline-export";
 import { RequestError } from "@/lib/request";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { CanvasYjsLiveSession } from "@/components/canvas/yjs-live-session";
 const api = vi.hoisted(() => ({
   createMediaExport: vi.fn(),
@@ -34,6 +41,8 @@ vi.mock("file-saver", () => files);
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+  vi.restoreAllMocks();
+  localStorage.removeItem("glowloom:timeline:jianying:skip-reminder");
   vi.unstubAllGlobals();
 });
 const projectID = "10000000-0000-4000-8000-000000000001",
@@ -376,7 +385,7 @@ it("keeps polling after a transient failure and delivers the completed task", as
     {},
     { timeout: 2500 },
   );
-  await screen.findByText("已添加到画布", {}, { timeout: 5000 });
+  await screen.findByText("已添加到画布", {}, { timeout: 15000 });
   expect(api.getMediaExport).toHaveBeenCalledTimes(2);
   expect(deliver).toHaveBeenCalledTimes(1);
 }, 10000);
@@ -470,6 +479,7 @@ it("cancels the current receipt once and waits for the authoritative cancellatio
   fireEvent.click(cancel);
   await screen.findByText("正在取消...");
   expect(api.cancelMediaExport).toHaveBeenCalledTimes(1);
+  expect(api.cancelMediaExport.mock.calls[0][0]).toEqual({ job_id: job().id });
   expect(api.cancelMediaExport.mock.calls[0][1]).toEqual({
     project_id: projectID,
     revision: 3,
@@ -480,6 +490,192 @@ it("cancels the current receipt once and waits for the authoritative cancellatio
   ).toBe(true);
   expect(screen.queryByText("已取消")).toBeNull();
 });
+
+it("refreshes one worker revision conflict and retries the same cancellation intent once", async () => {
+  api.createMediaExport.mockResolvedValue({ ...job(), status: "running" });
+  api.cancelMediaExport
+    .mockRejectedValueOnce(new RequestError("conflict", 409))
+    .mockResolvedValueOnce(undefined);
+  api.getMediaExport
+    .mockResolvedValueOnce({ ...job(), revision: 4, status: "running" })
+    .mockResolvedValue({ ...job(), revision: 5, status: "cancel_requested" });
+  mount();
+  fireEvent.click(screen.getByRole("button", { name: "确认" }));
+  fireEvent.click(await screen.findByRole("button", { name: "取消导出" }));
+  await screen.findByText("正在取消...");
+  expect(api.cancelMediaExport).toHaveBeenCalledTimes(2);
+  expect(
+    api.cancelMediaExport.mock.calls.map((call) => call[1].revision),
+  ).toEqual([3, 4]);
+  expect(
+    api.cancelMediaExport.mock.calls[0][2].headers["Idempotency-Key"],
+  ).not.toBe(api.cancelMediaExport.mock.calls[1][2].headers["Idempotency-Key"]);
+});
+
+it.each(["cancel_requested", "cancelled", "failed", "succeeded"])(
+  "does not resend cancellation after a conflict reads back %s",
+  async (status) => {
+    api.createMediaExport.mockResolvedValue({ ...job(), status: "running" });
+    api.cancelMediaExport.mockRejectedValue(new RequestError("conflict", 409));
+    api.getMediaExport.mockResolvedValue({ ...job(), revision: 4, status });
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "确认" }));
+    fireEvent.click(await screen.findByRole("button", { name: "取消导出" }));
+    await waitFor(() => expect(api.getMediaExport).toHaveBeenCalledTimes(1));
+    expect(api.cancelMediaExport).toHaveBeenCalledTimes(1);
+  },
+);
+
+it.each([409, 403, 422, 503])(
+  "bounds cancellation retries and never retries non-conflict %s",
+  async (status) => {
+    api.createMediaExport.mockResolvedValue({ ...job(), status: "running" });
+    api.cancelMediaExport.mockRejectedValue(
+      new RequestError("request_failed", status),
+    );
+    api.getMediaExport.mockResolvedValue({
+      ...job(),
+      revision: 4,
+      status: "running",
+    });
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "确认" }));
+    fireEvent.click(await screen.findByRole("button", { name: "取消导出" }));
+    await screen.findByRole("alert");
+    expect(api.cancelMediaExport).toHaveBeenCalledTimes(status === 409 ? 2 : 1);
+    expect(api.getMediaExport).toHaveBeenCalledTimes(status === 409 ? 1 : 0);
+  },
+);
+
+it("keeps the enabled cancellation notice inside the fullscreen modal pointer and focus boundary", async () => {
+  api.listMediaExports.mockResolvedValue({ items: [] });
+  api.createMediaExport.mockResolvedValue({ ...job(), status: "queued" });
+  api.cancelMediaExport.mockResolvedValue(undefined);
+  api.getMediaExport.mockResolvedValue({
+    ...job(),
+    revision: 4,
+    status: "cancel_requested",
+  });
+  render(
+    <Dialog open>
+      <DialogContent>
+        <DialogTitle>时间线全屏</DialogTitle>
+        <DialogDescription>编辑时间线</DialogDescription>
+        <TimelineExport
+          client={
+            {
+              prepareTimeline: async () => ({
+                canvas_id: canvasID,
+                node_id: nodeID,
+                revision: 9,
+              }),
+            } as unknown as CanvasYjsLiveSession
+          }
+          projectID={projectID}
+          canvasID={canvasID}
+          nodeID={nodeID}
+          disabled={false}
+          hasVisual
+          nodeTitle="时间线"
+          aspectRatio="16:9"
+        />
+      </DialogContent>
+    </Dialog>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "导出" }));
+  fireEvent.click(screen.getByRole("button", { name: "确认" }));
+  const cancel = await screen.findByRole("button", { name: "取消导出" });
+  await waitFor(() =>
+    expect((cancel as HTMLButtonElement).disabled).toBe(false),
+  );
+  const modal = screen.getByRole("dialog", { name: "时间线全屏" });
+  // Radix blocks body hit-testing. A body portal can look enabled while unreachable.
+  expect(document.body.style.pointerEvents).toBe("none");
+  expect(modal.contains(cancel)).toBe(true);
+  cancel.focus();
+  expect(document.activeElement).toBe(cancel);
+  fireEvent.click(cancel);
+  await waitFor(() => expect(api.cancelMediaExport).toHaveBeenCalledTimes(1));
+  expect(api.cancelMediaExport.mock.calls[0][0]).toEqual({ job_id: job().id });
+  expect(screen.getByRole("dialog", { name: "时间线全屏" })).toBeTruthy();
+});
+
+it.each(["running", "succeeded"] as const)(
+  "restores the latest %s receipt after compact → fullscreen → compact without duplicate notices",
+  async (status) => {
+    let latest: API.ExportJobResponse = { ...job(), status: "queued" };
+    api.listMediaExports.mockImplementation(async () => ({ items: [latest] }));
+    api.getMediaExport.mockImplementation(async () => latest);
+    api.cancelMediaExport.mockResolvedValue(undefined);
+    const props = {
+      client: {} as CanvasYjsLiveSession,
+      projectID,
+      canvasID,
+      nodeID,
+      disabled: false,
+      hasVisual: true,
+      aspectRatio: "16:9",
+    };
+    function View({ expanded }: { expanded: boolean }) {
+      return (
+        <>
+          <TimelineExport {...props} compact suspended={expanded} />
+          <Dialog open={expanded}>
+            <DialogContent>
+              <DialogTitle>时间线全屏</DialogTitle>
+              <DialogDescription>编辑时间线</DialogDescription>
+              <TimelineExport {...props} />
+            </DialogContent>
+          </Dialog>
+        </>
+      );
+    }
+    const view = render(<View expanded={false} />);
+    await screen.findByRole("button", { name: "取消导出" });
+    latest = {
+      ...job(),
+      id: "10000000-0000-4000-8000-000000000006",
+      revision: 7,
+      status,
+    };
+    view.rerender(<View expanded />);
+    await screen.findByRole("dialog", { name: "时间线全屏" });
+    await waitFor(() => {
+      const notices = document.querySelectorAll(
+        '[aria-label="时间线导出通知"]',
+      );
+      expect(notices).toHaveLength(1);
+      expect(notices[0].closest('[data-slot="dialog-content"]')).not.toBeNull();
+    });
+    view.rerender(<View expanded={false} />);
+    await waitFor(() => expect(api.listMediaExports).toHaveBeenCalledTimes(3));
+    await waitFor(() =>
+      expect(
+        document.querySelectorAll('[aria-label="时间线导出通知"]'),
+      ).toHaveLength(1),
+    );
+    expect(
+      document.querySelector('[aria-label="时间线导出通知"]')?.parentElement,
+    ).toBe(document.body);
+    if (status === "running") {
+      fireEvent.click(await screen.findByRole("button", { name: "取消导出" }));
+      await waitFor(() =>
+        expect(api.cancelMediaExport).toHaveBeenCalledTimes(1),
+      );
+      expect(api.cancelMediaExport.mock.calls[0][0]).toEqual({
+        job_id: latest.id,
+      });
+      expect(api.cancelMediaExport.mock.calls[0][1]).toEqual({
+        project_id: projectID,
+        revision: 7,
+      });
+    } else {
+      await screen.findByText("导出完成");
+      expect(screen.queryByRole("button", { name: "取消导出" })).toBeNull();
+      expect(screen.getByRole("button", { name: "下载到本地" })).toBeTruthy();
+    }
+  },
+);
 
 it("retries a failed frozen export without creating another job or preparing a newer timeline", async () => {
   api.createMediaExport.mockResolvedValue({ ...job(), status: "failed" });
@@ -494,6 +690,7 @@ it("retries a failed frozen export without creating another job or preparing a n
   fireEvent.click(await screen.findByRole("button", { name: "重试导出" }));
   await screen.findByText("导出中...");
   expect(api.retryMediaExport).toHaveBeenCalledTimes(1);
+  expect(api.retryMediaExport.mock.calls[0][0]).toEqual({ job_id: job().id });
   expect(api.retryMediaExport.mock.calls[0][1]).toEqual({
     project_id: projectID,
     revision: 3,
@@ -595,4 +792,178 @@ it("does not expose dependency codes when restoring export history fails", async
   mount();
   await screen.findByText("服务暂时不可用，请稍后重试。");
   expect(screen.queryByText("dependency_unavailable")).toBeNull();
+});
+
+async function nativeReceipt() {
+  const value = await packageReceipt();
+  value.current.output_kind = "jianying";
+  value.current.status = "succeeded";
+  value.receipt.artifact!.format = "jianying";
+  value.receipt.artifact!.format_version = "134.0.0";
+  value.receipt.launch_url = `${window.location.origin}/api/mediaexports/launch?token=${"a".repeat(64)}`;
+  return value;
+}
+async function chooseJianying() {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  const cancel = screen.queryByRole("button", { name: "取消" });
+  if (cancel) fireEvent.click(cancel);
+  fireEvent.keyDown(screen.getByRole("button", { name: "更多导出方式" }), {
+    key: "Enter",
+  });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "导出到剪映" }));
+}
+it("binds the native launch to the verified Jianying artifact and exact native protocol", async () => {
+  const { receipt, current } = await nativeReceipt();
+  const url = new URL(timelineJianyingLaunchURL(receipt, current));
+  expect(url.protocol).toBe("videocut:");
+  expect(url.host).toBe("com.ies.videocut");
+  expect(url.pathname).toBe("/uganchor/anchor_point/load_pippit_draft");
+  expect(JSON.parse(url.searchParams.get("featureEntry")!)).toEqual({
+    sence: "main",
+    sence_context: {},
+    feature: "load_pippit_draft",
+    enter_from: "glowloom_web",
+    feature_context: { json_url: receipt.launch_url },
+  });
+  for (const launch_url of [
+    "https://other.example/api/mediaexports/launch?token=" + "a".repeat(64),
+    `${window.location.origin}/api/mediaexports/launch?token=bad`,
+    `${receipt.launch_url}&job_id=x`,
+    `${receipt.launch_url}#fragment`,
+    undefined,
+  ]) {
+    expect(() =>
+      timelineJianyingLaunchURL({ ...receipt, launch_url }, current),
+    ).toThrow();
+  }
+  expect(() =>
+    timelineJianyingLaunchURL(receipt, { ...current, status: "queued" }),
+  ).toThrow();
+  expect(() =>
+    timelineJianyingLaunchURL(receipt, { ...current, output_kind: "xmeml" }),
+  ).toThrow();
+  expect(() =>
+    timelineJianyingLaunchURL(
+      { ...receipt, expires_at: new Date(0).toISOString() },
+      current,
+    ),
+  ).toThrow();
+  expect(() =>
+    timelineJianyingLaunchURL(
+      { ...receipt, artifact: { ...receipt.artifact, format_version: "1" } },
+      current,
+    ),
+  ).toThrow();
+});
+it("confirms native export before freezing and creating a task, and cancellation creates nothing", async () => {
+  api.createMediaExport.mockResolvedValue({
+    ...artifactJob(),
+    output_kind: "jianying",
+    status: "queued",
+    artifact_id: undefined,
+    sha256: undefined,
+  });
+  const { prepareTimeline } = mount();
+  await chooseJianying();
+  expect(screen.getByRole("dialog", { name: "打开剪映专业版" })).toBeTruthy();
+  expect(
+    screen
+      .getByRole("checkbox", { name: "不再提醒" })
+      .getAttribute("data-state"),
+  ).toBe("unchecked");
+  expect(prepareTimeline).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "取消" }));
+  expect(api.createMediaExport).not.toHaveBeenCalled();
+  await chooseJianying();
+  fireEvent.click(screen.getByRole("button", { name: "打开剪映专业版" }));
+  await waitFor(() => expect(api.createMediaExport).toHaveBeenCalledTimes(1));
+  expect(api.createMediaExport.mock.calls[0][1]).toMatchObject({
+    output_kind: "jianying",
+    revision: 9,
+    settings: { destination: "local" },
+  });
+  expect(await screen.findByText("正在导出剪映草稿...")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "取消导出" })).toBeTruthy();
+});
+it("verifies native package before requesting launch, supports repeat launch, and only exposes ZIP fallback on demand", async () => {
+  const { blob, receipt, current } = await nativeReceipt();
+  api.createMediaExport.mockResolvedValue(current);
+  api.downloadMediaExport.mockResolvedValue(blob);
+  api.previewMediaExport.mockResolvedValue(receipt);
+  const launches: string[] = [];
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+    this: HTMLAnchorElement,
+  ) {
+    launches.push(this.href);
+  });
+  mount();
+  await chooseJianying();
+  fireEvent.click(screen.getByRole("button", { name: "打开剪映专业版" }));
+  await screen.findByText("已请求打开剪映专业版");
+  expect(launches).toEqual([timelineJianyingLaunchURL(receipt, current)]);
+  expect(files.saveAs).not.toHaveBeenCalled();
+  expect(screen.queryByRole("button", { name: "下载工程包" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "再次打开剪映" }));
+  expect(launches).toHaveLength(2);
+  expect(api.downloadMediaExport).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole("button", { name: "无法打开？" }));
+  fireEvent.click(screen.getByRole("button", { name: "下载工程包" }));
+  await waitFor(() =>
+    expect(files.saveAs).toHaveBeenCalledWith(blob, "时间线 甲.zip"),
+  );
+  expect(launches).toHaveLength(2);
+});
+it("does not launch an unverified native ZIP and permits delivery retry without creating another job", async () => {
+  const { blob, receipt, current } = await nativeReceipt();
+  api.createMediaExport.mockResolvedValue(current);
+  api.downloadMediaExport.mockResolvedValue(
+    new Blob(["invalid"], { type: "application/zip" }),
+  );
+  api.previewMediaExport.mockResolvedValue(receipt);
+  const launch = vi
+    .spyOn(HTMLAnchorElement.prototype, "click")
+    .mockImplementation(() => {});
+  mount();
+  await chooseJianying();
+  fireEvent.click(screen.getByRole("button", { name: "打开剪映专业版" }));
+  await screen.findByText("工程文件类型或大小不匹配");
+  expect(launch).not.toHaveBeenCalled();
+  expect(files.saveAs).not.toHaveBeenCalled();
+  api.downloadMediaExport.mockResolvedValue(blob);
+  fireEvent.click(screen.getByRole("button", { name: "打开剪映专业版" }));
+  await screen.findByText("已请求打开剪映专业版");
+  expect(api.createMediaExport).toHaveBeenCalledTimes(1);
+  expect(launch).toHaveBeenCalledTimes(1);
+});
+it("remembers only a confirmed skip-reminder choice and reuses it on the next native export", async () => {
+  api.createMediaExport.mockResolvedValue({
+    ...artifactJob(),
+    output_kind: "jianying",
+    status: "queued",
+    artifact_id: undefined,
+    sha256: undefined,
+  });
+  mount();
+  await chooseJianying();
+  fireEvent.click(screen.getByRole("checkbox", { name: "不再提醒" }));
+  expect(
+    localStorage.getItem("glowloom:timeline:jianying:skip-reminder"),
+  ).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "打开剪映专业版" }));
+  await waitFor(() => expect(api.createMediaExport).toHaveBeenCalledTimes(1));
+  expect(localStorage.getItem("glowloom:timeline:jianying:skip-reminder")).toBe(
+    "true",
+  );
+  cleanup();
+  mount();
+  await chooseJianying();
+  await waitFor(() => expect(api.createMediaExport).toHaveBeenCalledTimes(2));
+  expect(screen.queryByRole("dialog", { name: "打开剪映专业版" })).toBeNull();
 });

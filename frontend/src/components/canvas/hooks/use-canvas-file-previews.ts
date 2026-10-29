@@ -101,7 +101,14 @@ export function useCanvasFilePreviews(
             reference && session.urls.get(previewKey(node, reference));
           if (!url || node.metadata?.content) return node;
           changed = true;
-          return { ...node, metadata: { ...node.metadata, content: url } };
+          return {
+            ...node,
+            metadata: {
+              ...node.metadata,
+              content: url,
+              status: "success" as const,
+            },
+          };
         });
         return changed ? restored : latest;
       });

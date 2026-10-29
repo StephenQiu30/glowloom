@@ -30,6 +30,56 @@ vi.mock("next/navigation", () => ({
 const router = { replace: vi.fn() };
 const navigation = { pathname: "/" };
 const notifications = vi.hoisted(() => ({ show: vi.fn(), dismiss: vi.fn() }));
+
+it("guest canvas redirect retains the full canvas location for login recovery", async () => {
+  const destination =
+    "/canvas?project_id=project&canvas_id=canvas&scope_id=scope";
+  window.history.replaceState(null, "", destination);
+  vi.mocked(request).mockRejectedValue(
+    new RequestError("unauthenticated", 401),
+  );
+  try {
+    render(
+      <SessionProvider>
+        <SessionGate>
+          <p>private canvas</p>
+        </SessionGate>
+      </SessionProvider>,
+    );
+    await waitFor(() =>
+      expect(router.replace).toHaveBeenCalledWith(
+        `/login?returnTo=${encodeURIComponent(destination)}`,
+      ),
+    );
+  } finally {
+    window.history.replaceState(null, "", "/");
+  }
+});
+
+it("a startup 503 keeps the canvas location and never opens login", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    "/canvas?canvas_id=canvas&project_id=project",
+  );
+  vi.mocked(request).mockRejectedValue(
+    new RequestError("dependency_unavailable", 503),
+  );
+  try {
+    render(
+      <SessionProvider>
+        <SessionGate>
+          <p>private canvas</p>
+        </SessionGate>
+      </SessionProvider>,
+    );
+    await screen.findByText("暂时无法确认登录状态");
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(window.location.pathname).toBe("/canvas");
+  } finally {
+    window.history.replaceState(null, "", "/");
+  }
+});
 vi.mock("sonner", () => ({
   toast: Object.assign(notifications.show, { dismiss: notifications.dismiss }),
 }));

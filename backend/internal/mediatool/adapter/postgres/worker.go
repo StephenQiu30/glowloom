@@ -23,6 +23,9 @@ func (s *Store) validateSources(ctx context.Context, tx *gorm.DB, actor identity
 	if !kind.Valid() || kind != frozen.OutputKind.Effective() || kind == domain.OutputAudio && !application.HasAudibleClip(frozen.Timeline) {
 		return application.ErrInvalidExport
 	}
+	if kind == domain.OutputJianying && (frozen.ExportID == nil || *frozen.ExportID != row.ID) {
+		return application.ErrConflict
+	}
 	if kind.IsArtifact() {
 		if err := application.ValidateProjectExport(frozen); err != nil {
 			return err

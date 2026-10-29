@@ -45,6 +45,9 @@ func (w *Worker) executeArtifact(ctx context.Context, id WorkID, work Work) (dom
 	if err := ValidateProjectExport(work.Frozen); err != nil {
 		return domain.ExportJob{}, err
 	}
+	if work.Frozen.OutputKind == domain.OutputJianying && (work.Frozen.ExportID == nil || *work.Frozen.ExportID != work.Job.ID) {
+		return domain.ExportJob{}, ErrInvalidExport
+	}
 	if *work.Frozen.Source != work.Job.Source || work.Frozen.OutputKind != work.Job.OutputKind {
 		return domain.ExportJob{}, ErrInvalidExport
 	}
@@ -130,7 +133,11 @@ func (q *ExportQuery) artifactPreview(ctx context.Context, store ArtifactStore, 
 	if err != nil {
 		return ExportPreview{}, err
 	}
-	return ExportPreview{JobID: job.ID, Revision: job.Revision, SHA256: artifact.SHA256, URL: grant.URL, ExpiresAt: grant.ExpiresAt, Artifact: &artifact}, nil
+	preview := ExportPreview{JobID: job.ID, Revision: job.Revision, SHA256: artifact.SHA256, URL: grant.URL, ExpiresAt: grant.ExpiresAt, Artifact: &artifact}
+	if err = q.nativeLaunch(ctx, actor, job, artifact, &preview); err != nil {
+		return ExportPreview{}, err
+	}
+	return preview, nil
 }
 func (q *ExportQuery) artifactDownload(ctx context.Context, store ArtifactStore, actor identityapp.Principal, project, id uuid.UUID) (io.ReadCloser, int64, error) {
 	job, artifact, err := store.PreviewArtifact(ctx, actor, project, id)

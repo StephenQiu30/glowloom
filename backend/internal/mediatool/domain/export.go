@@ -22,6 +22,7 @@ const (
 	OutputMediaBundle OutputKind = "media_bundle"
 	OutputFCPXML      OutputKind = "fcpxml"
 	OutputXMEML       OutputKind = "xmeml"
+	OutputJianying    OutputKind = "jianying"
 )
 
 // Effective applies the creation request's documented video default.
@@ -59,7 +60,7 @@ type ExportJob struct {
 	Settings    *ExportSettings `json:"settings,omitempty"`
 	ID          uuid.UUID       `json:"id"`
 	ProjectID   uuid.UUID       `json:"project_id"`
-	OutputKind  OutputKind      `json:"output_kind" enums:"video,audio,media_bundle,fcpxml,xmeml"`
+	OutputKind  OutputKind      `json:"output_kind" enums:"video,audio,media_bundle,fcpxml,xmeml,jianying"`
 	Source      Source          `json:"source"`
 	Status      Status          `json:"status"`
 	Stage       string          `json:"stage"`
@@ -92,6 +93,7 @@ type FrozenSource struct {
 
 // FrozenExport is the immutable rendering input stored with the local job.
 type FrozenExport struct {
+	ExportID   *uuid.UUID                  `json:"export_id,omitempty"`
 	Settings   *ExportSettings             `json:"settings,omitempty"`
 	Width      int                         `json:"width,omitempty"`
 	Height     int                         `json:"height,omitempty"`

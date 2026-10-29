@@ -14,6 +14,7 @@ it("all application business modules avoid browser durable storage; only the vie
   const allowed = new Set([
     "components/canvas/hooks/use-canvas-view-state.ts",
     "components/canvas/director/director-view-preferences.ts",
+    "components/canvas/timeline/timeline-view-preferences.ts",
   ]);
   const violations = files("src")
     .filter((path) => !allowed.has(relative("src", path)))

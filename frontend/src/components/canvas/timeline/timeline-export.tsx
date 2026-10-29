@@ -10,6 +10,10 @@ import {
   downloadMediaExport,
 } from "@/api/mediaExports";
 import { RequestError } from "@/lib/request";
+import {
+  skipJianyingReminder,
+  setSkipJianyingReminder,
+} from "./timeline-view-preferences";
 import { readErrorMessage } from "@/lib/read-error";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +31,15 @@ import {
   PopoverTitle,
   PopoverDescription,
 } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {
@@ -50,10 +63,10 @@ import { isProjectID } from "@/components/projects/project";
 
 type ExportKind = NonNullable<API.MediatoolCreateInput["output_kind"]>;
 const artifactKind = (kind?: string) =>
-  ["media_bundle", "fcpxml", "xmeml"].includes(kind ?? "");
+  ["media_bundle", "fcpxml", "xmeml", "jianying"].includes(kind ?? "");
 const artifactVersion = (kind?: string) =>
-  ({ media_bundle: "1", fcpxml: "1.10", xmeml: "5" })[
-    kind as "media_bundle" | "fcpxml" | "xmeml"
+  ({ media_bundle: "1", fcpxml: "1.10", xmeml: "5", jianying: "134.0.0" })[
+    kind as "media_bundle" | "fcpxml" | "xmeml" | "jianying"
   ];
 const active = (status?: API.MediatoolStatus) =>
   ["queued", "running", "cancel_requested"].includes(status ?? "");
@@ -101,7 +114,7 @@ export function requireTimelineExport(
     value.revision! < 1 ||
     !Number.isSafeInteger(value.source?.revision) ||
     value.source!.revision! < 1 ||
-    !["video", "audio", "media_bundle", "fcpxml", "xmeml"].includes(
+    !["video", "audio", "media_bundle", "fcpxml", "xmeml", "jianying"].includes(
       value.output_kind ?? "",
     ) ||
     (["review_required", "succeeded"].includes(value.status ?? "") &&
@@ -175,6 +188,49 @@ export function requireTimelinePreview(
   }
   return value;
 }
+export function timelineJianyingLaunchURL(
+  value: API.ExportPreview,
+  job: API.ExportJobResponse,
+) {
+  if (job.output_kind !== "jianying" || job.status !== "succeeded")
+    throw new Error("剪映工程尚未准备完成");
+  requireTimelinePreview(value, job);
+  const launch = new URL(value.launch_url ?? "");
+  if (
+    launch.origin !== window.location.origin ||
+    !["http:", "https:"].includes(launch.protocol) ||
+    launch.pathname !== "/api/mediaexports/launch" ||
+    launch.username ||
+    launch.password ||
+    launch.hash ||
+    [...launch.searchParams.keys()].length !== 1 ||
+    !/^[a-f0-9]{64}$/.test(launch.searchParams.get("token") ?? "")
+  )
+    throw new Error("剪映启动地址无效");
+  return (
+    "videocut://com.ies.videocut/uganchor/anchor_point/load_pippit_draft?featureEntry=" +
+    encodeURIComponent(
+      JSON.stringify({
+        sence: "main",
+        sence_context: {},
+        feature: "load_pippit_draft",
+        enter_from: "glowloom_web",
+        feature_context: { json_url: launch.href },
+      }),
+    )
+  );
+}
+function requestJianyingLaunch(url: string) {
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.hidden = true;
+  document.body.append(anchor);
+  try {
+    anchor.click();
+  } finally {
+    anchor.remove();
+  }
+}
 export async function verifyTimelineDownload(blob: Blob, sha256: string) {
   if (!(blob instanceof Blob) || !blob.size) throw new Error("导出文件为空");
   const digest = await crypto.subtle.digest(
@@ -213,6 +269,7 @@ type ExportProps = {
   aspectRatio: string;
   nodeTitle?: string;
   compact?: boolean;
+  suspended?: boolean;
   onAddToCanvas?: (result: TimelineExportDelivery) => Promise<void>;
 };
 export function TimelineExport(props: ExportProps) {
@@ -232,10 +289,19 @@ function TimelineExportSession({
   hasVisual,
   nodeTitle = "时间线",
   compact = false,
+  suspended = false,
   onAddToCanvas,
 }: ExportProps) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [nativeConfirm, setNativeConfirm] = useState(false);
+  const [skipReminder, setSkipReminder] = useState(false);
+  const [nativeHelp, setNativeHelp] = useState(false);
+  const nativeLaunch = useRef<{
+    key: string;
+    url: string;
+    expiresAt: number;
+  } | null>(null);
   const [fileName, setFileName] = useState(nodeTitle);
   const [destination, setDestination] = useState<"canvas" | "local">("canvas");
   const [resolution, setResolution] = useState(720);
@@ -243,7 +309,7 @@ function TimelineExportSession({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [delivery, setDelivery] = useState<
-    "idle" | "working" | "canvas" | "local" | "failed"
+    "idle" | "working" | "canvas" | "local" | "native" | "failed"
   >("idle");
   const alive = useRef(true),
     inFlight = useRef(false),
@@ -255,6 +321,16 @@ function TimelineExportSession({
   } | null>(null);
   const delivered = useRef(new Set<string>());
   const fieldID = useId();
+  const [noticeContainer, setNoticeContainer] = useState<HTMLElement | null>(
+    null,
+  );
+  const bindExportAnchor = useCallback((node: HTMLDivElement | null) => {
+    if (node)
+      setNoticeContainer(
+        node.closest<HTMLElement>('[data-slot="dialog-content"]') ??
+          document.body,
+      );
+  }, []);
   const running = active(job?.status);
   const accept = useCallback(
     (value: API.ExportJobResponse, previous?: API.ExportJobResponse) => {
@@ -274,36 +350,63 @@ function TimelineExportSession({
   useEffect(() => {
     alive.current = true;
     const abort = new AbortController();
-    void listMediaExports(
-      { pid: projectID, canvas_id: canvasID, node_id: nodeID, limit: 1 },
-      { signal: abort.signal },
-    )
-      .then((page) => {
-        if (abort.signal.aborted || jobRef.current) return;
-        const latest = page.items?.find(
-          (item) =>
-            item.source?.canvas_id === canvasID &&
-            item.source?.node_id === nodeID,
-        );
-        if (latest) accept(latest);
-      })
-      .catch((cause) => {
-        if (!abort.signal.aborted)
-          setError(exportErrorMessage(cause, "无法读取导出状态"));
-      });
+    const observed = jobRef.current;
+    if (!suspended)
+      void listMediaExports(
+        { pid: projectID, canvas_id: canvasID, node_id: nodeID, limit: 1 },
+        { signal: abort.signal },
+      )
+        .then((page) => {
+          if (
+            abort.signal.aborted ||
+            jobRef.current !== observed ||
+            inFlight.current
+          )
+            return;
+          const latest = page.items?.find(
+            (item) =>
+              item.source?.canvas_id === canvasID &&
+              item.source?.node_id === nodeID,
+          );
+          if (latest)
+            accept(
+              latest,
+              latest.id === observed?.id ? (observed ?? undefined) : undefined,
+            );
+        })
+        .catch((cause) => {
+          if (!abort.signal.aborted)
+            setError(exportErrorMessage(cause, "无法读取导出状态"));
+        });
     return () => {
       alive.current = false;
       abort.abort();
     };
-  }, [projectID, canvasID, nodeID, accept]);
+  }, [projectID, canvasID, nodeID, accept, suspended]);
   const deliver = useCallback(
-    async (current: API.ExportJobResponse, repeat = false) => {
+    async (
+      current: API.ExportJobResponse,
+      repeat = false,
+      downloadOnly = false,
+    ) => {
       if (current.status !== "succeeded" || !current.id) return;
       const receiptKey = `${current.id}/${current.attempt ?? 1}`;
       if (delivered.current.has(receiptKey) && !repeat) return;
       setDelivery("working");
       setError("");
+      setNativeHelp(false);
       try {
+        const cached = nativeLaunch.current;
+        if (
+          current.output_kind === "jianying" &&
+          !downloadOnly &&
+          cached?.key === receiptKey &&
+          cached.expiresAt > Date.now() + 5000
+        ) {
+          requestJianyingLaunch(cached.url);
+          setDelivery("native");
+          return;
+        }
         const name = current.settings?.file_name || nodeTitle;
         const location = artifactKind(current.output_kind)
           ? "local"
@@ -328,6 +431,19 @@ function TimelineExportSession({
               current,
             );
             await verifyArtifactDownload(blob, receipt.artifact!);
+            if (current.output_kind === "jianying" && !downloadOnly) {
+              const url = timelineJianyingLaunchURL(receipt, current);
+              if (!alive.current) return;
+              nativeLaunch.current = {
+                key: receiptKey,
+                url,
+                expiresAt: Date.parse(receipt.expires_at!),
+              };
+              requestJianyingLaunch(url);
+              delivered.current.add(receiptKey);
+              setDelivery("native");
+              return;
+            }
           } else await verifyTimelineDownload(blob, current.sha256!);
           if (!alive.current) return;
           const { saveAs } = await import("file-saver");
@@ -480,13 +596,36 @@ function TimelineExportSession({
       const previous = jobRef.current;
       if (!previous?.id) return;
       const params = { job_id: previous.id, project_id: projectID };
+      let refreshed: API.ExportJobResponse | undefined;
       if (action !== "refresh")
-        await (action === "cancel" ? cancelMediaExport : retryMediaExport)(
-          params,
-          { project_id: projectID, revision: previous.revision },
-          { headers: { "Idempotency-Key": crypto.randomUUID() } },
-        );
-      const value = await getMediaExport(params);
+        try {
+          await (action === "cancel" ? cancelMediaExport : retryMediaExport)(
+            { job_id: previous.id },
+            { project_id: projectID, revision: previous.revision },
+            { headers: { "Idempotency-Key": crypto.randomUUID() } },
+          );
+        } catch (cause) {
+          if (
+            action !== "cancel" ||
+            !(cause instanceof RequestError) ||
+            cause.status !== 409
+          )
+            throw cause;
+          // Worker progress may advance the revision between render and click.
+          // A definitive conflict permits one fresh command, never an unbounded retry.
+          const value = await getMediaExport(params);
+          if (!alive.current) return;
+          refreshed = accept(value, previous);
+          if (["queued", "running"].includes(refreshed.status!)) {
+            await cancelMediaExport(
+              { job_id: previous.id },
+              { project_id: projectID, revision: refreshed.revision },
+              { headers: { "Idempotency-Key": crypto.randomUUID() } },
+            );
+            refreshed = undefined;
+          }
+        }
+      const value = refreshed ?? (await getMediaExport(params));
       if (!alive.current) return;
       const current = accept(value, previous);
       if (action === "retry") {
@@ -504,27 +643,32 @@ function TimelineExportSession({
       ? "正在交付…"
       : delivery === "canvas"
         ? "已添加到画布"
-        : delivery === "local"
-          ? "已开始下载"
-          : {
-              queued: "排队中…",
-              running: "导出中…",
-              cancel_requested: "正在取消…",
-              cancelled: "已取消",
-              failed: "导出失败",
-              review_required: "请重新导出此旧任务",
-              succeeded: "导出完成",
-            }[job?.status ?? "queued"];
+        : delivery === "native"
+          ? "已请求打开剪映专业版"
+          : delivery === "local"
+            ? "已开始下载"
+            : {
+                queued: "排队中…",
+                running: "导出中…",
+                cancel_requested: "正在取消…",
+                cancelled: "已取消",
+                failed: "导出失败",
+                review_required: "请重新导出此旧任务",
+                succeeded: "导出完成",
+              }[job?.status ?? "queued"];
   const workingText =
-    job?.settings?.destination === "local" || artifactKind(job?.output_kind)
-      ? "下载中..."
-      : "导出中...";
-  const notice = !editing && (job || error || busy);
+    job?.output_kind === "jianying"
+      ? "正在导出剪映草稿..."
+      : job?.settings?.destination === "local" || artifactKind(job?.output_kind)
+        ? "下载中..."
+        : "导出中...";
+  const notice = !suspended && !editing && (job || error || busy);
   return (
     <>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverAnchor asChild>
           <div
+            ref={bindExportAnchor}
             className={
               compact
                 ? "inline-flex items-center"
@@ -585,7 +729,14 @@ function TimelineExportSession({
                     批量导出时间线素材
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem disabled title="剪映专业版交付协议核验中">
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      setOpen(false);
+                      setEditing(false);
+                      if (skipJianyingReminder()) void start("jianying");
+                      else setNativeConfirm(true);
+                    }}
+                  >
                     导出到剪映
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => void start("xmeml")}>
@@ -717,7 +868,42 @@ function TimelineExportSession({
           </div>
         </PopoverContent>
       </Popover>
+      <Dialog open={nativeConfirm} onOpenChange={setNativeConfirm}>
+        <DialogContent
+          className="gap-6 sm:max-w-[480px]"
+          data-canvas-shortcuts-ignore
+        >
+          <DialogHeader>
+            <DialogTitle>打开剪映专业版</DialogTitle>
+            <DialogDescription>
+              请确认剪映专业版已升级至最新版本
+            </DialogDescription>
+          </DialogHeader>
+          <Label className="flex items-center gap-2 text-muted-foreground">
+            <Checkbox
+              checked={skipReminder}
+              onCheckedChange={(value) => setSkipReminder(value === true)}
+            />
+            不再提醒
+          </Label>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setNativeConfirm(false)}>
+              取消
+            </Button>
+            <Button
+              onClick={() => {
+                setSkipJianyingReminder(skipReminder);
+                setNativeConfirm(false);
+                void start("jianying");
+              }}
+            >
+              打开剪映专业版
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {notice &&
+        noticeContainer &&
         createPortal(
           <section
             aria-label="时间线导出通知"
@@ -775,13 +961,41 @@ function TimelineExportSession({
                   if (job) void deliver(job, true);
                 }}
               >
-                {delivery === "failed"
-                  ? "重试交付"
-                  : job.settings?.destination === "canvas"
-                    ? "添加到画布"
-                    : "下载到本地"}
+                {job.output_kind === "jianying"
+                  ? delivery === "native"
+                    ? "再次打开剪映"
+                    : "打开剪映专业版"
+                  : delivery === "failed"
+                    ? "重试交付"
+                    : job.settings?.destination === "canvas"
+                      ? "添加到画布"
+                      : "下载到本地"}
               </Button>
             )}
+            {job?.output_kind === "jianying" &&
+              job.status === "succeeded" &&
+              (delivery === "native" || delivery === "failed") && (
+                <>
+                  {!nativeHelp && delivery !== "failed" && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setNativeHelp(true)}
+                    >
+                      无法打开？
+                    </Button>
+                  )}
+                  {(nativeHelp || delivery === "failed") && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => void deliver(job, true, true)}
+                    >
+                      下载工程包
+                    </Button>
+                  )}
+                </>
+              )}
             {job?.status === "review_required" && (
               <Button
                 size="sm"
@@ -815,7 +1029,7 @@ function TimelineExportSession({
               </Button>
             )}
           </section>,
-          document.body,
+          noticeContainer,
         )}
     </>
   );

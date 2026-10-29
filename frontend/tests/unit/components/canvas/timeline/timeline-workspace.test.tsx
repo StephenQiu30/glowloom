@@ -18,13 +18,21 @@ import {
   emptyTimelineConfig,
   type Timeline,
 } from "@/components/canvas/timeline/timeline-model";
+const mediaState = vi.hoisted(() => ({
+  media: {} as Record<
+    string,
+    import("@/components/canvas/timeline/timeline-preview").TimelineMedia
+  >,
+  errors: {} as Record<string, string>,
+  retry: vi.fn(),
+}));
 vi.mock("next/dynamic", () => ({ default: () => () => null }));
 vi.mock("@/components/canvas/timeline/use-timeline-media", () => ({
   useTimelineMedia: () => ({
-    media: {},
-    errors: {},
-    error: "",
-    retry: vi.fn(),
+    media: mediaState.media,
+    errors: mediaState.errors,
+    error: Object.values(mediaState.errors).join("；"),
+    retry: mediaState.retry,
   }),
 }));
 vi.mock("@/components/canvas/timeline/timeline-preview", () => ({
@@ -43,6 +51,9 @@ vi.mock("@/components/canvas/timeline/timeline-upload-dialog", () => ({
   TimelineUploadDialog: vi.fn(() => <div data-testid="batch-upload" />),
 }));
 beforeEach(() => {
+  mediaState.media = {};
+  mediaState.errors = {};
+  mediaState.retry.mockReset();
   vi.stubGlobal("PointerEvent", MouseEvent);
   vi.stubGlobal(
     "ResizeObserver",
@@ -594,4 +605,253 @@ it("includes viewport scrolling in trim distance and cancels on lost capture", (
   fireEvent.lostPointerCapture(handle, { pointerId: 32 });
   fireEvent.pointerUp(handle, { clientX: 160, pointerId: 32 });
   expect(f.client.changeTimeline).toHaveBeenCalledTimes(count);
+});
+
+it.each(["trim", "drag"] as const)(
+  "consumes Escape during an active %s before the real Dialog dismiss handler, then allows ordinary dismissal",
+  (gesture) => {
+    const f = setup(false, true, true);
+    fireEvent.click(f.ui.getByRole("button", { name: "全屏编辑" }));
+    const dialog = f.ui.getByRole("dialog", { name: "时间线" });
+    const clip = within(dialog).getByRole("button", { name: /测试片段，/ });
+    fireEvent.click(clip);
+    const shell = clip.closest<HTMLElement>(".timeline-clip-shell")!;
+    const originalWidth = shell.style.width;
+    const target =
+      gesture === "trim"
+        ? within(dialog).getByRole("slider", { name: /右边缘裁剪/ })
+        : clip;
+    fireEvent.pointerDown(target, { clientX: 100, pointerId: 7 });
+    fireEvent.pointerMove(target, { clientX: 78.6, pointerId: 7 });
+    if (gesture === "trim") expect(shell.style.width).not.toBe(originalWidth);
+    else expect(shell.style.transform).not.toBe("");
+    const escape = new KeyboardEvent("keydown", {
+      key: "Escape",
+      code: "Escape",
+      bubbles: true,
+      cancelable: true,
+    });
+    // Radix installs its real document capture listener; dispatch through the DOM.
+    act(() => {
+      document.dispatchEvent(escape);
+    });
+    expect(escape.defaultPrevented).toBe(true);
+    expect(f.ui.queryByRole("dialog", { name: "时间线" })).not.toBeNull();
+    expect(shell.style.width).toBe(originalWidth);
+    expect(shell.style.transform).toBe("");
+    fireEvent.pointerUp(target, { clientX: 78.6, pointerId: 7 });
+    expect(f.read().clips[0].duration_ms).toBe(4000);
+    expect(f.client.changeTimeline).not.toHaveBeenCalled();
+    expect(f.client.timelineHistory).not.toHaveBeenCalled();
+    fireEvent.keyDown(document, { key: "Escape", code: "Escape" });
+    expect(f.ui.queryByRole("dialog", { name: "时间线" })).toBeNull();
+  },
+);
+
+function snappingDragFixture() {
+  const f = setup(true, false);
+  const lane = f.clip.closest<HTMLElement>(".timeline-lane")!;
+  vi.spyOn(lane, "getBoundingClientRect").mockReturnValue({
+    top: 100,
+    bottom: 132,
+  } as DOMRect);
+  const playhead = f.ui.getByRole("slider", { name: "时间线播放头" });
+  fireEvent.keyDown(playhead, { key: "ArrowRight" });
+  fireEvent.keyDown(playhead, { key: "ArrowRight" });
+  const point = (seconds: number) => ({
+    clientX: 100 + seconds * 21.4,
+    clientY: 110,
+    pointerId: 9,
+  });
+  return { ...f, point };
+}
+it("retains one audio drag snap inside twelve pixels and commits only on release", () => {
+  const f = snappingDragFixture();
+  fireEvent.pointerDown(f.clip, f.point(0));
+  fireEvent.pointerMove(f.clip, f.point(1.7));
+  expect(f.shell.style.transform).toBe("translate(42.8px, 0px)");
+  fireEvent.pointerMove(f.clip, f.point(1.5));
+  expect(f.shell.style.transform).toBe("translate(42.8px, 0px)");
+  expect(f.client.changeTimeline).not.toHaveBeenCalled();
+  fireEvent.pointerUp(f.clip, f.point(1.5));
+  expect(f.read().clips[0].start_ms).toBe(2000);
+  expect(f.client.changeTimeline).toHaveBeenCalledTimes(1);
+});
+it.each(["Escape", "pointer", "permission", "capture"])(
+  "discards audio snap state on %s before a new gesture",
+  (cancellation) => {
+    const f = snappingDragFixture();
+    fireEvent.pointerDown(f.clip, f.point(0));
+    fireEvent.pointerMove(f.clip, f.point(1.7));
+    if (cancellation === "Escape") fireEvent.keyDown(window, { key: "Escape" });
+    else if (cancellation === "pointer")
+      fireEvent.pointerCancel(f.clip, f.point(1.7));
+    else if (cancellation === "capture")
+      fireEvent.lostPointerCapture(f.clip, f.point(1.7));
+    else {
+      f.setWritable(false);
+      f.setWritable(true);
+    }
+    expect(f.shell.style.transform).toBe("");
+    fireEvent.pointerUp(f.clip, f.point(1.5));
+    expect(f.client.changeTimeline).not.toHaveBeenCalled();
+    fireEvent.pointerDown(f.clip, f.point(0));
+    fireEvent.pointerMove(f.clip, f.point(1.5));
+    fireEvent.pointerUp(f.clip, f.point(1.5));
+    expect(f.read().clips[0].start_ms).toBe(1500);
+    expect(f.client.changeTimeline).toHaveBeenCalledTimes(1);
+  },
+);
+
+it.each([0.5, 1, 2])(
+  "seeks from the ruler origin through canvas scale %s even when read-only, without editing",
+  (scale) => {
+    const f = setup();
+    f.setWritable(false);
+    const root = f.clip.closest<HTMLElement>(".canvas-timeline")!;
+    Object.defineProperty(root, "offsetWidth", {
+      configurable: true,
+      value: 600,
+    });
+    vi.spyOn(root, "getBoundingClientRect").mockReturnValue({
+      width: 600 * scale,
+    } as DOMRect);
+    const ruler = root.querySelector<HTMLElement>(".timeline-ruler")!;
+    vi.spyOn(ruler, "getBoundingClientRect").mockReturnValue({
+      left: 64,
+      width: 960 * scale,
+    } as DOMRect);
+    const playhead = f.ui.getByRole("slider", { name: "时间线播放头" });
+    fireEvent.pointerDown(ruler, { clientX: 64 + 32.1 * scale, pointerId: 3 });
+    expect(playhead.getAttribute("aria-valuenow")).toBe("1500");
+    fireEvent.pointerMove(ruler, { clientX: 64 + 42.8 * scale, pointerId: 3 });
+    expect(Number(playhead.getAttribute("aria-valuenow"))).toBeCloseTo(2000);
+    fireEvent.pointerUp(ruler, { clientX: 64 + 42.8 * scale, pointerId: 3 });
+    fireEvent.pointerMove(ruler, { clientX: 64 + 64.2 * scale, pointerId: 3 });
+    expect(Number(playhead.getAttribute("aria-valuenow"))).toBeCloseTo(2000);
+    expect(f.client.changeTimeline).not.toHaveBeenCalled();
+    expect(f.client.timelineHistory).not.toHaveBeenCalled();
+  },
+);
+it("pauses ruler seeking, clamps bounds and restores the initial position on Escape", () => {
+  const f = setup();
+  const ruler = f.clip
+    .closest<HTMLElement>(".canvas-timeline")!
+    .querySelector<HTMLElement>(".timeline-ruler")!;
+  vi.spyOn(ruler, "getBoundingClientRect").mockReturnValue({
+    left: -100,
+    width: 960,
+  } as DOMRect);
+  const playhead = f.ui.getByRole("slider", { name: "时间线播放头" });
+  fireEvent.keyDown(playhead, { key: "ArrowRight" });
+  fireEvent.click(f.ui.getByRole("button", { name: "播放时间线预览" }));
+  fireEvent.pointerDown(ruler, { clientX: -67.9, pointerId: 4 });
+  expect(f.ui.getByRole("button", { name: "播放时间线预览" })).toBeTruthy();
+  fireEvent.pointerMove(ruler, { clientX: -200, pointerId: 4 });
+  expect(playhead.getAttribute("aria-valuenow")).toBe("0");
+  fireEvent.pointerMove(ruler, { clientX: 1000, pointerId: 4 });
+  expect(playhead.getAttribute("aria-valuenow")).toBe("4000");
+  fireEvent.keyDown(window, { key: "Escape" });
+  expect(playhead.getAttribute("aria-valuenow")).toBe("1000");
+  fireEvent.pointerUp(ruler, { clientX: 1000, pointerId: 4 });
+  expect(playhead.getAttribute("aria-valuenow")).toBe("1000");
+  expect(f.client.changeTimeline).not.toHaveBeenCalled();
+});
+
+it("retries only failed authorization reads without pausing healthy preview playback", () => {
+  const f = setup();
+  const healthyID = f.read().clips[0].asset_id!;
+  const failedID = crypto.randomUUID();
+  const healthy = {
+    asset: { id: healthyID, kind: "video", file_name: "健康视频" },
+    url: "https://media.example/healthy.mp4",
+  };
+  mediaState.media = { [healthyID]: healthy };
+  mediaState.errors = { [failedID]: "素材服务暂时不可用，请稍后重试。" };
+  act(() =>
+    f.replaceTimeline(
+      editTimeline(f.read(), {
+        type: "add",
+        assets: [
+          {
+            asset: {
+              id: failedID,
+              kind: "audio",
+              duration_ms: 7000,
+              file_name: "失败音频",
+            },
+          },
+        ],
+      }),
+    ),
+  );
+  fireEvent.click(f.ui.getByRole("button", { name: "播放时间线预览" }));
+  fireEvent.click(f.ui.getByRole("button", { name: "重新读取 失败音频" }));
+  expect(mediaState.retry.mock.calls).toEqual([[failedID]]);
+  const preview = vi.mocked(TimelinePreview).mock.calls.at(-1)![0];
+  expect(preview.playing).toBe(true);
+  expect(preview.media[healthyID]).toBe(healthy);
+  expect(f.client.changeTimeline).not.toHaveBeenCalled();
+});
+it("offers a scoped retry for media element failures and drops stale failure state after replacement", () => {
+  const f = setup();
+  const assetID = f.read().clips[0].asset_id!;
+  const source = {
+    asset: { id: assetID, kind: "video", file_name: "测试片段" },
+    url: "https://media.example/video.mp4",
+    retryGeneration: 1,
+  };
+  mediaState.media = { [assetID]: source };
+  act(() => f.replaceTimeline(f.read()));
+  const latest = () => vi.mocked(TimelinePreview).mock.calls.at(-1)![0];
+  act(() => latest().onError("无法播放：测试片段", source));
+  const retry = f.ui.getByRole("button", { name: "重新读取 测试片段" });
+  fireEvent.click(retry);
+  expect(mediaState.retry.mock.calls).toEqual([[assetID]]);
+  expect(f.ui.queryByText("无法播放：测试片段")).toBeNull();
+  act(() => latest().onError("无法播放：测试片段", source));
+  mediaState.media = { [assetID]: { ...source, retryGeneration: 2 } };
+  act(() => f.replaceTimeline(f.read()));
+  expect(f.ui.queryByText("无法播放：测试片段")).toBeNull();
+  expect(f.client.changeTimeline).not.toHaveBeenCalled();
+});
+
+it("retries only stale failed media once when the compact workspace resumes from fullscreen", () => {
+  const f = setup(false, false, true);
+  const healthyID = f.read().clips[0].asset_id!;
+  const failedID = crypto.randomUUID();
+  const healthy = {
+    asset: { id: healthyID, kind: "video" },
+    url: "https://media.example/healthy.mp4",
+  };
+  mediaState.media = { [healthyID]: healthy };
+  mediaState.errors = { [failedID]: "素材读取失败，请重试。" };
+  act(() =>
+    f.replaceTimeline(
+      editTimeline(f.read(), {
+        type: "add",
+        assets: [
+          {
+            asset: {
+              id: failedID,
+              kind: "audio",
+              duration_ms: 7000,
+              file_name: "待恢复音频",
+            },
+          },
+        ],
+      }),
+    ),
+  );
+  fireEvent.click(f.ui.getByRole("button", { name: "全屏编辑" }));
+  expect(mediaState.retry).not.toHaveBeenCalled();
+  const dialog = f.ui.getByRole("dialog", { name: "时间线" });
+  fireEvent.click(
+    within(dialog).getByRole("button", { name: "关闭时间线编辑器" }),
+  );
+  expect(mediaState.retry.mock.calls).toEqual([[failedID]]);
+  act(() => f.replaceTimeline(f.read()));
+  expect(mediaState.retry).toHaveBeenCalledTimes(1);
+  expect(mediaState.media[healthyID]).toBe(healthy);
+  expect(f.client.changeTimeline).not.toHaveBeenCalled();
 });

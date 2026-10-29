@@ -24,6 +24,7 @@ import {
   sessionCancellation,
 } from "@/lib/request";
 import { requireSession, canonicalAuthLink, isOlderSession } from "./contracts";
+import { loginLocation } from "./auth-return";
 import {
   sessionIdentitySource,
   isCurrentSession,
@@ -434,7 +435,10 @@ export function SessionGate({
   if (!status) throw new Error("SessionGate requires SessionProvider");
   const { guest, publicUnavailable, error, canonicalLink, retry } = status;
   useEffect(() => {
-    if (guest && !allowGuest) router.replace("/login");
+    if (guest && !allowGuest)
+      router.replace(
+        loginLocation(window.location.pathname + window.location.search),
+      );
   }, [guest, allowGuest, router]);
   useEffect(() => {
     if (error && (allowGuest || session))

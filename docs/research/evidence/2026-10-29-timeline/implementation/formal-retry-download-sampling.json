@@ -1,0 +1,881 @@
+{
+  "file": "时间线完整验收-1029.mp4",
+  "job_id": "cf82b065-b2cf-4ae8-9e3b-dfe8d64ba8bb",
+  "attempt": 2,
+  "sha256": "7fa4770da2c2c414b98de72684b8e1edd870b54022e0be3df4203d5b679eff52",
+  "bytes": 1223840,
+  "probe": {
+    "streams": [
+      {
+        "index": 0,
+        "codec_name": "h264",
+        "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+        "profile": "High",
+        "codec_type": "video",
+        "codec_tag_string": "avc1",
+        "codec_tag": "0x31637661",
+        "mime_codec_string": "avc1.64001f",
+        "width": 1280,
+        "height": 720,
+        "coded_width": 1280,
+        "coded_height": 720,
+        "has_b_frames": 2,
+        "sample_aspect_ratio": "1:1",
+        "display_aspect_ratio": "16:9",
+        "pix_fmt": "yuv420p",
+        "level": 31,
+        "chroma_location": "left",
+        "field_order": "progressive",
+        "is_avc": "true",
+        "nal_length_size": "4",
+        "id": "0x1",
+        "r_frame_rate": "30/1",
+        "avg_frame_rate": "30/1",
+        "time_base": "1/16000",
+        "start_pts": 0,
+        "start_time": "0.000000",
+        "duration_ts": 144000,
+        "duration": "9.000000",
+        "bit_rate": "973061",
+        "bits_per_raw_sample": "8",
+        "nb_frames": "270",
+        "extradata_size": 46,
+        "disposition": {
+          "default": 1,
+          "dub": 0,
+          "original": 0,
+          "comment": 0,
+          "lyrics": 0,
+          "karaoke": 0,
+          "forced": 0,
+          "hearing_impaired": 0,
+          "visual_impaired": 0,
+          "clean_effects": 0,
+          "attached_pic": 0,
+          "timed_thumbnails": 0,
+          "non_diegetic": 0,
+          "captions": 0,
+          "descriptions": 0,
+          "metadata": 0,
+          "dependent": 0,
+          "still_image": 0,
+          "multilayer": 0
+        },
+        "tags": {
+          "language": "und",
+          "handler_name": "VideoHandler",
+          "encoder": "Lavc59.37.100 libx264"
+        }
+      },
+      {
+        "index": 1,
+        "codec_name": "aac",
+        "codec_long_name": "AAC (Advanced Audio Coding)",
+        "profile": "LC",
+        "codec_type": "audio",
+        "codec_tag_string": "mp4a",
+        "codec_tag": "0x6134706d",
+        "mime_codec_string": "mp4a.40.2",
+        "sample_fmt": "fltp",
+        "sample_rate": "48000",
+        "channels": 2,
+        "channel_layout": "stereo",
+        "bits_per_sample": 0,
+        "initial_padding": 0,
+        "id": "0x2",
+        "r_frame_rate": "0/0",
+        "avg_frame_rate": "0/0",
+        "time_base": "1/48000",
+        "start_pts": 0,
+        "start_time": "0.000000",
+        "duration_ts": 432000,
+        "duration": "9.000000",
+        "bit_rate": "100226",
+        "nb_frames": "423",
+        "extradata_size": 5,
+        "disposition": {
+          "default": 1,
+          "dub": 0,
+          "original": 0,
+          "comment": 0,
+          "lyrics": 0,
+          "karaoke": 0,
+          "forced": 0,
+          "hearing_impaired": 0,
+          "visual_impaired": 0,
+          "clean_effects": 0,
+          "attached_pic": 0,
+          "timed_thumbnails": 0,
+          "non_diegetic": 0,
+          "captions": 0,
+          "descriptions": 0,
+          "metadata": 0,
+          "dependent": 0,
+          "still_image": 0,
+          "multilayer": 0
+        },
+        "tags": {
+          "language": "und",
+          "handler_name": "SoundHandler"
+        }
+      }
+    ],
+    "format": {
+      "filename": "时间线完整验收-1029.mp4",
+      "nb_streams": 2,
+      "nb_programs": 0,
+      "nb_stream_groups": 0,
+      "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+      "format_long_name": "QuickTime / MOV",
+      "start_time": "0.000000",
+      "duration": "9.000000",
+      "size": "1223840",
+      "bit_rate": "1087857",
+      "probe_score": 100,
+      "tags": {
+        "major_brand": "isom",
+        "minor_version": "512",
+        "compatible_brands": "isomiso2avc1mp41",
+        "encoder": "Lavf59.27.100"
+      }
+    }
+  },
+  "source_files": [
+    {
+      "name": "timeline-test-4s.mp4",
+      "sha256": "759a909ce3949cb0d554a0647006595aeedac5e23d885ea0ec506f35935e17aa",
+      "probe": {
+        "streams": [
+          {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+            "profile": "High",
+            "codec_type": "video",
+            "codec_tag_string": "avc1",
+            "codec_tag": "0x31637661",
+            "mime_codec_string": "avc1.64001e",
+            "width": 640,
+            "height": 360,
+            "coded_width": 640,
+            "coded_height": 360,
+            "has_b_frames": 2,
+            "sample_aspect_ratio": "1:1",
+            "display_aspect_ratio": "16:9",
+            "pix_fmt": "yuv420p",
+            "level": 30,
+            "chroma_location": "left",
+            "field_order": "progressive",
+            "is_avc": "true",
+            "nal_length_size": "4",
+            "id": "0x1",
+            "r_frame_rate": "30/1",
+            "avg_frame_rate": "30/1",
+            "time_base": "1/15360",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 61440,
+            "duration": "4.000000",
+            "bit_rate": "805286",
+            "bits_per_raw_sample": "8",
+            "nb_frames": "120",
+            "extradata_size": 47,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "VideoHandler",
+              "encoder": "Lavc62.28.102 libx264"
+            }
+          },
+          {
+            "index": 1,
+            "codec_name": "aac",
+            "codec_long_name": "AAC (Advanced Audio Coding)",
+            "profile": "LC",
+            "codec_type": "audio",
+            "codec_tag_string": "mp4a",
+            "codec_tag": "0x6134706d",
+            "mime_codec_string": "mp4a.40.2",
+            "sample_fmt": "fltp",
+            "sample_rate": "44100",
+            "channels": 1,
+            "channel_layout": "mono",
+            "bits_per_sample": 0,
+            "initial_padding": 0,
+            "id": "0x2",
+            "r_frame_rate": "0/0",
+            "avg_frame_rate": "0/0",
+            "time_base": "1/44100",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 176400,
+            "duration": "4.000000",
+            "bit_rate": "69421",
+            "nb_frames": "174",
+            "extradata_size": 5,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "SoundHandler"
+            }
+          }
+        ],
+        "format": {
+          "filename": "timeline-test-4s.mp4",
+          "nb_streams": 2,
+          "nb_programs": 0,
+          "nb_stream_groups": 0,
+          "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+          "format_long_name": "QuickTime / MOV",
+          "start_time": "0.000000",
+          "duration": "4.000000",
+          "size": "443200",
+          "bit_rate": "886400",
+          "probe_score": 100,
+          "tags": {
+            "major_brand": "isom",
+            "minor_version": "512",
+            "compatible_brands": "isomiso2avc1mp41",
+            "encoder": "Lavf62.12.102"
+          }
+        }
+      }
+    },
+    {
+      "name": "timeline-test-7s.wav",
+      "sha256": "c94327691bbf4d4fdd5aee98ce2f38ee734b77b281e071c9b73584606db556d5",
+      "probe": {
+        "streams": [
+          {
+            "index": 0,
+            "codec_name": "pcm_s16le",
+            "codec_long_name": "PCM signed 16-bit little-endian",
+            "codec_type": "audio",
+            "codec_tag_string": "[1][0][0][0]",
+            "codec_tag": "0x0001",
+            "sample_fmt": "s16",
+            "sample_rate": "44100",
+            "channels": 1,
+            "bits_per_sample": 16,
+            "initial_padding": 0,
+            "r_frame_rate": "0/0",
+            "avg_frame_rate": "0/0",
+            "time_base": "1/44100",
+            "duration_ts": 308700,
+            "duration": "7.000000",
+            "bit_rate": "705600",
+            "disposition": {
+              "default": 0,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            }
+          }
+        ],
+        "format": {
+          "filename": "timeline-test-7s.wav",
+          "nb_streams": 1,
+          "nb_programs": 0,
+          "nb_stream_groups": 0,
+          "format_name": "wav",
+          "format_long_name": "WAV / WAVE (Waveform Audio)",
+          "duration": "7.000000",
+          "size": "617478",
+          "bit_rate": "705689",
+          "probe_score": 99,
+          "tags": {
+            "encoder": "Lavf62.12.102"
+          }
+        }
+      }
+    },
+    {
+      "name": "timeline-test-image.png",
+      "sha256": "a7a9c9c5291be4fc71b7aa8cf72225dd6ec53247b33fc86a106ef76337e4aa82",
+      "probe": {
+        "streams": [
+          {
+            "index": 0,
+            "codec_name": "png",
+            "codec_long_name": "PNG (Portable Network Graphics) image",
+            "codec_type": "video",
+            "codec_tag_string": "[0][0][0][0]",
+            "codec_tag": "0x0000",
+            "width": 640,
+            "height": 360,
+            "coded_width": 640,
+            "coded_height": 360,
+            "has_b_frames": 0,
+            "sample_aspect_ratio": "1:1",
+            "display_aspect_ratio": "16:9",
+            "pix_fmt": "rgb24",
+            "level": -99,
+            "color_range": "pc",
+            "color_space": "gbr",
+            "r_frame_rate": "25/1",
+            "avg_frame_rate": "25/1",
+            "time_base": "1/25",
+            "disposition": {
+              "default": 0,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            }
+          }
+        ],
+        "format": {
+          "filename": "timeline-test-image.png",
+          "nb_streams": 1,
+          "nb_programs": 0,
+          "nb_stream_groups": 0,
+          "format_name": "png_pipe",
+          "format_long_name": "piped png sequence",
+          "size": "1503",
+          "probe_score": 99
+        }
+      }
+    }
+  ],
+  "source_audio_fft": [
+    {
+      "source": "timeline-test-4s.mp4",
+      "start_s": 0.5,
+      "duration_s": 0.2,
+      "fft_resolution_hz": 5.0,
+      "measured_bin_for_440_hz": 440.0,
+      "measured_bin_for_660_hz": 660.0,
+      "rms": 0.08793799607828914,
+      "amplitude_440_hz": 0.12458816177569886,
+      "amplitude_660_hz": 7.603158080537526e-08,
+      "dominant_hz": 440.0
+    },
+    {
+      "source": "timeline-test-7s.wav",
+      "start_s": 0.5,
+      "duration_s": 0.2,
+      "fft_resolution_hz": 5.0,
+      "measured_bin_for_440_hz": 440.0,
+      "measured_bin_for_660_hz": 660.0,
+      "rms": 0.0883695111650626,
+      "amplitude_440_hz": 6.465857467361328e-09,
+      "amplitude_660_hz": 0.12497336016487753,
+      "dominant_hz": 660.0
+    }
+  ],
+  "audio_windows": [
+    {
+      "start_s": 0.2,
+      "duration_s": 0.2,
+      "fft_resolution_hz": 5.0,
+      "measured_bin_for_440_hz": 440.0,
+      "measured_bin_for_660_hz": 660.0,
+      "rms": 0.12457460109633293,
+      "amplitude_440_hz": 0.12528617302125128,
+      "amplitude_660_hz": 0.12420724205113112,
+      "dominant_hz": 440.0
+    },
+    {
+      "start_s": 0.75,
+      "duration_s": 0.2,
+      "fft_resolution_hz": 5.0,
+      "measured_bin_for_440_hz": 440.0,
+      "measured_bin_for_660_hz": 660.0,
+      "rms": 0.12499173352183002,
+      "amplitude_440_hz": 0.12480625136877152,
+      "amplitude_660_hz": 0.12407971997951901,
+      "dominant_hz": 440.0
+    },
+    {
+      "start_s": 0.9,
+      "duration_s": 0.2,
+      "fft_resolution_hz": 5.0,
+      "measured_bin_for_440_hz": 440.0,
+      "measured_bin_for_660_hz": 660.0,
+      "rms": 0.12515564414159586,
+      "amplitude_440_hz": 0.12546987740390933,
+      "amplitude_660_hz": 0.12394061796870293,
+      "dominant_hz": 440.0
+    },
+    {
+      "start_s": 1,
+      "duration_s": 0.2,
+      "fft_resolution_hz": 5.0,
+      "measured_bin_for_440_hz": 440.0,
+      "measured_bin_for_660_hz": 660.0,
+      "rms": 0.1251899935416676,
+      "amplitude_440_hz": 0.12553408122467433,
+      "amplitude_660_hz": 0.12463927002017582,
+      "dominant_hz": 440.0
+    },
+    {
+      "start_s": 1.1,
+      "duration_s": 0.2,
+      "fft_resolution_hz": 5.0,
+      "measured_bin_for_440_hz": 440.0,
+      "measured_bin_for_660_hz": 660.0,
+      "rms": 0.12501063260180606,
+      "amplitude_440_hz": 0.1256314219393832,
+      "amplitude_660_hz": 0.12474175940226798,
+      "dominant_hz": 440.0
+    },
+    {
+      "start_s": 2,
+      "duration_s": 0.2,
+      "fft_resolution_hz": 5.0,
+      "measured_bin_for_440_hz": 440.0,
+      "measured_bin_for_660_hz": 660.0,
+      "rms": 0.12472401968955096,
+      "amplitude_440_hz": 0.1253659817015961,
+      "amplitude_660_hz": 0.12423671259896579,
+      "dominant_hz": 440.0
+    },
+    {
+      "start_s": 3.75,
+      "duration_s": 0.2,
+      "fft_resolution_hz": 5.0,
+      "measured_bin_for_440_hz": 440.0,
+      "measured_bin_for_660_hz": 660.0,
+      "rms": 0.12428445778726543,
+      "amplitude_440_hz": 0.1236002098713418,
+      "amplitude_660_hz": 0.12463354236880138,
+      "dominant_hz": 660.0
+    },
+    {
+      "start_s": 4.05,
+      "duration_s": 0.2,
+      "fft_resolution_hz": 5.0,
+      "measured_bin_for_440_hz": 440.0,
+      "measured_bin_for_660_hz": 660.0,
+      "rms": 0.08806768574726172,
+      "amplitude_440_hz": 1.9789807225275396e-07,
+      "amplitude_660_hz": 0.12453776920768887,
+      "dominant_hz": 660.0
+    },
+    {
+      "start_s": 4.5,
+      "duration_s": 0.2,
+      "fft_resolution_hz": 5.0,
+      "measured_bin_for_440_hz": 440.0,
+      "measured_bin_for_660_hz": 660.0,
+      "rms": 0.08809189021315875,
+      "amplitude_440_hz": 2.720672533464989e-07,
+      "amplitude_660_hz": 0.12440054381460047,
+      "dominant_hz": 660.0
+    },
+    {
+      "start_s": 6.75,
+      "duration_s": 0.2,
+      "fft_resolution_hz": 5.0,
+      "measured_bin_for_440_hz": 440.0,
+      "measured_bin_for_660_hz": 660.0,
+      "rms": 0.08826874767725264,
+      "amplitude_440_hz": 3.9337635225417695e-07,
+      "amplitude_660_hz": 0.12467022712898015,
+      "dominant_hz": 660.0
+    },
+    {
+      "start_s": 7.05,
+      "duration_s": 0.2,
+      "fft_resolution_hz": 5.0,
+      "measured_bin_for_440_hz": 440.0,
+      "measured_bin_for_660_hz": 660.0,
+      "rms": 0.0,
+      "amplitude_440_hz": 0.0,
+      "amplitude_660_hz": 0.0,
+      "dominant_hz": 0.0
+    },
+    {
+      "start_s": 8.5,
+      "duration_s": 0.2,
+      "fft_resolution_hz": 5.0,
+      "measured_bin_for_440_hz": 440.0,
+      "measured_bin_for_660_hz": 660.0,
+      "rms": 0.0,
+      "amplitude_440_hz": 0.0,
+      "amplitude_660_hz": 0.0,
+      "dominant_hz": 0.0
+    }
+  ],
+  "boundary_20ms_windows": {
+    "1": [
+      {
+        "start_s": 0.96,
+        "duration_s": 0.02,
+        "fft_resolution_hz": 50.0,
+        "measured_bin_for_440_hz": 450.0,
+        "measured_bin_for_660_hz": 650.0,
+        "rms": 0.11960244854571907,
+        "amplitude_440_hz": 0.11972676143736222,
+        "amplitude_660_hz": 0.12009637168105582,
+        "dominant_hz": 650.0
+      },
+      {
+        "start_s": 0.98,
+        "duration_s": 0.02,
+        "fft_resolution_hz": 50.0,
+        "measured_bin_for_440_hz": 450.0,
+        "measured_bin_for_660_hz": 650.0,
+        "rms": 0.12538221061202123,
+        "amplitude_440_hz": 0.12002551348527928,
+        "amplitude_660_hz": 0.1205360272012945,
+        "dominant_hz": 650.0
+      },
+      {
+        "start_s": 1,
+        "duration_s": 0.02,
+        "fft_resolution_hz": 50.0,
+        "measured_bin_for_440_hz": 450.0,
+        "measured_bin_for_660_hz": 650.0,
+        "rms": 0.1263506068901351,
+        "amplitude_440_hz": 0.12313845181331359,
+        "amplitude_660_hz": 0.12090613594907233,
+        "dominant_hz": 450.0
+      },
+      {
+        "start_s": 1.02,
+        "duration_s": 0.02,
+        "fft_resolution_hz": 50.0,
+        "measured_bin_for_440_hz": 450.0,
+        "measured_bin_for_660_hz": 650.0,
+        "rms": 0.12083841442570765,
+        "amplitude_440_hz": 0.12178019743160055,
+        "amplitude_660_hz": 0.12156464164947306,
+        "dominant_hz": 450.0
+      },
+      {
+        "start_s": 1.04,
+        "duration_s": 0.02,
+        "fft_resolution_hz": 50.0,
+        "measured_bin_for_440_hz": 450.0,
+        "measured_bin_for_660_hz": 650.0,
+        "rms": 0.1295692242511458,
+        "amplitude_440_hz": 0.12353560722754411,
+        "amplitude_660_hz": 0.12041072095211942,
+        "dominant_hz": 450.0
+      }
+    ],
+    "4": [
+      {
+        "start_s": 3.96,
+        "duration_s": 0.02,
+        "fft_resolution_hz": 50.0,
+        "measured_bin_for_440_hz": 450.0,
+        "measured_bin_for_660_hz": 650.0,
+        "rms": 0.12197010114762778,
+        "amplitude_440_hz": 0.12098390792188146,
+        "amplitude_660_hz": 0.12463650431596973,
+        "dominant_hz": 650.0
+      },
+      {
+        "start_s": 3.98,
+        "duration_s": 0.02,
+        "fft_resolution_hz": 50.0,
+        "measured_bin_for_440_hz": 450.0,
+        "measured_bin_for_660_hz": 650.0,
+        "rms": 0.12609075255288443,
+        "amplitude_440_hz": 0.12170866216072763,
+        "amplitude_660_hz": 0.12168959716118309,
+        "dominant_hz": 450.0
+      },
+      {
+        "start_s": 4,
+        "duration_s": 0.02,
+        "fft_resolution_hz": 50.0,
+        "measured_bin_for_440_hz": 450.0,
+        "measured_bin_for_660_hz": 650.0,
+        "rms": 0.08758136728432081,
+        "amplitude_440_hz": 0.0007128198537682741,
+        "amplitude_660_hz": 0.12118012623477938,
+        "dominant_hz": 650.0
+      },
+      {
+        "start_s": 4.02,
+        "duration_s": 0.02,
+        "fft_resolution_hz": 50.0,
+        "measured_bin_for_440_hz": 450.0,
+        "measured_bin_for_660_hz": 650.0,
+        "rms": 0.08776030008620514,
+        "amplitude_440_hz": 0.0003918297039068794,
+        "amplitude_660_hz": 0.1204368214361241,
+        "dominant_hz": 650.0
+      },
+      {
+        "start_s": 4.04,
+        "duration_s": 0.02,
+        "fft_resolution_hz": 50.0,
+        "measured_bin_for_440_hz": 450.0,
+        "measured_bin_for_660_hz": 650.0,
+        "rms": 0.08715405466793975,
+        "amplitude_440_hz": 0.00032563521833748477,
+        "amplitude_660_hz": 0.12094005509970222,
+        "dominant_hz": 650.0
+      }
+    ],
+    "7": [
+      {
+        "start_s": 6.96,
+        "duration_s": 0.02,
+        "fft_resolution_hz": 50.0,
+        "measured_bin_for_440_hz": 450.0,
+        "measured_bin_for_660_hz": 650.0,
+        "rms": 0.08821986947367476,
+        "amplitude_440_hz": 0.0003311687668966543,
+        "amplitude_660_hz": 0.12094667254584811,
+        "dominant_hz": 650.0
+      },
+      {
+        "start_s": 6.98,
+        "duration_s": 0.02,
+        "fft_resolution_hz": 50.0,
+        "measured_bin_for_440_hz": 450.0,
+        "measured_bin_for_660_hz": 650.0,
+        "rms": 0.08833388402240641,
+        "amplitude_440_hz": 0.000501789072643453,
+        "amplitude_660_hz": 0.12209588000175235,
+        "dominant_hz": 650.0
+      },
+      {
+        "start_s": 7,
+        "duration_s": 0.02,
+        "fft_resolution_hz": 50.0,
+        "measured_bin_for_440_hz": 450.0,
+        "measured_bin_for_660_hz": 650.0,
+        "rms": 0.0002231748393284901,
+        "amplitude_440_hz": 1.8153031804791497e-05,
+        "amplitude_660_hz": 1.4154338769166896e-05,
+        "dominant_hz": 500.0
+      },
+      {
+        "start_s": 7.02,
+        "duration_s": 0.02,
+        "fft_resolution_hz": 50.0,
+        "measured_bin_for_440_hz": 450.0,
+        "measured_bin_for_660_hz": 650.0,
+        "rms": 0.0,
+        "amplitude_440_hz": 0.0,
+        "amplitude_660_hz": 0.0,
+        "dominant_hz": 0.0
+      },
+      {
+        "start_s": 7.04,
+        "duration_s": 0.02,
+        "fft_resolution_hz": 50.0,
+        "measured_bin_for_440_hz": 450.0,
+        "measured_bin_for_660_hz": 650.0,
+        "rms": 0.0,
+        "amplitude_440_hz": 0.0,
+        "amplitude_660_hz": 0.0,
+        "dominant_hz": 0.0
+      }
+    ]
+  },
+  "audio_continuity": {
+    "block_s": 0.01,
+    "range_s": [
+      0,
+      7
+    ],
+    "minimum_rms": 0.08607440677670788,
+    "minimum_rms_start_s": 4.19,
+    "blocks_below_rms_0_001": [],
+    "tone_scan": {
+      "440": {
+        "window_s": 0.1,
+        "step_s": 0.01,
+        "range_s": [
+          0.05,
+          3.95
+        ],
+        "min_amplitude": 0.12115904682878931,
+        "max_amplitude": 0.1271980834796991,
+        "below_0_01_windows": []
+      },
+      "660": {
+        "window_s": 0.1,
+        "step_s": 0.01,
+        "range_s": [
+          0.05,
+          6.95
+        ],
+        "min_amplitude": 0.12289862841899768,
+        "max_amplitude": 0.12623500175185667,
+        "below_0_01_windows": []
+      }
+    },
+    "tail_after_7_05_rms": 0.0,
+    "decoded_samples": 432128,
+    "last_nonzero_after_7_s": 7.004,
+    "max_abs_7_to_7_02_s": 0.0014171067159622908
+  },
+  "video_comparison": {
+    "decoded_frame_count": 270,
+    "source_resampled_frame_count": 120,
+    "video_first_120_frames_mae_mean": 0.19786921296296298,
+    "video_first_120_frames_mae_max": 0.2361574074074074,
+    "still_last_150_frames_mae_mean": 1.333333333333333,
+    "still_last_150_frames_mae_max": 1.3333333333333333,
+    "frames": [
+      {
+        "frame": 0,
+        "time_s": 0.0,
+        "mae_to_still": 121.31023148148148,
+        "rgb_mean": [
+          121.39291666666666,
+          128.92798611111112,
+          125.03118055555555
+        ]
+      },
+      {
+        "frame": 30,
+        "time_s": 1.0,
+        "mae_to_still": 120.91824074074074,
+        "rgb_mean": [
+          121.41708333333334,
+          129.61208333333335,
+          124.76833333333333
+        ]
+      },
+      {
+        "frame": 118,
+        "time_s": 3.933333,
+        "mae_to_still": 120.96467592592593,
+        "rgb_mean": [
+          123.31444444444445,
+          127.75486111111111,
+          124.51652777777778
+        ]
+      },
+      {
+        "frame": 119,
+        "time_s": 3.966667,
+        "mae_to_still": 121.07358796296296,
+        "rgb_mean": [
+          122.91645833333334,
+          128.09340277777778,
+          124.20993055555556
+        ]
+      },
+      {
+        "frame": 120,
+        "time_s": 4.0,
+        "mae_to_still": 1.3333333333333333,
+        "rgb_mean": [
+          0.0,
+          126.0,
+          126.0
+        ]
+      },
+      {
+        "frame": 121,
+        "time_s": 4.033333,
+        "mae_to_still": 1.3333333333333333,
+        "rgb_mean": [
+          0.0,
+          126.0,
+          126.0
+        ]
+      },
+      {
+        "frame": 150,
+        "time_s": 5.0,
+        "mae_to_still": 1.3333333333333333,
+        "rgb_mean": [
+          0.0,
+          126.0,
+          126.0
+        ]
+      },
+      {
+        "frame": 209,
+        "time_s": 6.966667,
+        "mae_to_still": 1.3333333333333333,
+        "rgb_mean": [
+          0.0,
+          126.0,
+          126.0
+        ]
+      },
+      {
+        "frame": 269,
+        "time_s": 8.966667,
+        "mae_to_still": 1.3333333333333333,
+        "rgb_mean": [
+          0.0,
+          126.0,
+          126.0
+        ]
+      }
+    ]
+  },
+  "decode_stderr": "empty; full video and audio streams decoded successfully"
+}

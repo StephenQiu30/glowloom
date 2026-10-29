@@ -20,6 +20,8 @@ import {
   revokeSession,
 } from "@/components/auth/session";
 import { AuthDialog, type AuthMode } from "@/components/auth/auth-dialog";
+import { authenticationReturn } from "@/components/auth/auth-return";
+import { pendingInvitation } from "@/components/auth/invitation-continuity";
 import { UnavailableDialog } from "@/components/availability/unavailable";
 import { Button } from "@/components/ui/button";
 import {
@@ -112,8 +114,18 @@ function Shell({
   const [feature, setFeature] = useState<string | null>(null);
   const [auth, setAuth] = useState(Boolean(initialAuthMode));
   const [closedAuthMode, setClosedAuthMode] = useState<AuthMode | null>(null);
+  const authenticated = !!session;
   const authOpen =
-    auth || Boolean(initialAuthMode && closedAuthMode !== initialAuthMode);
+    !authenticated &&
+    (auth || Boolean(initialAuthMode && closedAuthMode !== initialAuthMode));
+  useEffect(() => {
+    if (authenticated && initialAuthMode)
+      router.replace(
+        pendingInvitation()
+          ? "/invitations"
+          : authenticationReturn(window.location.search),
+      );
+  }, [authenticated, initialAuthMode, router]);
   const [logout, setLogout] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -200,7 +212,8 @@ function Shell({
           updateSession(value);
           setAuth(false);
           if (initialAuthMode) setClosedAuthMode(initialAuthMode);
-          if (initialAuthMode) router.replace("/");
+          if (initialAuthMode)
+            router.replace(authenticationReturn(window.location.search));
         }}
       />
       <Dialog
