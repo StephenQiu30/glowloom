@@ -1,0 +1,95 @@
+[
+  {
+    "buttons": [
+      "批量操作",
+      "去剪映剪辑",
+      "消息中心",
+      "StephenQ iu个人主页"
+    ],
+    "nav": [
+      {
+        "color": "rgb(255, 255, 255)",
+        "label": "创作"
+      },
+      {
+        "color": "rgb(255, 255, 255)",
+        "label": "探索"
+      },
+      {
+        "color": "rgb(255, 255, 255)",
+        "label": "资产"
+      },
+      {
+        "color": "rgb(255, 255, 255)",
+        "label": "主体"
+      },
+      {
+        "color": "rgb(255, 255, 255)",
+        "label": "短剧工作室NewNew"
+      }
+    ],
+    "url": "https://jimeng.jianying.com/ai-tool/asset"
+  },
+  {
+    "buttons": [
+      "批量操作",
+      "去剪映剪辑",
+      "消息中心",
+      "StephenQ iu个人主页"
+    ],
+    "nav": [
+      {
+        "color": "rgb(255, 255, 255)",
+        "label": "创作"
+      },
+      {
+        "color": "rgb(255, 255, 255)",
+        "label": "探索"
+      },
+      {
+        "color": "rgb(255, 255, 255)",
+        "label": "资产"
+      },
+      {
+        "color": "rgb(255, 255, 255)",
+        "label": "主体"
+      },
+      {
+        "color": "rgb(255, 255, 255)",
+        "label": "短剧工作室NewNew"
+      }
+    ],
+    "url": "https://jimeng.jianying.com/ai-tool/elements"
+  },
+  {
+    "buttons": [
+      "历史画布",
+      "积分超市",
+      "消息中心",
+      "StephenQ iu个人主页"
+    ],
+    "nav": [
+      {
+        "color": "rgb(255, 255, 255)",
+        "label": "创作"
+      },
+      {
+        "color": "rgb(255, 255, 255)",
+        "label": "探索"
+      },
+      {
+        "color": "rgb(255, 255, 255)",
+        "label": "资产"
+      },
+      {
+        "color": "rgb(255, 255, 255)",
+        "label": "主体"
+      },
+      {
+        "color": "rgb(255, 255, 255)",
+        "label": "短剧工作室NewNew"
+      }
+    ],
+    "url": "https://jimeng.jianying.com/ai-tool/home"
+  }
+]

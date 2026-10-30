@@ -265,9 +265,7 @@ it("收起后保留可访问导航和当前页，重新挂载保持偏好", asyn
   expect(
     screen.getByRole("link", { name: "探索" }).getAttribute("aria-current"),
   ).toBe("page");
-  expect(
-    screen.getByRole("link", { name: "查看我的画布" }).getAttribute("href"),
-  ).toBe("/assets?view=canvas");
+  expect(screen.getByRole("button", { name: "新建画布" })).toBeTruthy();
   expect(document.querySelector('[data-collapsible="icon"]')).toBeTruthy();
   view.unmount();
   render(
@@ -276,6 +274,91 @@ it("收起后保留可访问导航和当前页，重新挂载保持偏好", asyn
     </BasicLayout>,
   );
   expect(await screen.findByRole("button", { name: "展开导航" })).toBeTruthy();
+});
+
+it("四页共用导航和账号节点，分组状态独立并在切页和收起后保留", async () => {
+  const view = render(
+    <ApplicationLayout>
+      <h1>当前页面</h1>
+    </ApplicationLayout>,
+  );
+  const sidebar = await screen.findByRole("complementary", {
+    name: "侧栏导航",
+  });
+  const header = screen.getByRole("banner", { name: "页面顶栏" });
+  const account = within(header).getByRole("button", { name: "账号菜单" });
+  const chat = within(sidebar).getByRole("button", {
+    name: "对话",
+  });
+  const canvas = within(sidebar).getByRole("button", {
+    name: "画布",
+  });
+  fireEvent.click(chat);
+  expect(chat.getAttribute("aria-expanded")).toBe("false");
+  expect(canvas.getAttribute("aria-expanded")).toBe("true");
+  expect(
+    document
+      .getElementById(chat.getAttribute("aria-controls")!)
+      ?.getAttribute("aria-hidden"),
+  ).toBe("true");
+
+  for (const [pathname, label, icon] of [
+    ["/", "创作", "creation"],
+    ["/explore", "探索", "explore"],
+    ["/assets", "资产", "assets"],
+    ["/subjects", "主体", "subjects"],
+  ]) {
+    mocks.pathname = pathname;
+    view.rerender(
+      <ApplicationLayout>
+        <h1>当前页面</h1>
+      </ApplicationLayout>,
+    );
+    expect(screen.getByRole("complementary", { name: "侧栏导航" })).toBe(
+      sidebar,
+    );
+    expect(screen.getAllByRole("banner", { name: "页面顶栏" })).toEqual([
+      header,
+    ]);
+    expect(within(header).getByRole("button", { name: "账号菜单" })).toBe(
+      account,
+    );
+    expect(chat.getAttribute("aria-expanded")).toBe("false");
+    const selected = within(sidebar).getByRole("link", {
+      name: label,
+    });
+    expect(selected.getAttribute("aria-current")).toBe("page");
+    expect(sidebar.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+    expect(
+      selected.querySelector("[data-product-icon]")?.getAttribute("style"),
+    ).toContain(`${icon}-active.svg`);
+    expect(
+      within(header).queryByRole("link", { name: "积分超市" }) !== null,
+    ).toBe(pathname === "/");
+    expect(
+      within(header).queryByRole("button", { name: "搜索灵感" }) !== null,
+    ).toBe(pathname !== "/");
+    expect(within(header).queryByRole("link", { name: "企业服务" })).toBeNull();
+  }
+  fireEvent.click(canvas);
+  fireEvent.click(screen.getByRole("button", { name: "收起导航" }));
+  expect(
+    within(sidebar).getByRole("button", { name: "新建画布" }),
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "展开导航" }));
+  expect(
+    within(sidebar)
+      .getByRole("button", { name: "对话" })
+      .getAttribute("aria-expanded"),
+  ).toBe("false");
+  expect(
+    within(sidebar)
+      .getByRole("button", { name: "画布" })
+      .getAttribute("aria-expanded"),
+  ).toBe("false");
+  expect(within(header).getByRole("button", { name: "账号菜单" })).toBe(
+    account,
+  );
 });
 
 it("快捷键切换导航，编辑输入时不抢占快捷键", async () => {

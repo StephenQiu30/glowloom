@@ -24,6 +24,7 @@ const state = vi.hoisted(() => ({
   historyCommand: vi.fn(),
   canvasCommand: vi.fn(),
   publish: vi.fn(),
+  invalidateProject: vi.fn(),
   canvases: vi.fn(),
   create: vi.fn(),
   createAsset: vi.fn(),
@@ -46,6 +47,15 @@ vi.mock("@/api/canvases", () => ({
   createAssetCanvas: state.createAsset,
   listCanvasAssetTemplates: state.templates,
 }));
+vi.mock(
+  "@/components/projects/project-presentation-store",
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import("@/components/projects/project-presentation-store")
+    >()),
+    publishProjectInvalidation: state.invalidateProject,
+  }),
+);
 vi.mock("@/api/media", () => ({
   downloadDocumentAsset: state.documentDownload,
   downloadMediaOriginal: vi.fn(),
@@ -702,6 +712,7 @@ it("主画布删除明确项目影响，并通过统一命令携带项目CAS", a
   fireEvent.click(within(confirmation).getByRole("button", { name: "取消" }));
   await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
   expect(state.canvasCommand).not.toHaveBeenCalled();
+  expect(state.invalidateProject).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "删除" }));
   fireEvent.click(
     within(screen.getByRole("alertdialog")).getByRole("button", {
@@ -724,6 +735,11 @@ it("主画布删除明确项目影响，并通过统一命令携带项目CAS", a
       expect.objectContaining({
         headers: { "Idempotency-Key": expect.any(String) },
       }),
+    ),
+  );
+  await waitFor(() =>
+    expect(state.invalidateProject).toHaveBeenCalledExactlyOnceWith(
+      task.project_id,
     ),
   );
 });
@@ -772,6 +788,7 @@ it("画布删除未知结果保留确认框和幂等重试，明确失败展示�
     }),
   );
   const retry = await screen.findByRole("button", { name: "重试原操作" });
+  expect(state.invalidateProject).not.toHaveBeenCalled();
   const dialog = screen.getByRole("alertdialog");
   expect(within(dialog).getByRole("alert").textContent).toContain(
     "操作结果尚未确认",
@@ -794,6 +811,7 @@ it("画布删除未知结果保留确认框和幂等重试，明确失败展示�
   const result = screen.getByLabelText("画布操作结果");
   expect(result.querySelector('[data-slot="alert"]')).toBeTruthy();
   expect(result.textContent).toContain("操作未完成");
+  expect(state.invalidateProject).not.toHaveBeenCalled();
   expect(
     (await screen.findByRole("checkbox", { name: "选择主画布" })).getAttribute(
       "aria-checked",

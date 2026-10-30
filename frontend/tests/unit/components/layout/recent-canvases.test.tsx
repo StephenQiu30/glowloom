@@ -96,3 +96,25 @@ it("首页读取失败在卡片区域显示重试，不伪装成空列表", asyn
   fireEvent.click(screen.getByRole("button", { name: "重试读取画布" }));
   expect(await screen.findByRole("heading", { name: "暂无画布" })).toBeTruthy();
 });
+
+it("侧栏仅显示五个真实最近画布，更多内容通过外部全部入口访问", async () => {
+  vi.mocked(listProjects).mockResolvedValue({
+    items: Array.from({ length: 7 }, (_, index) => ({
+      ...project,
+      id: `11111111-1111-4111-8111-11111111111${index + 1}`,
+      name: `最近画布 ${index + 1}`,
+    })),
+    next_cursor: "server-cursor",
+  } as unknown as Awaited<ReturnType<typeof listProjects>>);
+  render(<RecentCanvases />);
+  await screen.findByRole("link", { name: "最近画布 1" });
+  expect(screen.getAllByRole("link").map((link) => link.textContent)).toEqual([
+    "最近画布 1",
+    "最近画布 2",
+    "最近画布 3",
+    "最近画布 4",
+    "最近画布 5",
+  ]);
+  expect(screen.queryByRole("button", { name: /加载更多/ })).toBeNull();
+  expect(listProjects).toHaveBeenCalledTimes(1);
+});

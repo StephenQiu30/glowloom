@@ -31,16 +31,11 @@ import {
   DialogFooter,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  SidebarInset,
-  SidebarProvider,
-  useSidebar,
-} from "@/components/ui/sidebar";
-import { ProductSider } from "./product-sider";
+import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
+import { ProductNavigation } from "./product-navigation";
 import { PageOptionsContext, type PageOptions } from "./page-layout";
 import { resolveAdminSection, type Screen } from "./routes";
 import { AdminWorkspace } from "@/components/governance/admin-layout";
-import { ProductHeader } from "./product-header";
 import {
   PageToolbarContext,
   PageActionsContext,
@@ -150,55 +145,48 @@ function Shell({
       >
         跳转到主要内容
       </a>
-      <ProductSider
+      <ProductNavigation
         screen={screen}
         onMobileCloseAutoFocus={(event) => {
           event.preventDefault();
           if (!auth) mobileNavigationTrigger.current?.focus();
         }}
-      />
-      <SidebarInset asChild>
-        <div className="product-content">
-          <ProductHeader
-            assetLayout={screen === "assets"}
-            toolbarRef={setToolbarTarget}
-            pageActionsRef={setActionsTarget}
-            replaceBase={actionsRegistration?.presentation === "replace-base"}
-            search={pageSearch}
-            showSearch={screen !== "home"}
-            actor={session?.actor}
-            isMobile={isMobile}
-            navigationOpen={openMobile}
-            navigationTriggerRef={mobileNavigationTrigger}
-            onOpenNavigation={() => setOpenMobile(true)}
-            onLogin={() => setAuth(true)}
-            onLogout={() => setLogout(true)}
-            onFeature={setFeature}
-          />
-          <main
-            id="main-content"
-            ref={scrollRef}
-            tabIndex={-1}
-            className="product-main"
-          >
-            <PageOptionsContext.Provider value={setPageOptions}>
-              <PageToolbarContext.Provider value={toolbarTarget}>
-                <PageActionsContext.Provider value={actionsContext}>
-                  <SpaceGate>
-                    {adminSection ? (
-                      <AdminWorkspace active={adminSection}>
-                        {children}
-                      </AdminWorkspace>
-                    ) : (
-                      children
-                    )}
-                  </SpaceGate>
-                </PageActionsContext.Provider>
-              </PageToolbarContext.Provider>
-            </PageOptionsContext.Provider>
-          </main>
-        </div>
-      </SidebarInset>
+        toolbarRef={setToolbarTarget}
+        pageActionsRef={setActionsTarget}
+        replaceBase={actionsRegistration?.presentation === "replace-base"}
+        search={pageSearch}
+        actor={session?.actor}
+        isMobile={isMobile}
+        navigationOpen={openMobile}
+        navigationTriggerRef={mobileNavigationTrigger}
+        onOpenNavigation={() => setOpenMobile(true)}
+        onLogin={() => setAuth(true)}
+        onLogout={() => setLogout(true)}
+        onFeature={setFeature}
+      >
+        <main
+          id="main-content"
+          ref={scrollRef}
+          tabIndex={-1}
+          className="product-main"
+        >
+          <PageOptionsContext.Provider value={setPageOptions}>
+            <PageToolbarContext.Provider value={toolbarTarget}>
+              <PageActionsContext.Provider value={actionsContext}>
+                <SpaceGate>
+                  {adminSection ? (
+                    <AdminWorkspace active={adminSection}>
+                      {children}
+                    </AdminWorkspace>
+                  ) : (
+                    children
+                  )}
+                </SpaceGate>
+              </PageActionsContext.Provider>
+            </PageToolbarContext.Provider>
+          </PageOptionsContext.Provider>
+        </main>
+      </ProductNavigation>
       <UnavailableDialog feature={feature} onClose={() => setFeature(null)} />
       <AuthDialog
         fallbackFocusRef={mobileNavigationTrigger}

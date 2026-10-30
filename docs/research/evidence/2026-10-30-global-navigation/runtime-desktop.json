@@ -1,0 +1,365 @@
+[
+  {
+    "account": "radix-_r_g_",
+    "active": [
+      "创作"
+    ],
+    "groups": [
+      {
+        "controls": "_r_31_",
+        "expanded": "true",
+        "h": 34,
+        "name": "对话"
+      },
+      {
+        "controls": "_r_33_",
+        "expanded": "true",
+        "h": 34,
+        "name": "画布"
+      }
+    ],
+    "headers": 1,
+    "icons": [
+      {
+        "mask": "url(\"http://localhost:1122/icons/navigation/creation-active.svg\")",
+        "mode": "match-source",
+        "name": "creation",
+        "size": [
+          20,
+          20
+        ]
+      },
+      {
+        "mask": "url(\"http://localhost:1122/icons/navigation/explore.svg\")",
+        "mode": "match-source",
+        "name": "explore",
+        "size": [
+          20,
+          20
+        ]
+      },
+      {
+        "mask": "url(\"http://localhost:1122/icons/navigation/assets.svg\")",
+        "mode": "match-source",
+        "name": "assets",
+        "size": [
+          20,
+          20
+        ]
+      },
+      {
+        "mask": "url(\"http://localhost:1122/icons/navigation/subjects.svg\")",
+        "mode": "match-source",
+        "name": "subjects",
+        "size": [
+          20,
+          20
+        ]
+      }
+    ],
+    "overflow": false,
+    "path": "/",
+    "recent": 2,
+    "rows": [
+      {
+        "h": 36,
+        "name": "创作",
+        "w": 216
+      },
+      {
+        "h": 36,
+        "name": "探索",
+        "w": 216
+      },
+      {
+        "h": 36,
+        "name": "资产",
+        "w": 216
+      },
+      {
+        "h": 36,
+        "name": "主体",
+        "w": 216
+      }
+    ],
+    "sidebars": 1,
+    "utility": [
+      "历史画布 ↗",
+      "积分超市"
+    ],
+    "viewport": {
+      "h": 873,
+      "w": 1869
+    }
+  },
+  {
+    "account": "radix-_r_g_",
+    "active": [
+      "探索"
+    ],
+    "groups": [
+      {
+        "controls": "_r_31_",
+        "expanded": "true",
+        "h": 34,
+        "name": "对话"
+      },
+      {
+        "controls": "_r_33_",
+        "expanded": "true",
+        "h": 34,
+        "name": "画布"
+      }
+    ],
+    "headers": 1,
+    "icons": [
+      {
+        "mask": "url(\"http://localhost:1122/icons/navigation/creation.svg\")",
+        "mode": "match-source",
+        "name": "creation",
+        "size": [
+          20,
+          20
+        ]
+      },
+      {
+        "mask": "url(\"http://localhost:1122/icons/navigation/explore-active.svg\")",
+        "mode": "match-source",
+        "name": "explore",
+        "size": [
+          20,
+          20
+        ]
+      },
+      {
+        "mask": "url(\"http://localhost:1122/icons/navigation/assets.svg\")",
+        "mode": "match-source",
+        "name": "assets",
+        "size": [
+          20,
+          20
+        ]
+      },
+      {
+        "mask": "url(\"http://localhost:1122/icons/navigation/subjects.svg\")",
+        "mode": "match-source",
+        "name": "subjects",
+        "size": [
+          20,
+          20
+        ]
+      }
+    ],
+    "overflow": false,
+    "path": "/explore",
+    "recent": 2,
+    "rows": [
+      {
+        "h": 36,
+        "name": "创作",
+        "w": 216
+      },
+      {
+        "h": 36,
+        "name": "探索",
+        "w": 216
+      },
+      {
+        "h": 36,
+        "name": "资产",
+        "w": 216
+      },
+      {
+        "h": 36,
+        "name": "主体",
+        "w": 216
+      }
+    ],
+    "sidebars": 1,
+    "utility": [],
+    "viewport": {
+      "h": 873,
+      "w": 1869
+    }
+  },
+  {
+    "account": "radix-_r_g_",
+    "active": [
+      "资产"
+    ],
+    "groups": [
+      {
+        "controls": "_r_31_",
+        "expanded": "true",
+        "h": 34,
+        "name": "对话"
+      },
+      {
+        "controls": "_r_33_",
+        "expanded": "true",
+        "h": 34,
+        "name": "画布"
+      }
+    ],
+    "headers": 1,
+    "icons": [
+      {
+        "mask": "url(\"http://localhost:1122/icons/navigation/creation.svg\")",
+        "mode": "match-source",
+        "name": "creation",
+        "size": [
+          20,
+          20
+        ]
+      },
+      {
+        "mask": "url(\"http://localhost:1122/icons/navigation/explore.svg\")",
+        "mode": "match-source",
+        "name": "explore",
+        "size": [
+          20,
+          20
+        ]
+      },
+      {
+        "mask": "url(\"http://localhost:1122/icons/navigation/assets-active.svg\")",
+        "mode": "match-source",
+        "name": "assets",
+        "size": [
+          20,
+          20
+        ]
+      },
+      {
+        "mask": "url(\"http://localhost:1122/icons/navigation/subjects.svg\")",
+        "mode": "match-source",
+        "name": "subjects",
+        "size": [
+          20,
+          20
+        ]
+      }
+    ],
+    "overflow": false,
+    "path": "/assets",
+    "recent": 2,
+    "rows": [
+      {
+        "h": 36,
+        "name": "创作",
+        "w": 216
+      },
+      {
+        "h": 36,
+        "name": "探索",
+        "w": 216
+      },
+      {
+        "h": 36,
+        "name": "资产",
+        "w": 216
+      },
+      {
+        "h": 36,
+        "name": "主体",
+        "w": 216
+      }
+    ],
+    "sidebars": 1,
+    "utility": [],
+    "viewport": {
+      "h": 873,
+      "w": 1869
+    }
+  },
+  {
+    "account": "radix-_r_g_",
+    "active": [
+      "主体"
+    ],
+    "groups": [
+      {
+        "controls": "_r_31_",
+        "expanded": "true",
+        "h": 34,
+        "name": "对话"
+      },
+      {
+        "controls": "_r_33_",
+        "expanded": "true",
+        "h": 34,
+        "name": "画布"
+      }
+    ],
+    "headers": 1,
+    "icons": [
+      {
+        "mask": "url(\"http://localhost:1122/icons/navigation/creation.svg\")",
+        "mode": "match-source",
+        "name": "creation",
+        "size": [
+          20,
+          20
+        ]
+      },
+      {
+        "mask": "url(\"http://localhost:1122/icons/navigation/explore.svg\")",
+        "mode": "match-source",
+        "name": "explore",
+        "size": [
+          20,
+          20
+        ]
+      },
+      {
+        "mask": "url(\"http://localhost:1122/icons/navigation/assets.svg\")",
+        "mode": "match-source",
+        "name": "assets",
+        "size": [
+          20,
+          20
+        ]
+      },
+      {
+        "mask": "url(\"http://localhost:1122/icons/navigation/subjects-active.svg\")",
+        "mode": "luminance",
+        "name": "subjects",
+        "size": [
+          20,
+          20
+        ]
+      }
+    ],
+    "overflow": false,
+    "path": "/subjects",
+    "recent": 2,
+    "rows": [
+      {
+        "h": 36,
+        "name": "创作",
+        "w": 216
+      },
+      {
+        "h": 36,
+        "name": "探索",
+        "w": 216
+      },
+      {
+        "h": 36,
+        "name": "资产",
+        "w": 216
+      },
+      {
+        "h": 36,
+        "name": "主体",
+        "w": 216
+      }
+    ],
+    "sidebars": 1,
+    "utility": [],
+    "viewport": {
+      "h": 873,
+      "w": 1869
+    }
+  }
+]

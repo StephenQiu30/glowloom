@@ -6,11 +6,17 @@ import { RecentCanvases } from "./recent-canvases";
 import { ProductNavigationIcon } from "./product-navigation-icon";
 
 import Link from "next/link";
-import type { ComponentProps } from "react";
+import { useId, useState, type ComponentProps, type ReactNode } from "react";
 import { cn } from "cn";
 import { X } from "lucide-react";
 import { BrandMark } from "@/components/brand/brand";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from "@/components/ui/collapsible";
 import { Empty, EmptyDescription } from "@/components/ui/empty";
 import {
   Tooltip,
@@ -21,9 +27,7 @@ import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
-  SidebarGroupAction,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -63,7 +67,7 @@ function PrimaryNavigation({ screen }: { screen: string }) {
                 aria-current={screen === id ? "page" : undefined}
                 onClick={() => setOpenMobile(false)}
               >
-                <ProductNavigationIcon name={icon} />
+                <ProductNavigationIcon name={icon} active={screen === id} />
                 <span>{label}</span>
               </Link>
             </SidebarMenuButton>
@@ -71,6 +75,45 @@ function PrimaryNavigation({ screen }: { screen: string }) {
         ))}
       </SidebarMenu>
     </SidebarGroup>
+  );
+}
+
+function NavigationSection({
+  title,
+  open,
+  onOpenChange,
+  actions,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  actions: ReactNode;
+  children: ReactNode;
+}) {
+  const contentId = useId();
+  return (
+    <Collapsible open={open} onOpenChange={onOpenChange} asChild>
+      <SidebarGroup className="sidebar-history sidebar-section">
+        <div className="sidebar-section-header">
+          <CollapsibleTrigger asChild aria-controls={contentId}>
+            <Button variant="ghost" className="sidebar-section-toggle">
+              {title}
+              <ProductNavigationIcon name="section-chevron" />
+            </Button>
+          </CollapsibleTrigger>
+          <div className="sidebar-section-actions">{actions}</div>
+        </div>
+        <CollapsibleContent
+          id={contentId}
+          forceMount
+          aria-hidden={!open}
+          className="sidebar-section-content"
+        >
+          <SidebarGroupContent>{children}</SidebarGroupContent>
+        </CollapsibleContent>
+      </SidebarGroup>
+    </Collapsible>
   );
 }
 
@@ -84,6 +127,8 @@ export function ProductSider({
   >["onMobileCloseAutoFocus"];
 }) {
   const { open, isMobile, toggleSidebar, setOpenMobile } = useSidebar();
+  const [conversationsOpen, setConversationsOpen] = useState(true);
+  const [canvasesOpen, setCanvasesOpen] = useState(true);
   const session = useOptionalSession();
   const { selected: space, pending: scopePending } = useSpace();
   const compact = !open && !isMobile;
@@ -138,99 +183,105 @@ export function ProductSider({
         id="product-sidebar-navigation"
         className="product-sidebar-content"
       >
-        <PrimaryNavigation screen={screen} />
-        <SidebarGroup className="sidebar-history">
-          {!compact && (
-            <>
-              <SidebarGroupLabel>对话</SidebarGroupLabel>
-              <SidebarGroupAction asChild>
-                <Link href="/" aria-label="新建创作" onClick={closeMobile}>
-                  <ProductNavigationIcon name="new-creation" />
-                </Link>
-              </SidebarGroupAction>
-            </>
-          )}
-          <SidebarGroupContent>
-            {compact ? (
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    tooltip="新建创作"
-                    className="group-data-[collapsible=icon]:size-9! group-data-[collapsible=icon]:p-0!"
+        <PrimaryNavigation screen={screen === "projects" ? "assets" : screen} />
+        {!compact && <Separator className="sidebar-navigation-separator" />}
+        {compact ? (
+          <SidebarGroup className="sidebar-history">
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  tooltip="新建创作"
+                  className="group-data-[collapsible=icon]:size-9! group-data-[collapsible=icon]:p-0!"
+                >
+                  <Link href="/" aria-label="新建创作" onClick={closeMobile}>
+                    <ProductNavigationIcon name="new-creation" />
+                    <span>新建创作</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroup>
+        ) : (
+          <NavigationSection
+            title="对话"
+            open={conversationsOpen}
+            onOpenChange={setConversationsOpen}
+            actions={
+              <Link
+                href="/"
+                aria-label="新建创作"
+                className="sidebar-section-create"
+                onClick={closeMobile}
+              >
+                <ProductNavigationIcon name="new-creation" />
+              </Link>
+            }
+          >
+            <Empty className="sidebar-history-empty">
+              <EmptyDescription>
+                {session ? "对话功能待开放" : "登录后查看最近创作"}
+              </EmptyDescription>
+            </Empty>
+          </NavigationSection>
+        )}
+        {compact ? (
+          <SidebarGroup className="sidebar-history">
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  tooltip="新建画布"
+                  className="group-data-[collapsible=icon]:size-9! group-data-[collapsible=icon]:p-0!"
+                >
+                  <NewCanvasButton
+                    variant="ghost"
+                    size="icon"
+                    aria-label="新建画布"
+                    onClick={closeMobile}
                   >
-                    <Link href="/" aria-label="新建创作" onClick={closeMobile}>
-                      <ProductNavigationIcon name="new-creation" />
-                      <span>新建创作</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            ) : (
-              <Empty className="sidebar-history-empty">
-                <EmptyDescription>
-                  {session ? "对话功能待开放" : "登录后查看最近创作"}
-                </EmptyDescription>
-              </Empty>
-            )}
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup className="sidebar-history">
-          {!compact && (
-            <>
-              <SidebarGroupLabel asChild>
+                    <ProductNavigationIcon name="plus" />
+                    <span>新建画布</span>
+                  </NewCanvasButton>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroup>
+        ) : (
+          <NavigationSection
+            title="画布"
+            open={canvasesOpen}
+            onOpenChange={setCanvasesOpen}
+            actions={
+              <>
                 <Link
                   href="/assets?view=canvas"
                   aria-label="查看我的画布"
+                  className="sidebar-section-all"
                   onClick={closeMobile}
                 >
-                  画布
+                  全部
                 </Link>
-              </SidebarGroupLabel>
-              <SidebarGroupAction asChild>
                 <NewCanvasButton
                   variant="ghost"
                   size="icon"
+                  className="sidebar-section-create"
                   aria-label="新建画布"
                   onClick={closeMobile}
                 >
                   <ProductNavigationIcon name="plus" />
                 </NewCanvasButton>
-              </SidebarGroupAction>
-            </>
-          )}
-          <SidebarGroupContent>
-            {!compact && session && space && !scopePending ? (
+              </>
+            }
+          >
+            {session && space && !scopePending ? (
               <RecentCanvases
                 key={`${session.actor.id}/${space.id}`}
                 onNavigate={closeMobile}
               />
-            ) : compact ? (
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    className="group-data-[collapsible=icon]:size-9! group-data-[collapsible=icon]:p-0!"
-                    asChild
-                    tooltip="我的画布"
-                    isActive={screen === "projects" || screen === "canvas"}
-                  >
-                    <Link
-                      href="/assets?view=canvas"
-                      aria-label="查看我的画布"
-                      aria-current={screen === "projects" ? "page" : undefined}
-                      onClick={closeMobile}
-                    >
-                      <span className="sidebar-canvas-icon" aria-hidden="true">
-                        <ProductNavigationIcon name="canvas" />
-                      </span>
-                      <span>画布</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
             ) : null}
-          </SidebarGroupContent>
-        </SidebarGroup>
+          </NavigationSection>
+        )}
       </SidebarContent>
     </Sidebar>
   );

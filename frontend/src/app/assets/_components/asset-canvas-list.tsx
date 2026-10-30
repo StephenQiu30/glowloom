@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { MoreHorizontal, Pencil, Plus, Star, Trash2, X } from "lucide-react";
 import { applyCanvasAssetCommand, listAssetCanvases } from "@/api/canvases";
+import { publishProjectInvalidation } from "@/components/projects/project-presentation-store";
 import { CanvasDeleteConfirmation } from "@/components/projects/canvas-delete-confirmation";
 import { ProjectMediaPreview } from "@/components/media/project-media";
 import { useSpace } from "@/components/spaces/space-context";
@@ -253,6 +254,18 @@ export function AssetCanvasList({
         ok: item.status === "succeeded",
         code: item.code!,
       }));
+      if (op.body.action === "rename" || op.body.action === "delete") {
+        const changedProjects = new Set(
+          op.items
+            .filter(
+              (item) =>
+                item.is_main &&
+                outcomes.some((result) => result.id === item.id && result.ok),
+            )
+            .map((item) => item.project_id),
+        );
+        for (const id of changedProjects) publishProjectInvalidation(id);
+      }
       setResults(outcomes);
       setSelected((previous) =>
         previous.filter(

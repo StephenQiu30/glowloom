@@ -15,6 +15,7 @@ export type ProductHeaderActionsProps = ProductAccountActionsProps & {
   pageActions?: ReactNode;
   isMobile: boolean;
   showSearch?: boolean;
+  showUtilities?: boolean;
 };
 
 /** Page-specific tools never change the shared account area's composition or identity. */
@@ -24,6 +25,7 @@ export function ProductHeaderActions({
   search,
   isMobile,
   showSearch = true,
+  showUtilities = false,
   ...accountProps
 }: ProductHeaderActionsProps) {
   return (
@@ -51,7 +53,7 @@ export function ProductHeaderActions({
           <ProductSearch key="search" search={search} isMobile={isMobile} />
         )
       )}
-      {!assetLayout && <ProductUtilityNavigation />}
+      {showUtilities && <ProductUtilityNavigation />}
       <ProductAccountActions key="account" {...accountProps} />
     </div>
   );

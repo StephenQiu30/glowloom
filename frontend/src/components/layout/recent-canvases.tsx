@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ProductNavigationIcon } from "./product-navigation-icon";
 import { listProjects } from "@/api/projects";
@@ -30,11 +30,8 @@ export function RecentCanvases({
   children?: ReactNode;
 }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
-  const [cursor, setCursor] = useState<string | null>(null);
   const [error, setError] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
-  const pagination = useRef<AbortController | null>(null);
   useEffect(() => {
     const refresh = () => setRevision((n) => n + 1);
     const unsubscribe = subscribeProjectInvalidation(refresh);
@@ -46,7 +43,6 @@ export function RecentCanvases({
   }, []);
   useEffect(() => {
     const controller = new AbortController();
-    pagination.current?.abort();
     void listProjects(
       { limit: 20, status: "active", order: "recent_content" },
       { signal: controller.signal },
@@ -59,8 +55,6 @@ export function RecentCanvases({
             (p) => p.canvas_id && !p.is_delete && p.status !== "copying",
           ),
         );
-        setCursor(page.next_cursor);
-        setBusy(false);
         setError(false);
       })
       .catch(() => {
@@ -68,53 +62,8 @@ export function RecentCanvases({
       });
     return () => {
       controller.abort();
-      pagination.current?.abort();
     };
   }, [revision]);
-  async function more() {
-    if (
-      !cursor ||
-      busy ||
-      (pagination.current && !pagination.current.signal.aborted)
-    )
-      return;
-    const controller = new AbortController();
-    pagination.current = controller;
-    setBusy(true);
-    try {
-      const page = requireProjectList(
-        await listProjects(
-          {
-            limit: 20,
-            status: "active",
-            order: "recent_content",
-            cursor,
-          },
-          { signal: controller.signal },
-        ),
-      );
-      if (controller.signal.aborted) return;
-      setProjects((current) => [
-        ...(current ?? []),
-        ...page.items.filter(
-          (p) =>
-            p.canvas_id &&
-            !p.is_delete &&
-            p.status !== "copying" &&
-            !current?.some((c) => c.id === p.id),
-        ),
-      ]);
-      setCursor(page.next_cursor);
-      setError(false);
-    } catch {
-      if (!controller.signal.aborted) setError(true);
-    } finally {
-      if (pagination.current === controller) {
-        pagination.current = null;
-        if (!controller.signal.aborted) setBusy(false);
-      }
-    }
-  }
   if (presentation === "cards")
     return (
       <div className="home-canvas-list" aria-label="最近画布">
@@ -162,7 +111,7 @@ export function RecentCanvases({
     );
   return (
     <SidebarMenu aria-label="最近画布" className="sidebar-canvas-list">
-      {projects?.map((project) => (
+      {projects?.slice(0, 5).map((project) => (
         <SidebarMenuItem key={project.id}>
           <SidebarMenuButton asChild tooltip={project.name}>
             <Link
@@ -194,13 +143,6 @@ export function RecentCanvases({
         </li>
       ) : projects.length === 0 ? (
         <li className="sidebar-history-note">暂无画布</li>
-      ) : null}
-      {cursor ? (
-        <li>
-          <Button variant="ghost" disabled={busy} onClick={() => void more()}>
-            {busy ? "正在读取…" : "加载更多"}
-          </Button>
-        </li>
       ) : null}
     </SidebarMenu>
   );
