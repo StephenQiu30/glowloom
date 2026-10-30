@@ -696,9 +696,16 @@ it("主画布删除明确项目影响，并通过统一命令携带项目CAS", a
     .forEach((item) => fireEvent.click(item));
   fireEvent.click(screen.getByRole("button", { name: "删除" }));
   expect(screen.getByRole("alertdialog").textContent).toContain("整个所属项目");
+  const confirmation = screen.getByRole("alertdialog", { name: "确认删除" });
+  expect(within(confirmation).queryByRole("list")).toBeNull();
+  expect(state.canvasCommand).not.toHaveBeenCalled();
+  fireEvent.click(within(confirmation).getByRole("button", { name: "取消" }));
+  await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+  expect(state.canvasCommand).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "删除" }));
   fireEvent.click(
     within(screen.getByRole("alertdialog")).getByRole("button", {
-      name: "确认删除",
+      name: "删除",
     }),
   );
   await waitFor(() =>
@@ -761,7 +768,7 @@ it("画布删除未知结果保留确认框和幂等重试，明确失败展示�
   expect(screen.getByRole("alertdialog").textContent).toContain("整个所属项目");
   fireEvent.click(
     within(screen.getByRole("alertdialog")).getByRole("button", {
-      name: "确认删除",
+      name: "删除",
     }),
   );
   const retry = await screen.findByRole("button", { name: "重试原操作" });

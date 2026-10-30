@@ -210,7 +210,7 @@ it("R6 主导航与画布入口指向真实路由，支持收起和展开", asyn
   );
   expect(
     screen.getByRole("link", { name: "查看我的画布" }).getAttribute("href"),
-  ).toBe("/projects");
+  ).toBe("/assets?view=canvas");
   fireEvent.click(screen.getByRole("button", { name: "收起导航" }));
   expect(screen.getByRole("button", { name: "展开导航" })).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "展开导航" }));
@@ -267,7 +267,7 @@ it("收起后保留可访问导航和当前页，重新挂载保持偏好", asyn
   ).toBe("page");
   expect(
     screen.getByRole("link", { name: "查看我的画布" }).getAttribute("href"),
-  ).toBe("/projects");
+  ).toBe("/assets?view=canvas");
   expect(document.querySelector('[data-collapsible="icon"]')).toBeTruthy();
   view.unmount();
   render(
@@ -681,7 +681,7 @@ it("普通页面与资产复用同一账号组，切换路由保留积分弹层�
   ).toBe("/billing/membership");
   const utilities = screen.getByRole("navigation", { name: "快捷导航" });
   for (const [name, href] of [
-    ["历史画布", "/projects"],
+    ["历史画布", "/assets?view=canvas&collection=legacy"],
     ["积分超市", "/billing/recharge"],
   ])
     expect(

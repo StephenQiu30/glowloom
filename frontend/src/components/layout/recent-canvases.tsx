@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Box } from "lucide-react";
 import { ProductNavigationIcon } from "./product-navigation-icon";
 import { listProjects } from "@/api/projects";
 import {
@@ -121,14 +120,19 @@ export function RecentCanvases({
       <div className="home-canvas-list" aria-label="最近画布">
         {children}
         {projects?.slice(0, 3).map((project) => (
-          <Button key={project.id} variant="tile" asChild>
+          <Button
+            key={project.id}
+            variant="tile"
+            className="home-canvas-card"
+            asChild
+          >
             <Link
               href={canvasHref(project)}
               onClick={onNavigate}
               title={project.name}
             >
-              <Box aria-hidden="true" />
-              <span className="max-w-full truncate">{project.name}</span>
+              <ProductNavigationIcon name="canvas-card" />
+              <span className="home-canvas-card-title">{project.name}</span>
             </Link>
           </Button>
         ))}

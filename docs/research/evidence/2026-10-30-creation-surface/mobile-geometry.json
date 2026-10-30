@@ -1,0 +1,95 @@
+{
+  "mobileCanvasMetrics": {
+    "items": [
+      {
+        "rect": [
+          16,
+          120,
+          358,
+          48
+        ],
+        "selector": ".creation-toggle"
+      },
+      {
+        "rect": [
+          196,
+          122,
+          176,
+          44
+        ],
+        "selector": ".creation-toggle [data-state=\"on\"]"
+      },
+      {
+        "rect": [
+          16,
+          212,
+          358,
+          204.875
+        ],
+        "selector": ".home-canvas-list"
+      },
+      {
+        "rect": [
+          199,
+          212,
+          175,
+          98.4375
+        ],
+        "selector": ".home-canvas-card"
+      },
+      {
+        "rect": [
+          16,
+          440.875,
+          358,
+          80
+        ],
+        "selector": ".canvas-idea"
+      }
+    ],
+    "overflow": false,
+    "viewport": 390
+  },
+  "narrowCanvasMetrics": {
+    "items": [
+      {
+        "rect": [
+          16,
+          120,
+          288,
+          48
+        ],
+        "selector": ".creation-toggle"
+      },
+      {
+        "rect": [
+          161,
+          122,
+          141,
+          44
+        ],
+        "selector": ".creation-toggle [data-state=\"on\"]"
+      },
+      {
+        "rect": [
+          164,
+          212,
+          140,
+          78.75
+        ],
+        "selector": ".home-canvas-card"
+      },
+      {
+        "rect": [
+          16,
+          401.5,
+          288,
+          80
+        ],
+        "selector": ".canvas-idea"
+      }
+    ],
+    "overflow": false,
+    "viewport": 320
+  }
+}

@@ -1,0 +1,86 @@
+[
+  {
+    "clipped": [],
+    "overflow": false,
+    "rect": [
+      16,
+      184,
+      358,
+      216
+    ],
+    "type": "视频生成",
+    "viewport": 390
+  },
+  {
+    "clipped": [],
+    "overflow": false,
+    "rect": [
+      16,
+      184,
+      358,
+      344.5
+    ],
+    "type": "音乐生成",
+    "viewport": 390
+  },
+  {
+    "clipped": [],
+    "overflow": false,
+    "rect": [
+      16,
+      163.5,
+      358,
+      272
+    ],
+    "type": "音频生成",
+    "viewport": 390
+  },
+  {
+    "clipped": [],
+    "overflow": false,
+    "rect": [
+      16,
+      184,
+      358,
+      276
+    ],
+    "type": "数字人",
+    "viewport": 390
+  },
+  {
+    "clipped": [],
+    "overflow": false,
+    "rect": [
+      16,
+      184,
+      358,
+      216
+    ],
+    "type": "动作模仿",
+    "viewport": 390
+  },
+  {
+    "clipped": [],
+    "overflow": false,
+    "rect": [
+      16,
+      184,
+      358,
+      268
+    ],
+    "type": "Agent 模式",
+    "viewport": 390
+  },
+  {
+    "clipped": [],
+    "overflow": false,
+    "rect": [
+      16,
+      184,
+      358,
+      216
+    ],
+    "type": "图片生成",
+    "viewport": 390
+  }
+]

@@ -51,7 +51,7 @@ export function ProductHeaderActions({
           <ProductSearch key="search" search={search} isMobile={isMobile} />
         )
       )}
-      <ProductUtilityNavigation />
+      {!assetLayout && <ProductUtilityNavigation />}
       <ProductAccountActions key="account" {...accountProps} />
     </div>
   );

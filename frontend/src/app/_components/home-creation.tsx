@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useRef, useState, type ReactElement } from "react";
 import {
   ArrowUp,
@@ -256,7 +257,7 @@ function ScopedHomeCreation() {
   );
 
   return (
-    <section className="creation-hero" aria-label="开始创作">
+    <section className="creation-hero" data-mode={mode} aria-label="开始创作">
       <h1>你好，今天想要创作什么？</h1>
       {mode === "canvas" ? canvasRecovery.notice : inputRecovery.notice}
       {error ? <FeedbackToast message={error} /> : null}
@@ -494,20 +495,29 @@ function ScopedHomeCreation() {
           hidden={mode !== "canvas"}
           className="creation-panel home-canvas-launch"
         >
+          <div className="home-canvas-heading">
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/assets?view=canvas">全部</Link>
+            </Button>
+          </div>
           {mode === "canvas" && session && space ? (
             <RecentCanvases
               key={`${session.actor.id}/${space.id}`}
               presentation="cards"
             >
-              <NewCanvasButton variant="tile">
-                <Plus />
+              <NewCanvasButton variant="tile" className="home-canvas-new">
+                <span className="home-canvas-new-icon" aria-hidden="true">
+                  <Plus />
+                </span>
                 <span>新建画布</span>
               </NewCanvasButton>
             </RecentCanvases>
           ) : (
             <div className="home-canvas-list">
-              <NewCanvasButton variant="tile">
-                <Plus />
+              <NewCanvasButton variant="tile" className="home-canvas-new">
+                <span className="home-canvas-new-icon" aria-hidden="true">
+                  <Plus />
+                </span>
                 <span>新建画布</span>
               </NewCanvasButton>
             </div>

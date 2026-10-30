@@ -1,0 +1,376 @@
+{
+  "source": {
+    "children": [
+      {
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "0px none rgb(0, 0, 0)",
+        "cls": "",
+        "color": "rgb(0, 0, 0)",
+        "font": "14px",
+        "gap": "normal",
+        "lineHeight": "22.001px",
+        "padding": "0px",
+        "radius": "0px",
+        "rect": [
+          1,
+          1,
+          1,
+          0
+        ],
+        "role": null,
+        "shadow": "none",
+        "tag": "DIV",
+        "text": "",
+        "weight": "400"
+      },
+      {
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "0px none rgb(255, 255, 255)",
+        "cls": "",
+        "color": "rgb(255, 255, 255)",
+        "font": "16px",
+        "gap": "normal",
+        "lineHeight": "24px",
+        "padding": "0px",
+        "radius": "0px",
+        "rect": [
+          515.5,
+          321.5,
+          64,
+          22.5
+        ],
+        "role": null,
+        "shadow": "none",
+        "tag": "SPAN",
+        "text": "确认删除",
+        "weight": "500"
+      },
+      {
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "0px none rgba(255, 255, 255, 0.698)",
+        "cls": "lv-modal-content",
+        "color": "rgba(255, 255, 255, 0.698)",
+        "font": "14px",
+        "gap": "normal",
+        "lineHeight": "22px",
+        "padding": "0px 24px",
+        "radius": "0px",
+        "rect": [
+          491.5,
+          369,
+          480,
+          22
+        ],
+        "role": null,
+        "shadow": "none",
+        "tag": "DIV",
+        "text": "你的项目将被永久删除且无法找回，是否确认删除？",
+        "weight": "400"
+      },
+      {
+        "bg": "rgba(255, 255, 255, 0.08)",
+        "border": "0px none rgb(250, 250, 250)",
+        "cls": "lv-btn lv-btn-secondary lv-btn-size-default lv-btn-shape-square",
+        "color": "rgb(250, 250, 250)",
+        "font": "13px",
+        "gap": "normal",
+        "lineHeight": "20.4295px",
+        "padding": "0px 16px",
+        "radius": "8px",
+        "rect": [
+          819.5,
+          415,
+          58,
+          36
+        ],
+        "role": null,
+        "shadow": "none",
+        "tag": "BUTTON",
+        "text": "取消",
+        "weight": "500"
+      },
+      {
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "0px none rgb(250, 250, 250)",
+        "cls": "",
+        "color": "rgb(250, 250, 250)",
+        "font": "13px",
+        "gap": "normal",
+        "lineHeight": "20.4295px",
+        "padding": "0px",
+        "radius": "0px",
+        "rect": [
+          835.5,
+          423.2890625,
+          26,
+          18.5
+        ],
+        "role": null,
+        "shadow": "none",
+        "tag": "SPAN",
+        "text": "取消",
+        "weight": "500"
+      },
+      {
+        "bg": "rgb(250, 250, 250)",
+        "border": "0px none rgb(26, 26, 26)",
+        "cls": "lv-btn lv-btn-primary lv-btn-size-default lv-btn-shape-square lv-btn-status-danger",
+        "color": "rgb(26, 26, 26)",
+        "font": "13px",
+        "gap": "normal",
+        "lineHeight": "20.4295px",
+        "padding": "0px 16px",
+        "radius": "8px",
+        "rect": [
+          889.5,
+          415,
+          58,
+          36
+        ],
+        "role": null,
+        "shadow": "none",
+        "tag": "BUTTON",
+        "text": "删除",
+        "weight": "500"
+      },
+      {
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "0px none rgb(26, 26, 26)",
+        "cls": "",
+        "color": "rgb(26, 26, 26)",
+        "font": "13px",
+        "gap": "normal",
+        "lineHeight": "20.4295px",
+        "padding": "0px",
+        "radius": "0px",
+        "rect": [
+          905.5,
+          423.2890625,
+          26,
+          18.5
+        ],
+        "role": null,
+        "shadow": "none",
+        "tag": "SPAN",
+        "text": "删除",
+        "weight": "500"
+      },
+      {
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "0px none rgb(255, 255, 255)",
+        "cls": "",
+        "color": "rgb(255, 255, 255)",
+        "font": "20px",
+        "gap": "normal",
+        "lineHeight": "0px",
+        "padding": "0px",
+        "radius": "0px",
+        "rect": [
+          930.4506225585938,
+          325.95159912109375,
+          14.0977783203125,
+          14.0968017578125
+        ],
+        "role": null,
+        "shadow": "none",
+        "tag": "path",
+        "text": "",
+        "weight": "400"
+      },
+      {
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "0px none rgb(0, 0, 0)",
+        "cls": "",
+        "color": "rgb(0, 0, 0)",
+        "font": "14px",
+        "gap": "normal",
+        "lineHeight": "22.001px",
+        "padding": "0px",
+        "radius": "0px",
+        "rect": [
+          1,
+          1,
+          1,
+          0
+        ],
+        "role": null,
+        "shadow": "none",
+        "tag": "DIV",
+        "text": "",
+        "weight": "400"
+      }
+    ],
+    "dialog": {
+      "bg": "rgb(26, 26, 26)",
+      "border": "0px none rgb(0, 0, 0)",
+      "cls": "lv-modal lv-modal-simple lv-modal-closable modal-O_NHLH zoomModal-appear-done zoomModal-enter-done",
+      "color": "rgb(0, 0, 0)",
+      "font": "14px",
+      "gap": "normal",
+      "lineHeight": "22.001px",
+      "padding": "0px",
+      "radius": "16px",
+      "rect": [
+        491.5,
+        297,
+        480,
+        178
+      ],
+      "role": "dialog",
+      "shadow": "rgba(8, 12, 20, 0.12) 0px 8px 20px -4px",
+      "tag": "DIV",
+      "text": "确认删除你的项目将被永久删除且无法找回，是否确认删除？取消删除",
+      "weight": "400"
+    }
+  },
+  "local": {
+    "buttons": [
+      {
+        "bg": "rgba(255, 255, 255, 0.08)",
+        "font": "13px",
+        "gap": "8px",
+        "line": "22px",
+        "padding": "0px 16px",
+        "radius": "8px",
+        "rect": [
+          819.5,
+          415,
+          58,
+          36
+        ],
+        "text": "取消"
+      },
+      {
+        "bg": "rgb(250, 250, 250)",
+        "font": "13px",
+        "gap": "8px",
+        "line": "22px",
+        "padding": "0px 16px",
+        "radius": "8px",
+        "rect": [
+          889.5,
+          415,
+          58,
+          36
+        ],
+        "text": "删除"
+      },
+      {
+        "bg": "rgba(0, 0, 0, 0)",
+        "font": "14px",
+        "gap": "normal",
+        "line": "20px",
+        "padding": "0px",
+        "radius": "8px",
+        "rect": [
+          919.5,
+          315,
+          36,
+          36
+        ],
+        "text": ""
+      }
+    ],
+    "defaultFocus": "取消",
+    "description": {
+      "bg": "rgba(0, 0, 0, 0)",
+      "font": "14px",
+      "gap": "normal",
+      "line": "22px",
+      "padding": "0px",
+      "radius": "0px",
+      "rect": [
+        515.5,
+        369,
+        154,
+        22
+      ],
+      "text": "是否确认删除所选画布？"
+    },
+    "dialog": {
+      "bg": "rgb(26, 26, 26)",
+      "font": "16px",
+      "gap": "24px",
+      "line": "24px",
+      "padding": "24px",
+      "radius": "16px",
+      "rect": [
+        491.5,
+        297,
+        480,
+        178
+      ],
+      "text": "确认删除是否确认删除所选画布？取消删除"
+    },
+    "lists": 0,
+    "title": {
+      "bg": "rgba(0, 0, 0, 0)",
+      "font": "16px",
+      "gap": "normal",
+      "line": "24px",
+      "padding": "0px 32px 0px 0px",
+      "radius": "0px",
+      "rect": [
+        515.5,
+        321,
+        96,
+        24
+      ],
+      "text": "确认删除"
+    }
+  },
+  "mobile": [
+    {
+      "buttons": [
+        {
+          "height": 44,
+          "name": "取消"
+        },
+        {
+          "height": 44,
+          "name": "删除"
+        },
+        {
+          "height": 44,
+          "name": "关闭对话框"
+        }
+      ],
+      "overflow": false,
+      "rect": [
+        16,
+        318,
+        358,
+        208
+      ],
+      "transform": "none",
+      "viewport": 390,
+      "width": "358px"
+    },
+    {
+      "buttons": [
+        {
+          "height": 44,
+          "name": "取消"
+        },
+        {
+          "height": 44,
+          "name": "删除"
+        },
+        {
+          "height": 44,
+          "name": "关闭对话框"
+        }
+      ],
+      "overflow": false,
+      "rect": [
+        16,
+        276,
+        288,
+        208
+      ],
+      "transform": "none",
+      "viewport": 320,
+      "width": "288px"
+    }
+  ]
+}

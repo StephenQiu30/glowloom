@@ -6,26 +6,14 @@ import { useBatchToolbarFocus } from "./use-batch-toolbar-focus";
 import { AssetToolbarButton } from "./asset-toolbar-button";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { Heart, MoreHorizontal, Plus, Trash2, X } from "lucide-react";
+import { MoreHorizontal, Pencil, Plus, Star, Trash2, X } from "lucide-react";
 import { applyCanvasAssetCommand, listAssetCanvases } from "@/api/canvases";
-import { getProject } from "@/api/projects";
-import { ProjectCopyDialog } from "@/components/projects/project-copy-dialog";
-import { requireProject, type Project } from "@/components/projects/project";
+import { CanvasDeleteConfirmation } from "@/components/projects/canvas-delete-confirmation";
 import { ProjectMediaPreview } from "@/components/media/project-media";
 import { useSpace } from "@/components/spaces/space-context";
 import { ContentState } from "@/components/layout/content-state";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -43,6 +31,7 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { RequestError } from "@/lib/request";
 import { readErrorMessage } from "@/lib/read-error";
@@ -112,7 +101,6 @@ export function AssetCanvasList({
   }
 
   const [name, setName] = useState("");
-  const [copying, setCopying] = useState<Project | null>(null);
   const [intent, setIntent] = useState<Intent | null>(null);
   const [writing, setWriting] = useState(false);
   const [notice, setNotice] = useState("");
@@ -293,34 +281,6 @@ export function AssetCanvasList({
       if (!controller.signal.aborted) setWriting(false);
     }
   }
-  async function copy(item: AssetCanvasItem) {
-    if (busy.current || !item.can_copy_project) return;
-    busy.current = true;
-    setWriting(true);
-    onLock(true);
-    const controller = new AbortController();
-    flight.current = controller;
-    try {
-      const project = requireProject(
-        await getProject(
-          { pid: item.project_id },
-          { signal: controller.signal },
-        ),
-        true,
-      );
-      if (project.id !== item.project_id)
-        throw new RequestError("invalid_receipt");
-      if (!controller.signal.aborted) setCopying(project);
-    } catch (reason) {
-      if (!controller.signal.aborted) setNotice(readErrorMessage(reason));
-    } finally {
-      busy.current = false;
-      if (!controller.signal.aborted) {
-        setWriting(false);
-        onLock(false);
-      }
-    }
-  }
   const toolbar = (
     <div
       ref={batchToolbar}
@@ -362,7 +322,7 @@ export function AssetCanvasList({
               )
             }
           >
-            <Heart data-icon="inline-start" />
+            <Star data-icon="inline-start" />
             {chosen.length && chosen.every((item) => item.favorite)
               ? "取消收藏"
               : "收藏"}
@@ -527,7 +487,7 @@ export function AssetCanvasList({
                     void command("favorite", [item], !item.favorite)
                   }
                 >
-                  <Heart
+                  <Star
                     aria-hidden="true"
                     className={item.favorite ? "fill-current" : undefined}
                   />
@@ -546,7 +506,7 @@ export function AssetCanvasList({
                       <MoreHorizontal aria-hidden="true" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
+                  <DropdownMenuContent align="end" className="canvas-card-menu">
                     <DropdownMenuGroup>
                       <DropdownMenuItem
                         disabled={!writable}
@@ -555,6 +515,7 @@ export function AssetCanvasList({
                           setName(item.name);
                         }}
                       >
+                        <Pencil size={16} aria-hidden="true" />
                         重命名
                       </DropdownMenuItem>
                       <DropdownMenuItem
@@ -562,16 +523,10 @@ export function AssetCanvasList({
                           void command("favorite", [item], !item.favorite)
                         }
                       >
+                        <Star size={16} aria-hidden="true" />
                         {item.favorite ? "取消收藏" : "收藏"}
                       </DropdownMenuItem>
-                      {item.can_copy_project && (
-                        <DropdownMenuItem
-                          disabled={!writable}
-                          onSelect={() => void copy(item)}
-                        >
-                          复制项目
-                        </DropdownMenuItem>
-                      )}
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem
                         disabled={!writable}
                         onSelect={() => {
@@ -579,6 +534,7 @@ export function AssetCanvasList({
                           setDeleting([item]);
                         }}
                       >
+                        <Trash2 size={16} aria-hidden="true" />
                         删除
                       </DropdownMenuItem>
                     </DropdownMenuGroup>
@@ -643,57 +599,21 @@ export function AssetCanvasList({
           onLock={onLock}
         />
       )}
-      {copying && (
-        <ProjectCopyDialog
-          project={copying}
-          onClose={() => {
-            setCopying(null);
-            reload();
-          }}
-        />
-      )}
       {deleting && (
-        <AlertDialog
-          open
-          onOpenChange={(open) => {
-            if (!open && !locked) setDeleting(null);
-          }}
-        >
-          <AlertDialogContent onCloseAutoFocus={restoreDialogFocus}>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                删除所选{kind === "short_drama" ? "短剧" : "画布"}？
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                {deleting.some((item) => item.is_main)
-                  ? "选择中包含主画布，删除主画布会将其整个所属项目移入项目回收站，并影响该项目的其他画布。"
-                  : "所选画布将被移除，其他画布保持不变。"}
-                共{deleting.length}项。
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            {notice && (
-              <Alert variant="destructive">
-                <AlertTitle>删除尚未完成</AlertTitle>
-                <AlertDescription className="break-words">
-                  {notice}
-                </AlertDescription>
-              </Alert>
-            )}
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={locked}>取消</AlertDialogCancel>
-              <AlertDialogAction
-                variant="destructive"
-                disabled={writing}
-                onClick={(event) => {
-                  event.preventDefault();
-                  void command("delete", deleting);
-                }}
-              >
-                {writing ? "正在删除…" : intent ? "重试原操作" : "确认删除"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <CanvasDeleteConfirmation
+          description={
+            deleting.some((item) => item.is_main)
+              ? "删除主画布将把整个所属项目移入回收站，保留30天，是否确认删除？"
+              : `是否确认删除所选${kind === "short_drama" ? "短剧" : "画布"}？`
+          }
+          locked={locked}
+          pending={writing}
+          retry={!!intent}
+          notice={notice}
+          onClose={() => setDeleting(null)}
+          onConfirm={() => void command("delete", deleting)}
+          onCloseAutoFocus={restoreDialogFocus}
+        />
       )}
       {renaming && (
         <Dialog

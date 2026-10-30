@@ -180,7 +180,7 @@ export function ProductSider({
             <>
               <SidebarGroupLabel asChild>
                 <Link
-                  href="/projects"
+                  href="/assets?view=canvas"
                   aria-label="查看我的画布"
                   onClick={closeMobile}
                 >
@@ -215,7 +215,7 @@ export function ProductSider({
                     isActive={screen === "projects" || screen === "canvas"}
                   >
                     <Link
-                      href="/projects"
+                      href="/assets?view=canvas"
                       aria-label="查看我的画布"
                       aria-current={screen === "projects" ? "page" : undefined}
                       onClick={closeMobile}

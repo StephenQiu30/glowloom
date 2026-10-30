@@ -7,7 +7,7 @@ export function ProductUtilityNavigation() {
   return (
     <nav aria-label="快捷导航" className="product-utility-navigation">
       <Button asChild variant="ghost" className="product-history-action">
-        <Link href="/projects">
+        <Link href="/assets?view=canvas&collection=legacy">
           历史画布 <span aria-hidden="true">↗</span>
         </Link>
       </Button>

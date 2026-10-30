@@ -1,0 +1,130 @@
+{
+  "desktopCanvasMetrics": {
+    "items": [
+      {
+        "bg": "none",
+        "radius": "0px",
+        "rect": [
+          344.5,
+          68,
+          1014,
+          38
+        ],
+        "selector": ".creation-hero h1"
+      },
+      {
+        "bg": "none",
+        "radius": "999px",
+        "rect": [
+          691.5,
+          130,
+          320,
+          40
+        ],
+        "selector": ".creation-toggle"
+      },
+      {
+        "bg": "none",
+        "radius": "0px",
+        "rect": [
+          344.5,
+          170,
+          1014,
+          36
+        ],
+        "selector": ".home-canvas-heading"
+      },
+      {
+        "bg": "none",
+        "radius": "0px",
+        "rect": [
+          344.5,
+          206,
+          1014,
+          139.21875
+        ],
+        "selector": ".home-canvas-list"
+      },
+      {
+        "bg": "none",
+        "radius": "16px",
+        "rect": [
+          600,
+          206,
+          247.5,
+          139.21875
+        ],
+        "selector": ".home-canvas-card"
+      },
+      {
+        "bg": "linear-gradient(rgba(26, 26, 26, 0.72) 0%, rgba(42, 42, 42, 0.72) 106.67%)",
+        "radius": "20px",
+        "rect": [
+          444.5,
+          377.21875,
+          814,
+          70
+        ],
+        "selector": ".canvas-idea"
+      }
+    ],
+    "overflow": false,
+    "viewport": [
+      1463,
+      772
+    ]
+  },
+  "desktopGenerateMetrics": {
+    "items": [
+      {
+        "bg": "none",
+        "radius": "0px",
+        "rect": [
+          344.5,
+          68,
+          1014,
+          38
+        ],
+        "selector": ".creation-hero h1"
+      },
+      {
+        "bg": "none",
+        "radius": "999px",
+        "rect": [
+          691.5,
+          130,
+          320,
+          40
+        ],
+        "selector": ".creation-toggle"
+      },
+      {
+        "bg": "linear-gradient(rgb(250, 250, 250) 0%, rgba(250, 250, 250, 0.78) 6%, rgba(250, 250, 250, 0.65) 13%, rgba(250, 250, 250, 0.37) 25%, rgba(0, 0, 0, 0) 42%, rgba(0, 0, 0, 0) 58%, rgba(250, 250, 250, 0.37) 75%, rgba(250, 250, 250, 0.65) 87%, rgba(250, 250, 250, 0.78) 94%, rgb(250, 250, 250) 100%), linear-gradient(90deg, rgba(0, 0, 0, 0) 0%, rgba(247, 237, 227, 0.14) 3%, rgba(253, 233, 221, 0.73) 13%, rgba(255, 226, 206, 0.85) 22%, rgba(255, 221, 197, 0.85) 29%, rgba(245, 231, 209, 0.85) 35%, rgba(235, 234, 224, 0.85) 41%, rgba(196, 237, 240, 0.85) 48%, rgba(173, 238, 251, 0.85) 54%, rgba(150, 239, 255, 0.85) 61%, rgba(158, 235, 251, 0.84) 67%, rgba(173, 238, 251, 0.85) 73%, rgba(190, 243, 254, 0.85) 80%, rgba(204, 245, 255, 0.78) 86%, rgba(206, 243, 249, 0.4) 92%, rgba(218, 247, 249, 0.11) 97%, rgba(0, 0, 0, 0) 100%), none",
+        "radius": "999px",
+        "rect": [
+          693.5,
+          132,
+          157,
+          36
+        ],
+        "selector": ".creation-toggle [data-state=\"on\"]"
+      },
+      {
+        "bg": "linear-gradient(rgba(26, 26, 26, 0.72) 0%, rgba(42, 42, 42, 0.72) 106.67%)",
+        "radius": "24px",
+        "rect": [
+          344.5,
+          206,
+          1014,
+          160
+        ],
+        "selector": ".creation-composer"
+      }
+    ],
+    "overflow": false,
+    "viewport": [
+      1463,
+      772
+    ]
+  }
+}

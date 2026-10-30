@@ -56,6 +56,57 @@
 }
 
 :root {
+  --confirmation-background: #fff;
+  --confirmation-secondary: rgb(0 0 0 / 6%);
+  --confirmation-primary: #1a1a1a;
+  --confirmation-primary-foreground: #fafafa;
+  --confirmation-overlay: rgb(0 0 0 / 60%);
+  --confirmation-shadow: 0 8px 20px -4px rgb(8 12 20 / 12%);
+  --creation-surface: linear-gradient(
+    rgb(255 255 255 / 92%) 0%,
+    rgb(240 240 240 / 92%) 106.67%
+  );
+  --creation-track: rgb(0 0 0 / 6%);
+  --creation-card: rgb(0 0 0 / 5%);
+  --creation-border: rgb(0 0 0 / 8%);
+  --creation-selected-base: rgb(250 250 250);
+  --creation-selected-foreground: rgb(26 26 26);
+  --creation-new-icon: rgb(250 250 250);
+  --creation-new-icon-foreground: rgb(26 26 26);
+  --creation-selected-gradient:
+    linear-gradient(
+      rgb(250, 250, 250) 0%,
+      rgba(250, 250, 250, 0.78) 6%,
+      rgba(250, 250, 250, 0.65) 13%,
+      rgba(250, 250, 250, 0.37) 25%,
+      rgba(0, 0, 0, 0) 42%,
+      rgba(0, 0, 0, 0) 58%,
+      rgba(250, 250, 250, 0.37) 75%,
+      rgba(250, 250, 250, 0.65) 87%,
+      rgba(250, 250, 250, 0.78) 94%,
+      rgb(250, 250, 250) 100%
+    ),
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0) 0%,
+      rgba(247, 237, 227, 0.14) 3%,
+      rgba(253, 233, 221, 0.73) 13%,
+      rgba(255, 226, 206, 0.85) 22%,
+      rgba(255, 221, 197, 0.85) 29%,
+      rgba(245, 231, 209, 0.85) 35%,
+      rgba(235, 234, 224, 0.85) 41%,
+      rgba(196, 237, 240, 0.85) 48%,
+      rgba(173, 238, 251, 0.85) 54%,
+      rgba(150, 239, 255, 0.85) 61%,
+      rgba(158, 235, 251, 0.84) 67%,
+      rgba(173, 238, 251, 0.85) 73%,
+      rgba(190, 243, 254, 0.85) 80%,
+      rgba(204, 245, 255, 0.78) 86%,
+      rgba(206, 243, 249, 0.4) 92%,
+      rgba(218, 247, 249, 0.11) 97%,
+      rgba(0, 0, 0, 0) 100%
+    ),
+    none;
   --navigation-accent: #007cbf;
   --canvas-connection-highlight: #008ee5;
   --canvas-connection-aggregate-foreground: #121212;
@@ -146,6 +197,17 @@
 }
 
 .dark {
+  --confirmation-background: #1a1a1a;
+  --confirmation-secondary: rgb(255 255 255 / 8%);
+  --confirmation-primary: #fafafa;
+  --confirmation-primary-foreground: #1a1a1a;
+  --creation-surface: linear-gradient(
+    rgb(26 26 26 / 72%) 0%,
+    rgb(42 42 42 / 72%) 106.67%
+  );
+  --creation-track: rgb(255 255 255 / 8%);
+  --creation-card: rgb(255 255 255 / 8%);
+  --creation-border: rgb(255 255 255 / 8%);
   --navigation-accent: #00a8ff;
   --workspace-foreground: #fff;
   --workspace-muted-foreground: rgb(255 255 255 / 70%);
@@ -879,35 +941,167 @@ button:not(:disabled),
   min-height: 0;
   flex: 1;
 }
+/* UI-PC-DELETE-01: one compact confirmation for single and batch canvas commands. */
+.canvas-delete-overlay {
+  background: var(--confirmation-overlay);
+  backdrop-filter: none;
+}
+.canvas-delete-dialog[data-slot="alert-dialog-content"] {
+  width: 480px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  padding: 24px;
+  gap: 24px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--confirmation-background);
+  box-shadow: var(--confirmation-shadow);
+}
+.canvas-delete-dialog [data-slot="alert-dialog-header"] {
+  gap: 24px;
+}
+.canvas-delete-dialog [data-slot="alert-dialog-title"] {
+  padding-right: 32px;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: var(--workspace-foreground);
+}
+.canvas-delete-dialog [data-slot="alert-dialog-description"] {
+  font-size: 14px;
+  line-height: 22px;
+  text-wrap: wrap;
+  color: var(--workspace-muted-foreground);
+}
+.canvas-delete-dialog [data-slot="alert-dialog-footer"] {
+  margin: 0;
+  padding: 0;
+  gap: 12px;
+  border: 0;
+  background: transparent;
+}
+.canvas-delete-dialog [data-slot="alert-dialog-footer"] > button {
+  height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 22px;
+}
+.canvas-delete-dialog [data-slot="alert-dialog-cancel"] {
+  background: var(--confirmation-secondary);
+  color: var(--workspace-foreground);
+}
+.canvas-delete-dialog [data-slot="alert-dialog-action"] {
+  background: var(--confirmation-primary);
+  color: var(--confirmation-primary-foreground);
+}
+.canvas-delete-close {
+  position: absolute;
+  right: 16px;
+  top: 18px;
+  width: 36px;
+  height: 36px;
+}
+.canvas-card-menu {
+  width: 196px;
+  min-width: 0;
+  padding: 4px;
+  border: 0;
+  border-radius: 12px;
+}
+.canvas-card-menu [data-slot="dropdown-menu-group"] {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.canvas-card-menu [data-slot="dropdown-menu-item"] {
+  min-height: 36px;
+  padding: 9px 12px;
+  gap: 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 18px;
+}
+.canvas-card-menu [data-slot="dropdown-menu-separator"] {
+  height: 9px;
+  margin: 0 12px;
+  background: linear-gradient(
+    transparent 4px,
+    var(--border) 4px,
+    var(--border) 5px,
+    transparent 5px
+  );
+}
+@media (max-width: 767px) {
+  .canvas-delete-dialog [data-slot="alert-dialog-footer"] > button {
+    min-width: 64px;
+    height: 44px;
+  }
+  .canvas-delete-close {
+    width: 44px;
+    height: 44px;
+    top: 14px;
+    right: 12px;
+  }
+  .canvas-card-menu [data-slot="dropdown-menu-item"] {
+    min-height: 44px;
+  }
+}
+
 .home-page {
-  padding: var(--layout-content-y) var(--layout-content-x);
+  padding: 0 var(--layout-content-x) var(--layout-content-y);
 }
 .creation-hero {
-  max-width: 1012px;
-  margin-inline: auto;
-  padding: 12px 0 40px;
+  max-width: 1014px;
+  margin: -12px auto 0;
+  padding: 0 0 40px;
 }
 .creation-hero h1 {
   text-align: center;
-  font-size: 28px;
-  font-weight: 600;
-  line-height: 36px;
+  font-size: 30px;
+  font-weight: 400;
+  line-height: 38px;
   margin: 0 0 24px;
 }
 .creation-toggle {
-  margin: 0 auto 24px;
+  margin: 0 auto 36px;
   width: 320px;
   max-width: 100%;
   height: 40px;
-  padding: 4px;
-  gap: 4px;
+  padding: 2px;
+  gap: 2px;
   border: 0;
   border-radius: 999px;
-  background: var(--muted);
+  background: var(--creation-track);
 }
 .creation-toggle [data-slot="toggle-group-item"] {
   flex: 1;
   min-width: 0;
+  height: 36px;
+  border-radius: 999px;
+  font-size: 13px;
+  line-height: 22px;
+  color: var(--foreground);
+}
+.creation-toggle [data-slot="toggle-group-item"][data-state="on"] {
+  background-color: var(--creation-selected-base);
+  background-image: var(--creation-selected-gradient);
+  color: var(--creation-selected-foreground);
+}
+.creation-hero[data-mode="canvas"] .creation-toggle {
+  margin-bottom: 0;
+}
+.creation-hero .creation-composer[data-slot="input-group"],
+.creation-hero .canvas-idea[data-slot="input-group"] {
+  background: var(--creation-surface);
+  box-shadow: inset 0 0 0 1px var(--creation-border);
+  border-radius: 24px;
+}
+.creation-hero .home-prompt-editor,
+.creation-hero .creation-ready-prompt .tiptap {
+  font-size: 14px;
 }
 /* Content owns its height: references, wrapped tools and recovery stay visible. */
 .creation-stage {
@@ -1027,28 +1221,62 @@ button:not(:disabled),
   max-height: none;
 }
 .home-canvas-launch {
-  gap: 24px;
+  gap: 0;
   justify-content: flex-start;
+}
+.home-canvas-heading {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  height: 36px;
+  color: var(--muted-foreground);
 }
 .home-canvas-list {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  height: 144px;
+  gap: 8px;
   min-width: 0;
 }
 .home-canvas-list > a,
 .home-canvas-list > button,
 .home-canvas-skeleton {
-  height: 144px;
+  position: relative;
+  aspect-ratio: 16 / 9;
+  height: auto;
   min-width: 0;
-  border-radius: 12px;
-  gap: 12px;
+  border-radius: 16px;
+  gap: 8px;
+}
+.home-canvas-card {
+  background: var(--creation-card);
+  color: var(--muted-foreground);
+}
+.home-canvas-card-title {
+  position: absolute;
+  inset: auto 12px 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  color: var(--foreground);
+  font-weight: 400;
+}
+.home-canvas-new {
+  background: var(--creation-surface);
+  box-shadow: inset 0 0 0 1px var(--creation-border);
+}
+.home-canvas-new-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--creation-new-icon);
+  color: var(--creation-new-icon-foreground);
 }
 .home-canvas-state[data-slot="empty"] {
   grid-column: span 2;
   min-height: 0;
-  height: 144px;
   padding: 12px;
   gap: 8px;
 }
@@ -1058,18 +1286,30 @@ button:not(:disabled),
 .home-canvas-state [data-slot="empty-media"] {
   display: none;
 }
+.home-canvas-launch > form {
+  margin-top: 32px;
+}
 .canvas-idea[data-slot="input-group"] {
   margin: 0 auto;
-  max-width: 812px;
-  height: 72px;
-  padding: 12px 16px;
+  max-width: 814px;
+  min-height: 70px;
+  height: auto;
+  padding: 16px 17px;
+}
+.creation-hero .canvas-idea[data-slot="input-group"] {
+  border-radius: 20px;
 }
 .canvas-idea .home-prompt {
   flex: 1;
   min-width: 0;
 }
 .canvas-idea .home-prompt-editor {
-  height: 44px;
+  height: 24px;
+  min-height: 24px;
+}
+.canvas-idea > [data-slot="input-group-addon"] {
+  padding: 0;
+  margin: 0;
 }
 .inspiration h2 {
   font-size: 16px;
@@ -1428,6 +1668,7 @@ button:not(:disabled),
     padding: 24px 16px 32px;
   }
   .creation-hero {
+    margin-top: 0;
     padding: 8px 0 16px;
   }
   .creation-hero h1 {
@@ -1437,6 +1678,7 @@ button:not(:disabled),
   }
   .creation-toggle {
     width: 100%;
+    height: 48px;
     margin-bottom: 16px;
   }
   .creation-composer[data-slot="input-group"] {
@@ -1478,8 +1720,18 @@ button:not(:disabled),
     min-width: 44px;
     min-height: 44px;
   }
-  .home-canvas-launch {
-    gap: 16px;
+  .creation-toggle [data-slot="toggle-group-item"] {
+    height: 44px;
+  }
+  .home-canvas-heading {
+    height: 44px;
+  }
+  .home-canvas-heading > a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .home-canvas-launch > form {
+    margin-top: 24px;
   }
   .creation-editor-skeleton {
     height: 200px;
@@ -1523,20 +1775,23 @@ button:not(:disabled),
     min-width: 120px;
   }
   .home-canvas-list {
-    display: flex;
-    overflow-x: auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .home-canvas-list > a,
-  .home-canvas-list > button,
-  .home-canvas-skeleton {
-    flex: 0 0 172px;
+  .home-canvas-card-title {
+    inset-inline: 12px;
+    bottom: 8px;
+    font-size: 13px;
   }
-  .home-canvas-state[data-slot="empty"] {
-    flex: 0 0 172px;
+  .home-canvas-new {
+    font-size: 13px;
   }
   .canvas-idea[data-slot="input-group"] {
-    height: 80px;
+    min-height: 80px;
+    height: auto;
     padding: 12px;
+  }
+  .canvas-idea .home-prompt-editor {
+    height: 48px;
   }
 }
 .workspace-tabs {

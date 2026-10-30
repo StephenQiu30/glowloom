@@ -7,6 +7,7 @@ const sizes = {
   assets: 20,
   subjects: 20,
   canvas: 14,
+  "canvas-card": 24,
   sidebar: 16,
   notification: 16,
   store: 16,
