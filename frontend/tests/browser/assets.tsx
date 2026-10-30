@@ -120,7 +120,10 @@ const containers = (["current", "legacy"] as const).flatMap(
     ["canvas", "short_drama"].map((kind, offset) => ({
       id: uuid(300 + index * 10 + offset),
       project_id: project.id,
-      name: `${collection === "legacy" ? "旧草稿" : kind === "short_drama" ? "山谷短剧" : "山谷画布"}（合成验收）`,
+      name:
+        scenario === "text"
+          ? "长名称画布 · 山谷晨光与海边香氛的品牌视觉参考（合成验收）"
+          : `${collection === "legacy" ? "旧草稿" : kind === "short_drama" ? "山谷短剧" : "山谷画布"}（合成验收）`,
       kind,
       collection,
       revision: "5",
@@ -132,7 +135,8 @@ const containers = (["current", "legacy"] as const).flatMap(
       cover_unavailable: false,
       can_copy_project: collection === "current",
       created_at: "2026-10-27T01:00:00Z",
-      updated_at: "2026-10-28T01:00:00Z",
+      updated_at:
+        scenario === "text" ? "2024-10-28T01:00:00Z" : "2026-10-28T01:00:00Z",
     })),
 );
 const receipts = new Map<string, unknown>();

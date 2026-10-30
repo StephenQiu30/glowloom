@@ -468,14 +468,18 @@ export function AssetCanvasList({
               {batch || locked ? (
                 <span className="contents">
                   <CanvasCover item={item} />
-                  <CanvasText item={item} sort={filters.sort} />
+                  <CanvasText
+                    item={item}
+                    sort={filters.sort}
+                    reserveAction={!batch}
+                  />
                 </span>
               ) : (
                 <Link
                   href={`/canvas?project_id=${item.project_id}&canvas_id=${item.id}`}
                 >
                   <CanvasCover item={item} />
-                  <CanvasText item={item} sort={filters.sort} />
+                  <CanvasText item={item} sort={filters.sort} reserveAction />
                 </Link>
               )}
             </Button>
@@ -510,7 +514,7 @@ export function AssetCanvasList({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="absolute right-1 bottom-3 max-md:size-11"
+                      className="absolute right-1 bottom-1 max-md:size-11"
                       disabled={locked}
                       onPointerDown={rememberDialogTrigger}
                       onFocus={rememberDialogTrigger}
@@ -703,15 +707,20 @@ function CanvasCover({ item }: { item: AssetCanvasItem }) {
 function CanvasText({
   item,
   sort,
+  reserveAction,
 }: {
   item: AssetCanvasItem;
   sort: AssetFilters["sort"];
+  reserveAction: boolean;
 }) {
   const time = sort === "created" ? item.created_at : item.updated_at;
   return (
     <>
-      <AssetCardTitle reserveAction>{item.name}</AssetCardTitle>
-      <AssetCardMeta title={new Date(time).toLocaleString("zh-CN")}>
+      <AssetCardTitle reserveAction={reserveAction}>{item.name}</AssetCardTitle>
+      <AssetCardMeta
+        reserveAction={reserveAction}
+        title={new Date(time).toLocaleString("zh-CN")}
+      >
         {item.collection === "legacy" ? "画布 · " : ""}
         {formatAssetTime(time)}
         {sort === "created" ? "创建" : "修改"}

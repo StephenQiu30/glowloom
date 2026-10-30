@@ -84,7 +84,7 @@
   font-size: 12px;
   line-height: 20px;
 }
-.unified-subject-card .unified-subject-info {
+.unified-subject-card .unified-subject-info[data-card-actions] {
   padding-right: 48px;
 }
 .unified-subject-new .unified-subject-info {
@@ -103,6 +103,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+@media (max-width: 767px) {
+  .unified-subject-card .unified-subject-info[data-card-actions] {
+    padding-right: 56px;
+  }
 }
 @media (max-width: 639px) {
   .unified-subject-grid {

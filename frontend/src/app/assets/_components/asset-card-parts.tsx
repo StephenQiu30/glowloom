@@ -36,7 +36,7 @@ export function AssetCardTitle({
     <span
       className={cn(
         "mt-2 w-full truncate px-3 text-xs leading-5 font-medium text-workspace-foreground",
-        reserveAction && "pr-12",
+        reserveAction && "pr-12 max-md:pr-14",
       )}
       title={typeof children === "string" ? children : undefined}
     >
@@ -45,11 +45,17 @@ export function AssetCardTitle({
   );
 }
 
-export function AssetCardMeta(props: ComponentProps<"span">) {
+export function AssetCardMeta({
+  reserveAction = false,
+  ...props
+}: ComponentProps<"span"> & { reserveAction?: boolean }) {
   return (
     <span
       {...props}
-      className="w-full truncate px-3 text-xs leading-5 font-normal text-workspace-subtle-foreground"
+      className={cn(
+        "w-full truncate px-3 text-xs leading-5 font-normal text-workspace-subtle-foreground",
+        reserveAction && "pr-12 max-md:pr-14",
+      )}
     />
   );
 }

@@ -20,7 +20,12 @@ const items = Array.from({ length: 45 }, (_, i) => ({
   owner_scope_id: uuid(2),
   revision: 1,
   version_id: uuid(200 + i),
-  name: `合成主体 ${String(i + 1).padStart(2, "0")}`,
+  name:
+    scenario === "text" && i < 2
+      ? i === 0
+        ? "长名称主体 · 海边香氛与山野晨光的跨项目品牌视觉参考"
+        : "LongUnbrokenSubjectNameForTypographyOverflowAcceptance20261030"
+      : `合成主体 ${String(i + 1).padStart(2, "0")}`,
   description: "合成回执，仅验证列表加载",
   favorite: i === 0,
   primary: {

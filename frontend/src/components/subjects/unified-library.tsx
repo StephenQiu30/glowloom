@@ -520,10 +520,15 @@ export function UnifiedSubjectLibrary({
                         </Button>
                       ) : null}
                     </div>
-                    <div className="unified-subject-info pr-12">
-                      <p className="truncate">{subject.name}</p>
+                    <div
+                      className="unified-subject-info"
+                      data-card-actions={(!batch && !onSelect) || undefined}
+                    >
+                      <p className="truncate" title={subject.name}>
+                        {subject.name}
+                      </p>
                       <p
-                        className="text-muted-foreground"
+                        className="truncate text-muted-foreground"
                         suppressHydrationWarning
                       >
                         主体 ·{" "}
@@ -543,7 +548,7 @@ export function UnifiedSubjectLibrary({
                           <Button
                             variant="secondary"
                             size="icon"
-                            className="absolute right-3 bottom-3 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 max-md:opacity-100"
+                            className="absolute right-1 bottom-1 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 max-md:size-11 max-md:opacity-100"
                             aria-label={`更多 ${subject.name}`}
                             disabled={locked}
                           >

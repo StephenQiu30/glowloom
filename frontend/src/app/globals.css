@@ -334,6 +334,7 @@ button:not(:disabled),
   overflow: hidden;
 }
 .product-content {
+  container: product-content / inline-size;
   min-width: 0;
   min-height: 0;
   height: 100dvh;
@@ -401,6 +402,46 @@ button:not(:disabled),
   display: flex;
   min-width: 0;
   align-items: center;
+}
+
+/* CR-075: reserve full rows before search and page controls can collide. */
+@media (min-width: 768px) {
+  @container product-content (width < 850px) {
+    .product-header:not([data-asset-layout]):has(
+        .product-header-toolbar:not(:empty)
+      ) {
+      grid-template-columns: minmax(0, 1fr) auto;
+      padding-block: 12px;
+      row-gap: 8px;
+    }
+    .product-header:not([data-asset-layout]) .product-header-actions {
+      grid-column: 1 / -1;
+      grid-row: 1;
+      justify-self: end;
+      max-width: 100%;
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+    .product-header:not([data-asset-layout]) .product-header-toolbar {
+      grid-column: 1;
+      grid-row: 2;
+    }
+    .product-header:not([data-asset-layout]) .product-header-page-actions {
+      grid-column: 2;
+      grid-row: 2;
+      justify-content: flex-end;
+    }
+    .product-header:not([data-asset-layout])[data-replace-base]
+      .product-header-toolbar {
+      grid-column: 1 / -1;
+      grid-row: 1;
+    }
+    .product-header:not([data-asset-layout])[data-replace-base]
+      .product-header-page-actions {
+      grid-column: 1 / -1;
+      grid-row: 2;
+    }
+  }
 }
 .product-brand {
   display: inline-flex;

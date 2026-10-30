@@ -484,7 +484,11 @@ function TimeFilter({
             <ChevronDown data-icon="inline-end" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-80 max-w-[calc(100vw-2rem)]">
+        <PopoverContent
+          align="start"
+          collisionPadding={16}
+          className="max-h-[var(--radix-popover-content-available-height)] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto"
+        >
           <form
             onSubmit={(event) => {
               event.preventDefault();
