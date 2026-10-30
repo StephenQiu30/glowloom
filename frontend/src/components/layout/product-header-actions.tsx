@@ -7,12 +7,14 @@ import {
   type ProductAccountActionsProps,
 } from "./product-account-actions";
 import { ProductSearch, type PageSearch } from "./product-search";
+import { ProductUtilityNavigation } from "./product-utility-navigation";
 
 export type ProductHeaderActionsProps = ProductAccountActionsProps & {
   search?: PageSearch;
   assetLayout?: boolean;
   pageActions?: ReactNode;
   isMobile: boolean;
+  showSearch?: boolean;
 };
 
 /** Page-specific tools never change the shared account area's composition or identity. */
@@ -21,6 +23,7 @@ export function ProductHeaderActions({
   pageActions,
   search,
   isMobile,
+  showSearch = true,
   ...accountProps
 }: ProductHeaderActionsProps) {
   return (
@@ -36,14 +39,19 @@ export function ProductHeaderActions({
           aria-label="资产工具"
           className="max-w-full flex-wrap"
         >
-          <div data-asset-search className="contents">
-            <ProductSearch search={search} isMobile={isMobile} />
-          </div>
+          {showSearch && (
+            <div data-asset-search className="contents">
+              <ProductSearch search={search} isMobile={isMobile} />
+            </div>
+          )}
           {pageActions}
         </ButtonGroup>
       ) : (
-        <ProductSearch key="search" search={search} isMobile={isMobile} />
+        showSearch && (
+          <ProductSearch key="search" search={search} isMobile={isMobile} />
+        )
       )}
+      <ProductUtilityNavigation />
       <ProductAccountActions key="account" {...accountProps} />
     </div>
   );

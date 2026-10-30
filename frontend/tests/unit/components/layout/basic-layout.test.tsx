@@ -216,7 +216,9 @@ it("R6 主导航与画布入口指向真实路由，支持收起和展开", asyn
   fireEvent.click(screen.getByRole("button", { name: "展开导航" }));
   expect(screen.queryByRole("button", { name: "展开导航" })).toBeNull();
   const header = screen.getByRole("banner", { name: "页面顶栏" });
-  expect(within(header).getByRole("button", { name: "搜索灵感" })).toBeTruthy();
+  expect(within(header).queryByRole("button", { name: "搜索灵感" })).toBeNull();
+  fireEvent.keyDown(document, { key: "k", metaKey: true });
+  expect(screen.queryByRole("combobox")).toBeNull();
   expect(within(header).getByRole("button", { name: "账号菜单" })).toBeTruthy();
   expect(screen.queryByRole("combobox", { name: "当前创作空间" })).toBeNull();
   expect(screen.queryByRole("link", { name: "团队" })).toBeNull();
@@ -438,7 +440,7 @@ it("游客侧栏展开和收起均只保留顶栏登录入口", async () => {
   expect(screen.getByRole("link", { name: "资产" })).toBeTruthy();
 });
 
-it("普通页面换页保留同一个页头与侧栏节点，并清理前一页搜索回调", async () => {
+it("首页不挂载搜索，切页保留外壳并启用探索搜索", async () => {
   const oldSearch = vi.fn();
   const nextSearch = vi.fn();
   const view = render(
@@ -460,7 +462,9 @@ it("普通页面换页保留同一个页头与侧栏节点，并清理前一页�
   fireEvent.click(toggle);
   const header = screen.getByRole("banner", { name: "页面顶栏" });
   const navigation = screen.getByRole("navigation", { name: "主导航" });
-  expect(screen.getByRole("button", { name: "搜索首页" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "搜索首页" })).toBeNull();
+  fireEvent.keyDown(document, { key: "k", metaKey: true });
+  expect(screen.queryByRole("combobox")).toBeNull();
   mocks.pathname = "/explore";
   view.rerender(
     <ApplicationLayout>
@@ -672,7 +676,20 @@ it("普通页面与资产复用同一账号组，切换路由保留积分弹层�
   );
   const account = await screen.findByRole("button", { name: "账号菜单" });
   const group = screen.getByRole("group", { name: "通知与账号" });
-  expect(within(group).getByRole("link", { name: "会员中心" })).toBeTruthy();
+  expect(
+    within(group).getByRole("link", { name: "开会员" }).getAttribute("href"),
+  ).toBe("/billing/membership");
+  const utilities = screen.getByRole("navigation", { name: "快捷导航" });
+  for (const [name, href] of [
+    ["历史画布", "/projects"],
+    ["积分超市", "/billing/recharge"],
+  ])
+    expect(
+      within(utilities).getByRole("link", { name }).getAttribute("href"),
+    ).toBe(href);
+  expect(
+    within(utilities).queryByRole("link", { name: "企业服务" }),
+  ).toBeNull();
   fireEvent.click(within(group).getByRole("button", { name: "积分余额" }));
   expect(await screen.findByText("积分服务暂未开放")).toBeTruthy();
   for (const page of [

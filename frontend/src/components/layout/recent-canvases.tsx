@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Box } from "lucide-react";
+import { ProductNavigationIcon } from "./product-navigation-icon";
 import { listProjects } from "@/api/projects";
 import {
   canvasHref,
@@ -156,7 +157,7 @@ export function RecentCanvases({
       </div>
     );
   return (
-    <SidebarMenu aria-label="最近画布">
+    <SidebarMenu aria-label="最近画布" className="sidebar-canvas-list">
       {projects?.map((project) => (
         <SidebarMenuItem key={project.id}>
           <SidebarMenuButton asChild tooltip={project.name}>
@@ -165,7 +166,9 @@ export function RecentCanvases({
               onClick={onNavigate}
               title={project.name}
             >
-              <Box />
+              <span className="sidebar-canvas-icon" aria-hidden="true">
+                <ProductNavigationIcon name="canvas" />
+              </span>
               <span>{project.name}</span>
             </Link>
           </SidebarMenuButton>

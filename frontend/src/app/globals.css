@@ -56,6 +56,7 @@
 }
 
 :root {
+  --navigation-accent: #007cbf;
   --canvas-connection-highlight: #008ee5;
   --canvas-connection-aggregate-foreground: #121212;
   --canvas-connection-aggregate-background: #ffffff;
@@ -145,6 +146,7 @@
 }
 
 .dark {
+  --navigation-accent: #00a8ff;
   --workspace-foreground: #fff;
   --workspace-muted-foreground: rgb(255 255 255 / 70%);
   --workspace-subtle-foreground: rgb(255 255 255 / 35%);
@@ -504,6 +506,219 @@ button:not(:disabled),
 .product-header-actions > button svg {
   width: 20px;
   height: 20px;
+}
+/* Shared navigation: Figma 3280:64554, measured against the 2026-10-30 source. */
+.product-shell {
+  --layout-header: 80px;
+  --navigation-active: color-mix(in srgb, var(--foreground) 8%, transparent);
+  --navigation-icon-plate: color-mix(in srgb, var(--foreground) 12%, transparent);
+  --navigation-border: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+.product-navigation-icon {
+  display: inline-block;
+  width: var(--navigation-icon-size);
+  height: var(--navigation-icon-size);
+  flex: 0 0 var(--navigation-icon-size);
+  background: currentColor;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+}
+.sidebar-brand {
+  padding: 14px 12px 30px;
+}
+.sidebar-brand .sidebar-toggle {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0;
+  color: var(--muted-foreground);
+  border-radius: 6px;
+  background: transparent;
+}
+.primary-navigation [data-slot="sidebar-menu-button"] {
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 500;
+  color: var(--foreground);
+}
+.primary-navigation [data-slot="sidebar-menu-button"][data-active="true"] {
+  background: var(--navigation-active);
+}
+.primary-navigation + .sidebar-history {
+  margin-top: 12px;
+}
+.sidebar-history + .sidebar-history {
+  margin-top: 8px;
+}
+.sidebar-history [data-slot="sidebar-group-label"] {
+  height: 28px;
+}
+.sidebar-history [data-slot="sidebar-group-action"] {
+  top: 8px;
+}
+.sidebar-history [data-slot="sidebar-group-content"] {
+  padding-top: 4px;
+}
+.sidebar-history-empty {
+  min-height: 36px;
+  padding: 0 8px;
+}
+.sidebar-history-empty [data-slot="empty-description"] {
+  font-size: 12px;
+}
+.sidebar-canvas-list {
+  gap: 2px;
+}
+.sidebar-history .sidebar-canvas-list [data-slot="sidebar-menu-button"] {
+  height: 36px;
+  gap: 8px;
+  padding: 2px 8px;
+  border-radius: 8px;
+}
+.sidebar-canvas-icon {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: var(--navigation-icon-plate);
+}
+[data-collapsible="icon"] .sidebar-brand-compact {
+  padding: 8px 12px 4px;
+}
+[data-collapsible="icon"]
+  .product-sidebar
+  [data-slot="sidebar-menu-button"]
+  > [data-product-icon],
+[data-collapsible="icon"]
+  .product-sidebar
+  [data-slot="sidebar-menu-button"]
+  > .sidebar-canvas-icon {
+  display: inline-flex;
+}
+.product-utility-navigation {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+}
+.product-utility-navigation a {
+  height: 36px;
+  gap: 6px;
+  padding: 0 12px;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  border-radius: 8px;
+  box-shadow: none;
+}
+.product-utility-action {
+  min-width: 96px;
+  border-color: var(--navigation-border);
+  background: color-mix(in srgb, var(--background) 60%, transparent);
+}
+.product-history-action {
+  color: var(--muted-foreground);
+}
+.product-account-actions {
+  display: flex;
+  height: 36px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 6px 3px 4px;
+  border: 1px solid var(--navigation-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--background) 60%, transparent);
+}
+.product-account-actions .product-notification-action,
+.product-account-actions [aria-label="账号菜单"] {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0;
+  border-radius: 6px;
+}
+.product-account-actions [data-slot="avatar"] {
+  width: 24px;
+  height: 24px;
+}
+.product-account-divider {
+  width: 1px;
+  height: 12px;
+  margin-inline: 4px;
+  background: var(--navigation-border);
+}
+.product-account-actions .product-credit-action,
+.product-account-actions .product-membership-action {
+  height: 28px;
+  gap: 6px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--navigation-accent);
+}
+@media (width < 1280px) {
+  .product-utility-navigation {
+    display: none;
+  }
+}
+@media (width < 768px) {
+  .product-shell {
+    --layout-header: 64px;
+  }
+  .product-account-actions {
+    height: 50px;
+    padding-block: 2px;
+  }
+  .product-account-actions .product-notification-action,
+  .product-account-actions [aria-label="账号菜单"],
+  .product-account-actions .product-credit-action {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    padding: 0;
+  }
+  .product-membership-action,
+  .product-account-divider {
+    display: none;
+  }
+  .primary-navigation [data-slot="sidebar-menu-button"],
+  .sidebar-history .sidebar-canvas-list [data-slot="sidebar-menu-button"],
+  .sidebar-history [data-slot="sidebar-group-action"],
+  .sidebar-brand .sidebar-toggle {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+@media (width < 360px) {
+  .product-account-actions .product-credit-action {
+    display: none;
+  }
+}
+@media (width >= 768px) {
+  .product-header:has(.product-header-toolbar:not(:empty)):not(
+      :has(.product-header-page-actions:not(:empty))
+    ) {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .product-shell .product-header[data-asset-layout],
+  .product-shell .product-header:has([data-explore-navigation]) {
+    padding-right: 24px;
+  }
+  .product-shell
+    .product-header[data-asset-layout]:has(.product-header-toolbar:not(:empty)) {
+    min-height: 80px;
+    padding-block: 0;
+    grid-auto-rows: minmax(80px, auto);
+  }
 }
 .page-heading {
   display: flex;

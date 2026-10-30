@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Bell } from "lucide-react";
 import { CreditPopover } from "@/components/billing/credit-popover";
 import { ThemeToggle } from "@/components/controls/theme-controls";
 import { AccountMenu } from "@/components/account/account-menu";
 import { Button } from "@/components/ui/button";
-import { ButtonGroup } from "@/components/ui/button-group";
+import { ProductNavigationIcon } from "./product-navigation-icon";
 import {
   Tooltip,
   TooltipContent,
@@ -32,12 +31,12 @@ export function ProductAccountActions({
       <TooltipTrigger asChild>
         <Button
           variant="ghost"
-          size="icon-lg"
-          className="max-md:size-11"
+          size="icon-sm"
+          className="product-notification-action"
           aria-label="消息中心"
           onClick={() => onFeature("消息中心")}
         >
-          <Bell data-icon="inline-start" />
+          <ProductNavigationIcon name="notification" />
         </Button>
       </TooltipTrigger>
       <TooltipContent>消息中心</TooltipContent>
@@ -49,23 +48,24 @@ export function ProductAccountActions({
     <Button onClick={onLogin}>登录</Button>
   );
   return (
-    <ButtonGroup
-      variant="outline"
+    <div
+      role="group"
       data-account-actions
       aria-label="通知与账号"
-      className="shrink-0"
+      className="product-account-actions"
     >
       {!actor ? <ThemeToggle /> : null}
       {notification}
       {actor ? (
         <>
-          <CreditPopover />
-          <Button asChild variant="ghost" className="max-lg:hidden">
-            <Link href="/billing/membership">会员中心</Link>
+          <span className="product-account-divider" aria-hidden="true" />
+          <CreditPopover navigation />
+          <Button asChild variant="ghost" className="product-membership-action">
+            <Link href="/billing/membership">开会员</Link>
           </Button>
         </>
       ) : null}
       {account}
-    </ButtonGroup>
+    </div>
   );
 }

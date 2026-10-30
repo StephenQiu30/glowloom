@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Coins } from "lucide-react";
+import { ProductNavigationIcon } from "@/components/layout/product-navigation-icon";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -10,7 +11,11 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 
-export function CreditPopover() {
+export function CreditPopover({
+  navigation = false,
+}: {
+  navigation?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -18,9 +23,17 @@ export function CreditPopover() {
         <Button
           variant="ghost"
           aria-label="积分余额"
-          className="max-[359px]:hidden max-md:size-11 max-md:p-0"
+          className={
+            navigation
+              ? "product-credit-action"
+              : "max-[359px]:hidden max-md:size-11 max-md:p-0"
+          }
         >
-          <Coins data-icon="inline-start" />
+          {navigation ? (
+            <ProductNavigationIcon name="credit" />
+          ) : (
+            <Coins data-icon="inline-start" />
+          )}
           <span className="max-md:hidden">积分</span>
         </Button>
       </PopoverTrigger>

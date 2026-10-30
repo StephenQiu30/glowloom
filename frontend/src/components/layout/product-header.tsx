@@ -16,6 +16,7 @@ export function ProductHeader({
   pageActionsRef,
   replaceBase = false,
   search,
+  showSearch,
   actor,
   isMobile,
   navigationOpen,
@@ -49,6 +50,7 @@ export function ProductHeader({
       assetLayout={assetLayout}
       pageActions={assetLayout ? pageActions : undefined}
       search={search}
+      showSearch={showSearch}
       actor={actor}
       isMobile={isMobile}
       onLogin={onLogin}

@@ -3,22 +3,12 @@ import { NewCanvasButton } from "@/components/projects/new-canvas-button";
 import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
 import { RecentCanvases } from "./recent-canvases";
+import { ProductNavigationIcon } from "./product-navigation-icon";
 
 import Link from "next/link";
 import type { ComponentProps } from "react";
 import { cn } from "cn";
-import {
-  Compass,
-  Contact,
-  Folder,
-  LayoutDashboard,
-  MessageSquarePlus,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Plus,
-  Sparkles,
-  X,
-} from "lucide-react";
+import { X } from "lucide-react";
 import { BrandMark } from "@/components/brand/brand";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription } from "@/components/ui/empty";
@@ -42,11 +32,11 @@ import {
 } from "@/components/ui/sidebar";
 
 const links = [
-  { id: "home", label: "创作", icon: Sparkles, href: "/" },
-  { id: "explore", label: "探索", icon: Compass, href: "/explore" },
-  { id: "assets", label: "资产", icon: Folder, href: "/assets" },
-  { id: "subjects", label: "主体", icon: Contact, href: "/subjects" },
-];
+  { id: "home", label: "创作", icon: "creation", href: "/" },
+  { id: "explore", label: "探索", icon: "explore", href: "/explore" },
+  { id: "assets", label: "资产", icon: "assets", href: "/assets" },
+  { id: "subjects", label: "主体", icon: "subjects", href: "/subjects" },
+] as const;
 
 function PrimaryNavigation({ screen }: { screen: string }) {
   const { setOpenMobile } = useSidebar();
@@ -57,7 +47,7 @@ function PrimaryNavigation({ screen }: { screen: string }) {
       className="primary-navigation"
     >
       <SidebarMenu>
-        {links.map(({ id, label, icon: Icon, href }) => (
+        {links.map(({ id, label, icon, href }) => (
           <SidebarMenuItem key={id}>
             <SidebarMenuButton
               variant="workspace"
@@ -73,7 +63,7 @@ function PrimaryNavigation({ screen }: { screen: string }) {
                 aria-current={screen === id ? "page" : undefined}
                 onClick={() => setOpenMobile(false)}
               >
-                <Icon data-icon="inline-start" />
+                <ProductNavigationIcon name={icon} />
                 <span>{label}</span>
               </Link>
             </SidebarMenuButton>
@@ -98,7 +88,6 @@ export function ProductSider({
   const { selected: space, pending: scopePending } = useSpace();
   const compact = !open && !isMobile;
   const toggleLabel = isMobile ? "关闭导航" : open ? "收起导航" : "展开导航";
-  const ToggleIcon = isMobile ? X : open ? PanelLeftClose : PanelLeftOpen;
   const closeMobile = () => setOpenMobile(false);
   return (
     <Sidebar
@@ -137,7 +126,7 @@ export function ProductSider({
               aria-controls="product-sidebar-navigation"
               onClick={toggleSidebar}
             >
-              <ToggleIcon data-icon="inline-start" />
+              {isMobile ? <X /> : <ProductNavigationIcon name="sidebar" />}
             </Button>
           </TooltipTrigger>
           <TooltipContent side={compact ? "right" : "bottom"}>
@@ -156,7 +145,7 @@ export function ProductSider({
               <SidebarGroupLabel>对话</SidebarGroupLabel>
               <SidebarGroupAction asChild>
                 <Link href="/" aria-label="新建创作" onClick={closeMobile}>
-                  <Plus />
+                  <ProductNavigationIcon name="new-creation" />
                 </Link>
               </SidebarGroupAction>
             </>
@@ -171,7 +160,7 @@ export function ProductSider({
                     className="group-data-[collapsible=icon]:size-9! group-data-[collapsible=icon]:p-0!"
                   >
                     <Link href="/" aria-label="新建创作" onClick={closeMobile}>
-                      <MessageSquarePlus />
+                      <ProductNavigationIcon name="new-creation" />
                       <span>新建创作</span>
                     </Link>
                   </SidebarMenuButton>
@@ -205,7 +194,7 @@ export function ProductSider({
                   aria-label="新建画布"
                   onClick={closeMobile}
                 >
-                  <Plus />
+                  <ProductNavigationIcon name="plus" />
                 </NewCanvasButton>
               </SidebarGroupAction>
             </>
@@ -231,7 +220,9 @@ export function ProductSider({
                       aria-current={screen === "projects" ? "page" : undefined}
                       onClick={closeMobile}
                     >
-                      <LayoutDashboard />
+                      <span className="sidebar-canvas-icon" aria-hidden="true">
+                        <ProductNavigationIcon name="canvas" />
+                      </span>
                       <span>画布</span>
                     </Link>
                   </SidebarMenuButton>
