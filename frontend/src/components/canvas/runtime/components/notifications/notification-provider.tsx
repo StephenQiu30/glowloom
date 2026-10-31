@@ -12,7 +12,7 @@ import {
 } from "react";
 import { SWRConfig } from "swr";
 import useSWR from "@/components/canvas/runtime/lib/use-live-query";
-import { getMyNotificationSummary } from "@/components/canvas/runtime/api/notificationBffController";
+import { getMyNotificationSummary } from "@/components/canvas/runtime/api/notification-bff";
 import { useAccount } from "@/components/canvas/runtime/components/account/account-provider";
 import { accountScope } from "@/components/canvas/runtime/store/account-slice";
 import { unwrap } from "@/components/canvas/runtime/lib/request";

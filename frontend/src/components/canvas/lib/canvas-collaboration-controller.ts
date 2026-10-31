@@ -27,7 +27,7 @@ import {
   type CanvasTextDraft,
   type NodeTextBinding,
 } from "@glowloom/canvas-collab/model";
-import * as api from "@/components/canvas/runtime/api/canvasDocumentBffController";
+import * as api from "@/components/canvas/runtime/api/canvas-document-bff";
 import { ApiError, unwrap } from "@/components/canvas/runtime/lib/request";
 import {
   CanvasCollaborationProvider,

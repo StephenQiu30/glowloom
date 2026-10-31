@@ -1,4 +1,4 @@
-import { previewFiles } from "@/components/canvas/runtime/api/filePreviewBffController";
+import { previewFiles } from "@/components/canvas/runtime/api/file-preview-bff";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 
 export type ThumbnailGrant = CanvasContract.FilePreviewVO & {

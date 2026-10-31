@@ -6,7 +6,7 @@ import { Check, ChevronsUpDown } from "lucide-react";
 import {
   getAssetLibrary,
   listAssetLibraries,
-} from "@/components/canvas/runtime/api/assetBffController";
+} from "@/components/canvas/runtime/api/asset-bff";
 import { useAccount } from "@/components/canvas/runtime/components/account/account-provider";
 import { notifyError } from "@/components/canvas/runtime/components/feedback/error-notification";
 import { Button } from "@/components/ui/button";

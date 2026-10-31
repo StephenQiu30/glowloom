@@ -9,7 +9,7 @@ import {
   browserConnectionCsrf,
   unwrap,
 } from "@/components/canvas/runtime/lib/request";
-import { getCanvasSnapshot } from "@/components/canvas/runtime/api/canvasDocumentBffController";
+import { getCanvasSnapshot } from "@/components/canvas/runtime/api/canvas-document-bff";
 import {
   canvasGraphHash,
   createCanvasDocument,

@@ -2,7 +2,7 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { getGenerationOptions } from "@/components/canvas/runtime/api/generationBffController";
+import { getGenerationOptions } from "@/components/canvas/runtime/api/generation-bff";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 
 const projectId = "deca74c9-403f-4fb2-afb3-ac3a58048bb8";

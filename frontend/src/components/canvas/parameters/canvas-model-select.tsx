@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import useSWR from "swr";
 import { RefreshCw } from "lucide-react";
-import * as models from "@/components/canvas/runtime/api/generationBffController";
+import * as models from "@/components/canvas/runtime/api/generation-bff";
 import { ApiError, unwrap } from "@/components/canvas/runtime/lib/request";
 import { accountScope } from "@/components/canvas/runtime/store/account-slice";
 import { useAccount } from "@/components/canvas/runtime/components/account/account-provider";

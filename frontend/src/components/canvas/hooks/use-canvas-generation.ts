@@ -2,8 +2,8 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import useSWR from "@/components/canvas/runtime/lib/use-live-query";
 import { unstable_serialize, useSWRConfig } from "swr";
-import * as api from "@/components/canvas/runtime/api/canvasGenerationBffController";
-import * as tasks from "@/components/canvas/runtime/api/generationBffController";
+import * as api from "@/components/canvas/runtime/api/canvas-generation-bff";
+import * as tasks from "@/components/canvas/runtime/api/generation-bff";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 import { useModelBillingApproval } from "@/components/canvas/runtime/components/credits/model-billing-provider";
 import {

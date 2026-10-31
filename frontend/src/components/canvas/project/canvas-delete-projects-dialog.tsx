@@ -1,5 +1,5 @@
 "use client";
-import { getCanvasDocument } from "@/components/canvas/runtime/api/canvasDocumentBffController";
+import { getCanvasDocument } from "@/components/canvas/runtime/api/canvas-document-bff";
 import { canvasLibraryItem } from "../hooks/use-projects";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 import { useRef, useState } from "react";

@@ -3,7 +3,7 @@ import { ContentState } from "@/components/layout/content-state";
 import { useState } from "react";
 import useSWR from "swr";
 import { useCanvasHistory } from "../hooks/use-canvas-history";
-import * as api from "@/components/canvas/runtime/api/canvasDocumentBffController";
+import * as api from "@/components/canvas/runtime/api/canvas-document-bff";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 import { Button } from "@/components/ui/button";
 import {

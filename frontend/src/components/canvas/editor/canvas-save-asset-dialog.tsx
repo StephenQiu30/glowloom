@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import {
   getAssetCommand,
   saveMyAsset,
-} from "@/components/canvas/runtime/api/assetBffController";
+} from "@/components/canvas/runtime/api/asset-bff";
 import { ApiError, unwrap } from "@/components/canvas/runtime/lib/request";
 import { notifyError } from "@/components/canvas/runtime/components/feedback/error-notification";
 import { Button } from "@/components/ui/button";

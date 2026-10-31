@@ -1,6 +1,6 @@
 "use client";
 
-import { readFileTransfer } from "@/components/canvas/runtime/api/fileBffController";
+import { readFileTransfer } from "@/components/canvas/runtime/api/file-bff";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 import { toast } from "sonner";
 

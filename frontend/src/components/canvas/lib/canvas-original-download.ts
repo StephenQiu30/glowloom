@@ -1,4 +1,4 @@
-import { assetReviewRead } from "@/components/canvas/runtime/api/assetReviewBffController";
+import { assetReviewRead } from "@/components/canvas/runtime/api/asset-review-bff";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 import { startFileDownload } from "@/components/canvas/runtime/components/assets/lib/original-download";
 import { downloadFixedFile } from "@/components/canvas/runtime/components/assets/lib/original-download";

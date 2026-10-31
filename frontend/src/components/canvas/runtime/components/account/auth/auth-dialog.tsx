@@ -2,7 +2,7 @@
 
 import { useRef, useState, type FormEvent, type ComponentProps } from "react";
 import { ArrowLeft } from "lucide-react";
-import * as api from "@/components/canvas/runtime/api/accountBffController";
+import * as api from "@/components/canvas/runtime/api/account-bff";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 import { useAccountCommand } from "../hooks/use-account-command";
 import { useAccount } from "../account-provider";

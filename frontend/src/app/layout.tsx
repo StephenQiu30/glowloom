@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
-import { Providers } from "./providers";
+import { Providers } from "./_components/providers";
 import "./globals.css";
 
 export const metadata: Metadata = {

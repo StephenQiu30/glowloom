@@ -1,4 +1,4 @@
-import * as files from "@/components/canvas/runtime/api/fileBffController";
+import * as files from "@/components/canvas/runtime/api/file-bff";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 
 export function assetMedia(asset: CanvasContract.AssetVO) {

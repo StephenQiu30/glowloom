@@ -10,7 +10,7 @@ import {
   readImageSize,
 } from "../lib/canvas-image-size";
 import useSWR from "swr";
-import * as api from "@/components/canvas/runtime/api/generationBffController";
+import * as api from "@/components/canvas/runtime/api/generation-bff";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";

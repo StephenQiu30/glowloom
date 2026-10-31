@@ -3,7 +3,7 @@
 import { useDeferredValue, useState } from "react";
 import useSWR from "@/components/canvas/runtime/lib/use-live-query";
 import { FileImage, Music2, Video } from "lucide-react";
-import * as api from "@/components/canvas/runtime/api/assetReviewBffController";
+import * as api from "@/components/canvas/runtime/api/asset-review-bff";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 import { useAccount } from "@/components/canvas/runtime/components/account/account-provider";
 import { notifyError } from "@/components/canvas/runtime/components/feedback/error-notification";

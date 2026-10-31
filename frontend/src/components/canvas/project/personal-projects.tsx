@@ -8,8 +8,8 @@ import { useDeferredValue, useEffect, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import useLiveQuery from "@/components/canvas/runtime/lib/use-live-query";
 import Link from "next/link";
-import * as canvasApi from "@/components/canvas/runtime/api/canvasDocumentBffController";
-import { getCanvasSearchStatus } from "@/components/canvas/runtime/api/canvasSearchBffController";
+import * as canvasApi from "@/components/canvas/runtime/api/canvas-document-bff";
+import { getCanvasSearchStatus } from "@/components/canvas/runtime/api/canvas-search-bff";
 import { ProjectCanvasDialog } from "./project-canvases";
 import { WorkspaceResourceCard } from "./workspace-resource-card";
 import {
@@ -38,7 +38,7 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { useRouter, useSearchParams } from "next/navigation";
-import * as api from "@/components/canvas/runtime/api/personalWorkspaceBffController";
+import * as api from "@/components/canvas/runtime/api/personal-workspace-bff";
 import { ApiError, unwrap } from "@/components/canvas/runtime/lib/request";
 import { useAccount } from "@/components/canvas/runtime/components/account/account-provider";
 import {

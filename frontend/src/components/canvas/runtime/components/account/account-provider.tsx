@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import * as api from "@/components/canvas/runtime/api/accountBffController";
+import * as api from "@/components/canvas/runtime/api/account-bff";
 import {
   ApiError,
   setCsrfToken,

@@ -1,10 +1,10 @@
 "use client";
 import { Activity, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import * as api from "@/components/canvas/runtime/api/canvasDocumentBffController";
+import * as api from "@/components/canvas/runtime/api/canvas-document-bff";
 import { ApiError, unwrap } from "@/components/canvas/runtime/lib/request";
 import useSWR from "swr";
-import { getPersonalProjectWorkspace } from "@/components/canvas/runtime/api/personalWorkspaceBffController";
+import { getPersonalProjectWorkspace } from "@/components/canvas/runtime/api/personal-workspace-bff";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";

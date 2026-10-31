@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import useSWR, { SWRConfig } from "swr";
-import * as api from "@/components/canvas/runtime/api/notificationBffController";
+import * as api from "@/components/canvas/runtime/api/notification-bff";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";

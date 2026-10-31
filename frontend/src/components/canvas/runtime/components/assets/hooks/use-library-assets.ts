@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import useSWR from "@/components/canvas/runtime/lib/use-live-query";
 import { assetLibraryTarget } from "../library/asset-library-select";
 import { useAccount } from "@/components/canvas/runtime/components/account/account-provider";
-import { listMyAssets } from "@/components/canvas/runtime/api/assetBffController";
+import { listMyAssets } from "@/components/canvas/runtime/api/asset-bff";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 import { SyncPendingError } from "@/components/canvas/runtime/lib/read-recovery";
 

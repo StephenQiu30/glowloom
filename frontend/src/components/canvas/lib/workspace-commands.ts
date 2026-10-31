@@ -1,5 +1,5 @@
-import * as projects from "@/components/canvas/runtime/api/personalWorkspaceBffController";
-import * as canvases from "@/components/canvas/runtime/api/canvasDocumentBffController";
+import * as projects from "@/components/canvas/runtime/api/personal-workspace-bff";
+import * as canvases from "@/components/canvas/runtime/api/canvas-document-bff";
 import { ApiError, unwrap } from "@/components/canvas/runtime/lib/request";
 import type { WorkspaceResourceTarget } from "./workspace-resources";
 import type { ScopedMutator } from "swr";

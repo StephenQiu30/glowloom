@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import useSWR from "@/components/canvas/runtime/lib/use-live-query";
-import * as api from "@/components/canvas/runtime/api/assetZipBffController";
+import * as api from "@/components/canvas/runtime/api/asset-zip-bff";
 import { ApiError, unwrap } from "@/components/canvas/runtime/lib/request";
 import { accountScope } from "@/components/canvas/runtime/store/account-slice";
 import { useAccount } from "@/components/canvas/runtime/components/account/account-provider";

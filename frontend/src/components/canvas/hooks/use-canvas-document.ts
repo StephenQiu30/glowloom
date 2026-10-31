@@ -1,7 +1,7 @@
 "use client";
 import useSWR, { useSWRConfig } from "swr";
 import { useCallback, useState } from "react";
-import * as api from "@/components/canvas/runtime/api/canvasDocumentBffController";
+import * as api from "@/components/canvas/runtime/api/canvas-document-bff";
 import { useAccount } from "@/components/canvas/runtime/components/account/account-provider";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 

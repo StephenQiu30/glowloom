@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import useSWR from "@/components/canvas/runtime/lib/use-live-query";
-import { assetReviewRead } from "@/components/canvas/runtime/api/assetReviewBffController";
+import { assetReviewRead } from "@/components/canvas/runtime/api/asset-review-bff";
 import { readGrantedText } from "@/components/canvas/runtime/lib/media/granted-transfer";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 import { useAccount } from "@/components/canvas/runtime/components/account/account-provider";

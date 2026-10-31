@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Image from "next/image";
 import { Keyboard, RefreshCw } from "lucide-react";
-import * as api from "@/components/canvas/runtime/api/accountCaptchaController";
+import * as api from "@/components/canvas/runtime/api/account-captcha";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription } from "@/components/ui/field";

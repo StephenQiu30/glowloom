@@ -1,8 +1,8 @@
 import { getMediaPreview } from "@/api/media";
 import { requirePreview } from "@/components/media/library";
-import { readCanvasMedia } from "@/components/canvas/runtime/api/canvasMediaBffController";
-import * as files from "@/components/canvas/runtime/api/fileBffController";
-import { assetReviewRead } from "@/components/canvas/runtime/api/assetReviewBffController";
+import { readCanvasMedia } from "@/components/canvas/runtime/api/canvas-media-bff";
+import * as files from "@/components/canvas/runtime/api/file-bff";
+import { assetReviewRead } from "@/components/canvas/runtime/api/asset-review-bff";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 
 export type CanvasFilePreviewContext = {

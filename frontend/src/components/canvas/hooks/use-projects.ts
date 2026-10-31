@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { notifyError } from "@/components/canvas/runtime/components/feedback/error-notification";
 import { ApiError, unwrap } from "@/components/canvas/runtime/lib/request";
-import * as api from "@/components/canvas/runtime/api/canvasDocumentBffController";
+import * as api from "@/components/canvas/runtime/api/canvas-document-bff";
 import { useAccount } from "@/components/canvas/runtime/components/account/account-provider";
 import { qualifyCanvasCommand } from "../lib/canvas-command-scope";
 export type CanvasLibraryItem = CanvasContract.CanvasSummaryVO & { id: string };

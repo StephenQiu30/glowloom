@@ -1,4 +1,4 @@
-import { getCanvasDocument } from "@/components/canvas/runtime/api/canvasDocumentBffController";
+import { getCanvasDocument } from "@/components/canvas/runtime/api/canvas-document-bff";
 import { ApiError, unwrap } from "@/components/canvas/runtime/lib/request";
 
 type CanvasCommandVersion = {

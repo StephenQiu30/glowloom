@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import useSWR from "@/components/canvas/runtime/lib/use-live-query";
-import * as api from "@/components/canvas/runtime/api/generationBffController";
-import { previewFile } from "@/components/canvas/runtime/api/filePreviewBffController";
+import * as api from "@/components/canvas/runtime/api/generation-bff";
+import { previewFile } from "@/components/canvas/runtime/api/file-preview-bff";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 import { useAccount } from "@/components/canvas/runtime/components/account/account-provider";
 import { accountScope } from "@/components/canvas/runtime/store/account-slice";

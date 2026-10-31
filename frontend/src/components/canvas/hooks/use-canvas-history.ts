@@ -4,8 +4,8 @@ import useLiveQuery, {
   matchesProjection,
 } from "@/components/canvas/runtime/lib/use-live-query";
 import { onlineProjections } from "@/components/canvas/runtime/lib/online-projections";
-import * as scanApi from "@/components/canvas/runtime/api/canvasHistoryScanController";
-import * as api from "@/components/canvas/runtime/api/canvasDocumentBffController";
+import * as scanApi from "@/components/canvas/runtime/api/canvas-history-scan";
+import * as api from "@/components/canvas/runtime/api/canvas-document-bff";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 import type { CanvasScope } from "./use-canvas-document";
 

@@ -31,7 +31,7 @@ import {
   EmptyDescription,
 } from "@/components/ui/empty";
 import { toast } from "sonner";
-import * as api from "@/components/canvas/runtime/api/fileBffController";
+import * as api from "@/components/canvas/runtime/api/file-bff";
 import { useAccount } from "@/components/canvas/runtime/components/account/account-provider";
 import { useAuthDialog } from "@/components/canvas/runtime/components/account/auth/auth-dialog-provider";
 import {
