@@ -1,0 +1,44 @@
+[
+  {
+    "sequence": 2291,
+    "type": "yjs_submit",
+    "op_id": "07776b0c-ae49-490c-9208-ae3a78a50a54",
+    "bodyKeys": [
+      "epoch",
+      "sessionId",
+      "updateId",
+      "update",
+      "payloadHash"
+    ]
+  },
+  {
+    "sequence": 2316,
+    "type": "yjs_ack",
+    "receipt": {
+      "epoch": "76a8ab91-62da-422a-9358-e4a37a9485a4",
+      "commitSeq": "11",
+      "contentRevision": "12",
+      "graphHash": "8f3310730fcf2cc9f0770508c0e48b4de41183d5f206d9fc7f67c6063a220aab",
+      "updateId": "07776b0c-ae49-490c-9208-ae3a78a50a54",
+      "payloadHash": "3f50497c05748616d8084b7f1850bf359db2084ea9751496235533891c8042a1",
+      "effect": "VISIBLE_CHANGE",
+      "status": "accepted"
+    }
+  },
+  {
+    "sequence": 2352,
+    "type": "yjs_submit",
+    "op_id": "13aa9669-e60e-4943-bacd-b3c43e3216da",
+    "bodyKeys": [
+      "epoch",
+      "sessionId",
+      "updateId",
+      "update",
+      "payloadHash"
+    ]
+  },
+  {
+    "sequence": 2353,
+    "type": "socketClosed"
+  }
+]

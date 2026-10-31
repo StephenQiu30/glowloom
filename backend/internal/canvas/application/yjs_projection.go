@@ -113,7 +113,7 @@ func YjsProjectionOperations(before domain.Document, after DocumentDTO) ([]domai
 		set([]string{"position"}, pickFields(a, "x", "y"), pickFields(b, "x", "y"), false, true)
 		set([]string{"size"}, pickFields(a, "width", "height"), pickFields(b, "width", "height"), false, true)
 		ac, bc := jsonObject(old.Config), jsonObject(n.Config)
-		for _, key := range []string{"draft", "generation", "batch_table", "timeline", "director"} {
+		for _, key := range []string{"container", "cinema_kit", "subject", "draft", "generation", "batch_table", "timeline", "director"} {
 			set([]string{"config", key}, pickFields(ac, key), pickFields(bc, key), true, true)
 		}
 		set([]string{"config", "collapsed"}, ac["collapsed"], bc["collapsed"], false, true)

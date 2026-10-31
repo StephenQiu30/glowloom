@@ -1,0 +1,30 @@
+[
+  {
+    "label": "导演工具箱节点：相机 1",
+    "rect": {
+      "bottom": 576.5,
+      "height": 280,
+      "left": 734.5,
+      "right": 1134.5,
+      "top": 296.5,
+      "width": 400,
+      "x": 734.5,
+      "y": 296.5
+    },
+    "style": "transform: translate(-300.667px, -292.392px); width: 400px; height: 280px; transition: box-shadow 200ms; contain: layout style;"
+  },
+  {
+    "label": "图片节点：图片 3",
+    "rect": {
+      "bottom": 596.5,
+      "height": 320,
+      "left": 1194.5,
+      "right": 1514.5,
+      "top": 276.5,
+      "width": 320,
+      "x": 1194.5,
+      "y": 276.5
+    },
+    "style": "transform: translate(159.333px, -312.392px); width: 320px; height: 320px; transition: box-shadow 200ms; contain: layout style;"
+  }
+]

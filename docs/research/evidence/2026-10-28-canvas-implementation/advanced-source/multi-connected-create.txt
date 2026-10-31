@@ -1,0 +1,129 @@
+- banner "Canvas top bar":
+  - link "返回首页":
+    - /url: /ai-tool/home
+  - 'button "Canvas title: 一致性调研-202610221"':
+    - generic: 一致性调研-202610221
+  - button "项目":
+  - 'button "Canvas node summary: 节点 6"':
+    - text: 节点
+    - generic: "6"
+  - status: 保存中...
+  - button "搜索":
+  - button "生成历史":
+  - button "分享":
+    - generic: 分享
+  - button "更多":
+  - 'button "Credits: 88 · 开会员"':
+    - generic: "88"
+    - generic: 开会员
+  - button "用户菜单"
+- main "Canvas workspace":
+  - region "Canvas editing area":
+    - generic: 6 nodes, 2 edges, 1 selected. Editable. Room connected. 保存中....
+    - application "Canvas" [active]:
+      - 'group "文本 node: 文本 1"':
+        - 'group "双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected."':
+          - paragraph: 双击编辑文本
+        - generic "文本 1"
+      - 'group "文本 node: 文本 2"':
+        - 'group "双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected."':
+          - paragraph: 双击编辑文本
+        - generic "文本 2"
+      - 'group "文本 node: 文本 3"':
+        - 'group "双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected."':
+          - paragraph: 双击编辑文本
+        - generic "文本 3"
+      - 'group "外部 node: 导演台"':
+        - generic "导演台"
+        - button "Add tags":
+        - paragraph: 在 3D 空间中设计角色、机位与镜头
+        - generic: 进入导演台
+        - generic: "No resources: 0 ready, 0 processing, 0 failed. Not selected."
+      - 'group "视频 node: 视频 1"':
+        - generic "视频 1"
+        - img "暂无视频":
+        - generic: "No resources: 0 ready, 0 processing, 0 failed. Not selected."
+      - 'group "图片 node: 图片 1"':
+        - 'img "暂无图片. No resources: 0 ready, 0 processing, 0 failed. Selected."':
+        - button "Create connected node before 图片 1"
+        - button "Rename 图片 1":
+          - generic "图片 1"
+        - button "Add tags":
+        - button "Create connected node after 图片 1"
+      - toolbar "导演工具箱":
+        - button "相机":
+          - generic: 相机
+          - generic: 相机
+        - button "配色":
+          - generic: 配色
+          - generic: 配色
+        - button "风格":
+          - generic: 风格
+          - generic: 风格
+        - button "Hide Cinema Kit" [expanded]:
+      - button "展开图片生成器":
+      - form "生成":
+        - generic: Drag reference content to reorder it. With the keyboard, press Shift + Left or Right Arrow.
+        - list "参考内容":
+          - 'button "Reference material: 文本 1" [disabled]':
+          - generic: 空文本节点
+          - button "Remove 文本 1":
+          - 'button "Reference material: 文本 2" [disabled]':
+          - generic: 空文本节点
+          - button "Remove 文本 2":
+          - button "添加参考":
+        - generic "提示词":
+          - combobox "提示词":
+            - paragraph
+          - text: 上传参考图、输入文字或
+          - button "引用参考":
+          - text: 主体，描述你想生成的图片
+        - 'button "选择模型: Seedream 5.0 Lite"':
+          - generic: Seedream 5.0 Lite
+        - 'button "图片尺寸选项: 1:1 · 2K · 1"':
+          - generic: 1:1
+          - generic: 2K
+          - generic: "1"
+        - button "引用参考":
+        - generic: Current price 3 / 张.
+        - generic: 3 / 张
+        - button "生成" [disabled]:
+          - generic: 生成
+        - generic: 请输入提示词
+      - status
+  - complementary
+  - complementary "Canvas left toolbar":
+    - toolbar "Canvas toolbar":
+      - generic: 文本
+      - button "文本"
+      - generic: 图片
+      - button "图片"
+      - generic: 视频
+      - button "视频"
+      - generic: 音频
+      - button "音频"
+      - generic: 时间线
+      - button "时间线"
+      - generic: 主体
+      - button "主体"
+      - generic: 导演工具箱
+      - button "导演工具箱"
+      - generic: 导演台
+      - button "导演台"
+      - generic: 资产库
+      - button "资产库"
+      - generic: 上传
+      - button "上传"
+  - group "Canvas viewport controls":
+    - button "选择工具":
+    - button "小地图":
+    - button "显示连线" [pressed]:
+    - button "Zoom options, 50%": 50%
+    - status
+  - generic: 与 AI 对话
+  - button "与 AI 对话"
+- region "Notifications"
+- region "Canvas notifications"
+- region "Canvas notifications"
+- region "Canvas tag notifications"
+- region "Canvas notifications"

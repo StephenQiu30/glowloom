@@ -35,12 +35,14 @@ test("actual Tiptap bindings preserve simultaneous text, marks, mentions and per
   const [
     { Editor, getSchema },
     { default: StarterKit },
+    { default: TextAlign },
     { default: Mention },
     { default: Collaboration },
     { prosemirrorJSONToYDoc, yDocToProsemirrorJSON },
   ] = await Promise.all([
     import("@tiptap/core"),
     import("@tiptap/starter-kit"),
+    import("@tiptap/extension-text-align"),
     import("@tiptap/extension-mention"),
     import("@tiptap/extension-collaboration"),
     import("@tiptap/y-tiptap"),
@@ -52,7 +54,14 @@ test("actual Tiptap bindings preserve simultaneous text, marks, mentions and per
   }).configure({
     renderText: ({ node }) => String(node.attrs.token ?? node.attrs.label),
   });
-  const baseExtensions = [StarterKit.configure({ undoRedo: false }), reference];
+  const baseExtensions = [
+    StarterKit.configure({ undoRedo: false }),
+    TextAlign.configure({
+      types: ["paragraph", "heading"],
+      alignments: ["left", "center", "right"],
+    }),
+    reference,
+  ];
   const initial = prosemirrorJSONToYDoc(
     getSchema(baseExtensions),
     {
@@ -148,6 +157,40 @@ test("actual Tiptap bindings preserve simultaneous text, marks, mentions and per
     Y.applyUpdate(b, undo, "remote");
     assert.equal(ea.getText(), "AB@图Z乙", "A's undo preserves B's insertion");
     assert.equal(eb.getText(), "AB@图Z乙");
+    const aligned = capture(a, () =>
+      ea.chain().setTextSelection(1).setTextAlign("center").run(),
+    );
+    await engine.submit(scope, {
+      epoch: scope.epoch,
+      updateId: "align-a",
+      update: aligned,
+    });
+    Y.applyUpdate(b, aligned, "remote");
+    assert.equal(eb.getJSON().content[0].attrs.textAlign, "center");
+    const laterText = capture(b, () => eb.commands.insertContentAt(1, "丙"));
+    await engine.submit(
+      { ...scope, sessionId: "b" },
+      { epoch: scope.epoch, updateId: "later-b", update: laterText },
+    );
+    Y.applyUpdate(a, laterText, "remote");
+    const alignUndo = capture(a, () => assert.equal(ea.commands.undo(), true));
+    await engine.submit(scope, {
+      epoch: scope.epoch,
+      updateId: "align-undo-a",
+      update: alignUndo,
+    });
+    Y.applyUpdate(b, alignUndo, "remote");
+    assert.equal(ea.getText(), "丙AB@图Z乙");
+    assert.equal(eb.getText(), "丙AB@图Z乙");
+    assert.equal(ea.getJSON().content[0].attrs.textAlign, null);
+    const alignRedo = capture(a, () => assert.equal(ea.commands.redo(), true));
+    await engine.submit(scope, {
+      epoch: scope.epoch,
+      updateId: "align-redo-a",
+      update: alignRedo,
+    });
+    Y.applyUpdate(b, alignRedo, "remote");
+    assert.equal(eb.getJSON().content[0].attrs.textAlign, "center");
     const persisted = store.state.update,
       reopened = new Y.Doc();
     Y.applyUpdate(reopened, persisted);
@@ -155,9 +198,10 @@ test("actual Tiptap bindings preserve simultaneous text, marks, mentions and per
     try {
       assert.equal(
         ec.getText(),
-        "AB@图Z乙",
+        "丙AB@图Z乙",
         "mounting does not insert the initial JSON again",
       );
+      assert.equal(ec.getJSON().content[0].attrs.textAlign, "center");
     } finally {
       ec.destroy();
       reopened.destroy();

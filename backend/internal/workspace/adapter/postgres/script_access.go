@@ -91,7 +91,7 @@ func (s *ProjectContentAccessStore) authorizeStatus(ctx context.Context, actor i
 	if projectID == uuid.Nil {
 		return application.ProjectContentAccess{}, application.ErrProjectNotFound
 	}
-	query := `SELECT id AS project_id,org_id,revision,status FROM workspace.project WHERE id=? AND org_id=? AND NOT is_delete`
+	query := `SELECT id AS project_id,org_id,owner_scope_id,revision,status FROM workspace.project WHERE id=? AND org_id=? AND NOT is_delete`
 	if copying {
 		query += ` AND status='copying'`
 	} else {

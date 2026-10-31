@@ -41,7 +41,7 @@ import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
 import { getMediaPreview } from "@/api/media";
-import { listSubjects } from "@/api/subjects";
+import { listSubjects, getSubjectVersion } from "@/api/subjects";
 import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
 import {
@@ -54,11 +54,17 @@ import {
   unifiedReferencePreview,
   unifiedSubjectModelIssue,
 } from "@/components/subjects/unified-reference";
+import { getCanvas } from "@/api/canvases";
+import {
+  localCanvasSubjectReference,
+  requireCanvasSubjectVersion,
+} from "@/components/canvas/lib/canvas-subject-source";
 import { UnifiedSubjectMedia } from "@/components/subjects/unified-media";
 import { getScopeGeneration, getSessionGeneration } from "@/lib/request";
 import {
   referenceRoleLabel,
   type CanvasReferenceSource,
+  type CanvasSubjectReferenceSource,
 } from "./reference-source";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -180,7 +186,9 @@ export function ReferenceControls({
   authorized = false,
   compact = false,
   home = false,
+  assistant = false,
   canvasSources,
+  canvasSubjectSources,
   incomingSources,
   onChooseProject,
 }: {
@@ -192,7 +200,9 @@ export function ReferenceControls({
   authorized?: boolean;
   compact?: boolean;
   home?: boolean;
+  assistant?: boolean;
   canvasSources?: CanvasReferenceSource[];
+  canvasSubjectSources?: CanvasSubjectReferenceSource[];
   incomingSources?: (CanvasReferenceSource & { edgeID: string })[];
   onChooseProject?: () => void;
 }) {
@@ -243,10 +253,18 @@ export function ReferenceControls({
   const [sourceQuery, setSourceQuery] = useState("");
   const [readingSource, setReadingSource] = useState<string | null>(null);
   const sourceRequest = useRef<AbortController | null>(null);
-  const currentSources = useRef({ canvasSources, incomingSources });
+  const currentSources = useRef({
+    canvasSources,
+    canvasSubjectSources,
+    incomingSources,
+  });
   useEffect(() => {
-    currentSources.current = { canvasSources, incomingSources };
-  }, [canvasSources, incomingSources]);
+    currentSources.current = {
+      canvasSources,
+      canvasSubjectSources,
+      incomingSources,
+    };
+  }, [canvasSources, canvasSubjectSources, incomingSources]);
   useEffect(() => () => sourceRequest.current?.abort(), []);
   const referenceUploadInput = useRef<HTMLInputElement>(null);
   const inlineSource = useRef(false);
@@ -487,6 +505,84 @@ export function ReferenceControls({
         );
     } finally {
       sourceRequest.current = null;
+      if (!controller.signal.aborted) setReadingSource(null);
+    }
+  }
+  async function addCanvasSubject(
+    source: CanvasSubjectReferenceSource,
+    inline: boolean,
+  ) {
+    if (disabled || !scopeID || sourceRequest.current) return;
+    const controller = new AbortController();
+    const seq = session.snapshot().localSeq;
+    const sessionGeneration = getSessionGeneration();
+    const scopeGeneration = getScopeGeneration();
+    const range = inline ? mention?.range : undefined;
+    sourceRequest.current = controller;
+    setReadingSource(source.nodeID);
+    try {
+      const binding =
+        source.source === "canvas_subject"
+          ? localCanvasSubjectReference(
+              await getCanvas(
+                { id: source.canvasID },
+                { signal: controller.signal },
+              ),
+              projectID,
+              source.canvasID,
+              source.nodeID,
+              source.inputRevision,
+            )
+          : unifiedSubjectBinding(
+              requireCanvasSubjectVersion(
+                await getSubjectVersion(
+                  { id: source.subjectID, version: source.versionID },
+                  { signal: controller.signal },
+                ),
+                scopeID,
+                { subject_id: source.subjectID, version_id: source.versionID },
+              ),
+            );
+      if (
+        controller.signal.aborted ||
+        session.editor.isDestroyed ||
+        getSessionGeneration() !== sessionGeneration ||
+        getScopeGeneration() !== scopeGeneration
+      )
+        return;
+      if (session.snapshot().localSeq !== seq)
+        throw new Error("正文已变化，请重新选择参考。");
+      if (
+        !currentSources.current.canvasSubjectSources?.some(
+          (item) => JSON.stringify(item) === JSON.stringify(source),
+        )
+      )
+        throw new Error("主体节点或版本已变化，请重新选择。");
+      const existing = draft.references.find(
+        (reference) =>
+          reference.source.kind === binding.source.kind &&
+          reference.source.kind !== "pending_upload" &&
+          binding.source.kind !== "pending_upload" &&
+          reference.source.sourceId === binding.source.sourceId &&
+          reference.source.sourceVersion === binding.source.sourceVersion,
+      );
+      add(
+        existing ??
+          (draft.mode === "avatar" || draft.mode === "motion"
+            ? { ...binding, role: "character_image" }
+            : binding),
+        inline,
+        range,
+      );
+      setAddOpen(false);
+      setSourceKind(null);
+    } catch (cause) {
+      if (!controller.signal.aborted)
+        setError(
+          cause instanceof Error ? cause.message : "主体来源暂时无法核验。",
+        );
+    } finally {
+      if (sourceRequest.current === controller) sourceRequest.current = null;
       if (!controller.signal.aborted) setReadingSource(null);
     }
   }
@@ -860,11 +956,13 @@ export function ReferenceControls({
                 />
               </div>
             )}
-            {authorized && ref.source.kind === "subject" && (
-              <p className="text-sm">
-                {ref.source.description} · {ref.source.media.length} 个素材
-              </p>
-            )}
+            {authorized &&
+              (ref.source.kind === "subject" ||
+                ref.source.kind === "canvas_subject") && (
+                <p className="text-sm">
+                  {ref.source.description} · {ref.source.media.length} 个素材
+                </p>
+              )}
             {!authorized && ref.source.kind !== "pending_upload" && (
               <p className="text-sm">来源待核验；确认权限前隐藏内容。</p>
             )}
@@ -981,7 +1079,8 @@ export function ReferenceControls({
               >
                 后移
               </Button>
-              {ref.source.kind === "subject" && (
+              {(ref.source.kind === "subject" ||
+                ref.source.kind === "canvas_subject") && (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -994,18 +1093,19 @@ export function ReferenceControls({
                   更新 / 替换主体版本
                 </Button>
               )}
-              {ref.source.kind !== "subject" && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={disabled}
-                  onClick={() =>
-                    setPicker({ kind: ref.mediaKind, replace: ref.id })
-                  }
-                >
-                  替换
-                </Button>
-              )}
+              {ref.source.kind !== "subject" &&
+                ref.source.kind !== "canvas_subject" && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={disabled}
+                    onClick={() =>
+                      setPicker({ kind: ref.mediaKind, replace: ref.id })
+                    }
+                  >
+                    替换
+                  </Button>
+                )}
               <Button
                 size="sm"
                 variant="ghost"
@@ -1112,7 +1212,8 @@ export function ReferenceControls({
                   key={ref.id}
                   value={ref.id}
                   onSelect={() => {
-                    add(ref, true);
+                    if (assistant) setDetailsID(ref.id);
+                    else add(ref, true);
                     setAddOpen(false);
                   }}
                 >
@@ -1130,6 +1231,23 @@ export function ReferenceControls({
         ) : null}
         {!projectID ? null : sourceKind === "canvas" ? (
           <CommandGroup heading="当前画布">
+            {canvasSubjectSources
+              ?.filter((source) => source.title.includes(sourceQuery))
+              .map((source) => (
+                <CommandItem
+                  key={source.nodeID}
+                  value={source.nodeID}
+                  disabled={!!readingSource}
+                  onSelect={() => void addCanvasSubject(source, inline)}
+                >
+                  <UserRound />
+                  <span className="truncate">{source.title}</span>
+                  {readingSource === source.nodeID && (
+                    <span className="ml-auto">正在核验…</span>
+                  )}
+                </CommandItem>
+              ))}
+
             {canvasSources
               ?.filter((source) => source.title.includes(sourceQuery))
               .map((source) => (
@@ -1280,6 +1398,7 @@ export function ReferenceControls({
           className={cn(
             "flex w-full min-w-0 flex-col gap-3",
             compact && "gap-0",
+            assistant && "canvas-assistant-reference",
           )}
         >
           <p
@@ -1301,7 +1420,11 @@ export function ReferenceControls({
             <>
               <PopoverAnchor virtualRef={mentionAnchor} />
               <div
-                className="flex w-full min-w-0 items-start gap-2 overflow-x-auto pb-1"
+                className={
+                  assistant
+                    ? "flex items-center"
+                    : "flex w-full min-w-0 items-start gap-2 overflow-x-auto pb-1"
+                }
                 aria-label="参考内容"
               >
                 {(draft.mode === "avatar" || draft.mode === "motion") &&
@@ -1333,7 +1456,8 @@ export function ReferenceControls({
                   })}
                 {draft.references.map((ref) => {
                   const Icon =
-                    ref.source.kind === "subject"
+                    ref.source.kind === "subject" ||
+                    ref.source.kind === "canvas_subject"
                       ? UserRound
                       : ref.mediaKind === "video"
                         ? Video
@@ -1356,8 +1480,13 @@ export function ReferenceControls({
                         <Button
                           type="button"
                           variant="outline"
-                          className="relative h-16 w-16 shrink-0 flex-col gap-1 overflow-hidden"
+                          className={
+                            assistant
+                              ? "sr-only"
+                              : "relative h-16 w-16 shrink-0 flex-col gap-1 overflow-hidden"
+                          }
                           aria-label={`查看${displayLabel(ref.id)}详情`}
+                          tabIndex={assistant ? -1 : undefined}
                         >
                           {authorized && subjectPreview ? (
                             <span className="absolute inset-0">
@@ -1400,6 +1529,8 @@ export function ReferenceControls({
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent
+                        data-canvas-no-zoom={assistant || undefined}
+                        data-canvas-shortcuts-ignore={assistant || undefined}
                         side="top"
                         align="start"
                         collisionPadding={16}
@@ -1487,16 +1618,33 @@ export function ReferenceControls({
                   <PopoverTrigger asChild>
                     <Button
                       type="button"
-                      variant={home ? "reference" : "outline"}
-                      size={home ? "reference" : "icon"}
+                      variant={
+                        assistant ? "ghost" : home ? "reference" : "outline"
+                      }
+                      size={assistant ? "icon-sm" : home ? "reference" : "icon"}
                       disabled={disabled}
-                      aria-label="添加参考"
-                      className={home ? "shrink-0" : "size-14 shrink-0"}
+                      aria-label={
+                        assistant ? "从本地、画布或资产库添加" : "添加参考"
+                      }
+                      className={
+                        assistant
+                          ? "shrink-0"
+                          : home
+                            ? "shrink-0"
+                            : "size-14 shrink-0"
+                      }
                     >
                       <Plus />
+                      {assistant && draft.references.length > 0 ? (
+                        <span className="canvas-assistant-reference-count">
+                          {draft.references.length}
+                        </span>
+                      ) : null}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent
+                    data-canvas-no-zoom={assistant || undefined}
+                    data-canvas-shortcuts-ignore={assistant || undefined}
                     side="top"
                     align="start"
                     collisionPadding={16}
@@ -1520,6 +1668,8 @@ export function ReferenceControls({
           {menu &&
             (compact ? (
               <PopoverContent
+                data-canvas-no-zoom={assistant || undefined}
+                data-canvas-shortcuts-ignore={assistant || undefined}
                 side="bottom"
                 align="start"
                 sideOffset={8}
@@ -1727,6 +1877,8 @@ export function ReferenceControls({
               }}
             >
               <DialogContent
+                data-canvas-no-zoom={assistant || undefined}
+                data-canvas-shortcuts-ignore={assistant || undefined}
                 className="max-h-[85dvh] overflow-y-auto sm:max-w-4xl"
                 onCloseAutoFocus={(event) => {
                   event.preventDefault();

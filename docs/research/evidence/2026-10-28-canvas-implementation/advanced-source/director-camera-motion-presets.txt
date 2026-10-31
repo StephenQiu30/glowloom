@@ -1,0 +1,60 @@
+Browser tab: 1980371314, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+0 AXWebArea 一致性调研-202610221 - 即梦AI, URL: jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage
+	1 container
+		2 container
+			3 container Canvas top bar
+				4 text 已保存
+			5 container Canvas workspace
+				6 container
+					7 container
+						8 container Canvas editing area
+							9 container
+								10 container Canvas
+					11 container Canvas left toolbar
+						12 toolbar Canvas toolbar
+					13 container Canvas viewport controls
+		14 container 导演台, ID: radix-:modern-js-r5q:
+		15 container 添加运镜, ID: radix-:modern-js-r7d:
+			16 heading 添加运镜, Value: 2, ID: radix-:modern-js-r7e:
+				17 text 添加运镜
+			18 text 选择运镜预设，再设置注视点和运动路径。
+			19 text field (settable) 搜索素材
+			20 container
+				21 container 自定义路径
+					22 heading 自定义路径, Value: 2
+						23 text 自定义路径
+					24 button 固定注视点 固定注视点，让机位沿路径移动。
+						25 text 固定注视点
+						26 text 固定注视点，让机位沿路径移动。
+					27 button 固定机位 固定机位位置，让注视点沿路径移动。
+						28 text 固定机位
+						29 text 固定机位位置，让注视点沿路径移动。
+					30 button 自由运镜 先绘制注视点路径，再绘制机位路径。两者在同一时间范围内移动。
+						31 text 自由运镜
+						32 text 先绘制注视点路径，再绘制机位路径。两者在同一时间范围内移动。
+				33 container 运镜预设
+					34 heading 运镜预设, Value: 2
+						35 text 运镜预设
+					36 container 固定注视点
+						37 heading 固定注视点, Value: 3
+							38 text 固定注视点
+						39 checkbox Description: 推近：机位靠近主体，让主体逐渐放大。, Help: 机位靠近主体，让主体逐渐放大。, Value: 0
+						40 checkbox Description: 拉远：机位远离主体，展示更多环境。, Help: 机位远离主体，展示更多环境。, Value: 0
+						41 checkbox Description: 横移：横向移动机位，呈现前后景的相对变化。, Help: 横向移动机位，呈现前后景的相对变化。, Value: 0
+						42 checkbox Description: 上升：升高机位，逐渐俯视场景。, Help: 升高机位，逐渐俯视场景。, Value: 0
+						43 checkbox Description: 下降：降低机位，靠近主体高度。, Help: 降低机位，靠近主体高度。, Value: 0
+						44 checkbox Description: 环绕：围绕注视点旋转一整圈。, Help: 围绕注视点旋转一整圈。, Value: 0
+						45 checkbox Description: 半弧：围绕注视点移动半圈。, Help: 围绕注视点移动半圈。, Value: 0
+						46 checkbox Description: 螺旋上升：环绕上升，同时逐渐靠近主体。, Help: 环绕上升，同时逐渐靠近主体。, Value: 0
+						47 checkbox Description: 滑动变焦：同时调整距离和视野，保持主体大小并改变背景透视。, Help: 同时调整距离和视野，保持主体大小并改变背景透视。, Value: 0
+						48 checkbox Description: 倾斜镜头：倾斜画面，形成斜角构图。, Help: 倾斜画面，形成斜角构图。, Value: 0
+					49 container 固定机位
+						50 heading 固定机位, Value: 3
+							51 text 固定机位
+						52 checkbox Description: 镜头左摇：固定机位，向左转动拍摄方向。, Help: 固定机位，向左转动拍摄方向。, Value: 0
+						53 checkbox Description: 镜头右摇：固定机位，向右转动拍摄方向。, Help: 固定机位，向右转动拍摄方向。, Value: 0
+						54 checkbox Description: 镜头上摇：固定机位，向上转动拍摄方向。, Help: 固定机位，向上转动拍摄方向。, Value: 0
+						55 checkbox Description: 镜头下摇：固定机位，向下转动拍摄方向。, Help: 固定机位，向下转动拍摄方向。, Value: 0
+			56 button 关闭
+
+The focused UI element is 19 text field (settable) 搜索素材

@@ -20,6 +20,7 @@ var (
 type ProjectPresentation struct {
 	MainCanvasID uuid.UUID
 	Name, Status string
+	OwnerName    string
 }
 
 // ProjectPresentationReader projects current workspace facts inside the caller transaction.

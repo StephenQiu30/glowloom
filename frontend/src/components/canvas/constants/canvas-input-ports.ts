@@ -65,6 +65,51 @@ export const canvasInputPorts = [
     multiple: false,
     allOutputs: false,
   },
+  {
+    id: "reference_subjects",
+    label: "参考主体",
+    purpose: "REFERENCE_SUBJECT",
+    source: "subject",
+    targets: ["image", "video", "audio"],
+    multiple: true,
+    allOutputs: false,
+  },
+  {
+    id: "camera",
+    label: "相机",
+    purpose: "CINEMA_CAMERA",
+    source: "cinema_studio",
+    targets: ["image"],
+    multiple: false,
+    allOutputs: false,
+  },
+  {
+    id: "palette",
+    label: "配色",
+    purpose: "CINEMA_PALETTE",
+    source: "cinema_studio",
+    targets: ["image", "video"],
+    multiple: false,
+    allOutputs: false,
+  },
+  {
+    id: "style",
+    label: "风格",
+    purpose: "CINEMA_STYLE",
+    source: "cinema_studio",
+    targets: ["image", "video"],
+    multiple: false,
+    allOutputs: false,
+  },
+  {
+    id: "motion",
+    label: "运镜",
+    purpose: "CINEMA_MOTION",
+    source: "cinema_studio",
+    targets: ["video"],
+    multiple: false,
+    allOutputs: false,
+  },
 ] as const;
 
 export function canvasPortsFor(source: string, target: string) {
@@ -81,7 +126,7 @@ export function canvasInputPort(id: string) {
 export function canvasConnectionHandles(type: string) {
   return {
     input:
-      type === "timeline" ||
+      ["timeline", "subject"].includes(type) ||
       canvasInputPorts.some((port) =>
         port.targets.some((target) => target === type),
       ),

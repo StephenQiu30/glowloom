@@ -24,18 +24,21 @@ var (
 
 // NodeConfig contains only user-editable, type-specific presentation data.
 type NodeConfig struct {
-	Editor        *EditorConfig       `json:"editor,omitempty"`
-	RichText      json.RawMessage     `json:"rich_text,omitempty" swaggertype:"object"`
-	Composer      *promptdomain.Draft `json:"composer,omitempty"`
-	Format        string              `json:"format,omitempty"`
-	FormatVersion int                 `json:"format_version,omitempty"`
-	Draft         *Draft              `json:"draft,omitempty"`
-	Text          *string             `json:"text,omitempty"`
-	Collapsed     *bool               `json:"collapsed,omitempty"`
-	BatchTable    *BatchTableConfig   `json:"batch_table,omitempty"`
-	Timeline      *TimelineConfig     `json:"timeline,omitempty"`
-	Director      *DirectorConfig     `json:"director,omitempty"`
-	Generation    *GenerationConfig   `json:"generation,omitempty"`
+	Container     *ContainerConfig        `json:"container,omitempty"`
+	CinemaKit     *promptdomain.CinemaKit `json:"cinema_kit,omitempty"`
+	Subject       *SubjectConfig          `json:"subject,omitempty"`
+	Editor        *EditorConfig           `json:"editor,omitempty"`
+	RichText      json.RawMessage         `json:"rich_text,omitempty" swaggertype:"object"`
+	Composer      *promptdomain.Draft     `json:"composer,omitempty"`
+	Format        string                  `json:"format,omitempty"`
+	FormatVersion int                     `json:"format_version,omitempty"`
+	Draft         *Draft                  `json:"draft,omitempty"`
+	Text          *string                 `json:"text,omitempty"`
+	Collapsed     *bool                   `json:"collapsed,omitempty"`
+	BatchTable    *BatchTableConfig       `json:"batch_table,omitempty"`
+	Timeline      *TimelineConfig         `json:"timeline,omitempty"`
+	Director      *DirectorConfig         `json:"director,omitempty"`
+	Generation    *GenerationConfig       `json:"generation,omitempty"`
 	unknown       json.RawMessage
 }
 
@@ -151,8 +154,10 @@ type CommandError struct {
 func (e *CommandError) Error() string { return fmt.Sprintf("canvas command %d: %v", e.Index, e.Cause) }
 func (e *CommandError) Unwrap() error { return e.Cause }
 
-// InputSnapshot is the final immutable draft input of one accepted Yjs projection.
+// InputSnapshot is the final immutable generation or subject input of one accepted Yjs projection.
 type InputSnapshot struct {
+	Subject  *SubjectConfig
+	Title    string
 	NodeID   uuid.UUID
 	Revision int64
 	Draft    Draft
@@ -182,6 +187,9 @@ func Apply(document Document, commands []Command) (Document, error) {
 		return Document{}, &CommandError{Index: len(commands) - 1, Cause: err}
 	}
 	if err := validateTimelineRelationChanges(document, doc); err != nil {
+		return Document{}, &CommandError{Index: len(commands) - 1, Cause: err}
+	}
+	if err := validateSubjectRelationChanges(document, doc); err != nil {
 		return Document{}, &CommandError{Index: len(commands) - 1, Cause: err}
 	}
 	return doc, nil
@@ -216,7 +224,7 @@ func applyOne(doc *Document, c Command) error {
 			if n.InputRevision != 0 || n.ID == uuid.Nil || nodeIndex(doc, n.ID) >= 0 || !validTitle(n.Title) || !coordinate(n.X) || !coordinate(n.Y) || !dimension(n.NodeType, n.Width) || !dimension(n.NodeType, n.Height) || !validConfig(n.NodeType, n.Config) || !validZIndex(n.ZIndex) {
 				return ErrInvalidCommand
 			}
-			if IsDraft(n) {
+			if IsDraft(n) || n.NodeType == "subject" {
 				n.InputRevision = 1
 			}
 			doc.Nodes = append(doc.Nodes, n)
@@ -304,11 +312,13 @@ func applyOne(doc *Document, c Command) error {
 			return ErrInvalidCommand
 		}
 		if IsDraft(doc.Nodes[i]) && doc.Nodes[i].Config.Draft.Composer != nil {
-			if c.Config.Draft.Composer == nil || c.Config.Draft.Composer.ExtendsLabels(doc.Nodes[i].Config.Draft.Composer.LabelState) != nil {
+			if c.Config.Draft == nil || c.Config.Draft.Composer == nil || c.Config.Draft.Composer.ExtendsLabels(doc.Nodes[i].Config.Draft.Composer.LabelState) != nil {
 				return ErrInvalidCommand
 			}
 		}
-		if IsDraft(doc.Nodes[i]) && !SameInput(*doc.Nodes[i].Config.Draft, *c.Config.Draft) {
+		if doc.Nodes[i].Config.Draft == nil && c.Config.Draft != nil {
+			doc.Nodes[i].InputRevision = 1
+		} else if IsDraft(doc.Nodes[i]) && !SameInput(*doc.Nodes[i].Config.Draft, *c.Config.Draft) {
 			if doc.Nodes[i].InputRevision < 1 || doc.Nodes[i].InputRevision >= math.MaxInt32 {
 				return ErrInvalidCommand
 			}
@@ -321,7 +331,7 @@ func applyOne(doc *Document, c Command) error {
 		}
 		seen := map[uuid.UUID]bool{}
 		for _, id := range c.IDs {
-			if index := nodeIndex(doc, id); index >= 0 && IsDraft(doc.Nodes[index]) {
+			if index := nodeIndex(doc, id); index >= 0 && isGenerationDraft(doc.Nodes[index]) {
 				return ErrUnsupportedCommand
 			}
 			if _, err := editableIndex(doc, id, seen); err != nil {
@@ -337,6 +347,7 @@ func applyOne(doc *Document, c Command) error {
 			return ErrUnsupportedCommand
 		}
 		clearTimelineReferences(doc.Nodes, seen)
+		clearSubjectReferences(doc.Nodes, seen)
 		clearDirectorReferences(doc.Nodes, seen)
 		doc.Nodes = slices.DeleteFunc(doc.Nodes, func(n Node) bool { return seen[n.ID] })
 		clearBatchReferences(doc.Nodes, seen)
@@ -404,17 +415,17 @@ func editable(n Node) bool {
 	if n.LastOperationID != nil {
 		return false
 	}
-	if IsDraft(n) {
+	if n.NodeType == "image_generation" || n.NodeType == "video_generation" {
 		return n.NodeAction == "generate" && (n.RefType == "" && n.RefID == nil || n.Config.Editor != nil && n.RefType == "media_asset" && n.RefID != nil && *n.RefID != uuid.Nil)
 	}
-	if n.NodeType == "batch_table" || n.NodeType == "timeline" || n.NodeType == "director" || n.NodeType == "generation" {
+	if n.NodeType == "cinema_studio" || n.NodeType == "batch_table" || n.NodeType == "timeline" || n.NodeType == "director" || n.NodeType == "generation" {
 		return n.NodeAction == "tool" && n.RefType == "" && n.RefID == nil
 	}
 	if n.NodeAction != "resource" {
 		return false
 	}
 	switch n.NodeType {
-	case "text", "group", "config":
+	case "text", "group", "config", "subject":
 		return n.RefType == "" && n.RefID == nil
 	case "image", "video", "audio", "model":
 		return n.RefType == "media_asset" && n.RefID != nil && *n.RefID != uuid.Nil || n.Config.Editor != nil && n.RefType == "" && n.RefID == nil
@@ -426,6 +437,39 @@ func annotation(e Edge) bool {
 	return e.EdgeType == "annotation" && e.Role == "" && (len(e.Binding) == 0 || validEditorConnection(e.Binding))
 }
 func validConfig(kind string, c NodeConfig) bool {
+	if c.Container != nil && (kind != "group" || !validContainer(c.Container)) {
+		return false
+	}
+	if c.CinemaKit != nil {
+		if c.CinemaKit.Validate() != nil || len(c.CinemaKit.Sources) != 0 {
+			return false
+		}
+		if kind == "cinema_studio" {
+			return len(c.CinemaKit.Kinds()) == 1 && c.Subject == nil && c.Composer == nil && c.Draft == nil && c.Text == nil && c.Collapsed == nil && c.BatchTable == nil && c.Timeline == nil && c.Director == nil && c.Generation == nil && len(c.RichText) == 0 && c.Format == "" && c.FormatVersion == 0 && len(c.unknown) == 0 && validEditor(c.Editor)
+		}
+		media := kind
+		if kind == "image_generation" {
+			media = "image"
+		}
+		if kind == "video_generation" {
+			media = "video"
+		}
+		if !c.CinemaKit.Supports(media + ".generate") {
+			return false
+		}
+	} else if kind == "cinema_studio" {
+		return false
+	}
+	if c.Draft != nil && c.Draft.Composer != nil && c.Draft.Composer.CinemaKit != nil {
+		return false
+	}
+
+	if kind == "subject" {
+		return c.Subject != nil && validSubject(*c.Subject) && validEditor(c.Editor) && len(c.unknown) == 0 && len(c.RichText) == 0 && c.Composer == nil && c.Format == "" && c.FormatVersion == 0 && c.Draft == nil && c.Text == nil && c.Collapsed == nil && c.BatchTable == nil && c.Timeline == nil && c.Director == nil && c.Generation == nil
+	}
+	if c.Subject != nil {
+		return false
+	}
 	if !validEditor(c.Editor) || len(c.unknown) != 0 || (len(c.RichText) > 0 && (kind != "text" || c.Composer == nil || !validRichText(c.RichText, c.Composer))) {
 		return false
 	}
@@ -436,7 +480,14 @@ func validConfig(kind string, c NodeConfig) bool {
 		return c.Draft != nil && validDraft(*c.Draft) && c.Text == nil && c.Collapsed == nil && c.BatchTable == nil && c.Timeline == nil && c.Director == nil && c.Generation == nil
 	}
 	if c.Draft != nil {
-		return false
+		switch kind {
+		case "text", "image", "video", "audio":
+			if c.Editor == nil || c.Draft.Composer == nil || !validDraft(*c.Draft) {
+				return false
+			}
+		default:
+			return false
+		}
 	}
 	if kind == "generation" {
 		return c.Text == nil && c.Collapsed == nil && c.BatchTable == nil && c.Timeline == nil && c.Director == nil && c.Generation != nil && validGeneration(*c.Generation)

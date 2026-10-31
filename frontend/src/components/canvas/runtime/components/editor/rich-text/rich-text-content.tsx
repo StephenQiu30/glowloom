@@ -64,16 +64,31 @@ export function RichTextContent({
     const children = node.content?.map((child, index) =>
       render(child, `${key}-${index}`),
     );
+    const alignment = node.attrs?.textAlign;
+    const style =
+      alignment === "left" || alignment === "center" || alignment === "right"
+        ? { textAlign: alignment }
+        : undefined;
     switch (node.type) {
       case "paragraph":
-        return <p key={key}>{children?.length ? children : <br />}</p>;
+        return (
+          <p key={key} style={style}>
+            {children?.length ? children : <br />}
+          </p>
+        );
       case "heading":
         return node.attrs?.level === 1 ? (
-          <h1 key={key}>{children}</h1>
+          <h1 key={key} style={style}>
+            {children}
+          </h1>
         ) : node.attrs?.level === 3 ? (
-          <h3 key={key}>{children}</h3>
+          <h3 key={key} style={style}>
+            {children}
+          </h3>
         ) : (
-          <h2 key={key}>{children}</h2>
+          <h2 key={key} style={style}>
+            {children}
+          </h2>
         );
       case "bulletList":
         return <ul key={key}>{children}</ul>;

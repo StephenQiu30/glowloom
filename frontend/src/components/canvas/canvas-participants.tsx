@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useSyncExternalStore, type ReactNode } from "react";
-import useSWR, { SWRConfig } from "swr";
+import useSWR from "swr";
+import { getScopeGeneration, getSessionGeneration } from "@/lib/request";
 import { UsersRound } from "lucide-react";
 import { listTeamMembers, teamMemberAvatar } from "@/api/identity";
 import { getMyAvatar } from "@/api/media";
@@ -47,6 +48,8 @@ export function participantUserIDs(
 type Context = {
   actor: API.MeView;
   scopeID: string;
+  sessionID: string;
+  requestGeneration: string;
   teamID?: string;
   userIDs: string[];
 };
@@ -59,6 +62,8 @@ function useParticipant(id: string, context: Context) {
       ? [
           "canvas-participants",
           context.actor.id,
+          context.sessionID,
+          context.requestGeneration,
           context.scopeID,
           context.teamID,
           context.userIDs.join(","),
@@ -91,7 +96,11 @@ function useParticipant(id: string, context: Context) {
       } while (cursor && wanted.size);
       return people;
     },
-    { refreshInterval: 60_000, shouldRetryOnError: false },
+    {
+      refreshInterval: 60_000,
+      shouldRetryOnError: false,
+      keepPreviousData: false,
+    },
   );
   const person: Person = self
     ? {
@@ -105,6 +114,8 @@ function useParticipant(id: string, context: Context) {
       ? [
           "canvas-participant-avatar",
           context.actor.id,
+          context.sessionID,
+          context.requestGeneration,
           context.scopeID,
           context.teamID,
           id,
@@ -121,6 +132,7 @@ function useParticipant(id: string, context: Context) {
           : 45_000;
       },
       shouldRetryOnError: false,
+      keepPreviousData: false,
     },
   );
   return {
@@ -290,44 +302,43 @@ function ParticipantList({
   );
 }
 function Participants({ ids, context }: { ids: string[]; context: Context }) {
-  // Let SWR own each mounted cache, including its subscriptions and cleanup.
-  // Private profiles must not reuse a disposed cache across remounts.
+  // SWR 2.5.1 disposes a local provider during Activity/Suspense hiding,
+  // while React retains its cache ref. Use SWR's application cache lifecycle;
+  // both queries partition private data by actor, session, scope and generation.
   return (
-    <SWRConfig value={{ provider: () => new Map() }}>
-      <div
-        className="flex shrink-0 items-center px-1"
-        aria-label={`${ids.length} 位参与者在线`}
-      >
-        <AvatarGroup className="hidden items-center [@media(pointer:fine)]:flex">
-          {ids.slice(0, 3).map((id) => (
-            <Participant key={id} id={id} context={context} />
-          ))}
-          {ids.length > 3 && (
-            <ParticipantList ids={ids} context={context}>
-              <Button
-                type="button"
-                aria-label={`查看全部 ${ids.length} 位参与者`}
-                variant="ghost"
-                size="icon"
-                className="size-8 min-h-8 shrink-0 rounded-full border-0 p-0"
-              >
-                <AvatarGroupCount>+{ids.length - 3}</AvatarGroupCount>
-              </Button>
-            </ParticipantList>
-          )}
-        </AvatarGroup>
-        <ParticipantList ids={ids} context={context}>
-          <Button
-            variant="ghost"
-            className="h-11 min-w-11 [@media(pointer:fine)]:hidden"
-            aria-label={`查看全部 ${ids.length} 位参与者`}
-          >
-            <UsersRound />
-            {ids.length}
-          </Button>
-        </ParticipantList>
-      </div>
-    </SWRConfig>
+    <div
+      className="flex shrink-0 items-center px-1"
+      aria-label={`${ids.length} 位参与者在线`}
+    >
+      <AvatarGroup className="hidden items-center [@media(pointer:fine)]:flex">
+        {ids.slice(0, 3).map((id) => (
+          <Participant key={id} id={id} context={context} />
+        ))}
+        {ids.length > 3 && (
+          <ParticipantList ids={ids} context={context}>
+            <Button
+              type="button"
+              aria-label={`查看全部 ${ids.length} 位参与者`}
+              variant="ghost"
+              size="icon"
+              className="size-8 min-h-8 shrink-0 rounded-full border-0 p-0"
+            >
+              <AvatarGroupCount>+{ids.length - 3}</AvatarGroupCount>
+            </Button>
+          </ParticipantList>
+        )}
+      </AvatarGroup>
+      <ParticipantList ids={ids} context={context}>
+        <Button
+          variant="ghost"
+          className="h-11 min-w-11 [@media(pointer:fine)]:hidden"
+          aria-label={`查看全部 ${ids.length} 位参与者`}
+        >
+          <UsersRound />
+          {ids.length}
+        </Button>
+      </ParticipantList>
+    </div>
   );
 }
 export function CanvasParticipants({
@@ -362,6 +373,8 @@ export function CanvasParticipants({
       ids={participantUserIDs(actorID, peers)}
       context={{
         actor: session.actor,
+        sessionID: session.session_id,
+        requestGeneration: `${getSessionGeneration()}:${getScopeGeneration()}`,
         scopeID,
         teamID: space?.team_id || undefined,
         userIDs: participantUserIDs(actorID, peers),

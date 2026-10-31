@@ -56,6 +56,50 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
+it("火山音乐分别录入签名密钥且不会写成 Bearer API Key", async () => {
+  render(
+    <PresetConnect
+      presets={[
+        {
+          id: "music-preset",
+          version_id: "music-version",
+          document: {
+            name: "火山音乐",
+            config: { adapter_key: "volcengine_music" },
+            model_templates: [{ name: "Music" }],
+          },
+        },
+      ]}
+      onCreated={created}
+      onSaved={saved}
+    />,
+  );
+  fireEvent.click(screen.getByLabelText(/火山音乐/));
+  fireEvent.change(screen.getByLabelText("Access Key ID"), {
+    target: { value: "fixture-ak" },
+  });
+  fireEvent.change(screen.getByLabelText("Secret Access Key"), {
+    target: { value: "fixture-sk" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存连接" }));
+  await waitFor(() => expect(saved).toHaveBeenCalledOnce());
+  expect(api.key).toHaveBeenCalledWith(
+    { id: "connection" },
+    {
+      label: "平台统一 Key",
+      secret: { access_key_id: "fixture-ak", secret_access_key: "fixture-sk" },
+    },
+    expect.anything(),
+  );
+  expect(
+    (screen.getByLabelText("Access Key ID") as HTMLInputElement).value,
+  ).toBe("");
+  expect(
+    (screen.getByLabelText("Secret Access Key") as HTMLInputElement).value,
+  ).toBe("");
+  expect(JSON.stringify(localStorage)).not.toContain("fixture-sk");
+});
+
 function setup() {
   render(
     <PresetConnect presets={presets} onCreated={created} onSaved={saved} />,

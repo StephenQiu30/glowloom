@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { act, cleanup, render, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import type { Editor } from "@tiptap/core";
 import { RichTextEditor } from "@/components/canvas/runtime/components/editor/rich-text/rich-text-editor";
 import { documentText } from "@/components/canvas/runtime/components/editor/lib/rich-text-document";
@@ -66,4 +66,43 @@ it("continues to apply authoritative content while local editing is disabled", a
   );
   expect(state.editor!.getText()).toBe("服务器新内容");
   expect(change).not.toHaveBeenCalled();
+});
+
+it("对齐改变通过原正文回调保存，撤销与重开保留格式", async () => {
+  const change = vi.fn();
+  const view = render(
+    <RichTextEditor value="对齐正文" documentMode onChange={change} />,
+  );
+  await waitFor(() => expect(state.editor).not.toBeNull());
+  expect(screen.getByRole("button", { name: "段落对齐" })).not.toBeNull();
+  const editor = state.editor!;
+  act(() => {
+    editor.commands.setTextAlign("center");
+  });
+  expect(editor.getJSON().content?.[0].attrs?.textAlign).toBe("center");
+  const saved = change.mock.calls.at(-1)![1];
+  expect(saved.content.content[0].attrs.textAlign).toBe("center");
+  act(() => {
+    editor.commands.undo();
+  });
+  expect(editor.getJSON().content?.[0].attrs?.textAlign).toBeNull();
+  act(() => {
+    editor.commands.redo();
+  });
+  expect(editor.getJSON().content?.[0].attrs?.textAlign).toBe("center");
+  view.unmount();
+  render(
+    <RichTextEditor
+      value="对齐正文"
+      document={saved}
+      documentMode
+      disabled
+      onChange={change}
+    />,
+  );
+  await waitFor(() => expect(state.editor?.isDestroyed).toBe(false));
+  expect(state.editor!.getJSON().content?.[0].attrs?.textAlign).toBe("center");
+  expect(
+    screen.getByRole("button", { name: "段落对齐" }).hasAttribute("disabled"),
+  ).toBe(true);
 });

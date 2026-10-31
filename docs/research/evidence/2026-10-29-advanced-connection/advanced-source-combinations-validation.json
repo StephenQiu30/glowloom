@@ -1,0 +1,31 @@
+{
+  "test_file": "frontend/tests/unit/components/canvas/advanced-source-combinations.test.ts",
+  "command": "pnpm exec vitest run tests/unit/components/canvas/advanced-source-combinations.test.ts --maxWorkers=1",
+  "exit": 0,
+  "passed_files": 1,
+  "passed_tests": 8,
+  "duration_seconds": 1.49,
+  "scope": "Structural authoring candidate only; no browser, resource readiness, provider execution, authoritative receipt, or persisted reconstruction acceptance.",
+  "implementation_changes": false,
+  "cases": [
+    "camera + palette to image: preserve both typed ports and effective settings",
+    "two distinct cameras: reject entire batch",
+    "camera + motion: no common target; valid first source then incompatible source leaves input unchanged",
+    "embedded camera + incoming palette/camera: reject conflict and preserve embedded settings",
+    "subject + image to video: preserve complete sources, ports and bindings",
+    "text + director to existing image: reject entire batch",
+    "text + timeline: reject entire batch",
+    "text + group: reject entire batch"
+  ],
+  "scoped_eslint": {
+    "command": "pnpm exec eslint tests/unit/components/canvas/advanced-source-combinations.test.ts",
+    "exit": 0
+  },
+  "scoped_prettier": {
+    "command": "pnpm exec prettier --check tests/unit/components/canvas/advanced-source-combinations.test.ts",
+    "exit": 0
+  },
+  "git_diff_check": {
+    "exit": 0
+  }
+}

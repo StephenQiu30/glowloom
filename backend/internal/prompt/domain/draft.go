@@ -28,6 +28,7 @@ var (
 
 // Draft is the complete editable intent. It never contains resource URLs or readiness claims.
 type Draft struct {
+	CinemaKit     *CinemaKit     `json:"cinemaKit,omitempty"`
 	SchemaVersion int            `json:"schemaVersion"`
 	Document      Document       `json:"document"`
 	References    []Reference    `json:"references"`
@@ -130,6 +131,9 @@ func labelKind(s string) bool { return mediaKind(s) || s == "subject" }
 
 // Validate checks complete draft shape and cross-reference invariants.
 func (d Draft) Validate() error {
+	if d.CinemaKit != nil && d.CinemaKit.Validate() != nil {
+		return ErrInvalidDraft
+	}
 	if d.SchemaVersion != 1 {
 		return ErrUnsupportedSchema
 	}
@@ -184,16 +188,20 @@ func (d Draft) Validate() error {
 			if !identifier(s.ClientUploadID) || !identifier(s.UploadAttemptID) || (s.UploadSessionID != "" && !identifier(s.UploadSessionID)) || s.SourceID != "" || s.SourceVersion != "" || s.Description != "" || s.Media != nil {
 				return ErrInvalidDraft
 			}
-		case "media", "subject":
+		case "media", "subject", "canvas_subject":
 			if !identifier(s.SourceID) || !identifier(s.SourceVersion) || s.ClientUploadID != "" || s.UploadAttemptID != "" || s.UploadSessionID != "" {
 				return ErrInvalidDraft
 			}
 			if s.Kind == "media" && (s.Description != "" || s.Media != nil) {
 				return ErrInvalidDraft
 			}
-			if s.Kind == "subject" {
+			if s.Kind == "subject" || s.Kind == "canvas_subject" {
 				k = "subject"
-				if len(s.Description) > 10000 || !utf8.ValidString(s.Description) || len(s.Media) > 255 {
+				descriptionLimit := 10000
+				if s.Kind == "canvas_subject" {
+					descriptionLimit = 34000
+				}
+				if len(s.Description) > descriptionLimit || !utf8.ValidString(s.Description) || len(s.Media) > 255 {
 					return ErrInvalidDraft
 				}
 				for _, m := range s.Media {
@@ -290,9 +298,10 @@ const CompilerVersion = "prompt-reference-v1"
 
 // CompiledDraft is the deterministic text and ordered media projection.
 type CompiledDraft struct {
-	Mapping []ReferenceMapping `json:"mapping"`
-	Prompt  string             `json:"prompt"`
-	Media   []CompiledMedia    `json:"media"`
+	CinemaKit *CinemaKit         `json:"cinema_kit,omitempty"`
+	Mapping   []ReferenceMapping `json:"mapping"`
+	Prompt    string             `json:"prompt"`
+	Media     []CompiledMedia    `json:"media"`
 }
 
 // Compile uses authorized frozen facts supplied by the storage boundary; repeated mentions do not duplicate physical inputs.
@@ -319,11 +328,11 @@ func (d Draft) Compile() (CompiledDraft, error) {
 			return CompiledDraft{}, ErrReferenceUnavailable
 		case "media":
 			mapping.MediaSeqNos = append(mapping.MediaSeqNos, add(SourceMedia{SourceID: s.SourceID, SourceVersion: s.SourceVersion, MediaKind: r.MediaKind}, r.Role))
-		case "subject":
+		case "subject", "canvas_subject":
 			subjects = append(subjects, "["+d.Label(r.ID)+"] "+s.Description)
 			for _, m := range s.Media {
 				role := r.Role
-				if m.BindingID != "" && role == "subject" {
+				if (m.BindingID != "" || s.Kind == "canvas_subject") && role == "subject" {
 					role = "reference_" + m.MediaKind
 				}
 				mapping.MediaSeqNos = append(mapping.MediaSeqNos, add(m, role))
@@ -370,6 +379,10 @@ func (d Draft) Compile() (CompiledDraft, error) {
 	if len(subjects) > 0 && !visualInput {
 		out.Prompt += "\n" + strings.Join(subjects, "\n")
 	}
+	if d.CinemaKit != nil {
+		out.CinemaKit = d.CinemaKit
+		out.Prompt += "\n" + d.CinemaKit.Constraints()
+	}
 	return out, nil
 }
 
@@ -391,7 +404,7 @@ func (s ReferenceSource) MarshalJSON() ([]byte, error) {
 			UploadAttemptID string `json:"uploadAttemptId"`
 			UploadSessionID string `json:"uploadSessionId,omitempty"`
 		}{s.Kind, s.ClientUploadID, s.UploadAttemptID, s.UploadSessionID})
-	case "subject":
+	case "subject", "canvas_subject":
 		media := s.Media
 		if media == nil {
 			media = []SourceMedia{}
@@ -430,7 +443,7 @@ func (s *ReferenceSource) UnmarshalJSON(body []byte) error {
 		allowed["uploadSessionId"] = true
 	case "media":
 		required = []string{"sourceId", "sourceVersion"}
-	case "subject":
+	case "subject", "canvas_subject":
 		required = []string{"sourceId", "sourceVersion", "description", "media"}
 	default:
 		return ErrInvalidDraft

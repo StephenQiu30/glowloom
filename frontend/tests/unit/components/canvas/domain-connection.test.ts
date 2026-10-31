@@ -1,4 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
+import { getSubjectVersion } from "@/api/subjects";
+import { setSubjectConfig } from "@/components/canvas/subject/subject-node-state";
+import type { UnifiedSubject } from "@/components/subjects/unified-contracts";
 import { getMediaPreview } from "@/api/media";
 import { createCanvasDomainConnector } from "@/components/canvas/lib/canvas-domain-connection";
 import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
@@ -7,6 +10,7 @@ import type { CanvasYjsLiveSession } from "@/components/canvas/yjs-live-session"
 import type { CanvasEditorState } from "@/components/canvas/lib/canvas-document-adapter";
 
 vi.mock("@/api/media", () => ({ getMediaPreview: vi.fn() }));
+vi.mock("@/api/subjects", () => ({ getSubjectVersion: vi.fn() }));
 afterEach(() => vi.resetAllMocks());
 
 function fixture() {
@@ -53,7 +57,7 @@ function fixture() {
     change,
     waitForSaved,
   } as unknown as CanvasYjsLiveSession;
-  const connector = createCanvasDomainConnector(client, projectID);
+  const connector = createCanvasDomainConnector(client, projectID, scopeID);
   const request = { sourceNodeIds: [source.id], targetNodeId: target.id };
   vi.mocked(getMediaPreview).mockResolvedValue({ asset });
   return {
@@ -166,6 +170,64 @@ it("does not create another target while the first connection receipt is unknown
   expect(f.change).toHaveBeenCalledTimes(1);
   expect(f.graph().nodes.some((node) => node.id === nextTarget.id)).toBe(false);
 });
+
+it.each(["valid", "scope", "version"])(
+  "resolves a pinned subject version before attaching sources: %s",
+  async (kind) => {
+    const f = fixture();
+    const subject: UnifiedSubject = {
+      id: crypto.randomUUID(),
+      version_id: crypto.randomUUID(),
+      owner_scope_id: f.scopeID,
+      revision: 7,
+      name: "Pinned",
+      description: "preserve",
+      favorite: false,
+      created_at: "2026-10-29T00:00:00Z",
+      updated_at: "2026-10-29T00:00:00Z",
+      primary: {
+        binding_id: crypto.randomUUID(),
+        asset_id: crypto.randomUUID(),
+        asset_revision: 1,
+        kind: "image",
+        mime_type: "image/png",
+        file_name: "main.png",
+      },
+      references: [],
+    };
+    const target = setSubjectConfig(
+      createCanvasNode("subject", { x: 500, y: 0 }),
+      { version: 1, subject_id: subject.id, version_id: subject.version_id },
+    );
+    f.setGraph({ ...f.graph(), nodes: [f.source, target] });
+    vi.mocked(getSubjectVersion).mockResolvedValue({
+      ...subject,
+      ...(kind === "scope"
+        ? { owner_scope_id: crypto.randomUUID() }
+        : kind === "version"
+          ? { version_id: crypto.randomUUID() }
+          : {}),
+    });
+    const operation = f.connector.connect({
+      sourceNodeIds: [f.source.id],
+      targetNodeId: target.id,
+    });
+    if (kind === "valid") {
+      await expect(operation).resolves.toBe(target.id);
+      const local = f.graph().nodes.find((n) => n.id === target.id)?.serviceData
+        ?.config?.subject?.local;
+      expect(local?.primary?.binding_id).toBe(subject.primary.binding_id);
+      expect(local?.references?.[0].source_node_id).toBe(f.source.id);
+    } else {
+      await expect(operation).rejects.toThrow();
+      expect(f.change).not.toHaveBeenCalled();
+    }
+    expect(getSubjectVersion).toHaveBeenCalledWith(
+      { id: subject.id, version: subject.version_id },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  },
+);
 
 it("freezes the intended source set during asynchronous resolution", async () => {
   const f = fixture();

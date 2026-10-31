@@ -1,6 +1,4 @@
 "use client";
-import { createCanvasDomainConnector } from "./lib/canvas-domain-connection";
-import dynamic from "next/dynamic";
 import {
   useEffect,
   useMemo,
@@ -9,7 +7,18 @@ import {
   useSyncExternalStore,
 } from "react";
 import { toast } from "sonner";
+import dynamic from "next/dynamic";
+import { createCanvasAssistantAdoption } from "./assistant/canvas-assistant-adoption";
+import { createCanvasDomainConnector } from "./lib/canvas-domain-connection";
+import { createCanvasAudioConnector } from "./lib/canvas-audio-connection";
+import { previewCanvasAudioConnection } from "./lib/canvas-audio-connection-preview";
+import { useCanvasAudioModelCatalog } from "./hooks/use-canvas-audio-model-catalog";
+import { useCanvasAudioSubjectCapabilities } from "./hooks/use-canvas-audio-subject-capabilities";
+import { canvasAudioCatalogAcceptsSubjects } from "./lib/canvas-audio-connection-capability";
+import type { CanvasNodeData } from "./types/canvas";
+import type { CanvasClipboard } from "./lib/canvas-clipboard";
 import { CanvasYjsLiveSession } from "./yjs-live-session";
+import { CanvasGenerationPanel } from "./nodes/canvas-generation-panel";
 import { CanvasParticipants } from "./canvas-participants";
 import { SpaceSwitcher } from "@/components/spaces/space-context";
 import { YjsPresence } from "./yjs-presence";
@@ -23,6 +32,7 @@ import CanvasPage from "./editor/canvas-editor";
 import { CanvasTopBar } from "./controls/canvas-top-bar";
 import { CanvasMediaContext } from "./lib/canvas-media-context";
 import { canvasViewKey } from "./view-state";
+import { canvasSubjectSources } from "./lib/canvas-subject-source";
 import { getCSRFToken } from "@/lib/request";
 import { ensureSessionFresh } from "@/components/auth/session-renewal";
 import { Button } from "@/components/ui/button";
@@ -42,6 +52,15 @@ import { getProject } from "@/api/projects";
 import { requireProject, type Project } from "@/components/projects/project";
 import { ProjectRenameDialog } from "@/components/projects/project-rename-dialog";
 
+const CanvasTransferDialog = dynamic(() =>
+  import("./editor/canvas-transfer-dialog").then((m) => m.CanvasTransferDialog),
+);
+const CanvasTransferReceiver = dynamic(() =>
+  import("./editor/canvas-transfer-dialog").then(
+    (m) => m.CanvasTransferReceiver,
+  ),
+);
+
 const CanvasTimelineWorkspace = dynamic(
   () =>
     import("./timeline/canvas-timeline-workspace").then(
@@ -55,13 +74,52 @@ const CanvasTimelineWorkspace = dynamic(
     ),
   },
 );
+const CanvasSubjectNode = dynamic(
+  () =>
+    import("./subject/canvas-subject-node").then(
+      (module) => module.CanvasSubjectNode,
+    ),
+  {
+    loading: () => (
+      <p role="status" className="p-4 text-sm">
+        正在打开主体…
+      </p>
+    ),
+  },
+);
+
+const CanvasCinemaKitNode = dynamic(
+  () =>
+    import("./cinema-kit/canvas-cinema-kit").then((m) => m.CanvasCinemaKitNode),
+  { loading: () => <p role="status">正在打开导演工具箱…</p> },
+);
 const CanvasDirectorWorkspace = dynamic(
   () =>
     import("./director/canvas-director-workspace").then(
       (module) => module.CanvasDirectorWorkspace,
     ),
-  { loading: () => <p role="status">正在打开导演台…</p> },
+  {
+    loading: () => (
+      <p role="status" className="p-4 text-sm">
+        正在打开导演台…
+      </p>
+    ),
+  },
 );
+const CanvasAssistantPanel = dynamic(
+  () =>
+    import("./assistant/canvas-assistant-panel").then(
+      (module) => module.CanvasAssistantPanel,
+    ),
+  {
+    loading: () => (
+      <p role="status" className="absolute top-4 right-4">
+        正在打开助手…
+      </p>
+    ),
+  },
+);
+
 export function YjsCanvasWorkspace(props: {
   canvasID: string;
   projectID: string;
@@ -108,14 +166,59 @@ function CollaborativeEditor({
     client.getSnapshot,
     client.getSnapshot,
   );
-  const domainConnector = useMemo(
-    () => createCanvasDomainConnector(client, projectID),
+  const adoption = useMemo(
+    () => createCanvasAssistantAdoption(client, projectID),
     [client, projectID],
+  );
+  const domainConnector = useMemo(
+    () => createCanvasDomainConnector(client, projectID, scopeID),
+    [client, projectID, scopeID],
   );
   useEffect(() => {
     domainConnector.start();
     return () => domainConnector.dispose();
   }, [domainConnector]);
+  const { catalog: audioCatalog } = useCanvasAudioModelCatalog({
+    projectID,
+    scopeID,
+  });
+  const { prepare: prepareAudioSubjects, pinnedSubjects } =
+    useCanvasAudioSubjectCapabilities(
+      { projectID, scopeID },
+      canvasAudioCatalogAcceptsSubjects(audioCatalog, { projectID, scopeID }),
+    );
+  const audioConnector = useMemo(
+    () => createCanvasAudioConnector(client, projectID, scopeID),
+    [client, projectID, scopeID],
+  );
+  useEffect(() => {
+    audioConnector.start();
+    return () => audioConnector.dispose();
+  }, [audioConnector]);
+  const audioConnections = useMemo(
+    () => ({
+      prepare: prepareAudioSubjects,
+      preview: (sources: CanvasNodeData[], target?: CanvasNodeData) =>
+        previewCanvasAudioConnection(
+          audioCatalog,
+          { projectID, scopeID },
+          sources,
+          target,
+          pinnedSubjects,
+        ),
+      connect: audioConnector.connect,
+    }),
+    [
+      audioCatalog,
+      audioConnector,
+      prepareAudioSubjects,
+      pinnedSubjects,
+      projectID,
+      scopeID,
+    ],
+  );
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [transfer, setTransfer] = useState<CanvasClipboard | null>(null);
   const [rename, setRename] = useState<string | null>(null);
   const [renameProject, setRenameProject] = useState<Project | null>(null);
   const renameRequest = useRef<AbortController | null>(null);
@@ -175,9 +278,28 @@ function CollaborativeEditor({
       }}
     >
       <div className="canvas-workspace relative h-dvh">
+        <CanvasTransferReceiver
+          client={client}
+          canvasID={canvasID}
+          projectID={projectID}
+          actorID={actorID}
+          scopeID={scopeID}
+        />
+        {transfer && (
+          <CanvasTransferDialog
+            client={client}
+            canvasID={canvasID}
+            projectID={projectID}
+            actorID={actorID}
+            scopeID={scopeID}
+            selection={transfer}
+            onClose={() => setTransfer(null)}
+          />
+        )}
         <CanvasPage
           documentIntegration={{
             projectId: projectID,
+            getDocumentEpoch: client.getDocumentEpoch,
             initialState: view.document,
             viewStateKey: canvasViewKey(actorID, scopeID, projectID, canvasID),
             mediaContext: {
@@ -186,12 +308,15 @@ function CollaborativeEditor({
               bindingRevision: view.dto.revision!,
             },
             mediaEnabled: true,
+            onOpenAssistant: () => setAssistantOpen(true),
+            onTransferSelection: setTransfer,
             canNavigate: !view.dirty,
             frozen: !view.writable || view.migration,
             admit: client.canAccept,
             admitConnectionGraph: client.canAcceptConnectionGraph,
             resolveConnectionMedia: client.connectionMediaNode,
             connectDomain: domainConnector.connect,
+            audioConnections,
             onChange: client.change,
             textBinding: client.textBinding,
             renderToolNode: (nodeID, type) =>
@@ -211,7 +336,25 @@ function CollaborativeEditor({
                   projectID={projectID}
                   compact
                 />
+              ) : type === "cinema_studio" ? (
+                <CanvasCinemaKitNode client={client} nodeID={nodeID} />
+              ) : type === "subject" ? (
+                <CanvasSubjectNode
+                  projectID={projectID}
+                  client={client}
+                  nodeID={nodeID}
+                  actorID={actorID}
+                  scopeID={scopeID}
+                />
               ) : null,
+            renderGenerationPanel: (nodeID) => (
+              <CanvasGenerationPanel
+                client={client}
+                nodeID={nodeID}
+                canvasID={canvasID}
+                projectID={projectID}
+              />
+            ),
             onCursor: client.setCursor,
             presenceOverlay: <YjsPresence client={client} cursors />,
             undo: {
@@ -223,6 +366,8 @@ function CollaborativeEditor({
             toolbar: (controls) => (
               <CanvasTopBar
                 {...controls}
+                canvasID={canvasID}
+                projectID={projectID}
                 title={view.dto!.name ?? "画布"}
                 canDeleteCanvas={false}
                 canRenameCanvas={view.writable && !view.dirty}
@@ -268,6 +413,31 @@ function CollaborativeEditor({
             ),
           }}
         />
+        {assistantOpen && (
+          <CanvasAssistantPanel
+            canvasID={canvasID}
+            projectID={projectID}
+            onClose={() => setAssistantOpen(false)}
+            onAdopt={adoption.adoptMedia}
+            onAdoptText={adoption.adoptText}
+            referenceSources={view.document.nodes.flatMap((node) => {
+              const assetID = node.documentData?.fileReferences?.find(
+                (ref) => ref.purpose === "CONTENT",
+              )?.fileId;
+              return assetID && ["image", "video", "audio"].includes(node.type)
+                ? [
+                    {
+                      nodeID: node.id,
+                      title: node.title,
+                      kind: node.type as "image" | "video" | "audio",
+                      assetID,
+                    },
+                  ]
+                : [];
+            })}
+            subjectSources={canvasSubjectSources(view.document.nodes, canvasID)}
+          />
+        )}
         {view.message && (
           <Alert className="absolute bottom-16 left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 flex-wrap items-center justify-between gap-3 border-0 bg-popover p-4 shadow-sm">
             <AlertDescription className="min-w-0 flex-1">

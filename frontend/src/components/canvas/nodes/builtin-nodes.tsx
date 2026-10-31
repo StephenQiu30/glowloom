@@ -1,6 +1,8 @@
 import {
   Type,
+  Camera,
   Clapperboard,
+  Contact,
   Box,
   Group,
   Image as ImageIcon,
@@ -114,7 +116,23 @@ export function registerBuiltinNodes() {
     [
       ...BUILTIN_DEFINITIONS.slice(0, 4),
       timeline,
-      ...BUILTIN_DEFINITIONS.slice(4),
+      {
+        type: "subject",
+        title: "主体",
+        icon: <Contact className={iconClass} />,
+        defaultSize: { width: 360, height: 480 },
+        defaultMetadata: {},
+        hidePanel: true,
+      },
+      {
+        type: "cinema_studio",
+        title: "导演工具箱",
+        icon: <Camera className={iconClass} />,
+        defaultSize: { width: 400, height: 280 },
+        defaultMetadata: {},
+        hidePanel: true,
+        showInCreateMenu: false,
+      },
       {
         type: "director",
         title: "导演台",
@@ -124,6 +142,7 @@ export function registerBuiltinNodes() {
         hidePanel: true,
         hasSourceHandle: false,
       },
+      ...BUILTIN_DEFINITIONS.slice(4),
     ],
     "builtin",
   );

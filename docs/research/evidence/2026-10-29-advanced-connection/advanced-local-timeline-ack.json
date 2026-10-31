@@ -1,0 +1,13 @@
+[
+  {
+    "sequence": 4750,
+    "epoch": "76a8ab91-62da-422a-9358-e4a37a9485a4",
+    "commitSeq": "2",
+    "contentRevision": "3",
+    "graphHash": "5d1cefb9571345dcdca78f0042f34f1ee8a9948b5c9f4e359b46df693f106cf3",
+    "updateId": "a6d23bac-dcdd-4df0-b2e7-873343e7efe6",
+    "payloadHash": "45af6f29dde05665dcd01859aaf65fddc477843fef5c11d304fe6de7125baf26",
+    "effect": "VISIBLE_CHANGE",
+    "status": "accepted"
+  }
+]

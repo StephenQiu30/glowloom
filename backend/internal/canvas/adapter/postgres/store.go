@@ -29,6 +29,7 @@ type Store struct {
 	db       *gorm.DB
 	media    MediaReaderFactory
 	subjects SubjectSourcesFactory
+	usage    CanvasUsageFactory
 }
 
 // MediaReaderFactory binds the media application query to the canvas transaction.
@@ -559,8 +560,33 @@ func (s *Store) checkMediaReferences(ctx context.Context, tx *gorm.DB, a identit
 		}
 		return nil
 	}
+	checkSubject := func(config *domain.SubjectConfig, index int) error {
+		if config == nil || config.Local == nil {
+			return nil
+		}
+		for _, media := range config.Local.Media() {
+			if media.BindingID != nil {
+				continue
+			}
+			if err := check(media.AssetID, media.Kind, index); err != nil {
+				return err
+			}
+			if checked[media.AssetID].Revision != media.AssetRevision {
+				return &domain.CommandError{Index: index, Cause: domain.ErrInvalidCommand}
+			}
+			if media.SourceNodeID != nil {
+				if err := domain.ValidateSubjectSourceDuration(media.Kind, checked[media.AssetID].DurationMS); err != nil {
+					return &domain.CommandError{Index: index, Cause: err}
+				}
+			}
+		}
+		return nil
+	}
 	for index, c := range commands {
 		if c.Config != nil {
+			if err := checkSubject(c.Config.Subject, index); err != nil {
+				return err
+			}
 			if err := checkGeneration(c.Config.Generation, index); err != nil {
 				return err
 			}
@@ -572,6 +598,9 @@ func (s *Store) checkMediaReferences(ctx context.Context, tx *gorm.DB, a identit
 			}
 		}
 		for _, n := range c.Nodes {
+			if err := checkSubject(n.Config.Subject, index); err != nil {
+				return err
+			}
 			if editor := n.Config.Editor; editor != nil {
 				for _, ref := range editor.Files {
 					kind := n.NodeType

@@ -45,7 +45,8 @@ export function editorIssues(
     )
       issues.push(`${label} 的${referenceRoleLabel(ref.role)}不适用当前模式。`);
     if (ref.source.kind !== "pending_upload")
-      for (const m of ref.source.kind === "subject"
+      for (const m of ref.source.kind === "subject" ||
+      ref.source.kind === "canvas_subject"
         ? ref.source.media
         : [ref.source])
         physical.set(

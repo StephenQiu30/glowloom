@@ -38,7 +38,7 @@ func (a mediaScopeAccess) ReadProjectPresentation(ctx context.Context, actor ide
 	if err != nil {
 		return canvasapp.ProjectPresentation{}, err
 	}
-	return canvasapp.ProjectPresentation{MainCanvasID: facts.MainCanvasID, Name: facts.Name, Status: facts.Status}, nil
+	return canvasapp.ProjectPresentation{MainCanvasID: facts.MainCanvasID, Name: facts.Name, Status: facts.Status, OwnerName: facts.OwnerName}, nil
 }
 
 func (a mediaScopeAccess) MarkProjectContentChanged(ctx context.Context, actor identity.Principal, id uuid.UUID) error {

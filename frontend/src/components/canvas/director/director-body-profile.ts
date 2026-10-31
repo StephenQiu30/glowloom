@@ -1,4 +1,4 @@
-// Adapted from BeefTV 2327ee2. MIT: notices/BeefTV-MIT.txt.
+// Adapted MIT implementation; source attribution: notices/third-party-MIT.txt.
 export type DirectorBodyProfile = {
   leg: number;
   torso: number;

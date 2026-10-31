@@ -1,0 +1,32 @@
+Browser tab: 1980372098, Title: "连线完整验收-20261029 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/52298cdd-795e-4f5a-af85-47eb2fb84b6e".
+1 AXWebArea 连线完整验收-20261029 - 即梦AI, URL: jimeng.jianying.com/ai-tool/ai-canvas/52298cdd-795e-4f5a-af85-47eb2fb84b6e
+	2 container
+		3 container root
+			4 container
+				5 container Canvas top bar
+					6 link (collapsed) Description: 返回首页, Value: jimeng.jianying.com/ai-tool/home, Secondary Actions: Expand
+					7 container
+						8 button Canvas title: 连线完整验收-20261029
+						9 button (collapsed) Description: 项目, Secondary Actions: Expand
+					10 pop up button (collapsed) Description: Canvas node summary: 节点 10, Secondary Actions: Expand
+					11 text 未保存
+					12 container
+						115 button (disabled) AI 工具
+						116 text 准备就绪……
+						15 container
+							16 button (collapsed) Description: 分享, Secondary Actions: Expand
+						17 pop up button (collapsed) Description: 更多, ID: radix-:modern-js-r8c:, Secondary Actions: Expand
+						18 button Credits: 88 · 开会员
+							19 text 88
+							20 text 开会员
+						21 pop up button (collapsed) Description: 用户菜单, ID: radix-:modern-js-r11:, Secondary Actions: Expand
+				22 container Canvas workspace
+					23 container
+						117 container
+							118 heading 刷新后继续编辑, Value: 1
+								119 text 刷新后继续编辑
+							120 text 您的更改未保存，仅保留在此选项卡中。编辑已停止；刷新页面将放弃此更改并加载最新草稿。 Error code: write_scope_denied
+							121 button 刷新
+		114 container Notifications
+
+The focused UI element is 1 AXWebArea 连线完整验收-20261029 - 即梦AI, URL: jimeng.jianying.com/ai-tool/ai-canvas/52298cdd-795e-4f5a-af85-47eb2fb84b6e

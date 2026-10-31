@@ -1,0 +1,153 @@
+Browser tab: 1980372098, Title: "连线完整验收-20261029 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/52298cdd-795e-4f5a-af85-47eb2fb84b6e".
+0 AXWebArea 连线完整验收-20261029 - 即梦AI, URL: jimeng.jianying.com/ai-tool/ai-canvas/52298cdd-795e-4f5a-af85-47eb2fb84b6e
+	1 container
+		2 container root
+			3 container
+				4 container Canvas top bar
+					5 link Description: 返回首页, Value: jimeng.jianying.com/ai-tool/home
+					6 container
+						7 button Canvas title: 连线完整验收-20261029
+						8 button (collapsed) Description: 项目, Secondary Actions: Expand
+					9 pop up button (collapsed) Description: Canvas node summary: 节点 9, Secondary Actions: Expand
+					10 text 已保存
+					11 container
+						12 pop up button (collapsed) Description: 搜索, Secondary Actions: Expand
+						13 pop up button (collapsed) Description: 生成历史, Secondary Actions: Expand
+						14 container
+							15 button (collapsed) Description: 分享, Secondary Actions: Expand
+						16 pop up button (collapsed) Description: 更多, ID: radix-:modern-js-ra6:, Secondary Actions: Expand
+						17 button Credits: 88 · 开会员
+							18 text 88
+							19 text 开会员
+						20 pop up button (collapsed) Description: 用户菜单, ID: radix-:modern-js-r11:, Secondary Actions: Expand
+				21 container Canvas workspace
+					22 container
+						23 container
+							24 container Canvas editing area
+								25 container
+									26 text 9 nodes, 8 edges, 1 selected. Editable. Room connected. 已保存.
+									27 container Canvas
+										118 container
+											119 container
+												120 image
+													121 container Reference connection from 文本 node: 文本 1 to 文本 node: 文本 2
+												122 image
+													123 container Reference connection from 文本 node: 文本 1 to 图片 node: 图片 1
+												124 image
+													125 container Reference connection from 文本 node: 文本 2 to 图片 node: 图片 1
+												126 image
+													127 container Reference connection from 图片 node: 图片 1 to 文本 node: 文本 3
+												128 image
+													129 container Reference connection from 文本 node: 文本 1 to 文本 node: 文本 3
+												130 image
+													131 container Reference connection from 文本 node: 文本 2 to 文本 node: 文本 3
+												132 image
+													133 container Reference connection from 图片 node: timeline-test-image to 主体 node: 主体 1
+												134 image
+													135 container Reference connection from 图片 node: timeline-test-image to 时间线 node: 时间线 1
+												136 container 文本 node: 文本 1
+													137 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_d3r6v7t91j
+													138 text 文本 1
+												139 container 文本 node: 文本 2
+													140 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_5hqbc3zxwk
+													141 text 文本 2
+												142 container 图片 node: 图片 1
+													143 container
+														144 image Description: 暂无图片. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_ya065vajj2
+														145 text 图片 1
+												146 container 文本 node: 文本 3
+													147 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_6w6800e9q2
+													148 text 文本 3
+												149 container 图片 node: timeline-test-image
+													150 container
+														151 image Description: timeline-test-image.png. 1 resource: 1 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_8wa9fqvg0f
+														152 text timeline-test-image
+												153 container 主体 node: 主体 1
+													154 container
+														155 text 主体 1
+														156 container
+															157 button Edit 主体 1
+															158 pop up button (collapsed) Description: 上传音色, ID: radix-:modern-js-rai:, Secondary Actions: Expand
+														159 button Edit subject description
+														160 container Main: source node node_8wa9fqvg0f
+														161 button 移除主媒体并清除主体
+														162 pop up button (collapsed) Description: Add subject media, Secondary Actions: Expand
+														163 text Bound subject: main present, 0 auxiliaries, voice missing. Not selected.
+												164 container 时间线 node: 时间线 1
+													165 container
+														166 text 时间线 1
+														167 container
+															168 text 00:00 / 00:05
+														169 pop up button (collapsed) Description: 导出时间线, Secondary Actions: Expand
+														170 button 全屏编辑
+														171 checkbox Description: 静音, Value: 0
+														172 container
+															173 pop up button (collapsed) Description: 添加素材到时间线, Secondary Actions: Expand
+														174 text 时间线: 1 visual track, 0 audio tracks, 1 clips. Not selected.
+												175 container 视频 node: timeline-test-4s
+													176 container
+														177 text timeline-test-4s
+														178 image timeline-test-4s poster
+														179 text 1 resource: 1 ready, 0 processing, 0 failed. Not selected.
+												180 container 音频 node: timeline-test-7s
+													181 container
+														182 button Rename timeline-test-7s
+															183 text timeline-test-7s
+														184 button (collapsed) Description: Add tags, Secondary Actions: Expand
+														185 pop up button Create connected node after timeline-test-7s
+														186 container
+															187 slider Description: Seek timeline-test-7s, Value: 0
+															188 text 00:00:07
+															189 button Play timeline-test-7s
+														190 button 替换
+														191 text 1 resource: 1 ready, 0 processing, 0 failed. Selected.
+											192 container
+												193 toolbar Selection actions
+													194 button 音频修剪
+														195 container 音频修剪
+															196 text 音频修剪
+													197 button 变速
+														198 container 变速
+															199 text 变速
+													200 button 下载
+									201 menu 添加节点
+										202 text 添加节点
+										203 文本
+										204 (disabled) 图片
+											205 text 图片
+											206 text 无法连接这些节点
+										207 视频
+										208 音频
+										209 时间线
+										210 (disabled) 主体
+											211 text 主体
+											212 text 无法连接这些节点
+										213 (disabled) 导演台
+											214 text 导演台
+											215 text 无法连接这些节点
+						94 container Canvas left toolbar
+							95 toolbar Canvas toolbar
+								96 button 文本
+								97 button 图片
+								98 button 视频
+								99 button 音频
+								100 button 时间线
+								101 button 主体
+								102 checkbox (collapsed) Description: 导演工具箱, Value: 0, ID: radix-:modern-js-rbb:, Secondary Actions: Expand
+								103 button 导演台
+								104 button 资产库
+								105 button 上传
+						106 container Canvas viewport controls
+							107 checkbox Description: 选择工具, Value: 0
+							108 checkbox Description: 小地图, Value: 0
+							109 checkbox Description: 显示连线, Value: 1
+							110 container
+								111 pop up button (collapsed) Description: Zoom options, 55%, ID: radix-:modern-js-rk:, Secondary Actions: Expand
+						112 button (collapsed) Description: 与 AI 对话, Secondary Actions: Expand
+		113 container Notifications
+		114 container Canvas notifications
+		115 container Canvas notifications
+		116 container Canvas tag notifications
+		117 container Canvas notifications
+
+The focused UI element is 203 文本

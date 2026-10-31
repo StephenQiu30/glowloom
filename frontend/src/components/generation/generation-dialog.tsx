@@ -330,10 +330,11 @@ function TaskHistory({
   );
 }
 export function TaskDetail({
-  adoptLabel = "采用结果到画布",
   projectID,
   id,
   onAdopt,
+  adoptLabel = "采用结果到画布",
+  onAdoptText,
   onReuse,
   outputID,
   presentation = "default",
@@ -343,6 +344,7 @@ export function TaskDetail({
   projectID: string;
   id: string;
   onAdopt?: (id: string, kind: string) => Promise<void> | void;
+  onAdoptText?: (operationID: string, outputID: string) => Promise<void> | void;
   onReuse?: (task: Task) => void;
   outputID?: string;
   presentation?: "default" | "asset";
@@ -364,6 +366,20 @@ export function TaskDetail({
       await onAdopt?.(asset, kind);
     } catch (e) {
       setError(e instanceof Error ? e.message : "采用结果未确认，请重试。");
+    } finally {
+      setAdopting(false);
+    }
+  }
+  async function adoptText(output: string) {
+    if (adopting || !onAdoptText) return;
+    setAdopting(true);
+    setError("");
+    try {
+      await onAdoptText(id, output);
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "采用结果未确认，请重试。",
+      );
     } finally {
       setAdopting(false);
     }
@@ -468,12 +484,19 @@ export function TaskDetail({
               o.text,
           )
           .map((o) => (
-            <pre
-              className="max-h-96 overflow-auto rounded-lg border p-4 text-sm break-words whitespace-pre-wrap"
-              key={o.id}
-            >
-              {o.text}
-            </pre>
+            <div key={o.id} className="space-y-2">
+              <pre className="max-h-96 overflow-auto rounded-lg border p-4 text-sm break-words whitespace-pre-wrap">
+                {o.text}
+              </pre>
+              {onAdoptText && (
+                <Button
+                  disabled={adopting}
+                  onClick={() => void adoptText(o.id!)}
+                >
+                  {adopting ? "正在保存结果…" : "采用结果到画布"}
+                </Button>
+              )}
+            </div>
           ))}
       {task?.outputs && (
         <div

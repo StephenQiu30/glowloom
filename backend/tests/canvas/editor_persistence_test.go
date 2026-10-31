@@ -29,6 +29,36 @@ func TestEditorParameterPersistence(t *testing.T) {
 		t.Fatal("stale parameters overwrote saved state")
 	}
 }
+
+func TestEditorTextBackgroundPersistence(t *testing.T) {
+	for _, color := range []string{"default", "cyan", "blue", "purple", "orange", "yellow"} {
+		t.Run(color, func(t *testing.T) {
+			doc := otDoc()
+			doc.Nodes[0].Config.Editor = &domain.EditorConfig{SchemaVersion: 1, Metadata: map[string]json.RawMessage{"textBackground": raw(`"` + color + `"`)}}
+			if err := domain.ValidateGraph(doc); err != nil {
+				t.Fatalf("valid text background rejected: %v", err)
+			}
+			body, err := json.Marshal(doc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var reopened domain.Document
+			if err := json.Unmarshal(body, &reopened); err != nil {
+				t.Fatal(err)
+			}
+			if string(reopened.Nodes[0].Config.Editor.Metadata["textBackground"]) != `"`+color+`"` {
+				t.Fatal("text background lost on reopen")
+			}
+		})
+	}
+	for _, invalid := range []string{`"#ffffff"`, `"url(https://example.com)"`, `""`, `1`, `null`, `{}`} {
+		doc := otDoc()
+		doc.Nodes[0].Config.Editor = &domain.EditorConfig{SchemaVersion: 1, Metadata: map[string]json.RawMessage{"textBackground": raw(invalid)}}
+		if domain.ValidateGraph(doc) == nil {
+			t.Fatalf("accepted invalid background %s", invalid)
+		}
+	}
+}
 func TestEditorEmptyMediaAndBindingPersistence(t *testing.T) {
 	doc := otDoc()
 	id := uuid.New()

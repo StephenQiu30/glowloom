@@ -1,0 +1,46 @@
+[
+  {
+    "path": "frontend/src/components/canvas/lib/canvas-audio-connection-capability.ts",
+    "sha256": "1e98fc91712826f05a66442d3e0eb287f4038a0eff92fec1c85285ceacbecb76"
+  },
+  {
+    "path": "frontend/src/components/canvas/lib/canvas-audio-model-catalog.ts",
+    "sha256": "d10522e7c95ae99e62337802c79136b4856f72067bebcde7a11ef768385744fa"
+  },
+  {
+    "path": "frontend/src/components/canvas/lib/canvas-audio-connection-preview.ts",
+    "sha256": "de87bf5c858324b58b9508e86c50ac9c19fbcebbd102ba12d1a1098efe3bee14"
+  },
+  {
+    "path": "frontend/src/components/canvas/lib/canvas-audio-connection.ts",
+    "sha256": "9b48e02009cc5f540da18e9525608703d14a526bc0685bc02868832bd5527697"
+  },
+  {
+    "path": "frontend/src/components/canvas/hooks/use-canvas-audio-model-catalog.ts",
+    "sha256": "39ef1a589a9a33d4c1160eba3100cb6537b99c694d4f075366810e99d0b18416"
+  },
+  {
+    "path": "frontend/src/components/canvas/hooks/use-canvas-audio-subject-capabilities.ts",
+    "sha256": "e093b5825e6790f8e3e308f20857691a4b277b34d0bbedbc00c34dbfeb58018c"
+  },
+  {
+    "path": "frontend/tests/unit/components/canvas/audio-connection-capability.test.ts",
+    "sha256": "781be2131b4fcddaa508e64dda8e0639f960ad75b8eac9df1bda18ed7734d653"
+  },
+  {
+    "path": "frontend/tests/unit/components/canvas/audio-model-catalog.test.ts",
+    "sha256": "1ff967955b8f270a0ebf63bb35a41b43c8733d248c6f44b8ecab36c03bf2fcca"
+  },
+  {
+    "path": "frontend/tests/unit/components/canvas/audio-model-catalog-hook.test.tsx",
+    "sha256": "694712eb3edfa6e6f2a58541a07bc10867921a43963b5d8abc1819e3e25dfed8"
+  },
+  {
+    "path": "frontend/tests/unit/components/canvas/audio-connection-coordinator.test.ts",
+    "sha256": "7afd031711e65694b88beb57d9e8a7c9e314d1f2b00905ca63f06150ebcca78a"
+  },
+  {
+    "path": "frontend/tests/unit/components/canvas/audio-subject-capabilities-hook.test.tsx",
+    "sha256": "9508b53f1766d043b45fc3d8722f6ef6ed7b3486a0530dcfd056e41013cc4224"
+  }
+]

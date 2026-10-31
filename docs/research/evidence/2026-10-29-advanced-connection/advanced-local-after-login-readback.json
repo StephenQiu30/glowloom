@@ -1,0 +1,728 @@
+[
+  {
+    "commitSeq": "11",
+    "graphHash": "8f3310730fcf2cc9f0770508c0e48b4de41183d5f206d9fc7f67c6063a220aab",
+    "document": {
+      "kind": "canvas",
+      "id": "1d622b24-44f9-43d1-886d-affffa744115",
+      "project_id": "c6ba88ae-048b-4035-ae89-5be907ff1a3a",
+      "name": "未命名画布",
+      "scope": {},
+      "schema_version": 1,
+      "operation_version": 1,
+      "revision": "12",
+      "permissions": {
+        "read": true,
+        "write": true
+      },
+      "read_only_reason": null,
+      "nodes": [
+        {
+          "id": "1f4dd3de-af18-49f2-83b0-f1751a600686",
+          "title": "timeline-test-4s.mp4",
+          "node_type": "video",
+          "node_action": "resource",
+          "config": {
+            "editor": {
+              "schemaVersion": 1,
+              "parameters": {
+                "mode": "MANUAL"
+              },
+              "metadata": {
+                "freeResize": false
+              },
+              "files": [
+                {
+                  "referenceKey": "file-2060d206-c56b-4a3a-9540-a0173362a437",
+                  "fileId": "cd89b61a-5985-40ae-8412-d15df7f1bf42",
+                  "version": "1",
+                  "purpose": "CONTENT"
+                }
+              ]
+            }
+          },
+          "x": 571,
+          "y": 296,
+          "width": 320,
+          "height": 180,
+          "parent_id": null,
+          "z_index": 0,
+          "content_version": "1",
+          "media_ref": {
+            "asset_id": "cd89b61a-5985-40ae-8412-d15df7f1bf42"
+          }
+        },
+        {
+          "id": "86bedd58-46f9-4a3e-80fa-8b54700b71f1",
+          "title": "timeline-test-7s.wav",
+          "node_type": "audio",
+          "node_action": "resource",
+          "config": {
+            "editor": {
+              "schemaVersion": 1,
+              "parameters": {
+                "mode": "MANUAL"
+              },
+              "files": [
+                {
+                  "referenceKey": "file-e9e62717-ce5e-4d2a-bbd3-47ed51cd9680",
+                  "fileId": "fca5c050-a2c8-4131-b73d-68775e1f5c28",
+                  "version": "1",
+                  "purpose": "CONTENT"
+                }
+              ]
+            }
+          },
+          "x": 231,
+          "y": 595,
+          "width": 320,
+          "height": 180,
+          "parent_id": null,
+          "z_index": 0,
+          "content_version": "1",
+          "media_ref": {
+            "asset_id": "fca5c050-a2c8-4131-b73d-68775e1f5c28"
+          }
+        },
+        {
+          "id": "94f6e7a9-0074-4d45-a6c4-4644b5b9480a",
+          "title": "主体 1",
+          "node_type": "subject",
+          "node_action": "resource",
+          "config": {
+            "subject": {
+              "version": 1,
+              "local": {
+                "description": "",
+                "primary": {
+                  "asset_id": "1dcbc36f-3a0b-49f9-9246-194b31d5376e",
+                  "asset_revision": 1,
+                  "kind": "image",
+                  "source_node_id": "ee5a336b-68f1-4248-a4eb-4304d86fa330"
+                },
+                "references": []
+              }
+            },
+            "editor": {
+              "schemaVersion": 1,
+              "parameters": {
+                "mode": "MANUAL"
+              },
+              "metadata": {
+                "referenceLabels": {
+                  "ee5a336b-68f1-4248-a4eb-4304d86fa330": {
+                    "kind": "image",
+                    "ordinal": 1
+                  }
+                }
+              }
+            }
+          },
+          "x": 946.6224350205198,
+          "y": -105.70998632010946,
+          "width": 360,
+          "height": 480,
+          "parent_id": null,
+          "z_index": 1,
+          "content_version": "2",
+          "input_revision": 2
+        },
+        {
+          "id": "c2b304f5-e88d-4541-bb37-7ca128fc8a9e",
+          "title": "时间线 1",
+          "node_type": "timeline",
+          "node_action": "tool",
+          "config": {
+            "editor": {
+              "schemaVersion": 1,
+              "parameters": {
+                "mode": "MANUAL"
+              },
+              "metadata": {
+                "referenceLabels": {
+                  "ee5a336b-68f1-4248-a4eb-4304d86fa330": {
+                    "kind": "image",
+                    "ordinal": 1
+                  }
+                }
+              }
+            },
+            "timeline": {
+              "version": 1,
+              "aspect_ratio": "auto",
+              "fps": 30,
+              "tracks": [
+                {
+                  "id": "3b475d0c-44f2-40e9-a0f0-c69cc70ff827",
+                  "kind": "video",
+                  "label": "主视觉轨",
+                  "locked": false,
+                  "visible": true,
+                  "muted": false
+                }
+              ],
+              "clips": [
+                {
+                  "id": "39cf1eee-c1fe-4708-966d-7ad471d67eb1",
+                  "track_id": "3b475d0c-44f2-40e9-a0f0-c69cc70ff827",
+                  "kind": "image",
+                  "node_id": "ee5a336b-68f1-4248-a4eb-4304d86fa330",
+                  "asset_id": "1dcbc36f-3a0b-49f9-9246-194b31d5376e",
+                  "title": "timeline-test-image.png",
+                  "start_ms": 0,
+                  "duration_ms": 5000,
+                  "source_start_ms": 0,
+                  "source_duration_ms": null,
+                  "volume": 1,
+                  "fade_in_ms": 0,
+                  "fade_out_ms": 0,
+                  "text": ""
+                }
+              ],
+              "imported_assets": [
+                "1dcbc36f-3a0b-49f9-9246-194b31d5376e"
+              ],
+              "subtitle_style": {
+                "font_size": 32,
+                "color": "#ffffff",
+                "position": "bottom"
+              },
+              "snapping": true
+            }
+          },
+          "x": 951,
+          "y": 276,
+          "width": 1200,
+          "height": 220,
+          "parent_id": null,
+          "z_index": 1,
+          "content_version": "1"
+        },
+        {
+          "id": "c85a10d8-be6e-4c43-82c1-6becce25dade",
+          "title": "时间线 2",
+          "node_type": "timeline",
+          "node_action": "tool",
+          "config": {
+            "editor": {
+              "schemaVersion": 1,
+              "parameters": {
+                "mode": "MANUAL"
+              },
+              "metadata": {
+                "referenceLabels": {
+                  "1f4dd3de-af18-49f2-83b0-f1751a600686": {
+                    "kind": "video",
+                    "ordinal": 1
+                  },
+                  "86bedd58-46f9-4a3e-80fa-8b54700b71f1": {
+                    "kind": "audio",
+                    "ordinal": 1
+                  }
+                }
+              }
+            },
+            "timeline": {
+              "version": 1,
+              "aspect_ratio": "auto",
+              "fps": 30,
+              "tracks": [
+                {
+                  "id": "84471e10-e914-4ace-b7c2-2a1bb308d073",
+                  "kind": "video",
+                  "label": "主视觉轨",
+                  "locked": false,
+                  "visible": true,
+                  "muted": false
+                },
+                {
+                  "id": "c928eb4c-16f4-403f-bb23-c248beabf1af",
+                  "kind": "audio",
+                  "label": "音频轨 1",
+                  "locked": false,
+                  "visible": true,
+                  "muted": false
+                }
+              ],
+              "clips": [
+                {
+                  "id": "755cc1ee-10ce-4f79-952b-bb3c616f0ad2",
+                  "track_id": "84471e10-e914-4ace-b7c2-2a1bb308d073",
+                  "kind": "video",
+                  "node_id": "1f4dd3de-af18-49f2-83b0-f1751a600686",
+                  "asset_id": "cd89b61a-5985-40ae-8412-d15df7f1bf42",
+                  "title": "timeline-test-4s.mp4",
+                  "start_ms": 0,
+                  "duration_ms": 4000,
+                  "source_start_ms": 0,
+                  "source_duration_ms": 4000,
+                  "volume": 1,
+                  "fade_in_ms": 0,
+                  "fade_out_ms": 0,
+                  "text": ""
+                },
+                {
+                  "id": "5c896835-8376-4227-acae-057bf24d5417",
+                  "track_id": "c928eb4c-16f4-403f-bb23-c248beabf1af",
+                  "kind": "audio",
+                  "node_id": "86bedd58-46f9-4a3e-80fa-8b54700b71f1",
+                  "asset_id": "fca5c050-a2c8-4131-b73d-68775e1f5c28",
+                  "title": "timeline-test-7s.wav",
+                  "start_ms": 0,
+                  "duration_ms": 7000,
+                  "source_start_ms": 0,
+                  "source_duration_ms": 7000,
+                  "volume": 1,
+                  "fade_in_ms": 0,
+                  "fade_out_ms": 0,
+                  "text": ""
+                }
+              ],
+              "imported_assets": [
+                "cd89b61a-5985-40ae-8412-d15df7f1bf42",
+                "fca5c050-a2c8-4131-b73d-68775e1f5c28"
+              ],
+              "subtitle_style": {
+                "font_size": 32,
+                "color": "#ffffff",
+                "position": "bottom"
+              },
+              "snapping": true
+            }
+          },
+          "x": 951,
+          "y": 425.5,
+          "width": 1200,
+          "height": 220,
+          "parent_id": null,
+          "z_index": 1,
+          "content_version": "2"
+        },
+        {
+          "id": "ee5a336b-68f1-4248-a4eb-4304d86fa330",
+          "title": "timeline-test-image.png",
+          "node_type": "image",
+          "node_action": "resource",
+          "config": {
+            "editor": {
+              "schemaVersion": 1,
+              "parameters": {
+                "mode": "MANUAL"
+              },
+              "metadata": {
+                "freeResize": false
+              },
+              "files": [
+                {
+                  "referenceKey": "file-ccdabb1e-8fcf-4ec3-bf7c-169075b87307",
+                  "fileId": "1dcbc36f-3a0b-49f9-9246-194b31d5376e",
+                  "version": "1",
+                  "purpose": "CONTENT"
+                }
+              ]
+            }
+          },
+          "x": 571,
+          "y": 296,
+          "width": 320,
+          "height": 180,
+          "parent_id": null,
+          "z_index": 0,
+          "content_version": "1",
+          "media_ref": {
+            "asset_id": "1dcbc36f-3a0b-49f9-9246-194b31d5376e"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "01816b49-0dcc-4799-a348-bf5a1891628d",
+          "edge_type": "annotation",
+          "source_node_id": "ee5a336b-68f1-4248-a4eb-4304d86fa330",
+          "target_node_id": "c2b304f5-e88d-4541-bb37-7ca128fc8a9e"
+        },
+        {
+          "id": "519a6318-1c60-4242-b8bb-9cb2d007514f",
+          "edge_type": "annotation",
+          "source_node_id": "ee5a336b-68f1-4248-a4eb-4304d86fa330",
+          "target_node_id": "94f6e7a9-0074-4d45-a6c4-4644b5b9480a"
+        },
+        {
+          "id": "544b12e1-c5df-4953-99cf-95c4e2329cfc",
+          "edge_type": "annotation",
+          "source_node_id": "1f4dd3de-af18-49f2-83b0-f1751a600686",
+          "target_node_id": "c85a10d8-be6e-4c43-82c1-6becce25dade"
+        },
+        {
+          "id": "fb745927-dd95-466c-981b-50046df54570",
+          "edge_type": "annotation",
+          "source_node_id": "86bedd58-46f9-4a3e-80fa-8b54700b71f1",
+          "target_node_id": "c85a10d8-be6e-4c43-82c1-6becce25dade"
+        }
+      ]
+    }
+  },
+  {
+    "commitSeq": "11",
+    "graphHash": "8f3310730fcf2cc9f0770508c0e48b4de41183d5f206d9fc7f67c6063a220aab",
+    "document": {
+      "kind": "canvas",
+      "id": "1d622b24-44f9-43d1-886d-affffa744115",
+      "project_id": "c6ba88ae-048b-4035-ae89-5be907ff1a3a",
+      "name": "未命名画布",
+      "scope": {},
+      "schema_version": 1,
+      "operation_version": 1,
+      "revision": "12",
+      "permissions": {
+        "read": true,
+        "write": true
+      },
+      "read_only_reason": null,
+      "nodes": [
+        {
+          "id": "1f4dd3de-af18-49f2-83b0-f1751a600686",
+          "title": "timeline-test-4s.mp4",
+          "node_type": "video",
+          "node_action": "resource",
+          "config": {
+            "editor": {
+              "schemaVersion": 1,
+              "parameters": {
+                "mode": "MANUAL"
+              },
+              "metadata": {
+                "freeResize": false
+              },
+              "files": [
+                {
+                  "referenceKey": "file-2060d206-c56b-4a3a-9540-a0173362a437",
+                  "fileId": "cd89b61a-5985-40ae-8412-d15df7f1bf42",
+                  "version": "1",
+                  "purpose": "CONTENT"
+                }
+              ]
+            }
+          },
+          "x": 571,
+          "y": 296,
+          "width": 320,
+          "height": 180,
+          "parent_id": null,
+          "z_index": 0,
+          "content_version": "1",
+          "media_ref": {
+            "asset_id": "cd89b61a-5985-40ae-8412-d15df7f1bf42"
+          }
+        },
+        {
+          "id": "86bedd58-46f9-4a3e-80fa-8b54700b71f1",
+          "title": "timeline-test-7s.wav",
+          "node_type": "audio",
+          "node_action": "resource",
+          "config": {
+            "editor": {
+              "schemaVersion": 1,
+              "parameters": {
+                "mode": "MANUAL"
+              },
+              "files": [
+                {
+                  "referenceKey": "file-e9e62717-ce5e-4d2a-bbd3-47ed51cd9680",
+                  "fileId": "fca5c050-a2c8-4131-b73d-68775e1f5c28",
+                  "version": "1",
+                  "purpose": "CONTENT"
+                }
+              ]
+            }
+          },
+          "x": 231,
+          "y": 595,
+          "width": 320,
+          "height": 180,
+          "parent_id": null,
+          "z_index": 0,
+          "content_version": "1",
+          "media_ref": {
+            "asset_id": "fca5c050-a2c8-4131-b73d-68775e1f5c28"
+          }
+        },
+        {
+          "id": "94f6e7a9-0074-4d45-a6c4-4644b5b9480a",
+          "title": "主体 1",
+          "node_type": "subject",
+          "node_action": "resource",
+          "config": {
+            "subject": {
+              "version": 1,
+              "local": {
+                "description": "",
+                "primary": {
+                  "asset_id": "1dcbc36f-3a0b-49f9-9246-194b31d5376e",
+                  "asset_revision": 1,
+                  "kind": "image",
+                  "source_node_id": "ee5a336b-68f1-4248-a4eb-4304d86fa330"
+                },
+                "references": []
+              }
+            },
+            "editor": {
+              "schemaVersion": 1,
+              "parameters": {
+                "mode": "MANUAL"
+              },
+              "metadata": {
+                "referenceLabels": {
+                  "ee5a336b-68f1-4248-a4eb-4304d86fa330": {
+                    "kind": "image",
+                    "ordinal": 1
+                  }
+                }
+              }
+            }
+          },
+          "x": 946.6224350205198,
+          "y": -105.70998632010946,
+          "width": 360,
+          "height": 480,
+          "parent_id": null,
+          "z_index": 1,
+          "content_version": "2",
+          "input_revision": 2
+        },
+        {
+          "id": "c2b304f5-e88d-4541-bb37-7ca128fc8a9e",
+          "title": "时间线 1",
+          "node_type": "timeline",
+          "node_action": "tool",
+          "config": {
+            "editor": {
+              "schemaVersion": 1,
+              "parameters": {
+                "mode": "MANUAL"
+              },
+              "metadata": {
+                "referenceLabels": {
+                  "ee5a336b-68f1-4248-a4eb-4304d86fa330": {
+                    "kind": "image",
+                    "ordinal": 1
+                  }
+                }
+              }
+            },
+            "timeline": {
+              "version": 1,
+              "aspect_ratio": "auto",
+              "fps": 30,
+              "tracks": [
+                {
+                  "id": "3b475d0c-44f2-40e9-a0f0-c69cc70ff827",
+                  "kind": "video",
+                  "label": "主视觉轨",
+                  "locked": false,
+                  "visible": true,
+                  "muted": false
+                }
+              ],
+              "clips": [
+                {
+                  "id": "39cf1eee-c1fe-4708-966d-7ad471d67eb1",
+                  "track_id": "3b475d0c-44f2-40e9-a0f0-c69cc70ff827",
+                  "kind": "image",
+                  "node_id": "ee5a336b-68f1-4248-a4eb-4304d86fa330",
+                  "asset_id": "1dcbc36f-3a0b-49f9-9246-194b31d5376e",
+                  "title": "timeline-test-image.png",
+                  "start_ms": 0,
+                  "duration_ms": 5000,
+                  "source_start_ms": 0,
+                  "source_duration_ms": null,
+                  "volume": 1,
+                  "fade_in_ms": 0,
+                  "fade_out_ms": 0,
+                  "text": ""
+                }
+              ],
+              "imported_assets": [
+                "1dcbc36f-3a0b-49f9-9246-194b31d5376e"
+              ],
+              "subtitle_style": {
+                "font_size": 32,
+                "color": "#ffffff",
+                "position": "bottom"
+              },
+              "snapping": true
+            }
+          },
+          "x": 951,
+          "y": 276,
+          "width": 1200,
+          "height": 220,
+          "parent_id": null,
+          "z_index": 1,
+          "content_version": "1"
+        },
+        {
+          "id": "c85a10d8-be6e-4c43-82c1-6becce25dade",
+          "title": "时间线 2",
+          "node_type": "timeline",
+          "node_action": "tool",
+          "config": {
+            "editor": {
+              "schemaVersion": 1,
+              "parameters": {
+                "mode": "MANUAL"
+              },
+              "metadata": {
+                "referenceLabels": {
+                  "1f4dd3de-af18-49f2-83b0-f1751a600686": {
+                    "kind": "video",
+                    "ordinal": 1
+                  },
+                  "86bedd58-46f9-4a3e-80fa-8b54700b71f1": {
+                    "kind": "audio",
+                    "ordinal": 1
+                  }
+                }
+              }
+            },
+            "timeline": {
+              "version": 1,
+              "aspect_ratio": "auto",
+              "fps": 30,
+              "tracks": [
+                {
+                  "id": "84471e10-e914-4ace-b7c2-2a1bb308d073",
+                  "kind": "video",
+                  "label": "主视觉轨",
+                  "locked": false,
+                  "visible": true,
+                  "muted": false
+                },
+                {
+                  "id": "c928eb4c-16f4-403f-bb23-c248beabf1af",
+                  "kind": "audio",
+                  "label": "音频轨 1",
+                  "locked": false,
+                  "visible": true,
+                  "muted": false
+                }
+              ],
+              "clips": [
+                {
+                  "id": "755cc1ee-10ce-4f79-952b-bb3c616f0ad2",
+                  "track_id": "84471e10-e914-4ace-b7c2-2a1bb308d073",
+                  "kind": "video",
+                  "node_id": "1f4dd3de-af18-49f2-83b0-f1751a600686",
+                  "asset_id": "cd89b61a-5985-40ae-8412-d15df7f1bf42",
+                  "title": "timeline-test-4s.mp4",
+                  "start_ms": 0,
+                  "duration_ms": 4000,
+                  "source_start_ms": 0,
+                  "source_duration_ms": 4000,
+                  "volume": 1,
+                  "fade_in_ms": 0,
+                  "fade_out_ms": 0,
+                  "text": ""
+                },
+                {
+                  "id": "5c896835-8376-4227-acae-057bf24d5417",
+                  "track_id": "c928eb4c-16f4-403f-bb23-c248beabf1af",
+                  "kind": "audio",
+                  "node_id": "86bedd58-46f9-4a3e-80fa-8b54700b71f1",
+                  "asset_id": "fca5c050-a2c8-4131-b73d-68775e1f5c28",
+                  "title": "timeline-test-7s.wav",
+                  "start_ms": 0,
+                  "duration_ms": 7000,
+                  "source_start_ms": 0,
+                  "source_duration_ms": 7000,
+                  "volume": 1,
+                  "fade_in_ms": 0,
+                  "fade_out_ms": 0,
+                  "text": ""
+                }
+              ],
+              "imported_assets": [
+                "cd89b61a-5985-40ae-8412-d15df7f1bf42",
+                "fca5c050-a2c8-4131-b73d-68775e1f5c28"
+              ],
+              "subtitle_style": {
+                "font_size": 32,
+                "color": "#ffffff",
+                "position": "bottom"
+              },
+              "snapping": true
+            }
+          },
+          "x": 951,
+          "y": 425.5,
+          "width": 1200,
+          "height": 220,
+          "parent_id": null,
+          "z_index": 1,
+          "content_version": "2"
+        },
+        {
+          "id": "ee5a336b-68f1-4248-a4eb-4304d86fa330",
+          "title": "timeline-test-image.png",
+          "node_type": "image",
+          "node_action": "resource",
+          "config": {
+            "editor": {
+              "schemaVersion": 1,
+              "parameters": {
+                "mode": "MANUAL"
+              },
+              "metadata": {
+                "freeResize": false
+              },
+              "files": [
+                {
+                  "referenceKey": "file-ccdabb1e-8fcf-4ec3-bf7c-169075b87307",
+                  "fileId": "1dcbc36f-3a0b-49f9-9246-194b31d5376e",
+                  "version": "1",
+                  "purpose": "CONTENT"
+                }
+              ]
+            }
+          },
+          "x": 571,
+          "y": 296,
+          "width": 320,
+          "height": 180,
+          "parent_id": null,
+          "z_index": 0,
+          "content_version": "1",
+          "media_ref": {
+            "asset_id": "1dcbc36f-3a0b-49f9-9246-194b31d5376e"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "01816b49-0dcc-4799-a348-bf5a1891628d",
+          "edge_type": "annotation",
+          "source_node_id": "ee5a336b-68f1-4248-a4eb-4304d86fa330",
+          "target_node_id": "c2b304f5-e88d-4541-bb37-7ca128fc8a9e"
+        },
+        {
+          "id": "519a6318-1c60-4242-b8bb-9cb2d007514f",
+          "edge_type": "annotation",
+          "source_node_id": "ee5a336b-68f1-4248-a4eb-4304d86fa330",
+          "target_node_id": "94f6e7a9-0074-4d45-a6c4-4644b5b9480a"
+        },
+        {
+          "id": "544b12e1-c5df-4953-99cf-95c4e2329cfc",
+          "edge_type": "annotation",
+          "source_node_id": "1f4dd3de-af18-49f2-83b0-f1751a600686",
+          "target_node_id": "c85a10d8-be6e-4c43-82c1-6becce25dade"
+        },
+        {
+          "id": "fb745927-dd95-466c-981b-50046df54570",
+          "edge_type": "annotation",
+          "source_node_id": "86bedd58-46f9-4a3e-80fa-8b54700b71f1",
+          "target_node_id": "c85a10d8-be6e-4c43-82c1-6becce25dade"
+        }
+      ]
+    }
+  }
+]

@@ -187,6 +187,22 @@ export async function deleteDirectorRecovery(
   });
 }
 
+/** 画布项目信息与费用明细 GET /api/canvases/${param0}/information */
+export async function getCanvasInformation(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getCanvasInformationParams,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.CanvasInformation>(`/api/canvases/${param0}/information`, {
+    method: "GET",
+    params: {
+      ...queryParams,
+    },
+    ...(options || {}),
+  });
+}
+
 /** 项目画布列表 GET /api/projects/${param0}/canvases */
 export async function listCanvases(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

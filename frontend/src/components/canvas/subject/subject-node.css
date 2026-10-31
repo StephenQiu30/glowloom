@@ -1,0 +1,102 @@
+.canvas-subject-node {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  height: 100%;
+  overflow: auto;
+  color: var(--foreground);
+  background: var(--card);
+}
+.canvas-subject-main {
+  position: relative;
+  min-height: 180px;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--muted);
+}
+.canvas-subject-empty {
+  display: flex;
+  height: 100%;
+  min-height: 180px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.canvas-subject-clear {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+.canvas-subject-description {
+  font-size: 13px;
+  max-height: 56px;
+  overflow: auto;
+}
+.canvas-subject-references {
+  display: flex;
+  gap: 8px;
+  overflow: auto;
+  flex-shrink: 0;
+}
+.canvas-subject-references > div {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 6px;
+}
+.canvas-subject-import[data-slot="dialog-content"] {
+  width: min(1000px, calc(100vw - 48px));
+  max-width: none;
+  max-height: calc(100dvh - 48px);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.canvas-subject-import-tools {
+  display: flex;
+  gap: 12px;
+}
+.canvas-subject-import-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px;
+  overflow: auto;
+  min-height: 180px;
+}
+.canvas-subject-import-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  cursor: pointer;
+}
+.canvas-subject-import-card > div {
+  height: 140px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--muted);
+}
+.canvas-subject-import-card > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+}
+.canvas-subject-import-card > button {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+}
+
+.canvas-subject-editor[data-slot="dialog-content"] {
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+}

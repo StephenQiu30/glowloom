@@ -1,8 +1,10 @@
 import type { CanvasEditorState } from "./canvas-document-adapter";
+import { assertCanvasSubjectSourcePreview } from "./canvas-subject-connection-preview";
 import type { CanvasNodeData } from "../types/canvas";
 import { canvasConnectionMediaAssetId } from "./canvas-timeline-connections";
 
-export const isCanvasDomainTarget = (type: string) => type === "timeline";
+export const isCanvasDomainTarget = (type: string) =>
+  type === "timeline" || type === "subject";
 
 /** Cheap synchronous preview; the final command must resolve and revalidate every asset. */
 export function assertCanvasDomainSources(
@@ -34,6 +36,8 @@ export function validateCanvasDomainConnectionPreview(
     return resolveMedia(node);
   });
   assertCanvasDomainSources(sources, target.type);
+  if (target.type === "subject")
+    assertCanvasSubjectSourcePreview(sources, { target });
   const selected = new Set(sourceIDs);
   if (selected.has(targetID)) throw new Error("不能连接节点自身");
   if (

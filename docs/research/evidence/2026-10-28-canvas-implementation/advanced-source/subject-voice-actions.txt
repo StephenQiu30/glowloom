@@ -1,0 +1,31 @@
+Browser tab: 1980371314, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+0 AXWebArea 一致性调研-202610221 - 即梦AI, URL: jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage
+	1 container
+		2 container
+			3 container Canvas top bar
+				4 text 已保存
+			5 container Canvas workspace
+				6 container
+					7 container
+						8 container Canvas editing area
+							9 container
+								10 container Canvas
+					11 container Canvas left toolbar
+						12 toolbar Canvas toolbar
+					13 container Canvas viewport controls
+		14 menu 打开音色预览, ID: radix-:modern-js-rm0:
+			15 text 音色
+			16 (expanded) Description: More voice actions, ID: radix-:modern-js-rmk:, Secondary Actions: Collapse
+			17 Pause voice
+			18 text 00:00
+			19 text /
+			20 text 00:04
+		21 menu More voice actions, ID: radix-:modern-js-rmj:
+			22 text 替换音色
+			23 Add selected voice
+			24 从资产库选择
+			25 本地添加
+			26 智能配音
+			27 删除
+
+The focused UI element is 16 (expanded) Description: More voice actions, ID: radix-:modern-js-rmk:, Secondary Actions: Collapse

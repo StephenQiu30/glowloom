@@ -16,12 +16,16 @@ import {
   type NodeViewProps,
 } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import TextAlign from "@tiptap/extension-text-align";
 import Collaboration from "@tiptap/extension-collaboration";
 import { ySyncPluginKey } from "@tiptap/y-tiptap";
 import { persistentRichText } from "@glowloom/canvas-collab/rich-text";
 import type { XmlFragment } from "yjs";
 import { exitSuggestion, type SuggestionProps } from "@tiptap/suggestion";
 import {
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
   Bold,
   Italic,
   Underline,
@@ -44,6 +48,7 @@ import {
   Group,
 } from "lucide-react";
 import {
+  Fragment,
   useCallback,
   createContext,
   useContext,
@@ -249,6 +254,14 @@ function createEditorExtensions({
         ? { openOnClick: false, protocols: ["https", "http"] }
         : false,
     }),
+    ...(documentMode
+      ? [
+          TextAlign.configure({
+            types: ["paragraph", "heading"],
+            alignments: ["left", "center", "right"],
+          }),
+        ]
+      : []),
     ...(collaborationFragment
       ? [Collaboration.configure({ fragment: collaborationFragment })]
       : []),
@@ -365,7 +378,7 @@ function createEditorExtensions({
                 transaction.docChanged &&
                 readProps().acceptDocument?.({
                   schemaVersion: 1,
-                  content: transaction.doc.toJSON(),
+                  content: persistentRichText(transaction.doc.toJSON()),
                 }) === false
               )
                 return false;
@@ -697,6 +710,7 @@ export function RichTextEditor({ rootRef, ...props }: RichTextInputProps) {
           <Dialog open={expanded} onOpenChange={setExpanded}>
             <DialogContent
               data-rich-text-floating
+              data-document-export={props.documentExport}
               className={
                 props.documentMode
                   ? "canvas-document-fullscreen top-0 left-0 translate-x-0 translate-y-0"
@@ -753,7 +767,8 @@ export function RichTextEditor({ rootRef, ...props }: RichTextInputProps) {
               {props.documentMode ? (
                 <div className="canvas-document-header">
                   <span className="truncate">
-                    {props.documentTitle || "文本"}.json
+                    {props.documentTitle || "文本"}.
+                    {props.documentExport === "markdown" ? "md" : "json"}
                   </span>
                   <div className="ml-auto flex items-center gap-1">
                     <Button
@@ -762,7 +777,23 @@ export function RichTextEditor({ rootRef, ...props }: RichTextInputProps) {
                       aria-label="下载文档"
                       onClick={() =>
                         editor &&
-                        void downloadDocument(editor, props.documentTitle)
+                        void (
+                          props.documentExport === "markdown"
+                            ? import("../lib/rich-text-download").then(
+                                ({ downloadRichTextMarkdown }) =>
+                                  downloadRichTextMarkdown(
+                                    {
+                                      schemaVersion: 1,
+                                      content: persistentRichText(
+                                        editor.getJSON(),
+                                      ),
+                                    },
+                                    props.documentTitle || "文本",
+                                    props.references,
+                                  ),
+                              )
+                            : downloadDocument(editor, props.documentTitle)
+                        ).catch(() => toast.error("文档下载失败，请重试"))
                       }
                     >
                       <Download />
@@ -936,10 +967,21 @@ function EditorToolbar({
       bullet: current.isActive("bulletList"),
       ordered: current.isActive("orderedList"),
       quote: current.isActive("blockquote"),
+      alignment:
+        (current.isActive("heading")
+          ? current.getAttributes("heading")
+          : current.getAttributes("paragraph")
+        ).textAlign ?? "left",
       undo: current.can().undo(),
       redo: current.can().redo(),
     }),
   });
+  const AlignmentIcon =
+    state.alignment === "center"
+      ? AlignCenter
+      : state.alignment === "right"
+        ? AlignRight
+        : AlignLeft;
   const tools = [
     {
       label: "加粗",
@@ -1073,18 +1115,76 @@ function EditorToolbar({
             orderedTools.indexOf(a.label) - orderedTools.indexOf(b.label),
         )
         .map(({ label, Icon, active, run }) => (
-          <Toggle
-            key={label}
-            type="button"
-            size="sm"
-            pressed={active}
-            disabled={disabled}
-            aria-label={label}
-            title={label}
-            onPressedChange={run}
-          >
-            <Icon aria-hidden="true" />
-          </Toggle>
+          <Fragment key={label}>
+            <Toggle
+              type="button"
+              size="sm"
+              pressed={active}
+              disabled={disabled}
+              aria-label={label}
+              title={label}
+              onPressedChange={run}
+            >
+              <Icon aria-hidden="true" />
+            </Toggle>
+            {label === "引用" ? (
+              <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={disabled}
+                    className="canvas-text-alignment-trigger"
+                    aria-label="段落对齐"
+                    title="段落对齐"
+                  >
+                    <AlignmentIcon aria-hidden="true" />
+                    <ChevronDown aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  className="canvas-text-alignment-menu"
+                  data-rich-text-floating
+                  data-canvas-shortcuts-ignore
+                  onCloseAutoFocus={(event) => {
+                    event.preventDefault();
+                    editor.commands.focus();
+                  }}
+                  onEscapeKeyDown={(event) => event.stopPropagation()}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <DropdownMenuRadioGroup
+                    value={state.alignment}
+                    onValueChange={(value) => {
+                      if (
+                        !disabled &&
+                        editor.isEditable &&
+                        ["left", "center", "right"].includes(value)
+                      )
+                        editor.chain().focus().setTextAlign(value).run();
+                    }}
+                  >
+                    <DropdownMenuRadioItem value="left">
+                      <AlignLeft aria-hidden="true" />
+                      左对齐
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="center">
+                      <AlignCenter aria-hidden="true" />
+                      居中对齐
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="right">
+                      <AlignRight aria-hidden="true" />
+                      右对齐
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </Fragment>
         ))}
       <Button
         type="button"

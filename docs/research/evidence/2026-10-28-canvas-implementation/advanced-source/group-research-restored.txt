@@ -1,0 +1,100 @@
+- banner "Canvas top bar":
+  - link:
+    - /url: /ai-tool/home
+  - button:
+    - generic: 一致性调研-202610221
+  - button:
+  - button:
+    - text: 节点
+    - generic: "5"
+  - status: 已保存
+  - button:
+  - button:
+  - button:
+    - generic: 分享
+  - button:
+  - button:
+    - generic: "88"
+    - generic: 开会员
+  - button
+- main "Canvas workspace":
+  - region "Canvas editing area":
+    - generic: 5 nodes, 0 edges, 0 selected. Editable. Room connected. 已保存.
+    - application "Canvas":
+      - paragraph: 双击编辑文本
+      - generic: 文本 1
+      - paragraph: 双击编辑文本
+      - generic: 文本 2
+      - paragraph: 双击编辑文本
+      - generic: 文本 3
+      - generic: 导演台
+      - paragraph: 在 3D 空间中设计角色、机位与镜头
+      - generic: 进入导演台
+      - generic: "No resources: 0 ready, 0 processing, 0 failed. Not selected."
+      - generic: 视频 1
+      - generic: "No resources: 0 ready, 0 processing, 0 failed. Not selected."
+      - status
+  - complementary
+  - complementary "Canvas left toolbar":
+    - toolbar "Canvas toolbar":
+      - generic: 文本
+      - button
+      - generic: 图片
+      - button
+      - generic: 视频
+      - button
+      - generic: 音频
+      - button
+      - generic: 时间线
+      - button
+      - generic: 主体
+      - button
+      - generic: 导演工具箱
+      - button
+      - generic: 导演台
+      - button
+      - generic: 资产库
+      - button
+      - generic: 上传
+      - button
+  - group "Canvas viewport controls":
+    - button:
+    - button:
+    - button [pressed]:
+    - button: 50%
+    - status
+  - generic: 与 AI 对话
+  - button
+- dialog "Import assets":
+  - banner:
+    - heading "Import assets" [level=2]
+    - paragraph: Choose assets from Dreamina and import them into this canvas.
+    - tablist "Import assets":
+      - tab "资产" [selected]
+      - tab "主体"
+      - tab "画布"
+    - button "Close asset library" [active]:
+  - tablist "Asset type":
+    - tab "图片" [selected]:
+      - generic: 图片
+    - tab "视频":
+      - generic: 视频
+    - tab "音频":
+      - generic: 音频
+    - tab "文档":
+      - generic: 文档
+  - textbox "Search Dreamina assets":
+    - /placeholder: 搜索
+  - button "时间":
+    - generic: 时间
+  - button "筛选":
+    - generic: 筛选
+  - tabpanel "资产":
+    - tabpanel "图片":
+      - status:
+        - generic: 暂无图片素材
+  - contentinfo:
+    - generic: 已选择 0 个素材
+    - status
+    - button "确认" [disabled]
+    - generic: 请先选择素材

@@ -50,11 +50,21 @@ func ValidateDraftSources(tx *gorm.DB, a identityapp.Principal, p uuid.UUID, d d
 			if err := checkDraftMedia(tx, p, domain.SourceMedia{SourceID: s.SourceID, SourceVersion: s.SourceVersion, MediaKind: r.MediaKind}, ready); err != nil {
 				return err
 			}
-		case "subject":
+		case "subject", "canvas_subject":
 			var expected domain.ReferenceSource
 			var found bool
 			var err error
-			if sourceOwner != nil {
+			if s.Kind == "canvas_subject" {
+				canvasOwner, ok := sourceOwner.(application.CanvasSubjectSources)
+				if !ok {
+					return domain.ErrReferenceUnavailable
+				}
+				expected, err = canvasOwner.ResolveCanvasSubject(tx.Statement.Context, a, p, s.SourceID, s.SourceVersion)
+				if err != nil {
+					return err
+				}
+				found = true
+			} else if sourceOwner != nil {
 				expected, found, err = sourceOwner.ResolveSubject(tx.Statement.Context, a, p, s.SourceID, s.SourceVersion)
 				if err != nil {
 					return err

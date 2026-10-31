@@ -15,8 +15,21 @@ type Draft struct {
 	CandidateCount int                 `json:"candidate_count"`
 }
 
-// IsDraft identifies the two locally editable generation intents.
+// IsDraft identifies a node with a versioned generation input, separate from its result.
 func IsDraft(n Node) bool {
+	if isGenerationDraft(n) {
+		return true
+	}
+	switch n.NodeType {
+	case "text", "image", "video", "audio":
+		return n.NodeAction == "resource" && n.Config.Draft != nil
+	default:
+		return false
+	}
+}
+
+// isGenerationDraft identifies legacy intent-only nodes with distinct edit rules.
+func isGenerationDraft(n Node) bool {
 	return n.NodeType == "image_generation" || n.NodeType == "video_generation"
 }
 

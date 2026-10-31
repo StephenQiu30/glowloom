@@ -1,0 +1,25 @@
+Browser tab: 1980371314, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 48-59, 74-99, 102-109
+~											73 container 文本 node: 文本 1
++											74 container 文本 node: 文本 2
++											75 container 文本 node: 文本 3
++											76 container 外部 node: 导演台
++											77 container 视频 node: 视频 1
++											78 container 主体 node: 主体 1
++												79 container
++													80 button (disabled) Rename 主体 1
++														81 text 主体 1
++													82 button (disabled) Edit 主体 1
++													83 button (disabled) Edit subject description
++													84 container
++														85 button (disabled) 导入主体
++														86 button (disabled) 添加主媒体
++														87 button (disabled) 从资产库选择
++														88 button (disabled) 本地添加
++													89 text Empty subject: main missing, 0 auxiliaries, voice missing. Selected.
++										90 container 从画布选择 取消选择
++											91 text 从画布选择
++											92 button 取消选择
++										93 text 请选择图片或视频，按 Esc 取消
+The focused UI element is 90 container 从画布选择 取消选择

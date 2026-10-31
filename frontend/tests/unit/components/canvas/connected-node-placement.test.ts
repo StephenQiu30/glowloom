@@ -11,6 +11,12 @@ describe("connected node placement", () => {
     width: 480,
     height: 320,
   };
+  it("keeps a new empty image square", () => {
+    expect(createCanvasNode("image", { x: 0, y: 0 })).toMatchObject({
+      width: 320,
+      height: 320,
+    });
+  });
   it.each(["source", "target"] as const)(
     "places a clicked %s port beside the existing node without overlap",
     (handleType) => {

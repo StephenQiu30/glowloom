@@ -1,4 +1,6 @@
 import { Button } from "@/components/ui/button";
+import { CanvasColorTags } from "./canvas-color-tags";
+import type { CanvasColorTag } from "../lib/canvas-color-tags";
 import {
   Tooltip,
   TooltipContent,
@@ -6,15 +8,21 @@ import {
 } from "@/components/ui/tooltip";
 import {
   Group,
+  Layers,
   Ungroup,
   Play,
   Grid2X2,
   LayoutDashboard,
-  Copy,
-  Trash2,
+  Download,
 } from "lucide-react";
 import type { MouseEvent, ReactNode } from "react";
 import { CanvasConnectionHandle } from "../nodes/canvas-connection-handle";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 
 import { canvasThemes } from "@/components/canvas/runtime/lib/theme";
 import { nodeBounds } from "@/components/canvas/lib/canvas-node-geometry";
@@ -33,15 +41,16 @@ export function CanvasSelectionToolbar({
   canGroup,
   canUngroup,
   onGroup,
+  onStack,
   onUngroup,
   onRun,
   runDisabled = false,
   readOnly = false,
   onLayout,
+  onDownload,
   onConnectAfter,
   onConnectStart,
-  onCopy,
-  onDelete,
+  onColorTagChange,
 }: {
   nodes: CanvasNodeData[];
   viewport: ViewportTransform;
@@ -49,15 +58,16 @@ export function CanvasSelectionToolbar({
   canGroup: boolean;
   canUngroup: boolean;
   onGroup: () => void;
+  onStack?: () => void;
   onUngroup: () => void;
   onRun?: () => void;
   runDisabled?: boolean;
   readOnly?: boolean;
   onLayout?: (mode: "grid" | "smart") => void;
+  onDownload?: () => void;
   onConnectAfter?: () => void;
   onConnectStart?: (event: MouseEvent) => void;
-  onCopy?: () => void;
-  onDelete?: () => void;
+  onColorTagChange?: (tag: CanvasColorTag | null) => void;
 }) {
   const theme = canvasThemes[useThemeStore((state) => state.theme)];
   if (!nodes.length || (nodes.length < 2 && !onRun)) return null;
@@ -119,44 +129,72 @@ export function CanvasSelectionToolbar({
           onMouseDown={(event) => event.stopPropagation()}
           onPointerDown={(event) => event.stopPropagation()}
         >
-          {canGroup ? (
+          <span className="self-center px-3 tabular-nums">
+            {nodes.length} 节点
+          </span>
+          <span className="my-3 w-px bg-border" aria-hidden />
+          {canGroup && onStack && (
             <SelectionAction
-              title={"用组节点包住选中节点"}
-              label={"编组"}
-              icon={<Group className="size-4" />}
-              onClick={onGroup}
+              title="堆叠选中节点"
+              label="堆叠"
+              icon={<Layers className="size-4" />}
+              onClick={onStack}
             />
-          ) : null}
+          )}
+          {canGroup && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="h-12 px-3" aria-label="编组">
+                  <Group className="size-4" />
+                  编组
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                data-canvas-no-zoom
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <DropdownMenuItem onSelect={onGroup}>普通组</DropdownMenuItem>
+                <DropdownMenuItem disabled>分镜组</DropdownMenuItem>
+                <p className="max-w-60 px-2 py-1.5 text-xs text-muted-foreground">
+                  {nodes.some((n) => n.type !== "image") || nodes.length > 49
+                    ? "分镜组仅支持图片，最多支持49个图片节点"
+                    : !nodes.some((n) => n.metadata?.content)
+                      ? "所选节点均无可用图片"
+                      : "分镜组暂不可用"}
+                </p>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           {onLayout && (
-            <>
-              <SelectionAction
-                title="宫格布局"
-                label="宫格"
-                icon={<Grid2X2 className="size-4" />}
-                onClick={() => onLayout("grid")}
-              />
-              <SelectionAction
-                title="智能布局"
-                label="智能布局"
-                icon={<LayoutDashboard className="size-4" />}
-                onClick={() => onLayout("smart")}
-              />
-            </>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="h-12 px-3" aria-label="布局">
+                  <LayoutDashboard className="size-4" />
+                  布局
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                data-canvas-no-zoom
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <DropdownMenuItem onSelect={() => onLayout("grid")}>
+                  <Grid2X2 className="size-4" />
+                  宫格布局
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onLayout("smart")}>
+                  <LayoutDashboard className="size-4" />
+                  智能布局
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
-          {onCopy && (
+          <span className="my-3 w-px bg-border" aria-hidden />
+          {onDownload && (
             <SelectionAction
-              title="复制选中节点"
-              label="复制"
-              icon={<Copy className="size-4" />}
-              onClick={onCopy}
-            />
-          )}
-          {onDelete && (
-            <SelectionAction
-              title="删除选中节点"
-              label="删除"
-              icon={<Trash2 className="size-4" />}
-              onClick={onDelete}
+              title="下载选中节点"
+              label=""
+              icon={<Download className="size-4" />}
+              onClick={onDownload}
             />
           )}
           {onRun && (
@@ -178,6 +216,18 @@ export function CanvasSelectionToolbar({
           ) : null}
         </div>
       ) : null}
+      {showActions && onColorTagChange && (
+        <div
+          className="absolute z-[70]"
+          style={{ left: left + width - 32, top: top - 36 }}
+        >
+          <CanvasColorTags
+            nodes={nodes}
+            disabled={readOnly}
+            onChange={onColorTagChange}
+          />
+        </div>
+      )}
       {showActions && (onConnectStart || onConnectAfter) && (
         <div
           data-canvas-selection-connection

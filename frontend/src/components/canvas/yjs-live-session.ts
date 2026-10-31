@@ -1,13 +1,16 @@
 import type { CanvasNodeData } from "./types/canvas";
+import {
+  openCanvasPendingJournal,
+  type CanvasPendingJournal,
+  type CanvasPendingJournalFactory,
+} from "./lib/canvas-yjs-pending-journal";
 import { reconcileTimelineConnections } from "./lib/canvas-timeline-connections";
-import { readTimeline, type Timeline } from "./timeline/timeline-model";
-import { directorFingerprint } from "./director/director-model";
-import { validateDirectorDocument } from "./director/director-workspaces";
 import {
   CollaborationSession,
   type CommittedState,
   type DurableReceipt,
   type FrozenUpdate,
+  type RecoveryRecord,
 } from "@glowloom/canvas-collab/session";
 import {
   archiveRecovery,
@@ -28,11 +31,21 @@ import {
   type ServiceGraph,
 } from "@glowloom/canvas-collab/service-document";
 import type * as Y from "yjs";
+import { DOMParser as PromptDOMParser } from "@tiptap/pm/model";
+import type { ComposerSession } from "@/components/generation/composer-session";
 import { RequestError } from "@/lib/request";
 import { canvasGraphFingerprint } from "./lib/canvas-json";
+import { directorFingerprint } from "./director/director-model";
+import { validateDirectorDocument } from "./director/director-workspaces";
+import { readTimeline, type Timeline } from "./timeline/timeline-model";
 import { serviceDocumentFromEditor, serviceGraph } from "./service-graph";
 import type { CanvasEditorState } from "./lib/canvas-document-adapter";
 import { publishCanvasMedia, type CanvasMediaReceipt } from "./publish-media";
+import {
+  validatePromptDraft,
+  emptyPromptDraft,
+  type PromptDraft,
+} from "@/components/generation/prompt-document";
 
 type State = {
   documentId: string;
@@ -69,7 +82,16 @@ type Packet = {
   status?: number;
   code?: string;
 };
+export type RetainedCanvasInput = {
+  draft: PromptDraft;
+  baseline: PromptDraft | null;
+  reason: string;
+};
 export type YjsView = {
+  localPersistence:
+    "CHECKING" | "PENDING" | "PROTECTED" | "UNAVAILABLE" | "MEMORY";
+  recoveryRemaining: number;
+  inputDrafts: Record<string, RetainedCanvasInput>;
   document: CanvasEditorState | null;
   dto: API.DocumentDTO | null;
   connected: boolean;
@@ -86,13 +108,6 @@ const problem = (code: string, definitive = false) =>
   Object.assign(new Error(code), { code, definitive });
 const asShared = (document: API.DocumentDTO) =>
   document as unknown as ServiceDocument;
-const localSource = (node: CanvasEditorState["nodes"][number]) =>
-  ["image", "video", "audio"].includes(node.type) &&
-  /^(blob:|data:)/.test(node.metadata?.content ?? "")
-    ? node.metadata!.content
-    : undefined;
-
-/** One page-memory Y.Doc queue and one socket. Heartbeats resolve immutable originals. */
 // Display ordinals and mention labels are allocated by the authority on accept.
 // Compare author-owned content so that this bookkeeping does not block undo.
 function historyNodeFingerprint(node: ServiceGraph["nodes"][number]) {
@@ -116,7 +131,18 @@ function historyNodeFingerprint(node: ServiceGraph["nodes"][number]) {
     normalize((value.textDocument as typeof node.textDocument).content);
   return canvasGraphFingerprint(value);
 }
-
+const inputFingerprint = (draft: API.CanvasDraft | undefined) =>
+  canvasGraphFingerprint(
+    draft
+      ? {
+          composer: draft.composer ?? null,
+          prompt: draft.prompt ?? "",
+          negative_prompt: draft.negative_prompt ?? "",
+          aspect_ratio: draft.aspect_ratio ?? "",
+          candidate_count: draft.candidate_count ?? 0,
+        }
+      : null,
+  );
 const timelineFingerprint = (value: API.TimelineConfig | undefined) => {
   if (!value) return canvasGraphFingerprint(null);
   return canvasGraphFingerprint({
@@ -138,11 +164,52 @@ const timelineFingerprint = (value: API.TimelineConfig | undefined) => {
     })),
   });
 };
+const composerFingerprint = (draft: unknown) =>
+  canvasGraphFingerprint(draft ?? null);
+const readableInput = (composer: ComposerSession) => {
+  const draft = composer.snapshot().draft;
+  if (!composer.composing || composer.editor.isDestroyed) return draft;
+  try {
+    // IME can update the visible DOM before ProseMirror emits its transaction.
+    draft.document = PromptDOMParser.fromSchema(composer.editor.schema)
+      .parse(composer.editor.view.dom, { preserveWhitespace: "full" })
+      .toJSON();
+    validatePromptDraft(draft);
+    return draft;
+  } catch {
+    return composer.snapshot().draft;
+  }
+};
+const localSource = (node: CanvasEditorState["nodes"][number]) =>
+  ["image", "video", "audio"].includes(node.type) &&
+  /^(blob:|data:)/.test(node.metadata?.content ?? "")
+    ? node.metadata!.content
+    : undefined;
 
+/** One page-memory Y.Doc queue and one socket. Heartbeats resolve immutable originals. */
 export class CanvasYjsLiveSession {
-  readonly clientID = crypto.randomUUID();
+  clientID = crypto.randomUUID();
+  private journal: CanvasPendingJournal | null = null;
+  private journalError: Error | null = null;
+  private storedRecovery?: RecoveryRecord<ServiceGraph>;
+  private restoringOriginal = false;
+  private restoredOriginalMissing = false;
+  private journalLifecycle = 0;
+  private journalReady = false;
   private socket: WebSocket | null = null;
   private session: CollaborationSession<ServiceGraph> | null = null;
+  private inputGuards = new Map<string, () => boolean>();
+  private inputBindings = new Map<
+    string,
+    {
+      composer: ComposerSession;
+      baseline: PromptDraft | null;
+      applying: boolean;
+      conflict: boolean;
+      cleanup: () => void;
+    }
+  >();
+  private refreshingInputs = false;
   private draftReaders = new Map<
     string,
     {
@@ -258,6 +325,9 @@ export class CanvasYjsLiveSession {
   private uploadErrors = new Map<string, string>();
   private renewal: AbortController | null = null;
   private view: YjsView = {
+    localPersistence: "CHECKING",
+    recoveryRemaining: 0,
+    inputDrafts: {},
     document: null,
     dto: null,
     connected: false,
@@ -279,6 +349,8 @@ export class CanvasYjsLiveSession {
       csrf: () => string | null;
       renew: (signal: AbortSignal) => Promise<void>;
       socket?: (url: string) => WebSocket;
+      /** Dependency seam for isolated transport tests; production defaults to IndexedDB. */
+      recoveryJournal?: CanvasPendingJournalFactory | false;
     },
   ) {}
   subscribe = (listener: () => void) => {
@@ -288,14 +360,434 @@ export class CanvasYjsLiveSession {
     };
   };
   getSnapshot = () => this.view;
+  registerInputGuard = (nodeID: string, guard: () => boolean) => {
+    this.inputGuards.set(nodeID, guard);
+    return () => {
+      if (this.inputGuards.get(nodeID) === guard)
+        this.inputGuards.delete(nodeID);
+    };
+  };
+  readInputDraft = (nodeID: string): RetainedCanvasInput | null => {
+    const form = this.session?.forms[nodeID] as
+      { canvasInput?: RetainedCanvasInput } | undefined;
+    return structuredClone(
+      this.session
+        ? (form?.canvasInput ?? null)
+        : (this.view.inputDrafts[nodeID] ?? null),
+    );
+  };
+  retainInputDraft = (
+    nodeID: string,
+    input: PromptDraft,
+    baseline: PromptDraft | null = null,
+    reason = "生成输入尚未同步",
+  ) => {
+    validatePromptDraft(input);
+    const retained = {
+      draft: structuredClone(input),
+      baseline: structuredClone(baseline),
+      reason,
+    };
+    if (
+      composerFingerprint(this.readInputDraft(nodeID)) ===
+      composerFingerprint(retained)
+    )
+      return;
+    if (this.session && !this.session.closed) {
+      const previous = this.session.forms[nodeID];
+      this.session.setForms({
+        ...this.session.forms,
+        [nodeID]: {
+          ...(previous && typeof previous === "object" ? previous : {}),
+          canvasInput: retained,
+        },
+      });
+    } else
+      this.emit({
+        inputDrafts: { ...this.view.inputDrafts, [nodeID]: retained },
+      });
+  };
+  private clearInputDraft(nodeID: string) {
+    if (!this.session || !this.readInputDraft(nodeID)) return;
+    const forms = { ...this.session.forms };
+    const form = { ...(forms[nodeID] as Record<string, unknown> | undefined) };
+    delete form.canvasInput;
+    if (Object.keys(form).length) forms[nodeID] = form;
+    else delete forms[nodeID];
+    this.session.setForms(forms);
+  }
+  /** Explicit conflict resolution; no automatic replay over a collaborator's input. */
+  resolveInputDraft = (nodeID: string, choice: "server" | "local") => {
+    const retained = this.readInputDraft(nodeID);
+    if (!retained) return true;
+    const binding = this.inputBindings.get(nodeID);
+    if (binding?.composer.composing) throw problem("请先结束输入法编辑");
+    const authoritative = this.view.document?.nodes.find(
+      (node) => node.id === nodeID,
+    )?.serviceData?.config?.draft?.composer as PromptDraft | undefined;
+    if (!authoritative) throw problem("节点已删除或不可访问，本页草稿继续保留");
+    const input = choice === "server" ? authoritative : retained.draft;
+    if (
+      choice === "local" &&
+      (!this.view.writable ||
+        !this.view.document ||
+        !this.canAccept(this.view.document))
+    )
+      throw problem("当前无法重新提交，本页草稿继续保留");
+    if (binding) {
+      if (binding.composer.editor.isDestroyed)
+        throw problem("请重新打开生成输入");
+      const doc = binding.composer.editor.schema.nodeFromJSON(input.document);
+      const tr = binding.composer.editor.state.tr.replaceWith(
+        0,
+        binding.composer.editor.state.doc.content.size,
+        doc.content,
+      );
+      binding.applying = true;
+      try {
+        if (!binding.composer.applyAuthoritative(input, tr))
+          throw problem("输入仍在编辑，本页草稿继续保留");
+        binding.baseline = structuredClone(authoritative);
+        binding.conflict = false;
+      } finally {
+        binding.applying = false;
+      }
+    }
+    if (choice === "local") return this.changeInput(nodeID, input);
+    this.clearInputDraft(nodeID);
+    return true;
+  };
   private inputEditing() {
     return (
       this.gesture ||
+      [...this.inputGuards.values()].some((guard) => !guard()) ||
       [...this.draftReaders.values()].some(
         (entry) => entry.session === this.session && entry.read() !== null,
       )
     );
   }
+  private hasUnsubmittedInput() {
+    return [...this.inputBindings].some(([nodeID, binding]) => {
+      if (binding.composer.editor.isDestroyed) return false;
+      const input = this.view.document?.nodes.find((node) => node.id === nodeID)
+        ?.serviceData?.config?.draft?.composer;
+      return (
+        composerFingerprint(readableInput(binding.composer)) !==
+        composerFingerprint(input)
+      );
+    });
+  }
+  changeInput = (
+    nodeID: string,
+    input: PromptDraft,
+    materializeEmpty = false,
+  ) => {
+    validatePromptDraft(input);
+    const binding = this.inputBindings.get(nodeID);
+    if (binding?.applying) return true;
+    const graph = this.view.document;
+    const node = graph?.nodes.find((item) => item.id === nodeID);
+    // Boot emits the initial snapshot even in read-only mode. It is not an edit.
+    if (
+      !this.readInputDraft(nodeID) &&
+      node?.serviceData &&
+      composerFingerprint(
+        node.serviceData.config?.draft?.composer ??
+          (materializeEmpty ? null : emptyPromptDraft()),
+      ) === composerFingerprint(input)
+    )
+      return true;
+    if (
+      binding?.conflict ||
+      this.inputEditing() ||
+      !graph ||
+      !node?.serviceData ||
+      !this.canAccept(graph)
+    ) {
+      this.retainInputDraft(
+        nodeID,
+        input,
+        binding?.baseline ?? null,
+        binding?.conflict
+          ? "其他协作者已修改生成输入，请先处理本页草稿"
+          : "生成输入当前不可提交，已保留本页草稿",
+      );
+      return false;
+    }
+    if (
+      composerFingerprint(node.serviceData.config?.draft?.composer) ===
+      composerFingerprint(input)
+    ) {
+      this.clearInputDraft(nodeID);
+      return true;
+    }
+    this.change(
+      {
+        ...graph,
+        nodes: graph.nodes.map((item) =>
+          item.id !== nodeID
+            ? item
+            : {
+                ...item,
+                serviceData: {
+                  ...item.serviceData!,
+                  config: {
+                    ...item.serviceData!.config,
+                    draft: {
+                      composer: structuredClone(
+                        input,
+                      ) as unknown as API.PromptDraft,
+                      prompt: "",
+                      negative_prompt: "",
+                      aspect_ratio: "",
+                      candidate_count: 0,
+                    },
+                  },
+                },
+              },
+        ),
+      },
+      true,
+    );
+    const current = this.view.document?.nodes.find((item) => item.id === nodeID)
+      ?.serviceData?.config?.draft?.composer;
+    if (composerFingerprint(current) !== composerFingerprint(input)) {
+      this.retainInputDraft(
+        nodeID,
+        input,
+        binding?.baseline ?? null,
+        "生成输入未能写入画布，已保留本页草稿",
+      );
+      return false;
+    }
+    if (binding) binding.baseline = structuredClone(input);
+    this.clearInputDraft(nodeID);
+    return true;
+  };
+  bindInputComposer = (nodeID: string, composer: ComposerSession) => {
+    this.inputBindings.get(nodeID)?.cleanup();
+    const boundNode = this.view.document?.nodes.find(
+      (node) => node.id === nodeID,
+    );
+    const baseline =
+      boundNode?.serviceData?.config?.draft?.composer ??
+      (boundNode ? emptyPromptDraft() : null);
+    if (baseline) validatePromptDraft(baseline);
+    const binding = {
+      composer,
+      baseline: structuredClone(baseline ?? null),
+      applying: false,
+      conflict: !!this.readInputDraft(nodeID),
+      cleanup: () => {},
+    };
+    const unregister = this.registerInputGuard(
+      nodeID,
+      () =>
+        !composer.editor.isDestroyed &&
+        !composer.composing &&
+        !composer.pendingTarget &&
+        !composer
+          .snapshot()
+          .draft.references.some((reference) =>
+            composer.referencePending(reference.id),
+          ) &&
+        !binding.conflict,
+    );
+    const protect = () => {
+      if (binding.applying || composer.editor.isDestroyed) return;
+      const draft = readableInput(composer);
+      // A clean editor disappearing during undo has no unsaved input to retain.
+      if (
+        !composer.composing &&
+        composerFingerprint(draft) === composerFingerprint(binding.baseline)
+      )
+        return;
+      if (composer.composing || binding.conflict)
+        this.retainInputDraft(
+          nodeID,
+          draft,
+          binding.baseline,
+          binding.conflict
+            ? "其他协作者已修改生成输入，请先处理本页草稿"
+            : "输入法编辑尚未结束",
+        );
+    };
+    composer.editor.on("transaction", protect);
+    composer.editor.view.dom.addEventListener("input", protect);
+    composer.editor.view.dom.addEventListener("compositionstart", protect);
+    composer.editor.view.dom.addEventListener("compositionend", protect);
+    binding.cleanup = () => {
+      if (
+        !composer.editor.isDestroyed &&
+        composerFingerprint(readableInput(composer)) !==
+          composerFingerprint(binding.baseline)
+      )
+        this.retainInputDraft(
+          nodeID,
+          readableInput(composer),
+          binding.baseline,
+          "生成输入尚未同步，已保留本页草稿",
+        );
+      protect();
+      unregister();
+      composer.editor.off("transaction", protect);
+      if (!composer.editor.isDestroyed) {
+        composer.editor.view.dom.removeEventListener("input", protect);
+        composer.editor.view.dom.removeEventListener(
+          "compositionstart",
+          protect,
+        );
+        composer.editor.view.dom.removeEventListener("compositionend", protect);
+      }
+      if (this.inputBindings.get(nodeID) === binding)
+        this.inputBindings.delete(nodeID);
+    };
+    this.inputBindings.set(nodeID, binding);
+    this.refreshInputBindings();
+    return binding.cleanup;
+  };
+  private refreshInputBindings() {
+    if (this.refreshingInputs) return;
+    this.refreshingInputs = true;
+    try {
+      for (const [nodeID, binding] of this.inputBindings) {
+        const { composer } = binding;
+        if (binding.applying || composer.editor.isDestroyed) continue;
+        const boundNode = this.view.document?.nodes.find(
+          (node) => node.id === nodeID,
+        );
+        const next =
+          boundNode?.serviceData?.config?.draft?.composer ??
+          (boundNode ? emptyPromptDraft() : null);
+        if (next) validatePromptDraft(next);
+        const current = readableInput(composer);
+        if (!next) {
+          if (
+            composer.composing ||
+            composerFingerprint(current) !==
+              composerFingerprint(binding.baseline)
+          )
+            this.retainInputDraft(
+              nodeID,
+              current,
+              binding.baseline,
+              "节点已删除或不可访问，生成输入已保留",
+            );
+          binding.conflict = true;
+          continue;
+        }
+        if (composerFingerprint(next) === composerFingerprint(current)) {
+          binding.baseline = structuredClone(next);
+          if (!composer.composing && !binding.conflict)
+            this.clearInputDraft(nodeID);
+          continue;
+        }
+        if (composerFingerprint(next) === composerFingerprint(binding.baseline))
+          continue;
+        if (
+          composer.composing ||
+          binding.conflict ||
+          composerFingerprint(current) !== composerFingerprint(binding.baseline)
+        ) {
+          binding.conflict = true;
+          this.retainInputDraft(
+            nodeID,
+            current,
+            binding.baseline,
+            "其他协作者已修改生成输入，请先处理本页草稿",
+          );
+          continue;
+        }
+        const doc = composer.editor.schema.nodeFromJSON(next.document);
+        const tr = composer.editor.state.tr.replaceWith(
+          0,
+          composer.editor.state.doc.content.size,
+          doc.content,
+        );
+        binding.applying = true;
+        try {
+          if (composer.applyAuthoritative(next, tr))
+            binding.baseline = structuredClone(next);
+        } finally {
+          binding.applying = false;
+        }
+      }
+    } finally {
+      this.refreshingInputs = false;
+    }
+  }
+
+  /** A quote may only consume an acknowledged input, never a local projection. */
+  prepareInput = async (nodeID: string): Promise<API.InputSource> => {
+    const initial = this.view.document?.nodes.find(
+      (node) => node.id === nodeID,
+    );
+    if (!initial || !["text", "image", "video", "audio"].includes(initial.type))
+      throw problem("此节点不支持生成");
+    if (!initial.serviceData?.config?.draft?.composer)
+      throw problem("请先完成生成输入的初始化");
+    if (this.readInputDraft(nodeID))
+      throw problem("请先处理本页保留的生成输入");
+    if (
+      initial.serviceData.config.draft.composer.references?.some(
+        (reference) => reference.source?.kind === "pending_upload",
+      )
+    )
+      throw problem("参考素材尚未上传完成，请完成或移除后再生成");
+    const input = inputFingerprint(
+      this.view.document?.nodes.find((node) => node.id === nodeID)?.serviceData
+        ?.config?.draft,
+    );
+    const session = this.session;
+    const epoch = session?.confirmed.epoch;
+    const checkInput = () => {
+      if (this.session !== session || session?.confirmed.epoch !== epoch)
+        throw problem("画布版本已切换，请重新检查生成输入");
+      const current = this.view.document?.nodes.find(
+        (node) => node.id === nodeID,
+      );
+      if (
+        !current ||
+        inputFingerprint(current.serviceData?.config?.draft) !== input
+      )
+        throw problem("生成输入已变化，请重新提交");
+    };
+    const dto = await this.waitForSaved(checkInput);
+    // Resolution of a promise yields to other input handlers before this resumes.
+    checkInput();
+    if (
+      this.disposed ||
+      !this.view.writable ||
+      !this.online ||
+      this.inputEditing() ||
+      this.hasUnsubmittedInput() ||
+      this.view.dirty ||
+      this.draining ||
+      session?.status !== "CLEAN" ||
+      session.inFlight ||
+      this.dto?.revision !== dto.revision ||
+      session.confirmed.contentRevision !== dto.revision
+    )
+      throw problem("画布已变化，请重新检查生成输入");
+    const node = dto.nodes?.find((item) => item.id === nodeID);
+    const canvasRevision = Number(dto.revision);
+    if (
+      !Number.isSafeInteger(canvasRevision) ||
+      canvasRevision < 1 ||
+      !Number.isSafeInteger(node?.input_revision) ||
+      node!.input_revision! < 1 ||
+      inputFingerprint(node?.config?.draft) !== input
+    )
+      throw problem("生成输入的保存版本尚未确认");
+    return {
+      kind: "canvas_input",
+      canvas_id: this.config.canvasID,
+      node_id: nodeID,
+      canvas_revision: canvasRevision,
+      input_revision: node!.input_revision!,
+    };
+  };
+
   /** Capture alongside async intent; compare again before writing into this document. */
   getDocumentEpoch = (): string | null =>
     this.disposed ||
@@ -478,6 +970,7 @@ export class CanvasYjsLiveSession {
       this.view.dirty ||
       this.draining ||
       this.inputEditing() ||
+      this.hasUnsubmittedInput() ||
       this.session?.status !== "CLEAN" ||
       this.session.inFlight ||
       this.dto?.revision !== dto.revision ||
@@ -524,6 +1017,8 @@ export class CanvasYjsLiveSession {
             !this.view.writable ||
             !session ||
             this.inputEditing() ||
+            this.hasUnsubmittedInput() ||
+            Object.keys(this.view.inputDrafts).length ||
             this.epochPending ||
             this.switchingEpoch ||
             this.uploads.size ||
@@ -552,6 +1047,16 @@ export class CanvasYjsLiveSession {
   };
   private emit(patch: Partial<YjsView> = {}) {
     const session = this.session;
+    const inputDrafts = session
+      ? Object.fromEntries(
+          Object.entries(session.forms).flatMap(([id, value]) => {
+            const input = (
+              value as { canvasInput?: RetainedCanvasInput } | undefined
+            )?.canvasInput;
+            return input ? [[id, structuredClone(input)]] : [];
+          }),
+        )
+      : this.view.inputDrafts;
     const recovery =
       session?.recoverySources
         .map((source) => ({
@@ -568,9 +1073,22 @@ export class CanvasYjsLiveSession {
       this.uploads.size > 0 ||
       this.uploadErrors.size > 0 ||
       this.gesture ||
-      !!this.restoreCommand;
+      !!this.restoreCommand ||
+      Object.keys(inputDrafts).length > 0;
     this.view = {
       ...this.view,
+      recoveryRemaining: this.journal?.remaining ?? 0,
+      localPersistence:
+        this.config.recoveryJournal === false
+          ? "MEMORY"
+          : this.journalError || session?.journalError
+            ? "UNAVAILABLE"
+            : session?.protected
+              ? "PROTECTED"
+              : this.journal
+                ? "PENDING"
+                : "CHECKING",
+      inputDrafts,
       connected: this.online,
       writable:
         this.permitted &&
@@ -583,27 +1101,40 @@ export class CanvasYjsLiveSession {
       canUndo: !!this.undoManager?.canUndo(),
       canRedo: !!this.undoManager?.canRedo(),
       phase:
-        recovery.length || session?.sealed
-          ? "输入已保留，需处理"
-          : this.uploads.size
-            ? "素材上传中"
-            : this.uploadErrors.size
-              ? "素材待重试"
-              : this.gesture
-                ? "正在编辑，尚未保存"
-                : session?.status === "UNKNOWN"
-                  ? "保存结果未确认"
-                  : dirty
-                    ? "等待保存确认"
-                    : this.online
-                      ? "已保存"
-                      : "连接中断",
+        this.config.recoveryJournal !== false &&
+        (this.journalError || session?.journalError)
+          ? "本机草稿保存失败，请勿关闭页面"
+          : (this.journal?.remaining ?? 0) > 0
+            ? `另有 ${this.journal!.remaining} 份本机草稿，当前恢复完成后请重新打开处理`
+            : recovery.length ||
+                session?.sealed ||
+                Object.keys(inputDrafts).length
+              ? "输入已保留，需处理"
+              : this.uploads.size
+                ? "素材上传中"
+                : this.uploadErrors.size
+                  ? "素材待重试"
+                  : this.gesture
+                    ? "正在编辑，尚未保存"
+                    : session?.status === "UNKNOWN"
+                      ? "保存结果未确认"
+                      : dirty
+                        ? "等待保存确认"
+                        : this.online
+                          ? "已保存"
+                          : "连接中断",
       ...patch,
     };
+    this.refreshInputBindings();
     for (const listener of this.listeners) listener();
   }
   private changed = () => {
     if (this.disposed) return;
+    const session = this.session;
+    if (session && this.config.recoveryJournal !== false)
+      void session.protect().then(() => {
+        if (!this.disposed && this.session === session) this.emit();
+      });
     this.render();
     this.schedule();
   };
@@ -650,6 +1181,36 @@ export class CanvasYjsLiveSession {
     this.disposed = false;
     window.addEventListener("online", this.resume);
     window.addEventListener("pageshow", this.restored);
+    this.journalReady = this.config.recoveryJournal === false;
+    if (this.journalReady) this.connect();
+    else void this.prepareJournal();
+  }
+  private async prepareJournal() {
+    const lifecycle = ++this.journalLifecycle;
+    try {
+      const journal = await (
+        this.config.recoveryJournal || openCanvasPendingJournal
+      )({
+        origin: location.origin,
+        actorID: this.config.actorID,
+        scopeID: this.config.scopeID,
+        projectID: this.config.projectID,
+        canvasID: this.config.canvasID,
+      });
+      if (this.disposed || lifecycle !== this.journalLifecycle) {
+        await journal.close();
+        return;
+      }
+      this.journal = journal;
+      this.clientID = journal.sessionId;
+      this.storedRecovery = journal.record;
+      this.journalError = null;
+    } catch (error) {
+      if (this.disposed || lifecycle !== this.journalLifecycle) return;
+      this.journalError =
+        error instanceof Error ? error : problem("本机草稿存储不可用");
+    }
+    this.journalReady = true;
     this.connect();
   }
   private resume = () => {
@@ -665,7 +1226,7 @@ export class CanvasYjsLiveSession {
     }
   };
   private connect() {
-    if (this.disposed || this.renewal) return;
+    if (this.disposed || this.renewal || !this.journalReady) return;
     const url = new URL(
       `/api/canvases/${this.config.canvasID}/live`,
       location.origin,
@@ -775,6 +1336,7 @@ export class CanvasYjsLiveSession {
     this.destroyTimelineHistory();
     this.undoManager?.destroy();
     this.session?.destroy();
+    const journal = this.journal;
     this.session = new CollaborationSession<ServiceGraph>({
       scope: {
         origin: location.origin,
@@ -783,14 +1345,40 @@ export class CanvasYjsLiveSession {
         sessionId: this.clientID,
       },
       initial,
-      storage: "memory",
+      storage: this.config.recoveryJournal === false ? "memory" : "journal",
+      journal: {
+        put: async (record) => {
+          if (!journal)
+            throw this.journalError ?? problem("本机草稿存储不可用");
+          await journal.put(record);
+        },
+      },
       transport: {
-        submit: (update) =>
-          this.rpc("yjs_submit", update).then((receipt) => {
-            if (!receipt) throw problem("缺少保存回执");
-            return receipt;
-          }),
-        query: (update) => this.rpc("yjs_resolve", update),
+        submit: async (update) => {
+          const active = this.session;
+          if (
+            !active ||
+            this.disposed ||
+            active.inFlight?.updateId !== update.updateId
+          )
+            throw problem("原提交会话已变化");
+          if (
+            this.config.recoveryJournal !== false &&
+            !(await active.protect())
+          )
+            throw problem("本机草稿保存失败，请勿关闭页面");
+          if (this.disposed || this.session !== active)
+            throw problem("原提交会话已关闭");
+          const receipt = await this.rpc("yjs_submit", update);
+          if (!receipt) throw problem("缺少保存回执");
+          return receipt;
+        },
+        query: async (update) => {
+          const receipt = await this.rpc("yjs_resolve", update);
+          if (this.restoringOriginal && !receipt)
+            this.restoredOriginalMissing = true;
+          return receipt;
+        },
         confirmedSnapshot: (receipt) => this.confirmedSnapshot(receipt),
       },
       changed: this.changed,
@@ -860,6 +1448,8 @@ export class CanvasYjsLiveSession {
       if ([401, 403, 404].includes(packet.status ?? 0)) {
         this.permitted = false;
         if (packet.status !== 401) {
+          this.captureTextDrafts();
+          await this.session?.protect();
           this.session?.destroy();
           this.session = null;
           this.dto = null;
@@ -867,6 +1457,8 @@ export class CanvasYjsLiveSession {
           this.emit({
             document: null,
             dto: null,
+            inputDrafts: {},
+            recovery: [],
             message: "画布访问权限已失效",
           });
           this.stop();
@@ -922,18 +1514,34 @@ export class CanvasYjsLiveSession {
         edit: this.permitted,
       };
       this.captureTextDrafts();
-      if (!this.session) this.makeSession(initial);
-      else if (this.session.confirmed.epoch !== state.epoch) {
+      if (!this.session) {
+        const stored = this.storedRecovery;
+        this.storedRecovery = undefined;
+        if (stored?.inFlight) {
+          this.restoringOriginal = true;
+          this.makeSession(stored.confirmed, stored);
+        } else
+          this.makeSession(
+            initial,
+            stored ? archiveRecovery(stored, initial) : undefined,
+          );
+      }
+      if (this.session!.confirmed.epoch !== state.epoch) {
         this.epochPending = initial;
         this.emit({ message: "画布版本已切换，正在查证原提交并保留本页输入" });
         queueMicrotask(() => void this.adoptEpoch());
         return;
-      } else await this.session.receive({ ...initial, snapshot: true });
+      } else await this.session!.receive({ ...initial, snapshot: true });
       if (this.session?.status === "REJECTED" && !this.session.inFlight) {
         const record = archiveRecovery(this.session.record(), initial);
+        if (this.config.recoveryJournal !== false)
+          await this.journal!.put(record);
+        this.restoringOriginal = false;
+        this.restoredOriginalMissing = false;
         this.makeSession(initial, record);
       }
       this.emit({ migration: false, message: "" });
+      if (this.config.recoveryJournal !== false) await this.session?.protect();
       this.render();
       this.schedule();
       return;
@@ -966,6 +1574,7 @@ export class CanvasYjsLiveSession {
     const session = this.session;
     if (
       this.switchingEpoch ||
+      this.draining ||
       this.disposed ||
       !this.epochPending ||
       !this.online ||
@@ -976,19 +1585,26 @@ export class CanvasYjsLiveSession {
     try {
       if (session.inFlight) {
         try {
-          await session.flush();
+          await session.flush({ queryOnly: true });
         } catch {
           /* A durable rejection also settles the original. */
         }
       }
       if (this.disposed || this.session !== session) return;
+      if (this.restoredOriginalMissing) {
+        await this.archiveMissingOriginal(this.epochPending!);
+        return;
+      }
       if (session.inFlight) {
         this.emit({ message: "原版本的提交结果尚未确认，输入继续保留在本页" });
         return;
       }
       const initial = this.epochPending;
       const recovery = archiveRecovery(session.record(), initial);
+      if (this.config.recoveryJournal !== false)
+        await this.journal!.put(recovery);
       this.epochPending = null;
+      this.restoringOriginal = false;
       this.makeSession(initial, recovery);
       this.emit({ message: "" });
       this.render();
@@ -1064,7 +1680,24 @@ export class CanvasYjsLiveSession {
     this.draining = true;
     let completed = false;
     try {
-      await session.flush({ queryOnly: !this.permitted });
+      await session.flush({
+        queryOnly: !this.permitted || this.restoringOriginal,
+      });
+      if (this.restoringOriginal && !session.inFlight) {
+        this.restoringOriginal = false;
+        if (
+          session.pending.length ||
+          session.sealed ||
+          Object.keys(session.forms).length ||
+          Object.keys(session.textDrafts).length
+        ) {
+          const recovery = archiveRecovery(session.record(), session.confirmed);
+          await this.journal!.put(recovery);
+          this.makeSession(session.confirmed, recovery);
+          this.render();
+          return;
+        }
+      }
       completed = true;
       if (!this.disposed && this.session === session) {
         this.emit({ message: "" });
@@ -1074,6 +1707,16 @@ export class CanvasYjsLiveSession {
       }
     } catch (cause) {
       if (!this.disposed && this.session === session) {
+        if (this.restoredOriginalMissing) {
+          try {
+            await this.archiveMissingOriginal(session.confirmed);
+          } catch (error) {
+            this.journalError =
+              error instanceof Error ? error : problem("本机草稿归档失败");
+          }
+          this.render();
+          return;
+        }
         this.emit({
           message: cause instanceof Error ? cause.message : "保存尚未确认",
         });
@@ -1087,6 +1730,35 @@ export class CanvasYjsLiveSession {
           this.schedule();
       }
     }
+  }
+
+  private async archiveMissingOriginal(initial: CommittedState) {
+    const record = this.session!.record();
+    const original = record.inFlight;
+    const settled: RecoveryRecord<ServiceGraph> = {
+      ...record,
+      inFlight: null,
+      acceptedReceipt: null,
+      sealed: {
+        reason: "ORIGINAL_NOT_FOUND",
+        snapshot: record.snapshot,
+        inFlight: original,
+        pending: record.pending,
+        intents: [...record.inFlightIntents, ...record.intents],
+        originalOutcome: "NOT_FOUND",
+      },
+    };
+    const recovery = archiveRecovery(settled, initial);
+    await this.journal!.put(recovery);
+    this.journalError = null;
+    this.epochPending = null;
+    this.restoringOriginal = false;
+    this.restoredOriginalMissing = false;
+    this.makeSession(initial, recovery);
+    this.emit({
+      message: "原提交未被服务器接收，本机修改已保留，请查看恢复内容",
+    });
+    this.render();
   }
 
   canAccept = (state: CanvasEditorState) =>
@@ -1113,6 +1785,39 @@ export class CanvasYjsLiveSession {
     return { ...node, metadata };
   };
 
+  /** Domain connections may replace only the target's settled composer input. */
+  canAcceptAudioConnectionInput = (nodeID: string): boolean => {
+    const node = this.view.document?.nodes.find((item) => item.id === nodeID);
+    if (
+      !node?.serviceData ||
+      !this.view.writable ||
+      this.readInputDraft(nodeID)
+    )
+      return false;
+    try {
+      if (this.inputGuards.get(nodeID)?.() === false) return false;
+      const binding = this.inputBindings.get(nodeID);
+      if (!binding) return true;
+      const composer = binding.composer;
+      if (
+        binding.applying ||
+        binding.conflict ||
+        composer.editor.isDestroyed ||
+        composer.composing ||
+        composer.pendingTarget
+      )
+        return false;
+      return (
+        composerFingerprint(readableInput(composer)) ===
+        composerFingerprint(
+          node.serviceData.config?.draft?.composer ?? emptyPromptDraft(),
+        )
+      );
+    } catch {
+      return false;
+    }
+  };
+
   /** Connection gestures must publish their complete graph, never the upload-ready subset. */
   canAcceptConnectionGraph = (state: CanvasEditorState): boolean => {
     if (
@@ -1126,7 +1831,9 @@ export class CanvasYjsLiveSession {
       for (const node of state.nodes) {
         this.connectionMediaNode(node);
         const config = node.serviceData?.config;
-        const composers = [config?.composer, config?.draft?.composer];
+        const composers = [config?.composer, config?.draft?.composer] as (
+          PromptDraft | undefined
+        )[];
         if (
           composers.some((composer) =>
             composer?.references?.some(
@@ -1503,6 +2210,17 @@ export class CanvasYjsLiveSession {
     else this.schedule();
   };
   stop() {
+    this.captureTextDrafts();
+    const session = this.session,
+      journal = this.journal;
+    if (journal)
+      void (async () => {
+        await session?.protect();
+        await journal.close();
+      })();
+    this.journal = null;
+    this.journalReady = false;
+    this.journalLifecycle++;
     this.disposed = true;
     clearTimeout(this.cursorTimer);
     this.setPeers([]);
@@ -1530,5 +2248,10 @@ export class CanvasYjsLiveSession {
     this.epochPending = null;
     this.draftReaders.clear();
     this.receipts.clear();
+    this.online = false;
+    this.permitted = false;
+    this.emit();
+    for (const binding of this.inputBindings.values()) binding.cleanup();
+    this.inputGuards.clear();
   }
 }

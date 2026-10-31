@@ -134,7 +134,9 @@ export function AssetLibraryCommandDialog({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{assets ? "移动素材" : "新建项目参考素材目录"}</DialogTitle>
+          <DialogTitle>
+            {assets ? "移动素材" : "新建项目参考素材目录"}
+          </DialogTitle>
           <DialogDescription>
             {assets
               ? `将 ${assets.length} 个素材移动到所选参考素材，已保存的画布引用保持有效。`

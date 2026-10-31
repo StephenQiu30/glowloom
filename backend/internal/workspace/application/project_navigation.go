@@ -6,5 +6,6 @@ import "github.com/google/uuid"
 type ProjectNavigation struct {
 	ProjectID, MainCanvasID uuid.UUID
 	Name, Status            string
+	OwnerName               string
 	IsDelete                bool
 }

@@ -127,6 +127,13 @@ declare namespace API {
     sid: string;
   };
 
+  type appendCanvasAssistantTurnParams = {
+    /** 画布UUID */
+    id: string;
+    /** 会话UUID */
+    sid: string;
+  };
+
   type ApplyConfigInput = {
     preview_hash?: string;
     request_id?: string;
@@ -242,6 +249,40 @@ declare namespace API {
 
   type AssetTemplateCatalog = {
     items?: SystemAssetTemplate[];
+  };
+
+  type AssistantAppend = {
+    draft_id?: string;
+    execution?: string;
+    expected_revision?: number;
+    previous_operation_id?: string;
+    skill?: string;
+  };
+
+  type AssistantCreate = {
+    id?: string;
+    title?: string;
+  };
+
+  type AssistantSession = {
+    canvas_id?: string;
+    id?: string;
+    project_id?: string;
+    revision?: number;
+    title?: string;
+    turns?: AssistantTurn[];
+    updated_at?: string;
+  };
+
+  type AssistantSessions = {
+    items?: AssistantSession[];
+  };
+
+  type AssistantTurn = {
+    draft_id?: string;
+    execution?: string;
+    operation_id?: string;
+    skill?: string;
   };
 
   type AudioSentence = {
@@ -469,6 +510,14 @@ declare namespace API {
     pid: string;
   };
 
+  type CanvasCharge = {
+    amount_micros?: string;
+    created_at?: string;
+    id?: string;
+    model_key?: string;
+    operation_id?: string;
+  };
+
   type CanvasCreateInput = {
     kind?: "canvas" | "short_drama";
     name?: string;
@@ -483,6 +532,16 @@ declare namespace API {
     prompt?: string;
   };
 
+  type CanvasInformation = {
+    created_at?: string;
+    id?: string;
+    owner_name?: string;
+    project_id?: string;
+    revision?: string;
+    updated_at?: string;
+    usage?: CanvasUsage;
+  };
+
   type CanvasListResponse = {
     items?: DocumentDTO[];
     next_cursor?: string;
@@ -493,6 +552,14 @@ declare namespace API {
     node_id?: string;
     revision?: number;
     row_id?: string;
+  };
+
+  type CanvasUsage = {
+    currency?: "CNY";
+    entries?: CanvasCharge[];
+    next_page?: number;
+    settled_micros?: string;
+    task_count?: string;
   };
 
   type Capabilities = {
@@ -569,6 +636,34 @@ declare namespace API {
     definition?: CharacterDefinition;
     description?: string;
     name?: string;
+  };
+
+  type CinemaCamera = {
+    aperture?: string;
+    body?: string;
+    focal_length?: string;
+    lens?: string;
+  };
+
+  type CinemaKit = {
+    camera?: CinemaCamera;
+    motion?: string;
+    palette?: CinemaPalette;
+    sources?: CinemaSource[];
+    style?: string;
+    version?: number;
+  };
+
+  type CinemaPalette = {
+    colors?: string[];
+    name?: string;
+    preset?: string;
+  };
+
+  type CinemaSource = {
+    hash?: string;
+    kind?: string;
+    node_id?: string;
   };
 
   type CommandResult = {
@@ -712,6 +807,12 @@ declare namespace API {
     id: string;
   };
 
+  type ContainerConfig = {
+    background?: "none" | "cyan" | "blue" | "purple" | "orange" | "yellow";
+    kind?: "group" | "stack";
+    version?: number;
+  };
+
   type ContentRequest = {
     character?: CharacterInput;
     expected_revision?: number;
@@ -768,6 +869,11 @@ declare namespace API {
     /** Identity kind */
     kind: "character" | "location" | "prop";
     /** Identity UUID */
+    id: string;
+  };
+
+  type createCanvasAssistantSessionParams = {
+    /** 画布UUID */
     id: string;
   };
 
@@ -1908,6 +2014,13 @@ declare namespace API {
     version: string;
   };
 
+  type getCanvasInformationParams = {
+    /** 画布UUID */
+    id: string;
+    /** 明细页，从1开始，每页20条 */
+    page?: number;
+  };
+
   type getCanvasParams = {
     /** 画布UUID */
     id: string;
@@ -2676,6 +2789,11 @@ declare namespace API {
     kind?: "canvas" | "short_drama";
   };
 
+  type listCanvasAssistantSessionsParams = {
+    /** 画布UUID */
+    id: string;
+  };
+
   type listCanvasesParams = {
     /** 项目UUID */
     pid: string;
@@ -2756,6 +2874,16 @@ declare namespace API {
     search?: string;
     /** updated_desc/updated_asc/name_asc */
     order?: string;
+    /** 创建时间下界RFC3339，包含 */
+    created_from?: string;
+    /** 创建时间上界RFC3339，不包含 */
+    created_before?: string;
+    /** 真实素材来源 */
+    origin?: "upload" | "generated" | "system";
+    /** 图片实际长边1024/2048/4096/8192，1K,2K,4K,8K逗号分隔 */
+    resolutions?: string;
+    /** 图片实际宽高比例21:9,16:9,3:2,4:3,1:1,3:4,2:3,9:16逗号分隔 */
+    ratios?: string;
   };
 
   type listMediaPurgesParams = {
@@ -3342,8 +3470,10 @@ declare namespace API {
 
   type NodeConfig = {
     batch_table?: BatchTableConfig;
+    cinema_kit?: CinemaKit;
     collapsed?: boolean;
     composer?: PromptDraft;
+    container?: ContainerConfig;
     director?: DirectorConfig;
     draft?: CanvasDraft;
     editor?: EditorConfig;
@@ -3351,6 +3481,7 @@ declare namespace API {
     format_version?: number;
     generation?: GenerationConfig;
     rich_text?: Record<string, any>;
+    subject?: SubjectConfig;
     text?: string;
     timeline?: TimelineConfig;
   };
@@ -4130,6 +4261,7 @@ declare namespace API {
   };
 
   type PromptDraft = {
+    cinemaKit?: CinemaKit;
     document?: Document;
     labelState?: LabelState;
     mode?: string;
@@ -4416,6 +4548,13 @@ declare namespace API {
 
   type QuotesRequest = {
     items?: QuoteItemRequest[];
+  };
+
+  type readCanvasAssistantSessionParams = {
+    /** 画布UUID */
+    id: string;
+    /** 会话UUID */
+    sid: string;
   };
 
   type readDirectorRecoveryParams = {
@@ -5377,6 +5516,13 @@ declare namespace API {
     style_type?: string;
   };
 
+  type SubjectConfig = {
+    local?: SubjectLocal;
+    subject_id?: string;
+    version?: number;
+    version_id?: string;
+  };
+
   type SubjectDetail = {
     created_at?: string;
     description?: string;
@@ -5390,6 +5536,21 @@ declare namespace API {
     updated_at?: string;
     version_id?: string;
     voice?: Voice;
+  };
+
+  type SubjectLocal = {
+    description?: string;
+    primary?: SubjectMedia;
+    references?: SubjectMedia[];
+    voice?: SubjectVoice;
+  };
+
+  type SubjectMedia = {
+    asset_id?: string;
+    asset_revision?: number;
+    binding_id?: string;
+    kind?: string;
+    source_node_id?: string;
   };
 
   type SubjectSourceCapabilities = {
@@ -5432,6 +5593,11 @@ declare namespace API {
     page?: number;
     page_size?: number;
     total?: number;
+  };
+
+  type SubjectVoice = {
+    media?: SubjectMedia;
+    name?: string;
   };
 
   type SubjectVoiceSelection = {

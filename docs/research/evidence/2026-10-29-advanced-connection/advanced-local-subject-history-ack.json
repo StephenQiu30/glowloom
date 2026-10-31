@@ -1,0 +1,24 @@
+[
+  {
+    "sequence": 5116,
+    "epoch": "76a8ab91-62da-422a-9358-e4a37a9485a4",
+    "commitSeq": "4",
+    "contentRevision": "5",
+    "graphHash": "5d1cefb9571345dcdca78f0042f34f1ee8a9948b5c9f4e359b46df693f106cf3",
+    "updateId": "8b9a7bed-0c50-4a24-b326-1722491d4b99",
+    "payloadHash": "82f7bf6c21ee1bd652a699995f36fc6f46b04152606081569ebd8aece53520f8",
+    "effect": "VISIBLE_CHANGE",
+    "status": "accepted"
+  },
+  {
+    "sequence": 5155,
+    "epoch": "76a8ab91-62da-422a-9358-e4a37a9485a4",
+    "commitSeq": "5",
+    "contentRevision": "6",
+    "graphHash": "164579ca66d52fdcba682e4972bae43851e11e13ed44ac32e8e72134640d56a7",
+    "updateId": "f51d91c3-fcb8-4282-8e11-dc912b4345a7",
+    "payloadHash": "c8a4d6f52ad1b495209182f5b1bb7ff3c364812322cdff7dc38f75ff45462a95",
+    "effect": "VISIBLE_CHANGE",
+    "status": "accepted"
+  }
+]

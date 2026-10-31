@@ -1,6 +1,6 @@
-import { emptyTimelineConfig } from "../timeline/timeline-model";
 import { migrateDirectorDocument } from "../director/director-workspaces";
 import { emptyDirectorConfig } from "../director/director-model";
+import { emptyTimelineConfig } from "../timeline/timeline-model";
 import {
   getNodeSpec,
   NODE_DEFAULT_SIZE,
@@ -71,6 +71,16 @@ export function createCanvasNode(
             config: {
               director: migrateDirectorDocument(emptyDirectorConfig()),
             },
+          },
+        }
+      : {}),
+    ...(type === "subject"
+      ? {
+          serviceData: {
+            id,
+            node_type: "subject",
+            node_action: "resource",
+            config: { subject: { version: 1 } } as API.NodeConfig,
           },
         }
       : {}),

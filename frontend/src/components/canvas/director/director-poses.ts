@@ -1,4 +1,4 @@
-// Adapted from BeefTV 2327ee2. MIT: notices/BeefTV-MIT.txt.
+// Adapted MIT implementation; source attribution: notices/third-party-MIT.txt.
 import { Euler, Quaternion } from "three";
 export function directorPoseBoneDeltas(pose: string): Record<string, number[]> {
   // Soldier 的左右上臂局部 Z 轴方向一致，正向旋转才会把两侧手臂从 T Pose 放下。

@@ -1,0 +1,44 @@
+Browser tab: 1980371314, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+0 AXWebArea 一致性调研-202610221 - 即梦AI, URL: jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage
+	1 container
+		2 container
+			3 container Canvas top bar
+				4 text 已保存
+			5 container Canvas workspace
+				6 container
+					7 container
+						8 container Canvas editing area
+							9 container
+								10 container Canvas
+					11 container Canvas left toolbar
+						12 toolbar Canvas toolbar
+					13 container Canvas viewport controls
+		14 container 导演台, ID: radix-:modern-js-r5q:
+		15 container 导出视频, ID: radix-:modern-js-r7g:
+			16 heading 导出视频, Value: 2, ID: radix-:modern-js-r7h:
+				17 text 导出视频
+			18 text 选择一个机位导出完整动态预演
+			19 container
+				20 text 机位来源
+				21 pop up button (collapsed) Description: 机位来源, ID: radix-:modern-js-r8u:, Secondary Actions: Expand
+			22 container
+				23 checkbox (settable, integer) Description: 简化角色外形 推荐 用无四肢的简化人体替代角色，更适合为 Seedance 2.5 模型提供视频生成的构图与走位参考。, Value: 0
+				24 text 简化角色外形 推荐 用无四肢的简化人体替代角色，更适合为 Seedance 2.5 模型提供视频生成的构图与走位参考。
+			25 text 画幅
+			26 text 16:9 · 1280 × 720
+			27 text 时长
+			28 text 00:20.0
+			29 container
+				30 text 清晰度
+				31 pop up button (collapsed) Description: 清晰度, ID: radix-:modern-js-r92:, Secondary Actions: Expand
+			32 container
+				33 text 帧率
+				34 pop up button (collapsed) Description: 帧率, ID: radix-:modern-js-r96:, Secondary Actions: Expand
+			35 text 全程使用“机位”，保留该机位的运镜和角色动作。
+			36 text 成片不包含辅助线、控制点或编辑界面。
+			37 container Notifications
+			38 button 取消
+			39 button 导出
+			40 button 关闭
+
+The focused UI element is 21 pop up button (collapsed) Description: 机位来源, ID: radix-:modern-js-r8u:, Secondary Actions: Expand

@@ -36,6 +36,7 @@ import {
   Maximize2,
   Minimize2,
   MoreHorizontal,
+  SlidersHorizontal,
 } from "lucide-react";
 import {
   InputGroup,
@@ -132,7 +133,10 @@ import {
 import { editorIssues, compatibleParams } from "./editor-capabilities";
 import { fieldsForMode, requireQuote, money, type Quote } from "./contracts";
 import { TaskDetail, type GenerationSeed } from "./generation-dialog";
-import type { CanvasReferenceSource } from "./reference-source";
+import type {
+  CanvasReferenceSource,
+  CanvasSubjectReferenceSource,
+} from "./reference-source";
 export type CanvasComposerOwner = {
   readOnly?: boolean;
   contextKey: string;
@@ -140,8 +144,11 @@ export type CanvasComposerOwner = {
   onChange: (draft: PromptDraft, transaction?: Transaction) => void;
   collaboration?: ComposerCollaboration;
   onSession?: (session: ComposerSession) => (() => void) | void;
+  // Opening the editor must not materialize an empty generation input.
+  waitForNode?: () => Promise<void>;
   flush: () => Promise<API.InputSource>;
   referenceSources?: CanvasReferenceSource[];
+  subjectSources?: CanvasSubjectReferenceSource[];
   incomingSources?: (CanvasReferenceSource & { edgeID: string })[];
 };
 type Props = {
@@ -151,9 +158,14 @@ type Props = {
   onLock?: (locked: boolean) => void;
   onCloseGuard?: (guard: (() => Promise<boolean>) | null) => void;
   onAdopt?: (id: string, kind: string) => Promise<void> | void;
+  onAdoptText?: (operationID: string, outputID: string) => Promise<void> | void;
   canvas?: CanvasComposerOwner;
+  referenceSources?: CanvasReferenceSource[];
+  subjectSources?: CanvasSubjectReferenceSource[];
   draftID?: string;
-  presentation?: "canvas" | "home";
+  presentation?: "canvas" | "home" | "assistant";
+  onComposerSession?: (session: ComposerSession | null) => void;
+  onOperationReady?: (operationID: string, draftID: string) => void;
   onDraftReady?: (draftID: string) => void;
   headerActions?: ReactNode;
   projectControl?: ReactNode;
@@ -263,7 +275,7 @@ export function RichGeneration(props: Props) {
         let snapshot: SavedDraft;
         if (props.canvas) {
           if (props.presentation === "canvas" && !props.canvas.readOnly)
-            await props.canvas.flush();
+            await props.canvas.waitForNode?.();
           snapshot = {
             draft_id: props.canvas.contextKey,
             revision: 1,
@@ -300,7 +312,10 @@ export function RichGeneration(props: Props) {
               ref.order = draft.references.length;
               draft.references.push(ref);
               const kind =
-                ref.source.kind === "subject" ? "subject" : ref.mediaKind;
+                ref.source.kind === "subject" ||
+                ref.source.kind === "canvas_subject"
+                  ? "subject"
+                  : ref.mediaKind;
               draft.labelState.allocations[ref.id] = {
                 labelKind: kind,
                 ordinal: ++draft.labelState.highWater[kind],
@@ -432,8 +447,13 @@ function EditorWorkspace({
   onLock,
   onCloseGuard,
   onAdopt,
+  onAdoptText,
   canvas,
+  referenceSources,
+  subjectSources,
   presentation,
+  onComposerSession,
+  onOperationReady,
   headerActions,
   projectControl,
   snapshot,
@@ -453,8 +473,13 @@ function EditorWorkspace({
   const formFieldId = useId();
   const [voiceLibraryOpen, setVoiceLibraryOpen] = useState(false);
   const voiceLibraryButton = useRef<HTMLButtonElement>(null);
-  const compact = presentation === "canvas" || presentation === "home";
-  const [quoteReviewOpen, setQuoteReviewOpen] = useState(true);
+  const compact =
+    presentation === "canvas" ||
+    presentation === "home" ||
+    presentation === "assistant";
+  const [quoteReviewOpen, setQuoteReviewOpen] = useState(
+    presentation !== "assistant",
+  );
 
   const [models, setModels] = useState(initialModels);
   const catalog = useRef(initialModels);
@@ -536,6 +561,13 @@ function EditorWorkspace({
       params: PromptDraft["params"];
     } | null>(null),
     [serverConflict, setServerConflict] = useState<SavedDraft | null>(null);
+  useEffect(() => {
+    onComposerSession?.(session);
+    return () => onComposerSession?.(null);
+  }, [session, onComposerSession]);
+  useEffect(() => {
+    if (task) onOperationReady?.(task, snapshot.draft_id);
+  }, [task, onOperationReady, snapshot.draft_id]);
   const workspaceRef = useRef<HTMLElement>(null);
   useEffect(() => {
     const section = workspaceRef.current;
@@ -1174,9 +1206,11 @@ function EditorWorkspace({
                 ? "描述角色、台词、音效与时间段，@ 引用音频。"
                 : textOnlyAudio
                   ? "输入需要朗读的文字。"
-                  : compact
-                    ? "描述创意，@ 引用素材"
-                    : undefined
+                  : presentation === "assistant"
+                    ? "说说你的想法或任务，上传参考、输入文字或"
+                    : compact
+                      ? "描述创意，@ 引用素材"
+                      : undefined
         }
         resolveGeneration={compact ? resolveReferenceGeneration : undefined}
         contextKey={contextKey}
@@ -1321,7 +1355,9 @@ function EditorWorkspace({
         authorized={sourceReady}
         compact={compact}
         home={presentation === "home"}
-        canvasSources={canvas?.referenceSources}
+        assistant={presentation === "assistant"}
+        canvasSources={canvas?.referenceSources ?? referenceSources}
+        canvasSubjectSources={canvas?.subjectSources ?? subjectSources}
         incomingSources={canvas?.incomingSources}
       />
     ) : null;
@@ -1701,7 +1737,124 @@ function EditorWorkspace({
             ))}
           </div>
         )}
-        {compact ? (
+        {presentation === "assistant" ? (
+          <InputGroup variant="composer" className="canvas-assistant-composer">
+            <div
+              data-slot="input-group-control"
+              className="canvas-assistant-prompt"
+            >
+              {promptControl}
+            </div>
+            <InputGroupAddon
+              align="block-end"
+              className="canvas-assistant-tools"
+            >
+              {referenceControls}
+              {voiceControls}
+              {headerActions}
+              <InputGroupButton
+                aria-label="引用参考"
+                size="icon-sm"
+                disabled={frozen || !session}
+                onClick={() =>
+                  session?.editor
+                    .chain()
+                    .focus(undefined, { scrollIntoView: false })
+                    .insertContent("@")
+                    .run()
+                }
+              >
+                <AtSign />
+              </InputGroupButton>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <InputGroupButton
+                    aria-label="模型与参数"
+                    size="icon-sm"
+                    disabled={frozen || !session}
+                  >
+                    <SlidersHorizontal />
+                  </InputGroupButton>
+                </PopoverTrigger>
+                <PopoverContent
+                  side="top"
+                  align="end"
+                  data-canvas-no-zoom
+                  data-canvas-shortcuts-ignore
+                  className="max-h-[70dvh] w-80 max-w-[calc(100vw-32px)] space-y-4 overflow-y-auto"
+                  onPointerDown={(event) => event.stopPropagation()}
+                >
+                  <PopoverHeader>
+                    <PopoverTitle>模型与参数</PopoverTitle>
+                    <PopoverDescription>
+                      发送前会核对输入与费用。
+                    </PopoverDescription>
+                  </PopoverHeader>
+                  <p role="status" className="text-xs text-muted-foreground">
+                    {saveState} · r{revision}
+                  </p>
+                  <ModelPicker
+                    models={models}
+                    value={draft.modelVersion}
+                    disabled={frozen || !session}
+                    onSelect={(target) => {
+                      if (target.current_version?.id)
+                        void selectMode(
+                          target.current_version.id,
+                          referenceMode(
+                            {
+                              ...draft,
+                              modelVersion: target.current_version.id,
+                            },
+                            target,
+                          ) ?? "",
+                        );
+                    }}
+                  />
+                  {parameterControls}
+                </PopoverContent>
+              </Popover>
+              <InputGroupButton
+                className="ml-auto size-8 shrink-0 rounded-full"
+                size="icon-sm"
+                variant="default"
+                aria-label={
+                  current.submission
+                    ? current.submission.state === "accepted"
+                      ? "查看任务"
+                      : "查看报价"
+                    : "发送消息"
+                }
+                title={current.submission ? "查看费用与任务" : "检查费用并发送"}
+                disabled={
+                  pending ||
+                  confirmUnknown ||
+                  (!current.submission &&
+                    (!session ||
+                      frozen ||
+                      !draft.document.content.some((p) =>
+                        p.content?.some(
+                          (n) =>
+                            n.type === "reference" ||
+                            (n.type === "text" && n.text.trim()),
+                        ),
+                      )))
+                }
+                onClick={() =>
+                  current.submission
+                    ? setQuoteReviewOpen(true)
+                    : void getQuote()
+                }
+              >
+                {pending ? (
+                  <LoaderCircle className="animate-spin" />
+                ) : (
+                  <ArrowUp />
+                )}
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
+        ) : compact ? (
           <InputGroup
             variant="composer"
             className={cn(
@@ -2179,6 +2332,10 @@ function EditorWorkspace({
             }}
           >
             <DialogContent
+              data-canvas-no-zoom={presentation === "assistant" || undefined}
+              data-canvas-shortcuts-ignore={
+                presentation === "assistant" || undefined
+              }
               showCloseButton={!pending && !confirmUnknown}
               className="max-h-[85dvh] overflow-y-auto sm:max-w-3xl"
             >
@@ -2193,6 +2350,7 @@ function EditorWorkspace({
                   id={task}
                   onAdopt={onAdopt}
                   adoptLabel={adoptLabel}
+                  onAdoptText={onAdoptText}
                 />
               )}
             </DialogContent>
@@ -2237,6 +2395,7 @@ function EditorWorkspace({
             id={task}
             onAdopt={onAdopt}
             adoptLabel={adoptLabel}
+            onAdoptText={onAdoptText}
           />
         )}
       </div>

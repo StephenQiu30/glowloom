@@ -1,6 +1,59 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { GET, POST, PUT, DELETE } from "@/app/api/[...path]/route";
+import { GET, POST, PUT } from "@/app/api/[...path]/route";
 afterEach(() => vi.unstubAllGlobals());
+
+it("画布助手只开放私有会话读取和绑定路径，不接受外部owner查询", async () => {
+  const fetcher = vi
+    .fn()
+    .mockImplementation(() => Promise.resolve(new Response('{"items":[]}')));
+  vi.stubGlobal("fetch", fetcher);
+  const id = "00000000-0000-4000-8000-000000000001",
+    base = `canvases/${id}/assistant-sessions`;
+  for (const path of [base, `${base}/${id}`])
+    expect(
+      (await GET(new Request(`http://localhost/api/${path}`), context(path)))
+        .status,
+    ).toBe(200);
+  for (const path of [base, `${base}/${id}/turns`])
+    expect(
+      (
+        await POST(
+          new Request(`http://localhost/api/${path}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: "{}",
+          }),
+          context(path),
+        )
+      ).status,
+    ).toBe(200);
+  fetcher.mockClear();
+  expect(
+    (
+      await GET(
+        new Request(`http://localhost/api/${base}?actor_id=other`),
+        context(base),
+      )
+    ).status,
+  ).toBe(422);
+  expect(
+    (
+      await PUT(
+        new Request(`http://localhost/api/${base}/${id}`, { method: "PUT" }),
+        context(`${base}/${id}`),
+      )
+    ).status,
+  ).toBe(405);
+  expect(
+    (
+      await GET(
+        new Request(`http://localhost/api/${base}/bad`),
+        context(`${base}/bad`),
+      )
+    ).status,
+  ).toBe(404);
+  expect(fetcher).not.toHaveBeenCalled();
+});
 
 it("项目查询只透传允许的筛选参数，详情只读且必须是UUID", async () => {
   const fetcher = vi
@@ -1238,18 +1291,16 @@ it("作品公开读取有界且原件下载流使用120秒超时", async () => {
   const timeout = vi
     .spyOn(AbortSignal, "timeout")
     .mockImplementation(() => new AbortController().signal);
-  const fetcher = vi
-    .fn()
-    .mockImplementation(
-      async () =>
-        new Response("file", {
-          headers: {
-            "Content-Type": "video/mp4",
-            "Content-Disposition": 'attachment; filename="result.mp4"',
-            "X-Content-Type-Options": "nosniff",
-          },
-        }),
-    );
+  const fetcher = vi.fn().mockImplementation(
+    async () =>
+      new Response("file", {
+        headers: {
+          "Content-Type": "video/mp4",
+          "Content-Disposition": 'attachment; filename="result.mp4"',
+          "X-Content-Type-Options": "nosniff",
+        },
+      }),
+  );
   vi.stubGlobal("fetch", fetcher);
   const work = "works/00000000-0000-4000-8000-000000000001";
   expect(
@@ -1279,47 +1330,10 @@ it("作品公开读取有界且原件下载流使用120秒超时", async () => {
   timeout.mockRestore();
 });
 
-it.each([GET, PUT, DELETE])(
-  "proxies director recovery only on exact document/node UUID routes",
-  async (handler) => {
-    const fetcher = vi
-      .fn()
-      .mockImplementation(() => Promise.resolve(new Response("{}")));
-    vi.stubGlobal("fetch", fetcher);
-    const path =
-      "canvases/00000000-0000-4000-8000-000000000001/director-recovery/00000000-0000-4000-8000-000000000002";
-    const method = handler === GET ? "GET" : handler === PUT ? "PUT" : "DELETE";
-    const response = await handler(
-      new Request(`http://localhost/api/${path}`, {
-        method,
-        ...(method !== "GET" ? { body: '{"expected_revision":1}' } : {}),
-      }),
-      context(path),
-    );
-    expect(response.status).toBe(200);
-    expect(fetcher.mock.calls[0][0].pathname).toBe(`/api/${path}`);
-    expect(fetcher.mock.calls[0][0].search).toBe("");
-    expect(
-      (
-        await handler(
-          new Request(`http://localhost/api/${path}?actor_id=other`, {
-            method,
-          }),
-          context(path),
-        )
-      ).status,
-    ).toBe(422);
-    const invalid = path.replace(
-      "00000000-0000-4000-8000-000000000002",
-      "wrong",
-    );
-    expect(
-      (
-        await handler(
-          new Request(`http://localhost/api/${invalid}`, { method }),
-          context(invalid),
-        )
-      ).status,
-    ).toBe(404);
-  },
-);
+it("画布项目信息仅允许GET及page，不接受跨owner查询",async()=>{
+ const fetcher=vi.fn().mockResolvedValue(new Response("{}"));vi.stubGlobal("fetch",fetcher);
+ const path="canvases/00000000-0000-4000-8000-000000000001/information";
+ expect((await GET(new Request(`http://localhost/api/${path}?page=2`),context(path))).status).toBe(200);
+ expect((await GET(new Request(`http://localhost/api/${path}?owner_id=other`),context(path))).status).toBe(422);
+ expect((await POST(new Request(`http://localhost/api/${path}`,{method:"POST"}),context(path))).status).toBe(405);
+});

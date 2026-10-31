@@ -1,15 +1,33 @@
+import * as publishMedia from "@/components/canvas/publish-media";
 import {
-  emptyTimelineConfig,
-  editTimeline,
-  readTimeline,
-} from "@/components/canvas/timeline/timeline-model";
+  openCanvasPendingJournal,
+  type CanvasPendingStore,
+} from "@/components/canvas/lib/canvas-yjs-pending-journal";
+import type { RecoveryRecord } from "@glowloom/canvas-collab/session";
+import type { ServiceGraph } from "@glowloom/canvas-collab/service-document";
+import { connectCanvasDocumentSources } from "@/components/canvas/lib/canvas-document-connections";
+import { serviceDocumentFromEditor } from "@/components/canvas/service-graph";
+import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
+import {
+  createContainer,
+  containerDescendantIDs,
+} from "@/components/canvas/lib/canvas-containers";
 import {
   emptyDirectorConfig,
   editDirector,
   readDirector,
 } from "@/components/canvas/director/director-model";
-import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
+import {
+  emptyTimelineConfig,
+  editTimeline,
+  readTimeline,
+} from "@/components/canvas/timeline/timeline-model";
 import { afterEach, expect, it, vi } from "vitest";
+import { Editor } from "@tiptap/core";
+import {
+  ComposerSession,
+  composerEditorOptions,
+} from "@/components/generation/composer-session";
 import * as Y from "yjs";
 import {
   createCanvasDocument,
@@ -22,7 +40,9 @@ import {
 } from "@glowloom/canvas-collab/service-document";
 import { CanvasYjsLiveSession } from "@/components/canvas/yjs-live-session";
 import { RequestError } from "@/lib/request";
+import { emptyPromptDraft } from "@/components/generation/prompt-document";
 import { webcrypto } from "node:crypto";
+import { changeCanvasColorTags } from "@/components/canvas/lib/canvas-color-tags";
 class Socket {
   readyState = 1;
   sent: Record<string, unknown>[] = [];
@@ -41,8 +61,10 @@ class Socket {
   }
 }
 const instances: CanvasYjsLiveSession[] = [];
+const composers: ComposerSession[] = [];
 afterEach(() => {
   instances.splice(0).forEach((client) => client.stop());
+  composers.splice(0).forEach((composer) => composer.editor.destroy());
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -104,6 +126,7 @@ function setup(
   doc.destroy();
   const sockets: Socket[] = [];
   const client = new CanvasYjsLiveSession({
+    recoveryJournal: false,
     canvasID,
     projectID,
     actorID,
@@ -161,6 +184,67 @@ it("uses memory only, sends completed edits on the unique socket and retains ori
   expect(sockets[1].sent.find((p) => p.type === "yjs_resolve")!.body).toEqual(
     original.body,
   );
+});
+it("persists colorTags through the real live-session Yjs update and authoritative reopen", async () => {
+  const { client, sockets, state, actorID, nodeID } = setup();
+  await vi.waitFor(() => expect(client.getSnapshot().document).not.toBeNull());
+  const graph = client.getSnapshot().document!;
+  const next = {
+    ...graph,
+    nodes: changeCanvasColorTags(
+      changeCanvasColorTags(graph.nodes, new Set([nodeID]), "cyan"),
+      new Set([nodeID]),
+      "purple",
+    ),
+  };
+  client.change(next, true);
+  await vi.waitFor(() =>
+    expect(sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(true),
+  );
+  const packet = sockets[0].sent.find((p) => p.type === "yjs_submit")!;
+  const body = packet.body as { update: string; payloadHash: string };
+  const accepted = new Y.Doc();
+  Y.applyUpdate(accepted, Buffer.from(state.state, "base64"));
+  Y.applyUpdate(accepted, Buffer.from(body.update, "base64"));
+  const document = serviceProjection(
+    readCanvasDocument(accepted),
+    state.document as unknown as ServiceDocument,
+  );
+  expect(
+    (document as unknown as API.DocumentDTO).nodes?.[0]?.config?.editor
+      ?.metadata?.colorTags,
+  ).toEqual(["cyan", "purple"]);
+  sockets[0].receive({
+    type: "yjs_snapshot",
+    actor_id: actorID,
+    yjs_state: {
+      ...state,
+      commitSeq: "1",
+      state: Buffer.from(Y.encodeStateAsUpdate(accepted)).toString("base64"),
+      document: { ...document, revision: "2" },
+    },
+  });
+  sockets[0].receive({
+    type: "yjs_ack",
+    op_id: packet.op_id,
+    yjs_receipt: {
+      status: "accepted",
+      epoch: state.epoch,
+      updateId: packet.op_id,
+      payloadHash: body.payloadHash,
+      commitSeq: "1",
+      contentRevision: "2",
+      graphHash: state.graphHash,
+      effect: "VISIBLE_CHANGE",
+      update: body.update,
+    },
+  });
+  await vi.waitFor(() => expect(client.getSnapshot().dirty).toBe(false));
+  expect(client.getSnapshot().document?.nodes[0].metadata?.colorTags).toEqual([
+    "cyan",
+    "purple",
+  ]);
+  accepted.destroy();
 });
 it("holds an unfinished gesture and submits only the final atomic position, without periodic polling", async () => {
   const { client, sockets } = setup();
@@ -714,7 +798,15 @@ it.each(["missing", "epoch", "document", "revision"])(
   },
 );
 
-async function acceptDirectorUpdate(
+function inputFixture(inputRevision = 1) {
+  return setup(false, undefined, (document) => {
+    document.nodes![0].config!.draft = {
+      composer: emptyPromptDraft() as API.PromptDraft,
+    };
+    document.nodes![0].input_revision = inputRevision;
+  });
+}
+async function acceptInputUpdate(
   f: ReturnType<typeof setup>,
   alter?: (document: API.DocumentDTO) => void,
 ) {
@@ -734,6 +826,7 @@ async function acceptDirectorUpdate(
     ),
     revision: "2",
   } as API.DocumentDTO;
+  document.nodes![0].input_revision = 2;
   alter?.(document);
   sockets[0].receive({
     type: "yjs_snapshot",
@@ -762,228 +855,528 @@ async function acceptDirectorUpdate(
   accepted.destroy();
   await vi.waitFor(() => expect(client.getSnapshot().dirty).toBe(false));
 }
-function directorFixture() {
-  return setup(false, undefined, (document) => {
-    document.nodes![0].node_type = "director";
-    document.nodes![0].node_action = "tool";
-    document.nodes![0].config = { director: emptyDirectorConfig() };
-  });
-}
-const liveDirector = (f: ReturnType<typeof setup>) =>
-  readDirector(
-    f.client.getSnapshot().document!.nodes[0].serviceData!.config!.director,
+it("prepareInput never initializes a missing draft or commits unfinished body input", async () => {
+  const { client, sockets, nodeID } = setup();
+  await vi.waitFor(() => expect(client.getSnapshot().document).not.toBeNull());
+  const reader = client.textBinding(nodeID)!.registerDraftReader!(() => ({
+    schemaVersion: 1,
+    content: {
+      type: "doc",
+      content: [
+        { type: "paragraph", content: [{ type: "text", text: "正在输入" }] },
+      ],
+    },
+  }));
+  await expect(client.prepareInput(nodeID)).rejects.toThrow();
+  expect(
+    client.getSnapshot().document!.nodes[0].serviceData!.config?.draft,
+  ).toBeUndefined();
+  expect(client.changeInput(nodeID, emptyPromptDraft(), true)).toBe(false);
+  expect(sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
+    0,
   );
-it("director edits use an atomic scene CAS and retain a rejected concurrent intention", async () => {
-  const f = directorFixture();
-  await vi.waitFor(() =>
-    expect(f.client.getSnapshot().document).not.toBeNull(),
-  );
-  const before = liveDirector(f),
-    next = editDirector(before, { type: "add-object", primitive: "box" });
-  f.client.changeDirector(f.nodeID, next, before, f.client.getDocumentEpoch());
-  expect(() =>
-    f.client.changeDirector(
-      f.nodeID,
-      { ...before, background: "#ffffff" },
-      before,
-      f.client.getDocumentEpoch(),
-    ),
-  ).toThrow("其他协作者");
-  expect(liveDirector(f).objects).toHaveLength(1);
-  expect(f.client.retainedDirector(f.nodeID)?.background).toBe("#ffffff");
-  f.client.discardRetainedDirector(f.nodeID);
-  expect(f.client.retainedDirector(f.nodeID)).toBeNull();
+  reader();
 });
-it("director scene save is accepted on the original queue and survives authoritative readback", async () => {
-  const f = directorFixture();
+it("prepareInput waits for the sole save queue and accepts Go zero fields and JSON key reordering", async () => {
+  const f = setup();
   await vi.waitFor(() =>
     expect(f.client.getSnapshot().document).not.toBeNull(),
   );
-  const before = liveDirector(f),
-    next = editDirector(before, { type: "add-light", light: "point" });
-  f.client.changeDirector(f.nodeID, next, before, f.client.getDocumentEpoch());
-  const saved = f.client.waitForSaved();
-  await acceptDirectorUpdate(f);
-  await expect(saved).resolves.toMatchObject({ revision: "2" });
-  expect(liveDirector(f).lights[0].id).toBe(next.lights[0].id);
+  const input = emptyPromptDraft();
+  input.document.content[0].content = [{ type: "text", text: "已确认输入" }];
+  f.client.changeInput(f.nodeID, input);
+  let done = false;
+  const pointer = f.client.prepareInput(f.nodeID).then((v) => {
+    done = true;
+    return v;
+  });
+  await vi.waitFor(() =>
+    expect(f.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(true),
+  );
+  expect(done).toBe(false);
+  await acceptInputUpdate(f, (doc) => {
+    const draft = doc.nodes![0].config!.draft!;
+    draft.prompt = "";
+    draft.negative_prompt = "";
+    draft.aspect_ratio = "";
+    draft.candidate_count = 0;
+    draft.composer = Object.fromEntries(
+      Object.entries(draft.composer!).reverse(),
+    ) as API.PromptDraft;
+  });
+  await expect(pointer).resolves.toEqual({
+    kind: "canvas_input",
+    canvas_id: f.state.documentId,
+    node_id: f.nodeID,
+    canvas_revision: 2,
+    input_revision: 2,
+  });
   expect(f.sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
     1,
   );
 });
-it("director gesture from an old epoch cannot write identical restored scene content", async () => {
-  const f = directorFixture();
-  await vi.waitFor(() =>
-    expect(f.client.getSnapshot().document).not.toBeNull(),
+it("prepareInput rejects absent authoritative input revision rather than substituting content revision", async () => {
+  const { client, nodeID } = inputFixture(0);
+  await vi.waitFor(() => expect(client.getSnapshot().document).not.toBeNull());
+  await expect(client.prepareInput(nodeID)).rejects.toThrow(
+    "生成输入的保存版本尚未确认",
   );
-  const before = liveDirector(f),
-    epoch = f.client.getDocumentEpoch(),
-    replacement = crypto.randomUUID();
+});
+it("prepareInput rejects an input change while its original save is pending", async () => {
+  const { client, nodeID } = inputFixture();
+  await vi.waitFor(() => expect(client.getSnapshot().document).not.toBeNull());
+  const a = emptyPromptDraft();
+  a.document.content[0].content = [{ type: "text", text: "A" }];
+  client.changeInput(nodeID, a);
+  const rejected = expect(client.prepareInput(nodeID)).rejects.toThrow(
+    "生成输入已变化",
+  );
+  const b = structuredClone(a);
+  b.document.content[0].content = [{ type: "text", text: "B" }];
+  client.changeInput(nodeID, b);
+  await rejected;
+});
+it("prepareInput refuses offline and an active body gesture without modifying the draft", async () => {
+  const { client, nodeID, sockets } = inputFixture();
+  await vi.waitFor(() => expect(client.getSnapshot().document).not.toBeNull());
+  client.change(client.getSnapshot().document!, false);
+  await expect(client.prepareInput(nodeID)).rejects.toThrow();
+  const changed = emptyPromptDraft();
+  changed.document.content[0].content = [
+    { type: "text", text: "gesture input" },
+  ];
+  expect(client.changeInput(nodeID, changed)).toBe(false);
+  client.change(client.getSnapshot().document!, true);
+  sockets[0].close();
+  await expect(client.prepareInput(nodeID)).rejects.toThrow();
+});
+
+function createInputComposer(f: ReturnType<typeof setup>) {
+  const composer = new ComposerSession(
+    new Editor(
+      composerEditorOptions({
+        contextKey: f.nodeID,
+        replicaId: "input-test",
+        draft: emptyPromptDraft(),
+      }),
+    ),
+  );
+  composers.push(composer);
+  return composer;
+}
+function remoteInput(
+  f: ReturnType<typeof setup>,
+  text: string,
+  deleted = false,
+) {
+  const remote = new Y.Doc();
+  Y.applyUpdate(remote, Buffer.from(f.state.state, "base64"));
+  const nodes = remote.getMap("canvas").get("nodes") as Y.Map<Y.Map<unknown>>;
+  if (deleted) nodes.delete(f.nodeID);
+  else {
+    const data = nodes.get(f.nodeID)!.get("data") as Y.Map<unknown>;
+    const native = structuredClone(data.get("native")) as {
+      config: Record<string, unknown>;
+    };
+    const input = emptyPromptDraft();
+    input.document.content[0].content = [{ type: "text", text }];
+    native.config.draft = { composer: input };
+    data.set("native", native);
+  }
+  const document = {
+    ...serviceProjection(
+      readCanvasDocument(remote),
+      f.state.document as unknown as ServiceDocument,
+    ),
+    revision: "2",
+  } as API.DocumentDTO;
+  if (!deleted) document.nodes![0].input_revision = 2;
   f.sockets[0].receive({
     type: "yjs_snapshot",
     actor_id: f.actorID,
     yjs_state: {
       ...f.state,
-      epoch: replacement,
-      document: { ...f.state.document, revision: "2" },
+      commitSeq: "1",
+      document,
+      state: Buffer.from(Y.encodeStateAsUpdate(remote)).toString("base64"),
     },
   });
-  await vi.waitFor(() => expect(f.client.getDocumentEpoch()).toBe(replacement));
-  expect(() =>
-    f.client.changeDirector(
-      f.nodeID,
-      { ...before, background: "#ffffff" },
-      before,
-      epoch,
-    ),
-  ).toThrow("其他版本");
-  expect(liveDirector(f).background).toBe(before.background);
-  expect(f.sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
-    0,
-  );
-});
-it("director permission loss refuses transform writes without submitting", async () => {
-  const f = directorFixture();
+  remote.destroy();
+}
+it("an unchanged read-only boot emits no draft and no write", async () => {
+  const f = inputFixture();
   await vi.waitFor(() =>
     expect(f.client.getSnapshot().document).not.toBeNull(),
   );
-  const before = liveDirector(f);
   f.sockets[0].receive({
     type: "heartbeat",
     permissions: { read: true, write: false },
   });
   await vi.waitFor(() => expect(f.client.getSnapshot().writable).toBe(false));
-  expect(() =>
-    f.client.changeDirector(
-      f.nodeID,
-      { ...before, mode: "dynamic" },
-      before,
-      f.client.getDocumentEpoch(),
-    ),
-  ).toThrow();
+  expect(f.client.changeInput(f.nodeID, emptyPromptDraft())).toBe(true);
+  expect(f.client.readInputDraft(f.nodeID)).toBeNull();
   expect(f.sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
     0,
   );
 });
 
-it("director pending confirmation refuses an unfinished rich-text input", async () => {
+it("opening a resource without a saved composer does not create an undo frame or conflict", async () => {
   const f = setup();
   await vi.waitFor(() =>
     expect(f.client.getSnapshot().document).not.toBeNull(),
   );
-  const remove = f.client.textBinding(f.nodeID)!.registerDraftReader!(() => ({
-    schemaVersion: 1,
-    content: {
-      type: "doc",
-      content: [
-        { type: "paragraph", content: [{ type: "text", text: "未完成输入" }] },
-      ],
-    },
-  }));
-  await expect(f.client.waitForSaved()).rejects.toThrow();
-  remove();
+  const composer = createInputComposer(f);
+  const unbind = f.client.bindInputComposer(f.nodeID, composer);
+  expect(f.client.changeInput(f.nodeID, emptyPromptDraft())).toBe(true);
+  expect(f.client.readInputDraft(f.nodeID)).toBeNull();
+  expect(f.client.getSnapshot().canUndo).toBe(false);
+  expect(f.sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
+    0,
+  );
+  composer.editor.commands.insertContent("实际用户输入");
+  expect(f.client.changeInput(f.nodeID, composer.snapshot().draft)).toBe(true);
+  expect(f.client.readInputDraft(f.nodeID)).toBeNull();
+  unbind();
 });
-it("retains a validated director failure through workspace remount in the same session", async () => {
-  const f = directorFixture();
+
+it("deleting a clean empty resource with its composer open does not retain a phantom draft", async () => {
+  const f = setup();
   await vi.waitFor(() =>
     expect(f.client.getSnapshot().document).not.toBeNull(),
   );
-  const draft = liveDirector(f);
-  f.client.retainDirector(f.nodeID, draft);
-  const reopened = f.client.retainedDirector(f.nodeID)!;
-  expect(reopened.id).toBe(draft.id);
-  reopened.title = "changed";
-  expect(f.client.retainedDirector(f.nodeID)!.title).toBe(draft.title);
+  const composer = createInputComposer(f);
+  const unbind = f.client.bindInputComposer(f.nodeID, composer);
+  remoteInput(f, "", true);
+  unbind();
+  expect(f.client.readInputDraft(f.nodeID)).toBeNull();
+  expect(f.client.getSnapshot().recovery).toHaveLength(0);
 });
-it.each([false, true])(
-  "allows creation undo after server label allocation but protects foreign links: %s",
-  async (foreignLink) => {
-    const f = setup();
+
+it("quote preparation can explicitly materialize an empty input", async () => {
+  const f = setup();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  expect(f.client.changeInput(f.nodeID, emptyPromptDraft(), true)).toBe(true);
+  expect(
+    f.client.getSnapshot().document?.nodes[0].serviceData?.config?.draft
+      ?.composer,
+  ).toEqual(emptyPromptDraft());
+  await vi.waitFor(() =>
+    expect(
+      f.sockets[0].sent.filter((p) => p.type === "yjs_submit"),
+    ).toHaveLength(1),
+  );
+});
+it("input guards and pending uploads reject generation without creating a write", async () => {
+  const f = inputFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const remove = f.client.registerInputGuard(f.nodeID, () => false);
+  await expect(f.client.prepareInput(f.nodeID)).rejects.toThrow();
+  remove();
+  const draft = emptyPromptDraft();
+  draft.references.push({
+    id: "upload",
+    source: {
+      kind: "pending_upload",
+      clientUploadId: "c",
+      uploadAttemptId: "a",
+    },
+    bindingGeneration: 1,
+    mediaKind: "image",
+    role: "reference",
+    order: 0,
+  });
+  draft.labelState.allocations.upload = { labelKind: "image", ordinal: 1 };
+  draft.labelState.highWater.image = 1;
+  f.client.changeInput(f.nodeID, draft);
+  await expect(f.client.prepareInput(f.nodeID)).rejects.toThrow(
+    "参考素材尚未上传完成",
+  );
+});
+it("stop promptly rejects a save waiter", async () => {
+  const f = inputFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const draft = emptyPromptDraft();
+  draft.document.content[0].content = [{ type: "text", text: "pending" }];
+  f.client.changeInput(f.nodeID, draft);
+  const pending = expect(f.client.waitForSaved()).rejects.toThrow();
+  f.client.stop();
+  await pending;
+});
+it("a bound clean composer applies remote input in place with an authoritative transaction", async () => {
+  const f = inputFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const composer = createInputComposer(f);
+  const transactions: boolean[] = [];
+  composer.editor.on("transaction", ({ transaction }) =>
+    transactions.push(!!transaction.getMeta("composer-authoritative")),
+  );
+  f.client.bindInputComposer(f.nodeID, composer);
+  remoteInput(f, "remote text");
+  await vi.waitFor(() => expect(composer.editor.getText()).toBe("remote text"));
+  expect(transactions).toContain(true);
+  expect(f.client.readInputDraft(f.nodeID)).toBeNull();
+  await expect(f.client.prepareInput(f.nodeID)).resolves.toMatchObject({
+    canvas_revision: 2,
+    input_revision: 2,
+  });
+});
+it.each(["server", "local"] as const)(
+  "remote input during composition retains local input until explicit %s resolution",
+  async (choice) => {
+    const f = inputFixture();
     await vi.waitFor(() =>
       expect(f.client.getSnapshot().document).not.toBeNull(),
     );
-    const { connectCanvasDocumentSources } =
-      await import("@/components/canvas/lib/canvas-document-connections");
-    const original = f.client.getSnapshot().document!;
-    const image = createCanvasNode("image", { x: 400, y: 0 });
-    f.client.change(
-      connectCanvasDocumentSources(
-        { ...original, nodes: [...original.nodes, image] },
-        [f.nodeID],
-        image.id,
-      ),
-      true,
+    const composer = createInputComposer(f);
+    f.client.bindInputComposer(f.nodeID, composer);
+    composer.editor.view.dom.dispatchEvent(
+      new CompositionEvent("compositionstart", { bubbles: true }),
     );
+    composer.editor.view.dispatch(
+      composer.editor.state.tr.insertText("本页输入").setMeta("composition", 1),
+    );
+    remoteInput(f, "远端输入");
     await vi.waitFor(() =>
-      expect(f.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(true),
+      expect(JSON.stringify(f.client.getSnapshot().document)).toContain(
+        "远端输入",
+      ),
     );
-    const packet = f.sockets[0].sent.find((p) => p.type === "yjs_submit")!;
-    const remote = new Y.Doc();
-    Y.applyUpdate(remote, Buffer.from(f.state.state, "base64"));
-    Y.applyUpdate(
-      remote,
-      Buffer.from((packet.body as { update: string }).update, "base64"),
+    expect(composer.editor.getText()).toBe("本页输入");
+    expect(JSON.stringify(f.client.readInputDraft(f.nodeID)?.draft)).toContain(
+      "本页输入",
     );
-    const root = remote.getMap("canvas");
-    const nodes = root.get("nodes") as Y.Map<Y.Map<unknown>>;
-    (nodes.get(image.id)!.get("data") as Y.Map<unknown>).set(
-      "referenceLabels",
-      { [f.nodeID]: { kind: "text", ordinal: 1 } },
+    expect(() => f.client.resolveInputDraft(f.nodeID, choice)).toThrow(
+      "请先结束输入法编辑",
     );
-    if (foreignLink) {
-      const edges = root.get("connections") as Y.Map<Y.Map<unknown>>;
-      const id = crypto.randomUUID();
-      edges.set(
-        id,
-        new Y.Map(
-          Object.entries({
-            data: {
-              id,
-              fromNodeId: image.id,
-              toNodeId: f.nodeID,
-              native: {
-                id,
-                source_node_id: image.id,
-                target_node_id: f.nodeID,
-                edge_type: "annotation",
-              },
-            },
-            order: 1,
-          }),
+    await expect(f.client.prepareInput(f.nodeID)).rejects.toThrow();
+    composer.editor.view.dom.dispatchEvent(
+      new CompositionEvent("compositionend", { bubbles: true }),
+    );
+    await vi.waitFor(() => expect(composer.composing).toBe(false));
+    expect(f.client.changeInput(f.nodeID, composer.snapshot().draft)).toBe(
+      false,
+    );
+    expect(f.client.resolveInputDraft(f.nodeID, choice)).toBe(true);
+    expect(composer.editor.getText()).toBe(
+      choice === "server" ? "远端输入" : "本页输入",
+    );
+    expect(f.client.readInputDraft(f.nodeID)).toBeNull();
+    if (choice === "local")
+      await vi.waitFor(() =>
+        expect(f.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(
+          true,
         ),
       );
-    }
-    const document = serviceProjection(
-      readCanvasDocument(remote),
-      f.state.document as unknown as ServiceDocument,
-    );
-    f.sockets[0].receive({
-      type: "yjs_snapshot",
-      actor_id: f.actorID,
-      yjs_state: {
-        ...f.state,
-        commitSeq: "1",
-        state: Buffer.from(Y.encodeStateAsUpdate(remote)).toString("base64"),
-        document: { ...document, revision: "2" },
-      },
-    });
-    await vi.waitFor(() => expect(f.client.commitSeq).toBe("1"));
-    f.client.history("undo");
-    expect(
-      f.client.getSnapshot().document!.nodes.some((n) => n.id === image.id),
-    ).toBe(foreignLink);
-    if (foreignLink)
-      expect(f.client.getSnapshot().message).toContain("已有其他编辑");
-    else {
-      expect(f.client.getSnapshot().document!.connections).toHaveLength(0);
-      f.client.history("redo");
+    else
       expect(
-        f.client.getSnapshot().document!.nodes.some((n) => n.id === image.id),
-      ).toBe(true);
-      expect(f.client.getSnapshot().document!.connections).toHaveLength(1);
-    }
-    remote.destroy();
+        f.sockets[0].sent.filter((p) => p.type === "yjs_submit"),
+      ).toHaveLength(0);
   },
 );
+it.each(["delete", "revoke"])(
+  "%s preserves unsynchronized composer input after unbinding",
+  async (action) => {
+    const f = inputFixture();
+    await vi.waitFor(() =>
+      expect(f.client.getSnapshot().document).not.toBeNull(),
+    );
+    const composer = createInputComposer(f);
+    const unbind = f.client.bindInputComposer(f.nodeID, composer);
+    composer.editor.commands.insertContent("本页未同步");
+    if (action === "delete") remoteInput(f, "", true);
+    else
+      f.sockets[0].receive({ type: "error", status: 403, code: "forbidden" });
+    await vi.waitFor(() =>
+      expect(
+        f.client.getSnapshot().document?.nodes.some((n) => n.id === f.nodeID) ??
+          false,
+      ).toBe(false),
+    );
+    unbind();
+    expect(JSON.stringify(f.client.readInputDraft(f.nodeID)?.draft)).toContain(
+      "本页未同步",
+    );
+    expect(() => f.client.resolveInputDraft(f.nodeID, "local")).toThrow();
+    await expect(f.client.prepareInput(f.nodeID)).rejects.toThrow();
+  },
+);
+it("ACK before DTO waits for the matching authority revision, sharing one save among callers", async () => {
+  const f = inputFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const draft = emptyPromptDraft();
+  draft.document.content[0].content = [{ type: "text", text: "confirmed" }];
+  f.client.changeInput(f.nodeID, draft);
+  let resolved = false;
+  const first = f.client.prepareInput(f.nodeID).then((value) => {
+    resolved = true;
+    return value;
+  });
+  const second = f.client.prepareInput(f.nodeID);
+  await vi.waitFor(() =>
+    expect(f.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(true),
+  );
+  const request = f.sockets[0].sent.find((p) => p.type === "yjs_submit")!;
+  const frozen = request.body as { update: string; payloadHash: string };
+  f.sockets[0].receive({
+    type: "yjs_ack",
+    op_id: request.op_id,
+    yjs_receipt: {
+      ...frozen,
+      status: "accepted",
+      epoch: f.state.epoch,
+      updateId: request.op_id,
+      commitSeq: "1",
+      contentRevision: "2",
+      graphHash: f.state.graphHash,
+      effect: "VISIBLE_CHANGE",
+    },
+  });
+  await vi.waitFor(() =>
+    expect(f.sockets[0].sent.some((p) => p.type === "sync")).toBe(true),
+  );
+  expect(resolved).toBe(false);
+  expect(f.client.getSnapshot().dto?.revision).toBe("1");
+  await acceptInputUpdate(f);
+  await expect(first).resolves.toMatchObject({
+    canvas_revision: 2,
+    input_revision: 2,
+  });
+  await expect(second).resolves.toMatchObject({
+    canvas_revision: 2,
+    input_revision: 2,
+  });
+  expect(f.sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
+    1,
+  );
+});
+it("UNKNOWN acknowledgement and permission loss reject a waiting quote without a duplicate submit", async () => {
+  const f = inputFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const draft = emptyPromptDraft();
+  draft.document.content[0].content = [{ type: "text", text: "unknown" }];
+  f.client.changeInput(f.nodeID, draft);
+  const pending = expect(f.client.prepareInput(f.nodeID)).rejects.toThrow();
+  await vi.waitFor(() =>
+    expect(f.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(true),
+  );
+  f.sockets[0].receive({ type: "error", status: 503, code: "unavailable" });
+  await pending;
+  expect(f.client.getSnapshot().phase).toBe("保存结果未确认");
+  await expect(f.client.prepareInput(f.nodeID)).rejects.toThrow();
+  f.sockets[0].receive({
+    type: "heartbeat",
+    permissions: { read: true, write: false },
+  });
+  await vi.waitFor(() => expect(f.client.getSnapshot().writable).toBe(false));
+  const changed = structuredClone(draft);
+  changed.document.content[0].content = [
+    { type: "text", text: "after revoke" },
+  ];
+  expect(f.client.changeInput(f.nodeID, changed)).toBe(false);
+  expect(JSON.stringify(f.client.readInputDraft(f.nodeID))).toContain(
+    "after revoke",
+  );
+  expect(f.sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
+    1,
+  );
+});
+it("epoch replacement rejects a pending quote and retains IME input in recovery", async () => {
+  const f = inputFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const composer = createInputComposer(f);
+  f.client.bindInputComposer(f.nodeID, composer);
+  composer.editor.view.dom.dispatchEvent(
+    new CompositionEvent("compositionstart", { bubbles: true }),
+  );
+  composer.editor.view.dispatch(
+    composer.editor.state.tr
+      .insertText("旧版本本页稿")
+      .setMeta("composition", 1),
+  );
+  f.sockets[0].receive({
+    type: "yjs_snapshot",
+    actor_id: f.actorID,
+    yjs_state: {
+      ...f.state,
+      epoch: crypto.randomUUID(),
+      document: { ...f.state.document, revision: "2" },
+    },
+  });
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().recovery.length).toBeGreaterThan(0),
+  );
+  expect(JSON.stringify(f.client.getSnapshot().recovery)).toContain(
+    "旧版本本页稿",
+  );
+  await expect(f.client.prepareInput(f.nodeID)).rejects.toThrow();
+  expect(composer.editor.getText()).toBe("旧版本本页稿");
+  expect(f.sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
+    0,
+  );
+});
+it("unmount protects the visible IME DOM before a ProseMirror transaction", async () => {
+  const f = inputFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const composer = createInputComposer(f);
+  const unbind = f.client.bindInputComposer(f.nodeID, composer);
+  composer.editor.view.dom.dispatchEvent(
+    new CompositionEvent("compositionstart", { bubbles: true }),
+  );
+  composer.editor.view.dom.querySelector("p")!.textContent = "正在候选中的文字";
+  unbind();
+  expect(JSON.stringify(f.client.readInputDraft(f.nodeID)?.draft)).toContain(
+    "正在候选中的文字",
+  );
+  expect(f.sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
+    0,
+  );
+});
+it("a changed bound composer cannot quote the older input before onChange runs", async () => {
+  const f = inputFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const composer = createInputComposer(f);
+  f.client.bindInputComposer(f.nodeID, composer);
+  composer.editor.commands.insertContent("尚未交给画布的输入");
+  await expect(f.client.prepareInput(f.nodeID)).rejects.toThrow();
+  expect(f.client.changeInput(f.nodeID, composer.snapshot().draft)).toBe(true);
+  const pointer = f.client.prepareInput(f.nodeID);
+  await acceptInputUpdate(f);
+  await expect(pointer).resolves.toMatchObject({
+    canvas_revision: 2,
+    input_revision: 2,
+  });
+});
+it("input changes after a clean wait resolves still invalidate the prepared pointer", async () => {
+  const f = inputFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const pending = f.client.prepareInput(f.nodeID);
+  const draft = emptyPromptDraft();
+  draft.document.content[0].content = [
+    { type: "text", text: "changed in this turn" },
+  ];
+  f.client.changeInput(f.nodeID, draft);
+  await expect(pending).rejects.toThrow();
+});
 
 function timelineFixture(legacy = false) {
   return setup(false, undefined, (document) => {
@@ -1266,7 +1659,7 @@ it("timeline freeze waits for accepted authority and normalizes Go null optional
     expect(f.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(true),
   );
   expect(finished).toBe(false);
-  await acceptDirectorUpdate(f, (doc) => {
+  await acceptInputUpdate(f, (doc) => {
     const clip = doc.nodes![0].config!.timeline!.clips![0];
     Object.assign(clip, { node_id: null, crop: null });
   });
@@ -1371,6 +1764,269 @@ it("document epoch identity changes on same-ID restoration and is unavailable af
   expect(f.client.getDocumentEpoch()).toBeNull();
 });
 
+function directorFixture() {
+  return setup(false, undefined, (document) => {
+    document.nodes![0].node_type = "director";
+    document.nodes![0].node_action = "tool";
+    document.nodes![0].config = { director: emptyDirectorConfig() };
+  });
+}
+const liveDirector = (f: ReturnType<typeof setup>) =>
+  readDirector(
+    f.client.getSnapshot().document!.nodes[0].serviceData!.config!.director,
+  );
+it("director edits use an atomic scene CAS and retain a rejected concurrent intention", async () => {
+  const f = directorFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const before = liveDirector(f),
+    next = editDirector(before, { type: "add-object", primitive: "box" });
+  f.client.changeDirector(f.nodeID, next, before, f.client.getDocumentEpoch());
+  expect(() =>
+    f.client.changeDirector(
+      f.nodeID,
+      { ...before, background: "#ffffff" },
+      before,
+      f.client.getDocumentEpoch(),
+    ),
+  ).toThrow("其他协作者");
+  expect(liveDirector(f).objects).toHaveLength(1);
+  expect(f.client.retainedDirector(f.nodeID)?.background).toBe("#ffffff");
+  f.client.discardRetainedDirector(f.nodeID);
+  expect(f.client.retainedDirector(f.nodeID)).toBeNull();
+});
+it("director scene save is accepted on the original queue and survives authoritative readback", async () => {
+  const f = directorFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const before = liveDirector(f),
+    next = editDirector(before, { type: "add-light", light: "point" });
+  f.client.changeDirector(f.nodeID, next, before, f.client.getDocumentEpoch());
+  const saved = f.client.waitForSaved();
+  await acceptInputUpdate(f);
+  await expect(saved).resolves.toMatchObject({ revision: "2" });
+  expect(liveDirector(f).lights[0].id).toBe(next.lights[0].id);
+  expect(f.sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
+    1,
+  );
+});
+it("director gesture from an old epoch cannot write identical restored scene content", async () => {
+  const f = directorFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const before = liveDirector(f),
+    epoch = f.client.getDocumentEpoch(),
+    replacement = crypto.randomUUID();
+  f.sockets[0].receive({
+    type: "yjs_snapshot",
+    actor_id: f.actorID,
+    yjs_state: {
+      ...f.state,
+      epoch: replacement,
+      document: { ...f.state.document, revision: "2" },
+    },
+  });
+  await vi.waitFor(() => expect(f.client.getDocumentEpoch()).toBe(replacement));
+  expect(() =>
+    f.client.changeDirector(
+      f.nodeID,
+      { ...before, background: "#ffffff" },
+      before,
+      epoch,
+    ),
+  ).toThrow("其他版本");
+  expect(liveDirector(f).background).toBe(before.background);
+  expect(f.sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
+    0,
+  );
+});
+it("director permission loss refuses transform writes without submitting", async () => {
+  const f = directorFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const before = liveDirector(f);
+  f.sockets[0].receive({
+    type: "heartbeat",
+    permissions: { read: true, write: false },
+  });
+  await vi.waitFor(() => expect(f.client.getSnapshot().writable).toBe(false));
+  expect(() =>
+    f.client.changeDirector(
+      f.nodeID,
+      { ...before, mode: "dynamic" },
+      before,
+      f.client.getDocumentEpoch(),
+    ),
+  ).toThrow();
+  expect(f.sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
+    0,
+  );
+});
+
+it("preserves a typed stack, child geometry and links through delete undo redo", async () => {
+  const { client } = setup(
+    true,
+    async () => {},
+    (doc) => {
+      doc.edges = [
+        {
+          id: crypto.randomUUID(),
+          edge_type: "annotation",
+          source_node_id: doc.nodes![0].id,
+          target_node_id: doc.nodes![1].id,
+        },
+      ];
+    },
+  );
+  await vi.waitFor(() => expect(client.getSnapshot().document).not.toBeNull());
+  const graph = structuredClone(client.getSnapshot().document!);
+  const original = structuredClone(graph.nodes);
+  const stack = createCanvasNode("group", { x: 200, y: 200 });
+  const grouped = {
+    ...graph,
+    nodes: createContainer(
+      graph.nodes,
+      new Set(graph.nodes.map((n) => n.id)),
+      stack,
+      "stack",
+    ),
+  };
+  client.change(grouped, true);
+  expect(
+    client.getSnapshot().document!.nodes.find((n) => n.id === stack.id)
+      ?.serviceData?.config?.container?.kind,
+  ).toBe("stack");
+  client.history("undo");
+  expect(
+    client
+      .getSnapshot()
+      .document!.nodes.map((n) => n.id)
+      .sort(),
+  ).toEqual(original.map((n) => n.id).sort());
+  client.history("redo");
+  const restored = client.getSnapshot().document!;
+  expect(containerDescendantIDs(restored.nodes, stack.id).size).toBe(2);
+  const ids = new Set([
+    stack.id,
+    ...containerDescendantIDs(restored.nodes, stack.id),
+  ]);
+  client.change(
+    {
+      ...restored,
+      nodes: restored.nodes.filter((n) => !ids.has(n.id)),
+      connections: restored.connections.filter(
+        (e) => !ids.has(e.fromNodeId) && !ids.has(e.toNodeId),
+      ),
+    },
+    true,
+  );
+  expect(client.getSnapshot().document!.nodes).toHaveLength(0);
+  client.history("undo");
+  const recovered = client.getSnapshot().document!;
+  expect(recovered.nodes).toHaveLength(3);
+  for (const node of original)
+    expect(recovered.nodes.find((n) => n.id === node.id)?.position).toEqual(
+      node.position,
+    );
+  expect(recovered.connections).toHaveLength(1);
+  expect(recovered.connections).toEqual(restored.connections);
+});
+
+it.each([false, true])(
+  "allows creation undo after server label allocation but protects foreign links: %s",
+  async (foreignLink) => {
+    const f = setup();
+    await vi.waitFor(() =>
+      expect(f.client.getSnapshot().document).not.toBeNull(),
+    );
+    const { connectCanvasDocumentSources } =
+      await import("@/components/canvas/lib/canvas-document-connections");
+    const original = f.client.getSnapshot().document!;
+    const image = createCanvasNode("image", { x: 400, y: 0 });
+    f.client.change(
+      connectCanvasDocumentSources(
+        { ...original, nodes: [...original.nodes, image] },
+        [f.nodeID],
+        image.id,
+      ),
+      true,
+    );
+    await vi.waitFor(() =>
+      expect(f.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(true),
+    );
+    const packet = f.sockets[0].sent.find((p) => p.type === "yjs_submit")!;
+    const remote = new Y.Doc();
+    Y.applyUpdate(remote, Buffer.from(f.state.state, "base64"));
+    Y.applyUpdate(
+      remote,
+      Buffer.from((packet.body as { update: string }).update, "base64"),
+    );
+    const root = remote.getMap("canvas");
+    const nodes = root.get("nodes") as Y.Map<Y.Map<unknown>>;
+    (nodes.get(image.id)!.get("data") as Y.Map<unknown>).set(
+      "referenceLabels",
+      { [f.nodeID]: { kind: "text", ordinal: 1 } },
+    );
+    if (foreignLink) {
+      const edges = root.get("connections") as Y.Map<Y.Map<unknown>>;
+      const id = crypto.randomUUID();
+      edges.set(
+        id,
+        new Y.Map(
+          Object.entries({
+            data: {
+              id,
+              fromNodeId: image.id,
+              toNodeId: f.nodeID,
+              native: {
+                id,
+                source_node_id: image.id,
+                target_node_id: f.nodeID,
+                edge_type: "annotation",
+              },
+            },
+            order: 1,
+          }),
+        ),
+      );
+    }
+    const document = serviceProjection(
+      readCanvasDocument(remote),
+      f.state.document as unknown as ServiceDocument,
+    );
+    f.sockets[0].receive({
+      type: "yjs_snapshot",
+      actor_id: f.actorID,
+      yjs_state: {
+        ...f.state,
+        commitSeq: "1",
+        state: Buffer.from(Y.encodeStateAsUpdate(remote)).toString("base64"),
+        document: { ...document, revision: "2" },
+      },
+    });
+    await vi.waitFor(() => expect(f.client.commitSeq).toBe("1"));
+    f.client.history("undo");
+    expect(
+      f.client.getSnapshot().document!.nodes.some((n) => n.id === image.id),
+    ).toBe(foreignLink);
+    if (foreignLink)
+      expect(f.client.getSnapshot().message).toContain("已有其他编辑");
+    else {
+      expect(f.client.getSnapshot().document!.connections).toHaveLength(0);
+      f.client.history("redo");
+      expect(
+        f.client.getSnapshot().document!.nodes.some((n) => n.id === image.id),
+      ).toBe(true);
+      expect(f.client.getSnapshot().document!.connections).toHaveLength(1);
+    }
+    remote.destroy();
+  },
+);
+
 it("undoes audio clip deletion and automatic lane cleanup as one timeline history item", async () => {
   const f = timelineFixture();
   await vi.waitFor(() =>
@@ -1392,4 +2048,841 @@ it("undoes audio clip deletion and automatic lane cleanup as one timeline histor
   expect(liveTimeline(f)).toEqual(added);
   f.client.timelineHistory(f.nodeID, "redo");
   expect(liveTimeline(f)).toEqual(removed);
+});
+
+async function connectionFixture() {
+  const f = setup(true);
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const graph = f.client.getSnapshot().document!;
+  const target = createCanvasNode("image", { x: 800, y: 200 });
+  const candidate = connectCanvasDocumentSources(
+    { ...graph, nodes: [...graph.nodes, target] },
+    graph.nodes.map((node) => node.id),
+    target.id,
+  );
+  return { ...f, candidate, target };
+}
+
+it("connection admission refuses mixed pending upload without publishing a partial ready graph", async () => {
+  const f = await connectionFixture();
+  const upload = createCanvasNode(
+    "image",
+    { x: 0, y: 500 },
+    { content: "blob:unfinished" },
+  );
+  // A local replacement may retain the old file pin while its new upload is pending.
+  upload.documentData = {
+    id: upload.id,
+    type: "image",
+    nodeTypeVersion: 1,
+    title: upload.title,
+    position: upload.position,
+    width: upload.width,
+    height: upload.height,
+    zIndex: 1,
+    fileReferences: [
+      {
+        purpose: "CONTENT",
+        referenceKey: "old",
+        fileId: crypto.randomUUID(),
+        version: "1",
+      },
+    ],
+  };
+  const mixed = connectCanvasDocumentSources(
+    { ...f.candidate, nodes: [...f.candidate.nodes, upload] },
+    [upload.id],
+    f.target.id,
+  );
+  expect(f.client.canAccept(mixed)).toBe(true);
+  const before = structuredClone(f.client.getSnapshot().document);
+  if (f.client.canAcceptConnectionGraph(mixed)) f.client.change(mixed, true);
+  expect(f.client.getSnapshot().document).toEqual(before);
+  expect(f.client.canAcceptConnectionGraph(mixed)).toBe(false);
+  expect(f.sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
+    0,
+  );
+});
+
+it("connection admission refuses pending composer uploads and full projection failures", async () => {
+  const f = await connectionFixture();
+  const pending = structuredClone(f.candidate);
+  const composer = emptyPromptDraft();
+  composer.references.push({
+    id: "upload",
+    source: {
+      kind: "pending_upload",
+      clientUploadId: "c",
+      uploadAttemptId: "a",
+    },
+    bindingGeneration: 1,
+    mediaKind: "image",
+    role: "reference",
+    order: 0,
+  });
+  composer.labelState.allocations.upload = { labelKind: "image", ordinal: 1 };
+  composer.labelState.highWater.image = 1;
+  pending.nodes[0].serviceData = {
+    ...pending.nodes[0].serviceData,
+    config: {
+      ...pending.nodes[0].serviceData?.config,
+      draft: {
+        composer: {
+          ...composer,
+          mode: composer.mode ?? undefined,
+          modelVersion: composer.modelVersion ?? undefined,
+        },
+      },
+    },
+  };
+  expect(f.client.canAccept(pending)).toBe(true);
+  expect(f.client.canAcceptConnectionGraph(pending)).toBe(false);
+  const invalid = structuredClone(f.candidate);
+  invalid.nodes[0].serviceData = {
+    ...invalid.nodes[0].serviceData,
+    config: { ...invalid.nodes[0].serviceData?.config, draft: {} },
+  };
+  expect(() => serviceDocumentFromEditor(f.state.document, invalid)).toThrow(
+    "生成输入不能被移除",
+  );
+  expect(f.client.canAccept(invalid)).toBe(true);
+  expect(f.client.canAcceptConnectionGraph(invalid)).toBe(false);
+  expect(f.sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
+    0,
+  );
+});
+
+it("connection admission preserves offline editing of durable sources", async () => {
+  const f = await connectionFixture();
+  f.sockets[0].close();
+  expect(f.client.getSnapshot().connected).toBe(false);
+  expect(f.client.canAcceptConnectionGraph(f.candidate)).toBe(true);
+  f.client.change(f.candidate, true);
+  expect(f.client.getSnapshot().document?.connections).toHaveLength(2);
+  expect(f.client.getSnapshot().dirty).toBe(true);
+});
+
+it("connection batch submits once and both edges survive accepted snapshot readback", async () => {
+  const f = await connectionFixture();
+  expect(f.client.canAcceptConnectionGraph(f.candidate)).toBe(true);
+  f.client.change(f.candidate, true);
+  await vi.waitFor(() =>
+    expect(
+      f.sockets[0].sent.filter((p) => p.type === "yjs_submit"),
+    ).toHaveLength(1),
+  );
+  const packet = f.sockets[0].sent.find((p) => p.type === "yjs_submit")!;
+  const body = packet.body as { update: string; payloadHash: string };
+  const server = new Y.Doc();
+  Y.applyUpdate(server, Buffer.from(f.state.state, "base64"));
+  Y.applyUpdate(server, Buffer.from(body.update, "base64"));
+  const document = serviceProjection(
+    readCanvasDocument(server),
+    f.state.document as unknown as ServiceDocument,
+  );
+  expect(document.nodes).toHaveLength(3);
+  expect(document.edges).toHaveLength(2);
+  f.sockets[0].receive({
+    type: "yjs_snapshot",
+    actor_id: f.actorID,
+    yjs_state: {
+      ...f.state,
+      commitSeq: "1",
+      state: Buffer.from(Y.encodeStateAsUpdate(server)).toString("base64"),
+      document: { ...document, revision: "2" },
+    },
+  });
+  f.sockets[0].receive({
+    type: "yjs_ack",
+    op_id: packet.op_id,
+    yjs_receipt: {
+      status: "accepted",
+      epoch: f.state.epoch,
+      updateId: packet.op_id,
+      payloadHash: body.payloadHash,
+      commitSeq: "1",
+      contentRevision: "2",
+      graphHash: f.state.graphHash,
+      effect: "VISIBLE_CHANGE",
+      update: body.update,
+    },
+  });
+  await vi.waitFor(() => expect(f.client.getSnapshot().dirty).toBe(false));
+  expect(
+    f.client.canAcceptConnectionGraph(f.client.getSnapshot().document!),
+  ).toBe(true);
+  expect(
+    f.client
+      .getSnapshot()
+      .document?.connections.map((e) => e.id)
+      .sort(),
+  ).toEqual(f.candidate.connections.map((e) => e.id).sort());
+  server.destroy();
+});
+
+it("connection batch rejection restores all nodes and edges and retains its intention", async () => {
+  const f = await connectionFixture();
+  expect(f.client.canAcceptConnectionGraph(f.candidate)).toBe(true);
+  f.client.change(f.candidate, true);
+  await vi.waitFor(() =>
+    expect(f.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(true),
+  );
+  const original = f.sockets[0].sent.find((p) => p.type === "yjs_submit")!;
+  f.sockets[0].receive({
+    type: "yjs_ack",
+    op_id: original.op_id,
+    yjs_receipt: { status: "rejected", code: "GRAPH_CONFLICT" },
+  });
+  await vi.waitFor(() =>
+    expect(f.sockets[0].sent.some((p) => p.type === "sync")).toBe(true),
+  );
+  f.sockets[0].receive({
+    type: "yjs_snapshot",
+    actor_id: f.actorID,
+    yjs_state: f.state,
+  });
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().recovery).toHaveLength(1),
+  );
+  expect(f.client.getSnapshot().document?.nodes).toHaveLength(2);
+  expect(f.client.getSnapshot().document?.connections).toHaveLength(0);
+  expect(f.sockets[0].sent.filter((p) => p.type === "yjs_submit")).toHaveLength(
+    1,
+  );
+});
+
+it("connection batch lost acknowledgement resolves original id and bytes without duplicate submit", async () => {
+  const f = await connectionFixture();
+  expect(f.client.canAcceptConnectionGraph(f.candidate)).toBe(true);
+  f.client.change(f.candidate, true);
+  await vi.waitFor(() =>
+    expect(f.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(true),
+  );
+  const original = f.sockets[0].sent.find((p) => p.type === "yjs_submit")!;
+  f.sockets[0].close();
+  window.dispatchEvent(new Event("online"));
+  await vi.waitFor(() => expect(f.sockets).toHaveLength(2));
+  f.sockets[1].onopen?.();
+  f.sockets[1].receive({
+    type: "yjs_snapshot",
+    actor_id: f.actorID,
+    yjs_state: f.state,
+  });
+  await vi.waitFor(() =>
+    expect(f.sockets[1].sent.some((p) => p.type === "yjs_resolve")).toBe(true),
+  );
+  const resolved = f.sockets[1].sent.find((p) => p.type === "yjs_resolve")!;
+  expect(resolved.op_id).toBe(original.op_id);
+  expect(resolved.body).toEqual(original.body);
+  expect(
+    f.sockets.flatMap((s) => s.sent).filter((p) => p.type === "yjs_submit"),
+  ).toHaveLength(1);
+});
+
+it("UNKNOWN blocks a new connection intention while preserving ordinary admission and the original pending identity", async () => {
+  const f = await connectionFixture();
+  f.client.change(f.candidate, true);
+  await vi.waitFor(() =>
+    expect(
+      f.sockets[0].sent.some((packet) => packet.type === "yjs_submit"),
+    ).toBe(true),
+  );
+  const original = f.sockets[0].sent.find(
+    (packet) => packet.type === "yjs_submit",
+  )!;
+  f.sockets[0].receive({ type: "error", status: 503, code: "unavailable" });
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().phase).toBe("保存结果未确认"),
+  );
+  const current = f.client.getSnapshot().document!;
+  const target = createCanvasNode("image", { x: 1000, y: 300 });
+  const retry = connectCanvasDocumentSources(
+    { ...current, nodes: [...current.nodes, target] },
+    [current.nodes[0].id],
+    target.id,
+  );
+  expect(f.client.canAccept(retry)).toBe(true);
+  expect(f.client.canAcceptConnectionGraph(retry)).toBe(false);
+  if (f.client.canAcceptConnectionGraph(retry)) f.client.change(retry, true);
+  expect(
+    f.client
+      .getSnapshot()
+      .document!.nodes.some((node) => node.id === target.id),
+  ).toBe(false);
+  f.sockets[0].close();
+  window.dispatchEvent(new Event("online"));
+  await vi.waitFor(() => expect(f.sockets).toHaveLength(2));
+  f.sockets[1].onopen?.();
+  f.sockets[1].receive({
+    type: "yjs_snapshot",
+    actor_id: f.actorID,
+    yjs_state: f.state,
+  });
+  await vi.waitFor(() =>
+    expect(
+      f.sockets[1].sent.some((packet) => packet.type === "yjs_resolve"),
+    ).toBe(true),
+  );
+  const resolved = f.sockets[1].sent.find(
+    (packet) => packet.type === "yjs_resolve",
+  )!;
+  expect(resolved.op_id).toBe(original.op_id);
+  expect(resolved.body).toEqual(original.body);
+  expect(
+    f.sockets
+      .flatMap((socket) => socket.sent)
+      .filter((packet) => packet.type === "yjs_submit"),
+  ).toHaveLength(1);
+});
+
+it("a 15-second save confirmation timeout keeps in-flight connection admission closed without changing ordinary offline admission", async () => {
+  const f = await connectionFixture();
+  f.client.change(f.candidate, true);
+  await vi.waitFor(() =>
+    expect(
+      f.sockets[0].sent.some((packet) => packet.type === "yjs_submit"),
+    ).toBe(true),
+  );
+  const original = f.sockets[0].sent.find(
+    (packet) => packet.type === "yjs_submit",
+  )!;
+  vi.useFakeTimers();
+  try {
+    const waiter = expect(f.client.waitForSaved()).rejects.toThrow(
+      "保存尚未确认",
+    );
+    await vi.advanceTimersByTimeAsync(15000);
+    await waiter;
+    expect(f.client.getSnapshot().phase).toBe("等待保存确认");
+    const current = f.client.getSnapshot().document!;
+    expect(f.client.canAccept(current)).toBe(true);
+    expect(f.client.canAcceptConnectionGraph(current)).toBe(false);
+    expect(
+      f.sockets[0].sent.filter((packet) => packet.type === "yjs_submit"),
+    ).toEqual([original]);
+    expect(current.connections.map((edge) => edge.id)).toEqual(
+      f.candidate.connections.map((edge) => edge.id),
+    );
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("ordinary upload edits can publish a ready subset, so connection admission rejects that entire candidate", async () => {
+  const f = await connectionFixture();
+  f.sockets[0].close();
+  const upload = createCanvasNode(
+    "image",
+    { x: 0, y: 500 },
+    { content: "blob:unfinished" },
+  );
+  upload.documentData = {
+    id: upload.id,
+    type: "image",
+    nodeTypeVersion: 1,
+    title: upload.title,
+    position: upload.position,
+    width: upload.width,
+    height: upload.height,
+    zIndex: 1,
+    fileReferences: [
+      {
+        purpose: "CONTENT",
+        referenceKey: "old",
+        fileId: crypto.randomUUID(),
+        version: "1",
+      },
+    ],
+  };
+  const mixed = connectCanvasDocumentSources(
+    { ...f.candidate, nodes: [...f.candidate.nodes, upload] },
+    [upload.id],
+    f.target.id,
+  );
+  expect(mixed.connections).toHaveLength(3);
+  expect(f.client.canAcceptConnectionGraph(mixed)).toBe(false);
+  // Exercise the unchanged ordinary uploader to prove why its admission is insufficient.
+  f.client.change(mixed, true);
+  window.dispatchEvent(new Event("online"));
+  await vi.waitFor(() => expect(f.sockets).toHaveLength(2));
+  f.sockets[1].onopen?.();
+  f.sockets[1].receive({
+    type: "yjs_snapshot",
+    actor_id: f.actorID,
+    yjs_state: f.state,
+  });
+  await vi.waitFor(() =>
+    expect(f.sockets[1].sent.some((p) => p.type === "yjs_submit")).toBe(true),
+  );
+  const packet = f.sockets[1].sent.find((p) => p.type === "yjs_submit")!;
+  const server = new Y.Doc();
+  Y.applyUpdate(server, Buffer.from(f.state.state, "base64"));
+  Y.applyUpdate(
+    server,
+    Buffer.from((packet.body as { update: string }).update, "base64"),
+  );
+  const document = serviceProjection(
+    readCanvasDocument(server),
+    f.state.document as unknown as ServiceDocument,
+  );
+  expect(document.nodes).toHaveLength(3);
+  expect(document.edges).toHaveLength(2);
+  expect(document.nodes.some((node) => node.id === upload.id)).toBe(false);
+  server.destroy();
+});
+
+it("connection media projection rejects unfinished local bytes and strips only a matching completed receipt preview", async () => {
+  const f = await connectionFixture();
+  const ordinary = f.candidate.nodes[0];
+  expect(f.client.connectionMediaNode(ordinary)).toBe(ordinary);
+  const upload = createCanvasNode(
+    "image",
+    { x: 0, y: 0 },
+    { content: "blob:preview", status: "success", naturalWidth: 640 },
+  );
+  expect(() => f.client.connectionMediaNode(upload)).toThrow();
+  const asset: API.AssetSummary = {
+    id: crypto.randomUUID(),
+    project_id: f.state.document.project_id,
+    revision: 1,
+    kind: "image",
+  };
+  vi.spyOn(publishMedia, "publishCanvasMedia").mockImplementation(
+    async (state, _projectID, receipts) => {
+      receipts.set(upload.id, {
+        source: "blob:preview",
+        key: "receipt",
+        asset,
+      });
+      return {
+        ...state,
+        nodes: state.nodes.map((node) => ({
+          ...node,
+          documentData: {
+            id: node.id,
+            type: node.type,
+            title: node.title,
+            position: node.position,
+            width: node.width,
+            height: node.height,
+            zIndex: 1,
+            nodeTypeVersion: 1,
+            fileReferences: [
+              {
+                referenceKey: asset.id!,
+                fileId: asset.id!,
+                version: "1",
+                purpose: "CONTENT",
+              },
+            ],
+          },
+        })),
+      };
+    },
+  );
+  const graph = f.client.getSnapshot().document!;
+  f.client.change({ ...graph, nodes: [...graph.nodes, upload] }, true);
+  await vi.waitFor(() =>
+    expect(
+      f.client
+        .getSnapshot()
+        .document?.nodes.find((node) => node.id === upload.id)?.documentData
+        ?.fileReferences?.[0]?.fileId,
+    ).toBe(asset.id),
+  );
+  const ready = f.client
+    .getSnapshot()
+    .document!.nodes.find((node) => node.id === upload.id)!;
+  const withDisplayMetadata = {
+    ...ready,
+    metadata: { ...ready.metadata, naturalWidth: 640 },
+  };
+  const projected = f.client.connectionMediaNode(withDisplayMetadata);
+  expect(ready.metadata?.content).toBe("blob:preview");
+  expect(projected.metadata?.content).toBeUndefined();
+  expect(projected.documentData).toBe(ready.documentData);
+  expect(projected.metadata?.naturalWidth).toBe(640);
+  expect(() =>
+    f.client.connectionMediaNode({
+      ...ready,
+      metadata: { ...ready.metadata, content: "blob:replacement" },
+    }),
+  ).toThrow();
+  expect(() =>
+    f.client.connectionMediaNode({
+      ...ready,
+      documentData: { ...ready.documentData!, fileReferences: [] },
+    }),
+  ).toThrow();
+});
+
+async function durableSessionFixture() {
+  const seed = setup();
+  seed.client.stop();
+  const records = new Map<string, RecoveryRecord<ServiceGraph>>(),
+    locks = new Set<string>();
+  let failWrites = false;
+  const store: CanvasPendingStore = {
+    list: async (namespace) =>
+      [...records]
+        .filter(([key]) => key.startsWith(namespace + ":"))
+        .map(([, record]) => structuredClone(record)),
+    put: async (namespace, record) => {
+      if (failWrites) throw new Error("QuotaExceededError");
+      records.set(
+        namespace + ":" + record.scope.sessionId + ":" + record.scope.epoch,
+        structuredClone(record),
+      );
+    },
+    remove: async (namespace, scope) => {
+      if (failWrites) throw new Error("QuotaExceededError");
+      records.delete(namespace + ":" + scope.sessionId + ":" + scope.epoch);
+    },
+  };
+  const scopeID = crypto.randomUUID();
+  const open = async (actorID = seed.actorID, epoch = seed.state.epoch) => {
+    const sockets: Socket[] = [];
+    const client = new CanvasYjsLiveSession({
+      canvasID: seed.state.document.id!,
+      projectID: seed.state.document.project_id!,
+      actorID,
+      scopeID,
+      csrf: () => "csrf-not-journaled",
+      renew: async () => {},
+      recoveryJournal: (identity) =>
+        openCanvasPendingJournal(identity, {
+          store,
+          claim: async (scope) => {
+            if (locks.has(scope.sessionId)) return null;
+            locks.add(scope.sessionId);
+            return async () => {
+              locks.delete(scope.sessionId);
+            };
+          },
+        }),
+      socket: () => {
+        const socket = new Socket();
+        sockets.push(socket);
+        return socket as unknown as WebSocket;
+      },
+    });
+    instances.push(client);
+    client.start();
+    await vi.waitFor(() => expect(sockets).toHaveLength(1));
+    sockets[0].onopen?.();
+    sockets[0].receive({
+      type: "yjs_snapshot",
+      actor_id: actorID,
+      yjs_state: { ...seed.state, epoch },
+    });
+    await vi.waitFor(() =>
+      expect(client.getSnapshot().document).not.toBeNull(),
+    );
+    return { client, sockets };
+  };
+  const close = async (client: CanvasYjsLiveSession) => {
+    client.stop();
+    await vi.waitFor(() => expect(locks.size).toBe(0));
+  };
+  return {
+    ...seed,
+    open,
+    close,
+    records,
+    failWrites: () => {
+      failWrites = true;
+    },
+  };
+}
+it("reopening after lost acknowledgement resolves the durably stored original packet before offering uncommitted intent recovery", async () => {
+  const f = await durableSessionFixture(),
+    first = await f.open();
+  const next = structuredClone(first.client.getSnapshot().document!);
+  next.nodes[0].position.x = 777;
+  first.client.change(next, true);
+  await vi.waitFor(() =>
+    expect(first.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(
+      true,
+    ),
+  );
+  const original = first.sockets[0].sent.find((p) => p.type === "yjs_submit")!;
+  expect(
+    [...f.records.values()].some(
+      (record) => record.inFlight?.updateId === original.op_id,
+    ),
+  ).toBe(true);
+  await f.close(first.client);
+  const reopened = await f.open();
+  await vi.waitFor(() =>
+    expect(reopened.sockets[0].sent.some((p) => p.type === "yjs_resolve")).toBe(
+      true,
+    ),
+  );
+  const resolved = reopened.sockets[0].sent.find(
+    (p) => p.type === "yjs_resolve",
+  )!;
+  expect(resolved.op_id).toBe(original.op_id);
+  expect(resolved.body).toEqual(original.body);
+  expect(reopened.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(
+    false,
+  );
+  reopened.sockets[0].receive({ type: "yjs_not_found", op_id: original.op_id });
+  await vi.waitFor(() =>
+    expect(reopened.client.getSnapshot().recovery).toHaveLength(1),
+  );
+  expect(reopened.client.getSnapshot().document!.nodes[0].position.x).toBe(0);
+  expect(JSON.stringify(reopened.client.getSnapshot().recovery)).toContain(
+    "777",
+  );
+  expect(reopened.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(
+    false,
+  );
+  expect(JSON.stringify([...f.records.values()])).not.toContain(
+    "csrf-not-journaled",
+  );
+  const recovered = reopened.client.getSnapshot().recovery[0];
+  await reopened.client.applyRecovery(
+    recovered.sourceId,
+    recovered.fields,
+    reopened.client.commitSeq,
+  );
+  await vi.waitFor(() =>
+    expect(
+      reopened.sockets[0].sent.some((packet) => packet.type === "yjs_submit"),
+    ).toBe(true),
+  );
+  expect(
+    reopened.sockets[0].sent.find((packet) => packet.type === "yjs_submit")!
+      .op_id,
+  ).not.toBe(original.op_id);
+  expect(reopened.client.getSnapshot().document!.nodes[0].position.x).toBe(777);
+});
+it("device recovery cannot cross actor identity and a forbidden response keeps its disk draft", async () => {
+  const f = await durableSessionFixture(),
+    first = await f.open();
+  const next = structuredClone(first.client.getSnapshot().document!);
+  next.nodes[0].position.x = 777;
+  first.client.change(next, true);
+  await vi.waitFor(() =>
+    expect(first.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(
+      true,
+    ),
+  );
+  first.sockets[0].receive({ type: "error", status: 403, code: "forbidden" });
+  await vi.waitFor(() =>
+    expect(first.client.getSnapshot().document).toBeNull(),
+  );
+  await f.close(first.client);
+  expect([...f.records.values()].some((record) => record.inFlight)).toBe(true);
+  const other = await f.open(crypto.randomUUID());
+  expect(other.client.getSnapshot().document!.nodes[0].position.x).toBe(0);
+  expect(other.sockets[0].sent.some((p) => p.type === "yjs_resolve")).toBe(
+    false,
+  );
+});
+it("a device journal quota failure blocks transport submission and never labels the draft protected", async () => {
+  const f = await durableSessionFixture(),
+    opened = await f.open();
+  f.failWrites();
+  const next = structuredClone(opened.client.getSnapshot().document!);
+  next.nodes[0].position.x = 777;
+  opened.client.change(next, true);
+  await vi.waitFor(() =>
+    expect(opened.client.getSnapshot().localPersistence).toBe("UNAVAILABLE"),
+  );
+  expect(opened.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(
+    false,
+  );
+  expect(opened.client.getSnapshot().phase).toContain("请勿关闭");
+  expect(opened.client.getSnapshot().dirty).toBe(true);
+});
+it("a reopened accepted submission consumes its exact receipt without creating another update identity", async () => {
+  const f = await durableSessionFixture(),
+    first = await f.open();
+  const next = structuredClone(first.client.getSnapshot().document!);
+  next.nodes[0].position.x = 777;
+  first.client.change(next, true);
+  await vi.waitFor(() =>
+    expect(first.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(
+      true,
+    ),
+  );
+  const original = first.sockets[0].sent.find((p) => p.type === "yjs_submit")!;
+  const body = original.body as { payloadHash: string; update: string };
+  await f.close(first.client);
+  const reopened = await f.open();
+  await vi.waitFor(() =>
+    expect(reopened.sockets[0].sent.some((p) => p.type === "yjs_resolve")).toBe(
+      true,
+    ),
+  );
+  reopened.sockets[0].receive({
+    type: "yjs_ack",
+    op_id: original.op_id,
+    yjs_receipt: {
+      status: "accepted",
+      updateId: original.op_id,
+      payloadHash: body.payloadHash,
+      epoch: f.state.epoch,
+      commitSeq: "1",
+      contentRevision: "2",
+      graphHash: "b".repeat(64),
+      effect: "VISIBLE_CHANGE",
+      update: body.update,
+    },
+  });
+  await vi.waitFor(() =>
+    expect(reopened.client.getSnapshot().dirty).toBe(false),
+  );
+  expect(reopened.client.getSnapshot().document!.nodes[0].position.x).toBe(777);
+  expect(reopened.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(
+    false,
+  );
+  expect([...f.records.values()]).toEqual([]);
+});
+it("an epoch change queries the old frozen operation then retains a review draft instead of replaying old bytes", async () => {
+  const f = await durableSessionFixture(),
+    first = await f.open();
+  const next = structuredClone(first.client.getSnapshot().document!);
+  next.nodes[0].position.x = 777;
+  first.client.change(next, true);
+  await vi.waitFor(() =>
+    expect(first.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(
+      true,
+    ),
+  );
+  const original = first.sockets[0].sent.find((p) => p.type === "yjs_submit")!;
+  await f.close(first.client);
+  const epoch = crypto.randomUUID(),
+    reopened = await f.open(f.actorID, epoch);
+  await vi.waitFor(() =>
+    expect(reopened.sockets[0].sent.some((p) => p.type === "yjs_resolve")).toBe(
+      true,
+    ),
+  );
+  expect(
+    reopened.sockets[0].sent.find((p) => p.type === "yjs_resolve")!.body,
+  ).toEqual(original.body);
+  reopened.sockets[0].receive({ type: "yjs_not_found", op_id: original.op_id });
+  await vi.waitFor(() =>
+    expect(reopened.client.getSnapshot().recovery).toHaveLength(1),
+  );
+  expect(reopened.client.getDocumentEpoch()).toBe(epoch);
+  expect(reopened.client.getSnapshot().document!.nodes[0].position.x).toBe(0);
+  expect(reopened.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(
+    false,
+  );
+  expect([...f.records.values()].map((record) => record.scope.epoch)).toEqual([
+    epoch,
+  ]);
+  expect([...f.records.values()][0].recoverySources[0].scope.epoch).toBe(
+    f.state.epoch,
+  );
+});
+
+it("audio input connection guard rejects target-local edits without blocking an unrelated composer", async () => {
+  const f = inputFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const composer = createInputComposer(f);
+  f.client.bindInputComposer(f.nodeID, composer);
+  f.client.registerInputGuard(crypto.randomUUID(), () => false);
+  expect(f.client.canAcceptAudioConnectionInput(f.nodeID)).toBe(true);
+  composer.editor.commands.insertContent("尚未提交的音频指令");
+  expect(f.client.canAcceptAudioConnectionInput(f.nodeID)).toBe(false);
+  expect(f.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(false);
+});
+it("audio input connection guard refuses composition and pending mode selection", async () => {
+  const f = inputFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  const composer = createInputComposer(f);
+  f.client.bindInputComposer(f.nodeID, composer);
+  composer.beginModeSelection({ mode: "audio", modelVersion: "audio-test" });
+  expect(f.client.canAcceptAudioConnectionInput(f.nodeID)).toBe(false);
+  composer.cancelModeSelection();
+  expect(f.client.canAcceptAudioConnectionInput(f.nodeID)).toBe(true);
+  composer.editor.view.dom.dispatchEvent(
+    new CompositionEvent("compositionstart", { bubbles: true }),
+  );
+  expect(f.client.canAcceptAudioConnectionInput(f.nodeID)).toBe(false);
+});
+it("audio input connection guard refuses missing, retained, and readonly targets", async () => {
+  const f = inputFixture();
+  await vi.waitFor(() =>
+    expect(f.client.getSnapshot().document).not.toBeNull(),
+  );
+  expect(f.client.canAcceptAudioConnectionInput(crypto.randomUUID())).toBe(
+    false,
+  );
+  const remove = f.client.registerInputGuard(f.nodeID, () => false);
+  expect(f.client.canAcceptAudioConnectionInput(f.nodeID)).toBe(false);
+  remove();
+  f.client.retainInputDraft(f.nodeID, emptyPromptDraft());
+  expect(f.client.canAcceptAudioConnectionInput(f.nodeID)).toBe(false);
+  f.client.resolveInputDraft(f.nodeID, "server");
+  expect(f.client.canAcceptAudioConnectionInput(f.nodeID)).toBe(true);
+  f.sockets[0].receive({
+    type: "heartbeat",
+    permissions: { read: true, write: false },
+  });
+  await vi.waitFor(() => expect(f.client.getSnapshot().writable).toBe(false));
+  expect(f.client.canAcceptAudioConnectionInput(f.nodeID)).toBe(false);
+});
+it("a durable rejection after reopening retains review and permits an explicitly approved replacement operation", async () => {
+  const f = await durableSessionFixture(),
+    first = await f.open();
+  const next = structuredClone(first.client.getSnapshot().document!);
+  next.nodes[0].position.x = 777;
+  first.client.change(next, true);
+  await vi.waitFor(() =>
+    expect(first.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(
+      true,
+    ),
+  );
+  const original = first.sockets[0].sent.find((p) => p.type === "yjs_submit")!;
+  await f.close(first.client);
+  const reopened = await f.open();
+  await vi.waitFor(() =>
+    expect(reopened.sockets[0].sent.some((p) => p.type === "yjs_resolve")).toBe(
+      true,
+    ),
+  );
+  reopened.sockets[0].receive({
+    type: "yjs_ack",
+    op_id: original.op_id,
+    yjs_receipt: { status: "rejected", code: "VALIDATION_FAILED" },
+  });
+  await vi.waitFor(() =>
+    expect(reopened.sockets[0].sent.some((p) => p.type === "sync")).toBe(true),
+  );
+  reopened.sockets[0].receive({
+    type: "yjs_snapshot",
+    actor_id: f.actorID,
+    yjs_state: f.state,
+  });
+  await vi.waitFor(() =>
+    expect(reopened.client.getSnapshot().recovery).toHaveLength(1),
+  );
+  expect(reopened.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(
+    false,
+  );
+  const recovery = reopened.client.getSnapshot().recovery[0];
+  await reopened.client.applyRecovery(
+    recovery.sourceId,
+    recovery.fields,
+    reopened.client.commitSeq,
+  );
+  await vi.waitFor(() =>
+    expect(reopened.sockets[0].sent.some((p) => p.type === "yjs_submit")).toBe(
+      true,
+    ),
+  );
+  expect(
+    reopened.sockets[0].sent.find((p) => p.type === "yjs_submit")!.op_id,
+  ).not.toBe(original.op_id);
 });

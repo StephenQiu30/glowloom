@@ -11,7 +11,7 @@ import (
 
 func TestBuiltinPresetsAreIsolatedAndContainNoCredentials(t *testing.T) {
 	presets := domain.BuiltinPresets()
-	require.Len(t, presets, 8)
+	require.Len(t, presets, 9)
 	slugs := make(map[string]bool)
 	for _, p := range presets {
 		require.False(t, slugs[p.Slug], "duplicate preset %s", p.Slug)

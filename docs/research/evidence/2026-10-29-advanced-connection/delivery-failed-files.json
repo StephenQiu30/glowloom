@@ -1,0 +1,15 @@
+[
+  "tests/unit/app/assets/_components/asset-workspace.test.tsx",
+  "tests/unit/components/layout/basic-layout.test.tsx",
+  "tests/unit/app/projects/_components/projects-page.test.tsx",
+  "tests/unit/app/account/_components/account-page.test.tsx",
+  "tests/unit/app/assets/_components/assets-page.test.tsx",
+  "tests/unit/app/providers/_components/preset-connect.test.tsx",
+  "tests/unit/app/_components/home-creation.test.tsx",
+  "tests/unit/components/subjects/subject-date-range.test.tsx",
+  "tests/unit/app/providers/_components/connection-onboarding.test.tsx",
+  "tests/unit/app/assets/_components/history-publication-dialog.test.tsx",
+  "tests/unit/components/subjects/subject-detail.test.tsx",
+  "tests/unit/components/controls/theme-controls.test.tsx",
+  "tests/unit/app/providers/_components/service-trial.test.tsx"
+]

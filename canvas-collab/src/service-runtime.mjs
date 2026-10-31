@@ -279,7 +279,7 @@ function normalizeReferenceLabels(doc, base, transition) {
     );
     for (const reference of node.references) {
       const kind =
-        reference.source?.kind === "subject" ? "subject" : reference.mediaKind;
+        ["subject", "canvas_subject"].includes(reference.source?.kind) ? "subject" : reference.mediaKind;
       if (!["image", "video", "audio", "subject"].includes(kind))
         throw failure("INVALID_REFERENCE");
       const old = labels.allocations[reference.id];

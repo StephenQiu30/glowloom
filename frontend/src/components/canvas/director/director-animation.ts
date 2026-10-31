@@ -1,6 +1,6 @@
-// Independent-channel semantics adapted from BeefTV 2327ee2 director-camera-paths.ts.
+// Independent-channel semantics; source attribution: notices/third-party-MIT.txt.
 // Glowloom uses UUID identities, generated DTOs and whole-document Yjs transactions.
-// MIT notice: notices/BeefTV-MIT.txt.
+// License and source attribution: notices/third-party-MIT.txt.
 import { Euler, Quaternion } from "three";
 import type {
   DirectorCamera,

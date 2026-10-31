@@ -47,7 +47,7 @@ func CopyProjectDocument(source Document, targetProject, job uuid.UUID, assets m
 	}
 	doc := &result.Document
 	for i := range doc.Nodes {
-		if IsDraft(doc.Nodes[i]) || doc.Nodes[i].Config.Composer != nil && len(doc.Nodes[i].Config.Composer.References) > 0 || len(doc.Nodes[i].Config.unknown) != 0 {
+		if IsDraft(doc.Nodes[i]) && !copyableResourceInput(doc.Nodes[i]) || doc.Nodes[i].Config.Composer != nil && len(doc.Nodes[i].Config.Composer.References) > 0 || len(doc.Nodes[i].Config.unknown) != 0 {
 			return ProjectDocumentCopy{}, ErrUnsupportedProjectCopy
 		}
 		if doc.Nodes[i].LastOperationID != nil {
@@ -88,6 +88,30 @@ func CopyProjectDocument(source Document, targetProject, job uuid.UUID, assets m
 		remapCopyPointer(node.ParentID, func(id uuid.UUID) uuid.UUID { return identity("node", id) })
 		if node.RefID != nil {
 			remapCopyPointer(node.RefID, assetID)
+		}
+		if IsDraft(*node) {
+			node.InputRevision = 1
+		}
+		if subject := node.Config.Subject; subject != nil {
+			node.InputRevision = 1
+			if local := subject.Local; local != nil {
+				remap := func(media *SubjectMedia) {
+					if media != nil && media.SourceNodeID != nil {
+						remapCopyPointer(media.SourceNodeID, func(id uuid.UUID) uuid.UUID { return identity("node", id) })
+					}
+					if media != nil && media.BindingID == nil {
+						media.AssetID = assetID(media.AssetID)
+						media.AssetRevision = 1
+					}
+				}
+				remap(local.Primary)
+				for i := range local.References {
+					remap(&local.References[i])
+				}
+				if local.Voice != nil {
+					remap(&local.Voice.Media)
+				}
+			}
 		}
 		if editor := node.Config.Editor; editor != nil {
 			for j := range editor.Files {
@@ -164,6 +188,20 @@ func CopyProjectDocument(source Document, targetProject, job uuid.UUID, assets m
 	return result, nil
 }
 
+// User-authored source proofs need their own cross-project migration. Graph
+// references are derived after all node, edge and media identities are remapped.
+func copyableResourceInput(node Node) bool {
+	if node.NodeAction != "resource" || node.Config.Draft == nil || node.Config.Draft.Composer == nil {
+		return false
+	}
+	switch node.NodeType {
+	case "text", "image", "video", "audio":
+		return len(node.Config.Draft.Composer.References) == 0 && node.Config.Draft.Composer.Validate() == nil
+	default:
+		return false
+	}
+}
+
 func remapCopyPointer(value *uuid.UUID, remap func(uuid.UUID) uuid.UUID) {
 	if value != nil {
 		*value = remap(*value)
@@ -173,7 +211,11 @@ func remapCopyPointer(value *uuid.UUID, remap func(uuid.UUID) uuid.UUID) {
 func validateCopiedGraph(doc Document) error {
 	commands := []Command{{Type: "SetViewport", Viewport: &doc.Viewport}}
 	if len(doc.Nodes) > 0 {
-		commands = append(commands, Command{Type: "AddNodes", Nodes: doc.Nodes})
+		nodes := append([]Node(nil), doc.Nodes...)
+		for i := range nodes {
+			nodes[i].InputRevision = 0
+		}
+		commands = append(commands, Command{Type: "AddNodes", Nodes: nodes})
 	}
 	if len(doc.Edges) > 0 {
 		commands = append(commands, Command{Type: "Connect", Edges: doc.Edges})
@@ -190,6 +232,7 @@ func copyDirectorIdentities(c *DirectorConfig, scope string, identity func(strin
 		c.ID = identity(scope+"/director/scene", c.ID)
 		return
 	}
+
 	id := func(kind string, old uuid.UUID) uuid.UUID { return identity(scope+"/director/"+kind, old) }
 	nodeID := func(old uuid.UUID) uuid.UUID { return identity("node", old) }
 	c.ID = id("scene", c.ID)

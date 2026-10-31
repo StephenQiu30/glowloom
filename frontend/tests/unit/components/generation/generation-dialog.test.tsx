@@ -353,6 +353,7 @@ async function compactWorkspace(
     contextKey: `canvas/${id}`,
     draft,
     onChange: vi.fn(),
+    waitForNode: vi.fn(async () => {}),
     referenceSources: sources,
     flush: vi.fn(async () => pointer),
   };
@@ -381,7 +382,7 @@ async function compactWorkspace(
   return { ...view, props, canvas, pointer };
 }
 
-it("画布紧凑呈现保持真正富文本内联，先保存新节点且重渲染不重新初始化", async () => {
+it("画布紧凑呈现等新节点保存但不物化空输入，重渲染不重新初始化", async () => {
   const { props, canvas, rerender } = await compactWorkspace();
   const editor = screen.getByRole("textbox", { name: "创作提示词" });
   expect(editor.getAttribute("contenteditable")).toBe("true");
@@ -392,8 +393,9 @@ it("画布紧凑呈现保持真正富文本内联，先保存新节点且重渲�
   ).toContain("真实模型");
   expect(screen.queryByRole("combobox", { name: "生成模式" })).toBeNull();
   expect(screen.getByText("全能参考")).toBeTruthy();
-  expect(canvas.flush).toHaveBeenCalledOnce();
-  expect(canvas.flush.mock.invocationCallOrder[0]).toBeLessThan(
+  expect(canvas.flush).not.toHaveBeenCalled();
+  expect(canvas.waitForNode).toHaveBeenCalledOnce();
+  expect(canvas.waitForNode.mock.invocationCallOrder[0]).toBeLessThan(
     api.current.mock.invocationCallOrder[0],
   );
   expect(api.current.mock.calls[0][0]).toMatchObject({
@@ -405,7 +407,8 @@ it("画布紧凑呈现保持真正富文本内联，先保存新节点且重渲�
   expect(api.create).not.toHaveBeenCalled();
   rerender(<RichGeneration {...props} canvas={{ ...canvas }} />);
   expect(screen.getByRole("textbox", { name: "创作提示词" })).toBe(editor);
-  expect(canvas.flush).toHaveBeenCalledOnce();
+  expect(canvas.flush).not.toHaveBeenCalled();
+  expect(canvas.waitForNode).toHaveBeenCalledOnce();
 });
 
 it("紧凑参数使用模型schema与候选上限，同一画布来源报价后才允许确认", async () => {
@@ -823,7 +826,7 @@ it("模型目录503仍能输入和保存，局部重试恢复模型且保留正�
     ).toContain("目录失败时新增正文"),
   );
   fireEvent.keyDown(editor, { key: "s", ctrlKey: true });
-  await waitFor(() => expect(canvas.flush).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(canvas.flush).toHaveBeenCalledOnce());
   const edited = canvas.onChange.mock.calls.at(-1)?.[0];
   const identityCalls = api.identity.mock.calls.length;
   const submissionCalls = api.current.mock.calls.length;
@@ -839,7 +842,7 @@ it("模型目录503仍能输入和保存，局部重试恢复模型且保留正�
   expect(edited.references[0]).toEqual(binding);
   expect(api.identity).toHaveBeenCalledTimes(identityCalls);
   expect(api.current).toHaveBeenCalledTimes(submissionCalls);
-  expect(canvas.flush).toHaveBeenCalledTimes(2);
+  expect(canvas.flush).toHaveBeenCalledOnce();
   expect(api.quote).not.toHaveBeenCalled();
 });
 
@@ -1167,6 +1170,89 @@ it("asset detail accepts a completed official document and explains original-onl
   );
   expect(
     await screen.findByText("正式文档仅提供原件，下载原件以查看。"),
+  ).toBeTruthy();
+});
+
+it("文字结果采用等待画布保存并在失败时保留结果供重试", async () => {
+  api.get.mockResolvedValue({
+    id,
+    project_id: project.id,
+    status: "completed",
+    capability: "text.generate",
+    inputs: [],
+    outputs: [
+      { id, kind: "json", moderation_status: "passed", text: "可采用正文" },
+    ],
+  });
+  let reject!: (cause: Error) => void;
+  const adopt = vi.fn(
+    () =>
+      new Promise<void>((_, fail) => {
+        reject = fail;
+      }),
+  );
+  render(<TaskDetail projectID={project.id} id={id} onAdoptText={adopt} />);
+  await screen.findByText("可采用正文");
+  fireEvent.click(screen.getByRole("button", { name: "采用结果到画布" }));
+  expect(adopt).toHaveBeenCalledWith(id, id);
+  expect(
+    (screen.getByRole("button", { name: "正在保存结果…" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  reject(new Error("节点结果已变化，请重新确认采用"));
+  await findFeedback("节点结果已变化，请重新确认采用");
+  expect(screen.getByText("可采用正文")).toBeTruthy();
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "采用结果到画布",
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(false);
+});
+
+it("助手紧凑展示保持提示词草稿归属并经正式报价后确认发送", async () => {
+  render(
+    <RichGeneration
+      projectID={project.id}
+      presentation="assistant"
+      headerActions={<button>使用技能</button>}
+      seed={{ project, prompt: "讨论海报构图", capability: "image" }}
+    />,
+  );
+  const editor = await screen.findByRole("textbox", { name: "创作提示词" });
+  expect(editor.getAttribute("contenteditable")).toBe("true");
+  expect(editor.closest('[data-presentation="assistant"]')).toBeTruthy();
+  expect(screen.getByRole("button", { name: "使用技能" })).toBeTruthy();
+  expect(
+    await screen.findByRole("button", { name: "从本地、画布或资产库添加" }),
+  ).toBeTruthy();
+  expect(screen.queryByRole("combobox", { name: "生成模式" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "生成模型" })).toBeNull();
+  expect(screen.queryByText("全能参考")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "模型与参数" }));
+  fireEvent.click(await screen.findByRole("button", { name: "生成模型" }));
+  fireEvent.click(await screen.findByRole("option", { name: "真实模型" }));
+  await waitFor(() =>
+    expect(
+      api.save.mock.calls.some(
+        (call) => call[1].draft.modelVersion === version,
+      ),
+    ).toBe(true),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "发送消息" }));
+  await waitFor(() => expect(api.quote).toHaveBeenCalledOnce());
+  expect(api.quote.mock.calls[0]![1].input_source).toMatchObject({
+    kind: "prompt_draft",
+    draft_id: id,
+  });
+  expect(api.current.mock.calls[0]![0]).toMatchObject({
+    owner_kind: "prompt_draft",
+    draft_id: id,
+  });
+  expect(api.confirm).not.toHaveBeenCalled();
+  expect(
+    await screen.findByRole("dialog", { name: "报价与生成任务" }),
   ).toBeTruthy();
 });
 

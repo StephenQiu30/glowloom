@@ -22,7 +22,8 @@ export function CanvasTextPreview({ node }: { node: CanvasNodeData }) {
               (r) => r.id === item.attrs.referenceId,
             );
             const Icon =
-              ref?.source.kind === "subject"
+              ref?.source.kind === "subject" ||
+              ref?.source.kind === "canvas_subject"
                 ? UserRound
                 : ref?.mediaKind === "video"
                   ? Video

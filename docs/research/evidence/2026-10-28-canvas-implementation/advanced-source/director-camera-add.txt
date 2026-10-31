@@ -1,0 +1,8 @@
+Browser tab: 1980371314, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+~								211 pop up button (expanded) Description: 机位 · 添加, ID: radix-:modern-js-r89:, Secondary Actions: Collapse
++		264 menu 机位 · 添加, ID: radix-:modern-js-r8a:
++			265 添加运镜
++			266 绘制机位路径
++			267 绘制注视点路径
+The focused UI element is 264 menu 机位 · 添加, ID: radix-:modern-js-r8a:

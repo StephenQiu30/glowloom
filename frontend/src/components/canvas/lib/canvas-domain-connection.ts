@@ -1,4 +1,7 @@
 import { getMediaPreview } from "@/api/media";
+import { getSubjectVersion } from "@/api/subjects";
+import { requireCanvasSubjectVersion } from "./canvas-subject-source";
+import { subjectConfig } from "../subject/subject-node-state";
 import type { CanvasYjsLiveSession } from "../yjs-live-session";
 import type { CanvasNodeData } from "../types/canvas";
 import { canvasGraphFingerprint } from "./canvas-json";
@@ -26,6 +29,7 @@ function contentIdentity(node: CanvasNodeData) {
 export function createCanvasDomainConnector(
   client: CanvasYjsLiveSession,
   projectID: string,
+  scopeID?: string,
 ) {
   let busy = false;
   let disposed = false;
@@ -54,7 +58,7 @@ export function createCanvasDomainConnector(
       const target =
         request.newTarget ??
         before.nodes.find((node) => node.id === request.targetNodeId);
-      if (!target || target.type !== "timeline")
+      if (!target || !["timeline", "subject"].includes(target.type))
         throw new Error("连接目标已不存在");
       if (
         !request.sourceNodeIds.length ||
@@ -77,19 +81,35 @@ export function createCanvasDomainConnector(
       requests.add(abort);
       busy = true;
       try {
-        const entries = await Promise.all(
-          [...new Set(sources.map((source) => source.assetID))].map(
-            async (assetID) => {
-              const result = await getMediaPreview(
-                { pid: projectID, asset_id: assetID },
-                { signal: abort.signal },
-              );
-              if (!result.asset || result.asset.id !== assetID)
-                throw new Error("素材身份不匹配");
-              return [assetID, result.asset] as const;
-            },
+        const pin =
+          target.type === "subject" ? subjectConfig(target) : undefined;
+        const [entries, pinnedSubject] = await Promise.all([
+          Promise.all(
+            [...new Set(sources.map((source) => source.assetID))].map(
+              async (assetID) => {
+                const result = await getMediaPreview(
+                  { pid: projectID, asset_id: assetID },
+                  { signal: abort.signal },
+                );
+                if (!result.asset || result.asset.id !== assetID)
+                  throw new Error("素材身份不匹配");
+                return [assetID, result.asset] as const;
+              },
+            ),
           ),
-        );
+          pin?.subject_id && pin.version_id && !pin.local
+            ? getSubjectVersion(
+                { id: pin.subject_id, version: pin.version_id },
+                { signal: abort.signal },
+              ).then((value) => {
+                if (!scopeID) throw new Error("无法确认主体所属空间");
+                return requireCanvasSubjectVersion(value, scopeID, {
+                  subject_id: pin.subject_id!,
+                  version_id: pin.version_id!,
+                });
+              })
+            : Promise.resolve(undefined),
+        ]);
         const assets = new Map(entries);
         abort.signal.throwIfAborted();
         const currentView = client.getSnapshot();
@@ -131,14 +151,29 @@ export function createCanvasDomainConnector(
         const graph = request.newTarget
           ? { ...prepared, nodes: [...prepared.nodes, request.newTarget] }
           : prepared;
-        const resolved = (
-          await import("./canvas-timeline-connections")
-        ).connectCanvasTimelineSources(
-          graph,
-          request.sourceNodeIds,
-          target.id,
-          { projectID, assets },
-        );
+        const resolved =
+          target.type === "timeline"
+            ? (
+                await import("./canvas-timeline-connections")
+              ).connectCanvasTimelineSources(
+                graph,
+                request.sourceNodeIds,
+                target.id,
+                { projectID, assets },
+              )
+            : (
+                await import("./canvas-subject-connections")
+              ).connectCanvasSubjectSources(
+                graph,
+                request.sourceNodeIds,
+                target.id,
+                sources.map((source) => ({
+                  sourceNodeId: source.id,
+                  asset: assets.get(source.assetID)!,
+                })),
+                projectID,
+                pinnedSubject,
+              );
         const originalNodes = new Map(
           current.nodes.map((node) => [node.id, node]),
         );

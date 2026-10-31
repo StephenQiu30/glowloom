@@ -1,0 +1,24 @@
+{
+  "cinema-picker-original-timeout-recheck": {
+    "exit": 1,
+    "seconds": 148.58,
+    "command": [
+      "pnpm",
+      "exec",
+      "vitest",
+      "run",
+      "tests/unit/components/canvas/cinema-kit-picker.test.tsx",
+      "--maxWorkers=1"
+    ]
+  },
+  "editor-final-eslint": {
+    "exit": 0,
+    "seconds": 142.45,
+    "command": [
+      "pnpm",
+      "exec",
+      "eslint",
+      "src/components/canvas/editor/canvas-editor.tsx"
+    ]
+  }
+}

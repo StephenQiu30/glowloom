@@ -138,6 +138,9 @@ func compileEditorInput(tx *gorm.DB, input application.CreateFreeQuoteInput, d p
 	if r.RowsAffected != 1 {
 		return input, application.ErrFreeQuoteModelMissing
 	}
+	if d.CinemaKit != nil && !d.CinemaKit.Supports(model.Capability) {
+		return input, application.ErrFreeQuoteInputNotReady
+	}
 	compiled, err := d.Compile()
 	if err != nil {
 		return input, err

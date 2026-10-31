@@ -137,3 +137,28 @@ it("侧边只改对应维度，Enter复位保持对边，组合输入不改尺�
   fireEvent.keyDown(handle, { key: "Enter", isComposing: true });
   expect(p.onResize).toHaveBeenCalledTimes(1);
 });
+
+it("文本操作条和它的弹层不关闭节点生成器，普通外部焦点仍关闭", () => {
+  const p = props();
+  const close = vi.fn();
+  render(
+    <>
+      <CanvasNode
+        {...p}
+        showPanel
+        renderPanel={() => <div>生成器</div>}
+        onPanelClose={close}
+      />
+      <button data-canvas-text-action>背景菜单</button>
+      <div data-rich-text-floating>
+        <button>全屏正文操作</button>
+      </div>
+      <button>画布外部操作</button>
+    </>,
+  );
+  fireEvent.focusIn(screen.getByRole("button", { name: "背景菜单" }));
+  fireEvent.focusIn(screen.getByRole("button", { name: "全屏正文操作" }));
+  expect(close).not.toHaveBeenCalled();
+  fireEvent.focusIn(screen.getByRole("button", { name: "画布外部操作" }));
+  expect(close).toHaveBeenCalledWith("resize-node");
+});

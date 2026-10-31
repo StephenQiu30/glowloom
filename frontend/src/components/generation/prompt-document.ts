@@ -1,3 +1,7 @@
+import {
+  readCinemaKit,
+  type CinemaKit,
+} from "@/components/canvas/cinema-kit/cinema-kit-model";
 /** E0 client contract. Resource authorization and server hashes belong to E1/E4. */
 export type MediaKind = "image" | "video" | "audio";
 export type LabelKind = MediaKind | "subject";
@@ -18,7 +22,7 @@ export type ReferenceSource =
     }
   | { kind: "media"; sourceId: string; sourceVersion: string }
   | {
-      kind: "subject";
+      kind: "subject" | "canvas_subject";
       sourceId: string;
       sourceVersion: string;
       description: string;
@@ -42,6 +46,7 @@ export type LabelState = {
   allocations: Record<string, { labelKind: LabelKind; ordinal: number }>;
 };
 export type PromptDraft = {
+  cinemaKit?: CinemaKit;
   schemaVersion: 1;
   document: PromptDocument;
   references: ReferenceBinding[];
@@ -124,7 +129,9 @@ export function validateReference(
     id(s.uploadAttemptId);
     if (s.uploadSessionId !== undefined) id(s.uploadSessionId);
   } else {
-    requireValue(s.kind === "media" || s.kind === "subject");
+    requireValue(
+      s.kind === "media" || s.kind === "subject" || s.kind === "canvas_subject",
+    );
     keys(
       s,
       s.kind === "media"
@@ -133,7 +140,7 @@ export function validateReference(
     );
     id(s.sourceId);
     id(s.sourceVersion);
-    if (s.kind === "subject") {
+    if (s.kind === "subject" || s.kind === "canvas_subject") {
       requireValue(typeof s.description === "string" && Array.isArray(s.media));
       for (const item of s.media) {
         record(item);
@@ -153,6 +160,7 @@ export function validatePromptDraft(
 ): asserts value is PromptDraft {
   record(value);
   keys(value, [
+    "cinemaKit",
     "schemaVersion",
     "document",
     "references",
@@ -162,6 +170,7 @@ export function validatePromptDraft(
     "labelState",
   ]);
   requireValue(value.schemaVersion === 1);
+  if (value.cinemaKit !== undefined) readCinemaKit(value.cinemaKit);
   if (value.mode !== null) id(value.mode);
   if (value.modelVersion !== null) id(value.modelVersion);
   record(value.params);
@@ -240,7 +249,10 @@ export function validatePromptDraft(
   }
 }
 export function labelKind(binding: ReferenceBinding): LabelKind {
-  return binding.source.kind === "subject" ? "subject" : binding.mediaKind;
+  return binding.source.kind === "subject" ||
+    binding.source.kind === "canvas_subject"
+    ? "subject"
+    : binding.mediaKind;
 }
 export function referenceLabel(labels: LabelState, referenceId: string) {
   const allocation = labels.allocations[referenceId];
@@ -264,7 +276,7 @@ export function sameReference(a: ReferenceBinding, b: ReferenceBinding) {
   return (
     a.source.sourceId === b.source.sourceId &&
     a.source.sourceVersion === b.source.sourceVersion &&
-    (a.source.kind !== "subject" ||
+    ((a.source.kind !== "subject" && a.source.kind !== "canvas_subject") ||
       JSON.stringify(a.source) === JSON.stringify(b.source))
   );
 }

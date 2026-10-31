@@ -1,3 +1,4 @@
+import { detachSubjectSources } from "./canvas-subject-connections";
 import { detachTimelineSources } from "./canvas-timeline-connections";
 import {
   documentText,
@@ -68,12 +69,15 @@ export function removeCanvasReferences(
     );
   return {
     nodes: reconcileCanvasReferences(
-      detachTimelineSources(
-        nextNodes,
-        connections,
+      detachSubjectSources(
+        detachTimelineSources(
+          nextNodes,
+          connections,
+          nextConnections,
+          removal.nodeIds,
+          nodes,
+        ),
         nextConnections,
-        removal.nodeIds,
-        nodes,
       ),
       nextConnections,
     ),

@@ -76,5 +76,5 @@ export function PromptEditor({
     };
   }, [editor, onRequestSave, onRequestSubmit, onChange, options.collaboration]);
 
-  return <EditorContent editor={editor} />;
+  return <EditorContent editor={editor} className="w-full min-w-0 flex-1" />;
 }

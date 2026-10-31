@@ -1,4 +1,4 @@
-// Adapted from BeefTV a2196d3 (MIT); see frontend/EDITOR-THIRD-PARTY-NOTICES.md.
+// Third-party attribution: frontend/EDITOR-THIRD-PARTY-NOTICES.md.
 export type CanvasSpatialBounds = {
   left: number;
   top: number;

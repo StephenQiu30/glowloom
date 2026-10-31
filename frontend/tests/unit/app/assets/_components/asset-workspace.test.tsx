@@ -3,12 +3,12 @@ import {
   act,
   cleanup,
   fireEvent,
-  render,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { render, findFeedback } from "../../../../feedback";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PageToolbarContext } from "@/components/layout/page-toolbar";
 import { AssetWorkspace } from "@/app/assets/_components/asset-workspace";
@@ -706,6 +706,9 @@ it("主画布删除明确项目影响，并通过统一命令携带项目CAS", a
     .forEach((item) => fireEvent.click(item));
   fireEvent.click(screen.getByRole("button", { name: "删除" }));
   expect(screen.getByRole("alertdialog").textContent).toContain("整个所属项目");
+  expect(screen.getByRole("alertdialog").textContent).not.toMatch(
+    /回收站|30天/,
+  );
   const confirmation = screen.getByRole("alertdialog", { name: "确认删除" });
   expect(within(confirmation).queryByRole("list")).toBeNull();
   expect(state.canvasCommand).not.toHaveBeenCalled();
@@ -790,9 +793,8 @@ it("画布删除未知结果保留确认框和幂等重试，明确失败展示�
   const retry = await screen.findByRole("button", { name: "重试原操作" });
   expect(state.invalidateProject).not.toHaveBeenCalled();
   const dialog = screen.getByRole("alertdialog");
-  expect(within(dialog).getByRole("alert").textContent).toContain(
-    "操作结果尚未确认",
-  );
+  await findFeedback("操作结果尚未确认");
+  expect(within(dialog).queryByRole("alert")).toBeNull();
   expect(
     within(dialog)
       .getByRole("button", { name: "取消" })
@@ -808,15 +810,95 @@ it("画布删除未知结果保留确认框和幂等重试，明确失败展示�
   expect(state.canvasCommand.mock.calls[1][1].headers).toEqual(
     state.canvasCommand.mock.calls[0][1].headers,
   );
-  const result = screen.getByLabelText("画布操作结果");
-  expect(result.querySelector('[data-slot="alert"]')).toBeTruthy();
-  expect(result.textContent).toContain("操作未完成");
+  await findFeedback("删除失败。内容已更新，请重试此项。");
   expect(state.invalidateProject).not.toHaveBeenCalled();
+  expect(screen.queryByLabelText("画布操作结果")).toBeNull();
+  expect(
+    document.querySelector('[data-sonner-toast][data-type="error"]'),
+  ).toBeTruthy();
   expect(
     (await screen.findByRole("checkbox", { name: "选择主画布" })).getAttribute(
       "aria-checked",
     ),
   ).toBe("true");
+});
+
+it("画布批量删除只显示一条摘要，保留失败项供新命令重试", async () => {
+  const ids = [
+    "77777777-7777-4777-8777-777777777777",
+    "88888888-8888-4888-8888-888888888888",
+  ];
+  const items = ids.map((id, index) => ({
+    id,
+    project_id: task.project_id,
+    name: `画布${index + 1}`,
+    kind: "canvas",
+    revision: "7",
+    created_at: task.create_time,
+    updated_at: task.create_time,
+    is_main: false,
+    collection: "current",
+    favorite: false,
+    favorite_revision: "2",
+    project_revision: 9,
+    cover_asset_id: null,
+    cover_unavailable: false,
+    can_copy_project: false,
+  }));
+  state.canvases.mockResolvedValue({ items, next_cursor: null });
+  state.canvasCommand.mockResolvedValueOnce({
+    results: [
+      { id: ids[0], status: "succeeded", code: "applied" },
+      { id: ids[1], status: "failed", code: "revision_conflict" },
+    ],
+    succeeded: 1,
+    failed: 1,
+  });
+  render(<AssetWorkspace initialView="canvas" />);
+  await screen.findByRole("link", { name: /画布1/ });
+  fireEvent.click(screen.getByRole("button", { name: "批量操作" }));
+  screen
+    .getAllByRole("checkbox", { name: /^选择/ })
+    .forEach((item) => fireEvent.click(item));
+  fireEvent.click(screen.getByRole("button", { name: "删除" }));
+  fireEvent.click(
+    within(screen.getByRole("alertdialog")).getByRole("button", {
+      name: "删除",
+    }),
+  );
+  await findFeedback("已删除1项，1项删除失败。内容已更新，请重试此项。");
+  expect(screen.queryByLabelText("画布操作结果")).toBeNull();
+  expect(screen.queryByText("操作完成")).toBeNull();
+  expect(
+    document.querySelectorAll('[data-sonner-toast]:not([data-removed="true"])'),
+  ).toHaveLength(1);
+  expect(
+    screen
+      .getByRole("checkbox", { name: "选择画布1" })
+      .getAttribute("aria-checked"),
+  ).toBe("false");
+  expect(
+    screen
+      .getByRole("checkbox", { name: "选择画布2" })
+      .getAttribute("aria-checked"),
+  ).toBe("true");
+  state.canvasCommand.mockResolvedValueOnce({
+    results: [{ id: ids[1], status: "succeeded", code: "applied" }],
+    succeeded: 1,
+    failed: 0,
+  });
+  fireEvent.click(screen.getByRole("button", { name: "删除" }));
+  fireEvent.click(
+    within(screen.getByRole("alertdialog")).getByRole("button", {
+      name: "删除",
+    }),
+  );
+  await findFeedback("删除成功");
+  expect(state.canvasCommand.mock.calls[1][0].items).toHaveLength(1);
+  expect(state.canvasCommand.mock.calls[1][0].items[0].id).toBe(ids[1]);
+  expect(state.canvasCommand.mock.calls[1][1].headers).not.toEqual(
+    state.canvasCommand.mock.calls[0][1].headers,
+  );
 });
 
 it("权限拒绝不会显示为空列表或可操作旧数据", async () => {

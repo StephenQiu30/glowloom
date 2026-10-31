@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { emptyPromptDraft } from "@/components/generation/prompt-document";
 import { createCanvasNode } from "@/components/canvas/lib/canvas-node-factory";
 import {
   serviceGraph,
@@ -35,6 +36,23 @@ function document(): API.DocumentDTO {
   };
 }
 describe("Yjs editor projection boundary", () => {
+  it("preserves a copied resource's independent generator input", () => {
+    const dto = document();
+    const input = emptyPromptDraft();
+    dto.nodes![0].config!.draft = {
+      composer: input as unknown as NonNullable<API.CanvasDraft["composer"]>,
+    };
+    const state = serviceGraph(dto, canvas, project);
+    const copied = structuredClone(state.nodes[0]);
+    copied.id = "44444444-4444-4444-8444-444444444444";
+    state.nodes.push(copied);
+    const saved = serviceDocumentFromEditor(dto, state);
+    expect(
+      saved.nodes!.find((n) => n.id === copied.id)?.config?.draft?.composer,
+    ).toEqual(input);
+    expect(saved.nodes![0]).toEqual(dto.nodes![0]);
+  });
+
   it("keeps director scene edits and object identity through save and reopen", () => {
     const dto = document();
     const state = serviceGraph(dto, canvas, project);
@@ -74,6 +92,95 @@ describe("Yjs editor projection boundary", () => {
     expect(modified.nodes![0]).toEqual(dto.nodes![0]);
   });
 
+  it("creates, fills, reopens and clears a subject pin without replacing its node", () => {
+    const dto = document();
+    const state = serviceGraph(dto, canvas, project);
+    const subjectNode = createCanvasNode("subject", { x: 400, y: 300 });
+    state.nodes.push(subjectNode);
+    const created = serviceDocumentFromEditor(dto, state);
+    expect(
+      created.nodes?.find((n) => n.id === subjectNode.id)?.config?.subject,
+    ).toEqual({ version: 1 });
+    const next = serviceGraph(created, canvas, project);
+    const target = next.nodes.find((n) => n.id === subjectNode.id)!;
+    target.serviceData!.config!.subject = {
+      version: 1,
+      subject_id: project,
+      version_id: canvas,
+    };
+    const filled = serviceDocumentFromEditor(created, next);
+    expect(
+      filled.nodes?.find((n) => n.id === subjectNode.id)?.config?.subject,
+    ).toEqual({ version: 1, subject_id: project, version_id: canvas });
+    const reopened = serviceGraph(filled, canvas, project);
+    expect(serviceDocumentFromEditor(filled, reopened)).toEqual(filled);
+    reopened.nodes.find(
+      (n) => n.id === subjectNode.id,
+    )!.serviceData!.config!.subject = { version: 1 };
+    const cleared = serviceDocumentFromEditor(filled, reopened);
+    expect(
+      cleared.nodes?.find((n) => n.id === subjectNode.id)?.config?.subject,
+    ).toEqual({ version: 1 });
+    expect(cleared.nodes?.[0]).toEqual(created.nodes?.[0]);
+  });
+
+  it("saves generator input independently of the visible resource body", () => {
+    const dto = document();
+    const state = serviceGraph(dto, canvas, project);
+    const input = emptyPromptDraft();
+    input.document = {
+      type: "doc",
+      content: [
+        { type: "paragraph", content: [{ type: "text", text: "续写正文" }] },
+      ],
+    };
+    state.nodes[0].serviceData!.config!.draft = {
+      composer: input as unknown as NonNullable<API.CanvasDraft["composer"]>,
+    };
+    const saved = serviceDocumentFromEditor(dto, state);
+    expect(saved.nodes![0].node_type).toBe("text");
+    expect(saved.nodes![0].config?.text).toBe("原文");
+    expect(saved.nodes![0].config?.draft?.composer).toEqual(input);
+    const reopened = serviceGraph(saved, canvas, project);
+    expect(reopened.nodes[0].metadata?.content).toBe("原文");
+    expect(serviceDocumentFromEditor(saved, reopened)).toEqual(saved);
+  });
+  it("retains text background across service projection and reset without changing document content", () => {
+    const dto = document();
+    const state = serviceGraph(dto, canvas, project);
+    state.nodes[0].metadata = {
+      ...state.nodes[0].metadata,
+      textBackground: "cyan",
+    };
+    const saved = serviceDocumentFromEditor(dto, state);
+    const reopened = serviceGraph(saved, canvas, project);
+    expect(reopened.nodes[0].metadata?.textBackground).toBe("cyan");
+    expect(saved.nodes![0].config?.text).toBe("原文");
+    reopened.nodes[0].metadata!.textBackground = "default";
+    expect(
+      serviceGraph(serviceDocumentFromEditor(saved, reopened), canvas, project)
+        .nodes[0].metadata?.textBackground,
+    ).toBe("default");
+  });
+  it("creates and reopens a formal timeline tool without flattening its configuration", () => {
+    const dto = document();
+    const state = serviceGraph(dto, canvas, project);
+    const timeline = createCanvasNode("timeline", { x: 500, y: 200 });
+    state.nodes.push(timeline);
+    const saved = serviceDocumentFromEditor(dto, state);
+    const tool = saved.nodes!.find((item) => item.id === timeline.id)!;
+    expect(tool.node_action).toBe("tool");
+    expect(tool.config?.timeline?.aspect_ratio).toBe("auto");
+    const reopened = serviceGraph(saved, canvas, project);
+    const editable = reopened.nodes.find((item) => item.id === timeline.id)!;
+    editable.serviceData!.config!.timeline!.aspect_ratio = "2.35:1";
+    const modified = serviceDocumentFromEditor(saved, reopened);
+    expect(
+      modified.nodes!.find((item) => item.id === timeline.id)?.config?.timeline
+        ?.aspect_ratio,
+    ).toBe("2.35:1");
+    expect(modified.nodes![0]).toEqual(dto.nodes![0]);
+  });
   it("roundtrips without changing protected state or bigint revision", () => {
     const dto = document();
     expect(
@@ -209,4 +316,36 @@ describe("Yjs editor projection boundary", () => {
     };
     expect(() => richTextConfig(text)).toThrow();
   });
+});
+
+it("preserves typed stack/background, nested membership and group metadata through authoritative reopen", () => {
+  const dto = document();
+  const state = serviceGraph(dto, canvas, project);
+  const group = createCanvasNode("group", { x: 0, y: 0 });
+  group.serviceData = {
+    config: { container: { version: 1, kind: "stack", background: "purple" } },
+  };
+  group.metadata = { colorTags: ["cyan"] };
+  state.nodes.push(group);
+  state.nodes[0].metadata = { ...state.nodes[0].metadata, groupId: group.id };
+  const saved = serviceDocumentFromEditor(dto, state);
+  const actual = saved.nodes!.find((n) => n.id === group.id)!;
+  expect(actual.config?.container).toEqual({
+    version: 1,
+    kind: "stack",
+    background: "purple",
+  });
+  expect(actual.config?.editor?.metadata?.colorTags).toEqual(["cyan"]);
+  expect(saved.nodes![0].parent_id).toBe(group.id);
+  const reopened = serviceGraph(saved, canvas, project);
+  const next = reopened.nodes.find((n) => n.id === group.id)!;
+  next.serviceData!.config!.container!.background = "orange";
+  const changed = serviceDocumentFromEditor(saved, reopened);
+  expect(
+    changed.nodes!.find((n) => n.id === group.id)!.config!.container!
+      .background,
+  ).toBe("orange");
+  expect(
+    serviceDocumentFromEditor(changed, serviceGraph(changed, canvas, project)),
+  ).toEqual(changed);
 });

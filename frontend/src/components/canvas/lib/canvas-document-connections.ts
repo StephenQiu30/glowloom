@@ -1,3 +1,8 @@
+import {
+  kitKind,
+  readCinemaKit,
+  cinemaSupports,
+} from "../cinema-kit/cinema-kit-model";
 import { toCanvasGraph } from "./canvas-document-adapter";
 import { canvasConnectionKey as connectionKey } from "./canvas-connection-key";
 import type { CanvasEditorState } from "./canvas-document-adapter";
@@ -40,8 +45,31 @@ export function connectCanvasDocumentSources(
   }, state);
 }
 
-/** 草稿引用能力来自图协议，不由当前模型或执行通道缩窄。 */
-export function supportsCanvasConnection(source: string, target: string) {
+// Authoring policy is narrower than the wire schema: historical draft edges
+// remain readable, while new gestures follow the canvas target capabilities.
+const targetSourceLimits: Record<string, number> = {
+  text: 128,
+  image: 999,
+  video: 999,
+  audio: 7,
+};
+
+/** Canvas authoring capability; model-specific limits still require execution preflight. */
+export function supportsCanvasConnection(
+  source: string,
+  target: string,
+  sourceNode?: CanvasNodeData,
+) {
+  if (
+    (source === "text" && target === "audio") ||
+    (["video", "audio"].includes(source) && target === "image")
+  )
+    return false;
+  if (source === "cinema_studio" && sourceNode)
+    return cinemaSupports(
+      kitKind(readCinemaKit(sourceNode.serviceData?.config?.cinema_kit)),
+      target,
+    );
   return canvasPortsFor(source, target).length > 0;
 }
 
@@ -89,8 +117,8 @@ export function connectCanvasDocument(
   );
   const graph = toCanvasGraph({
     ...state,
-    nodes: state.nodes.filter(
-      (node) => !["timeline", "director"].includes(node.type),
+    nodes: state.nodes.filter((n) =>
+      ["text", "image", "video", "audio", "config", "group"].includes(n.type),
     ),
     connections: state.connections.filter(
       (edge) => edge.documentData || !edge.serviceData,
@@ -100,7 +128,7 @@ export function connectCanvasDocument(
   graph.nodes = state.nodes.map((n) => {
     const base = projected.get(n.id);
     if (base) return base;
-    if (!["timeline", "director"].includes(n.type))
+    if (!["subject", "cinema_studio", "timeline", "director"].includes(n.type))
       throw new Error("节点类型不支持连接");
     return {
       ...n.documentData,
@@ -120,8 +148,35 @@ export function connectCanvasDocument(
   const target = graph.nodes.find((node) => node.id === toNodeId);
   if (!source || !target) throw new Error("连接的节点已不存在");
   if (fromNodeId === toNodeId) throw new Error("不能连接节点自身");
-  const input = canvasPortsFor(source.type, target.type)[0];
+  const sourceNode = state.nodes.find((n) => n.id === fromNodeId)!;
+  if (
+    canvasPortsFor(source.type, target.type).length > 0 &&
+    !supportsCanvasConnection(source.type, target.type, sourceNode)
+  )
+    throw new Error("无法连接这些节点");
+  const sources = new Set(
+    state.connections
+      .filter((edge) => edge.toNodeId === toNodeId)
+      .map((edge) => edge.fromNodeId),
+  );
+  sources.add(fromNodeId);
+  const limit = targetSourceLimits[target.type];
+  if (limit !== undefined && sources.size > limit)
+    throw new Error("引用数量已达上限，请先移除不需要的连接");
+  const sourceKind =
+    source.type === "cinema_studio"
+      ? kitKind(readCinemaKit(sourceNode.serviceData?.config?.cinema_kit))
+      : undefined;
+  const input = canvasPortsFor(source.type, target.type).find(
+    (p) => !sourceKind || p.id === sourceKind,
+  );
   if (!input) throw new Error("这两种节点之间没有可用的输入用途");
+  if (
+    sourceKind &&
+    state.nodes.find((n) => n.id === toNodeId)?.serviceData?.config
+      ?.cinema_kit?.[sourceKind] !== undefined
+  )
+    throw new Error("目标已有同类设置，请先清除后连接");
   if (target.parameters?.mode === "AGENT" && input.id !== "prompt")
     throw new Error("当前 Agent（Mock）支持连接文字资料");
   const { id: toPortId, purpose } = input;
@@ -129,6 +184,8 @@ export function connectCanvasDocument(
     source.fileReferences?.filter((ref) => ref.purpose === "CONTENT") ?? [];
   const manualValue =
     source.type === "config" ||
+    source.type === "cinema_studio" ||
+    source.type === "subject" ||
     (source.type === "text" && source.parameters?.mode === "MANUAL");
   const bindings: CanvasContract.CanvasBindingDTO[] = manualValue
     ? [{ kind: "NODE_VALUE" }]
@@ -151,7 +208,8 @@ export function connectCanvasDocument(
       id: crypto.randomUUID(),
       fromNodeId,
       toNodeId,
-      fromPortId: source.type === "config" ? "settings" : source.type,
+      fromPortId:
+        sourceKind ?? (source.type === "config" ? "settings" : source.type),
       toPortId,
       purpose,
       binding,

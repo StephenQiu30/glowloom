@@ -1,0 +1,30 @@
+Browser tab: 1980371314, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+~									73 pop up button (expanded) Description: 使用技能, Secondary Actions: Collapse
++		103 container Description: Select a skill, ID: radix-:modern-js-rao:
++			104 text field (settable) 搜索技能
++			105 content list Select a skill
++				106 checkbox Description: 视频反解, Value: 0
++					107 text 视频反解
++					108 text 拆解参考视频的镜头与光影，生成可用于复刻和再创作的视频 Prompt
++				109 checkbox Description: 创作分镜, Value: 0
++					110 text 创作分镜
++					111 text 为你生成创意转电影级分镜Prompt，内置运镜词典与导演风格库
++				112 checkbox Description: 全流程广告片导演, Value: 0
++					113 text 全流程广告片导演
++					114 text 输入广告需求或 Brief，自动生成从创意到配乐的完整广告片
++				115 checkbox Description: 剧情短片, Value: 0
++					116 text 剧情短片
++					117 text 视频创作标准工作流程，想法创意-剧本-素材-分镜-生成视频全链路
++				118 checkbox Description: 电商套图, Value: 0
++					119 text 电商套图
++					120 text 生成风格统一的商品全套视觉素材，适用于各大电商平台
++				121 checkbox Description: 海报设计, Value: 0
++					122 text 海报设计
++					123 text 生成更有创意的海报内容，擅长营销场景和节日热点
++				124 checkbox Description: 品牌设计, Value: 0
++					125 text 品牌设计
++					126 text 根据公司名称、业务与客群，生成品牌 Logo 与视觉方案
++			127 pop up button (collapsed) 新建技能, ID: radix-:modern-js-rd1:, Secondary Actions: Expand
++			128 button 管理技能
+The focused UI element is 104 text field (settable) 搜索技能

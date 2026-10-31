@@ -1,0 +1,16 @@
+.canvas-information-surface {
+  --popover: var(--canvas-text-editor);
+  --popover-foreground: var(--canvas-reference-foreground);
+  --foreground: var(--canvas-reference-foreground);
+  --muted: var(--canvas-reference-text-start);
+  --muted-foreground: color-mix(
+    in srgb,
+    var(--canvas-reference-foreground) 48%,
+    transparent
+  );
+  --border: color-mix(
+    in srgb,
+    var(--canvas-reference-foreground) 10%,
+    transparent
+  );
+}

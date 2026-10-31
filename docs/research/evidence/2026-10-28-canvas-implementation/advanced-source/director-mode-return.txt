@@ -1,0 +1,28 @@
+Browser tab: 1980371314, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+0 AXWebArea 一致性调研-202610221 - 即梦AI, URL: jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage
+	1 container
+		2 container
+			3 container Canvas top bar
+				4 text 已保存
+			5 container Canvas workspace
+				6 container
+					7 container
+						8 container Canvas editing area
+							9 container
+								10 container Canvas
+					11 container Canvas left toolbar
+						12 toolbar Canvas toolbar
+					13 container Canvas viewport controls
+		14 container 导演台, ID: radix-:modern-js-r5q:
+		15 container 将当前动态预演帧用于静态预演？, ID: radix-:modern-js-r9p:
+			16 heading 将当前动态预演帧用于静态预演？, Value: 2, ID: radix-:modern-js-r9q:
+				17 text 将当前动态预演帧用于静态预演？
+			18 text 用当前帧的场景、角色姿势和机位覆盖静态预演场景，不复制动作片段和关键帧。
+			19 container
+				20 checkbox (settable, integer) Description: 确认覆盖静态预演场景, Value: 0
+				21 text 确认覆盖静态预演场景
+			22 button 不同步，直接切换
+			23 button (disabled) 覆盖并切换
+			24 button 关闭
+
+The focused UI element is 22 button 不同步，直接切换

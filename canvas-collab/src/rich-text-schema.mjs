@@ -1,6 +1,7 @@
 import { getSchema, Node } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Mention from "@tiptap/extension-mention";
+import TextAlign from "@tiptap/extension-text-align";
 
 const mention = Mention.extend({
   addAttributes() {
@@ -9,17 +10,28 @@ const mention = Mention.extend({
 });
 // Glowloom stores reference identity separately from transient preview URLs and labels.
 const reference = Node.create({
-  name: "reference", group: "inline", inline: true, atom: true,
+  name: "reference",
+  group: "inline",
+  inline: true,
+  atom: true,
   addAttributes: () => ({ referenceId: { default: null } }),
-  renderHTML: ({ node }) => ["span", { "data-reference-id": node.attrs.referenceId }],
+  renderHTML: ({ node }) => [
+    "span",
+    { "data-reference-id": node.attrs.referenceId },
+  ],
 });
 export const richTextSchema = getSchema([
   StarterKit.configure({ undoRedo: false }),
+  TextAlign.configure({
+    types: ["paragraph", "heading"],
+    alignments: ["left", "center", "right"],
+  }),
   mention,
   reference,
 ]);
 const attrs = {
-  heading: ["level"],
+  paragraph: ["textAlign"],
+  heading: ["level", "textAlign"],
   orderedList: ["start"],
   codeBlock: ["language"],
   mention: ["id", "label", "token"],
@@ -33,11 +45,27 @@ export function persistentRichText(value) {
   const walk = (item, depth = 0) => {
     if (depth > 32 || !item || typeof item !== "object")
       throw new Error("INVALID_RICH_TEXT");
-    if (item.type === "reference" && (typeof item.attrs?.referenceId !== "string" || !item.attrs.referenceId.length || item.attrs.referenceId.length > 128))
+    if (
+      item.type === "reference" &&
+      (typeof item.attrs?.referenceId !== "string" ||
+        !item.attrs.referenceId.length ||
+        item.attrs.referenceId.length > 128)
+    )
       throw new Error("INVALID_REFERENCE_IDENTITY");
     if (item.attrs) {
       if (item.type === "mention") delete item.attrs.mentionSuggestionChar;
       for (const field of Object.keys(item.attrs)) {
+        if (
+          field === "textAlign" &&
+          ["paragraph", "heading"].includes(item.type)
+        ) {
+          // Tiptap adds a null default. Omit it so opening legacy documents
+          // cannot alter their persisted representation or accepted graph hash.
+          if (item.attrs.textAlign === null) delete item.attrs.textAlign;
+          else if (!["left", "center", "right"].includes(item.attrs.textAlign))
+            throw new Error("INVALID_TEXT_ALIGNMENT");
+          continue;
+        }
         if (
           (item.type === "orderedList" && field === "type") ||
           (item.type === "link" && field === "title")
@@ -48,6 +76,7 @@ export function persistentRichText(value) {
         } else if (!(attrs[item.type] ?? []).includes(field))
           throw new Error("UNREGISTERED_TEXT_ATTRIBUTE");
       }
+      if (!Object.keys(item.attrs).length) delete item.attrs;
     }
     if (item.content) item.content.forEach((child) => walk(child, depth + 1));
     if (item.marks) item.marks.forEach((mark) => walk(mark, depth + 1));

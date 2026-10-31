@@ -1,0 +1,79 @@
+Browser tab: 1980371324, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+0 AXWebArea 一致性调研-202610221 - 即梦AI, URL: jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage
+	1 container
+		2 container
+			3 container Canvas top bar
+				4 text 已保存
+			5 container Canvas workspace
+				6 container
+					7 container
+						8 container Canvas editing area
+							9 container
+								10 container Canvas
+					11 container Canvas left toolbar
+						12 toolbar Canvas toolbar
+					13 container Canvas viewport controls
+		14 container 时间线, ID: radix-:modern-js-r56:
+			37 heading 时间线, Value: 2, ID: radix-:modern-js-r57:
+				38 text 时间线
+			39 text Edit the main visual track and multiple audio tracks
+			40 pop up button (disabled, collapsed) Description: 导出, Secondary Actions: Expand
+			41 text 当前时间线暂不支持此操作
+			42 pop up button (disabled, collapsed) Description: 更多导出方式, ID: radix-:modern-js-r5d:, Secondary Actions: Expand
+			43 button Close timeline editor
+			44 container 画布资产
+				45 container
+					46 tab group 已导入资产
+						47 tab (selectable, settable, boolean) 已导入资产, Value: 0
+						48 tab (selected, settable, boolean) 画布资产, Value: 1
+					49 tab group 画布资产
+						50 tab (selected, settable, boolean) 全部, Value: 1
+						51 tab (selectable, settable, boolean) 图片, Value: 0
+						52 tab (selectable, settable, boolean) 视频, Value: 0
+						53 tab (selectable, settable, boolean) 音频, Value: 0
+					54 text 没有可添加的画布资源。
+					55 splitter Description: Resize canvas assets panel, Value: 360
+					56 button 隐藏资产库
+					57 container Timeline media addition results
+			36 container Edit the main visual track and multiple audio tracks
+				58 container
+					59 text 没有媒体可供预览
+				60 container
+					61 text Timeline playhead
+					62 button (disabled) Play timeline preview
+					63 text 00:00:00 / 00:00:00
+					64 pop up button (collapsed) Description: 画面比例, ID: radix-:modern-js-r67:, Secondary Actions: Expand
+					65 container
+						66 text Timeline preview volume
+						67 checkbox Description: 开启原声, Value: 0
+						68 slider Timeline preview volume, Value: 1
+					69 button Play video in full screen
+			70 container Edit the main visual track and multiple audio tracks
+				71 splitter Description: Resize timeline editor height, Value: 218
+				72 toolbar Timeline editing tools
+					73 button (disabled) 撤销
+					74 button (disabled) 重做
+					75 container
+						76 button (disabled) 分割
+						77 text 将播放头移动到目标片段内进行剪切。
+					78 container
+						79 button (disabled) 向左剪裁
+						80 text 将播放头移动到目标片段内进行剪切。
+					81 container
+						82 button (disabled) 向右剪裁
+						83 text 将播放头移动到目标片段内进行剪切。
+					84 button (disabled) 删除
+				85 container Timeline playback controls
+					86 checkbox Description: 关闭自动吸附, Value: 1
+					87 button 缩小视图
+					88 slider Description: Timeline zoom, Value: 21.399999618530273
+					89 button 放大视图
+				90 container
+					91 container Main visual track
+						92 checkbox Description: 静音, Value: 0
+						93 pop up button (collapsed) Description: 添加素材到时间线, ID: radix-:modern-js-r7e:, Secondary Actions: Expand
+					94 slider (disabled) Description: Timeline playhead, Value: 0
+			95 container Canvas notifications
+			96 container Canvas notifications
+
+The focused UI element is 48 tab (selected, settable, boolean) 画布资产, Value: 1

@@ -9,9 +9,37 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
+
+// VolcengineVisualDriver implements the communication strategy for Volcengine Visual OpenAPI
+// (JiMeng Avatar and Motion Imitation).
+type VolcengineVisualDriver struct{}
+
+func init() {
+	RegisterDriver(&VolcengineVisualDriver{}, "volcengine_avatar", "volcengine_motion")
+}
+
+func (d *VolcengineVisualDriver) Submit(ctx context.Context, c *Client, input application.GenerationRequest, key string) (application.GenerationResult, error) {
+	return c.submitVisual(ctx, input, key)
+}
+
+func (d *VolcengineVisualDriver) Query(ctx context.Context, c *Client, config catalog.ProviderConfig, taskID, key string) (application.GenerationResult, error) {
+	return c.queryVisual(ctx, config, taskID, key)
+}
+
+func (d *VolcengineVisualDriver) Probe(ctx context.Context, c *Client, config catalog.ProviderConfig, key string) ProbeResult {
+	if config.Validate() != nil {
+		return ProbeResult{Auth: "unknown", Adapter: "unsupported", Discovery: "unsupported", Candidates: []catalogapp.ModelCandidate{}}
+	}
+	return ProbeResult{Auth: "unknown", Adapter: "ok", Discovery: "unsupported", Candidates: []catalogapp.ModelCandidate{}}
+}
+
+func (d *VolcengineVisualDriver) ProbeModelDefaultParams(capability string) map[string]any {
+	return nil
+}
 
 const avatarModel = "jimeng_realman_avatar_picture_omni_v15"
 const motionModel = "jimeng_dreamactor_m20_gen_video"
@@ -183,13 +211,4 @@ func submitHTTPFailure(status int) application.GenerationResult {
 		result.Outcome = "rejected"
 	}
 	return result
-}
-
-func integerParam(value any) (int64, bool) {
-	b, err := json.Marshal(value)
-	var n int64
-	if err != nil || json.Unmarshal(b, &n) != nil {
-		return 0, false
-	}
-	return n, true
 }

@@ -1,0 +1,78 @@
+Browser tab: 1980371390, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+0 AXWebArea 一致性调研-202610221 - 即梦AI, URL: jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage
+	1 container
+		2 container
+			3 container Canvas top bar
+				4 text 已保存
+			5 container Canvas workspace
+				6 container
+					7 container
+						8 container Canvas editing area
+							9 container
+								10 container Canvas
+					11 container Canvas left toolbar
+						12 toolbar Canvas toolbar
+					13 container Canvas viewport controls
+		14 container 配色, ID: radix-:modern-js-rb1:
+			15 heading 配色, Value: 2, ID: radix-:modern-js-rb2:
+				16 text 配色
+			17 button 关闭
+			20 container
+				21 pop up button (collapsed) Description: 创建配色, ID: radix-:modern-js-rba:, Secondary Actions: Expand
+				22 checkbox Description: 日系清新色调, Value: 0
+				23 pop up button (collapsed) Description: Palette actions 日系清新色调, ID: radix-:modern-js-rbf:, Secondary Actions: Expand
+				24 checkbox Description: 雾蓝米白色调, Value: 0
+				25 pop up button (collapsed) Description: Palette actions 雾蓝米白色调, ID: radix-:modern-js-rbk:, Secondary Actions: Expand
+				26 checkbox Description: 复古糖果色调, Value: 0
+				27 pop up button (collapsed) Description: Palette actions 复古糖果色调, ID: radix-:modern-js-rbp:, Secondary Actions: Expand
+				28 checkbox Description: 暖黄灰褐色调, Value: 0
+				29 pop up button (collapsed) Description: Palette actions 暖黄灰褐色调, ID: radix-:modern-js-rbu:, Secondary Actions: Expand
+				30 checkbox Description: 冷青琥珀色调, Value: 0
+				31 pop up button (collapsed) Description: Palette actions 冷青琥珀色调, ID: radix-:modern-js-rc3:, Secondary Actions: Expand
+				32 checkbox Description: 南法假日色调, Value: 0
+				33 pop up button (collapsed) Description: Palette actions 南法假日色调, ID: radix-:modern-js-rc8:, Secondary Actions: Expand
+				34 checkbox Description: 沙漠史诗色调, Value: 0
+				35 pop up button (collapsed) Description: Palette actions 沙漠史诗色调, ID: radix-:modern-js-rcd:, Secondary Actions: Expand
+				36 checkbox Description: 复古好莱坞色调, Value: 0
+				37 pop up button (collapsed) Description: Palette actions 复古好莱坞色调, ID: radix-:modern-js-rci:, Secondary Actions: Expand
+				38 checkbox Description: 幻彩史诗色调, Value: 0
+				39 pop up button (collapsed) Description: Palette actions 幻彩史诗色调, ID: radix-:modern-js-rcn:, Secondary Actions: Expand
+				40 checkbox Description: 过期暖黄色调, Value: 0
+				41 pop up button (collapsed) Description: Palette actions 过期暖黄色调, ID: radix-:modern-js-rcs:, Secondary Actions: Expand
+				42 checkbox Description: 琥珀棕褐色调, Value: 0
+				43 pop up button (collapsed) Description: Palette actions 琥珀棕褐色调, ID: radix-:modern-js-rd1:, Secondary Actions: Expand
+				44 checkbox Description: 法式红绿色调, Value: 0
+				45 pop up button (collapsed) Description: Palette actions 法式红绿色调, ID: radix-:modern-js-rd6:, Secondary Actions: Expand
+				46 checkbox Description: 墨绿暖黄色调, Value: 0
+				47 pop up button (collapsed) Description: Palette actions 墨绿暖黄色调, ID: radix-:modern-js-rdb:, Secondary Actions: Expand
+				48 checkbox Description: 灰绿砖红色调, Value: 0
+				49 pop up button (collapsed) Description: Palette actions 灰绿砖红色调, ID: radix-:modern-js-rdg:, Secondary Actions: Expand
+				50 checkbox Description: 韩系冷青色调, Value: 0
+				51 pop up button (collapsed) Description: Palette actions 韩系冷青色调, ID: radix-:modern-js-rdl:, Secondary Actions: Expand
+				52 checkbox Description: 赛博冷绿色调, Value: 0
+				53 pop up button (collapsed) Description: Palette actions 赛博冷绿色调, ID: radix-:modern-js-rdq:, Secondary Actions: Expand
+				54 checkbox Description: 灰蓝海岸色调, Value: 0
+				55 pop up button (collapsed) Description: Palette actions 灰蓝海岸色调, ID: radix-:modern-js-rdv:, Secondary Actions: Expand
+				56 checkbox Description: 米黄天蓝色调, Value: 0
+				57 pop up button (collapsed) Description: Palette actions 米黄天蓝色调, ID: radix-:modern-js-re4:, Secondary Actions: Expand
+				58 checkbox Description: 青橙色调, Value: 0
+				59 pop up button (collapsed) Description: Palette actions 青橙色调, ID: radix-:modern-js-re9:, Secondary Actions: Expand
+				60 checkbox Description: 港片霓虹色调, Value: 0
+				61 pop up button (collapsed) Description: Palette actions 港片霓虹色调, ID: radix-:modern-js-ree:, Secondary Actions: Expand
+				62 checkbox Description: 孔雀蓝色调, Value: 0
+				63 pop up button (collapsed) Description: Palette actions 孔雀蓝色调, ID: radix-:modern-js-rej:, Secondary Actions: Expand
+				64 checkbox Description: 单色蓝色调, Value: 0
+				65 pop up button (collapsed) Description: Palette actions 单色蓝色调, ID: radix-:modern-js-reo:, Secondary Actions: Expand
+				66 checkbox Description: 暗黑冷色调, Value: 0
+				67 pop up button (collapsed) Description: Palette actions 暗黑冷色调, ID: radix-:modern-js-ret:, Secondary Actions: Expand
+				68 checkbox Description: 单色红色调, Value: 0
+				69 pop up button (collapsed) Description: Palette actions 单色红色调, ID: radix-:modern-js-rf2:, Secondary Actions: Expand
+				70 checkbox Description: 绛红紫灰色调, Value: 0
+				71 pop up button (collapsed) Description: Palette actions 绛红紫灰色调, ID: radix-:modern-js-rf7:, Secondary Actions: Expand
+				72 checkbox Description: 都市暮色蓝调, Value: 0
+				73 pop up button (collapsed) Description: Palette actions 都市暮色蓝调, ID: radix-:modern-js-rfc:, Secondary Actions: Expand
+				74 checkbox Description: 黑白纪实色调, Value: 0
+				75 pop up button (collapsed) Description: Palette actions 黑白纪实色调, ID: radix-:modern-js-rfh:, Secondary Actions: Expand
+			19 button (disabled) 确认
+
+The focused UI element is 17 button 关闭

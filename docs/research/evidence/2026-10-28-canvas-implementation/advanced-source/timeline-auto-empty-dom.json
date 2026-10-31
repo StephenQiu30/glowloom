@@ -1,0 +1,64 @@
+[
+  [
+    {
+      "aspectRatio": "auto",
+      "class": "",
+      "rect": {
+        "h": 20,
+        "w": 104,
+        "x": 888,
+        "y": 267
+      },
+      "role": null,
+      "tag": "SPAN"
+    },
+    {
+      "aspectRatio": "auto",
+      "class": "absolute inset-0 flex items-center justify-center pointer-events-none font-dreamina-cn text-dreamina-cn-13 font-dreamina-regular text-dreamina-text-placeholder",
+      "rect": {
+        "h": 426,
+        "w": 757.328125,
+        "x": 561.3359375,
+        "y": 64
+      },
+      "role": null,
+      "tag": "OUTPUT"
+    },
+    {
+      "aspectRatio": "auto",
+      "class": "relative flex-none w-full h-full overflow-hidden rounded-canvas-timeline-preview",
+      "rect": {
+        "h": 426,
+        "w": 757.328125,
+        "x": 561.3359375,
+        "y": 64
+      },
+      "role": null,
+      "tag": "DIV"
+    },
+    {
+      "aspectRatio": "auto",
+      "class": "relative [flex:1_1_0] min-h-canvas-timeline-zero m-canvas-timeline-track-inset mb-canvas-timeline-zero overflow-hidden bg-dreamina-bg-surface flex items-center justify-center",
+      "rect": {
+        "h": 426,
+        "w": 1112,
+        "x": 384,
+        "y": 64
+      },
+      "role": null,
+      "tag": "DIV"
+    },
+    {
+      "aspectRatio": "auto",
+      "class": "relative flex flex-1 min-w-canvas-timeline-zero flex-col overflow-hidden bg-dreamina-bg-surface rounded-canvas-timeline-workspace",
+      "rect": {
+        "h": 474,
+        "w": 1120,
+        "x": 380,
+        "y": 60
+      },
+      "role": null,
+      "tag": "SECTION"
+    }
+  ]
+]

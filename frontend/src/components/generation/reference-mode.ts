@@ -22,7 +22,7 @@ export function referenceMode(
   for (const ref of draft.references) {
     const sources = inputs.get(ref.role) ?? new Set<string>();
     const media =
-      ref.source.kind === "subject"
+      ref.source.kind === "subject" || ref.source.kind === "canvas_subject"
         ? ref.source.media
         : ref.source.kind === "media"
           ? [ref.source]

@@ -58,6 +58,8 @@ export type CanvasNodeMetadata = {
   status?: CanvasNodeStatus;
   errorDetails?: string;
   fontSize?: number;
+  textBackground?: "default" | "cyan" | "blue" | "purple" | "orange" | "yellow";
+  colorTags?: ("cyan" | "blue" | "purple" | "orange" | "yellow")[];
   generationMode?: CanvasGenerationMode;
   generationType?: CanvasImageGenerationType;
   model?: string;
@@ -162,6 +164,7 @@ export type SelectionBox = {
 };
 
 export type ContextMenuState =
+  | { type: "canvas"; x: number; y: number }
   | {
       type: "node";
       x: number;

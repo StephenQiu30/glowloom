@@ -23,7 +23,10 @@ import {
 } from "@/components/canvas/lib/node-registry";
 import {
   Sparkles,
-  Contact,
+  Camera,
+  Palette,
+  Clapperboard,
+  MoveRight,
   Folder,
   Eraser,
   Keyboard,
@@ -49,6 +52,7 @@ export function CanvasToolbar({
   onRedo,
   onUpload,
   onBrowseAssets,
+  onOpenAssistant,
   onDelete,
   onClear,
   onBackgroundModeChange,
@@ -68,6 +72,7 @@ export function CanvasToolbar({
   onRedo: () => void;
   onUpload: () => void;
   onBrowseAssets: () => void;
+  onOpenAssistant?: () => void;
   onDelete: () => void;
   onClear: () => void;
   onCanvasToolChange: (tool: "select" | "pan") => void;
@@ -191,7 +196,7 @@ export function CanvasToolbar({
                       "video",
                       "audio",
                       "timeline",
-                      "director",
+                      "subject",
                     ].includes(item.type),
                 )
                 .map((definition) => (
@@ -241,6 +246,7 @@ export function CanvasToolbar({
                 "video",
                 "audio",
                 "timeline",
+                "subject",
                 "director",
               ].includes(item.type),
             )
@@ -252,6 +258,7 @@ export function CanvasToolbar({
                   "video",
                   "audio",
                   "timeline",
+                  "subject",
                   "director",
                 ].indexOf(a.type) -
                 [
@@ -260,42 +267,87 @@ export function CanvasToolbar({
                   "video",
                   "audio",
                   "timeline",
+                  "subject",
                   "director",
                 ].indexOf(b.type),
             )
-            .map((definition) => (
-              <Tooltip key={definition.type}>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-lg"
-                    aria-label={`添加${definition.title}节点`}
-                    disabled={!canEdit}
-                    onClick={() => onCreateNode(definition.type)}
-                  >
-                    {definition.icon}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right">{definition.title}</TooltipContent>
-              </Tooltip>
-            ))}
-          {[{ label: "主体", icon: Contact }].map(({ label, icon: Icon }) => (
-            <Tooltip key={label}>
-              <TooltipTrigger asChild>
-                <span tabIndex={0} aria-label={`${label}暂不可用`}>
-                  <Button
-                    variant="ghost"
-                    size="icon-lg"
-                    disabled
-                    aria-label={label}
-                  >
-                    <Icon data-icon="inline-start" />
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="right">{label}暂不可用</TooltipContent>
-            </Tooltip>
-          ))}
+            .map((definition) =>
+              definition.type === "director" ? (
+                <div key={definition.type} className="flex flex-col">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-lg"
+                        aria-label="导演工具箱"
+                        disabled={!canEdit}
+                      >
+                        <Clapperboard />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      side="right"
+                      align="center"
+                      className="w-44 p-1"
+                      data-canvas-no-zoom
+                      data-canvas-shortcuts-ignore
+                    >
+                      {(
+                        [
+                          { kind: "camera", label: "相机", Icon: Camera },
+                          { kind: "palette", label: "配色", Icon: Palette },
+                          { kind: "style", label: "风格", Icon: Clapperboard },
+                          { kind: "motion", label: "运镜", Icon: MoveRight },
+                        ] as const
+                      ).map(({ kind, label, Icon }) => (
+                        <Button
+                          key={kind}
+                          variant="ghost"
+                          className="w-full justify-start"
+                          onClick={() => onCreateNode(`cinema_studio:${kind}`)}
+                        >
+                          <Icon />
+                          {label}
+                        </Button>
+                      ))}
+                    </PopoverContent>
+                  </Popover>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-lg"
+                        aria-label={`添加${definition.title}节点`}
+                        disabled={!canEdit}
+                        onClick={() => onCreateNode(definition.type)}
+                      >
+                        {definition.icon}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                      {definition.title}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              ) : (
+                <Tooltip key={definition.type}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-lg"
+                      aria-label={`添加${definition.title}节点`}
+                      disabled={!canEdit}
+                      onClick={() => onCreateNode(definition.type)}
+                    >
+                      {definition.icon}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    {definition.title}
+                  </TooltipContent>
+                </Tooltip>
+              ),
+            )}
           <Separator className="my-1 max-w-8" />
           <Tooltip>
             <TooltipTrigger asChild>
@@ -332,12 +384,16 @@ export function CanvasToolbar({
         <div className="canvas-assistant-action">
           <Tooltip>
             <TooltipTrigger asChild>
-              <span tabIndex={0} aria-label="AI 对话暂不可用">
+              <span
+                tabIndex={onOpenAssistant ? undefined : 0}
+                aria-label={onOpenAssistant ? undefined : "AI 对话暂不可用"}
+              >
                 <Button
                   variant="secondary"
                   size="sm"
                   aria-label="与 AI 对话"
-                  disabled
+                  onClick={onOpenAssistant}
+                  disabled={!onOpenAssistant}
                   className="rounded-full"
                 >
                   <Sparkles data-icon="inline-start" />
@@ -345,7 +401,9 @@ export function CanvasToolbar({
                 </Button>
               </span>
             </TooltipTrigger>
-            <TooltipContent side="top">AI 对话暂不可用</TooltipContent>
+            <TooltipContent side="top">
+              {onOpenAssistant ? "与 AI 对话" : "AI 对话暂不可用"}
+            </TooltipContent>
           </Tooltip>
         </div>
       </footer>

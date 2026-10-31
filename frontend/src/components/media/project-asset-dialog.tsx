@@ -1,15 +1,23 @@
 "use client";
+import { useOptionalSession } from "@/components/auth/session";
+import { useSpace } from "@/components/spaces/space-context";
+import { getSubjectVersion } from "@/api/subjects";
+import { requireCanvasSubjectVersion } from "@/components/canvas/lib/canvas-subject-source";
+import type { UnifiedSubject } from "@/components/subjects/unified-contracts";
+import {
+  ProjectPickerSubjects,
+  ProjectPickerCanvases,
+} from "./project-picker-sources";
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
 
 import { useEffect, useRef, useState } from "react";
 import {
-  CalendarDays,
-  ListFilter,
   AudioLines,
   Box,
   Check,
   FolderOpen,
+  FileText,
   ImageIcon,
   Search,
   Upload,
@@ -24,11 +32,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
@@ -46,43 +49,48 @@ import {
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import { getMediaPreview, listMediaAssets } from "@/api/media";
+import { getMediaPreview, listMediaLibrary } from "@/api/media";
 import { ProjectMediaPreview } from "@/components/media/project-media";
 import { UploadDialog } from "@/components/media/upload-dialog";
 import { SubjectList } from "@/components/subjects/subject-list";
 import { subjectText, type Subject } from "@/components/subjects/contracts";
-import {
-  getScopeGeneration,
-  getSessionGeneration,
-  RequestError,
-} from "@/lib/request";
+import { getScopeGeneration, getSessionGeneration } from "@/lib/request";
 import "./project-asset-dialog.css";
-import { isProjectID } from "@/components/projects/project";
+import {
+  defaultProjectPickerFilter,
+  projectPickerFilterForKind,
+  projectPickerQuery,
+  requireProjectPickerPage,
+  type ProjectPickerFilter,
+} from "./project-picker";
+import { ProjectPickerFilters } from "./project-picker-filters";
 
 const mediaKinds = [
   { value: "image", label: "图片", icon: ImageIcon },
   { value: "video", label: "视频", icon: VideoIcon },
   { value: "audio", label: "音频", icon: AudioLines },
   { value: "model", label: "3D", icon: Box },
+  { value: "document", label: "文档", icon: FileText },
 ];
 
 export function ProjectAssetDialog({
   projectID,
-  dialogTitle,
   initialTab = "assets",
   initialKind = "image",
   onClose,
   onAdd,
   onSubject,
+  onUnifiedSubject,
+  browseSources = false,
   reference = false,
   allowedKinds,
   selectionLimit,
   confirmLabel,
   canvasPresentation = false,
   initialUpload = false,
+  dialogTitle,
 }: {
   projectID: string;
-  dialogTitle?: string;
   initialTab?: "assets" | "subjects";
   initialKind?: string;
   onClose: () => void;
@@ -93,16 +101,27 @@ export function ProjectAssetDialog({
   confirmLabel?: string;
   canvasPresentation?: boolean;
   initialUpload?: boolean;
+  dialogTitle?: string;
   onSubject?: (subject: Subject) => void;
+  onUnifiedSubject?: (subject: UnifiedSubject) => void | Promise<void>;
+  browseSources?: boolean;
 }) {
+  const sessionIdentity = useOptionalSession();
+  const space = useSpace();
+  const [unifiedSubject, setUnifiedSubject] = useState<UnifiedSubject | null>(
+    null,
+  );
   const limit = reference ? 1 : (selectionLimit ?? 24);
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState(defaultProjectPickerFilter);
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState("");
   const confirmLock = useRef(false);
   const confirmRequest = useRef<AbortController | null>(null);
-  useEffect(() => () => confirmRequest.current?.abort(), []);
-  const [tab, setTab] = useState(initialTab);
+  useEffect(() => () => confirmRequest.current?.abort(), [projectID]);
+  const [tab, setTab] = useState<"assets" | "subjects" | "canvases">(
+    initialTab,
+  );
   const [kind, setKind] = useState(initialKind);
   const [subjectKind, setSubjectKind] = useState<API.Kind>("character");
   const [selected, setSelected] = useState<API.AssetSummary[]>([]);
@@ -132,11 +151,12 @@ export function ProjectAssetDialog({
           showCloseButton={!confirming}
           className="canvas-material-dialog sm:max-w-[800px]"
           data-canvas-picker={canvasPresentation || undefined}
+          data-canvas-no-zoom
+          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
         >
           <DialogHeader className="sr-only">
-            <DialogTitle>
-              {dialogTitle ?? (reference ? "选择参考素材" : "参考素材")}
-            </DialogTitle>
+            <DialogTitle>{dialogTitle ?? (reference ? "选择参考素材" : "参考素材")}</DialogTitle>
             <DialogDescription>
               从当前项目添加素材，或选择主体开始创作。
             </DialogDescription>
@@ -149,7 +169,12 @@ export function ProjectAssetDialog({
           >
             <TabsList>
               <TabsTrigger value="assets">资产</TabsTrigger>
-              {onSubject && <TabsTrigger value="subjects">主体</TabsTrigger>}
+              {(onSubject || onUnifiedSubject || browseSources) && (
+                <TabsTrigger value="subjects">主体</TabsTrigger>
+              )}
+              {browseSources && (
+                <TabsTrigger value="canvases">画布</TabsTrigger>
+              )}
             </TabsList>
             <TabsContent value="assets" className="flex min-h-0 flex-col gap-4">
               <div className="canvas-material-filters flex flex-col gap-4">
@@ -158,7 +183,12 @@ export function ProjectAssetDialog({
                     type="single"
                     value={kind}
                     onValueChange={(v) => {
-                      if (v) setKind(v);
+                      if (v) {
+                        setKind(v);
+                        setFilter((previous) =>
+                          projectPickerFilterForKind(previous, v),
+                        );
+                      }
                     }}
                     aria-label="素材类型"
                   >
@@ -207,33 +237,30 @@ export function ProjectAssetDialog({
                       </Button>
                     )}
                   </InputGroup>
-                  {[
-                    { icon: CalendarDays, label: "时间筛选" },
-                    { icon: ListFilter, label: "来源筛选" },
-                  ].map(({ icon: Icon, label }) => (
-                    <Popover key={label}>
-                      <PopoverTrigger asChild>
-                        <Button variant="ghost" size="icon" aria-label={label}>
-                          <Icon />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent align="end">
-                        <p className="font-medium">{label}暂不可用</p>
-                        <p className="text-muted-foreground">
-                          素材服务尚未提供对应信息，可先按类型或名称查找。
-                        </p>
-                      </PopoverContent>
-                    </Popover>
-                  ))}
+                  <ProjectPickerFilters
+                    kind={kind}
+                    value={filter}
+                    onChange={setFilter}
+                  />
                 </div>
               </div>
               <MaterialList
-                key={projectID + kind + revision + query}
+                key={JSON.stringify([
+                  sessionIdentity?.actor.id,
+                  space.selected?.id,
+                  projectID,
+                  kind,
+                  revision,
+                  query,
+                  filter,
+                ])}
                 projectID={projectID}
+                actorID={sessionIdentity?.actor.id}
                 kind={kind}
                 selected={selected}
                 onToggle={toggle}
                 query={query}
+                filter={filter}
                 limit={limit}
                 canvasPresentation={canvasPresentation}
                 onSelectPage={(items) =>
@@ -252,29 +279,53 @@ export function ProjectAssetDialog({
               className="min-h-0 overflow-auto"
               data-canvas-wheel-scroll
             >
-              <ToggleGroup
-                type="single"
-                value={subjectKind}
-                onValueChange={(v) => {
-                  if (v) {
-                    setSubjectKind(v as API.Kind);
-                    setSubject(null);
-                  }
-                }}
-                aria-label="主体类型"
-              >
-                <ToggleGroupItem value="character">角色</ToggleGroupItem>
-                <ToggleGroupItem value="scene">场景</ToggleGroupItem>
-                <ToggleGroupItem value="prop">物品</ToggleGroupItem>
-              </ToggleGroup>
-              <SubjectList
-                key={projectID + subjectKind}
-                projectID={projectID}
-                kind={subjectKind}
-                onSelect={setSubject}
-                selectedID={subject?.head.id}
-              />
+              {onUnifiedSubject || browseSources ? (
+                sessionIdentity && space.selected?.id ? (
+                  <ProjectPickerSubjects
+                    key={`${sessionIdentity.actor.id}/${space.selected.id}`}
+                    actorID={sessionIdentity.actor.id}
+                    scopeID={space.selected.id}
+                    selected={unifiedSubject?.id}
+                    onSelect={setUnifiedSubject}
+                  />
+                ) : (
+                  <ContentState state="empty" title="请选择创作空间" />
+                )
+              ) : (
+                <>
+                  <ToggleGroup
+                    type="single"
+                    value={subjectKind}
+                    onValueChange={(v) => {
+                      if (v) {
+                        setSubjectKind(v as API.Kind);
+                        setSubject(null);
+                      }
+                    }}
+                    aria-label="主体类型"
+                  >
+                    <ToggleGroupItem value="character">角色</ToggleGroupItem>
+                    <ToggleGroupItem value="scene">场景</ToggleGroupItem>
+                    <ToggleGroupItem value="prop">物品</ToggleGroupItem>
+                  </ToggleGroup>
+                  <SubjectList
+                    key={projectID + subjectKind}
+                    projectID={projectID}
+                    kind={subjectKind}
+                    onSelect={setSubject}
+                    selectedID={subject?.head.id}
+                  />
+                </>
+              )}
             </TabsContent>
+            {browseSources && (
+              <TabsContent
+                value="canvases"
+                className="flex min-h-0 flex-1 flex-col"
+              >
+                <ProjectPickerCanvases />
+              </TabsContent>
+            )}
           </Tabs>
           {confirmError && (
             <p role="alert" className="text-sm text-destructive">
@@ -288,9 +339,15 @@ export function ProjectAssetDialog({
             >
               {tab === "assets"
                 ? `已选择 ${selected.length} 个素材（最多 ${limit} 个）`
-                : subject
-                  ? `已选择：${subjectText(subject).name ?? "未命名主体"}`
-                  : "请选择一个主体"}
+                : tab === "canvases"
+                  ? "整张画布暂不可添加"
+                  : onUnifiedSubject || browseSources
+                    ? unifiedSubject
+                      ? `已选择：${unifiedSubject.name}`
+                      : "请选择一个主体"
+                    : subject
+                      ? `已选择：${subjectText(subject).name ?? "未命名主体"}`
+                      : "请选择一个主体"}
             </p>
             {tab === "assets" && selected.length > 0 && (
               <Button
@@ -306,7 +363,16 @@ export function ProjectAssetDialog({
             </Button>
             <Button
               disabled={
-                confirming || (tab === "assets" ? !selected.length : !subject)
+                confirming ||
+                (tab === "assets"
+                  ? !selected.length
+                  : tab === "canvases"
+                    ? true
+                    : onUnifiedSubject || browseSources
+                      ? !onUnifiedSubject ||
+                        !unifiedSubject ||
+                        unifiedSubject.owner_scope_id !== space.selected?.id
+                      : !subject)
               }
               onClick={async () => {
                 if (confirmLock.current) return;
@@ -345,6 +411,32 @@ export function ProjectAssetDialog({
                     )
                       return;
                     await onAdd(verified);
+                  } else if (
+                    unifiedSubject &&
+                    onUnifiedSubject &&
+                    space.selected?.id
+                  ) {
+                    const verified = requireCanvasSubjectVersion(
+                      await getSubjectVersion(
+                        {
+                          id: unifiedSubject.id,
+                          version: unifiedSubject.version_id,
+                        },
+                        { signal: controller.signal },
+                      ),
+                      space.selected.id,
+                      {
+                        subject_id: unifiedSubject.id,
+                        version_id: unifiedSubject.version_id,
+                      },
+                    );
+                    if (
+                      controller.signal.aborted ||
+                      scope !== getScopeGeneration() ||
+                      session !== getSessionGeneration()
+                    )
+                      return;
+                    await onUnifiedSubject(verified);
                   } else if (subject) onSubject?.(subject);
                 } catch (error) {
                   if (!controller.signal.aborted)
@@ -365,7 +457,11 @@ export function ProjectAssetDialog({
                   ? reference
                     ? "添加为参考"
                     : (confirmLabel ?? "添加到画布")
-                  : "用主体创作"}
+                  : tab === "canvases"
+                    ? "暂不可添加"
+                    : onUnifiedSubject
+                      ? "添加主体"
+                      : "用主体创作"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -393,6 +489,9 @@ export function ProjectAssetDialog({
               setConfirmError("");
               setQuery("");
               setKind(asset.kind!);
+              setFilter((previous) =>
+                projectPickerFilterForKind(previous, asset.kind!),
+              );
               setSelected((items) =>
                 limit === 1
                   ? [asset]
@@ -411,80 +510,67 @@ export function ProjectAssetDialog({
 
 function MaterialList({
   projectID,
+  actorID,
   kind,
   selected,
   onToggle,
   query,
+  filter,
   onSelectPage,
   limit,
   canvasPresentation,
 }: {
   projectID: string;
+  actorID?: string;
   kind: string;
   selected: API.AssetSummary[];
   onToggle: (asset: API.AssetSummary) => void;
   query: string;
+  filter: ProjectPickerFilter;
   limit: number;
   canvasPresentation?: boolean;
   onSelectPage: (assets: API.AssetSummary[]) => void;
 }) {
   const [items, setItems] = useState<API.AssetSummary[]>([]);
-  const [cursor, setCursor] = useState<string>();
+  const [pageIndex, setPageIndex] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   const request = useRef<AbortController | null>(null);
   const busy = useRef(false);
-  function validate(page: API.AssetPage) {
-    if (
-      !Array.isArray(page.items) ||
-      page.items.some(
-        (a) =>
-          !isProjectID(a.id) || a.project_id !== projectID || a.kind !== kind,
-      ) ||
-      (page.next_cursor != null && typeof page.next_cursor !== "string")
-    )
-      throw new RequestError("invalid_receipt");
-    return { ...page, next_cursor: page.next_cursor ?? undefined };
+  async function read(index: number, controller: AbortController) {
+    return requireProjectPickerPage(
+      await listMediaLibrary(
+        projectPickerQuery(projectID, kind, query, index, filter),
+        { signal: controller.signal },
+      ),
+      projectID,
+      kind,
+      index,
+      actorID,
+    );
   }
   useEffect(() => {
     const controller = new AbortController();
     request.current = controller;
-    async function read() {
-      const page = validate(
-        await listMediaAssets(
-          { pid: projectID, kind, limit: 40 },
-          { signal: controller.signal },
-        ),
-      );
-      if (!query.trim()) return page;
-      const all = [...page.items!];
-      let next = page.next_cursor;
-      const seen = new Set<string>();
-      while (next && !controller.signal.aborted) {
-        if (seen.has(next)) throw new RequestError("invalid_receipt");
-        seen.add(next);
-        const more = validate(
-          await listMediaAssets(
-            { pid: projectID, kind, limit: 200, cursor: next },
-            { signal: controller.signal },
-          ),
-        );
-        all.push(...more.items!);
-        next = more.next_cursor;
-      }
-      return {
-        items: [...new Map(all.map((a) => [a.id, a])).values()],
-        next_cursor: undefined,
-      };
-    }
+    const scope = getScopeGeneration(),
+      session = getSessionGeneration();
     const timer = setTimeout(
       () => {
-        void read()
+        void read(1, controller)
           .then((page) => {
-            if (controller.signal.aborted) return;
-            setItems(page.items!);
-            setCursor(page.next_cursor);
+            if (
+              controller.signal.aborted ||
+              scope !== getScopeGeneration() ||
+              session !== getSessionGeneration()
+            )
+              return;
+            setItems(page.items);
+            setPageIndex(page.page);
+            setTotal(page.total);
+            setHasMore(page.hasMore);
             setError("");
           })
           .catch((e) => {
@@ -501,30 +587,32 @@ function MaterialList({
       controller.abort();
       request.current?.abort();
     };
-  }, [projectID, kind, retry, query]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [projectID, actorID, kind, retry, query, filter]); // eslint-disable-line react-hooks/exhaustive-deps
   async function more() {
-    if (busy.current || loading || !cursor) return;
+    if (busy.current || loading || !hasMore) return;
     busy.current = true;
     const controller = new AbortController();
     request.current = controller;
     setLoading(true);
     setError("");
     try {
-      const page = validate(
-        await listMediaAssets(
-          { pid: projectID, kind, limit: 40, cursor },
-          { signal: controller.signal },
-        ),
-      );
-      if (controller.signal.aborted) return;
-      if (page.next_cursor === cursor)
-        throw new RequestError("invalid_receipt");
+      const scope = getScopeGeneration(),
+        session = getSessionGeneration();
+      const page = await read(pageIndex + 1, controller);
+      if (
+        controller.signal.aborted ||
+        scope !== getScopeGeneration() ||
+        session !== getSessionGeneration()
+      )
+        return;
       setItems((previous) => [
         ...new Map(
           [...previous, ...page.items!].map((a) => [a.id, a]),
         ).values(),
       ]);
-      setCursor(page.next_cursor);
+      setPageIndex(page.page);
+      setTotal(page.total);
+      setHasMore(page.hasMore);
     } catch (e) {
       if (!controller.signal.aborted) setError(readErrorMessage(e));
     } finally {
@@ -532,11 +620,7 @@ function MaterialList({
       if (!controller.signal.aborted) setLoading(false);
     }
   }
-  const filtered = items.filter((a) =>
-    (a.file_name ?? "")
-      .toLocaleLowerCase()
-      .includes(query.trim().toLocaleLowerCase()),
-  );
+  const filtered = items;
   const Icon = mediaKinds.find((k) => k.value === kind)!.icon;
   return (
     <>
@@ -548,19 +632,29 @@ function MaterialList({
               : "正在读取素材…"
             : error
               ? "读取未完成"
-              : `${filtered.length} 个结果`}
+              : `${total} 个结果，已加载 ${filtered.length} 个`}
         </span>
         {limit > 1 && (
           <Button
             variant="ghost"
             size="sm"
-            disabled={loading || !filtered.length || selected.length >= limit}
+            disabled={
+              kind === "document" ||
+              loading ||
+              !filtered.length ||
+              selected.length >= limit
+            }
             onClick={() => onSelectPage(filtered)}
           >
             选择本页
           </Button>
         )}
       </div>
+      {kind === "document" && (
+        <p className="text-xs text-muted-foreground">
+          可浏览项目文档；文档解析与添加到画布尚未接入。
+        </p>
+      )}
       <div className="canvas-material-content" data-canvas-wheel-scroll>
         {error && !loading && (
           <ContentState
@@ -591,7 +685,10 @@ function MaterialList({
                 className="canvas-material-card h-auto p-0 whitespace-normal"
                 aria-label={`选择素材 ${a.file_name || "未命名素材"}`}
                 aria-pressed={chosen}
-                disabled={limit > 1 && !chosen && selected.length >= limit}
+                disabled={
+                  kind === "document" ||
+                  (limit > 1 && !chosen && selected.length >= limit)
+                }
                 onClick={() => onToggle(a)}
               >
                 <Card variant="media" className="w-full">
@@ -645,7 +742,7 @@ function MaterialList({
             }
           />
         )}
-        {cursor && (
+        {hasMore && (
           <Button
             variant="ghost"
             disabled={loading}

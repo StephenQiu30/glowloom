@@ -12,7 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 
@@ -61,14 +61,7 @@ export function CanvasDeleteConfirmation({
           <AlertDialogTitle>确认删除</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
-        {notice && (
-          <Alert variant="destructive">
-            <AlertTitle>删除尚未完成</AlertTitle>
-            <AlertDescription className="break-words">
-              {notice}
-            </AlertDescription>
-          </Alert>
-        )}
+        {notice && <FeedbackToast message={notice} />}
         <AlertDialogFooter>
           <AlertDialogCancel ref={cancel} disabled={locked}>
             取消

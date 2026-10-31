@@ -1,0 +1,84 @@
+{
+  "candidate_manifest": "/tmp/glowloom-multi-delivery-candidate/manifest.json",
+  "candidate_unchanged": true,
+  "base": "90485fdb48ec00a09cfbe518b030a6f788c272ee",
+  "targeted_before_full_run": {
+    "files": 7,
+    "passed_tests": 63,
+    "exit": 0
+  },
+  "quality": [
+    {
+      "name": "next-build",
+      "command": [
+        "npx",
+        "next",
+        "build"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "typegen",
+      "command": [
+        "npx",
+        "next",
+        "typegen"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "tsc",
+      "command": [
+        "npx",
+        "tsc",
+        "--noEmit",
+        "--pretty",
+        "false"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "eslint",
+      "command": [
+        "npx",
+        "eslint",
+        "."
+      ],
+      "exit": 0
+    },
+    {
+      "name": "prettier",
+      "command": [
+        "npx",
+        "prettier",
+        "--check",
+        "."
+      ],
+      "exit": 1
+    }
+  ],
+  "full_vitest": {
+    "exit": 1,
+    "failed_files": 13,
+    "passed_files": 159,
+    "failed_tests": 35,
+    "passed_tests": 1102,
+    "duration_seconds": 779.9,
+    "log": "/tmp/glowloom-multi-agent-check/validation-logs/full-vitest.log"
+  },
+  "failed_files_serial_recheck": {
+    "exit": 0,
+    "passed_files": 13,
+    "passed_tests": 157,
+    "duration_seconds": 31.81,
+    "unchanged_source_and_timeouts": true,
+    "log": "/tmp/glowloom-multi-agent-check/validation-logs/failed-files-serial.log"
+  },
+  "prettier_baseline": {
+    "unchanged_HEAD_files": 9,
+    "HEAD_globals_also_fails": true,
+    "log": "/tmp/glowloom-multi-agent-check/validation-logs/prettier-head-globals.log",
+    "identities": "/tmp/glowloom-multi-agent-check/validation-logs/prettier-baseline-identities.json"
+  },
+  "interpretation": "Initial full run failed under observed concurrent host workloads; every failed file passed unchanged in serial rerun. Do not describe initial full run as passing. No stable failing test remains for HEAD reproduction. Candidate files are fixed and no real worktree or index was changed."
+}

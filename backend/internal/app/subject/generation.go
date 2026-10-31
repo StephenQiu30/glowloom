@@ -143,17 +143,7 @@ func (g generationAccess) ResolveSubject(ctx context.Context, a identity.Princip
 	if err != nil || !known {
 		return out, known, err
 	}
-	out.Description = v.Content.Name
-	if v.Content.Description != "" {
-		out.Description += "：" + v.Content.Description
-	}
-	out.Media = append(out.Media, sourceMedia(v.Content.Primary))
-	for _, ref := range v.Content.References {
-		out.Media = append(out.Media, sourceMedia(ref))
-	}
-	if v.Content.Voice != nil {
-		out.Media = append(out.Media, sourceMedia(v.Content.Voice.Binding))
-	}
+	fillSubjectSource(&out, v.Content)
 	return out, true, nil
 }
 
@@ -170,4 +160,18 @@ func (g generationAccess) ValidateBinding(ctx context.Context, a identity.Princi
 		return promptdomain.ErrReferenceUnavailable
 	}
 	return nil
+}
+
+func fillSubjectSource(out *promptdomain.ReferenceSource, content subjectdomain.Content) {
+	out.Description = content.Name
+	if content.Description != "" {
+		out.Description += "：" + content.Description
+	}
+	out.Media = append(out.Media, sourceMedia(content.Primary))
+	for _, ref := range content.References {
+		out.Media = append(out.Media, sourceMedia(ref))
+	}
+	if content.Voice != nil {
+		out.Media = append(out.Media, sourceMedia(content.Voice.Binding))
+	}
 }

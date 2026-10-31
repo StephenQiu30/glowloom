@@ -1,0 +1,124 @@
+Browser tab: 1980371390, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+0 AXWebArea 一致性调研-202610221 - 即梦AI, URL: jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage
+	1 container
+		2 container root
+			3 container
+				4 container Canvas top bar
+					5 link Description: 返回首页, Value: jimeng.jianying.com/ai-tool/home
+					6 container
+						7 button Canvas title: 一致性调研-202610221
+						8 button (collapsed) Description: 项目, Secondary Actions: Expand
+					9 pop up button (collapsed) Description: Canvas node summary: 节点 7, Secondary Actions: Expand
+					10 text 已保存
+					11 container
+						12 pop up button (collapsed) Description: 搜索, Secondary Actions: Expand
+						13 pop up button (collapsed) Description: 生成历史, Secondary Actions: Expand
+						14 container
+							15 button (collapsed) Description: 分享, Secondary Actions: Expand
+						16 pop up button (collapsed) Description: 更多, ID: radix-:modern-js-r23:, Secondary Actions: Expand
+						17 button Credits: 88 · 开会员
+							18 text 88
+							19 text 开会员
+						20 pop up button (collapsed) Description: 用户菜单, ID: radix-:modern-js-r14:, Secondary Actions: Expand
+				21 container Canvas workspace
+					22 container
+						23 container
+							24 container Canvas editing area
+								25 container
+									26 text 7 nodes, 1 edge, 1 selected. Editable. Room connected. 已保存.
+									27 container Canvas
+										28 container
+											29 container
+												88 image
+													89 container Reference connection from 导演工具箱 node: 相机 1 to 图片 node: 图片 1
+												30 container 文本 node: 文本 1
+													31 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_cgm1h72hr6
+													32 text 文本 1
+												33 container 文本 node: 文本 2
+													34 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_862fkmng46
+													35 text 文本 2
+												36 container 文本 node: 文本 3
+													37 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_jt894kh8f0
+													38 text 文本 3
+												39 container 外部 node: 导演台
+													40 container
+														41 text 导演台
+														42 text 在 3D 空间中设计角色、机位与镜头
+														43 text No resources: 0 ready, 0 processing, 0 failed. Not selected.
+												44 container 视频 node: 视频 1
+													45 container
+														46 text 视频 1
+														47 image 暂无视频
+														48 text No resources: 0 ready, 0 processing, 0 failed. Not selected.
+												49 container 导演工具箱 node: 相机 1
+													50 container
+														91 text 相机 1
+														55 text 现代数字
+														56 text 镜头
+														57 text 自动
+														58 text 焦距
+														59 text 35mm
+														60 text 光圈
+														61 text 自动
+														62 button Edit camera settings
+														63 text No resources: 0 ready, 0 processing, 0 failed. Not selected.
+												92 container 图片 node: 图片 1
+													93 container
+														94 image Description: 暂无图片. No resources: 0 ready, 0 processing, 0 failed. Selected., ID: canvas-node-description-node_dn7dtedenh
+														95 pop up button Create connected node before 图片 1
+														96 button Rename 图片 1
+															97 text 图片 1
+														98 button (collapsed) Description: Add tags, Secondary Actions: Expand
+														99 pop up button Create connected node after 图片 1
+											100 container
+												101 toolbar 导演工具箱
+													102 container
+														103 button 现代数字, 35mm
+														104 button Clear camera settings
+													105 button 配色
+													106 button 风格
+													107 button (expanded) Description: Hide Cinema Kit, Secondary Actions: Collapse
+												108 button 展开图片生成器
+												109 container 生成
+													110 content list 参考内容
+														111 pop up button (collapsed) Description: 添加参考, ID: radix-:modern-js-r9d:, Secondary Actions: Expand
+													112 container 提示词
+														113 container
+															114 combo box (collapsed) Description: 提示词, Secondary Actions: Expand, Value: 
+
+															115 button 引用参考
+													116 container
+														117 pop up button (collapsed) Description: 选择模型: Seedream 5.0 Lite, Secondary Actions: Expand
+														118 pop up button (collapsed) Description: 图片尺寸选项: 1:1 · 2K · 1, Secondary Actions: Expand
+															119 text 1:1
+															120 text 2K
+															121 text 1
+														122 button 引用参考
+													123 text Current price 3 / 张.
+													124 button 生成
+						64 container Canvas left toolbar
+							65 toolbar Canvas toolbar
+								66 button 文本
+								67 button 图片
+								68 button 视频
+								69 button 音频
+								70 button 时间线
+								71 button 主体
+								72 checkbox (collapsed) Description: 导演工具箱, Value: 0, ID: radix-:modern-js-r33:, Secondary Actions: Expand
+								73 button 导演台
+								74 button 资产库
+								75 button 上传
+						76 container Canvas viewport controls
+							77 checkbox Description: 选择工具, Value: 0
+							78 checkbox Description: 小地图, Value: 0
+							79 checkbox Description: 显示连线, Value: 1
+							80 container
+								81 pop up button (collapsed) Description: Zoom options, 72%, ID: radix-:modern-js-rn:, Secondary Actions: Expand
+						82 button (collapsed) Description: 与 AI 对话, Secondary Actions: Expand
+		83 container Notifications
+		84 container Canvas notifications
+		85 container Canvas notifications
+		86 container Canvas tag notifications
+		87 container Canvas notifications
+
+The focused UI element is 72 checkbox (collapsed) Description: 导演工具箱, Value: 0, ID: radix-:modern-js-r33:, Secondary Actions: Expand

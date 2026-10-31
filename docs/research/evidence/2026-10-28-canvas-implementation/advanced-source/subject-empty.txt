@@ -1,0 +1,42 @@
+Browser tab: 1980371314, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 28-47
+~					9 pop up button (collapsed) Description: Canvas node summary: 节点 6, Secondary Actions: Expand
+~									26 text 6 nodes, 0 edges, 1 selected. Editable. Room connected. 已保存.
++										72 container
++											73 container
++												74 container 文本 node: 文本 1
++													75 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_cgm1h72hr6
++													76 text 文本 1
++												77 container 文本 node: 文本 2
++													78 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_862fkmng46
++													79 text 文本 2
++												80 container 文本 node: 文本 3
++													81 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_jt894kh8f0
++													82 text 文本 3
++												83 container 外部 node: 导演台
++													84 container
++														85 text 导演台
++														86 text 在 3D 空间中设计角色、机位与镜头
++														87 text No resources: 0 ready, 0 processing, 0 failed. Not selected.
++												88 container 视频 node: 视频 1
++													89 container
++														90 text 视频 1
++														91 image 暂无视频
++														92 text No resources: 0 ready, 0 processing, 0 failed. Not selected.
++												93 container 主体 node: 主体 1
++													94 container
++														95 pop up button Create connected node before 主体 1
++														96 button Rename 主体 1
++															97 text 主体 1
++														98 button (collapsed) Description: Add tags, Secondary Actions: Expand
++														99 pop up button Create connected node after 主体 1
++														100 button Edit 主体 1
++														101 button Edit subject description
++														102 container
++															103 button 导入主体
++															104 button 添加主媒体
++															105 button 从资产库选择
++															106 button 本地添加
++														107 text Empty subject: main missing, 0 auxiliaries, voice missing. Selected.
+The focused UI element is 55 button 主体

@@ -1,0 +1,50 @@
+[
+  {
+    "name": "next-build",
+    "command": [
+      "npx",
+      "next",
+      "build"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "typegen",
+    "command": [
+      "npx",
+      "next",
+      "typegen"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "tsc",
+    "command": [
+      "npx",
+      "tsc",
+      "--noEmit",
+      "--pretty",
+      "false"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "eslint",
+    "command": [
+      "npx",
+      "eslint",
+      "."
+    ],
+    "exit": 0
+  },
+  {
+    "name": "prettier",
+    "command": [
+      "npx",
+      "prettier",
+      "--check",
+      "."
+    ],
+    "exit": 1
+  }
+]

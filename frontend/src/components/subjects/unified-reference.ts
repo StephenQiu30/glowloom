@@ -32,7 +32,11 @@ export function unifiedSubjectModelIssue(
   if (!model) return null;
   const roles: unknown = model.current_version?.limits?.roles;
   for (const reference of references) {
-    if (reference.source.kind !== "subject") continue;
+    if (
+      reference.source.kind !== "subject" &&
+      reference.source.kind !== "canvas_subject"
+    )
+      continue;
     for (const media of reference.source.media) {
       if (!media.bindingId) continue;
       const role =

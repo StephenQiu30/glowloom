@@ -25,6 +25,11 @@ var (
 
 // LibraryQuery describes full server-side filtering before a stable page is selected.
 type LibraryQuery struct {
+	CreatedFrom    *time.Time
+	CreatedBefore  *time.Time
+	Origin         string
+	Resolutions    []string
+	Ratios         []string
 	Page, PageSize int
 	Kind           string
 	Category       string
@@ -39,7 +44,7 @@ type LibraryQuery struct {
 
 // Validate permits only the mounted source's query semantics and bounded pages.
 func (q LibraryQuery) Validate(scope domain.LibraryScope) error {
-	if scope.Validate() != nil || q.Page < 1 || q.Page > 100000 || q.PageSize < 1 || q.PageSize > 120 ||
+	if !validLibraryPickerFilters(q) || scope.Validate() != nil || q.Page < 1 || q.Page > 100000 || q.PageSize < 1 || q.PageSize > 120 ||
 		!slices.Contains([]string{"", "text", "image", "video", "audio", "document", "model"}, q.Kind) ||
 		!slices.Contains([]string{"", "character", "environment", "prop", "material", "other"}, q.Category) ||
 		!slices.Contains([]string{"active", "trashed"}, q.State) ||

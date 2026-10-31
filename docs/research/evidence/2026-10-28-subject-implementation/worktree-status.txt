@@ -1,0 +1,285 @@
+ M .env.example
+ M .github/workflows/ci.yml
+ M .gitignore
+ M BACKLOG.md
+ M DESIGN.md
+ M backend/db/schema.sql
+ M backend/internal/app/catalog/provider_wiring.go
+ M backend/internal/app/media/media_purge_wiring.go
+ M backend/internal/app/operation/operation_scope_access.go
+ M backend/internal/app/public_api.go
+ M backend/internal/app/roles_wiring.go
+ M backend/internal/canvas/adapter/postgres/project_copy.go
+ M backend/internal/canvas/adapter/postgres/project_copy_verify.go
+ M backend/internal/canvas/adapter/postgres/store.go
+ M backend/internal/canvas/adapter/postgres/yjs_history.go
+ M backend/internal/canvas/adapter/postgres/yjs_projection_store.go
+ M backend/internal/canvas/adapter/yjsruntime/client.go
+ M backend/internal/canvas/application/dto.go
+ M backend/internal/canvas/application/service.go
+ M backend/internal/canvas/domain/document.go
+ M backend/internal/canvas/domain/project_copy.go
+ M backend/internal/catalog/adapter/credentialschema/registry.go
+ M backend/internal/catalog/adapter/postgres/list_models.go
+ M backend/internal/catalog/adapter/postgres/model_releases.go
+ M backend/internal/catalog/adapter/postgres/provider_onboarding.go
+ M backend/internal/catalog/domain/model_candidates.go
+ M backend/internal/catalog/domain/preset_model.go
+ M backend/internal/catalog/domain/provider_parameters.go
+ M backend/internal/catalog/domain/provider_preset.go
+ M backend/internal/media/adapter/http/upload.go
+ M backend/internal/media/application/storage_work.go
+ M backend/internal/operation/adapter/http/handler.go
+ M backend/internal/operation/adapter/managed/activities.go
+ M backend/internal/operation/adapter/postgres/confirm_batch_quote.go
+ M backend/internal/operation/adapter/postgres/confirm_single_quote.go
+ M backend/internal/operation/adapter/postgres/create_free_quote.go
+ M backend/internal/operation/adapter/postgres/editor_submission.go
+ M backend/internal/operation/adapter/postgres/managed_binding.go
+ M backend/internal/operation/adapter/postgres/provider_dispatch.go
+ M backend/internal/operation/adapter/postgres/provider_trial.go
+ M backend/internal/operation/adapter/postgres/quote_catalog.go
+ M backend/internal/operation/adapter/postgres/store.go
+ M backend/internal/operation/adapter/postgres/workflow_consent.go
+ M backend/internal/operation/adapter/postgres/workflow_transition.go
+ M backend/internal/operation/adapter/providerhttp/client.go
+ M backend/internal/operation/adapter/providerhttp/model_probe.go
+ M backend/internal/operation/adapter/providerhttp/probe.go
+ M backend/internal/operation/adapter/providerhttp/submission.go
+ M backend/internal/operation/application/create_free_quote.go
+ M backend/internal/operation/application/free_quote_media.go
+ M backend/internal/operation/application/managed_result.go
+ M backend/internal/operation/application/provider_execution.go
+ M backend/internal/operation/application/public_text_output.go
+ M backend/internal/operation/domain/model.go
+ M backend/internal/platform/objectstorage/registry.go
+ M backend/internal/prompt/adapter/postgres/draft_sources.go
+ M backend/internal/prompt/adapter/postgres/drafts.go
+ M backend/internal/prompt/adapter/postgres/input_source.go
+ M backend/internal/prompt/domain/draft.go
+ M backend/tests/catalog/builtin_candidates_test.go
+ M backend/tests/catalog/cloud_protocols_test.go
+ M backend/tests/catalog/onboarding_test.go
+ M backend/tests/catalog/provider_preset_test.go
+ M backend/tests/operation/managed_result_test.go
+ M backend/tests/operation/public_text_output_test.go
+ M canvas-collab/src/server.mjs
+ M canvas-collab/src/service-runtime.mjs
+ M docker-compose.yml
+ M docs/00-文档索引.md
+ M docs/design/00-设计导航.md
+ M docs/design/07-AI平台接入市场调研与架构设计.md
+ M docs/design/09-统一顶栏与阶段入口设计.md
+ M docs/plan/00-Plan导航.md
+ M docs/plan/10-AI平台接入与预设管理实施计划.md
+ M docs/plan/16-Figma设计落地实施计划.md
+ M docs/prd/00-PRD导航.md
+ M docs/prd/03-AI平台接入与预设管理.md
+ M docs/requirement/00-需求导航.md
+ M docs/requirement/04-AI平台接入与预设管理需求.md
+ M docs/requirement/11-统一工作台与创作入口需求.md
+ M docs/research/00-调研导航.md
+ M frontend/package.json
+ M frontend/pnpm-lock.yaml
+ M frontend/src/api/bible.ts
+ M frontend/src/api/canvases.ts
+ M frontend/src/api/index.ts
+ M frontend/src/api/media.ts
+ M frontend/src/api/operations.ts
+ M frontend/src/api/typings.d.ts
+ M frontend/src/app/_components/home-creation.tsx
+ M frontend/src/app/account/_components/personal-space.tsx
+ M frontend/src/app/api/[...path]/route.ts
+ M frontend/src/app/assets/_components/assets-page.tsx
+ M frontend/src/app/assets/_components/library-toolbar.tsx
+ M frontend/src/app/assets/page.tsx
+ M frontend/src/app/providers/_components/preset-connect.tsx
+ M frontend/src/app/providers/_components/preset-editor.tsx
+ M frontend/src/app/providers/_components/preset-template.ts
+ M frontend/src/app/subjects/_components/subjects-page.tsx
+ M frontend/src/components/canvas/chrome.tsx
+ M frontend/src/components/canvas/controls/canvas-toolbar.tsx
+ M frontend/src/components/canvas/editor/canvas-save-asset-dialog.tsx
+ M frontend/src/components/canvas/media-tools/derived-save.tsx
+ M frontend/src/components/canvas/project/canvas-delete-projects-dialog.tsx
+ M frontend/src/components/canvas/publish-media.ts
+ M frontend/src/components/canvas/runtime/components/assets/library/asset-library-command-dialog.tsx
+ M frontend/src/components/canvas/runtime/components/assets/library/asset-library-select.tsx
+ M frontend/src/components/canvas/runtime/components/assets/picker/asset-picker-modal.tsx
+ M frontend/src/components/canvas/runtime/components/assets/transfer/asset-zip-transfers.tsx
+ M frontend/src/components/canvas/runtime/components/assets/transfer/file-transfers-panel.tsx
+ M frontend/src/components/generation/contracts.ts
+ M frontend/src/components/generation/generation-dialog.tsx
+ M frontend/src/components/generation/prompt-document.ts
+ M frontend/src/components/generation/reference-controls.tsx
+ M frontend/src/components/generation/reference-mention-menu.tsx
+ M frontend/src/components/generation/rich-generation.tsx
+ M frontend/src/components/layout/product-sider.tsx
+ M frontend/src/components/layout/routes.ts
+ M frontend/src/components/media/project-asset-dialog.tsx
+ M frontend/src/components/media/upload-dialog.tsx
+ M frontend/src/components/projects/project-actions-dialog.tsx
+ M frontend/src/components/subjects/contracts.ts
+ M frontend/tests/unit/app/_components/home-page.test.tsx
+ M frontend/tests/unit/app/api/[...path]/route.test.ts
+ M frontend/tests/unit/app/assets/_components/assets-page.test.tsx
+ M frontend/tests/unit/app/providers/_components/preset-connect.test.tsx
+ M frontend/tests/unit/app/providers/_components/preset-editor.test.tsx
+ M frontend/tests/unit/components/generation/contracts.test.ts
+ M frontend/tests/unit/components/generation/generation-dialog.test.tsx
+ M frontend/tests/unit/components/layout/basic-layout.test.tsx
+?? backend/config/TOS配置说明.md
+?? backend/config/object-storage.tos.example.yml
+?? backend/db/canvas_asset_creation_incremental.sql
+?? backend/db/canvas_asset_kind_incremental.sql
+?? backend/db/canvas_asset_management_incremental.sql
+?? backend/db/history_publication_incremental.sql
+?? backend/db/media_storage_prerequisites_incremental.sql
+?? backend/db/personal_history_incremental.sql
+?? backend/db/storage_ledger_expand_incremental.sql
+?? backend/db/subject_library_incremental.sql
+?? backend/db/subject_voice_incremental.sql
+?? backend/db/volcengine_speech_incremental.sql
+?? backend/internal/app/canvas/asset_commands.go
+?? backend/internal/app/canvas/asset_creation.go
+?? backend/internal/app/canvas/assets.go
+?? backend/internal/app/media/asset_download.go
+?? backend/internal/app/operation/publication.go
+?? backend/internal/app/subject/
+?? backend/internal/canvas/adapter/http/asset_commands.go
+?? backend/internal/canvas/adapter/http/asset_creation.go
+?? backend/internal/canvas/adapter/http/assets.go
+?? backend/internal/canvas/adapter/postgres/asset_commands.go
+?? backend/internal/canvas/adapter/postgres/asset_creation.go
+?? backend/internal/canvas/adapter/postgres/assets.go
+?? backend/internal/canvas/adapter/postgres/subject_sources.go
+?? backend/internal/canvas/application/asset_commands.go
+?? backend/internal/canvas/application/asset_creation.go
+?? backend/internal/canvas/application/asset_yjs_rename.go
+?? backend/internal/canvas/application/assets.go
+?? backend/internal/canvas/domain/asset_templates.go
+?? backend/internal/canvas/domain/document_kind.go
+?? backend/internal/catalog/adapter/postgres/subject_voice.go
+?? backend/internal/catalog/domain/volcengine_models.go
+?? backend/internal/media/adapter/http/asset_download.go
+?? backend/internal/media/adapter/objectstorage/personal_generated_audio.go
+?? backend/internal/media/adapter/postgres/personal_generated_audio.go
+?? backend/internal/media/adapter/postgres/storage_work_readiness.go
+?? backend/internal/media/adapter/postgres/subject_catalogue.go
+?? backend/internal/media/adapter/postgres/subject_source.go
+?? backend/internal/media/application/asset_download.go
+?? backend/internal/media/application/personal_generated_audio.go
+?? backend/internal/media/application/subject_library.go
+?? backend/internal/media/application/subject_source.go
+?? backend/internal/operation/adapter/http/history_publication.go
+?? backend/internal/operation/adapter/http/personal_history.go
+?? backend/internal/operation/adapter/http/personal_history_commands.go
+?? backend/internal/operation/adapter/postgres/history_publication.go
+?? backend/internal/operation/adapter/postgres/personal_history.go
+?? backend/internal/operation/adapter/postgres/personal_history_commands.go
+?? backend/internal/operation/adapter/postgres/personal_history_facts.go
+?? backend/internal/operation/adapter/postgres/subject_media.go
+?? backend/internal/operation/adapter/providerhttp/speech.go
+?? backend/internal/operation/application/history_publication.go
+?? backend/internal/operation/application/personal_history.go
+?? backend/internal/operation/application/personal_history_commands.go
+?? backend/internal/operation/application/subject_media.go
+?? backend/internal/prompt/application/subject_sources.go
+?? backend/internal/subject/
+?? backend/tests/canvas/asset_commands_store_test.go
+?? backend/tests/canvas/asset_commands_test.go
+?? backend/tests/canvas/asset_creation_http_test.go
+?? backend/tests/canvas/asset_creation_store_test.go
+?? backend/tests/canvas/asset_creation_test.go
+?? backend/tests/canvas/asset_final_alignment_test.go
+?? backend/tests/canvas/asset_original_store_test.go
+?? backend/tests/canvas/assets_http_test.go
+?? backend/tests/canvas/assets_store_test.go
+?? backend/tests/canvas/assets_test.go
+?? backend/tests/catalog/speech_http_test.go
+?? backend/tests/catalog/volcengine_catalog_test.go
+?? backend/tests/catalog/volcengine_onboarding_integration_test.go
+?? backend/tests/media/asset_download_test.go
+?? backend/tests/media/personal_generated_audio_objects_test.go
+?? backend/tests/media/personal_generated_audio_test.go
+?? backend/tests/media/storage_ledger_migration_test.go
+?? backend/tests/operation/history_publication_integration_test.go
+?? backend/tests/operation/history_publication_test.go
+?? backend/tests/operation/personal_history_commands_test.go
+?? backend/tests/operation/personal_history_integration_test.go
+?? backend/tests/operation/personal_history_store_test.go
+?? backend/tests/operation/personal_history_test.go
+?? backend/tests/operation/subject_binding_integration_test.go
+?? backend/tests/operation/subject_binding_test.go
+?? backend/tests/operation/subject_multimodal_wire_test.go
+?? backend/tests/prompt/subject_binding_test.go
+?? backend/tests/subject/
+?? canvas-collab/tests/asset-rename.test.mjs
+?? docs/design/25-统一主体库与创作引用设计.md
+?? docs/design/26-资产信息架构与即梦对齐设计.md
+?? docs/plan/21-统一主体库与创作引用实施计划.md
+?? docs/plan/22-资产对齐即梦实施计划.md
+?? docs/prd/12-统一主体库与创作引用.md
+?? docs/prd/13-资产与创作回访.md
+?? docs/requirement/12-主体功能对齐需求.md
+?? docs/requirement/13-资产对齐即梦需求.md
+?? docs/research/08-即梦资产完整需求分析.md
+?? docs/research/09-即梦主体功能与需求基线.md
+?? docs/research/evidence/
+?? frontend/public/fonts/
+?? frontend/src/api/subjects.ts
+?? frontend/src/api/works.ts
+?? frontend/src/app/assets/_components/asset-canvas-list.tsx
+?? frontend/src/app/assets/_components/asset-create-project.tsx
+?? frontend/src/app/assets/_components/asset-filter-menu.tsx
+?? frontend/src/app/assets/_components/asset-query.ts
+?? frontend/src/app/assets/_components/asset-template-list.tsx
+?? frontend/src/app/assets/_components/asset-workspace.tsx
+?? frontend/src/app/assets/_components/create-asset-canvas.tsx
+?? frontend/src/app/assets/_components/document-pdf.ts
+?? frontend/src/app/assets/_components/history-download.ts
+?? frontend/src/app/assets/_components/history-publication-dialog.tsx
+?? frontend/src/app/assets/_components/history-result-card.tsx
+?? frontend/src/app/assets/_components/history-results.ts
+?? frontend/src/app/assets/_components/personal-history-list.tsx
+?? frontend/src/app/subjects/history/
+?? frontend/src/app/works/
+?? frontend/src/components/subjects/subject-date-range.tsx
+?? frontend/src/components/subjects/unified-contracts.ts
+?? frontend/src/components/subjects/unified-editor.tsx
+?? frontend/src/components/subjects/unified-library.tsx
+?? frontend/src/components/subjects/unified-media.tsx
+?? frontend/src/components/subjects/unified-reference.ts
+?? frontend/src/components/subjects/unified-source-contracts.ts
+?? frontend/src/components/subjects/unified-source-picker.tsx
+?? frontend/src/components/subjects/unified-source-upload.tsx
+?? frontend/src/components/subjects/unified-subjects.css
+?? frontend/src/components/subjects/unified-toolbar.tsx
+?? frontend/src/components/subjects/unified-voice-contracts.ts
+?? frontend/src/components/subjects/unified-voice-controls.tsx
+?? frontend/src/components/subjects/unified-voice-job.ts
+?? frontend/tests/browser/assets-mobile.html
+?? frontend/tests/browser/assets-navigation.ts
+?? frontend/tests/browser/assets.html
+?? frontend/tests/browser/assets.tsx
+?? frontend/tests/browser/assets.vite.config.ts
+?? frontend/tests/browser/serve-assets.mjs
+?? frontend/tests/unit/app/assets/_components/asset-workspace.test.tsx
+?? frontend/tests/unit/app/assets/_components/document-pdf.test.ts
+?? frontend/tests/unit/app/assets/_components/history-download.test.ts
+?? frontend/tests/unit/app/assets/_components/history-publication-dialog.test.tsx
+?? frontend/tests/unit/app/assets/_components/history-results.test.ts
+?? frontend/tests/unit/app/works/
+?? frontend/tests/unit/components/generation/unified-mention.test.tsx
+?? frontend/tests/unit/components/subjects/subject-date-range.test.tsx
+?? frontend/tests/unit/components/subjects/subject-history-page.test.tsx
+?? frontend/tests/unit/components/subjects/unified-contracts.test.ts
+?? frontend/tests/unit/components/subjects/unified-editor.test.tsx
+?? frontend/tests/unit/components/subjects/unified-library.test.tsx
+?? frontend/tests/unit/components/subjects/unified-media.test.tsx
+?? frontend/tests/unit/components/subjects/unified-reference.test.ts
+?? frontend/tests/unit/components/subjects/unified-source-contracts.test.ts
+?? frontend/tests/unit/components/subjects/unified-source-picker.test.tsx
+?? frontend/tests/unit/components/subjects/unified-source-upload.test.tsx
+?? frontend/tests/unit/components/subjects/unified-voice-controls.test.tsx
+?? frontend/tests/unit/components/subjects/unified-voice-job.test.tsx

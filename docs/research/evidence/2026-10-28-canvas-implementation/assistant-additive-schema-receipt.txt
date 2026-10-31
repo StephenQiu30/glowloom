@@ -1,0 +1,15 @@
+2026-10-29 Asia/Shanghai
+Transaction: BEGIN; CREATE TABLE; CREATE INDEX; GRANT; COMMIT. No existing data reset.
+glowloom|postgres
+id|uuid|NO
+canvas_id|uuid|NO
+project_id|uuid|NO
+actor_id|uuid|NO
+title|text|NO
+revision|bigint|NO
+turns|jsonb|NO
+updated_at|timestamp with time zone|NO
+assistant_session_pkey
+assistant_session_owner
+t
+0

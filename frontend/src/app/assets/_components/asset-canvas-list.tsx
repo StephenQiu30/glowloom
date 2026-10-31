@@ -14,7 +14,6 @@ import { ProjectMediaPreview } from "@/components/media/project-media";
 import { useSpace } from "@/components/spaces/space-context";
 import { ContentState } from "@/components/layout/content-state";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -105,9 +104,9 @@ export function AssetCanvasList({
   const [intent, setIntent] = useState<Intent | null>(null);
   const [writing, setWriting] = useState(false);
   const [notice, setNotice] = useState("");
-  const [results, setResults] = useState<
-    { id: string; title: string; ok: boolean; code: string }[]
-  >([]);
+  const [noticeTone, setNoticeTone] = useState<"error" | "info" | "success">(
+    "error",
+  );
   const space = useSpace();
   const busy = useRef(false);
   const flight = useRef<AbortController | null>(null);
@@ -180,6 +179,7 @@ export function AssetCanvasList({
   const chosen = page?.items.filter((item) => selected.includes(item.id)) ?? [];
   function toggle(id: string) {
     if (!selected.includes(id) && selected.length >= selectionLimit) {
+      setNoticeTone("info");
       setNotice(`最多选择${selectionLimit}项内容。`);
       return;
     }
@@ -217,6 +217,7 @@ export function AssetCanvasList({
     setWriting(true);
     setIntent(op);
     setNotice("");
+    setNoticeTone("error");
     onLock(true);
     const controller = new AbortController();
     flight.current = controller;
@@ -250,7 +251,6 @@ export function AssetCanvasList({
       if (controller.signal.aborted) return;
       const outcomes = response.results.map((item) => ({
         id: item.id!,
-        title: op.items.find((old) => old.id === item.id)!.name,
         ok: item.status === "succeeded",
         code: item.code!,
       }));
@@ -266,7 +266,26 @@ export function AssetCanvasList({
         );
         for (const id of changedProjects) publishProjectInvalidation(id);
       }
-      setResults(outcomes);
+      const label =
+        op.body.action === "delete"
+          ? "删除"
+          : op.body.action === "rename"
+            ? "重命名"
+            : op.body.favorite
+              ? "收藏"
+              : "取消收藏";
+      const failures = outcomes.filter((item) => !item.ok);
+      setNoticeTone(failures.length ? "error" : "success");
+      if (failures.length) {
+        const summary = response.succeeded
+          ? `已${label}${response.succeeded}项，${failures.length}项${label}失败。`
+          : `${label}失败。`;
+        const reason =
+          new Set(failures.map((item) => item.code)).size === 1
+            ? assetActionFeedback(failures[0].code)
+            : "请重试未完成的内容。";
+        setNotice(summary + reason);
+      } else setNotice(`${label}成功`);
       setSelected((previous) =>
         previous.filter(
           (id) => !outcomes.some((item) => item.id === id && item.ok),
@@ -589,25 +608,6 @@ export function AssetCanvasList({
           更多画布
         </Button>
       )}
-      <section
-        aria-label="画布操作结果"
-        aria-live="polite"
-        className={results.length ? "flex flex-col gap-2" : "sr-only"}
-      >
-        {results.map((item) => (
-          <Alert
-            key={item.id}
-            variant={item.ok ? "default" : "destructive"}
-            role="group"
-          >
-            <AlertTitle>{item.ok ? "操作完成" : "操作未完成"}</AlertTitle>
-            <AlertDescription className="break-words">
-              {item.title}：
-              {item.ok ? "已完成" : assetActionFeedback(item.code)}
-            </AlertDescription>
-          </Alert>
-        ))}
-      </section>
       {creating && (
         <AssetCreateProject
           kind={kind}
@@ -620,7 +620,7 @@ export function AssetCanvasList({
         <CanvasDeleteConfirmation
           description={
             deleting.some((item) => item.is_main)
-              ? "删除主画布将把整个所属项目移入回收站，保留30天，是否确认删除？"
+              ? "删除主画布将同时删除整个所属项目，是否确认删除？"
               : `是否确认删除所选${kind === "short_drama" ? "短剧" : "画布"}？`
           }
           locked={locked}
@@ -684,7 +684,9 @@ export function AssetCanvasList({
           </DialogContent>
         </Dialog>
       )}
-      {notice && !deleting && <FeedbackToast message={notice} />}
+      {notice && !deleting && (
+        <FeedbackToast message={notice} tone={noticeTone} />
+      )}
     </div>
   );
 }

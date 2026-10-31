@@ -13,9 +13,10 @@ import (
 // ProjectContentAccess contains current workspace facts for a content owner.
 // The owning transaction retains its project lock until content and events commit.
 type ProjectContentAccess struct {
-	ProjectID uuid.UUID
-	OrgID     uuid.UUID
-	Revision  int64
+	OwnerScopeID uuid.UUID
+	ProjectID    uuid.UUID
+	OrgID        uuid.UUID
+	Revision     int64
 }
 
 // ProjectContentChangedEvent invalidates current project content without exposing it.

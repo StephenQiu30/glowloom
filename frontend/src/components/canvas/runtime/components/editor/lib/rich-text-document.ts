@@ -193,6 +193,18 @@ export function parseRichTextDocument(value: unknown): RichTextDocument {
       typeof node.attrs !== "object"
     )
       throw new Error("文档属性无效");
+    if (
+      "attrs" in node &&
+      node.attrs &&
+      typeof node.attrs === "object" &&
+      "textAlign" in node.attrs
+    ) {
+      if (
+        !["paragraph", "heading"].includes(node.type) ||
+        !["left", "center", "right"].includes(String(node.attrs.textAlign))
+      )
+        throw new Error("文档对齐方式无效");
+    }
     if ("content" in node) {
       if (!Array.isArray(node.content)) throw new Error("文档内容无效");
       node.content.forEach((child) => check(child, depth + 1));

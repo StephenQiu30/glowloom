@@ -3,6 +3,10 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
 
@@ -37,19 +41,32 @@ func (s *DraftStore) ReadInput(ctx context.Context, a identityapp.Principal, p u
 			}
 			out = saved.Draft
 		} else {
-			var revision int64
-			r := tx.Raw(`SELECT revision FROM canvas.document WHERE id=? AND project_id=? AND NOT is_delete FOR SHARE`, source.CanvasID, p).Scan(&revision)
+			var document struct {
+				Revision      int64
+				SchemaVersion int
+			}
+			r := tx.Raw(`SELECT revision,schema_version FROM canvas.document WHERE id=? AND project_id=? AND NOT is_delete FOR SHARE`, source.CanvasID, p).Scan(&document)
 			if r.Error != nil {
 				return r.Error
 			}
-			if r.RowsAffected != 1 || (!confirm && revision != source.CanvasRevision) {
+			if r.RowsAffected != 1 || (!confirm && document.Revision != source.CanvasRevision) {
 				return ErrInputStale
+			}
+			if document.SchemaVersion != canvasapp.SchemaVersion {
+				return fmt.Errorf("%w: %w", ErrInputStale, canvasdomain.ErrGraphReadOnly)
+			}
+			graph, err := readCanvasInputGraph(tx, source.CanvasID)
+			if err != nil {
+				if errors.Is(err, canvasdomain.ErrGraphReadOnly) {
+					return fmt.Errorf("%w: %w", ErrInputStale, err)
+				}
+				return err
 			}
 			var row struct {
 				InputRevision int64
 				Config        []byte
 			}
-			r = tx.Raw(`SELECT input_revision,config FROM canvas.node WHERE id=? AND document_id=? AND NOT is_delete AND node_type IN ('image_generation','video_generation') FOR SHARE`, source.NodeID, source.CanvasID).Scan(&row)
+			r = tx.Raw(`SELECT input_revision,config FROM canvas.node WHERE id=? AND document_id=? AND NOT is_delete AND (node_type IN ('image_generation','video_generation') OR (node_type IN ('text','image','video','audio') AND node_action='resource' AND config->'draft'->'composer' IS NOT NULL)) FOR SHARE`, source.NodeID, source.CanvasID).Scan(&row)
 			if r.Error != nil {
 				return r.Error
 			}
@@ -60,7 +77,18 @@ func (s *DraftStore) ReadInput(ctx context.Context, a identityapp.Principal, p u
 			if json.Unmarshal(row.Config, &config) != nil || config.Draft == nil || config.Draft.Composer == nil {
 				return domain.ErrInvalidDraft
 			}
-			out = *config.Draft.Composer
+			for _, node := range graph.Nodes {
+				if node.ID == source.NodeID {
+					effective, err := canvasdomain.GenerationInput(graph, node)
+					if err != nil || effective.Composer == nil {
+						return domain.ErrInvalidDraft
+					}
+					out = *effective.Composer
+					if err := s.resolveGraphSubjectPins(ctx, tx, a, p, graph, node, &out); err != nil {
+						return err
+					}
+				}
+			}
 		}
 		return ValidateDraftSources(tx, a, p, out, true, s.sources(tx))
 	})
@@ -91,4 +119,31 @@ func (s *DraftStore) AuthorizeOwner(ctx context.Context, a identityapp.Principal
 		}
 		return nil
 	})
+}
+
+// The document share lock held by ReadInput serializes this graph read with
+// authoritative edits. Unknown graph fields must not bypass the canvas's
+// read-only admission rule merely because the selected composer is understood.
+func readCanvasInputGraph(tx *gorm.DB, id uuid.UUID) (canvasdomain.Document, error) {
+	var rows []struct{ Body []byte }
+	if err := tx.Raw(`SELECT row_to_json(n) AS body FROM (
+SELECT id,title,node_type,node_action,ref_type,ref_id,config,x,y,width,height,parent_id,z_index,last_operation_id,COALESCE(input_revision,0) AS input_revision
+FROM canvas.node WHERE document_id=? AND NOT is_delete ORDER BY id) n`, id).Scan(&rows).Error; err != nil {
+		return canvasdomain.Document{}, err
+	}
+	doc := canvasdomain.Document{ID: id}
+	for _, row := range rows {
+		var node canvasdomain.Node
+		if err := json.Unmarshal(row.Body, &node); err != nil {
+			return canvasdomain.Document{}, fmt.Errorf("%w: decode input graph: %w", canvasdomain.ErrGraphReadOnly, err)
+		}
+		doc.Nodes = append(doc.Nodes, node)
+	}
+	if err := tx.Raw(`SELECT id,edge_type,source_node_id,target_node_id,role,binding FROM canvas.edge WHERE document_id=? AND NOT is_delete ORDER BY id`, id).Scan(&doc.Edges).Error; err != nil {
+		return canvasdomain.Document{}, err
+	}
+	if err := canvasdomain.ValidateGraph(doc); err != nil {
+		return canvasdomain.Document{}, fmt.Errorf("%w: %w", canvasdomain.ErrGraphReadOnly, err)
+	}
+	return doc, nil
 }

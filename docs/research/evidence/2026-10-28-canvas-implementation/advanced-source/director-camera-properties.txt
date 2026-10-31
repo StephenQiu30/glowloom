@@ -1,0 +1,54 @@
+Browser tab: 1980371314, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 121-173
+~								113 sortable 机位, Value: 1
++							216 text 机位
++							217 container 机位位置
++								218 button (expanded) 机位位置, ID: :modern-js-r8d:-heading, Secondary Actions: Collapse
++								219 checkbox Description: 机位位置 keyframe, Value: 0
++								220 container Description: 机位位置, ID: :modern-js-r8d:-content
++									221 container 机位位置 X
++										222 button 机位位置 X, drag horizontally to adjust
++										223 stepper (settable, integer) Description: 机位位置 X, Value: 0
++										224 text m
++									225 container 机位位置 Y
++										226 button 机位位置 Y, drag horizontally to adjust
++										227 stepper (settable, float) Description: 机位位置 Y, Value: 2.200000047683716, Details: 2.2
++										228 text m
++									229 container 机位位置 Z
++										230 button 机位位置 Z, drag horizontally to adjust
++										231 stepper (settable, integer) Description: 机位位置 Z, Value: 7
++										232 text m
++							233 container 注视点
++								234 button (expanded) 注视点, ID: :modern-js-r8e:-heading, Secondary Actions: Collapse
++								235 checkbox Description: 注视点 keyframe, Value: 0
++								236 container Description: 注视点, ID: :modern-js-r8e:-content
++									237 container 注视点 X
++										238 button 注视点 X, drag horizontally to adjust
++										239 stepper (settable, integer) Description: 注视点 X, Value: 0
++										240 text m
++									241 container 注视点 Y
++										242 button 注视点 Y, drag horizontally to adjust
++										243 stepper (settable, integer) Description: 注视点 Y, Value: 1
++										244 text m
++									245 container 注视点 Z
++										246 button 注视点 Z, drag horizontally to adjust
++										247 stepper (settable, integer) Description: 注视点 Z, Value: 0
++										248 text m
++							249 container 镜头
++								250 button (expanded) 镜头, ID: :modern-js-r8f:-heading, Secondary Actions: Collapse
++								251 container Description: 镜头, ID: :modern-js-r8f:-content
++									252 container 视野
++										253 button 视野, drag horizontally to adjust
++										254 stepper (settable, integer) Description: 视野, Value: 50
++										255 text °
++										256 checkbox Description: 视野 keyframe, Value: 0
++									257 container 画面倾斜
++										258 button 画面倾斜, drag horizontally to adjust
++										259 stepper (settable, integer) Description: 画面倾斜, Value: 0
++										260 text °
++										261 checkbox Description: 画面倾斜 keyframe, Value: 0
++							262 text 画幅比例
++							263 pop up button (collapsed) Description: 画幅比例, ID: radix-:modern-js-r8g:, Secondary Actions: Expand
+~								210 checkbox 机位, Value: 1
+The focused UI element is 113 sortable 机位, Value: 1

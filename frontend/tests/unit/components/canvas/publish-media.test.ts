@@ -43,11 +43,9 @@ describe("画布本地素材发布", () => {
       project,
     );
     state.nodes[0].metadata!.content = "blob:derived-image";
-    const fetch = vi
-      .fn()
-      .mockResolvedValue({
-        blob: async () => new Blob(["test"], { type: "image/png" }),
-      });
+    const fetch = vi.fn().mockResolvedValue({
+      blob: async () => new Blob(["test"], { type: "image/png" }),
+    });
     vi.stubGlobal("fetch", fetch);
     upload.mockResolvedValue({
       asset: { id: canvas, project_id: project, kind: "image", revision: 2 },

@@ -1,0 +1,169 @@
+[
+  {
+    "id": "3102:47785",
+    "name": "即梦一致性 / 文本全屏 / 三向对齐菜单展开",
+    "type": "FRAME",
+    "x": 207516,
+    "y": 40,
+    "width": 1512,
+    "height": 772,
+    "opacity": 1,
+    "visible": true,
+    "layoutMode": "NONE",
+    "primaryAxisAlignItems": "MIN",
+    "children": [
+      {
+        "id": "3102:47786",
+        "name": "全屏顶部栏",
+        "type": "FRAME",
+        "width": 1512,
+        "height": 64
+      },
+      {
+        "id": "3102:47792",
+        "name": "富文本工具栏 / 实测居中 / 434px控件组",
+        "type": "FRAME",
+        "width": 1320,
+        "height": 40
+      },
+      {
+        "id": "3102:47860",
+        "name": "正文 / 同一节点协作内容",
+        "type": "FRAME",
+        "width": 1320,
+        "height": 624
+      },
+      {
+        "id": "3102:47869",
+        "name": "Paragraph alignment / 实测200×116",
+        "type": "FRAME",
+        "width": 200,
+        "height": 116
+      }
+    ]
+  },
+  {
+    "id": "3102:47869",
+    "name": "Paragraph alignment / 实测200×116",
+    "type": "FRAME",
+    "x": 549,
+    "y": 126,
+    "width": 200,
+    "height": 116,
+    "opacity": 1,
+    "visible": true,
+    "layoutMode": "VERTICAL",
+    "primaryAxisAlignItems": "MIN",
+    "children": [
+      {
+        "id": "3102:47870",
+        "name": "左对齐",
+        "type": "FRAME",
+        "width": 192,
+        "height": 36
+      },
+      {
+        "id": "3102:47874",
+        "name": "居中对齐",
+        "type": "FRAME",
+        "width": 192,
+        "height": 36
+      },
+      {
+        "id": "3102:47878",
+        "name": "右对齐",
+        "type": "FRAME",
+        "width": 192,
+        "height": 36
+      }
+    ]
+  },
+  {
+    "id": "2208:26507",
+    "name": "富文本工具栏 / 实测居中 / 434px控件组",
+    "type": "FRAME",
+    "x": 96,
+    "y": 84,
+    "width": 1320,
+    "height": 40,
+    "opacity": 1,
+    "visible": true,
+    "layoutMode": "HORIZONTAL",
+    "primaryAxisAlignItems": "CENTER",
+    "children": [
+      {
+        "id": "3102:47742",
+        "name": "格式操作 / 四组",
+        "type": "FRAME",
+        "width": 434,
+        "height": 32
+      }
+    ]
+  },
+  {
+    "id": "2208:26490",
+    "name": "段落对齐 / 左·中·右 / 正式可用",
+    "type": "FRAME",
+    "x": 152,
+    "y": 4,
+    "width": 32,
+    "height": 32,
+    "opacity": 1,
+    "visible": true,
+    "layoutMode": "HORIZONTAL",
+    "primaryAxisAlignItems": "CENTER",
+    "children": [
+      {
+        "id": "2208:26491",
+        "name": "Icon / text-align-start / 24",
+        "type": "INSTANCE",
+        "width": 18,
+        "height": 18
+      }
+    ]
+  },
+  {
+    "id": "2208:26516",
+    "name": "段落对齐 / 左·中·右 / 正式可用",
+    "type": "FRAME",
+    "x": 4,
+    "y": 4,
+    "width": 32,
+    "height": 32,
+    "opacity": 1,
+    "visible": false,
+    "layoutMode": "HORIZONTAL",
+    "primaryAxisAlignItems": "CENTER",
+    "children": [
+      {
+        "id": "2208:26517",
+        "name": "Icon / text-align-start / 24",
+        "type": "INSTANCE",
+        "width": 18,
+        "height": 18
+      }
+    ]
+  },
+  {
+    "id": "2208:26541",
+    "name": "段落对齐 / 左·中·右 / 正式可用",
+    "type": "FRAME",
+    "x": 152,
+    "y": 4,
+    "width": 32,
+    "height": 32,
+    "opacity": 1,
+    "visible": true,
+    "layoutMode": "HORIZONTAL",
+    "primaryAxisAlignItems": "CENTER",
+    "children": [
+      {
+        "id": "2208:26542",
+        "name": "Icon / text-align-start / 24",
+        "type": "INSTANCE",
+        "width": 18,
+        "height": 18
+      }
+    ]
+  }
+]

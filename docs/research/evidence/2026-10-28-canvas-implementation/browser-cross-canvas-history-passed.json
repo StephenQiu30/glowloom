@@ -1,0 +1,150 @@
+{
+  "observedAt": "2026-10-28T18:55:23.262Z",
+  "targetID": "5ac4833c-8242-4db8-b296-98b37ebae3a7",
+  "baselineNodes": 12,
+  "copied": 12,
+  "visibleCounts": [
+    24,
+    12,
+    24
+  ],
+  "receipts": [
+    {
+      "type": "yjs_ack",
+      "receipt": {
+        "epoch": "5b1a7818-0a65-4572-9c2c-a998737ef35a",
+        "commitSeq": "2",
+        "contentRevision": "3",
+        "graphHash": "c189b74fad7c1faf5a819da9a46ad0b71b11c6f31ca9d25a47943443fde51d5e",
+        "updateId": "083e71ea-6f01-453f-8144-eeec283c7eb7",
+        "payloadHash": "3909c37c8ad0f441b20ac96d1143cfb428e8aa62660dcf4cf9684331e00b5770",
+        "effect": "VISIBLE_CHANGE",
+        "status": "accepted"
+      }
+    },
+    {
+      "type": "yjs_ack",
+      "receipt": {
+        "epoch": "5b1a7818-0a65-4572-9c2c-a998737ef35a",
+        "commitSeq": "3",
+        "contentRevision": "4",
+        "graphHash": "f282344c0591525f5a26997ee9df4477d1d92b32730eecdcc311cf550b7d4c37",
+        "updateId": "8b6fd45b-2290-40d0-bd8a-547e6d55be50",
+        "payloadHash": "315aeebbd087a6058f189909abb975d353c4c7efdd54e648376d6ee185732323",
+        "effect": "VISIBLE_CHANGE",
+        "status": "accepted"
+      }
+    },
+    {
+      "type": "yjs_ack",
+      "receipt": {
+        "epoch": "5b1a7818-0a65-4572-9c2c-a998737ef35a",
+        "commitSeq": "4",
+        "contentRevision": "5",
+        "graphHash": "c189b74fad7c1faf5a819da9a46ad0b71b11c6f31ca9d25a47943443fde51d5e",
+        "updateId": "64b31098-da9b-41b0-a53e-c0bef7187be5",
+        "payloadHash": "9188f1193b130888bd89f8a7f030b54eba601094578204dc10a6638bec4a0910",
+        "effect": "VISIBLE_CHANGE",
+        "status": "accepted"
+      }
+    }
+  ],
+  "refresh": {
+    "commitSeq": "4",
+    "graphHash": "c189b74fad7c1faf5a819da9a46ad0b71b11c6f31ca9d25a47943443fde51d5e",
+    "nodeCount": 24,
+    "edgeCount": 14
+  },
+  "newNodes": [
+    {
+      "id": "05a8e413-a5b9-4ff7-aa56-e1b81dd97f28",
+      "sourceID": "1a9aa93e-1adb-416d-82c2-d7f261e030c9",
+      "type": "image",
+      "inputRevision": 2,
+      "subjectPreserved": true,
+      "draftPreserved": true
+    },
+    {
+      "id": "092dd279-96e1-4866-acf5-ecac938fcd6e",
+      "sourceID": "fdbf6f84-4e35-4d27-b9fd-fa0ecaab64fd",
+      "type": "image",
+      "subjectPreserved": true,
+      "draftPreserved": true
+    },
+    {
+      "id": "21a47e62-069a-479f-a55d-7d6d631771e8",
+      "sourceID": "9d5f817a-2673-42d6-8908-97da8572c976",
+      "type": "image",
+      "inputRevision": 2,
+      "subjectPreserved": true,
+      "draftPreserved": true
+    },
+    {
+      "id": "2f6ed9f6-8faa-4207-819d-42841697152f",
+      "sourceID": "a23de06c-f0ff-4652-9ea3-16daedfd52e8",
+      "type": "image",
+      "subjectPreserved": true,
+      "draftPreserved": true
+    },
+    {
+      "id": "457ae882-9a8f-4be9-8813-ce3038fcfad0",
+      "sourceID": "008abf24-f8ab-4799-bc0b-16aa0e25ad37",
+      "type": "cinema_studio",
+      "subjectPreserved": true,
+      "draftPreserved": true
+    },
+    {
+      "id": "5b338d2c-b575-4e2d-9db7-61c58fdb5cb7",
+      "sourceID": "02101e0f-e9c6-47e2-80d7-232e81135361",
+      "type": "image",
+      "inputRevision": 2,
+      "subjectPreserved": true,
+      "draftPreserved": true
+    },
+    {
+      "id": "69d3ff09-adff-4101-ac04-d2390146441c",
+      "sourceID": "91f5b018-c001-48e4-951d-ab63aca8acba",
+      "type": "group",
+      "subjectPreserved": true,
+      "draftPreserved": true
+    },
+    {
+      "id": "72b5c6ef-f187-46d7-83d3-173ad42283f4",
+      "sourceID": "f86d612a-ffa5-433f-98d8-12db4577b49f",
+      "type": "director",
+      "subjectPreserved": true,
+      "draftPreserved": true
+    },
+    {
+      "id": "8642204d-4dcd-4f63-b3db-06ffef504dd8",
+      "sourceID": "01660488-0785-437e-a78d-b548661b5d81",
+      "type": "timeline",
+      "subjectPreserved": true,
+      "draftPreserved": true
+    },
+    {
+      "id": "968c77f6-519a-4130-a42f-fbbc205aa90b",
+      "sourceID": "54424331-6bb1-41c8-9936-eca6dc790273",
+      "type": "subject",
+      "inputRevision": 2,
+      "subjectPreserved": true,
+      "draftPreserved": true
+    },
+    {
+      "id": "a157335a-f676-43b9-bbaa-bd678d8d799f",
+      "sourceID": "f412d9eb-20cb-42e5-ae75-9103ecdfff64",
+      "type": "text",
+      "inputRevision": 2,
+      "subjectPreserved": true,
+      "draftPreserved": true
+    },
+    {
+      "id": "db1cd47a-4a7e-458c-8d5a-9a7e8accc928",
+      "sourceID": "6f914a32-14d4-4a1b-939b-b9a00af0eb18",
+      "type": "subject",
+      "inputRevision": 2,
+      "subjectPreserved": true,
+      "draftPreserved": true
+    }
+  ]
+}

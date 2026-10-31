@@ -1,4 +1,11 @@
 import {
+  containerKind,
+  hiddenContainerMemberIDs,
+  createContainer,
+  releaseContainers,
+  selectedContainerRoots,
+} from "./canvas-containers";
+import {
   CanvasNodeType,
   type CanvasConnection,
   type CanvasNodeData,
@@ -42,10 +49,16 @@ export function findGroupDropTarget(
     (node) => movedIds.has(node.id) && node.type !== CanvasNodeType.Group,
   );
   if (!movingNodes.length) return null;
+  const hidden = hiddenContainerMemberIDs(nodes);
   // Walk backwards instead of copying and reversing; this runs on every drag frame.
   for (let index = nodes.length - 1; index >= 0; index -= 1) {
     const group = nodes[index];
-    if (group.type !== CanvasNodeType.Group || movedIds.has(group.id)) continue;
+    if (
+      containerKind(group) !== "group" ||
+      movedIds.has(group.id) ||
+      hidden.has(group.id)
+    )
+      continue;
     if (movingNodes.some((node) => containsCenter(group, node))) return group;
   }
   return null;
@@ -96,30 +109,12 @@ export function snapNodesIntoGroup(
 export const GROUP_WRAP_PADDING = 24;
 export const GROUP_WRAP_TOP_PADDING = 52;
 
-function selectedGroupIds(selectedIds: Set<string>, nodes: CanvasNodeData[]) {
-  return new Set(
-    nodes
-      .filter(
-        (node) =>
-          selectedIds.has(node.id) && node.type === CanvasNodeType.Group,
-      )
-      .map((node) => node.id),
-  );
-}
-
 export function collectGroupMemberNodes(
   selectedIds: Set<string>,
   nodes: CanvasNodeData[],
 ) {
-  const groups = selectedGroupIds(selectedIds, nodes);
-  return nodes.filter(
-    (node) =>
-      node.type !== CanvasNodeType.Group &&
-      (selectedIds.has(node.id) ||
-        (node.metadata?.groupId != null && groups.has(node.metadata.groupId))),
-  );
+  return selectedContainerRoots(nodes, selectedIds);
 }
-
 export function getGroupWrapRect(members: CanvasNodeData[]) {
   const bounds = nodeBounds(members);
   return {
@@ -130,124 +125,63 @@ export function getGroupWrapRect(members: CanvasNodeData[]) {
       bounds.bottom - bounds.top + GROUP_WRAP_TOP_PADDING + GROUP_WRAP_PADDING,
   };
 }
-
 export function canGroupSelectedNodes(
-  selectedIds: Set<string>,
+  selected: Set<string>,
   nodes: CanvasNodeData[],
 ) {
-  const members = collectGroupMemberNodes(selectedIds, nodes);
-  if (members.length < 2) return false;
-  const groupId = members[0].metadata?.groupId;
-  return !groupId || members.some((node) => node.metadata?.groupId !== groupId);
+  return selectedContainerRoots(nodes, selected).length >= 2;
 }
-
 export function canUngroupSelectedNodes(
-  selectedIds: Set<string>,
+  selected: Set<string>,
   nodes: CanvasNodeData[],
 ) {
   return nodes.some(
     (node) =>
-      selectedIds.has(node.id) &&
-      (node.type === CanvasNodeType.Group || Boolean(node.metadata?.groupId)),
+      selected.has(node.id) && (containerKind(node) || node.metadata?.groupId),
   );
 }
-
-function emptyGroupIds(nodes: CanvasNodeData[], keepId?: string) {
-  const used = new Set(
-    nodes.flatMap((node) =>
-      node.type !== CanvasNodeType.Group && node.metadata?.groupId
-        ? [node.metadata.groupId]
-        : [],
-    ),
-  );
-  return new Set(
-    nodes
-      .filter(
-        (node) =>
-          node.type === CanvasNodeType.Group &&
-          node.id !== keepId &&
-          !used.has(node.id),
-      )
-      .map((node) => node.id),
-  );
-}
-
-function withoutRemoved(
-  nodes: CanvasNodeData[],
-  connections: CanvasConnection[],
-  removedIds: Set<string>,
-) {
-  return {
-    nodes: nodes.filter((node) => !removedIds.has(node.id)),
-    connections: connections.filter(
-      (connection) =>
-        !removedIds.has(connection.fromNodeId) &&
-        !removedIds.has(connection.toNodeId),
-    ),
-  };
-}
-
 export function applyGroupSelection(
-  selectedIds: Set<string>,
+  selected: Set<string>,
   nodes: CanvasNodeData[],
   connections: CanvasConnection[],
   group: CanvasNodeData,
 ) {
-  const members = collectGroupMemberNodes(selectedIds, nodes);
-  if (members.length < 2) return null;
-  const memberIds = new Set(members.map((node) => node.id));
-  const flattenedGroupIds = selectedGroupIds(selectedIds, nodes);
-  const updated = nodes
-    .filter((node) => !flattenedGroupIds.has(node.id))
-    .map((node) =>
-      memberIds.has(node.id)
-        ? { ...node, metadata: { ...node.metadata, groupId: group.id } }
-        : node,
-    );
-  const insertAt = updated.findIndex((node) => memberIds.has(node.id));
-  const withGroup =
-    insertAt < 0
-      ? [...updated, group]
-      : [...updated.slice(0, insertAt), group, ...updated.slice(insertAt)];
-  const next = withoutRemoved(
-    withGroup,
+  if (!canGroupSelectedNodes(selected, nodes)) return null;
+  return {
+    nodes: createContainer(nodes, selected, group, "group"),
     connections,
-    new Set([...flattenedGroupIds, ...emptyGroupIds(withGroup, group.id)]),
-  );
-  return { ...next, selectedIds: [group.id] };
+    selectedIds: [group.id],
+  };
 }
-
 export function applyUngroupSelection(
-  selectedIds: Set<string>,
+  selected: Set<string>,
   nodes: CanvasNodeData[],
   connections: CanvasConnection[],
 ) {
-  const flattenedGroupIds = selectedGroupIds(selectedIds, nodes);
-  if (
-    !flattenedGroupIds.size &&
-    !nodes.some((node) => selectedIds.has(node.id) && node.metadata?.groupId)
-  )
-    return null;
-  const releasedIds = new Set<string>();
-  const updated = nodes
-    .filter((node) => !flattenedGroupIds.has(node.id))
-    .map((node) => {
-      const groupId = node.metadata?.groupId;
-      if (!groupId) return node;
-      if (!flattenedGroupIds.has(groupId) && !selectedIds.has(node.id))
-        return node;
-      releasedIds.add(node.id);
-      return { ...node, metadata: { ...node.metadata, groupId: undefined } };
-    });
-  const next = withoutRemoved(
-    updated,
-    connections,
-    new Set([...flattenedGroupIds, ...emptyGroupIds(updated)]),
+  if (!canUngroupSelectedNodes(selected, nodes)) return null;
+  const containers = new Set(
+    nodes
+      .filter((node) => selected.has(node.id) && containerKind(node))
+      .map((node) => node.id),
+  );
+  const next = releaseContainers(nodes, containers).map((node) =>
+    selected.has(node.id) && !containers.size
+      ? { ...node, metadata: { ...node.metadata, groupId: undefined } }
+      : node,
   );
   return {
-    ...next,
-    selectedIds: next.nodes
-      .filter((node) => selectedIds.has(node.id) || releasedIds.has(node.id))
+    nodes: next,
+    connections: connections.filter(
+      (edge) =>
+        !containers.has(edge.fromNodeId) && !containers.has(edge.toNodeId),
+    ),
+    selectedIds: next
+      .filter(
+        (node) =>
+          selected.has(node.id) ||
+          node.metadata?.groupId !==
+            nodes.find((old) => old.id === node.id)?.metadata?.groupId,
+      )
       .map((node) => node.id),
   };
 }
@@ -256,12 +190,14 @@ export function findContainingGroupId(
   node: CanvasNodeData,
   nodes: CanvasNodeData[],
 ) {
+  const hidden = hiddenContainerMemberIDs(nodes);
   // Called once per moved node when a drag ends, so avoid copying the node list each time.
   for (let index = nodes.length - 1; index >= 0; index -= 1) {
     const group = nodes[index];
     if (
-      group.type === CanvasNodeType.Group &&
+      containerKind(group) === "group" &&
       group.id !== node.id &&
+      !hidden.has(group.id) &&
       containsCenter(group, node)
     )
       return group.id;

@@ -62,6 +62,9 @@ func (s *Store) persistYjsProjection(ctx context.Context, tx *gorm.DB, a identit
 	if err := s.checkMediaReferences(ctx, tx, a, p, commands, candidate.Document); err != nil {
 		return 0, err
 	}
+	if err := application.ValidateSubjectNodes(ctx, a, p, sourceNodes, s.subjectSources(tx)); err != nil {
+		return 0, err
+	}
 	for _, n := range sourceNodes {
 		if n.Config.Composer != nil {
 			if err := pgprompt.ValidateDraftSources(tx, a, p, *n.Config.Composer, false, s.subjectSources(tx)); err != nil {

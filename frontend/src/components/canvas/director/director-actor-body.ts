@@ -1,4 +1,4 @@
-// Adapted from BeefTV 2327ee2. MIT: notices/BeefTV-MIT.txt.
+// Adapted MIT implementation; source attribution: notices/third-party-MIT.txt.
 import { Bone, Matrix4, SkinnedMesh, Vector3, type Object3D } from "three";
 import {
   directorBodyProfile,

@@ -1,0 +1,7 @@
+Browser tab: 1980372098, Title: "连线完整验收-20261029 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/52298cdd-795e-4f5a-af85-47eb2fb84b6e".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 313-314
+~															318 button Play timeline preview
+~															327 slider Timeline playhead, Value: 0
+~								53 pop up button (collapsed) Description: Zoom options, 66%, ID: radix-:modern-js-rk:, Secondary Actions: Expand
+The focused UI element is 105 button 上传

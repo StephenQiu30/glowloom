@@ -1,0 +1,30 @@
+[
+  {
+    "bounds": {
+      "bottom": 367.7001953125,
+      "height": 158.79261779785156,
+      "left": 736.031005859375,
+      "right": 894.8236083984375,
+      "top": 208.90757751464844,
+      "width": 158.7926025390625,
+      "x": 736.031005859375,
+      "y": 208.90757751464844
+    },
+    "name": "文本 node: 文本 1",
+    "style": "z-index: 0; transform: translate(700.254px, -120.606px); pointer-events: all; visibility: visible; width: 320px; height: 320px; --octo-canvas-node-external-frame-inset: calc(-1 * 4px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-canvas-node-external-frame-radius: calc(8px + 4px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-canvas-node-external-frame-stroke-width: calc(1px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-canvas-node-chrome-counter-scale: 2; --octo-canvas-node-surface-stroke-counter-scale: 2.015206961881267; --octo-canvas-node-tag-hit-area-counter-scale: 1.0076034809406336;"
+  },
+  {
+    "bounds": {
+      "bottom": 358.39630126953125,
+      "height": 158.79263305664062,
+      "left": 925,
+      "right": 1083.7926025390625,
+      "top": 199.60366821289065,
+      "width": 158.7926025390625,
+      "x": 925,
+      "y": 199.60366821289065
+    },
+    "name": "图片 node: 图片 1",
+    "style": "z-index: 11; transform: translate(1081.07px, -139.355px); pointer-events: all; visibility: visible; width: 320px; height: 320px; --octo-canvas-node-external-frame-inset: calc(-1 * 4px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-canvas-node-external-frame-radius: calc(8px + 4px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-canvas-node-external-frame-stroke-width: calc(1px * var(--octo-canvas-node-chrome-counter-scale, 1)); --octo-canvas-node-chrome-counter-scale: 2; --octo-canvas-node-tag-hit-area-counter-scale: 1.0076034809406336; --octo-canvas-node-surface-stroke-counter-scale: 2.015206961881267;"
+  }
+]

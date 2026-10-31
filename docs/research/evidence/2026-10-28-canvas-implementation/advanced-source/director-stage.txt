@@ -1,0 +1,177 @@
+Browser tab: 1980371314, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+0 AXWebArea 一致性调研-202610221 - 即梦AI, URL: jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage
+	1 container
+		2 container
+			3 container Canvas top bar
+				4 text 已保存
+			5 container Canvas workspace
+				6 container
+					7 container
+						8 container Canvas editing area
+							9 container
+								10 container Canvas
+					11 container Canvas left toolbar
+						12 toolbar Canvas toolbar
+					13 container Canvas viewport controls
+		14 container 导演台, ID: radix-:modern-js-r5q:
+			15 heading 导演台, Value: 2, ID: radix-:modern-js-r5r:
+				16 text 导演台
+			17 container
+				18 text 3D导演台
+				19 pop up button (collapsed) Description: 快捷键, Secondary Actions: Expand
+				20 button (disabled) 保存
+				21 tab group 3D导演台
+					22 tab (selected, settable, boolean) 静态预演, Help: 布置场景、调整姿势，完成单帧构图, Value: 1
+					23 tab (selectable, settable, boolean) 动态预演, Help: 编排角色动作和运镜，制作动态预演, Value: 0
+				24 button 拍摄
+				25 checkbox Description: 镜头素材, Value: 0
+				26 button 返回画布
+			27 container
+				28 container
+					29 image 3D viewport
+					30 button Description: 机位 · 实时预览, Help: 机位 · 实时预览 · 同时查看导演视角和机位画面
+						31 text 分屏预览
+						32 text  ↗
+					33 pop up button (collapsed) Description: 机位 · 实时预览, ID: radix-:modern-js-r6a:, Secondary Actions: Expand
+					34 button 收起机位预览
+					35 slider Description: 拖动调整预览大小, Value: 320
+				36 pop up button (collapsed) Description: 导演视角, Help: 切换视角, ID: radix-:modern-js-r6e:, Secondary Actions: Expand
+			37 container 对象
+				38 checkbox Description: 选择 · 0, Value: 0
+				39 checkbox Description: 移动 · 1, Value: 1
+				40 checkbox Description: 旋转 · 2, Value: 0
+				41 checkbox Description: 缩放 · 3, Value: 0
+				42 button (disabled) 落到地面 · G
+				43 pop up button (collapsed) Description: 视图设置, ID: radix-:modern-js-r6g:, Secondary Actions: Expand
+			44 container
+				45 heading 资产, Value: 2
+					46 text 资产
+				47 button 关闭
+				48 splitter 资产
+				49 tab group 资产
+					50 tab (selected, settable, boolean) Description: 角色, Value: 1
+					51 tab (selectable, settable, boolean) Description: 物体, Value: 0
+					52 tab (selectable, settable, boolean) Description: 背景, Value: 0
+					53 tab (selectable, settable, boolean) Description: 机位, Value: 0
+				54 text field (settable) 搜索素材 · 角色
+				55 tab group
+					56 tab (selected, settable, boolean) 全部, Value: 1
+					57 tab (selectable, settable, boolean) 我的, Value: 0
+				58 container
+					59 text 我的
+					60 button 添加角色, Help: 支持使用 Mixamo 骨架的 FBX 角色文件
+					61 text 预设
+					62 button 男性 · 标准 预设
+						63 text 男性 · 标准
+						64 text 预设
+					65 button 女性 · 标准 预设
+						66 text 女性 · 标准
+						67 text 预设
+					68 button 男性 · 少年 预设
+						69 text 男性 · 少年
+						70 text 预设
+					71 button 女性 · 少年 预设
+						72 text 女性 · 少年
+						73 text 预设
+					74 button 男性·儿童 预设
+						75 text 男性·儿童
+						76 text 预设
+					77 button 女性·儿童 预设
+						78 text 女性·儿童
+						79 text 预设
+					80 button 男性·纤瘦 预设
+						81 text 男性·纤瘦
+						82 text 预设
+					83 button 女性·纤瘦 预设
+						84 text 女性·纤瘦
+						85 text 预设
+					86 button 男性·健壮 预设
+						87 text 男性·健壮
+						88 text 预设
+					89 button 女性·健壮 预设
+						90 text 女性·健壮
+						91 text 预设
+					92 button 男性·丰腴 预设
+						93 text 男性·丰腴
+						94 text 预设
+					95 button 女性·丰腴 预设
+						96 text 女性·丰腴
+						97 text 预设
+			98 container
+				99 container :modern-js-r6j:
+					100 splitter 属性
+					101 container
+						102 heading 对象, Value: 2
+							103 text 对象
+						104 search text field (settable) 搜索对象
+						105 container
+							106 button (expanded) 机位 1, Secondary Actions: Collapse
+								107 text 机位
+								108 text 1
+							109 container
+								110 button (collapsed) Description: 展开 机位, Secondary Actions: Expand
+								111 sortable 机位, Value: 0
+								112 button 聚焦选中对象 机位
+								113 button 锁定对象 机位
+								114 button 实时预览 机位
+						115 splitter 对象 / 属性
+						116 heading 属性, Value: 2
+							117 text 属性
+						118 container
+							119 text 环境预设
+							120 pop up button (collapsed) Description: 环境预设, ID: radix-:modern-js-r6n:, Secondary Actions: Expand
+							121 text 背景颜色
+							122 color well (settable) Description: 背景颜色, Value: #171717
+							123 text field (settable) Description: 背景颜色, Value: #171717
+							124 text 地面颜色
+							125 color well (settable) Description: 地面颜色, Value: #242424
+							126 text field (settable) Description: 地面颜色, Value: #242424
+							127 text 显示地面
+							128 switch Description: 显示地面, Value: 1
+							129 container 地面不透明度
+								130 button 地面不透明度, drag horizontally to adjust
+								131 stepper (settable, integer) Description: 地面不透明度, Value: 50
+								132 text %
+							133 container 曝光
+								134 button 曝光, drag horizontally to adjust
+								135 stepper (settable, float) Description: 曝光, Value: 1.0499999523162842, Details: 1.05
+							136 text 显示网格
+							137 switch Description: 显示网格, Value: 1
+							138 heading 主光, Value: 3
+								139 text 主光
+							140 text 灯光颜色
+							141 color well (settable) Description: 灯光颜色, Value: #ffffff
+							142 text field (settable) Description: 灯光颜色, Value: #ffffff
+							143 container 强度
+								144 button 强度, drag horizontally to adjust
+								145 stepper (settable, float) Description: 强度, Value: 3.4000000953674316, Details: 3.4
+							146 container 水平角度
+								147 button 水平角度, drag horizontally to adjust
+								148 stepper (settable, integer) Description: 水平角度, Value: -34
+								149 text °
+							150 container 仰角
+								151 button 仰角, drag horizontally to adjust
+								152 stepper (settable, integer) Description: 仰角, Value: 51
+								153 text °
+							154 text 阴影
+							155 switch Description: 阴影, Value: 1
+							156 heading 补光, Value: 3
+								157 text 补光
+							158 text 灯光颜色
+							159 color well (settable) Description: 灯光颜色, Value: #ffffff
+							160 text field (settable) Description: 灯光颜色, Value: #ffffff
+							161 container 强度
+								162 button 强度, drag horizontally to adjust
+								163 stepper (settable, float) Description: 强度, Value: 2.0999999046325684, Details: 2.1
+							164 heading 轮廓光, Value: 3
+								165 text 轮廓光
+							166 text 灯光颜色
+							167 color well (settable) Description: 灯光颜色, Value: #ffffff
+							168 text field (settable) Description: 灯光颜色, Value: #ffffff
+							169 container 强度
+								170 button 强度, drag horizontally to adjust
+								171 stepper (settable, float) Description: 强度, Value: 1.100000023841858, Details: 1.1
+				172 button (expanded) Description: 收起对象与属性面板, Secondary Actions: Collapse
+			173 pop up button (collapsed) Description: 对象操作, ID: radix-:modern-js-r6k:, Secondary Actions: Expand
+
+The focused UI element is 0 AXWebArea 一致性调研-202610221 - 即梦AI, URL: jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage

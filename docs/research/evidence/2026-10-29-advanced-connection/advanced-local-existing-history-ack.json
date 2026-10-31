@@ -1,0 +1,32 @@
+[
+  {
+    "epoch": "76a8ab91-62da-422a-9358-e4a37a9485a4",
+    "commitSeq": "15",
+    "contentRevision": "16",
+    "graphHash": "115744fdcb3a997c54faa42f77bdf1a3be76b9029052c99fdff9a7797941d44c",
+    "updateId": "9bee8e11-928f-4c7c-8779-df83c231582b",
+    "payloadHash": "4d2590b4568919c285c5fc1be1b0817ba7cfa748b7d4fd21a8d2b3bd459880c1",
+    "effect": "VISIBLE_CHANGE",
+    "status": "accepted"
+  },
+  {
+    "epoch": "76a8ab91-62da-422a-9358-e4a37a9485a4",
+    "commitSeq": "15",
+    "contentRevision": "16",
+    "graphHash": "115744fdcb3a997c54faa42f77bdf1a3be76b9029052c99fdff9a7797941d44c",
+    "updateId": "9bee8e11-928f-4c7c-8779-df83c231582b",
+    "payloadHash": "4d2590b4568919c285c5fc1be1b0817ba7cfa748b7d4fd21a8d2b3bd459880c1",
+    "effect": "VISIBLE_CHANGE",
+    "status": "accepted"
+  },
+  {
+    "epoch": "76a8ab91-62da-422a-9358-e4a37a9485a4",
+    "commitSeq": "16",
+    "contentRevision": "17",
+    "graphHash": "abf488b3925c53b035ed2e70180ba9a9317fd3d8165a65d5027f3fa1bd666014",
+    "updateId": "77ab3fb3-cd33-4ce6-a778-7dff3e41151e",
+    "payloadHash": "e82851aa0825f73bb81b568398e7e75200bd2037f6a2ce981d3bb4d6a815f571",
+    "effect": "VISIBLE_CHANGE",
+    "status": "accepted"
+  }
+]

@@ -23,6 +23,7 @@ func (s *ProjectRetentionStore) ClearProjectContent(ctx context.Context, project
 		return fmt.Errorf("invalid canvas retention binding")
 	}
 	statements := []string{
+		`UPDATE canvas.assistant_session SET title='已删除会话',turns='[]'::jsonb,revision=revision+1 WHERE project_id=?`,
 		`DELETE FROM canvas.edge WHERE document_id IN (SELECT id FROM canvas.document WHERE project_id=?)`,
 		`DELETE FROM canvas.node WHERE document_id IN (SELECT id FROM canvas.document WHERE project_id=?)`,
 		`UPDATE canvas.command_log SET commands='[]'::jsonb,is_delete=true WHERE document_id IN (SELECT id FROM canvas.document WHERE project_id=?)`,

@@ -10,12 +10,17 @@ export type CanvasPreparedDocument = CanvasContract.CanvasVO & {
 };
 
 export type CanvasDocumentIntegration = {
-  renderToolNode?: (nodeId: string, type: string) => ReactNode;
   presenceOverlay?: ReactNode;
+  onOpenAssistant?: () => void;
+  onTransferSelection?: (
+    selection: import("../lib/canvas-clipboard").CanvasClipboard,
+  ) => void;
   onCursor?: (cursor: { x: number; y: number } | null) => void;
   mediaContext?: import("../lib/canvas-file-preview").CanvasFilePreviewContext;
   mediaEnabled?: boolean;
   textBinding?: (nodeId: string) => NodeTextBinding | undefined;
+  renderToolNode?: (nodeId: string, type: string) => ReactNode;
+  renderGenerationPanel?: (nodeId: string) => ReactNode;
   undo?: {
     canUndo: boolean;
     canRedo: boolean;
@@ -24,6 +29,7 @@ export type CanvasDocumentIntegration = {
   };
   viewStateKey?: string;
   projectId?: string;
+  getDocumentEpoch?: () => string | null;
   initialState: CanvasEditorState;
   toolbar: (
     controls: Omit<
@@ -43,6 +49,18 @@ export type CanvasDocumentIntegration = {
   connectDomain?: (
     request: import("../lib/canvas-domain-connection").CanvasDomainConnectionRequest,
   ) => Promise<string>;
+  audioConnections?: {
+    prepare?: (sources: CanvasEditorState["nodes"]) => void;
+    preview: (
+      sources: CanvasEditorState["nodes"],
+      target?: CanvasEditorState["nodes"][number],
+    ) => import("@/components/generation/prompt-document").PromptDraft;
+    connect: (
+      request: import("../lib/canvas-domain-connection").CanvasDomainConnectionRequest & {
+        newSources?: CanvasEditorState["nodes"];
+      },
+    ) => Promise<string>;
+  };
   onChange: (state: CanvasEditorState, stable: boolean) => void;
   pendingForms?: CanvasPendingForms;
   onPendingForm?: (
@@ -70,6 +88,7 @@ export type CanvasDocumentIntegration = {
     ) => Promise<void>;
   };
 };
+
 /** Recheck the whole connection candidate before a gesture or a visible graph commit. */
 export function admitCanvasConnectionGraph(
   integration:

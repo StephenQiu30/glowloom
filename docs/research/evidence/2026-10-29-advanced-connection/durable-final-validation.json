@@ -1,0 +1,46 @@
+{
+  "status": "implementation_complete_checks_not_all_green",
+  "initialRelatedTests": {
+    "files": 36,
+    "passed": 368,
+    "failed": 1,
+    "failure": "cinema-kit-picker motion selection: default 5000ms timeout",
+    "exit": 1
+  },
+  "targetedCinemaRecheck": {
+    "passed": 3,
+    "failed": 1,
+    "failure": "camera cycles: default 5000ms timeout; original motion passed",
+    "exit": 1
+  },
+  "focusedSessionJournal": {
+    "tests": 87,
+    "result": "all passed within initial related collection",
+    "note": "86-test focused green preceded additional rejected-after-reopen regression, whose red and green logs are retained"
+  },
+  "eslint": {
+    "files": 68,
+    "exit": 0,
+    "finalEditorExit": 0
+  },
+  "standaloneTsc": {
+    "exit": 2,
+    "cause": "Parallel timeline-export.test.tsx:709 implicit this; later fixed by its owner; no independent rerun"
+  },
+  "initialBuild": {
+    "exit": 1,
+    "cause": "same parallel timeline test TypeScript failure",
+    "editorChangedDuringValidation": [
+      "src/components/canvas/editor/canvas-editor.tsx"
+    ]
+  },
+  "finalSnapshotBuild": {
+    "exit": 0,
+    "seconds": 86.37,
+    "reason": "Parallel timeline test this annotation repaired; compile final reverse-pinned-source editor changes",
+    "changedDuringRebuild": []
+  },
+  "realBusinessCrossLoginAcceptance": "not verified; root reports browser/media/collaboration unavailable",
+  "realIndexedDBBrowserLayer": "root verified synthetic save/reload/actor isolation, separate idb-browser-validation.md",
+  "noGitCommitOrPush": true
+}

@@ -34,7 +34,7 @@ func (h *LibraryHandler) Register(group *gin.RouterGroup) {
 }
 
 func libraryScope(query url.Values) (domain.LibraryScope, error) {
-	allowed := map[string]bool{"scope": true, "project_id": true, "page": true, "page_size": true, "kind": true, "category": true, "folder_id": true, "root_only": true, "favorite_only": true, "recent_only": true, "catalog_state": true, "search": true, "order": true}
+	allowed := map[string]bool{"scope": true, "project_id": true, "page": true, "page_size": true, "kind": true, "category": true, "folder_id": true, "root_only": true, "favorite_only": true, "recent_only": true, "catalog_state": true, "search": true, "order": true, "created_from": true, "created_before": true, "origin": true, "resolutions": true, "ratios": true}
 	for key, values := range query {
 		if !allowed[key] || len(values) != 1 {
 			return domain.LibraryScope{}, domain.ErrInvalidLibrary
@@ -90,6 +90,9 @@ func libraryPageQuery(query url.Values, scope domain.LibraryScope) (application.
 	if query.Has("order") {
 		page.Order = query.Get("order")
 	}
+	if err := libraryPickerQuery(query, &page); err != nil {
+		return page, err
+	}
 	return page, page.Validate(scope)
 }
 
@@ -111,6 +114,11 @@ func libraryPageQuery(query url.Values, scope domain.LibraryScope) (application.
 // @Param catalog_state query string false "active/trashed；默认active"
 // @Param search query string false "完整库文字搜索"
 // @Param order query string false "updated_desc/updated_asc/name_asc"
+// @Param created_from query string false "创建时间下界RFC3339，包含"
+// @Param created_before query string false "创建时间上界RFC3339，不包含"
+// @Param origin query string false "真实素材来源" Enums(upload,generated,system)
+// @Param resolutions query string false "图片实际长边1024/2048/4096/8192，1K,2K,4K,8K逗号分隔"
+// @Param ratios query string false "图片实际宽高比例21:9,16:9,3:2,4:3,1:1,3:4,2:3,9:16逗号分隔"
 // @Success 200 {object} application.LibraryPage
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem

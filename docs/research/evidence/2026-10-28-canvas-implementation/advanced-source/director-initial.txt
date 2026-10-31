@@ -1,0 +1,36 @@
+Browser tab: 1980371314, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+0 AXWebArea 一致性调研-202610221 - 即梦AI, URL: jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage
+	1 container
+		2 container
+			3 container Canvas top bar
+				4 text 已保存
+			5 container Canvas workspace
+				6 container
+					7 container
+						8 container Canvas editing area
+							9 container
+								10 container Canvas
+					11 container Canvas left toolbar
+						12 toolbar Canvas toolbar
+					13 container Canvas viewport controls
+		14 container 导演视角操作, ID: radix-:modern-js-r60:
+			15 heading 导演视角操作, Value: 2, ID: radix-:modern-js-r61:
+				16 text 导演视角操作
+			17 text 使用键盘在场景中移动和旋转视角
+			18 container 移动视角
+				19 heading 移动视角, Value: 3, ID: director-stage-free-view-guide-move
+					20 text 移动视角
+				21 text 按住按键即可持续移动
+				22 text Q 下降 W 前进 E 上升 A 向左 S 后退 D 向右
+			23 container 旋转视角
+				24 heading 旋转视角, Value: 3, ID: director-stage-free-view-guide-rotate
+					25 text 旋转视角
+				26 text 按住按键即可持续旋转
+				27 text I 上转 J 左转 K 下转 L 右转
+			28 text Shift
+			29 text 加速移动
+			30 text 移动或旋转时按住 Shift
+			31 button 知道了
+			32 button 关闭
+
+The focused UI element is 31 button 知道了

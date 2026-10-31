@@ -1,0 +1,124 @@
+Browser tab: 1980372111, Title: "无限画布", URL: "http://localhost:1122/canvas?project_id=c6ba88ae-048b-4035-ae89-5be907ff1a3a&canvas_id=1d622b24-44f9-43d1-886d-affffa744115&scope_id=a6c05c02-8821-40f9-b00e-b841f9be90d0".
+1 AXWebArea 无限画布, URL: localhost:1122/canvas?project_id=c6ba88ae-048b-4035-ae89-5be907ff1a3a&canvas_id=1d622b24-44f9-43d1-886d-affffa744115&scope_id=a6c05c02-8821-40f9-b00e-b841f9be90d0
+	5 container
+		6 container 创作画布
+			7 container
+				8 container 协作者光标
+				9 image
+					10 image
+					11 image
+					12 image
+					13 image
+				14 container 图片节点：timeline-test-image.png
+					15 text 未选中。 可编辑。 媒体资源：0 项就绪，0 项处理中，0 项失败，1 项状态未核验。
+					16 button timeline-test-image.png, Help: 双击或按 Enter 修改节点名称
+					17 image timeline-test-image.png
+					18 pop up button 连接输出节点
+				19 container 时间线节点：时间线 1
+					20 text 未选中。 可编辑。 无媒体资源。
+					21 button 时间线 1, Help: 双击或按 Enter 修改节点名称
+					22 container 时间线工作区
+						23 container
+							24 button (disabled) 分割
+							25 button (disabled) 删除
+							26 button 播放时间线预览
+							27 text 00:00  /  00:05
+							28 pop up button (collapsed) Description: 导出, Secondary Actions: Expand
+							29 button 全屏编辑
+						30 container
+							31 text 00:00 00:05 00:10 00:15 00:20 00:25
+							32 container 主视觉轨
+								33 checkbox Description: 静音 主视觉轨, Value: 0
+								34 container
+									35 pop up button (collapsed) Description: 添加素材到 主视觉轨, ID: radix-_r_3q_, Secondary Actions: Expand
+									36 checkbox Description: timeline-test-image.png，00:00:00，时长5.00秒, Value: 0
+							37 slider Description: 时间线播放头, Value: 0
+					38 pop up button 连接输入节点
+				39 container 主体节点：主体 1
+					40 text 未选中。 可编辑。 媒体资源：0 项就绪，0 项处理中，0 项失败，1 项状态未核验。
+					41 button 主体 1, Help: 双击或按 Enter 修改节点名称
+					42 container
+						43 image 主体 1
+						44 button 移除主媒体并清除主体
+						45 text 暂无描述
+						46 container 辅助媒体
+						47 button 编辑主体
+						48 button 主体导入
+					49 pop up button 连接输入节点
+					50 pop up button 连接输出节点
+				51 container 视频节点：timeline-test-4s.mp4
+					52 text 未选中。 可编辑。 媒体资源：0 项就绪，0 项处理中，0 项失败，1 项状态未核验。
+					53 button timeline-test-4s.mp4, Help: 双击或按 Enter 修改节点名称
+					54 container
+						55 container timeline-test-4s.mp4
+						56 button 播放视频
+					57 pop up button 连接输出节点
+				58 container 音频节点：timeline-test-7s.wav
+					59 text 未选中。 可编辑。 媒体资源：0 项就绪，0 项处理中，0 项失败，1 项状态未核验。
+					60 button timeline-test-7s.wav, Help: 双击或按 Enter 修改节点名称
+					61 container
+						62 text 音频
+						63 button 播放
+						64 slider 音频时间进度条
+						65 container
+							66 slider
+							67 button
+						68 pop up button 显示更多媒体控件
+					69 pop up button 连接输出节点
+				70 container 时间线节点：时间线 2
+					71 text 未选中。 可编辑。 无媒体资源。
+					72 button 时间线 2, Help: 双击或按 Enter 修改节点名称
+					73 container 时间线工作区
+						74 container
+							75 button (disabled) 分割
+							76 button (disabled) 删除
+							77 button 播放时间线预览
+							78 text 00:00  /  00:07
+							79 pop up button (collapsed) Description: 导出, Secondary Actions: Expand
+							80 button 全屏编辑
+						81 container
+							82 text 00:00 00:05 00:10 00:15 00:20 00:25
+							83 container 主视觉轨
+								84 checkbox Description: 静音 主视觉轨, Value: 0
+								85 container
+									86 pop up button (collapsed) Description: 添加素材到 主视觉轨, ID: radix-_r_44_, Secondary Actions: Expand
+									87 checkbox Description: timeline-test-4s.mp4，00:00:00，时长4.00秒, Value: 0
+							88 container 音频轨 1
+								89 checkbox Description: 静音 音频轨 1, Value: 0
+								90 checkbox Description: timeline-test-7s.wav，00:00:00，时长7.00秒, Value: 0
+									91 image 音频波形
+							92 slider Description: 时间线播放头, Value: 0
+					93 pop up button 连接输入节点
+		94 container
+			95 pop up button (collapsed) Description: 打开导航菜单, ID: radix-_r_1r_, Secondary Actions: Expand
+			96 pop up button (collapsed) Description: 打开画布菜单, ID: radix-_r_1t_, Secondary Actions: Expand
+			97 pop up button (collapsed) Description: 节点统计，共 6 个节点, Secondary Actions: Expand
+			98 text 已保存
+			99 container 1 位参与者在线
+				100 pop up button (collapsed) Description: 查看参与者 StephenQiu（你）, Secondary Actions: Expand
+			101 pop up button (collapsed) Description: 搜索画布, Secondary Actions: Expand
+			102 pop up button (collapsed) Description: 生成历史, Secondary Actions: Expand
+			103 button 复制画布链接
+			104 link Description: 账号设置, Value: localhost:1122/account
+			105 pop up button (collapsed) Description: 更多画布操作, Secondary Actions: Expand
+		106 container 画布工具栏
+			107 button 添加文本节点
+			108 button 添加图片节点
+			109 button 添加视频节点
+			110 button 添加音频节点
+			111 button 添加时间线节点
+			112 button 添加主体节点
+			113 pop up button (collapsed) Description: 导演工具箱, Secondary Actions: Expand
+			114 button 添加导演台节点
+			115 button 资产管理
+			116 button 本地上传
+		117 container
+			118 container 画布视图控制
+				119 pop up button (collapsed) Description: 画布操作模式：选择, Help: 操作模式（V / H）, ID: radix-_r_2h_, Secondary Actions: Expand
+				120 checkbox Description: 小地图, Value: 0
+				121 checkbox Description: 显示连线, Value: 1
+				122 pop up button (collapsed) Description: 缩放选项，当前 100%, Secondary Actions: Expand
+			123 button 与 AI 对话
+	4 container 通知 alt+T
+
+The focused UI element is 1 AXWebArea 无限画布, URL: localhost:1122/canvas?project_id=c6ba88ae-048b-4035-ae89-5be907ff1a3a&canvas_id=1d622b24-44f9-43d1-886d-affffa744115&scope_id=a6c05c02-8821-40f9-b00e-b841f9be90d0

@@ -12,7 +12,7 @@ type CanvasNodeSpec = {
 export const NODE_DEFAULT_SIZE = {
   [CanvasNodeType.Image]: {
     width: 320,
-    height: 180,
+    height: 320,
     get title() {
       return "图片";
     },
@@ -60,7 +60,7 @@ export const NODE_DEFAULT_SIZE = {
 export const NODE_SPECS = {
   [CanvasNodeType.Image]: {
     width: 320,
-    height: 180,
+    height: 320,
     get title() {
       return NODE_DEFAULT_SIZE[CanvasNodeType.Image].title;
     },

@@ -29,6 +29,7 @@ type ProjectCopyStore struct {
 	db          *gorm.DB
 	sourceMedia MediaReaderFactory
 	targetMedia CopyMediaReaderFactory
+	subjects    CopySubjectSourcesFactory
 }
 
 // NewProjectCopyStore injects the admission transaction and media owner readers.
@@ -63,13 +64,19 @@ func loadCopyDocument(tx *gorm.DB, row documentRow) (domain.Document, error) {
 		return domain.Document{}, err
 	}
 	var nodes []nodeRow
-	if err := tx.Raw(`SELECT id,title,node_type,node_action,ref_type,ref_id,config,x,y,width,height,parent_id,z_index,last_operation_id FROM canvas.node WHERE document_id=? AND NOT is_delete ORDER BY id FOR SHARE`, row.ID).Scan(&nodes).Error; err != nil {
+	if err := tx.Raw(`SELECT id,title,node_type,node_action,ref_type,ref_id,config,x,y,width,height,parent_id,z_index,last_operation_id,COALESCE(input_revision,0) AS input_revision FROM canvas.node WHERE document_id=? AND NOT is_delete ORDER BY id FOR SHARE`, row.ID).Scan(&nodes).Error; err != nil {
 		return domain.Document{}, err
 	}
 	for _, node := range nodes {
 		n := domain.Node{ID: node.ID, Title: node.Title, NodeType: node.NodeType, NodeAction: node.NodeAction, RefType: node.RefType, RefID: node.RefID, X: node.X, Y: node.Y, Width: node.Width, Height: node.Height, ParentID: node.ParentID, ZIndex: node.ZIndex, LastOperationID: node.LastOperationID}
+		if node.NodeType == "subject" {
+			n.InputRevision = node.InputRevision
+		}
 		if err := strictCopyJSON(node.Config, &n.Config); err != nil {
 			return domain.Document{}, err
+		}
+		if domain.IsDraft(n) {
+			n.InputRevision = node.InputRevision
 		}
 		doc.Nodes = append(doc.Nodes, n)
 	}
@@ -103,6 +110,9 @@ func (s *ProjectCopyStore) Freeze(ctx context.Context, actor identityapp.Princip
 	for _, row := range rows {
 		doc, err := loadCopyDocument(tx, row)
 		if err != nil {
+			return application.ProjectCopySnapshot{}, err
+		}
+		if err := application.ValidateSubjectNodes(ctx, actor, binding.SourceProjectID, doc.Nodes, s.copySubjectSources(tx, binding)); err != nil {
 			return application.ProjectCopySnapshot{}, err
 		}
 		if err := (&Store{db: tx, media: s.sourceMedia}).checkMediaReferences(ctx, tx, actor, binding.SourceProjectID, []domain.Command{{Type: "AddNodes", Nodes: doc.Nodes}}, doc); err != nil {
@@ -178,6 +188,11 @@ func (s *ProjectCopyStore) Copy(ctx context.Context, actor identityapp.Principal
 	if err != nil {
 		return application.ProjectCopyReceipt{}, err
 	}
+	for _, item := range copied {
+		if err := application.ValidateSubjectNodes(ctx, actor, binding.TargetProjectID, item.Document.Nodes, s.copySubjectSources(tx, binding)); err != nil {
+			return application.ProjectCopyReceipt{}, err
+		}
+	}
 	result := application.ProjectCopyReceipt{ManifestSHA256: expected.ManifestSHA256, ContentSHA256: contentHash, Documents: len(copied)}
 	for _, item := range copied {
 		result.ClearedOperationBindings += item.ClearedOperationBindings
@@ -222,6 +237,22 @@ func (s *ProjectCopyStore) Copy(ctx context.Context, actor identityapp.Principal
 		}
 		if err := saveGraph(tx, domain.Document{}, doc); err != nil {
 			return application.ProjectCopyReceipt{}, fmt.Errorf("insert unpublished graph: %w", err)
+		}
+		inputs := []domain.InputSnapshot{}
+		for _, node := range doc.Nodes {
+			if node.Config.Subject != nil {
+				inputs = append(inputs, domain.InputSnapshot{NodeID: node.ID, Revision: node.InputRevision, Subject: node.Config.Subject, Title: node.Title})
+			}
+			if domain.IsDraft(node) {
+				effective, err := domain.GenerationInput(doc, node)
+				if err != nil {
+					return application.ProjectCopyReceipt{}, err
+				}
+				inputs = append(inputs, domain.InputSnapshot{NodeID: node.ID, Revision: node.InputRevision, Draft: effective})
+			}
+		}
+		if err := saveInputs(tx, actor.ID, inputs); err != nil {
+			return application.ProjectCopyReceipt{}, err
 		}
 	}
 	if err := tx.Exec(`INSERT INTO canvas.project_copy_receipt(snapshot_id,content_sha256,document_count,cleared_operation_bindings) VALUES(?,?,?,?)`, expected.ID, result.ContentSHA256, result.Documents, result.ClearedOperationBindings).Error; err != nil {

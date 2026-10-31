@@ -55,7 +55,14 @@ export function buildConnectedNodeMap(
     let projection = source.referenceProjection;
     const edge = connection.documentData;
     const port = edge && canvasInputPort(edge.toPortId);
-    if (edge && port && port.source !== "config") {
+    if (
+      edge &&
+      port &&
+      (port.source === "text" ||
+        port.source === "image" ||
+        port.source === "video" ||
+        port.source === "audio")
+    ) {
       const kind = port.source;
       let byKind = ordinalsByTarget.get(connection.toNodeId);
       if (!byKind) {

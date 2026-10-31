@@ -1,0 +1,83 @@
+- banner "Canvas top bar":
+  - link:
+    - /url: /ai-tool/home
+  - button:
+    - generic: 一致性调研-202610221
+  - button:
+  - button:
+    - text: 节点
+    - generic: "5"
+  - status: 已保存
+  - button:
+  - button:
+  - button:
+    - generic: 分享
+  - button:
+  - button:
+    - generic: "88"
+    - generic: 开会员
+  - button
+- main "Canvas workspace":
+  - region "Canvas editing area":
+    - generic: 5 nodes, 0 edges, 0 selected. Editable. Room connected. 已保存.
+    - application "Canvas":
+      - paragraph: 双击编辑文本
+      - generic: 文本 1
+      - paragraph: 双击编辑文本
+      - generic: 文本 2
+      - paragraph: 双击编辑文本
+      - generic: 文本 3
+      - generic: 导演台
+      - paragraph: 在 3D 空间中设计角色、机位与镜头
+      - generic: 进入导演台
+      - generic: "No resources: 0 ready, 0 processing, 0 failed. Not selected."
+      - generic: 视频 1
+      - generic: "No resources: 0 ready, 0 processing, 0 failed. Not selected."
+      - status
+  - complementary
+  - complementary "Canvas left toolbar":
+    - toolbar "Canvas toolbar":
+      - generic: 文本
+      - button
+      - generic: 图片
+      - button
+      - generic: 视频
+      - button
+      - generic: 音频
+      - button
+      - generic: 时间线
+      - button
+      - generic: 主体
+      - button
+      - generic: 导演工具箱
+      - button
+      - generic: 导演台
+      - button
+      - generic: 资产库
+      - button
+      - generic: 上传
+      - button
+  - group "Canvas viewport controls":
+    - button:
+    - button:
+    - button [pressed]:
+    - button: 50%
+    - status
+  - generic: 与 AI 对话
+  - button
+- dialog "项目信息":
+  - banner:
+    - heading "项目信息" [level=2]
+    - button "关闭项目信息":
+  - tablist "项目信息":
+    - tab "基础信息": 基础信息
+    - tab "积分消耗" [active] [selected]: 积分消耗
+  - tabpanel "积分消耗":
+    - term: 总消耗积分
+    - definition: "0"
+    - term: 任务数
+    - definition: "0"
+    - region "积分消耗":
+      - paragraph: 暂无数据
+    - button "查看积分明细":
+      - text: 查看积分明细

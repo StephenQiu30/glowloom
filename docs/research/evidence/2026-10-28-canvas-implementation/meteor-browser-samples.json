@@ -1,0 +1,29 @@
+[
+  {
+    "time": 1793215330997,
+    "result": {
+      "result": {
+        "type": "string",
+        "value": "[{\"offset\":\"-222.072px\",\"animation\":\"2.8s linear infinite canvas-connection-flow\"},{\"offset\":\"-229.072px\",\"animation\":\"2.8s linear infinite canvas-connection-flow\"}]"
+      }
+    }
+  },
+  {
+    "time": 1793215331113,
+    "result": {
+      "result": {
+        "type": "string",
+        "value": "[{\"offset\":\"-264.886px\",\"animation\":\"2.8s linear infinite canvas-connection-flow\"},{\"offset\":\"-271.886px\",\"animation\":\"2.8s linear infinite canvas-connection-flow\"}]"
+      }
+    }
+  },
+  {
+    "time": 1793215331142,
+    "result": {
+      "result": {
+        "type": "string",
+        "value": "[{\"offset\":\"-278.6px\",\"animation\":\"2.8s linear infinite canvas-connection-flow\"},{\"offset\":\"-285.6px\",\"animation\":\"2.8s linear infinite canvas-connection-flow\"}]"
+      }
+    }
+  }
+]

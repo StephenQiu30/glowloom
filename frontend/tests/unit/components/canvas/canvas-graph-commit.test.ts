@@ -1,3 +1,5 @@
+import { admitCanvasConnectionGraph } from "@/components/canvas/types/canvas-document-integration";
+import type { CanvasEditorState } from "@/components/canvas/lib/canvas-document-adapter";
 import { expect, it, vi } from "vitest";
 import { commitCanvasGraphResult } from "@/components/canvas/lib/canvas-graph-commit";
 import type {
@@ -79,4 +81,79 @@ it("does not expose any graph changes when admission throws", () => {
     ),
   ).toThrow("admission unavailable");
   expect(commit).not.toHaveBeenCalled();
+});
+
+it("connection integration prioritizes full-candidate admission and never falls back after a rejection", () => {
+  const initialState = {
+    nodes: [node],
+    connections: [],
+    backgroundMode: "dots",
+    showImageInfo: false,
+    viewport: { x: 10, y: 20, k: 0.71 },
+  } as CanvasEditorState;
+  const result = {
+    nodes: [node, { ...node, id: "new-target" }],
+    connections: [{ id: "edge", fromNodeId: node.id, toNodeId: "new-target" }],
+  };
+  const admit = vi.fn(() => true);
+  const admitConnectionGraph = vi.fn(() => false);
+  const integration = {
+    initialState,
+    frozen: false,
+    admit,
+    admitConnectionGraph,
+  };
+  const commit = vi.fn();
+  expect(
+    commitCanvasGraphResult(
+      result,
+      (candidate) => admitCanvasConnectionGraph(integration, candidate),
+      commit,
+    ),
+  ).toBe(false);
+  expect(admitConnectionGraph).toHaveBeenCalledWith({
+    ...initialState,
+    ...result,
+  });
+  expect(admit).not.toHaveBeenCalled();
+  expect(commit).not.toHaveBeenCalled();
+  admitConnectionGraph.mockReturnValue(true);
+  expect(
+    commitCanvasGraphResult(
+      result,
+      (candidate) => admitCanvasConnectionGraph(integration, candidate),
+      commit,
+    ),
+  ).toBe(true);
+  expect(commit).toHaveBeenCalledExactlyOnceWith(result);
+});
+
+it("connection integration keeps legacy/standalone behavior while rejecting frozen or invalid candidates", () => {
+  const initialState = {
+    nodes: [node],
+    connections: [],
+  } as unknown as CanvasEditorState;
+  const result = { nodes: [node], connections: [] };
+  const admit = vi.fn(() => true);
+  expect(admitCanvasConnectionGraph(undefined, result)).toBe(true);
+  expect(
+    admitCanvasConnectionGraph({ initialState, frozen: false, admit }, result),
+  ).toBe(true);
+  expect(admit).toHaveBeenCalledExactlyOnceWith(initialState);
+  expect(
+    admitCanvasConnectionGraph({ initialState, frozen: true, admit }, result),
+  ).toBe(false);
+  expect(admit).toHaveBeenCalledTimes(1);
+  expect(
+    admitCanvasConnectionGraph(
+      {
+        initialState,
+        frozen: false,
+        admitConnectionGraph: () => {
+          throw Error("invalid projection");
+        },
+      },
+      result,
+    ),
+  ).toBe(false);
 });

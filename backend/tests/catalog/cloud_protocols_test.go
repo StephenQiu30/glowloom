@@ -90,6 +90,10 @@ func TestCloudDiscoveryDoesNotInventImageOrAccountPermissions(t *testing.T) {
 				require.Equal(t, "/models", r.URL.Path)
 				return providerResponse(200, `{"data":[{"id":"account-model"}]}`), nil
 			}
+			if preset.Config.AdapterKey == "openai" {
+				require.Equal(t, "/v1/models", r.URL.Path)
+				return providerResponse(200, `{"data":[{"id":"gpt-4o"}]}`), nil
+			}
 			require.Equal(t, "/api/v3/contents/generations/tasks", r.URL.Path)
 			require.Equal(t, "1", r.URL.Query().Get("page_size"))
 			return providerResponse(200, `{"items":[]}`), nil
@@ -97,7 +101,7 @@ func TestCloudDiscoveryDoesNotInventImageOrAccountPermissions(t *testing.T) {
 		result := client.Probe(t.Context(), preset.Config, "fixture-key")
 		require.Equal(t, "ok", result.Auth)
 		require.Equal(t, 1, calls)
-		if preset.Config.AdapterKey == "deepseek" {
+		if preset.Config.AdapterKey == "deepseek" || preset.Config.AdapterKey == "openai" {
 			require.Equal(t, "ok", result.Discovery)
 			require.Len(t, result.Candidates, 1)
 			require.Equal(t, "text.generate", result.Candidates[0].Capability)

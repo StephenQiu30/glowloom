@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from "react";
+import { assertCanvasSubjectSourcePreview } from "../lib/canvas-subject-connection-preview";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -49,7 +50,8 @@ type ReferenceNodeType =
   | CanvasNodeType.Text
   | CanvasNodeType.Video
   | CanvasNodeType.Audio
-  | "timeline";
+  | "timeline"
+  | "subject";
 
 export function ConnectionCreateMenu({
   pending,
@@ -57,6 +59,7 @@ export function ConnectionCreateMenu({
   existingNode,
   existingNodes,
   resolveMedia = (node) => node,
+  previewAudio,
   onCreate,
   onClose,
 }: {
@@ -65,6 +68,10 @@ export function ConnectionCreateMenu({
   existingNode?: CanvasNodeData;
   existingNodes?: CanvasNodeData[];
   resolveMedia?: (node: CanvasNodeData) => CanvasNodeData;
+  previewAudio?: (
+    sources: CanvasNodeData[],
+    target?: CanvasNodeData,
+  ) => unknown;
   onCreate: (type: ReferenceNodeType) => string | void;
   onClose: () => void;
 }) {
@@ -91,6 +98,7 @@ export function ConnectionCreateMenu({
                   supportsCanvasConnection(
                     node?.type ?? existingType,
                     item.type,
+                    node,
                   ) &&
                   !(
                     (node?.type ?? existingType) === "text" &&
@@ -112,11 +120,55 @@ export function ConnectionCreateMenu({
               ).map(resolveMedia),
               item.type,
             );
+            if (item.type === "subject")
+              assertCanvasSubjectSourcePreview(
+                (existingNodes?.length
+                  ? existingNodes
+                  : existingNode
+                    ? [existingNode]
+                    : []
+                ).map(resolveMedia),
+              );
             supported = true;
           } catch (error) {
             supported = false;
             domainReason =
               error instanceof Error ? error.message : "素材尚未就绪";
+          }
+        }
+        if (supported && previewAudio) {
+          try {
+            if (
+              item.type === "audio" &&
+              pending.connection.handleType === "source"
+            )
+              previewAudio(
+                existingNodes?.length
+                  ? existingNodes
+                  : existingNode
+                    ? [existingNode]
+                    : [],
+              );
+            else if (
+              existingType === "audio" &&
+              pending.connection.handleType === "target" &&
+              existingNode
+            )
+              previewAudio(
+                [
+                  {
+                    id: "connection-preview",
+                    type: item.type,
+                    title: item.title,
+                    position: { x: 0, y: 0 },
+                  } as CanvasNodeData,
+                ],
+                existingNode,
+              );
+          } catch (error) {
+            supported = false;
+            domainReason =
+              error instanceof Error ? error.message : "音频模型能力尚未就绪";
           }
         }
         const reason =

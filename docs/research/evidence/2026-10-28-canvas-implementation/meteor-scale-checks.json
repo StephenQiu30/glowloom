@@ -1,0 +1,14 @@
+[
+  {
+    "result": {
+      "type": "string",
+      "value": "[{\"width\":\"1px\",\"vector\":\"non-scaling-stroke\",\"scale\":0.6000000238418579},{\"width\":\"1px\",\"vector\":\"non-scaling-stroke\",\"scale\":0.6000000238418579}]"
+    }
+  },
+  {
+    "result": {
+      "type": "string",
+      "value": "[{\"width\":\"1px\",\"vector\":\"non-scaling-stroke\",\"scale\":1.3600000143051147},{\"width\":\"1px\",\"vector\":\"non-scaling-stroke\",\"scale\":1.3600000143051147}]"
+    }
+  }
+]

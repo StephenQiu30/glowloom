@@ -1536,6 +1536,183 @@ html:has(.canvas-controls-layout) {
   }
 }
 
+@layer utilities {
+  .canvas-text-actions {
+    position: absolute;
+    z-index: 70;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    width: 160px;
+    height: 40px;
+    padding: 4px;
+    border: 1px solid
+      color-mix(in srgb, var(--canvas-reference-foreground) 4%, transparent);
+    border-radius: 12px;
+    transform: translateX(-50%);
+    background: var(--canvas-reference-toolbar);
+    color: var(--canvas-reference-foreground);
+    font-family:
+      PingFangSC, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial,
+      sans-serif;
+  }
+  .canvas-text-actions button {
+    width: 32px;
+    height: 32px;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border-radius: 8px;
+    color: inherit;
+    flex-shrink: 0;
+  }
+  .canvas-text-actions button:hover {
+    background: color-mix(
+      in srgb,
+      var(--canvas-reference-foreground) 8%,
+      transparent
+    );
+  }
+  .canvas-text-actions .canvas-text-background-trigger {
+    width: 76px;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 400;
+  }
+  .canvas-text-actions svg {
+    width: 16px;
+    height: 16px;
+  }
+  .canvas-text-background-chip {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+  }
+  .canvas-text-action-divider {
+    width: 1px;
+    height: 12px;
+    background: color-mix(
+      in srgb,
+      var(--canvas-reference-foreground) 8%,
+      transparent
+    );
+  }
+  .canvas-text-color-menu {
+    z-index: 120;
+    width: 214px;
+    min-width: 214px;
+    height: 40px;
+    padding: 6px 8px;
+    border-radius: 12px;
+    background: var(--canvas-text-menu);
+    color: var(--canvas-reference-foreground);
+    overflow: visible;
+  }
+  .canvas-text-color-options {
+    display: flex;
+    gap: 6px;
+  }
+  .canvas-text-color-option {
+    width: 28px;
+    min-width: 0;
+    height: 28px;
+    min-height: 0;
+    padding: 5px;
+    border-radius: 6px;
+    background: transparent;
+  }
+  .canvas-text-color-option > [data-slot="dropdown-menu-radio-item-indicator"] {
+    display: none;
+  }
+  .canvas-text-color-option[data-state="checked"],
+  .canvas-text-color-option[data-highlighted] {
+    box-shadow: inset 0 0 0 1px var(--canvas-reference-foreground);
+    background: transparent;
+  }
+  .canvas-text-color-swatch {
+    display: block;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    border: 1px solid
+      color-mix(in srgb, var(--canvas-reference-foreground) 8%, transparent);
+  }
+  .canvas-document-fullscreen[data-document-export="markdown"] {
+    gap: 0;
+    padding: 0 24px 24px;
+    grid-template-rows: 84px 40px minmax(0, 1fr);
+    background: var(--canvas-text-fullscreen);
+    color: var(--canvas-reference-foreground);
+  }
+  .canvas-document-fullscreen[data-document-export="markdown"]
+    .canvas-document-header {
+    height: 64px;
+  }
+  .canvas-document-fullscreen[data-document-export="markdown"]
+    > .rich-text-toolbar {
+    width: min(1320px, 100%);
+    max-width: 100%;
+    height: 40px;
+    min-height: 40px;
+    border-radius: 12px 12px 0 0;
+    padding: 4px;
+    background: var(--canvas-text-editor);
+  }
+  .canvas-document-fullscreen[data-document-export="markdown"]
+    > .rich-text-toolbar
+    button {
+    min-height: 32px;
+    height: 32px;
+  }
+  .canvas-document-fullscreen[data-document-export="markdown"]
+    .canvas-expanded-body {
+    width: min(1320px, 100%);
+    border-radius: 0 0 12px 12px;
+    background: var(--canvas-text-editor);
+    overflow-y: auto;
+  }
+  .canvas-document-fullscreen[data-document-export="markdown"]
+    .rich-text-surface {
+    width: min(800px, 100%);
+    margin-inline: auto;
+    padding: 20px 0 60px;
+  }
+  @media (max-width: 640px) {
+    .canvas-document-fullscreen[data-document-export="markdown"] {
+      padding-inline: 12px;
+    }
+    .canvas-document-fullscreen[data-document-export="markdown"]
+      .rich-text-surface {
+      padding-inline: 16px;
+    }
+  }
+}
+
+@layer utilities {
+  .canvas-document-fullscreen .rich-text-toolbar .canvas-text-alignment-trigger,
+  .canvas-document-toolbar .rich-text-toolbar .canvas-text-alignment-trigger {
+    width: 48px;
+    min-width: 48px;
+    height: 32px;
+    gap: 4px;
+    padding: 4px 6px;
+  }
+  .canvas-text-alignment-trigger svg:last-child {
+    width: 12px;
+    height: 12px;
+  }
+  .canvas-text-alignment-menu[data-slot="dropdown-menu-content"] {
+    width: 200px;
+    padding: 4px;
+    border-radius: 12px;
+  }
+  .canvas-text-alignment-menu [role="menuitemradio"] {
+    height: 36px;
+    min-height: 36px;
+    padding-inline: 8px 28px;
+  }
+}
+
 /* Compact connection-drop menu uses the canvas surface tokens. */
 .canvas-connection-create-menu {
   font-family:

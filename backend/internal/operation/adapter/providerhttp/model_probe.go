@@ -18,7 +18,15 @@ type ModelProbeResult struct {
 // ProbeModel sends exactly one bounded real request. Callers must durably claim
 // dispatch before calling, and must never retry an unknown result automatically.
 func (c *Client) ProbeModel(ctx context.Context, config catalogdomain.ProviderConfig, model, capability, key string) ModelProbeResult {
-	input := application.GenerationRequest{Config: config, ModelID: model, Capability: capability, OutputCount: 1, Prompt: "Reply with OK only.", Mode: "text_to_text", Params: map[string]any{"max_tokens": 4096}}
+	input := application.GenerationRequest{
+		Config:      config,
+		ModelID:     model,
+		Capability:  capability,
+		OutputCount: 1,
+		Prompt:      "Reply with OK only.",
+		Mode:        "text_to_text",
+		Params:      map[string]any{"max_tokens": 4096},
+	}
 	switch capability {
 	case "audio.generate":
 		input.Mode, input.Prompt = "text2audio", "你好。"
@@ -26,12 +34,16 @@ func (c *Client) ProbeModel(ctx context.Context, config catalogdomain.ProviderCo
 	case "image.generate":
 		input.Mode, input.Prompt = "text2image", "A small blue circle on a white background."
 		input.Params = map[string]any{}
-		if config.AdapterKey == "volcengine_ark" {
-			input.Params["size"] = "2K"
-		}
 	case "video.generate":
 		input.Mode, input.Prompt = "text2video", "A blue circle slowly moving on a white background."
 		input.Params = map[string]any{"duration": 4, "resolution": "720p"}
+	}
+	if driver, ok := c.drivers[config.AdapterKey]; ok {
+		if defaults := driver.ProbeModelDefaultParams(capability); defaults != nil {
+			for k, v := range defaults {
+				input.Params[k] = v
+			}
+		}
 	}
 	generated, err := c.Submit(ctx, input, key)
 	if err != nil {

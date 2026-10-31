@@ -28,15 +28,18 @@ func ValidateGraph(doc Document) error {
 			return fmt.Errorf("%w: unknown node configuration", ErrUnsupportedCommand)
 		}
 		switch node.NodeType {
-		case "config", "text", "group", "image", "video", "audio", "model", "image_generation", "video_generation", "batch_table", "timeline", "director", "generation":
+		case "cinema_studio", "subject", "config", "text", "group", "image", "video", "audio", "model", "image_generation", "video_generation", "batch_table", "timeline", "director", "generation":
 		default:
 			return fmt.Errorf("%w: unknown node type", ErrUnsupportedCommand)
+		}
+		if node.NodeType == "subject" && !editable(node) {
+			return ErrInvalidCommand
 		}
 		if !validConfig(node.NodeType, node.Config) || !validEditorFiles(node) {
 			return ErrInvalidCommand
 		}
 	}
-	if !validParents(doc.Nodes) || !validToolReferences(doc.Nodes) || !validTimelineRelations(doc) {
+	if !validParents(doc.Nodes) || !validToolReferences(doc.Nodes) || !validTimelineRelations(doc) || !validSubjectRelations(doc) {
 		return ErrInvalidCommand
 	}
 	ids := make(map[uuid.UUID]bool, len(doc.Edges))
@@ -63,6 +66,13 @@ func ValidateGraph(doc Document) error {
 // inputSources visits current canvas-node bindings only. Asset identities and
 // frozen generation provenance never become node dependencies by UUID equality.
 func inputSources(node Node, visit func(uuid.UUID)) {
+	if subject := node.Config.Subject; subject != nil && subject.Local != nil {
+		for _, media := range subject.Local.Media() {
+			if media.SourceNodeID != nil {
+				visit(*media.SourceNodeID)
+			}
+		}
+	}
 	if c := node.Config.BatchTable; c != nil {
 		for _, row := range c.Rows {
 			for _, id := range row.InputNodeIDs {

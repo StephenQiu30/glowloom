@@ -43,56 +43,10 @@ type ModelCandidateSelection struct {
 // BuiltinModelCatalog returns new slices on every call. Account-specific slots
 // intentionally have no request model ID; they cannot be dispatched.
 func BuiltinModelCatalog(adapter string) ModelCandidateCatalog {
-	catalog := ModelCandidateCatalog{Version: "2026-10-26.1", Models: []ModelCandidatePreset{}}
-	add := func(key, name, id, capability, source, lifecycle string, modes ...string) {
-		catalog.Models = append(catalog.Models, ModelCandidatePreset{
-			Key: key, AdapterKey: adapter, DisplayName: name, ProviderModelID: id,
-			Capability: capability, Modes: modes, SourceURL: source, ReviewedAt: "2026-10-20",
-			Lifecycle: lifecycle, RequiresModelSelection: id == "",
-		})
+	if spec, ok := GetAdapterSpec(adapter); ok && spec.CandidateCatalog != nil {
+		return spec.CandidateCatalog()
 	}
-	switch adapter {
-	case "deepseek":
-		source := "https://api-docs.deepseek.com/api/list-models/"
-		add("ds-flash", "DeepSeek Flash", "deepseek-flash", "text.generate", source, "alias", "text_to_text")
-		add("ds-pro", "DeepSeek V4 Pro", "deepseek-v4-pro", "text.generate", source, "alias", "text_to_text")
-	case "openrouter":
-		source := "https://openrouter.ai/api/v1/models"
-		add("or-gpt-chat", "GPT-5.4", "openai/gpt-5.4", "text.generate", source, "active", "text_to_text")
-		add("or-claude-chat", "Claude Sonnet 4.6", "anthropic/claude-sonnet-4.6", "text.generate", source, "active", "text_to_text")
-		add("or-gemini-chat", "Gemini 3.1 Pro Preview", "google/gemini-3.1-pro-preview", "text.generate", source, "preview", "text_to_text")
-		source = "https://openrouter.ai/api/v1/images/models"
-		add("or-gpt-image", "GPT Image 2", "openai/gpt-image-2", "image.generate", source, "active", "text2image", "image2image")
-		add("or-gemini-image", "Nano Banana 2", "google/gemini-3.1-flash-image", "image.generate", source, "active", "text2image", "image2image")
-		one := 1
-		catalog.Models[len(catalog.Models)-1].MaxOutputs = &one
-		add("or-seedream", "Seedream 4.5", "bytedance-seed/seedream-4.5", "image.generate", source, "active", "text2image", "image2image")
-	case "volcengine_ark":
-		return volcengineModelCatalog()
-	case "volcengine_music", "volcengine_avatar", "volcengine_motion":
-		return creationModelCatalog(adapter)
-	case "volcengine_speech":
-		return doubaoSpeechCatalog()
-	case "byteplus":
-		source := "https://docs.byteplus.com/en/docs/modelark/model-list"
-		add("bp-chat", "BytePlus 文本 · 选择账号型号", "", "text.generate", source, "account_selection", "text_to_text")
-		add("bp-image", "Seedream · 选择海外账号型号", "", "image.generate", source, "account_selection", "text2image", "image2image")
-	case "codex":
-		source := "https://learn.chatgpt.com/docs/app-server"
-		add("codex-chat", "Codex 聊天 · 选择节点模型", "", "text.generate", source, "runtime_selection", "text_to_text")
-		add("codex-image", "Codex 生图 · 选择节点模型", "", "image.generate", source, "runtime_selection", "text_to_image")
-		one := 1
-		catalog.Models[len(catalog.Models)-1].MaxOutputs = &one
-	}
-	if adapter == "volcengine_ark" || adapter == "byteplus" {
-		for i := range catalog.Models {
-			if catalog.Models[i].Capability == "image.generate" {
-				one := 1
-				catalog.Models[i].MaxOutputs = &one
-			}
-		}
-	}
-	return catalog
+	return ModelCandidateCatalog{Version: "2026-10-26.1", Models: []ModelCandidatePreset{}}
 }
 
 // Select resolves an ordered selection against one exact catalog snapshot.

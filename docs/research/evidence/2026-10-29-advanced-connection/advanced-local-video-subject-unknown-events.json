@@ -1,0 +1,52 @@
+[
+  {
+    "sequence": 5482,
+    "type": "socketClosed"
+  },
+  {
+    "sequence": 5527,
+    "type": "socketClosed"
+  },
+  {
+    "sequence": 5857,
+    "type": "socketClosed"
+  },
+  {
+    "sequence": 5962,
+    "type": "yjs_submit",
+    "op_id": "ed17f168-345c-4b50-a261-987bde4da00b",
+    "body": {
+      "epoch": "76a8ab91-62da-422a-9358-e4a37a9485a4",
+      "updateId": "ed17f168-345c-4b50-a261-987bde4da00b",
+      "payloadHash": "86b821c169afbd5b4f90d4586570a02730da39e334842bc19d962b9328e31c75"
+    }
+  },
+  {
+    "sequence": 5973,
+    "type": "socketClosed"
+  },
+  {
+    "sequence": 5990,
+    "type": "yjs_resolve",
+    "op_id": "ed17f168-345c-4b50-a261-987bde4da00b",
+    "body": {
+      "epoch": "76a8ab91-62da-422a-9358-e4a37a9485a4",
+      "updateId": "ed17f168-345c-4b50-a261-987bde4da00b",
+      "payloadHash": "86b821c169afbd5b4f90d4586570a02730da39e334842bc19d962b9328e31c75"
+    }
+  },
+  {
+    "sequence": 5995,
+    "type": "yjs_ack",
+    "receipt": {
+      "epoch": "76a8ab91-62da-422a-9358-e4a37a9485a4",
+      "commitSeq": "17",
+      "contentRevision": "18",
+      "graphHash": "2d3290b82983f9aacab9260ef7f2e2b70d202879a66d322f80a7e5a401d44042",
+      "updateId": "ed17f168-345c-4b50-a261-987bde4da00b",
+      "payloadHash": "86b821c169afbd5b4f90d4586570a02730da39e334842bc19d962b9328e31c75",
+      "effect": "VISIBLE_CHANGE",
+      "status": "accepted"
+    }
+  }
+]

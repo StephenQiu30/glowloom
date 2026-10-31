@@ -19,7 +19,7 @@ func (s *Store) ReadProjectNavigation(ctx context.Context, actor identity.Princi
 	if err := s.requireScope(ctx, s.db, actor, false); err != nil {
 		return result, err
 	}
-	read := s.db.WithContext(ctx).Raw(`SELECT id AS project_id,initial_canvas_id AS main_canvas_id,name,status,is_delete FROM workspace.project WHERE id=? AND org_id=? AND owner_scope_id=? AND NOT is_delete FOR SHARE`, id, actor.OrgID, actor.ScopeID).Scan(&result)
+	read := s.db.WithContext(ctx).Raw(`SELECT p.id AS project_id,p.initial_canvas_id AS main_canvas_id,p.name,p.status,p.is_delete,COALESCE(u.display_name,'') AS owner_name FROM workspace.project p LEFT JOIN identity."user" u ON u.id=p.owner_id AND NOT u.is_delete WHERE p.id=? AND p.org_id=? AND p.owner_scope_id=? AND NOT p.is_delete FOR SHARE OF p`, id, actor.OrgID, actor.ScopeID).Scan(&result)
 	if read.Error != nil {
 		return result, fmt.Errorf("read project navigation: %w", read.Error)
 	}

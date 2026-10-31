@@ -144,6 +144,9 @@ func libraryFilters(q application.LibraryQuery, now time.Time) (string, []any) {
 			args = append(args, pattern)
 		}
 	}
+	pickerConditions, pickerArgs := libraryPickerFilters(q)
+	conditions = append(conditions, pickerConditions...)
+	args = append(args, pickerArgs...)
 	return strings.Join(conditions, " AND "), args
 }
 

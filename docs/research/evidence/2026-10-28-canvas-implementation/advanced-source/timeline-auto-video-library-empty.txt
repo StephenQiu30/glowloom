@@ -1,0 +1,40 @@
+Browser tab: 1980371324, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+0 AXWebArea 一致性调研-202610221 - 即梦AI, URL: jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage
+	1 container
+		2 container
+			3 container Canvas top bar
+				4 text 已保存
+			5 container Canvas workspace
+				6 container
+					7 container
+						8 container Canvas editing area
+							9 container
+								10 container Canvas
+					11 container Canvas left toolbar
+						12 toolbar Canvas toolbar
+					13 container Canvas viewport controls
+		14 container 时间线, ID: radix-:modern-js-r56:
+			36 container Edit the main visual track and multiple audio tracks
+		37 container 资产, ID: radix-:modern-js-r8h:
+			38 container
+				39 heading 资产, Value: 2, ID: canvas-asset-library-primary-title
+					40 text 资产
+				41 text Choose assets from Dreamina and import them into this canvas.
+				42 button Close asset library
+			43 tab group Asset type
+				44 tab (selectable, settable, boolean) Description: 图片, Value: 0, ID: canvas-asset-tab-image
+				45 tab (selected, settable, boolean) Description: 视频, Value: 1, ID: canvas-asset-tab-video
+				46 tab (selectable, settable, boolean) Description: 音频, Value: 0, ID: canvas-asset-tab-audio
+			47 text field (settable) Search Dreamina assets
+			48 pop up button (collapsed) Description: 时间, Secondary Actions: Expand
+			49 checkbox (collapsed) Description: 筛选, Value: 0, ID: radix-:modern-js-r8v:, Secondary Actions: Expand
+			50 container 资产, ID: canvas-asset-section-panel-assets
+				51 container Description: 视频, ID: canvas-asset-panel-video
+					58 text 暂无视频素材
+			53 container
+				54 container
+					55 text 已选择  0  个素材
+				56 button (disabled) 确认
+				57 text 请先选择素材
+
+The focused UI element is 45 tab (selected, settable, boolean) Description: 视频, Value: 1, ID: canvas-asset-tab-video

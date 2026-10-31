@@ -1,0 +1,11 @@
+Browser tab: 1980371314, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+~				31 pop up button (collapsed) Description: 清晰度, ID: radix-:modern-js-r92:, Secondary Actions: Expand
+~				34 pop up button (expanded) Description: 帧率, ID: radix-:modern-js-r96:, Secondary Actions: Collapse
+~		41 menu 帧率, ID: radix-:modern-js-r97:
+~				43 24 FPS, Value: 0
+~				44 25 FPS, Value: 0
++				45 30 FPS, Value: 1
++				46 50 FPS, Value: 0
++				47 60 FPS, Value: 0
+The focused UI element is 41 menu 帧率, ID: radix-:modern-js-r97:

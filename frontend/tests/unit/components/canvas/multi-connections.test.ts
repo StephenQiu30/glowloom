@@ -38,7 +38,7 @@ describe("multi-selection connections", () => {
   });
   it("does not retain the first edge when a later source is invalid", () => {
     const original = fixture();
-    original.nodes[1] = createCanvasNode("group", { x: 0, y: 0 });
+    original.nodes[1] = createCanvasNode("timeline", { x: 0, y: 0 });
     const before = structuredClone(original);
     expect(() =>
       connectCanvasDocumentSources(

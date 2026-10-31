@@ -13,6 +13,7 @@ import {
   canvasAssetPayload,
 } from "./library-picker-content";
 import { ProjectAssetDialog } from "@/components/media/project-asset-dialog";
+import type { UnifiedSubject } from "@/components/subjects/unified-contracts";
 type FixedReference = {
   fileId?: string;
   fileVersion?: string;
@@ -20,6 +21,7 @@ type FixedReference = {
   publicRevision?: string;
 };
 export type InsertAssetPayload =
+  | { kind: "subject"; subject: UnifiedSubject }
   | { kind: "text"; content: string; title: string }
   | (FixedReference & {
       kind: "image";
@@ -41,6 +43,7 @@ export type InsertAssetPayload =
 
 type Props = {
   projectId?: string;
+  getDocumentEpoch?: () => string | null;
   open: boolean;
   defaultTab?: string;
   initialUpload?: boolean;
@@ -55,6 +58,7 @@ export function AssetPickerModal({
   open,
   initialUpload,
   projectId,
+  getDocumentEpoch,
   onInsert,
   onClose,
   kinds,
@@ -63,20 +67,70 @@ export function AssetPickerModal({
   onSourceFilesComplete,
 }: Props) {
   const request = useRef<AbortController | null>(null);
-  useEffect(() => () => request.current?.abort(), [open, projectId]);
+  const epochReader = useRef(getDocumentEpoch);
+  useEffect(() => {
+    epochReader.current = getDocumentEpoch;
+  }, [getDocumentEpoch]);
+  const opened = useRef<{
+    active: boolean;
+    projectID?: string;
+    epoch: string | null | undefined;
+    scope: number;
+    session: number;
+  }>({ active: false, epoch: undefined, scope: 0, session: 0 });
+  useEffect(() => {
+    opened.current = {
+      active: open,
+      projectID: projectId,
+      epoch: epochReader.current?.(),
+      scope: getScopeGeneration(),
+      session: getSessionGeneration(),
+    };
+    return () => {
+      opened.current.active = false;
+      request.current?.abort();
+    };
+  }, [open, projectId]);
+  function stillCurrent() {
+    const snapshot = opened.current;
+    return (
+      snapshot.active &&
+      snapshot.projectID === projectId &&
+      (!epochReader.current || snapshot.epoch !== null) &&
+      snapshot.epoch === epochReader.current?.() &&
+      snapshot.scope === getScopeGeneration() &&
+      snapshot.session === getSessionGeneration()
+    );
+  }
   if (!open) return null;
   if (projectId && !sourceFile && !sourceFiles?.length) {
     return (
       <ProjectAssetDialog
+        key={projectId}
         projectID={projectId}
         initialKind={kinds?.[0] ?? "image"}
-        allowedKinds={kinds ?? ["image", "video", "audio"]}
+        allowedKinds={kinds ?? ["image", "video", "audio", "document"]}
+        browseSources={!kinds}
+        onUnifiedSubject={
+          kinds
+            ? undefined
+            : async (subject) => {
+                if (!stillCurrent())
+                  throw new Error(
+                    "画布或创作空间已变化，请关闭选择器后重新添加。",
+                  );
+                onInsert({ kind: "subject", subject });
+                onClose();
+              }
+        }
         selectionLimit={kinds ? 1 : undefined}
         confirmLabel={kinds ? "替换素材" : undefined}
         initialUpload={initialUpload}
         canvasPresentation
         onClose={onClose}
         onAdd={async (assets) => {
+          if (!stillCurrent())
+            throw new Error("画布或创作空间已变化，请关闭选择器后重新添加。");
           request.current?.abort();
           const controller = new AbortController();
           request.current = controller;
@@ -88,6 +142,7 @@ export function AssetPickerModal({
             ),
           );
           if (
+            !stillCurrent() ||
             controller.signal.aborted ||
             scope !== getScopeGeneration() ||
             session !== getSessionGeneration()

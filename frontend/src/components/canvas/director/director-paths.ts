@@ -1,6 +1,6 @@
-// Adapted from BeefTV 2327ee2 director-actor-paths.ts and director-camera-paths.ts.
+// Adapted MIT implementation; source attribution: notices/third-party-MIT.txt.
 // UUIDs, range validation and channel-preserving transactions follow Glowloom contracts.
-// MIT notice: notices/BeefTV-MIT.txt.
+// License and source attribution: notices/third-party-MIT.txt.
 import { Vector3 } from "three";
 import {
   resampleDirectorGroundPath,

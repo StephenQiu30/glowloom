@@ -3,7 +3,9 @@ package domain
 import "strings"
 
 var operationFields = map[string]fieldPolicy{
+	"config.cinema_kit":              {kind: "set", group: []string{"cinema_kit"}, cas: true, optional: true},
 	"config.draft":                   {kind: "set", group: []string{"draft"}, cas: true},
+	"config.subject":                 {kind: "set", group: []string{"subject"}, cas: true},
 	"config.generation":              {kind: "set", group: []string{"generation"}, cas: true},
 	"config.batch_table":             {kind: "set", group: []string{"batch_table"}, cas: true},
 	"config.timeline":                {kind: "set", group: []string{"timeline"}, cas: true},
@@ -17,6 +19,7 @@ var operationFields = map[string]fieldPolicy{
 	"size":                           {kind: "set", group: []string{"width", "height"}},
 	"config.text_source":             {kind: "set", group: []string{"text"}, cas: true},
 	"config.text":                    {kind: "text"},
+	"config.container":               {kind: "set", group: []string{"container"}, cas: true, optional: true},
 	"config.collapsed":               {kind: "set"},
 	"config.draft.prompt":            {kind: "text"},
 	"config.draft.negative_prompt":   {kind: "text"},

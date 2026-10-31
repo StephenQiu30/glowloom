@@ -6,6 +6,7 @@ import (
 
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
 	workspacewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/workspace"
 
 	"github.com/google/uuid"
@@ -71,7 +72,7 @@ func provideProjectCopyStore(database *gorm.DB, scopes pgmedia.ScopeAccessFactor
 					}}
 				}, func(tx *gorm.DB) canvasapp.ProjectAccess {
 					return mediawire.NewCanvasProjectAccessWithScope(tx, scopes(tx))
-				})
+				}).WithSubjectSources(subjectwire.NewCanvasCopySources)
 			return workspaceapp.ProjectCopyOwners{Media: media, Canvas: canvas, Budget: pgbilling.NewScopedStore(tx, func(db *gorm.DB) billingapp.ProjectAccess { return copyBudgetAccess{scopes(db)} }), Cover: projectCopyCoverOwner{tx: tx, scopes: scopes}}
 		}, func(tx *gorm.DB, authority workspaceapp.ProjectCopyAuthority) workspaceapp.ProjectCopyScriptOwner {
 			store := provideScriptProjectCopyStore(tx, authority)

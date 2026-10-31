@@ -1,0 +1,116 @@
+- banner "Canvas top bar":
+  - link "返回首页":
+    - /url: /ai-tool/home
+  - 'button "Canvas title: 一致性调研-202610221"':
+    - generic: 一致性调研-202610221
+  - button "项目":
+  - 'button "Canvas node summary: 节点 6"':
+    - text: 节点
+    - generic: "6"
+  - status: 已保存
+  - button "搜索":
+  - button "生成历史":
+  - button "分享":
+    - generic: 分享
+  - button "更多":
+  - 'button "Credits: 88 · 开会员"':
+    - generic: "88"
+    - generic: 开会员
+  - button "用户菜单"
+- main "Canvas workspace":
+  - region "Canvas editing area":
+    - generic: 6 nodes, 0 edges, 1 selected. Editable. Room connected. 已保存.
+    - application "Canvas":
+      - 'group "文本 node: 文本 3"':
+        - 'group "双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected."':
+          - paragraph: 双击编辑文本
+        - generic "文本 3"
+      - 'group "外部 node: 导演台"':
+        - generic "导演台"
+        - paragraph: 在 3D 空间中设计角色、机位与镜头
+        - generic: 进入导演台
+        - generic: "No resources: 0 ready, 0 processing, 0 failed. Not selected."
+      - 'group "视频 node: 视频 1"':
+        - generic "视频 1"
+        - img "暂无视频":
+        - generic: "No resources: 0 ready, 0 processing, 0 failed. Not selected."
+      - 'group "组 node: 编组 1" [active]':
+        - button "Rename group 编组 1":
+          - generic: 编组 1
+        - button "Add tags":
+        - generic: Group 编组 1, 2 members. Selected.
+      - 'group "文本 node: 文本 2"':
+        - 'group "双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected."':
+          - paragraph: 双击编辑文本
+        - generic "文本 2"
+      - 'group "文本 node: 文本 1"':
+        - 'group "双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected."':
+          - paragraph: 双击编辑文本
+        - generic "文本 1"
+      - button "Resize group from top left"
+      - button "Resize group from top"
+      - button "Resize group from top right"
+      - button "Resize group from right"
+      - button "Resize group from bottom right"
+      - button "Resize group from bottom"
+      - button "Resize group from bottom left"
+      - button "Resize group from left"
+      - menu "布局":
+        - menuitem "宫格布局":
+          - generic: 宫格布局
+        - menuitem "智能布局":
+          - generic: 智能布局
+      - status
+      - toolbar "Selection actions":
+        - button "转为分镜组" [disabled]:
+          - generic "转为分镜组":
+            - generic: 转为分镜组
+        - generic: 分镜组仅支持图片，最多支持 49 个图片节点
+        - button "解除编组":
+          - generic "解除编组":
+            - generic: 解除编组
+        - button "布局" [expanded]:
+          - generic "布局":
+            - generic: 布局
+        - button "背景色":
+          - generic "背景色":
+            - generic: 背景色
+        - separator
+        - button "下载":
+      - status
+  - complementary
+  - complementary "Canvas left toolbar":
+    - toolbar "Canvas toolbar":
+      - generic: 文本
+      - button "文本"
+      - generic: 图片
+      - button "图片"
+      - generic: 视频
+      - button "视频"
+      - generic: 音频
+      - button "音频"
+      - generic: 时间线
+      - button "时间线"
+      - generic: 主体
+      - button "主体"
+      - generic: 导演工具箱
+      - button "导演工具箱"
+      - generic: 导演台
+      - button "导演台"
+      - generic: 资产库
+      - button "资产库"
+      - generic: 上传
+      - button "上传"
+  - group "Canvas viewport controls":
+    - button "选择工具":
+    - button "小地图":
+    - button "显示连线" [pressed]:
+    - button "Zoom options, 50%": 50%
+    - status
+  - generic: 与 AI 对话
+  - button "与 AI 对话"
+- region "Notifications"
+- region "Canvas notifications"
+- region "Canvas notifications"
+- region "Canvas tag notifications"
+- region "Canvas notifications"

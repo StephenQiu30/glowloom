@@ -8,7 +8,11 @@ export function replaceCanvasNodeAsset(
   node: CanvasNodeData,
   asset: InsertAssetPayload,
 ): CanvasNodeData {
-  if (asset.kind === "text" || node.type !== asset.kind)
+  if (
+    asset.kind === "text" ||
+    asset.kind === "subject" ||
+    node.type !== asset.kind
+  )
     throw new Error("请选择与当前节点类型相同的素材");
   if (!asset.fileId || !asset.fileVersion)
     throw new Error("请选择已上传的固定版本素材");

@@ -1,0 +1,455 @@
+{
+  "observedAt": "2026-10-28T18:45:21.819Z",
+  "sourceCanvas": "24969728-69d3-4326-b360-c591b018f42d",
+  "targetCanvas": "5ac4833c-8242-4db8-b296-98b37ebae3a7",
+  "project": "7fe2cb76-b42b-4fd9-abd4-e70a93173e87",
+  "name": "跨画布一致性验收-20261029",
+  "epoch": "5b1a7818-0a65-4572-9c2c-a998737ef35a",
+  "commitSeq": "1",
+  "graphHash": "f282344c0591525f5a26997ee9df4477d1d92b32730eecdcc311cf550b7d4c37",
+  "nodeCount": 12,
+  "edgeCount": 7,
+  "nodes": [
+    {
+      "id": "05f6d81f-c4a4-4e5a-9ae7-a5c8bec5804a",
+      "title": "主体对齐本地验收-20261028 副本",
+      "type": "subject",
+      "inputRevision": 1,
+      "subject": {
+        "version": 1,
+        "subject_id": "fc8ee683-a084-423c-94ba-a55668ccd052",
+        "version_id": "008fc3e4-babc-418f-8a58-ba3e34035459",
+        "local": {
+          "description": "画布局部说明验收：仅更新此主体节点，主体库说明保持原样。",
+          "primary": {
+            "asset_id": "d2cf6792-2556-47de-9594-b1a2c75c289c",
+            "asset_revision": 1,
+            "kind": "image",
+            "binding_id": "96a2b9b8-2cda-4f2f-9fce-b721568cb39d"
+          },
+          "references": []
+        }
+      }
+    },
+    {
+      "id": "0bc75538-e0db-480c-ba3d-7c16b6abb666",
+      "title": "相机 1 副本",
+      "type": "cinema_studio"
+    },
+    {
+      "id": "21ee4224-cf52-4a0d-8148-9fa06e8e86a3",
+      "title": "图片 5 副本",
+      "type": "image",
+      "inputRevision": 1,
+      "draft": {
+        "composer": {
+          "schemaVersion": 1,
+          "document": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph"
+              }
+            ]
+          },
+          "references": [],
+          "modelVersion": null,
+          "mode": null,
+          "params": {},
+          "labelState": {
+            "highWater": {
+              "audio": 0,
+              "image": 0,
+              "subject": 0,
+              "video": 0
+            },
+            "allocations": {}
+          }
+        },
+        "prompt": "",
+        "negative_prompt": "",
+        "aspect_ratio": "",
+        "candidate_count": 0
+      }
+    },
+    {
+      "id": "26e6abe3-11f3-47ae-a8f4-ec7f1c5623c8",
+      "title": "图片 3 副本",
+      "type": "image",
+      "inputRevision": 1,
+      "draft": {
+        "composer": {
+          "schemaVersion": 1,
+          "document": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph"
+              }
+            ]
+          },
+          "references": [],
+          "modelVersion": null,
+          "mode": null,
+          "params": {},
+          "labelState": {
+            "highWater": {
+              "audio": 0,
+              "image": 0,
+              "subject": 0,
+              "video": 0
+            },
+            "allocations": {}
+          }
+        },
+        "prompt": "",
+        "negative_prompt": "",
+        "aspect_ratio": "",
+        "candidate_count": 0
+      }
+    },
+    {
+      "id": "281e39ab-3629-4419-a269-dbf1d99a7d1a",
+      "title": "图片 2 副本",
+      "type": "image",
+      "inputRevision": 1,
+      "draft": {
+        "composer": {
+          "schemaVersion": 1,
+          "document": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph"
+              }
+            ]
+          },
+          "references": [],
+          "modelVersion": null,
+          "mode": null,
+          "params": {},
+          "labelState": {
+            "highWater": {
+              "audio": 0,
+              "image": 0,
+              "subject": 0,
+              "video": 0
+            },
+            "allocations": {}
+          }
+        },
+        "prompt": "",
+        "negative_prompt": "",
+        "aspect_ratio": "",
+        "candidate_count": 0
+      }
+    },
+    {
+      "id": "3209d147-e314-4231-91f6-3e8fc099e88f",
+      "title": "图片 4 副本",
+      "type": "image"
+    },
+    {
+      "id": "38dc46af-6ba0-4feb-a1ec-cc3c10e65a3a",
+      "title": "时间线 1 副本",
+      "type": "timeline"
+    },
+    {
+      "id": "83c724c7-79ac-4030-a7db-ab1df84e40c6",
+      "title": "文本 1 副本",
+      "type": "text",
+      "inputRevision": 1,
+      "draft": {
+        "composer": {
+          "schemaVersion": 1,
+          "document": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "写一段关于雨后城市灯光的简短描述。"
+                  }
+                ]
+              }
+            ]
+          },
+          "references": [],
+          "modelVersion": null,
+          "mode": null,
+          "params": {},
+          "labelState": {
+            "highWater": {
+              "audio": 0,
+              "image": 0,
+              "subject": 0,
+              "video": 0
+            },
+            "allocations": {}
+          }
+        },
+        "prompt": "",
+        "negative_prompt": "",
+        "aspect_ratio": "",
+        "candidate_count": 0
+      }
+    },
+    {
+      "id": "8602bfba-3a75-4bfd-9275-133c56478807",
+      "title": "图片 1 副本",
+      "type": "image"
+    },
+    {
+      "id": "be1ca7ed-76a1-4b5a-b0cd-a639b8fe7d76",
+      "title": "堆叠 副本",
+      "type": "group"
+    },
+    {
+      "id": "c9c387b6-71ed-4e1b-a39e-99e9334b3ef9",
+      "title": "导演台 1 副本",
+      "type": "director"
+    },
+    {
+      "id": "f6608a0d-a7b7-4de0-8c99-9d058d28e892",
+      "title": "主体对齐本地验收-20261028 Copy 副本",
+      "type": "subject",
+      "inputRevision": 1,
+      "subject": {
+        "version": 1,
+        "subject_id": "fc8ee683-a084-423c-94ba-a55668ccd052",
+        "version_id": "008fc3e4-babc-418f-8a58-ba3e34035459",
+        "local": {
+          "description": "画布局部说明验收：仅更新此主体节点，主体库说明保持原样。",
+          "primary": {
+            "asset_id": "d2cf6792-2556-47de-9594-b1a2c75c289c",
+            "asset_revision": 1,
+            "kind": "image",
+            "binding_id": "96a2b9b8-2cda-4f2f-9fce-b721568cb39d"
+          },
+          "references": []
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "1fc27e54-f8cb-4fcc-b315-6f020be3a81f",
+      "edge_type": "annotation",
+      "source_node_id": "0bc75538-e0db-480c-ba3d-7c16b6abb666",
+      "target_node_id": "3209d147-e314-4231-91f6-3e8fc099e88f",
+      "binding": {
+        "order": 0,
+        "binding": {
+          "kind": "NODE_VALUE"
+        },
+        "purpose": "CINEMA_CAMERA",
+        "toPortId": "camera",
+        "fromPortId": "camera",
+        "schemaVersion": 1
+      }
+    },
+    {
+      "id": "37921fc7-2bc3-451c-8194-39b2bf7c5a9d",
+      "edge_type": "annotation",
+      "source_node_id": "0bc75538-e0db-480c-ba3d-7c16b6abb666",
+      "target_node_id": "21ee4224-cf52-4a0d-8148-9fa06e8e86a3",
+      "binding": {
+        "order": 0,
+        "binding": {
+          "kind": "NODE_VALUE"
+        },
+        "purpose": "CINEMA_CAMERA",
+        "toPortId": "camera",
+        "fromPortId": "camera",
+        "schemaVersion": 1
+      }
+    },
+    {
+      "id": "386289be-714c-40f4-8c63-6c6b3a320fdd",
+      "edge_type": "annotation",
+      "source_node_id": "0bc75538-e0db-480c-ba3d-7c16b6abb666",
+      "target_node_id": "26e6abe3-11f3-47ae-a8f4-ec7f1c5623c8",
+      "binding": {
+        "order": 0,
+        "binding": {
+          "kind": "NODE_VALUE"
+        },
+        "purpose": "CINEMA_CAMERA",
+        "toPortId": "camera",
+        "fromPortId": "camera",
+        "schemaVersion": 1
+      }
+    },
+    {
+      "id": "7d3bb4ed-0fa3-4065-88c5-e796d7a2fa09",
+      "edge_type": "annotation",
+      "source_node_id": "f6608a0d-a7b7-4de0-8c99-9d058d28e892",
+      "target_node_id": "281e39ab-3629-4419-a269-dbf1d99a7d1a",
+      "binding": {
+        "order": 0,
+        "binding": {
+          "kind": "NODE_VALUE"
+        },
+        "purpose": "REFERENCE_SUBJECT",
+        "toPortId": "reference_subjects",
+        "fromPortId": "subject",
+        "schemaVersion": 1
+      }
+    },
+    {
+      "id": "b504d44c-d6ec-4d9c-bd3f-a27bd129795f",
+      "edge_type": "annotation",
+      "source_node_id": "f6608a0d-a7b7-4de0-8c99-9d058d28e892",
+      "target_node_id": "3209d147-e314-4231-91f6-3e8fc099e88f",
+      "binding": {
+        "order": 0,
+        "binding": {
+          "kind": "NODE_VALUE"
+        },
+        "purpose": "REFERENCE_SUBJECT",
+        "toPortId": "reference_subjects",
+        "fromPortId": "subject",
+        "schemaVersion": 1
+      }
+    },
+    {
+      "id": "b6be9d88-3bb0-4f9a-ba99-7661f7910a75",
+      "edge_type": "annotation",
+      "source_node_id": "f6608a0d-a7b7-4de0-8c99-9d058d28e892",
+      "target_node_id": "21ee4224-cf52-4a0d-8148-9fa06e8e86a3",
+      "binding": {
+        "order": 0,
+        "binding": {
+          "kind": "NODE_VALUE"
+        },
+        "purpose": "REFERENCE_SUBJECT",
+        "toPortId": "reference_subjects",
+        "fromPortId": "subject",
+        "schemaVersion": 1
+      }
+    },
+    {
+      "id": "f6ddae50-5692-48d8-8998-38e5cdeb3fe6",
+      "edge_type": "annotation",
+      "source_node_id": "83c724c7-79ac-4030-a7db-ab1df84e40c6",
+      "target_node_id": "8602bfba-3a75-4bfd-9275-133c56478807",
+      "binding": {
+        "order": 0,
+        "binding": {
+          "kind": "NODE_VALUE"
+        },
+        "purpose": "PROMPT",
+        "toPortId": "prompt",
+        "fromPortId": "text",
+        "schemaVersion": 1
+      }
+    }
+  ],
+  "undo": {
+    "result": "blocked",
+    "message": "该对象已有其他编辑，无法单独撤销创建。协作者的内容已保留"
+  },
+  "comparison": {
+    "sourceCommitSeq": "54",
+    "nodes": [
+      {
+        "targetID": "05f6d81f-c4a4-4e5a-9ae7-a5c8bec5804a",
+        "sourceID": "6f914a32-14d4-4a1b-939b-b9a00af0eb18",
+        "title": "主体对齐本地验收-20261028 副本",
+        "newID": true,
+        "subjectPreserved": true,
+        "draftPreserved": true
+      },
+      {
+        "targetID": "0bc75538-e0db-480c-ba3d-7c16b6abb666",
+        "sourceID": "008abf24-f8ab-4799-bc0b-16aa0e25ad37",
+        "title": "相机 1 副本",
+        "newID": true,
+        "subjectPreserved": true,
+        "draftPreserved": true
+      },
+      {
+        "targetID": "21ee4224-cf52-4a0d-8148-9fa06e8e86a3",
+        "sourceID": "02101e0f-e9c6-47e2-80d7-232e81135361",
+        "title": "图片 5 副本",
+        "newID": true,
+        "subjectPreserved": true,
+        "draftPreserved": true
+      },
+      {
+        "targetID": "26e6abe3-11f3-47ae-a8f4-ec7f1c5623c8",
+        "sourceID": "9d5f817a-2673-42d6-8908-97da8572c976",
+        "title": "图片 3 副本",
+        "newID": true,
+        "subjectPreserved": true,
+        "draftPreserved": true
+      },
+      {
+        "targetID": "281e39ab-3629-4419-a269-dbf1d99a7d1a",
+        "sourceID": "1a9aa93e-1adb-416d-82c2-d7f261e030c9",
+        "title": "图片 2 副本",
+        "newID": true,
+        "subjectPreserved": true,
+        "draftPreserved": true
+      },
+      {
+        "targetID": "3209d147-e314-4231-91f6-3e8fc099e88f",
+        "sourceID": "fdbf6f84-4e35-4d27-b9fd-fa0ecaab64fd",
+        "title": "图片 4 副本",
+        "newID": true,
+        "subjectPreserved": true,
+        "draftPreserved": true
+      },
+      {
+        "targetID": "38dc46af-6ba0-4feb-a1ec-cc3c10e65a3a",
+        "sourceID": "01660488-0785-437e-a78d-b548661b5d81",
+        "title": "时间线 1 副本",
+        "newID": true,
+        "subjectPreserved": true,
+        "draftPreserved": true
+      },
+      {
+        "targetID": "83c724c7-79ac-4030-a7db-ab1df84e40c6",
+        "sourceID": "f412d9eb-20cb-42e5-ae75-9103ecdfff64",
+        "title": "文本 1 副本",
+        "newID": true,
+        "subjectPreserved": true,
+        "draftPreserved": true
+      },
+      {
+        "targetID": "8602bfba-3a75-4bfd-9275-133c56478807",
+        "sourceID": "a23de06c-f0ff-4652-9ea3-16daedfd52e8",
+        "title": "图片 1 副本",
+        "newID": true,
+        "subjectPreserved": true,
+        "draftPreserved": true
+      },
+      {
+        "targetID": "be1ca7ed-76a1-4b5a-b0cd-a639b8fe7d76",
+        "sourceID": "91f5b018-c001-48e4-951d-ab63aca8acba",
+        "title": "堆叠 副本",
+        "newID": true,
+        "subjectPreserved": true,
+        "draftPreserved": true
+      },
+      {
+        "targetID": "c9c387b6-71ed-4e1b-a39e-99e9334b3ef9",
+        "sourceID": "f86d612a-ffa5-433f-98d8-12db4577b49f",
+        "title": "导演台 1 副本",
+        "newID": true,
+        "subjectPreserved": true,
+        "draftPreserved": true
+      },
+      {
+        "targetID": "f6608a0d-a7b7-4de0-8c99-9d058d28e892",
+        "sourceID": "54424331-6bb1-41c8-9936-eca6dc790273",
+        "title": "主体对齐本地验收-20261028 Copy 副本",
+        "newID": true,
+        "subjectPreserved": true,
+        "draftPreserved": true
+      }
+    ]
+  }
+}

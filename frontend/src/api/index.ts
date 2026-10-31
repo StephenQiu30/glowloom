@@ -6,6 +6,7 @@ import * as settings from "./settings";
 import * as identity from "./identity";
 import * as operations from "./operations";
 import * as canvases from "./canvases";
+import * as canvasAssistant from "./canvasAssistant";
 import * as script from "./script";
 import * as media from "./media";
 import * as mediaDepths from "./mediaDepths";
@@ -26,6 +27,7 @@ export default {
   identity,
   operations,
   canvases,
+  canvasAssistant,
   script,
   media,
   mediaDepths,

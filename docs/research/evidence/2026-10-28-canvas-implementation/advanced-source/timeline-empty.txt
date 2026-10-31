@@ -1,0 +1,28 @@
+Browser tab: 1980371314, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 41-46, 53-78, 103-106
+~					9 pop up button (collapsed) Description: Canvas node summary: 节点 6, Secondary Actions: Expand
+~									26 text 6 nodes, 0 edges, 1 selected. Editable. Room connected. 已保存.
++														103 text 导演台
++														104 text 在 3D 空间中设计角色、机位与镜头
+~														47 text No resources: 0 ready, 0 processing, 0 failed. Not selected.
++												105 container 时间线 node: 时间线 1
++													106 container
++														107 pop up button Create connected node before 时间线 1
++														108 button Rename 时间线 1
++															109 text 时间线 1
++														110 button (collapsed) Description: Add tags, Secondary Actions: Expand
++														111 button (disabled) 分割
++														112 button (disabled) 删除
++														113 container
++															114 text 00:00 / 00:00
++														115 pop up button (collapsed) Description: 导出时间线, Secondary Actions: Expand
++														116 button 全屏编辑
++														117 checkbox Description: 静音, Value: 0
++														118 pop up button (collapsed) Description: 添加素材到时间线, Secondary Actions: Expand
++														119 text Drag clips to reorder them. With the keyboard, press Shift + Left or Right Arrow.
++														120 splitter Description: Resize timeline, Value: 1200
++														121 text 时间线: 1 visual track, 0 audio tracks, 0 clips. Selected.
+~						97 button (collapsed) Description: 与 AI 对话, Secondary Actions: Expand
++		122 container Timeline media addition results
+The focused UI element is 85 button 时间线

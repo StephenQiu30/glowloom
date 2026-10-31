@@ -81,6 +81,33 @@ func validEditor(c *EditorConfig) bool {
 	}
 	for key, value := range c.Metadata {
 		switch key {
+		case "colorTags":
+			var tags []string
+			if json.Unmarshal(value, &tags) != nil || tags == nil || len(tags) > 5 {
+				return false
+			}
+			seen := map[string]bool{}
+			for _, tag := range tags {
+				switch tag {
+				case "cyan", "blue", "purple", "orange", "yellow":
+				default:
+					return false
+				}
+				if seen[tag] {
+					return false
+				}
+				seen[tag] = true
+			}
+		case "textBackground":
+			var color string
+			if json.Unmarshal(value, &color) != nil {
+				return false
+			}
+			switch color {
+			case "default", "cyan", "blue", "purple", "orange", "yellow":
+			default:
+				return false
+			}
 		case "referenceLabels":
 			var labels map[string]struct {
 				Kind    string `json:"kind"`

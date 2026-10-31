@@ -8,6 +8,12 @@ export type CanvasReferenceSource = {
   assetID?: string;
 };
 
+/** A subject keeps its own immutable version and expands into its authorized media. */
+export type CanvasSubjectReferenceSource = { nodeID: string; title: string } & (
+  | { source: "subject"; subjectID: string; versionID: string }
+  | { source: "canvas_subject"; canvasID: string; inputRevision: number }
+);
+
 export function referenceRoleLabel(role: string) {
   return (
     (

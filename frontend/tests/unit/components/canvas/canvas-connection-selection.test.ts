@@ -27,7 +27,7 @@ describe("connection gesture selection snapshot", () => {
       { id: "director", type: "director" },
       { id: "b", type: "image" },
       { id: "group", type: "group" },
-      { id: "c", type: "video" },
+      { id: "c", type: "subject" },
     ];
     expect(
       snapshotCanvasConnectionSelection(

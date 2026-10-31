@@ -7,6 +7,9 @@ const harness = vi.hoisted(() => ({
   payload: vi.fn(),
   props: {} as {
     onAdd: (assets: API.AssetSummary[]) => Promise<void>;
+    onUnifiedSubject?: (
+      subject: import("@/components/subjects/unified-contracts").UnifiedSubject,
+    ) => Promise<void>;
     selectionLimit?: number;
     confirmLabel?: string;
   },
@@ -105,5 +108,87 @@ it("账号范围改变后拒绝迟到素材，替换入口明确限制单选", a
   harness.session++;
   resolve({ kind: "image", title: "one" });
   await act(() => pending);
+  expect(insert).not.toHaveBeenCalled();
+});
+
+it("主体固定版本导入在历史恢复新epoch、空间切换、关闭后均拒绝", async () => {
+  const insert = vi.fn();
+  let epoch = "old";
+  const props = {
+    projectId: "project",
+    getDocumentEpoch: () => epoch,
+    onInsert: insert,
+    onClose: vi.fn(),
+  };
+  const view = render(<AssetPickerModal open {...props} />);
+  const subject = {
+    id: "subject",
+    version_id: "version",
+    name: "主演",
+  } as import("@/components/subjects/unified-contracts").UnifiedSubject;
+  const confirm = harness.props.onUnifiedSubject!;
+  epoch = "restored";
+  await expect(confirm(subject)).rejects.toThrow("画布或创作空间已变化");
+  expect(insert).not.toHaveBeenCalled();
+  view.rerender(<AssetPickerModal open={false} {...props} />);
+  view.rerender(<AssetPickerModal open {...props} />);
+  await act(() => harness.props.onUnifiedSubject!(subject));
+  expect(insert).toHaveBeenCalledExactlyOnceWith({ kind: "subject", subject });
+  harness.scope++;
+  await expect(harness.props.onUnifiedSubject!(subject)).rejects.toThrow();
+  view.unmount();
+  await expect(harness.props.onUnifiedSubject!(subject)).rejects.toThrow();
+  expect(insert).toHaveBeenCalledOnce();
+});
+it("媒体预览等待期间epoch变化不会把素材写入恢复后的画布", async () => {
+  let epoch = "one";
+  let finish!: (value: unknown) => void;
+  const insert = vi.fn();
+  harness.payload.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  render(
+    <AssetPickerModal
+      open
+      projectId="project"
+      getDocumentEpoch={() => epoch}
+      onInsert={insert}
+      onClose={vi.fn()}
+    />,
+  );
+  const pending = harness.props.onAdd([assets[0]]);
+  epoch = "two";
+  finish({ kind: "image", title: "one" });
+  await act(() => pending);
+  expect(insert).not.toHaveBeenCalled();
+});
+
+it("切换项目后旧确认闭包不能写入新项目", async () => {
+  const insert = vi.fn();
+  const view = render(
+    <AssetPickerModal
+      open
+      projectId="old"
+      onInsert={insert}
+      onClose={vi.fn()}
+    />,
+  );
+  const oldConfirm = harness.props.onUnifiedSubject!;
+  view.rerender(
+    <AssetPickerModal
+      open
+      projectId="new"
+      onInsert={insert}
+      onClose={vi.fn()}
+    />,
+  );
+  await expect(
+    oldConfirm({
+      id: "subject",
+    } as import("@/components/subjects/unified-contracts").UnifiedSubject),
+  ).rejects.toThrow();
   expect(insert).not.toHaveBeenCalled();
 });

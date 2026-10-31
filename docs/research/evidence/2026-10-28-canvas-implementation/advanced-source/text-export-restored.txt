@@ -1,0 +1,79 @@
+Browser tab: 1980371336, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+0 AXWebArea 一致性调研-202610221 - 即梦AI, URL: jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage
+	1 container
+		2 container root
+			3 container
+				4 container Canvas top bar
+					5 link Description: 返回首页, Value: jimeng.jianying.com/ai-tool/home
+					6 container
+						7 button Canvas title: 一致性调研-202610221
+						8 button (collapsed) Description: 项目, Secondary Actions: Expand
+					9 pop up button (collapsed) Description: Canvas node summary: 节点 5, Secondary Actions: Expand
+					10 text 已保存
+					11 container
+						12 pop up button (collapsed) Description: 搜索, Secondary Actions: Expand
+						13 pop up button (collapsed) Description: 生成历史, Secondary Actions: Expand
+						14 container
+							15 button (collapsed) Description: 分享, Secondary Actions: Expand
+						16 pop up button (collapsed) Description: 更多, ID: radix-:modern-js-r1t:, Secondary Actions: Expand
+						17 button Credits: 88 · 开会员
+							18 text 88
+							19 text 开会员
+						20 pop up button (collapsed) Description: 用户菜单, ID: radix-:modern-js-r14:, Secondary Actions: Expand
+				21 container Canvas workspace
+					22 container
+						23 container
+							24 container Canvas editing area
+								25 container
+									26 text 5 nodes, 0 edges, 0 selected. Editable. Room connected. 已保存.
+									27 container Canvas
+										110 container
+											111 container 文本 node: 文本 1
+												112 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_cgm1h72hr6
+												113 text 文本 1
+											114 container 文本 node: 文本 2
+												115 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_862fkmng46
+												116 text 文本 2
+											117 container 文本 node: 文本 3
+												118 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_jt894kh8f0
+												119 text 文本 3
+											120 container 外部 node: 导演台
+												121 container
+													122 text 导演台
+													123 text 在 3D 空间中设计角色、机位与镜头
+													124 text No resources: 0 ready, 0 processing, 0 failed. Not selected.
+											125 container 视频 node: 视频 1
+												126 container
+													127 text 视频 1
+													128 image 暂无视频
+													129 text No resources: 0 ready, 0 processing, 0 failed. Not selected.
+						82 container Canvas left toolbar
+							83 toolbar Canvas toolbar
+								84 button 文本
+								85 button 图片
+								86 button 视频
+								87 button 音频
+								88 button 时间线
+								89 button 主体
+								90 checkbox (collapsed) Description: 导演工具箱, Value: 0, ID: radix-:modern-js-r2t:, Secondary Actions: Expand
+								91 button 导演台
+								92 button 资产库
+								93 button 上传
+						94 container Canvas viewport controls
+							95 checkbox Description: 选择工具, Value: 0
+							96 checkbox Description: 小地图, Value: 0
+							97 checkbox Description: 显示连线, Value: 1
+							98 container
+								99 pop up button (collapsed) Description: Zoom options, 77%, ID: radix-:modern-js-rn:, Secondary Actions: Expand
+						100 button (collapsed) Description: 与 AI 对话, Secondary Actions: Expand
+		101 container Notifications
+		102 container Canvas notifications
+		103 container Canvas notifications
+		104 container Canvas tag notifications
+		105 container Canvas notifications
+		106 container Description: 会员资格, ID: radix-:modern-js-r11:
+			107 container :modern-js-r10:
+				108 text 还未开通会员
+				109 button 去开通
+
+The focused UI element is 0 AXWebArea 一致性调研-202610221 - 即梦AI, URL: jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage

@@ -14,7 +14,7 @@ const api = vi.hoisted(() => ({
   upload: vi.fn(),
 }));
 vi.mock("@/api/media", () => ({
-  listMediaAssets: api.list,
+  listMediaLibrary: api.list,
   getMediaPreview: api.preview,
 }));
 vi.mock("@/components/media/project-media", () => ({
@@ -42,6 +42,25 @@ const b = {
   id: "00000000-0000-4000-8000-000000000012",
   file_name: "蓝蝶.png",
 };
+function library(items: API.AssetSummary[], page = 1, total = items.length) {
+  return {
+    current_actor_id: pid,
+    current_org_id: pid,
+    library_id: pid,
+    revision: 1,
+    scope: { kind: "project", project_id: items[0]?.project_id ?? pid },
+    page,
+    page_size: 40,
+    total,
+    items: items.map((asset) => ({
+      id: asset.id,
+      asset_id: asset.id,
+      kind: asset.kind,
+      catalog_state: "active",
+      media: { ...asset, project_id: undefined },
+    })),
+  };
+}
 beforeEach(() => {
   vi.resetAllMocks();
   api.preview.mockImplementation(({ asset_id }) =>
@@ -50,7 +69,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 it("单选参考上传同类素材时替换原选择，异类上传不改变参考类型", async () => {
-  api.list.mockResolvedValue({ items: [a, b] });
+  api.list.mockResolvedValue(library([a, b]));
   const add = vi.fn();
   render(
     <ProjectAssetDialog
@@ -81,9 +100,9 @@ it("单选参考上传同类素材时替换原选择，异类上传不改变参�
 });
 it("多选、搜索与分页保留已选资源身份，确认前不写入画布", async () => {
   api.list
-    .mockResolvedValueOnce({ items: [a], next_cursor: "next" })
-    .mockResolvedValueOnce({ items: [b] })
-    .mockResolvedValue({ items: [a, b] });
+    .mockResolvedValueOnce(library([a], 1, 41))
+    .mockResolvedValueOnce(library([b], 2, 41))
+    .mockResolvedValue(library([a, b]));
   const add = vi.fn();
   render(
     <ProjectAssetDialog
@@ -110,17 +129,18 @@ it("多选、搜索与分页保留已选资源身份，确认前不写入画布"
   expect(screen.getByText("已选择 2 个素材（最多 24 个）")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "添加到画布" }));
   await waitFor(() => expect(add).toHaveBeenCalledExactlyOnceWith([a, b]));
-  expect(api.list.mock.calls[1][0]).toEqual({
-    pid,
+  expect(api.list.mock.calls[1][0]).toMatchObject({
+    scope: "project",
+    project_id: pid,
     kind: "image",
-    limit: 40,
-    cursor: "next",
+    page: 2,
+    page_size: 40,
   });
 });
 it("跨项目回执不进入可选素材，重新读取可恢复", async () => {
   api.list
-    .mockResolvedValueOnce({ items: [{ ...a, project_id: a.id }] })
-    .mockResolvedValueOnce({ items: [a] });
+    .mockResolvedValueOnce(library([{ ...a, project_id: a.id }]))
+    .mockResolvedValueOnce(library([a]));
   render(
     <ProjectAssetDialog
       projectID={pid}
@@ -159,11 +179,13 @@ it("关闭弹窗中止读取，迟到回执不能继续更新弹窗", async () =
   const signal = api.list.mock.calls[0][1].signal as AbortSignal;
   view.unmount();
   expect(signal.aborted).toBe(true);
-  await act(async () => finish({ items: [a] }));
+  await act(async () => finish(library([a])));
   expect(screen.queryByRole("dialog")).toBeNull();
 });
 it("真实空列表和已加载素材搜索无结果具有不同提示", async () => {
-  api.list.mockResolvedValue({ items: [a] });
+  api.list.mockImplementation(({ search }) =>
+    Promise.resolve(library(search ? [] : [a])),
+  );
   render(
     <ProjectAssetDialog
       projectID={pid}
@@ -182,8 +204,8 @@ it("真实空列表和已加载素材搜索无结果具有不同提示", async (
   ).toBe(true);
 });
 
-it("真实空分页的 null 游标显示空态而非回执错误", async () => {
-  api.list.mockResolvedValue({ items: [], next_cursor: null });
+it("真实空分页显示空态而非回执错误", async () => {
+  api.list.mockResolvedValue(library([]));
   render(
     <ProjectAssetDialog
       projectID={pid}
@@ -196,11 +218,9 @@ it("真实空分页的 null 游标显示空态而非回执错误", async () => {
   expect(screen.queryByText(/连接中断|结果未确认/)).toBeNull();
 });
 
-it("搜索会遍历项目后续分页，选中项不受关键词影响", async () => {
-  api.list.mockImplementation(({ cursor }) =>
-    Promise.resolve(
-      cursor ? { items: [b] } : { items: [a], next_cursor: "later" },
-    ),
+it("搜索交给完整服务端分页，不遍历或客户端过滤，选中项保留", async () => {
+  api.list.mockImplementation(({ search }) =>
+    Promise.resolve(search ? library([b]) : library([a], 1, 100)),
   );
   render(
     <ProjectAssetDialog projectID={pid} onClose={vi.fn()} onAdd={vi.fn()} />,
@@ -215,11 +235,13 @@ it("搜索会遍历项目后续分页，选中项不受关键词影响", async (
     await screen.findByRole("button", { name: "选择素材 蓝蝶.png" }),
   ).toBeTruthy();
   expect(screen.getByText("已选择 1 个素材（最多 24 个）")).toBeTruthy();
+  expect(api.list).toHaveBeenCalledTimes(2);
+  expect(api.list.mock.lastCall![0]).toMatchObject({ search: "蓝蝶", page: 1 });
   fireEvent.click(screen.getByRole("button", { name: "选择本页" }));
   expect(screen.getByText("已选择 2 个素材（最多 24 个）")).toBeTruthy();
 });
 it("确认核验失败保留选择且不调用添加", async () => {
-  api.list.mockResolvedValue({ items: [a] });
+  api.list.mockResolvedValue(library([a]));
   api.preview.mockRejectedValue(new Error("素材不可用"));
   const add = vi.fn();
   render(<ProjectAssetDialog projectID={pid} onClose={vi.fn()} onAdd={add} />);
@@ -235,7 +257,7 @@ it("确认核验失败保留选择且不调用添加", async () => {
 });
 
 it("画布替换只列出允许类型，单选新素材替换旧选择", async () => {
-  api.list.mockResolvedValue({ items: [a, b] });
+  api.list.mockResolvedValue(library([a, b]));
   const add = vi.fn();
   render(
     <ProjectAssetDialog
@@ -259,4 +281,49 @@ it("画布替换只列出允许类型，单选新素材替换旧选择", async (
   ).toBe("false");
   fireEvent.click(screen.getByRole("button", { name: "添加到画布" }));
   await waitFor(() => expect(add).toHaveBeenCalledExactlyOnceWith([b]));
+});
+it("切换媒体类型清除图片多选规格并从第一页读取，切回不复活条件", async () => {
+  api.list.mockResolvedValue(library([]));
+  render(
+    <ProjectAssetDialog projectID={pid} onClose={vi.fn()} onAdd={vi.fn()} />,
+  );
+  await screen.findByText("当前项目暂无此类素材");
+  fireEvent.click(screen.getByRole("button", { name: "来源与规格筛选" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "1K" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "2K" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "16:9" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "1:1" }));
+  await waitFor(() =>
+    expect(api.list.mock.lastCall![0]).toMatchObject({
+      kind: "image",
+      resolutions: "1K,2K",
+      ratios: "16:9,1:1",
+      page: 1,
+    }),
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "来源与规格筛选，已选 4 项" }),
+  );
+  fireEvent.click(screen.getByRole("radio", { name: "视频" }));
+  await waitFor(() =>
+    expect(api.list.mock.lastCall![0]).toMatchObject({
+      kind: "video",
+      resolutions: undefined,
+      ratios: undefined,
+      page: 1,
+    }),
+  );
+  fireEvent.click(screen.getByRole("radio", { name: "图片" }));
+  await waitFor(() =>
+    expect(api.list.mock.lastCall![0]).toMatchObject({
+      kind: "image",
+      resolutions: undefined,
+      ratios: undefined,
+      page: 1,
+    }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "来源与规格筛选" }));
+  expect(
+    screen.getByRole("checkbox", { name: "2K" }).getAttribute("data-state"),
+  ).toBe("unchecked");
 });

@@ -183,11 +183,19 @@ func (s *Store) CommitYjsRestore(ctx context.Context, a identity.Principal, base
 		if err = domain.ValidateGraph(target); err != nil {
 			return err
 		}
+		if err = application.ValidateSubjectNodes(ctx, a, p, target.Nodes, s.subjectSources(tx)); err != nil {
+			return err
+		}
 		commands := []domain.Command{}
 		for _, node := range target.Nodes {
 			commands = append(commands, domain.Command{Type: "AddNodes", Nodes: []domain.Node{node}})
 			if node.Config.Composer != nil {
 				if err = pgprompt.ValidateDraftSources(tx, a, p, *node.Config.Composer, false, s.subjectSources(tx)); err != nil {
+					return err
+				}
+			}
+			if domain.IsDraft(node) && node.Config.Draft.Composer != nil {
+				if err = pgprompt.ValidateDraftSources(tx, a, p, *node.Config.Draft.Composer, false, s.subjectSources(tx)); err != nil {
 					return err
 				}
 			}
@@ -198,11 +206,22 @@ func (s *Store) CommitYjsRestore(ctx context.Context, a identity.Principal, base
 		// The accepted history is the only source of restored identities. Versions
 		// advance from the most recent lifetime, including currently deleted rows.
 		for i := range target.Nodes {
-			var v int64
-			if err = tx.Raw(`SELECT content_version FROM canvas.node WHERE document_id=? AND id=?`, id, target.Nodes[i].ID).Scan(&v).Error; err != nil {
+			var versions struct {
+				ContentVersion int64
+				InputRevision  int64
+			}
+			if err = tx.Raw(`SELECT content_version,input_revision FROM canvas.node WHERE document_id=? AND id=?`, id, target.Nodes[i].ID).Scan(&versions).Error; err != nil {
 				return err
 			}
-			target.Nodes[i].ContentVersion = max(v, target.Nodes[i].ContentVersion)
+			target.Nodes[i].ContentVersion = max(versions.ContentVersion, target.Nodes[i].ContentVersion)
+			target.Nodes[i].InputRevision = max(versions.InputRevision, target.Nodes[i].InputRevision)
+			if target.Nodes[i].NodeType == "subject" || domain.IsDraft(target.Nodes[i]) {
+				previous := target.Nodes[i].InputRevision
+				if previous >= math.MaxInt32 {
+					return domain.ErrInvalidCommand
+				}
+				target.Nodes[i].InputRevision = previous + 1
+			}
 		}
 		if err = advanceContentVersions(current, &target); err != nil {
 			return err
@@ -219,6 +238,23 @@ func (s *Store) CommitYjsRestore(ctx context.Context, a identity.Principal, base
 		if err = saveGraphWithRestoration(tx, current, target, true); err != nil {
 			return err
 		}
+		inputs := []domain.InputSnapshot{}
+		for _, node := range target.Nodes {
+			if node.Config.Subject != nil {
+				inputs = append(inputs, domain.InputSnapshot{NodeID: node.ID, Revision: node.InputRevision, Subject: node.Config.Subject, Title: node.Title})
+			}
+			if domain.IsDraft(node) {
+				effective, err := domain.GenerationInput(target, node)
+				if err != nil {
+					return err
+				}
+				inputs = append(inputs, domain.InputSnapshot{NodeID: node.ID, Revision: node.InputRevision, Draft: effective})
+			}
+		}
+		if err = saveInputs(tx, a.ID, inputs); err != nil {
+			return err
+		}
+
 		presentation, err := s.presentation(tx, a, p)
 		if err != nil {
 			return err

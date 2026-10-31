@@ -39,8 +39,8 @@ func parseEditorConnection(body []byte) (EditorConnection, bool) {
 	if len(body) > 4096 || decoder.Decode(&c) != nil || c.SchemaVersion != 1 || c.Order < 0 || c.Order > 999 {
 		return c, false
 	}
-	purposes := map[string]string{"prompt": "PROMPT", "settings": "SETTINGS", "reference_images": "REFERENCE_IMAGE", "reference_videos": "REFERENCE_VIDEO", "reference_audio": "REFERENCE_AUDIO", "first_frame": "FIRST_FRAME", "last_frame": "LAST_FRAME"}
-	if purposes[c.ToPortID] != c.Purpose || c.Purpose == "" || !slices.Contains([]string{"text", "image", "video", "audio", "settings", "last_frame"}, c.FromPortID) {
+	purposes := map[string]string{"prompt": "PROMPT", "settings": "SETTINGS", "reference_images": "REFERENCE_IMAGE", "reference_videos": "REFERENCE_VIDEO", "reference_audio": "REFERENCE_AUDIO", "first_frame": "FIRST_FRAME", "last_frame": "LAST_FRAME", "camera": "CINEMA_CAMERA", "palette": "CINEMA_PALETTE", "style": "CINEMA_STYLE", "motion": "CINEMA_MOTION", "reference_subjects": "REFERENCE_SUBJECT"}
+	if purposes[c.ToPortID] != c.Purpose || c.Purpose == "" || !slices.Contains([]string{"text", "image", "video", "audio", "settings", "last_frame", "camera", "palette", "style", "motion", "subject"}, c.FromPortID) {
 		return c, false
 	}
 	switch c.Binding.Kind {
@@ -85,6 +85,36 @@ func validateEditorConnections(doc Document) error {
 		}
 		source, target := nodes[e.SourceNodeID], nodes[e.TargetNodeID]
 		s, t := editorNodeType(source), editorNodeType(target)
+		if s == "cinema_studio" {
+			kit := source.Config.CinemaKit
+			if kit == nil || len(kit.Kinds()) != 1 || c.FromPortID != kit.Kinds()[0] || c.ToPortID != c.FromPortID || c.Binding.Kind != "NODE_VALUE" || !kit.Supports(t+".generate") {
+				return ErrInvalidCommand
+			}
+			key := e.TargetNodeID.String() + "/" + c.ToPortID
+			if single[key] {
+				return ErrInvalidCommand
+			}
+			single[key] = true
+			if _, err := EffectiveCinemaKit(doc, target); err != nil {
+				return err
+			}
+			adj[e.SourceNodeID] = append(adj[e.SourceNodeID], e.TargetNodeID)
+			continue
+		}
+
+		if s == "subject" {
+			if c.FromPortID != "subject" || c.ToPortID != "reference_subjects" || c.Binding.Kind != "NODE_VALUE" || !slices.Contains([]string{"image", "video", "audio"}, t) {
+				return ErrInvalidCommand
+			}
+			key := e.SourceNodeID.String() + "/" + e.TargetNodeID.String() + "/subject"
+			if seen[key] {
+				return ErrInvalidCommand
+			}
+			seen[key] = true
+			adj[e.SourceNodeID] = append(adj[e.SourceNodeID], e.TargetNodeID)
+			continue
+		}
+
 		want := map[string]string{"prompt": "text", "settings": "config", "reference_images": "image", "reference_videos": "video", "reference_audio": "audio", "first_frame": "image", "last_frame": "image"}[c.ToPortID]
 		sourceKind := s
 		if s == "video" && c.FromPortID == "last_frame" {

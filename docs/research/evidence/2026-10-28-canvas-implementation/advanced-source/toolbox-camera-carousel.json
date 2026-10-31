@@ -1,0 +1,516 @@
+{
+  "相机": [
+    [
+      {
+        "name": "VHS磁带",
+        "selected": false
+      },
+      {
+        "name": "纪实胶片",
+        "selected": false
+      },
+      {
+        "name": "黑白纪实",
+        "selected": true
+      },
+      {
+        "name": "Y2K卡片机",
+        "selected": false
+      },
+      {
+        "name": "自动",
+        "selected": false
+      }
+    ],
+    [
+      {
+        "name": "纪实胶片",
+        "selected": false
+      },
+      {
+        "name": "黑白纪实",
+        "selected": false
+      },
+      {
+        "name": "Y2K卡片机",
+        "selected": true
+      },
+      {
+        "name": "自动",
+        "selected": false
+      },
+      {
+        "name": "现代数字",
+        "selected": false
+      }
+    ],
+    [
+      {
+        "name": "黑白纪实",
+        "selected": false
+      },
+      {
+        "name": "Y2K卡片机",
+        "selected": false
+      },
+      {
+        "name": "自动",
+        "selected": true
+      },
+      {
+        "name": "现代数字",
+        "selected": false
+      },
+      {
+        "name": "电影胶片",
+        "selected": false
+      }
+    ],
+    [
+      {
+        "name": "Y2K卡片机",
+        "selected": false
+      },
+      {
+        "name": "自动",
+        "selected": false
+      },
+      {
+        "name": "现代数字",
+        "selected": true
+      },
+      {
+        "name": "电影胶片",
+        "selected": false
+      },
+      {
+        "name": "VHS磁带",
+        "selected": false
+      }
+    ],
+    [
+      {
+        "name": "自动",
+        "selected": false
+      },
+      {
+        "name": "现代数字",
+        "selected": false
+      },
+      {
+        "name": "电影胶片",
+        "selected": true
+      },
+      {
+        "name": "VHS磁带",
+        "selected": false
+      },
+      {
+        "name": "纪实胶片",
+        "selected": false
+      }
+    ],
+    [
+      {
+        "name": "现代数字",
+        "selected": false
+      },
+      {
+        "name": "电影胶片",
+        "selected": false
+      },
+      {
+        "name": "VHS磁带",
+        "selected": true
+      },
+      {
+        "name": "纪实胶片",
+        "selected": false
+      },
+      {
+        "name": "黑白纪实",
+        "selected": false
+      }
+    ],
+    [
+      {
+        "name": "电影胶片",
+        "selected": false
+      },
+      {
+        "name": "VHS磁带",
+        "selected": false
+      },
+      {
+        "name": "纪实胶片",
+        "selected": true
+      },
+      {
+        "name": "黑白纪实",
+        "selected": false
+      },
+      {
+        "name": "Y2K卡片机",
+        "selected": false
+      }
+    ]
+  ],
+  "镜头": [
+    [
+      {
+        "name": "暖调复古镜头",
+        "selected": false
+      },
+      {
+        "name": "黑柔滤镜镜头",
+        "selected": false
+      },
+      {
+        "name": "鱼眼广角镜头",
+        "selected": true
+      },
+      {
+        "name": "漏光镜头",
+        "selected": false
+      },
+      {
+        "name": "自动",
+        "selected": false
+      }
+    ],
+    [
+      {
+        "name": "黑柔滤镜镜头",
+        "selected": false
+      },
+      {
+        "name": "鱼眼广角镜头",
+        "selected": false
+      },
+      {
+        "name": "漏光镜头",
+        "selected": true
+      },
+      {
+        "name": "自动",
+        "selected": false
+      },
+      {
+        "name": "干净锐利镜头",
+        "selected": false
+      }
+    ],
+    [
+      {
+        "name": "鱼眼广角镜头",
+        "selected": false
+      },
+      {
+        "name": "漏光镜头",
+        "selected": false
+      },
+      {
+        "name": "自动",
+        "selected": true
+      },
+      {
+        "name": "干净锐利镜头",
+        "selected": false
+      },
+      {
+        "name": "银幕电影镜头",
+        "selected": false
+      }
+    ],
+    [
+      {
+        "name": "漏光镜头",
+        "selected": false
+      },
+      {
+        "name": "自动",
+        "selected": false
+      },
+      {
+        "name": "干净锐利镜头",
+        "selected": true
+      },
+      {
+        "name": "银幕电影镜头",
+        "selected": false
+      },
+      {
+        "name": "暖调复古镜头",
+        "selected": false
+      }
+    ],
+    [
+      {
+        "name": "自动",
+        "selected": false
+      },
+      {
+        "name": "干净锐利镜头",
+        "selected": false
+      },
+      {
+        "name": "银幕电影镜头",
+        "selected": true
+      },
+      {
+        "name": "暖调复古镜头",
+        "selected": false
+      },
+      {
+        "name": "黑柔滤镜镜头",
+        "selected": false
+      }
+    ],
+    [
+      {
+        "name": "干净锐利镜头",
+        "selected": false
+      },
+      {
+        "name": "银幕电影镜头",
+        "selected": false
+      },
+      {
+        "name": "暖调复古镜头",
+        "selected": true
+      },
+      {
+        "name": "黑柔滤镜镜头",
+        "selected": false
+      },
+      {
+        "name": "鱼眼广角镜头",
+        "selected": false
+      }
+    ],
+    [
+      {
+        "name": "银幕电影镜头",
+        "selected": false
+      },
+      {
+        "name": "暖调复古镜头",
+        "selected": false
+      },
+      {
+        "name": "黑柔滤镜镜头",
+        "selected": true
+      },
+      {
+        "name": "鱼眼广角镜头",
+        "selected": false
+      },
+      {
+        "name": "漏光镜头",
+        "selected": false
+      }
+    ]
+  ],
+  "焦距": [
+    [
+      {
+        "name": "自动",
+        "selected": false
+      },
+      {
+        "name": "24mm",
+        "selected": false
+      },
+      {
+        "name": "35mm",
+        "selected": true
+      },
+      {
+        "name": "85mm",
+        "selected": false
+      },
+      {
+        "name": "135mm",
+        "selected": false
+      }
+    ],
+    [
+      {
+        "name": "24mm",
+        "selected": false
+      },
+      {
+        "name": "35mm",
+        "selected": false
+      },
+      {
+        "name": "85mm",
+        "selected": true
+      },
+      {
+        "name": "135mm",
+        "selected": false
+      },
+      {
+        "name": "自动",
+        "selected": false
+      }
+    ],
+    [
+      {
+        "name": "35mm",
+        "selected": false
+      },
+      {
+        "name": "85mm",
+        "selected": false
+      },
+      {
+        "name": "135mm",
+        "selected": true
+      },
+      {
+        "name": "自动",
+        "selected": false
+      },
+      {
+        "name": "24mm",
+        "selected": false
+      }
+    ],
+    [
+      {
+        "name": "85mm",
+        "selected": false
+      },
+      {
+        "name": "135mm",
+        "selected": false
+      },
+      {
+        "name": "自动",
+        "selected": true
+      },
+      {
+        "name": "24mm",
+        "selected": false
+      },
+      {
+        "name": "35mm",
+        "selected": false
+      }
+    ],
+    [
+      {
+        "name": "135mm",
+        "selected": false
+      },
+      {
+        "name": "自动",
+        "selected": false
+      },
+      {
+        "name": "24mm",
+        "selected": true
+      },
+      {
+        "name": "35mm",
+        "selected": false
+      },
+      {
+        "name": "85mm",
+        "selected": false
+      }
+    ]
+  ],
+  "光圈": [
+    [
+      {
+        "name": "f4中景深",
+        "selected": false
+      },
+      {
+        "name": "f11深景深",
+        "selected": false
+      },
+      {
+        "name": "自动",
+        "selected": true
+      },
+      {
+        "name": "f1.4浅景深",
+        "selected": false
+      },
+      {
+        "name": "f4中景深",
+        "selected": false
+      }
+    ],
+    [
+      {
+        "name": "f11深景深",
+        "selected": false
+      },
+      {
+        "name": "自动",
+        "selected": false
+      },
+      {
+        "name": "f1.4浅景深",
+        "selected": true
+      },
+      {
+        "name": "f4中景深",
+        "selected": false
+      },
+      {
+        "name": "f11深景深",
+        "selected": false
+      }
+    ],
+    [
+      {
+        "name": "自动",
+        "selected": false
+      },
+      {
+        "name": "f1.4浅景深",
+        "selected": false
+      },
+      {
+        "name": "f4中景深",
+        "selected": true
+      },
+      {
+        "name": "f11深景深",
+        "selected": false
+      },
+      {
+        "name": "自动",
+        "selected": false
+      }
+    ],
+    [
+      {
+        "name": "f1.4浅景深",
+        "selected": false
+      },
+      {
+        "name": "f4中景深",
+        "selected": false
+      },
+      {
+        "name": "f11深景深",
+        "selected": true
+      },
+      {
+        "name": "自动",
+        "selected": false
+      },
+      {
+        "name": "f1.4浅景深",
+        "selected": false
+      }
+    ]
+  ]
+}

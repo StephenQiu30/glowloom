@@ -1,5 +1,14 @@
 import { CanvasConnectionHandle } from "./canvas-connection-handle";
+import { containerKind } from "../lib/canvas-containers";
+import { canvasTextBackgrounds } from "../lib/canvas-text-background";
+import { canvasNodeAccessibility } from "../lib/canvas-node-accessibility";
 import { CanvasVideoPlayer } from "./canvas-video-player";
+import {
+  CanvasColorTags,
+  CanvasColorTagMarks,
+} from "../controls/canvas-color-tags";
+import type { CanvasColorTag } from "../lib/canvas-color-tags";
+import { canvasTextBackground } from "../lib/canvas-text-background";
 import { useBoundReferences } from "../hooks/use-bound-references";
 import { cn } from "@/lib/utils";
 import { isImeComposing } from "@/components/canvas/runtime/lib/keyboard-event";
@@ -28,7 +37,10 @@ import {
 } from "@/components/ui/sheet";
 import {
   ChevronRight,
+  Contact,
   Clapperboard,
+  Box,
+  Palette,
   Copy,
   Download,
   FileText,
@@ -47,6 +59,7 @@ import {
 import type { ReactNode } from "react";
 import React, {
   useCallback,
+  useId,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -138,6 +151,7 @@ type CanvasNodeProps = {
     document?: RichTextDocument,
   ) => void;
   onTitleChange: (nodeId: string, title: string) => void;
+  onColorTagChange?: (nodeId: string, tag: CanvasColorTag | null) => void;
   onToggleBatch?: (nodeId: string) => void;
   onSetBatchPrimary?: (nodeId: string, itemId: string) => void;
   onDuplicateBatchImage?: (node: CanvasNodeData, imageId: string) => void;
@@ -221,6 +235,7 @@ export const CanvasNode = React.memo(function CanvasNode({
   onResizeEnd,
   onContentChange,
   onTitleChange,
+  onColorTagChange,
   onToggleBatch,
   onSetBatchPrimary,
   onDuplicateBatchImage,
@@ -444,6 +459,13 @@ export const CanvasNode = React.memo(function CanvasNode({
   }, [handleResizeMove, handleResizeUp]);
 
   const panelOpen = showPanel && !referenceSelectionState && !isGroup;
+  const descriptionID = useId();
+  const accessibility = canvasNodeAccessibility(data, {
+    selected: isSelected,
+    readOnly,
+    editing: isEditingContent || isEditingTitle,
+    reference: referenceSelectionState,
+  });
   return (
     <>
       <Popover
@@ -455,6 +477,10 @@ export const CanvasNode = React.memo(function CanvasNode({
         <PopoverAnchor asChild>
           <div
             ref={nodeElement}
+            role="group"
+            aria-roledescription="画布节点"
+            aria-label={accessibility.label}
+            aria-describedby={descriptionID}
             onLoadCapture={(event) => {
               const target = event.target;
               if (target instanceof HTMLImageElement)
@@ -521,11 +547,15 @@ export const CanvasNode = React.memo(function CanvasNode({
               else onContextMenu(event, data.id);
             }}
           >
+            <span id={descriptionID} className="sr-only">
+              {accessibility.description}
+            </span>
             {!referenceSelectionState && (
               <div
-                className="canvas-node-heading absolute top-[-28px] left-0 z-[65] max-w-canvas-dialog"
+                className="canvas-node-heading absolute top-[-28px] left-0 z-[65] flex max-w-canvas-dialog items-center gap-2"
                 style={{
                   top: -28 / scale,
+                  width: data.width * scale,
                   transform: `scale(${1 / scale})`,
                   transformOrigin: "top left",
                 }}
@@ -560,7 +590,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                   <Button
                     variant="ghost"
                     type="button"
-                    className="canvas-node-title max-w-full justify-start px-0"
+                    className="canvas-node-title min-w-0 justify-start px-0"
                     title="双击或按 Enter 修改节点名称"
                     onKeyDown={(event) => {
                       if (
@@ -584,8 +614,14 @@ export const CanvasNode = React.memo(function CanvasNode({
                       <AudioLines />
                     ) : data.type === CanvasNodeType.Text ? (
                       <Type />
+                    ) : data.type === "subject" ? (
+                      <Contact />
                     ) : data.type === "timeline" ? (
                       <Clapperboard />
+                    ) : data.type === "director" ? (
+                      <Box />
+                    ) : data.type === "cinema_studio" ? (
+                      <Palette />
                     ) : (
                       <FileText />
                     )}
@@ -594,6 +630,15 @@ export const CanvasNode = React.memo(function CanvasNode({
                     </span>
                   </Button>
                 )}
+                <CanvasColorTagMarks tags={data.metadata?.colorTags} />
+                <span className="flex-1" />
+                {isSelected && onColorTagChange && (
+                  <CanvasColorTags
+                    nodes={[data]}
+                    disabled={readOnly}
+                    onChange={(tag) => onColorTagChange(data.id, tag)}
+                  />
+                )}
               </div>
             )}
 
@@ -601,7 +646,12 @@ export const CanvasNode = React.memo(function CanvasNode({
               className="canvas-node-body relative h-full w-full overflow-visible rounded-xl border"
               style={{
                 background: isGroup
-                  ? "transparent"
+                  ? containerKind(data) === "stack"
+                    ? "var(--card)"
+                    : data.serviceData?.config?.container?.background &&
+                        data.serviceData.config.container.background !== "none"
+                      ? `color-mix(in srgb, ${canvasTextBackgrounds.find((color) => color.value === data.serviceData?.config?.container?.background)?.color ?? "transparent"} 14%, transparent)`
+                      : "transparent"
                   : hasImageContent || hasVideoContent || transparentBg
                     ? "transparent"
                     : theme.node.fill,
@@ -618,7 +668,10 @@ export const CanvasNode = React.memo(function CanvasNode({
                         : transparentBg
                           ? "transparent"
                           : theme.node.stroke,
-                borderStyle: isGroup ? "dashed" : "solid",
+                borderStyle:
+                  isGroup && containerKind(data) !== "stack"
+                    ? "dashed"
+                    : "solid",
                 borderWidth: data.type === CanvasNodeType.Text ? 0 : undefined,
                 outline:
                   data.type === CanvasNodeType.Text && isSelected
@@ -663,23 +716,33 @@ export const CanvasNode = React.memo(function CanvasNode({
                 setIsEditingContent(true);
               }}
               role={
-                data.type === CanvasNodeType.Text && !isEditingContent
+                data.type === CanvasNodeType.Text &&
+                !isEditingContent &&
+                !readOnly &&
+                !referenceSelectionState
                   ? "button"
                   : undefined
               }
               tabIndex={
-                data.type === CanvasNodeType.Text && !isEditingContent
+                data.type === CanvasNodeType.Text &&
+                !isEditingContent &&
+                !readOnly &&
+                !referenceSelectionState
                   ? 0
                   : undefined
               }
               aria-label={
-                data.type === CanvasNodeType.Text && !isEditingContent
+                data.type === CanvasNodeType.Text &&
+                !isEditingContent &&
+                !readOnly &&
+                !referenceSelectionState
                   ? "编辑文本节点内容"
                   : undefined
               }
               onKeyDown={(event) => {
                 if (
                   !readOnly &&
+                  !referenceSelectionState &&
                   data.type === CanvasNodeType.Text &&
                   !isEditingContent &&
                   (event.key === "Enter" || event.key === " ")
@@ -703,7 +766,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                       : hasImageContent || hasVideoContent || transparentBg
                         ? "transparent"
                         : data.type === CanvasNodeType.Text
-                          ? "linear-gradient(to bottom right, var(--canvas-reference-text-start), var(--canvas-reference-text-end))"
+                          ? canvasTextBackground(data.metadata?.textBackground)
                           : theme.node.fill,
                     pointerEvents: contentInteractive ? undefined : "none",
                   } as React.CSSProperties
@@ -902,8 +965,17 @@ export const CanvasNode = React.memo(function CanvasNode({
             }}
             onInteractOutside={(event) => {
               if (
+                event.target instanceof Node &&
+                nodeElement.current?.contains(event.target)
+              ) {
+                event.preventDefault();
+                return;
+              }
+              if (
                 event.target instanceof Element &&
-                event.target.closest("[data-canvas-view-control]")
+                event.target.closest(
+                  "[data-canvas-view-control], [data-canvas-text-action], [data-rich-text-floating]",
+                )
               ) {
                 event.preventDefault();
                 return;
@@ -1144,6 +1216,7 @@ function TextContent({
             value={content}
             document={primaryText?.richText ?? node.metadata?.richText}
             documentMode
+            documentExport="markdown"
             floatingToolbar
             documentTitle={node.title}
             autoFocus

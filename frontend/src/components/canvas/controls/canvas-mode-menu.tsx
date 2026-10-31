@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-// Adapted from BeefTV's CanvasModeMenu; Radix owns focus and keyboard behavior.
+// Third-party attribution: frontend/EDITOR-THIRD-PARTY-NOTICES.md.
 export function CanvasModeMenu({
   value,
   onChange,

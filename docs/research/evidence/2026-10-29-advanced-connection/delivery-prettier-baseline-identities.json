@@ -1,0 +1,42 @@
+[
+  {
+    "path": "src/app/globals.css",
+    "identical_to_HEAD": false
+  },
+  {
+    "path": "src/components/canvas/runtime/components/assets/library/asset-library-command-dialog.tsx",
+    "identical_to_HEAD": true
+  },
+  {
+    "path": "src/components/ui/breadcrumb.tsx",
+    "identical_to_HEAD": true
+  },
+  {
+    "path": "src/components/ui/progress.tsx",
+    "identical_to_HEAD": true
+  },
+  {
+    "path": "src/components/ui/sidebar.tsx",
+    "identical_to_HEAD": true
+  },
+  {
+    "path": "src/components/ui/tabs.tsx",
+    "identical_to_HEAD": true
+  },
+  {
+    "path": "src/components/ui/toggle.tsx",
+    "identical_to_HEAD": true
+  },
+  {
+    "path": "tests/browser/serve-assets.mjs",
+    "identical_to_HEAD": true
+  },
+  {
+    "path": "tests/unit/app/api/[...path]/route.test.ts",
+    "identical_to_HEAD": true
+  },
+  {
+    "path": "tests/unit/components/canvas/publish-media.test.ts",
+    "identical_to_HEAD": true
+  }
+]

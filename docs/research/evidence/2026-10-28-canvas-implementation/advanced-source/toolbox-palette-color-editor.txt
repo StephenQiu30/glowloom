@@ -1,0 +1,63 @@
+Browser tab: 1980371390, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+0 AXWebArea 一致性调研-202610221 - 即梦AI, URL: jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage
+	1 container
+		2 container
+			3 container Canvas top bar
+				4 text 已保存
+			5 container Canvas workspace
+				6 container
+					7 container
+						8 container Canvas editing area
+							9 container
+								10 container Canvas
+					11 container Canvas left toolbar
+						12 toolbar Canvas toolbar
+					13 container Canvas viewport controls
+		14 container 未命名配色 1, ID: radix-:modern-js-rb4:
+			15 heading 未命名配色 1, Value: 2, ID: radix-:modern-js-rb5:
+				16 text 未命名配色 1
+			17 button 关闭
+			18 button Palette name
+			19 text 自定义取色
+			20 container Colour wheel
+				21 checkbox Description: 自定义取色, Value: 1
+				22 checkbox Description: 临近色取色, Value: 0
+				23 checkbox Description: 互补色, Value: 0
+				24 checkbox Description: 三等分取色, Value: 0
+			25 container
+				26 button Colour wheel
+				27 checkbox Description: Colour wheel Colour 1 #4B90E2, Value: 1
+				28 checkbox Description: Colour wheel Colour 2 #9A9AEE, Value: 0
+				29 checkbox Description: Colour wheel Colour 3 #4BD7E2, Value: 0
+				30 checkbox Description: Colour wheel Colour 4 #924AE2, Value: 0
+				31 checkbox Description: Colour wheel Colour 5 #4AE2A6, Value: 0
+			32 text 5 个颜色
+			33 container
+				34 checkbox Description: Colour 1 #4B90E2, Value: 1
+				35 pop up button (expanded) Description: Edit Colour 1, Secondary Actions: Collapse
+				36 button Remove colour 1
+			37 container
+				38 checkbox Description: Colour 2 #9A9AEE, Value: 0
+				39 pop up button (collapsed) Description: Edit Colour 2, Secondary Actions: Expand
+				40 button Remove colour 2
+			41 container
+				42 checkbox Description: Colour 3 #4BD7E2, Value: 0
+				43 pop up button (collapsed) Description: Edit Colour 3, Secondary Actions: Expand
+				44 button Remove colour 3
+			45 container
+				46 checkbox Description: Colour 4 #924AE2, Value: 0
+				47 pop up button (collapsed) Description: Edit Colour 4, Secondary Actions: Expand
+				48 button Remove colour 4
+			49 container
+				50 checkbox Description: Colour 5 #4AE2A6, Value: 0
+				51 pop up button (collapsed) Description: Edit Colour 5, Secondary Actions: Expand
+				52 button Remove colour 5
+			53 button Add colour
+			54 button 创建
+		55 container radix-:modern-js-rgi:
+			56 button Saturation and brightness
+			57 slider Description: Hue, Value: 212.5827789306641
+			58 button Pick a colour from the screen
+			59 text field (settable) Description: Hex colour, Value: #4B90E2
+
+The focused UI element is 59 text field (settable) Description: Hex colour, Value: #4B90E2

@@ -1,0 +1,293 @@
+{
+  "children": [
+    {
+      "label": null,
+      "rect": {
+        "h": 36,
+        "w": 192,
+        "x": 553,
+        "y": 130
+      },
+      "role": "menuitem",
+      "style": {
+        "bg": "rgba(255, 255, 255, 0.08)",
+        "color": "rgb(255, 255, 255)",
+        "font": "\"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Arial, sans-serif",
+        "fontSize": "13px",
+        "gap": "8px",
+        "lineHeight": "20px",
+        "padding": "9px 12px",
+        "radius": "8px"
+      },
+      "tag": "DIV",
+      "text": "左对齐"
+    },
+    {
+      "label": null,
+      "rect": {
+        "h": 16,
+        "w": 16,
+        "x": 565,
+        "y": 140
+      },
+      "role": null,
+      "style": {
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(255, 255, 255)",
+        "font": "\"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Arial, sans-serif",
+        "fontSize": "13px",
+        "gap": "normal",
+        "lineHeight": "20px",
+        "padding": "0px",
+        "radius": "0px"
+      },
+      "tag": "SPAN",
+      "text": ""
+    },
+    {
+      "label": null,
+      "rect": {
+        "h": 16,
+        "w": 16,
+        "x": 565,
+        "y": 140
+      },
+      "role": null,
+      "style": {
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(255, 255, 255)",
+        "font": "\"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Arial, sans-serif",
+        "fontSize": "13px",
+        "gap": "normal",
+        "lineHeight": "20px",
+        "padding": "0px",
+        "radius": "0px"
+      },
+      "svg": "<svg data-text-editor-format-icon=\"true\" data-icon=\"text-format-align-left\" aria-hidden=\"true\" color=\"currentColor\" fill=\"none\" focusable=\"false\" height=\"16\" viewBox=\"0 0 24 24\" width=\"16\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M12 18C12 18.5523 11.5523 19 11 19H5C4.44772 19 4 18.5523 4 18C4 17.4477 4.44772 17 5 17H11C11.5523 17 12 17.4477 12 18ZM20 12C20 12.5523 19.5523 13 19 13H5C4.44772 13 4 12.5523 4 12C4 11.4477 4.44772 11 5 11H19C19.5523 11 20 11.4477 20 12ZM20 6C20 6.55228 19.5523 7 19 7H5C4.44772 7 4 6.55228 4 6C4 5.44772 4.44772 5 5 5H19C19.5523 5 20 5.44772 20 6Z\" fill=\"currentColor\"></path></svg>",
+      "tag": "svg",
+      "text": ""
+    },
+    {
+      "label": null,
+      "rect": {
+        "h": 9.333343505859377,
+        "w": 10.6666259765625,
+        "x": 567.6666870117188,
+        "y": 143.3333282470703
+      },
+      "role": null,
+      "style": {
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(255, 255, 255)",
+        "font": "\"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Arial, sans-serif",
+        "fontSize": "13px",
+        "gap": "normal",
+        "lineHeight": "20px",
+        "padding": "0px",
+        "radius": "0px"
+      },
+      "tag": "path",
+      "text": ""
+    },
+    {
+      "label": null,
+      "rect": {
+        "h": 36,
+        "w": 192,
+        "x": 553,
+        "y": 166
+      },
+      "role": "menuitem",
+      "style": {
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(255, 255, 255)",
+        "font": "\"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Arial, sans-serif",
+        "fontSize": "13px",
+        "gap": "8px",
+        "lineHeight": "20px",
+        "padding": "9px 12px",
+        "radius": "8px"
+      },
+      "tag": "DIV",
+      "text": "居中对齐"
+    },
+    {
+      "label": null,
+      "rect": {
+        "h": 16,
+        "w": 16,
+        "x": 565,
+        "y": 176
+      },
+      "role": null,
+      "style": {
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(255, 255, 255)",
+        "font": "\"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Arial, sans-serif",
+        "fontSize": "13px",
+        "gap": "normal",
+        "lineHeight": "20px",
+        "padding": "0px",
+        "radius": "0px"
+      },
+      "tag": "SPAN",
+      "text": ""
+    },
+    {
+      "label": null,
+      "rect": {
+        "h": 16,
+        "w": 16,
+        "x": 565,
+        "y": 176
+      },
+      "role": null,
+      "style": {
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(255, 255, 255)",
+        "font": "\"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Arial, sans-serif",
+        "fontSize": "13px",
+        "gap": "normal",
+        "lineHeight": "20px",
+        "padding": "0px",
+        "radius": "0px"
+      },
+      "svg": "<svg data-text-editor-format-icon=\"true\" data-icon=\"text-format-align-center\" aria-hidden=\"true\" color=\"currentColor\" fill=\"none\" focusable=\"false\" height=\"16\" viewBox=\"0 0 24 24\" width=\"16\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M16.5 18C16.5 18.5523 16.0523 19 15.5 19H9.5C8.94772 19 8.5 18.5523 8.5 18C8.5 17.4477 8.94772 17 9.5 17H15.5C16.0523 17 16.5 17.4477 16.5 18ZM20.5 12C20.5 12.5523 20.0523 13 19.5 13H5.5C4.94772 13 4.5 12.5523 4.5 12C4.5 11.4477 4.94772 11 5.5 11H19.5C20.0523 11 20.5 11.4477 20.5 12ZM20.5 6C20.5 6.55228 20.0523 7 19.5 7H5.5C4.94772 7 4.5 6.55228 4.5 6C4.5 5.44772 4.94772 5 5.5 5H19.5C20.0523 5 20.5 5.44772 20.5 6Z\" fill=\"currentColor\"></path></svg>",
+      "tag": "svg",
+      "text": ""
+    },
+    {
+      "label": null,
+      "rect": {
+        "h": 9.333343505859377,
+        "w": 10.66668701171875,
+        "x": 568,
+        "y": 179.3333282470703
+      },
+      "role": null,
+      "style": {
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(255, 255, 255)",
+        "font": "\"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Arial, sans-serif",
+        "fontSize": "13px",
+        "gap": "normal",
+        "lineHeight": "20px",
+        "padding": "0px",
+        "radius": "0px"
+      },
+      "tag": "path",
+      "text": ""
+    },
+    {
+      "label": null,
+      "rect": {
+        "h": 36,
+        "w": 192,
+        "x": 553,
+        "y": 202
+      },
+      "role": "menuitem",
+      "style": {
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(255, 255, 255)",
+        "font": "\"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Arial, sans-serif",
+        "fontSize": "13px",
+        "gap": "8px",
+        "lineHeight": "20px",
+        "padding": "9px 12px",
+        "radius": "8px"
+      },
+      "tag": "DIV",
+      "text": "右对齐"
+    },
+    {
+      "label": null,
+      "rect": {
+        "h": 16,
+        "w": 16,
+        "x": 565,
+        "y": 212
+      },
+      "role": null,
+      "style": {
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(255, 255, 255)",
+        "font": "\"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Arial, sans-serif",
+        "fontSize": "13px",
+        "gap": "normal",
+        "lineHeight": "20px",
+        "padding": "0px",
+        "radius": "0px"
+      },
+      "tag": "SPAN",
+      "text": ""
+    },
+    {
+      "label": null,
+      "rect": {
+        "h": 16,
+        "w": 16,
+        "x": 565,
+        "y": 212
+      },
+      "role": null,
+      "style": {
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(255, 255, 255)",
+        "font": "\"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Arial, sans-serif",
+        "fontSize": "13px",
+        "gap": "normal",
+        "lineHeight": "20px",
+        "padding": "0px",
+        "radius": "0px"
+      },
+      "svg": "<svg data-text-editor-format-icon=\"true\" data-icon=\"text-format-align-right\" aria-hidden=\"true\" color=\"currentColor\" fill=\"none\" focusable=\"false\" height=\"16\" viewBox=\"0 0 24 24\" width=\"16\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M20 18C20 18.5523 19.5523 19 19 19H13C12.4477 19 12 18.5523 12 18C12 17.4477 12.4477 17 13 17H19C19.5523 17 20 17.4477 20 18ZM20 12C20 12.5523 19.5523 13 19 13H5C4.44772 13 4 12.5523 4 12C4 11.4477 4.44772 11 5 11H19C19.5523 11 20 11.4477 20 12ZM20 6C20 6.55228 19.5523 7 19 7H5C4.44772 7 4 6.55228 4 6C4 5.44772 4.44772 5 5 5H19C19.5523 5 20 5.44772 20 6Z\" fill=\"currentColor\"></path></svg>",
+      "tag": "svg",
+      "text": ""
+    },
+    {
+      "label": null,
+      "rect": {
+        "h": 9.333343505859377,
+        "w": 10.6666259765625,
+        "x": 567.6666870117188,
+        "y": 215.3333282470703
+      },
+      "role": null,
+      "style": {
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(255, 255, 255)",
+        "font": "\"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Arial, sans-serif",
+        "fontSize": "13px",
+        "gap": "normal",
+        "lineHeight": "20px",
+        "padding": "0px",
+        "radius": "0px"
+      },
+      "tag": "path",
+      "text": ""
+    }
+  ],
+  "menu": {
+    "label": "Paragraph alignment",
+    "rect": {
+      "h": 116,
+      "w": 200,
+      "x": 549,
+      "y": 126
+    },
+    "role": "menu",
+    "style": {
+      "bg": "rgb(38, 38, 38)",
+      "color": "rgb(255, 255, 255)",
+      "font": "\"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Arial, sans-serif",
+      "fontSize": "16px",
+      "gap": "normal",
+      "lineHeight": "24px",
+      "padding": "4px",
+      "radius": "12px"
+    },
+    "tag": "DIV",
+    "text": "左对齐居中对齐右对齐"
+  }
+}

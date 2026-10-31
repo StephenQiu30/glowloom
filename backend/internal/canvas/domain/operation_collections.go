@@ -75,7 +75,7 @@ func applyStructure(doc *Document, op Operation) error {
 		return applyOne(doc, Command{Type: "AddNodes", Nodes: []Node{*op.Node}})
 	case "delete_node":
 		i := nodeIndex(doc, op.NodeID)
-		if i >= 0 && IsDraft(doc.Nodes[i]) {
+		if i >= 0 && isGenerationDraft(doc.Nodes[i]) {
 			if !editable(doc.Nodes[i]) {
 				return operationError("protected_target")
 			}

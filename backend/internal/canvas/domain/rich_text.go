@@ -70,7 +70,20 @@ func validRichText(body json.RawMessage, composer *prompt.Draft) bool {
 		}
 		for key := range node.Attrs {
 			switch key {
-			case "level", "start", "language", "id", "label", "token", "referenceId", "textAlign":
+			case "textAlign":
+				if node.Type != "paragraph" && node.Type != "heading" {
+					return false
+				}
+				var alignment string
+				if json.Unmarshal(node.Attrs[key], &alignment) != nil {
+					return false
+				}
+				switch alignment {
+				case "left", "center", "right":
+				default:
+					return false
+				}
+			case "level", "start", "language", "id", "label", "token", "referenceId":
 			default:
 				return false
 			}

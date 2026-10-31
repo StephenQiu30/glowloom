@@ -14,7 +14,11 @@ import (
 
 func saveInputs(tx *gorm.DB, actor uuid.UUID, inputs []domain.InputSnapshot) error {
 	for _, input := range inputs {
-		draft, err := json.Marshal(input.Draft)
+		var value any = input.Draft
+		if input.Subject != nil {
+			value = subjectInput{Kind: "subject", Title: input.Title, Subject: *input.Subject}
+		}
+		draft, err := json.Marshal(value)
 		if err != nil {
 			return fmt.Errorf("encode canvas input: %w", err)
 		}
@@ -46,4 +50,11 @@ func savedAudit(tx *gorm.DB, a identityapp.Principal, doc domain.Document, key s
 		return fmt.Errorf("record canvas audit: no committed row")
 	}
 	return nil
+}
+
+// subjectInput discriminates immutable local-subject facts from generation drafts.
+type subjectInput struct {
+	Kind    string               `json:"kind"`
+	Title   string               `json:"title"`
+	Subject domain.SubjectConfig `json:"subject"`
 }

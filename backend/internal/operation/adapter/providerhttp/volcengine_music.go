@@ -14,9 +14,37 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
+
+// VolcengineMusicDriver implements the communication strategy for Volcengine Music
+// (Imagination) using AWS IAM V4 HMAC-SHA256 signature protocol.
+type VolcengineMusicDriver struct{}
+
+func init() {
+	RegisterDriver(&VolcengineMusicDriver{}, "volcengine_music")
+}
+
+func (d *VolcengineMusicDriver) Submit(ctx context.Context, c *Client, input application.GenerationRequest, key string) (application.GenerationResult, error) {
+	return c.submitMusic(ctx, input, key)
+}
+
+func (d *VolcengineMusicDriver) Query(ctx context.Context, c *Client, config catalog.ProviderConfig, taskID, key string) (application.GenerationResult, error) {
+	return c.queryMusic(ctx, config, taskID, key)
+}
+
+func (d *VolcengineMusicDriver) Probe(ctx context.Context, c *Client, config catalog.ProviderConfig, key string) ProbeResult {
+	if config.Validate() != nil {
+		return ProbeResult{Auth: "unknown", Adapter: "unsupported", Discovery: "unsupported", Candidates: []catalogapp.ModelCandidate{}}
+	}
+	return ProbeResult{Auth: "unknown", Adapter: "ok", Discovery: "unsupported", Candidates: []catalogapp.ModelCandidate{}}
+}
+
+func (d *VolcengineMusicDriver) ProbeModelDefaultParams(capability string) map[string]any {
+	return nil
+}
 
 func (c *Client) musicRequest(ctx context.Context, config catalog.ProviderConfig, key, action string, payload any) ([]byte, int, error) {
 	var credential struct {

@@ -15,7 +15,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ChevronDown, Pencil, FolderOpen, History } from "lucide-react";
-import { useCanvasSidePanelStore } from "../store/use-canvas-side-panel-store";
+import { CanvasNodeSearch } from "../search/canvas-node-search";
 import { CanvasHistoryDialog } from "../history/canvas-history-dialog";
 import { toast } from "sonner";
 import { Search, UserRound, Link2 } from "lucide-react";
@@ -27,6 +27,8 @@ import type { CanvasNodeData } from "../types/canvas";
 export function CanvasTopBar({
   title,
   nodes,
+  canvasID,
+  projectID,
   onRenameProject,
   onExportProject,
   exportingProject,
@@ -37,6 +39,7 @@ export function CanvasTopBar({
   saveControl,
   workflowControl,
   participantsControl,
+  onFocusNode,
   onCreatePersonalProject,
   onProjectCanvases,
   canSwitchCanvas = true,
@@ -47,6 +50,9 @@ export function CanvasTopBar({
 }: {
   title: string;
   nodes?: CanvasNodeData[];
+  canvasID?: string;
+  projectID?: string;
+  onFocusNode?: (nodeID: string) => void;
   onRenameProject: () => void;
   canUndo: boolean;
   canRedo: boolean;
@@ -71,8 +77,6 @@ export function CanvasTopBar({
   projectCanvas?: boolean;
   projectPath?: string;
 }) {
-  const openPanel = useCanvasSidePanelStore((state) => state.openPanel);
-  const setPanelTab = useCanvasSidePanelStore((state) => state.setTab);
   return (
     <TooltipProvider>
       <div
@@ -193,7 +197,13 @@ export function CanvasTopBar({
             </DropdownMenuContent>
           </DropdownMenu>
           <div className="canvas-status-panel flex items-center gap-1">
-            {nodes && <CanvasNodeSummary nodes={nodes} />}
+            {nodes && (
+              <CanvasNodeSummary
+                nodes={nodes}
+                canvasID={canvasID}
+                projectID={projectID}
+              />
+            )}
             {workflowControl}
             {saveControl === undefined ? (
               <Tooltip>
@@ -217,23 +227,19 @@ export function CanvasTopBar({
         </div>
         <div className="canvas-header-actions pointer-events-auto flex items-center gap-1">
           {participantsControl}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-lg"
-                aria-label="搜索画布"
-                data-canvas-side-panel-trigger
-                onClick={() => {
-                  setPanelTab("canvas");
-                  openPanel();
-                }}
-              >
-                <Search />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>搜索画布</TooltipContent>
-          </Tooltip>
+          <CanvasNodeSearch
+            nodes={nodes ?? []}
+            onLocate={(id) => onFocusNode?.(id)}
+          >
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              aria-label="搜索画布"
+              disabled={!onFocusNode}
+            >
+              <Search />
+            </Button>
+          </CanvasNodeSearch>
           <CanvasHistoryDialog>
             <Button variant="ghost" size="icon-lg" aria-label="生成历史">
               <History />

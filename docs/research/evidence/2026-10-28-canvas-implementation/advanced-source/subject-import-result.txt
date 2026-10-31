@@ -1,0 +1,30 @@
+Browser tab: 1980371314, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+0 AXWebArea 一致性调研-202610221 - 即梦AI, URL: jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage
+	1 container
+		2 container
+			3 container Canvas top bar
+				4 text 已保存
+			5 container Canvas workspace
+				6 container
+					7 container
+						8 container Canvas editing area
+							9 container
+								10 container Canvas
+					11 container Canvas left toolbar
+						12 toolbar Canvas toolbar
+					13 container Canvas viewport controls
+		14 container 主体, ID: radix-:modern-js-rl3:
+			15 container
+				16 heading 主体, Value: 2, ID: canvas-asset-library-primary-title
+					17 text 主体
+				18 text Choose assets from Dreamina and import them into this canvas.
+				19 text field (disabled) Search subjects
+				20 checkbox (disabled, collapsed) Description: 筛选, Value: 0, ID: radix-:modern-js-rl7:, Secondary Actions: Expand
+				21 button Close asset library
+			22 container 主体, ID: canvas-asset-section-panel-subjects
+				23 container 主体, ID: canvas-asset-panel-all
+			30 container
+				34 text 正在导入 0/1
+				33 button Cancel import
+
+The focused UI element is 33 button Cancel import

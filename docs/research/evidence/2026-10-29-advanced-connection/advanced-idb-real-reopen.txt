@@ -1,0 +1,19 @@
+Browser tab: 1980372147, Title: "画布草稿持久化验收", URL: "http://127.0.0.1:1147/".
+1 AXWebArea 画布草稿持久化验收, URL: 127.0.0.1:1147/
+	2 heading 画布草稿持久化验收, Value: 1
+		3 text 画布草稿持久化验收
+	4 text 仅使用合成记录；真实 IndexedDB 与 Web Locks。此页不访问业务账号或服务。
+	5 button 保存合成待确认记录, ID: save
+	6 button 重开读取并核对原身份, ID: read
+	7 button 验证另一个用户隔离, ID: other
+	8 button 清除此测试记录, ID: clear
+	9 text {
+  "status": "PASS",
+  "sessionId": "7b71506b-af93-4228-9c9a-d0d2341afc0a",
+  "originalSession": "7b71506b-af93-4228-9c9a-d0d2341afc0a",
+  "op_id": "66666666-6666-4666-8666-666666666666",
+  "payloadHash": "synthetic-original-hash",
+  "remaining": 0
+}
+
+The focused UI element is 6 button 重开读取并核对原身份, ID: read

@@ -29,6 +29,7 @@ export type RichTextInputProps = {
   floatingToolbar?: boolean;
   compactToolbar?: boolean;
   documentTitle?: string;
+  documentExport?: "json" | "markdown";
   expandedView?: {
     open: boolean;
     onOpenChange: (open: boolean) => void;

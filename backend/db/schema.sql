@@ -6539,6 +6539,8 @@ INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8
 INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash) VALUES('6da07a11-0000-4000-8000-000000000003','6da07a10-0000-4000-8000-000000000003',1,'{"schema_version":1,"name":"BytePlus","config":{"adapter_key":"byteplus","base_url":"https://ark.ap-southeast.bytepluses.com/api/v3","region":"overseas","capabilities":["text","image"],"timeout_seconds":120,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'fc1f34a321b3e757a5dce883b5e6bf8cb964844f37f4b5c09c1f5e9a917aedcc');
 INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8000-000000000004','deepseek','builtin');
 INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash) VALUES('6da07a11-0000-4000-8000-000000000004','6da07a10-0000-4000-8000-000000000004',1,'{"schema_version":1,"name":"DeepSeek","config":{"adapter_key":"deepseek","base_url":"https://api.deepseek.com","region":"domestic","capabilities":["text"],"timeout_seconds":120,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'da870135adccd6c8d3f5ab3073ed31876fcef9c6b654c90286f5cdc2290c8f79');
+INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8000-000000000009','openai','builtin');
+INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash) VALUES('6da07a11-0000-4000-8000-000000000009','6da07a10-0000-4000-8000-000000000009',1,'{"schema_version":1,"name":"OpenAI","config":{"adapter_key":"openai","base_url":"https://api.openai.com/v1","region":"overseas","capabilities":["text","image"],"timeout_seconds":120,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'adf7b0f4aafb3fcf51928c275d6e501d509f0b0009a576bb56570e8fdae66be5');
 
 -- Project recycle retention worker (metadata only until explicitly scheduled).
 CREATE TABLE IF NOT EXISTS workspace.project_retention_job (
@@ -7024,21 +7026,19 @@ GRANT SELECT ON media.storage_empty_deployment_evidence TO glowloom_app;
 -- Script copy admission freezes its own output work in the caller transaction.
 ALTER TABLE script.copy_snapshot ADD COLUMN IF NOT EXISTS storage_intent_id uuid REFERENCES media.storage_work_intent(id);
 
--- Private director recovery does not alter the authoritative Yjs document.
-CREATE SEQUENCE IF NOT EXISTS canvas.director_recovery_revision AS integer NO CYCLE;
-GRANT USAGE ON SEQUENCE canvas.director_recovery_revision TO glowloom_app;
-CREATE TABLE IF NOT EXISTS canvas.director_recovery (
- actor_id uuid NOT NULL,
- document_id uuid NOT NULL REFERENCES canvas.document(id) ON DELETE CASCADE,
- node_id uuid NOT NULL,
- revision bigint NOT NULL CHECK(revision BETWEEN 1 AND 2147483647),
- epoch uuid NOT NULL,
- base_fingerprint text NOT NULL CHECK(base_fingerprint ~ '^[0-9a-f]{64}$'),
- director jsonb NOT NULL CHECK(octet_length(director::text)<=600000),
- updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
- PRIMARY KEY(actor_id,document_id,node_id)
+-- Private canvas assistant history; generation drafts and tasks keep their owners.
+CREATE TABLE IF NOT EXISTS canvas.assistant_session (
+ id uuid PRIMARY KEY,
+ canvas_id uuid NOT NULL REFERENCES canvas.document(id),
+ project_id uuid NOT NULL REFERENCES workspace.project(id),
+ actor_id uuid NOT NULL REFERENCES identity."user"(id),
+ title text NOT NULL CHECK (length(btrim(title)) BETWEEN 1 AND 128),
+ revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
+ turns jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(turns)='array' AND jsonb_array_length(turns)<=64 AND octet_length(turns::text)<=65536),
+ updated_at timestamptz NOT NULL DEFAULT now()
 );
-GRANT SELECT,INSERT,UPDATE,DELETE ON canvas.director_recovery TO glowloom_app;
+CREATE INDEX IF NOT EXISTS assistant_session_owner ON canvas.assistant_session(canvas_id,actor_id,updated_at DESC,id);
+GRANT SELECT,INSERT,UPDATE ON canvas.assistant_session TO glowloom_app;
 
 -- Portable timeline artifacts (additive schema contract).
 -- Add portable timeline artifacts without changing existing playable media outputs.
@@ -7089,6 +7089,22 @@ SELECT '6da07a11-0000-4000-8000-000000000007',id,1,'{"schema_version":1,"name":"
 INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8000-000000000008','volcengine-motion','builtin') ON CONFLICT(slug) DO NOTHING;
 INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash)
 SELECT '6da07a11-0000-4000-8000-000000000008',id,1,'{"schema_version":1,"name":"即梦动作模仿","config":{"adapter_key":"volcengine_motion","base_url":"https://openapi.cv.volces.com","region":"domestic","capabilities":["video"],"timeout_seconds":120,"concurrency_limit":1,"rate_limit_per_min":30}}'::jsonb,'7df763c7f974d3654c6ef0de51c17e95ee6bb50737cd7101ef4afb7919e243a5' FROM catalog.provider_preset WHERE slug='volcengine-motion' AND origin='builtin' ON CONFLICT(preset_id,version_no) DO NOTHING;
+
+-- Private director recovery does not alter the authoritative Yjs document.
+CREATE SEQUENCE IF NOT EXISTS canvas.director_recovery_revision AS integer NO CYCLE;
+GRANT USAGE ON SEQUENCE canvas.director_recovery_revision TO glowloom_app;
+CREATE TABLE IF NOT EXISTS canvas.director_recovery (
+ actor_id uuid NOT NULL,
+ document_id uuid NOT NULL REFERENCES canvas.document(id) ON DELETE CASCADE,
+ node_id uuid NOT NULL,
+ revision bigint NOT NULL CHECK(revision BETWEEN 1 AND 2147483647),
+ epoch uuid NOT NULL,
+ base_fingerprint text NOT NULL CHECK(base_fingerprint ~ '^[0-9a-f]{64}$'),
+ director jsonb NOT NULL CHECK(octet_length(director::text)<=600000),
+ updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ PRIMARY KEY(actor_id,document_id,node_id)
+);
+GRANT SELECT,INSERT,UPDATE,DELETE ON canvas.director_recovery TO glowloom_app;
 
 -- Seed-Audio adds a distinct mode; keep all existing capability contracts.
 UPDATE catalog.capability SET modes=ARRAY(SELECT DISTINCT x FROM unnest(modes || ARRAY['omni_audio']) x), input_roles=ARRAY(SELECT DISTINCT x FROM unnest(input_roles || ARRAY['reference_audio','reference_image']) x) WHERE key='audio.generate';

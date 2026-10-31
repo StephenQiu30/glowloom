@@ -62,6 +62,7 @@
   --confirmation-primary-foreground: #fafafa;
   --confirmation-overlay: rgb(0 0 0 / 60%);
   --confirmation-shadow: 0 8px 20px -4px rgb(8 12 20 / 12%);
+  /* CR-072: homepage creation surfaces measured from Jimeng. */
   --creation-surface: linear-gradient(
     rgb(255 255 255 / 92%) 0%,
     rgb(240 240 240 / 92%) 106.67%
@@ -107,6 +108,7 @@
       rgba(0, 0, 0, 0) 100%
     ),
     none;
+
   --navigation-accent: #007cbf;
   --canvas-connection-highlight: #008ee5;
   --canvas-connection-aggregate-foreground: #121212;
@@ -123,18 +125,34 @@
   --canvas-reference-text-start: #222222;
   --canvas-reference-text-end: #141414;
   --canvas-reference-foreground: #ffffff;
+  --canvas-text-cyan: #00cae0;
+  --canvas-text-blue: #6d7cff;
+  --canvas-text-purple: #be68ff;
+  --canvas-text-orange: #ff9230;
+  --canvas-text-yellow: #ffd600;
+  --canvas-text-menu: #262626;
+  --canvas-text-fullscreen: #121212;
+  --canvas-text-editor: #1a1a1a;
+  --canvas-assistant-input: #111111;
+  --canvas-assistant-background: #1c1c1c;
+  --canvas-assistant-border: #303030;
+  --canvas-assistant-foreground: #dedede;
+  --canvas-assistant-muted: #888888;
+  --canvas-assistant-subtle: #999999;
+  --canvas-assistant-resize: #666666;
   --canvas-presence-online: #16a34a;
+  /* Formal canvas tool surfaces share source colors across timeline and director. */
   --canvas-director-background: #171717;
   --canvas-tool-foreground: #eee;
   --canvas-tool-muted-foreground: #999;
   --canvas-tool-secondary-foreground: #bbb;
   --canvas-tool-subtle-foreground: #666;
-  --canvas-tool-border: #333;
   --canvas-timeline-hover: #292929;
   --canvas-timeline-waveform: #009efa;
   --canvas-timeline-audio: rgb(0 142 229 / 12%);
   --canvas-timeline-audio-clip: rgb(0 158 250 / 12.5%);
   --canvas-timeline-snap: #00b5ef;
+  --canvas-tool-border: #333;
   --canvas-timeline-ruler-border: #3a3a3a;
   --canvas-timeline-lane: #2c2c2c;
   --canvas-timeline-lane-selected: #353535;
@@ -146,6 +164,13 @@
   --canvas-director-popover: #252525;
   --canvas-director-divider: #303030;
   --canvas-director-overlay: #222c;
+  /* Independently authored CinemaKit scene, not source film artwork. */
+  --cinema-preview-sky: #abb9c4;
+  --cinema-preview-road: #475259;
+  --cinema-preview-wall: #bd9070;
+  --cinema-preview-window: #d3c4a5;
+  --cinema-preview-person: #27333d;
+  --cinema-preview-line: #ebd9ae;
   --layout-header: 64px;
   --layout-sidebar: 240px;
   --layout-sidebar-collapsed: 64px;
@@ -610,6 +635,7 @@ button:not(:disabled),
   width: 20px;
   height: 20px;
 }
+
 /* Shared navigation: Figma 3280:64554, measured against the 2026-10-30 source. */
 .product-shell {
   --layout-header: 80px;

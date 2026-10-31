@@ -202,6 +202,8 @@ function contentConfig(config: API.NodeConfig = {}) {
   );
 }
 const metadataFields = new Set([
+  "colorTags",
+  "textBackground",
   "fontSize",
   "prompt",
   "composerContent",
@@ -337,8 +339,10 @@ function projectionDifferences(
           "video",
           "audio",
           "config",
-          "director",
           "timeline",
+          "subject",
+          "director",
+          "cinema_studio",
         ].includes(node.type)
       )
         throw new Error("此节点的保存接口尚未接入，修改已保留");
@@ -348,7 +352,9 @@ function projectionDifferences(
           ...(source ?? {}),
           id: node.id,
           node_type: node.type,
-          node_action: ["director", "timeline"].includes(node.type)
+          node_action: ["timeline", "director", "cinema_studio"].includes(
+            node.type,
+          )
             ? "tool"
             : "resource",
           title: node.title,
@@ -360,14 +366,29 @@ function projectionDifferences(
           z_index: node.documentData?.zIndex ?? (node.type === "group" ? 0 : 1),
           config:
             node.type === "group"
-              ? { collapsed: node.documentData?.collapsed ?? false }
+              ? {
+                  collapsed: node.documentData?.collapsed ?? false,
+                  ...(source?.config?.container
+                    ? { container: source.config.container }
+                    : {}),
+                  editor: editorConfig(node),
+                }
               : {
                   ...(node.type === "text" ? richTextConfig(node) : {}),
+                  ...(source?.config?.cinema_kit
+                    ? { cinema_kit: source.config.cinema_kit }
+                    : {}),
                   ...(node.type === "timeline"
                     ? { timeline: source?.config?.timeline }
                     : {}),
                   ...(node.type === "director"
                     ? { director: source?.config?.director }
+                    : {}),
+                  ...(node.type === "subject"
+                    ? { subject: source?.config?.subject }
+                    : {}),
+                  ...(source?.config?.draft
+                    ? { draft: structuredClone(source.config.draft) }
                     : {}),
                   editor: editorConfig(node),
                 },
@@ -378,6 +399,28 @@ function projectionDifferences(
     }
     if (node.type !== previous.type) throw new Error("不能改变已有节点类型");
     if (
+      JSON.stringify(node.serviceData?.config?.cinema_kit) !==
+      JSON.stringify(previous.serviceData?.config?.cinema_kit)
+    ) {
+      if (
+        node.type === "cinema_studio" &&
+        !node.serviceData?.config?.cinema_kit
+      )
+        throw new Error("工具箱节点设置不能为空");
+      set(
+        ["config", "cinema_kit"],
+        node.serviceData?.config?.cinema_kit ?? null,
+      );
+    }
+
+    if (
+      node.type === "group" &&
+      JSON.stringify(node.serviceData?.config?.container) !==
+        JSON.stringify(previous.serviceData?.config?.container)
+    ) {
+      set(["config", "container"], node.serviceData?.config?.container ?? null);
+    }
+    if (
       node.type === "timeline" &&
       JSON.stringify(node.serviceData?.config?.timeline) !==
         JSON.stringify(previous.serviceData?.config?.timeline)
@@ -385,6 +428,15 @@ function projectionDifferences(
       const timeline = node.serviceData?.config?.timeline;
       if (!timeline) throw new Error("时间线配置不能被移除");
       set(["config", "timeline"], timeline);
+    }
+    if (
+      node.type === "subject" &&
+      JSON.stringify(node.serviceData?.config?.subject) !==
+        JSON.stringify(previous.serviceData?.config?.subject)
+    ) {
+      const subject = node.serviceData?.config?.subject;
+      if (!subject) throw new Error("主体配置不能被移除");
+      set(["config", "subject"], subject);
     }
     if (
       node.type === "director" &&
@@ -395,10 +447,23 @@ function projectionDifferences(
       if (!director) throw new Error("导演场景不能被移除");
       set(["config", "director"], director);
     }
+    const draft = node.serviceData?.config?.draft;
+    const oldDraft = previous.serviceData?.config?.draft;
+    if (JSON.stringify(draft) !== JSON.stringify(oldDraft)) {
+      if (!draft?.composer) throw new Error("生成输入不能被移除");
+      validatePromptDraft(draft.composer);
+      result.push({
+        type: "set",
+        node_id: node.id,
+        path: ["config", "draft"],
+        expected_exists: true,
+        expected: oldDraft ? { draft: oldDraft } : {},
+        value: { draft },
+      });
+    }
     if (
-      node.type !== "group" &&
       JSON.stringify(editorConfig(node)) !==
-        JSON.stringify(editorConfig(previous))
+      JSON.stringify(editorConfig(previous))
     ) {
       result.push({
         type: "set",
@@ -537,6 +602,8 @@ export function serviceDocumentFromEditor(
           ] as const)
             delete config[key];
           Object.assign(config, operation.value);
+        } else if (path[0] === "config" && path[1] === "draft") {
+          Object.assign((node.config ??= {}), structuredClone(operation.value));
         } else {
           const target = (
             path[0] === "config" ? (node.config ??= {}) : node

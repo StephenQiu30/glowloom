@@ -280,7 +280,7 @@ type freeQuoteCatalogRow struct {
 
 func readFreeQuoteCatalog(tx *gorm.DB, input application.CreateFreeQuoteInput, allowOverseas bool, now time.Time) (application.FreeQuoteCatalog, error) {
 	var row freeQuoteCatalogRow
-	read := tx.Raw(`
+	read := tx.Raw(fmt.Sprintf(`
 		SELECT published.id AS release_id, m.id AS model_id, v.id AS version_id,
 		       v.provider_model_id, provider.region,
 		       to_jsonb(v.modes)::text AS modes,
@@ -301,19 +301,19 @@ func readFreeQuoteCatalog(tx *gorm.DB, input application.CreateFreeQuoteInput, a
 		JOIN catalog.capability AS capability
 		  ON capability.key = m.capability AND NOT capability.is_delete
 		JOIN catalog.model_profile_version AS v
-		  ON v.id = CASE WHEN provider.adapter_key IN ('volcengine_ark','openrouter','byteplus','deepseek','volcengine_speech','volcengine_music','volcengine_avatar','volcengine_motion') THEN published.model_version_id ELSE m.current_version_id END AND v.model_profile_id = m.id AND NOT v.is_delete
+		  ON v.id = CASE WHEN provider.adapter_key IN (%[1]s) THEN published.model_version_id ELSE m.current_version_id END AND v.model_profile_id = m.id AND NOT v.is_delete
 		JOIN LATERAL (
 		  SELECT id, version_no, unit, rule, currency, fx_rate_to_cny, effective_from
 		  FROM catalog.price_rule_version
-		  WHERE (provider.adapter_key NOT IN ('volcengine_ark','openrouter','byteplus','deepseek','volcengine_speech','volcengine_music','volcengine_avatar','volcengine_motion') OR id=published.price_version_id) AND model_profile_id = m.id AND effective_from <= ? AND NOT is_delete
+		  WHERE (provider.adapter_key NOT IN (%[1]s) OR id=published.price_version_id) AND model_profile_id = m.id AND effective_from <= ? AND NOT is_delete
 		  ORDER BY effective_from DESC, version_no DESC LIMIT 1
 		) AS price ON true
-		WHERE m.model_key = ? AND (provider.adapter_key NOT IN ('volcengine_ark','openrouter','byteplus','deepseek','volcengine_speech','volcengine_music','volcengine_avatar','volcengine_motion') OR EXISTS (SELECT 1 FROM catalog.provider_config_version pc JOIN catalog.provider_preset_version pv ON pv.id=pc.preset_version_id JOIN catalog.provider_preset preset ON preset.id=pv.preset_id WHERE pc.id=published.config_version_id AND NOT preset.emergency_disabled)) AND m.capability = ? AND m.status = 'active'
+		WHERE m.model_key = ? AND (provider.adapter_key NOT IN (%[1]s) OR EXISTS (SELECT 1 FROM catalog.provider_config_version pc JOIN catalog.provider_preset_version pv ON pv.id=pc.preset_version_id JOIN catalog.provider_preset preset ON preset.id=pv.preset_id WHERE pc.id=published.config_version_id AND NOT preset.emergency_disabled)) AND m.capability = ? AND m.status = 'active'
 		  AND NOT m.is_delete AND ? = ANY(v.modes) AND ? = ANY(capability.modes)
 		  AND 'prompt' = ANY(capability.input_roles)
 		  AND (? OR provider.region = 'domestic')
 		FOR SHARE OF m, provider, credential
-	`, now, input.ModelKey, input.Capability, input.Mode, input.Mode, allowOverseas).Scan(&row)
+	`, catalogdomain.ManagedCloudSQLInList()), now, input.ModelKey, input.Capability, input.Mode, input.Mode, allowOverseas).Scan(&row)
 	if read.Error != nil {
 		return application.FreeQuoteCatalog{}, fmt.Errorf("read current free quote model: %w", read.Error)
 	}

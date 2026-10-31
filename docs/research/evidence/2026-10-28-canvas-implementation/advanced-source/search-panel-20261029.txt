@@ -1,0 +1,114 @@
+Browser tab: 1980371390, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+0 AXWebArea 一致性调研-202610221 - 即梦AI, URL: jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage
+	1 container
+		2 container root
+			3 container
+				4 container Canvas top bar
+					5 link Description: 返回首页, Value: jimeng.jianying.com/ai-tool/home
+					6 container
+						7 button Canvas title: 一致性调研-202610221
+						8 button (collapsed) Description: 项目, Secondary Actions: Expand
+					9 pop up button (collapsed) Description: Canvas node summary: 节点 5, Secondary Actions: Expand
+					10 text 已保存
+					11 container
+						12 pop up button (expanded) Description: 搜索, Secondary Actions: Collapse
+						13 pop up button (collapsed) Description: 生成历史, Secondary Actions: Expand
+						14 container
+							15 button (collapsed) Description: 分享, Secondary Actions: Expand
+						16 pop up button (collapsed) Description: 更多, ID: radix-:modern-js-r23:, Secondary Actions: Expand
+						17 button Credits: 88 · 开会员
+							80 text 88
+							81 text 开会员
+						18 pop up button (collapsed) Description: 用户菜单, ID: radix-:modern-js-r14:, Secondary Actions: Expand
+				19 container Canvas workspace
+					20 container
+						21 container
+							22 container Canvas editing area
+								23 container
+									24 text 5 nodes, 0 edges, 0 selected. Editable. Room connected. 已保存.
+									25 container Canvas
+										26 container
+											27 container 文本 node: 文本 1
+												28 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_cgm1h72hr6
+												29 text 文本 1
+											30 container 文本 node: 文本 2
+												31 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_862fkmng46
+												32 text 文本 2
+											33 container 文本 node: 文本 3
+												34 container Description: 双击编辑文本. No resources: 0 ready, 0 processing, 0 failed. Not selected., ID: canvas-node-description-node_jt894kh8f0
+												35 text 文本 3
+											36 container 外部 node: 导演台
+												37 container
+													38 text 导演台
+													39 text 在 3D 空间中设计角色、机位与镜头
+													40 text No resources: 0 ready, 0 processing, 0 failed. Not selected.
+											41 container 视频 node: 视频 1
+												42 container
+													43 text 视频 1
+													44 image 暂无视频
+													45 text No resources: 0 ready, 0 processing, 0 failed. Not selected.
+							82 container Description: 搜索, ID: canvas-feature-panel-canvasSearch
+								83 container 搜索
+									84 text field (settable) 搜索
+									85 container
+										86 tab group Search result categories
+											87 tab (selected, settable, boolean) Description: 全部 5, Value: 1, ID: canvas-search-tab-all
+											88 tab (selectable, settable, boolean) Description: 图片, Value: 0, ID: canvas-search-tab-image
+											89 tab (selectable, settable, boolean) Description: 视频 1, Value: 0, ID: canvas-search-tab-video
+											90 tab (selectable, settable, boolean) Description: 音频, Value: 0, ID: canvas-search-tab-audio
+											91 tab (selectable, settable, boolean) Description: 文本 3, Value: 0, ID: canvas-search-tab-text
+											92 tab (selectable, settable, boolean) Description: 主体, Value: 0, ID: canvas-search-tab-subject
+											93 tab (selectable, settable, boolean) Description: 时间线, Value: 0, ID: canvas-search-tab-timeline
+											94 tab (selectable, settable, boolean) Description: 导演工具箱, Value: 0, ID: canvas-search-tab-cinema_studio
+											95 tab (selectable, settable, boolean) Description: 组, Value: 0, ID: canvas-search-tab-group
+											96 tab (selectable, settable, boolean) Description: 其他 1, Value: 0, ID: canvas-search-tab-other
+										97 button Next search categories
+										98 container Description: 全部 5, ID: canvas-search-results
+											99 container
+												100 content list
+													101 container
+														102 button 视频 1, 视频
+															103 text 视频 1
+															104 text 视频
+													105 container
+														106 button 导演台, 导演台
+															107 text 导演台
+															108 text 导演台
+													109 container
+														110 button 文本 3, 文本
+															111 text 文本 3
+															112 text 文本
+													113 container
+														114 button 文本 2, 文本
+															115 text 文本 2
+															116 text 文本
+													117 container
+														118 button 文本 1, 文本
+															119 text 文本 1
+															120 text 文本
+						46 container Canvas left toolbar
+							47 toolbar Canvas toolbar
+								48 button 文本
+								50 button 图片
+								52 button 视频
+								54 button 音频
+								56 button 时间线
+								58 button 主体
+								60 checkbox (collapsed) Description: 导演工具箱, Value: 0, ID: radix-:modern-js-r33:, Secondary Actions: Expand
+								62 button 导演台
+								64 button 资产库
+								66 button 上传
+						68 container Canvas viewport controls
+							69 checkbox Description: 选择工具, Value: 0
+							70 checkbox Description: 小地图, Value: 0
+							71 checkbox Description: 显示连线, Value: 1
+							72 container
+								73 pop up button (collapsed) Description: Zoom options, 75%, ID: radix-:modern-js-rn:, Secondary Actions: Expand
+						74 button (collapsed) Description: 与 AI 对话, Secondary Actions: Expand
+		75 container Notifications
+		76 container Canvas notifications
+		77 container Canvas notifications
+		78 container Canvas tag notifications
+		79 container Canvas notifications
+
+The focused UI element is 82 container Description: 搜索, ID: canvas-feature-panel-canvasSearch

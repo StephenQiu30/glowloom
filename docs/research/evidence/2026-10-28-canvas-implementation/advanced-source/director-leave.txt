@@ -1,0 +1,25 @@
+Browser tab: 1980371314, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+0 AXWebArea 一致性调研-202610221 - 即梦AI, URL: jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage
+	1 container
+		2 container
+			3 container Canvas top bar
+				4 text 已保存
+			5 container Canvas workspace
+				6 container
+					7 container
+						8 container Canvas editing area
+							9 container
+								10 container Canvas
+					11 container Canvas left toolbar
+						12 toolbar Canvas toolbar
+					13 container Canvas viewport controls
+		14 container 导演台, ID: radix-:modern-js-r5q:
+		15 container 保存更改？, ID: radix-:modern-js-r9j:
+			16 heading 保存更改？, Value: 2, ID: radix-:modern-js-r9k:
+				17 text 保存更改？
+			18 text 当前有未保存的更改。本地草稿仅保留在当前浏览器，保存到云端后才能跨设备使用。
+			19 button 继续编辑
+			20 button 直接关闭
+			21 button 保存并关闭
+
+The focused UI element is 19 button 继续编辑

@@ -32,44 +32,8 @@ type ProviderConfig struct {
 
 // Validate admits only implemented protocols and bounded operational settings.
 func (c ProviderConfig) Validate() error {
-	var allowed []string
-	switch c.AdapterKey {
-	case "volcengine_ark":
-		if c.BaseURL != "https://ark.cn-beijing.volces.com/api/v3" || c.Region != RegionDomestic {
-			return ErrInvalidPreset
-		}
-		allowed = []string{"text", "image", "video"}
-	case "volcengine_music":
-		if c.BaseURL != "https://open.volcengineapi.com" || c.Region != RegionDomestic {
-			return ErrInvalidPreset
-		}
-		allowed = []string{"audio"}
-	case "volcengine_avatar", "volcengine_motion":
-		if c.BaseURL != "https://openapi.cv.volces.com" || c.Region != RegionDomestic {
-			return ErrInvalidPreset
-		}
-		allowed = []string{"video"}
-	case "volcengine_speech":
-		if c.BaseURL != "https://openspeech.bytedance.com/api/v3" || c.Region != RegionDomestic {
-			return ErrInvalidPreset
-		}
-		allowed = []string{"audio"}
-	case "openrouter":
-		if c.BaseURL != "https://openrouter.ai/api/v1" || c.Region != RegionOverseas {
-			return ErrInvalidPreset
-		}
-		allowed = []string{"text", "image", "video"}
-	case "byteplus":
-		if c.BaseURL != "https://ark.ap-southeast.bytepluses.com/api/v3" || c.Region != RegionOverseas {
-			return ErrInvalidPreset
-		}
-		allowed = []string{"text", "image"}
-	case "deepseek":
-		if c.BaseURL != "https://api.deepseek.com" || c.Region != RegionDomestic {
-			return ErrInvalidPreset
-		}
-		allowed = []string{"text"}
-	default:
+	spec, ok := GetAdapterSpec(c.AdapterKey)
+	if !ok || c.BaseURL != spec.AllowedBaseURL || c.Region != spec.AllowedRegion {
 		return ErrInvalidPreset
 	}
 	if c.TimeoutSeconds < 5 || c.TimeoutSeconds > 300 || c.ConcurrencyLimit < 1 || c.ConcurrencyLimit > 1000 || c.RateLimitPerMin < 1 || c.RateLimitPerMin > 100000 || len(c.Capabilities) == 0 {
@@ -77,7 +41,7 @@ func (c ProviderConfig) Validate() error {
 	}
 	seen := make(map[string]bool)
 	for _, capability := range c.Capabilities {
-		if !slices.Contains(allowed, capability) || seen[capability] {
+		if !slices.Contains(spec.Capabilities, capability) || seen[capability] {
 			return ErrInvalidPreset
 		}
 		seen[capability] = true
@@ -211,6 +175,7 @@ func BuiltinPresets() []BuiltinPreset {
 		{Slug: "volcengine-avatar", Name: "即梦数字人", Config: ProviderConfig{AdapterKey: "volcengine_avatar", BaseURL: "https://openapi.cv.volces.com", Region: RegionDomestic, Capabilities: []string{"video"}, TimeoutSeconds: 120, ConcurrencyLimit: 1, RateLimitPerMin: 30}},
 		{Slug: "volcengine-motion", Name: "即梦动作模仿", Config: ProviderConfig{AdapterKey: "volcengine_motion", BaseURL: "https://openapi.cv.volces.com", Region: RegionDomestic, Capabilities: []string{"video"}, TimeoutSeconds: 120, ConcurrencyLimit: 1, RateLimitPerMin: 30}},
 		{Slug: "volcengine-speech", Name: "豆包语音", Config: ProviderConfig{AdapterKey: "volcengine_speech", BaseURL: "https://openspeech.bytedance.com/api/v3", Region: RegionDomestic, Capabilities: []string{"audio"}, TimeoutSeconds: 300, ConcurrencyLimit: 2, RateLimitPerMin: 30}},
+		{Slug: "openai", Name: "OpenAI", Config: ProviderConfig{AdapterKey: "openai", BaseURL: "https://api.openai.com/v1", Region: RegionOverseas, Capabilities: []string{"text", "image"}, TimeoutSeconds: 120, ConcurrencyLimit: 2, RateLimitPerMin: 30}},
 	}
 }
 

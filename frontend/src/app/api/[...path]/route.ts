@@ -31,11 +31,6 @@ const identityRoutes: {
   { pattern: `session/(refresh|upgrade)`, methods: ["POST"], query: [] },
   { pattern: `session`, methods: ["GET"], query: [] },
   { pattern: `auth-policy`, methods: ["GET"], query: [] },
-  {
-    pattern: `canvases/${identityUUID}/director-recovery/${identityUUID}`,
-    methods: ["GET", "PUT", "DELETE"],
-    query: [],
-  },
   { pattern: `registrations`, methods: ["POST"], query: [] },
   {
     pattern: `registrations/${identityUUID}/(resend|verify|complete)`,
@@ -619,6 +614,21 @@ async function proxy(
     { pattern: "canvas-assets/templates", methods: ["GET"], query: ["kind"] },
     { pattern: "canvas-assets/commands", methods: ["POST"], query: [] },
     {
+      pattern: `canvases/${identityUUID}/assistant-sessions`,
+      methods: ["GET", "POST"],
+      query: [],
+    },
+    {
+      pattern: `canvases/${identityUUID}/assistant-sessions/${identityUUID}`,
+      methods: ["GET"],
+      query: [],
+    },
+    {
+      pattern: `canvases/${identityUUID}/assistant-sessions/${identityUUID}/turns`,
+      methods: ["POST"],
+      query: [],
+    },
+    {
       pattern: `projects/${identityUUID}/media/${identityUUID}/original`,
       methods: ["GET"],
       query: [],
@@ -688,6 +698,16 @@ async function proxy(
       methods: ["GET"],
       query: [] as string[],
     },
+    {
+      pattern: `canvases/${identityUUID}/director-recovery/${identityUUID}`,
+      methods: ["GET", "PUT", "DELETE"],
+      query: [],
+    },
+    {
+      pattern: `canvases/${identityUUID}/information`,
+      methods: ["GET"],
+      query: ["page"],
+    },
     ...identityRoutes,
     ...editorCatalogRoutes,
   ].find((rule) => new RegExp(`^${rule.pattern}$`, "i").test(resource));
@@ -723,7 +743,7 @@ async function proxy(
     for (const key of incoming.searchParams.keys()) {
       if (
         request.method !== "GET" ||
-        !boundedRoute.query.includes(key) ||
+        !("query" in boundedRoute ? boundedRoute.query : []).includes(key) ||
         incoming.searchParams.getAll(key).length !== 1
       )
         return Response.json(

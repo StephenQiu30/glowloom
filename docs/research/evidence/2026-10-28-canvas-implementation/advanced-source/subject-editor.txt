@@ -1,0 +1,6 @@
+Browser tab: 1980371314, Title: "一致性调研-202610221 - 即梦AI", URL: "https://jimeng.jianying.com/ai-tool/ai-canvas/284cfd4e-5e10-4f6e-8fc9-2dbe7097381e?enter_from=project_list&from_page=canvas_homepage".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 100-101
++														108 text field (settable) Description: 名称, Value: 主体 1
++														109 button Edit subject description
+The focused UI element is 108 text field (settable) Description: 名称, Value: 主体 1

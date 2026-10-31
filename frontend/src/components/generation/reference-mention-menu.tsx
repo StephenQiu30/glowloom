@@ -117,7 +117,8 @@ export function ReferenceMentionMenu({
     return () => editor.removeEventListener("keydown", handle, true);
   }, [session]);
   const titleFor = (ref: ReferenceBinding) => {
-    if (ref.source.kind === "subject") return ref.source.description;
+    if (ref.source.kind === "subject" || ref.source.kind === "canvas_subject")
+      return ref.source.description;
     if (ref.source.kind !== "media") return "";
     const id = ref.source.sourceId;
     return (

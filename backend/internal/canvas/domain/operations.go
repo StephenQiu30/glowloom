@@ -404,13 +404,43 @@ func applyOperations(document Document, operations []Operation, final bool) (Ope
 	if final {
 		for i := range doc.Nodes {
 			n := &doc.Nodes[i]
+			if n.NodeType == "subject" {
+				if err := advanceSubjectInput(document, n, operations); err != nil {
+					return OperationOutcome{}, err
+				}
+				old := nodeIndex(&document, n.ID)
+				if old < 0 || document.Nodes[old].InputRevision != n.InputRevision {
+					out.Inputs = append(out.Inputs, InputSnapshot{NodeID: n.ID, Revision: n.InputRevision, Subject: n.Config.Subject, Title: n.Title})
+				}
+				continue
+			}
+		}
+		for i := range doc.Nodes {
+			n := &doc.Nodes[i]
 			if !IsDraft(*n) {
 				continue
 			}
 			old := nodeIndex(&document, n.ID)
+			effective, err := GenerationInput(doc, *n)
+			if err != nil {
+				return OperationOutcome{}, err
+			}
+			var previous Draft
+			if old >= 0 && document.Nodes[old].Config.Draft != nil {
+				previous, err = GenerationInput(document, document.Nodes[old])
+				if err != nil {
+					return OperationOutcome{}, err
+				}
+			}
 			switch {
-			case old < 0:
+			case old < 0 || document.Nodes[old].Config.Draft == nil:
 				n.InputRevision = 1
+				if old >= 0 {
+					if document.Nodes[old].InputRevision >= math.MaxInt32 {
+						return OperationOutcome{}, operationError("input_revision_limit")
+					}
+					n.InputRevision = document.Nodes[old].InputRevision + 1
+				}
 				for _, op := range operations {
 					if op.Type == "restore_node" && op.Node != nil && op.Node.ID == n.ID {
 						if op.Node.InputRevision >= math.MaxInt32 {
@@ -419,7 +449,7 @@ func applyOperations(document Document, operations []Operation, final bool) (Ope
 						n.InputRevision = op.Node.InputRevision + 1
 					}
 				}
-			case !SameInput(*document.Nodes[old].Config.Draft, *n.Config.Draft):
+			case !SameInput(previous, effective):
 				if document.Nodes[old].InputRevision >= math.MaxInt32 {
 					return OperationOutcome{}, operationError("input_revision_limit")
 				}
@@ -427,7 +457,7 @@ func applyOperations(document Document, operations []Operation, final bool) (Ope
 			default:
 				continue
 			}
-			out.Inputs = append(out.Inputs, InputSnapshot{NodeID: n.ID, Revision: n.InputRevision, Draft: *n.Config.Draft})
+			out.Inputs = append(out.Inputs, InputSnapshot{NodeID: n.ID, Revision: n.InputRevision, Draft: effective})
 		}
 		for _, node := range doc.Nodes {
 			if !validTitle(node.Title) || !coordinate(node.X) || !coordinate(node.Y) || !dimension(node.NodeType, node.Width) || !dimension(node.NodeType, node.Height) || !validZIndex(node.ZIndex) {
@@ -438,6 +468,9 @@ func applyOperations(document Document, operations []Operation, final bool) (Ope
 			return OperationOutcome{}, err
 		}
 		if err := validateTimelineRelationChanges(document, doc); err != nil {
+			return OperationOutcome{}, err
+		}
+		if err := validateSubjectRelationChanges(document, doc); err != nil {
 			return OperationOutcome{}, err
 		}
 	}

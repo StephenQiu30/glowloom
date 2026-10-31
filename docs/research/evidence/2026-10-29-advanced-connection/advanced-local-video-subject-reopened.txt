@@ -1,0 +1,161 @@
+- alert:
+  - generic: 暂时无法读取内容，请稍后重试。
+  - button "重试"
+- generic "创作画布":
+  - generic "协作者光标"
+  - group "图片节点：timeline-test-image.png":
+    - generic: 未选中。 可编辑。 媒体资源：0 项就绪，0 项处理中，0 项失败，1 项状态未核验。
+    - button "timeline-test-image.png":
+      - generic: timeline-test-image.png
+    - generic: 输入画面描述，或添加参考图片开始创作
+    - button "连接输出节点"
+  - group "时间线节点：时间线 1":
+    - generic: 未选中。 可编辑。 无媒体资源。
+    - button "时间线 1":
+      - generic: 时间线 1
+    - region "时间线工作区":
+      - button "分割" [disabled]:
+      - button "删除" [disabled]:
+      - button "播放时间线预览":
+      - generic: 00:00 / 00:09
+      - button "导出":
+      - button "全屏编辑":
+        - text: 全屏编辑
+      - alert:
+        - generic: 操作结果未确认，请保留当前内容并重试原请求。
+        - button "重新读取素材"
+      - paragraph: 正在读取 timeline-test-image.png
+      - paragraph: 正在读取 timeline-test-7s.wav
+      - generic: 00:00
+      - generic: 00:05
+      - generic: 00:10
+      - generic: 00:15
+      - generic: 00:20
+      - generic: 00:25
+      - generic "主视觉轨":
+        - button "静音 主视觉轨":
+        - button "添加素材到 主视觉轨":
+        - button "timeline-test-image.png，00:00:00，时长5.00秒":
+          - generic: 00:05
+        - button "timeline-test-4s.mp4，00:05:00，时长4.00秒":
+          - generic: 00:04
+      - generic "音频轨 1":
+        - button "静音 音频轨 1":
+        - button "timeline-test-7s.wav，00:00:00，时长7.00秒":
+      - slider "时间线播放头"
+    - button "连接输入节点"
+  - group "主体节点：主体 1":
+    - generic: 未选中。 可编辑。 媒体资源：0 项就绪，0 项处理中，0 项失败，1 项状态未核验。
+    - button "主体 1":
+      - generic: 主体 1
+    - status:
+      - text: 素材已失效或无权读取
+      - button "重试"
+    - button "移除主媒体并清除主体":
+    - paragraph: 暂无描述
+    - generic "辅助媒体"
+    - button "编辑主体"
+    - button "主体导入"
+    - button "连接输入节点"
+    - button "连接输出节点"
+  - group "视频节点：timeline-test-4s.mp4":
+    - generic: 未选中。 可编辑。 媒体资源：0 项就绪，0 项处理中，0 项失败，1 项状态未核验。
+    - button "timeline-test-4s.mp4":
+      - generic: timeline-test-4s.mp4
+    - generic "timeline-test-4s.mp4"
+    - button "播放视频":
+    - button "连接输出节点"
+  - group "音频节点：timeline-test-7s.wav":
+    - generic: 未选中。 可编辑。 媒体资源：0 项就绪，0 项处理中，0 项失败，1 项状态未核验。
+    - button "timeline-test-7s.wav":
+      - generic: timeline-test-7s.wav
+    - generic: 音频
+    - button "连接输出节点"
+  - group "时间线节点：时间线 2":
+    - generic: 未选中。 可编辑。 无媒体资源。
+    - button "时间线 2":
+      - generic: 时间线 2
+    - region "时间线工作区":
+      - button "分割" [disabled]:
+      - button "删除" [disabled]:
+      - button "播放时间线预览":
+      - generic: 00:00 / 00:07
+      - button "导出":
+      - button "全屏编辑":
+        - text: 全屏编辑
+      - alert:
+        - generic: 操作结果未确认，请保留当前内容并重试原请求。
+        - button "重新读取素材"
+      - paragraph: 正在读取 timeline-test-4s.mp4
+      - paragraph: 正在读取 timeline-test-7s.wav
+      - generic: 00:00
+      - generic: 00:05
+      - generic: 00:10
+      - generic: 00:15
+      - generic: 00:20
+      - generic: 00:25
+      - generic "主视觉轨":
+        - button "静音 主视觉轨":
+        - button "添加素材到 主视觉轨":
+        - button "timeline-test-4s.mp4，00:00:00，时长4.00秒":
+          - generic: 00:04
+      - generic "音频轨 1":
+        - button "静音 音频轨 1":
+        - button "timeline-test-7s.wav，00:00:00，时长7.00秒":
+      - slider "时间线播放头"
+    - button "连接输入节点"
+  - group "主体节点：主体 2":
+    - generic: 未选中。 可编辑。 媒体资源：0 项就绪，0 项处理中，0 项失败，1 项状态未核验。
+    - button "主体 2":
+      - generic: 主体 2
+    - status:
+      - text: 素材已失效或无权读取
+      - button "重试"
+    - button "移除主媒体并清除主体":
+    - paragraph: 暂无描述
+    - generic "辅助媒体"
+    - button "编辑主体"
+    - button "主体导入"
+    - button "连接输入节点"
+    - button "连接输出节点"
+- button "打开导航菜单":
+- button "打开画布菜单":
+  - generic: 未命名画布
+- button "节点统计，共 7 个节点": 节点 7
+- status: 连接中断
+- status: 协作连接已断开，在线状态未知
+- button "搜索画布":
+- button "生成历史":
+- button "复制画布链接":
+  - generic: 分享
+- link "账号设置":
+  - /url: /account
+- button "更多画布操作":
+- generic "画布工具栏":
+  - button "添加文本节点":
+  - button "添加图片节点":
+  - button "添加视频节点":
+  - button "添加音频节点":
+  - button "添加时间线节点":
+  - button "添加主体节点":
+  - button "导演工具箱":
+  - button "添加导演台节点":
+  - button "资产管理":
+  - button "本地上传":
+- generic "画布视图控制":
+  - button "画布操作模式：选择":
+  - button "小地图":
+  - button "显示连线" [pressed]:
+  - button "缩放选项，当前 46%": 46%
+- button "与 AI 对话":
+  - generic: 与 AI 对话
+- region "通知 alt+T"
+- alert
+- region "时间线导出通知":
+  - status: 排队中…
+  - alert: 无法读取导出状态
+  - button "关闭导出通知":
+- region "时间线导出通知":
+  - status: 排队中…
+  - alert: 无法读取导出状态
+  - button "关闭导出通知":

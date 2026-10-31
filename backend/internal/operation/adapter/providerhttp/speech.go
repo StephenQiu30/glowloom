@@ -14,8 +14,43 @@ import (
 
 	"github.com/google/uuid"
 
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
+	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
+
+// VolcengineSpeechDriver implements the communication strategy for Volcengine OpenSpeech
+// (Doubao Speech / Seed-TTS and Omni Audio).
+type VolcengineSpeechDriver struct{}
+
+func init() {
+	RegisterDriver(&VolcengineSpeechDriver{}, "volcengine_speech")
+}
+
+func (d *VolcengineSpeechDriver) Submit(ctx context.Context, c *Client, input application.GenerationRequest, key string) (application.GenerationResult, error) {
+	if input.ModelID == "seed-audio-1.0" {
+		return c.submitOmniAudio(ctx, input, key)
+	}
+	return c.submitSpeech(ctx, input, key)
+}
+
+func (d *VolcengineSpeechDriver) Query(ctx context.Context, c *Client, config catalogdomain.ProviderConfig, taskID, key string) (application.GenerationResult, error) {
+	return unknownResult(), nil
+}
+
+func (d *VolcengineSpeechDriver) Probe(ctx context.Context, c *Client, config catalogdomain.ProviderConfig, key string) ProbeResult {
+	if config.Validate() != nil {
+		return ProbeResult{Auth: "unknown", Adapter: "unsupported", Discovery: "unsupported", Candidates: []catalogapp.ModelCandidate{}}
+	}
+	return ProbeResult{Auth: "unknown", Adapter: "ok", Discovery: "unsupported", Candidates: []catalogapp.ModelCandidate{}}
+}
+
+func (d *VolcengineSpeechDriver) ProbeModelDefaultParams(capability string) map[string]any {
+	if capability == "audio.generate" {
+		return map[string]any{"speaker": "zh_female_vv_uranus_bigtts"}
+	}
+	return nil
+}
 
 // submitSpeech is deliberately separate from Ark's Bearer/JSON protocol. A speech
 // Key is sent only to the pinned speech origin, never to a discovered endpoint.

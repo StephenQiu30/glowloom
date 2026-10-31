@@ -1,12 +1,12 @@
 import {
   cleanup,
   fireEvent,
-  render,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
+import { render, findFeedback } from "../../../feedback";
 import { CanvasDeleteConfirmation } from "@/components/projects/canvas-delete-confirmation";
 
 afterEach(cleanup);
@@ -41,7 +41,7 @@ it("默认聚焦取消，取消和Escape只关闭，确认才提交", async () =
   expect(onConfirm).toHaveBeenCalledTimes(1);
 });
 
-it("处理中或未知回执保持确认，不允许关闭；未知结果只重试原操作", () => {
+it("处理中或未知回执保持确认，不允许关闭；未知结果只重试原操作", async () => {
   const onClose = vi.fn(),
     onConfirm = vi.fn();
   const props = {
@@ -72,9 +72,8 @@ it("处理中或未知回执保持确认，不允许关闭；未知结果只重�
       notice="操作结果尚未确认，请重试原操作。"
     />,
   );
-  expect(within(dialog).getByRole("alert").textContent).toContain(
-    "操作结果尚未确认",
-  );
+  await findFeedback("操作结果尚未确认");
+  expect(within(dialog).queryByRole("alert")).toBeNull();
   fireEvent.click(within(dialog).getByRole("button", { name: "重试原操作" }));
   expect(onConfirm).toHaveBeenCalledTimes(1);
   expect(onClose).not.toHaveBeenCalled();

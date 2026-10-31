@@ -214,6 +214,11 @@ func configMediaReferences(config domain.NodeConfig) ([]uuid.UUID, error) {
 		return nil, domain.ErrUnsupportedCommand
 	}
 	var ids []uuid.UUID
+	if config.Subject != nil && config.Subject.Local != nil {
+		for _, media := range config.Subject.Local.Media() {
+			ids = append(ids, media.AssetID)
+		}
+	}
 	if config.Editor != nil {
 		for _, ref := range config.Editor.Files {
 			ids = append(ids, ref.FileID)

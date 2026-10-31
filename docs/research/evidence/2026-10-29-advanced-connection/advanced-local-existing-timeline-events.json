@@ -1,0 +1,63 @@
+[
+  {
+    "sequence": 4414,
+    "type": "yjs_submit",
+    "op_id": "f5ca85f9-4a15-4c0c-a64f-af023adb4058"
+  },
+  {
+    "sequence": 4428,
+    "type": "yjs_ack",
+    "receipt": {
+      "epoch": "76a8ab91-62da-422a-9358-e4a37a9485a4",
+      "commitSeq": "12",
+      "contentRevision": "13",
+      "graphHash": "0bf7c60b9bb951a8349385d280e0e9752e8fc5b3152498eac594eddb257969a8",
+      "updateId": "f5ca85f9-4a15-4c0c-a64f-af023adb4058",
+      "payloadHash": "2de04271d0096817c70a4bf8c49ec3c192f93501055b260bd0a259426b71143b",
+      "effect": "VISIBLE_CHANGE",
+      "status": "accepted"
+    }
+  },
+  {
+    "sequence": 4436,
+    "type": "yjs_submit",
+    "op_id": "2c8c2df9-9133-4adf-be65-022a20afeb37"
+  },
+  {
+    "sequence": 4441,
+    "type": "yjs_ack",
+    "receipt": {
+      "epoch": "76a8ab91-62da-422a-9358-e4a37a9485a4",
+      "commitSeq": "13",
+      "contentRevision": "14",
+      "graphHash": "342c0f43f36713e4f0496e659df1b3e562087cc45641deb7686895282652be87",
+      "updateId": "2c8c2df9-9133-4adf-be65-022a20afeb37",
+      "payloadHash": "d70fdded4da2ac5e2b5c2265a5fbd97ff8d3caffff5402c47794716d88e3593e",
+      "effect": "VISIBLE_CHANGE",
+      "status": "accepted"
+    }
+  },
+  {
+    "sequence": 4541,
+    "type": "yjs_submit",
+    "op_id": "ef3d50ec-78cf-4833-a948-ebf311035649"
+  },
+  {
+    "sequence": 4588,
+    "type": "yjs_ack",
+    "receipt": {
+      "epoch": "76a8ab91-62da-422a-9358-e4a37a9485a4",
+      "commitSeq": "14",
+      "contentRevision": "15",
+      "graphHash": "abf488b3925c53b035ed2e70180ba9a9317fd3d8165a65d5027f3fa1bd666014",
+      "updateId": "ef3d50ec-78cf-4833-a948-ebf311035649",
+      "payloadHash": "cb0484b2cf92f47e662318e6f24b2990105354b5a85476f3bb2a89a5ae8daf43",
+      "effect": "VISIBLE_CHANGE",
+      "status": "accepted"
+    }
+  },
+  {
+    "sequence": 4617,
+    "type": "socketClosed"
+  }
+]
