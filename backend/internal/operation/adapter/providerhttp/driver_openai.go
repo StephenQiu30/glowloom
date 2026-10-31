@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strings"
 
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
@@ -20,9 +21,13 @@ func init() {
 	RegisterDriver(&OpenAICompatibleDriver{}, "openai", "deepseek", "codex", "openrouter")
 }
 
+// Submit performs one provider request without replaying unknown outcomes.
 func (d *OpenAICompatibleDriver) Submit(ctx context.Context, c *Client, input application.GenerationRequest, key string) (application.GenerationResult, error) {
 	if !validKey(key) || !validateCommonInput(input) {
 		return invalidSubmissionResult(), nil
+	}
+	if input.Config.AdapterKey == "openai" && input.Capability == "text.generate" && strings.HasPrefix(input.ModelID, "gpt-6") {
+		return submitOpenAIResponses(ctx, c, input, key)
 	}
 	payload := map[string]any{"model": input.ModelID, "prompt": input.Prompt}
 	path := ""
@@ -36,16 +41,26 @@ func (d *OpenAICompatibleDriver) Submit(ctx context.Context, c *Client, input ap
 		payload["messages"] = []map[string]string{{"role": "user", "content": input.Prompt}}
 		payload["stream"] = false
 	case "image.generate":
-		if input.Config.AdapterKey == "openai" {
+		switch input.Config.AdapterKey {
+		case "openai":
 			if input.OutputCount != 1 || len(input.References) != 0 || input.Mode != "text2image" {
 				return invalidSubmissionResult(), nil
 			}
+			if isGPTImage(input.ModelID) {
+				for field := range input.Params {
+					if field != "size" && field != "quality" {
+						return invalidSubmissionResult(), nil
+					}
+				}
+			}
 			path = "/images/generations"
-			payload["response_format"] = "b64_json"
-		} else if input.Config.AdapterKey == "openrouter" {
+			if !isGPTImage(input.ModelID) {
+				payload["response_format"] = "b64_json"
+			}
+		case "openrouter":
 			path = "/images"
 			payload["n"] = input.OutputCount
-		} else {
+		default:
 			return invalidSubmissionResult(), nil
 		}
 	case "video.generate":
@@ -137,6 +152,7 @@ func (d *OpenAICompatibleDriver) Submit(ctx context.Context, c *Client, input ap
 	return result, nil
 }
 
+// Query retrieves the original asynchronous video task.
 func (d *OpenAICompatibleDriver) Query(ctx context.Context, c *Client, config catalogdomain.ProviderConfig, taskID, key string) (application.GenerationResult, error) {
 	if config.Validate() != nil || config.AdapterKey != "openrouter" || !validKey(key) || !validTaskID(taskID) {
 		return unknownResult(), nil
@@ -189,6 +205,7 @@ func (d *OpenAICompatibleDriver) Query(ctx context.Context, c *Client, config ca
 	return result, nil
 }
 
+// Probe reads credential validity and account-visible model metadata.
 func (d *OpenAICompatibleDriver) Probe(ctx context.Context, c *Client, config catalogdomain.ProviderConfig, key string) ProbeResult {
 	result := ProbeResult{Auth: "unknown", Adapter: "ok", Discovery: "unsupported", Candidates: []catalogapp.ModelCandidate{}}
 	if config.Validate() != nil || !validKey(key) {
@@ -220,14 +237,14 @@ func (d *OpenAICompatibleDriver) Probe(ctx context.Context, c *Client, config ca
 				result.Discovery = "invalid_response"
 				return result
 			}
-			cap := "text.generate"
-			if model.ID == "dall-e-3" || model.ID == "dall-e-2" {
-				cap = "image.generate"
+			capability := "text.generate"
+			if strings.HasPrefix(model.ID, "gpt-image-") || model.ID == "chatgpt-image-latest" || model.ID == "dall-e-3" || model.ID == "dall-e-2" {
+				capability = "image.generate"
 			}
 			result.Candidates = append(result.Candidates, catalogapp.ModelCandidate{
 				ProviderModelID: model.ID,
 				DisplayName:     model.ID,
-				Capability:      cap,
+				Capability:      capability,
 				Metadata:        json.RawMessage(`{"verified":false}`),
 			})
 		}
@@ -313,9 +330,15 @@ func (d *OpenAICompatibleDriver) Probe(ctx context.Context, c *Client, config ca
 	return result
 }
 
+// ProbeModelDefaultParams supplies conservative validation parameters.
 func (d *OpenAICompatibleDriver) ProbeModelDefaultParams(capability string) map[string]any {
 	if capability == "image.generate" {
 		return map[string]any{"size": "1024x1024"}
 	}
 	return nil
+}
+
+// GPT Image aliases share the same request contract as named GPT Image models.
+func isGPTImage(model string) bool {
+	return strings.HasPrefix(model, "gpt-image-") || model == "chatgpt-image-latest"
 }

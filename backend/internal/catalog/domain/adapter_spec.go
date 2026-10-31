@@ -152,28 +152,26 @@ func init() {
 	})
 
 	RegisterAdapterSpec(AdapterSpecification{
-		AdapterKey:     "openai",
-		AllowedBaseURL: "https://api.openai.com/v1",
-		AllowedRegion:  RegionOverseas,
-		Capabilities:   []string{"text", "image"},
-		IsManagedCloud: true,
-		ParameterFields: map[string][]string{
-			"text.generate":  standardTextParams,
-			"image.generate": {"size", "seed", "watermark", "quality"},
-		},
+		AdapterKey: "openai", AllowedBaseURL: "https://api.openai.com/v1", AllowedRegion: RegionOverseas,
+		Capabilities: []string{"text", "image"}, IsManagedCloud: true,
+		ParameterFields: map[string][]string{"text.generate": standardTextParams, "image.generate": {"size", "quality", "seed", "watermark"}},
 		CandidateCatalog: func() ModelCandidateCatalog {
-			catalog := ModelCandidateCatalog{Version: "2026-10-26.1", Models: []ModelCandidatePreset{}}
-			source := "https://platform.openai.com/docs/models"
+			catalog := ModelCandidateCatalog{Version: "2026-10-31.2", Models: []ModelCandidatePreset{}}
+			for _, model := range []struct{ key, name, id string }{
+				{"openai-sol", "GPT-6.1 Sol", "gpt-6.1-sol"},
+				{"openai-astra", "GPT-6 Astra", "gpt-6-astra"},
+				{"openai-terra", "GPT-6.1 Terra", "gpt-6.1-terra"},
+				{"openai-luna", "GPT-6 Luna", "gpt-6-luna"},
+			} {
+				catalog.Models = append(catalog.Models, ModelCandidatePreset{Key: model.key, AdapterKey: "openai", DisplayName: model.name, ProviderModelID: model.id, Capability: "text.generate", Modes: []string{"text_to_text"}, SourceURL: "https://developers.openai.com/api/docs/models", ReviewedAt: "2026-10-31", Lifecycle: "active"})
+			}
 			one := 1
-			catalog.Models = append(catalog.Models,
-				ModelCandidatePreset{Key: "openai-gpt-4o", AdapterKey: "openai", DisplayName: "GPT-4o", ProviderModelID: "gpt-4o", Capability: "text.generate", Modes: []string{"text_to_text"}, SourceURL: source, ReviewedAt: "2026-10-31", Lifecycle: "active"},
-				ModelCandidatePreset{Key: "openai-gpt-4o-mini", AdapterKey: "openai", DisplayName: "GPT-4o Mini", ProviderModelID: "gpt-4o-mini", Capability: "text.generate", Modes: []string{"text_to_text"}, SourceURL: source, ReviewedAt: "2026-10-31", Lifecycle: "active"},
-				ModelCandidatePreset{Key: "openai-o1", AdapterKey: "openai", DisplayName: "OpenAI o1", ProviderModelID: "o1", Capability: "text.generate", Modes: []string{"text_to_text"}, SourceURL: source, ReviewedAt: "2026-10-31", Lifecycle: "active"},
-				ModelCandidatePreset{Key: "openai-o1-mini", AdapterKey: "openai", DisplayName: "OpenAI o1-mini", ProviderModelID: "o1-mini", Capability: "text.generate", Modes: []string{"text_to_text"}, SourceURL: source, ReviewedAt: "2026-10-31", Lifecycle: "active"},
-				ModelCandidatePreset{Key: "openai-o3-mini", AdapterKey: "openai", DisplayName: "OpenAI o3-mini", ProviderModelID: "o3-mini", Capability: "text.generate", Modes: []string{"text_to_text"}, SourceURL: source, ReviewedAt: "2026-10-31", Lifecycle: "active"},
-				ModelCandidatePreset{Key: "openai-gpt-4-turbo", AdapterKey: "openai", DisplayName: "GPT-4 Turbo", ProviderModelID: "gpt-4-turbo", Capability: "text.generate", Modes: []string{"text_to_text"}, SourceURL: source, ReviewedAt: "2026-10-31", Lifecycle: "active"},
-				ModelCandidatePreset{Key: "openai-dall-e-3", AdapterKey: "openai", DisplayName: "DALL·E 3", ProviderModelID: "dall-e-3", Capability: "image.generate", Modes: []string{"text2image"}, SourceURL: source, ReviewedAt: "2026-10-31", Lifecycle: "active", MaxOutputs: &one},
-			)
+			for _, model := range []struct{ key, name, id string }{
+				{"openai-image-sunburst", "GPT Image 2.5 Sunburst", "gpt-image-2.5-sunburst"},
+				{"openai-image-flare", "GPT Image 2.5 Flare", "gpt-image-2.5-flare"},
+			} {
+				catalog.Models = append(catalog.Models, ModelCandidatePreset{Key: model.key, AdapterKey: "openai", DisplayName: model.name, ProviderModelID: model.id, Capability: "image.generate", Modes: []string{"text2image"}, MaxOutputs: &one, SourceURL: "https://developers.openai.com/api/reference/resources/images/methods/generate", ReviewedAt: "2026-10-31", Lifecycle: "active"})
+			}
 			return catalog
 		},
 	})

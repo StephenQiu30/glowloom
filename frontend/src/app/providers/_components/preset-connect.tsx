@@ -203,6 +203,7 @@ export function PresetConnect({
               onValueChange={(id) => {
                 setPresetID(id);
                 setCandidateKeys([]);
+                setAccessKeyID("");
                 setAPIKey("");
                 setVisible(false);
                 setCategory(

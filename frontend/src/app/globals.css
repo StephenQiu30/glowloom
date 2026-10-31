@@ -3512,3 +3512,65 @@ button:not(:disabled),
     --layout-content-x: 44px;
   }
 }
+
+/* Management uses the same workspace geometry and controls as product pages. */
+.admin-workspace {
+  display: flex;
+  min-height: 100%;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--layout-gap);
+  padding: var(--layout-content-y) var(--layout-content-x);
+}
+.admin-navigation {
+  display: flex;
+  min-width: 0;
+  width: 100%;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.admin-navigation-link[data-slot="button"] {
+  height: 36px;
+  flex-shrink: 0;
+  padding-inline: 16px;
+  border-radius: 999px;
+  color: var(--muted-foreground);
+}
+.admin-navigation-link[aria-current="page"] {
+  background: var(--secondary);
+  color: var(--foreground);
+}
+.workspace-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.workspace-page-heading {
+  min-width: 0;
+}
+.workspace-page-heading h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 32px;
+}
+.workspace-page-description {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted-foreground);
+}
+.workspace-page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 767px) {
+  .admin-navigation-link[data-slot="button"] {
+    min-height: 44px;
+  }
+}

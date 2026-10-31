@@ -3,7 +3,10 @@ import { readErrorMessage } from "@/lib/read-error";
 import { ContentState } from "@/components/layout/content-state";
 
 import { useEffect, useRef, useState } from "react";
-import { SelectionBar } from "@/components/governance/admin-layout";
+import {
+  AdminHeading,
+  SelectionBar,
+} from "@/components/governance/admin-layout";
 import { useBatchOperation } from "@/components/governance/use-batch-operation";
 import { BatchDialog } from "@/components/governance/batch-dialog";
 import {
@@ -78,7 +81,11 @@ import { ConnectionDetail } from "./connection-detail";
 import { PresetConnect } from "./preset-connect";
 import { ConnectionList, regionLabel } from "./connection-list";
 import { ProviderLogo } from "./provider-logo";
-import { providerLabel } from "./provider-label";
+import {
+  canConnectPreset,
+  connectionPresets,
+  providerLabel,
+} from "./provider-label";
 
 type Confirmation =
   | { kind: "provider"; provider: API.CreatedProvider }
@@ -279,24 +286,19 @@ function ProviderAdministration({
     );
   return (
     <div className="flex w-full flex-col gap-5">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-medium tracking-tight">AI 服务接入</h1>
-          <p className="text-sm text-muted-foreground">
-            连接你的 AI 服务，集中管理凭据与模型。
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            className="max-md:h-11"
-            onClick={() => openConnect(true)}
-            disabled={loading || !!error}
-          >
-            <Plus data-icon="inline-start" />
-            接入服务
-          </Button>
-        </div>
-      </header>
+      <AdminHeading
+        title="AI 服务接入"
+        description="连接你的 AI 服务，集中管理凭据与模型。"
+      >
+        <Button
+          className="max-md:h-11"
+          onClick={() => openConnect(true)}
+          disabled={loading || !!error}
+        >
+          <Plus data-icon="inline-start" />
+          接入服务
+        </Button>
+      </AdminHeading>
       {mutation.message || mutation.pending ? (
         <MutationStatus mutation={mutation} />
       ) : null}
@@ -483,11 +485,15 @@ function ProviderAdministration({
                       </CardHeader>
                       <CardFooter className="flex-wrap gap-2">
                         <Button
-                          disabled={p.archived || p.emergency_disabled}
+                          disabled={
+                            p.archived ||
+                            p.emergency_disabled ||
+                            !canConnectPreset(p)
+                          }
                           className="max-md:h-11"
                           onClick={() => openConnect(p)}
                         >
-                          使用预设
+                          {canConnectPreset(p) ? "使用预设" : "仅支持维护"}
                         </Button>
                         <Collapsible className="w-full">
                           <CollapsibleTrigger asChild>
@@ -616,7 +622,10 @@ function ProviderAdministration({
           </DialogHeader>
           {connect ? (
             <PresetConnect
-              presets={presets}
+              presets={connectionPresets(
+                presets,
+                pendingCreate.pending?.target,
+              )}
               providers={providers}
               initialPreset={connect === true ? undefined : connect.id}
               onCreated={(id) => {

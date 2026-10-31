@@ -25,7 +25,7 @@ import (
 )
 
 func TestVolcengineWholeCatalogAndSpeechOnboardingUseRealStores(t *testing.T) {
-	for _, slug := range []string{"volcengine-ark", "volcengine-speech"} {
+	for _, slug := range []string{"volcengine-ark", "volcengine-speech", "openai"} {
 		t.Run(slug, func(t *testing.T) {
 			ctx, database := modelCatalogDB(t)
 			org := insertModelCatalogOrganization(ctx, t, database)
@@ -33,6 +33,9 @@ func TestVolcengineWholeCatalogAndSpeechOnboardingUseRealStores(t *testing.T) {
 			require.NoError(t, database.Exec(`UPDATE identity."user" SET platform_role='platform_admin' WHERE id=?`, actor.ID).Error)
 			actor = identityfixture.Session(t, database, actor)
 			project := insertModelCatalogProject(ctx, t, database, actor, false)
+			if slug == "openai" {
+				require.NoError(t, database.Exec(`UPDATE workspace.project SET allow_overseas_models=true WHERE id=?`, project).Error)
+			}
 			require.NoError(t, database.Exec(`INSERT INTO billing.budget(id,project_id,limit_micros) VALUES(?,?,0)`, uuid.New(), project).Error)
 			store := app.NewCatalogStore(database)
 			presets := catalogapp.NewProviderPresets(store)
@@ -94,6 +97,10 @@ func TestVolcengineWholeCatalogAndSpeechOnboardingUseRealStores(t *testing.T) {
 				if slug == "volcengine-speech" {
 					require.Equal(t, "seed-tts-2.0", r.Header.Get("X-Api-Resource-Id"))
 					return providerResponse(200, `{"code":0,"data":"SUQzAAAAAAAAAAAAAAAAAAAAAA==","usage":{"text_words":3}}`), nil
+				}
+				if slug == "openai" {
+					require.Equal(t, "/v1/responses", r.URL.Path)
+					return providerResponse(200, `{"status":"completed","output":[{"type":"message","status":"completed","content":[{"type":"output_text","text":"OK"}]}]}`), nil
 				}
 				return providerResponse(200, `{"choices":[{"message":{"content":"OK"},"finish_reason":"stop"}]}`), nil
 			})})

@@ -2,6 +2,8 @@
 import Link from "next/link";
 import type { AdminSection } from "@/components/layout/routes";
 import type { ReactNode } from "react";
+import { PageToolbar } from "@/components/layout/page-toolbar";
+import { PageHeader } from "@/components/canvas/runtime/components/layout/workspace/page-header";
 import { Button } from "@/components/ui/button";
 export function AdminNavigation({ active }: { active: AdminSection }) {
   const links = [
@@ -12,13 +14,13 @@ export function AdminNavigation({ active }: { active: AdminSection }) {
     { id: "settings", href: "/platform/settings", label: "平台设置" },
   ];
   return (
-    <nav aria-label="管理页面" className="flex flex-wrap gap-1">
+    <nav aria-label="管理页面" className="admin-navigation">
       {links.map((link) => (
         <Button
           key={link.id}
           variant={active === link.id ? "secondary" : "ghost"}
           asChild
-          className="max-md:h-11"
+          className="admin-navigation-link"
         >
           <Link
             href={link.href}
@@ -40,8 +42,10 @@ export function AdminWorkspace({
   children: ReactNode;
 }) {
   return (
-    <div className="admin-workspace flex min-h-full flex-col gap-5 p-6 max-md:px-4 max-md:pb-8">
-      <AdminNavigation active={active} />
+    <div className="admin-workspace">
+      <PageToolbar inHeader>
+        <AdminNavigation active={active} />
+      </PageToolbar>
       {children}
     </div>
   );
@@ -56,13 +60,9 @@ export function AdminHeading({
   children?: ReactNode;
 }) {
   return (
-    <header className="flex flex-wrap items-start justify-between gap-4">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-medium tracking-tight">{title}</h1>
-        <p className="text-sm text-muted-foreground">{description}</p>
-      </div>
-      {children ? <div className="flex flex-wrap gap-2">{children}</div> : null}
-    </header>
+    <PageHeader title={title} description={description}>
+      {children}
+    </PageHeader>
   );
 }
 export function SelectionBar({

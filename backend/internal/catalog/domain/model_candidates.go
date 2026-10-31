@@ -104,6 +104,10 @@ func (m ModelCandidatePreset) OnboardingVersion(modelID, actorID uuid.UUID) (Mod
 	case "text.generate":
 		version.ParamSchema = json.RawMessage(`[{"field":"max_tokens","label":"最大输出 Token","component":"input","type":"integer","min":1,"max":32768,"default":4096}]`)
 	case "image.generate":
+		if m.AdapterKey == "openai" {
+			version.ParamSchema = json.RawMessage(`[{"field":"size","label":"图像尺寸","component":"select","type":"string","enum":["1024x1024","1536x1024","1024x1536"],"default":"1024x1024"},{"field":"quality","label":"画质","component":"select","type":"string","enum":["low","medium","high"],"default":"medium"}]`)
+			return version, version.Validate()
+		}
 		if m.AdapterKey != "volcengine_ark" && m.AdapterKey != "openrouter" {
 			return ModelVersion{}, ErrInvalidPreset
 		}

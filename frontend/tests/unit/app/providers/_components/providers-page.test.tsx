@@ -213,13 +213,16 @@ it("预设与文件维护按需展开，主页面不展示协议与版本", asyn
   expect(screen.queryByRole("navigation", { name: "管理页面" })).toBeNull();
   expect(screen.queryByRole("button", { name: "使用预设" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "预设管理" }));
-  expect(screen.getByRole("button", { name: "使用预设" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "仅支持维护" })).toHaveProperty(
+    "disabled",
+    true,
+  );
   expect(screen.queryByRole("button", { name: "导出" })).toBeNull();
   expect(screen.queryByText(/openrouter ·|v9/)).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "维护预设" }));
   expect(screen.getByRole("button", { name: "导出" })).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "使用预设" }));
-  expect(screen.getByRole("dialog", { name: "接入 AI 服务" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "仅支持维护" }));
+  expect(screen.queryByRole("dialog", { name: "接入 AI 服务" })).toBeNull();
 });
 
 it("权限撤销立即卸载管理详情，再恢复权限重新读取", async () => {

@@ -67,3 +67,30 @@ it("standalone consumers fall back inline while a pending shell host waits", () 
   );
   expect(screen.queryByRole("button", { name: "Inline filter" })).toBeNull();
 });
+
+it("全部管理页导航进入共享顶栏，正文只保留页面内容", async () => {
+  const { AdminWorkspace } =
+    await import("@/components/governance/admin-layout");
+  const host = document.createElement("header");
+  document.body.appendChild(host);
+  try {
+    const view = render(
+      <PageToolbarContext.Provider value={host}>
+        <AdminWorkspace active="providers">
+          <p>服务管理内容</p>
+        </AdminWorkspace>
+      </PageToolbarContext.Provider>,
+    );
+    const nav = screen.getByRole("navigation", { name: "管理页面" });
+    expect(host.contains(nav)).toBe(true);
+    expect(view.container.querySelector(".admin-workspace nav")).toBeNull();
+    expect(
+      screen
+        .getByRole("link", { name: "AI 服务接入" })
+        .getAttribute("aria-current"),
+    ).toBe("page");
+    expect(screen.getByText("服务管理内容")).toBeTruthy();
+  } finally {
+    host.remove();
+  }
+});

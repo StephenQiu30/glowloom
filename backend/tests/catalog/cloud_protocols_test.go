@@ -22,6 +22,14 @@ func TestCloudTextProtocolsKeepProviderRoutingIndependent(t *testing.T) {
 			calls := 0
 			client := providerhttp.NewClient(&http.Client{Transport: providerTransport(func(r *http.Request) (*http.Response, error) {
 				calls++
+				if preset.Config.AdapterKey == "openai" {
+					require.Equal(t, preset.Config.BaseURL+"/responses", r.URL.String())
+					var body map[string]any
+					require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+					require.Equal(t, "hello", body["input"])
+					require.Equal(t, false, body["store"])
+					return providerResponse(200, `{"status":"completed","output":[{"type":"message","status":"completed","content":[{"type":"output_text","text":"fixture reply"}]}],"usage":{"input_tokens":2,"output_tokens":3}}`), nil
+				}
 				require.Equal(t, preset.Config.BaseURL+"/chat/completions", r.URL.String())
 				var body map[string]any
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
@@ -33,7 +41,7 @@ func TestCloudTextProtocolsKeepProviderRoutingIndependent(t *testing.T) {
 				}
 				return providerResponse(200, `{"choices":[{"message":{"content":"fixture reply"},"finish_reason":"stop"}],"usage":{"prompt_tokens":2,"completion_tokens":3}}`), nil
 			})})
-			result, err := client.Submit(t.Context(), operationapp.GenerationRequest{Config: preset.Config, Capability: "text.generate", Mode: "text_to_text", ModelID: "fixture-exact-model", Prompt: "hello", OutputCount: 1}, "fixture-key")
+			result, err := client.Submit(t.Context(), operationapp.GenerationRequest{Config: preset.Config, Capability: "text.generate", Mode: "text_to_text", ModelID: map[bool]string{true: "gpt-6.1-sol", false: "fixture-exact-model"}[preset.Config.AdapterKey == "openai"], Prompt: "hello", OutputCount: 1}, "fixture-key")
 			require.NoError(t, err)
 			require.Equal(t, "completed", result.Outcome)
 			require.Equal(t, "fixture reply", result.Text)
@@ -63,7 +71,7 @@ func TestArkImageRequestsUseSingleImageContractWithoutOpenRouterFields(t *testin
 				require.NotContains(t, body, "content")
 				return providerResponse(400, `{}`), nil
 			})})
-			input := operationapp.GenerationRequest{Config: preset.Config, Capability: "image.generate", Mode: "image2image", ModelID: "fixture-exact-model", Prompt: "reference image", OutputCount: 1, References: []operationapp.ProviderReference{{Role: "reference_image", URL: "https://assets.example/allowed.png"}}}
+			input := operationapp.GenerationRequest{Config: preset.Config, Capability: "image.generate", Mode: "image2image", ModelID: map[bool]string{true: "gpt-6.1-sol", false: "fixture-exact-model"}[preset.Config.AdapterKey == "openai"], Prompt: "reference image", OutputCount: 1, References: []operationapp.ProviderReference{{Role: "reference_image", URL: "https://assets.example/allowed.png"}}}
 			result, err := client.Submit(t.Context(), input, "fixture-key")
 			require.NoError(t, err)
 			require.Equal(t, "rejected", result.Outcome)

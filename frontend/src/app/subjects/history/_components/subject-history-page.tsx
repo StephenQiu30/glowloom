@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
 import { ContentState } from "@/components/layout/content-state";
+import { PageToolbar } from "@/components/layout/page-toolbar";
 import { PageLayout } from "@/components/layout/page-layout";
 import { PageHeading } from "@/components/layout/page-heading";
 import { ProjectPicker } from "@/components/projects/project-picker";
@@ -36,13 +37,15 @@ function ProjectHistory() {
             setKind(value);
         }}
       >
-        <TabsList aria-label="历史主体类型">
-          {(Object.keys(kinds) as API.Kind[]).map((value) => (
-            <TabsTrigger key={value} value={value}>
-              {kinds[value]}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <PageToolbar inHeader>
+          <TabsList variant="workspace" aria-label="历史主体类型">
+            {(Object.keys(kinds) as API.Kind[]).map((value) => (
+              <TabsTrigger key={value} value={value}>
+                {kinds[value]}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </PageToolbar>
       </Tabs>
       {project ? (
         <section aria-label={`${project.name} · ${kinds[kind]}历史主体`}>
