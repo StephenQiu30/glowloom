@@ -1,0 +1,132 @@
+[
+  {
+    "file": "0r4rgzg-4x8kv.js",
+    "url": "https://liblibai-web-static.liblib.cloud/liblibtv_online/static/_next/static/chunks/0r4rgzg-4x8kv.js",
+    "sha256": "e2c4cb60cd6dcf79750fa2e7c5d9e50d003865182d46b94844ed6eab8f5d2c13",
+    "term": "projectSessionCreate:",
+    "offset": 23931,
+    "offset_unit": "Python Unicode code points, zero-based",
+    "snippet": "ctionWhiteList:\"/api/protection/whitelist/verify\",academyWhiteList:\"/api/whitelist/check\",projectSessionCreate:`${t.config.tv.mediaApiHost}/api/v1/project/session/create`,projectSessionList:`${t.config.tv.mediaApiHost}/api/v1/project/session/list`,projectSessionDelete:`${t.config.tv.mediaAp",
+    "authority": "public frontend static text; not live endpoint validation"
+  },
+  {
+    "file": "0r4rgzg-4x8kv.js",
+    "url": "https://liblibai-web-static.liblib.cloud/liblibtv_online/static/_next/static/chunks/0r4rgzg-4x8kv.js",
+    "sha256": "e2c4cb60cd6dcf79750fa2e7c5d9e50d003865182d46b94844ed6eab8f5d2c13",
+    "term": "projectSessionStop:",
+    "offset": 24352,
+    "offset_unit": "Python Unicode code points, zero-based",
+    "snippet": "projectSessionUpdateMeta:`${t.config.tv.mediaApiHost}/api/v1/project/session/update-meta`,projectSessionStop:`${t.config.tv.mediaApiHost}/api/v1/project/session/stop`,projectMessageList:`${t.config.tv.mediaApiHost}/api/v1/project/message/list`,projectShare:`${t.config.tv.mediaApiHost}/api",
+    "authority": "public frontend static text; not live endpoint validation"
+  },
+  {
+    "file": "0r4rgzg-4x8kv.js",
+    "url": "https://liblibai-web-static.liblib.cloud/liblibtv_online/static/_next/static/chunks/0r4rgzg-4x8kv.js",
+    "sha256": "e2c4cb60cd6dcf79750fa2e7c5d9e50d003865182d46b94844ed6eab8f5d2c13",
+    "term": "canvasSessionApprovalModeUpdate:",
+    "offset": 15218,
+    "offset_unit": "Python Unicode code points, zero-based",
+    "snippet": "ject/heartbeat\",canvasProjectGetTitleByMessage:\"/api/canvas/project/get_title_by_message\",canvasSessionApprovalModeUpdate:\"/api/canvas/session/approval-mode/update\",canvasTextParseFile:\"/api/canvas/text/parse-file\",canvasNodesBatch:\"/api/canvas/nodes/batch\",canvasNodeDetail:\"/api/canvas/node/detail\",c",
+    "authority": "public frontend static text; not live endpoint validation"
+  },
+  {
+    "file": "0r4rgzg-4x8kv.js",
+    "url": "https://liblibai-web-static.liblib.cloud/liblibtv_online/static/_next/static/chunks/0r4rgzg-4x8kv.js",
+    "sha256": "e2c4cb60cd6dcf79750fa2e7c5d9e50d003865182d46b94844ed6eab8f5d2c13",
+    "term": "projectMessageList:",
+    "offset": 24429,
+    "offset_unit": "Python Unicode code points, zero-based",
+    "snippet": "update-meta`,projectSessionStop:`${t.config.tv.mediaApiHost}/api/v1/project/session/stop`,projectMessageList:`${t.config.tv.mediaApiHost}/api/v1/project/message/list`,projectShare:`${t.config.tv.mediaApiHost}/api/v1/project/share`,thirdAssetVisualValidate:\"/api/third_asset/visual-validate",
+    "authority": "public frontend static text; not live endpoint validation"
+  },
+  {
+    "file": "3k_26iohxd-3l.js",
+    "url": "https://liblibai-web-static.liblib.cloud/liblibtv_online/static/_next/static/chunks/3k_26iohxd-3l.js",
+    "sha256": "8c84a2f80e195954bab4e1a519f6adae9fad3355cdaf099ab5ca7072ddfc3417",
+    "term": "e.afterSeq",
+    "offset": 16538,
+    "offset_unit": "Python Unicode code points, zero-based",
+    "snippet": "Mode:i}),f=async e=>{let i={projectId:e.projectId};e.sessionId&&(i.sessionId=e.sessionId),e.afterSeq&&(i.afterSeq=e.afterSeq);let n=await t.f.get(r.U.projectMessageList,{params:i}),a=n.data?.messages;return a?.length&&n.data&&(n.data={...n.data,messages:a.map(e=>{let t=e.messageI",
+    "authority": "public frontend static text; not live endpoint validation"
+  },
+  {
+    "file": "3k_26iohxd-3l.js",
+    "url": "https://liblibai-web-static.liblib.cloud/liblibtv_online/static/_next/static/chunks/3k_26iohxd-3l.js",
+    "sha256": "8c84a2f80e195954bab4e1a519f6adae9fad3355cdaf099ab5ca7072ddfc3417",
+    "term": "projectSessionStop",
+    "offset": 16334,
+    "offset_unit": "Python Unicode code points, zero-based",
+    "snippet": "i)=>t.f.post(r.U.projectSessionUpdateTitle,{sessionId:e,title:i}),u=async e=>t.f.post(r.U.projectSessionStop,{sessionId:e}),p=async(e,i)=>t.f.post(r.U.canvasSessionApprovalModeUpdate,{sessionId:e,approvalMode:i}),f=async e=>{let i={projectId:e.projectId};e.sessionId&&(i.sessionId=e.sessi",
+    "authority": "public frontend static text; not live endpoint validation"
+  },
+  {
+    "file": "3k_26iohxd-3l.js",
+    "url": "https://liblibai-web-static.liblib.cloud/liblibtv_online/static/_next/static/chunks/3k_26iohxd-3l.js",
+    "sha256": "8c84a2f80e195954bab4e1a519f6adae9fad3355cdaf099ab5ca7072ddfc3417",
+    "term": "projectSessionCreate",
+    "offset": 15555,
+    "offset_unit": "Python Unicode code points, zero-based",
+    "snippet": "get(r.U.canvasProjectGetTitleByMessage,{params:{message:e}}),a=async(e,i,n)=>t.f.post(r.U.projectSessionCreate,{projectId:e,name:i,...n?.agentName?{agentName:n.agentName,...n.canvasId?{canvasId:n.canvasId}:{}}:{},...n?.nodeKey?{nodeKey:n.nodeKey}:{},...n?.workKey?{workKey:n.workKey}:{},...",
+    "authority": "public frontend static text; not live endpoint validation"
+  },
+  {
+    "file": "1b_ci7u0-cn1o.js",
+    "url": "https://liblibai-web-static.liblib.cloud/liblibtv_online/static/_next/static/chunks/1b_ci7u0-cn1o.js",
+    "sha256": "c81f82dda16c6c61915680c8614d003dda5464159946449d447c2a28efbef8b5",
+    "term": "fe_tool_call",
+    "offset": 12397,
+    "offset_unit": "Python Unicode code points, zero-based",
+    "snippet": "unction(e,t){return e[t]??n},\"r\",0,i])},905272,e=>{var t=e.i(989247),n=e.i(320293);let r=\"fe_tool_call\",i=\"fe_tool_cancel\",s=\"fe_tool_receipt\",o=\"FE_TOOL_ERROR\";e.s([\"n\",0,class{deps;records;constructor(e){this.deps=e,this.records=new Map}handleInbound(e){let t=\"string\"==typeof e.t",
+    "authority": "public frontend static text; not live endpoint validation"
+  },
+  {
+    "file": "1b_ci7u0-cn1o.js",
+    "url": "https://liblibai-web-static.liblib.cloud/liblibtv_online/static/_next/static/chunks/1b_ci7u0-cn1o.js",
+    "sha256": "c81f82dda16c6c61915680c8614d003dda5464159946449d447c2a28efbef8b5",
+    "term": "FE_TOOL_UNSUPPORTED",
+    "offset": 13503,
+    "offset_unit": "Python Unicode code points, zero-based",
+    "snippet": "me(r,s,{type:\"fe_tool_result\",requestId:r,sessionUuid:s,status:\"unsupported\",error:{code:\"FE_TOOL_UNSUPPORTED\",message:`frontend tool \"${i}\" is not registered`}});let l=new AbortController,c={requestId:r,sessionId:s,controller:l,timer:null,settled:!1};this.records.set(r,c),c.timer=setTime",
+    "authority": "public frontend static text; not live endpoint validation"
+  },
+  {
+    "file": "1b_ci7u0-cn1o.js",
+    "url": "https://liblibai-web-static.liblib.cloud/liblibtv_online/static/_next/static/chunks/1b_ci7u0-cn1o.js",
+    "sha256": "c81f82dda16c6c61915680c8614d003dda5464159946449d447c2a28efbef8b5",
+    "term": "fe_tool_result",
+    "offset": 13427,
+    "offset_unit": "Python Unicode code points, zero-based",
+    "snippet": "rejectByPreempt(r,s,i);let a=(0,n.d)(i);if(!a)return void this.settleWithFrame(r,s,{type:\"fe_tool_result\",requestId:r,sessionUuid:s,status:\"unsupported\",error:{code:\"FE_TOOL_UNSUPPORTED\",message:`frontend tool \"${i}\" is not registered`}});let l=new AbortController,c={requestId:r,sess",
+    "authority": "public frontend static text; not live endpoint validation"
+  },
+  {
+    "file": "2tdqgr5vhd9d0.js",
+    "url": "https://liblibai-web-static.liblib.cloud/liblibtv_online/static/_next/static/chunks/2tdqgr5vhd9d0.js",
+    "sha256": "b85e55566444a7d620742cdfa076b37b32a27a308c8901e3079db695b0db5977",
+    "term": "RUN_STARTED",
+    "offset": 79440,
+    "offset_unit": "Python Unicode code points, zero-based",
+    "snippet": ",t){let n=e[t];return\"string\"==typeof n?n:void 0}function ey(e){let t,n=[],r=!1,i=t=>{if(\"RUN_STARTED\"===t.type){if(r)return;r=!0}e.next(t)},s=()=>{if(null!=t&&(clearTimeout(t),t=void 0),0===n.length)return;let e=n;for(let t of(n=[],function(e){let t=(0,eu.o)(e),n=[],r=new Map;for",
+    "authority": "public frontend static text; not live endpoint validation"
+  },
+  {
+    "file": "2tdqgr5vhd9d0.js",
+    "url": "https://liblibai-web-static.liblib.cloud/liblibtv_online/static/_next/static/chunks/2tdqgr5vhd9d0.js",
+    "sha256": "b85e55566444a7d620742cdfa076b37b32a27a308c8901e3079db695b0db5977",
+    "term": "RUN_FINISHED",
+    "offset": 82430,
+    "offset_unit": "Python Unicode code points, zero-based",
+    "snippet": "c?[c]:[],h.isActive=n,h.isDisconnected=!n,h.isInitialized=!!n,h}static isRunEnd(e){return\"RUN_FINISHED\"===e.type||\"RUN_ERROR\"===e.type}beginChatRunAttempt(e,t=!1){if(this.chatRunAttemptKey)return!1;let n=eg(this.sessionId);return!!h.p.getInstance().beginChatRun(n,e,t)&&(this.chatRu",
+    "authority": "public frontend static text; not live endpoint validation"
+  },
+  {
+    "file": "2tdqgr5vhd9d0.js",
+    "url": "https://liblibai-web-static.liblib.cloud/liblibtv_online/static/_next/static/chunks/2tdqgr5vhd9d0.js",
+    "sha256": "b85e55566444a7d620742cdfa076b37b32a27a308c8901e3079db695b0db5977",
+    "term": "TOOL_CALL_",
+    "offset": 79219,
+    "offset_unit": "Python Unicode code points, zero-based",
+    "snippet": "777);var ed=e.i(88848),eu=e.i(64879);let ep={plan:{}},eh=new Set([\"TEXT_MESSAGE_CONTENT\",\"TOOL_CALL_ARGS\",\"REASONING_MESSAGE_CONTENT\"]),ef=0;function eg(e){return ef+=1,`canvas-chat:${e}:${Date.now()}:${ef}`}function em(e,t){let n=e[t];return\"string\"==typeof n?n:void 0}function e",
+    "authority": "public frontend static text; not live endpoint validation"
+  }
+]

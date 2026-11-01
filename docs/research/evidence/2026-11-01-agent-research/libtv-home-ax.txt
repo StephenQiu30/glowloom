@@ -1,0 +1,182 @@
+- document:
+  - text: "0 1 : 2 2 : 4 7 : 0 7"
+  - strong: 双十一狂欢·全年底价 ｜Wan3、Kling4.0、H3等0积分畅用、Seedance 2.5 每秒低至 ¥ 0.16、年会员最高赠送3个月会员+超20万积分
+  - text: 限时抢购
+  - button "关闭"
+  - complementary "侧边导航":
+    - button "首页":
+      - img
+    - navigation:
+      - button "首页"
+      - button "项目"
+      - button "资产"
+      - button "插件"
+    - text: 创作
+    - navigation:
+      - button "LibTV 画布"
+      - button "LibTV Agent": LibTV Agent BETA
+      - button "LibTV 3D-BOX"
+    - text: 社区
+    - navigation:
+      - button "学院"
+      - button "创作精选": 创作精选 全网爆款
+      - button "创作者挑战赛"
+    - button "banner"
+    - button "1 / 4"
+    - button "2 / 4"
+    - button "3 / 4"
+    - button "4 / 4"
+    - button "版本更新记录": 版本更新记录 v1.5
+  - main:
+    - button "企业采购"
+    - button "积分超市"
+    - button "开通会员 0 积分畅用":
+      - text: 开通会员
+      - img
+      - text: 0 积分畅用
+    - button "注册/登录"
+    - button "新建画布创作"
+    - button "Wan 3.0": Wan 3.0 0积分畅用
+    - button "Kling 4.0": Kling 4.0 0积分畅用
+    - button "Minimax H3": Minimax H3 0积分畅用
+    - button "Seedance 2.5"
+    - button "视频生成"
+    - button "图片生成"
+    - button "音频生成"
+    - button "剧本生成"
+    - button "智能剪辑"
+    - button "下一张"
+    - text: 最近上新
+    - button "抖音电商毛茸茸大赛 进行中"
+    - button "元素替换 New"
+    - button "3D-BOX 新模型低至 0.4元/次"
+    - button "Kling 4.0 模型上新"
+    - button "LibTV已接入WorkBuddy"
+    - text: 创作精选
+    - tablist:
+      - tab "全部" [selected]
+      - tab "全网爆款"
+      - tab "LibTV·「X小时之后」AI短片黑客松"
+      - tab "王者无界剧场计划"
+      - tab "精选画布"
+      - tab "专业影视"
+      - tab "短剧漫剧"
+      - tab "商业广告"
+      - tab "动漫游戏"
+      - tab "教育生活"
+      - tab "TV工具箱"
+    - button "向右滚动"
+    - textbox "请输入搜索内容"
+    - button "搜索"
+    - list:
+      - listitem:
+        - img "用Libtv深度视频功能复刻大牌广告镜头"
+        - button "ShineAi":
+          - img "ShineAi"
+        - img "先锋"
+        - paragraph: 用Libtv深度视频功能复刻大牌广告镜头
+        - button "ShineAi"
+      - listitem:
+        - img "山河为证·梁林寻找唐构之旅"
+        - button "者行孙AIGC":
+          - img "者行孙AIGC"
+        - img "专业"
+        - paragraph: 山河为证·梁林寻找唐构之旅
+        - button "者行孙AIGC"
+      - listitem:
+        - img "动物成精毛茸茸的动物秘密"
+        - button "徐晚":
+          - img "徐晚"
+        - img "先锋"
+        - paragraph: 动物成精毛茸茸的动物秘密
+        - text: 全网点赞100万+
+        - button "徐晚"
+      - listitem:
+        - img "第七席"
+        - button "溯影匠":
+          - img "溯影匠"
+        - paragraph: 第七席
+        - button "溯影匠"
+      - listitem:
+        - img "《窃丹-卖龙》第四集"
+        - button "洋月亮鉴定师":
+          - img "洋月亮鉴定师"
+        - img "先锋"
+        - paragraph: 《窃丹-卖龙》第四集
+        - button "洋月亮鉴定师"
+      - listitem:
+        - img "回到过去，爱上你。（8）"
+        - button "李志明AIGC":
+          - img "李志明AIGC"
+        - img "先锋"
+        - paragraph: 回到过去，爱上你。（8）
+        - button "李志明AIGC"
+      - listitem:
+        - img "顺手牵羊"
+        - button "戴雯静":
+          - img "戴雯静"
+        - img "先锋"
+        - paragraph: 顺手牵羊
+        - button "戴雯静"
+      - listitem:
+        - img "《多比啾咪》-半亩花田"
+        - button "多比啾咪":
+          - img "多比啾咪"
+        - img "先锋"
+        - paragraph: 《多比啾咪》-半亩花田
+        - button "多比啾咪"
+      - listitem:
+        - img "SoulArmor 的mv"
+        - button "丸毒孜辣er":
+          - img "丸毒孜辣er"
+        - img "先锋"
+        - paragraph: SoulArmor 的mv
+        - button "丸毒孜辣er"
+      - listitem:
+        - img "AIGC电影《髓海之上·笑面》EP03"
+        - button "蒙太神奇":
+          - img "蒙太神奇"
+        - img "荣誉"
+        - paragraph: AIGC电影《髓海之上·笑面》EP03
+        - button "蒙太神奇"
+      - listitem:
+        - img "原来都是真的"
+        - button "三两不睡了":
+          - img "三两不睡了"
+        - img "先锋"
+        - paragraph: 原来都是真的
+        - button "三两不睡了"
+      - listitem:
+        - img "火烧黑风山"
+        - button "玄机动画":
+          - img "玄机动画"
+        - img "先锋"
+        - paragraph: 火烧黑风山
+        - button "玄机动画"
+      - listitem:
+        - img "原创AI剧集-《死神十三》第三集"
+        - button "Chuwei":
+          - img "Chuwei"
+        - paragraph: 原创AI剧集-《死神十三》第三集
+        - text: 全网点赞30万+
+        - button "Chuwei"
+      - listitem:
+        - img "狐涂与咕呱-天降蛤蟆"
+        - button "翻滚的咸鱼":
+          - img "翻滚的咸鱼"
+        - img "先锋"
+        - paragraph: 狐涂与咕呱-天降蛤蟆
+        - button "翻滚的咸鱼"
+      - listitem:
+        - img "The Gray Ping灰松郡"
+        - button "Yzsw1":
+          - img "Yzsw1"
+        - paragraph: The Gray Ping灰松郡
+        - button "Yzsw1"
+    - status "加载中...":
+      - img
+    - button "滚动到创作精选": 全网百万赞作品｜去创作精选看看
+  - dialog:
+    - button "关闭"
+  - alert
+  - button "帮助信息": "?"

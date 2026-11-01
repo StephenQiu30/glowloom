@@ -7,7 +7,7 @@
 导演台编辑者可创建和应用；只读用户可查看与临时预览。身体修改仅静态工作区。导入/预览/混合确认均以对象ID与场景基线保护取消或过期写入。
 
 ## 3. 背景与证据
-即梦实证：research/13及evidence/2026-10-29-director/static-pose-properties.txt、actor-animation-library-loaded.txt、new-animation.txt。身体整体、胸腰、头部、左右肢体实证是姿势角度；独立肢体长度是用户本轮明确要求的扩展，不冒称竞品实证。BeefTV固定2327ee2d80282b10dd8bef0f26b48990d46f5c3b（MIT）提供轮廓变形与Mixer基础，不提供可直接复制的742动作。已下载Quaternius Standard CC0包真实43动作，沿用source-rest到target-rest旋转适配。
+即梦实证：research/13及evidence/2026-10-29-director/static-pose-properties.txt、actor-animation-library-loaded.txt、new-animation.txt。身体整体、胸腰、头部、左右肢体实证是姿势角度；独立肢体长度是用户本轮明确要求的扩展，不冒称竞品实证。轮廓变形与Mixer是体型和动作适配基础，动作资源按实际可用目录管理。已下载Quaternius Standard CC0包真实43动作，沿用source-rest到target-rest旋转适配。
 
 ## 4. 目标
 原10项体型新增leftArm/rightArm/leftLeg/rightLeg，遗漏侧别值继承原arms/leg。左右骨架和网格同一变形映射，身体改变清冻结快照。姿势提供标准身体分组但仅显示实际映射骨骼。

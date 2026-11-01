@@ -1,0 +1,48 @@
+{
+  "date": "2026-11-01",
+  "timezone": "Asia/Shanghai",
+  "head": "65ba1e64200a5541498e1e6aaf63c82d55347a58",
+  "scope": "Working tree source inspection; includes pre-existing uncommitted changes; no runtime or provider acceptance",
+  "files": [
+    {
+      "path": "backend/internal/agent/domain/session.go",
+      "sha256": "e9ab50be2abfb4c6bb72564b275217c46b2cddbc042ad113bcbfa722a397a02c"
+    },
+    {
+      "path": "backend/internal/agent/application/service.go",
+      "sha256": "5a1687b6bd723dbbd695e702867ea2066eb92f1f2380c67a6de8af687b83b415"
+    },
+    {
+      "path": "backend/internal/agent/adapter/http/handler.go",
+      "sha256": "69327e3a3f4b40012b9dff154b18493ddb4ae8c7b1e99a14b9be1b34d39d0b81"
+    },
+    {
+      "path": "backend/internal/agent/adapter/postgres/store.go",
+      "sha256": "3e8b64ce12d7334d9d97be923e44d1fe7319cf60ed7f3eb2f14b3a3982756ba3"
+    },
+    {
+      "path": "frontend/src/components/generation/agent-workspace.tsx",
+      "sha256": "d5cb536148b58b861fbb2d579fd0ba340a92d5de7221d40ba81573159d35b38b"
+    },
+    {
+      "path": "backend/internal/operation/adapter/providerhttp/openai_responses.go",
+      "sha256": "864ab4a185d67d5ea2c53d5cdd0bafec2863b8306c88d05bae6ae13c59e0da62"
+    },
+    {
+      "path": "backend/internal/operation/adapter/workflow/workflow.go",
+      "sha256": "d3efc31db4481b36451ac3cb1aa1d1fe0f163121e4a97a1dae2c01ed21deae1b"
+    },
+    {
+      "path": "backend/internal/operation/adapter/workflow/batch.go",
+      "sha256": "a5189bcd14cf275f9b8bed179dd1d2ab5d0f8fbb85bfa5da6af43ab0b8a445f4"
+    },
+    {
+      "path": "frontend/src/app/storyboard/page.tsx",
+      "sha256": "bee23a28ef71747b205f6002d00b4fa3a8abff8d7037768324df3e9d42688ce9"
+    },
+    {
+      "path": "frontend/src/app/shot/page.tsx",
+      "sha256": "6a316737acace0a3ca8332f637ac07466eef0d811b86aba66f6c540a956e9a1b"
+    }
+  ]
+}

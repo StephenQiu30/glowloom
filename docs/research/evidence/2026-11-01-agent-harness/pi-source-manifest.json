@@ -1,0 +1,88 @@
+{
+  "commit": "71023aec1546d6d677a65669c5665c0927ce0dd0",
+  "tag": "v1.3.0",
+  "date": "2026-11-01",
+  "method": "GitHub connector static review; no SDK execution",
+  "sources": [
+    {
+      "path": "packages/durable/package.json",
+      "url": "https://github.com/earendil-works/pi/blob/71023aec1546d6d677a65669c5665c0927ce0dd0/packages/durable/package.json",
+      "locators": [
+        {
+          "term": "\"version\": \"1.3.0\"",
+          "line": 3
+        }
+      ]
+    },
+    {
+      "path": "packages/durable/src/harness/types.ts",
+      "url": "https://github.com/earendil-works/pi/blob/71023aec1546d6d677a65669c5665c0927ce0dd0/packages/durable/src/harness/types.ts",
+      "locators": [
+        {
+          "term": "beforeRequest",
+          "line": 759
+        },
+        {
+          "term": "beforeCompact",
+          "line": 801
+        },
+        {
+          "term": "readonly taskId",
+          "line": 178
+        },
+        {
+          "term": "memo<T",
+          "line": 238
+        }
+      ]
+    },
+    {
+      "path": "packages/durable/src/harness/generation.ts",
+      "url": "https://github.com/earendil-works/pi/blob/71023aec1546d6d677a65669c5665c0927ce0dd0/packages/durable/src/harness/generation.ts",
+      "locators": [
+        {
+          "term": "beforeRequest",
+          "line": 209
+        },
+        {
+          "term": "createGeneration(tx, conversationId)",
+          "line": 559
+        }
+      ]
+    },
+    {
+      "path": "packages/durable/src/harness/compaction.ts",
+      "url": "https://github.com/earendil-works/pi/blob/71023aec1546d6d677a65669c5665c0927ce0dd0/packages/durable/src/harness/compaction.ts",
+      "locators": [
+        {
+          "term": "beforeCompact",
+          "line": 136
+        }
+      ]
+    },
+    {
+      "path": "packages/durable/src/types.ts",
+      "url": "https://github.com/earendil-works/pi/blob/71023aec1546d6d677a65669c5665c0927ce0dd0/packages/durable/src/types.ts",
+      "locators": [
+        {
+          "term": "readonly taskId",
+          "line": 171
+        },
+        {
+          "term": "memo<T",
+          "line": 204
+        }
+      ]
+    },
+    {
+      "path": "LICENSE",
+      "url": "https://github.com/earendil-works/pi/blob/71023aec1546d6d677a65669c5665c0927ce0dd0/LICENSE",
+      "locators": [
+        {
+          "term": "MIT License",
+          "line": 1
+        }
+      ]
+    }
+  ]
+}
