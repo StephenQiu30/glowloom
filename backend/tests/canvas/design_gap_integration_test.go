@@ -165,7 +165,7 @@ func TestCanvasSocketAuthorityDoesNotUpgradeSharedProjectLocks(t *testing.T) {
 	var count atomic.Int32
 	if err := f.db.Callback().Row().Before("gorm:row").Register("test:canvas-authority-barrier", func(query *gorm.DB) {
 		sql := query.Statement.SQL.String()
-		if strings.Contains(sql, "SELECT 1 FROM workspace.project") && strings.HasSuffix(sql, " FOR UPDATE") && count.Add(1) == 1 {
+		if strings.Contains(sql, "SELECT id AS project_id,org_id,owner_scope_id,revision,status FROM workspace.project") && strings.HasSuffix(sql, " FOR UPDATE") && count.Add(1) == 1 {
 			arrived <- struct{}{}
 			select {
 			case <-release:

@@ -75,10 +75,6 @@ jobs:
           psql "$GLOWLOOM_TEST_GOVERNANCE_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           psql "postgres://postgres@127.0.0.1:5432/glowloom_catalog?sslmode=disable" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           psql "$GLOWLOOM_TEST_SUBJECT_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
-      - name: Verify model preset onboarding
-        env:
-          GLOWLOOM_TEST_MODEL_CATALOG_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_catalog?sslmode=disable
-        run: go test -race -count=1 ./tests/catalog -run '^TestVolcengineWholeCatalogAndSpeechOnboardingUseRealStores$'
       - name: Run backend Race tests
         run: go test -race -count=1 ./...
 
