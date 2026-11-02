@@ -588,3 +588,63 @@ it("多厂商预设支持展示 ChatGPT Anthropic Gemini Grok 品牌标签与筛
   expect(screen.getByText("GPT-4o")).toBeDefined();
   expect(screen.getByText("Claude 3.7 Sonnet")).toBeDefined();
 });
+
+it("多厂商预设支持手动添加自定义候选模型并成功提交", async () => {
+  const openrouter: API.Preset = {
+    id: "or-preset",
+    version_id: "or-v1",
+    document: {
+      name: "OpenRouter",
+      config: { adapter_key: "openrouter", region: "overseas", capabilities: ["text"] },
+    },
+    model_catalog: {
+      version: "2026-11-02.3",
+      models: [
+        { key: "or-gpt-6-1-sol", capability: "text.generate", display_name: "GPT-6.1 Sol", provider_model_id: "openai/gpt-6.1-sol" },
+      ],
+    },
+  };
+  render(
+    <PresetConnect
+      presets={[openrouter]}
+      initialPreset="or-preset"
+      onCreated={created}
+      onSaved={saved}
+    />,
+  );
+  expect(screen.getByText("GPT-6.1 Sol")).toBeDefined();
+
+  // Expand custom model form
+  fireEvent.click(screen.getByRole("button", { name: /添加自定义候选模型/ }));
+  fireEvent.change(screen.getByPlaceholderText(/模型名称/), {
+    target: { value: "Claude Sonnet 5.5 Custom" },
+  });
+  fireEvent.change(screen.getByPlaceholderText(/上游标识/), {
+    target: { value: "anthropic/claude-sonnet-5.5" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "确认添加并勾选" }));
+
+  // The added custom model should appear in the list and be checked
+  expect(await screen.findByText("Claude Sonnet 5.5 Custom")).toBeDefined();
+  expect(screen.getByText("已选 1")).toBeDefined();
+
+  // Connect and verify custom_candidates payload
+  fireEvent.change(screen.getByLabelText("API Key"), {
+    target: { value: "fixture-key" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "接入服务" }));
+  await screen.findByText("服务已接入。");
+
+  expect(api.connect).toHaveBeenCalledWith(
+    { id: "or-preset" },
+    expect.objectContaining({
+      custom_candidates: [
+        expect.objectContaining({
+          display_name: "Claude Sonnet 5.5 Custom",
+          provider_model_id: "anthropic/claude-sonnet-5.5",
+          capability: "text.generate",
+        }),
+      ],
+    }),
+  );
+});

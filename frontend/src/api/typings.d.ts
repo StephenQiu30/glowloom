@@ -795,6 +795,7 @@ declare namespace API {
   type ConnectPresetInput = {
     candidate_keys?: string[];
     catalog_version?: string;
+    custom_candidates?: ModelCandidatePreset[];
     direct_use?: boolean;
     key?: string;
     name?: string;

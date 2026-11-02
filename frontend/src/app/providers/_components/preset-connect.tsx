@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Plus } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Empty, EmptyHeader, EmptyDescription } from "@/components/ui/empty";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Input } from "@/components/ui/input";
 import {
   InputGroup,
   InputGroupInput,
@@ -66,6 +67,12 @@ export function PresetConnect({
   const [presetID, setPresetID] = useState(initialPreset);
   const [candidateKeys, setCandidateKeys] = useState<string[]>([]);
   const [selectedBrand, setSelectedBrand] = useState<string>("all");
+  const [customCandidates, setCustomCandidates] = useState<
+    API.ModelCandidatePreset[]
+  >([]);
+  const [showAddCustom, setShowAddCustom] = useState(false);
+  const [customName, setCustomName] = useState("");
+  const [customID, setCustomID] = useState("");
   const [visible, setVisible] = useState(false);
   const mounted = useRef(true);
   useEffect(() => {
@@ -122,10 +129,19 @@ export function PresetConnect({
         (p) => p.provider?.id === targetID && p.credential?.status === "active",
       ));
   const busy = create.busy || credential.busy;
+  const isMultiBrand =
+    preset?.document?.config?.adapter_key === "openrouter" ||
+    preset?.document?.config?.adapter_key === "vercel";
+  const allModels = [
+    ...(preset?.model_catalog?.models ?? []),
+    ...customCandidates,
+  ];
+  const models = isMultiBrand
+    ? allModels.filter((m) => getCandidateBrand(m) !== undefined)
+    : allModels;
   const direct =
-    !!preset?.model_catalog?.models?.length &&
-    !preset.document?.model_templates?.length;
-  const models = preset?.model_catalog?.models ?? [];
+    (candidateKeys.length > 0 || customCandidates.length > 0) &&
+    !preset?.document?.model_templates?.length;
   const selectable = models.filter((m) => m.key && !m.requires_model_selection);
   const allSelected =
     selectable.length > 0 &&
@@ -142,7 +158,7 @@ export function PresetConnect({
           (!targetID &&
             (!preset?.id ||
               !preset.version_id ||
-              (direct && !candidateKeys.length)))
+              (direct && !candidateKeys.length && !customCandidates.length)))
         )
           return;
         const connectionName = "";
@@ -168,6 +184,8 @@ export function PresetConnect({
                   name: connectionName,
                   catalog_version: preset.model_catalog?.version,
                   candidate_keys: candidateKeys,
+                  custom_candidates:
+                    customCandidates.length > 0 ? customCandidates : undefined,
                   direct_use: direct,
                 },
               ),
@@ -206,6 +224,10 @@ export function PresetConnect({
               onValueChange={(id) => {
                 setPresetID(id);
                 setCandidateKeys([]);
+                setCustomCandidates([]);
+                setShowAddCustom(false);
+                setCustomName("");
+                setCustomID("");
                 setAccessKeyID("");
                 setAPIKey("");
                 setVisible(false);
@@ -415,7 +437,7 @@ export function PresetConnect({
                     value={value}
                     className="max-h-60 overflow-y-auto py-1"
                   >
-                    {hasMultipleBrands ? (
+                    {isMultiBrand || hasMultipleBrands ? (
                       <div className="sticky top-0 z-10 mb-1.5 flex flex-wrap items-center gap-1.5 bg-background/95 px-2 py-1.5 backdrop-blur">
                         <button
                           type="button"
@@ -429,7 +451,7 @@ export function PresetConnect({
                         >
                           全部 ({visibleModels.length})
                         </button>
-                        {availableBrands.map((b) => {
+                        {(["ChatGPT", "Anthropic", "Gemini", "Grok"] as const).map((b) => {
                           const count = visibleModels.filter(
                             (m) => getCandidateBrand(m) === b,
                           ).length;
@@ -442,7 +464,7 @@ export function PresetConnect({
                                 "cursor-pointer rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors",
                                 selectedBrand === b
                                   ? "bg-primary text-primary-foreground"
-                              : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground",
+                                  : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground",
                               )}
                             >
                               {b} ({count})
@@ -530,6 +552,77 @@ export function PresetConnect({
                 );
               })}
             </Tabs>
+            <div className="mt-1 border-t border-dashed pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAddCustom((v) => !v)}
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                <Plus className="size-3.5" />
+                {showAddCustom ? "收起添加模型" : "添加自定义候选模型"}
+              </button>
+              {showAddCustom ? (
+                <div className="mt-2 flex flex-col gap-2 rounded-md border p-2.5 bg-muted/20">
+                  <div className="grid grid-cols-2 gap-2 max-sm:grid-cols-1">
+                    <Input
+                      placeholder="模型名称（如 Claude Sonnet 5.5）"
+                      value={customName}
+                      onChange={(e) => setCustomName(e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                    <Input
+                      placeholder="上游标识（如 anthropic/claude-sonnet-5.5）"
+                      value={customID}
+                      onChange={(e) => setCustomID(e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      分类：
+                      {category === "text.generate"
+                        ? "文本"
+                        : category === "image.generate"
+                          ? "图片"
+                          : category === "video.generate"
+                            ? "视频"
+                            : "音频"}
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="h-7 text-xs"
+                      disabled={!customName.trim() || !customID.trim()}
+                      onClick={() => {
+                        const key = `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+                        const newModel: API.ModelCandidatePreset = {
+                          key,
+                          adapter_key: preset?.document?.config?.adapter_key,
+                          display_name: customName.trim(),
+                          provider_model_id: customID.trim(),
+                          capability: category,
+                          modes:
+                            category === "image.generate"
+                              ? ["text2image"]
+                              : category === "video.generate"
+                                ? ["text2video"]
+                                : ["text_to_text"],
+                          lifecycle: "active",
+                        };
+                        setCustomCandidates((prev) => [...prev, newModel]);
+                        setCandidateKeys((prev) => [...prev, key]);
+                        setCustomName("");
+                        setCustomID("");
+                        setShowAddCustom(false);
+                      }}
+                    >
+                      确认添加并勾选
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </FieldSet>
         ) : null}
         {targetID ? (

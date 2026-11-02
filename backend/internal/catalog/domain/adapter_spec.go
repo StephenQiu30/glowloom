@@ -86,7 +86,7 @@ func init() {
 			"video.generate": {"duration", "duration_ms", "resolution", "aspect_ratio", "generate_audio", "seed"},
 		},
 		CandidateCatalog: func() ModelCandidateCatalog {
-			catalog := ModelCandidateCatalog{Version: "2026-11-02.1", Models: []ModelCandidatePreset{}}
+			catalog := ModelCandidateCatalog{Version: "2026-11-02.3", Models: []ModelCandidatePreset{}}
 			add := func(key, name, id, capability, source, lifecycle string, modes ...string) {
 				catalog.Models = append(catalog.Models, ModelCandidatePreset{
 					Key: key, AdapterKey: "openrouter", DisplayName: name, ProviderModelID: id,
@@ -95,26 +95,42 @@ func init() {
 				})
 			}
 			source := "https://openrouter.ai/api/v1/models"
-			// ChatGPT (OpenAI)
+			// ChatGPT (OpenAI) - 2026 Latest
+			add("or-gpt-6-1-sol", "GPT-6.1 Sol", "openai/gpt-6.1-sol", "text.generate", source, "active", "text_to_text")
+			add("or-gpt-6-1-terra", "GPT-6.1 Terra", "openai/gpt-6.1-terra", "text.generate", source, "active", "text_to_text")
+			add("or-o3-pro", "o3 Pro", "openai/o3-pro", "text.generate", source, "active", "text_to_text")
+			add("or-o3", "o3", "openai/o3", "text.generate", source, "active", "text_to_text")
+			add("or-gpt-5-4", "GPT-5.4", "openai/gpt-5.4", "text.generate", source, "active", "text_to_text")
 			add("or-gpt-4o", "GPT-4o", "openai/gpt-4o", "text.generate", source, "active", "text_to_text")
-			add("or-gpt-4o-mini", "GPT-4o mini", "openai/gpt-4o-mini", "text.generate", source, "active", "text_to_text")
-			add("or-o1", "o1", "openai/o1", "text.generate", source, "active", "text_to_text")
-			add("or-o3-mini", "o3-mini", "openai/o3-mini", "text.generate", source, "active", "text_to_text")
 
-			// Anthropic (Claude)
-			add("or-claude-3-7", "Claude 3.7 Sonnet", "anthropic/claude-3.7-sonnet", "text.generate", source, "active", "text_to_text")
-			add("or-claude-3-5", "Claude 3.5 Sonnet", "anthropic/claude-3.5-sonnet", "text.generate", source, "active", "text_to_text")
-			add("or-claude-3-5-haiku", "Claude 3.5 Haiku", "anthropic/claude-3.5-haiku", "text.generate", source, "active", "text_to_text")
+			// Anthropic (Claude) - 2026 Latest
+			add("or-claude-sonnet-5-5", "Claude Sonnet 5.5", "anthropic/claude-sonnet-5.5", "text.generate", source, "active", "text_to_text")
+			add("or-claude-opus-5-5", "Claude Opus 5.5", "anthropic/claude-opus-5.5", "text.generate", source, "active", "text_to_text")
+			add("or-claude-haiku-5-5", "Claude Haiku 5.5", "anthropic/claude-haiku-5.5", "text.generate", source, "active", "text_to_text")
+			add("or-claude-sonnet-4-6", "Claude Sonnet 4.6", "anthropic/claude-sonnet-4.6", "text.generate", source, "active", "text_to_text")
+			add("or-claude-opus-4-6", "Claude Opus 4.6", "anthropic/claude-opus-4.6", "text.generate", source, "active", "text_to_text")
 
-			// Gemini (Google)
+			// Gemini (Google) - 2026 Latest
+			add("or-gemini-4-argon", "Gemini 4 Argon", "google/gemini-4-argon", "text.generate", source, "active", "text_to_text")
+			add("or-gemini-3-8-flash", "Gemini 3.8 Flash", "google/gemini-3.8-flash", "text.generate", source, "active", "text_to_text")
+			add("or-gemini-3-7-flash", "Gemini 3.7 Flash", "google/gemini-3.7-flash", "text.generate", source, "active", "text_to_text")
 			add("or-gemini-2-5-pro", "Gemini 2.5 Pro", "google/gemini-2.5-pro", "text.generate", source, "active", "text_to_text")
 			add("or-gemini-2-5-flash", "Gemini 2.5 Flash", "google/gemini-2.5-flash", "text.generate", source, "active", "text_to_text")
-			add("or-gemini-2-0-flash", "Gemini 2.0 Flash", "google/gemini-2.0-flash-001", "text.generate", source, "active", "text_to_text")
 
-			// Grok (xAI)
-			add("or-grok-2", "Grok 2", "x-ai/grok-2", "text.generate", source, "active", "text_to_text")
-			add("or-grok-2-vision", "Grok 2 Vision", "x-ai/grok-2-vision", "text.generate", source, "active", "text_to_text")
-			add("or-grok-beta", "Grok Beta", "x-ai/grok-beta", "text.generate", source, "active", "text_to_text")
+			// Grok (xAI) - 2026 Latest
+			add("or-grok-4-7", "Grok 4.7", "x-ai/grok-4.7", "text.generate", source, "active", "text_to_text")
+			add("or-grok-4-6", "Grok 4.6", "x-ai/grok-4.6", "text.generate", source, "active", "text_to_text")
+			add("or-grok-4-5", "Grok 4.5", "x-ai/grok-4.5", "text.generate", source, "active", "text_to_text")
+			add("or-grok-4-3", "Grok 4.3", "x-ai/grok-4.3", "text.generate", source, "active", "text_to_text")
+			add("or-grok-4-20", "Grok 4.20", "x-ai/grok-4.20", "text.generate", source, "active", "text_to_text")
+
+			// Images
+			one := 1
+			sourceImg := "https://openrouter.ai/api/v1/images/models"
+			add("or-gpt-image", "GPT Image 2", "openai/gpt-image-2", "image.generate", sourceImg, "active", "text2image", "image2image")
+			catalog.Models[len(catalog.Models)-1].MaxOutputs = &one
+			add("or-gemini-image", "Nano Banana 2", "google/gemini-3.1-flash-image", "image.generate", sourceImg, "active", "text2image", "image2image")
+			catalog.Models[len(catalog.Models)-1].MaxOutputs = &one
 			return catalog
 		},
 	})
@@ -192,7 +208,7 @@ func init() {
 		Capabilities: []string{"text", "image"}, IsManagedCloud: true,
 		ParameterFields: map[string][]string{"text.generate": standardTextParams, "image.generate": {"size", "quality", "seed"}},
 		CandidateCatalog: func() ModelCandidateCatalog {
-			catalog := ModelCandidateCatalog{Version: "2026-11-02.2", Models: []ModelCandidatePreset{}}
+			catalog := ModelCandidateCatalog{Version: "2026-11-02.3", Models: []ModelCandidatePreset{}}
 			source := "https://vercel.com/docs/ai/ai-gateway"
 			add := func(key, name, id, capability, lifecycle string, modes ...string) {
 				catalog.Models = append(catalog.Models, ModelCandidatePreset{
@@ -201,26 +217,41 @@ func init() {
 					Lifecycle: lifecycle, RequiresModelSelection: id == "",
 				})
 			}
-			// ChatGPT (OpenAI)
+			// ChatGPT (OpenAI) - 2026 Latest
+			add("vercel-gpt-6-1-sol", "GPT-6.1 Sol (Gateway)", "openai/gpt-6.1-sol", "text.generate", "active", "text_to_text")
+			add("vercel-gpt-6-1-terra", "GPT-6.1 Terra (Gateway)", "openai/gpt-6.1-terra", "text.generate", "active", "text_to_text")
+			add("vercel-o3-pro", "o3 Pro (Gateway)", "openai/o3-pro", "text.generate", "active", "text_to_text")
+			add("vercel-o3", "o3 (Gateway)", "openai/o3", "text.generate", "active", "text_to_text")
+			add("vercel-gpt-5-4", "GPT-5.4 (Gateway)", "openai/gpt-5.4", "text.generate", "active", "text_to_text")
 			add("vercel-gpt-4o", "GPT-4o (Gateway)", "openai/gpt-4o", "text.generate", "active", "text_to_text")
-			add("vercel-gpt-4o-mini", "GPT-4o Mini (Gateway)", "openai/gpt-4o-mini", "text.generate", "active", "text_to_text")
-			add("vercel-o1", "o1 (Gateway)", "openai/o1", "text.generate", "active", "text_to_text")
-			add("vercel-o3-mini", "o3-mini (Gateway)", "openai/o3-mini", "text.generate", "active", "text_to_text")
 
-			// Anthropic (Claude)
-			add("vercel-claude-3-7", "Claude 3.7 Sonnet (Gateway)", "anthropic/claude-3-7-sonnet", "text.generate", "active", "text_to_text")
-			add("vercel-claude-3-5", "Claude 3.5 Sonnet (Gateway)", "anthropic/claude-3-5-sonnet", "text.generate", "active", "text_to_text")
-			add("vercel-claude-3-5-haiku", "Claude 3.5 Haiku (Gateway)", "anthropic/claude-3.5-haiku", "text.generate", "active", "text_to_text")
+			// Anthropic (Claude) - 2026 Latest
+			add("vercel-claude-sonnet-5-5", "Claude Sonnet 5.5 (Gateway)", "anthropic/claude-sonnet-5.5", "text.generate", "active", "text_to_text")
+			add("vercel-claude-opus-5-5", "Claude Opus 5.5 (Gateway)", "anthropic/claude-opus-5.5", "text.generate", "active", "text_to_text")
+			add("vercel-claude-haiku-5-5", "Claude Haiku 5.5 (Gateway)", "anthropic/claude-haiku-5.5", "text.generate", "active", "text_to_text")
+			add("vercel-claude-sonnet-4-6", "Claude Sonnet 4.6 (Gateway)", "anthropic/claude-sonnet-4.6", "text.generate", "active", "text_to_text")
+			add("vercel-claude-opus-4-6", "Claude Opus 4.6 (Gateway)", "anthropic/claude-opus-4.6", "text.generate", "active", "text_to_text")
 
-			// Gemini (Google)
+			// Gemini (Google) - 2026 Latest
+			add("vercel-gemini-4-argon", "Gemini 4 Argon (Gateway)", "google/gemini-4-argon", "text.generate", "active", "text_to_text")
+			add("vercel-gemini-3-8-flash", "Gemini 3.8 Flash (Gateway)", "google/gemini-3.8-flash", "text.generate", "active", "text_to_text")
+			add("vercel-gemini-3-7-flash", "Gemini 3.7 Flash (Gateway)", "google/gemini-3.7-flash", "text.generate", "active", "text_to_text")
 			add("vercel-gemini-2-5-pro", "Gemini 2.5 Pro (Gateway)", "google/gemini-2.5-pro", "text.generate", "active", "text_to_text")
 			add("vercel-gemini-2-5-flash", "Gemini 2.5 Flash (Gateway)", "google/gemini-2.5-flash", "text.generate", "active", "text_to_text")
-			add("vercel-gemini-2-0-flash", "Gemini 2.0 Flash (Gateway)", "google/gemini-2.0-flash", "text.generate", "active", "text_to_text")
 
-			// Grok (xAI)
-			add("vercel-grok-2", "Grok 2 (Gateway)", "x-ai/grok-2", "text.generate", "active", "text_to_text")
-			add("vercel-grok-2-vision", "Grok 2 Vision (Gateway)", "x-ai/grok-2-vision", "text.generate", "active", "text_to_text")
-			add("vercel-grok-beta", "Grok Beta (Gateway)", "x-ai/grok-beta", "text.generate", "active", "text_to_text")
+			// Grok (xAI / SpaceXAI) - 2026 Latest
+			add("vercel-grok-4-7", "Grok 4.7 (Gateway)", "spacexai/grok-4.7", "text.generate", "active", "text_to_text")
+			add("vercel-grok-4-6", "Grok 4.6 (Gateway)", "spacexai/grok-4.6", "text.generate", "active", "text_to_text")
+			add("vercel-grok-4-5", "Grok 4.5 (Gateway)", "spacexai/grok-4.5", "text.generate", "active", "text_to_text")
+			add("vercel-grok-4-3", "Grok 4.3 (Gateway)", "spacexai/grok-4.3", "text.generate", "active", "text_to_text")
+			add("vercel-grok-4-20", "Grok 4.20 (Gateway)", "spacexai/grok-4.20-reasoning", "text.generate", "active", "text_to_text")
+
+			// Images
+			one := 1
+			add("vercel-gpt-image", "GPT Image 2.5 Sunburst", "openai/gpt-image-2.5-sunburst", "image.generate", "active", "text2image")
+			catalog.Models[len(catalog.Models)-1].MaxOutputs = &one
+			add("vercel-gemini-image", "Nano Banana 2", "google/gemini-3.1-flash-image", "image.generate", "active", "text2image")
+			catalog.Models[len(catalog.Models)-1].MaxOutputs = &one
 			return catalog
 		},
 	})

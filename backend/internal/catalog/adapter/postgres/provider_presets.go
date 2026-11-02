@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -237,17 +239,45 @@ func (s *Store) ConnectPreset(ctx context.Context, actor identityapp.Principal, 
 		if err := presetvalidation.Validate(document); err != nil {
 			return application.PresetConnection{}, err
 		}
-		if input.DirectUse && (len(input.CandidateKeys) == 0 || len(document.ModelTemplates) != 0) {
+		if input.DirectUse && (len(input.CandidateKeys) == 0 && len(input.CustomCandidates) == 0 && len(document.ModelTemplates) == 0) {
 			return application.PresetConnection{}, domain.ErrInvalidPreset
 		}
-		catalog := domain.ModelCatalogForConfig(document.Config)
+		config := document.Config
+		catalog := domain.ModelCatalogForPreset(document)
 		candidates, err := catalog.Select(input.CatalogVersion, input.CandidateKeys)
 		if err != nil {
 			return application.PresetConnection{}, err
 		}
+		for _, custom := range input.CustomCandidates {
+			if custom.DisplayName == "" || custom.ProviderModelID == "" || custom.Capability == "" {
+				return application.PresetConnection{}, domain.ErrInvalidPreset
+			}
+			capBase := strings.TrimSuffix(custom.Capability, ".generate")
+			if !slices.Contains(config.Capabilities, capBase) {
+				return application.PresetConnection{}, domain.ErrInvalidPreset
+			}
+			if custom.Key == "" {
+				custom.Key = "custom-" + uuid.New().String()[:8]
+			}
+			custom.AdapterKey = config.AdapterKey
+			custom.SourceURL = "custom://admin"
+			custom.ReviewedAt = time.Now().Format("2006-01-02")
+			custom.Lifecycle = "active"
+			if len(custom.Modes) == 0 {
+				if custom.Capability == "text.generate" {
+					custom.Modes = []string{"text_to_text"}
+				} else if custom.Capability == "image.generate" {
+					custom.Modes = []string{"text2image"}
+				}
+			}
+			candidates = append(candidates, custom)
+		}
 		for _, candidate := range candidates {
 			for _, template := range document.ModelTemplates {
 				if candidate.ProviderModelID != "" && candidate.ProviderModelID == template.ProviderModelID && candidate.Capability == template.Capability {
+					if candidate.Key == template.Key {
+						continue
+					}
 					return application.PresetConnection{}, domain.ErrInvalidPreset
 				}
 			}
@@ -256,7 +286,6 @@ func (s *Store) ConnectPreset(ctx context.Context, actor identityapp.Principal, 
 			input.Name = document.Name + " · " + input.RequestID.String()[:8]
 		}
 		providerID, configID := uuid.New(), uuid.New()
-		config := document.Config
 		if err := tx.Exec(`INSERT INTO catalog.provider(id,key,name,adapter_key,region,status,concurrency_limit,rate_limit_per_min) VALUES(?,?,?,?,?,'disabled',?,?)`, providerID, input.Key, input.Name, config.AdapterKey, config.Region, config.ConcurrencyLimit, config.RateLimitPerMin).Error; err != nil {
 			return application.PresetConnection{}, err
 		}
@@ -276,6 +305,16 @@ func (s *Store) ConnectPreset(ctx context.Context, actor identityapp.Principal, 
 			return application.PresetConnection{}, err
 		}
 		for _, candidate := range candidates {
+			isFromTemplate := false
+			for _, template := range document.ModelTemplates {
+				if candidate.Key == template.Key {
+					isFromTemplate = true
+					break
+				}
+			}
+			if isFromTemplate {
+				continue
+			}
 			id := uuid.New()
 			model := domain.ModelProfile{ID: id, Key: "candidate-" + id.String(), ProviderID: providerID, Capability: candidate.Capability, DisplayName: candidate.DisplayName, Status: domain.ModelDisabled, Revision: 1}
 			if err := createModelInTx(tx, model); err != nil {

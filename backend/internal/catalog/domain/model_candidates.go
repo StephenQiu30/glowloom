@@ -90,6 +90,45 @@ func ModelCatalogForConfig(config ProviderConfig) ModelCandidateCatalog {
 	return catalog
 }
 
+// ModelCatalogForPreset returns candidate models matching the config's capabilities,
+// combining builtin candidates with any administrator-configured model templates.
+// This ensures model catalogs are dynamic and administrator-manageable without hardcoding.
+func ModelCatalogForPreset(document PresetDocument) ModelCandidateCatalog {
+	catalog := ModelCatalogForConfig(document.Config)
+	if catalog.Version == "" {
+		catalog.Version = "preset-custom.1"
+	}
+	existingKeys := make(map[string]bool, len(catalog.Models))
+	for _, m := range catalog.Models {
+		existingKeys[m.Key] = true
+	}
+	for _, template := range document.ModelTemplates {
+		if !existingKeys[template.Key] {
+			reviewedAt := "2026-11-02"
+			if !template.UpstreamCost.ReviewedAt.IsZero() {
+				reviewedAt = template.UpstreamCost.ReviewedAt.Format("2006-01-02")
+			}
+			source := template.UpstreamCost.Source
+			if source == "" {
+				source = "preset://admin"
+			}
+			catalog.Models = append(catalog.Models, ModelCandidatePreset{
+				Key:             template.Key,
+				AdapterKey:      document.Config.AdapterKey,
+				DisplayName:     template.Name,
+				ProviderModelID: template.ProviderModelID,
+				Capability:      template.Capability,
+				Modes:           slices.Clone(template.Modes),
+				SourceURL:       source,
+				ReviewedAt:      reviewedAt,
+				Lifecycle:       "active",
+			})
+			existingKeys[template.Key] = true
+		}
+	}
+	return catalog
+}
+
 // OnboardingVersion supplies conservative parameters supported by the deployed
 // adapter. A candidate with an account-specific placeholder cannot be enabled.
 func (m ModelCandidatePreset) OnboardingVersion(modelID, actorID uuid.UUID) (ModelVersion, error) {

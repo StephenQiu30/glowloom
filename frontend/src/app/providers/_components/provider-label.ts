@@ -82,6 +82,7 @@ export function getCandidateBrand(candidate?: {
     name.includes("chatgpt") ||
     name.startsWith("o1") ||
     name.startsWith("o3") ||
+    name.startsWith("o4") ||
     name.includes("dall-e") ||
     key.includes("gpt") ||
     key.includes("openai") ||
@@ -100,14 +101,18 @@ export function getCandidateBrand(candidate?: {
   }
   if (
     id.startsWith("google/") ||
+    id.includes("gemini") ||
     name.includes("gemini") ||
     name.includes("google") ||
+    name.includes("banana") ||
     key.includes("gemini")
   ) {
     return "Gemini";
   }
   if (
     id.startsWith("x-ai/") ||
+    id.startsWith("spacexai/") ||
+    id.includes("grok") ||
     name.includes("grok") ||
     name.includes("xai") ||
     key.includes("grok")

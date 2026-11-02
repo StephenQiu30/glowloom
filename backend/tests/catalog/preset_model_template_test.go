@@ -58,3 +58,63 @@ func TestPresetTemplatesRejectSecretsAndInvalidPriceRules(t *testing.T) {
 	doc.ModelTemplates[0].Limits = json.RawMessage(`{"max_outputs":2}`)
 	require.ErrorIs(t, doc.Validate(), domain.ErrInvalidPreset)
 }
+
+func TestModelCatalogForPresetDynamicallyIncludesAdminTemplates(t *testing.T) {
+	doc := domain.PresetDocument{
+		SchemaVersion: 1,
+		Name:          "Dynamic Custom Preset",
+		Config:        domain.BuiltinPresets()[1].Config, // OpenRouter
+		ModelTemplates: []domain.PresetModelTemplate{
+			{
+				Key:             "admin-custom-model",
+				Name:            "Admin Managed Claude 5.5",
+				Capability:      "text.generate",
+				ProviderModelID: "anthropic/claude-sonnet-5.5",
+				Modes:           []string{"text_to_text"},
+				Limits:          json.RawMessage(`{"max_outputs":1}`),
+				ParamSchema:     json.RawMessage(`[]`),
+				ExpectedMaxMS:   60000,
+				Price:           domain.PresetModelPrice{Unit: domain.PricePer1KTokens, Rule: json.RawMessage(`{"amount":10}`), Currency: "CNY"},
+				UpstreamCost:    domain.PresetModelCost{Currency: "USD", MaxMicros: 20000, Source: "https://openrouter.ai/models", ReviewedAt: time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)},
+			},
+		},
+	}
+	catalog := domain.ModelCatalogForPreset(doc)
+	require.NotEmpty(t, catalog.Models)
+	var found bool
+	for _, m := range catalog.Models {
+		if m.Key == "admin-custom-model" {
+			found = true
+			require.Equal(t, "Admin Managed Claude 5.5", m.DisplayName)
+			require.Equal(t, "anthropic/claude-sonnet-5.5", m.ProviderModelID)
+			require.Equal(t, "text.generate", m.Capability)
+			require.Equal(t, "active", m.Lifecycle)
+			break
+		}
+	}
+	require.True(t, found, "catalog must dynamically expose administrator-configured model templates")
+}
+
+func TestOpenRouterAndVercelCandidatesContainFourCoreFamilies(t *testing.T) {
+	for _, adapter := range []string{"openrouter", "vercel"} {
+		catalog := domain.BuiltinModelCatalog(adapter)
+		require.NotEmpty(t, catalog.Models)
+		var hasChatGPT, hasAnthropic, hasGemini, hasGrok bool
+		for _, m := range catalog.Models {
+			switch {
+			case m.Key == adapter+"-gpt-6-1-sol" || m.Key == "or-gpt-6-1-sol" || m.Key == "vercel-gpt-6-1-sol":
+				hasChatGPT = true
+			case m.Key == adapter+"-claude-sonnet-5-5" || m.Key == "or-claude-sonnet-5-5" || m.Key == "vercel-claude-sonnet-5-5":
+				hasAnthropic = true
+			case m.Key == adapter+"-gemini-4-argon" || m.Key == "or-gemini-4-argon" || m.Key == "vercel-gemini-4-argon":
+				hasGemini = true
+			case m.Key == adapter+"-grok-4-7" || m.Key == "or-grok-4-7" || m.Key == "vercel-grok-4-7":
+				hasGrok = true
+			}
+		}
+		require.True(t, hasChatGPT, "must contain ChatGPT family models")
+		require.True(t, hasAnthropic, "must contain Anthropic family models")
+		require.True(t, hasGemini, "must contain Gemini family models")
+		require.True(t, hasGrok, "must contain Grok family models")
+	}
+}
