@@ -34,9 +34,17 @@ func newCOS(p config.StorageProfile, c config.StorageCredentials, transport http
 func rejectStorageRedirect(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
 
 func (b cosBackend) put(ctx context.Context, key string, reader io.Reader, size int64, contentType, sha string) error {
-	meta := http.Header{"X-Cos-Meta-Sha256": []string{sha}}
-	condition := http.Header{"X-Cos-Forbid-Overwrite": []string{"true"}}
-	resp, err := b.sdk.Object.Put(ctx, key, reader, &cos.ObjectPutOptions{ObjectPutHeaderOptions: &cos.ObjectPutHeaderOptions{ContentType: contentType, ContentLength: size, XCosMetaXXX: &meta, XOptionHeader: &condition}})
+	header := &cos.ObjectPutHeaderOptions{
+		ContentType:   contentType,
+		ContentLength: size,
+	}
+	if sha != "" {
+		meta := http.Header{"X-Cos-Meta-Sha256": []string{sha}}
+		condition := http.Header{"X-Cos-Forbid-Overwrite": []string{"true"}}
+		header.XCosMetaXXX = &meta
+		header.XOptionHeader = &condition
+	}
+	resp, err := b.sdk.Object.Put(ctx, key, reader, &cos.ObjectPutOptions{ObjectPutHeaderOptions: header})
 	closeCOS(resp)
 	return err
 }

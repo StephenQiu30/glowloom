@@ -31,7 +31,7 @@ import (
 // Non-local workers retain a separate service home and strict preflight.
 // Existing project dispatch keeps its own authorization and price gate.
 func Register(ctx context.Context, w worker.Worker, database *gorm.DB, cfg config.Config) error {
-	storage, err := objectstorage.OpenLegacy(cfg)
+	storage, err := objectstorage.OpenFromConfig(cfg)
 	if err != nil {
 		return err
 	}

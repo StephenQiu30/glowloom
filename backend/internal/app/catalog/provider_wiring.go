@@ -42,9 +42,10 @@ func RegisterProviderActivities(ctx context.Context, w worker.Worker, database *
 		return fmt.Errorf("configure provider worker sealing key: %w", err)
 	}
 	activities := providerprobe.NewScopedActivities(database, unsealer, providerhttp.NewClient(&http.Client{}), operationwire.NewCatalogStore(database))
+	w.RegisterActivityWithOptions(activities.TestReachability, activity.RegisterOptions{Name: "provider.test_reachability"})
 	w.RegisterActivityWithOptions(activities.TestCredential, activity.RegisterOptions{Name: "provider.test_credential"})
 
-	storage, err := objectstorage.OpenLegacy(cfg)
+	storage, err := objectstorage.OpenFromConfig(cfg)
 	if err != nil {
 		return fmt.Errorf("configure provider result storage: %w", err)
 	}

@@ -127,7 +127,7 @@ func (c *Client) Put(ctx context.Context, key string, reader io.Reader, size int
 		return ErrInvalidObject
 	}
 	if c.native != nil {
-		return ErrAccessDenied
+		return storageError("put", "storage", c.native.put(ctx, key, reader, size, contentType, ""))
 	}
 	_, err := c.sdk.PutObject(ctx, c.bucket, key, reader, size, minio.PutObjectOptions{ContentType: contentType})
 	if err != nil {
@@ -148,6 +148,9 @@ func (c *Client) PutIfAbsent(ctx context.Context, key string, reader io.Reader, 
 	if !validKey(key) || reader == nil || size < 0 ||
 		strings.TrimSpace(contentType) == "" || len(sha256) != 64 {
 		return ErrInvalidObject
+	}
+	if c.native != nil {
+		return storageError("put", "storage", c.native.put(ctx, key, reader, size, contentType, sha256))
 	}
 	opts := minio.PutObjectOptions{
 		ContentType:  contentType,
@@ -225,6 +228,9 @@ func (c *Client) Remove(ctx context.Context, key string) error {
 	}
 	if !validKey(key) {
 		return ErrInvalidObject
+	}
+	if c.native != nil {
+		return storageError("remove", "storage", c.native.remove(ctx, key))
 	}
 	if err := c.sdk.RemoveObject(ctx, c.bucket, key, minio.RemoveObjectOptions{}); err != nil {
 		return fmt.Errorf("remove media object: %w", err)

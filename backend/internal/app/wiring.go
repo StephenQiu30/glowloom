@@ -74,7 +74,7 @@ func provideTemporal(cfg config.Config, logger *zap.Logger, tracerProvider trace
 }
 
 func provideObjectStorage(cfg config.Config) (*objectstorage.Client, error) {
-	conn, err := objectstorage.OpenLegacy(cfg)
+	conn, err := objectstorage.OpenFromConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("configure api object storage: %w", err)
 	}

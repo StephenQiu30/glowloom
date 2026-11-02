@@ -41,8 +41,11 @@ func newBackend(p config.StorageProfile, c config.StorageCredentials, transport 
 type minioBackend struct{ client *Client }
 
 func (b minioBackend) put(ctx context.Context, key string, reader io.Reader, size int64, contentType, sha string) error {
-	opts := minio.PutObjectOptions{ContentType: contentType, UserMetadata: map[string]string{"sha256": sha}, DisableMultipart: true}
-	opts.SetMatchETagExcept("*")
+	opts := minio.PutObjectOptions{ContentType: contentType, DisableMultipart: true}
+	if sha != "" {
+		opts.UserMetadata = map[string]string{"sha256": sha}
+		opts.SetMatchETagExcept("*")
+	}
 	_, err := b.client.sdk.PutObject(ctx, b.client.bucket, key, reader, size, opts)
 	return err
 }

@@ -157,7 +157,7 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		operationflow.RegisterQuoteExpiry(queueWorker,
 			operationflow.NewQuoteExpiryActivities(operationapp.NewQuoteExpiryService(operationStore, 500)))
 	case "media":
-		storage, err := objectstorage.OpenLegacy(cfg)
+		storage, err := objectstorage.OpenFromConfig(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("configure media object storage: %w", err)
 		}
