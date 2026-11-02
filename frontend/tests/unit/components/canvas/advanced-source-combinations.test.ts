@@ -209,7 +209,7 @@ describe("advanced source combinations remain complete and atomic", () => {
 
     expect(() =>
       connectCanvasDocumentSources(original, [text.id, director.id], target.id),
-    ).toThrow("无法连接这些节点");
+    ).toThrow("这两种节点之间没有可用的输入用途");
     expect(original).toEqual(before);
     expect(original.nodes).toHaveLength(3);
     expect(original.connections).toEqual([]);
@@ -230,7 +230,7 @@ describe("advanced source combinations remain complete and atomic", () => {
           [text.id, unsupported.id],
           target.id,
         ),
-      ).toThrow("无法连接这些节点");
+      ).toThrow("这两种节点之间没有可用的输入用途");
       expect(original).toEqual(before);
       expect(original.connections).toEqual([]);
     },

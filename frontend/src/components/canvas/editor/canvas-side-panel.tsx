@@ -2,7 +2,7 @@ import { PreviewImage } from "@/components/canvas/runtime/components/media/previ
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { ContentState } from "@/components/layout/content-state";
 import {
   InputGroup,
   InputGroupAddon,
@@ -636,11 +636,11 @@ function CanvasNodesTab({
             })}
           </div>
         ) : (
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>画布暂无匹配节点</EmptyTitle>
-            </EmptyHeader>
-          </Empty>
+          <ContentState
+            className="min-h-24 p-3"
+            icon={Search}
+            title="画布暂无匹配节点"
+          />
         )}
       </div>
       {selectMode ? (

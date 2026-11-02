@@ -15,6 +15,7 @@ import { ApiError, unwrap } from "@/components/canvas/runtime/lib/request";
 import { accountScope } from "@/components/canvas/runtime/store/account-slice";
 import { useAccount } from "@/components/canvas/runtime/components/account/account-provider";
 import { notifyError } from "@/components/canvas/runtime/components/feedback/error-notification";
+import { ContentState } from "@/components/layout/content-state";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -27,12 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Empty,
-  EmptyContent,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty";
+import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import {
   Table,
   TableBody,
@@ -345,16 +341,16 @@ export function AssetZipTransfers({
               正在读取导入任务…
             </p>
           ) : imports.error ? (
-            <Empty>
-              <EmptyHeader>
-                <EmptyTitle>导入任务暂不可读取</EmptyTitle>
-              </EmptyHeader>
-              <EmptyContent>
+            <ContentState
+              className="min-h-40"
+              state="error"
+              title="导入任务暂不可读取"
+              actions={
                 <Button variant="outline" onClick={() => void imports.mutate()}>
                   重新读取
                 </Button>
-              </EmptyContent>
-            </Empty>
+              }
+            />
           ) : imports.data?.length ? (
             <Table aria-label="素材ZIP导入任务">
               <TableHeader>
@@ -395,11 +391,7 @@ export function AssetZipTransfers({
               </TableBody>
             </Table>
           ) : (
-            <Empty>
-              <EmptyHeader>
-                <EmptyTitle>还没有导入任务</EmptyTitle>
-              </EmptyHeader>
-            </Empty>
+            <ContentState className="min-h-40" title="还没有导入任务" />
           )}
         </>
       )}

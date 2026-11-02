@@ -3,7 +3,7 @@ import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Grid2X2, MoreHorizontal, PanelsTopLeft } from "lucide-react";
+import { Grid2X2, MoreHorizontal } from "lucide-react";
 import { useProjectPresentation } from "@/components/projects/project-presentation";
 import { subscribeProjectInvalidation } from "@/components/projects/project-presentation-store";
 import { ProjectRenameDialog } from "@/components/projects/project-rename-dialog";
@@ -44,6 +44,7 @@ import {
   requireProjectList,
   type Project,
 } from "@/components/projects/project";
+import { CanvasListEmptyState } from "@/components/projects/canvas-list-empty-state";
 export function ProjectList({
   query,
   view,
@@ -300,25 +301,7 @@ export function ProjectList({
         />
       )}
       {!error && !loading && page?.items.length === 0 && (
-        <ContentState
-          icon={PanelsTopLeft}
-          title={
-            query
-              ? "没有匹配的画布"
-              : filter === "archived"
-                ? "没有已归档的画布"
-                : filter === "deleted"
-                  ? "回收站为空"
-                  : "还没有画布"
-          }
-          description={
-            query
-              ? "试试其他名称。"
-              : filter === "active"
-                ? "创建第一个空白画布，进入你的画布。"
-                : "画布状态变化后会显示在这里。"
-          }
-        />
+        <CanvasListEmptyState kind={query ? "search" : filter} />
       )}
       <div className={view === "grid" ? "canvas-grid" : "flex flex-col gap-3"}>
         {page?.items.map((project) => (

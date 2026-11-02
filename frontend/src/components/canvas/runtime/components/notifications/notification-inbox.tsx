@@ -21,7 +21,6 @@ import {
   useErrorNotification,
 } from "@/components/canvas/runtime/components/feedback/error-notification";
 import { Tabs, TabsTrigger } from "@/components/ui/tabs";
-import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Sheet,
@@ -31,6 +30,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { useNotifications } from "./notification-provider";
+import { ContentState } from "@/components/layout/content-state";
 import {
   decimal,
   notificationHref,
@@ -413,13 +413,11 @@ function Inbox({
               ))}
             </div>
           ) : !page.data?.items?.length ? (
-            <Empty>
-              <EmptyHeader>
-                <EmptyTitle>
-                  {pageError ? "通知读取失败" : "暂无通知"}
-                </EmptyTitle>
-              </EmptyHeader>
-            </Empty>
+            <ContentState
+              className="min-h-24 p-4"
+              state={pageError ? "error" : "empty"}
+              title={pageError ? "通知读取失败" : "暂无通知"}
+            />
           ) : (
             <ul className="divide-y divide-border" aria-label="最近通知">
               {page.data.items.map((notification) => (
@@ -466,9 +464,11 @@ function Inbox({
               emptyTitle={
                 pageError
                   ? "通知读取失败"
-                  : unreadOnly
-                    ? "没有未读通知"
-                    : "暂无通知"
+                  : category !== "all"
+                    ? "没有匹配的通知"
+                    : unreadOnly
+                      ? "没有未读通知"
+                      : "暂无通知"
               }
             />
           </div>
@@ -526,17 +526,19 @@ function Inbox({
               <div className="flex min-h-0 flex-col gap-4 overflow-y-auto px-4 pb-4">
                 {detail.isLoading && <Skeleton className="h-24" />}
                 {detail.error && (
-                  <Empty>
-                    <EmptyHeader>
-                      <EmptyTitle>通知暂时无法查看</EmptyTitle>
-                    </EmptyHeader>
-                    <Button
-                      variant="outline"
-                      onClick={() => void detail.mutate()}
-                    >
-                      重试
-                    </Button>
-                  </Empty>
+                  <ContentState
+                    className="min-h-40 p-4"
+                    state="error"
+                    title="通知暂时无法查看"
+                    actions={
+                      <Button
+                        variant="outline"
+                        onClick={() => void detail.mutate()}
+                      >
+                        重试
+                      </Button>
+                    }
+                  />
                 )}
                 {item && !detail.error && (
                   <>

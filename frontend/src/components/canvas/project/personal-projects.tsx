@@ -46,6 +46,8 @@ import {
   useErrorNotification,
 } from "@/components/canvas/runtime/components/feedback/error-notification";
 import { Button } from "@/components/ui/button";
+import { ContentState } from "@/components/layout/content-state";
+import { CanvasListEmptyState } from "@/components/projects/canvas-list-empty-state";
 import {
   Select,
   SelectContent,
@@ -54,7 +56,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -599,22 +600,29 @@ export function PersonalProjects({
               ))}
             </div>
           ) : null}
-          {complete && total === 0 && (
-            <Empty className="min-h-project-empty flex-none">
-              <EmptyHeader>
-                <EmptyTitle>
-                  {search ? "没有找到相关内容" : "还没有内容"}
-                </EmptyTitle>
-              </EmptyHeader>
-              {!search && (
-                <Button
-                  onClick={kind === "canvas" ? createCanvas : createProject}
-                >
-                  {kind === "canvas" ? "新建画布" : "新建项目"}
-                </Button>
-              )}
-            </Empty>
-          )}
+          {complete &&
+            total === 0 &&
+            (kind === "canvas" ? (
+              <CanvasListEmptyState
+                className="min-h-project-empty flex-none"
+                kind={search ? "search" : "active"}
+                actions={
+                  !search ? (
+                    <Button onClick={createCanvas}>新建画布</Button>
+                  ) : undefined
+                }
+              />
+            ) : (
+              <ContentState
+                className="min-h-project-empty flex-none"
+                title={search ? "没有找到相关内容" : "还没有内容"}
+                actions={
+                  !search ? (
+                    <Button onClick={createProject}>新建项目</Button>
+                  ) : undefined
+                }
+              />
+            ))}
           {!failed && (
             <ListPagination
               label="项目内容分页"
@@ -904,14 +912,15 @@ export function PersonalProjectPage({ projectId }: { projectId: string }) {
   if (query.error)
     return (
       <section className="workspace-page">
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>项目暂时无法加载</EmptyTitle>
-          </EmptyHeader>
-          <Button variant="outline" onClick={() => void query.mutate()}>
-            重试
-          </Button>
-        </Empty>
+        <ContentState
+          state="error"
+          title="项目暂时无法加载"
+          actions={
+            <Button variant="outline" onClick={() => void query.mutate()}>
+              重试
+            </Button>
+          }
+        />
       </section>
     );
   if (query.data?.workspaceState === "READY")

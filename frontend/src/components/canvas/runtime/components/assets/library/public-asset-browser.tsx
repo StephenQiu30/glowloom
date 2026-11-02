@@ -7,6 +7,7 @@ import * as api from "@/components/canvas/runtime/api/asset-review-bff";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 import { useAccount } from "@/components/canvas/runtime/components/account/account-provider";
 import { notifyError } from "@/components/canvas/runtime/components/feedback/error-notification";
+import { ContentState } from "@/components/layout/content-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,12 +34,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  Empty,
-  EmptyHeader,
-  EmptyTitle,
-  EmptyDescription,
-} from "@/components/ui/empty";
 import { WorkspaceCardSkeleton } from "@/components/canvas/runtime/components/feedback/workspace-card-skeleton";
 import { ListPagination } from "@/components/canvas/runtime/components/layout/workspace/list-pagination";
 import { AssetGrantedPreview } from "../review/asset-granted-preview";
@@ -197,23 +192,26 @@ export function PublicAssetBrowser({
       {list.isLoading ? (
         <WorkspaceCardSkeleton />
       ) : list.error ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>公共素材暂不可读取</EmptyTitle>
-            <EmptyDescription>
-              检索同步或源许可发生变化，请刷新重试。
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <ContentState
+          className="min-h-40"
+          state="error"
+          title="公共素材暂不可读取"
+          description="检索同步或源许可发生变化，请刷新重试。"
+        />
       ) : !list.data?.records?.length ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>暂无公共素材</EmptyTitle>
-            <EmptyDescription>
-              管理员发布后将在此显示，私人素材不会自动公开。
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <ContentState
+          className="min-h-40"
+          title={
+            query || kind !== "all" ? "没有匹配的公共素材" : "暂无公共素材"
+          }
+          description={
+            query || kind !== "all"
+              ? kinds?.length === 1
+                ? "试试其他关键词。"
+                : "试试其他关键词或素材类型。"
+              : "管理员发布后将在此显示，私人素材不会自动公开。"
+          }
+        />
       ) : (
         <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {list.data.records.map((asset) => (

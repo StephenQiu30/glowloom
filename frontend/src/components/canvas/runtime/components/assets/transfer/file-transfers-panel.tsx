@@ -23,13 +23,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Empty,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-  EmptyDescription,
-} from "@/components/ui/empty";
 import { toast } from "sonner";
 import * as api from "@/components/canvas/runtime/api/file-bff";
 import { useAccount } from "@/components/canvas/runtime/components/account/account-provider";
@@ -681,31 +674,28 @@ function TransferContent({
               }
             />
           ) : !visibleFiles.length && !zipImports?.items.length ? (
-            <Empty className="min-h-72">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <FileUp aria-hidden="true" />
-                </EmptyMedia>
-                <EmptyTitle>
-                  {zipImports
-                    ? "还没有上传任务"
-                    : files.data?.length || cursors.length > 1
-                      ? isZip
-                        ? "当前页没有ZIP上传记录"
-                        : "当前页没有普通素材上传记录"
-                      : "还没有上传记录"}
-                </EmptyTitle>
-                <EmptyDescription>
-                  {cursors.length > 1 && !files.data?.length
-                    ? "可返回较新记录继续查看。"
-                    : files.data?.length
-                      ? "可翻阅更早记录，或选择文件开始上传。"
-                      : isZip
-                        ? "点击“导入素材ZIP”选择压缩包。"
-                        : "点击“上传素材”选择图片、视频、音频或文本。"}
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
+            <ContentState
+              className="min-h-72"
+              icon={FileUp}
+              title={
+                zipImports
+                  ? "还没有上传任务"
+                  : files.data?.length || cursors.length > 1
+                    ? isZip
+                      ? "当前页没有ZIP上传记录"
+                      : "当前页没有普通素材上传记录"
+                    : "还没有上传记录"
+              }
+              description={
+                cursors.length > 1 && !files.data?.length
+                  ? "可返回较新记录继续查看。"
+                  : files.data?.length
+                    ? "可翻阅更早记录，或选择文件开始上传。"
+                    : isZip
+                      ? "点击“导入素材ZIP”选择压缩包。"
+                      : "点击“上传素材”选择图片、视频、音频或文本。"
+              }
+            />
           ) : (
             <Table className="file-transfers-table" aria-label="上传文件列表">
               <TableHeader>

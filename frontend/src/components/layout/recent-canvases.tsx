@@ -11,6 +11,10 @@ import {
 } from "@/components/projects/project";
 import { subscribeProjectInvalidation } from "@/components/projects/project-presentation-store";
 import { ContentState } from "./content-state";
+import {
+  CanvasListEmptyState,
+  canvasListEmptyCopy,
+} from "@/components/projects/canvas-list-empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
@@ -105,7 +109,11 @@ export function RecentCanvases({
             />
           ))
         ) : projects.length === 0 ? (
-          <ContentState className="home-canvas-state" title="暂无画布" />
+          <CanvasListEmptyState
+            className="home-canvas-state"
+            kind="active"
+            showDescription={false}
+          />
         ) : null}
       </div>
     );
@@ -142,7 +150,9 @@ export function RecentCanvases({
           正在读取…
         </li>
       ) : projects.length === 0 ? (
-        <li className="sidebar-history-note">暂无画布</li>
+        <li className="sidebar-history-note">
+          {canvasListEmptyCopy.active.title}
+        </li>
       ) : null}
     </SidebarMenu>
   );

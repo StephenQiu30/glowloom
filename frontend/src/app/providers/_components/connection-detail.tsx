@@ -2,6 +2,7 @@
 import { ConnectionTests } from "./connection-tests";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { LoadingState } from "@/components/layout/loading-state";
+import { ContentState } from "@/components/layout/content-state";
 import { Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -22,12 +23,6 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import {
-  Empty,
-  EmptyHeader,
-  EmptyTitle,
-  EmptyContent,
-} from "@/components/ui/empty";
 import {
   Item,
   ItemContent,
@@ -159,11 +154,10 @@ export function ConnectionDetail({
       {error ? <FeedbackToast message={error} /> : null}
       {!detail ? (
         error ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>暂时无法加载连接</EmptyTitle>
-            </EmptyHeader>
-            <EmptyContent>
+          <ContentState
+            state="error"
+            title="暂时无法加载连接"
+            actions={
               <Button
                 variant="outline"
                 onClick={() => {
@@ -173,8 +167,8 @@ export function ConnectionDetail({
               >
                 重新加载
               </Button>
-            </EmptyContent>
-          </Empty>
+            }
+          />
         ) : (
           <LoadingState>正在加载连接…</LoadingState>
         )

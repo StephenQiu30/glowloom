@@ -57,14 +57,6 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import {
-  Empty,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-  EmptyDescription,
-  EmptyContent,
-} from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -406,22 +398,17 @@ function Library({
       />
       <div className="flex min-h-0 flex-1 flex-col gap-6">
         {!authenticated ? (
-          <Empty className="library-login-state">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <Folder aria-hidden="true" />
-              </EmptyMedia>
-              <EmptyTitle>登录查看你的素材</EmptyTitle>
-            </EmptyHeader>
-            <EmptyDescription>
-              登录后，上传、收藏和整理你的创作素材。
-            </EmptyDescription>
-            <EmptyContent>
+          <ContentState
+            className="library-login-state"
+            icon={Folder}
+            title="登录查看你的素材"
+            description="登录后，上传、收藏和整理你的创作素材。"
+            actions={
               <Button size="lg" className="min-h-11 px-6" onClick={login}>
                 登录 / 注册
               </Button>
-            </EmptyContent>
-          </Empty>
+            }
+          />
         ) : (
           <>
             {filter.search && (

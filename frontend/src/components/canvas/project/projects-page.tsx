@@ -1,6 +1,6 @@
 "use client";
 import { Button } from "@/components/ui/button";
-import { FolderOpen, Square, PanelLeft, Plus, Trash2 } from "lucide-react";
+import { Square, PanelLeft, Plus, Trash2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useDeferredValue, useEffect, useState } from "react";
 import { CanvasProjectCard } from "@/components/canvas/project/canvas-project-card";
@@ -9,14 +9,7 @@ import {
   useAppSelector,
 } from "@/components/canvas/runtime/store/hooks";
 import { workspaceActions } from "@/components/canvas/runtime/store/app-store";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
+import { CanvasListEmptyState } from "@/components/projects/canvas-list-empty-state";
 import { Input } from "@/components/ui/input";
 import { WorkspaceCardSkeleton } from "@/components/canvas/runtime/components/feedback/workspace-card-skeleton";
 import {
@@ -326,22 +319,12 @@ function ProjectLibrary() {
           ))}
         </div>
       ) : (
-        <Empty className="min-h-72">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <FolderOpen />
-            </EmptyMedia>
-            <EmptyTitle>{query ? "没有匹配的画布" : "还没有画布"}</EmptyTitle>
-            <EmptyDescription>
-              {query
-                ? "试试其他名称，或清空搜索查看所有画布。"
-                : "新建一张画布，开始创作。"}
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button onClick={openCreate}>新建画布</Button>
-          </EmptyContent>
-        </Empty>
+        <CanvasListEmptyState
+          kind={query ? "search" : "active"}
+          actions={
+            !query ? <Button onClick={openCreate}>新建画布</Button> : undefined
+          }
+        />
       )}
       {data && !error && (
         <ListPagination

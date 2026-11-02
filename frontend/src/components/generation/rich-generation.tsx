@@ -7,13 +7,6 @@ import { readErrorMessage } from "@/lib/read-error";
 import type { Transaction } from "@tiptap/pm/state";
 import type { ComposerCollaboration } from "./composer-session";
 import { TextIntentInput } from "./text-intent-input";
-import {
-  Empty,
-  EmptyHeader,
-  EmptyTitle,
-  EmptyDescription,
-  EmptyContent,
-} from "@/components/ui/empty";
 
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1546,17 +1539,16 @@ function EditorWorkspace({
   ) : null;
   if (suspended)
     return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyTitle>请重新核验登录状态</EmptyTitle>
-          <EmptyDescription>本地草稿已保留。</EmptyDescription>
-        </EmptyHeader>
-        <EmptyContent>
+      <ContentState
+        state="error"
+        title="请重新核验登录状态"
+        description="本地草稿已保留。"
+        actions={
           <Button onClick={() => onOpen(snapshot.draft_id)}>
             重新核验并找回草稿
           </Button>
-        </EmptyContent>
-      </Empty>
+        }
+      />
     );
   return (
     <section

@@ -55,7 +55,7 @@ it("does not disguise a rejected request as an empty history and can retry", asy
     } as unknown as Awaited<ReturnType<typeof listProjects>>);
   render(<RecentCanvases onNavigate={() => {}} />);
   fireEvent.click(await screen.findByRole("button", { name: "重试读取画布" }));
-  await waitFor(() => expect(screen.getByText("暂无画布")).toBeTruthy());
+  await waitFor(() => expect(screen.getByText("还没有画布")).toBeTruthy());
 });
 
 it("首页卡片使用真实画布链接，限制三个最近项目并保留新建入口", async () => {
@@ -94,7 +94,9 @@ it("首页读取失败在卡片区域显示重试，不伪装成空列表", asyn
     expect.stringContaining("暂时无法读取画布"),
   );
   fireEvent.click(screen.getByRole("button", { name: "重试读取画布" }));
-  expect(await screen.findByRole("heading", { name: "暂无画布" })).toBeTruthy();
+  expect(
+    await screen.findByRole("heading", { name: "还没有画布" }),
+  ).toBeTruthy();
 });
 
 it("侧栏仅显示五个真实最近画布，更多内容通过外部全部入口访问", async () => {

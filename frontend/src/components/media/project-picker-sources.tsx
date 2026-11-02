@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { ContentState } from "@/components/layout/content-state";
+import { CanvasListEmptyState } from "@/components/projects/canvas-list-empty-state";
 import { UnifiedSubjectMedia } from "@/components/subjects/unified-media";
 import { useSubjectList } from "@/components/subjects/use-subject-list";
 import {
@@ -291,7 +292,7 @@ function CanvasResults({
         />
       )}
       {!loading && !result.error && !result.items.length && (
-        <ContentState state="empty" title="没有匹配的画布" />
+        <CanvasListEmptyState kind="filtered" className="min-h-40" />
       )}
       {result.next && (
         <Button
