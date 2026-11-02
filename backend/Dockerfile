@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 FROM golang:1.26.10-bookworm AS dev
-ENV CGO_ENABLED=0 GOMAXPROCS=2 GOCACHE=/go/build-cache
+ARG GOPROXY="https://goproxy.cn,direct"
+ENV CGO_ENABLED=0 GOMAXPROCS=2 GOCACHE=/go/build-cache GOPROXY=${GOPROXY}
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg curl socat \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
@@ -38,6 +39,8 @@ ENTRYPOINT ["/usr/local/bin/glowloom-dev-entrypoint"]
 CMD ["--role=api"]
 
 FROM golang:1.26.10-alpine AS build
+ARG GOPROXY="https://goproxy.cn,direct"
+ENV GOPROXY=${GOPROXY}
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
