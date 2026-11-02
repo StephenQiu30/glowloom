@@ -8,9 +8,7 @@
 
 ## 开发
 
-本目录执行 `pnpm install --frozen-lockfile`，再执行 `pnpm exec next dev --hostname 127.0.0.1 --port 3141`。Docker 访问地址以 Compose 配置及实际启动状态为准。质量门禁见 [PROJECT](../PROJECT.md#4-质量门禁)。
-
-浏览器访问地址必须与后端 `GLOWLOOM_PUBLIC_ORIGIN` 一致。Compose 默认使用 `http://127.0.0.1:3200`；`localhost` 与 `127.0.0.1` 是不同来源，地址不一致的登录及写入请求会被返回 `403 origin_forbidden`。独立启动前端时，相应后端也须配置匹配的来源；不要重写请求 Origin 或关闭校验。
+本地前端、后端和协作运行时统一由仓库根目录的 `docker-compose.yml` 启动；本目录不单独启动 Next.js。请按[仓库启动说明](../README.md)操作。Compose 注入 `GLOWLOOM_PUBLIC_ORIGIN` 和 `GLOWLOOM_BACKEND_ORIGIN`，缺少必需地址时服务会明确失败，不会回退到容器自身的回环地址。质量门禁见 [PROJECT](../PROJECT.md#4-质量门禁)。
 
 交互控件、卡片、表单与状态展示统一复用官方 shadcn/ui Radix Nova，图标使用 Lucide。HTML 仅用于框架根节点、必要语义布局、文本与媒体，不自行实现已有控件。字体直接使用 Vercel 官方 `geist` 包，中文回退系统字体；主题沿用现有 neutral 语义颜色，不增加页面专属主题。
 

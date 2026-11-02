@@ -1,3 +1,5 @@
+import { getBackendOrigin } from "@/server/backend-origin";
+
 const headers = {
   "Cache-Control": "no-store",
   "Referrer-Policy": "no-referrer",
@@ -20,12 +22,7 @@ export async function GET(request: Request) {
   )
     return Response.json({ code: "invalid_request" }, { status: 422, headers });
   try {
-    const upstream = new URL(
-      "/api/media-export-launch",
-      process.env.GLOWLOOM_BACKEND_ORIGIN ??
-        process.env.LV_BACKEND_ORIGIN ??
-        "http://127.0.0.1:8080",
-    );
+    const upstream = new URL("/api/media-export-launch", getBackendOrigin());
     upstream.searchParams.set("token", token);
     const response = await fetch(upstream, {
       headers: { Accept: "application/json" },

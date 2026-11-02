@@ -112,13 +112,14 @@ it("only the exact internal health probe bypasses canonical Host", () => {
   ])
     expect(proxy(request(path, host, method)).status).toBe(400);
 });
-it("development default works while production configuration is required", () => {
+it("requires an explicit public origin in every environment", () => {
   vi.stubEnv("GLOWLOOM_PUBLIC_ORIGIN", undefined);
+  vi.stubEnv("LV_PUBLIC_ORIGIN", undefined);
   vi.stubEnv("NODE_ENV", "development");
   const request = new NextRequest(`${canonical}/account`, {
     headers: { host: "127.0.0.1:3200" },
   });
-  expect(proxy(request).headers.get("x-middleware-next")).toBe("1");
+  expect(proxy(request).status).toBe(503);
   vi.stubEnv("NODE_ENV", "production");
   expect(proxy(request).status).toBe(503);
 });
@@ -147,14 +148,14 @@ it("canonical rejects unsafe return_to through actual proxy", () => {
   ).toBe(400);
 });
 
-it("legacy public origin remains readable while canonical keys take precedence", () => {
+it("ignores a legacy public origin when the canonical origin is missing", () => {
   vi.stubEnv("NODE_ENV", "production");
   vi.stubEnv("GLOWLOOM_PUBLIC_ORIGIN", undefined);
   vi.stubEnv("LV_PUBLIC_ORIGIN", canonical);
   const request = new NextRequest(`${canonical}/account`, {
     headers: { host: "127.0.0.1:3200" },
   });
-  expect(proxy(request).headers.get("x-middleware-next")).toBe("1");
+  expect(proxy(request).status).toBe(503);
   vi.stubEnv("GLOWLOOM_PUBLIC_ORIGIN", "https://glowloom.example");
   expect(proxy(request).status).toBe(400);
   vi.stubEnv("GLOWLOOM_PUBLIC_ORIGIN", "");

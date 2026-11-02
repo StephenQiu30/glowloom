@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { getBackendOrigin } from "./src/server/backend-origin";
 
 const nextConfig: NextConfig = {
   output: "standalone",
@@ -13,10 +14,7 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1", "[::1]"],
   async rewrites() {
     // Upgrade requests must reach Go before the fetch-only API catch-all.
-    const backend =
-      process.env.GLOWLOOM_BACKEND_ORIGIN ??
-      process.env.LV_BACKEND_ORIGIN ??
-      "http://127.0.0.1:8080";
+    const backend = getBackendOrigin();
     return {
       beforeFiles: [
         {

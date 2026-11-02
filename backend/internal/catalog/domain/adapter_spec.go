@@ -95,6 +95,9 @@ func init() {
 				})
 			}
 			source := "https://openrouter.ai/api/v1/models"
+			add("or-claude-3-7", "Claude 3.7 Sonnet", "anthropic/claude-3.7-sonnet", "text.generate", source, "active", "text_to_text")
+			add("or-claude-3-5", "Claude 3.5 Sonnet", "anthropic/claude-3.5-sonnet", "text.generate", source, "active", "text_to_text")
+			add("or-gpt-4o", "GPT-4o", "openai/gpt-4o", "text.generate", source, "active", "text_to_text")
 			add("or-gpt-chat", "GPT-5.4", "openai/gpt-5.4", "text.generate", source, "active", "text_to_text")
 			add("or-claude-chat", "Claude Sonnet 4.6", "anthropic/claude-sonnet-4.6", "text.generate", source, "active", "text_to_text")
 			add("or-gemini-chat", "Gemini 3.1 Pro Preview", "google/gemini-3.1-pro-preview", "text.generate", source, "preview", "text_to_text")
@@ -172,6 +175,30 @@ func init() {
 			} {
 				catalog.Models = append(catalog.Models, ModelCandidatePreset{Key: model.key, AdapterKey: "openai", DisplayName: model.name, ProviderModelID: model.id, Capability: "image.generate", Modes: []string{"text2image"}, MaxOutputs: &one, SourceURL: "https://developers.openai.com/api/reference/resources/images/methods/generate", ReviewedAt: "2026-10-31", Lifecycle: "active"})
 			}
+			return catalog
+		},
+	})
+
+	RegisterAdapterSpec(AdapterSpecification{
+		AdapterKey: "vercel", AllowedBaseURL: "https://ai-gateway.vercel.sh/v1", AllowedRegion: RegionOverseas,
+		Capabilities: []string{"text", "image"}, IsManagedCloud: true,
+		ParameterFields: map[string][]string{"text.generate": standardTextParams, "image.generate": {"size", "quality", "seed"}},
+		CandidateCatalog: func() ModelCandidateCatalog {
+			catalog := ModelCandidateCatalog{Version: "2026-11-02.1", Models: []ModelCandidatePreset{}}
+			source := "https://vercel.com/docs/ai/ai-gateway"
+			add := func(key, name, id, capability, lifecycle string, modes ...string) {
+				catalog.Models = append(catalog.Models, ModelCandidatePreset{
+					Key: key, AdapterKey: "vercel", DisplayName: name, ProviderModelID: id,
+					Capability: capability, Modes: modes, SourceURL: source, ReviewedAt: "2026-11-02",
+					Lifecycle: lifecycle, RequiresModelSelection: id == "",
+				})
+			}
+			add("vercel-claude-3-7", "Claude 3.7 Sonnet (Gateway)", "anthropic/claude-3-7-sonnet", "text.generate", "active", "text_to_text")
+			add("vercel-claude-3-5", "Claude 3.5 Sonnet (Gateway)", "anthropic/claude-3-5-sonnet", "text.generate", "active", "text_to_text")
+			add("vercel-gpt-4o", "GPT-4o (Gateway)", "openai/gpt-4o", "text.generate", "active", "text_to_text")
+			add("vercel-gpt-4o-mini", "GPT-4o Mini (Gateway)", "openai/gpt-4o-mini", "text.generate", "active", "text_to_text")
+			add("vercel-llama-3-3", "Llama 3.3 70B (Gateway)", "meta-llama/llama-3.3-70b", "text.generate", "active", "text_to_text")
+			add("vercel-deepseek-r1", "DeepSeek R1 (Gateway)", "deepseek/deepseek-r1", "text.generate", "active", "text_to_text")
 			return catalog
 		},
 	})

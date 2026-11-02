@@ -11,6 +11,7 @@ const logos: Record<string, string> = {
   volcengine_speech: "/brand/providers/doubao.svg",
   byteplus: "/brand/providers/byteplus.png",
   deepseek: "/brand/providers/deepseek.svg",
+  vercel: "/brand/providers/vercel.svg",
 };
 
 export function ProviderLogo({ adapterKey }: { adapterKey?: string }) {
@@ -20,7 +21,11 @@ export function ProviderLogo({ adapterKey }: { adapterKey?: string }) {
       : undefined;
   if (!source) return <Globe aria-hidden="true" className="size-5 shrink-0" />;
 
-  if (adapterKey === "openrouter" || adapterKey === "openai") {
+  if (
+    adapterKey === "openrouter" ||
+    adapterKey === "openai" ||
+    adapterKey === "vercel"
+  ) {
     return (
       <span
         aria-hidden="true"

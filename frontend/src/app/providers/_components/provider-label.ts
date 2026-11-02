@@ -8,6 +8,7 @@ const labels: Record<string, string> = {
   openai: "OpenAI",
   deepseek: "DeepSeek",
   byteplus: "BytePlus",
+  vercel: "Vercel",
 };
 
 export function providerLabel(adapter?: string) {
@@ -22,6 +23,8 @@ const connectionAdapters = [
   "volcengine_ark",
   "volcengine_speech",
   "volcengine_music",
+  "openrouter",
+  "vercel",
 ];
 
 export function canConnectPreset(preset: API.Preset) {
@@ -55,6 +58,8 @@ export function providerConsoleURL(adapter?: string) {
       openai: "https://platform.openai.com/",
       deepseek: "https://platform.deepseek.com/",
       volcengine_ark: "https://console.volcengine.com/ark",
+      openrouter: "https://openrouter.ai/",
+      vercel: "https://vercel.com/",
     } as Record<string, string>
   )[adapter ?? ""];
 }

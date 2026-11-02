@@ -1,5 +1,8 @@
 import { vi } from "vitest";
 
+// Route tests use an inert upstream unless a test provides its own local server.
+process.env.GLOWLOOM_BACKEND_ORIGIN = "http://backend.invalid";
+
 // jsdom does not implement layout observation used by Radix form controls.
 // Browser validation covers dimensions; these tests cover events and FormData.
 vi.stubGlobal(

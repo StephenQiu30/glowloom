@@ -19,6 +19,7 @@ func TestCredentialSchemaRequiresOnlyDeclaredStringFields(t *testing.T) {
 		{"volcengine_ark", `{"api_key":"ark-test-A9F2"}`, "A9F2"},
 		{"minimax", `{"api_key":"minimax-test-B8C3","group_id":"group-1"}`, "B8C3"},
 		{"openrouter", `{"api_key":"openrouter-test-C7D4"}`, "C7D4"},
+		{"vercel", `{"api_key":"vercel-test-D8E5"}`, "D8E5"},
 	} {
 		last4, err := registry.Validate(tc.adapter, json.RawMessage(tc.secret))
 		if err != nil || last4 != tc.last4 {

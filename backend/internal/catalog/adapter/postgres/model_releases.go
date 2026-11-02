@@ -99,9 +99,9 @@ func (s *Store) CreateModelRelease(ctx context.Context, actor identityapp.Princi
  AND ((m.capability='video.generate' AND config.config->>'adapter_key' IN ('openrouter','volcengine_ark'))
  OR (m.capability='video.generate' AND config.config->>'adapter_key'='volcengine_avatar' AND v.provider_model_id='jimeng_realman_avatar_picture_omni_v15' AND v.modes=ARRAY['avatar']::text[] AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('output_resolution','pe_fast_mode')))
  OR (m.capability='video.generate' AND config.config->>'adapter_key'='volcengine_motion' AND v.provider_model_id='jimeng_dreamactor_m20_gen_video' AND v.modes=ARRAY['motion']::text[] AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('cut_result_first_second_switch')))
- OR (m.capability='text.generate' AND config.config->>'adapter_key' IN ('openrouter','volcengine_ark','byteplus','deepseek','openai'))
+ OR (m.capability='text.generate' AND config.config->>'adapter_key' IN ('openrouter','volcengine_ark','byteplus','deepseek','openai','vercel'))
  OR (m.capability='audio.generate' AND config.config->>'adapter_key' IN ('volcengine_speech','volcengine_music'))
- OR (m.capability='image.generate' AND config.config->>'adapter_key'='openai' AND v.modes=ARRAY['text2image']::text[] AND (v.limits->>'max_outputs')::int=1 AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('size','quality')))
+ OR (m.capability='image.generate' AND config.config->>'adapter_key' IN ('openai','vercel') AND v.modes=ARRAY['text2image']::text[] AND (v.limits->>'max_outputs')::int=1 AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('size','quality')))
  OR (m.capability='image.generate' AND (config.config->>'adapter_key'='openrouter' OR (config.config->>'adapter_key' IN ('volcengine_ark','byteplus') AND (v.limits->>'max_outputs')::int=1))))
  FOR SHARE OF preset,m`, id, input.ModelVersionID, input.PriceVersionID, input.ConfigVersionID).Scan(&found)
 		if r.Error != nil {

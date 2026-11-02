@@ -176,6 +176,7 @@ func BuiltinPresets() []BuiltinPreset {
 		{Slug: "volcengine-motion", Name: "即梦动作模仿", Config: ProviderConfig{AdapterKey: "volcengine_motion", BaseURL: "https://openapi.cv.volces.com", Region: RegionDomestic, Capabilities: []string{"video"}, TimeoutSeconds: 120, ConcurrencyLimit: 1, RateLimitPerMin: 30}},
 		{Slug: "volcengine-speech", Name: "豆包语音", Config: ProviderConfig{AdapterKey: "volcengine_speech", BaseURL: "https://openspeech.bytedance.com/api/v3", Region: RegionDomestic, Capabilities: []string{"audio"}, TimeoutSeconds: 300, ConcurrencyLimit: 2, RateLimitPerMin: 30}},
 		{Slug: "openai", Name: "OpenAI", Config: ProviderConfig{AdapterKey: "openai", BaseURL: "https://api.openai.com/v1", Region: RegionOverseas, Capabilities: []string{"text", "image"}, TimeoutSeconds: 120, ConcurrencyLimit: 2, RateLimitPerMin: 30}},
+		{Slug: "vercel", Name: "Vercel", Config: ProviderConfig{AdapterKey: "vercel", BaseURL: "https://ai-gateway.vercel.sh/v1", Region: RegionOverseas, Capabilities: []string{"text", "image"}, TimeoutSeconds: 120, ConcurrencyLimit: 2, RateLimitPerMin: 60}},
 	}
 }
 

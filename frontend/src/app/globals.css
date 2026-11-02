@@ -1249,7 +1249,7 @@ button:not(:disabled),
 }
 .creation-hero {
   max-width: 1014px;
-  margin: -12px auto 0;
+  margin: 0 auto;
   padding: 0 0 40px;
 }
 .creation-hero h1 {

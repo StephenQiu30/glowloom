@@ -1,3 +1,5 @@
+import { getBackendOrigin } from "@/server/backend-origin";
+
 const identityUUID =
   "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 // Explicit current identity contracts. Adding a handler requires a reviewed entry here.
@@ -791,12 +793,7 @@ async function proxy(
     );
   let uploadTooLarge = false;
   try {
-    const upstream = new URL(
-      `/api/${resource}`,
-      process.env.GLOWLOOM_BACKEND_ORIGIN ??
-        process.env.LV_BACKEND_ORIGIN ??
-        "http://127.0.0.1:8080",
-    );
+    const upstream = new URL(`/api/${resource}`, getBackendOrigin());
     if (boundedRoute)
       for (const [key, value] of incoming.searchParams)
         upstream.searchParams.set(key, value);

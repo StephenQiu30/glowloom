@@ -11,7 +11,7 @@ import (
 )
 
 func TestCommonCandidatesAreNotPublishableTemplates(t *testing.T) {
-	for _, adapter := range []string{"volcengine_ark", "openrouter", "byteplus", "deepseek", "codex", "volcengine_speech"} {
+	for _, adapter := range []string{"volcengine_ark", "openrouter", "byteplus", "deepseek", "codex", "volcengine_speech", "vercel"} {
 		t.Run(adapter, func(t *testing.T) {
 			catalog := domain.BuiltinModelCatalog(adapter)
 			require.NotEmpty(t, catalog.Version)

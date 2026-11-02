@@ -201,8 +201,8 @@ it("预设与文件维护按需展开，主页面不展示协议与版本", asyn
         origin: "builtin",
         version: 9,
         document: {
-          name: "OpenRouter",
-          config: { adapter_key: "openrouter", region: "overseas" },
+          name: "BytePlus",
+          config: { adapter_key: "byteplus", region: "overseas" },
         },
       },
     ],

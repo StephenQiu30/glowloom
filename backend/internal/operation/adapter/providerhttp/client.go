@@ -69,6 +69,10 @@ func (c *Client) request(ctx context.Context, config catalogdomain.ProviderConfi
 	}
 	request.Header.Set("Authorization", "Bearer "+key)
 	request.Header.Set("Content-Type", "application/json")
+	if config.AdapterKey == "openrouter" {
+		request.Header.Set("HTTP-Referer", "https://glowloom.com")
+		request.Header.Set("X-Title", "Glowloom")
+	}
 	response, err := c.client.Do(request)
 	if err != nil {
 		return nil, 0, err

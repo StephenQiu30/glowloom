@@ -4,7 +4,7 @@ import { ProviderLogo } from "@/app/providers/_components/provider-logo";
 import { providerLabel } from "@/app/providers/_components/provider-label";
 
 describe("ProviderLogo", () => {
-  it("OpenAI 和 OpenRouter 使用前景色遮罩自适应单色渲染", () => {
+  it("OpenAI、OpenRouter 和 Vercel 使用前景色遮罩自适应单色渲染", () => {
     const { container: openaiContainer } = render(
       <ProviderLogo adapterKey="openai" />,
     );
@@ -21,6 +21,15 @@ describe("ProviderLogo", () => {
     expect(spanOpenRouter).toBeTruthy();
     expect(spanOpenRouter?.getAttribute("style")).toContain(
       "/brand/providers/openrouter.svg",
+    );
+
+    const { container: vercelContainer } = render(
+      <ProviderLogo adapterKey="vercel" />,
+    );
+    const spanVercel = vercelContainer.querySelector("span");
+    expect(spanVercel).toBeTruthy();
+    expect(spanVercel?.getAttribute("style")).toContain(
+      "/brand/providers/vercel.svg",
     );
   });
 
@@ -61,6 +70,7 @@ describe("providerLabel", () => {
     expect(providerLabel("deepseek")).toBe("DeepSeek");
     expect(providerLabel("openrouter")).toBe("OpenRouter");
     expect(providerLabel("byteplus")).toBe("BytePlus");
+    expect(providerLabel("vercel")).toBe("Vercel");
     expect(providerLabel("unknown")).toBe("其他服务");
   });
 });

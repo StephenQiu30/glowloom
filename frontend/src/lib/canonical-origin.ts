@@ -12,7 +12,7 @@ export function canonicalNavigation(
     canonical.password
   )
     throw new Error("invalid_canonical_origin");
-  // Only the documented local alias is trusted, never arbitrary loopback hosts.
+  // Only the explicitly configured legacy local alias is trusted.
   const alias =
     canonicalOrigin === "http://127.0.0.1:3200" &&
     requestURL.origin === "http://localhost:3200";

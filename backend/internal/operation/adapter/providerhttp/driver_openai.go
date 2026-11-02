@@ -18,7 +18,7 @@ import (
 type OpenAICompatibleDriver struct{}
 
 func init() {
-	RegisterDriver(&OpenAICompatibleDriver{}, "openai", "deepseek", "codex", "openrouter")
+	RegisterDriver(&OpenAICompatibleDriver{}, "openai", "deepseek", "codex", "openrouter", "vercel")
 }
 
 // Submit performs one provider request without replaying unknown outcomes.
@@ -42,7 +42,7 @@ func (d *OpenAICompatibleDriver) Submit(ctx context.Context, c *Client, input ap
 		payload["stream"] = false
 	case "image.generate":
 		switch input.Config.AdapterKey {
-		case "openai":
+		case "openai", "vercel":
 			if input.OutputCount != 1 || len(input.References) != 0 || input.Mode != "text2image" {
 				return invalidSubmissionResult(), nil
 			}
@@ -212,7 +212,7 @@ func (d *OpenAICompatibleDriver) Probe(ctx context.Context, c *Client, config ca
 		result.Adapter = "unsupported"
 		return result
 	}
-	if config.AdapterKey == "deepseek" || config.AdapterKey == "openai" {
+	if config.AdapterKey == "deepseek" || config.AdapterKey == "openai" || config.AdapterKey == "vercel" {
 		authData, status, err := c.request(ctx, config, key, http.MethodGet, "/models", nil, 1<<20)
 		if err != nil {
 			result.Auth = "unreachable"
