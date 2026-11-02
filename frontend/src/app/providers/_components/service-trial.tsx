@@ -34,6 +34,7 @@ import {
   getAiTrialArtifact,
 } from "@/api/settings";
 import { RequestError } from "@/lib/request";
+import { providerConnectionName } from "@/lib/provider-connection-name";
 import { catalogMessage } from "@/components/catalog/mutation";
 
 const trialMessages: Record<string, string> = {
@@ -392,7 +393,7 @@ export function ServiceTrial({
                           key={p.provider!.id}
                           value={p.provider!.id!}
                         >
-                          {p.provider!.name}
+                          {providerConnectionName(p.provider)}
                         </SelectItem>
                       ))}
                     </SelectContent>

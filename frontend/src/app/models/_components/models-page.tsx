@@ -1,5 +1,6 @@
 "use client";
 import { readErrorMessage } from "@/lib/read-error";
+import { providerConnectionName } from "@/lib/provider-connection-name";
 import { ContentState } from "@/components/layout/content-state";
 
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
@@ -161,9 +162,12 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
     {
       id: "provider",
       header: "服务连接",
-      cell: ({ row }) =>
-        providers.find((p) => p.provider?.id === row.original.provider_id)
-          ?.provider?.name ?? "—",
+      cell: ({ row }) => {
+        const provider = providers.find(
+          (p) => p.provider?.id === row.original.provider_id,
+        )?.provider;
+        return providerConnectionName(provider) ?? "—";
+      },
     },
     {
       id: "capability",
@@ -302,7 +306,7 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
                               key={p.provider?.id}
                               value={p.provider?.id}
                             >
-                              {p.provider?.name}
+                              {providerConnectionName(p.provider)}
                             </SelectItem>
                           ) : null,
                         )}

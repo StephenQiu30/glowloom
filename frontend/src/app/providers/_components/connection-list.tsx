@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ProviderLogo } from "./provider-logo";
 import { providerLabel } from "./provider-label";
+import { providerConnectionName } from "@/lib/provider-connection-name";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -71,6 +72,7 @@ function ConnectionMenu({
   onDisable: (provider: API.CreatedProvider) => void;
 }) {
   const p = item.provider;
+  const name = providerConnectionName(p);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -79,7 +81,7 @@ function ConnectionMenu({
           variant="ghost"
           size="icon"
           className="max-md:size-11"
-          aria-label={`${p?.name ?? "连接"}的操作`}
+          aria-label={`${name ?? "连接"}的操作`}
         >
           <MoreHorizontal data-icon="inline-start" />
         </Button>
@@ -132,34 +134,37 @@ export function ConnectionList({
     {
       id: "name",
       header: "连接名称",
-      cell: ({ row }) => (
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            {mobile ? (
-              <ProviderLogo adapterKey={row.original.provider?.adapter_key} />
-            ) : null}
-            <Button
-              variant="link"
-              className="h-auto min-w-0 justify-start p-0 text-left whitespace-normal text-foreground"
-              disabled={disabled}
-              data-connection-trigger={`${row.original.id}:overview`}
-              aria-label={`查看 ${row.original.provider?.name}`}
-              onClick={(event) =>
-                onSelect(row.original.id, event.currentTarget)
-              }
-            >
-              {row.original.provider?.name}
-            </Button>
+      cell: ({ row }) => {
+        const name = providerConnectionName(row.original.provider);
+        return (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              {mobile ? (
+                <ProviderLogo adapterKey={row.original.provider?.adapter_key} />
+              ) : null}
+              <Button
+                variant="link"
+                className="h-auto min-w-0 justify-start p-0 text-left whitespace-normal text-foreground"
+                disabled={disabled}
+                data-connection-trigger={`${row.original.id}:overview`}
+                aria-label={`查看 ${name}`}
+                onClick={(event) =>
+                  onSelect(row.original.id, event.currentTarget)
+                }
+              >
+                {name}
+              </Button>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {mobile
+                ? `${providerLabel(row.original.provider?.adapter_key)} · `
+                : ""}
+              {regionLabel(row.original.provider?.region)}
+              {mobile ? ` · ${row.original.model_count ?? 0} 个模型` : ""}
+            </span>
           </div>
-          <span className="text-xs text-muted-foreground">
-            {mobile
-              ? `${providerLabel(row.original.provider?.adapter_key)} · `
-              : ""}
-            {regionLabel(row.original.provider?.region)}
-            {mobile ? ` · ${row.original.model_count ?? 0} 个模型` : ""}
-          </span>
-        </div>
-      ),
+        );
+      },
     },
     {
       id: "adapter",
@@ -215,7 +220,7 @@ export function ConnectionList({
             onClick={(event) => onTest(row.original.id, event.currentTarget)}
             className="max-md:h-11"
             data-connection-trigger={`${row.original.id}:test`}
-            aria-label={`测试 ${row.original.provider?.name}`}
+            aria-label={`测试 ${providerConnectionName(row.original.provider)}`}
           >
             测试
           </Button>
@@ -259,7 +264,7 @@ export function ConnectionList({
         }}
         selection={{
           ...selection,
-          getLabel: (r) => r.provider?.name ?? r.id,
+          getLabel: (r) => providerConnectionName(r.provider) ?? r.id,
           pageLabel: "选择当前页全部连接",
           disabled,
         }}

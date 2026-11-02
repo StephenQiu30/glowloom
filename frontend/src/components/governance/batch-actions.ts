@@ -16,6 +16,7 @@ import {
   getConfigReceipt,
 } from "@/api/settings";
 import { RequestError } from "@/lib/request";
+import { providerConnectionName } from "@/lib/provider-connection-name";
 import type { BatchAction } from "./use-batch-operation";
 export function userBatchAction(
   kind: "enable" | "disable" | "revoke_sessions" | "delete",
@@ -129,7 +130,7 @@ export function connectionBatchAction(
       ? "仅提交只读连接检查，不生成内容或发布模型。已提交不代表检查通过，实际结果可在连接详情查看。"
       : "停止通过所选连接创建新任务，已有任务继续使用绑定的配置和 Key。",
     destructive: !check,
-    label: (r) => r.provider?.name ?? r.id,
+    label: (r) => providerConnectionName(r.provider) ?? r.id,
     prepare: async (row, signal, refresh) => {
       const detail = await getAdminProvider({ id: row.id }, { signal });
       if (

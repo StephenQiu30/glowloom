@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { providerConnectionName } from "@/lib/provider-connection-name";
 import { Box, Check, ChevronDown, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -121,7 +122,11 @@ export function ModelPicker({
                         <span className="flex min-w-0 flex-1 flex-col gap-1">
                           <span className="truncate">{model.display_name}</span>
                           <span className="truncate text-xs text-muted-foreground">
-                            {unavailable ? "当前不可用" : model.provider_name}
+                            {unavailable
+                              ? "当前不可用"
+                              : providerConnectionName({
+                                  name: model.provider_name,
+                                })}
                           </span>
                         </span>
                         {model.current_version!.id === value ? (

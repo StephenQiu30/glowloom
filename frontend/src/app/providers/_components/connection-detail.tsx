@@ -46,6 +46,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useEffect, useState, useId } from "react";
+import { providerConnectionName } from "@/lib/provider-connection-name";
 import { Button } from "@/components/ui/button";
 import { isCredentialReceipt } from "@/components/catalog/credential-receipt";
 import { RequestError } from "@/lib/request";
@@ -153,7 +154,7 @@ export function ConnectionDetail({
         tabIndex={-1}
         className="pr-8 text-lg font-medium outline-none"
       >
-        {provider?.name ?? "连接详情"}
+        {providerConnectionName(provider) ?? "连接详情"}
       </h2>
       {error ? <FeedbackToast message={error} /> : null}
       {!detail ? (
