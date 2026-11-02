@@ -47,11 +47,13 @@ type PricingInput struct {
 }
 
 type parsedPriceRule struct {
-	baseMicros   uint64
-	inputMicros  uint64
-	outputMicros uint64
-	byMode       map[string]*big.Rat
-	byResolution map[string]*big.Rat
+	baseMicros       uint64
+	inputMicros      uint64
+	outputMicros     uint64
+	markupMultiplier *big.Rat
+	creditRatio      *big.Rat
+	byMode           map[string]*big.Rat
+	byResolution     map[string]*big.Rat
 }
 
 // QuoteCostDetail explains the exact inputs to a quote before the final CNY
@@ -62,6 +64,8 @@ type QuoteCostDetail struct {
 	UnitPriceMicros       *uint64                 `json:"unit_price_micros,omitempty"`
 	Outputs               int64                   `json:"outputs"`
 	Multipliers           map[string]json.Number  `json:"multipliers,omitempty"`
+	MarkupMultiplier      json.Number             `json:"markup_multiplier,omitempty"`
+	EstimatedCredits      *int64                  `json:"estimated_credits,omitempty"`
 	Currency              string                  `json:"currency"`
 	FXRateToCNY           string                  `json:"fx_rate_to_cny,omitempty"`
 	EstimatedInputTokens  *int64                  `json:"estimated_input_tokens,omitempty"`
@@ -139,12 +143,19 @@ func CalculateQuoteDetailed(price catalogdomain.PriceRuleVersion, input PricingI
 	if err != nil {
 		return 0, QuoteCostDetail{}, err
 	}
+	amount.Mul(amount, rule.markupMultiplier)
+	detail.MarkupMultiplier = decimalNumber(rule.markupMultiplier, 4)
 	detail.Currency = price.Currency
 	if price.Currency != "CNY" {
 		detail.FXRateToCNY = price.FXRateToCNY
 	}
 	result, err := finishPriceAmount(amount, fx)
-	return result, detail, err
+	if err != nil {
+		return 0, QuoteCostDetail{}, err
+	}
+	credits := calculateCredits(result, rule.creditRatio)
+	detail.EstimatedCredits = &credits
+	return result, detail, nil
 }
 
 // CalculateActualCost prices conclusive provider usage against the same
@@ -163,6 +174,7 @@ func CalculateActualCost(price catalogdomain.PriceRuleVersion, usage BillableUsa
 			return 0, err
 		}
 	}
+	amount.Mul(amount, rule.markupMultiplier)
 	return finishPriceAmount(amount, fx)
 }
 
@@ -251,27 +263,50 @@ func parsePrice(price catalogdomain.PriceRuleVersion) (parsedPriceRule, *big.Rat
 	if err != nil {
 		return parsedPriceRule{}, nil, err
 	}
-	rule := parsedPriceRule{}
+	rule := parsedPriceRule{
+		markupMultiplier: big.NewRat(1, 1),
+		creditRatio:      big.NewRat(10, 1),
+	}
 	if price.Unit == catalogdomain.PricePer1KTokens {
-		if len(fields) != 2 {
+		inputRaw, hasInput := fields["input_micros_per_1k"]
+		outputRaw, hasOutput := fields["output_micros_per_1k"]
+		if !hasInput || !hasOutput {
 			return parsedPriceRule{}, nil, ErrInvalidPricingRule
 		}
 		var ok bool
-		rule.inputMicros, ok = priceMicros(fields["input_micros_per_1k"])
+		rule.inputMicros, ok = priceMicros(inputRaw)
 		if !ok {
 			return parsedPriceRule{}, nil, ErrInvalidPricingRule
 		}
-		rule.outputMicros, ok = priceMicros(fields["output_micros_per_1k"])
-		if !ok || rule.inputMicros == 0 && rule.outputMicros == 0 {
+		rule.outputMicros, ok = priceMicros(outputRaw)
+		if !ok || (rule.inputMicros == 0 && rule.outputMicros == 0) {
 			return parsedPriceRule{}, nil, ErrInvalidPricingRule
+		}
+		for name, raw := range fields {
+			switch name {
+			case "input_micros_per_1k", "output_micros_per_1k":
+			case "markup_multiplier":
+				rule.markupMultiplier, ok = parseMultiplierOrRatio(raw)
+				if !ok {
+					return parsedPriceRule{}, nil, ErrInvalidPricingRule
+				}
+			case "credit_ratio":
+				rule.creditRatio, ok = parseMultiplierOrRatio(raw)
+				if !ok {
+					return parsedPriceRule{}, nil, ErrInvalidPricingRule
+				}
+			default:
+				return parsedPriceRule{}, nil, ErrInvalidPricingRule
+			}
 		}
 		return rule, fx, nil
 	}
-	if len(fields) < 1 || len(fields) > 3 {
+	baseRaw, hasBase := fields["base_micros"]
+	if !hasBase {
 		return parsedPriceRule{}, nil, ErrInvalidPricingRule
 	}
 	var ok bool
-	rule.baseMicros, ok = priceMicros(fields["base_micros"])
+	rule.baseMicros, ok = priceMicros(baseRaw)
 	if !ok {
 		return parsedPriceRule{}, nil, ErrInvalidPricingRule
 	}
@@ -282,6 +317,16 @@ func parsePrice(price catalogdomain.PriceRuleVersion) (parsedPriceRule, *big.Rat
 			rule.byMode, err = pricingCoefficients(raw)
 		case "by_resolution":
 			rule.byResolution, err = pricingCoefficients(raw)
+		case "markup_multiplier":
+			rule.markupMultiplier, ok = parseMultiplierOrRatio(raw)
+			if !ok {
+				return parsedPriceRule{}, nil, ErrInvalidPricingRule
+			}
+		case "credit_ratio":
+			rule.creditRatio, ok = parseMultiplierOrRatio(raw)
+			if !ok {
+				return parsedPriceRule{}, nil, ErrInvalidPricingRule
+			}
 		default:
 			return parsedPriceRule{}, nil, ErrInvalidPricingRule
 		}
@@ -486,4 +531,23 @@ func priceCoefficient(raw json.RawMessage) (*big.Rat, bool) {
 		return nil, false
 	}
 	return new(big.Rat).SetFrac(new(big.Int).SetUint64(scaled), big.NewInt(int64(coefficientScale))), true
+}
+
+func calculateCredits(micros int64, ratio *big.Rat) int64 {
+	if micros <= 0 || ratio == nil || ratio.Sign() <= 0 {
+		return 0
+	}
+	r := new(big.Rat).SetInt64(micros)
+	r.Mul(r, ratio)
+	r.Quo(r, big.NewRat(1_000_000, 1))
+	whole, remainder := new(big.Int).QuoRem(r.Num(), r.Denom(), new(big.Int))
+	if remainder.Sign() > 0 {
+		whole.Add(whole, big.NewInt(1))
+	}
+	return whole.Int64()
+}
+
+func parseMultiplierOrRatio(raw json.RawMessage) (*big.Rat, bool) {
+	text := strings.Trim(string(raw), "\"")
+	return priceCoefficient(json.RawMessage(text))
 }

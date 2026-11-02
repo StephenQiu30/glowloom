@@ -52,6 +52,11 @@ func TestPriceRuleValidatorChecksBillableRuleShape(t *testing.T) {
 		{"token unsafe rate", domain.PricePer1KTokens, `{"input_micros_per_1k":9007199254740992,"output_micros_per_1k":1}`, false},
 		{"token with base", domain.PricePer1KTokens, `{"base_micros":1000,"input_micros_per_1k":1,"output_micros_per_1k":1}`, false},
 		{"token with coefficient", domain.PricePer1KTokens, `{"input_micros_per_1k":1,"output_micros_per_1k":1,"by_mode":{"chat":2}}`, false},
+		{"token with multiplier and credit ratio string", domain.PricePer1KTokens, `{"input_micros_per_1k":25,"output_micros_per_1k":50,"markup_multiplier":"1.0","credit_ratio":"10.0"}`, true},
+		{"token with numeric multiplier", domain.PricePer1KTokens, `{"input_micros_per_1k":25,"output_micros_per_1k":50,"markup_multiplier":1.25}`, true},
+		{"image with multiplier and credit ratio", domain.PricePerImage, `{"base_micros":1000,"markup_multiplier":"1.5","credit_ratio":"10"}`, true},
+		{"token with zero multiplier", domain.PricePer1KTokens, `{"input_micros_per_1k":25,"output_micros_per_1k":50,"markup_multiplier":0}`, false},
+		{"token with negative multiplier", domain.PricePer1KTokens, `{"input_micros_per_1k":25,"output_micros_per_1k":50,"markup_multiplier":-1.0}`, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			price := validPriceVersion(uuid.New())

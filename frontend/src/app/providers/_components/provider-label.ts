@@ -66,58 +66,58 @@ export function providerConsoleURL(adapter?: string) {
 
 export type ModelBrand = "ChatGPT" | "Anthropic" | "Gemini" | "Grok";
 
-export function getCandidateBrand(candidate?: {
+export interface CandidateTarget {
   provider_model_id?: string;
   display_name?: string;
   key?: string;
-}): ModelBrand | undefined {
-  if (!candidate) return undefined;
-  const id = candidate.provider_model_id?.toLowerCase() ?? "";
-  const name = candidate.display_name?.toLowerCase() ?? "";
-  const key = candidate.key?.toLowerCase() ?? "";
+}
 
-  if (
-    id.startsWith("openai/") ||
-    name.includes("gpt") ||
-    name.includes("chatgpt") ||
-    name.startsWith("o1") ||
-    name.startsWith("o3") ||
-    name.startsWith("o4") ||
-    name.includes("dall-e") ||
-    key.includes("gpt") ||
-    key.includes("openai") ||
-    key.includes("-o1") ||
-    key.includes("-o3")
-  ) {
-    return "ChatGPT";
+export interface CandidateSpecification {
+  isSatisfiedBy(candidate: CandidateTarget): boolean;
+}
+
+export class BrandSpecification implements CandidateSpecification {
+  constructor(
+    public readonly brand: ModelBrand,
+    private readonly patterns: RegExp[],
+  ) {}
+
+  isSatisfiedBy(candidate: CandidateTarget): boolean {
+    const text = `${candidate.provider_model_id ?? ""} ${candidate.display_name ?? ""} ${candidate.key ?? ""}`.toLowerCase();
+    return this.patterns.some((pattern) => pattern.test(text));
   }
-  if (
-    id.startsWith("anthropic/") ||
-    name.includes("claude") ||
-    name.includes("anthropic") ||
-    key.includes("claude")
-  ) {
-    return "Anthropic";
-  }
-  if (
-    id.startsWith("google/") ||
-    id.includes("gemini") ||
-    name.includes("gemini") ||
-    name.includes("google") ||
-    name.includes("banana") ||
-    key.includes("gemini")
-  ) {
-    return "Gemini";
-  }
-  if (
-    id.startsWith("x-ai/") ||
-    id.startsWith("spacexai/") ||
-    id.includes("grok") ||
-    name.includes("grok") ||
-    name.includes("xai") ||
-    key.includes("grok")
-  ) {
-    return "Grok";
+}
+
+export const BRAND_SPECIFICATIONS: BrandSpecification[] = [
+  new BrandSpecification("ChatGPT", [
+    /\b(openai|chatgpt|dall-e)\b/i,
+    /^openai\//i,
+    /\bgpt(-|\d)/i,
+    /[-_]o[1-4]\b/i,
+    /^o[1-4](-|$)/i,
+  ]),
+  new BrandSpecification("Anthropic", [
+    /\b(anthropic|claude)\b/i,
+    /^anthropic\//i,
+  ]),
+  new BrandSpecification("Gemini", [
+    /\b(google|gemini|banana)\b/i,
+    /^google\//i,
+  ]),
+  new BrandSpecification("Grok", [
+    /\b(x-ai|spacexai|xai|grok)\b/i,
+    /^(x-ai|spacexai)\//i,
+  ]),
+];
+
+export function getCandidateBrand(
+  candidate?: CandidateTarget,
+): ModelBrand | undefined {
+  if (!candidate) return undefined;
+  for (const spec of BRAND_SPECIFICATIONS) {
+    if (spec.isSatisfiedBy(candidate)) {
+      return spec.brand;
+    }
   }
   return undefined;
 }

@@ -43,22 +43,36 @@ func (v *Validator) Validate(price domain.PriceRuleVersion) error {
 	}
 	switch price.Unit {
 	case domain.PricePer1KTokens:
-		if len(fields) != 2 {
+		inputRaw, hasInput := fields["input_micros_per_1k"]
+		outputRaw, hasOutput := fields["output_micros_per_1k"]
+		if !hasInput || !hasOutput {
 			return ErrInvalidConfiguration
 		}
-		input, ok := nonnegativeMicros(fields["input_micros_per_1k"])
+		input, ok := nonnegativeMicros(inputRaw)
 		if !ok {
 			return ErrInvalidConfiguration
 		}
-		output, ok := nonnegativeMicros(fields["output_micros_per_1k"])
-		if !ok || input == 0 && output == 0 {
+		output, ok := nonnegativeMicros(outputRaw)
+		if !ok || (input == 0 && output == 0) {
 			return ErrInvalidConfiguration
+		}
+		for name, raw := range fields {
+			switch name {
+			case "input_micros_per_1k", "output_micros_per_1k":
+			case "markup_multiplier", "credit_ratio":
+				if !validMultiplierOrRatio(raw) {
+					return ErrInvalidConfiguration
+				}
+			default:
+				return ErrInvalidConfiguration
+			}
 		}
 	default:
-		if len(fields) < 1 || len(fields) > 3 {
+		baseRaw, hasBase := fields["base_micros"]
+		if !hasBase {
 			return ErrInvalidConfiguration
 		}
-		if _, ok := nonnegativeMicros(fields["base_micros"]); !ok {
+		if _, ok := nonnegativeMicros(baseRaw); !ok {
 			return ErrInvalidConfiguration
 		}
 		for name, raw := range fields {
@@ -66,6 +80,10 @@ func (v *Validator) Validate(price domain.PriceRuleVersion) error {
 			case "base_micros":
 			case "by_mode", "by_resolution":
 				if !validCoefficients(raw) {
+					return ErrInvalidConfiguration
+				}
+			case "markup_multiplier", "credit_ratio":
+				if !validMultiplierOrRatio(raw) {
 					return ErrInvalidConfiguration
 				}
 			default:
@@ -187,4 +205,46 @@ func numberText(raw json.RawMessage) (string, bool) {
 	}
 	number, ok := value.(json.Number)
 	return number.String(), ok
+}
+
+func validMultiplierOrRatio(raw json.RawMessage) bool {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return false
+	}
+	var text string
+	switch v := value.(type) {
+	case json.Number:
+		text = v.String()
+	case string:
+		text = v
+	default:
+		return false
+	}
+	if text == "" || strings.ContainsAny(text, "+-eE") {
+		return false
+	}
+	whole, fraction, dotted := strings.Cut(text, ".")
+	if len(whole) == 0 || len(whole) > 7 || (dotted && (len(fraction) == 0 || len(fraction) > 6)) {
+		return false
+	}
+	wholeValue, err := strconv.ParseUint(whole, 10, 64)
+	if err != nil || wholeValue > 1000000 {
+		return false
+	}
+	fractionValue := uint64(0)
+	if dotted {
+		fractionValue, err = strconv.ParseUint(fraction, 10, 64)
+		if err != nil {
+			return false
+		}
+		for len(fraction) < 6 {
+			fractionValue *= 10
+			fraction += "0"
+		}
+	}
+	scaled := wholeValue*1000000 + fractionValue
+	return scaled > 0 && scaled <= maxCoefficient
 }

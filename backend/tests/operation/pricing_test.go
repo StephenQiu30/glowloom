@@ -86,6 +86,8 @@ func TestCalculateActualCostFromBillableUsage(t *testing.T) {
 	}{
 		{"images", pricingRule(catalogdomain.PricePerImage, `{"base_micros":1000000}`, "CNY", ""),
 			application.BillableUsage{OutputCount: amount(2)}, "", "", 2_000_000},
+		{"images with multiplier", pricingRule(catalogdomain.PricePerImage, `{"base_micros":1000000,"markup_multiplier":"1.5"}`, "CNY", ""),
+			application.BillableUsage{OutputCount: amount(2)}, "", "", 3_000_000},
 		{"billed seconds with frozen factors and FX", pricingRule(catalogdomain.PricePerSecond,
 			`{"base_micros":100,"by_mode":{"image2video":1.25},"by_resolution":{"1080p":2}}`, "USD", "1.234567"),
 			application.BillableUsage{BilledDurationMS: amount(1500)}, "image2video", "1080p", 463},
@@ -98,6 +100,9 @@ func TestCalculateActualCostFromBillableUsage(t *testing.T) {
 		{"actual tokens", pricingRule(catalogdomain.PricePer1KTokens,
 			`{"input_micros_per_1k":11,"output_micros_per_1k":23}`, "CNY", ""),
 			application.BillableUsage{InputTokens: amount(1200), OutputTokens: amount(800)}, "", "", 32},
+		{"actual tokens with multiplier", pricingRule(catalogdomain.PricePer1KTokens,
+			`{"input_micros_per_1k":1000,"output_micros_per_1k":2000,"markup_multiplier":"1.2"}`, "CNY", ""),
+			application.BillableUsage{InputTokens: amount(1000), OutputTokens: amount(1000)}, "", "", 3600},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := application.CalculateActualCost(tc.price, tc.usage, tc.mode, tc.res)
@@ -116,6 +121,46 @@ func TestCalculateActualCostFromBillableUsage(t *testing.T) {
 		); !errors.Is(err, application.ErrInvalidPricingInput) {
 			t.Fatalf("invalid billable usage %+v: %v", usage, err)
 		}
+	}
+}
+
+func TestCalculateQuoteWithMultiplierAndCreditRatio(t *testing.T) {
+	// Test default 1.0 multiplier and 10.0 credit ratio (1 CNY = 10 Credits)
+	amount, detail, err := application.CalculateQuoteDetailed(
+		pricingRule(catalogdomain.PricePerImage, `{"base_micros":100000}`, "CNY", ""),
+		application.PricingInput{OutputCount: 1},
+	)
+	if err != nil {
+		t.Fatalf("quote failed: %v", err)
+	}
+	if amount != 100_000 {
+		t.Fatalf("amount = %d, want 100000", amount)
+	}
+	if detail.MarkupMultiplier != "1" {
+		t.Fatalf("markup_multiplier = %s, want 1", detail.MarkupMultiplier)
+	}
+	if detail.EstimatedCredits == nil || *detail.EstimatedCredits != 1 {
+		t.Fatalf("estimated_credits = %v, want 1", detail.EstimatedCredits)
+	}
+
+	// Test custom 1.25 multiplier and 10.0 credit ratio
+	// 100,000 micros * 1.25 = 125,000 micros.
+	// Credits = ceil(125,000 * 10 / 1,000,000) = ceil(1.25) = 2 credits
+	amount, detail, err = application.CalculateQuoteDetailed(
+		pricingRule(catalogdomain.PricePerImage, `{"base_micros":100000,"markup_multiplier":"1.25","credit_ratio":"10.0"}`, "CNY", ""),
+		application.PricingInput{OutputCount: 1},
+	)
+	if err != nil {
+		t.Fatalf("quote failed: %v", err)
+	}
+	if amount != 125_000 {
+		t.Fatalf("amount = %d, want 125000", amount)
+	}
+	if detail.MarkupMultiplier != "1.25" {
+		t.Fatalf("markup_multiplier = %s, want 1.25", detail.MarkupMultiplier)
+	}
+	if detail.EstimatedCredits == nil || *detail.EstimatedCredits != 2 {
+		t.Fatalf("estimated_credits = %v, want 2", detail.EstimatedCredits)
 	}
 }
 
