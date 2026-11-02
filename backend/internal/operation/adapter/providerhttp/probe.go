@@ -9,6 +9,7 @@ import (
 
 // ProbeResult contains independent safe result categories and catalog candidates.
 type ProbeResult struct {
+	HTTPStatus               int
 	Auth, Adapter, Discovery string
 	Candidates               []catalogapp.ModelCandidate
 }

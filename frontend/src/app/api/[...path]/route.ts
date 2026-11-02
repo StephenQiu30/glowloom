@@ -376,6 +376,32 @@ const editorCatalogRoutes: typeof identityRoutes = [
     query: [],
   },
   {
+    pattern: `admin/providers/${identityUUID}/checks`,
+    methods: ["GET"],
+    query: ["offset"],
+  },
+  {
+    pattern: `admin/providers/${identityUUID}/checks/reachability`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `admin/providers/${identityUUID}/test-models`,
+    methods: ["GET"],
+    query: [],
+  },
+  {
+    pattern: `admin/provider-checks/${identityUUID}/(query|end-tracking)`,
+    methods: ["POST"],
+    query: [],
+  },
+  { pattern: `projects/${identityUUID}/budget`, methods: ["GET"], query: [] },
+  {
+    pattern: `admin/model-releases/${identityUUID}/trial-recovery`,
+    methods: ["GET"],
+    query: [],
+  },
+  {
     pattern: `admin/providers/${identityUUID}/onboarding`,
     methods: ["GET"],
     query: [],

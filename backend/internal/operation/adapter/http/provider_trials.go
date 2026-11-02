@@ -19,6 +19,7 @@ func NewProviderTrialHandler(trials application.ProviderTrials) *ProviderTrialHa
 // Register adds quote preparation only; paid execution uses normal confirmation.
 func (h *ProviderTrialHandler) Register(group *gin.RouterGroup) {
 	group.POST("/admin/model-releases/:id/trial-quotes", h.Quote)
+	group.GET("/admin/model-releases/:id/trial-recovery", h.Recovery)
 }
 
 // Quote prepares a candidate quote without making a paid provider request.
@@ -45,5 +46,30 @@ func (h *ProviderTrialHandler) Quote(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(201, quoteResponse(result))
+	response := quoteResponse(result)
+	key := application.ProviderTrialConfirmKey(result.OperationID)
+	response.ConfirmKey = &key
+	c.JSON(201, response)
+}
+
+// Recovery restores a trial without creating a quote or confirming a charge.
+// @Summary 恢复原模型试运行
+// @ID getProviderTrialRecovery
+// @Tags settings
+// @Produce json
+// @Param id path string true "发布ID"
+// @Success 200 {object} application.ProviderTrialRecovery
+// @Router /api/admin/model-releases/{id}/trial-recovery [get]
+func (h *ProviderTrialHandler) Recovery(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	id, ok := httpapi.PathUUID(c, "id")
+	if !ok {
+		return
+	}
+	result, err := h.trials.ReadProviderTrialRecovery(c.Request.Context(), identityhttp.Principal(c), id)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(200, result)
 }

@@ -28,7 +28,7 @@ func (s *TestStarter) StartCredentialTest(ctx context.Context, request applicati
 	if s == nil || s.client == nil {
 		return ErrInvalidTestWorkflow
 	}
-	input := Input{TestID: request.TestID, ProviderID: request.ProviderID, CredentialID: request.CredentialID, ActorID: request.ActorID, OrgID: request.OrgID, RequestID: request.RequestID}
+	input := Input{Kind: request.Kind, TestID: request.TestID, ProviderID: request.ProviderID, CredentialID: request.CredentialID, ActorID: request.ActorID, OrgID: request.OrgID, RequestID: request.RequestID}
 	_, err := s.client.ExecuteWorkflow(ctx, client.StartWorkflowOptions{ID: "credential-test/" + request.TestID.String(), TaskQueue: "flow", WorkflowIDReusePolicy: enums.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE}, CredentialTestWorkflow, input)
 	if err != nil {
 		var started *serviceerror.WorkflowExecutionAlreadyStarted

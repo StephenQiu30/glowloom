@@ -1060,7 +1060,15 @@ CREATE TABLE catalog.provider_check (
     actor_id uuid NOT NULL,
     provider_id uuid NOT NULL,
     config_version_id uuid NOT NULL,
-    credential_id uuid NOT NULL,
+    credential_id uuid,
+    request_id uuid,
+    network_result text NOT NULL DEFAULT '',
+    http_status integer NOT NULL DEFAULT 0,
+    elapsed_ms bigint NOT NULL DEFAULT 0,
+    attempts integer NOT NULL DEFAULT 0,
+    parent_check_id uuid,
+    tracking_ended_at timestamp with time zone,
+    tracking_note text NOT NULL DEFAULT '',
     kind text NOT NULL,
     status text NOT NULL,
     auth_result text DEFAULT 'unknown'::text NOT NULL,
@@ -1069,7 +1077,7 @@ CREATE TABLE catalog.provider_check (
     error_code text,
     create_time timestamp with time zone DEFAULT now() NOT NULL,
     completed_at timestamp with time zone,
-    CONSTRAINT provider_check_kind_check CHECK ((kind = ANY (ARRAY['connectivity'::text, 'discovery'::text, 'model_access'::text]))),
+    CONSTRAINT provider_check_kind_check CHECK ((kind = ANY (ARRAY['connectivity'::text, 'credential_auth'::text, 'reachability'::text, 'model_query'::text, 'discovery'::text, 'model_access'::text]))),
     CONSTRAINT provider_check_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'running'::text, 'completed'::text, 'failed'::text])))
 );
 

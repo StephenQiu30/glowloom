@@ -2626,4 +2626,21 @@ CR-075交付候选复验：以bb5da8dc为基线独立提取34个相关文件，2
 - 已完成：Figma 可编辑统一稿（`3330:65996`）；五类管理页导航移入共享顶栏，与头像工具栏同排并采用胶囊选中态；个人空间及历史主体的页面主分类同步迁移；320/390px检查无整页横向溢出。
 - 已完成：新建服务五入口、历史预设仅维护与待确认恢复；OpenAI当前文本/图片目录、Responses、GPT Image、旧Chat冻结兼容、图片别名、发布及冻结编辑器提交；当前本地库已幂等补齐缺失的OpenAI内置预设，未自动创建真实连接或配置凭据。
 - 验证：相关前端88项通过、ESLint/类型/构建通过；catalog与operation使用分离PG18测试库的全量Race通过；变更范围golangci-lint 0 issues，govulncheck无可达漏洞。全量前端1982通过、4项原有画布/存储策略用例失败，未改无关源文件或放宽断言。
-- 待接受：真实OpenAI账号生成未执行；未提交、推送或发布。设计、PRD、Plan和逐项证据见对应2026-10-31文档及research/evidence/2026-10-31-admin-services/validation.md。
+- Git补记：已按用户授权提交并推送main，提交`65ba1e64200a5541498e1e6aaf63c82d55347a58`。2026-11-01只读复查[CI](https://github.com/StephenQiu30/glowloom/actions/runs/41217163948)终态失败：frontend business tests与backend Race步骤失败；此处未重新归因或修复。真实OpenAI账号生成未执行。设计、PRD、Plan和逐项证据见对应2026-10-31文档及research/evidence/2026-10-31-admin-services/validation.md。
+
+## SRC-AI-33 服务测试与验证实现（2026-11-01）
+
+- 用户已明确“落实我们的设计和实现”，设计阶段暂停已解除。保留CC Switch固定提交调研与13个Figma可编辑状态；实现列表“测试”→同一详情Sheet、概览/测试/凭据/高级配置、三层独立证据、最近记录与320/390px布局。主导航与头像工具栏仍共用顶栏。
+- 网络无Key GET、只读凭据鉴权、固定模板模型验证和正式release试运行分别执行；OpenAI凭据schema缺失已补。复用Idempotency/Outbox/Temporal/worker，共用供应商并发/速率；保存/切换/打开不调用，收费模型明确确认。
+- unknown/accepted不自动重发；原异步任务绑定原配置/模型版本/TaskID/draining Key，只读查询；结束同步unknown追踪保留说明与未知结果，新请求关联旧记录。正式试运行刷新恢复原operation与稳定确认键，费用显示冻结摘要；当前有效active release可试运行。历史通过不沿用到新Key/配置/模型版本。
+- 独立审查的8项重要问题已按失败→修复回归；另补焦点返回、无画布上下文渲染、未知状态与关联恢复。相关前端回归通过；最终完整前端2001项中1997通过、原有4项画布/存储策略失败。catalog、operation、providerhttp完整Race通过，workspace预算归属Race定向通过；workspace全量仍有固定日期回收样例失败，先前全Go仍有canvas锁测试失败，不宣称全仓通过。
+- 浏览器实际验证无Key网络链路HTTP404/956ms/1次；准备并取消模型确认只有GET、零生成POST。桌面顶栏同排，手机无整页横向溢出，费用取消与Sheet关闭焦点返回。真实Key/收费生成、所有模型/模式及生产部署未接受。本地仅安装可幂等增量，隔离测试库重复两次通过；临时PG已清理。
+- 交付：[设计](docs/design/2026-11-01-AI服务测试与验证交互设计.md)、[PRD](docs/prd/2026-11-01-AI服务测试与验证.md)、[Plan](docs/plan/2026-11-01-AI服务测试与验证实施.md)、[调研](docs/research/2026-11-01-CC-Switch测试交互调研.md)、[Figma](https://www.figma.com/design/uLqmeRWuQuzfrp9xOYg6FT?node-id=3342-67847)、[完整实现验收](docs/research/evidence/2026-11-01-service-testing/implementation-validation.md)。变更范围lint、类型、格式、API与最终构建结果以验收命令摘录为准。
+- 本轮新增代码未提交或推送，保留完整diff及无关并行改动；早先`65ba1e64`推送和失败CI不被本轮本机验证替代。
+
+
+### SRC-AI-33 极简呈现修正（2026-11-01）
+
+按用户追加要求同步既有13个Figma状态与代码。网络/凭据改为紧凑行，移除重复卡片边框、空态和说明；诊断/历史收进有记录才出现的检测详情，未配置直接进入配置；一般费用文字集中到确认弹窗，错误、异步/未知恢复、重复费用和启用范围保留。全局DESIGN记入极简呈现原则；共享AdminHeading副标题改可选，当前服务列表不再显示泛化副标题。
+
+11文件77项相关回归、TSX lint、TypeScript、生产构建及变更格式通过。Chrome检查默认/详情/直接配置/费用取消及390/320px，无整页横向溢出，恢复默认视口；未执行真实Key或收费请求。后端及数据库未改变，不沿用上一轮全量结论冒充新接受。新增代码仍未提交/推送，其他并行改动保留。逐项证据和工作区清单见[极简优化验收](docs/research/evidence/2026-11-01-service-testing/minimal/validation.md)。

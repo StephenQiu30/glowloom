@@ -19,17 +19,21 @@ var ErrInvalidCredentialTest = errors.New("invalid credential test")
 
 // CredentialTestRequest binds one authorized test to its original credential.
 type CredentialTestRequest struct {
-	ModelID      uuid.UUID
-	TestID       uuid.UUID
-	ProviderID   uuid.UUID
-	CredentialID uuid.UUID
-	ActorID      uuid.UUID
-	OrgID        uuid.UUID
-	RequestID    string
+	Kind          string
+	ParentCheckID uuid.UUID
+	ModelID       uuid.UUID
+	TestID        uuid.UUID
+	ProviderID    uuid.UUID
+	CredentialID  uuid.UUID
+	ActorID       uuid.UUID
+	OrgID         uuid.UUID
+	RequestID     string
 }
 
 // CredentialTestObservation is the Agent's safe result, with no provider body.
 type CredentialTestObservation struct {
+	HTTPStatus  int   `json:"http_status,omitempty"`
+	ElapsedMS   int64 `json:"elapsed_ms,omitempty"`
 	ModelResult string
 	TaskID      string
 	CredentialTestRequest
@@ -69,7 +73,7 @@ func (s *CredentialTestService) Load(ctx context.Context, request CredentialTest
 	}
 	if provider.ID != request.ProviderID || (provider.Status != domain.ProviderActive && provider.CurrentConfigVersionID == uuid.Nil) ||
 		credential.ID != request.CredentialID || credential.ProviderID != provider.ID ||
-		credential.Status != domain.CredentialActive || credential.Validate() != nil {
+		(credential.Status != domain.CredentialActive && (request.Kind != "model_query" || credential.Status != domain.CredentialDraining)) || credential.Validate() != nil {
 		return domain.Provider{}, domain.Credential{}, ErrInvalidCredentialTest
 	}
 	return provider, credential, nil

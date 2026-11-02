@@ -1077,6 +1077,7 @@ declare namespace API {
     check_id?: string;
     credential_id?: string;
     event_id?: string;
+    kind?: string;
     model_id?: string;
     provider_id?: string;
     test_id?: string;
@@ -1764,6 +1765,16 @@ declare namespace API {
     upgrade_available: boolean;
   };
 
+  type endProviderCheckTrackingParams = {
+    /** 检查ID */
+    id: string;
+  };
+
+  type EndTrackingInput = {
+    note?: string;
+    request_id?: string;
+  };
+
   type Episode = {
     confirmed_structure_id?: string;
     current_structure_id?: string;
@@ -2151,6 +2162,11 @@ declare namespace API {
     to?: string;
   };
 
+  type getProjectBudgetParams = {
+    /** 项目ID */
+    pid: string;
+  };
+
   type getProjectCopyParams = {
     /** 复制任务UUID */
     id: string;
@@ -2183,6 +2199,11 @@ declare namespace API {
 
   type getProviderOnboardingParams = {
     /** 服务ID */
+    id: string;
+  };
+
+  type getProviderTrialRecoveryParams = {
+    /** 发布ID */
     id: string;
   };
 
@@ -3063,8 +3084,20 @@ declare namespace API {
     cursor?: string;
   };
 
+  type listProviderChecksParams = {
+    /** 服务ID */
+    id: string;
+    /** 记录偏移 */
+    offset?: number;
+  };
+
   type listProviderCredentialsParams = {
     /** 连接ID */
+    id: string;
+  };
+
+  type listProviderTestModelsParams = {
+    /** 服务ID */
     id: string;
   };
 
@@ -4026,6 +4059,15 @@ declare namespace API {
     expected_revision: string;
   };
 
+  type ProjectBudgetView = {
+    available_micros?: number;
+    limit_micros?: number;
+    project_id?: string;
+    reserved_micros?: number;
+    revision?: number;
+    settled_micros?: number;
+  };
+
   type ProjectCopyBibleCounts = {
     character_confirmations?: number;
     character_versions?: number;
@@ -4309,22 +4351,37 @@ declare namespace API {
 
   type ProviderCheck = {
     adapter_result?: string;
+    attempts?: number;
     auth_result?: string;
     candidates?: ModelCandidate[];
     completed_at?: string;
     config_version_id?: string;
     created_at?: string;
     credential_id?: string;
+    current?: boolean;
     discovery_result?: string;
+    elapsed_ms?: number;
     error_code?: string;
+    http_status?: number;
     id?: string;
     kind?: string;
     model_id?: string;
     model_result?: string;
     model_version_id?: string;
+    network_result?: string;
+    parent_check_id?: string;
     provider_id?: string;
+    request_id?: string;
     status?: string;
     task_id?: string;
+    tracking_ended_at?: string;
+    tracking_note?: string;
+  };
+
+  type ProviderCheckPage = {
+    current_checks?: ProviderCheck[];
+    has_more?: boolean;
+    items?: ProviderCheck[];
   };
 
   type ProviderConfig = {
@@ -4383,6 +4440,17 @@ declare namespace API {
 
   type ProviderStatus = "active" | "disabled";
 
+  type ProviderTestModel = {
+    capability?: string;
+    display_name?: string;
+    id?: string;
+    provider_model_id?: string;
+    release_id?: string;
+    requires_trial?: boolean;
+    status?: string;
+    version_id?: string;
+  };
+
   type ProviderTrialQuote = {
     max_charge_micros?: number;
     media_inputs?: TrialMediaInput[];
@@ -4391,6 +4459,18 @@ declare namespace API {
     project_id?: string;
     prompt?: string;
     request_id?: string;
+    supplier_currency?: string;
+    supplier_max_micros?: number;
+  };
+
+  type ProviderTrialRecovery = {
+    confirm_request_id?: string;
+    found?: boolean;
+    max_charge_micros?: number;
+    operation_id?: string;
+    project_id?: string;
+    request_id?: string;
+    status?: string;
     supplier_currency?: string;
     supplier_max_micros?: number;
   };
@@ -4505,6 +4585,11 @@ declare namespace API {
     items?: PurgeJob[];
     page?: number;
     page_size?: number;
+  };
+
+  type queryProviderModelCheckParams = {
+    /** 检查ID */
+    id: string;
   };
 
   type QuoteItemRequest = {
@@ -5925,6 +6010,11 @@ declare namespace API {
     credential_id: string;
     /** 模型ID */
     model_id: string;
+  };
+
+  type testProviderReachabilityParams = {
+    /** 服务ID */
+    id: string;
   };
 
   type TestResult =

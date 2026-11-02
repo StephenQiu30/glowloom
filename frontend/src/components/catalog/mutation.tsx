@@ -14,6 +14,7 @@ type Pending = { id: string; action: string; target: string };
 export function catalogMessage(error: unknown) {
   if (error instanceof RequestError) {
     const messages: Record<string, string> = {
+      rate_limited: "服务商当前并发或请求频率已达上限，请稍后重试。",
       forbidden: "仅平台管理员可以管理平台连接和模型。",
       revision_conflict: "配置已变化或请求标识已使用，请刷新并核对回执。",
       preset_unavailable: "预设已归档或被紧急停用，请重新选择。",

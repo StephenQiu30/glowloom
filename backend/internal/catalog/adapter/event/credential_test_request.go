@@ -88,6 +88,7 @@ func parseCredentialTest(record inbox.Record) (application.CredentialTestRequest
 			ID   uuid.UUID `json:"id"`
 		} `json:"aggregate"`
 		Data struct {
+			Kind         string    `json:"kind,omitempty"`
 			TestID       uuid.UUID `json:"test_id"`
 			ProviderID   uuid.UUID `json:"provider_id"`
 			CredentialID uuid.UUID `json:"credential_id"`
@@ -102,19 +103,26 @@ func parseCredentialTest(record inbox.Record) (application.CredentialTestRequest
 	}
 	decoder := json.NewDecoder(bytes.NewReader(record.Value))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&body) != nil || decoder.Decode(new(any)) != io.EOF || record.Topic != CredentialTestTopic || body.EventType != record.Topic || string(record.Key) != body.OrgID.String() || body.OccurredAt.IsZero() || body.Actor.Kind != "user" || body.Aggregate.Type != "provider_credential" || body.Aggregate.ID != body.Data.CredentialID {
+	if decoder.Decode(&body) != nil || decoder.Decode(new(any)) != io.EOF || record.Topic != CredentialTestTopic || body.EventType != record.Topic || string(record.Key) != body.OrgID.String() || body.OccurredAt.IsZero() || body.Actor.Kind != "user" {
+		return invalid()
+	}
+	if body.Data.Kind == "reachability" {
+		if body.Data.CredentialID != uuid.Nil || body.Aggregate.Type != "provider" || body.Aggregate.ID != body.Data.ProviderID {
+			return invalid()
+		}
+	} else if body.Aggregate.Type != "provider_credential" || body.Aggregate.ID != body.Data.CredentialID || body.Data.CredentialID == uuid.Nil {
 		return invalid()
 	}
 	key, err := uuid.Parse(body.Data.RequestID)
 	if err != nil || key == uuid.Nil || key.String() != body.Data.RequestID {
 		return invalid()
 	}
-	for _, id := range []uuid.UUID{body.EventID, body.OrgID, body.Actor.ID, body.Data.TestID, body.Data.ProviderID, body.Data.CredentialID} {
+	for _, id := range []uuid.UUID{body.EventID, body.OrgID, body.Actor.ID, body.Data.TestID, body.Data.ProviderID} {
 		if id == uuid.Nil {
 			return invalid()
 		}
 	}
-	request := application.CredentialTestRequest{TestID: body.Data.TestID, ProviderID: body.Data.ProviderID, CredentialID: body.Data.CredentialID, ActorID: body.Actor.ID, OrgID: body.OrgID, RequestID: body.Data.RequestID}
+	request := application.CredentialTestRequest{Kind: body.Data.Kind, TestID: body.Data.TestID, ProviderID: body.Data.ProviderID, CredentialID: body.Data.CredentialID, ActorID: body.Actor.ID, OrgID: body.OrgID, RequestID: body.Data.RequestID}
 	if request.TestID != uuid.NewSHA1(key, []byte(request.ActorID.String()+request.OrgID.String()+request.ProviderID.String()+request.CredentialID.String())) || body.EventID != uuid.NewSHA1(request.TestID, []byte("credential_test_requested")) {
 		return invalid()
 	}

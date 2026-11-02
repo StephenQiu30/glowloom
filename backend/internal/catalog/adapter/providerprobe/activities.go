@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -59,9 +60,9 @@ func (a *Activities) TestCredential(ctx context.Context, input catalogflow.Agent
  JOIN catalog.provider_config_version config ON config.id=check_run.config_version_id
  JOIN catalog.provider_preset_version pv ON pv.id=config.preset_version_id
  JOIN catalog.provider_preset preset ON preset.id=pv.preset_id AND NOT preset.emergency_disabled
- JOIN catalog.provider_credential credential ON credential.id=check_run.credential_id AND credential.status='active' AND NOT credential.is_delete
+ JOIN catalog.provider_credential credential ON credential.id=check_run.credential_id AND (credential.status='active' OR (check_run.kind='model_query' AND credential.status='draining')) AND NOT credential.is_delete
  WHERE check_run.id=? AND check_run.provider_id=? AND check_run.credential_id=? AND check_run.status='running'
- AND p.current_config_version_id=check_run.config_version_id AND p.adapter_key=?`, input.ActorID, input.TestID, input.ProviderID, input.Credential.ID, input.AdapterKey).Scan(&row)
+ AND (p.current_config_version_id=check_run.config_version_id OR check_run.kind='model_query') AND p.adapter_key=?`, input.ActorID, input.TestID, input.ProviderID, input.Credential.ID, input.AdapterKey).Scan(&row)
 	if r.Error != nil {
 		return unsupported, fmt.Errorf("authorize provider probe: %w", r.Error)
 	}
@@ -92,11 +93,12 @@ func (a *Activities) TestCredential(ctx context.Context, input catalogflow.Agent
 		ModelID                     *uuid.UUID
 		ModelVersionID              *uuid.UUID
 		ProviderModelID, Capability string
+		Kind, TaskID                string
 	}
-	r = a.db.WithContext(ctx).Raw(`SELECT check_run.model_id,check_run.model_version_id,v.provider_model_id,m.capability
+	r = a.db.WithContext(ctx).Raw(`SELECT check_run.model_id,check_run.model_version_id,v.provider_model_id,m.capability,check_run.kind,check_run.task_id
  FROM catalog.provider_check check_run JOIN catalog.model_profile m ON m.id=check_run.model_id
- JOIN catalog.model_profile_version v ON v.id=check_run.model_version_id AND v.id=m.current_version_id
- WHERE check_run.id=? AND check_run.kind='model_access' AND NOT m.is_delete AND NOT v.is_delete`, input.TestID).Scan(&selected)
+ JOIN catalog.model_profile_version v ON v.id=check_run.model_version_id AND (v.id=m.current_version_id OR check_run.kind='model_query')
+ WHERE check_run.id=? AND check_run.kind IN ('model_access','model_query') AND NOT m.is_delete AND NOT v.is_delete`, input.TestID).Scan(&selected)
 	if r.Error != nil {
 		return unsupported, r.Error
 	}
@@ -104,17 +106,35 @@ func (a *Activities) TestCredential(ctx context.Context, input catalogflow.Agent
 		claimed := a.db.WithContext(ctx).Exec(`UPDATE catalog.provider_check check_run SET dispatch_started_at=now()
  FROM catalog.provider p, catalog.provider_credential key, catalog.model_profile m
  WHERE check_run.id=? AND check_run.status='running' AND check_run.dispatch_started_at IS NULL
- AND p.id=check_run.provider_id AND p.current_config_version_id=check_run.config_version_id AND NOT p.is_delete
- AND key.id=check_run.credential_id AND key.status='active' AND NOT key.is_delete
- AND m.id=check_run.model_id AND m.current_version_id=check_run.model_version_id AND NOT m.is_delete`, input.TestID)
+ AND p.id=check_run.provider_id AND (p.current_config_version_id=check_run.config_version_id OR check_run.kind='model_query') AND NOT p.is_delete
+ AND key.id=check_run.credential_id AND (key.status='active' OR (check_run.kind='model_query' AND key.status='draining')) AND NOT key.is_delete
+ AND m.id=check_run.model_id AND (m.current_version_id=check_run.model_version_id OR check_run.kind='model_query') AND NOT m.is_delete`, input.TestID)
 		if claimed.Error != nil {
 			return unsupported, claimed.Error
 		}
 		if claimed.RowsAffected != 1 {
 			return catalogflow.AgentTestOutput{Result: catalogdomain.TestUnreachable, AuthResult: "unknown", AdapterResult: "ok", DiscoveryResult: "unsupported", ModelResult: "unknown"}, nil
 		}
-		probe := a.client.ProbeModel(ctx, configuration, selected.ProviderModelID, selected.Capability, providerKey)
-		result := catalogflow.AgentTestOutput{Result: catalogdomain.TestUnreachable, AuthResult: "unknown", AdapterResult: "ok", DiscoveryResult: "unsupported", ModelResult: probe.Result, TaskID: probe.TaskID}
+		started := time.Now()
+		var probe providerhttp.ModelProbeResult
+		if selected.Kind == "model_query" {
+			generated, err := a.client.Query(ctx, configuration, selected.TaskID, providerKey)
+			probe = providerhttp.ModelProbeResult{Result: "unknown", TaskID: selected.TaskID}
+			if err == nil {
+				switch generated.State {
+				case "succeeded":
+					probe.Result = "completed"
+				case "queued", "running":
+					probe.Result = "accepted"
+				case "failed", "cancelled", "expired":
+					probe.Result = "rejected"
+					probe.ErrorCode = "upstream_unavailable"
+				}
+			}
+		} else {
+			probe = a.client.ProbeModel(ctx, configuration, selected.ProviderModelID, selected.Capability, providerKey)
+		}
+		result := catalogflow.AgentTestOutput{ElapsedMS: time.Since(started).Milliseconds(), Result: catalogdomain.TestUnreachable, AuthResult: "unknown", AdapterResult: "ok", DiscoveryResult: "unsupported", ModelResult: probe.Result, TaskID: probe.TaskID}
 		switch probe.Result {
 		case "completed", "accepted":
 			result.Result, result.AuthResult = catalogdomain.TestOK, "ok"
@@ -131,21 +151,40 @@ func (a *Activities) TestCredential(ctx context.Context, input catalogflow.Agent
 	}
 	// A stale model selection must never fall back to a weaker metadata probe.
 	var isModel bool
-	if err := a.db.WithContext(ctx).Raw(`SELECT kind='model_access' FROM catalog.provider_check WHERE id=?`, input.TestID).Scan(&isModel).Error; err != nil {
+	if err := a.db.WithContext(ctx).Raw(`SELECT kind IN ('model_access','model_query') FROM catalog.provider_check WHERE id=?`, input.TestID).Scan(&isModel).Error; err != nil {
 		return unsupported, err
 	}
 	if isModel {
 		return unsupported, nil
 	}
-	result := a.client.Probe(ctx, configuration, providerKey)
+	claimed := a.db.WithContext(ctx).Exec(`UPDATE catalog.provider_check check_run SET dispatch_started_at=now()
+ FROM catalog.provider p,catalog.provider_credential key
+ WHERE check_run.id=? AND check_run.provider_id=? AND check_run.credential_id=? AND check_run.kind IN ('connectivity','credential_auth','discovery') AND check_run.status='running' AND check_run.dispatch_started_at IS NULL
+ AND p.id=check_run.provider_id AND (p.current_config_version_id=check_run.config_version_id OR check_run.kind='model_query') AND NOT p.is_delete
+ AND key.id=check_run.credential_id AND (key.status='active' OR (check_run.kind='model_query' AND key.status='draining')) AND NOT key.is_delete`, input.TestID, input.ProviderID, input.Credential.ID)
+	if claimed.Error != nil {
+		return unsupported, claimed.Error
+	}
+	if claimed.RowsAffected != 1 {
+		return unsupported, catalogapp.ErrInvalidCredentialTest
+	}
+	bounded, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	started := time.Now()
+	result := a.client.Probe(bounded, configuration, providerKey)
+	if result.Auth == "unknown" && result.Discovery == "unsupported" {
+		result.Auth = "unsupported"
+	}
 	category := catalogdomain.TestUnreachable
 	switch result.Auth {
 	case "ok":
 		category = catalogdomain.TestOK
 	case "auth_failed":
 		category = catalogdomain.TestAuthFailed
+	case "unsupported":
+		category = catalogdomain.TestUnsupported
 	}
-	return catalogflow.AgentTestOutput{Result: category, AuthResult: result.Auth, AdapterResult: result.Adapter, DiscoveryResult: result.Discovery, Candidates: result.Candidates}, nil
+	return catalogflow.AgentTestOutput{HTTPStatus: result.HTTPStatus, ElapsedMS: time.Since(started).Milliseconds(), Result: category, AuthResult: result.Auth, AdapterResult: result.Adapter, DiscoveryResult: result.Discovery, Candidates: result.Candidates}, nil
 }
 
 // NewScopedActivities injects receipt/current-epoch authority at the actual key owner.

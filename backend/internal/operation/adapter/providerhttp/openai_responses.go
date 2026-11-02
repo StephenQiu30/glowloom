@@ -40,7 +40,7 @@ func submitOpenAIResponses(ctx context.Context, c *Client, input application.Gen
 		if slices.Contains([]int{400, 401, 402, 403, 404, 422, 429}, status) {
 			outcome = "rejected"
 		}
-		return application.GenerationResult{Outcome: outcome, ErrorCode: safeHTTPError(status)}, nil
+		return application.GenerationResult{Outcome: outcome, ErrorCode: safeHTTPErrorBody(status, data)}, nil
 	}
 	var response struct {
 		Status string `json:"status"`

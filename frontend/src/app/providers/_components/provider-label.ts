@@ -47,3 +47,14 @@ export function connectionPresets(
       return rank(a) - rank(b);
     });
 }
+
+/** Public console roots only; never append keys, prompts or task URLs. */
+export function providerConsoleURL(adapter?: string) {
+  return (
+    {
+      openai: "https://platform.openai.com/",
+      deepseek: "https://platform.deepseek.com/",
+      volcengine_ark: "https://console.volcengine.com/ark",
+    } as Record<string, string>
+  )[adapter ?? ""];
+}

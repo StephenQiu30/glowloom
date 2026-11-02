@@ -169,6 +169,23 @@ export async function createProviderTrialQuote(
   );
 }
 
+/** 恢复原模型试运行 GET /api/admin/model-releases/${param0}/trial-recovery */
+export async function getProviderTrialRecovery(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getProviderTrialRecoveryParams,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.ProviderTrialRecovery>(
+    `/api/admin/model-releases/${param0}/trial-recovery`,
+    {
+      method: "GET",
+      params: { ...queryParams },
+      ...(options || {}),
+    },
+  );
+}
+
 /** 管理员模型目录 GET /api/admin/models */
 export async function listAdminModels(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -315,6 +332,42 @@ export async function getProviderCheck(
   const { id: param0, ...queryParams } = params;
   return request<API.ProviderCheck>(`/api/admin/provider-checks/${param0}`, {
     method: "GET",
+    params: { ...queryParams },
+    ...(options || {}),
+  });
+}
+
+/** 结束追踪并保留未知 POST /api/admin/provider-checks/${param0}/end-tracking */
+export async function endProviderCheckTracking(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.endProviderCheckTrackingParams,
+  body: API.EndTrackingInput,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.ProviderCheck>(
+    `/api/admin/provider-checks/${param0}/end-tracking`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    },
+  );
+}
+
+/** 查询原模型验证任务 POST /api/admin/provider-checks/${param0}/query */
+export async function queryProviderModelCheck(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.queryProviderModelCheckParams,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<any>(`/api/admin/provider-checks/${param0}/query`, {
+    method: "POST",
     params: { ...queryParams },
     ...(options || {}),
   });
@@ -523,6 +576,39 @@ export async function applyProviderPreset(
   );
 }
 
+/** 服务测试记录 GET /api/admin/providers/${param0}/checks */
+export async function listProviderChecks(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.listProviderChecksParams,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.ProviderCheckPage>(
+    `/api/admin/providers/${param0}/checks`,
+    {
+      method: "GET",
+      params: {
+        ...queryParams,
+      },
+      ...(options || {}),
+    },
+  );
+}
+
+/** 检测服务地址连通 POST /api/admin/providers/${param0}/checks/reachability */
+export async function testProviderReachability(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.testProviderReachabilityParams,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<any>(`/api/admin/providers/${param0}/checks/reachability`, {
+    method: "POST",
+    params: { ...queryParams },
+    ...(options || {}),
+  });
+}
+
 /** 读取连接配置快照 GET /api/admin/providers/${param0}/config */
 export async function getProviderConfig(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -669,6 +755,23 @@ export async function activateProviderOnboarding(
       },
       params: { ...queryParams },
       data: body,
+      ...(options || {}),
+    },
+  );
+}
+
+/** 服务可测试模型 GET /api/admin/providers/${param0}/test-models */
+export async function listProviderTestModels(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.listProviderTestModelsParams,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.ProviderTestModel[]>(
+    `/api/admin/providers/${param0}/test-models`,
+    {
+      method: "GET",
+      params: { ...queryParams },
       ...(options || {}),
     },
   );

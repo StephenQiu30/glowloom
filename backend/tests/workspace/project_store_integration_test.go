@@ -14,6 +14,7 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
@@ -253,6 +254,13 @@ func TestWorkspaceStoreReadsOnlyCurrentActorsOrganization(t *testing.T) {
 	budget, err := store.FindBudget(ctx, actor, project.ID)
 	if err != nil || budget.ProjectID != project.ID || budget.LimitMicros != 0 {
 		t.Fatalf("own budget = %+v, err=%v", budget, err)
+	}
+	budgetView, err := workspaceapp.NewProjectBudgetQuery(store).Read(ctx, actor, project.ID)
+	if err != nil || budgetView.ProjectID != project.ID || budgetView.AvailableMicros != 0 {
+		t.Fatalf("budget view = %+v,err=%v", budgetView, err)
+	}
+	if _, err := workspaceapp.NewProjectBudgetQuery(store).Read(ctx, otherActor, project.ID); err == nil {
+		t.Fatal("other organization read budget view")
 	}
 	if _, err := store.FindProject(ctx, otherActor, project.ID); err == nil {
 		t.Fatal("other organization read project")

@@ -141,6 +141,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	protected.Use(workspacehttp.RequireCreationScope(scopewire.ProvideRequestScopeAccess(database)))
 	protected.Use(workspacehttp.RequireProjectAccess(workspaceStore))
 	workspacehttp.NewHandler(workspaceapp.NewListProjectsQuery(workspaceStore), workspaceapp.NewCreateProjectCommand(workspaceStore, time.Now), workspaceapp.NewListStylePresetsQuery(workspaceStore)).Register(protected)
+	workspacehttp.NewProjectBudgetHandler(workspaceapp.NewProjectBudgetQuery(workspaceStore)).Register(protected)
 	workspacehttp.NewProjectLifecycleHandler(workspaceapp.NewProjectLifecycle(workspaceStore, time.Now)).Register(protected)
 	workspacehttp.NewProjectCreationRecoveryHandler(workspaceapp.NewProjectCreationRecoveryQuery(workspaceStore)).Register(protected)
 	copies := copywire.ProvideProjectCopyStore(database)

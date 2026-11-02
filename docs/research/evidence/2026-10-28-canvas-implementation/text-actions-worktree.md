@@ -70,7 +70,7 @@
 | `??` | `docs/research/evidence/2026-10-28-jimeng-explore/search.png` | 并行任务，保留 |
 | `??` | `docs/research/evidence/2026-10-28-jimeng-explore/skill-detail.png` | 并行任务，保留 |
 | `??` | `docs/research/evidence/2026-10-28-jimeng-explore/skills.png` | 并行任务，保留 |
-| `??` | `docs/research/evidence/2026-10-28-jimeng-explore/validate-planning.py` | 并行任务，保留 |
+| `??` | `docs/research/evidence/2026-10-28-jimeng-explore/` | 并行任务的探索证据目录，保留 |
 | `??` | `docs/research/evidence/2026-10-28-jimeng-explore/validation.md` | 并行任务，保留 |
 | `??` | `docs/research/evidence/2026-10-28-jimeng-explore/workflow-readonly.png` | 并行任务，保留 |
 | `??` | `docs/research/evidence/2026-10-28-subject-implementation/worktree-status.txt` | 并行任务，保留 |

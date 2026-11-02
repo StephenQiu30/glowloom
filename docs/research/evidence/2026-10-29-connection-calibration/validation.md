@@ -52,9 +52,7 @@
 
 ## 可复现方式
 
-- `python3 compare-screenshots.py`：使用Pillow和保存的原始PNG重算同ICC截图指标。
-- `analyze-source-frames.py` 与 `fit-source-period.py`：以本目录原始连续帧及时间戳重算图像周期。
-- 从上述审计URL获取对应worker，在本仓已安装前端依赖的环境执行 `node prepare-harness.mjs <临时输出目录> <下载的worker路径>`。该脚本校验参考SHA、只提取GLSL文本，不执行bundle；从当前产品TS编译本地模块。用仅绑定127.0.0.1的静态服务器提供输出目录，浏览器打开 `/shader-parity.html` 点击运行；`/isolated.html` 用于相位与截图比较。没有向产品加入测试路由。
+当次核对使用本目录保存的原始 PNG、连续帧和时间戳，重算同 ICC 截图指标与图像周期。参考 worker 只用于提取 GLSL 文本并和本地模块比较，没有执行 bundle，也没有向产品加入测试路由。结果保留在本目录的日志和图像证据中。
 
 ## Git 范围与未决事项
 

@@ -208,13 +208,21 @@ func (d *VolcengineArkDriver) Probe(ctx context.Context, c *Client, config catal
 		result.Adapter = "unsupported"
 		return result
 	}
-	_, status, err := c.request(ctx, config, key, http.MethodGet, "/contents/generations/tasks?page_size=1", nil, 1<<20)
+	data, status, err := c.request(ctx, config, key, http.MethodGet, "/contents/generations/tasks?page_size=1", nil, 1<<20)
 	if err != nil {
 		result.Auth = "unreachable"
 		return result
 	}
+	result.HTTPStatus = status
 	if status != 200 {
-		result.Auth = safeHTTPError(status)
+		result.Auth = safeHTTPErrorBody(status, data)
+		return result
+	}
+	var response struct {
+		Items []json.RawMessage `json:"items"`
+	}
+	if json.Unmarshal(data, &response) != nil || response.Items == nil {
+		result.Auth = "invalid_response"
 		return result
 	}
 	result.Auth = "ok"

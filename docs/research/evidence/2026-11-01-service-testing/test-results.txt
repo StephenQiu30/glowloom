@@ -1,0 +1,88 @@
+2026-11-01 SRC-AI-33 命令结果摘录。退出码逐项来自实际运行；不含真实Key或供应商原始错误体。
+
+
+完整相关后端Race（catalog/model/operation各自测试DSN已设置）
+命令: go test -race -count=1 ./tests/catalog ./tests/operation ./internal/operation/adapter/providerhttp
+退出码: 0
+ok  	github.com/StephenQiu30/glowloom-server/backend/tests/catalog	24.315s
+ok  	github.com/StephenQiu30/glowloom-server/backend/tests/operation	66.361s
+ok  	github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/providerhttp	1.330s
+
+预算所属项目/组织Race（workspace测试DSN已设置）
+命令: go test -race -count=1 ./tests/workspace -run TestWorkspaceStoreReadsOnlyCurrentActorsOrganization
+退出码: 0
+ok  	github.com/StephenQiu30/glowloom-server/backend/tests/workspace	2.670s
+
+相关前端/API交互
+命令: pnpm exec vitest run tests/unit/app/providers/_components tests/unit/app/models/_components/provider-trial.test.tsx tests/unit/app/api/ tests/unit/api-generation.test.ts
+退出码: 0
+ Test Files  17 passed (17)
+      Tests  157 passed (157)
+
+完整前端，最后一次
+命令: pnpm exec vitest run --maxWorkers=2 --reporter=dot
+退出码: 1
+ FAIL  tests/unit/business-storage-policy.test.ts > all application business modules avoid browser durable storage; only the view preference whitelist remains
+ FAIL  tests/unit/components/canvas/advanced-source-combinations.test.ts > advanced source combinations remain complete and atomic > rejects director with text when connecting to an existing image
+ FAIL  tests/unit/components/canvas/advanced-source-combinations.test.ts > advanced source combinations remain complete and atomic > rejects a mixed text + timeline batch without leaving a valid subset
+ FAIL  tests/unit/components/canvas/advanced-source-combinations.test.ts > advanced source combinations remain complete and atomic > rejects a mixed text + group batch without leaving a valid subset
+ Test Files  2 failed | 275 passed (277)
+      Tests  4 failed | 1997 passed (2001)
+
+类型
+命令: pnpm exec tsc --noEmit
+退出码: 0
+无错误输出。
+
+生产构建
+命令: pnpm exec next build
+退出码: 0
+✓ Running next.config.ts took 71ms
+✓ Compiled successfully in 3.5s
+  Finished TypeScript in 2.3s ...
+✓ Generating static pages using 9 workers (35/35) in 135ms
+
+API生成一致性
+命令: pnpm api:check
+退出码: 0
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+
+变更范围ESLint
+命令: pnpm exec eslint <implementation-files中的现存TS/TSX>
+退出码: 0
+✖ 3 problems (0 errors, 3 warnings)
+API生成目录依项目配置忽略（3条warning）；源代码0 errors。
+
+变更范围Prettier
+命令: pnpm exec prettier --check <implementation-files中的现存TS/TSX>
+退出码: 0
+All matched files use Prettier code style!
+
+Go vet
+命令: go vet ./...
+退出码: 0
+无错误输出。
+
+变更范围Go lint
+命令: golangci-lint run --new-from-rev=HEAD ./...
+退出码: 0
+0 issues.
+
+重复迁移
+命令: psql -v ON_ERROR_STOP=1 -1 -f provider_testing_incremental.sql（隔离库连续两次）
+退出码: 0
+两次事务脚本均成功；ADD COLUMN IF NOT EXISTS提示已存在，类型约束重建成功。
+
+漏洞扫描
+命令: govulncheck ./...
+退出码: 0
+Your code is affected by 0 vulnerabilities.
+This scan also found 0 vulnerabilities in packages you import and 1
+vulnerability in modules you require, but your code doesn't appear to call these
+
+workspace完整Race（glowloom_reference）
+命令: go test -race -count=1 ./tests/workspace
+退出码: 1
+--- FAIL: TestListProjectsScopesStatusesRecycleBinAndLiteralSearchOnPostgres (0.65s)
+FAIL	github.com/StephenQiu30/glowloom-server/backend/tests/workspace	134.013s

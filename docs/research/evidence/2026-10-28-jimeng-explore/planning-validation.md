@@ -14,13 +14,12 @@
 从仓库根执行：
 
 ```sh
-python3 docs/research/evidence/2026-10-28-jimeng-explore/validate-planning.py
 frontend/node_modules/.bin/prettier --check docs/design/28-探索发现与创作转化设计.md docs/prd/15-探索发现与创作转化.md docs/plan/24-探索一致性改造Agent执行计划.md docs/requirement/15-探索对齐即梦需求.md
 git diff --check
 git -c core.quotepath=false status --short
 ```
 
-- 13项结构与追踪检查通过，机器结果见[planning-checks.json](planning-checks.json)，可复用校验脚本见[validate-planning.py](validate-planning.py)。设计八节、7项原始要求、40FR+10NFR无遗漏无重复、10故事、22AC、22场景、15工作包、10组FIG、8项决策、唯一来源和无环依赖均符合预期。
+- 13项结构与追踪检查通过，机器结果见[planning-checks.json](planning-checks.json)。一次性检查脚本已从仓库移除。设计八节、7项原始要求、40FR+10NFR无遗漏无重复、10故事、22AC、22场景、15工作包、10组FIG、8项决策、唯一来源和无环依赖均符合预期。
 - 链接核查覆盖本任务正文及被追加的共享导航/规范；检查本地文件存在性，不对历史共享锚点做重新解释。最终链接数量与时间以JSON为准。首次广扫曾遇并行画布任务的证据文件尚未落盘，重查时已存在，未由本任务补造。
 - 四份新需求/设计/PRD/Plan的Prettier检查通过；`git diff --check`通过。未对共享大文档整文件重新格式化。
 - 人工核对来源语义：补齐回到顶部、详情字段、播放器控制/离屏停止、技能正文/收藏、活动历史展开、搜索组内容；所有后置写入明确成功、失败和未知，不把竞品未测内容改写为已证事实。

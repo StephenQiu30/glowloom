@@ -31,6 +31,42 @@ func safeHTTPError(status int) string {
 	}
 }
 
+// safeHTTPErrorBody maps only reviewed error codes; upstream messages never escape.
+func safeHTTPErrorBody(status int, data []byte) string {
+	var body struct {
+		Error struct {
+			Code string `json:"code"`
+			Type string `json:"type"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(data, &body) == nil {
+		for _, code := range []string{body.Error.Code, body.Error.Type} {
+			switch code {
+			case "credit_balance_exhausted":
+				return "insufficient_balance"
+			case "project_spend_limit_exceeded":
+				return "project_limit_exceeded"
+			case "organization_usage_limit_exceeded":
+				return "organization_limit_exceeded"
+			case "insufficient_quota":
+				return "insufficient_quota"
+			case "ip_not_authorized":
+				return "ip_restricted"
+			case "unsupported_country_region_territory":
+				return "region_restricted"
+			case "permission_denied", "insufficient_permissions":
+				return "permission_denied"
+			case "invalid_api_key":
+				return "auth_failed"
+			}
+		}
+	}
+	if status == 403 {
+		return "permission_denied"
+	}
+	return safeHTTPError(status)
+}
+
 func safeUsage(raw json.RawMessage) json.RawMessage {
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(raw, &fields) != nil {

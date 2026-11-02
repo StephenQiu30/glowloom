@@ -15,6 +15,7 @@ var ErrCredentialTestKeyReused = errors.New("credential test request key reused"
 
 // CredentialTestAccepted reports scheduling, never successful provider credentials.
 type CredentialTestAccepted struct {
+	Kind         string     `json:"kind,omitempty"`
 	ModelID      *uuid.UUID `json:"model_id,omitempty"`
 	TestID       uuid.UUID  `json:"test_id"`
 	CheckID      uuid.UUID  `json:"check_id"`
@@ -39,12 +40,20 @@ func NewRequestCredentialTestCommand(store CredentialTestRequestStore) *RequestC
 
 // Execute accepts only administrators and derives a stable test identity.
 func (c *RequestCredentialTestCommand) Execute(ctx context.Context, actor identityapp.Principal, providerID, credentialID uuid.UUID, key string) (CredentialTestAccepted, error) {
+	if credentialID == uuid.Nil {
+		return CredentialTestAccepted{}, ErrInvalidCredentialTest
+	}
 	return c.execute(ctx, actor, providerID, credentialID, uuid.Nil, key)
+}
+
+// ExecuteReachability schedules a key-free address probe.
+func (c *RequestCredentialTestCommand) ExecuteReachability(ctx context.Context, actor identityapp.Principal, providerID uuid.UUID, key string) (CredentialTestAccepted, error) {
+	return c.execute(ctx, actor, providerID, uuid.Nil, uuid.Nil, key)
 }
 
 // ExecuteModel validates one selected model using a real provider request.
 func (c *RequestCredentialTestCommand) ExecuteModel(ctx context.Context, actor identityapp.Principal, providerID, credentialID, modelID uuid.UUID, key string) (CredentialTestAccepted, error) {
-	if modelID == uuid.Nil {
+	if modelID == uuid.Nil || credentialID == uuid.Nil {
 		return CredentialTestAccepted{}, ErrInvalidCredentialTest
 	}
 	return c.execute(ctx, actor, providerID, credentialID, modelID, key)
@@ -55,10 +64,13 @@ func (c *RequestCredentialTestCommand) execute(ctx context.Context, actor identi
 		return CredentialTestAccepted{}, err
 	}
 	requestID, err := uuid.Parse(key)
-	if c == nil || c.store == nil || err != nil || requestID == uuid.Nil || requestID.String() != key || providerID == uuid.Nil || credentialID == uuid.Nil {
+	if c == nil || c.store == nil || err != nil || requestID == uuid.Nil || requestID.String() != key || providerID == uuid.Nil {
 		return CredentialTestAccepted{}, ErrInvalidCredentialTest
 	}
 	request := CredentialTestRequest{ModelID: modelID, TestID: uuid.NewSHA1(requestID, []byte(actor.ID.String()+actor.OrgID.String()+providerID.String()+credentialID.String())), ProviderID: providerID, CredentialID: credentialID, ActorID: actor.ID, OrgID: actor.OrgID, RequestID: key}
+	if credentialID == uuid.Nil {
+		request.Kind = "reachability"
+	}
 	result, err := c.store.RequestCredentialTest(ctx, actor, request)
 	if err != nil {
 		return CredentialTestAccepted{}, fmt.Errorf("request credential test: %w", err)

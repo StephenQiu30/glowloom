@@ -74,7 +74,7 @@ func (s *Store) ReadProviderOnboarding(ctx context.Context, actor identityapp.Pr
 		}
 		if err := tx.Raw(`SELECT m.id,v.id AS version_id,r.id AS release_id,m.display_name,v.provider_model_id,m.capability,m.status
  FROM catalog.model_profile m JOIN catalog.model_release r ON r.model_id=m.id AND r.upstream_cost='{}'::jsonb
- JOIN catalog.model_profile_version v ON v.id=r.model_version_id
+ JOIN catalog.model_profile_version v ON v.id=r.model_version_id AND v.id=m.current_version_id
  JOIN catalog.provider p ON p.id=m.provider_id AND p.current_config_version_id=r.config_version_id
  WHERE m.provider_id=? AND m.candidate_snapshot IS NOT NULL AND NOT m.is_delete AND NOT v.is_delete
  ORDER BY m.capability,m.display_name LIMIT ?`, id, domain.MaxPresetModels).Scan(&result.Models).Error; err != nil {
@@ -82,9 +82,10 @@ func (s *Store) ReadProviderOnboarding(ctx context.Context, actor identityapp.Pr
 		}
 		var check application.ProviderCheck
 		r = tx.Raw(`SELECT check_run.id,check_run.provider_id,check_run.config_version_id,check_run.credential_id,check_run.model_id,check_run.model_version_id,
- check_run.kind,check_run.status,check_run.auth_result,check_run.adapter_result,check_run.discovery_result,check_run.model_result,check_run.task_id,check_run.error_code,check_run.create_time AS created_at,check_run.completed_at
+ check_run.elapsed_ms,check_run.request_id,check_run.tracking_ended_at,check_run.tracking_note,check_run.kind,check_run.status,check_run.auth_result,check_run.adapter_result,check_run.discovery_result,check_run.model_result,check_run.task_id,check_run.error_code,check_run.create_time AS created_at,check_run.completed_at,true AS current
  FROM catalog.provider_check check_run JOIN catalog.provider p ON p.id=check_run.provider_id AND p.current_config_version_id=check_run.config_version_id
  JOIN catalog.provider_credential c ON c.id=check_run.credential_id AND c.status='active' AND NOT c.is_delete
+ JOIN catalog.model_profile checked_model ON checked_model.id=check_run.model_id AND checked_model.current_version_id=check_run.model_version_id AND NOT checked_model.is_delete
  WHERE check_run.provider_id=? AND check_run.kind='model_access' ORDER BY check_run.create_time DESC,check_run.id DESC LIMIT 1`, id).Scan(&check)
 		if r.Error != nil {
 			return r.Error

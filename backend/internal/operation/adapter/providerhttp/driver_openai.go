@@ -143,7 +143,7 @@ func (d *OpenAICompatibleDriver) Submit(ctx context.Context, c *Client, input ap
 		if slices.Contains([]int{400, 401, 402, 403, 404, 422, 429}, status) {
 			outcome = "rejected"
 		}
-		return application.GenerationResult{Outcome: outcome, ErrorCode: safeHTTPError(status)}, nil
+		return application.GenerationResult{Outcome: outcome, ErrorCode: safeHTTPErrorBody(status, data)}, nil
 	}
 	result, ok := parseStandardGenerationResponse(input, data)
 	if !ok {
@@ -167,7 +167,7 @@ func (d *OpenAICompatibleDriver) Query(ctx context.Context, c *Client, config ca
 		if status == 404 {
 			state = "not_found"
 		}
-		return application.GenerationResult{State: state, ErrorCode: safeHTTPError(status)}, nil
+		return application.GenerationResult{State: state, ErrorCode: safeHTTPErrorBody(status, data)}, nil
 	}
 	var response struct {
 		ID           string          `json:"id"`
@@ -218,23 +218,23 @@ func (d *OpenAICompatibleDriver) Probe(ctx context.Context, c *Client, config ca
 			result.Auth = "unreachable"
 			return result
 		}
+		result.HTTPStatus = status
 		if status != 200 {
-			result.Auth = safeHTTPError(status)
+			result.Auth = safeHTTPErrorBody(status, authData)
 			return result
 		}
-		result.Auth = "ok"
 		var response struct {
 			Data []struct {
 				ID string `json:"id"`
 			} `json:"data"`
 		}
 		if json.Unmarshal(authData, &response) != nil || response.Data == nil || len(response.Data) > 500 {
-			result.Discovery = "invalid_response"
+			result.Auth, result.Discovery = "invalid_response", "invalid_response"
 			return result
 		}
 		for _, model := range response.Data {
 			if model.ID == "" || len(model.ID) > 256 {
-				result.Discovery = "invalid_response"
+				result.Auth, result.Discovery = "invalid_response", "invalid_response"
 				return result
 			}
 			capability := "text.generate"
@@ -248,7 +248,7 @@ func (d *OpenAICompatibleDriver) Probe(ctx context.Context, c *Client, config ca
 				Metadata:        json.RawMessage(`{"verified":false}`),
 			})
 		}
-		result.Discovery = "ok"
+		result.Auth, result.Discovery = "ok", "ok"
 		return result
 	}
 	if config.AdapterKey == "codex" {
@@ -257,13 +257,14 @@ func (d *OpenAICompatibleDriver) Probe(ctx context.Context, c *Client, config ca
 	}
 
 	// OpenRouter discovery: probe /key then enumerate endpoints.
-	_, status, err := c.request(ctx, config, key, http.MethodGet, "/key", nil, 1<<20)
+	data, status, err := c.request(ctx, config, key, http.MethodGet, "/key", nil, 1<<20)
 	if err != nil {
 		result.Auth = "unreachable"
 		return result
 	}
+	result.HTTPStatus = status
 	if status != 200 {
-		result.Auth = safeHTTPError(status)
+		result.Auth = safeHTTPErrorBody(status, data)
 		return result
 	}
 	result.Auth = "ok"

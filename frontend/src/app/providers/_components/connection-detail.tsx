@@ -1,8 +1,8 @@
 "use client";
-import { ConnectionOnboarding } from "./connection-onboarding";
+import { ConnectionTests } from "./connection-tests";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { LoadingState } from "@/components/layout/loading-state";
-import { ChevronDown, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -30,19 +30,11 @@ import {
 } from "@/components/ui/empty";
 import {
   Item,
-  ItemGroup,
   ItemContent,
   ItemTitle,
   ItemActions,
 } from "@/components/ui/item";
-import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
-import { regionLabel } from "./connection-list";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -61,8 +53,6 @@ import {
   getAdminProvider,
   getProviderConfig,
   setAdminCredential,
-  testAdminCredential,
-  getProviderCheck,
   previewProviderUpgrade,
   applyProviderPreset,
   listProviderCredentials,
@@ -80,13 +70,32 @@ export function ConnectionDetail({
   presets,
   onSaved,
   revision = 0,
+  initialView = "overview",
+  onViewChange,
+  initialModel,
+  initialRelease,
+  initialMode,
 }: {
   id: string;
   revision?: number;
+  initialView?: string;
+  onViewChange?: (value: string) => void;
+  initialModel?: string;
+  initialRelease?: string;
+  initialMode?: string;
   presets: API.Preset[];
   onSaved: () => void;
 }) {
   const formFieldId = useId();
+  const [view, setView] = useState(
+    ["overview", "test", "key", "config"].includes(initialView)
+      ? initialView
+      : "overview",
+  );
+  function changeView(value: string) {
+    setView(value);
+    onViewChange?.(value);
+  }
 
   const [detail, setDetail] = useState<API.ProviderDetail | null>(null);
   const [config, setConfig] = useState<API.ConnectionConfig | null>(null);
@@ -98,9 +107,6 @@ export function ConnectionDetail({
   const [visible, setVisible] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState("");
-  const [check, setCheck] = useState<API.ProviderCheck | null>(null);
-  const [checkID, setCheckID] = useState("");
-  const [checking, setChecking] = useState(false);
   const [target, setTarget] = useState("");
   const [preview, setPreview] = useState<API.ConfigUpgradePreview | null>(null);
   const [resolution, setResolution] = useState("");
@@ -135,39 +141,20 @@ export function ConnectionDetail({
       });
     return () => abort.abort();
   }, [id, revision, attempt]);
-  useEffect(() => {
-    if (!checkID) return;
-    const abort = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    async function poll() {
-      try {
-        const result = await getProviderCheck(
-          { id: checkID },
-          { signal: abort.signal },
-        );
-        if (abort.signal.aborted) return;
-        setCheck(result);
-        if (result.status === "pending" || result.status === "running")
-          timer = setTimeout(poll, 3000);
-        else setChecking(false);
-      } catch (error) {
-        if (!abort.signal.aborted) {
-          setError(catalogMessage(error));
-          setChecking(false);
-        }
-      }
-    }
-    void poll();
-    return () => {
-      abort.abort();
-      clearTimeout(timer);
-    };
-  }, [checkID]);
   const provider = detail?.provider;
   const musicCredential = provider?.adapter_key === "volcengine_music";
   return (
-    <section className="flex min-w-0 flex-col gap-6" aria-label="连接详情">
-      <h2 className="text-lg font-medium">{provider?.name ?? "连接详情"}</h2>
+    <section
+      className="flex min-h-0 min-w-0 flex-1 flex-col gap-4"
+      aria-label="连接详情"
+    >
+      <h2
+        data-connection-title
+        tabIndex={-1}
+        className="pr-8 text-lg font-medium outline-none"
+      >
+        {provider?.name ?? "连接详情"}
+      </h2>
       {error ? <FeedbackToast message={error} /> : null}
       {!detail ? (
         error ? (
@@ -192,13 +179,13 @@ export function ConnectionDetail({
         )
       ) : (
         <>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {provider?.status === "active"
               ? "已启用"
               : provider?.status === "disabled"
                 ? "未启用"
                 : "状态未知"}{" "}
-            · {regionLabel(provider?.region)}
+            · {detail.credential?.status === "active" ? "已配置" : "未配置"}
           </p>
           {onboardingPending ? (
             <>
@@ -212,13 +199,24 @@ export function ConnectionDetail({
           {mutation.message || mutation.pending ? (
             <MutationStatus mutation={mutation} />
           ) : null}
-          <Tabs defaultValue="overview" className="gap-6">
-            <TabsList className="w-full max-md:h-11" aria-label="连接详情视图">
+          <Tabs
+            value={view}
+            onValueChange={changeView}
+            className="min-h-0 flex-1 gap-4"
+          >
+            <TabsList
+              className="w-full shrink-0 max-md:h-11"
+              aria-label="连接详情视图"
+            >
               <TabsTrigger value="overview">概览</TabsTrigger>
-              <TabsTrigger value="key">API Key</TabsTrigger>
+              <TabsTrigger value="test">测试</TabsTrigger>
+              <TabsTrigger value="key">凭据</TabsTrigger>
               <TabsTrigger value="config">高级配置</TabsTrigger>
             </TabsList>
-            <TabsContent value="overview" className="flex flex-col gap-6">
+            <TabsContent
+              value="overview"
+              className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto"
+            >
               <Item size="xs" className="px-0">
                 <ItemContent>
                   <ItemTitle>密钥配置</ItemTitle>
@@ -235,24 +233,16 @@ export function ConnectionDetail({
                   </Badge>
                 </ItemActions>
               </Item>
-              {[
-                "volcengine_music",
-                "volcengine_avatar",
-                "volcengine_motion",
-              ].includes(provider?.adapter_key ?? "") ? (
-                <p className="text-sm text-muted-foreground">
-                  请在模型管理中逐项试运行。完成生成与归档后，可启用已验证的发布。
-                </p>
-              ) : (
-                <ConnectionOnboarding
-                  id={id}
-                  revision={revision + attempt}
-                  onSaved={() => {
-                    onSaved();
-                    setAttempt((v) => v + 1);
-                  }}
-                />
-              )}
+              <p className="text-sm text-muted-foreground">
+                网络连通、凭据鉴权与具体模型的验证结果分别记录。
+              </p>
+              <Button
+                variant="outline"
+                className="self-start max-md:h-11"
+                onClick={() => changeView("test")}
+              >
+                查看测试
+              </Button>
               <Button
                 variant="outline"
                 asChild
@@ -262,104 +252,6 @@ export function ConnectionDetail({
                   模型管理
                 </Link>
               </Button>
-              <Collapsible className="flex flex-col gap-3">
-                <CollapsibleTrigger asChild>
-                  <Button type="button" variant="ghost" className="self-start">
-                    <ChevronDown data-icon="inline-start" />
-                    连接检查
-                  </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="flex flex-col gap-4">
-                  <p className="text-xs text-muted-foreground">
-                    只读检查，不生成内容。
-                  </p>
-                  <Button
-                    variant="outline"
-                    disabled={!detail.credential?.id || checking}
-                    onClick={async () => {
-                      setChecking(true);
-                      setError("");
-                      try {
-                        const result = await testAdminCredential(
-                          { id, credential_id: detail.credential!.id! },
-                          {
-                            headers: { "Idempotency-Key": crypto.randomUUID() },
-                          },
-                        );
-                        if (result.check_id) setCheckID(result.check_id);
-                        else throw new Error("检查回执不完整。");
-                      } catch (error) {
-                        setError(catalogMessage(error));
-                        setChecking(false);
-                      }
-                    }}
-                  >
-                    {checking ? <Spinner data-icon="inline-start" /> : null}
-                    {checking ? "正在检查" : "检查连接"}
-                  </Button>
-                  {check ? (
-                    <div className="flex flex-col gap-3 text-sm">
-                      <p>
-                        鉴权：{check.auth_result} · 适配：{check.adapter_result}{" "}
-                        · 发现：{check.discovery_result}
-                      </p>
-                      {check.discovery_result === "unsupported" ? (
-                        <p>
-                          此平台不提供已接入的模型发现接口，请在模型管理中填写账号可用的模型
-                          ID。
-                        </p>
-                      ) : null}
-                      {check.discovery_result === "partial" ? (
-                        <p>候选列表已截断，可在模型管理中手动补充模型 ID。</p>
-                      ) : null}
-                      {check.candidates?.length ? (
-                        <Collapsible>
-                          <CollapsibleTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              className="group/collapsible h-auto w-full justify-between whitespace-normal"
-                            >
-                              <span>
-                                查看 {check.candidates.length} 个候选模型
-                              </span>
-                              <ChevronDown
-                                data-icon="inline-end"
-                                className="transition-transform group-data-[state=open]/collapsible:rotate-180"
-                              />
-                            </Button>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent
-                            forceMount
-                            className="pt-3 data-[state=closed]:hidden"
-                          >
-                            <ItemGroup className="mt-2 max-h-64 overflow-auto">
-                              {check.candidates.map((item) => (
-                                <Item
-                                  key={`${item.capability}:${item.provider_model_id}`}
-                                  variant="outline"
-                                  className="break-all"
-                                >
-                                  <span>
-                                    {item.display_name ||
-                                      item.provider_model_id}
-                                  </span>
-                                  <code className="block text-xs">
-                                    {item.provider_model_id}
-                                  </code>
-                                  <span className="text-xs text-muted-foreground">
-                                    {item.capability}
-                                  </span>
-                                </Item>
-                              ))}
-                            </ItemGroup>
-                          </CollapsibleContent>
-                        </Collapsible>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </CollapsibleContent>
-              </Collapsible>
               {provider?.status === "active" ? (
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
@@ -404,8 +296,46 @@ export function ConnectionDetail({
                 </AlertDialog>
               ) : null}
             </TabsContent>
-            <TabsContent value="key" className="flex flex-col gap-6">
+            <TabsContent
+              value="test"
+              className="min-h-0 flex-1 overflow-y-auto"
+            >
+              <ConnectionTests
+                id={id}
+                adapter={provider?.adapter_key}
+                credentialID={
+                  detail.credential?.status === "active"
+                    ? detail.credential.id
+                    : undefined
+                }
+                revision={revision + attempt}
+                onSaved={() => {
+                  onSaved();
+                  setAttempt((v) => v + 1);
+                }}
+                onConfigure={() => changeView("key")}
+                initialModel={initialModel}
+                initialRelease={initialRelease}
+                initialMode={initialMode}
+              />
+            </TabsContent>
+            <TabsContent
+              value="key"
+              className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto"
+            >
               {" "}
+              {detail.credential?.status === "active" ? (
+                <div className="flex items-center justify-between gap-2">
+                  <Badge variant="secondary">已配置</Badge>
+                  <Button
+                    variant="outline"
+                    className="max-md:h-11"
+                    onClick={() => changeView("test")}
+                  >
+                    检查凭据
+                  </Button>
+                </div>
+              ) : null}
               <form
                 onSubmit={async (event) => {
                   event.preventDefault();

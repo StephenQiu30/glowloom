@@ -94,7 +94,7 @@ func (a operationProjectAccess) AuthorizeCatalog(ctx context.Context, actor iden
 func NewCatalogStore(db *gorm.DB) *pgcatalog.Store {
 	return pgcatalog.NewScopedStore(db, func(tx *gorm.DB) catalog.ActorAccess { return pgidentity.NewStore(tx) }, func(tx *gorm.DB) catalog.ProjectAccess {
 		return operationProjectAccess{store: scopewire.ProvideProjectContentAccess(tx), scopes: scopewire.ProvideRequestScopeAccess(tx)}
-	})
+	}).WithCheckUsage(func(tx *gorm.DB) catalog.ProviderCheckUsageReader { return pgoperation.NewStore(tx) })
 }
 
 // ProvideOperationPlatformAccess adapts platform authority for operations.

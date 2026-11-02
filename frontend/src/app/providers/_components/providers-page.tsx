@@ -91,7 +91,14 @@ type Confirmation =
   | { kind: "provider"; provider: API.CreatedProvider }
   | { kind: "preset"; preset: API.Preset; action: "archive" | "emergency" };
 
-type ProvidersPageProps = { initialConnection?: string; search?: string };
+type ProvidersPageProps = {
+  initialConnection?: string;
+  search?: string;
+  initialView?: string;
+  initialModel?: string;
+  initialRelease?: string;
+  initialMode?: string;
+};
 
 export function ProvidersPage(props: ProvidersPageProps) {
   const session = useSession();
@@ -110,6 +117,10 @@ export function ProvidersPage(props: ProvidersPageProps) {
 function ProviderAdministration({
   initialConnection = "",
   search = "",
+  initialView = "overview",
+  initialModel,
+  initialRelease,
+  initialMode,
 }: ProvidersPageProps) {
   const overlayTrigger = useRef<HTMLElement | null>(null);
   function rememberTrigger() {
@@ -124,7 +135,16 @@ function ProviderAdministration({
           : null;
   }
   function restoreFocus() {
-    if (overlayTrigger.current?.isConnected) overlayTrigger.current.focus();
+    const original = overlayTrigger.current;
+    const key = original?.dataset.connectionTrigger;
+    const target = original?.isConnected
+      ? original
+      : key
+        ? Array.from(
+            document.querySelectorAll<HTMLElement>("[data-connection-trigger]"),
+          ).find((node) => node.dataset.connectionTrigger === key)
+        : null;
+    target?.focus();
   }
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [providers, setProviders] = useState<API.ProviderListItem[]>([]);
@@ -150,6 +170,12 @@ function ProviderAdministration({
   );
   const [presets, setPresets] = useState<API.Preset[]>([]);
   const [selected, setSelected] = useState(initialConnection);
+  const [detailView, setDetailView] = useState(initialView);
+  const [context, setContext] = useState({
+    model: initialModel,
+    release: initialRelease,
+    mode: initialMode,
+  });
   const [detailOpen, setDetailOpen] = useState(Boolean(initialConnection));
   const [connect, setConnect] = useState<API.Preset | true | null>(null);
   const connectVisible = useRef(false);
@@ -221,8 +247,26 @@ function ProviderAdministration({
     url.searchParams.set("connection", id);
     window.history.replaceState(null, "", url);
   }
-  function openConnection(id: string) {
-    rememberTrigger();
+  function changeDetailView(value: string) {
+    setDetailView(value);
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", value);
+    window.history.replaceState(null, "", url);
+  }
+  function openConnection(
+    id: string,
+    view = "overview",
+    trigger?: HTMLElement,
+  ) {
+    if (trigger) overlayTrigger.current = trigger;
+    else rememberTrigger();
+    setDetailView(view);
+    setContext({ model: undefined, release: undefined, mode: undefined });
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", view);
+    for (const name of ["model", "release", "mode"])
+      url.searchParams.delete(name);
+    window.history.replaceState(null, "", url);
     selectConnection(id);
     setDetailOpen(true);
   }
@@ -230,7 +274,8 @@ function ProviderAdministration({
     setDetailOpen(open);
     if (!open) {
       const url = new URL(window.location.href);
-      url.searchParams.delete("connection");
+      for (const name of ["connection", "view", "model", "release", "mode"])
+        url.searchParams.delete(name);
       window.history.replaceState(null, "", url);
     }
   }
@@ -286,10 +331,7 @@ function ProviderAdministration({
     );
   return (
     <div className="flex w-full flex-col gap-5">
-      <AdminHeading
-        title="AI 服务接入"
-        description="连接你的 AI 服务，集中管理凭据与模型。"
-      >
+      <AdminHeading title="AI 服务接入">
         <Button
           className="max-md:h-11"
           onClick={() => openConnect(true)}
@@ -348,7 +390,7 @@ function ProviderAdministration({
                   )
                 }
               >
-                检查连接
+                检查凭据（只读）
               </Button>
               <Button
                 variant="destructive"
@@ -387,7 +429,10 @@ function ProviderAdministration({
                     ? pendingKey.pending.target
                     : undefined
                 }
-                onSelect={openConnection}
+                onSelect={(id, trigger) =>
+                  openConnection(id, "overview", trigger)
+                }
+                onTest={(id, trigger) => openConnection(id, "test", trigger)}
                 onDisable={(provider) =>
                   openConfirmation({ kind: "provider", provider })
                 }
@@ -644,16 +689,30 @@ function ProviderAdministration({
             event.preventDefault();
             restoreFocus();
           }}
-          className="gap-0 data-[side=right]:w-full data-[side=right]:sm:max-w-[520px] max-md:[&_[data-slot=sheet-close]]:size-11"
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            requestAnimationFrame(() =>
+              document
+                .querySelector<HTMLElement>("[data-connection-title]")
+                ?.focus(),
+            );
+          }}
+          className="gap-0 bg-popover data-[side=right]:w-full data-[side=right]:sm:max-w-[520px] max-md:[&_[data-slot=sheet-close]]:size-11"
         >
           <SheetHeader className="sr-only">
             <SheetTitle>连接详情</SheetTitle>
             <SheetDescription>查看连接检查、Key 和配置。</SheetDescription>
           </SheetHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto p-6">
+          <div className="flex min-h-0 flex-1 flex-col p-4 md:p-6">
             {selected ? (
               <ConnectionDetail
+                key={selected}
                 id={selected}
+                initialView={detailView}
+                onViewChange={changeDetailView}
+                initialModel={context.model}
+                initialRelease={context.release}
+                initialMode={context.mode}
                 revision={refresh}
                 presets={presets}
                 onSaved={() => setRefresh((v) => v + 1)}

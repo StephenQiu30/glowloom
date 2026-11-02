@@ -78,7 +78,7 @@ func (s *Store) CreateProviderTrialQuote(ctx context.Context, actor identityapp.
    FROM catalog.model_release r JOIN catalog.model_profile m ON m.id=r.model_id
    JOIN catalog.model_profile_version v ON v.id=r.model_version_id JOIN catalog.price_rule_version price ON price.id=r.price_version_id
    JOIN catalog.provider p ON p.id=m.provider_id JOIN catalog.capability cap ON cap.key=m.capability
-   WHERE r.id=? AND r.status='draft' AND NOT m.is_delete AND NOT p.is_delete AND NOT v.is_delete AND NOT price.is_delete
+   WHERE r.id=? AND (r.status='draft' OR (r.status='active' AND m.status='active' AND m.active_release_id=r.id)) AND NOT m.is_delete AND NOT p.is_delete AND NOT v.is_delete AND NOT price.is_delete
    AND price.effective_from<=now() AND (? OR p.region='domestic') FOR SHARE OF m,p,r`, releaseID, project.AllowOverseasModels).Scan(&row)
 		if r.Error != nil {
 			return r.Error
@@ -143,7 +143,7 @@ func freezeTrialRelease(tx *gorm.DB, actor identityapp.Principal, op domain.Oper
  JOIN catalog.provider_preset_version pv ON pv.id=config.preset_version_id JOIN catalog.provider_preset preset ON preset.id=pv.preset_id
  JOIN catalog.provider_credential key ON key.provider_id=p.id AND key.status='active' AND NOT key.is_delete
  WHERE actor.id=? AND actor.platform_role='platform_admin' AND actor.status='active' AND NOT actor.is_delete
- AND r.status='draft' AND r.model_version_id=? AND r.price_version_id=? AND NOT preset.emergency_disabled
+ AND (r.status='draft' OR (r.status='active' AND m.status='active' AND m.active_release_id=r.id)) AND r.model_version_id=? AND r.price_version_id=? AND NOT preset.emergency_disabled
  AND r.upstream_cost->>'currency'=? AND (r.upstream_cost->>'max_micros')::bigint<=?
  FOR SHARE OF actor,preset,key`, trial.ReleaseID, actor.ID, op.ModelProfileVersionID, op.PriceRuleVersionID, trial.Input.SupplierCurrency, trial.Input.SupplierMaxMicros).Scan(&present)
 	if r.Error != nil {
@@ -178,7 +178,7 @@ func currentTrialCatalog(tx *gorm.DB, actor identityapp.Principal, op domain.Ope
  JOIN catalog.provider_preset preset ON preset.id=pv.preset_id
  JOIN identity."user" actor ON actor.id=? AND actor.platform_role='platform_admin' AND actor.status='active' AND NOT actor.is_delete
  JOIN catalog.provider_credential key ON key.provider_id=p.id AND key.status='active' AND NOT key.is_delete
- WHERE b.operation_id=? AND r.status='draft' AND NOT m.is_delete AND NOT p.is_delete AND NOT preset.emergency_disabled
+ WHERE b.operation_id=? AND (r.status='draft' OR (r.status='active' AND m.status='active' AND m.active_release_id=r.id)) AND NOT m.is_delete AND NOT p.is_delete AND NOT preset.emergency_disabled
  AND (? OR p.region='domestic') FOR SHARE OF actor,m,p,r,key,preset`, actor.ID, op.ID, allowOverseas).Scan(&row)
 	if r.Error != nil {
 		return true, nil, nil, r.Error
@@ -187,4 +187,43 @@ func currentTrialCatalog(tx *gorm.DB, actor identityapp.Principal, op domain.Ope
 		return true, nil, nil, nil
 	}
 	return true, &row.ModelID, &row.PriceID, nil
+}
+
+// ReadProviderTrialRecovery restores the latest actor-owned release trial only
+// after rechecking both platform authority and its exact project scope.
+func (s *Store) ReadProviderTrialRecovery(ctx context.Context, actor identityapp.Principal, release uuid.UUID) (application.ProviderTrialRecovery, error) {
+	result := application.ProviderTrialRecovery{}
+	if !catalogapp.IsPlatformAdmin(actor) {
+		return result, identityapp.ErrForbidden
+	}
+	if release == uuid.Nil {
+		return result, application.ErrInvalidFreeQuote
+	}
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.requirePlatform(tx, actor); err != nil {
+			return err
+		}
+		r := tx.Raw(`SELECT op.id AS operation_id,op.project_id,receipt.request_id,op.status,trial.max_charge_micros,trial.supplier_max_micros,trial.supplier_currency
+ FROM catalog.config_request receipt JOIN operation.operation op ON op.id=(receipt.result->>'operation_id')::uuid
+ JOIN operation.provider_trial trial ON trial.operation_id=op.id AND trial.actor_id=receipt.actor_id
+ JOIN operation.provider_binding binding ON binding.operation_id=op.id AND binding.release_id=receipt.target_id
+ WHERE receipt.actor_id=? AND receipt.action='trial.quote' AND receipt.target_id=? AND NOT op.is_delete
+ ORDER BY receipt.create_time DESC,op.id DESC LIMIT 1`, actor.ID, release).Scan(&result)
+		if r.Error != nil {
+			return r.Error
+		}
+		if r.RowsAffected == 0 {
+			return nil
+		}
+		if err := s.requireProject(tx, actor, result.ProjectID, false); err != nil {
+			return err
+		}
+		result.Found = true
+		result.ConfirmRequestID = application.ProviderTrialConfirmKey(result.OperationID)
+		return nil
+	})
+	if err != nil {
+		return application.ProviderTrialRecovery{}, err
+	}
+	return result, nil
 }

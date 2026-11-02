@@ -30,7 +30,7 @@ import {
   modelConfiguration,
   priceRule,
 } from "./model-setup";
-import { ProviderTrial } from "./provider-trial";
+import { ProviderTrial } from "@/components/catalog/provider-trial";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -620,13 +620,21 @@ export function ModelDetail({
                   ) : null}
                   {onboardingDraft ? (
                     <Button variant="outline" asChild>
-                      <a href={`/providers?connection=${model?.provider_id}`}>
+                      <a
+                        href={`/providers?connection=${model?.provider_id}&view=test&model=${model?.id}&release=${r.id}`}
+                      >
                         前往连接验证并启用所选模型
                       </a>
                     </Button>
                   ) : null}
                   {r.status === "draft" && !onboardingDraft ? (
-                    <ProviderTrial release={r} onVerified={onSaved} />
+                    <ProviderTrial
+                      release={r}
+                      version={detail.versions?.find(
+                        (v) => v.id === r.model_version_id,
+                      )}
+                      onVerified={onSaved}
+                    />
                   ) : null}
                   {(r.status === "draft" || r.status === "retired") &&
                   !onboardingDraft ? (

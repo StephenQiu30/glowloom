@@ -33,6 +33,10 @@ func (s *Store) LoadForCredentialTest(ctx context.Context, request application.C
 		if err := requireCredentialProvider(tx, request.ProviderID); err != nil {
 			return err
 		}
+		query, err := isBoundModelQuery(tx, request)
+		if err != nil {
+			return err
+		}
 		var p providerRow
 		result := tx.Raw(`
 			SELECT id, current_config_version_id, key, name, adapter_key, region, status, concurrency_limit,
@@ -53,9 +57,9 @@ func (s *Store) LoadForCredentialTest(ctx context.Context, request application.C
 			SELECT id, provider_id, label, ciphertext, key_id, last4, status,
 			       last_tested_at, last_test_result, create_time, update_time
 			FROM catalog.provider_credential
-			WHERE id = ?::uuid AND provider_id = ?::uuid AND status = 'active'
+			WHERE id = ?::uuid AND provider_id = ?::uuid AND (status = 'active' OR (? AND status='draining'))
 			  AND NOT is_delete FOR SHARE
-		`, request.CredentialID.String(), request.ProviderID.String()).Scan(&c)
+		`, request.CredentialID.String(), request.ProviderID.String(), query).Scan(&c)
 		if result.Error != nil {
 			return fmt.Errorf("read sealed credential for test: %w", result.Error)
 		}
@@ -63,7 +67,7 @@ func (s *Store) LoadForCredentialTest(ctx context.Context, request application.C
 			return ErrCredentialNotFound
 		}
 		var original struct{ ConfigVersionID uuid.UUID }
-		check := tx.Raw(`UPDATE catalog.provider_check SET status='running' WHERE id=? AND config_version_id=? RETURNING config_version_id`, request.TestID, p.CurrentConfigVersionID).Scan(&original)
+		check := tx.Raw(`UPDATE catalog.provider_check SET status='running' WHERE id=? AND actor_id=? AND provider_id=? AND credential_id=? AND (config_version_id=? OR (? AND kind='model_query')) RETURNING config_version_id`, request.TestID, request.ActorID, request.ProviderID, request.CredentialID, p.CurrentConfigVersionID, query).Scan(&original)
 		if check.Error != nil {
 			return check.Error
 		}
@@ -93,6 +97,10 @@ func (s *Store) RecordCredentialTest(ctx context.Context, observation applicatio
 			return err
 		}
 		if err := requireCredentialProvider(tx, observation.ProviderID); err != nil {
+			return err
+		}
+		query, err := isBoundModelQuery(tx, observation.CredentialTestRequest)
+		if err != nil {
 			return err
 		}
 		var provider struct {
@@ -126,29 +134,31 @@ func (s *Store) RecordCredentialTest(ctx context.Context, observation applicatio
 		}
 		result = tx.Raw(`
 			SELECT last4, last_tested_at FROM catalog.provider_credential
-			WHERE id = ?::uuid AND provider_id = ?::uuid AND status = 'active'
+			WHERE id = ?::uuid AND provider_id = ?::uuid AND (status = 'active' OR (? AND status='draining'))
 			  AND NOT is_delete FOR UPDATE
-		`, observation.CredentialID.String(), observation.ProviderID.String()).Scan(&credential)
+		`, observation.CredentialID.String(), observation.ProviderID.String(), query).Scan(&credential)
 		if result.Error != nil {
 			return fmt.Errorf("lock credential for test result: %w", result.Error)
 		}
 		if result.RowsAffected != 1 || credential.Last4 != observation.Last4 {
 			return ErrCredentialNotFound
 		}
-		if credential.LastTestedAt != nil && !credential.LastTestedAt.Before(observation.TestedAt) {
+		if !query && credential.LastTestedAt != nil && !credential.LastTestedAt.Before(observation.TestedAt) {
 			return ErrTestSuperseded
 		}
-		result = tx.Exec(`
+		if !query {
+			result = tx.Exec(`
 			UPDATE catalog.provider_credential
 			SET last_tested_at = ?, last_test_result = ?, update_time = now()
 			WHERE id = ?::uuid AND provider_id = ?::uuid AND status = 'active' AND NOT is_delete
 		`, observation.TestedAt.UTC(), string(observation.Result),
-			observation.CredentialID.String(), observation.ProviderID.String())
-		if result.Error != nil {
-			return fmt.Errorf("update credential test result: %w", result.Error)
-		}
-		if result.RowsAffected != 1 {
-			return ErrCredentialNotFound
+				observation.CredentialID.String(), observation.ProviderID.String())
+			if result.Error != nil {
+				return fmt.Errorf("update credential test result: %w", result.Error)
+			}
+			if result.RowsAffected != 1 {
+				return ErrCredentialNotFound
+			}
 		}
 		if err := recordProviderCheck(tx, observation); err != nil {
 			return err
@@ -213,3 +223,23 @@ func validCredentialTestEvents(observation application.CredentialTestObservation
 }
 
 var _ application.CredentialTestStore = (*Store)(nil)
+
+// isBoundModelQuery proves the immutable original task before allowing its draining key.
+func isBoundModelQuery(tx *gorm.DB, request application.CredentialTestRequest) (bool, error) {
+	if request.Kind != "model_query" {
+		return false, nil
+	}
+	var found int
+	row := tx.Raw(`SELECT 1 FROM catalog.provider_check query JOIN catalog.provider_check original ON original.id=query.parent_check_id
+ WHERE query.id=? AND query.actor_id=? AND query.provider_id=? AND query.credential_id=? AND query.request_id=?::uuid AND query.kind='model_query'
+ AND original.kind='model_access' AND original.provider_id=query.provider_id AND original.credential_id=query.credential_id
+ AND original.config_version_id=query.config_version_id AND original.model_id=query.model_id AND original.model_version_id=query.model_version_id
+ AND original.task_id=query.task_id AND query.task_id<>'' FOR SHARE OF query,original`, request.TestID, request.ActorID, request.ProviderID, request.CredentialID, request.RequestID).Scan(&found)
+	if row.Error != nil {
+		return false, row.Error
+	}
+	if row.RowsAffected != 1 {
+		return false, application.ErrInvalidCredentialTest
+	}
+	return true, nil
+}

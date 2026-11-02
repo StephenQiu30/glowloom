@@ -20,6 +20,7 @@ var ErrInvalidTestWorkflow = errors.New("invalid credential test workflow")
 
 // Input identifies the credential and administrator who requested its test.
 type Input struct {
+	Kind         string    `json:"kind,omitempty"`
 	TestID       uuid.UUID `json:"test_id"`
 	ProviderID   uuid.UUID `json:"provider_id"`
 	CredentialID uuid.UUID `json:"credential_id"`
@@ -60,6 +61,8 @@ type AgentCredential struct {
 
 // AgentTestOutput is the safe result category returned by the Agent.
 type AgentTestOutput struct {
+	HTTPStatus      int                          `json:"http_status,omitempty"`
+	ElapsedMS       int64                        `json:"elapsed_ms,omitempty"`
 	ModelResult     string                       `json:"model_result,omitempty"`
 	TaskID          string                       `json:"task_id,omitempty"`
 	Result          domain.TestResult            `json:"result"`
@@ -89,7 +92,7 @@ type Output struct {
 // then atomically records a safe result and its events.
 func CredentialTestWorkflow(ctx workflow.Context, input Input) (output Output, resultErr error) {
 	requestID, err := uuid.Parse(input.RequestID)
-	if input.TestID == uuid.Nil || input.ProviderID == uuid.Nil || input.CredentialID == uuid.Nil ||
+	if input.TestID == uuid.Nil || input.ProviderID == uuid.Nil ||
 		input.ActorID == uuid.Nil || input.OrgID == uuid.Nil || err != nil || requestID.String() != input.RequestID {
 		return Output{}, ErrInvalidTestWorkflow
 	}
@@ -114,6 +117,11 @@ func CredentialTestWorkflow(ctx workflow.Context, input Input) (output Output, r
 		}()
 	}
 
+	if input.CredentialID == uuid.Nil {
+		networkCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{TaskQueue: "provider", StartToCloseTimeout: 30 * time.Second, RetryPolicy: &temporal.RetryPolicy{MaximumAttempts: 1}})
+		err := workflow.ExecuteActivity(networkCtx, "provider.test_reachability", input).Get(networkCtx, nil)
+		return Output{}, err
+	}
 	var loaded LoadedCredential
 	if err := workflow.ExecuteActivity(flowCtx, "LoadCredentialForTest", input).Get(flowCtx, &loaded); err != nil {
 		return Output{}, err

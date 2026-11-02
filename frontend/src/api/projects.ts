@@ -195,6 +195,20 @@ export async function archiveProject(
   });
 }
 
+/** 项目预算余额 GET /api/projects/${param0}/budget */
+export async function getProjectBudget(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getProjectBudgetParams,
+  options?: RequestOptions,
+) {
+  const { pid: param0, ...queryParams } = params;
+  return request<API.ProjectBudgetView>(`/api/projects/${param0}/budget`, {
+    method: "GET",
+    params: { ...queryParams },
+    ...(options || {}),
+  });
+}
+
 /** 移动项目目录位置 PUT /api/projects/${param0}/folder */
 export async function moveProjectToFolder(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

@@ -764,6 +764,7 @@ it("编辑器和目录管理已注册合同均经过同站代理", async () => {
     "operation/adapter/http/provider_trials.go",
     "operation/adapter/http/handler.go",
     "workspace/adapter/http/model_defaults.go",
+    "workspace/adapter/http/project_budget.go",
   );
   const fetcher = vi.fn().mockImplementation(async () => new Response("{}"));
   vi.stubGlobal("fetch", fetcher);
@@ -1330,10 +1331,32 @@ it("作品公开读取有界且原件下载流使用120秒超时", async () => {
   timeout.mockRestore();
 });
 
-it("画布项目信息仅允许GET及page，不接受跨owner查询",async()=>{
- const fetcher=vi.fn().mockResolvedValue(new Response("{}"));vi.stubGlobal("fetch",fetcher);
- const path="canvases/00000000-0000-4000-8000-000000000001/information";
- expect((await GET(new Request(`http://localhost/api/${path}?page=2`),context(path))).status).toBe(200);
- expect((await GET(new Request(`http://localhost/api/${path}?owner_id=other`),context(path))).status).toBe(422);
- expect((await POST(new Request(`http://localhost/api/${path}`,{method:"POST"}),context(path))).status).toBe(405);
+it("画布项目信息仅允许GET及page，不接受跨owner查询", async () => {
+  const fetcher = vi.fn().mockResolvedValue(new Response("{}"));
+  vi.stubGlobal("fetch", fetcher);
+  const path = "canvases/00000000-0000-4000-8000-000000000001/information";
+  expect(
+    (
+      await GET(
+        new Request(`http://localhost/api/${path}?page=2`),
+        context(path),
+      )
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await GET(
+        new Request(`http://localhost/api/${path}?owner_id=other`),
+        context(path),
+      )
+    ).status,
+  ).toBe(422);
+  expect(
+    (
+      await POST(
+        new Request(`http://localhost/api/${path}`, { method: "POST" }),
+        context(path),
+      )
+    ).status,
+  ).toBe(405);
 });

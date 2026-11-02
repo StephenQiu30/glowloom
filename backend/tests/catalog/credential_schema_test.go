@@ -15,6 +15,7 @@ func TestCredentialSchemaRequiresOnlyDeclaredStringFields(t *testing.T) {
 		secret  string
 		last4   string
 	}{
+		{"openai", `{"api_key":"synthetic-openai-A1B2"}`, "A1B2"},
 		{"volcengine_ark", `{"api_key":"ark-test-A9F2"}`, "A9F2"},
 		{"minimax", `{"api_key":"minimax-test-B8C3","group_id":"group-1"}`, "B8C3"},
 		{"openrouter", `{"api_key":"openrouter-test-C7D4"}`, "C7D4"},

@@ -24,7 +24,7 @@
 | 浅色/深色和手机可访问性 | axe4.12.1在桌面浅/深及390/320四次扫描均0违规、0待人工项 |
 | 运行异常 | 最终无头验收会话 errors 未返回页面异常 |
 
-尺寸原始数据见[responsive.json](responsive.json)，可重复检查脚本见[responsive-check.py](responsive-check.py)。[accessibility.json](accessibility.json)仅保留脱敏扫描结果。图片为本目录各状态PNG。检查没有删除、收藏写入、付费生成或改动主体内容。
+尺寸原始数据见[responsive.json](responsive.json)。[accessibility.json](accessibility.json)仅保留脱敏扫描结果。图片为本目录各状态PNG。检查没有删除、收藏写入、付费生成或改动主体内容。
 
 可见会话在截图/录屏期间发生agent-browser daemon忙碌错误；doctor为11通过、1旧状态文件提示、0失败。使用工具的state save/load将本任务登录状态临时转入无头会话后完成验收，临时状态文件已删除，未进入仓库。失败录屏未计作验收证据。最初点击后立即截取的主题过渡帧已重新等待light类后采集；查询与弹层测试等待状态后判断。
 

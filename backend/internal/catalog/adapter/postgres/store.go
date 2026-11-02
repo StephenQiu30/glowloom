@@ -31,9 +31,10 @@ var (
 // Store keeps the provider tables behind an explicitly injected database handle.
 // Administrator authorization belongs to the application command or query.
 type Store struct {
-	db       *gorm.DB
-	actors   ActorAccessFactory
-	projects ProjectAccessFactory
+	db         *gorm.DB
+	actors     ActorAccessFactory
+	projects   ProjectAccessFactory
+	checkUsage func(*gorm.DB) application.ProviderCheckUsageReader
 }
 
 // NewStore injects the database handle for catalog persistence.
@@ -306,3 +307,10 @@ func NewScopedStore(db *gorm.DB, actors ActorAccessFactory, projects ProjectAcce
 	return &Store{db: db, actors: actors, projects: projects}
 }
 func (s *Store) withDB(db *gorm.DB) *Store { bound := *s; bound.db = db; return &bound }
+
+// WithCheckUsage injects shared generation/check capacity at the transaction boundary.
+func (s *Store) WithCheckUsage(factory func(*gorm.DB) application.ProviderCheckUsageReader) *Store {
+	bound := *s
+	bound.checkUsage = factory
+	return &bound
+}

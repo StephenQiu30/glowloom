@@ -22,7 +22,7 @@ func NewActivities(service *application.CredentialTestService, failures CheckFai
 // LoadCredentialForTest reads only a still-active credential for the requester.
 func (a *Activities) LoadCredentialForTest(ctx context.Context, input Input) (LoadedCredential, error) {
 	request := application.CredentialTestRequest{
-		TestID: input.TestID, ProviderID: input.ProviderID, CredentialID: input.CredentialID,
+		Kind: input.Kind, TestID: input.TestID, ProviderID: input.ProviderID, CredentialID: input.CredentialID,
 		ActorID: input.ActorID, OrgID: input.OrgID, RequestID: input.RequestID,
 	}
 	provider, credential, err := a.service.Load(ctx, request)
@@ -40,10 +40,10 @@ func (a *Activities) LoadCredentialForTest(ctx context.Context, input Input) (Lo
 func (a *Activities) RecordCredentialTestResult(ctx context.Context, input RecordInput) error {
 	return a.service.Record(ctx, application.CredentialTestObservation{
 		CredentialTestRequest: application.CredentialTestRequest{
-			TestID: input.TestID, ProviderID: input.ProviderID, CredentialID: input.CredentialID,
+			Kind: input.Kind, TestID: input.TestID, ProviderID: input.ProviderID, CredentialID: input.CredentialID,
 			ActorID: input.ActorID, OrgID: input.OrgID, RequestID: input.RequestID,
 		},
-		ModelResult: input.Evidence.ModelResult, TaskID: input.Evidence.TaskID, Result: input.Result, TestedAt: input.TestedAt, Last4: input.Last4,
+		HTTPStatus: input.Evidence.HTTPStatus, ElapsedMS: input.Evidence.ElapsedMS, ModelResult: input.Evidence.ModelResult, TaskID: input.Evidence.TaskID, Result: input.Result, TestedAt: input.TestedAt, Last4: input.Last4,
 		AuthResult: input.Evidence.AuthResult, AdapterResult: input.Evidence.AdapterResult, DiscoveryResult: input.Evidence.DiscoveryResult, Candidates: input.Evidence.Candidates,
 	})
 }

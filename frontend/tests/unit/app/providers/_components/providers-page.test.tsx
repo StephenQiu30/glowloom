@@ -346,3 +346,25 @@ it("连接列表显示品牌名称和模型数，不将未启用连接称为已�
   expect(screen.getByText("未启用")).toBeTruthy();
   expect(screen.queryByText("已停用")).toBeNull();
 });
+
+it("鼠标打开测试后关闭仍返回原行入口", async () => {
+  api.role = "platform_admin";
+  api.providers.mockResolvedValue({
+    items: [
+      {
+        provider: { id: "connection", name: "OpenAI", status: "disabled" },
+        model_count: 1,
+      },
+    ],
+  });
+  render(<ProvidersPage />);
+  const trigger = await screen.findByRole("button", { name: "测试 OpenAI" });
+  fireEvent.click(trigger);
+  await screen.findByText("连接详情内容");
+  fireEvent.click(screen.getByRole("button", { name: /^关闭$/ }));
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "测试 OpenAI" }),
+    ),
+  );
+});

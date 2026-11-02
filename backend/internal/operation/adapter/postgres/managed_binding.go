@@ -103,21 +103,10 @@ func (s *Store) admitManagedDispatch(tx *gorm.DB, identity application.ProviderD
 	if r.RowsAffected != 1 {
 		return application.ErrWorkflowModelUnavailable
 	}
-	var counts struct{ Active, Recent int64 }
-	if err := tx.Raw(`SELECT count(DISTINCT op.id) FILTER(WHERE op.status NOT IN ('completed','failed','cancelled','expired')) AS active,
-     count(DISTINCT op.id) FILTER(WHERE call.dispatch_started_at>now()-interval '1 minute') AS recent
-     FROM operation.provider_credential_binding cb JOIN catalog.provider_credential key ON key.id=cb.credential_id
-     JOIN operation.operation op ON op.id=cb.operation_id
-     JOIN operation.provider_call call ON call.operation_id=op.id AND call.action='submit' AND call.dispatch_started_at IS NOT NULL AND NOT call.is_delete
-     WHERE key.provider_id=?`, row.ProviderID).Scan(&counts).Error; err != nil {
+	counts, err := readProviderUsage(tx, row.ProviderID)
+	if err != nil {
 		return err
 	}
-	var voice struct{ Active, Recent int64 }
-	if err := tx.Raw(`SELECT count(*) FILTER(WHERE status IN ('dispatching','unknown')) AS active,count(*) FILTER(WHERE dispatch_started_at>now()-interval '1 minute') AS recent FROM subject.voice_job WHERE provider_id=?`, row.ProviderID).Scan(&voice).Error; err != nil {
-		return err
-	}
-	counts.Active += voice.Active
-	counts.Recent += voice.Recent
 	if counts.Active >= connection.ConcurrencyLimit || counts.Recent >= connection.RateLimitPerMin {
 		return application.ErrManagedCapacity
 	}
@@ -130,7 +119,7 @@ func (s *Store) admitManagedDispatch(tx *gorm.DB, identity application.ProviderD
 		return application.ErrWorkflowModelUnavailable
 	}
 	r = tx.Raw(`SELECT 1 FROM catalog.model_profile m JOIN catalog.model_release r ON r.model_id=m.id
- WHERE m.id=? AND NOT m.is_delete AND r.id=? AND ((? AND r.status='draft') OR (NOT ? AND m.status='active' AND m.active_release_id=r.id AND r.status='active'))
+ WHERE m.id=? AND NOT m.is_delete AND r.id=? AND ((? AND (r.status='draft' OR (r.status='active' AND m.status='active' AND m.active_release_id=r.id))) OR (NOT ? AND m.status='active' AND m.active_release_id=r.id AND r.status='active'))
  FOR SHARE OF m,r`, row.ModelID, *row.ReleaseID, isTrial, isTrial).Scan(&present)
 	if r.Error != nil {
 		return fmt.Errorf("lock dispatch release: %w", r.Error)

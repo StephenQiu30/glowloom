@@ -67,7 +67,7 @@ function ConnectionMenu({
 }: {
   item: API.ProviderListItem;
   disabled?: boolean;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, trigger?: HTMLElement) => void;
   onDisable: (provider: API.CreatedProvider) => void;
 }) {
   const p = item.provider;
@@ -107,6 +107,7 @@ function ConnectionMenu({
 export function ConnectionList({
   items,
   onSelect,
+  onTest,
   onDisable,
   pendingCredential,
   selection,
@@ -114,7 +115,8 @@ export function ConnectionList({
 }: {
   pendingCredential?: string;
   items: ConnectionRow[];
-  onSelect: (id: string) => void;
+  onTest: (id: string, trigger?: HTMLElement) => void;
+  onSelect: (id: string, trigger?: HTMLElement) => void;
   onDisable: (provider: API.CreatedProvider) => void;
   selection: {
     selected: ConnectionRow[];
@@ -136,9 +138,18 @@ export function ConnectionList({
             {mobile ? (
               <ProviderLogo adapterKey={row.original.provider?.adapter_key} />
             ) : null}
-            <span className="break-words whitespace-normal">
+            <Button
+              variant="link"
+              className="h-auto min-w-0 justify-start p-0 text-left whitespace-normal text-foreground"
+              disabled={disabled}
+              data-connection-trigger={`${row.original.id}:overview`}
+              aria-label={`查看 ${row.original.provider?.name}`}
+              onClick={(event) =>
+                onSelect(row.original.id, event.currentTarget)
+              }
+            >
               {row.original.provider?.name}
-            </span>
+            </Button>
           </div>
           <span className="text-xs text-muted-foreground">
             {mobile
@@ -201,10 +212,12 @@ export function ConnectionList({
           <Button
             variant="ghost"
             disabled={disabled}
-            onClick={() => onSelect(row.original.id)}
-            aria-label={`查看 ${row.original.provider?.name}`}
+            onClick={(event) => onTest(row.original.id, event.currentTarget)}
+            className="max-md:h-11"
+            data-connection-trigger={`${row.original.id}:test`}
+            aria-label={`测试 ${row.original.provider?.name}`}
           >
-            查看
+            测试
           </Button>
           <ConnectionMenu
             disabled={disabled}

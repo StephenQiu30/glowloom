@@ -54,10 +54,4 @@
 
 ## 可复核方法与范围
 
-[采样脚本](verify-formal-download.py)只调用ffprobe/ffmpeg及NumPy，读取下载文件和三份原素材，写入指定采样JSON，不修改输入媒体。调用方式：
-
-```sh
-python3 verify-formal-download.py <实际下载的MP4> <原samples目录> <输出JSON>
-```
-
-脚本对完整视频/音频流实际解码，采样数据见[formal-retry-download-sampling.json](formal-retry-download-sampling.json)。本轮只新增脚本、采样数据和本证据文件，没有修改产品代码、总验收表、服务或任务状态，没有UI操作、重启、提交或推送。
+采样当时用 ffprobe、ffmpeg 和 NumPy 读取下载文件与三份原素材，解码完整视频和音频流后写入采样 JSON，不修改输入媒体。采样数据见[formal-retry-download-sampling.json](formal-retry-download-sampling.json)。一次性采样脚本已从仓库移除。当时本轮新增的是采样脚本、采样数据和本证据文件，没有修改产品代码、总验收表、服务或任务状态，没有 UI 操作、重启、提交或推送。
