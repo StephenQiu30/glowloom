@@ -63,3 +63,56 @@ export function providerConsoleURL(adapter?: string) {
     } as Record<string, string>
   )[adapter ?? ""];
 }
+
+export type ModelBrand = "ChatGPT" | "Anthropic" | "Gemini" | "Grok";
+
+export function getCandidateBrand(candidate?: {
+  provider_model_id?: string;
+  display_name?: string;
+  key?: string;
+}): ModelBrand | undefined {
+  if (!candidate) return undefined;
+  const id = candidate.provider_model_id?.toLowerCase() ?? "";
+  const name = candidate.display_name?.toLowerCase() ?? "";
+  const key = candidate.key?.toLowerCase() ?? "";
+
+  if (
+    id.startsWith("openai/") ||
+    name.includes("gpt") ||
+    name.includes("chatgpt") ||
+    name.startsWith("o1") ||
+    name.startsWith("o3") ||
+    name.includes("dall-e") ||
+    key.includes("gpt") ||
+    key.includes("openai") ||
+    key.includes("-o1") ||
+    key.includes("-o3")
+  ) {
+    return "ChatGPT";
+  }
+  if (
+    id.startsWith("anthropic/") ||
+    name.includes("claude") ||
+    name.includes("anthropic") ||
+    key.includes("claude")
+  ) {
+    return "Anthropic";
+  }
+  if (
+    id.startsWith("google/") ||
+    name.includes("gemini") ||
+    name.includes("google") ||
+    key.includes("gemini")
+  ) {
+    return "Gemini";
+  }
+  if (
+    id.startsWith("x-ai/") ||
+    name.includes("grok") ||
+    name.includes("xai") ||
+    key.includes("grok")
+  ) {
+    return "Grok";
+  }
+  return undefined;
+}

@@ -19,6 +19,8 @@ import { isCredentialReceipt } from "@/components/catalog/credential-receipt";
 import { RequestError } from "@/lib/request";
 import { ProviderLogo } from "./provider-logo";
 import { Button } from "@/components/ui/button";
+import { cn } from "cn";
+import { getCandidateBrand } from "./provider-label";
 import {
   Field,
   FieldGroup,
@@ -63,6 +65,7 @@ export function PresetConnect({
   const fieldID = useId();
   const [presetID, setPresetID] = useState(initialPreset);
   const [candidateKeys, setCandidateKeys] = useState<string[]>([]);
+  const [selectedBrand, setSelectedBrand] = useState<string>("all");
   const [visible, setVisible] = useState(false);
   const mounted = useRef(true);
   useEffect(() => {
@@ -206,6 +209,7 @@ export function PresetConnect({
                 setAccessKeyID("");
                 setAPIKey("");
                 setVisible(false);
+                setSelectedBrand("all");
                 setCategory(
                   presets.find((p) => p.id === id)?.model_catalog?.models?.[0]
                     ?.capability ?? "text.generate",
@@ -361,7 +365,10 @@ export function PresetConnect({
             </div>
             <Tabs
               value={category}
-              onValueChange={setCategory}
+              onValueChange={(val) => {
+                setCategory(val);
+                setSelectedBrand("all");
+              }}
               className="min-w-0 gap-1"
             >
               <TabsList
@@ -390,64 +397,125 @@ export function PresetConnect({
                     ? m.capability?.startsWith("audio.")
                     : m.capability === value,
                 );
+                const availableBrands = (
+                  ["ChatGPT", "Anthropic", "Gemini", "Grok"] as const
+                ).filter((b) =>
+                  visibleModels.some((m) => getCandidateBrand(m) === b),
+                );
+                const hasMultipleBrands = availableBrands.length > 1;
+                const displayedModels =
+                  hasMultipleBrands && selectedBrand !== "all"
+                    ? visibleModels.filter(
+                        (m) => getCandidateBrand(m) === selectedBrand,
+                      )
+                    : visibleModels;
                 return (
                   <TabsContent
                     key={value}
                     value={value}
                     className="max-h-60 overflow-y-auto py-1"
                   >
-                    {visibleModels.length ? (
-                      <FieldGroup className="gap-0">
-                        {visibleModels.map((candidate) => (
-                          <Field
-                            key={candidate.key}
-                            orientation="horizontal"
-                            data-disabled={
-                              candidate.requires_model_selection || undefined
-                            }
-                            className="min-h-10 gap-2 px-2 max-md:min-h-11"
-                          >
-                            <Checkbox
-                              id={fieldID + "-candidate-" + candidate.key}
-                              disabled={
-                                candidate.requires_model_selection ||
-                                busy ||
-                                complete ||
-                                !!targetID ||
-                                !!create.pending
-                              }
-                              checked={candidateKeys.includes(candidate.key!)}
-                              onCheckedChange={(checked) =>
-                                setCandidateKeys((previous) =>
-                                  checked === true
-                                    ? [
-                                        ...new Set([
-                                          ...previous,
-                                          candidate.key!,
-                                        ]),
-                                      ]
-                                    : previous.filter(
-                                        (key) => key !== candidate.key,
-                                      ),
-                                )
-                              }
-                            />
-                            <FieldLabel
-                              htmlFor={fieldID + "-candidate-" + candidate.key}
-                              className="min-h-10 min-w-0 flex-1 items-center py-2 max-md:min-h-11"
+                    {hasMultipleBrands ? (
+                      <div className="sticky top-0 z-10 mb-1.5 flex flex-wrap items-center gap-1.5 bg-background/95 px-2 py-1.5 backdrop-blur">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedBrand("all")}
+                          className={cn(
+                            "cursor-pointer rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors",
+                            selectedBrand === "all"
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground",
+                          )}
+                        >
+                          全部 ({visibleModels.length})
+                        </button>
+                        {availableBrands.map((b) => {
+                          const count = visibleModels.filter(
+                            (m) => getCandidateBrand(m) === b,
+                          ).length;
+                          return (
+                            <button
+                              key={b}
+                              type="button"
+                              onClick={() => setSelectedBrand(b)}
+                              className={cn(
+                                "cursor-pointer rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors",
+                                selectedBrand === b
+                                  ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground",
+                              )}
                             >
-                              <FieldTitle className="min-w-0 break-words">
-                                {candidate.display_name}
-                              </FieldTitle>
-                              {candidate.requires_model_selection ? (
-                                <span>需配置</span>
-                              ) : null}
-                              {candidate.lifecycle === "sunsetting" ? (
-                                <Badge variant="outline">即将下线</Badge>
-                              ) : null}
-                            </FieldLabel>
-                          </Field>
-                        ))}
+                              {b} ({count})
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                    {displayedModels.length ? (
+                      <FieldGroup className="gap-0">
+                        {displayedModels.map((candidate) => {
+                          const brand = getCandidateBrand(candidate);
+                          return (
+                            <Field
+                              key={candidate.key}
+                              orientation="horizontal"
+                              data-disabled={
+                                candidate.requires_model_selection || undefined
+                              }
+                              className="min-h-10 gap-2 px-2 max-md:min-h-11"
+                            >
+                              <Checkbox
+                                id={fieldID + "-candidate-" + candidate.key}
+                                disabled={
+                                  candidate.requires_model_selection ||
+                                  busy ||
+                                  complete ||
+                                  !!targetID ||
+                                  !!create.pending
+                                }
+                                checked={candidateKeys.includes(candidate.key!)}
+                                onCheckedChange={(checked) =>
+                                  setCandidateKeys((previous) =>
+                                    checked === true
+                                      ? [
+                                          ...new Set([
+                                            ...previous,
+                                            candidate.key!,
+                                          ]),
+                                        ]
+                                      : previous.filter(
+                                          (key) => key !== candidate.key,
+                                        ),
+                                  )
+                                }
+                              />
+                              <FieldLabel
+                                htmlFor={
+                                  fieldID + "-candidate-" + candidate.key
+                                }
+                                className="min-h-10 min-w-0 flex-1 items-center py-2 max-md:min-h-11"
+                              >
+                                <FieldTitle className="min-w-0 break-words flex items-center gap-1.5">
+                                  <span>{candidate.display_name}</span>
+                                  {brand ? (
+                                    <Badge
+                                      variant="secondary"
+                                      className="px-1.5 py-0 text-[10px] font-normal"
+                                    >
+                                      {brand}
+                                    </Badge>
+                                  ) : null}
+                                </FieldTitle>
+                                {candidate.requires_model_selection ? (
+                                  <span>需配置</span>
+                                ) : null}
+                                {candidate.lifecycle === "sunsetting" ? (
+                                  <Badge variant="outline">即将下线</Badge>
+                                ) : null}
+                              </FieldLabel>
+                            </Field>
+                          );
+                        })}
                       </FieldGroup>
                     ) : (
                       <Empty className="min-h-24 p-4">
