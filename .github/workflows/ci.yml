@@ -30,7 +30,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      GLOWLOOM_TEST_AGENT_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_agent_runtime?sslmode=disable
+      GLOWLOOM_TEST_AGENT_CONTROL_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_reference?sslmode=disable
       GLOWLOOM_TEST_SCHEMA_DB_DSN: postgres://postgres@127.0.0.1:5432/schema_probe?sslmode=disable
       GLOWLOOM_TEST_CANVAS_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_reference?sslmode=disable
       GLOWLOOM_TEST_GOVERNANCE_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_governance?sslmode=disable
@@ -76,17 +76,6 @@ jobs:
           psql "$GLOWLOOM_TEST_GOVERNANCE_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           psql "postgres://postgres@127.0.0.1:5432/glowloom_catalog?sslmode=disable" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           psql "$GLOWLOOM_TEST_SUBJECT_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
-      - name: Initialize isolated Agent runtime storage
-        run: |
-          psql "$GLOWLOOM_TEST_CANVAS_DB_DSN" -X -v ON_ERROR_STOP=1 -c 'CREATE DATABASE glowloom_agent_runtime'
-          psql "$GLOWLOOM_TEST_AGENT_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/agent_harness_incremental.sql
-          psql "$GLOWLOOM_TEST_AGENT_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/agent_harness_incremental.sql
-      - name: Test the private Agent runtime with PostgreSQL
-        working-directory: agent-runtime
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm typecheck
-          pnpm test
       - name: Run backend Race tests
         run: go test -race -count=1 ./...
 

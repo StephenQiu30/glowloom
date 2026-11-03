@@ -18,8 +18,6 @@ var ErrInvalid = errors.New("invalid configuration")
 // Config is the validated configuration shared by every backend role.
 type Config struct {
 	AgentHarnessEnabled           bool
-	AgentRuntimeURL               string
-	AgentRuntimeSigningKey        string `json:"-" yaml:"-"`
 	CanvasRuntimeURL              string
 	CanvasRuntimeToken            string
 	CodexBinary                   string
@@ -107,8 +105,6 @@ func Load() (Config, error) {
 
 	cfg := Config{
 		AgentHarnessEnabled:           v.GetBool("GLOWLOOM_AGENT_HARNESS_ENABLED"),
-		AgentRuntimeURL:               strings.TrimSpace(v.GetString("GLOWLOOM_AGENT_RUNTIME_URL")),
-		AgentRuntimeSigningKey:        v.GetString("GLOWLOOM_AGENT_RUNTIME_SIGNING_KEY"),
 		CanvasRuntimeURL:              strings.TrimSpace(v.GetString("GLOWLOOM_CANVAS_RUNTIME_URL")),
 		CanvasRuntimeToken:            v.GetString("GLOWLOOM_COLLAB_RUNTIME_TOKEN"),
 		CodexBinary:                   strings.TrimSpace(v.GetString("GLOWLOOM_CODEX_BINARY")),
@@ -185,14 +181,6 @@ func Load() (Config, error) {
 }
 
 func (c Config) validate() error {
-	if c.AgentHarnessEnabled {
-		u, err := url.Parse(c.AgentRuntimeURL)
-		if err != nil || u.Hostname() == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || len(c.AgentRuntimeSigningKey) < 32 {
-			return fmt.Errorf("%w: enabled Agent Harness requires an HTTP(S) runtime origin and a signing key of at least 32 bytes", ErrInvalid)
-		}
-	} else if c.AgentRuntimeURL != "" || c.AgentRuntimeSigningKey != "" {
-		return fmt.Errorf("%w: Agent runtime settings require GLOWLOOM_AGENT_HARNESS_ENABLED", ErrInvalid)
-	}
 	if c.CredentialPublicKeyPEM != "" && c.CredentialPublicKeyFile != "" || c.CredentialPrivateKeyPEM != "" && c.CredentialPrivateKeyFile != "" || len(c.CredentialPublicKeyPEM) > 16384 || len(c.CredentialPrivateKeyPEM) > 16384 {
 		return fmt.Errorf("%w: conflicting or oversized credential key source", ErrInvalid)
 	}

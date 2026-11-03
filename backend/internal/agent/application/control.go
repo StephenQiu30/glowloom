@@ -77,11 +77,11 @@ type ControlStore interface {
 
 // DeliveryClaim is a short database lease; Host I/O always happens after the lease transaction commits.
 type DeliveryClaim struct {
-	ID     uuid.UUID
-	Token  uuid.UUID
-	RunID  uuid.UUID
+	ID      uuid.UUID
+	Token   uuid.UUID
+	RunID   uuid.UUID
 	Attempt int
-	Value  RuntimeDelivery
+	Value   RuntimeDelivery
 }
 
 // AdmissionReceipt distinguishes a new Go reservation from an existing in-flight operation.
