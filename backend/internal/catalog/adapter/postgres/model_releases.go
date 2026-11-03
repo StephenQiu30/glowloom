@@ -91,7 +91,11 @@ func (s *Store) CreateModelRelease(ctx context.Context, actor identityapp.Princi
  OR (m.capability='audio.generate' AND config.config->>'adapter_key'='volcengine_speech' AND v.provider_model_id='seed-audio-1.0' AND v.modes=ARRAY['omni_audio']::text[] AND price.unit IN ('per_request','per_second') AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('speech_rate','loudness_rate','pitch_rate','enable_subtitle')))
  OR (m.capability='audio.generate' AND config.config->>'adapter_key'='volcengine_music' AND v.provider_model_id='v5.0' AND v.modes <@ ARRAY['music_song','music_instrumental']::text[] AND price.unit IN ('per_request','per_second') AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v.param_schema) field WHERE field->>'field' NOT IN ('duration_ms','music_input')))
  OR (m.capability='image.generate' AND price.unit IN ('per_request','per_image') AND v.modes <@ ARRAY['text2image','image2image']::text[])
- OR (m.capability='video.generate' AND price.unit IN ('per_request','per_second') AND v.modes <@ ARRAY['text2video','image2video','omni_reference','avatar','motion']::text[]))
+ OR (m.capability='video.generate' AND
+   (price.unit IN ('per_request','per_second') OR
+    (price.unit='per_1k_tokens' AND config.config->>'adapter_key'='volcengine_ark'
+     AND v.provider_model_id LIKE 'doubao-seedance-2-%' AND price.rule->>'input_micros_per_1k'='0'))
+   AND v.modes <@ ARRAY['text2video','image2video','omni_reference','avatar','motion']::text[]))
  AND (m.capability='image.generate' OR (v.limits->>'max_outputs')::int=1)
  AND v.supports_query=(m.capability='video.generate' OR config.config->>'adapter_key'='volcengine_music')
  AND (NOT v.limits ? 'provider_endpoint' OR (config.config->>'adapter_key'='openrouter' AND m.capability IN ('text.generate','image.generate')))

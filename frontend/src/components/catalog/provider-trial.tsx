@@ -682,11 +682,16 @@ export function ProviderTrial({
           <div className="space-y-2 text-sm">
             <p className="text-muted-foreground">
               任务状态：{task.status}
-              {task.settled_micros !== undefined &&
+              {typeof task.settled_micros === "number" &&
+                Number.isSafeInteger(task.settled_micros) &&
+                task.settled_micros >= 0 &&
                 ` · 已结算 ${formatBillingMicros(task.settled_micros)}`}
             </p>
             {task.status === "quoted" ? (
-              <QuoteCostDetail amount={task.quote_micros} />
+              <QuoteCostDetail
+                amount={task.quote_micros}
+                detail={task.quote_detail}
+              />
             ) : null}
             {task.failure_code && (
               <Alert variant="destructive">

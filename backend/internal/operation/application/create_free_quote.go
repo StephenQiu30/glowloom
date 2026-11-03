@@ -237,7 +237,7 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 		return PreparedFreeQuote{}, ErrInvalidFreeQuote
 	}
 	var priceFields map[string]json.RawMessage
-	if json.Unmarshal(catalog.Price.Rule, &priceFields) != nil || priceFields["reference_scope"] != nil {
+	if json.Unmarshal(catalog.Price.Rule, &priceFields) != nil {
 		return PreparedFreeQuote{}, ErrFreeQuoteModelMissing
 	}
 	pricing := PricingInput{OutputCount: int64(input.OutputCount), Mode: input.Mode,
@@ -246,6 +246,19 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 	}
 	if resolution, ok := params["resolution"].(string); ok {
 		pricing.Resolution = resolution
+	} else if size, ok := params["size"].(string); ok {
+		pricing.Resolution = size
+	}
+	if priceFields["reference_scope"] != nil {
+		if input.Capability != "image.generate" {
+			return PreparedFreeQuote{}, ErrFreeQuoteInputNotReady
+		}
+		for _, fact := range media {
+			if fact.Kind != "image" {
+				return PreparedFreeQuote{}, ErrFreeQuoteInputNotReady
+			}
+			pricing.ReferenceImageCount++
+		}
 	}
 	if duration, ok := params["duration_ms"].(json.Number); ok {
 		exact, parseErr := exactFingerprintNumber(duration.String())
@@ -281,6 +294,13 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 			if err != nil {
 				return PreparedFreeQuote{}, ErrFreeQuoteInputNotReady
 			}
+		}
+	}
+	if catalog.Price.Unit == catalogdomain.PricePer1KTokens && input.Capability == "video.generate" {
+		pricing.EstimatedInputTokens = 0
+		pricing.MaxOutputTokens, err = seedanceQuoteTokens(catalog.ProviderModelID, input.Mode, params, media)
+		if err != nil {
+			return PreparedFreeQuote{}, err
 		}
 	}
 	amount, costs, err := CalculateQuoteDetailed(catalog.Price, pricing)

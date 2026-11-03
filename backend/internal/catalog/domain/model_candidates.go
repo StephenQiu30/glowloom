@@ -170,7 +170,7 @@ func (m ModelCandidatePreset) OnboardingVersion(modelID, actorID uuid.UUID) (Mod
 		}
 		version.SupportsQuery = true
 		version.ExpectedMaxMS = 600000
-		version.ParamSchema = json.RawMessage(`[{"field":"duration_ms","label":"视频时长（毫秒）","component":"input","type":"integer","min":4000,"max":15000,"step":1000,"default":5000},{"field":"resolution","label":"分辨率","component":"select","type":"string","enum":["720p","1080p"],"default":"720p"},{"field":"aspect_ratio","label":"画面比例","component":"select","type":"string","enum":["16:9","9:16","1:1"],"default":"16:9"}]`)
+		version.ParamSchema = json.RawMessage(`[{"field":"duration_ms","label":"视频时长（毫秒）","component":"input","type":"integer","min":4000,"max":15000,"step":1000,"default":5000},{"field":"resolution","label":"分辨率","component":"select","type":"string","enum":["480p","720p","1080p"],"default":"720p"},{"field":"aspect_ratio","label":"画面比例","component":"select","type":"string","enum":["16:9","9:16","1:1"],"default":"16:9"}]`)
 	default:
 		return ModelVersion{}, ErrInvalidPreset
 	}

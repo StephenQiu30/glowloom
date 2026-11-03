@@ -73,13 +73,19 @@ describe("provider trial consent and recovery", () => {
   it("prepares a free quote without automatic confirmation and keeps only identities in page memory", async () => {
     vi.mocked(createProviderTrialQuote).mockResolvedValue({
       operation_id: "operation",
-      quote_micros: 100,
+      quote_micros: 600000,
     });
     vi.mocked(getOperation).mockResolvedValue({
       id: "operation",
       project_id: "project",
       status: "quoted",
-      quote_micros: 100,
+      settled_micros: JSON.parse("null"),
+      quote_micros: 600000,
+      quote_detail: {
+        estimated_credits: 6,
+        unit: "per_image",
+        price_version_no: 2,
+      },
     });
     render(<ProviderTrial release={release} onVerified={vi.fn()} />);
     fireEvent.click(screen.getByText("试运行此发布"));
@@ -98,6 +104,8 @@ describe("provider trial consent and recovery", () => {
       screen.getByRole("button", { name: "准备免费报价" }).closest("form")!,
     );
     await screen.findByRole("button", { name: "确认并试运行" });
+    expect(screen.getByText("预计消耗 6 积分")).toBeTruthy();
+    expect(screen.queryByText(/已结算/)).toBeNull();
     expect(confirmOperationQuote).not.toHaveBeenCalled();
     const saved = pageBusinessMemory.getItem(key)!;
     expect(saved).toContain("operation");

@@ -365,7 +365,7 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 			if input.Action == "submit" && (evidence.TaskID != "" || !callHasDispatchIdentity(call, identity) || call.DispatchStartedAt == nil) {
 				return application.ErrProviderCallConflict
 			}
-			input.Usage, err = managedBillableUsage(tx, *op.PriceRuleVersionID, evidence.Usage)
+			input.Usage, err = managedBillableUsage(tx, input.OperationID, *op.PriceRuleVersionID, evidence.Usage)
 			if err != nil {
 				return err
 			}
@@ -550,6 +550,7 @@ func priceProviderUsage(tx *gorm.DB, modelVersionID, priceID *uuid.UUID,
 	}
 	var frozenParams struct {
 		Resolution string `json:"resolution"`
+		Size       string `json:"size"`
 	}
 	if err := json.Unmarshal(params, &frozenParams); err != nil {
 		return 0, fmt.Errorf("decode frozen provider params: %w", err)
@@ -561,6 +562,9 @@ func priceProviderUsage(tx *gorm.DB, modelVersionID, priceID *uuid.UUID,
 	}
 	if row.FXRateToCNY != nil {
 		price.FXRateToCNY = *row.FXRateToCNY
+	}
+	if frozenParams.Resolution == "" {
+		frozenParams.Resolution = frozenParams.Size
 	}
 	amount, err := application.CalculateActualCost(price, usage, mode, frozenParams.Resolution)
 	if err != nil {
@@ -724,12 +728,15 @@ func jsonEqual(a, b []byte) bool {
 		reflect.DeepEqual(left, right)
 }
 
-func managedBillableUsage(tx *gorm.DB, priceID uuid.UUID, raw []byte) (json.RawMessage, error) {
-	var unit string
-	if err := tx.Raw(`SELECT unit FROM catalog.price_rule_version WHERE id=?`, priceID).Scan(&unit).Error; err != nil {
+func managedBillableUsage(tx *gorm.DB, operationID, priceID uuid.UUID, raw []byte) (json.RawMessage, error) {
+	var price struct {
+		Unit string
+		Rule []byte
+	}
+	if err := tx.Raw(`SELECT unit,rule::text AS rule FROM catalog.price_rule_version WHERE id=?`, priceID).Scan(&price).Error; err != nil {
 		return nil, err
 	}
-	keys := map[string][]string{"per_request": {"billable_requests"}, "per_image": {"output_count"}, "per_second": {"billed_duration_ms"}, "per_1k_tokens": {"input_tokens", "output_tokens"}, "per_1k_chars": {"character_count"}}[unit]
+	keys := map[string][]string{"per_request": {"billable_requests"}, "per_image": {"output_count"}, "per_second": {"billed_duration_ms"}, "per_1k_tokens": {"input_tokens", "output_tokens"}, "per_1k_chars": {"character_count"}}[price.Unit]
 	var original map[string]json.RawMessage
 	if len(keys) == 0 || json.Unmarshal(raw, &original) != nil {
 		return nil, application.ErrProviderCostUnknown
@@ -741,6 +748,32 @@ func managedBillableUsage(tx *gorm.DB, priceID uuid.UUID, raw []byte) (json.RawM
 			return nil, application.ErrProviderCostUnknown
 		}
 		selected[key] = value
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(price.Rule, &fields) != nil {
+		return nil, application.ErrProviderCostUnknown
+	}
+	if fields["cached_input_micros_per_1k"] != nil {
+		value, ok := original["cached_input_tokens"]
+		if !ok {
+			return nil, application.ErrProviderCostUnknown
+		}
+		selected["cached_input_tokens"] = value
+	}
+	if fields["reference_scope"] != nil {
+		var frozen struct{ Count *int64 }
+		if err := tx.Raw(`SELECT (quote_detail->>'reference_image_count')::bigint AS count FROM operation.operation WHERE id=?`, operationID).Scan(&frozen).Error; err != nil {
+			return nil, err
+		}
+		var count int64
+		if err := tx.Raw(`SELECT count(*) FROM operation.operation_input WHERE operation_id=? AND media_asset_id IS NOT NULL AND NOT is_delete`, operationID).Scan(&count).Error; err != nil {
+			return nil, err
+		}
+		if frozen.Count == nil || *frozen.Count != count {
+			return nil, application.ErrProviderCostUnknown
+		}
+		value, _ := json.Marshal(count)
+		selected["reference_image_count"] = value
 	}
 	return json.Marshal(selected)
 }

@@ -151,6 +151,15 @@
 
 - CI既有阻断：父提交b03f9dee与4ab20c15均失败于Agent测试库缺`agent.graph_checkpoint`（TestPostgresCheckpointerSaveAndResume）；4ab20c15前端CI通过。本次不扩范围修改Agent或CI，不将本地定向通过描述为主干全绿。
 
+### 6.5 其他模型配置与计费补齐（SRC-AI-38）
+
+用户选择先完成配置和代码、暂不收费调用。9个有现存凭据的模型已追加配置v2、11份审核价格；Pro图片、两款豆包文本及四款Seedance共7个待验证发布已保存。DeepSeek分别留存高峰/空闲价，分时结算依据未齐不创建发布；两个OpenAI模型仍缺Key。所有新增模型保持停用，Flash原发布不变。
+
+- 已完成：缓存用量分价、Seedance输出Token报价/结算及发布门禁、Pro参考附加的发布/报价/冻结计数结算、试运行积分明细传递；受影响catalog/operation及managed/providerhttp整包Race通过，前端7项定向、类型和lint通过。完整验证见[本轮记录](docs/research/evidence/2026-11-03-beeftv-adoption/remaining-models-validation.md)及[安全配置快照](docs/research/evidence/2026-11-03-beeftv-adoption/remaining-model-configurations.json)。
+- 免费页面验证：Pro 2K报价0.60元、预计6积分；仅quoted，不确认生成。当前视频最低样例高于原项目0.64元可用预算，保留既有页面门禁，不增加预算。
+- 全仓限制：首次后端全仓命令受测试环境条件阻断，后续受影响整包已用完整隔离环境通过；前端全量2069通过/1失败，失败指向并行探索搜索存储策略，保留该改动。
+- 未接受：9个模型的真实生成/归档/结算与启用、DeepSeek自动分时/节假日结算、输入视频阶梯费率/最低用量、OpenAI凭据与价格、个人积分钱包。本轮新增供应商调用0次、派发总数仍3；原manual的0.12元预留不变。
+
 ### 2026-11-03 SRC-AI-37 界面增量
 
 报价、服务接入和模型管理按即梦实页重新分层，公共Select长文本与移动端样式同步修复；Figma先行，代码落盘未提交。执行证据见Plan29/30本轮回执及[研究记录](docs/research/2026-11-03-即梦报价与模型接入交互拆解.md)。本轮未执行收费调用、数据库迁移或新价格发布；T-AI-21/22/23/25既有未接受项与合同依赖保留。

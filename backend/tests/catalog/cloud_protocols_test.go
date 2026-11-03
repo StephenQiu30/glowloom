@@ -152,3 +152,26 @@ func TestSeedreamProAndFlashOmitUnsupportedGroupAndStreamParameters(t *testing.T
 		})
 	}
 }
+
+func TestTextProtocolsKeepCanonicalCachedTokenEvidence(t *testing.T) {
+	for _, adapter := range []string{"deepseek", "volcengine_ark"} {
+		for _, raw := range []string{`{"prompt_tokens":1000,"completion_tokens":3,"prompt_cache_hit_tokens":800}`, `{"prompt_tokens":1000,"completion_tokens":3,"prompt_tokens_details":{"cached_tokens":800}}`} {
+			var config domain.ProviderConfig
+			for _, preset := range domain.BuiltinPresets() {
+				if preset.Config.AdapterKey == adapter {
+					config = preset.Config
+					break
+				}
+			}
+			client := providerhttp.NewClient(&http.Client{Transport: providerTransport(func(_ *http.Request) (*http.Response, error) {
+				return providerResponse(200, `{"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}],"usage":`+raw+`}`), nil
+			})})
+			result, err := client.Submit(t.Context(), operationapp.GenerationRequest{Config: config, ModelID: "fixture", Capability: "text.generate", Mode: "text_to_text", Prompt: "hello", OutputCount: 1}, "fixture-key")
+			require.NoError(t, err)
+			require.Equal(t, "completed", result.Outcome)
+			var usage map[string]int64
+			require.NoError(t, json.Unmarshal(result.Usage, &usage))
+			require.Equal(t, int64(800), usage["cached_input_tokens"])
+		}
+	}
+}

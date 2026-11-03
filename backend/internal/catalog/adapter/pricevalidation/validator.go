@@ -59,6 +59,15 @@ func (v *Validator) Validate(price domain.PriceRuleVersion) error {
 		for name, raw := range fields {
 			switch name {
 			case "input_micros_per_1k", "output_micros_per_1k":
+			case "cached_input_micros_per_1k":
+				cached, valid := nonnegativeMicros(raw)
+				if !valid || cached > input {
+					return ErrInvalidConfiguration
+				}
+			case "by_resolution":
+				if input != 0 || !validCoefficients(raw) {
+					return ErrInvalidConfiguration
+				}
 			case "markup_multiplier", "credit_ratio":
 				if !validMultiplierOrRatio(raw) {
 					return ErrInvalidConfiguration
@@ -77,6 +86,20 @@ func (v *Validator) Validate(price domain.PriceRuleVersion) error {
 		}
 		for name, raw := range fields {
 			switch name {
+			case "free_reference_images", "reference_image_micros":
+				if price.Unit != domain.PricePerImage && price.Unit != domain.PricePerRequest {
+					return ErrInvalidConfiguration
+				}
+				if _, ok := nonnegativeMicros(raw); !ok {
+					return ErrInvalidConfiguration
+				}
+			case "reference_scope":
+				var scope string
+				if json.Unmarshal(raw, &scope) != nil || (scope != "per_task" && scope != "per_output") ||
+					(price.Unit != domain.PricePerImage && price.Unit != domain.PricePerRequest) ||
+					(scope == "per_output" && price.Unit != domain.PricePerImage) {
+					return ErrInvalidConfiguration
+				}
 			case "base_micros":
 			case "by_mode", "by_resolution":
 				if !validCoefficients(raw) {
@@ -90,6 +113,12 @@ func (v *Validator) Validate(price domain.PriceRuleVersion) error {
 				return ErrInvalidConfiguration
 			}
 		}
+	}
+	_, hasScope := fields["reference_scope"]
+	_, hasFree := fields["free_reference_images"]
+	_, hasReference := fields["reference_image_micros"]
+	if hasScope != hasFree || hasScope != hasReference {
+		return ErrInvalidConfiguration
 	}
 	return nil
 }

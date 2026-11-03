@@ -1,0 +1,158 @@
+首次全仓测试使用不完整的测试环境；以下为实际失败名称。后续受影响整包改用完整隔离测试环境通过，不把本次全仓尝试计为通过。
+
+TestCanvasAssetPersonalFavoritesCASPartialReplayAndCollection — asset_commands_store_test.go:26: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasAssetMutationsKeepMainProjectProtectionAndPartialDelete — asset_commands_store_test.go:82: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasAssetCoverUsesOnlyCurrentlyReferenceableImage — asset_commands_store_test.go:143: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasAssetFavoritesIsolateTeamMembersAndSerializeCAS — asset_commands_store_test.go:168: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasAssetUnknownDependencyRollsBackAllSuccessfulItems — asset_commands_store_test.go:251: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasAssetRenamePreservesInitializedCollaborationMetadata — asset_commands_store_test.go:290: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasAssetCreationAllocatesActualPrimaryAndTemplatesWithoutGeneration — asset_creation_store_test.go:22: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasAssetCreationRollsBackProjectBudgetAuditAndReceipts — asset_creation_store_test.go:122: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasAssetCreationConcurrentRetryAndRevokedSession — asset_creation_store_test.go:156: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasAssetCreationReceiptFailureRollsBackSeedGraph — asset_creation_store_test.go:194: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestAssetFinalArchivedPrimaryDeleteKeepsWorkspaceAndWriteGuards — asset_final_alignment_test.go:64: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestAssetFinalHistoryPublicationReflectsReadOnlyScope — asset_final_alignment_test.go:129: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestAssetFinalVideoRecordRetainsSiblingsUnderResultFilters — asset_final_alignment_test.go:156: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasAssetOriginalRechecksRealOwnerSessionAfterObjectOpen — asset_original_store_test.go:37: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasAssetOriginalUnconfiguredTransportFailsClosed — asset_original_store_test.go:68: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestAssetOutputKindsUseCanonicalMediaFactsAndPreserveStoredRows — asset_output_kind_test.go:61: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestAssetPublicTaskPreservesUnavailableCandidateFactsAndValidSiblings — asset_output_kind_test.go:97: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestAssetQuoteReceiptFieldFormsShareReadAuthority — --- FAIL: TestAssetQuoteReceiptFieldFormsShareReadAuthority/OperationID (0.00s)
+TestAssetCanvasStoreReadsActualDocumentsAndExplicitShortDramas — assets_store_test.go:20: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestAssetCanvasStoreUsesHalfOpenDatesAndStableBidirectionalPages — assets_store_test.go:80: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestAssetCanvasStoreCopyRetainsShortDramaClassification — assets_store_test.go:120: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestAssistantSessionPrivateBindingReplayAndFreeze — assistant_session_test.go:27: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestAssistantDraftCannotRaceIntoTwoSessions — assistant_session_test.go:130: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestAssistantEmptySessionCreationIsSerialized — assistant_session_test.go:179: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCinemaKitPostgresYjsSaveEditReadAndDetach — cinema_kit_integration_test.go:19: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasContainerPostgresNestedTreeAndReopen — container_integration_test.go:16: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestContentActivityTracksPrimaryContentWithoutProjectCAS — content_activity_integration_test.go:16: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestDAGGetRetriesWholeSnapshotAfterConcurrentCommitAndBoundsRetries — --- FAIL: TestDAGGetRetriesWholeSnapshotAfterConcurrentCommitAndBoundsRetries/one_concurrent_commit (0.00s)
+TestDAGReadOnlyGraphCannotAdmitNewExecutionInputs — --- FAIL: TestDAGReadOnlyGraphCannotAdmitNewExecutionInputs/unclassified_relation (0.00s)
+TestDAGPersistenceCompleteBatchReloadCleanupAndReplay — dag_integration_test.go:18: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestDAGPersistenceUnknownHistoryRemainsReadableAndReadOnly — --- FAIL: TestDAGPersistenceUnknownHistoryRemainsReadableAndReadOnly/input (0.00s)
+TestDAGPersistenceConcurrentDuplicateAnnotationHasSingleWinner — dag_integration_test.go:203: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasHTTPCommandRouteRemoved — design_gap_integration_test.go:26: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasLegacySocketProtocolRejected — design_gap_integration_test.go:52: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasOversizedGraphRejectedBeforeSaveAndReportedOnLoad — design_gap_integration_test.go:65: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasAcceptedCapacityBoundaryReopensOverWebSocket — design_gap_integration_test.go:99: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasSocketAuthorityDoesNotUpgradeSharedProjectLocks — design_gap_integration_test.go:152: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestDirectorOutputOperationsClosedJSONAndHTTPRefresh — director_outputs_http_test.go:53: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestDirectorOutputsPersistAndRejectUnavailableImages — director_outputs_integration_test.go:25: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestDirectorGalleryLinksSurviveResourceNodeDeletion — director_outputs_integration_test.go:156: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestDirectorOutputsHoldMediaEligibilityUntilCommit — --- FAIL: TestDirectorOutputsHoldMediaEligibilityUntilCommit/gallery (0.00s)
+TestDirectorImportedMotionYjsProjectionBudgetAndRewind — director_projection_budget_test.go:54: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestDirectorRetainedAuditBudgetRejectsOversize — director_projection_budget_test.go:142: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestDirectorOversizedAtomicAuditRejectsWithoutPartialSave — director_projection_budget_test.go:171: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestDirectorRecoveryPrivateCASAndReopen — director_recovery_test.go:16: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestDirectorScenePostgresControlsFramesAndReopen — director_scene_integration_test.go:15: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestDirectorWorkspacesPostgresRoundTrip — director_workspaces_test.go:128: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestDraftFixtureBatchesPersistFinalInputs — draft_integration_test.go:18: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestDraftPersistenceReceiptReplayAndAuditRollback — draft_integration_test.go:73: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasSnapshotUsesVersionedDTO — dto_contract_test.go:21: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasCopyRejectsUnsupportedSchemaBeforeFreezing — dto_contract_test.go:75: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasSnapshotMediaFormatAndReadOnlyPermissions — --- FAIL: TestCanvasSnapshotMediaFormatAndReadOnlyPermissions/archived (0.00s)
+TestEditorCompleteGraphDurableRoundTrip — editor_persistence_integration_test.go:15: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestPublicCanvasAPIWithLocalPostgres — http_integration_test.go:33: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_HTTP_DB_DSN
+TestCanvasInformationScopedLedgerPaginationAndMetadata — information_integration_test.go:15: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasWebSocketRejectsForeignOriginBeforeUpgrade — live_integration_test.go:140: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasWebSocketHeartbeatDoesNotExtendSessionAndRevocationCloses — live_integration_test.go:158: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasWebSocketStopsWithAPILifetime — live_integration_test.go:219: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasWebSocketSyncBurstDoesNotBlockHeartbeatPong — live_integration_test.go:232: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasLocationResolvesTeamBeforeScopeSelection — location_http_test.go:12: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestMainCanvasProjectsCurrentNameAndRejectsDirectMutation — main_canvas_contract_integration_test.go:19: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestMainCanvasGuardPreservesValidOldReceiptBeforeRejectingExpiredKey — main_canvas_contract_integration_test.go:60: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestMainCanvasDeleteGuardPreservesOldReceiptThenRejectsExpiredKey — main_canvas_contract_integration_test.go:93: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasMediaReferenceGuardRetainsSoftRemovedNodesAndCompleteConfigHistory — media_reference_guard_integration_test.go:36: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasMediaReferenceGuardRequiresCallerTransactionAndCurrentScope — media_reference_guard_integration_test.go:85: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasMediaReferenceGuardCorruptHistoricalConfigFailsClosed — media_reference_guard_integration_test.go:102: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasMediaReferenceGuardBoundsCombinedRetainedHistory — media_reference_guard_integration_test.go:117: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasMediaReferenceGuardRetainsHistoryBudgetLock — media_reference_guard_integration_test.go:188: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasReplaceMediaPreservesIdentityVersionEdgesAndUndo — --- FAIL: TestCanvasReplaceMediaPreservesIdentityVersionEdgesAndUndo/image (0.00s)
+TestCanvasReplaceMediaRejectsUnauthorizedAndWrongKindAtomically — media_replacement_integration_test.go:124: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasCollaborationHashIgnoresNestedJSONKeyOrder — media_replacement_integration_test.go:168: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasReplaceMediaReceiptFailureRollsBackAndOriginalRequestRetries — media_replacement_integration_test.go:189: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasConcurrentMediaReplacementHasOneWinner — media_replacement_integration_test.go:237: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestProjectCopyCanvasPersistsFrozenGraphsAndHidesTarget — project_copy_integration_test.go:22: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_PROJECT_COPY_DB_DSN
+TestProjectCopyCanvasRejectsUnknownConfigWithoutPartialSnapshot — project_copy_integration_test.go:119: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_PROJECT_COPY_DB_DSN
+TestResourceInputPostgresVersionsReplayAndSourceAuthorization — resource_input_integration_test.go:20: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestResourceInputPostgresReadOnlyGraphAdmission — --- FAIL: TestResourceInputPostgresReadOnlyGraphAdmission/unknown_config (0.00s)
+TestResourceInputPostgresAuditFailureRollsBackYjsAndInput — resource_input_integration_test.go:179: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestMediaReferenceRemainsLockedUntilCanvasCommit — resource_store_test.go:58: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestResourcePersistenceScopesMediaAndSoftDeleteReplay — resource_store_test.go:113: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestResourceGroupRestoreAndParentValidationOnPostgres — resource_store_test.go:181: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestResourceWithOperationBindingRejectsEditsWithoutFalseSavedRevision — resource_store_test.go:241: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestEditorCanvasUsesFiniteTextOperationsAndOneDraftOwner — rich_draft_integration_test.go:16: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestCanvasPersistenceRevisionReplayRollbackAndRestore — store_integration_test.go:62: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestConcurrentCanvasOperationsJointlyAdvanceRevisions — store_integration_test.go:137: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestSubjectInputReaderRechecksCurrentSourceAndRelation — subject_input_reader_test.go:17: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestTextComposerPostgresReopenUndoRedoSourceGuard — text_composer_integration_test.go:17: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestTimelineAspectPostgresYjsRoundTripAndUnknownRollback — timeline_aspect_integration_test.go:15: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestTimelineRelationsPersistAtomicallyAndRejectStaleMediaDuration — timeline_connections_integration_test.go:13: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestTimelineImportedShelfPersistsWithoutClipsAndRejectsForeignAssets — timeline_imports_integration_test.go:14: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestTimelineReaderFreezesOwnedMediaAndRejectsStaleRevision — timeline_reader_test.go:20: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestToolConfigurationsSurviveDatabaseReloadAndIdempotentReplay — tool_store_test.go:20: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestTranscriptionSourceFreezesFormalNodeAndLocksUntilOuterCommit — transcription_source_test.go:20: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestTranscriptionSourceRejectsImageAndKindChangedAfterSave — transcription_source_test.go:91: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestYjsOnlyRejectsRetiredProtocolsWithoutInitializingOrWriting — yjs_cutover_test.go:16: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestYjsOnlyFirstOpenInitializesOnceAndRejectsOldSubmitMessages — yjs_cutover_test.go:38: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestYjsDeletionUndoRestoresDependentToolReferences — yjs_cutover_test.go:101: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestYjsUpdateIDIsScopedToSessionInProjectionAudit — yjs_cutover_test.go:155: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestYjsRuntimeAtomicAcceptanceConcurrentTextAndRecovery — yjs_integration_test.go:67: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestYjsTwoActorsConcurrencyStaleReviewWriterFenceAndRuntimeReload — yjs_integration_test.go:140: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestYjsReceiptFailureRollsBackProjectionBinaryLogAndOutbox — yjs_integration_test.go:229: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestYjsConcurrentDuplicateEdgesRejectWithoutBinaryContamination — yjs_integration_test.go:278: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestYjsStableIdentityRestorationAuthorAndOldLifetimeFence — yjs_integration_test.go:332: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestYjsHistoryRestorationNewEpochReceiptAndOldUpdateFence — yjs_integration_test.go:395: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestYjsConcurrentReferenceAllocationsSurviveHistoryRestore — yjs_integration_test.go:494: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestYjsRestorationCannotReplayAnotherActorsDeletion — yjs_integration_test.go:556: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestYjsExperimentalStateUpgradeAndConcurrentFirstParameters — yjs_integration_test.go:641: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestYjsTwoAccountsThreeSocketsPresenceRevocationAndNoBusinessWrites — yjs_live_integration_test.go:45: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestYjsTeamHistoryRestoreThroughAuthenticatedSocket — yjs_live_integration_test.go:99: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestYjsPrivateCanvasResponsesAreNotCacheable — yjs_live_integration_test.go:133: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestYjsSaveAndRestoreEventsPassRelayValidation — yjs_outbox_test.go:34: required isolated PostgreSQL DSN is missing: GLOWLOOM_TEST_CANVAS_DB_DSN
+TestAgentQuoteAndConfirmShareSessionTransaction — agent_session_integration_test.go:158: insert checkpoint: ERROR: relation "agent.graph_checkpoint" does not exist (SQLSTATE 42P01)
+TestBatchCancelQueuedChildReleasesReservationOnce — batch_cancel_integration_test.go:41: batch cancellation with runtime role: mark batch cancellation: ERROR: permission denied for schema operation (SQLSTATE 42501)
+TestBatchLaunchProviderSlotReleasesWithTerminalSettlement — batch_launch_integration_test.go:130: terminal settlement: load operation for settlement: read settlement facts: ERROR: permission denied for schema operation (SQLSTATE 42501)
+TestCompleteFromReuseCopiesOutputsAndSettlesZeroOnce — complete_from_reuse_integration_test.go:26: create source media: ERROR: null value in column "object_location_id" of relation "media_asset" violates not-null constraint (SQLSTATE 23502)
+TestCompleteFromReuseRejectsSourceRevokedAfterConfirmation — complete_from_reuse_integration_test.go:133: create source media: ERROR: null value in column "object_location_id" of relation "media_asset" violates not-null constraint (SQLSTATE 23502)
+TestCompleteFromReuseRunsAsRuntimeRole — complete_from_reuse_integration_test.go:176: create source media: ERROR: null value in column "object_location_id" of relation "media_asset" violates not-null constraint (SQLSTATE 23502)
+TestConfirmBatchQuoteRunsAsRuntimeRole — confirm_batch_quote_integration_test.go:179: confirm batch as runtime role: prepare batch confirmation: ERROR: permission denied for schema identity (SQLSTATE 42501)
+TestConfirmSingleQuoteRunsAsRuntimeRole — confirm_single_quote_integration_test.go:183: confirm as runtime role: confirm single quote transaction: ERROR: permission denied for schema identity (SQLSTATE 42501)
+TestConfirmationWritesUnderRuntimeRole — confirmation_runtime_role_integration_test.go:113: confirmation writes as runtime role: insert held reservation: ERROR: permission denied for schema billing (SQLSTATE 42501)
+TestCreateBatchFreeQuoteAsRuntimeRole — create_batch_free_quote_integration_test.go:178: runtime role batch quote: create batch free quote transaction: ERROR: permission denied for schema identity (SQLSTATE 42501)
+TestCreateFreeQuoteLocksReadyMediaAndFreezesAssetIdentity — create_free_quote_integration_test.go:103: ERROR: null value in column "object_location_id" of relation "media_asset" violates not-null constraint (SQLSTATE 23502)
+TestCreateFreeQuoteUsesProjectDefaultModelAndReplaysResolvedQuote — create_free_quote_integration_test.go:238: runtime role project default quote: create free quote transaction: ERROR: permission denied for schema identity (SQLSTATE 42501)
+TestCreateFreeQuoteReusesCompletedInputUnlessForced — create_free_quote_integration_test.go:293: create source media: ERROR: null value in column "object_location_id" of relation "media_asset" violates not-null constraint (SQLSTATE 23502)
+TestCreateFreeQuoteRejectsUnavailableModelAndForeignProjectWithoutWrites — create_free_quote_integration_test.go:432: runtime role disabled model = create free quote transaction: ERROR: permission denied for schema identity (SQLSTATE 42501)
+TestEditorSavedReferencesReachManagedWireOnce — editor_generation_integration_test.go:74:
+TestOperationMediaReferenceGuardRetainsMediaMaskLegacyInputAndOutput — media_reference_guard_integration_test.go:41: isolated reference database required <nil>
+TestOperationMediaReferenceGuardRequiresCallerTransactionAndCurrentScope — media_reference_guard_integration_test.go:76: isolated reference database required <nil>
+TestOperationMediaReferenceGuardKeepsTaskProjectBoundary — media_reference_guard_integration_test.go:93: isolated reference database required <nil>
+TestTemplateQuoteAtomicRollbackAndRuntimePrivileges — prompt_quote_integration_test.go:194: runtime role failed template transaction or immutability guard create free quote transaction: ERROR: permission denied for schema identity (SQLSTATE 42501)
+TestRealProviderUsagePricesFrozenRuleOnce — provider_call_integration_test.go:307: complete priced query under runtime role: lock operation for provider result: ERROR: permission denied for schema operation (SQLSTATE 42501)
+TestProviderCallSettlementUnderRuntimeRole — provider_call_integration_test.go:764: transition under runtime role: transition workflow operation transaction: read execution actor: ERROR: permission denied for schema operation (SQLSTATE 42501)
+TestM1DispatchClaimUnderRuntimeRole — provider_dispatch_integration_test.go:356: dispatch under runtime role: read execution actor: ERROR: permission denied for schema operation (SQLSTATE 42501)
+TestProviderTrialQuoteRequiresAdminAndBudgetAndCanConfirmDraft — provider_trial_integration_test.go:47:
+TestReadCurrentQuoteCatalogTracksPublishedVersionsAndAvailability — quote_catalog_integration_test.go:44: read catalog with runtime role: read quote catalog: ERROR: permission denied for schema identity (SQLSTATE 42501)
+TestExpireQuotedUnderRuntimeRole — quote_expiry_integration_test.go:118: expire under runtime role: expire due operation quotes: ERROR: permission denied for schema operation (SQLSTATE 42501)
+TestFindReusableCompletedRequiresSameProjectAndSafeOutputs — reuse_candidate_integration_test.go:22: create source media: ERROR: null value in column "object_location_id" of relation "media_asset" violates not-null constraint (SQLSTATE 23502)
+TestReuseDeliveryAcceptsHistoricalSkippedAndUnattributedAssets — reuse_completion_integration_test.go:54: create source media: ERROR: null value in column "object_location_id" of relation "media_asset" violates not-null constraint (SQLSTATE 23502)
+TestReuseDeliveryRejectsBrokenCopyAndFrozenRelationships — reuse_completion_integration_test.go:68: create source media: ERROR: null value in column "object_location_id" of relation "media_asset" violates not-null constraint (SQLSTATE 23502)
+TestPaidLegacyZeroBasedDeliveryRetainsReadyAndAdmission — reuse_completion_integration_test.go:143:
+TestReadReuseSourceAvailableRechecksMutableOutputs — reuse_source_confirmation_integration_test.go:20: create source media: ERROR: null value in column "object_location_id" of relation "media_asset" violates not-null constraint (SQLSTATE 23502)
+TestReadReuseSourceAvailableHoldsMediaLockThroughOuterTransaction — reuse_source_confirmation_integration_test.go:120: create source media: ERROR: null value in column "object_location_id" of relation "media_asset" violates not-null constraint (SQLSTATE 23502)
+TestSubjectQuoteRequiresProofAndRechecksRevocationAtConfirm — subject_binding_integration_test.go:56: ERROR: null value in column "object_location_id" of relation "media_asset" violates not-null constraint (SQLSTATE 23502)
+TestTerminalMultiArtifactDeliveryKeepsPartialRecoverableUntilAllArchived — terminal_delivery_recovery_integration_test.go:303: interrupted ingest: register media output: save generated media output: insert generated media: ERROR: null value in column "object_location_id" of relation "media_asset" violates not-null constraint (SQLSTATE 23502)
+TestRecoveredAudioShowsOnlyOriginalSubtitle — terminal_delivery_recovery_integration_test.go:632:
+TestWorkflowTransitionAndSettlementUnderRuntimeRole — workflow_runtime_role_integration_test.go:63: transition as runtime role: transition workflow operation transaction: read execution actor: ERROR: permission denied for schema operation (SQLSTATE 42501)
+TestWorkflowStarterReadsCommittedSingleAndSweepCandidates — workflow_starter_test.go:364: runtime role batch snapshot: load workflow batch: ERROR: permission denied for schema operation (SQLSTATE 42501)
+TestWorkflowSubmissionChecksFrozenMediaInsideTransition — workflow_store_integration_test.go:305: create frozen media: ERROR: null value in column "object_location_id" of relation "media_asset" violates not-null constraint (SQLSTATE 23502)
+TestEditorDraftPersistenceCASAndReplay — draft_integration_test.go:28: preferences tests require the task's isolated receipt database
+TestEditorDraftConcurrentWriters — draft_integration_test.go:74: preferences tests require the task's isolated receipt database
+TestEditorUploadRecoveryIsPrivateAndReauthorized — draft_integration_test.go:109: preferences tests require the task's isolated receipt database
+TestWorkspaceModelDefaultsPersistAndGuard — preferences_integration_test.go:97: preferences tests require the task's isolated receipt database
+TestPromptPreferencesPersistenceConcurrencyAndIsolation — preferences_integration_test.go:147: preferences tests require the task's isolated receipt database
+TestPromptPreferenceAuditFailureRollsBack — preferences_integration_test.go:229: preferences tests require the task's isolated receipt database
+TestPreferencePublicHTTPProducerAndSecurity — preferences_integration_test.go:266: preferences tests require the task's isolated receipt database
+TestPreferenceApplicationRoleAndOutdatedBaseline — preferences_integration_test.go:300: preferences tests require the task's isolated receipt database

@@ -52,16 +52,17 @@ type PricingInput struct {
 }
 
 type parsedPriceRule struct {
-	freeReferences   uint64
-	referenceMicros  uint64
-	referenceScope   string
-	baseMicros       uint64
-	inputMicros      uint64
-	outputMicros     uint64
-	markupMultiplier *big.Rat
-	creditRatio      *big.Rat
-	byMode           map[string]*big.Rat
-	byResolution     map[string]*big.Rat
+	freeReferences    uint64
+	referenceMicros   uint64
+	referenceScope    string
+	baseMicros        uint64
+	cachedInputMicros *uint64
+	inputMicros       uint64
+	outputMicros      uint64
+	markupMultiplier  *big.Rat
+	creditRatio       *big.Rat
+	byMode            map[string]*big.Rat
+	byResolution      map[string]*big.Rat
 }
 
 // QuoteCostDetail explains the exact inputs to a quote before the final CNY
@@ -100,6 +101,7 @@ type BillableUsage struct {
 	BilledDurationMS    *int64 `json:"billed_duration_ms,omitempty"`
 	BillableRequests    *int64 `json:"billable_requests,omitempty"`
 	CharacterCount      *int64 `json:"character_count,omitempty"`
+	CachedInputTokens   *int64 `json:"cached_input_tokens,omitempty"`
 	InputTokens         *int64 `json:"input_tokens,omitempty"`
 	OutputTokens        *int64 `json:"output_tokens,omitempty"`
 }
@@ -131,6 +133,8 @@ func ParseBillableUsage(raw json.RawMessage) (BillableUsage, error) {
 			usage.BillableRequests = &value
 		case "character_count":
 			usage.CharacterCount = &value
+		case "cached_input_tokens":
+			usage.CachedInputTokens = &value
 		case "input_tokens":
 			usage.InputTokens = &value
 		case "output_tokens":
@@ -201,10 +205,8 @@ func CalculateActualCost(price catalogdomain.PriceRuleVersion, usage BillableUsa
 	if err != nil {
 		return 0, err
 	}
-	if price.Unit != catalogdomain.PricePer1KTokens {
-		if err := applyPriceFactors(amount, rule, mode, resolution, nil); err != nil {
-			return 0, err
-		}
+	if err := applyPriceFactors(amount, rule, mode, resolution, nil); err != nil {
+		return 0, err
 	}
 	if rule.referenceScope != "" {
 		if usage.ReferenceImageCount == nil {
@@ -256,11 +258,23 @@ func actualPriceAmount(unit catalogdomain.PriceUnit, rule parsedPriceRule, usage
 		if fields != 2 || usage.InputTokens == nil || usage.OutputTokens == nil {
 			return nil, ErrInvalidPricingInput
 		}
-		inputCost := new(big.Int).Mul(big.NewInt(*usage.InputTokens), new(big.Int).SetUint64(rule.inputMicros))
+		uncached := *usage.InputTokens
+		cachedCost := new(big.Int)
+		if rule.cachedInputMicros != nil {
+			if usage.CachedInputTokens == nil || *usage.CachedInputTokens < 0 || *usage.CachedInputTokens > uncached {
+				return nil, ErrInvalidPricingInput
+			}
+			uncached -= *usage.CachedInputTokens
+			cachedCost.Mul(big.NewInt(*usage.CachedInputTokens), new(big.Int).SetUint64(*rule.cachedInputMicros))
+		} else if usage.CachedInputTokens != nil {
+			return nil, ErrInvalidPricingInput
+		}
+		inputCost := new(big.Int).Mul(big.NewInt(uncached), new(big.Int).SetUint64(rule.inputMicros))
+		inputCost.Add(inputCost, cachedCost)
 		outputCost := new(big.Int).Mul(big.NewInt(*usage.OutputTokens), new(big.Int).SetUint64(rule.outputMicros))
 		return new(big.Rat).SetFrac(inputCost.Add(inputCost, outputCost), big.NewInt(1_000)), nil
 	}
-	if fields != 1 {
+	if usage.CachedInputTokens != nil || fields != 1 {
 		return nil, ErrInvalidPricingInput
 	}
 	quantity := new(big.Rat)
@@ -336,6 +350,20 @@ func parsePrice(price catalogdomain.PriceRuleVersion) (parsedPriceRule, *big.Rat
 		for name, raw := range fields {
 			switch name {
 			case "input_micros_per_1k", "output_micros_per_1k":
+			case "cached_input_micros_per_1k":
+				value, valid := priceMicros(raw)
+				if !valid || value > rule.inputMicros {
+					return parsedPriceRule{}, nil, ErrInvalidPricingRule
+				}
+				rule.cachedInputMicros = &value
+			case "by_resolution":
+				if rule.inputMicros != 0 {
+					return parsedPriceRule{}, nil, ErrInvalidPricingRule
+				}
+				rule.byResolution, err = pricingCoefficients(raw)
+				if err != nil {
+					return parsedPriceRule{}, nil, err
+				}
 			case "markup_multiplier":
 				rule.markupMultiplier, ok = parseMultiplierOrRatio(raw)
 				if !ok {
@@ -422,7 +450,11 @@ func priceAmount(unit catalogdomain.PriceUnit, rule parsedPriceRule, input Prici
 		detail.InputUnitPriceMicros, detail.OutputUnitPriceMicros = &inputRate, &outputRate
 		inputCost := new(big.Int).Mul(big.NewInt(input.EstimatedInputTokens), new(big.Int).SetUint64(rule.inputMicros))
 		outputCost := new(big.Int).Mul(big.NewInt(input.MaxOutputTokens), new(big.Int).SetUint64(rule.outputMicros))
-		return new(big.Rat).SetFrac(inputCost.Add(inputCost, outputCost), big.NewInt(1_000)), detail, nil
+		amount := new(big.Rat).SetFrac(inputCost.Add(inputCost, outputCost), big.NewInt(1_000))
+		if err := applyPriceFactors(amount, rule, input.Mode, input.Resolution, &detail); err != nil {
+			return nil, QuoteCostDetail{}, err
+		}
+		return amount, detail, nil
 	}
 	quantity := new(big.Rat)
 	displayQuantity := new(big.Rat)

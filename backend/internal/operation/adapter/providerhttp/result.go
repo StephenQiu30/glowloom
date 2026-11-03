@@ -85,6 +85,34 @@ func safeUsage(raw json.RawMessage) json.RawMessage {
 			}
 		}
 	}
+	// Preserve only the reviewed cache count, never arbitrary nested usage data.
+	var cached *int64
+	addCached := func(raw json.RawMessage) bool {
+		var count int64
+		if json.Unmarshal(raw, &count) != nil || count < 0 || (cached != nil && *cached != count) {
+			return false
+		}
+		cached = &count
+		return true
+	}
+	if raw, ok := fields["prompt_cache_hit_tokens"]; ok && !addCached(raw) {
+		return nil
+	}
+	for _, name := range []string{"prompt_tokens_details", "input_tokens_details"} {
+		if raw, ok := fields[name]; ok {
+			var detail map[string]json.RawMessage
+			if json.Unmarshal(raw, &detail) != nil {
+				return nil
+			}
+			if count, present := detail["cached_tokens"]; present && !addCached(count) {
+				return nil
+			}
+		}
+	}
+	if cached != nil {
+		raw, _ := json.Marshal(*cached)
+		allowed["cached_input_tokens"] = raw
+	}
 	if len(allowed) == 0 {
 		return nil
 	}

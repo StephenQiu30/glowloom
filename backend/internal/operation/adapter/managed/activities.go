@@ -258,6 +258,18 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 			}
 		}
 	}
+	if config.AdapterKey == "volcengine_ark" && op.Capability == "video.generate" {
+		if _, present := usage["output_tokens"]; present {
+			usage["input_tokens"] = 0
+		}
+	}
+	var supplier map[string]json.RawMessage
+	if json.Unmarshal(result.Usage, &supplier) == nil {
+		var cached int64
+		if raw, present := supplier["cached_input_tokens"]; present && json.Unmarshal(raw, &cached) == nil && cached >= 0 {
+			usage["cached_input_tokens"] = cached
+		}
+	}
 	evidence.Usage, err = json.Marshal(usage)
 	if err != nil {
 		return unknown, err

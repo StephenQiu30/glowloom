@@ -126,7 +126,9 @@ func appendPriceRuleInTx(tx *gorm.DB, price domain.PriceRuleVersion, expectedRev
 	check := tx.Raw(`
 		SELECT ARRAY(SELECT jsonb_array_elements_text(?::jsonb)) <@ v.modes AS modes_supported,
 		       ARRAY(SELECT jsonb_array_elements_text(?::jsonb)) <@
-		         ARRAY(SELECT jsonb_array_elements_text(COALESCE(v.limits->'resolutions', '[]'::jsonb))) AS resolutions_supported
+		         ARRAY(SELECT jsonb_array_elements_text(COALESCE(v.limits->'resolutions', '[]'::jsonb))
+               UNION SELECT jsonb_array_elements_text(field->'enum') FROM jsonb_array_elements(v.param_schema) field
+               WHERE field->>'field' IN ('size','resolution')) AS resolutions_supported
 		FROM catalog.model_profile_version AS v
 		WHERE v.id = ?::uuid AND v.model_profile_id = ?::uuid AND NOT v.is_delete
 	`, string(modesJSON), string(resolutionsJSON), row.CurrentVersionID.String(), price.ModelID.String()).Scan(&supported)

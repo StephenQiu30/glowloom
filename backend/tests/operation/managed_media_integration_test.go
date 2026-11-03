@@ -83,3 +83,43 @@ func TestManagedMediaRealStorageAndProbeAreIdempotent(t *testing.T) {
 		})
 	}
 }
+
+func TestManagedReferenceSettlementRequiresFrozenQuoteCount(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		detail string
+		valid  bool
+	}{
+		{"zero references", `{"reference_image_count":0}`, true},
+		{"missing frozen count", `{}`, false},
+		{"input count changed", `{"reference_image_count":2}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			database := operationStoreDB(t)
+			f := seedManagedFixture(t, database)
+			i := f.identity
+			require.NoError(t, database.Exec(`UPDATE catalog.model_profile SET capability='image.generate' WHERE id=(SELECT model_profile_id FROM catalog.model_profile_version WHERE id=?)`, i.ModelProfileVersionID).Error)
+			require.NoError(t, database.Exec(`UPDATE catalog.model_profile_version SET modes=ARRAY['text2image'],supports_query=false,supports_cancel=false,queue='provider',moderation='provider' WHERE id=?`, i.ModelProfileVersionID).Error)
+			require.NoError(t, database.Exec(`UPDATE catalog.price_rule_version SET unit='per_image',rule='{"base_micros":11,"by_resolution":{"2K":2},"free_reference_images":1,"reference_image_micros":3,"reference_scope":"per_task"}' WHERE id=?`, i.PriceRuleVersionID).Error)
+			require.NoError(t, database.Exec(`UPDATE operation.operation SET capability='image.generate',mode='text2image',params='{"size":"2K"}',quote_detail=?::jsonb WHERE id=?`, tc.detail, i.OperationID).Error)
+			claim, err := f.store.ClaimProviderDispatch(t.Context(), i)
+			require.NoError(t, err)
+			require.True(t, claim.Claimed)
+			results := application.NewManagedResults(&stageTestObjects{entries: map[string]stageTestObject{}}, f.store)
+			var encoded bytes.Buffer
+			require.NoError(t, png.Encode(&encoded, image.NewRGBA(image.Rect(0, 0, 64, 48))))
+			artifact, err := results.StageArtifact(t.Context(), i, 1, encoded.Bytes(), "image/png")
+			require.NoError(t, err)
+			require.NoError(t, results.Save(t.Context(), application.ManagedResult{Identity: i, State: "succeeded", Artifacts: []application.ManagedArtifact{artifact}, Usage: json.RawMessage(`{"output_count":1,"billable_requests":1}`)}))
+			err = f.store.CompleteProviderCall(t.Context(), application.CompleteProviderCallInput{OperationID: i.OperationID, Action: "submit", Attempt: 1, Outcome: "ok", State: "completed", Managed: true})
+			if !tc.valid {
+				require.ErrorIs(t, err, application.ErrProviderCostUnknown)
+				return
+			}
+			require.NoError(t, err)
+			cost, err := f.store.LoadProviderCost(t.Context(), i.OperationID)
+			require.NoError(t, err)
+			require.Equal(t, int64(22), cost.ActualCostMicros)
+		})
+	}
+}
