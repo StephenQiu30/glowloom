@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"net/url"
 	"strings"
 	"time"
 
@@ -196,6 +197,8 @@ const (
 // PriceRuleVersion is a published, append-only price and exchange rate.
 // FXRateToCNY is decimal text to retain exact monetary input.
 type PriceRuleVersion struct {
+	SourceURL     string
+	ReviewedAt    *time.Time
 	ID            uuid.UUID
 	ModelID       uuid.UUID
 	VersionNo     int
@@ -272,4 +275,14 @@ func validPositiveRate(rate string) bool {
 		positive = positive || digit != '0'
 	}
 	return positive
+}
+
+// ValidateProvenance checks reviewed, credential-free price evidence. Historical
+// versions may omit provenance; every new publication calls this explicitly.
+func (p PriceRuleVersion) ValidateProvenance() error {
+	u, err := url.Parse(p.SourceURL)
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || len(p.SourceURL) > 2048 || p.ReviewedAt == nil || p.ReviewedAt.IsZero() {
+		return ErrInvalidPriceRule
+	}
+	return nil
 }

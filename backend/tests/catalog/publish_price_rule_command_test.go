@@ -52,6 +52,7 @@ func (s *publishPriceStore) PublishPriceRuleWithAudit(_ context.Context, actor i
 
 func validPublishPriceRuleInput(modelID uuid.UUID) catalogapp.PublishPriceRuleInput {
 	return catalogapp.PublishPriceRuleInput{
+		SourceURL: "https://example.invalid/prices", ReviewedAt: priceReviewedFixtureTime(),
 		ModelID: modelID, ExpectedRevision: 2, VersionNo: 1,
 		Unit:     domain.PricePerSecond,
 		Rule:     json.RawMessage(`{"base_micros":1000,"by_mode":{"secret-mode-123":1.25}}`),
@@ -207,4 +208,22 @@ func TestPublishPriceRuleCommandNormalizesEffectiveTimeToDatabasePrecision(t *te
 		!envelope.Data.After.EffectiveFrom.Equal(expected) {
 		t.Fatalf("audit effective time %s, want %s: %v", envelope.Data.After.EffectiveFrom, expected, err)
 	}
+}
+
+func TestPricePublicationRequiresReviewedSource(t *testing.T) {
+	input := validPublishPriceRuleInput(uuid.New())
+	store := &publishPriceStore{}
+	// A source in the rule body must not substitute version provenance.
+	input.SourceURL = ""
+	input.ReviewedAt = nil
+	input.Rule = json.RawMessage(`{"base_micros":1}`)
+	_, err := catalogapp.NewPublishPriceRuleCommand(store, &publishPriceValidator{}, time.Now).Execute(t.Context(), adminPrincipal(), input)
+	if err == nil || store.called {
+		t.Fatal("unreviewed price published")
+	}
+}
+
+func priceReviewedFixtureTime() *time.Time {
+	t := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
+	return &t
 }

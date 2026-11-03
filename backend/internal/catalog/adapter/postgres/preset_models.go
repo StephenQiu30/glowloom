@@ -27,6 +27,9 @@ func (s *Store) instantiatePresetModels(ctx context.Context, tx *gorm.DB, actor 
 			return nil, err
 		}
 		price := template.PriceVersion(id, actor.ID, time.Now().UTC())
+		if price.ValidateProvenance() != nil || price.ReviewedAt.After(time.Now()) {
+			return nil, domain.ErrInvalidPreset
+		}
 		if err := appendPriceRuleInTx(tx, price, 2); err != nil {
 			return nil, err
 		}

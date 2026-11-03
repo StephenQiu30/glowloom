@@ -51,12 +51,14 @@ import { PresetModels } from "./preset-models";
 export function PresetEditor({
   preset,
   presets,
+  adapters,
   onClose,
   onSaved,
   returnFocusRef,
 }: {
   preset?: API.Preset;
   presets: API.Preset[];
+  adapters?: API.AdapterMetadata[];
   onClose: () => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
   onSaved: () => void;
@@ -92,6 +94,25 @@ export function PresetEditor({
     setDocument(next);
     setPreview(null);
     setError("");
+  }
+  const metadata = adapters?.find(
+    (item) => item.adapter_key === document.config?.adapter_key,
+  );
+  function declaredDocument(): API.PresetDocument {
+    const config = document.config;
+    const protocol = metadata?.protocol_ids?.[0];
+    if (!config || !protocol) return document;
+    return {
+      ...document,
+      adapter_declaration: {
+        schema_version: 1,
+        adapter_key: config.adapter_key,
+        protocol_id: protocol,
+        base_url: config.base_url,
+        region: config.region,
+        capabilities: config.capabilities,
+      },
+    };
   }
   function config(name: keyof API.ProviderConfig, value: number) {
     update({ ...document, config: { ...document.config, [name]: value } });
@@ -153,6 +174,7 @@ export function PresetEditor({
                           ...document,
                           config: base.config,
                           model_templates: [],
+                          adapter_declaration: undefined,
                         });
                     }}
                   >
@@ -240,13 +262,10 @@ export function PresetEditor({
                 <FieldSet>
                   <FieldLegend>可提供的能力</FieldLegend>
                   <FieldGroup className="flex-row flex-wrap">
-                    {(document.config?.adapter_key === "volcengine_speech"
-                      ? ["audio"]
-                      : document.config?.adapter_key === "deepseek"
-                        ? ["text"]
-                        : document.config?.adapter_key === "byteplus"
-                          ? ["text", "image"]
-                          : ["text", "image", "video"]
+                    {(
+                      metadata?.capabilities ??
+                      document.config?.capabilities ??
+                      []
                     ).map((capability) => (
                       <Field key={capability} orientation="horizontal">
                         <Checkbox
@@ -342,7 +361,7 @@ export function PresetEditor({
                         setChecking(false);
                       }
                     } else {
-                      setSource(JSON.stringify(document, null, 2));
+                      setSource(JSON.stringify(declaredDocument(), null, 2));
                       setAdvanced(true);
                     }
                     setPreview(null);
@@ -358,7 +377,7 @@ export function PresetEditor({
             <div className="rounded bg-muted p-3 text-sm">
               <p>
                 {preview.document?.name} ·{" "}
-                {providerLabel(preview.document?.config?.adapter_key)}
+                {providerLabel(preview.document?.config?.adapter_key, adapters)}
               </p>
               <p>
                 {preview.document?.model_templates?.length ?? 0} 个模型模板 ·
@@ -388,7 +407,9 @@ export function PresetEditor({
               setError("");
               try {
                 const result = await previewProviderPreset({
-                  document_json: advanced ? source : JSON.stringify(document),
+                  document_json: advanced
+                    ? source
+                    : JSON.stringify(declaredDocument()),
                 });
                 setPreview(result);
               } catch (e) {

@@ -42,6 +42,7 @@ func TestServiceReachabilityWithoutCredentialIsDurableAndDeduplicated(t *testing
 		if p.Slug == "deepseek" {
 			r, e := presets.Connect(t.Context(), actor, p.ID, catalog.ConnectPresetInput{RequestID: uuid.New(), VersionID: p.VersionID, CatalogVersion: p.ModelCatalog.Version, CandidateKeys: []string{p.ModelCatalog.Models[0].Key}, DirectUse: true})
 			require.NoError(t, e)
+			seedReviewedOnboardingPrices(t, conn.DB, actor, r, false)
 			connection = r.ProviderID
 		}
 	}

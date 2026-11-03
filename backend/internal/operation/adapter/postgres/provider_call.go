@@ -385,7 +385,33 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 		if input.ProviderTaskID == nil {
 			input.ProviderTaskID = call.ProviderTaskID
 		}
-		state, err := json.Marshal(map[string]string{"state": input.State})
+		var adapter struct{ AdapterKey string }
+		result = tx.Raw(`
+			SELECT p.adapter_key
+			FROM catalog.model_profile_version AS v
+			JOIN catalog.model_profile AS m ON m.id = v.model_profile_id
+			JOIN catalog.provider AS p ON p.id = m.provider_id
+			WHERE v.id = ?::uuid
+		`, op.ModelProfileVersionID.String()).Scan(&adapter)
+		if result.Error != nil {
+			return fmt.Errorf("read provider adapter for result: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return application.ErrInvalidProviderCall
+		}
+		// Older activity histories reported remote 4xx as "rejected".
+		// Only the explicitly free mock protocol can treat that state as final.
+		if input.Action == "submit" && input.State == "rejected" && adapter.AdapterKey != "mock" {
+			input.State, input.Outcome = "unknown", "unknown"
+		}
+		summary := map[string]string{"state": input.State}
+		if adapter.AdapterKey == "mock" && input.Action == "submit" && input.State == "rejected" {
+			summary["price_contract"] = "mock_free"
+		}
+		if input.ErrorCode != "" && input.State == "unknown" {
+			summary["failure_code"] = application.SafeProviderFailureCode(input.ErrorCode, input.State)
+		}
+		state, err := json.Marshal(summary)
 		if err != nil {
 			return fmt.Errorf("encode provider result state: %w", err)
 		}
@@ -402,7 +428,25 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 				jsonEqual(call.Usage, input.Usage) && jsonEqual(call.Receipt, receipt) {
 				return nil
 			}
-			if call.Outcome != "unknown" || input.Outcome == "unknown" {
+			legacy := false
+			if input.Action == "submit" && call.Outcome == "error" && call.CostMicros != nil && *call.CostMicros == 0 && call.ProviderTaskID == nil && len(call.Receipt) == 0 {
+				var previous struct {
+					State         string
+					PriceContract string `json:"price_contract"`
+				}
+				legacy = json.Unmarshal(call.ResponseSummary, &previous) == nil && previous.State == "rejected" && previous.PriceContract != "mock_free"
+			}
+			if legacy && input.State == "unknown" {
+				// A replay acknowledges the same ambiguous historical observation.
+				// Preserve the row; readProviderCost never accepts its old zero.
+				return nil
+			}
+			if !legacy && call.Outcome != "unknown" {
+				return application.ErrProviderCallConflict
+			}
+			// Once a submit has a durable ambiguous response, only evidence
+			// of the original accepted task or completed result can advance it.
+			if input.Outcome == "unknown" || input.Action == "submit" && input.State != "accepted" && input.State != "completed" {
 				return application.ErrProviderCallConflict
 			}
 		}
@@ -410,25 +454,13 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 			(op.Status == "completed" || op.Status == "failed" || op.Status == "cancelled" || op.Status == "expired") {
 			return application.ErrProviderCallConflict
 		}
-		var adapter struct{ AdapterKey string }
-		result = tx.Raw(`
-			SELECT p.adapter_key
-			FROM catalog.model_profile_version AS v
-			JOIN catalog.model_profile AS m ON m.id = v.model_profile_id
-			JOIN catalog.provider AS p ON p.id = m.provider_id
-			WHERE v.id = ?::uuid
-		`, op.ModelProfileVersionID.String()).Scan(&adapter)
-		if result.Error != nil {
-			return fmt.Errorf("read provider adapter for result: %w", result.Error)
-		}
-		if result.RowsAffected != 1 {
-			return application.ErrInvalidProviderCall
-		}
 		var cost *int64
 		switch {
 		case input.Action == "submit" && input.State == "completed" && !input.Managed:
 			// Artifact completion proves execution, but synchronous pricing is a
 			// later contract. Persist usage without inventing a zero charge.
+		case input.Action == "submit" && (input.State == "unknown" || input.State == "rejected") && adapter.AdapterKey != "mock":
+			// A remote error does not establish a zero charge.
 		case adapter.AdapterKey == "mock":
 			zero := int64(0)
 			cost = &zero
@@ -557,11 +589,7 @@ func (s *Store) ProviderCostInTransaction(ctx context.Context, tx *gorm.DB, oper
 	if s == nil || s.db == nil || tx == nil || operationID == uuid.Nil {
 		return application.ProviderCost{}, application.ErrInvalidProviderCall
 	}
-	var op struct {
-		ProjectID    uuid.UUID
-		Status       string
-		ReusedFromID *uuid.UUID
-	}
+	var op providerCostOperation
 	result := tx.WithContext(ctx).Raw(`
 		SELECT project_id, status, reused_from_id FROM operation.operation
 		WHERE id = ?::uuid AND NOT is_delete FOR UPDATE
@@ -572,15 +600,28 @@ func (s *Store) ProviderCostInTransaction(ctx context.Context, tx *gorm.DB, oper
 	if result.RowsAffected != 1 {
 		return application.ProviderCost{}, ErrNotFound
 	}
+	return readProviderCost(ctx, tx, operationID, op)
+}
+
+type providerCostOperation struct {
+	ProjectID    uuid.UUID
+	Status       string
+	ReusedFromID *uuid.UUID
+}
+
+// readProviderCost is also used on historical zero releases in an authorized
+// read snapshot. It never writes or acquires an execution lock itself.
+func readProviderCost(ctx context.Context, tx *gorm.DB, operationID uuid.UUID, op providerCostOperation) (application.ProviderCost, error) {
 	var calls []struct {
 		Action         string
 		Outcome        string
 		State          string
+		MockFree       bool
 		CostMicros     *int64
 		ProviderTaskID *string
 	}
 	if err := tx.WithContext(ctx).Raw(`
-		SELECT action, outcome, COALESCE(response_summary ->> 'state', '') AS state,
+		SELECT action, outcome, COALESCE(response_summary ->> 'state', '') AS state,response_summary->>'price_contract'='mock_free' AS mock_free,
 		       cost_micros, provider_task_id
 		FROM operation.provider_call
 		WHERE project_id = ?::uuid AND operation_id = ?::uuid AND NOT is_delete
@@ -594,7 +635,7 @@ func (s *Store) ProviderCostInTransaction(ctx context.Context, tx *gorm.DB, oper
 	for _, call := range calls {
 		if call.Action == "submit" {
 			cost.HasSubmission = true
-			unknownSubmission = unknownSubmission || call.Outcome == "unknown" || call.Outcome == "timeout"
+			unknownSubmission = unknownSubmission || call.Outcome == "unknown" || call.Outcome == "timeout" || (call.State == "rejected" && !call.MockFree)
 			acceptedSubmission = acceptedSubmission || call.State == "accepted"
 			completedSubmission = completedSubmission || call.State == "completed"
 		}
@@ -603,7 +644,9 @@ func (s *Store) ProviderCostInTransaction(ctx context.Context, tx *gorm.DB, oper
 			conclusiveResolution = true
 		}
 		if call.CostMicros == nil {
-			unknownCost = true
+			if call.Action != "submit" || call.State != "unknown" && call.State != "rejected" {
+				unknownCost = true
+			}
 			continue
 		}
 		if *call.CostMicros < 0 || cost.ActualCostMicros > math.MaxInt64-*call.CostMicros {
@@ -634,9 +677,9 @@ func (s *Store) ProviderCostInTransaction(ctx context.Context, tx *gorm.DB, oper
 		return application.ProviderCost{}, application.ErrProviderCostUnknown
 	}
 	if unknownCost || (unknownSubmission || acceptedSubmission) && !conclusiveResolution {
-		if op.Status == "manual" {
+		if op.Status == "manual" || op.Status == "failed" || op.Status == "cancelled" || op.Status == "completed" {
 			var present int
-			result = tx.WithContext(ctx).Raw(`
+			result := tx.WithContext(ctx).Raw(`
 				SELECT 1 FROM operation.operation_event
 				WHERE operation_id = ?::uuid AND to_status = 'manual'
 				  AND reason = ? AND NOT is_delete LIMIT 1
@@ -658,7 +701,7 @@ func (s *Store) ProviderCostInTransaction(ctx context.Context, tx *gorm.DB, oper
 func providerCallEstablishesCharge(action, state string) bool {
 	switch action {
 	case "submit":
-		return state == "rejected" || state == "not_submitted"
+		return state == "not_submitted"
 	case "query":
 		return state == "succeeded" || state == "failed" || state == "confirmed_not_exist"
 	case "cancel":

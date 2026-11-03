@@ -195,9 +195,6 @@ func visualError(code int, submitting bool) application.GenerationResult {
 	if submitting {
 		result.Outcome = "unknown"
 	}
-	if submitting && slices.Contains([]int{50200, 50201, 50204, 50205, 50211, 50214, 50215, 50400, 50411, 50412, 50413, 50511, 50512, 50513, 50514, 50429, 50430}, code) {
-		result.Outcome = "rejected"
-	}
 	if !submitting && slices.Contains([]int{50200, 50201, 50204, 50205, 50211, 50214, 50215, 50411, 50412, 50413, 50511, 50512, 50513, 50514}, code) {
 		result.State = "failed"
 		result.ErrorCode = "generation_failed"
@@ -207,8 +204,5 @@ func visualError(code int, submitting bool) application.GenerationResult {
 
 func submitHTTPFailure(status int) application.GenerationResult {
 	result := application.GenerationResult{Outcome: "unknown", ErrorCode: safeHTTPError(status)}
-	if slices.Contains([]int{400, 401, 402, 403, 404, 422, 429}, status) {
-		result.Outcome = "rejected"
-	}
 	return result
 }

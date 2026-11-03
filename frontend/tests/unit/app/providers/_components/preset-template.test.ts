@@ -19,6 +19,8 @@ const detail: API.AdminModelDetail = {
   prices: [
     {
       id: "price",
+      source_url: "https://example.invalid/prices",
+      reviewed_at: "2026-10-18T00:00:00Z",
       unit: "per_request",
       rule: { base_micros: 10 },
       currency: "CNY",
@@ -68,4 +70,13 @@ it("拒绝跨模型、丢失版本或不支持的执行配置", () => {
       release,
     ),
   ).toThrow();
+});
+
+it("旧价格缺少核验来源时要求先补审，不虚构元数据", () => {
+  expect(() =>
+    templateFromRelease(
+      { ...detail, prices: [{ ...detail.prices![0], source_url: undefined }] },
+      release,
+    ),
+  ).toThrow(/补审/);
 });

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
@@ -21,7 +22,8 @@ import (
 const publicTaskSelect = `SELECT o.id, o.project_id, o.batch_id, o.capability, o.mode,
  COALESCE(m.model_key,'') AS model_key, COALESCE(m.display_name,'') AS model_name,
  COALESCE(o.target_type,'') AS target_type, o.target_id, o.origin, o.status,
- o.quote_micros, o.settled_micros, o.failure_code, o.retryable,
+ o.quote_micros, o.settled_micros, o.failure_code, (SELECT c.response_summary->>'failure_code' FROM operation.provider_call c
+ WHERE o.status IN ('manual','submitting','submitted','unknown','reconciling') AND c.operation_id=o.id AND c.project_id=o.project_id AND c.action='submit' AND c.outcome='unknown' AND NOT c.is_delete ORDER BY c.attempt DESC LIMIT 1) AS submit_failure_code, o.retryable,
  EXISTS(SELECT 1 FROM operation.operation_event AS e WHERE e.operation_id=o.id
    AND e.reason='user_cancel_requested' AND NOT e.is_delete) AS cancel_requested,
  o.create_time, o.update_time, o.started_at, o.finished_at,o.source_context::text AS source_json`
@@ -46,7 +48,7 @@ type publicTaskRow struct {
 	TargetID                                                  *uuid.UUID
 	Status                                                    domain.Status
 	QuoteMicros, SettledMicros                                *int64
-	FailureCode                                               *string
+	FailureCode, SubmitFailureCode                            *string
 	Retryable                                                 *bool
 	CancelRequested                                           bool
 	CreateTime, UpdateTime                                    time.Time
@@ -55,6 +57,10 @@ type publicTaskRow struct {
 }
 
 func (r publicTaskRow) summary() (application.TaskSummary, error) {
+	if r.FailureCode == nil && r.SubmitFailureCode != nil {
+		safe := application.SafeProviderFailureCode(strings.TrimPrefix(*r.SubmitFailureCode, "provider_"), "unknown")
+		r.FailureCode = &safe
+	}
 	item := application.TaskSummary{ID: r.ID, ProjectID: r.ProjectID, BatchID: r.BatchID, Capability: r.Capability, Mode: r.Mode, ModelKey: r.ModelKey, ModelName: r.ModelName, TargetType: r.TargetType, TargetID: r.TargetID, Origin: r.Origin, Status: r.Status, QuoteMicros: r.QuoteMicros, SettledMicros: r.SettledMicros, FailureCode: r.FailureCode, Retryable: r.Retryable, CancelRequested: r.CancelRequested, CreateTime: r.CreateTime, UpdateTime: r.UpdateTime, StartedAt: r.StartedAt, FinishedAt: r.FinishedAt}
 	if r.SourceJSON != nil {
 		var source domain.CanvasSource
@@ -233,11 +239,26 @@ func (s *Store) ReadPublicTask(ctx context.Context, actor identityapp.Principal,
  ORDER BY output.seq_no`, operationID, projectID).Scan(&outputs).Error; err != nil {
 			return fmt.Errorf("read public task candidates: %w", err)
 		}
+		var terminalDeliveryAllowed bool
+		if result.Status.IsTerminal() && result.Status != domain.StatusCompleted {
+			terminalDeliveryAllowed, err = originalDeliveryAllowed(tx, operationID)
+			if err != nil {
+				return err
+			}
+		}
 		for _, output := range outputs {
-			output.IncludeReviewedText(result.Capability, result.Status, output.Payload)
+			displayStatus := result.Status
+			if terminalDeliveryAllowed {
+				displayStatus = domain.StatusCompleted
+			}
+			output.IncludeReviewedText(result.Capability, displayStatus, output.Payload)
 			result.Outputs = append(result.Outputs, output.TaskOutput)
 		}
-		if result.Status == "completed" && result.Capability == "audio.generate" && result.Mode == "omni_audio" {
+		result.BillingOutcome, err = readBillingOutcome(tx, projectID, operationID, result.Status)
+		if err != nil {
+			return err
+		}
+		if (result.Status == "completed" || terminalDeliveryAllowed && result.BillingOutcome.DeliveryState == "ready") && result.Capability == "audio.generate" && result.Mode == "omni_audio" {
 			var subtitle struct{ Value []byte }
 			if err := tx.Raw(`SELECT r.result->'subtitle' AS value FROM operation.provider_result r
               WHERE r.operation_id=? AND EXISTS(SELECT 1 FROM operation.operation_output o WHERE o.operation_id=r.operation_id AND o.project_id=? AND o.kind='media' AND o.moderation_status='passed' AND NOT o.is_delete)`, operationID, projectID).Scan(&subtitle).Error; err != nil {

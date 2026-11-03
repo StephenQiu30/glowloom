@@ -28,16 +28,18 @@ type ModelCatalogCursor struct {
 
 // ModelCatalogVersion is the current published configuration safe for display.
 type ModelCatalogVersion struct {
-	ID          uuid.UUID
-	VersionNo   int
+	ID            uuid.UUID
+	VersionNo     int
 	ContextWindow int
-	Modes       []string
-	Limits      json.RawMessage
-	ParamSchema json.RawMessage
+	Modes         []string
+	Limits        json.RawMessage
+	ParamSchema   json.RawMessage
 }
 
 // ModelCatalogPrice is the latest currently effective price rule.
 type ModelCatalogPrice struct {
+	SourceURL     *string
+	ReviewedAt    *time.Time
 	ID            uuid.UUID
 	VersionNo     int
 	Unit          string

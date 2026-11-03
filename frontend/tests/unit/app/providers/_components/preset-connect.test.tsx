@@ -553,15 +553,39 @@ it("多厂商预设支持展示 ChatGPT Anthropic Gemini Grok 品牌标签与筛
     version_id: "or-v1",
     document: {
       name: "OpenRouter",
-      config: { adapter_key: "openrouter", region: "overseas", capabilities: ["text"] },
+      config: {
+        adapter_key: "openrouter",
+        region: "overseas",
+        capabilities: ["text"],
+      },
     },
     model_catalog: {
       version: "2026-11-02.1",
       models: [
-        { key: "or-gpt-4o", capability: "text.generate", display_name: "GPT-4o", provider_model_id: "openai/gpt-4o" },
-        { key: "or-claude-3-7", capability: "text.generate", display_name: "Claude 3.7 Sonnet", provider_model_id: "anthropic/claude-3.7-sonnet" },
-        { key: "or-gemini-2-5-pro", capability: "text.generate", display_name: "Gemini 2.5 Pro", provider_model_id: "google/gemini-2.5-pro" },
-        { key: "or-grok-2", capability: "text.generate", display_name: "Grok 2", provider_model_id: "x-ai/grok-2" },
+        {
+          key: "or-gpt-4o",
+          capability: "text.generate",
+          display_name: "GPT-4o",
+          provider_model_id: "openai/gpt-4o",
+        },
+        {
+          key: "or-claude-3-7",
+          capability: "text.generate",
+          display_name: "Claude 3.7 Sonnet",
+          provider_model_id: "anthropic/claude-3.7-sonnet",
+        },
+        {
+          key: "or-gemini-2-5-pro",
+          capability: "text.generate",
+          display_name: "Gemini 2.5 Pro",
+          provider_model_id: "google/gemini-2.5-pro",
+        },
+        {
+          key: "or-grok-2",
+          capability: "text.generate",
+          display_name: "Grok 2",
+          provider_model_id: "x-ai/grok-2",
+        },
       ],
     },
   };
@@ -579,12 +603,12 @@ it("多厂商预设支持展示 ChatGPT Anthropic Gemini Grok 品牌标签与筛
   expect(screen.getByText("Grok")).toBeDefined();
 
   // Filter to Grok
-  fireEvent.click(screen.getByRole("button", { name: /^Grok/ }));
+  fireEvent.click(screen.getByRole("radio", { name: /^Grok/ }));
   expect(screen.getByText("Grok 2")).toBeDefined();
   expect(screen.queryByText("GPT-4o")).toBeNull();
 
   // Switch back to all
-  fireEvent.click(screen.getByRole("button", { name: /^全部/ }));
+  fireEvent.click(screen.getByRole("radio", { name: /^全部/ }));
   expect(screen.getByText("GPT-4o")).toBeDefined();
   expect(screen.getByText("Claude 3.7 Sonnet")).toBeDefined();
 });
@@ -595,12 +619,21 @@ it("多厂商预设支持手动添加自定义候选模型并成功提交", asyn
     version_id: "or-v1",
     document: {
       name: "OpenRouter",
-      config: { adapter_key: "openrouter", region: "overseas", capabilities: ["text"] },
+      config: {
+        adapter_key: "openrouter",
+        region: "overseas",
+        capabilities: ["text"],
+      },
     },
     model_catalog: {
       version: "2026-11-02.3",
       models: [
-        { key: "or-gpt-6-1-sol", capability: "text.generate", display_name: "GPT-6.1 Sol", provider_model_id: "openai/gpt-6.1-sol" },
+        {
+          key: "or-gpt-6-1-sol",
+          capability: "text.generate",
+          display_name: "GPT-6.1 Sol",
+          provider_model_id: "openai/gpt-6.1-sol",
+        },
       ],
     },
   };

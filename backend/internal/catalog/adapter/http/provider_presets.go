@@ -111,6 +111,10 @@ func (h *PresetHandler) Preview(c *gin.Context) {
 		presetError(c, err)
 		return
 	}
+	if err := h.service.ValidateDeclaration(doc); err != nil {
+		presetError(c, err)
+		return
+	}
 	if err := presetvalidation.Validate(doc); err != nil {
 		presetError(c, err)
 		return

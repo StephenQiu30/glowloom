@@ -50,6 +50,7 @@ func (h *Handler) Register(group *gin.RouterGroup) {
 	group.GET("/operations/:id", h.Task)
 	group.POST("/operations/:id/confirm", h.Confirm)
 	group.POST("/operations/:id/cancel", h.Cancel)
+	group.POST("/operations/:id/recover", h.Recover)
 	group.GET("/batches/:id", h.Batch)
 	group.POST("/batches/:id/confirm", h.ConfirmBatch)
 	group.POST("/batches/:id/cancel", h.CancelBatch)
@@ -597,6 +598,8 @@ func writeError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 409, "submission_already_accepted", nil)
 	case errors.Is(err, promptdomain.ErrReferenceUnavailable):
 		httpapi.WriteProblem(c, 422, "reference_unavailable", nil)
+	case errors.Is(err, application.ErrPendingConsumption):
+		httpapi.WriteProblem(c, 409, "consumption_pending", nil)
 	case errors.Is(err, application.ErrQuoteSourceStale), errors.Is(err, promptdomain.ErrInputStale):
 		httpapi.WriteProblem(c, 409, "canvas_revision_conflict", nil)
 	case errors.Is(err, workspaceapp.ErrScopeNotFound), errors.Is(err, workspaceapp.ErrProjectNotFound):
@@ -628,3 +631,22 @@ func writeError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 503, "dependency_unavailable", nil)
 	}
 }
+
+// Recover requests only original task query or delivery, never a new generation.
+// @Summary 继续核对或取回原任务
+// @ID recoverOperation
+// @Tags operations
+// @Accept json
+// @Produce json
+// @Param id path string true "原操作UUID"
+// @Param Idempotency-Key header string true "UUID幂等键"
+// @Param body body ProjectRequest true "项目"
+// @Success 202 {object} application.WorkflowControlResult
+// @Failure 401 {object} httpapi.Problem
+// @Failure 403 {object} httpapi.Problem
+// @Failure 404 {object} httpapi.Problem
+// @Failure 409 {object} httpapi.Problem
+// @Failure 422 {object} httpapi.Problem
+// @Failure 503 {object} httpapi.Problem
+// @Router /api/operations/{id}/recover [post]
+func (h *Handler) Recover(c *gin.Context) { h.control(c, "operation", "recover") }

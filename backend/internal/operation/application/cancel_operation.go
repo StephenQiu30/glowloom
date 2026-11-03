@@ -11,6 +11,8 @@ import (
 )
 
 var (
+	// ErrPendingConsumption prevents a second purchase for an unresolved target.
+	ErrPendingConsumption = errors.New("original consumption is unresolved")
 	// ErrInvalidWorkflowControl rejects arbitrary workflow IDs and signal names.
 	ErrInvalidWorkflowControl = errors.New("invalid workflow control")
 	// ErrWorkflowControlConflict means the task is no longer controllable.
@@ -36,7 +38,7 @@ func (i WorkflowControlInput) Validate() error {
 	if err != nil || key == uuid.Nil || key.String() != i.RequestID || i.ProjectID == uuid.Nil || i.TargetID == uuid.Nil {
 		return ErrInvalidWorkflowControl
 	}
-	if i.TargetType == "operation" && i.Action == "cancel" {
+	if i.TargetType == "operation" && (i.Action == "cancel" || i.Action == "recover") {
 		return nil
 	}
 	if i.TargetType == "batch" && (i.Action == "cancel" || i.Action == "resume") {

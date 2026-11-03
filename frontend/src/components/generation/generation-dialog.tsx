@@ -1,4 +1,9 @@
 "use client";
+import {
+  BillingOutcomeView,
+  billingFailureMessage,
+} from "@/components/billing/billing-outcome";
+import { QuoteCostDetail } from "./quote-cost-detail";
 import { AudioSubtitles } from "./audio-subtitles";
 import { ContentState } from "@/components/layout/content-state";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
@@ -28,6 +33,7 @@ import { RequestError } from "@/lib/request";
 import {
   getOperation,
   cancelOperation,
+  recoverOperation,
   listProjectOperations,
 } from "@/api/operations";
 import {
@@ -329,17 +335,7 @@ function TaskHistory({
     </section>
   );
 }
-export function TaskDetail({
-  projectID,
-  id,
-  onAdopt,
-  adoptLabel = "采用结果到画布",
-  onAdoptText,
-  onReuse,
-  outputID,
-  presentation = "default",
-  onAvailabilityChange,
-}: {
+type TaskDetailProps = {
   adoptLabel?: string;
   projectID: string;
   id: string;
@@ -349,13 +345,93 @@ export function TaskDetail({
   outputID?: string;
   presentation?: "default" | "asset";
   onAvailabilityChange?: (available: boolean) => void;
-}) {
-  const [task, setTask] = useState<Task | null>(null),
-    [error, setError] = useState(""),
+};
+export function TaskDetail(props: TaskDetailProps) {
+  return <ScopedTaskDetail key={`${props.projectID}/${props.id}`} {...props} />;
+}
+function ScopedTaskDetail({
+  projectID,
+  id,
+  onAdopt,
+  adoptLabel = "采用结果到画布",
+  onAdoptText,
+  onReuse,
+  outputID,
+  presentation = "default",
+  onAvailabilityChange,
+}: TaskDetailProps) {
+  const [loadedTask, setTask] = useState<Task | null>(null),
+    [failure, setFailure] = useState<{ scope: string; message: string } | null>(
+      null,
+    ),
     [retry, setRetry] = useState(0),
     [confirmCancel, setConfirmCancel] = useState(false),
-    [pending, setPending] = useState(false);
+    [pendingScope, setPendingScope] = useState<string | null>(null),
+    [recoveryScope, setRecoveryScope] = useState<string | null>(null);
+  const scope = `${projectID}/${id}`;
+  const pending = pendingScope === scope;
+  const error = failure?.scope === scope ? failure.message : "";
+  function setError(message: string) {
+    setFailure({ scope, message });
+  }
+  const task =
+    loadedTask?.id === id && loadedTask.project_id === projectID
+      ? loadedTask
+      : null;
   const cancelKey = useRef<string | null>(null);
+  const recoverKey = useRef<{
+    scope: string;
+    key: string;
+    inFlight: boolean;
+  } | null>(null);
+  const actionScope = useRef(`${projectID}/${id}`);
+  useEffect(() => {
+    actionScope.current = `${projectID}/${id}`;
+    return () => {
+      actionScope.current = "";
+      recoverKey.current = null;
+    };
+  }, [projectID, id]);
+  async function recover() {
+    if (pending) return;
+    const scope = `${projectID}/${id}`;
+    if (recoverKey.current?.scope !== scope)
+      recoverKey.current = { scope, key: crypto.randomUUID(), inFlight: false };
+    const intent = recoverKey.current;
+    if (intent.inFlight) return;
+    intent.inFlight = true;
+    setPendingScope(scope);
+    setError("");
+    try {
+      const receipt = await recoverOperation(
+        { id },
+        { project_id: projectID },
+        { headers: { "Idempotency-Key": intent.key } },
+      );
+      if (actionScope.current !== scope || recoverKey.current !== intent)
+        return;
+      if (
+        receipt.target_id !== id ||
+        receipt.target_type !== "operation" ||
+        receipt.action !== "recover" ||
+        typeof receipt.accepted !== "boolean"
+      )
+        throw new RequestError("invalid_receipt");
+      recoverKey.current = null;
+      if (receipt.accepted) setRecoveryScope(scope);
+      setRetry((n) => n + 1);
+    } catch (e) {
+      if (actionScope.current === scope && recoverKey.current === intent)
+        setError(flowError(e));
+    } finally {
+      intent.inFlight = false;
+      if (
+        actionScope.current === scope &&
+        (!recoverKey.current || recoverKey.current === intent)
+      )
+        setPendingScope(null);
+    }
+  }
   const [adopting, setAdopting] = useState(false);
   const [assetDenied, setAssetDenied] = useState(false);
   async function adopt(asset: string, kind: string) {
@@ -399,7 +475,7 @@ export function TaskDetail({
         if (c.signal.aborted) return;
         if (t.id !== id) throw new RequestError("invalid_receipt");
         setTask(t);
-        setError("");
+        setFailure({ scope: `${projectID}/${id}`, message: "" });
         if (presentation === "asset") setAssetDenied(false);
         if (presentation === "asset")
           onAvailabilityChange?.(
@@ -410,7 +486,13 @@ export function TaskDetail({
                   output.moderation_status === "passed",
               ),
           );
-        if (activeTask(t.status)) timer = setTimeout(() => void read(), 3000);
+        const recovering =
+          recoveryScope === `${projectID}/${id}` &&
+          ["pending", "recoverable"].includes(
+            t.billing_outcome?.delivery_state ?? "",
+          );
+        if (activeTask(t.status) || recovering)
+          timer = setTimeout(() => void read(), 3000);
       } catch (e) {
         if (!c.signal.aborted) {
           if (presentation === "asset") {
@@ -421,7 +503,7 @@ export function TaskDetail({
               e instanceof RequestError && [401, 403, 404].includes(e.status),
             );
           }
-          setError(flowError(e));
+          setFailure({ scope: `${projectID}/${id}`, message: flowError(e) });
         }
       }
     }
@@ -430,10 +512,18 @@ export function TaskDetail({
       c.abort();
       clearTimeout(timer);
     };
-  }, [id, projectID, retry, presentation, onAvailabilityChange, outputID]);
+  }, [
+    id,
+    projectID,
+    retry,
+    recoveryScope,
+    presentation,
+    onAvailabilityChange,
+    outputID,
+  ]);
   async function cancel() {
     if (pending) return;
-    setPending(true);
+    setPendingScope(scope);
     cancelKey.current ??= crypto.randomUUID();
     try {
       const receipt = await cancelOperation(
@@ -448,16 +538,18 @@ export function TaskDetail({
         receipt.action !== "cancel"
       )
         throw new RequestError("invalid_receipt");
+      if (actionScope.current !== scope) return;
       setConfirmCancel(false);
       setRetry((n) => n + 1);
     } catch (e) {
-      setError(flowError(e));
+      if (actionScope.current === scope) setError(flowError(e));
     } finally {
-      setPending(false);
+      if (actionScope.current === scope) setPendingScope(null);
     }
   }
   const missingDocumentBody =
-    task?.status === "completed" &&
+    (task?.status === "completed" ||
+      task?.billing_outcome?.delivery_state === "ready") &&
     (task.capability?.startsWith("text.") ||
       task.capability?.startsWith("document.")) &&
     task.outputs?.some(
@@ -469,10 +561,13 @@ export function TaskDetail({
     );
   const preview = (
     <>
-      {task?.status === "completed" && task.audio_subtitle && (
-        <AudioSubtitles subtitle={task.audio_subtitle} />
-      )}
-      {task?.status === "completed" &&
+      {(task?.status === "completed" ||
+        task?.billing_outcome?.delivery_state === "ready") &&
+        task.audio_subtitle && (
+          <AudioSubtitles subtitle={task.audio_subtitle} />
+        )}
+      {(task?.status === "completed" ||
+        task?.billing_outcome?.delivery_state === "ready") &&
         (task.capability?.startsWith("text.") ||
           task.capability?.startsWith("document.")) &&
         task.outputs
@@ -721,29 +816,43 @@ export function TaskDetail({
             </CollapsibleContent>
           </Collapsible>
         )}
+        {task && (
+          <BillingOutcomeView
+            outcome={task.billing_outcome}
+            pending={pending}
+            onRecover={() => void recover()}
+          />
+        )}
+        {task?.quote_detail && (
+          <QuoteCostDetail
+            amount={task.quote_micros}
+            detail={task.quote_detail}
+          />
+        )}
         {task?.failure_code && (
           <p>
-            生成未能完成，请核对输入或稍后重试。
+            {billingFailureMessage(task.failure_code)}
             <small className="block text-muted-foreground">
               错误编号：{task.failure_code}
             </small>
           </p>
         )}
-        {task?.status === "completed" &&
+        {(task?.status === "completed" ||
+          task?.billing_outcome?.delivery_state === "ready") &&
           !task.outputs?.some(
             (o) =>
               o.moderation_status === "passed" &&
               (o.media_asset_id || (o.kind === "json" && o.text)),
           ) && (
             <p>
-              任务已结束，当前没有通过审核的可用结果。请调整描述后重新生成。
+              任务已结束，当前没有通过审核的可用结果。费用与交付状态仍需分别核对。
             </p>
           )}
         {task && ["unknown", "reconciling", "manual"].includes(task.status) && (
           <p>结果正在核对，请保留此任务，避免重复提交。</p>
         )}
         {task?.status === "cancelled" && (
-          <p>任务已取消，你可以调整输入重新生成。</p>
+          <p>已记录取消。是否收费以账务事实为准，请先核对原任务。</p>
         )}
         {presentation === "default" && preview}
         {task && activeTask(task.status) && task.status !== "cancelling" && (
@@ -755,6 +864,8 @@ export function TaskDetail({
           ["failed", "cancelled", "expired", "completed"].includes(
             task.status,
           ) &&
+          task.billing_outcome?.regenerate !== "blocked" &&
+          task.billing_outcome?.regenerate != null &&
           onReuse && (
             <Button variant="outline" onClick={() => onReuse(task)}>
               复用参数重新报价

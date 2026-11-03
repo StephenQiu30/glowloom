@@ -55,6 +55,7 @@ func TestOnboardingOneModelEnablesSelectionForCreation(t *testing.T) {
 	connection, err := presets.Connect(t.Context(), actor, preset.ID, input)
 	require.NoError(t, err)
 	require.Len(t, connection.ModelIDs, 3)
+	seedReviewedOnboardingPrices(t, conn.DB, actor, connection, false)
 	onboarding := catalogapp.NewProviderOnboarding(store)
 	state, err := onboarding.Read(t.Context(), actor, connection.ProviderID)
 	require.NoError(t, err)
@@ -127,13 +128,18 @@ func TestOnboardingOneModelEnablesSelectionForCreation(t *testing.T) {
 	var evidenceCount int
 	require.NoError(t, conn.DB.Raw(`SELECT count(*) FROM catalog.model_validation validation JOIN catalog.model_release release ON release.id=validation.release_id WHERE release.model_id IN ?`, connection.ModelIDs).Scan(&evidenceCount).Error)
 	require.Zero(t, evidenceCount)
-	catalog, err := store.ListModelsForProject(t.Context(), actor, catalogapp.ListModelsInput{ProjectID: project, Limit: 200})
-	require.NoError(t, err)
+	// The shared catalog may exceed one page. Resolve this test's three
+	// connected model keys directly rather than relying on page order.
+	var keys []string
+	require.NoError(t, conn.DB.Raw(`SELECT model_key FROM catalog.model_profile WHERE id IN ? ORDER BY model_key`, connection.ModelIDs).Scan(&keys).Error)
+	require.Len(t, keys, 3)
 	found := 0
-	for _, model := range catalog.Models {
-		if model.ProviderID != connection.ProviderID {
-			continue
-		}
+	for _, key := range keys {
+		catalog, err := store.ListModelsForProject(t.Context(), actor, catalogapp.ListModelsInput{ProjectID: project, ModelKey: key, Limit: 1})
+		require.NoError(t, err)
+		require.Len(t, catalog.Models, 1)
+		model := catalog.Models[0]
+		require.Equal(t, connection.ProviderID, model.ProviderID)
 		found++
 		require.Equal(t, domain.ModelActive, model.Status)
 		require.NotNil(t, model.CurrentVersion)

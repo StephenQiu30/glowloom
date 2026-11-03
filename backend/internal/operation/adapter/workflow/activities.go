@@ -158,6 +158,7 @@ func permanentActivityError(err error) error {
 // Register installs one deterministic workflow and its flow queue activities.
 func Register(w worker.Worker, activities *Activities) {
 	w.RegisterWorkflowWithOptions(OperationWorkflow, workflow.RegisterOptions{Name: "OperationWorkflow"})
+	w.RegisterWorkflowWithOptions(OriginalDeliveryRecoveryWorkflow, workflow.RegisterOptions{Name: "OriginalDeliveryRecoveryWorkflow"})
 	w.RegisterActivityWithOptions(activities.ResolveRevokedOperation, activity.RegisterOptions{Name: "flow.ResolveRevokedOperation"})
 	w.RegisterActivityWithOptions(activities.LoadOperation, activity.RegisterOptions{Name: "flow.LoadOperation"})
 	w.RegisterActivityWithOptions(activities.CheckConsent, activity.RegisterOptions{Name: "flow.CheckConsent"})

@@ -323,6 +323,14 @@ export async function publishAdminModelVersion(
   );
 }
 
+/** 已安装供应商安全元数据 GET /api/admin/provider-adapters */
+export async function listAdminProviderAdapters(options?: RequestOptions) {
+  return request<API.AdapterMetadata[]>("/api/admin/provider-adapters", {
+    method: "GET",
+    ...(options || {}),
+  });
+}
+
 /** 连接检查与候选模型 GET /api/admin/provider-checks/${param0} */
 export async function getProviderCheck(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

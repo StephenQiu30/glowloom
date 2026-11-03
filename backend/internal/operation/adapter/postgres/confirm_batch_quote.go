@@ -162,6 +162,9 @@ func (s *Store) confirmBatchQuote(ctx context.Context, actor identityapp.Princip
 		var total int64
 		var lastReserve billingapp.ReserveResult
 		for _, quoted := range selected {
+			if err := checkStoredBillingBarrier(tx, quoted.ProjectID, quoted.ID); err != nil {
+				return err
+			}
 			if quoted.QuoteMicros == nil || *quoted.QuoteMicros < 0 ||
 				total > math.MaxInt64-*quoted.QuoteMicros {
 				return application.ErrInvalidConfirmBatchQuote

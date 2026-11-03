@@ -4,12 +4,16 @@ package application
 import (
 	"bytes"
 	"encoding/json"
+
 	"errors"
 	"io"
 	"math/big"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
+
+	"github.com/google/uuid"
 
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 )
@@ -35,6 +39,7 @@ const (
 // a character count supplied by the input builder, not a UTF-8 byte count.
 // ParameterMultipliers is rejected until its publication shape is specified.
 type PricingInput struct {
+	ReferenceImageCount  int64
 	OutputCount          int64
 	TargetDurationMS     int64
 	AllowedDurationsMS   []int64
@@ -47,6 +52,9 @@ type PricingInput struct {
 }
 
 type parsedPriceRule struct {
+	freeReferences   uint64
+	referenceMicros  uint64
+	referenceScope   string
 	baseMicros       uint64
 	inputMicros      uint64
 	outputMicros     uint64
@@ -59,6 +67,15 @@ type parsedPriceRule struct {
 // QuoteCostDetail explains the exact inputs to a quote before the final CNY
 // ceiling. Unit prices are denominated in Currency, not necessarily CNY.
 type QuoteCostDetail struct {
+	SourceURL             string                  `json:"source_url,omitempty"`
+	ReviewedAt            *time.Time              `json:"reviewed_at,omitempty"`
+	ReferenceImageCount   *int64                  `json:"reference_image_count,omitempty"`
+	FreeReferenceImages   *uint64                 `json:"free_reference_images,omitempty"`
+	ReferenceImageMicros  *uint64                 `json:"reference_image_micros,omitempty"`
+	ReferenceScope        string                  `json:"reference_scope,omitempty"`
+	PriceRuleVersionID    uuid.UUID               `json:"price_rule_version_id"`
+	PriceVersionNo        int                     `json:"price_version_no"`
+	AmountKind            string                  `json:"amount_kind"`
 	Unit                  catalogdomain.PriceUnit `json:"unit"`
 	Quantity              json.Number             `json:"quantity,omitempty"`
 	UnitPriceMicros       *uint64                 `json:"unit_price_micros,omitempty"`
@@ -78,12 +95,13 @@ type QuoteCostDetail struct {
 // Pointer fields distinguish an explicit zero charge from missing evidence.
 // BilledDurationMS is the total billed duration across all generated outputs.
 type BillableUsage struct {
-	OutputCount      *int64 `json:"output_count,omitempty"`
-	BilledDurationMS *int64 `json:"billed_duration_ms,omitempty"`
-	BillableRequests *int64 `json:"billable_requests,omitempty"`
-	CharacterCount   *int64 `json:"character_count,omitempty"`
-	InputTokens      *int64 `json:"input_tokens,omitempty"`
-	OutputTokens     *int64 `json:"output_tokens,omitempty"`
+	ReferenceImageCount *int64 `json:"reference_image_count,omitempty"`
+	OutputCount         *int64 `json:"output_count,omitempty"`
+	BilledDurationMS    *int64 `json:"billed_duration_ms,omitempty"`
+	BillableRequests    *int64 `json:"billable_requests,omitempty"`
+	CharacterCount      *int64 `json:"character_count,omitempty"`
+	InputTokens         *int64 `json:"input_tokens,omitempty"`
+	OutputTokens        *int64 `json:"output_tokens,omitempty"`
 }
 
 // ParseBillableUsage accepts only exact integer quantities. A missing field is
@@ -103,6 +121,8 @@ func ParseBillableUsage(raw json.RawMessage) (BillableUsage, error) {
 			return BillableUsage{}, ErrInvalidPricingInput
 		}
 		switch name {
+		case "reference_image_count":
+			usage.ReferenceImageCount = &value
 		case "output_count":
 			usage.OutputCount = &value
 		case "billed_duration_ms":
@@ -143,6 +163,18 @@ func CalculateQuoteDetailed(price catalogdomain.PriceRuleVersion, input PricingI
 	if err != nil {
 		return 0, QuoteCostDetail{}, err
 	}
+	if rule.referenceScope != "" {
+		surcharge, err := referencePrice(rule, input.ReferenceImageCount, input.OutputCount)
+		if err != nil {
+			return 0, QuoteCostDetail{}, err
+		}
+		amount.Add(amount, surcharge)
+		refs := input.ReferenceImageCount
+		detail.ReferenceImageCount, detail.FreeReferenceImages, detail.ReferenceImageMicros = &refs, &rule.freeReferences, &rule.referenceMicros
+		detail.ReferenceScope = rule.referenceScope
+	}
+	detail.SourceURL, detail.ReviewedAt = price.SourceURL, price.ReviewedAt
+	detail.PriceRuleVersionID, detail.PriceVersionNo, detail.AmountKind = price.ID, price.VersionNo, "reservation"
 	amount.Mul(amount, rule.markupMultiplier)
 	detail.MarkupMultiplier = decimalNumber(rule.markupMultiplier, 4)
 	detail.Currency = price.Currency
@@ -173,6 +205,25 @@ func CalculateActualCost(price catalogdomain.PriceRuleVersion, usage BillableUsa
 		if err := applyPriceFactors(amount, rule, mode, resolution, nil); err != nil {
 			return 0, err
 		}
+	}
+	if rule.referenceScope != "" {
+		if usage.ReferenceImageCount == nil {
+			return 0, ErrInvalidPricingInput
+		}
+		outputs := int64(1)
+		if rule.referenceScope == "per_output" {
+			if usage.OutputCount == nil {
+				return 0, ErrInvalidPricingInput
+			}
+			outputs = *usage.OutputCount
+		}
+		surcharge, err := referencePrice(rule, *usage.ReferenceImageCount, outputs)
+		if err != nil {
+			return 0, err
+		}
+		amount.Add(amount, surcharge)
+	} else if usage.ReferenceImageCount != nil {
+		return 0, ErrInvalidPricingInput
 	}
 	amount.Mul(amount, rule.markupMultiplier)
 	return finishPriceAmount(amount, fx)
@@ -301,6 +352,28 @@ func parsePrice(price catalogdomain.PriceRuleVersion) (parsedPriceRule, *big.Rat
 		}
 		return rule, fx, nil
 	}
+	if raw, present := fields["reference_scope"]; present {
+		if price.Unit != catalogdomain.PricePerImage && price.Unit != catalogdomain.PricePerRequest {
+			return parsedPriceRule{}, nil, ErrInvalidPricingRule
+		}
+		if json.Unmarshal(raw, &rule.referenceScope) != nil || (rule.referenceScope != "per_task" && rule.referenceScope != "per_output") {
+			return parsedPriceRule{}, nil, ErrInvalidPricingRule
+		}
+		var ok bool
+		rule.freeReferences, ok = priceMicros(fields["free_reference_images"])
+		if !ok {
+			return parsedPriceRule{}, nil, ErrInvalidPricingRule
+		}
+		rule.referenceMicros, ok = priceMicros(fields["reference_image_micros"])
+		if !ok {
+			return parsedPriceRule{}, nil, ErrInvalidPricingRule
+		}
+		if rule.referenceScope == "per_output" && price.Unit != catalogdomain.PricePerImage {
+			return parsedPriceRule{}, nil, ErrInvalidPricingRule
+		}
+	} else if fields["free_reference_images"] != nil || fields["reference_image_micros"] != nil {
+		return parsedPriceRule{}, nil, ErrInvalidPricingRule
+	}
 	baseRaw, hasBase := fields["base_micros"]
 	if !hasBase {
 		return parsedPriceRule{}, nil, ErrInvalidPricingRule
@@ -312,7 +385,7 @@ func parsePrice(price catalogdomain.PriceRuleVersion) (parsedPriceRule, *big.Rat
 	}
 	for name, raw := range fields {
 		switch name {
-		case "base_micros":
+		case "base_micros", "free_reference_images", "reference_image_micros", "reference_scope":
 		case "by_mode":
 			rule.byMode, err = pricingCoefficients(raw)
 		case "by_resolution":
@@ -550,4 +623,22 @@ func calculateCredits(micros int64, ratio *big.Rat) int64 {
 func parseMultiplierOrRatio(raw json.RawMessage) (*big.Rat, bool) {
 	text := strings.Trim(string(raw), "\"")
 	return priceCoefficient(json.RawMessage(text))
+}
+
+// referencePrice is a math-only contract. Publication remains disabled until a
+// reviewed per-model counting contract is accepted; fixtures are not price evidence.
+func referencePrice(rule parsedPriceRule, references, outputs int64) (*big.Rat, error) {
+	if references < 0 || outputs < 0 {
+		return nil, ErrInvalidPricingInput
+	}
+	quantity := new(big.Int).SetInt64(references)
+	quantity.Sub(quantity, new(big.Int).SetUint64(rule.freeReferences))
+	if quantity.Sign() < 0 {
+		quantity.SetInt64(0)
+	}
+	if rule.referenceScope == "per_output" {
+		quantity.Mul(quantity, big.NewInt(outputs))
+	}
+	quantity.Mul(quantity, new(big.Int).SetUint64(rule.referenceMicros))
+	return new(big.Rat).SetInt(quantity), nil
 }

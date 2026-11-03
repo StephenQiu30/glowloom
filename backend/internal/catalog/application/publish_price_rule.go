@@ -30,6 +30,8 @@ type PublishPriceRuleStore interface {
 
 // PublishPriceRuleInput is the reviewed configuration for the next price version.
 type PublishPriceRuleInput struct {
+	SourceURL        string
+	ReviewedAt       *time.Time
 	ModelID          uuid.UUID
 	ExpectedRevision int64
 	VersionNo        int
@@ -79,7 +81,10 @@ func (c *PublishPriceRuleCommand) Execute(ctx context.Context, actor identityapp
 		ID: uuid.NewSHA1(actor.ID, []byte("model.price/"+input.RequestID)), ModelID: input.ModelID, VersionNo: input.VersionNo,
 		Unit: input.Unit, Rule: slices.Clone(input.Rule), Currency: input.Currency,
 		FXRateToCNY: input.FXRateToCNY, EffectiveFrom: input.EffectiveFrom.UTC().Round(time.Microsecond),
-		CreateBy: actor.ID,
+		CreateBy: actor.ID, SourceURL: input.SourceURL, ReviewedAt: input.ReviewedAt,
+	}
+	if price.ValidateProvenance() != nil || (price.ReviewedAt != nil && price.ReviewedAt.After(c.now())) {
+		return PublishedPriceRule{}, ErrInvalidPublishPriceRule
 	}
 	if err := price.Validate(); err != nil {
 		return PublishedPriceRule{}, fmt.Errorf("validate price metadata: %w", err)
@@ -102,7 +107,7 @@ func (c *PublishPriceRuleCommand) Execute(ctx context.Context, actor identityapp
 	if saved.ID != price.ID || saved.ModelID != price.ModelID ||
 		saved.VersionNo != price.VersionNo || saved.Unit != price.Unit ||
 		!slices.Equal(saved.Rule, price.Rule) || saved.Currency != price.Currency ||
-		saved.FXRateToCNY != price.FXRateToCNY ||
+		saved.FXRateToCNY != price.FXRateToCNY || saved.SourceURL != price.SourceURL || saved.ReviewedAt == nil || !saved.ReviewedAt.Equal(*price.ReviewedAt) ||
 		!saved.EffectiveFrom.Equal(price.EffectiveFrom) || saved.CreateBy != actor.ID ||
 		saved.CreateTime.IsZero() {
 		return PublishedPriceRule{}, ErrInvalidPublishPriceRule

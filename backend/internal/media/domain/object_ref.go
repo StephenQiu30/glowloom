@@ -45,3 +45,8 @@ type ObjectLocation struct {
 	SHA256   *string
 	MIMEType *string
 }
+
+// Readable reports whether this stored location can serve the asset's exact key.
+func (l *ObjectLocation) Readable(key string) bool {
+	return l != nil && l.ID != uuid.Nil && l.Ref.Validate() == nil && l.Ref.Key == key && (l.State == "accepted" || l.State == "present")
+}

@@ -55,6 +55,7 @@ type BeginProviderCallInput struct {
 // Usage contains normalized, non-sensitive billable quantities from a trusted
 // provider adapter. The mock adapter is explicitly free.
 type CompleteProviderCallInput struct {
+	ErrorCode      string           `json:"error_code,omitempty"`
 	Managed        bool             `json:"managed,omitempty"`
 	OperationID    uuid.UUID        `json:"operation_id"`
 	Action         string           `json:"action"`

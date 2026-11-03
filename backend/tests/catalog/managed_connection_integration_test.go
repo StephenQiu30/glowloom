@@ -89,7 +89,7 @@ func TestManagedConnectionKeyRotationAndReleaseGate(t *testing.T) {
 	priceValidator, err := pricevalidation.NewValidator()
 	require.NoError(t, err)
 	prices := catalogapp.NewPublishPriceRuleCommand(store, priceValidator, time.Now)
-	priceInput := catalogapp.PublishPriceRuleInput{ModelID: model.ID, ExpectedRevision: version.Revision, VersionNo: 1, Unit: domain.PricePerRequest, Rule: json.RawMessage(`{"base_micros":1000}`), Currency: "CNY", EffectiveFrom: time.Now().Add(-time.Hour), RequestID: uuid.NewString()}
+	priceInput := catalogapp.PublishPriceRuleInput{SourceURL: "https://example.invalid/prices", ReviewedAt: priceReviewedFixtureTime(), ModelID: model.ID, ExpectedRevision: version.Revision, VersionNo: 1, Unit: domain.PricePerRequest, Rule: json.RawMessage(`{"base_micros":1000}`), Currency: "CNY", EffectiveFrom: time.Now().Add(-time.Hour), RequestID: uuid.NewString()}
 	price, err := prices.Execute(t.Context(), actor, priceInput)
 	require.NoError(t, err)
 	repeatedPrice, err := prices.Execute(t.Context(), actor, priceInput)

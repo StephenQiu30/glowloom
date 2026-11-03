@@ -14,17 +14,30 @@ const logos: Record<string, string> = {
   vercel: "/brand/providers/vercel.svg",
 };
 
-export function ProviderLogo({ adapterKey }: { adapterKey?: string }) {
+export function ProviderLogo({
+  adapterKey,
+  metadata,
+}: {
+  adapterKey?: string;
+  metadata?: API.AdapterMetadata;
+}) {
+  const logoKey = metadata?.logo_key ?? adapterKey;
   const source =
-    adapterKey && Object.hasOwn(logos, adapterKey)
-      ? logos[adapterKey]
-      : undefined;
-  if (!source) return <Globe aria-hidden="true" className="size-5 shrink-0" />;
+    logoKey && Object.hasOwn(logos, logoKey) ? logos[logoKey] : undefined;
+  if (!source)
+    return (
+      <span className="inline-flex min-w-0 items-center gap-1">
+        <Globe aria-hidden="true" className="size-5 shrink-0" />
+        <span className="truncate">
+          {metadata?.display_name ?? adapterKey ?? "其他服务"}
+        </span>
+      </span>
+    );
 
   if (
-    adapterKey === "openrouter" ||
-    adapterKey === "openai" ||
-    adapterKey === "vercel"
+    logoKey === "openrouter" ||
+    logoKey === "openai" ||
+    logoKey === "vercel"
   ) {
     return (
       <span

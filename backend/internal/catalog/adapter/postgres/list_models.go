@@ -61,7 +61,7 @@ func (s *Store) ListModelsForProject(ctx context.Context, actor identityapp.Prin
 			       to_jsonb(v.modes)::text AS version_modes,
 			       v.limits::text AS version_limits,
 			       v.param_schema::text AS version_param_schema,
-			       pr.id AS price_id, pr.version_no AS price_version_no,
+			       pr.source_url AS price_source_url,pr.reviewed_at AS price_reviewed_at,pr.id AS price_id, pr.version_no AS price_version_no,
 			       pr.unit AS price_unit, pr.rule::text AS price_rule,
 			       pr.currency::text AS price_currency,
 			       pr.fx_rate_to_cny::text AS price_fx_rate_to_cny,
@@ -75,7 +75,7 @@ func (s *Store) ListModelsForProject(ctx context.Context, actor identityapp.Prin
 			LEFT JOIN catalog.provider_credential AS c
 			  ON c.provider_id = p.id AND c.status = 'active' AND NOT c.is_delete
 			LEFT JOIN LATERAL (
-			  SELECT id, version_no, unit, rule, currency, fx_rate_to_cny, effective_from
+			  SELECT id, version_no, unit, rule, currency, fx_rate_to_cny, source_url, reviewed_at, effective_from
 			  FROM catalog.price_rule_version
 			  WHERE (p.adapter_key NOT IN (%[1]s) OR id=published.price_version_id) AND model_profile_id = m.id AND effective_from <= transaction_timestamp()
 			    AND NOT is_delete
@@ -147,6 +147,8 @@ type modelCatalogRow struct {
 	VersionModes         *string
 	VersionLimits        *string
 	VersionParamSchema   *string
+	PriceSourceURL       *string
+	PriceReviewedAt      *time.Time
 	PriceID              *uuid.UUID
 	PriceVersionNo       *int
 	PriceUnit            *string
@@ -203,7 +205,7 @@ func (row modelCatalogRow) item() (application.ModelCatalogItem, error) {
 			return application.ModelCatalogItem{}, application.ErrInvalidModelCatalog
 		}
 		item.CurrentPrice = &application.ModelCatalogPrice{
-			ID: *row.PriceID, VersionNo: *row.PriceVersionNo, Unit: *row.PriceUnit,
+			SourceURL: row.PriceSourceURL, ReviewedAt: row.PriceReviewedAt, ID: *row.PriceID, VersionNo: *row.PriceVersionNo, Unit: *row.PriceUnit,
 			Rule: json.RawMessage(*row.PriceRule), Currency: *row.PriceCurrency,
 			FXRateToCNY: row.PriceFXRateToCNY, EffectiveFrom: *row.PriceEffectiveFrom,
 		}

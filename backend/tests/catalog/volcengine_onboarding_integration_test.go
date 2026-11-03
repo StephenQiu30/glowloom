@@ -61,6 +61,7 @@ func TestVolcengineWholeCatalogAndSpeechOnboardingUseRealStores(t *testing.T) {
 			}
 			connected, err := presets.Connect(ctx, actor, preset.ID, catalogapp.ConnectPresetInput{RequestID: uuid.New(), VersionID: preset.VersionID, CatalogVersion: preset.ModelCatalog.Version, CandidateKeys: keys, DirectUse: true})
 			require.NoError(t, err)
+			seedReviewedOnboardingPrices(t, database, actor, connected, false)
 			onboarding := catalogapp.NewProviderOnboarding(store)
 			state, err := onboarding.Read(ctx, actor, connected.ProviderID)
 			require.NoError(t, err)

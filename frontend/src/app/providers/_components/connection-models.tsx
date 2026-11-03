@@ -117,6 +117,14 @@ export function ConnectionModels({
     return (
       <div className="space-y-2 text-sm">
         <h3 className="font-medium">模型验证</h3>
+        {onboarding?.models?.map((model) => (
+          <p key={model.id} className="text-sm">
+            {model.display_name}
+            <span className="ml-2 text-muted-foreground">
+              价格待审核，尚不可创作。请在模型管理中发布已审核价格并完成验证。
+            </span>
+          </p>
+        ))}
         <p className="text-xs text-muted-foreground">
           当前连接没有可测试的发布，请先在模型管理中完成配置。
         </p>
@@ -127,29 +135,55 @@ export function ConnectionModels({
         </Button>
       </div>
     );
+  const pendingCandidates = onboarding?.models?.filter(
+    (model) =>
+      !model.release_id ||
+      model.release_id === "00000000-0000-0000-0000-000000000000",
+  );
+  const pendingPrices = pendingCandidates?.length ? (
+    <div className="flex flex-col gap-2 text-sm">
+      {pendingCandidates.map((model) => (
+        <p key={model.id}>{model.display_name}</p>
+      ))}
+      <p className="text-xs text-muted-foreground">
+        价格待审核，尚不可创作。请在模型管理中发布已审核价格并完成验证。
+      </p>
+      <Button variant="outline" asChild>
+        <Link href={`/models?provider=${encodeURIComponent(id)}`}>
+          模型管理
+        </Link>
+      </Button>
+    </div>
+  ) : null;
   if (!target.requires_trial)
     return (
-      <ConnectionOnboarding
-        adapter={adapter}
-        id={id}
-        revision={revision}
-        onSaved={onSaved}
-        modelID={target.id}
-        selector={selector}
-        checks={checks}
-        onChecked={onChecked}
-      />
+      <>
+        {pendingPrices}
+        <ConnectionOnboarding
+          adapter={adapter}
+          id={id}
+          revision={revision}
+          onSaved={onSaved}
+          modelID={target.id}
+          selector={selector}
+          checks={checks}
+          onChecked={onChecked}
+        />
+      </>
     );
   return (
-    <FormalModelTest
-      key={target.release_id}
-      provider={id}
-      target={target}
-      selector={selector()}
-      releaseID={target.id === initialModel ? initialRelease : undefined}
-      mode={target.id === initialModel ? initialMode : undefined}
-      onSaved={onSaved}
-    />
+    <>
+      {pendingPrices}
+      <FormalModelTest
+        key={target.release_id}
+        provider={id}
+        target={target}
+        selector={selector()}
+        releaseID={target.id === initialModel ? initialRelease : undefined}
+        mode={target.id === initialModel ? initialMode : undefined}
+        onSaved={onSaved}
+      />
+    </>
   );
 }
 

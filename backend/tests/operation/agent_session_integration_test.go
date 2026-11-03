@@ -13,6 +13,7 @@ import (
 	agentpg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	agentapp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	agent "github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain/graph"
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	pgop "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	op "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
@@ -145,6 +146,41 @@ func TestAgentQuoteAndConfirmShareSessionTransaction(t *testing.T) {
 	var count int64
 	if err := db.Raw(`SELECT count(*) FROM billing.reservation WHERE operation_id=?`, in.OperationID).Scan(&count).Error; err != nil || count != 1 {
 		t.Fatal("exactly one reservation", count, err)
+	}
+	// Persist the approved operation identity before simulating a checkpoint resume.
+	checkpointID, runID := uuid.New(), uuid.New()
+	payload, err := json.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpoint := &graph.AgentState{RunID: runID, SessionID: saved.ID, ProjectID: pid, ActorID: actor.ID, Proposals: []graph.Proposal{{ID: turn.ID, Action: "generation.submit", Data: payload, Approved: true, Status: "approved"}}}
+	if err := agentpg.NewCheckpointStore(db).SaveCheckpoint(ctx, runID, checkpointID, "approved_generation", checkpoint); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := agentpg.NewCheckpointStore(db).GetLatestCheckpoint(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var original agentapp.ConfirmInput
+	if err := json.Unmarshal(restored.State.Proposals[0].Data, &original); err != nil || original.OperationID != id {
+		t.Fatal("checkpoint lost original operation", err)
+	}
+	if err := db.Exec(`UPDATE operation.operation SET status='unknown' WHERE id=?`, id).Error; err != nil {
+		t.Fatal(err)
+	}
+	fresh := agentapp.Service{Store: agentpg.NewStore(db, operationRequestAccess, func(tx *gorm.DB) agentapp.Operations { return operationStore(tx) })}
+	for range 2 {
+		resumed, err := fresh.Advance(ctx, actor, restored.State.ProjectID, restored.State.SessionID)
+		if err != nil || resumed.Turns[0].Status != "needs_reconciliation" || len(resumed.Turns[0].Stages) != 1 || resumed.Turns[0].Stages[0].OperationID != id {
+			t.Fatal("checkpoint resume created another consumption", resumed, err)
+		}
+	}
+	var operations int64
+	if err := db.Raw(`SELECT count(*) FROM operation.operation WHERE project_id=? AND origin='agent'`, pid).Scan(&operations).Error; err != nil || operations != 1 {
+		t.Fatal("agent replay created new operation", operations, err)
+	}
+	if err := db.Raw(`SELECT count(*) FROM billing.reservation WHERE operation_id=?`, id).Scan(&count).Error; err != nil || count != 1 {
+		t.Fatal("agent replay created second reservation", count, err)
 	}
 }
 

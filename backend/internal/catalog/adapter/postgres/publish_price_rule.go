@@ -23,7 +23,7 @@ func (s *Store) publishPriceRuleWithAuditOnce(ctx context.Context, actor identit
 		return domain.PriceRuleVersion{}, fmt.Errorf("prepare price validation: %w", err)
 	}
 	if s == nil || s.db == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil ||
-		price.Validate() != nil || validator.Validate(price) != nil ||
+		price.Validate() != nil || price.ValidateProvenance() != nil || validator.Validate(price) != nil ||
 		price.CreateBy != actor.ID || expectedRevision < 1 ||
 		!validPriceRulePublishedAudit(actor.ID, actor.OrgID, price, expectedRevision, event) {
 		return domain.PriceRuleVersion{}, application.ErrInvalidPublishPriceRule
@@ -70,6 +70,13 @@ func (s *Store) publishPriceRuleWithAuditOnce(ctx context.Context, actor identit
 }
 
 func appendPriceRuleInTx(tx *gorm.DB, price domain.PriceRuleVersion, expectedRevision int64) error {
+	validator, err := pricevalidation.NewValidator()
+	if err != nil {
+		return err
+	}
+	if price.ValidateProvenance() != nil || price.ReviewedAt.After(time.Now()) || validator.Validate(price) != nil {
+		return application.ErrInvalidPublishPriceRule
+	}
 	row, err := lockModelProfile(tx, price.ModelID)
 	if err != nil {
 		return err
@@ -135,11 +142,11 @@ func appendPriceRuleInTx(tx *gorm.DB, price domain.PriceRuleVersion, expectedRev
 	result := tx.Exec(`
 		INSERT INTO catalog.price_rule_version
 		  (id, model_profile_id, version_no, unit, rule, currency,
-		   fx_rate_to_cny, effective_from, create_by)
-		VALUES (?::uuid, ?::uuid, ?, ?, ?::jsonb, ?, NULLIF(?, '')::numeric, ?, ?::uuid)
+		   fx_rate_to_cny, effective_from, create_by, source_url, reviewed_at)
+		VALUES (?::uuid, ?::uuid, ?, ?, ?::jsonb, ?, NULLIF(?, '')::numeric, ?, ?::uuid, ?, ?)
 	`, price.ID.String(), price.ModelID.String(), price.VersionNo,
 		string(price.Unit), string(price.Rule), price.Currency,
-		price.FXRateToCNY, price.EffectiveFrom, price.CreateBy.String())
+		price.FXRateToCNY, price.EffectiveFrom, price.CreateBy.String(), price.SourceURL, price.ReviewedAt)
 	if isUniqueViolation(result.Error, "uq_price_rule_version") {
 		return ErrPriceVersionConflict
 	}

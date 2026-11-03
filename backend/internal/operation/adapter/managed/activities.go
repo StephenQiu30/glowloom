@@ -143,10 +143,10 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 		return unknown, nil
 	}
 	switch result.Outcome {
-	case "rejected", "not_submitted":
+	case "not_submitted":
 		return application.ManagedProgress{State: result.Outcome, ErrorCode: result.ErrorCode}, nil
-	case "unknown":
-		return unknown, nil
+	case "rejected", "unknown":
+		return application.ManagedProgress{State: "unknown", ErrorCode: result.ErrorCode}, nil
 	case "accepted":
 		evidence := application.ManagedResult{Identity: identity, State: "accepted", TaskID: result.TaskID}
 		if err := a.results.Save(ctx, evidence); err != nil {

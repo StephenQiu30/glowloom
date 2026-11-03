@@ -113,8 +113,11 @@ func (r *IngestRepository) CompleteGeneratedWork(ctx context.Context, operationI
 		if q.Error != nil {
 			return q.Error
 		}
-		if q.RowsAffected != 1 || op.Status != "ingesting" {
+		if q.RowsAffected != 1 {
 			return ErrOperationNotIngesting
+		}
+		if err := r.requireIngestState(op.Status); err != nil {
+			return err
 		}
 		intent, found, err := readStorageWork(tx, application.StorageWorkOwner{Kind: "operation", OwnerID: op.ProjectID, WorkID: operationID})
 		if err != nil {

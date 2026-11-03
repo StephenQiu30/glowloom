@@ -20,7 +20,7 @@ import { isCredentialReceipt } from "@/components/catalog/credential-receipt";
 import { RequestError } from "@/lib/request";
 import { ProviderLogo } from "./provider-logo";
 import { Button } from "@/components/ui/button";
-import { cn } from "cn";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { getCandidateBrand } from "./provider-label";
 import {
   Field,
@@ -50,6 +50,7 @@ function connectionID(value: unknown) {
 
 export function PresetConnect({
   presets,
+  adapters,
   initialPreset = "",
   onCancel,
   providers = [],
@@ -57,6 +58,7 @@ export function PresetConnect({
   onSaved,
 }: {
   presets: API.Preset[];
+  adapters?: API.AdapterMetadata[];
   initialPreset?: string;
   onCancel?: () => void;
   providers?: API.ProviderListItem[];
@@ -103,6 +105,7 @@ export function PresetConnect({
   );
   const credential = useCatalogMutation(
     (result) => {
+      if (!mounted.current) return;
       setComplete(true);
       onSaved(connectionID(result));
     },
@@ -119,8 +122,14 @@ export function PresetConnect({
       ? create.pending.target
       : presetID;
   const preset = presets.find((p) => p.id === selectedPreset);
-  const musicCredential =
-    preset?.document?.config?.adapter_key === "volcengine_music";
+  const metadata = adapters?.find(
+    (item) => item.adapter_key === preset?.document?.config?.adapter_key,
+  );
+  const musicCredential = metadata
+    ? metadata.credential_fields?.some(
+        (field) => field.name === "secret_access_key",
+      )
+    : preset?.document?.config?.adapter_key === "volcengine_music";
   const complete =
     confirmed ||
     (!!targetID &&
@@ -191,7 +200,7 @@ export function PresetConnect({
               ),
           );
           id = connectionID(result);
-          if (!id) return;
+          if (!id || !mounted.current) return;
         }
         await credential.run("credential.set", id, (requestID) =>
           setAdminCredential(
@@ -253,6 +262,11 @@ export function PresetConnect({
                         <FieldTitle>
                           <ProviderLogo
                             adapterKey={p.document?.config?.adapter_key}
+                            metadata={adapters?.find(
+                              (item) =>
+                                item.adapter_key ===
+                                p.document?.config?.adapter_key,
+                            )}
                           />
                           {p.document?.name}
                         </FieldTitle>
@@ -438,40 +452,34 @@ export function PresetConnect({
                     className="max-h-60 overflow-y-auto py-1"
                   >
                     {isMultiBrand || hasMultipleBrands ? (
-                      <div className="sticky top-0 z-10 mb-1.5 flex flex-wrap items-center gap-1.5 bg-background/95 px-2 py-1.5 backdrop-blur">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedBrand("all")}
-                          className={cn(
-                            "cursor-pointer rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors",
-                            selectedBrand === "all"
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground",
-                          )}
-                        >
+                      <ToggleGroup
+                        type="single"
+                        value={selectedBrand}
+                        onValueChange={(value) => {
+                          if (value) setSelectedBrand(value);
+                        }}
+                        variant="pill"
+                        size="sm"
+                        aria-label="按模型品牌筛选"
+                        className="sticky top-0 z-10 mb-1.5 flex-wrap bg-background/95 px-2 py-1.5 backdrop-blur"
+                      >
+                        <ToggleGroupItem value="all">
                           全部 ({visibleModels.length})
-                        </button>
-                        {(["ChatGPT", "Anthropic", "Gemini", "Grok"] as const).map((b) => {
-                          const count = visibleModels.filter(
-                            (m) => getCandidateBrand(m) === b,
-                          ).length;
-                          return (
-                            <button
-                              key={b}
-                              type="button"
-                              onClick={() => setSelectedBrand(b)}
-                              className={cn(
-                                "cursor-pointer rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors",
-                                selectedBrand === b
-                                  ? "bg-primary text-primary-foreground"
-                                  : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground",
-                              )}
-                            >
-                              {b} ({count})
-                            </button>
-                          );
-                        })}
-                      </div>
+                        </ToggleGroupItem>
+                        {(
+                          ["ChatGPT", "Anthropic", "Gemini", "Grok"] as const
+                        ).map((brand) => (
+                          <ToggleGroupItem key={brand} value={brand}>
+                            {brand} (
+                            {
+                              visibleModels.filter(
+                                (model) => getCandidateBrand(model) === brand,
+                              ).length
+                            }
+                            )
+                          </ToggleGroupItem>
+                        ))}
+                      </ToggleGroup>
                     ) : null}
                     {displayedModels.length ? (
                       <FieldGroup className="gap-0">
@@ -517,7 +525,7 @@ export function PresetConnect({
                                 }
                                 className="min-h-10 min-w-0 flex-1 items-center py-2 max-md:min-h-11"
                               >
-                                <FieldTitle className="min-w-0 break-words flex items-center gap-1.5">
+                                <FieldTitle className="flex min-w-0 items-center gap-1.5 break-words">
                                   <span>{candidate.display_name}</span>
                                   {brand ? (
                                     <Badge
@@ -553,16 +561,18 @@ export function PresetConnect({
               })}
             </Tabs>
             <div className="mt-1 border-t border-dashed pt-2">
-              <button
+              <Button
                 type="button"
-                onClick={() => setShowAddCustom((v) => !v)}
-                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                variant="link"
+                size="sm"
+                aria-expanded={showAddCustom}
+                onClick={() => setShowAddCustom((value) => !value)}
               >
-                <Plus className="size-3.5" />
+                <Plus data-icon="inline-start" />
                 {showAddCustom ? "收起添加模型" : "添加自定义候选模型"}
-              </button>
+              </Button>
               {showAddCustom ? (
-                <div className="mt-2 flex flex-col gap-2 rounded-md border p-2.5 bg-muted/20">
+                <div className="mt-2 flex flex-col gap-2 rounded-md border bg-muted/20 p-2.5">
                   <div className="grid grid-cols-2 gap-2 max-sm:grid-cols-1">
                     <Input
                       placeholder="模型名称（如 Claude Sonnet 5.5）"

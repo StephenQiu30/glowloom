@@ -1,4 +1,5 @@
 "use client";
+import { PriceEvidenceFields } from "./price-evidence-fields";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { LoadingState } from "@/components/layout/loading-state";
 import { ChevronDown } from "lucide-react";
@@ -333,6 +334,10 @@ export function ModelDetail({
                           expected_revision: model?.revision,
                           version_no: (latestPrice?.version_no ?? 0) + 1,
                           unit: String(f.get("unit")) as API.PriceUnit,
+                          source_url: String(f.get("source_url")),
+                          reviewed_at: new Date(
+                            String(f.get("reviewed_at")),
+                          ).toISOString(),
                           rule,
                           currency: "CNY",
                           effective_from: new Date(
@@ -375,6 +380,7 @@ export function ModelDetail({
                     </Select>
                   </Field>
                   <PriceSetup rule={latestPrice?.rule} />
+                  <PriceEvidenceFields price={latestPrice} />
                   <Field>
                     <FieldLabel htmlFor={`${formFieldId}-field-5`}>
                       <span>生效时间</span>

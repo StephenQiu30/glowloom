@@ -225,6 +225,12 @@ func TestConfirmBatchQuoteIncludesPreviouslyExpiredSibling(t *testing.T) {
 func seedConfirmableBatch(t *testing.T, database *gorm.DB, amounts ...int64) (identityapp.Principal, uuid.UUID, uuid.UUID, []pgoperation.QuoteItem) {
 	t.Helper()
 	actor, projectID := operationStoreProject(t, database)
+	batchID, items := seedProjectBatch(t, database, actor, projectID, amounts...)
+	return actor, projectID, batchID, items
+}
+
+func seedProjectBatch(t *testing.T, database *gorm.DB, actor identityapp.Principal, projectID uuid.UUID, amounts ...int64) (uuid.UUID, []pgoperation.QuoteItem) {
+	t.Helper()
 	quoted, _, _ := seedQuoteCatalog(t, database, projectID, time.Now().UTC())
 	batchID := uuid.New()
 	items := make([]pgoperation.QuoteItem, 0, len(amounts))
@@ -244,5 +250,5 @@ func seedConfirmableBatch(t *testing.T, database *gorm.DB, amounts ...int64) (id
 	if err := operationStore(database).CreateQuoteSnapshot(t.Context(), actor, &batch, items); err != nil {
 		t.Fatal(err)
 	}
-	return actor, projectID, batchID, items
+	return batchID, items
 }

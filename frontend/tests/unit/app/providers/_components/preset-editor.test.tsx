@@ -123,6 +123,14 @@ it.each([
     <PresetEditor
       preset={item}
       presets={[item]}
+      adapters={[
+        {
+          adapter_key: adapter as string,
+          capabilities: (supported as string[]).map(
+            (name) => ({ 文本: "text", 图片: "image", 视频: "video" })[name],
+          ) as string[],
+        },
+      ]}
       onClose={vi.fn()}
       onSaved={vi.fn()}
     />,

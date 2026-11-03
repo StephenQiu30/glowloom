@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"slices"
 	"strings"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
@@ -36,11 +35,7 @@ func submitOpenAIResponses(ctx context.Context, c *Client, input application.Gen
 		return application.GenerationResult{Outcome: "unknown", ErrorCode: "transport_unknown"}, nil
 	}
 	if status < 200 || status >= 300 {
-		outcome := "unknown"
-		if slices.Contains([]int{400, 401, 402, 403, 404, 422, 429}, status) {
-			outcome = "rejected"
-		}
-		return application.GenerationResult{Outcome: outcome, ErrorCode: safeHTTPErrorBody(status, data)}, nil
+		return application.GenerationResult{Outcome: "unknown", ErrorCode: safeHTTPErrorBody(status, data)}, nil
 	}
 	var response struct {
 		Status string `json:"status"`
@@ -64,7 +59,7 @@ func submitOpenAIResponses(ctx context.Context, c *Client, input application.Gen
 		}
 		for _, part := range item.Content {
 			if part.Type == "refusal" {
-				return application.GenerationResult{Outcome: "rejected", ErrorCode: "content_rejected", Usage: safeUsage(response.Usage)}, nil
+				return application.GenerationResult{Outcome: "unknown", ErrorCode: "content_rejected", Usage: safeUsage(response.Usage)}, nil
 			}
 			if item.Status != "completed" {
 				return unknownResult(), nil

@@ -99,6 +99,9 @@ func (s *Store) confirmSingleQuote(ctx context.Context, actor identityapp.Princi
 			quoted.ModelProfileVersionID == nil {
 			return application.ErrConfirmationTargetUnavailable
 		}
+		if err := checkStoredBillingBarrier(tx, quoted.ProjectID, quoted.ID); err != nil {
+			return err
+		}
 		confirmedAt := time.Now().UTC()
 		currentModel, currentPrice, err := s.withDB(tx).ReadCurrentQuoteCatalog(ctx, actor, quoted, confirmedAt)
 		if err != nil {

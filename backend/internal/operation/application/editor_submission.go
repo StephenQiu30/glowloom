@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -61,6 +62,7 @@ type EditorSubmissions interface {
 
 // EditorQuote preserves the user-visible estimate and compiler mapping.
 type EditorQuote struct {
+	QuoteDetail      json.RawMessage                 `json:"quote_detail" swaggertype:"object"`
 	CompilerVersion  string                          `json:"compiler_version,omitempty"`
 	ReferenceMapping []promptdomain.ReferenceMapping `json:"reference_mapping,omitempty"`
 	QuoteMicros      int64                           `json:"quote_micros"`

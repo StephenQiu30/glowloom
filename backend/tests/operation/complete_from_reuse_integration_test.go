@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -102,6 +104,25 @@ func TestCompleteFromReuseCopiesOutputsAndSettlesZeroOnce(t *testing.T) {
 	if calls != 0 || settledEvents != 1 || completedEvents != 1 {
 		t.Fatalf("reuse events and calls: calls=%d settled=%d completed=%d", calls, settledEvents, completedEvents)
 	}
+
+	detail, err := store.ReadPublicTask(t.Context(), actor, projectID, quoted.ID)
+	require.NoError(t, err)
+	require.Equal(t, "ready", detail.BillingOutcome.DeliveryState, "completed reusable outputs must remain ready")
+	require.Equal(t, "released", detail.BillingOutcome.ChargeState)
+	require.EqualValues(t, 0, *detail.BillingOutcome.ChargedMicros)
+	var settleCount int64
+	require.NoError(t, database.Raw(`SELECT count(*) FROM billing.ledger_entry WHERE operation_id=? AND entry_type='settle' AND amount_micros=0`, quoted.ID).Scan(&settleCount).Error)
+	require.EqualValues(t, 1, settleCount)
+	var assetSource string
+	require.NoError(t, database.Raw(`SELECT source_operation_id FROM media.media_asset WHERE id=?`, sourceAsset.ID).Scan(&assetSource).Error)
+	require.Equal(t, sourceID.String(), assetSource, "reuse must not rewrite original asset ownership")
+	// Hiding the old task or disabling its historical catalog does not revoke
+	// independently copied output rows or the still-readable shared asset.
+	require.NoError(t, database.Exec(`UPDATE operation.operation SET is_delete=true WHERE id=?`, sourceID).Error)
+	require.NoError(t, database.Exec(`UPDATE catalog.model_profile SET status='disabled' WHERE id=(SELECT model_profile_id FROM catalog.model_profile_version WHERE id=?)`, quoted.ModelProfileVersionID).Error)
+	detail, err = store.ReadPublicTask(t.Context(), actor, projectID, quoted.ID)
+	require.NoError(t, err)
+	require.Equal(t, "ready", detail.BillingOutcome.DeliveryState)
 }
 
 func TestCompleteFromReuseRejectsSourceRevokedAfterConfirmation(t *testing.T) {

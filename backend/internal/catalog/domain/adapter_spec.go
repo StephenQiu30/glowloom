@@ -8,13 +8,17 @@ import (
 // AdapterSpecification declares the protocol invariants, endpoint rules,
 // allowed generation parameters, and candidate model loaders for a provider adapter.
 type AdapterSpecification struct {
-	AdapterKey       string
-	AllowedBaseURL   string
-	AllowedRegion    Region
-	Capabilities     []string
-	IsManagedCloud   bool
-	ParameterFields  map[string][]string // capability -> allowed parameter names
-	CandidateCatalog func() ModelCandidateCatalog
+	DisplayName       string
+	LogoKey           string
+	ProtocolIDs       []string
+	CheckCapabilities []string
+	AdapterKey        string
+	AllowedBaseURL    string
+	AllowedRegion     Region
+	Capabilities      []string
+	IsManagedCloud    bool
+	ParameterFields   map[string][]string // capability -> allowed parameter names
+	CandidateCatalog  func() ModelCandidateCatalog
 }
 
 var adapterRegistry = map[string]AdapterSpecification{}
@@ -25,13 +29,42 @@ func RegisterAdapterSpec(spec AdapterSpecification) {
 	if spec.AdapterKey == "" {
 		panic("register adapter spec with empty key")
 	}
-	adapterRegistry[spec.AdapterKey] = spec
+	if _, exists := adapterRegistry[spec.AdapterKey]; exists {
+		panic("register duplicate adapter spec")
+	}
+	adapterRegistry[spec.AdapterKey] = cloneAdapterSpec(spec)
 }
 
 // GetAdapterSpec retrieves the registered specification for the given adapter key.
 func GetAdapterSpec(adapter string) (AdapterSpecification, bool) {
 	spec, ok := adapterRegistry[adapter]
-	return spec, ok
+	return cloneAdapterSpec(spec), ok
+}
+
+// AdapterSpecifications returns ordered, isolated declarations for safe projections.
+func AdapterSpecifications() []AdapterSpecification {
+	keys := make([]string, 0, len(adapterRegistry))
+	for key := range adapterRegistry {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	specs := make([]AdapterSpecification, 0, len(keys))
+	for _, key := range keys {
+		specs = append(specs, cloneAdapterSpec(adapterRegistry[key]))
+	}
+	return specs
+}
+
+func cloneAdapterSpec(spec AdapterSpecification) AdapterSpecification {
+	spec.Capabilities = slices.Clone(spec.Capabilities)
+	spec.ProtocolIDs = slices.Clone(spec.ProtocolIDs)
+	spec.CheckCapabilities = slices.Clone(spec.CheckCapabilities)
+	fields := make(map[string][]string, len(spec.ParameterFields))
+	for key, values := range spec.ParameterFields {
+		fields[key] = slices.Clone(values)
+	}
+	spec.ParameterFields = fields
+	return spec
 }
 
 // ManagedCloudAdapters returns the sorted list of all registered managed cloud adapter keys.
@@ -61,6 +94,7 @@ func init() {
 	standardTextParams := []string{"temperature", "top_p", "max_tokens", "seed", "response_format"}
 
 	RegisterAdapterSpec(AdapterSpecification{
+		DisplayName: "火山方舟", LogoKey: "volcengine_ark", ProtocolIDs: []string{"volcengine_ark"}, CheckCapabilities: []string{"credential", "model_test"},
 		AdapterKey:     "volcengine_ark",
 		AllowedBaseURL: "https://ark.cn-beijing.volces.com/api/v3",
 		AllowedRegion:  RegionDomestic,
@@ -75,6 +109,7 @@ func init() {
 	})
 
 	RegisterAdapterSpec(AdapterSpecification{
+		DisplayName: "OpenRouter", LogoKey: "openrouter", ProtocolIDs: []string{"openrouter"}, CheckCapabilities: []string{"credential", "model_discovery", "model_test"},
 		AdapterKey:     "openrouter",
 		AllowedBaseURL: "https://openrouter.ai/api/v1",
 		AllowedRegion:  RegionOverseas,
@@ -136,6 +171,7 @@ func init() {
 	})
 
 	RegisterAdapterSpec(AdapterSpecification{
+		DisplayName: "BytePlus", LogoKey: "byteplus", ProtocolIDs: []string{"byteplus"}, CheckCapabilities: []string{"credential", "model_test"},
 		AdapterKey:     "byteplus",
 		AllowedBaseURL: "https://ark.ap-southeast.bytepluses.com/api/v3",
 		AllowedRegion:  RegionOverseas,
@@ -159,6 +195,7 @@ func init() {
 	})
 
 	RegisterAdapterSpec(AdapterSpecification{
+		DisplayName: "DeepSeek", LogoKey: "deepseek", ProtocolIDs: []string{"deepseek"}, CheckCapabilities: []string{"credential", "model_discovery", "model_test"},
 		AdapterKey:     "deepseek",
 		AllowedBaseURL: "https://api.deepseek.com",
 		AllowedRegion:  RegionDomestic,
@@ -179,6 +216,7 @@ func init() {
 	})
 
 	RegisterAdapterSpec(AdapterSpecification{
+		DisplayName: "OpenAI", LogoKey: "openai", ProtocolIDs: []string{"openai"}, CheckCapabilities: []string{"credential", "model_discovery", "model_test"},
 		AdapterKey: "openai", AllowedBaseURL: "https://api.openai.com/v1", AllowedRegion: RegionOverseas,
 		Capabilities: []string{"text", "image"}, IsManagedCloud: true,
 		ParameterFields: map[string][]string{"text.generate": standardTextParams, "image.generate": {"size", "quality", "seed", "watermark"}},
@@ -204,6 +242,7 @@ func init() {
 	})
 
 	RegisterAdapterSpec(AdapterSpecification{
+		DisplayName: "Vercel", LogoKey: "vercel", ProtocolIDs: []string{"vercel"}, CheckCapabilities: []string{"credential", "model_discovery", "model_test"},
 		AdapterKey: "vercel", AllowedBaseURL: "https://ai-gateway.vercel.sh/v1", AllowedRegion: RegionOverseas,
 		Capabilities: []string{"text", "image"}, IsManagedCloud: true,
 		ParameterFields: map[string][]string{"text.generate": standardTextParams, "image.generate": {"size", "quality", "seed"}},
@@ -257,6 +296,7 @@ func init() {
 	})
 
 	RegisterAdapterSpec(AdapterSpecification{
+		DisplayName: "火山音乐", LogoKey: "volcengine_music", ProtocolIDs: []string{"volcengine_music"}, CheckCapabilities: []string{"model_test"},
 		AdapterKey:     "volcengine_music",
 		AllowedBaseURL: "https://open.volcengineapi.com",
 		AllowedRegion:  RegionDomestic,
@@ -271,6 +311,7 @@ func init() {
 	})
 
 	RegisterAdapterSpec(AdapterSpecification{
+		DisplayName: "即梦数字人", LogoKey: "volcengine_avatar", ProtocolIDs: []string{"volcengine_avatar"}, CheckCapabilities: []string{"model_test"},
 		AdapterKey:     "volcengine_avatar",
 		AllowedBaseURL: "https://openapi.cv.volces.com",
 		AllowedRegion:  RegionDomestic,
@@ -285,6 +326,7 @@ func init() {
 	})
 
 	RegisterAdapterSpec(AdapterSpecification{
+		DisplayName: "即梦动作模仿", LogoKey: "volcengine_motion", ProtocolIDs: []string{"volcengine_motion"}, CheckCapabilities: []string{"model_test"},
 		AdapterKey:     "volcengine_motion",
 		AllowedBaseURL: "https://openapi.cv.volces.com",
 		AllowedRegion:  RegionDomestic,
@@ -299,6 +341,7 @@ func init() {
 	})
 
 	RegisterAdapterSpec(AdapterSpecification{
+		DisplayName: "豆包语音", LogoKey: "volcengine_speech", ProtocolIDs: []string{"volcengine_speech"}, CheckCapabilities: []string{"model_test"},
 		AdapterKey:     "volcengine_speech",
 		AllowedBaseURL: "https://openspeech.bytedance.com/api/v3",
 		AllowedRegion:  RegionDomestic,
@@ -311,6 +354,7 @@ func init() {
 	})
 
 	RegisterAdapterSpec(AdapterSpecification{
+		DisplayName: "Codex", LogoKey: "codex", ProtocolIDs: []string{"codex"}, CheckCapabilities: []string{},
 		AdapterKey:     "codex",
 		AllowedBaseURL: "",
 		Capabilities:   []string{"text", "image"},

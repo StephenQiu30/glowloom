@@ -1,4 +1,5 @@
 "use client";
+import { QuoteCostDetail } from "./quote-cost-detail";
 import dynamic from "next/dynamic";
 import { modelsForCreation, creationModeLabel } from "./creation-contract";
 import { ContentState } from "@/components/layout/content-state";
@@ -629,6 +630,10 @@ function EditorWorkspace({
         current.submission.input_source?.kind === "prompt_draft" &&
         current.submission.input_source.revision !== revision));
   const activeQuote = quote ?? current.submission?.quote;
+  const quoteAmountKnown =
+    Number.isSafeInteger(activeQuote?.quote_micros) &&
+    typeof activeQuote?.quote_micros === "number" &&
+    activeQuote.quote_micros >= 0;
   const [expiredQuote, setExpiredQuote] = useState<API.EditorQuote | null>(
     null,
   );
@@ -948,7 +953,7 @@ function EditorWorkspace({
         const expires = Date.parse(activeQuote?.expires_at ?? "");
         if (!Number.isFinite(expires) || Date.now() >= expires)
           throw new Error("报价已过期，请重新检查费用。");
-        if (activeQuote?.confirmable !== true)
+        if (!quoteAmountKnown || activeQuote?.confirmable !== true)
           throw new Error("当前报价不可确认，请重新检查费用。");
       }
       if (session?.pendingTarget) throw new Error("模式选择尚未完成。");
@@ -1446,15 +1451,14 @@ function EditorWorkspace({
       <p className="text-sm">
         提交 {current.submission.id?.slice(0, 8)} · 代次 {current.epoch}
       </p>
-      {quote && (
-        <p>
-          预计费用：{money(quote.quote_micros)}；余额：
-          {money(quote.available_micros)}
-        </p>
+      {activeQuote && (
+        <QuoteCostDetail
+          amount={activeQuote.quote_micros}
+          detail={activeQuote.quote_detail}
+        />
       )}
-      {!quote && current.submission.quote && (
-        <p>原报价：{money(current.submission.quote.quote_micros ?? 0)}</p>
-      )}
+      {quote && <p>可用项目预算：{money(quote.available_micros)}</p>}
+      {!quote && current.submission.quote && <p>原报价金额以冻结明细为准。</p>}
       {current.submission.state !== "accepted" &&
         !confirmUnknown &&
         quoteExpired && (
@@ -1517,6 +1521,7 @@ function EditorWorkspace({
                     recoveredChanged ||
                     !!pendingMode ||
                     activeQuote?.confirmable !== true ||
+                    !quoteAmountKnown ||
                     issues.length > 0 ||
                     !sourceReady ||
                     (quote !== null && quoteSeq !== seq)))
@@ -1804,6 +1809,9 @@ function EditorWorkspace({
                     }}
                   />
                   {parameterControls}
+                  {!activeQuote && (
+                    <QuoteCostDetail preview={model?.pricing_preview} />
+                  )}
                 </PopoverContent>
               </Popover>
               <InputGroupButton

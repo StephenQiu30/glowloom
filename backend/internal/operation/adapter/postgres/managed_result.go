@@ -77,12 +77,36 @@ func (s *Store) ReadManagedResult(ctx context.Context, i application.ProviderDis
 
 // IngestManagedText copies durable provider output to the project candidate table.
 func (s *Store) IngestManagedText(ctx context.Context, i application.ProviderDispatchIdentity) error {
+	return s.ingestManagedText(ctx, i, nil)
+}
+
+// IngestOriginalText writes only while the same accepted recovery remains authorized.
+func (s *Store) IngestOriginalText(ctx context.Context, i application.ProviderDispatchIdentity, d application.WorkflowControlDelivery) error {
+	if d.TargetID != i.OperationID || d.ProjectID != i.ProjectID {
+		return application.ErrInvalidWorkflowControl
+	}
+	return s.ingestManagedText(ctx, i, &d)
+}
+
+func (s *Store) ingestManagedText(ctx context.Context, i application.ProviderDispatchIdentity, d *application.WorkflowControlDelivery) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := s.requireWorker(tx, i.OperationID, true); err != nil {
+		if d != nil {
+			if err := s.CheckOriginalDelivery(tx, *d); err != nil {
+				return err
+			}
+		} else if err := s.requireWorker(tx, i.OperationID, true); err != nil {
 			return err
 		}
+		var status string
+		if err := tx.Raw(`SELECT status FROM operation.operation WHERE id=? FOR UPDATE`, i.OperationID).Scan(&status).Error; err != nil {
+			return err
+		}
+		if d == nil && status != "ingesting" {
+			return application.ErrProviderCallConflict
+		}
+
 		var present int
-		r := tx.Raw(`SELECT 1 FROM operation.operation WHERE id=? AND project_id=? AND status='ingesting' AND capability='text.generate' AND NOT is_delete FOR UPDATE`, i.OperationID, i.ProjectID).Scan(&present)
+		r := tx.Raw(`SELECT 1 FROM operation.operation WHERE id=? AND project_id=? AND capability='text.generate' AND NOT is_delete FOR UPDATE`, i.OperationID, i.ProjectID).Scan(&present)
 		if r.Error != nil {
 			return r.Error
 		}

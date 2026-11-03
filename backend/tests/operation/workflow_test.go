@@ -772,3 +772,29 @@ func registerOperationMockActivities(env *testsuite.TestWorkflowEnvironment) {
 	})
 	register("media.RecordModeration", func(context.Context, map[string]any) error { return nil })
 }
+
+func TestMockManualRecoveryQueriesOnlyOriginalRequest(t *testing.T) {
+	loaded := workflowFixture()
+	loaded.Operation.Status = domain.StatusManual
+	loaded.LastQueryAttempt = 3
+	id := loaded.Operation.ID.String()
+	env := (&testsuite.WorkflowTestSuite{}).NewTestWorkflowEnvironment()
+	registerOperationMockActivities(env)
+	env.OnActivity("flow.LoadOperation", mock.Anything, id).Return(loaded, nil).Once()
+	env.OnActivity("flow.BeginProviderCall", mock.Anything, mock.MatchedBy(func(i application.BeginProviderCallInput) bool {
+		return i.Action == "query" && i.Attempt == 4 && i.OperationID == loaded.Operation.ID
+	})).Return(nil).Once()
+	env.OnActivity("provider.query", mock.Anything, mock.MatchedBy(func(i workflow.ProviderQueryInput) bool {
+		return i.ProviderTaskID == nil && i.ProviderRequestKey != nil && *i.ProviderRequestKey == loaded.ProviderRequestKey
+	})).Return(workflow.ProviderQueryOutput{State: workflow.ProviderQueryPending}, nil).Once()
+	env.OnActivity("flow.CompleteProviderCall", mock.Anything, mock.MatchedBy(func(i application.CompleteProviderCallInput) bool {
+		return i.Action == "query" && i.Attempt == 4 && i.State == "pending"
+	})).Return(nil).Once()
+	env.RegisterDelayedCallback(func() { env.SignalWorkflow("recover", nil) }, time.Second)
+	env.RegisterDelayedCallback(env.CancelWorkflow, 2*time.Second)
+	env.ExecuteWorkflow(workflow.OperationWorkflow, workflow.OperationInput{OperationID: id})
+	if !temporal.IsCanceledError(env.GetWorkflowError()) {
+		t.Fatalf("manual recovery closed execution: %v", env.GetWorkflowError())
+	}
+	env.AssertExpectations(t)
+}

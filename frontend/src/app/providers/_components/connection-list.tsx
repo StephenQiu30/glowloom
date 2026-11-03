@@ -107,6 +107,7 @@ function ConnectionMenu({
   );
 }
 export function ConnectionList({
+  adapters,
   items,
   onSelect,
   onTest,
@@ -115,6 +116,7 @@ export function ConnectionList({
   selection,
   disabled,
 }: {
+  adapters?: API.AdapterMetadata[];
   pendingCredential?: string;
   items: ConnectionRow[];
   onTest: (id: string, trigger?: HTMLElement) => void;
@@ -140,7 +142,13 @@ export function ConnectionList({
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
               {mobile ? (
-                <ProviderLogo adapterKey={row.original.provider?.adapter_key} />
+                <ProviderLogo
+                  adapterKey={row.original.provider?.adapter_key}
+                  metadata={adapters?.find(
+                    (item) =>
+                      item.adapter_key === row.original.provider?.adapter_key,
+                  )}
+                />
               ) : null}
               <Button
                 variant="link"
@@ -157,7 +165,7 @@ export function ConnectionList({
             </div>
             <span className="text-xs text-muted-foreground">
               {mobile
-                ? `${providerLabel(row.original.provider?.adapter_key)} · `
+                ? `${providerLabel(row.original.provider?.adapter_key, adapters)} · `
                 : ""}
               {regionLabel(row.original.provider?.region)}
               {mobile ? ` · ${row.original.model_count ?? 0} 个模型` : ""}
@@ -171,8 +179,15 @@ export function ConnectionList({
       header: "供应商",
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          <ProviderLogo adapterKey={row.original.provider?.adapter_key} />
-          <span>{providerLabel(row.original.provider?.adapter_key)}</span>
+          <ProviderLogo
+            adapterKey={row.original.provider?.adapter_key}
+            metadata={adapters?.find(
+              (item) => item.adapter_key === row.original.provider?.adapter_key,
+            )}
+          />
+          <span>
+            {providerLabel(row.original.provider?.adapter_key, adapters)}
+          </span>
         </div>
       ),
     },

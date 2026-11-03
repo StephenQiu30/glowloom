@@ -38,7 +38,7 @@ type ObjectReader interface {
 }
 
 func readableRef(location *domain.ObjectLocation, key string) (domain.ObjectRef, error) {
-	if location == nil || location.ID == uuid.Nil || location.Ref.Validate() != nil || location.Ref.Key != key || location.State != "accepted" && location.State != "present" {
+	if !location.Readable(key) {
 		return domain.ObjectRef{}, ErrUnavailable
 	}
 	return location.Ref, nil

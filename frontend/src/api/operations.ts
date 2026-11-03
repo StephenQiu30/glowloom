@@ -130,6 +130,25 @@ export async function confirmOperationQuote(
   });
 }
 
+/** 继续核对或取回原任务 POST /api/operations/${param0}/recover */
+export async function recoverOperation(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.recoverOperationParams,
+  body: API.ProjectRequest,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<any>(`/api/operations/${param0}/recover`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    params: { ...queryParams },
+    data: body,
+    ...(options || {}),
+  });
+}
+
 /** 本人发起的生成历史 GET /api/operations/history */
 export async function listPersonalOperationHistory(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

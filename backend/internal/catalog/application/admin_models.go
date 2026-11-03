@@ -35,6 +35,8 @@ type AdminModelVersion struct {
 
 // AdminPrice contains the published price history, including scheduled prices.
 type AdminPrice struct {
+	SourceURL     *string         `json:"source_url" extensions:"x-nullable"`
+	ReviewedAt    *time.Time      `json:"reviewed_at" extensions:"x-nullable"`
 	ID            uuid.UUID       `json:"id"`
 	VersionNo     int             `json:"version_no"`
 	Unit          string          `json:"unit"`

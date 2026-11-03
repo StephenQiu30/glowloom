@@ -27,7 +27,8 @@ var (
 // IngestRepository writes one generated media asset and its operation output
 // in the same database transaction. It owns no other operation lifecycle state.
 type IngestRepository struct {
-	db *gorm.DB
+	db       *gorm.DB
+	original func(*gorm.DB, uuid.UUID) error
 	scopeAuthority
 }
 
@@ -109,10 +110,10 @@ func (r *IngestRepository) loadOperation(ctx context.Context, operationID uuid.U
 		JOIN catalog.model_profile AS profile ON profile.id = version.model_profile_id
 		JOIN catalog.capability AS capability ON capability.key = profile.capability
 		JOIN catalog.provider AS provider ON provider.id = profile.provider_id
-		WHERE o.id = ?::uuid AND o.status = 'ingesting' AND NOT o.is_delete
+		WHERE o.id = ?::uuid AND (o.status = 'ingesting' OR ?) AND NOT o.is_delete
 		  AND NOT project.is_delete AND NOT version.is_delete
 		  AND NOT profile.is_delete AND NOT provider.is_delete
-	`, operationID.String()).Scan(&row)
+	`, operationID.String(), r.original != nil).Scan(&row)
 	if result.Error != nil {
 		return application.SourceOperation{}, fmt.Errorf("load media source operation: %w", result.Error)
 	}
@@ -171,8 +172,8 @@ func (r *IngestRepository) SaveOutput(ctx context.Context, asset domain.MediaAss
 			saved = existing
 			return nil
 		}
-		if row.Status != "ingesting" {
-			return ErrOperationNotIngesting
+		if err := r.requireIngestState(row.Status); err != nil {
+			return err
 		}
 		if err := acceptIngestLocations(tx, asset, renditions); err != nil {
 			return err
@@ -301,7 +302,10 @@ func (r *IngestRepository) RecordModeration(ctx context.Context, operationID, ou
 			((row.ModerationReason == nil && reason == "") || (row.ModerationReason != nil && *row.ModerationReason == reason)) {
 			return nil
 		}
-		if op.Status != "ingesting" || row.ModerationStatus != string(domain.ModerationPending) ||
+		if err := r.requireIngestState(op.Status); err != nil {
+			return err
+		}
+		if row.ModerationStatus != string(domain.ModerationPending) ||
 			row.AssetStatus != string(domain.StatusProcessing) || row.AssetModeration != string(domain.ModerationPending) {
 			return ErrOutputConflict
 		}
@@ -346,6 +350,9 @@ func NewScopedIngestRepository(db *gorm.DB, scopes ScopeAccessFactory) *IngestRe
 	return &IngestRepository{db: db, scopeAuthority: scopeAuthority{scopes: scopes}}
 }
 func (r *IngestRepository) authorizeOperation(tx *gorm.DB, id uuid.UUID, write bool) error {
+	if r.original != nil {
+		return r.original(tx, id)
+	}
 	var row struct {
 		ProjectID, OrgID uuid.UUID
 		ConfirmedBy      *uuid.UUID
@@ -371,7 +378,9 @@ func (r *IngestRepository) LoadOperation(ctx context.Context, id uuid.UUID) (app
 			return err
 		}
 		var err error
-		out, err = NewScopedIngestRepository(tx, r.scopes).loadOperation(ctx, id)
+		bound := *r
+		bound.db = tx
+		out, err = bound.loadOperation(ctx, id)
 		return err
 	})
 	return out, err

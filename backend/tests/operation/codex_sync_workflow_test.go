@@ -155,3 +155,43 @@ func registerSyncWorkflowActivities(env *testsuite.TestWorkflowEnvironment) {
 	}, activity.RegisterOptions{Name: "flow.LoadProviderCost"})
 	env.RegisterActivityWithOptions(func(context.Context, string) (*application.ProviderReceipt, error) { return nil, nil }, activity.RegisterOptions{Name: "flow.RecoverProviderImage"})
 }
+
+func TestFinalReviewCodexManualRecoverMustConsultOriginalReceipt(t *testing.T) {
+	loaded := syncWorkflowFixture()
+	loaded.Operation.Status = domain.StatusManual
+	id := loaded.Operation.ID.String()
+	env := (&testsuite.WorkflowTestSuite{}).NewTestWorkflowEnvironment()
+	registerOperationMockActivities(env)
+	registerSyncWorkflowActivities(env)
+	env.OnActivity("flow.LoadOperation", mock.Anything, id).Return(loaded, nil).Once()
+	env.OnActivity("flow.CheckConsent", mock.Anything, id).Return(nil).Maybe()
+	var checks int
+	env.OnActivity("flow.RecoverProviderImage", mock.Anything, id).Return(func(context.Context, string) (*application.ProviderReceipt, error) { checks++; return nil, nil }).Maybe()
+	env.RegisterDelayedCallback(func() { env.SignalWorkflow("recover", nil) }, time.Second)
+	env.RegisterDelayedCallback(env.CancelWorkflow, 2*time.Second)
+	env.ExecuteWorkflow(workflow.OperationWorkflow, workflow.OperationInput{OperationID: id})
+	t.Logf("original receipt checks after recovery signal=%d; workflow=%v", checks, env.GetWorkflowError())
+	if checks != 1 {
+		t.Fatal("expected one original receipt lookup, no resubmit/settle")
+	}
+}
+
+func TestLegacyManualSignalReplaysAndNewTaggedRecoveryChecksReceipt(t *testing.T) {
+	loaded := syncWorkflowFixture()
+	loaded.Operation.Status = domain.StatusManual
+	id := loaded.Operation.ID.String()
+	env := (&testsuite.WorkflowTestSuite{}).NewTestWorkflowEnvironment()
+	registerOperationMockActivities(env)
+	registerSyncWorkflowActivities(env)
+	env.OnActivity("flow.LoadOperation", mock.Anything, id).Return(loaded, nil).Once()
+	env.OnGetVersion("manual-original-check-v1", temporalworkflow.DefaultVersion, 1).Return(temporalworkflow.DefaultVersion).Once()
+	env.OnActivity("flow.RecoverProviderImage", mock.Anything, id).Return((*application.ProviderReceipt)(nil), nil).Once()
+	env.RegisterDelayedCallback(func() { env.SignalWorkflow("recover", nil) }, time.Second)
+	env.RegisterDelayedCallback(func() { env.SignalWorkflow("recover", map[string]bool{"check_original": true}) }, 2*time.Second)
+	env.RegisterDelayedCallback(env.CancelWorkflow, 3*time.Second)
+	env.ExecuteWorkflow(workflow.OperationWorkflow, workflow.OperationInput{OperationID: id})
+	if !temporal.IsCanceledError(env.GetWorkflowError()) {
+		t.Fatalf("old manual history closed: %v", env.GetWorkflowError())
+	}
+	env.AssertExpectations(t)
+}

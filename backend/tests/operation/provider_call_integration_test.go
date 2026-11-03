@@ -174,7 +174,7 @@ func TestMockProviderCallEvidenceSettlesOnce(t *testing.T) {
 	}
 }
 
-func TestRealProviderRejectedSubmissionSettlesZero(t *testing.T) {
+func TestRealProviderUnclassifiedRejectionCannotSettleZero(t *testing.T) {
 	database := operationStoreDB(t)
 	opID, store := seedProviderCallOperation(t, database)
 	if err := database.Exec(`
@@ -204,15 +204,19 @@ func TestRealProviderRejectedSubmissionSettlesZero(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if cost, err := store.LoadProviderCost(t.Context(), opID); err != nil || cost.ActualCostMicros != 0 || !cost.HasSubmission {
-		t.Fatalf("rejected provider charge = %+v, %v; want proven zero", cost, err)
+	// Reproduce already-persisted pre-fix rejection and its fictitious zero.
+	if err := database.Exec(`UPDATE operation.provider_call SET outcome='error',response_summary='{"state":"rejected"}',cost_micros=0,dispatch_started_at=now() WHERE operation_id=?`, opID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CompleteProviderCall(t.Context(), application.CompleteProviderCallInput{OperationID: opID, Action: "submit", Attempt: 1, Outcome: "error", State: "rejected"}); err != nil {
+		t.Fatalf("legacy rejection activity replay: %v", err)
+	}
+	if _, err := store.LoadProviderCost(t.Context(), opID); !errors.Is(err, application.ErrProviderCostUnknown) {
+		t.Fatalf("rejection cost = %v", err)
 	}
 	finalizer := app.NewOperationFinalizer(database, store, pgbilling.NewStore(database))
-	if err := finalizer.FinalizeOperation(t.Context(), operationflow.SettlementInput{
-		OperationID: opID.String(), From: domain.StatusSubmitting, To: domain.StatusFailed,
-		ActualCostMicros: 0, FailureCode: "provider_rejected",
-	}); err != nil {
-		t.Fatalf("real provider rejection did not settle at zero: %v", err)
+	if err := finalizer.FinalizeOperation(t.Context(), operationflow.SettlementInput{OperationID: opID.String(), From: domain.StatusSubmitting, To: domain.StatusFailed, FailureCode: "provider_rejected"}); !errors.Is(err, application.ErrProviderCostUnknown) {
+		t.Fatalf("unverified zero settlement = %v", err)
 	}
 }
 

@@ -1,9 +1,17 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import React, { useState } from "react";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 export interface ProposalData {
   proposal_id: string;
@@ -28,7 +36,7 @@ export function ProposalApprovalCard({
   disabled = false,
 }: ProposalApprovalCardProps) {
   const [submitting, setSubmitting] = useState(false);
-  const [rejectReason, setRejectReason] = useState('');
+  const [rejectReason, setRejectReason] = useState("");
   const [showRejectInput, setShowRejectInput] = useState(false);
 
   const costYuan = (proposal.estimated_cost_micros / 1_000_000).toFixed(2);
@@ -45,7 +53,7 @@ export function ProposalApprovalCard({
   const handleReject = async () => {
     try {
       setSubmitting(true);
-      await onReject(proposal.proposal_id, rejectReason || '用户驳回了提案');
+      await onReject(proposal.proposal_id, rejectReason || "用户驳回了提案");
     } finally {
       setSubmitting(false);
       setShowRejectInput(false);
@@ -53,27 +61,27 @@ export function ProposalApprovalCard({
   };
 
   return (
-    <Card className="border-amber-500/40 bg-amber-500/5 shadow-md my-4">
+    <Card className="my-4 shadow-md">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-950/40">
-            待审批生成提案 (Proposal Yield)
-          </Badge>
-          <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+          <Badge variant="outline">待审批生成提案 (Proposal Yield)</Badge>
+          <span className="text-sm font-semibold text-foreground">
             预估费用: ¥{costYuan}
           </span>
         </div>
-        <CardTitle className="text-base font-medium mt-2">{proposal.summary}</CardTitle>
-        <CardDescription className="text-xs text-muted-foreground font-mono">
+        <CardTitle className="mt-2 text-base font-medium">
+          {proposal.summary}
+        </CardTitle>
+        <CardDescription className="font-mono text-xs text-muted-foreground">
           操作类型: {proposal.action}
         </CardDescription>
       </CardHeader>
 
       <CardContent className="pb-3 text-sm">
         {proposal.data && (
-          <div className="bg-background/80 rounded p-2.5 text-xs font-mono overflow-x-auto border max-h-40">
+          <div className="max-h-40 overflow-x-auto rounded border bg-background/80 p-2.5 font-mono text-xs">
             <pre>
-              {typeof proposal.data === 'string'
+              {typeof proposal.data === "string"
                 ? proposal.data
                 : JSON.stringify(proposal.data, null, 2)}
             </pre>
@@ -82,12 +90,13 @@ export function ProposalApprovalCard({
 
         {showRejectInput && (
           <div className="mt-3">
-            <input
+            <Input
               type="text"
+              aria-label="修改意见或驳回原因"
               placeholder="请输入修改意见或驳回原因..."
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
-              className="w-full text-xs rounded border px-2.5 py-1.5 bg-background"
+              className="w-full rounded border bg-background px-2.5 py-1.5 text-xs"
             />
           </div>
         )}
@@ -109,9 +118,8 @@ export function ProposalApprovalCard({
               size="sm"
               disabled={disabled || submitting}
               onClick={handleApprove}
-              className="bg-amber-600 hover:bg-amber-700 text-white"
             >
-              {submitting ? '审批中...' : '批准并生成'}
+              {submitting ? "审批中..." : "批准并生成"}
             </Button>
           </>
         ) : (
@@ -130,7 +138,7 @@ export function ProposalApprovalCard({
               disabled={submitting}
               onClick={handleReject}
             >
-              {submitting ? '提交中...' : '确认驳回'}
+              {submitting ? "提交中..." : "确认驳回"}
             </Button>
           </>
         )}

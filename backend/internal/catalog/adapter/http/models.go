@@ -40,6 +40,8 @@ type ModelVersion struct {
 
 // ModelPrice exposes the currently effective price for estimates.
 type ModelPrice struct {
+	SourceURL     *string         `json:"source_url" extensions:"x-nullable"`
+	ReviewedAt    *time.Time      `json:"reviewed_at" extensions:"x-nullable"`
 	ID            uuid.UUID       `json:"id"`
 	VersionNo     int             `json:"version_no"`
 	Unit          string          `json:"unit"`
@@ -50,21 +52,32 @@ type ModelPrice struct {
 }
 
 // ModelResponse is safe display data, excluding provider URLs and credentials.
+// PricingPreview describes catalog information, never a confirmation ticket.
+type PricingPreview struct {
+	AmountKind     string     `json:"amount_kind"`
+	AmountMicros   *int64     `json:"amount_micros" extensions:"x-nullable"`
+	Confirmable    bool       `json:"confirmable"`
+	PriceVersionID *uuid.UUID `json:"price_version_id" extensions:"x-nullable"`
+	Unit           string     `json:"unit,omitempty"`
+	Currency       string     `json:"currency,omitempty"`
+}
+
 type ModelResponse struct {
-	ID                   uuid.UUID     `json:"id"`
-	Key                  string        `json:"key"`
-	DisplayName          string        `json:"display_name"`
-	Capability           string        `json:"capability"`
-	InputRoles           []string      `json:"input_roles"`
-	Status               string        `json:"status"`
-	ProviderID           uuid.UUID     `json:"provider_id"`
-	ProviderName         string        `json:"provider_name"`
-	Region               string        `json:"region"`
-	ProviderStatus       string        `json:"provider_status"`
-	CredentialPresent    bool          `json:"credential_present"`
-	CredentialTestResult *string       `json:"credential_test_result" extensions:"x-nullable"`
-	CurrentVersion       *ModelVersion `json:"current_version" extensions:"x-nullable"`
-	CurrentPrice         *ModelPrice   `json:"current_price" extensions:"x-nullable"`
+	PricingPreview       PricingPreview `json:"pricing_preview"`
+	ID                   uuid.UUID      `json:"id"`
+	Key                  string         `json:"key"`
+	DisplayName          string         `json:"display_name"`
+	Capability           string         `json:"capability"`
+	InputRoles           []string       `json:"input_roles"`
+	Status               string         `json:"status"`
+	ProviderID           uuid.UUID      `json:"provider_id"`
+	ProviderName         string         `json:"provider_name"`
+	Region               string         `json:"region"`
+	ProviderStatus       string         `json:"provider_status"`
+	CredentialPresent    bool           `json:"credential_present"`
+	CredentialTestResult *string        `json:"credential_test_result" extensions:"x-nullable"`
+	CurrentVersion       *ModelVersion  `json:"current_version" extensions:"x-nullable"`
+	CurrentPrice         *ModelPrice    `json:"current_price" extensions:"x-nullable"`
 }
 
 // ModelPage is one bounded catalog page.
@@ -150,7 +163,7 @@ func (h *Handler) ListModels(c *gin.Context) {
 	}
 	response := ModelPage{Items: make([]ModelResponse, 0, len(page.Models))}
 	for _, model := range page.Models {
-		item := ModelResponse{ID: model.ID, Key: model.Key, DisplayName: model.DisplayName, Capability: model.Capability, Status: string(model.Status), ProviderID: model.ProviderID,
+		item := ModelResponse{PricingPreview: PricingPreview{AmountKind: "unknown"}, ID: model.ID, Key: model.Key, DisplayName: model.DisplayName, Capability: model.Capability, Status: string(model.Status), ProviderID: model.ProviderID,
 			InputRoles:   append([]string{}, model.InputRoles...),
 			ProviderName: model.ProviderName, Region: string(model.ProviderRegion), ProviderStatus: string(model.ProviderStatus), CredentialPresent: model.CredentialPresent}
 		if model.CredentialTestResult != nil {
@@ -161,7 +174,8 @@ func (h *Handler) ListModels(c *gin.Context) {
 			item.CurrentVersion = &ModelVersion{ID: v.ID, VersionNo: v.VersionNo, Modes: v.Modes, Limits: v.Limits, ParamSchema: v.ParamSchema}
 		}
 		if p := model.CurrentPrice; p != nil {
-			item.CurrentPrice = &ModelPrice{ID: p.ID, VersionNo: p.VersionNo, Unit: p.Unit, Rule: p.Rule, Currency: p.Currency, FXRateToCNY: p.FXRateToCNY, EffectiveFrom: p.EffectiveFrom}
+			item.PricingPreview = PricingPreview{AmountKind: "unit_only", PriceVersionID: &p.ID, Unit: p.Unit, Currency: p.Currency}
+			item.CurrentPrice = &ModelPrice{SourceURL: p.SourceURL, ReviewedAt: p.ReviewedAt, ID: p.ID, VersionNo: p.VersionNo, Unit: p.Unit, Rule: p.Rule, Currency: p.Currency, FXRateToCNY: p.FXRateToCNY, EffectiveFrom: p.EffectiveFrom}
 		}
 		response.Items = append(response.Items, item)
 	}

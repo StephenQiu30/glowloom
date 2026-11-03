@@ -18,6 +18,7 @@ const api = vi.hoisted(() => ({
   get: vi.fn(),
   list: vi.fn(),
   cancel: vi.fn(),
+  recover: vi.fn(),
   identity: vi.fn(),
   preferences: vi.fn(),
   create: vi.fn(),
@@ -43,6 +44,7 @@ vi.mock("@/api/operations", () => ({
   getOperation: api.get,
   listProjectOperations: api.list,
   cancelOperation: api.cancel,
+  recoverOperation: api.recover,
 }));
 vi.mock("@/api/promptEditor", () => ({
   validatePromptFragment: api.validate,
@@ -1118,6 +1120,14 @@ it("文档详情只展开选定结果，仍保留完整任务作为复用来源"
     id,
     project_id: project.id,
     status: "completed",
+    billing_outcome: {
+      charge_state: "settled",
+      charged_micros: 1,
+      delivery_state: "ready",
+      regenerate: "confirm",
+      provider_settlement_state: "unknown",
+      reconciliation_required: false,
+    },
     capability: "text.structured",
     inputs: [{ role: "prompt", text: "原始提示词" }],
     params: { seed: 42 },
@@ -1326,5 +1336,294 @@ it("音频草稿保存后按来源指针报价，正文引用为空且不自动�
   expect(api.create.mock.calls[0][1].draft.references).toEqual([]);
   expect(api.create.mock.calls[0][1].draft.mode).toBe("text2audio");
   expect(api.quote.mock.calls[0][1].media_inputs).toBeUndefined();
+  expect(api.confirm).not.toHaveBeenCalled();
+});
+
+it("费用未决只允许原任务恢复且同一恢复请求复用幂等键", async () => {
+  api.get.mockResolvedValue({
+    id,
+    project_id: project.id,
+    status: "manual",
+    outputs: [],
+    billing_outcome: {
+      charge_state: "pending",
+      delivery_state: "recoverable",
+      regenerate: "blocked",
+      reconciliation_required: true,
+    },
+  });
+  api.recover.mockRejectedValueOnce(new Error("reply lost")).mockResolvedValue({
+    target_id: id,
+    target_type: "operation",
+    action: "recover",
+    accepted: true,
+  });
+  render(<TaskDetail projectID={project.id} id={id} onReuse={vi.fn()} />);
+  fireEvent.click(
+    await screen.findByRole("button", { name: "继续取回原任务" }),
+  );
+  await waitFor(() => expect(api.recover).toHaveBeenCalledTimes(1));
+  await waitFor(() =>
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "继续取回原任务",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "继续取回原任务" }));
+  await waitFor(() => expect(api.recover).toHaveBeenCalledTimes(2));
+  expect(api.recover.mock.calls[0][2].headers["Idempotency-Key"]).toBe(
+    api.recover.mock.calls[1][2].headers["Idempotency-Key"],
+  );
+  expect(screen.queryByRole("button", { name: "复用参数重新报价" })).toBeNull();
+  expect(api.confirm).not.toHaveBeenCalled();
+  expect(api.quote).not.toHaveBeenCalled();
+});
+
+it("已扣费终态恢复交付后仍展示原正文，执行失败不伪称退款", async () => {
+  api.get.mockResolvedValue({
+    id,
+    project_id: project.id,
+    status: "failed",
+    capability: "text.generate",
+    outputs: [
+      { id, kind: "json", moderation_status: "passed", text: "取回的原正文" },
+    ],
+    billing_outcome: {
+      charge_state: "settled",
+      charged_micros: 19,
+      delivery_state: "ready",
+      regenerate: "confirm",
+      provider_settlement_state: "unknown",
+      reconciliation_required: false,
+    },
+  });
+  render(<TaskDetail projectID={project.id} id={id} />);
+  await screen.findByText("取回的原正文");
+  expect(screen.getByText(/实扣：¥0.000019/)).toBeTruthy();
+  expect(screen.queryByText(/退款已入账/)).toBeNull();
+  expect(api.quote).not.toHaveBeenCalled();
+});
+it("切换项目后迟到的原恢复回执不能覆盖当前任务或锁住按钮", async () => {
+  let reply!: (value: API.WorkflowControlResult) => void;
+  const other = "77777777-7777-4777-8777-777777777777";
+  const original = {
+    id,
+    project_id: project.id,
+    status: "manual",
+    outputs: [],
+    billing_outcome: {
+      charge_state: "pending",
+      delivery_state: "recoverable",
+      regenerate: "blocked",
+      reconciliation_required: true,
+    },
+  };
+  api.get
+    .mockResolvedValueOnce(original)
+    .mockResolvedValue({ ...original, project_id: other });
+  api.recover.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        reply = resolve;
+      }),
+  );
+  const { rerender } = render(<TaskDetail projectID={project.id} id={id} />);
+  fireEvent.click(
+    await screen.findByRole("button", { name: "继续取回原任务" }),
+  );
+  await waitFor(() => expect(api.recover).toHaveBeenCalledOnce());
+  rerender(<TaskDetail projectID={other} id={id} />);
+  await waitFor(() =>
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "继续取回原任务",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false),
+  );
+  const calls = api.get.mock.calls.length;
+  reply({
+    target_id: id,
+    target_type: "operation",
+    action: "recover",
+    accepted: true,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(api.get.mock.calls.length).toBe(calls);
+  expect(api.quote).not.toHaveBeenCalled();
+});
+
+it.each([undefined, -1, Number.MAX_SAFE_INTEGER + 1])(
+  "恢复报价金额%s不能展示时禁止新确认",
+  async (amount) => {
+    api.create.mockImplementation(async (_, body) => {
+      const result = saved(body);
+      result.draft = {
+        ...result.draft,
+        modelVersion: version,
+        mode: "text_to_image",
+      };
+      current = {
+        epoch: 1,
+        submission: {
+          id,
+          state: "quoted",
+          operation_id: id,
+          confirm_key: "confirm-key",
+          quote: { ...quote, quote_micros: amount },
+          input_source: {
+            kind: "prompt_draft",
+            draft_id: id,
+            revision: result.revision,
+          },
+          draft: {
+            ...result.draft,
+            mode: "text_to_image",
+            modelVersion: version,
+          },
+        },
+      };
+      return result;
+    });
+    await open();
+    const button = await screen.findByRole("button", {
+      name: "确认费用并生成",
+    });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(button);
+    expect(api.confirm).not.toHaveBeenCalled();
+  },
+);
+it("无法显示金额仍可沿原幂等键核对已发出的未知确认", async () => {
+  api.confirm.mockImplementationOnce(async () => {
+    quote.quote_micros = Number.MAX_SAFE_INTEGER + 1;
+    throw new RequestError("request_unconfirmed");
+  });
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "确认费用并生成" }),
+  );
+  const retry = await screen.findByRole("button", { name: "重试原确认" });
+  await waitFor(() =>
+    expect((retry as HTMLButtonElement).disabled).toBe(false),
+  );
+  fireEvent.click(retry);
+  await waitFor(() => expect(api.confirm).toHaveBeenCalledTimes(2));
+  expect(api.confirm.mock.calls[0]).toEqual(api.confirm.mock.calls[1]);
+});
+
+it.each(["failed", "manual"])(
+  "%s接受恢复后持续读取原任务直到完整交付，并停止轮询",
+  async (status) => {
+    const original = {
+      id,
+      project_id: project.id,
+      status,
+      capability: "text.generate",
+      outputs: [],
+      billing_outcome: {
+        charge_state: "settled",
+        charged_micros: 19,
+        delivery_state: "recoverable",
+        regenerate: "blocked",
+        reconciliation_required: false,
+      },
+    };
+    api.get
+      .mockResolvedValueOnce(original)
+      .mockResolvedValueOnce(original)
+      .mockResolvedValue({
+        ...original,
+        outputs: [
+          {
+            id,
+            kind: "json",
+            moderation_status: "passed",
+            text: "异步恢复原正文",
+          },
+        ],
+        billing_outcome: {
+          ...original.billing_outcome,
+          delivery_state: "ready",
+          regenerate: "confirm",
+        },
+      });
+    api.recover.mockResolvedValue({
+      target_id: id,
+      target_type: "operation",
+      action: "recover",
+      accepted: true,
+    });
+    render(<TaskDetail projectID={project.id} id={id} />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "继续取回原任务" }),
+    );
+    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
+    await screen.findByText("异步恢复原正文", {}, { timeout: 4500 });
+    expect(api.get).toHaveBeenCalledTimes(3);
+    await new Promise((resolve) => setTimeout(resolve, 3100));
+    expect(api.get).toHaveBeenCalledTimes(3);
+    expect(
+      api.get.mock.calls.every(
+        ([params]) => params.id === id && params.project_id === project.id,
+      ),
+    ).toBe(true);
+    expect(api.quote).not.toHaveBeenCalled();
+    expect(api.confirm).not.toHaveBeenCalled();
+  },
+  10000,
+);
+it("new explicit retry after acknowledged original query is still pending yields new recovery event", async () => {
+  const state = {
+    id,
+    project_id: project.id,
+    status: "manual",
+    inputs: [],
+    outputs: [],
+    billing_outcome: {
+      charge_state: "pending",
+      delivery_state: "recoverable",
+      regenerate: "blocked",
+    },
+  };
+  api.get.mockResolvedValue(state);
+  api.recover.mockResolvedValue({
+    target_id: id,
+    target_type: "operation",
+    action: "recover",
+    accepted: true,
+  });
+  render(<TaskDetail projectID={project.id} id={id} />);
+  fireEvent.click(
+    await screen.findByRole("button", { name: "继续取回原任务" }),
+  );
+  await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
+  fireEvent.click(screen.getByRole("button", { name: "继续取回原任务" }));
+  await waitFor(() => expect(api.recover).toHaveBeenCalledTimes(2));
+  expect(api.recover.mock.calls[0][2].headers["Idempotency-Key"]).not.toBe(
+    api.recover.mock.calls[1][2].headers["Idempotency-Key"],
+  );
+});
+
+it.each([true, false])("确认面板展示服务端冻结系数：%s", async (provided) => {
+  if (provided)
+    quote.quote_detail = {
+      multipliers: { mode_text2img: 1.5, resolution_2k: 1.25 },
+    };
+  await compactWorkspace();
+  fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
+  await screen.findByRole("button", { name: "确认费用并生成" });
+  fireEvent.click(screen.getByRole("button", { name: "费用明细" }));
+  if (provided) {
+    expect(screen.getByText("模式系数（text2img）")).toBeTruthy();
+    expect(screen.getByText("分辨率系数（2k）")).toBeTruthy();
+    expect(screen.getByText("1.5")).toBeTruthy();
+    expect(screen.getByText("1.25")).toBeTruthy();
+  } else expect(screen.queryByText(/模式系数|分辨率系数/)).toBeNull();
   expect(api.confirm).not.toHaveBeenCalled();
 });

@@ -164,7 +164,7 @@ func runMockProvider(ctx, flowCtx workflow.Context, loaded application.WorkflowO
 		return ErrInvalidOperationInput
 	}
 	status := loaded.Operation.Status
-	calls := &providerCalls{flowCtx: flowCtx, operationID: id}
+	calls := &providerCalls{flowCtx: flowCtx, operationID: id, queryAttempt: loaded.LastQueryAttempt}
 	cancelChannel := workflow.GetSignalChannel(ctx, "cancel")
 	cancelHandled := false
 	taskID := ""
@@ -271,6 +271,12 @@ func runMockProvider(ctx, flowCtx workflow.Context, loaded application.WorkflowO
 				return err
 			}
 			switch resolution.Outcome {
+			case "retry":
+				// The public signal carries no task identity or resolution. Read
+				// only the frozen request key, record the observation and wait.
+				if _, err := calls.query(ctx, loaded.Provider.Queue, ProviderQueryInput{ProviderRequestKey: &requestKey}); err != nil && !errors.Is(err, errNeedsReconciliation) {
+					return err
+				}
 			case "not_executed":
 				if err := workflow.ExecuteActivity(flowCtx, "flow.CheckManualNotExecuted", id.String()).Get(flowCtx, nil); err != nil {
 					if isApplicationErrorType(err, "manual_resolution_unverified") {
@@ -514,11 +520,7 @@ func isApplicationErrorType(err error, target string) bool {
 }
 
 func waitManualResolution(ctx workflow.Context) (ManualResolution, error) {
-	var resolution ManualResolution
-	if !workflow.GetSignalChannel(ctx, "resolve_manual").Receive(ctx, &resolution) {
-		return ManualResolution{}, ctx.Err()
-	}
-	return resolution, nil
+	return waitImageManualResolution(ctx)
 }
 
 func providerActivityContext(ctx workflow.Context, queue string, timeout time.Duration, attempts int32) workflow.Context {

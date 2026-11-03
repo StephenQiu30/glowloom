@@ -236,6 +236,10 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 	if candidate != nil && (*candidate == uuid.Nil || !reusable || input.ForceRegenerate) {
 		return PreparedFreeQuote{}, ErrInvalidFreeQuote
 	}
+	var priceFields map[string]json.RawMessage
+	if json.Unmarshal(catalog.Price.Rule, &priceFields) != nil || priceFields["reference_scope"] != nil {
+		return PreparedFreeQuote{}, ErrFreeQuoteModelMissing
+	}
 	pricing := PricingInput{OutputCount: int64(input.OutputCount), Mode: input.Mode,
 		CharacterCount:     int64(utf8.RuneCountInString(input.Prompt)),
 		AllowedDurationsMS: limits.DurationsMS,

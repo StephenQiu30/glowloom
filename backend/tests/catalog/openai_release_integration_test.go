@@ -4,12 +4,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
+
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
 )
 
 func TestOpenAITextAndImageCanCreateReleases(t *testing.T) {
@@ -31,6 +32,7 @@ func TestOpenAITextAndImageCanCreateReleases(t *testing.T) {
 	require.NotEqual(t, uuid.Nil, preset.ID)
 	connection, err := presets.Connect(ctx, actor, preset.ID, catalogapp.ConnectPresetInput{RequestID: uuid.New(), VersionID: preset.VersionID, CatalogVersion: preset.ModelCatalog.Version, CandidateKeys: []string{"openai-sol", "openai-image-sunburst"}, DirectUse: true})
 	require.NoError(t, err)
+	seedReviewedOnboardingPrices(t, database, actor, connection, false)
 	state, err := catalogapp.NewProviderOnboarding(store).Read(ctx, actor, connection.ProviderID)
 	require.NoError(t, err)
 	require.Len(t, state.Models, 2)

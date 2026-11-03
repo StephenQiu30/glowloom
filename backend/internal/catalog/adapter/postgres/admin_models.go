@@ -71,6 +71,8 @@ type adminVersionRow struct {
 }
 
 type adminPriceRow struct {
+	SourceURL                 *string
+	ReviewedAt                *time.Time
 	ID                        uuid.UUID
 	VersionNo                 int
 	Unit, Rule, Currency      string
@@ -125,7 +127,7 @@ WHERE model_profile_id=?::uuid AND NOT is_delete ORDER BY version_no DESC LIMIT 
 		}
 		var prices []adminPriceRow
 		if err := tx.Raw(`SELECT id,version_no,unit,rule::text AS rule,currency::text AS currency,
-fx_rate_to_cny::text AS fx_rate_to_cny,effective_from,create_time FROM catalog.price_rule_version
+source_url,reviewed_at,fx_rate_to_cny::text AS fx_rate_to_cny,effective_from,create_time FROM catalog.price_rule_version
 WHERE model_profile_id=?::uuid AND NOT is_delete ORDER BY version_no DESC LIMIT 1001`, id).Scan(&prices).Error; err != nil {
 			return fmt.Errorf("read admin prices: %w", err)
 		}
@@ -133,7 +135,7 @@ WHERE model_profile_id=?::uuid AND NOT is_delete ORDER BY version_no DESC LIMIT 
 			return fmt.Errorf("price version history exceeds bound")
 		}
 		for _, p := range prices {
-			result.Prices = append(result.Prices, application.AdminPrice{ID: p.ID, VersionNo: p.VersionNo, Unit: p.Unit, Rule: json.RawMessage(p.Rule), Currency: p.Currency, FXRateToCNY: p.FXRateToCNY, EffectiveFrom: p.EffectiveFrom, CreateTime: p.CreateTime})
+			result.Prices = append(result.Prices, application.AdminPrice{SourceURL: p.SourceURL, ReviewedAt: p.ReviewedAt, ID: p.ID, VersionNo: p.VersionNo, Unit: p.Unit, Rule: json.RawMessage(p.Rule), Currency: p.Currency, FXRateToCNY: p.FXRateToCNY, EffectiveFrom: p.EffectiveFrom, CreateTime: p.CreateTime})
 		}
 		return nil
 	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})

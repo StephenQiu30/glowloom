@@ -14,6 +14,7 @@ import (
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
 	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 )
@@ -172,6 +173,11 @@ func (s *Store) prepareFreeQuoteItem(ctx context.Context, tx *gorm.DB, actor ide
 	if _, err := readQuoteCanvasSource(tx, input.ProjectID, input.FreeQuoteItemInput); err != nil {
 		return QuoteItem{}, "", err
 	}
+	if input.Source != nil {
+		if err := checkBillingBarrier(tx, domain.Operation{ProjectID: input.ProjectID, Source: input.Source}); err != nil {
+			return QuoteItem{}, "", err
+		}
+	}
 	var compilation *promptapp.Preparation
 	if input.PromptTemplate != nil {
 		if s.promptCompiler == nil {
@@ -275,6 +281,8 @@ type freeQuoteCatalogRow struct {
 	PriceRule          string
 	PriceCurrency      string
 	PriceFXRateToCNY   *string
+	PriceSourceURL     *string
+	PriceReviewedAt    *time.Time
 	PriceEffectiveFrom time.Time
 }
 
@@ -290,7 +298,7 @@ func readFreeQuoteCatalog(tx *gorm.DB, input application.CreateFreeQuoteInput, a
 		       price.unit AS price_unit, price.rule::text AS price_rule,
 		       price.currency::text AS price_currency,
 		       price.fx_rate_to_cny::text AS price_fx_rate_to_cny,
-		       price.effective_from AS price_effective_from
+		       price.source_url AS price_source_url,price.reviewed_at AS price_reviewed_at,price.effective_from AS price_effective_from
 		FROM catalog.model_profile AS m
 		JOIN catalog.provider AS provider
 		  ON provider.id = m.provider_id AND provider.status = 'active' AND NOT provider.is_delete
@@ -303,7 +311,7 @@ func readFreeQuoteCatalog(tx *gorm.DB, input application.CreateFreeQuoteInput, a
 		JOIN catalog.model_profile_version AS v
 		  ON v.id = CASE WHEN provider.adapter_key IN (%[1]s) THEN published.model_version_id ELSE m.current_version_id END AND v.model_profile_id = m.id AND NOT v.is_delete
 		JOIN LATERAL (
-		  SELECT id, version_no, unit, rule, currency, fx_rate_to_cny, effective_from
+		  SELECT id, version_no, unit, rule, currency, fx_rate_to_cny, source_url, reviewed_at, effective_from
 		  FROM catalog.price_rule_version
 		  WHERE (provider.adapter_key NOT IN (%[1]s) OR id=published.price_version_id) AND model_profile_id = m.id AND effective_from <= ? AND NOT is_delete
 		  ORDER BY effective_from DESC, version_no DESC LIMIT 1
@@ -344,7 +352,7 @@ func freeCatalogFromRow(row freeQuoteCatalogRow) (application.FreeQuoteCatalog, 
 			ID: row.PriceID, ModelID: row.ModelID, VersionNo: row.PriceVersionNo,
 			Unit: catalogdomain.PriceUnit(row.PriceUnit), Rule: json.RawMessage(row.PriceRule),
 			Currency: row.PriceCurrency, FXRateToCNY: fx,
-			EffectiveFrom: row.PriceEffectiveFrom,
+			SourceURL: priceSourceText(row.PriceSourceURL), ReviewedAt: row.PriceReviewedAt, EffectiveFrom: row.PriceEffectiveFrom,
 		},
 	}, nil
 }
@@ -442,3 +450,10 @@ func (s *Store) readQuoteMedia(tx *gorm.DB, actor identityapp.Principal, project
 }
 
 var _ application.FreeQuoteCreator = (*Store)(nil)
+
+func priceSourceText(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}

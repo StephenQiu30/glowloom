@@ -63,6 +63,7 @@ func newServiceTestingFixture(t *testing.T, slugs ...string) serviceTestingFixtu
 			require.NoError(t, err)
 		}
 	}
+	seedReviewedOnboardingPrices(t, conn.DB, actor, connected, false)
 	private, public := testCredentialKey(t)
 	der, err := x509.MarshalPKCS8PrivateKey(private)
 	require.NoError(t, err)

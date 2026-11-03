@@ -52,10 +52,11 @@ func (c ProviderConfig) Validate() error {
 // PresetDocument is the complete portable format. Connection and credential identities,
 // headers, validation evidence and executable scripts are unrepresentable.
 type PresetDocument struct {
-	SchemaVersion  int                   `json:"schema_version"`
-	Name           string                `json:"name"`
-	Config         ProviderConfig        `json:"config"`
-	ModelTemplates []PresetModelTemplate `json:"model_templates,omitempty"`
+	AdapterDeclaration *AdapterDeclaration   `json:"adapter_declaration,omitempty"`
+	SchemaVersion      int                   `json:"schema_version"`
+	Name               string                `json:"name"`
+	Config             ProviderConfig        `json:"config"`
+	ModelTemplates     []PresetModelTemplate `json:"model_templates,omitempty"`
 }
 
 // Validate checks the versioned import/export contract.
@@ -63,7 +64,7 @@ func (p PresetDocument) Validate() error {
 	if p.SchemaVersion != 1 || strings.TrimSpace(p.Name) != p.Name || len(p.Name) == 0 || len(p.Name) > 200 {
 		return ErrInvalidPreset
 	}
-	if p.Config.Validate() != nil || len(p.ModelTemplates) > 16 {
+	if p.Config.Validate() != nil || len(p.ModelTemplates) > 16 || (p.AdapterDeclaration != nil && p.AdapterDeclaration.Validate(p.Config) != nil) {
 		return ErrInvalidPreset
 	}
 	seen := map[string]bool{}
@@ -90,16 +91,34 @@ func (p PresetDocument) Digest() string {
 // ParsePreset rejects unknown and duplicate fields instead of silently dropping
 // credentials or resolving ambiguous security-relevant values.
 func ParsePreset(data []byte) (PresetDocument, error) {
-	var p PresetDocument
+	// A local type keeps JSON decoding from recursively invoking UnmarshalJSON.
+	type portablePreset PresetDocument
+	var decoded portablePreset
+	p := PresetDocument{}
 	if len(data) > 262144 || rejectDuplicateFields(json.NewDecoder(bytes.NewReader(data))) != nil {
 		return p, ErrInvalidPreset
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&p) != nil || decoder.Decode(new(any)) != io.EOF || p.Validate() != nil {
+	if decoder.Decode(&decoded) != nil || decoder.Decode(new(any)) != io.EOF {
+		return PresetDocument{}, ErrInvalidPreset
+	}
+	p = PresetDocument(decoded)
+	if p.Validate() != nil {
 		return PresetDocument{}, ErrInvalidPreset
 	}
 	return p, nil
+}
+
+// UnmarshalJSON gives direct create/version requests the same strict document
+// boundary as import preview, including duplicate keys anywhere in the document.
+func (p *PresetDocument) UnmarshalJSON(data []byte) error {
+	decoded, err := ParsePreset(data)
+	if err != nil {
+		return err
+	}
+	*p = decoded
+	return nil
 }
 
 func rejectDuplicateFields(decoder *json.Decoder) error {

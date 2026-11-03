@@ -24,7 +24,7 @@ type revokedDelivery struct {
 func (s *revokedDelivery) CanDeliverWorkflowControl(context.Context, operationevent.ControlDelivery) (bool, error) {
 	return s.err == nil, s.err
 }
-func (s *revokedDelivery) SignalControl(context.Context, string, uuid.UUID, string) error {
+func (s *revokedDelivery) SignalControl(context.Context, operationevent.ControlDelivery) error {
 	s.calls++
 	return nil
 }

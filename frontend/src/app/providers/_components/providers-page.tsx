@@ -69,6 +69,7 @@ import {
   exportProviderPreset,
   listAdminProviders,
   listProviderPresets,
+  listAdminProviderAdapters,
   updateProviderPresetState,
   updateAdminProvider,
 } from "@/api/settings";
@@ -146,6 +147,7 @@ function ProviderAdministration({
         : null;
     target?.focus();
   }
+  const [adapters, setAdapters] = useState<API.AdapterMetadata[]>([]);
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [providers, setProviders] = useState<API.ProviderListItem[]>([]);
   const [selection, setSelection] = useState<{
@@ -211,12 +213,14 @@ function ProviderAdministration({
         { signal: controller.signal },
       ),
       listProviderPresets({ signal: controller.signal }),
+      listAdminProviderAdapters({ signal: controller.signal }),
     ])
-      .then(([connections, registry]) => {
+      .then(([connections, registry, metadata]) => {
         if (controller.signal.aborted) return;
         setProviders(connections.items ?? []);
         setNextCursor(connections.next_cursor ?? "");
         setPresets(registry.items ?? []);
+        setAdapters(metadata);
         setError("");
         setLoading(false);
       })
@@ -301,7 +305,7 @@ function ProviderAdministration({
       (p) =>
         p.provider?.id &&
         matches(
-          `${p.provider.name} ${p.provider.adapter_key} ${providerLabel(p.provider.adapter_key)} ${regionLabel(p.provider.region)}`,
+          `${p.provider.name} ${p.provider.adapter_key} ${providerLabel(p.provider.adapter_key, adapters)} ${regionLabel(p.provider.region)}`,
         ),
     )
     .map((item) => ({ ...item, id: item.provider!.id! }));
@@ -409,6 +413,7 @@ function ProviderAdministration({
             </SelectionBar>
             {visibleProviders.length ? (
               <ConnectionList
+                adapters={adapters}
                 items={visibleProviders}
                 disabled={
                   batch.busy || batch.unresolved || !!pendingKey.pending
@@ -513,6 +518,11 @@ function ProviderAdministration({
                           <h2 className="flex items-center gap-3">
                             <ProviderLogo
                               adapterKey={p.document?.config?.adapter_key}
+                              metadata={adapters.find(
+                                (item) =>
+                                  item.adapter_key ===
+                                  p.document?.config?.adapter_key,
+                              )}
                             />
                             {p.document?.name}
                           </h2>
@@ -667,6 +677,7 @@ function ProviderAdministration({
           </DialogHeader>
           {connect ? (
             <PresetConnect
+              adapters={adapters}
               presets={connectionPresets(
                 presets,
                 pendingCreate.pending?.target,
@@ -723,6 +734,7 @@ function ProviderAdministration({
       </Sheet>
       {editor ? (
         <PresetEditor
+          adapters={adapters}
           returnFocusRef={overlayTrigger}
           key={editor === "new" ? "new" : editor.id}
           preset={editor === "new" ? undefined : editor}

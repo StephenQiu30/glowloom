@@ -1006,6 +1006,8 @@ CREATE TABLE catalog.model_validation (
 );
 
 CREATE TABLE catalog.price_rule_version (
+    source_url text,
+    reviewed_at timestamp with time zone,
     id uuid NOT NULL,
     model_profile_id uuid NOT NULL,
     version_no integer NOT NULL,
@@ -4507,6 +4509,8 @@ CREATE INDEX ix_operation_output_project_media ON operation.operation_output USI
 CREATE INDEX ix_operation_project_status ON operation.operation USING btree (project_id, status, create_time DESC);
 
 CREATE INDEX ix_operation_reuse ON operation.operation USING btree (project_id, input_hash) WHERE (status = 'completed'::text);
+
+CREATE INDEX ix_operation_canvas_billing_target ON operation.operation (project_id, (source_context->>'canvas_id'), (source_context->>'node_id'), (COALESCE(source_context->>'row_id',''))) WHERE NOT is_delete AND source_context IS NOT NULL;
 
 CREATE INDEX ix_operation_target ON operation.operation USING btree (target_type, target_id, create_time DESC);
 

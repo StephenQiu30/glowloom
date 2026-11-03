@@ -21,6 +21,7 @@ import (
 
 // AdminDependencies injects existing audited catalog commands and safe queries.
 type AdminDependencies struct {
+	Adapters          *application.AdapterMetadataQuery
 	Providers         *application.ListProvidersQuery
 	Provider          *application.ProviderDetailQuery
 	CreateProvider    *application.CreateProviderCommand
@@ -53,6 +54,7 @@ func (h *AdminHandler) Register(group *gin.RouterGroup) {
 		}
 		c.Header("Cache-Control", "private, no-store")
 	})
+	admin.GET("/provider-adapters", h.Adapters)
 	admin.GET("/providers", h.ListProviders)
 	admin.POST("/providers", h.CreateProvider)
 	admin.GET("/providers/:id", h.Provider)
@@ -540,6 +542,8 @@ func (h *AdminHandler) PublishVersion(c *gin.Context) {
 
 // PublishPriceRequest publishes the exact price coefficients and effective date.
 type PublishPriceRequest struct {
+	SourceURL        string           `json:"source_url"`
+	ReviewedAt       *time.Time       `json:"reviewed_at"`
 	ExpectedRevision int64            `json:"expected_revision"`
 	VersionNo        int              `json:"version_no"`
 	Unit             domain.PriceUnit `json:"unit"`
@@ -572,7 +576,7 @@ func (h *AdminHandler) PublishPrice(c *gin.Context) {
 	if !httpapi.Decode(c, &b) {
 		return
 	}
-	result, err := h.deps.PublishPrice.Execute(c.Request.Context(), identityhttp.Principal(c), application.PublishPriceRuleInput{ModelID: id, ExpectedRevision: b.ExpectedRevision, VersionNo: b.VersionNo, Unit: b.Unit, Rule: b.Rule, Currency: b.Currency, FXRateToCNY: b.FXRateToCNY, EffectiveFrom: b.EffectiveFrom, RequestID: c.GetHeader("Idempotency-Key")})
+	result, err := h.deps.PublishPrice.Execute(c.Request.Context(), identityhttp.Principal(c), application.PublishPriceRuleInput{SourceURL: b.SourceURL, ReviewedAt: b.ReviewedAt, ModelID: id, ExpectedRevision: b.ExpectedRevision, VersionNo: b.VersionNo, Unit: b.Unit, Rule: b.Rule, Currency: b.Currency, FXRateToCNY: b.FXRateToCNY, EffectiveFrom: b.EffectiveFrom, RequestID: c.GetHeader("Idempotency-Key")})
 	if err != nil {
 		adminError(c, err)
 		return
@@ -609,6 +613,27 @@ func (h *AdminHandler) SetModelStatus(c *gin.Context) {
 		return
 	}
 	result, err := h.deps.SetModelStatus.Execute(c.Request.Context(), identityhttp.Principal(c), application.SetModelStatusInput{ModelID: id, ExpectedRevision: b.ExpectedRevision, Status: b.Status, RequestID: c.GetHeader("Idempotency-Key")})
+	if err != nil {
+		adminError(c, err)
+		return
+	}
+	c.JSON(200, result)
+}
+
+// Adapters returns safe installed protocol and credential input descriptors.
+// @Summary 已安装供应商安全元数据
+// @ID listAdminProviderAdapters
+// @Tags settings
+// @Produce json
+// @Success 200 {array} application.AdapterMetadata
+// @Failure 403 {object} httpapi.Problem
+// @Router /api/admin/provider-adapters [get]
+func (h *AdminHandler) Adapters(c *gin.Context) {
+	if h.deps.Adapters == nil {
+		httpapi.WriteProblem(c, 503, "catalog_unavailable", nil)
+		return
+	}
+	result, err := h.deps.Adapters.List(c.Request.Context(), identityhttp.Principal(c))
 	if err != nil {
 		adminError(c, err)
 		return

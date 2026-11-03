@@ -5,11 +5,12 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
+
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/providerhttp"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
 )
 
 func openAIConfig(t *testing.T) domain.ProviderConfig {
@@ -27,7 +28,7 @@ func TestOpenAIResponsesProtocol(t *testing.T) {
 	for _, tc := range []struct{ name, response, outcome string }{
 		{"completed", `{"status":"completed","output":[{"type":"reasoning"},{"type":"message","status":"completed","content":[{"type":"output_text","text":"fixture reply"}]}],"usage":{"input_tokens":2,"output_tokens":3,"total_tokens":5}}`, "completed"},
 		{"incomplete", `{"status":"incomplete","output":[{"type":"message","content":[{"type":"output_text","text":"partial"}]}]}`, "unknown"},
-		{"refused", `{"status":"completed","output":[{"type":"message","content":[{"type":"refusal","refusal":"no"}]}]}`, "rejected"},
+		{"refused", `{"status":"completed","output":[{"type":"message","content":[{"type":"refusal","refusal":"no"}]}]}`, "unknown"},
 		{"empty", `{"status":"completed","output":[]}`, "unknown"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

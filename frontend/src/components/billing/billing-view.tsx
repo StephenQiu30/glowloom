@@ -131,10 +131,9 @@ export function BillingView({ section = "overview" }: { section?: Section }) {
                     <CardTitle>积分如何计算</CardTitle>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-3">
-                    <p>人民币报价 × 10，向上取整为积分。</p>
+                    <p>每次报价按当时发布并冻结的规则提供积分预估。</p>
                     <p className="text-sm text-muted-foreground">
-                      例如：¥0.26 → 3
-                      积分。每次按整笔任务报价取整，提交前确认。积分计费开放后按此规则展示。
+                      积分展示与人民币微元账本分别核对。预留释放不等于已扣款退款；未知费用需要继续核查。
                     </p>
                   </CardContent>
                 </Card>

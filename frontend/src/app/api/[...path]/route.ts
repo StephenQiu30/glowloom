@@ -474,6 +474,7 @@ const editorCatalogRoutes: typeof identityRoutes = [
     methods: ["GET"],
     query: ["action", "target_id"],
   },
+  { pattern: `admin/provider-adapters`, methods: ["GET"], query: [] },
   { pattern: `admin/provider-presets`, methods: ["GET", "POST"], query: [] },
   {
     pattern: `admin/provider-presets/import-preview`,
@@ -525,7 +526,7 @@ async function proxy(
             ? ["GET"]
             : matches(`operations/${uuid}`)
               ? ["GET"]
-              : matches(`operations/${uuid}/(confirm|cancel)`)
+              : matches(`operations/${uuid}/(confirm|cancel|recover)`)
                 ? ["POST"]
                 : matches(`projects/${uuid}/bible/(character|location|prop)`)
                   ? ["GET", "POST"]

@@ -49,6 +49,7 @@ func TestCreationCandidatesPersistWithCostAndStayDisabled(t *testing.T) {
 			again, err := presets.Connect(ctx, actor, preset.ID, input)
 			require.NoError(t, err)
 			require.Equal(t, connected, again)
+			seedReviewedOnboardingPrices(t, database, actor, connected, true)
 			state, err := catalogapp.NewProviderOnboarding(store).Read(ctx, actor, connected.ProviderID)
 			require.NoError(t, err)
 			require.Equal(t, "disabled", state.Status)

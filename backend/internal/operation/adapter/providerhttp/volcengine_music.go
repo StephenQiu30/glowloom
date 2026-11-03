@@ -240,10 +240,6 @@ func musicError(code int, submitting bool) application.GenerationResult {
 	result := application.GenerationResult{State: "unknown", ProviderTerminalCode: code, ErrorCode: "provider_error"}
 	if submitting {
 		result.Outcome = "unknown"
-		switch code {
-		case 100010, 100011, 200020, 200021, 200022, 200023, 200024, 200026, 200027, 200028, 300061, 300063, 300065, 300066, 400040, 50000001:
-			result.Outcome = "rejected"
-		}
 	}
 	return result
 }

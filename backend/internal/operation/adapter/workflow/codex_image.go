@@ -58,7 +58,12 @@ func runCodexImage(ctx, flowCtx workflow.Context, loaded application.WorkflowOpe
 			}
 			return settleOperation(flowCtx, id.String(), status, domain.StatusFailed, 0, "provider_not_submitted", true)
 		case ProviderSubmitRejected:
-			return settleOperation(flowCtx, id.String(), status, domain.StatusFailed, 0, providerFailureCode(result.Error), false)
+			// Only unversioned histories enter this branch. Replay the old
+			// command; a live finalizer independently verifies provider cost.
+			err := settleOperation(flowCtx, id.String(), status, domain.StatusFailed, 0, providerFailureCode(result.Error), false)
+			if !isApplicationErrorType(err, "provider_cost_unknown") {
+				return err
+			}
 		case ProviderSubmitUnknown:
 		default:
 			return ErrInvalidProviderResult
@@ -108,7 +113,7 @@ func runCodexImage(ctx, flowCtx workflow.Context, loaded application.WorkflowOpe
 			}
 			return nil
 		}
-		if resolution.Outcome == "succeeded" {
+		if resolution.Outcome == "succeeded" || resolution.Outcome == "retry" {
 			// Signals trigger the same receipt/cost check; their task ID or extra
 			// fields never authorize a query, a second turn, or a zero settlement.
 			if err := recoverImageEvidence(flowCtx, loaded); err != nil {
@@ -118,10 +123,31 @@ func runCodexImage(ctx, flowCtx workflow.Context, loaded application.WorkflowOpe
 	}
 }
 
+// New relay signals have no user-controlled task ID. The tag lets even an
+// old history that replayed a nil recovery later process a new explicit check.
+type originalCheckSignal struct {
+	CheckOriginal bool `json:"check_original"`
+}
+
 func waitImageManualResolution(ctx workflow.Context) (ManualResolution, error) {
 	var resolution ManualResolution
+	var signal originalCheckSignal
+	recovered := false
 	channel := workflow.GetSignalChannel(ctx, "resolve_manual")
-	err := workflow.Await(ctx, func() bool { return channel.ReceiveAsync(&resolution) })
+	recoverChannel := workflow.GetSignalChannel(ctx, "recover")
+	err := workflow.Await(ctx, func() bool {
+		if channel.ReceiveAsync(&resolution) {
+			return true
+		}
+		if recoverChannel.ReceiveAsync(&signal) {
+			recovered = true
+			return true
+		}
+		return false
+	})
+	if recovered && (signal.CheckOriginal || workflow.GetVersion(ctx, "manual-original-check-v1", workflow.DefaultVersion, 1) != workflow.DefaultVersion) {
+		resolution = ManualResolution{Outcome: "retry"}
+	}
 	return resolution, err
 }
 
@@ -149,7 +175,7 @@ func recoverImageEvidence(flowCtx workflow.Context, loaded application.WorkflowO
 		return nil
 	}
 	i := receipt.Identity
-	if receipt.Validate() != nil || i.ProjectID != loaded.Operation.ProjectID || i.OperationID != loaded.Operation.ID || i.RequestKey != loaded.ProviderRequestKey ||
+	if receipt.Validate() != nil || i.Attempt != 1 || i.ProjectID != loaded.Operation.ProjectID || i.OperationID != loaded.Operation.ID || i.RequestKey != loaded.ProviderRequestKey ||
 		i.ModelProfileVersionID != *loaded.Operation.ModelProfileVersionID || i.PriceRuleVersionID != *loaded.Operation.PriceRuleVersionID {
 		return nil // Untrusted recovery output cannot establish a billable result.
 	}

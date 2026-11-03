@@ -40,6 +40,9 @@ func (s *Store) LoadProviderImageIdentity(ctx context.Context, operationID uuid.
 	if s == nil || s.db == nil || operationID == uuid.Nil {
 		return application.ProviderDispatchIdentity{}, false, application.ErrInvalidProviderCall
 	}
+	if err := s.AuthorizeWorker(ctx, operationID, false); err != nil {
+		return application.ProviderDispatchIdentity{}, false, err
+	}
 	var row struct {
 		ProjectID, OperationID                    uuid.UUID
 		Attempt                                   int32
@@ -52,7 +55,7 @@ func (s *Store) LoadProviderImageIdentity(ctx context.Context, operationID uuid.
 		FROM operation.provider_call c
 		JOIN operation.operation o ON o.id=c.operation_id AND o.project_id=c.project_id
 		WHERE o.id=?::uuid AND NOT o.is_delete AND NOT c.is_delete
-		  AND c.action='submit' AND c.request_summary->>'dispatch_contract'='v1'
+		  AND c.action='submit' AND c.attempt=1 AND c.dispatch_started_at IS NOT NULL AND c.request_summary->>'dispatch_contract'='v1'
 		  AND c.request_key=o.provider_request_key
 		  AND c.model_profile_version_id=o.model_profile_version_id
 		  AND c.price_rule_version_id=o.price_rule_version_id

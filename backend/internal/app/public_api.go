@@ -17,6 +17,7 @@ import (
 	trialwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/aitrial"
 	biblewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/bible"
 	canvaswire "github.com/StephenQiu30/glowloom-server/backend/internal/app/canvas"
+	catalogwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/catalog"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
 	copywire "github.com/StephenQiu30/glowloom-server/backend/internal/app/projectcopy"
@@ -247,7 +248,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		return nil, err
 	}
 	catalogStore := operationwire.NewCatalogStore(database)
-	cataloghttp.NewPresetHandler(catalogapp.NewProviderPresets(catalogStore)).Register(identityProtected)
+	cataloghttp.NewPresetHandler(catalogapp.NewDeclaredProviderPresets(catalogStore, catalogwire.InstalledProtocol)).Register(identityProtected)
 	cataloghttp.NewConfigHandler(catalogapp.NewProviderConfigs(catalogStore)).Register(identityProtected)
 	cataloghttp.NewReleaseHandler(catalogapp.NewModelReleases(catalogStore)).Register(identityProtected)
 	cataloghttp.NewCheckHandler(catalogapp.NewProviderChecks(catalogStore)).Register(identityProtected)
@@ -293,6 +294,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	prompthttp.NewHandler(promptapp.NewPreferences(operationwire.ProvidePromptPreferenceStore(database), time.Now)).Register(identityProtected)
 	prompthttp.NewDraftHandler(pgprompt.NewDraftStore(database, promptwire.DraftAccess).WithSubjectSources(subjectwire.NewPromptSources)).Register(protected)
 	cataloghttp.NewAdminHandler(cataloghttp.AdminDependencies{
+		Adapters:          catalogwire.NewAdapterMetadata(catalogStore),
 		Providers:         catalogapp.NewListProvidersQuery(catalogStore),
 		Provider:          catalogapp.NewProviderDetailQuery(catalogStore, credentialSchema),
 		CreateProvider:    catalogapp.NewCreateProviderCommand(catalogStore, credentialSchema, time.Now),

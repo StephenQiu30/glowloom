@@ -34,6 +34,19 @@ var (
 func RegisterDriver(driver ProtocolDriver, adapterKeys ...string) {
 	registryMu.Lock()
 	defer registryMu.Unlock()
+	if driver == nil || len(adapterKeys) == 0 {
+		panic("register missing protocol driver")
+	}
+	seen := make(map[string]bool, len(adapterKeys))
+	for _, key := range adapterKeys {
+		if key == "" || seen[key] {
+			panic("register invalid protocol key")
+		}
+		if _, exists := defaultRegistry[key]; exists {
+			panic("register duplicate protocol driver")
+		}
+		seen[key] = true
+	}
 	for _, key := range adapterKeys {
 		defaultRegistry[key] = driver
 	}

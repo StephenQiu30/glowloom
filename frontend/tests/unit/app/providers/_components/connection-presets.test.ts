@@ -2,7 +2,6 @@ import { expect, it } from "vitest";
 import {
   connectionPresets,
   getCandidateBrand,
-  BrandSpecification,
 } from "@/app/providers/_components/provider-label";
 const preset = (adapter: string): API.Preset => ({
   id: adapter,

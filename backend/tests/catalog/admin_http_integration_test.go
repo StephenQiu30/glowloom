@@ -138,7 +138,7 @@ func TestAdminCatalogHTTPManagementKeepsRolesAndRealPublication(t *testing.T) {
 	if res.Code != 201 {
 		t.Fatalf("publish version=%d %s", res.Code, res.Body)
 	}
-	res = adminCatalogRequest(t, router, "POST", modelPath+"/prices", fmt.Sprintf(`{"expected_revision":2,"version_no":1,"unit":"per_image","rule":{"base_micros":10},"currency":"CNY","fx_rate_to_cny":"","effective_from":"%s"}`, time.Now().UTC().Add(-time.Minute).Format(time.RFC3339Nano)), uuid.NewString())
+	res = adminCatalogRequest(t, router, "POST", modelPath+"/prices", fmt.Sprintf(`{"source_url":"https://example.invalid/prices","reviewed_at":"2026-09-26T00:00:00Z","expected_revision":2,"version_no":1,"unit":"per_image","rule":{"base_micros":10},"currency":"CNY","fx_rate_to_cny":"","effective_from":"%s"}`, time.Now().UTC().Add(-time.Minute).Format(time.RFC3339Nano)), uuid.NewString())
 	if res.Code != 201 {
 		t.Fatalf("publish price=%d %s", res.Code, res.Body)
 	}

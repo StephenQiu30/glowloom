@@ -15,8 +15,10 @@ import (
 	"go.temporal.io/sdk/worker"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialschema"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialseal"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/providerprobe"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -80,4 +82,12 @@ func RegisterProviderActivities(ctx context.Context, w worker.Worker, database *
 		trialwire.RegisterCloud(w, database, unsealer, providerhttp.NewClient(&http.Client{}), storage, operationapp.TrialStorageID(cfg.ObjectStorageEndpoint, cfg.ObjectStorageBucket))
 	}
 	return nil
+}
+
+// InstalledProtocol resolves the existing provider driver registry without exposing drivers to catalog.
+func InstalledProtocol(id string) bool { _, ok := providerhttp.GetDriver(id); return ok }
+
+// NewAdapterMetadata injects the existing contracts and live authorization.
+func NewAdapterMetadata(access catalogapp.AdapterMetadataAccess) *catalogapp.AdapterMetadataQuery {
+	return catalogapp.NewAdapterMetadataQuery(access, credentialschema.NewRegistry(), InstalledProtocol)
 }

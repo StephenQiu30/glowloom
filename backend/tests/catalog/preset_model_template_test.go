@@ -13,7 +13,7 @@ import (
 
 func presetTextTemplate() domain.PresetModelTemplate {
 	return domain.PresetModelTemplate{Key: "text", Name: "审核过的文本模型", Capability: "text.generate", ProviderModelID: "fixture/text", Modes: []string{"text_to_text"}, Limits: json.RawMessage(`{"max_outputs":1}`), ParamSchema: json.RawMessage(`[]`), ExpectedMaxMS: 60000,
-		Price:        domain.PresetModelPrice{Unit: domain.PricePerRequest, Rule: json.RawMessage(`{"base_micros":10}`), Currency: "CNY"},
+		Price:        domain.PresetModelPrice{SourceURL: "https://example.invalid/prices", ReviewedAt: priceReviewedFixtureTime(), Unit: domain.PricePerRequest, Rule: json.RawMessage(`{"base_micros":10}`), Currency: "CNY"},
 		UpstreamCost: domain.PresetModelCost{Currency: "CNY", MaxMicros: 20, Source: "fixture reviewed price", ReviewedAt: time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)}}
 }
 func TestPresetModelTemplatesArePortableAndProtocolBound(t *testing.T) {

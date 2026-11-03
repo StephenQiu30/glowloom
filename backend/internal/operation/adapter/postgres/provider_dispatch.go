@@ -90,6 +90,9 @@ func (s *Store) ClaimProviderDispatch(ctx context.Context, identity application.
 		if cancelled {
 			return application.ErrProviderDispatchCancelled
 		}
+		if err := checkStoredBillingBarrier(tx, identity.ProjectID, identity.OperationID); err != nil {
+			return err
+		}
 		if err := s.admitManagedDispatch(tx, identity); err != nil {
 			return err
 		}

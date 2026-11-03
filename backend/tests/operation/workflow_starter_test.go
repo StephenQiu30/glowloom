@@ -300,7 +300,13 @@ func TestWorkflowStarterReadsCommittedSingleAndSweepCandidates(t *testing.T) {
 	if err != nil || containsOperationID(tooYoung, quoted.ID) {
 		t.Fatalf("young confirmation in sweep: %v, %v", tooYoung, err)
 	}
-	stale, err := store.StaleConfirmedSingles(t.Context(), time.Now().Add(3*time.Minute), 100, 0)
+	// Other isolated fixtures may retain more than one page of confirmations.
+	// Follow the actual sweep pagination instead of assuming this ID is in page 1.
+	cutoff := time.Now().Add(3 * time.Minute)
+	stale, err := store.StaleConfirmedSingles(t.Context(), cutoff, 100, 0)
+	for offset := 100; offset < 10000 && err == nil && len(stale) == 100 && !containsOperationID(stale, quoted.ID); offset += 100 {
+		stale, err = store.StaleConfirmedSingles(t.Context(), cutoff, 100, offset)
+	}
 	if err != nil || !containsOperationID(stale, quoted.ID) {
 		t.Fatalf("old confirmation missing from sweep: %v, %v", stale, err)
 	}

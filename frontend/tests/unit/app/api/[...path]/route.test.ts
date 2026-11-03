@@ -1360,3 +1360,26 @@ it("画布项目信息仅允许GET及page，不接受跨owner查询", async () =
     ).status,
   ).toBe(405);
 });
+
+it("原任务恢复沿专用POST路由保留幂等键，不开放任意信号", async () => {
+  const fetcher = vi
+    .fn()
+    .mockResolvedValue(new Response('{"accepted":true}', { status: 202 }));
+  vi.stubGlobal("fetch", fetcher);
+  const path = "operations/00000000-0000-4000-8000-000000000001/recover";
+  const res = await POST(
+    new Request(`http://localhost/api/${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": "original-recovery",
+      },
+      body: '{"project_id":"00000000-0000-4000-8000-000000000002"}',
+    }),
+    context(path),
+  );
+  expect(res.status).toBe(202);
+  expect(fetcher.mock.calls[0][1].headers.get("Idempotency-Key")).toBe(
+    "original-recovery",
+  );
+});

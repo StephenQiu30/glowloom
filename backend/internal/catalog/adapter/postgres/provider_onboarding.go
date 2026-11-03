@@ -2,8 +2,6 @@ package postgres
 
 import (
 	"context"
-	"encoding/json"
-	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -14,7 +12,7 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
-func instantiateOnboardingModel(tx *gorm.DB, actor identityapp.Principal, id, configID uuid.UUID, candidate domain.ModelCandidatePreset) error {
+func instantiateOnboardingModel(tx *gorm.DB, actor identityapp.Principal, id, _ uuid.UUID, candidate domain.ModelCandidatePreset) error {
 	version, err := candidate.OnboardingVersion(id, actor.ID)
 	if err != nil {
 		return err
@@ -29,31 +27,7 @@ func instantiateOnboardingModel(tx *gorm.DB, actor identityapp.Principal, id, co
 	if err := appendModelVersionInTx(tx, version, 1); err != nil {
 		return err
 	}
-	// This is the platform's zero surcharge, not an estimate of supplier costs.
-	price := domain.PriceRuleVersion{ID: uuid.New(), ModelID: id, VersionNo: 1, Unit: domain.PricePerRequest, Rule: json.RawMessage(`{"base_micros":0}`), Currency: "CNY", EffectiveFrom: time.Now().UTC(), CreateBy: actor.ID}
-	if err := appendPriceRuleInTx(tx, price, 2); err != nil {
-		return err
-	}
-	if candidate.ProviderModelID == "seed-audio-1.0" || candidate.AdapterKey == "volcengine_music" || candidate.AdapterKey == "volcengine_avatar" || candidate.AdapterKey == "volcengine_motion" {
-		// These media protocols require a real per-mode trial with authorized
-		// inputs. They must not use metadata/accepted-only onboarding activation.
-		maxMicros := int64(480000)
-		if candidate.ProviderModelID == "seed-audio-1.0" {
-			maxMicros = 2000000
-		}
-		if candidate.AdapterKey == "volcengine_avatar" {
-			maxMicros = 60000000
-		}
-		if candidate.AdapterKey == "volcengine_motion" {
-			maxMicros = 12000000
-		}
-		cost, err := json.Marshal(domain.PresetModelCost{Currency: "CNY", MaxMicros: maxMicros, Source: candidate.SourceURL, ReviewedAt: time.Date(2026, 10, 29, 0, 0, 0, 0, time.UTC)})
-		if err != nil {
-			return err
-		}
-		return tx.Exec(`INSERT INTO catalog.model_release(id,model_id,model_version_id,price_version_id,config_version_id,upstream_cost) VALUES(?,?,?,?,?,?::jsonb)`, uuid.New(), id, version.ID, price.ID, configID, string(cost)).Error
-	}
-	return tx.Exec(`INSERT INTO catalog.model_release(id,model_id,model_version_id,price_version_id,config_version_id,upstream_cost) VALUES(?,?,?,?,?, '{}'::jsonb)`, uuid.New(), id, version.ID, price.ID, configID).Error
+	return nil
 }
 
 // ReadProviderOnboarding reads only safe saved selections and current check evidence.
@@ -73,10 +47,12 @@ func (s *Store) ReadProviderOnboarding(ctx context.Context, actor identityapp.Pr
 			return application.ErrProviderNotFound
 		}
 		if err := tx.Raw(`SELECT m.id,v.id AS version_id,r.id AS release_id,m.display_name,v.provider_model_id,m.capability,m.status
- FROM catalog.model_profile m JOIN catalog.model_release r ON r.model_id=m.id AND r.upstream_cost='{}'::jsonb
- JOIN catalog.model_profile_version v ON v.id=r.model_version_id AND v.id=m.current_version_id
- JOIN catalog.provider p ON p.id=m.provider_id AND p.current_config_version_id=r.config_version_id
- WHERE m.provider_id=? AND m.candidate_snapshot IS NOT NULL AND NOT m.is_delete AND NOT v.is_delete
+ FROM catalog.model_profile m
+ JOIN catalog.provider p ON p.id=m.provider_id
+ JOIN catalog.model_profile_version v ON v.id=m.current_version_id
+ LEFT JOIN catalog.model_release r ON r.model_id=m.id AND r.model_version_id=v.id AND r.config_version_id=p.current_config_version_id
+
+ WHERE m.provider_id=? AND m.candidate_snapshot IS NOT NULL AND NOT m.is_delete AND NOT v.is_delete AND (r.id IS NULL OR r.upstream_cost='{}'::jsonb)
  ORDER BY m.capability,m.display_name LIMIT ?`, id, domain.MaxPresetModels).Scan(&result.Models).Error; err != nil {
 			return err
 		}

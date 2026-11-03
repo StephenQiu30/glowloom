@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"slices"
 	"strings"
 
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
@@ -77,11 +76,7 @@ func (s *OpenAIStandardStrategy) Submit(ctx context.Context, c *Client, input ap
 		return application.GenerationResult{Outcome: "unknown", ErrorCode: "transport_unknown"}, nil
 	}
 	if status < 200 || status >= 300 {
-		outcome := "unknown"
-		if slices.Contains([]int{400, 401, 402, 403, 404, 422, 429}, status) {
-			outcome = "rejected"
-		}
-		return application.GenerationResult{Outcome: outcome, ErrorCode: safeHTTPErrorBody(status, data)}, nil
+		return application.GenerationResult{Outcome: "unknown", ErrorCode: safeHTTPErrorBody(status, data)}, nil
 	}
 	result, ok := parseStandardGenerationResponse(input, data)
 	if !ok {

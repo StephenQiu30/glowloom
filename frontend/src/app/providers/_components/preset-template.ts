@@ -40,6 +40,8 @@ export function templateFromRelease(
     ].includes(price.unit)
   )
     throw new Error("来源发布的价格单位不受支持。");
+  if (!price.source_url || !price.reviewed_at)
+    throw new Error("来源价格版本缺少来源与核验时间，请先补审并保存价格版本。");
   return {
     key: `model-${release.id.slice(0, 8)}`,
     name: model.display_name,
@@ -50,6 +52,8 @@ export function templateFromRelease(
     param_schema: version.param_schema,
     expected_max_ms: version.expected_max_ms,
     price: {
+      source_url: price.source_url,
+      reviewed_at: price.reviewed_at,
       unit: price.unit as API.PriceUnit,
       rule: price.rule,
       currency: price.currency,

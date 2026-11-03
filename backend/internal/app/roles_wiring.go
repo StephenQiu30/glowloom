@@ -198,6 +198,7 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 			managedIngest = managedprovider.NewRoutedIngestActivities(dbConn.DB, objects.Registry(), managedResults, mediawire.NewMediaWorkerScopeAccess, operationwire.ProvideOperationStore(dbConn.DB))
 		}
 		queueWorker.RegisterActivityWithOptions(managedIngest.Ingest, activity.RegisterOptions{Name: "media.IngestManaged"})
+		queueWorker.RegisterActivityWithOptions(managedIngest.IngestOriginal, activity.RegisterOptions{Name: "media.IngestOriginal"})
 		mediaflow.Register(queueWorker, activities)
 		exportRenderer, err := toolff.NewRenderer(mediaflow.FFProber{})
 		if err != nil {
@@ -290,7 +291,7 @@ func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Conn
 		starterHandler := operationevent.NewWorkflowStarterHandler(processed,
 			operationwire.ProvideOperationStore(dbConn.DB), operationflow.NewStarter(temporalConn.Client))
 		controlHandler := operationevent.NewWorkflowControlHandler(processed,
-			operationwire.ProvideOperationStore(dbConn.DB), operationflow.NewControl(temporalConn.Client))
+			operationwire.ProvideOperationStore(dbConn.DB), operationflow.NewControl(temporalConn.Client, operationwire.ProvideOperationStore(dbConn.DB)))
 		credentialHandler := catalogevent.NewCredentialTestHandler(processed,
 			operationwire.NewCatalogStore(dbConn.DB), catalogflow.NewTestStarter(temporalConn.Client))
 		exportHandler := toolevent.NewHandler(processed, mediawire.ProvideMediaExportStoreWithAccess(dbConn.DB, mediawire.NewMediaWorkerScopeAccess), toolflow.NewStarter(temporalConn.Client))

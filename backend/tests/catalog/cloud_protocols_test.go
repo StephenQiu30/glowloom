@@ -74,7 +74,7 @@ func TestArkImageRequestsUseSingleImageContractWithoutOpenRouterFields(t *testin
 			input := operationapp.GenerationRequest{Config: preset.Config, Capability: "image.generate", Mode: "image2image", ModelID: map[bool]string{true: "gpt-6.1-sol", false: "fixture-exact-model"}[preset.Config.AdapterKey == "openai"], Prompt: "reference image", OutputCount: 1, References: []operationapp.ProviderReference{{Role: "reference_image", URL: "https://assets.example/allowed.png"}}}
 			result, err := client.Submit(t.Context(), input, "fixture-key")
 			require.NoError(t, err)
-			require.Equal(t, "rejected", result.Outcome)
+			require.Equal(t, "unknown", result.Outcome)
 			require.Equal(t, 1, calls)
 			input.OutputCount = 2
 			result, err = client.Submit(t.Context(), input, "fixture-key")

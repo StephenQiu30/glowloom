@@ -52,7 +52,8 @@ export function requireTask(value: API.TaskDetail, project: string): Task {
             (o.text !== undefined &&
               (o.kind !== "json" ||
                 o.moderation_status !== "passed" ||
-                value.status !== "completed" ||
+                (value.status !== "completed" &&
+                  value.billing_outcome?.delivery_state !== "ready") ||
                 !(
                   value.capability?.startsWith("text.") ||
                   value.capability?.startsWith("document.")
@@ -154,6 +155,8 @@ export function flowError(e: unknown) {
         "所需服务暂不可用，请稍后重试；当前操作结果尚未确认。",
       quote_expired: "报价已过期，请重新获取报价。",
       insufficient_balance: "可用余额不足，请联系管理员补充额度后重试。",
+      consumption_pending:
+        "原消费仍待核查，请继续取回原任务，不能通过修改模型或输入重复消费。",
       insufficient_budget: "项目预算不足，请调整数量或联系管理员。",
       impact_acknowledgment_required: "此主体已被引用，请先确认影响范围。",
       revision_conflict: "内容已更新，请读取最新版本后再保存。",

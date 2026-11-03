@@ -47,6 +47,11 @@ func (s *Store) RequestWorkflowControl(ctx context.Context, actor identityapp.Pr
 		if read.Error != nil {
 			return fmt.Errorf("read workflow control receipt: %w", read.Error)
 		}
+		if input.TargetType == "operation" {
+			if err := requireAgentOperationOwner(tx, actor, input.ProjectID, input.TargetID); err != nil {
+				return err
+			}
+		}
 		if read.RowsAffected == 1 {
 			if previous.RequestHash != hash {
 				return application.ErrWorkflowControlKeyReused
@@ -56,15 +61,25 @@ func (s *Store) RequestWorkflowControl(ctx context.Context, actor identityapp.Pr
 			}
 			return nil
 		}
-		if input.TargetType == "operation" {
-			if err := requireAgentOperationOwner(tx, actor, input.ProjectID, input.TargetID); err != nil {
-				return err
-			}
-		}
 		status, err := lockControlTarget(tx, input)
 		if err != nil {
 			return err
 		}
+		if input.Action == "recover" {
+			outcome, readErr := readBillingOutcome(tx, input.ProjectID, input.TargetID, domain.Status(status))
+			if readErr != nil {
+				return readErr
+			}
+			if outcome.DeliveryState == "ready" {
+				result = application.WorkflowControlResult{RequestID: requestID, TargetID: input.TargetID, TargetType: input.TargetType, Action: input.Action, Accepted: false}
+				body, err := json.Marshal(result)
+				if err != nil {
+					return err
+				}
+				return tx.Exec(`INSERT INTO infra.idempotency_record(id,actor_id,idem_key,request_hash,status_code,response_body,expires_at) VALUES(?,?,?,?,202,?::jsonb,now()+interval '24 hours')`, uuid.New(), actor.ID, input.RequestID, hash, string(body)).Error
+			}
+		}
+
 		now := time.Now().UTC()
 		eventID := uuid.New()
 		result = application.WorkflowControlResult{RequestID: requestID, EventID: eventID, TargetID: input.TargetID, TargetType: input.TargetType, Action: input.Action, Accepted: true}
@@ -77,7 +92,17 @@ func (s *Store) RequestWorkflowControl(ctx context.Context, actor identityapp.Pr
 			return fmt.Errorf("persist workflow control: %w", err)
 		}
 		if input.TargetType == "operation" {
-			if err := tx.Exec(`INSERT INTO operation.operation_event(id,operation_id,from_status,to_status,reason,detail) VALUES(?::uuid,?::uuid,?,?,'user_cancel_requested','{}'::jsonb)`, uuid.New(), input.TargetID, status, status).Error; err != nil {
+			detail := "{}"
+			reason := "user_cancel_requested"
+			if input.Action == "recover" {
+				reason = "user_recover_requested"
+				anchor, err := json.Marshal(map[string]any{"event_id": eventID, "request_id": requestID, "actor_id": actor.ID, "session_id": actor.SessionID, "credential_epoch": actor.CredentialEpoch, "scope_id": actor.ScopeID})
+				if err != nil {
+					return fmt.Errorf("encode original recovery authority: %w", err)
+				}
+				detail = string(anchor)
+			}
+			if err := tx.Exec(`INSERT INTO operation.operation_event(id,operation_id,from_status,to_status,reason,detail) VALUES(?::uuid,?::uuid,?,?,?,?::jsonb)`, uuid.New(), input.TargetID, status, status, reason, detail).Error; err != nil {
 				return fmt.Errorf("record task cancel intent: %w", err)
 			}
 		}
@@ -127,6 +152,26 @@ func lockControlTarget(tx *gorm.DB, input application.WorkflowControlInput) (str
 		return "", application.ErrPublicNotFound
 	}
 	switch {
+	case input.TargetType == "operation" && input.Action == "recover":
+		outcome, err := readBillingOutcome(tx, input.ProjectID, input.TargetID, domain.Status(row.Status))
+		if err != nil {
+			return "", err
+		}
+		if domain.Status(row.Status).IsTerminal() && outcome.ReconciliationRequired {
+			return "", application.ErrWorkflowControlConflict
+		}
+		if domain.Status(row.Status).IsTerminal() && outcome.DeliveryState != "ready" {
+			allowed, err := originalDeliveryAllowed(tx, input.TargetID)
+			if err != nil {
+				return "", err
+			}
+			if !allowed {
+				return "", application.ErrWorkflowControlConflict
+			}
+		}
+		if outcome.DeliveryState != "ready" && outcome.DeliveryState != "recoverable" {
+			return "", application.ErrWorkflowControlConflict
+		}
 	case input.TargetType == "operation":
 		if row.Status != string(domain.StatusConfirmed) && (row.Status != string(domain.StatusSubmitted) || !row.SupportsCancel) {
 			return "", application.ErrWorkflowControlConflict

@@ -46,14 +46,14 @@ type PresetStateInput struct {
 
 // ConnectPresetInput creates a disabled connection from a pinned preset version.
 type ConnectPresetInput struct {
-	DirectUse        bool                         `json:"direct_use,omitempty"`
-	CatalogVersion   string                       `json:"catalog_version,omitempty"`
-	CandidateKeys    []string                     `json:"candidate_keys,omitempty"`
+	DirectUse        bool                          `json:"direct_use,omitempty"`
+	CatalogVersion   string                        `json:"catalog_version,omitempty"`
+	CandidateKeys    []string                      `json:"candidate_keys,omitempty"`
 	CustomCandidates []domain.ModelCandidatePreset `json:"custom_candidates,omitempty"`
-	VersionID        uuid.UUID                    `json:"version_id"`
-	Key              string                       `json:"key"`
-	Name             string                       `json:"name"`
-	RequestID        uuid.UUID                    `json:"request_id"`
+	VersionID        uuid.UUID                     `json:"version_id"`
+	Key              string                        `json:"key"`
+	Name             string                        `json:"name"`
+	RequestID        uuid.UUID                     `json:"request_id"`
 }
 
 // ConnectionConfig preserves the nonsecret settings used by a connection.
@@ -81,10 +81,29 @@ type PresetStore interface {
 }
 
 // ProviderPresets owns preset validation and management commands.
-type ProviderPresets struct{ store PresetStore }
+type ProviderPresets struct {
+	store     PresetStore
+	installed ProtocolAvailability
+}
 
 // NewProviderPresets injects the authorized transactional store.
 func NewProviderPresets(store PresetStore) *ProviderPresets { return &ProviderPresets{store: store} }
+
+// NewDeclaredProviderPresets enables declarations only for installed host protocols.
+func NewDeclaredProviderPresets(store PresetStore, installed ProtocolAvailability) *ProviderPresets {
+	return &ProviderPresets{store: store, installed: installed}
+}
+
+// ValidateDeclaration checks implementation availability without making a provider request.
+func (s *ProviderPresets) ValidateDeclaration(doc domain.PresetDocument) error {
+	if doc.Validate() != nil {
+		return domain.ErrInvalidPreset
+	}
+	if d := doc.AdapterDeclaration; d != nil && (s.installed == nil || !s.installed(d.ProtocolID)) {
+		return domain.ErrInvalidPreset
+	}
+	return nil
+}
 
 // List returns portable settings without credential or account data.
 func (s *ProviderPresets) List(ctx context.Context, actor identityapp.Principal) ([]domain.Preset, error) {
@@ -106,7 +125,7 @@ func (s *ProviderPresets) Save(ctx context.Context, actor identityapp.Principal,
 	if !IsPlatformAdmin(actor) {
 		return domain.Preset{}, identityapp.ErrForbidden
 	}
-	if !validProviderKey(input.Slug) || input.RequestID == uuid.Nil || input.Document.Validate() != nil || input.PreviewHash != input.Document.Digest() || (input.ID == uuid.Nil) != (input.ExpectedRevision == 0) || input.ExpectedRevision < 0 {
+	if !validProviderKey(input.Slug) || input.RequestID == uuid.Nil || s.ValidateDeclaration(input.Document) != nil || input.PreviewHash != input.Document.Digest() || (input.ID == uuid.Nil) != (input.ExpectedRevision == 0) || input.ExpectedRevision < 0 {
 		return domain.Preset{}, domain.ErrInvalidPreset
 	}
 	return s.store.SavePreset(ctx, actor, input)

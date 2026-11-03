@@ -48,6 +48,25 @@ declare namespace API {
     set_default?: boolean;
   };
 
+  type AdapterDeclaration = {
+    adapter_key?: string;
+    base_url?: string;
+    capabilities?: string[];
+    protocol_id?: string;
+    region?: Region;
+    schema_version?: number;
+  };
+
+  type AdapterMetadata = {
+    adapter_key?: string;
+    capabilities?: string[];
+    check_capabilities?: string[];
+    credential_fields?: CredentialField[];
+    display_name?: string;
+    logo_key?: string;
+    protocol_ids?: string[];
+  };
+
   type AdminModelDetail = {
     candidate?: ModelCandidateSelection;
     model?: CreatedModel;
@@ -82,7 +101,9 @@ declare namespace API {
     effective_from?: string;
     fx_rate_to_cny?: string;
     id?: string;
+    reviewed_at?: string;
     rule?: Record<string, any>;
+    source_url?: string;
     unit?: string;
     version_no?: number;
   };
@@ -418,6 +439,21 @@ declare namespace API {
     model_key?: string;
     params?: VoiceParams;
     voice_key?: string;
+  };
+
+  type BillingOutcome = {
+    charge_state?: string;
+    charged_micros?: number;
+    delivery_state?: string;
+    evidence_present?: boolean;
+    provider_settlement_state?: string;
+    reason?: string;
+    reconcile_deadline?: string;
+    reconciliation_required?: boolean;
+    refunded_micros?: number;
+    regenerate?: string;
+    released_micros?: number;
+    reserved_micros?: number;
   };
 
   type bindBibleVoiceParams = {
@@ -1718,6 +1754,7 @@ declare namespace API {
     confirmable?: boolean;
     expires_at?: string;
     final_prompt?: string;
+    quote_detail?: Record<string, any>;
     quote_micros?: number;
     reference_mapping?: ReferenceMapping[];
   };
@@ -3439,7 +3476,9 @@ declare namespace API {
     effective_from?: string;
     fx_rate_to_cny?: string;
     id?: string;
+    reviewed_at?: string;
     rule?: Record<string, any>;
+    source_url?: string;
     unit?: string;
     version_no?: number;
   };
@@ -3469,6 +3508,7 @@ declare namespace API {
     id?: string;
     input_roles?: string[];
     key?: string;
+    pricing_preview?: PricingPreview;
     provider_id?: string;
     provider_name?: string;
     provider_status?: string;
@@ -3937,6 +3977,7 @@ declare namespace API {
   };
 
   type PresetDocument = {
+    adapter_declaration?: AdapterDeclaration;
     config?: ProviderConfig;
     model_templates?: PresetModelTemplate[];
     name?: string;
@@ -3957,7 +3998,9 @@ declare namespace API {
   type PresetModelPrice = {
     currency?: string;
     fx_rate_to_cny?: string;
+    reviewed_at?: string;
     rule?: Record<string, any>;
+    source_url?: string;
     unit?: PriceUnit;
   };
 
@@ -4035,6 +4078,15 @@ declare namespace API {
     | "per_request"
     | "per_1k_tokens"
     | "per_1k_chars";
+
+  type PricingPreview = {
+    amount_kind?: string;
+    amount_micros?: number;
+    confirmable?: boolean;
+    currency?: string;
+    price_version_id?: string;
+    unit?: string;
+  };
 
   type Problem = {
     code?: string;
@@ -4518,7 +4570,9 @@ declare namespace API {
     effective_from?: string;
     expected_revision?: number;
     fx_rate_to_cny?: string;
+    reviewed_at?: string;
     rule?: Record<string, any>;
+    source_url?: string;
     unit?: PriceUnit;
     version_no?: number;
   };
@@ -4721,6 +4775,11 @@ declare namespace API {
 
   type recoverAiTrialParams = {
     /** Trial request ID */
+    id: string;
+  };
+
+  type recoverOperationParams = {
+    /** 原操作UUID */
     id: string;
   };
 
@@ -5136,6 +5195,7 @@ declare namespace API {
   };
 
   type Session = {
+    engine?: string;
     id?: string;
     project_id?: string;
     revision?: number;
@@ -5762,6 +5822,7 @@ declare namespace API {
   type TaskDetail = {
     audio_subtitle?: AudioSubtitle;
     batch_id?: string;
+    billing_outcome?: BillingOutcome;
     cancel_requested?: boolean;
     capability?: string;
     create_time?: string;

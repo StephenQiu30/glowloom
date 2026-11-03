@@ -88,7 +88,21 @@ func runManagedProvider(ctx, flowCtx workflow.Context, loaded application.Workfl
 			}
 		}
 		switch progress.State {
-		case "not_submitted", "rejected":
+		case "rejected":
+			if workflow.GetVersion(ctx, "managed-sent-rejection-v1", workflow.DefaultVersion, 1) == workflow.DefaultVersion {
+				// Preserve commands already emitted by an older history. Both
+				// activities now independently reject an unproven zero charge.
+				if err := calls.complete(application.CompleteProviderCallInput{OperationID: id, Action: "submit", Attempt: 1, Outcome: "error", State: "rejected"}); err != nil {
+					return err
+				}
+				err := settleOperation(flowCtx, id.String(), status, domain.StatusFailed, 0, application.SafeProviderFailureCode(progress.ErrorCode, progress.State), false)
+				if !isApplicationErrorType(err, "provider_cost_unknown") {
+					return err
+				}
+			} else if err := calls.complete(application.CompleteProviderCallInput{OperationID: id, Action: "submit", Attempt: 1, Outcome: "unknown", State: "unknown", ErrorCode: progress.ErrorCode}); err != nil {
+				return err
+			}
+		case "not_submitted":
 			if err := calls.complete(application.CompleteProviderCallInput{OperationID: id, Action: "submit", Attempt: 1, Outcome: "error", State: progress.State}); err != nil {
 				return err
 			}
@@ -98,10 +112,10 @@ func runManagedProvider(ctx, flowCtx workflow.Context, loaded application.Workfl
 				}
 				return settleOperation(flowCtx, id.String(), domain.StatusCancelling, domain.StatusCancelled, 0, "", false)
 			}
-			return settleOperation(flowCtx, id.String(), status, domain.StatusFailed, 0, "provider_"+progress.State, false)
+			return settleOperation(flowCtx, id.String(), status, domain.StatusFailed, 0, application.SafeProviderFailureCode(progress.ErrorCode, progress.State), false)
 		case "accepted", "succeeded":
 		default:
-			if err := calls.complete(application.CompleteProviderCallInput{OperationID: id, Action: "submit", Attempt: 1, Outcome: "unknown", State: "unknown"}); err != nil {
+			if err := calls.complete(application.CompleteProviderCallInput{OperationID: id, Action: "submit", Attempt: 1, Outcome: "unknown", State: "unknown", ErrorCode: progress.ErrorCode}); err != nil {
 				return err
 			}
 		}

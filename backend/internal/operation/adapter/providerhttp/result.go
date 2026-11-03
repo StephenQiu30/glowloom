@@ -19,9 +19,9 @@ func safeHTTPError(status int) string {
 	case 401, 403:
 		return "auth_failed"
 	case 402:
-		return "insufficient_balance"
+		return "payment_required"
 	case 429:
-		return "rate_limited"
+		return "request_limited"
 	case 400, 422:
 		return "invalid_parameters"
 	case 404:
@@ -42,6 +42,8 @@ func safeHTTPErrorBody(status int, data []byte) string {
 	if json.Unmarshal(data, &body) == nil {
 		for _, code := range []string{body.Error.Code, body.Error.Type} {
 			switch code {
+			case "rate_limit_exceeded", "rate_limit_error":
+				return "rate_limited"
 			case "credit_balance_exhausted":
 				return "insufficient_balance"
 			case "project_spend_limit_exceeded":

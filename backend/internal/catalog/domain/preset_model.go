@@ -11,6 +11,8 @@ import (
 
 // PresetModelPrice is a reviewed platform price, never an account bill.
 type PresetModelPrice struct {
+	SourceURL   string          `json:"source_url,omitempty"`
+	ReviewedAt  *time.Time      `json:"reviewed_at,omitempty"`
 	Unit        PriceUnit       `json:"unit"`
 	Rule        json.RawMessage `json:"rule" swaggertype:"object"`
 	Currency    string          `json:"currency"`
@@ -47,7 +49,7 @@ func (t PresetModelTemplate) Version(modelID, actorID uuid.UUID) ModelVersion {
 
 // PriceVersion binds the copied rule to a new model and creation time.
 func (t PresetModelTemplate) PriceVersion(modelID, actorID uuid.UUID, now time.Time) PriceRuleVersion {
-	return PriceRuleVersion{ID: uuid.New(), ModelID: modelID, VersionNo: 1, Unit: t.Price.Unit, Rule: slices.Clone(t.Price.Rule), Currency: t.Price.Currency, FXRateToCNY: t.Price.FXRateToCNY, EffectiveFrom: now, CreateBy: actorID}
+	return PriceRuleVersion{ID: uuid.New(), ModelID: modelID, VersionNo: 1, SourceURL: t.Price.SourceURL, ReviewedAt: t.Price.ReviewedAt, Unit: t.Price.Unit, Rule: slices.Clone(t.Price.Rule), Currency: t.Price.Currency, FXRateToCNY: t.Price.FXRateToCNY, EffectiveFrom: now, CreateBy: actorID}
 }
 
 func (t PresetModelTemplate) validate(config ProviderConfig) error {

@@ -57,6 +57,12 @@ func (c *Client) ProbeModel(ctx context.Context, config catalogdomain.ProviderCo
 	case "rejected", "not_submitted":
 		return ModelProbeResult{Result: "rejected", ErrorCode: generated.ErrorCode}
 	default:
+		// This is the onboarding diagnostic only. A recognized rejection of
+		// the probe does not change the generation driver's unknown cost.
+		switch generated.ErrorCode {
+		case "auth_failed", "permission_denied", "payment_required", "request_limited", "rate_limited", "insufficient_balance", "insufficient_quota", "invalid_parameters", "not_found", "ip_restricted", "region_restricted", "project_limit_exceeded", "organization_limit_exceeded", "content_rejected":
+			return ModelProbeResult{Result: "rejected", ErrorCode: generated.ErrorCode}
+		}
 		return ModelProbeResult{Result: "unknown", ErrorCode: "unreachable"}
 	}
 }

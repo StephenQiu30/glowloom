@@ -70,7 +70,7 @@ func readEditorSubmission(tx *gorm.DB, a identityapp.Principal, p, id uuid.UUID)
 	if err := json.Unmarshal(row.Quote, &quote); err != nil {
 		return out, err
 	}
-	out.Quote = &application.EditorQuote{CompilerVersion: quote.CompilerVersion, ReferenceMapping: quote.ReferenceMapping, QuoteMicros: quote.QuoteMicros, AvailableMicros: quote.AvailableMicros, FinalPrompt: quote.FinalPrompt, ExpiresAt: quote.ExpiresAt, Confirmable: quote.Confirmable}
+	out.Quote = &application.EditorQuote{QuoteDetail: quote.QuoteDetail, CompilerVersion: quote.CompilerVersion, ReferenceMapping: quote.ReferenceMapping, QuoteMicros: quote.QuoteMicros, AvailableMicros: quote.AvailableMicros, FinalPrompt: quote.FinalPrompt, ExpiresAt: quote.ExpiresAt, Confirmable: quote.Confirmable}
 	return out, nil
 }
 

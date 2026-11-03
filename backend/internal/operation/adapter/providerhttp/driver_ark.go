@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
-	"slices"
 	"strings"
 
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
@@ -138,11 +137,7 @@ func (d *VolcengineArkDriver) Submit(ctx context.Context, c *Client, input appli
 		return application.GenerationResult{Outcome: "unknown", ErrorCode: "transport_unknown"}, nil
 	}
 	if status < 200 || status >= 300 {
-		outcome := "unknown"
-		if slices.Contains([]int{400, 401, 402, 403, 404, 422, 429}, status) {
-			outcome = "rejected"
-		}
-		return application.GenerationResult{Outcome: outcome, ErrorCode: safeHTTPError(status)}, nil
+		return application.GenerationResult{Outcome: "unknown", ErrorCode: safeHTTPErrorBody(status, data)}, nil
 	}
 	result, ok := parseStandardGenerationResponse(input, data)
 	if !ok {
@@ -165,7 +160,7 @@ func (d *VolcengineArkDriver) Query(ctx context.Context, c *Client, config catal
 		if status == 404 {
 			state = "not_found"
 		}
-		return application.GenerationResult{State: state, ErrorCode: safeHTTPError(status)}, nil
+		return application.GenerationResult{State: state, ErrorCode: safeHTTPErrorBody(status, data)}, nil
 	}
 	var response struct {
 		ID      string `json:"id"`

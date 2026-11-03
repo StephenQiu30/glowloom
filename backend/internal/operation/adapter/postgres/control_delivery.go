@@ -21,23 +21,23 @@ func (s *Store) canDeliverWorkflowControl(ctx context.Context, delivery applicat
 	if delivery.TargetType != "operation" && delivery.TargetType != "batch" {
 		return false, application.ErrInvalidWorkflowControl
 	}
-	var receipt bool
-	err := s.db.WithContext(ctx).Raw(`SELECT EXISTS(SELECT 1 FROM infra.idempotency_record AS r
- JOIN workspace.project AS p ON p.id=?::uuid AND p.org_id=?::uuid
- WHERE r.actor_id=?::uuid AND r.idem_key=? AND NOT r.is_delete AND r.status_code=202
- AND r.response_body->>'event_id'=? AND r.response_body->>'target_id'=?
- AND r.response_body->>'target_type'=? AND r.response_body->>'action'=?
- AND r.response_body->>'accepted'='true')`, delivery.ProjectID, delivery.OrgID, delivery.ActorID, delivery.RequestID.String(), delivery.EventID.String(), delivery.TargetID.String(), delivery.TargetType, delivery.Action).Scan(&receipt).Error
-	if err != nil {
-		return false, fmt.Errorf("read workflow control binding: %w", err)
-	}
-	if !receipt {
-		return false, application.ErrInvalidWorkflowControl
+	if err := requireControlReceipt(s.db.WithContext(ctx), delivery); err != nil {
+		return false, err
 	}
 	var status string
 	var readErr error
 	if delivery.TargetType == "operation" {
 		readErr = s.db.WithContext(ctx).Raw(`SELECT status FROM operation.operation WHERE id=?::uuid AND project_id=?::uuid AND NOT is_delete`, delivery.TargetID, delivery.ProjectID).Scan(&status).Error
+		if readErr == nil && delivery.Action == "recover" && domain.Status(status).IsTerminal() {
+			outcome, err := readBillingOutcome(s.db.WithContext(ctx), delivery.ProjectID, delivery.TargetID, domain.Status(status))
+			if err != nil || outcome.DeliveryState == "ready" {
+				return false, err
+			}
+			if err := s.requireRecoveryRequester(s.db.WithContext(ctx), delivery); err != nil {
+				return false, err
+			}
+			return originalDeliveryAllowed(s.db.WithContext(ctx), delivery.TargetID)
+		}
 		if readErr == nil && (status == "" || domain.Status(status).IsTerminal()) {
 			return false, nil
 		}
@@ -53,6 +53,37 @@ func (s *Store) canDeliverWorkflowControl(ctx context.Context, delivery applicat
 	return true, nil
 }
 
+func requireControlReceipt(tx *gorm.DB, delivery application.WorkflowControlDelivery) error {
+	var receipt bool
+	err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM infra.idempotency_record AS r
+ JOIN workspace.project AS p ON p.id=?::uuid AND p.org_id=?::uuid
+ WHERE r.actor_id=?::uuid AND r.idem_key=? AND NOT r.is_delete AND r.status_code=202
+ AND r.response_body->>'event_id'=? AND r.response_body->>'target_id'=?
+ AND r.response_body->>'target_type'=? AND r.response_body->>'action'=?
+ AND r.response_body->>'accepted'='true')`, delivery.ProjectID, delivery.OrgID, delivery.ActorID, delivery.RequestID.String(), delivery.EventID.String(), delivery.TargetID.String(), delivery.TargetType, delivery.Action).Scan(&receipt).Error
+	if err != nil {
+		return fmt.Errorf("read workflow control binding: %w", err)
+	}
+	if !receipt {
+		return application.ErrInvalidWorkflowControl
+	}
+	return nil
+}
+
+func (s *Store) requireControlActor(tx *gorm.DB, d application.WorkflowControlDelivery) error {
+	if s.workerAccess == nil || s.workerAccess(tx) == nil {
+		return identity.ErrForbidden
+	}
+	actor := identity.Principal{ID: d.ActorID, OrgID: d.OrgID}
+	if err := s.workerAccess(tx).AuthorizeOperation(tx.Statement.Context, actor, d.ProjectID, true); err != nil {
+		return err
+	}
+	if d.TargetType == "operation" {
+		return requireAgentOperationOwner(tx, actor, d.ProjectID, d.TargetID)
+	}
+	return nil
+}
+
 // CanDeliverWorkflowControl rechecks the durable control actor before delivering a signal.
 func (s *Store) CanDeliverWorkflowControl(ctx context.Context, delivery application.WorkflowControlDelivery) (bool, error) {
 	if s == nil || s.db == nil {
@@ -65,13 +96,7 @@ func (s *Store) CanDeliverWorkflowControl(ctx context.Context, delivery applicat
 		if err != nil || !allowed {
 			return err
 		}
-		if s.workerAccess == nil || s.workerAccess(tx) == nil {
-			return identity.ErrForbidden
-		}
-		if err := s.workerAccess(tx).AuthorizeOperation(ctx, identity.Principal{ID: delivery.ActorID, OrgID: delivery.OrgID}, delivery.ProjectID, true); err != nil {
-			return err
-		}
-		return nil
+		return s.requireControlActor(tx, delivery)
 	})
 	return allowed, err
 }

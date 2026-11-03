@@ -24,6 +24,7 @@ vi.mock("@/api/settings", () => ({
   listAdminProviders: api.providers,
   getAdminProvider: api.detail,
   listProviderPresets: api.presets,
+  listAdminProviderAdapters: vi.fn().mockResolvedValue([]),
   getConfigReceipt: vi.fn(),
   updateProviderPresetState: vi.fn(),
   updateAdminProvider: vi.fn(),

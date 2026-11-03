@@ -11,7 +11,14 @@ const labels: Record<string, string> = {
   vercel: "Vercel",
 };
 
-export function providerLabel(adapter?: string) {
+export function providerLabel(
+  adapter?: string,
+  adapters?: API.AdapterMetadata[],
+) {
+  const declared = adapters?.find(
+    (item) => item.adapter_key === adapter,
+  )?.display_name;
+  if (declared) return declared;
   return adapter && Object.hasOwn(labels, adapter)
     ? labels[adapter]
     : "其他服务";
@@ -83,7 +90,8 @@ export class BrandSpecification implements CandidateSpecification {
   ) {}
 
   isSatisfiedBy(candidate: CandidateTarget): boolean {
-    const text = `${candidate.provider_model_id ?? ""} ${candidate.display_name ?? ""} ${candidate.key ?? ""}`.toLowerCase();
+    const text =
+      `${candidate.provider_model_id ?? ""} ${candidate.display_name ?? ""} ${candidate.key ?? ""}`.toLowerCase();
     return this.patterns.some((pattern) => pattern.test(text));
   }
 }

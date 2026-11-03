@@ -31,7 +31,7 @@ type ControlDeliveryStore interface {
 
 // ControlSignaler sends only a fixed control to the target's stable workflow ID.
 type ControlSignaler interface {
-	SignalControl(context.Context, string, uuid.UUID, string) error
+	SignalControl(context.Context, ControlDelivery) error
 }
 
 // WorkflowControlHandler acknowledges the event only after Temporal accepts it.
@@ -66,7 +66,11 @@ func (h *WorkflowControlHandler) Handle(ctx context.Context, record inbox.Record
 		if !eligible {
 			return nil
 		}
-		return h.signaler.SignalControl(ctx, event.TargetType, event.TargetID, event.Action)
+		err = h.signaler.SignalControl(ctx, event)
+		if errors.Is(err, application.ErrExecutionAuthorityRevoked) {
+			return nil
+		}
+		return err
 	})
 	if err != nil {
 		return fmt.Errorf("deliver workflow control: %w", err)
@@ -113,7 +117,7 @@ func parseControl(record inbox.Record) (ControlDelivery, error) {
 			return ControlDelivery{}, ErrInvalidWorkflowControlEvent
 		}
 	}
-	validControl := body.Aggregate.Type == "operation" && body.Data.Action == "cancel" || body.Aggregate.Type == "batch" && (body.Data.Action == "cancel" || body.Data.Action == "resume")
+	validControl := body.Aggregate.Type == "operation" && (body.Data.Action == "cancel" || body.Data.Action == "recover") || body.Aggregate.Type == "batch" && (body.Data.Action == "cancel" || body.Data.Action == "resume")
 	if !validControl {
 		return ControlDelivery{}, ErrInvalidWorkflowControlEvent
 	}

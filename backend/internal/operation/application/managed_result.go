@@ -160,12 +160,21 @@ func (s *ManagedResults) Save(ctx context.Context, r ManagedResult) error {
 
 // Recover checks terminal evidence first; an absent manifest remains unknown.
 func (s *ManagedResults) Recover(ctx context.Context, i ProviderDispatchIdentity) (*ManagedResult, error) {
+	return s.recover(ctx, i, true)
+}
+
+// Verify reads the original staged manifest without rewriting terminal evidence.
+func (s *ManagedResults) Verify(ctx context.Context, i ProviderDispatchIdentity) (*ManagedResult, error) {
+	return s.recover(ctx, i, false)
+}
+
+func (s *ManagedResults) recover(ctx context.Context, i ProviderDispatchIdentity, persist bool) (*ManagedResult, error) {
 	if s != nil && s.factory != nil {
 		scoped, err := s.scoped(ctx, i)
 		if err != nil {
 			return nil, err
 		}
-		return scoped.Recover(ctx, i)
+		return scoped.recover(ctx, i, persist)
 	}
 	if i.Validate() != nil {
 		return nil, ErrInvalidProviderCall
@@ -207,8 +216,10 @@ func (s *ManagedResults) Recover(ctx context.Context, i ProviderDispatchIdentity
 				return nil, ErrProviderCallConflict
 			}
 		}
-		if err := s.repo.SaveManagedResult(ctx, r); err != nil {
-			return nil, err
+		if persist {
+			if err := s.repo.SaveManagedResult(ctx, r); err != nil {
+				return nil, err
+			}
 		}
 		return &r, nil
 	}

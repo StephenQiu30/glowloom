@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { cn } from "cn";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   getAdminModel,
   listAdminModels,
@@ -57,6 +57,26 @@ export function PresetModels({
   const [manualName, setManualName] = useState("");
   const [manualID, setManualID] = useState("");
   const [manualCap, setManualCap] = useState("text.generate");
+  const [manualPrice, setManualPrice] = useState("");
+  const [manualCost, setManualCost] = useState("");
+  const [manualSource, setManualSource] = useState("");
+  const [manualReviewed, setManualReviewed] = useState("");
+  const validManualMoney = (value: string) =>
+    /^\d+$/.test(value) && Number.isSafeInteger(Number(value));
+  const manualSourceValid = (() => {
+    try {
+      const u = new URL(manualSource);
+      return (
+        u.protocol === "https:" &&
+        !u.username &&
+        !u.password &&
+        !u.search &&
+        !u.hash
+      );
+    } catch {
+      return false;
+    }
+  })();
   useEffect(() => {
     const controller = new AbortController();
     Promise.all([
@@ -132,38 +152,23 @@ export function PresetModels({
           </Item>
         ))}
       </ItemGroup>
-      <div className="flex items-center gap-1.5 border-t pt-3">
-        <button
-          type="button"
-          onClick={() => {
-            setCreationMode("copy");
+      <ToggleGroup
+        type="single"
+        value={creationMode}
+        variant="pill"
+        size="sm"
+        aria-label="添加模型的方式"
+        onValueChange={(value) => {
+          if (value === "copy" || value === "manual") {
+            setCreationMode(value);
             setError("");
-          }}
-          className={cn(
-            "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-            creationMode === "copy"
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted text-muted-foreground hover:bg-muted/80",
-          )}
-        >
-          从已有发布复制
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setCreationMode("manual");
-            setError("");
-          }}
-          className={cn(
-            "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-            creationMode === "manual"
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted text-muted-foreground hover:bg-muted/80",
-          )}
-        >
-          直接添加新模型
-        </button>
-      </div>
+          }
+        }}
+        className="border-t pt-3"
+      >
+        <ToggleGroupItem value="copy">从已有发布复制</ToggleGroupItem>
+        <ToggleGroupItem value="manual">直接添加新模型</ToggleGroupItem>
+      </ToggleGroup>
 
       {creationMode === "copy" ? (
         <>
@@ -198,7 +203,9 @@ export function PresetModels({
           </Field>
           {source ? (
             <Field>
-              <FieldLabel htmlFor={`${fieldID}-release`}>来源发布组合</FieldLabel>
+              <FieldLabel htmlFor={`${fieldID}-release`}>
+                来源发布组合
+              </FieldLabel>
               <Select
                 value={releaseID}
                 disabled={loading}
@@ -252,9 +259,11 @@ export function PresetModels({
           </Button>
         </>
       ) : (
-        <div className="flex flex-col gap-3 rounded-md border p-3 bg-muted/20">
+        <div className="flex flex-col gap-3 rounded-md border bg-muted/20 p-3">
           <Field>
-            <FieldLabel htmlFor={`${fieldID}-manual-name`}>模型显示名称</FieldLabel>
+            <FieldLabel htmlFor={`${fieldID}-manual-name`}>
+              模型显示名称
+            </FieldLabel>
             <Input
               id={`${fieldID}-manual-name`}
               placeholder="例如：Claude Sonnet 5.5"
@@ -263,7 +272,9 @@ export function PresetModels({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor={`${fieldID}-manual-id`}>上游模型标识</FieldLabel>
+            <FieldLabel htmlFor={`${fieldID}-manual-id`}>
+              上游模型标识
+            </FieldLabel>
             <Input
               id={`${fieldID}-manual-id`}
               placeholder="例如：anthropic/claude-sonnet-5.5"
@@ -273,22 +284,94 @@ export function PresetModels({
           </Field>
           <Field>
             <FieldLabel htmlFor={`${fieldID}-manual-cap`}>能力类型</FieldLabel>
-            <Select value={manualCap} onValueChange={(val) => setManualCap(val)}>
+            <Select
+              value={manualCap}
+              onValueChange={(val) => setManualCap(val)}
+            >
               <SelectTrigger id={`${fieldID}-manual-cap`} className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="text.generate">文本 (text.generate)</SelectItem>
-                <SelectItem value="image.generate">图片 (image.generate)</SelectItem>
-                <SelectItem value="video.generate">视频 (video.generate)</SelectItem>
-                <SelectItem value="audio.generate">音频 (audio.generate)</SelectItem>
+                <SelectItem value="text.generate">
+                  文本 (text.generate)
+                </SelectItem>
+                <SelectItem value="image.generate">
+                  图片 (image.generate)
+                </SelectItem>
+                <SelectItem value="video.generate">
+                  视频 (video.generate)
+                </SelectItem>
+                <SelectItem value="audio.generate">
+                  音频 (audio.generate)
+                </SelectItem>
               </SelectContent>
             </Select>
           </Field>
+          <Field>
+            <FieldLabel htmlFor={`${fieldID}-manual-price`}>
+              基础单价（人民币微元/次）
+            </FieldLabel>
+            <Input
+              id={`${fieldID}-manual-price`}
+              type="number"
+              min="0"
+              step="1"
+              value={manualPrice}
+              onChange={(e) => setManualPrice(e.target.value)}
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`${fieldID}-manual-cost`}>
+              上游成本上限（人民币微元/次）
+            </FieldLabel>
+            <Input
+              id={`${fieldID}-manual-cost`}
+              type="number"
+              min="0"
+              step="1"
+              value={manualCost}
+              onChange={(e) => setManualCost(e.target.value)}
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`${fieldID}-manual-source`}>
+              计价核验来源
+            </FieldLabel>
+            <Input
+              id={`${fieldID}-manual-source`}
+              type="url"
+              value={manualSource}
+              onChange={(e) => setManualSource(e.target.value)}
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`${fieldID}-manual-reviewed`}>
+              计价核验时间
+            </FieldLabel>
+            <Input
+              id={`${fieldID}-manual-reviewed`}
+              type="datetime-local"
+              value={manualReviewed}
+              onChange={(e) => setManualReviewed(e.target.value)}
+            />
+          </Field>
+          <p className="text-xs text-muted-foreground">
+            这里只添加已核验的按次价格模板。平台售价与上游成本分别填写，1元=1,000,000微元；添加模板不会验证模型或发布价格。
+          </p>
           <Button
             type="button"
             variant="outline"
-            disabled={!manualName.trim() || !manualID.trim() || templates.length >= 16}
+            disabled={
+              !manualName.trim() ||
+              !manualID.trim() ||
+              templates.length >= 16 ||
+              !validManualMoney(manualPrice) ||
+              !validManualMoney(manualCost) ||
+              Number(manualCost) > 1_000_000_000 ||
+              !manualSourceValid ||
+              !manualReviewed ||
+              !Number.isFinite(Date.parse(manualReviewed))
+            }
             onClick={() => {
               try {
                 const cleanKey = manualName
@@ -297,7 +380,9 @@ export function PresetModels({
                   .replace(/^-+|-+$/g, "")
                   .slice(0, 16);
                 const key = `m-${cleanKey || "tpl"}-${Date.now().toString(36).slice(-4)}`;
-                if (templates.some((t) => t.provider_model_id === manualID.trim())) {
+                if (
+                  templates.some((t) => t.provider_model_id === manualID.trim())
+                ) {
                   throw new Error("该上游模型标识已存在于模板中。");
                 }
                 const newTemplate: API.PresetModelTemplate = {
@@ -310,21 +395,25 @@ export function PresetModels({
                       ? ["text2image"]
                       : manualCap === "video.generate"
                         ? ["text2video"]
-                        : ["text_to_text"],
+                        : manualCap === "audio.generate"
+                          ? ["text2audio"]
+                          : ["text_to_text"],
                   limits: { max_outputs: 1 },
                   param_schema: [],
                   expected_max_ms: 120000,
                   price: {
-                    unit: manualCap === "text.generate" ? "per_1k_tokens" : "per_request",
-                    rule: { amount: 10 },
+                    unit: "per_request",
+                    rule: { base_micros: Number(manualPrice) },
                     currency: "CNY",
                     fx_rate_to_cny: "1",
+                    source_url: manualSource,
+                    reviewed_at: new Date(manualReviewed).toISOString(),
                   },
                   upstream_cost: {
-                    currency: "USD",
-                    max_micros: 20000,
-                    source: "admin-managed",
-                    reviewed_at: new Date().toISOString(),
+                    currency: "CNY",
+                    max_micros: Number(manualCost),
+                    source: manualSource,
+                    reviewed_at: new Date(manualReviewed).toISOString(),
                   },
                 };
                 onChange([...templates, newTemplate]);

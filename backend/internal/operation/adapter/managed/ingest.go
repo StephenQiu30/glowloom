@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"io"
+	"reflect"
+	"slices"
 	"strconv"
 
 	"github.com/google/uuid"
+	"go.temporal.io/sdk/temporal"
 	"gorm.io/gorm"
 
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
@@ -64,6 +67,39 @@ func (a *IngestActivities) Ingest(ctx context.Context, operationID uuid.UUID) (r
 		return application.ErrInvalidProviderCall
 	}
 	identity := application.ProviderDispatchIdentity{ProjectID: loaded.Operation.ProjectID, OperationID: operationID, ModelProfileVersionID: *loaded.Operation.ModelProfileVersionID, PriceRuleVersionID: *loaded.Operation.PriceRuleVersionID, Action: "submit", Attempt: 1, RequestKey: loaded.ProviderRequestKey}
+	return a.ingestResult(ctx, identity, nil)
+}
+
+type originalDeliveryStore interface {
+	OriginalDeliveryIdentity(context.Context, application.WorkflowControlDelivery) (application.ProviderDispatchIdentity, error)
+	CheckOriginalDelivery(*gorm.DB, application.WorkflowControlDelivery) error
+	IngestOriginalText(context.Context, application.ProviderDispatchIdentity, application.WorkflowControlDelivery) error
+}
+
+// IngestOriginal archives one previously paid result on behalf of the accepted
+// requester; this activity never enters the execution or settlement workflow.
+func (a *IngestActivities) IngestOriginal(ctx context.Context, d application.WorkflowControlDelivery) error {
+	store, ok := a.store.(originalDeliveryStore)
+	if !ok {
+		return application.ErrInvalidProviderCall
+	}
+	i, err := store.OriginalDeliveryIdentity(ctx, d)
+	if err != nil {
+		return originalIngestError(err)
+	}
+	return originalIngestError(a.ingestResult(ctx, i, &d))
+}
+
+func originalIngestError(err error) error {
+	if errors.Is(err, application.ErrWorkflowControlConflict) || errors.Is(err, application.ErrInvalidWorkflowControl) {
+		return temporal.NewNonRetryableApplicationError("original delivery request is no longer eligible", "original_delivery_conflict", err)
+	}
+	return executionAuthorityError(err)
+}
+
+func (a *IngestActivities) ingestResult(ctx context.Context, identity application.ProviderDispatchIdentity, d *application.WorkflowControlDelivery) error {
+	store := a.store
+	operationID := identity.OperationID
 	result, err := store.ReadManagedResult(ctx, identity)
 	if err != nil {
 		return err
@@ -71,13 +107,36 @@ func (a *IngestActivities) Ingest(ctx context.Context, operationID uuid.UUID) (r
 	if result == nil || result.State != "succeeded" {
 		return application.ErrProviderCallConflict
 	}
+	if d != nil {
+		if a.results == nil {
+			return application.ErrProviderCallConflict
+		}
+		original, err := a.results.Verify(ctx, identity)
+		if err != nil {
+			return err
+		}
+		if original == nil || original.State != "succeeded" || original.Text != result.Text || original.TaskID != result.TaskID || !reflect.DeepEqual(original.Subtitle, result.Subtitle) || !slices.Equal(original.Artifacts, result.Artifacts) {
+			return application.ErrProviderCallConflict
+		}
+	}
 	if result.Text != "" {
+		if d != nil {
+			return store.(originalDeliveryStore).IngestOriginalText(ctx, identity, *d)
+		}
 		return store.IngestManagedText(ctx, identity)
 	}
 	if a.results == nil || a.registry == nil && a.objects == nil {
 		return mediaapp.ErrStorageNotReady
 	}
 	repo := mediapg.NewScopedIngestRepository(a.db, a.scopes)
+	if d != nil {
+		repo = repo.ForOriginalDelivery(func(tx *gorm.DB, id uuid.UUID) error {
+			if id != d.TargetID {
+				return application.ErrInvalidWorkflowControl
+			}
+			return store.(originalDeliveryStore).CheckOriginalDelivery(tx, *d)
+		})
+	}
 	service := mediaapp.NewIngestService(repo, artifactDownload{results: a.results, identity: identity}, mediaflow.FFProber{}, mediaflow.FFRenderer{}, mediaObjects{client: a.objects})
 	if a.registry != nil {
 		service = mediaapp.NewRoutedIngestService(repo, artifactDownload{results: a.results, identity: identity}, mediaflow.FFProber{}, mediaflow.FFRenderer{}, mediaobjects.NewGeneratedObjects(a.registry, mediapg.NewStorageRoutes(a.db)), mediapg.NewStorageRoutes(a.db))

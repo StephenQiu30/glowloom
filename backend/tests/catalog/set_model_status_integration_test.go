@@ -93,7 +93,7 @@ func TestSetModelStatusCommitsAuditAndGuardsActivationOnLocalPostgres(t *testing
 		t.Fatal(err)
 	}
 	publishPrice := catalogapp.NewPublishPriceRuleCommand(store, priceValidator, time.Now)
-	futurePrice := catalogapp.PublishPriceRuleInput{
+	futurePrice := catalogapp.PublishPriceRuleInput{SourceURL: "https://example.invalid/prices", ReviewedAt: priceReviewedFixtureTime(),
 		ModelID: created.ID, ExpectedRevision: 2, VersionNo: 1,
 		Unit: domain.PricePerSecond, Rule: json.RawMessage(`{"base_micros":1000}`),
 		Currency: "CNY", EffectiveFrom: time.Now().Add(24 * time.Hour), RequestID: uuid.NewString(),

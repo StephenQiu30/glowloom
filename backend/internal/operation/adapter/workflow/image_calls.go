@@ -22,6 +22,11 @@ func (c *providerCalls) submitImage(providerCtx workflow.Context, input Provider
 			outcome = "unknown"
 		}
 	case ProviderSubmitRejected, ProviderSubmitNotSubmitted:
+		if result.Outcome == ProviderSubmitRejected && workflow.GetVersion(c.flowCtx, "codex-sent-rejection-v1", workflow.DefaultVersion, 1) != workflow.DefaultVersion {
+			result = ProviderSubmitOutput{Outcome: ProviderSubmitUnknown, Error: result.Error}
+			outcome = "unknown"
+			break
+		}
 		if result.ProviderTaskID != nil || result.Receipt != nil || result.Usage != nil {
 			result = ProviderSubmitOutput{Outcome: ProviderSubmitUnknown}
 			outcome = "unknown"
@@ -32,7 +37,11 @@ func (c *providerCalls) submitImage(providerCtx workflow.Context, input Provider
 		result = ProviderSubmitOutput{Outcome: ProviderSubmitUnknown}
 		outcome = "unknown"
 	}
-	if err := c.complete(application.CompleteProviderCallInput{OperationID: c.operationID, Action: "submit", Attempt: input.Attempt, Outcome: outcome, State: string(result.Outcome), Receipt: result.Receipt, Usage: result.Usage}); err != nil {
+	var code string
+	if result.Error != nil {
+		code = result.Error.Code
+	}
+	if err := c.complete(application.CompleteProviderCallInput{ErrorCode: code, OperationID: c.operationID, Action: "submit", Attempt: input.Attempt, Outcome: outcome, State: string(result.Outcome), Receipt: result.Receipt, Usage: result.Usage}); err != nil {
 		return ProviderSubmitOutput{}, err
 	}
 	return result, nil

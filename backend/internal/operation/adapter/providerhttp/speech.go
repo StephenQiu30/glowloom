@@ -117,11 +117,7 @@ func (c *Client) submitSpeech(ctx context.Context, input application.GenerationR
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		outcome := "unknown"
-		if response.StatusCode == 400 || response.StatusCode == 401 || response.StatusCode == 402 || response.StatusCode == 403 || response.StatusCode == 404 || response.StatusCode == 422 || response.StatusCode == 429 {
-			outcome = "rejected"
-		}
-		return application.GenerationResult{Outcome: outcome, ErrorCode: safeHTTPError(response.StatusCode)}, nil
+		return application.GenerationResult{Outcome: "unknown", ErrorCode: safeHTTPError(response.StatusCode)}, nil
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, (64<<20)+1))
 	if err != nil || len(data) > 64<<20 {
@@ -168,7 +164,7 @@ func (c *Client) submitSpeech(ctx context.Context, input application.GenerationR
 			if len(output) > 0 {
 				return unknownResult(), nil
 			}
-			return application.GenerationResult{Outcome: "rejected", ErrorCode: "invalid_parameters"}, nil
+			return application.GenerationResult{Outcome: "unknown", ErrorCode: "invalid_parameters"}, nil
 		}
 		if chunk.Data != "" {
 			part, err := base64.StdEncoding.Strict().DecodeString(chunk.Data)

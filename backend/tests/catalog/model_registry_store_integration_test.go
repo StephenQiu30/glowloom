@@ -114,7 +114,7 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 	}
 	publishPrice := catalogapp.NewPublishPriceRuleCommand(store, priceValidator, time.Now)
 	price1 := validPriceVersion(model.ID)
-	firstPriceInput := catalogapp.PublishPriceRuleInput{
+	firstPriceInput := catalogapp.PublishPriceRuleInput{SourceURL: "https://example.invalid/prices", ReviewedAt: priceReviewedFixtureTime(),
 		ModelID: model.ID, ExpectedRevision: 3, VersionNo: 1,
 		Unit: price1.Unit, Rule: price1.Rule, Currency: price1.Currency,
 		EffectiveFrom: price1.EffectiveFrom, RequestID: uuid.NewString(),
