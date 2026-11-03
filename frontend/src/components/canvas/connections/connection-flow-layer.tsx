@@ -104,6 +104,15 @@ export function ConnectionFlowLayer({
           );
           foreign.setAttribute("width", String(bounds.width));
           foreign.setAttribute("height", String(bounds.height));
+          // Node dragging paints SVG paths directly between React commits.
+          // Sample that same geometry so the raster trail never follows a stale curve.
+          for (const entry of registry.entries.values()) {
+            const path = entry.element.getAttribute("d") ?? "";
+            if (path !== entry.path) {
+              entry.path = path;
+              dirty = true;
+            }
+          }
           if (dirty) {
             const meshes = [...registry.entries.values()].map((entry) =>
               connectionFlowMesh(entry.path, entry.fanout),

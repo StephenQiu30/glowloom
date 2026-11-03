@@ -141,3 +141,23 @@ it("offsets only dragging anchors outside the node and keeps pending anchors cen
   );
   expect(Number(path().split(" ")[1])).toBe(from.position.x + from.width);
 });
+
+it("keeps node-related connections muted until the edge itself is hovered or selected", () => {
+  const view = render(
+    <svg>
+      <ConnectionPath
+        connection={connection}
+        from={from}
+        to={to}
+        active
+        onSelect={vi.fn()}
+      />
+    </svg>,
+  );
+  expect(view.container.querySelector(".canvas-connection-meteor")).toBeNull();
+  expect(
+    view.container
+      .querySelector(".canvas-connection-line")
+      ?.getAttribute("stroke"),
+  ).not.toBe("#008EE5");
+});

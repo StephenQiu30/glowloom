@@ -65,7 +65,7 @@ export function ConnectionPath({
 }) {
   const theme = canvasThemes[useThemeStore((state) => state.theme)];
   const [hovered, setHovered] = useState(false);
-  const highlighted = active || selected || generating || hovered;
+  const highlighted = selected || generating || hovered;
   const startX = from.position.x + from.width;
   const startY = from.position.y + from.height / 2;
   const endX = to.position.x;
@@ -82,6 +82,7 @@ export function ConnectionPath({
       onMouseLeave={() => setHovered(false)}
       data-canvas-edge-id={connection.id}
       data-selected={selected || undefined}
+      data-related={active || undefined}
     >
       <path
         data-connection-id={connection.id}

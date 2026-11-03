@@ -1,0 +1,15 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.2 /Users/stephenqiu/Desktop/StephenQiu/Glowloom/glowloom-server/frontend
+
+
+ Test Files  5 passed (5)
+      Tests  20 passed (20)
+   Start at  23:07:43
+   Duration  2.09s (environment 82%, import 9%, tests 4%, transform 4%, setup 1%, worker 1%)
+
+    Isolate  5 workers spawned · ~352ms startup each (spawn + environment, per file)
+             at least ~1.41s faster with isolate: false — reuses workers across files instead of one per file
+

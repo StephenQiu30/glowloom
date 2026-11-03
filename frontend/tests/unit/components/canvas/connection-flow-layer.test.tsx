@@ -105,6 +105,31 @@ it("shares one frame and surface, follows the viewport transform, then suspends 
     1300,
   );
   expect(pending.size).toBe(1);
+  // Drag preview updates SVG paths imperatively before React commits node positions.
+  view.container
+    .querySelector("path")!
+    .setAttribute("d", "M 50 90 C 100 90, 200 90, 300 90");
+  const [dragId, dragDraw] = pending.entries().next().value!;
+  pending.delete(dragId);
+  dragDraw(1320);
+  expect(surface.upload).toHaveBeenCalledTimes(2);
+  expect(Array.from(surface.upload.mock.calls.at(-1)![0].slice(0, 2))).toEqual([
+    50, 90,
+  ]);
+  view.container
+    .querySelector("path")!
+    .setAttribute("d", "M 0 0 C 100 0, 200 0, 300 0");
+  const [cancelId, cancelDraw] = pending.entries().next().value!;
+  pending.delete(cancelId);
+  cancelDraw(1325);
+  expect(surface.upload).toHaveBeenCalledTimes(3);
+  expect(Array.from(surface.upload.mock.calls.at(-1)![0].slice(0, 2))).toEqual([
+    0, 0,
+  ]);
+  const [stableId, stableDraw] = pending.entries().next().value!;
+  pending.delete(stableId);
+  stableDraw(1326);
+  expect(surface.upload).toHaveBeenCalledTimes(3);
   view.rerender(<Fixture fanout />);
   const [nextId, nextDraw] = pending.entries().next().value!;
   pending.delete(nextId);
