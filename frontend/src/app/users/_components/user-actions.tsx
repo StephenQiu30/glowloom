@@ -48,6 +48,7 @@ export function UserActions({
           : "禁用"
         : labels[kind],
       destructive: kind === "delete" || kind === "revoke_admin",
+      successMessage: kind === "delete" ? "账号已删除" : undefined,
       effect:
         kind === "password_reset"
           ? "成功表示密码恢复通知已加入邮件队列。管理员不会设置或看到用户密码。"

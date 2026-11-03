@@ -156,17 +156,6 @@ export function BatchDeleteProjectsDialog({
             将删除所选的 {items.length} 个画布，删除后无法打开。
           </DialogDescription>
         </DialogHeader>
-        {started && (
-          <p className="text-sm tabular-nums" role="status">
-            已删除 {deleted.length} 个，已跳过 {skipped.length} 个，待处理{" "}
-            {items.length - index} 个
-          </p>
-        )}
-        {command.error && !complete && (
-          <p className="text-sm break-words">
-            当前画布：{items[index].project.title}
-          </p>
-        )}
         {!command.unknown && command.error?.code === 40901 && (
           <Button
             variant="outline"

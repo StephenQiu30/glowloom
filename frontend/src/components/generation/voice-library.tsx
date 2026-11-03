@@ -1,6 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { toast } from "sonner";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useEffect, useRef, useState } from "react";
 import { VoiceFilters, emptyVoiceTags, type VoiceTags } from "./voice-filters";
 import { Star, Pencil, Trash2 } from "lucide-react";
@@ -298,7 +300,7 @@ export function VoiceLibrary({
             )}
           </div>
         )}
-        {error && (
+        {error && !deleting && (
           <div role="alert">
             <p>{error}</p>
             <Button
@@ -393,12 +395,13 @@ export function VoiceLibrary({
                       items.filter((v) => v.id !== deleting.id),
                     );
                     setDeleting(null);
+                    toast.success("音色已删除");
                   })
                 }
               >
                 删除音色
               </Button>
-              {error && <p role="alert">{error}</p>}
+              {error && <FeedbackToast message={error} />}
             </DialogContent>
           </Dialog>
         )}

@@ -17,7 +17,6 @@ import { requireTask, type Task } from "@/components/generation/contracts";
 import type { GenerationSeed } from "@/components/generation/generation-dialog";
 import { ContentState } from "@/components/layout/content-state";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -61,7 +60,7 @@ import {
   resultTargetKey,
   type HistoryCardTarget,
 } from "./history-results";
-import { HistoryResultCard, historyCardTitle } from "./history-result-card";
+import { HistoryResultCard } from "./history-result-card";
 import { HistoryPublicationDialog } from "./history-publication-dialog";
 import { assetActionFeedback } from "./asset-action-feedback";
 import {
@@ -83,7 +82,6 @@ type Command = {
   body: Parameters<typeof applyPersonalHistoryCommand>[0];
   cards: HistoryCardTarget[];
 };
-type CommandResult = { key: string; title: string; ok: boolean; code: string };
 
 export function PersonalHistoryList({
   kind,
@@ -125,7 +123,6 @@ export function PersonalHistoryList({
   const [downloadResults, setDownloadResults] = useState<
     HistoryDownloadResult[]
   >([]);
-  const [results, setResults] = useState<CommandResult[]>([]);
   const [notice, setNotice] = useState("");
   const [noticeTone, setNoticeTone] = useState<"error" | "info" | "success">(
     "error",
@@ -257,21 +254,33 @@ export function PersonalHistoryList({
         const key = resultTargetKey(item.operation_id!, item.output_id);
         return {
           key,
-          title: historyCardTitle(op.cards.find((card) => card.key === key)!),
           ok: item.ok!,
           code: item.code ?? "",
         };
       });
-      if (
-        kind === "audio" &&
-        op.body.action === "delete" &&
-        outcomes.every((item) => item.ok)
-      ) {
+      if (op.body.action === "delete" && outcomes.every((item) => item.ok)) {
         setBatch(false);
         onBatchMode(false);
       }
       setDetail(null);
-      setResults(outcomes);
+      const label =
+        op.body.action === "delete"
+          ? "删除"
+          : op.body.favorited
+            ? "收藏"
+            : "取消收藏";
+      const failures = outcomes.filter((item) => !item.ok);
+      const succeeded = outcomes.length - failures.length;
+      setNoticeTone(failures.length ? "error" : "success");
+      if (failures.length) {
+        const reason =
+          new Set(failures.map((item) => item.code)).size === 1
+            ? assetActionFeedback(failures[0].code)
+            : "请重试未完成的内容。";
+        setNotice(
+          `${succeeded ? `已${label}${succeeded}项，` : ""}${failures.length}项${label}失败。${reason}`,
+        );
+      } else setNotice(`已${label}${succeeded}项内容`);
       setChosen((previous) =>
         previous.filter(
           (key) => !outcomes.some((item) => item.key === key && item.ok),
@@ -644,25 +653,6 @@ export function PersonalHistoryList({
         </Button>
       )}
       <section
-        aria-label="操作结果"
-        aria-live="polite"
-        className={results.length ? "flex flex-col gap-2" : "sr-only"}
-      >
-        {results.map((item) => (
-          <Alert
-            key={item.key}
-            variant={item.ok ? "default" : "destructive"}
-            role="group"
-          >
-            <AlertTitle>{item.ok ? "操作完成" : "操作未完成"}</AlertTitle>
-            <AlertDescription className="break-words">
-              {item.title}：
-              {item.ok ? "已完成" : assetActionFeedback(item.code)}
-            </AlertDescription>
-          </Alert>
-        ))}
-      </section>
-      <section
         aria-label="下载结果"
         aria-live="polite"
         className={downloadResults.length ? "grid gap-1 text-sm" : "sr-only"}
@@ -805,14 +795,6 @@ export function PersonalHistoryList({
                 项，任务执行、计费和画布引用不受影响。
               </AlertDialogDescription>
             </AlertDialogHeader>
-            {notice && (
-              <Alert variant="destructive">
-                <AlertTitle>删除尚未完成</AlertTitle>
-                <AlertDescription className="break-words">
-                  {notice}
-                </AlertDescription>
-              </Alert>
-            )}
             <AlertDialogFooter>
               <AlertDialogCancel disabled={locked}>取消</AlertDialogCancel>
               <AlertDialogAction
@@ -840,9 +822,7 @@ export function PersonalHistoryList({
       {reuse && (
         <GenerationDialog seed={reuse} onClose={() => setReuse(null)} />
       )}
-      {notice && !deleting && (
-        <FeedbackToast message={notice} tone={noticeTone} />
-      )}
+      {notice && <FeedbackToast message={notice} tone={noticeTone} />}
     </div>
   );
 }

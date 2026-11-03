@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { toast } from "sonner";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { Contact, Heart, LoaderCircle, X } from "lucide-react";
 import { getSubjectVersion, listSubjects } from "@/api/subjects";
 import { Button } from "@/components/ui/button";
@@ -122,6 +124,7 @@ export function CanvasSubjectNode({
       client.change(next, true);
       await client.waitForSaved();
       setError("");
+      toast.success("主体引用已移除");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "移除尚未确认");
     }
@@ -271,7 +274,7 @@ export function CanvasSubjectNode({
       >
         主体导入
       </Button>
-      {error && <p role="alert">{error}</p>}
+      {error && <FeedbackToast message={error} />}
       {editing && (
         <SubjectNodeEditor
           actorID={actorID}

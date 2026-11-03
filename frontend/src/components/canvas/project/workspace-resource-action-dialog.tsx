@@ -201,15 +201,7 @@ export function WorkspaceResourceActionDialog({
   };
   const recovery = (
     <>
-      {started &&
-        operation === "delete" &&
-        (command.error || skipped > 0 || index > 0) && (
-          <p role="status" className="text-sm tabular-nums">
-            已删除 {deleted} 项，待处理 {items.length - index} 项
-            {skipped > 0 ? `，已跳过 ${skipped} 项` : ""}
-          </p>
-        )}
-      {command.error && !complete && (
+      {command.error && !complete && operation !== "delete" && (
         <p className="text-sm break-words" role="status">
           {items[index].target.title}：
           {command.unknown ? "操作结果待确认" : command.error.message}

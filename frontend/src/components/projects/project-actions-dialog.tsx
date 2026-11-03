@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { toast } from "sonner";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { RequestError } from "@/lib/request";
 import { useRef, useState } from "react";
 import { ensureSessionFresh } from "@/components/auth/session";
@@ -102,7 +103,10 @@ export function ProjectActionsDialog({
           if (!rejected) unresolved.push(project);
           outcomes.current.set(project.id, {
             kind: rejected ? "rejected" : "unknown",
-            message: `${project.name}：${projectManagementMessage(reason)}`,
+            message:
+              action === "recycle"
+                ? projectManagementMessage(reason)
+                : `${project.name}：${projectManagementMessage(reason)}`,
           });
         }
       }
@@ -151,7 +155,9 @@ export function ProjectActionsDialog({
         return;
       }
       setResult(
-        `已完成 ${success.length} 项，${rejected} 项被拒绝，${unknown} 项结果未确认。关闭后重新读取列表核对，未完成项保留选择。${failures.join("；")}`,
+        action === "recycle"
+          ? `已完成 ${success.length} 项，${rejected} 项被拒绝，${unknown} 项结果未确认。${failures[0] ?? "请重新读取列表核对。"}`
+          : `已完成 ${success.length} 项，${rejected} 项被拒绝，${unknown} 项结果未确认。关闭后重新读取列表核对，未完成项保留选择。${failures.join("；")}`,
       );
     } catch {
       setResult("无法确认当前登录状态，请关闭后重新读取。");
@@ -197,14 +203,17 @@ export function ProjectActionsDialog({
                     : "分别恢复到删除前的画布或已归档列表，保留原内容和原标识。"
                 : "取消归档后可在画布列表继续创作。"}
         </DialogDescription>
-        <ul className="max-h-48 overflow-auto text-sm text-muted-foreground">
-          {projects.map((p) => (
-            <li key={p.id} className="truncate py-1">
-              {p.name}
-            </li>
-          ))}
-        </ul>
-        {(pending || result) && (
+        {action !== "recycle" && (
+          <ul className="max-h-48 overflow-auto text-sm text-muted-foreground">
+            {projects.map((p) => (
+              <li key={p.id} className="truncate py-1">
+                {p.name}
+              </li>
+            ))}
+          </ul>
+        )}
+        {result && action === "recycle" && <FeedbackToast message={result} />}
+        {(pending || (result && action !== "recycle")) && (
           <p role="status" aria-atomic="true" className="text-sm break-words">
             {pending ? "正在处理，请稍候…" : result}
           </p>

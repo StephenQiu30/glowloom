@@ -8,7 +8,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { toast } from "sonner";
 import { Plus, Search, UserRound, MapPin, Box } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -381,24 +380,6 @@ export function SubjectList({
             change(s);
             if (!!s.head.deleted !== deleted) {
               setSelected(null);
-              toast.success(
-                s.head.deleted ? "主体已移除" : "主体已恢复",
-                s.head.deleted
-                  ? {
-                      description: "历史版本保留，可在已删除列表中恢复。",
-                      action: {
-                        label: "查看已删除",
-                        onClick: () => {
-                          setDeleted(true);
-                          setLoading(true);
-                          setItems([]);
-                          setCursor(undefined);
-                          setCursorHistory([undefined]);
-                        },
-                      },
-                    }
-                  : undefined,
-              );
               if (!s.head.deleted) {
                 setDeleted(false);
                 setLoading(true);

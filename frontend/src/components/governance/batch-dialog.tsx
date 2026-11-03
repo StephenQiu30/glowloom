@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import {
@@ -139,15 +140,17 @@ export function BatchDialog<T extends { id?: string }>({
             />
           ) : null}
           {compact && (failed > 0 || batch.unresolved) ? (
-            <Alert variant="destructive">
-              <AlertDescription>
-                {batch.unresolved
+            <FeedbackToast
+              message={
+                batch.unresolved
                   ? "部分结果待确认，请先查询原请求。"
-                  : `${failed} 项未完成。${batch.entries.find((entry) => entry.status === "failed")?.message ?? "请重新读取后再试。"}`}
-              </AlertDescription>
-            </Alert>
+                  : `${failed} 项未完成。${batch.entries.find((entry) => entry.status === "failed")?.message ?? "请重新读取后再试。"}`
+              }
+            />
           ) : null}
-          {batch.error ? (
+          {batch.error && compact ? (
+            <FeedbackToast message={batch.error} />
+          ) : batch.error ? (
             <Alert variant="destructive">
               <AlertDescription>{batch.error}</AlertDescription>
             </Alert>

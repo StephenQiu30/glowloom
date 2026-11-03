@@ -1,5 +1,5 @@
 "use client";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { toast } from "sonner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -215,6 +215,10 @@ function Library({
       setConfirm(null);
       setFolderOpen(false);
       setFolderName("");
+      if (op.body.action === "recycle_items")
+        toast.success(`已移入回收站 ${op.body.items?.length ?? 0} 项素材`);
+      else if (op.body.action === "restore_items")
+        toast.success(`已恢复 ${op.body.items?.length ?? 0} 项素材`);
       if (
         op.body.action === "update_item" &&
         detail &&
@@ -432,7 +436,7 @@ function Library({
                 </ItemActions>
               </Item>
             )}
-            {writeError && !confirm && (
+            {writeError && (
               <FeedbackToast
                 message={writeError}
                 action={
@@ -858,14 +862,6 @@ function Library({
                       : "移入回收站后可以恢复。"}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
-                {writeError && (
-                  <Alert variant="destructive">
-                    <AlertTitle>操作尚未完成</AlertTitle>
-                    <AlertDescription className="break-words">
-                      {writeError}
-                    </AlertDescription>
-                  </Alert>
-                )}
                 <AlertDialogFooter>
                   <AlertDialogCancel disabled={saving || !!pendingOperation}>
                     取消

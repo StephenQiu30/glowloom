@@ -3,6 +3,7 @@ import { getCanvasDocument } from "@/components/canvas/runtime/api/canvas-docume
 import { canvasLibraryItem } from "../hooks/use-projects";
 import { unwrap } from "@/components/canvas/runtime/lib/request";
 import { useRef, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -40,6 +41,7 @@ export function CanvasDeleteProjectsDialog({
       queryOnly,
     );
     if (result) {
+      toast.success("画布已删除");
       onClose();
       onDeleted?.();
     }

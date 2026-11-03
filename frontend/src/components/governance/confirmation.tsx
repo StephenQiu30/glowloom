@@ -1,5 +1,6 @@
 "use client";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import { toast } from "sonner";
 import { FieldLabel } from "@/components/ui/field";
 import { useEffect, useRef, useState } from "react";
 import { reauthenticate } from "@/api/identity";
@@ -31,6 +32,7 @@ export type ConfirmAction = {
   password?: boolean;
   confirmLabel?: string;
   destructive?: boolean;
+  successMessage?: string;
   run: (
     reason: string,
     signal: AbortSignal,
@@ -73,6 +75,7 @@ export function Confirmation({
       setPassword("");
       await action.run(reason.trim(), c.signal, requestID.current);
       if (!c.signal.aborted) {
+        if (action.successMessage) toast.success(action.successMessage);
         await onDone();
         onClose();
       }
@@ -110,11 +113,7 @@ export function Confirmation({
             </AlertDialogTitle>
             <AlertDialogDescription>{action.effect}</AlertDialogDescription>
           </AlertDialogHeader>
-          {error ? (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          ) : null}
+          {error ? <FeedbackToast message={error} /> : null}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={pending}>取消</AlertDialogCancel>
             <AlertDialogAction
@@ -175,11 +174,7 @@ export function Confirmation({
               />
             </FieldLabel>
           ) : null}
-          {error ? (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          ) : null}
+          {error ? <FeedbackToast message={error} /> : null}
           <div className="flex flex-wrap justify-end gap-2">
             <Button
               type="button"

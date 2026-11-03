@@ -1,4 +1,4 @@
-import { render } from "../../../feedback";
+import { render, findFeedback } from "../../../feedback";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { Confirmation } from "@/components/governance/confirmation";
@@ -34,7 +34,7 @@ it("冲突重读一次且不重试业务动作，关闭清除密码", async () =
     target: { value: "测试治理原因" },
   });
   fireEvent.click(screen.getByText("确认操作"));
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(run).toHaveBeenCalledTimes(1);
   expect(done).toHaveBeenCalledTimes(1);
   expect(close).not.toHaveBeenCalled();
@@ -47,6 +47,30 @@ it("冲突重读一次且不重试业务动作，关闭清除密码", async () =
     <Confirmation key="closed" action={null} onDone={done} onClose={close} />,
   );
   expect(screen.queryByLabelText("当前密码")).toBeNull();
+});
+it("删除成功通过根Toaster提示，关闭确认且没有结果清单", async () => {
+  const run = vi.fn().mockResolvedValue(undefined);
+  const close = vi.fn();
+  render(
+    <Confirmation
+      action={{
+        title: "删除测试账号？",
+        effect: "此操作不可恢复。",
+        reason: false,
+        password: false,
+        destructive: true,
+        successMessage: "账号已删除",
+        run,
+      }}
+      onDone={vi.fn()}
+      onClose={close}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "确认" }));
+  await findFeedback("账号已删除");
+  expect(run).toHaveBeenCalledTimes(1);
+  expect(close).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole("alert")).toBeNull();
 });
 it("错误密码不执行业务动作", async () => {
   vi.mocked(request).mockRejectedValue(
@@ -64,7 +88,7 @@ it("错误密码不执行业务动作", async () => {
     target: { value: "wrong" },
   });
   fireEvent.click(screen.getByText("确认操作"));
-  await screen.findByRole("alert");
+  await findFeedback();
   await waitFor(() => expect(run).not.toHaveBeenCalled());
 });
 it("简短删除确认使用警示对话框，取消优先聚焦，失败保留确认入口", async () => {
@@ -95,7 +119,7 @@ it("简短删除确认使用警示对话框，取消优先聚焦，失败保留�
     ),
   );
   fireEvent.click(screen.getByRole("button", { name: "删除" }));
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(close).not.toHaveBeenCalled();
   expect(run).toHaveBeenCalledTimes(1);
 });

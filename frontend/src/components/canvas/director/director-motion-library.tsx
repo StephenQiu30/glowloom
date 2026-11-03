@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -313,6 +314,7 @@ export function DirectorMotionLibrary(props: DirectorMotionLibraryProps) {
                           ),
                         });
                         stop();
+                        toast.success("动作已从动作库移除");
                       }}
                     >
                       删除

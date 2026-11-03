@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useRef, useState, type SetStateAction } from "react";
 import dynamic from "next/dynamic";
+import { toast } from "sonner";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import {
   Download,
   Star,
@@ -177,9 +179,11 @@ export function UnifiedSubjectLibrary({
       setSelected(op.subjects.filter((s) => failedIDs.has(s.id)));
       setWriteError(
         failures.length
-          ? `${failures.length} 项未完成：${failures.map((i) => `${op.subjects.find((s) => s.id === i.id)?.name ?? "主体"}（${subjectBatchError(i.code)}）`).join("、")}`
+          ? `${response.items.length - failures.length} 项已完成，${failures.length} 项未完成。${new Set(failures.map((item) => item.code)).size === 1 ? subjectBatchError(failures[0].code) : "请重试未完成的主体。"}`
           : "",
       );
+      if (op.body.action === "delete" && !failures.length)
+        toast.success(`已删除 ${response.items.length} 个主体`);
       operation.current = null;
       setUncertain(false);
       setDeleting(null);
@@ -401,22 +405,14 @@ export function UnifiedSubjectLibrary({
         ) : null}
       </PageToolbar>
       {writeError ? (
-        <div
-          role="alert"
-          className="rounded-lg border border-destructive/30 p-3 text-sm"
-        >
-          <p>{writeError}</p>
-          {uncertain ? (
-            <Button
-              className="mt-2"
-              variant="outline"
-              disabled={pending}
-              onClick={() => void mutate()}
-            >
-              重试原操作
-            </Button>
-          ) : null}
-        </div>
+        <FeedbackToast
+          message={writeError}
+          action={
+            uncertain && !deleting && !pending
+              ? { label: "重试原操作", onClick: () => void mutate() }
+              : undefined
+          }
+        />
       ) : null}
       {!page && loading ? (
         <div className="unified-subject-grid" aria-label="正在读取主体">
@@ -638,11 +634,6 @@ export function UnifiedSubjectLibrary({
             <DialogDescription>
               主体删除后无法恢复，关联的历史作品将无法重新编辑。
             </DialogDescription>
-            {writeError ? (
-              <p role="alert" className="text-sm text-destructive">
-                {writeError}
-              </p>
-            ) : null}
             <DialogFooter>
               <Button
                 variant="outline"

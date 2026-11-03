@@ -2059,6 +2059,10 @@ function InfiniteCanvasPage({
       for (const id of ids)
         for (const child of containerDescendantIDs(nodesRef.current, id))
           allIds.add(child);
+      const removedCount = nodesRef.current.filter((node) =>
+        allIds.has(node.id),
+      ).length;
+      if (!removedCount) return;
       const next = removeCanvasReferences(
         nodesRef.current,
         connectionsRef.current,
@@ -2107,8 +2111,9 @@ function InfiniteCanvasPage({
       setContextMenu((current) =>
         current?.type === "node" && allIds.has(current.nodeId) ? null : current,
       );
+      message.success(`已从画布移除 ${removedCount} 项内容`);
     },
-    [setConnections, setNodes],
+    [message, setConnections, setNodes],
   );
 
   const groupSelection = useCallback(() => {
@@ -2189,6 +2194,8 @@ function InfiniteCanvasPage({
 
   const deleteConnection = useCallback(
     (connectionId: string) => {
+      if (!connectionsRef.current.some((item) => item.id === connectionId))
+        return;
       const next = removeCanvasReferences(
         nodesRef.current,
         connectionsRef.current,
@@ -2206,8 +2213,9 @@ function InfiniteCanvasPage({
           ? null
           : current,
       );
+      message.success("连线已移除");
     },
-    [setConnections, setNodes],
+    [message, setConnections, setNodes],
   );
 
   const disconnectNodeReference = useCallback(
@@ -5595,6 +5603,8 @@ function InfiniteCanvasPage({
   const deleteBatchImage = useCallback(
     (nodeId: string, imageId: string) => {
       const node = nodesRef.current.find((item) => item.id === nodeId);
+      if (!node?.metadata?.images?.some((image) => image.id === imageId))
+        return;
       if ((node?.metadata?.images?.length || 0) <= 2)
         setExpandedBatchNodeIds(
           (current) => new Set([...current].filter((id) => id !== nodeId)),
@@ -5619,8 +5629,9 @@ function InfiniteCanvasPage({
           };
         }),
       );
+      message.success("图片已从画布移除");
     },
-    [setNodes],
+    [message, setNodes],
   );
 
   const retryBatchImage = useCallback(

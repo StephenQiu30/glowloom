@@ -567,12 +567,8 @@ it("多图结果分别计数，批量收藏部分失败后仅保留失败项并�
       .getAttribute("data-state"),
   ).toBe("checked");
   expect(state.history).toHaveBeenCalledTimes(2);
-  expect(screen.getByLabelText("操作结果").textContent).toContain(
-    "内容已更新，请重试此项。",
-  );
-  expect(screen.getByLabelText("操作结果").getAttribute("aria-live")).toBe(
-    "polite",
-  );
+  await findFeedback("已收藏1项，1项收藏失败。内容已更新，请重试此项。");
+  expect(screen.queryByLabelText("操作结果")).toBeNull();
 });
 it("收藏未知结果冻结来源与原幂等键，重试不会改为新命令", async () => {
   state.history.mockResolvedValue({ items: [multiTask], next_cursor: null });
@@ -627,6 +623,88 @@ it("没有输出的进行中记录不可收藏，删除只提交记录修订且�
   expect(state.historyCommand.mock.calls[0][0].targets).toEqual([
     { operation_id: task.id, output_id: undefined, expected_revision: 3 },
   ]);
+});
+it("批量删除成功仅提示一条Toast，退出选择且不展示逐项回执", async () => {
+  state.history.mockResolvedValue({ items: [multiTask], next_cursor: null });
+  state.historyCommand.mockImplementation(async (body, options) =>
+    receipt(body, options),
+  );
+  render(<AssetWorkspace />);
+  await screen.findByRole("article", { name: "本人的创作记录 · 结果2" });
+  fireEvent.click(screen.getByRole("button", { name: "批量操作" }));
+  screen
+    .getAllByRole("checkbox", { name: /^选择/ })
+    .forEach((item) => fireEvent.click(item));
+  fireEvent.click(screen.getByRole("button", { name: "删除" }));
+  fireEvent.click(
+    within(screen.getByRole("alertdialog")).getByRole("button", {
+      name: "删除",
+    }),
+  );
+  await findFeedback("已删除2项内容");
+  expect(screen.queryByLabelText("操作结果")).toBeNull();
+  expect(screen.queryByRole("alertdialog")).toBeNull();
+  expect(screen.queryByText("操作完成")).toBeNull();
+  expect(screen.queryByText("已选择0项内容")).toBeNull();
+  expect(screen.getByRole("button", { name: "批量操作" })).toBeTruthy();
+});
+it("批量删除部分失败只汇总Toast，继续选择失败项", async () => {
+  state.history.mockResolvedValue({ items: [multiTask], next_cursor: null });
+  state.historyCommand.mockImplementation(async (body, options) =>
+    receipt(body, options, true),
+  );
+  render(<AssetWorkspace />);
+  await screen.findByRole("article", { name: "本人的创作记录 · 结果2" });
+  fireEvent.click(screen.getByRole("button", { name: "批量操作" }));
+  screen
+    .getAllByRole("checkbox", { name: /^选择/ })
+    .forEach((item) => fireEvent.click(item));
+  fireEvent.click(screen.getByRole("button", { name: "删除" }));
+  fireEvent.click(
+    within(screen.getByRole("alertdialog")).getByRole("button", {
+      name: "删除",
+    }),
+  );
+  await findFeedback("已删除1项，1项删除失败。内容已更新，请重试此项。");
+  expect(screen.getByText("已选择1项内容")).toBeTruthy();
+  expect(screen.queryByLabelText("操作结果")).toBeNull();
+  expect(
+    screen
+      .getByRole("checkbox", { name: "选择本人的创作记录 · 结果2" })
+      .getAttribute("data-state"),
+  ).toBe("checked");
+});
+it("删除结果未知只提示Toast并保留同一请求重试", async () => {
+  state.history.mockResolvedValue({ items: [multiTask], next_cursor: null });
+  state.historyCommand
+    .mockRejectedValueOnce(new RequestError("unavailable", 503))
+    .mockImplementationOnce(async (body, options) => receipt(body, options));
+  render(<AssetWorkspace />);
+  await screen.findByRole("article", { name: "本人的创作记录 · 结果2" });
+  fireEvent.click(screen.getByRole("button", { name: "批量操作" }));
+  fireEvent.click(
+    screen.getByRole("checkbox", { name: "选择本人的创作记录 · 结果1" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "删除" }));
+  fireEvent.click(
+    within(screen.getByRole("alertdialog")).getByRole("button", {
+      name: "删除",
+    }),
+  );
+  await findFeedback("操作结果尚未确认，请重试原操作。");
+  expect(screen.queryByLabelText("操作结果")).toBeNull();
+  fireEvent.click(
+    await within(screen.getByRole("alertdialog")).findByRole("button", {
+      name: "重试原操作",
+    }),
+  );
+  await findFeedback("已删除1项内容");
+  expect(state.historyCommand.mock.calls[1][0]).toEqual(
+    state.historyCommand.mock.calls[0][0],
+  );
+  expect(state.historyCommand.mock.calls[1][1].headers["Idempotency-Key"]).toBe(
+    state.historyCommand.mock.calls[0][1].headers["Idempotency-Key"],
+  );
 });
 it("高级筛选按组发CSV，切换媒体清理不兼容条件", async () => {
   render(<AssetWorkspace />);

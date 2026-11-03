@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { render, findFeedback } from "../../../feedback";
 import {
   PageToolbarContext,
   PageActionsContext,
@@ -8,7 +9,6 @@ import {
   act,
   cleanup,
   fireEvent,
-  render,
   screen,
   waitFor,
   within,
@@ -110,7 +110,7 @@ it("同一帧重复下载只创建一次导出，失败保留所选版本", asyn
   download.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   expect(api.export).toHaveBeenCalledOnce();
   reject(new Error("network"));
-  await screen.findByRole("alert");
+  await findFeedback();
   expect(screen.getByText("已选择 1 项内容")).toBeTruthy();
   expect(api.export.mock.calls[0][0]).toEqual({
     items: [{ id: first.id, version_id: first.version_id }],
@@ -270,9 +270,8 @@ it("批量部分失败保留失败选择，不能显示全部成功", async () =
   fireEvent.click(screen.getByRole("checkbox", { name: "选择主体 纸飞机" }));
   fireEvent.click(screen.getByRole("button", { name: "收藏" }));
   await screen.findByText("已选择 1 项内容");
-  expect(screen.getByRole("alert").textContent).toContain(
-    "纸飞机（内容已更新，请重新选择）",
-  );
+  await findFeedback("1 项已完成，1 项未完成。内容已更新，请重新选择");
+  expect(screen.queryByRole("alert")).toBeNull();
   await screen.findByRole("checkbox", { name: "选择主体 纸飞机" });
   expect(
     screen

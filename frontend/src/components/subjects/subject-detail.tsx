@@ -1,6 +1,7 @@
 "use client";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useRef, useState } from "react";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -105,6 +106,8 @@ export function SubjectDetail({
               s.head.confirmed_version_id !== s.current.id)))
       )
         throw new RequestError("invalid_receipt");
+      if (action === "delete") toast.success("主体已删除");
+      else if (action === "restore") toast.success("主体已恢复");
       changed(s);
       if (s.head.revision > receipt.revision)
         setError("操作已完成，主体随后又有更新。当前显示的是最新状态。");
