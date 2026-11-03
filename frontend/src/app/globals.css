@@ -394,6 +394,9 @@ button:not(:disabled),
   background: var(--background);
 }
 .product-header {
+  --header-control-size: 28px;
+  --header-group-height: 36px;
+  --header-group-padding: 3px;
   border: 0;
   box-shadow: none;
   height: var(--layout-header);
@@ -882,20 +885,22 @@ button:not(:disabled),
 }
 .product-account-actions {
   display: flex;
-  height: 36px;
+  height: var(--header-group-height, 36px);
   flex-shrink: 0;
   align-items: center;
   gap: 2px;
-  padding: 3px 6px 3px 4px;
+  padding: var(--header-group-padding, 3px) 6px var(--header-group-padding, 3px)
+    4px;
   border: 1px solid var(--navigation-border);
   border-radius: 8px;
   background: color-mix(in srgb, var(--background) 60%, transparent);
 }
 .product-account-actions .product-notification-action,
+.product-account-actions [data-theme-trigger],
 .product-account-actions [aria-label="账号菜单"] {
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
+  width: var(--header-control-size, 28px);
+  height: var(--header-control-size, 28px);
+  min-width: var(--header-control-size, 28px);
   padding: 0;
   border-radius: 6px;
 }
@@ -911,7 +916,7 @@ button:not(:disabled),
 }
 .product-account-actions .product-credit-action,
 .product-account-actions .product-membership-action {
-  height: 28px;
+  height: var(--header-control-size, 28px);
   gap: 6px;
   padding: 0 8px;
   border-radius: 6px;
@@ -919,25 +924,36 @@ button:not(:disabled),
   line-height: 18px;
   color: var(--navigation-accent);
 }
+.product-account-actions .product-login-action {
+  height: var(--header-control-size, 28px);
+  min-width: var(--header-control-size, 28px);
+  padding-block: 0;
+}
 @media (width < 1280px) {
   .product-utility-navigation {
     display: none;
   }
 }
 @media (width < 768px) {
+  .product-header {
+    --header-control-size: 44px;
+    --header-group-height: 50px;
+    --header-group-padding: 2px;
+  }
   .product-shell {
     --layout-header: 64px;
   }
   .product-account-actions {
-    height: 50px;
-    padding-block: 2px;
+    height: var(--header-group-height, 50px);
+    padding-block: var(--header-group-padding, 2px);
   }
   .product-account-actions .product-notification-action,
+  .product-account-actions [data-theme-trigger],
   .product-account-actions [aria-label="账号菜单"],
   .product-account-actions .product-credit-action {
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
+    width: var(--header-control-size, 44px);
+    height: var(--header-control-size, 44px);
+    min-width: var(--header-control-size, 44px);
     padding: 0;
   }
   .product-membership-action,
@@ -3395,6 +3411,22 @@ button:not(:disabled),
 }
 
 /* Asset header uses shadcn surfaces; these rules only arrange their slots. */
+.product-header [data-asset-tool-group]:not(:has([data-asset-batch])) {
+  min-height: var(--header-group-height);
+  padding: var(--header-group-padding) 4px;
+}
+.product-header [data-asset-tool-group]:not(:has([data-asset-batch])) button {
+  width: var(--header-control-size);
+  height: var(--header-control-size);
+  min-width: var(--header-control-size);
+  min-height: var(--header-control-size);
+  padding: 0;
+}
+.product-header
+  [data-asset-tool-group]:not(:has([data-asset-batch]))
+  [data-inline-page-search] {
+  height: var(--header-control-size);
+}
 .product-header[data-asset-layout]:has(.product-header-toolbar:not(:empty)) {
   grid-template-columns: minmax(0, 1fr) minmax(0, auto);
   grid-auto-rows: minmax(44px, auto);

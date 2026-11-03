@@ -45,7 +45,9 @@ export function ProductAccountActions({
   const account = actor ? (
     <AccountMenu actor={actor} onLogout={onLogout} />
   ) : (
-    <Button onClick={onLogin}>登录</Button>
+    <Button className="product-login-action" onClick={onLogin}>
+      登录
+    </Button>
   );
   return (
     <div
