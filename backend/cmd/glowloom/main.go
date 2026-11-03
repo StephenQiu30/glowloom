@@ -38,6 +38,9 @@ func run() error {
 	if len(os.Args) > 1 && os.Args[1] == "identity" {
 		return identityoperator.Run(os.Args[2:])
 	}
+	if len(os.Args) > 1 && os.Args[1] == "sandbox" {
+		return runSandbox(os.Args[2:])
+	}
 	var role app.Role
 	var queues, schedulePrefix string
 	var projectRetention bool

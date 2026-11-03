@@ -4,9 +4,19 @@
 
 业务与架构决策明确：拒绝 Node.js 独立宿主过度设计，在 Go 后端进程内（`backend/internal/agent`）原生统一实现。结合业界成熟的 **LangGraph (StateGraph) 状态图编排** 与开源 **BeefTV 工业级 Harness 状态机**（提案中断 `Proposal Yield`、多步写链 `WriteChain`、现场自愈 `StudioDigest` 及单轮看门狗），完全闭环多 Agent 协作。
 
-- 架构纠偏：四层文档（需求19、设计32、PRD19、Plan28）已全部更新为 Go 原生架构；彻底消除双宿主分布式脑裂、跨网络签名与底层 bytea 日志表，恢复单一二进制进程原则。
-- 阶段状态：阶段性底座已安全提交 Git（commit `4a1c76e1`）。
-- 下一步任务：按更新后的 Plan 28 正式启动 **T-AH-01（Go LangGraph StateGraph 核心引擎与 PostgreSQL Checkpointer）** 的落地代码实现。
+- **架构纠偏**：四层文档（需求19、设计32、PRD19、Plan28）已全部更新为 Go 原生架构；彻底消除双宿主分布式脑裂、跨网络签名与底层 bytea 日志表，恢复单一二进制进程原则。
+- **全套方案落地完成 (T-AH-01 ~ T-AH-08)**：
+  - **T-AH-01 状态图引擎与检查点**：`graph.StateGraph`、`CompiledGraph`、PostgreSQL Checkpointer（`agent.graph_checkpoint`）全部通过单元与事务恢复测试。
+  - **T-AH-02 Supervisor 统筹与提案中断**：`Supervisor` 制作人目标分解与条件边路由，结合 `ProposalHarness` 实现提案截断挂起（Proposal Yield），经用户批准恢复前绝不发起后续推理。
+  - **T-AH-03 模型统一网关与看门狗**：模型参数冻结校验、45秒 SSE 空闲看门狗与单轮最大 40 步请求 / 40 步工具调用硬性熔断。
+  - **T-AH-04 业务工具、写入链与现场自愈**：`ToolRegistry` 工具分发、`WriteChainCoordinator` 单轮连续写 CAS 链头自增、`StudioDigestComputer` 画布差异 `<canvas_changes>` 实时自愈注入。
+  - **T-AH-05 Skill 生命周期与动态装载**：`SkillPackage` 版本固定与内容哈希校验、防路径穿越、`skill_load` 运行时动态展开与子任务上下文重置。
+  - **T-AH-06 专业 Worker 智能体族**：落地 ScriptWorker（剧本拆解与歧义标记）、StoryboardWorker（分镜与机位设定）、ShotWorker（镜头提示词与生成提案）、AudioWorker（配音音效与时间线对齐），端到端多智能体流水线全流通。
+  - **T-AH-07 隔离执行沙箱**：提供 `glowloom sandbox serve` 子命令与受限进程执行器，超时强制熔断与无凭据泄露。
+  - **T-AH-08 SSE 流式事件与前端卡片**：`StreamHandler` 统一推送 `thinking`、`text`、`tool_call`、`proposal`、`turn_end`；前端落地 `ProposalApprovalCard` 待审批弹窗卡片与参数确认。
+- **质量门禁**：
+  - 后端：46/46 专项与集成测试全部通过，`-race` 检测 0 数据竞争，`go vet` 0 警告，`gofmt` 0 异常。
+  - 前端：TypeScript 类型检查通过（`tsc --noEmit` 0 错误）。
 
 ## 2026-11-01 完整创作 Agent Harness、Skill 与多 Agent 文档
 

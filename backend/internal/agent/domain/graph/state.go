@@ -64,8 +64,35 @@ type Proposal struct {
 	Summary             string          `json:"summary"`
 	EstimatedCostMicros int64           `json:"estimated_cost_micros"`
 	Data                json.RawMessage `json:"data"`
+	Status              string          `json:"status"` // "pending", "approved", "rejected"
 	Approved            bool            `json:"approved"`
 	CreatedAt           time.Time       `json:"created_at"`
+}
+
+// ProposalResolution communicates the user's approval/rejection when resuming the graph.
+type ProposalResolution struct {
+	ProposalID uuid.UUID `json:"proposal_id"`
+	Approved   bool      `json:"approved"`
+	Reason     string    `json:"reason,omitempty"`
+}
+
+// PlanStepState tracks the lifecycle of one step in the agent execution plan.
+type PlanStepState struct {
+	ID        string          `json:"id"`
+	Agent     string          `json:"agent"` // "script_worker", "storyboard_worker", "shot_worker", "audio_worker"
+	Title     string          `json:"title"`
+	Status    string          `json:"status"` // "pending", "in_progress", "completed", "failed", "skipped"
+	DependsOn []string        `json:"depends_on,omitempty"`
+	Input     json.RawMessage `json:"input,omitempty"`
+	Result    string          `json:"result,omitempty"`
+}
+
+// ExecutionPlan holds the decomposed steps produced by the Supervisor.
+type ExecutionPlan struct {
+	Revision int64           `json:"revision"`
+	Goal     string          `json:"goal"`
+	Steps    []PlanStepState `json:"steps"`
+	Approved bool            `json:"approved"`
 }
 
 // AgentState is the immutable-per-step state container passed along the LangGraph execution graph.
@@ -76,6 +103,9 @@ type AgentState struct {
 	ActorID         uuid.UUID       `json:"actor_id"`
 	CurrentRevision int64           `json:"current_revision"`
 	WriteChain      WriteChainState `json:"write_chain"`
+
+	Goal string         `json:"goal,omitempty"`
+	Plan *ExecutionPlan `json:"plan,omitempty"`
 
 	Messages     []Message  `json:"messages"`
 	Proposals    []Proposal `json:"proposals"`
@@ -100,6 +130,125 @@ func (s *AgentState) Interrupt(reason string) {
 	s.Interrupted = true
 	s.InterruptReason = reason
 	s.Status = "suspended_for_approval"
+}
+
+// AddProposal appends a new proposal and immediately flags state interruption.
+func (s *AgentState) AddProposal(p Proposal) {
+	if p.ID == uuid.Nil {
+		p.ID = uuid.New()
+	}
+	if p.Status == "" {
+		p.Status = "pending"
+	}
+	if p.CreatedAt.IsZero() {
+		p.CreatedAt = time.Now().UTC()
+	}
+	s.Proposals = append(s.Proposals, p)
+	s.Interrupt("proposal_approval_required")
+}
+
+// ResolveProposal updates a pending proposal with the user's decision.
+func (s *AgentState) ResolveProposal(id uuid.UUID, approved bool) bool {
+	for i := range s.Proposals {
+		if s.Proposals[i].ID == id {
+			s.Proposals[i].Approved = approved
+			if approved {
+				s.Proposals[i].Status = "approved"
+			} else {
+				s.Proposals[i].Status = "rejected"
+			}
+			return true
+		}
+	}
+	return false
+}
+
+// PendingProposals returns any proposals awaiting approval.
+func (s *AgentState) PendingProposals() []Proposal {
+	var pending []Proposal
+	for _, p := range s.Proposals {
+		if p.Status == "pending" && !p.Approved {
+			pending = append(pending, p)
+		}
+	}
+	return pending
+}
+
+// NextReadyStep finds the next step whose dependencies are all completed.
+func (s *AgentState) NextReadyStep() *PlanStepState {
+	if s.Plan == nil {
+		return nil
+	}
+	completed := make(map[string]bool)
+	for _, step := range s.Plan.Steps {
+		if step.Status == "completed" || step.Status == "skipped" {
+			completed[step.ID] = true
+		}
+	}
+	for i := range s.Plan.Steps {
+		step := &s.Plan.Steps[i]
+		if step.Status == "pending" {
+			depsMet := true
+			for _, dep := range step.DependsOn {
+				if !completed[dep] {
+					depsMet = false
+					break
+				}
+			}
+			if depsMet {
+				return step
+			}
+		}
+	}
+	return nil
+}
+
+// StepByID returns a pointer to the plan step with matching ID.
+func (s *AgentState) StepByID(id string) *PlanStepState {
+	if s.Plan == nil {
+		return nil
+	}
+	for i := range s.Plan.Steps {
+		if s.Plan.Steps[i].ID == id {
+			return &s.Plan.Steps[i]
+		}
+	}
+	return nil
+}
+
+// MarkStepCompleted marks a step as completed and records its result.
+func (s *AgentState) MarkStepCompleted(id string, result string) bool {
+	step := s.StepByID(id)
+	if step == nil {
+		return false
+	}
+	step.Status = "completed"
+	step.Result = result
+	return true
+}
+
+// MarkStepFailed marks a step as failed.
+func (s *AgentState) MarkStepFailed(id string, errReason string) bool {
+	step := s.StepByID(id)
+	if step == nil {
+		return false
+	}
+	step.Status = "failed"
+	step.Result = errReason
+	return true
+}
+
+// AllStepsCompleted returns true if all steps in the plan are completed or skipped.
+func (s *AgentState) AllStepsCompleted() bool {
+	if s.Plan == nil || len(s.Plan.Steps) == 0 {
+		return false
+	}
+	for _, step := range s.Plan.Steps {
+		if step.Status != "completed" && step.Status != "skipped" {
+			return false
+		}
+	}
+	return true
 }
 
 // Checkpoint represents a persisted snapshot of the state graph at a node boundary.

@@ -181,10 +181,21 @@ func (c *CompiledGraph) Resume(ctx context.Context, runID uuid.UUID, resumeData 
 	state.InterruptReason = ""
 	state.Status = "running"
 
+	// Apply resumeData if provided
+	if res, ok := resumeData.(ProposalResolution); ok {
+		state.ResolveProposal(res.ProposalID, res.Approved)
+	} else if resPtr, ok := resumeData.(*ProposalResolution); ok && resPtr != nil {
+		state.ResolveProposal(resPtr.ProposalID, resPtr.Approved)
+	} else if fn, ok := resumeData.(func(*AgentState)); ok && fn != nil {
+		fn(state)
+	}
+
 	// Determine next node from the suspended node's outgoing edge
 	currentNode := state.CurrentNode
 	var nextNode string
-	if router, ok := c.conditionalEdges[currentNode]; ok {
+	if currentNode == "" {
+		nextNode = c.entryPoint
+	} else if router, ok := c.conditionalEdges[currentNode]; ok {
 		next, err := router(ctx, state)
 		if err != nil {
 			return state, err
