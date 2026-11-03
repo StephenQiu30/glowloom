@@ -36,20 +36,22 @@ Spec由PRD19唯一来源的设计32持有，本文通过PRD追溯，不建立第
 - **测试**：`tests/agent/graph_engine_test.go`、`tests/agent/checkpointer_integration_test.go`。
 - **退出条件**：成功在 Go 中编译并运行循环状态图；人工中断时状态落库，重启可成功 Resume。
 
-### T-AH-02 Supervisor 统筹编排与提案挂起控制（Proposal Yield）
+### T-AH-02 Supervisor 统筹编排与提案挂起控制（Proposal Yield 与 CAS 锁）
 - **产出**：
   - `application/workers/supervisor.go`：统筹制作人节点，分解目标，管理 `plan_update`。
-  - `application/control.go`：打通图 Interrupt 与 Go 两阶段用户审批（`approve`/`reject`）。
+  - `application/control.go`：打通图 Interrupt 与 Go 两阶段用户审批（`approve`/`reject`），在 Resume 时严格校验 Proposal 的 `ExpectedCanvasRevision` 与 `ExpectedPriceRevision` CAS 锁。
 - **测试**：`tests/agent/supervisor_test.go`、`tests/agent/proposal_interrupt_test.go`。
-- **退出条件**：模型调用提案工具时触发 Interrupt 挂起图执行，审批通过前绝不发起后续推理。
+- **退出条件**：模型调用提案工具时触发 Interrupt 挂起图执行；审批恢复时若检测到画布版本或模型价格变动，精确拦截陈旧冲突拒绝（`stale_conflict`）；校验通过前绝不发起后续推理。
 
-### T-AH-03 模型统一网关、流式看门狗与费用结算
+### T-AH-03 模型统一网关、流式看门狗与预算计费
 - **产出**：
   - `application/model_gateway.go`：直连 Go catalog 统一模型适配层。
   - `model_stream_watchdog.go`：SSE 分块空闲超时检测（45 秒）。
   - `turn_budget.go`：单轮最大 40 步请求 / 40 步工具调用硬熔断。
-- **测试**：`tests/agent/model_gateway_test.go`、`tests/agent/turn_budget_watchdog_test.go`。
-- **退出条件**：流式假死自动探测中断；死循环被看门狗硬性拦截，费用原子预留与出账结算正确。
+  - `project_budget.go`：项目级总预算硬封顶（`ProjectBudgetCap`）熔断控制。
+  - `prompt_cache.go`：长上下文 Prompt Caching 前缀标记与计费命中折算。
+- **测试**：`tests/agent/model_gateway_test.go`、`tests/agent/turn_budget_watchdog_test.go`、`tests/agent/project_budget_test.go`。
+- **退出条件**：流式假死自动探测中断；死循环被看门狗硬性拦截；Prompt Caching 命中折算正确；超预算强制熔断，费用原子预留与出账结算正确。
 
 ### T-AH-04 业务工具注册、写入链 CAS 与现场快照自愈
 - **产出**：

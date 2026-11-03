@@ -92,9 +92,9 @@ flowchart TD
     BusinessBridge --> Database[(PostgreSQL 业务库)]
 ```
 
-### 7.2 统一状态契约 (AgentState)
+### 7.2 统一状态契约 (AgentState 与 Proposal)
 
-在 Go 中定义强类型的状态图上下文，跨节点流转：
+在 Go 中定义强类型的状态图上下文与提案模型，跨节点流转：
 
 ```go
 type AgentState struct {
@@ -111,17 +111,32 @@ type AgentState struct {
     LastStudioHash  string             `json:"last_studio_hash"`  // 上次画布现场快照哈希
     TurnStepCount   int                `json:"turn_step_count"`   // 单轮请求看门狗计数
     ToolStepCount   int                `json:"tool_step_count"`   // 单轮工具步数看门狗计数
+    ProjectBudgetCap int64             `json:"project_budget_cap"`// 项目级总预算硬上限 (积分)
+    AccumulatedCost  int64             `json:"accumulated_cost"`  // 已消耗总积分
     Status          string             `json:"status"`            // running, suspended, completed
+}
+
+type Proposal struct {
+    ID                     uuid.UUID       `json:"id"`
+    RunID                  uuid.UUID       `json:"run_id"`
+    ToolCallID             string          `json:"tool_call_id"`
+    Type                   ProposalType    `json:"type"`                     // e.g. "generation", "canvas_write", "timeline_edit"
+    Payload                json.RawMessage `json:"payload"`
+    EstimatedPrice         int64           `json:"estimated_price"`          // 积分预估 (0.1元 = 1积分)
+    ExpectedCanvasRevision int64           `json:"expected_canvas_revision"` // CAS 画布版本锁 (防并发覆写)
+    ExpectedPriceRevision  int64           `json:"expected_price_revision"`  // CAS 价格版本锁 (防过期价格)
+    Status                 ProposalStatus  `json:"status"`                   // pending, approved, rejected, expired
+    CreatedAt              time.Time       `json:"created_at"`
 }
 ```
 
-### 7.3 吸收 BeefTV 的四大工业级 Harness 机制
+### 7.3 吸收 BeefTV 的五大工业级 Harness 机制
 
-1. **提案即截断中断 (Proposal Yield & Human-in-the-Loop)**：
+1. **提案即截断中断与 CAS 双版本校验锁 (Proposal Yield & Dual CAS Lock)**：
    - 借鉴 BeefTV `durable-extensions.mjs` 中的 `canvas.generation.propose` 控制逻辑：
-   - 当模型调用任何会产生计费、媒体生成或结构性覆写的工具时，工具执行器标记 `InterruptRequired: true`。
+   - 当模型调用任何会产生计费、媒体生成或结构性覆写的工具时，工具执行器标记 `InterruptRequired: true`，并在 Proposal 中强绑定当时的 `ExpectedCanvasRevision` 与 `ExpectedPriceRevision`；
    - LangGraph 图引擎捕获该标记，立即执行 Checkpoint 保存当前 State，并将状态置为 `suspended_for_approval`，**主动截断后续循环**，杜绝未批准前的幻觉输出；
-   - 用户在前端完成审批后，控制器触发 `graph.Resume(runID, approvalContext)`，从暂停点顺畅接续。
+   - 用户在前端完成审批后，控制器触发 `graph.Resume(runID, approvalContext)`，首先核对当前画布版本与价格版本：若发生并发变更，触发陈旧冲突（`stale_conflict`）提示，杜绝盲目覆写与过期计价；校验通过后从暂停点顺畅接续。
 2. **多步工具 CAS 连续写入链 (Write Chain)**：
    - 借鉴 BeefTV `canvas-turn.mjs` 中的 `extendWriteChain` 模式：
    - 单轮内连续执行多次写工具时，每一步成功在 `WriteChain.Head` 上递增版本，后续工具调用自动使用最新的 `Head` 作为 `ExpectedRevision`；
@@ -133,6 +148,9 @@ type AgentState struct {
 4. **单轮预算与空闲超时看门狗 (Turn Budget & Watchdog)**：
    - 限制单轮最大模型请求数 40 次、最大工具步数 40 次，超过阈值强制熔断挂起；
    - 模型网关引入 SSE 分块空闲看门狗（超时默认 45 秒），防止远程供应商网络假死。
+5. **Prompt Caching 前缀缓存与项目预算硬封顶 (Prompt Caching & Budget Cap)**：
+   - **Prompt Caching 前缀缓存**：针对剧本解析、分镜与导演等多 Agent 协作中的超长上下文（System Prompt、角色资产库、剧本原文），在调用支持缓存的 LLM（Claude 3.7 / Gemini 2.5 / DeepSeek）时自动将静态前缀标记为 Ephemeral Cache，使得后续交互享受高达 90% 的 Token 折扣，大幅压降短剧制作成本；
+   - **项目级总预算硬封顶 (Project Budget Cap)**：每个创作 Run 配置硬性预算阈值（`ProjectBudgetCap`），当累计消耗积分达到阈值时强制挂起，必须由创作者明确授权追加预算后方可继续，杜绝死循环导致积分失控。
 
 ### 7.4 Supervisor-Worker 多 Agent 协作模式
 
