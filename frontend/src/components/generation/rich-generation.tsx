@@ -63,6 +63,11 @@ import {
 } from "react";
 import { Button } from "@/components/ui/button";
 import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from "@/components/ui/collapsible";
+import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
@@ -908,111 +913,139 @@ function EditorWorkspace({
       return;
     }
     if (compact) setQuoteReviewOpen(true);
+    await run(prepareQuote);
+  }
+  async function prepareQuote() {
+    if (issues.length || pendingMode || !sourceReady)
+      throw new Error(issues[0] ?? "请等待参考内容核验完成。");
+    const captured = latest.current.localSeq;
+    const pointer = await flush();
+    if (latest.current.localSeq !== captured)
+      throw new Error("保存期间输入已更新，请重新检查费用。");
+    const recovered = await discover();
+    if (recovered.submission) {
+      setQuote(null);
+      throw new Error("请先处理已有提交，再创建下一报价。");
+    }
+    const intent = submission.current ?? {
+      key: crypto.randomUUID(),
+      body: {
+        input_source: pointer,
+        expected_submission_epoch: recovered.epoch,
+        force_regenerate: !!seed.reuse,
+      },
+    };
+    submission.current = intent;
+    await saver.current?.setSubmission(intent);
+    const result = requireQuote(
+      await createFreeQuote({ pid: projectID }, intent.body, {
+        headers: { "Idempotency-Key": intent.key },
+      }),
+    );
+    if (!result.confirm_key || !result.submission_id)
+      throw new RequestError("invalid_receipt");
+    intent.confirmKey = result.confirm_key;
+    await saver.current?.setSubmission(intent);
+    await discover();
+    if (latest.current.localSeq === captured) {
+      setQuote(result);
+      setQuoteSeq(captured);
+    }
+  }
+  async function refreshQuote() {
+    if (confirmUnknown) return;
     await run(async () => {
-      if (issues.length || pendingMode || !sourceReady)
-        throw new Error(issues[0] ?? "请等待参考内容核验完成。");
-      const captured = latest.current.localSeq;
-      const pointer = await flush();
-      if (latest.current.localSeq !== captured)
-        throw new Error("保存期间输入已更新，请重新检查费用。");
-      const recovered = await discover();
-      if (recovered.submission) {
-        setQuote(null);
-        throw new Error("请先处理已有提交，再创建下一报价。");
-      }
-      const intent = submission.current ?? {
-        key: crypto.randomUUID(),
-        body: {
-          input_source: pointer,
-          expected_submission_epoch: recovered.epoch,
-          force_regenerate: !!seed.reuse,
-        },
-      };
-      submission.current = intent;
-      await saver.current?.setSubmission(intent);
-      const result = requireQuote(
-        await createFreeQuote({ pid: projectID }, intent.body, {
-          headers: { "Idempotency-Key": intent.key },
-        }),
-      );
-      if (!result.confirm_key || !result.submission_id)
-        throw new RequestError("invalid_receipt");
-      intent.confirmKey = result.confirm_key;
-      await saver.current?.setSubmission(intent);
-      await discover();
-      if (latest.current.localSeq === captured) {
-        setQuote(result);
-        setQuoteSeq(captured);
-      }
+      await resolveSubmission("discard_quote");
+      await prepareQuote();
     });
   }
   async function confirm() {
+    await run(async () => confirmQuote(Date.now()));
+  }
+  async function reconcileConfirmation() {
+    if (!confirmUnknown) return;
     await run(async () => {
-      // An unknown confirmation must retain its original key even after expiry.
-      if (!confirmUnknown) {
-        const expires = Date.parse(activeQuote?.expires_at ?? "");
-        if (!Number.isFinite(expires) || Date.now() >= expires)
-          throw new Error("报价已过期，请重新检查费用。");
-        if (!quoteAmountKnown || activeQuote?.confirmable !== true)
-          throw new Error("当前报价不可确认，请重新检查费用。");
-      }
-      if (session?.pendingTarget) throw new Error("模式选择尚未完成。");
-      const sub = current.submission;
-      const confirmKey = sub?.confirm_key ?? quote?.confirm_key;
-      const operation = sub?.operation_id ?? quote?.operation_id;
-      if (!operation || !confirmKey) throw new Error("请先恢复报价。");
-      if (quote && quoteSeq !== latest.current.localSeq)
-        throw new Error("输入已变化，请重新报价。");
-      if (!quote && !confirmUnknown) {
-        const saved = await flush();
-        if (!sameSource(saved, sub?.input_source))
-          throw new Error("草稿已变化，请放弃旧报价后重新检查。");
-      }
-      const intent = submission.current ?? {
-        key: crypto.randomUUID(),
-        body: { input_source: sub?.input_source },
-        confirmKey,
-      };
-      intent.confirmRequested = true;
-      submission.current = intent;
-      await saver.current?.setSubmission(intent);
-      setConfirmUnknown(true);
-      try {
-        const result = await confirmOperationQuote(
-          { id: operation },
-          { project_id: projectID },
-          { headers: { "Idempotency-Key": confirmKey } },
-        );
-        if (!result.reservation_id) throw new RequestError("invalid_receipt");
-        setConfirmUnknown(false);
-        setTask(operation);
-        setQuote(null);
-        await discover();
-      } catch (e) {
-        if (e instanceof RequestError && e.status >= 400 && e.status < 500)
-          setConfirmUnknown(false);
-        throw e;
-      }
+      const original = current.submission;
+      const recovered = await discover();
+      if (recovered.submission?.state === "accepted") return;
+      if (
+        recovered.submission?.state !== "quoted" ||
+        recovered.submission.operation_id !== original?.operation_id ||
+        recovered.submission.confirm_key !== original?.confirm_key
+      )
+        throw new Error("原请求仍待核对，请稍后重试。");
+      // Replaying the original confirmation recovers its receipt; it never creates a quote.
+      await confirmQuote(Date.now());
     });
   }
-  async function resolve(action: "discard_quote" | "acknowledge_result") {
-    await run(async () => {
-      const sub = current.submission;
-      if (!sub?.id) throw new Error("没有可处理的提交");
-      const key = `${sub.id}:${action}`;
-      const storageKey = resolveKeys.current.get(key) ?? crypto.randomUUID();
-      resolveKeys.current.set(key, storageKey);
-      const value = await resolvePromptSubmission(
-        { pid: projectID, id: sub.id },
-        { action, expected_epoch: current.epoch },
-        { headers: { "Idempotency-Key": storageKey } },
+  async function confirmQuote(now: number) {
+    // An unknown confirmation must retain its original key even after expiry.
+    if (!confirmUnknown) {
+      const expires = Date.parse(activeQuote?.expires_at ?? "");
+      if (!Number.isFinite(expires) || now >= expires)
+        throw new Error("报价已过期，请重新检查费用。");
+      if (!quoteAmountKnown || activeQuote?.confirmable !== true)
+        throw new Error("当前报价不可确认，请重新检查费用。");
+    }
+    if (session?.pendingTarget) throw new Error("模式选择尚未完成。");
+    const sub = current.submission;
+    const confirmKey = sub?.confirm_key ?? quote?.confirm_key;
+    const operation = sub?.operation_id ?? quote?.operation_id;
+    if (!operation || !confirmKey) throw new Error("请先恢复报价。");
+    if (quote && quoteSeq !== latest.current.localSeq)
+      throw new Error("输入已变化，请重新报价。");
+    if (!quote && !confirmUnknown) {
+      const saved = await flush();
+      if (!sameSource(saved, sub?.input_source))
+        throw new Error("草稿已变化，请放弃旧报价后重新检查。");
+    }
+    const intent = submission.current ?? {
+      key: crypto.randomUUID(),
+      body: { input_source: sub?.input_source },
+      confirmKey,
+    };
+    intent.confirmRequested = true;
+    submission.current = intent;
+    await saver.current?.setSubmission(intent);
+    setConfirmUnknown(true);
+    try {
+      const result = await confirmOperationQuote(
+        { id: operation },
+        { project_id: projectID },
+        { headers: { "Idempotency-Key": confirmKey } },
       );
-      setCurrent(value);
-      setQuote(null);
+      if (!result.reservation_id) throw new RequestError("invalid_receipt");
       setConfirmUnknown(false);
-      submission.current = undefined;
-      await saver.current?.setSubmission(undefined);
-    });
+      setTask(operation);
+      setQuote(null);
+      await discover();
+    } catch (e) {
+      if (e instanceof RequestError && e.status >= 400 && e.status < 500)
+        setConfirmUnknown(false);
+      throw e;
+    }
+  }
+  async function resolve(action: "discard_quote" | "acknowledge_result") {
+    await run(() => resolveSubmission(action));
+  }
+  async function resolveSubmission(
+    action: "discard_quote" | "acknowledge_result",
+  ) {
+    const sub = current.submission;
+    if (!sub?.id) throw new Error("没有可处理的提交");
+    const key = `${sub.id}:${action}`;
+    const storageKey = resolveKeys.current.get(key) ?? crypto.randomUUID();
+    resolveKeys.current.set(key, storageKey);
+    const value = await resolvePromptSubmission(
+      { pid: projectID, id: sub.id },
+      { action, expected_epoch: current.epoch },
+      { headers: { "Idempotency-Key": storageKey } },
+    );
+    setCurrent(value);
+    setQuote(null);
+    setConfirmUnknown(false);
+    submission.current = undefined;
+    await saver.current?.setSubmission(undefined);
   }
   const resolveKeys = useRef(new Map<string, string>());
   async function selectMode(version: string, mode: string) {
@@ -1441,101 +1474,159 @@ function EditorWorkspace({
         )}
       </div>
     ) : null;
+  const needsQuoteRefresh =
+    quoteExpired || recoveredChanged || (quote !== null && quoteSeq !== seq);
+  const quotedBudget = activeQuote?.available_micros;
+  const insufficientProjectBudget =
+    typeof quotedBudget === "number" &&
+    Number.isSafeInteger(quotedBudget) &&
+    quotedBudget >= 0 &&
+    typeof activeQuote?.quote_micros === "number" &&
+    quoteAmountKnown &&
+    quotedBudget < activeQuote.quote_micros;
   const submissionPanel = current.submission ? (
-    <div className="space-y-2 rounded border p-3" aria-label="未决提交">
-      <p>
-        {current.submission.state === "accepted"
-          ? "这次生成已接受，可查看任务并确认已知晓结果。"
-          : "发现未处理的报价；关闭页面不会自动取消。"}
-      </p>
-      <p className="text-sm">
-        提交 {current.submission.id?.slice(0, 8)} · 代次 {current.epoch}
-      </p>
-      {activeQuote && (
+    <div className="flex flex-col gap-4" aria-label="生成确认">
+      {current.submission.state === "accepted" ? (
+        <p className="text-sm text-muted-foreground">
+          已提交生成，可查看任务或继续创作。
+        </p>
+      ) : activeQuote ? (
         <QuoteCostDetail
           amount={activeQuote.quote_micros}
           detail={activeQuote.quote_detail}
         />
+      ) : null}
+      {confirmUnknown && (
+        <p role="status" className="text-sm text-muted-foreground">
+          核对原请求并恢复结果。
+        </p>
       )}
-      {quote && <p>可用项目预算：{money(quote.available_micros)}</p>}
-      {!quote && current.submission.quote && <p>原报价金额以冻结明细为准。</p>}
+      {!confirmUnknown &&
+        current.submission.state !== "accepted" &&
+        activeQuote?.confirmable === false && (
+          <p role="status" className="text-sm text-muted-foreground">
+            {insufficientProjectBudget
+              ? "项目预算不足，请调整数量或联系管理员。"
+              : "当前报价暂不可确认，请检查项目预算或更新费用。"}
+          </p>
+        )}
       {current.submission.state !== "accepted" &&
         !confirmUnknown &&
         quoteExpired && (
           <FeedbackToast message="报价已过期，请重新检查费用。" />
         )}
-      <pre className="max-h-36 overflow-auto text-xs whitespace-pre-wrap">
-        {quote?.final_prompt ?? current.submission.quote?.final_prompt}
-      </pre>
-      <p className="text-sm">
-        冻结模式：{current.submission.draft?.mode} · 编译：
-        {activeQuote?.compiler_version}
-      </p>
-      {activeQuote?.reference_mapping?.length ? (
-        <Table className="w-full text-left text-xs">
-          <TableCaption>显示标签与实际媒体输入顺序</TableCaption>
-          <TableHeader>
-            <TableRow>
-              <TableHead>引用</TableHead>
-              <TableHead>角色</TableHead>
-              <TableHead>媒体位置</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {activeQuote.reference_mapping.map((m) => (
-              <TableRow key={m.reference_id}>
-                <TableCell>{m.label}</TableCell>
-                <TableCell>{m.role}</TableCell>
-                <TableCell>{m.media_seq_nos?.join("、") || "仅描述"}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      ) : null}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="outline"
-          disabled={pending}
-          onClick={() =>
-            void run(async () => {
-              await discover();
-            })
-          }
-        >
-          核对提交状态
-        </Button>
+      {!confirmUnknown &&
+        needsQuoteRefresh &&
+        current.submission.state !== "accepted" && (
+          <p role="status" className="text-sm text-muted-foreground">
+            {quoteExpired
+              ? "费用已过期，请更新后再生成。"
+              : "内容已更改，请更新费用。"}
+          </p>
+        )}
+      <Collapsible>
+        <CollapsibleTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="group/collapsible"
+          >
+            查看生成详情
+            <ChevronDown
+              data-icon="inline-end"
+              className="transition-transform group-data-[state=open]/collapsible:rotate-180"
+            />
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="flex min-w-0 flex-col gap-3 pt-3 text-sm">
+            <p>
+              提交 {current.submission.id?.slice(0, 8)} · 代次 {current.epoch}
+            </p>
+            {quote && <p>可用项目预算：{money(quote.available_micros)}</p>}
+            <pre className="max-h-36 overflow-auto text-xs whitespace-pre-wrap">
+              {quote?.final_prompt ?? current.submission.quote?.final_prompt}
+            </pre>
+            <p>
+              冻结模式：{current.submission.draft?.mode} · 编译：
+              {activeQuote?.compiler_version}
+            </p>
+            {activeQuote?.reference_mapping?.length ? (
+              <Table className="w-full text-left text-xs">
+                <TableCaption>显示标签与实际媒体输入顺序</TableCaption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>引用</TableHead>
+                    <TableHead>角色</TableHead>
+                    <TableHead>媒体位置</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {activeQuote.reference_mapping.map((m) => (
+                    <TableRow key={m.reference_id}>
+                      <TableCell>{m.label}</TableCell>
+                      <TableCell>{m.role}</TableCell>
+                      <TableCell>
+                        {m.media_seq_nos?.join("、") || "仅描述"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : null}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+      <div className="flex flex-wrap justify-end gap-2">
         {current.submission.state === "accepted" ? (
           <Button
             disabled={pending}
             onClick={() => void resolve("acknowledge_result")}
           >
-            已知晓，继续编辑
+            继续创作
+          </Button>
+        ) : confirmUnknown ? (
+          <Button
+            disabled={pending}
+            onClick={() => void reconcileConfirmation()}
+          >
+            核对状态
+          </Button>
+        ) : error ? (
+          <Button
+            disabled={pending}
+            onClick={() =>
+              void run(async () => {
+                await discover();
+              })
+            }
+          >
+            核对状态
           </Button>
         ) : (
           <>
             <Button
-              disabled={
-                pending ||
-                (!confirmUnknown &&
-                  (quoteExpired ||
-                    recoveredChanged ||
-                    !!pendingMode ||
-                    activeQuote?.confirmable !== true ||
-                    !quoteAmountKnown ||
-                    issues.length > 0 ||
-                    !sourceReady ||
-                    (quote !== null && quoteSeq !== seq)))
-              }
-              onClick={() => void confirm()}
-            >
-              {confirmUnknown ? "重试原确认" : "确认费用并生成"}
-            </Button>
-            <Button
-              variant="outline"
-              disabled={pending || confirmUnknown}
+              variant="ghost"
+              disabled={pending}
               onClick={() => void resolve("discard_quote")}
             >
-              放弃旧报价并重新检查
+              取消
+            </Button>
+            <Button
+              disabled={
+                pending ||
+                !!pendingMode ||
+                issues.length > 0 ||
+                !sourceReady ||
+                (!needsQuoteRefresh &&
+                  (activeQuote?.confirmable !== true || !quoteAmountKnown))
+              }
+              onClick={() =>
+                void (needsQuoteRefresh ? refreshQuote() : confirm())
+              }
+            >
+              {needsQuoteRefresh ? "更新费用" : "确认生成"}
             </Button>
           </>
         )}
@@ -1814,6 +1905,9 @@ function EditorWorkspace({
                   )}
                 </PopoverContent>
               </Popover>
+              <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
+                费用待确认
+              </span>
               <InputGroupButton
                 className="ml-auto size-8 shrink-0 rounded-full"
                 size="icon-sm"
@@ -2060,6 +2154,11 @@ function EditorWorkspace({
                   )}
                 {presentation === "home" && projectControl}
               </div>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {current.submission?.state === "accepted"
+                  ? "已提交"
+                  : "费用待确认"}
+              </span>
               {current.submission ? (
                 <InputGroupButton
                   className="ml-auto"
@@ -2337,11 +2436,17 @@ function EditorWorkspace({
                 presentation === "assistant" || undefined
               }
               showCloseButton={!pending && !confirmUnknown}
-              className="max-h-[85dvh] overflow-y-auto sm:max-w-3xl"
+              className="max-h-[85dvh] overflow-y-auto sm:max-w-[480px]"
             >
-              <DialogTitle>报价与生成任务</DialogTitle>
+              <DialogTitle>
+                {current.submission?.state === "accepted"
+                  ? "生成任务"
+                  : "确认生成"}
+              </DialogTitle>
               <DialogDescription>
-                确认当前冻结输入与费用后开始生成。
+                {current.submission?.state === "accepted"
+                  ? "查看生成结果或继续创作。"
+                  : "确认本次消耗后开始生成。"}
               </DialogDescription>
               {submissionPanel}
               {task && (

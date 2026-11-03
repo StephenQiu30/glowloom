@@ -97,7 +97,7 @@ describe("provider trial consent and recovery", () => {
     fireEvent.submit(
       screen.getByRole("button", { name: "准备免费报价" }).closest("form")!,
     );
-    await screen.findByRole("button", { name: "确认费用并执行" });
+    await screen.findByRole("button", { name: "确认并试运行" });
     expect(confirmOperationQuote).not.toHaveBeenCalled();
     const saved = pageBusinessMemory.getItem(key)!;
     expect(saved).toContain("operation");
@@ -107,7 +107,7 @@ describe("provider trial consent and recovery", () => {
       new Error("response lost"),
     );
     fireEvent.submit(
-      screen.getByRole("button", { name: "确认费用并执行" }).closest("form")!,
+      screen.getByRole("button", { name: "确认并试运行" }).closest("form")!,
     );
     await screen.findByText("response lost");
     expect(JSON.parse(pageBusinessMemory.getItem(key)!).confirmRequested).toBe(
@@ -305,6 +305,9 @@ it("恢复收费报价时显示服务端冻结的验证摘要", async () => {
     quote_micros: 100,
   });
   render(<ProviderTrial embedded release={release} onVerified={() => {}} />);
+  fireEvent.click(
+    await screen.findByRole("button", { name: "费用与输入详情" }),
+  );
   await screen.findByLabelText("本次验证摘要");
   expect(screen.getByText(/模型：火山音乐/)).toBeDefined();
   expect(screen.getByText(/模式：music_song/)).toBeDefined();

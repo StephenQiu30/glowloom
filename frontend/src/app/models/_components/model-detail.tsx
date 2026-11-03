@@ -4,6 +4,7 @@ import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { LoadingState } from "@/components/layout/loading-state";
 import { ContentState } from "@/components/layout/content-state";
 import { ChevronDown } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Collapsible,
   CollapsibleContent,
@@ -63,16 +64,20 @@ export function ModelDetail({
 }) {
   const formFieldId = useId();
 
-  const [sectionOpen, setSectionOpen] = useState<
-    Partial<Record<"configuration" | "pricing" | "release", boolean>>
-  >({});
+  const [view, setView] = useState("configuration");
+  const [priceUnit, setPriceUnit] = useState<string | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState<boolean | null>(null);
   const [detail, setDetail] = useState<API.AdminModelDetail | null>(null);
   const [config, setConfig] = useState<API.ConnectionConfig | null>(null);
   const [releases, setReleases] = useState<API.ModelRelease[]>([]);
   const [defaults, setDefaults] = useState<API.CapabilityDefault[]>([]);
   const [error, setError] = useState("");
   const [readAttempt, setReadAttempt] = useState(0);
-  const mutation = useCatalogMutation(onSaved, `model.${id}`);
+  function reloadDetail() {
+    onSaved();
+    setReadAttempt((attempt) => attempt + 1);
+  }
+  const mutation = useCatalogMutation(reloadDetail, `model.${id}`);
   useEffect(() => {
     const abort = new AbortController();
     const model = getAdminModel({ id }, { signal: abort.signal });
@@ -128,10 +133,7 @@ export function ModelDetail({
     ].includes(mode),
   );
   return (
-    <section
-      className="min-w-0 space-y-5 rounded-xl border p-4"
-      aria-label="模型详情"
-    >
+    <section className="flex min-w-0 flex-col gap-5" aria-label="模型详情">
       <h2 className="text-lg font-medium">
         {model?.display_name ?? "模型详情"}
       </h2>
@@ -175,39 +177,38 @@ export function ModelDetail({
               此草稿尚无价格和验证记录。
             </p>
           ) : null}
-          <Collapsible
-            open={sectionOpen.configuration ?? !latest}
-            onOpenChange={(open) =>
-              setSectionOpen((previous) => ({
-                ...previous,
-                configuration: open,
-              }))
-            }
-            className="rounded-lg border p-3"
-          >
-            <CollapsibleTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                className="group/collapsible h-auto w-full justify-between whitespace-normal"
-              >
-                <span>
-                  模型配置 ·{" "}
-                  {latest
-                    ? `已保存 ${detail.versions?.length} 个版本`
-                    : "待配置"}
-                </span>
-                <ChevronDown
-                  data-icon="inline-end"
-                  className="transition-transform group-data-[state=open]/collapsible:rotate-180"
-                />
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent
+          <Tabs value={view} onValueChange={setView} className="gap-5">
+            <TabsList
+              variant="line"
+              aria-label="模型详情视图"
+              className="max-w-full max-md:min-h-11"
+            >
+              <TabsTrigger value="configuration">模型设置</TabsTrigger>
+              <TabsTrigger value="pricing">价格</TabsTrigger>
+              <TabsTrigger value="release">发布</TabsTrigger>
+            </TabsList>
+            <TabsContent
+              value="configuration"
               forceMount
-              className="pt-3 data-[state=closed]:hidden"
+              hidden={view !== "configuration"}
             >
               <form
+                onInvalidCapture={(event) => {
+                  const target = event.target;
+                  if (
+                    (target instanceof HTMLInputElement ||
+                      target instanceof HTMLTextAreaElement) &&
+                    target.closest("[data-model-advanced]") &&
+                    !(advancedOpen ?? !latest?.limits)
+                  ) {
+                    event.preventDefault();
+                    setAdvancedOpen(true);
+                    requestAnimationFrame(() => {
+                      target.focus();
+                      target.reportValidity();
+                    });
+                  }
+                }}
                 onSubmit={async (e) => {
                   e.preventDefault();
                   const f = new FormData(e.currentTarget);
@@ -298,49 +299,45 @@ export function ModelDetail({
                       defaultValue={(latest?.expected_max_ms ?? 600000) / 1000}
                     />
                   </Field>
-                  <ModelSetup
-                    adapter={config?.config?.adapter_key}
-                    capability={model?.capability ?? ""}
-                    limits={latest?.limits}
-                    parameters={latest?.param_schema}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    参数和限制以账号对应模型文档为准。首轮不开放回调及自动取消。
-                  </p>
-                  <Button disabled={mutation.busy}>保存新配置版本</Button>
+                  <Collapsible
+                    data-model-advanced
+                    open={advancedOpen ?? !latest?.limits}
+                    onOpenChange={setAdvancedOpen}
+                  >
+                    <CollapsibleTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="group/collapsible justify-between"
+                      >
+                        高级参数
+                        <ChevronDown
+                          data-icon="inline-end"
+                          className="transition-transform group-data-[state=open]:rotate-180"
+                        />
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent
+                      forceMount
+                      className="pt-3 data-[state=closed]:hidden"
+                    >
+                      <ModelSetup
+                        key={latest?.id ?? "new"}
+                        adapter={config?.config?.adapter_key}
+                        capability={model?.capability ?? ""}
+                        limits={latest?.limits}
+                        parameters={latest?.param_schema}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        参数和限制以账号对应模型文档为准。首轮不开放回调及自动取消。
+                      </p>
+                    </CollapsibleContent>
+                  </Collapsible>
+                  <Button disabled={mutation.busy}>保存配置</Button>
                 </FieldGroup>
               </form>
-            </CollapsibleContent>
-          </Collapsible>
-          <Collapsible
-            open={sectionOpen.pricing ?? (!!latest && !latestPrice)}
-            onOpenChange={(open) =>
-              setSectionOpen((previous) => ({ ...previous, pricing: open }))
-            }
-            className="rounded-lg border p-3"
-          >
-            <CollapsibleTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                className="group/collapsible h-auto w-full justify-between whitespace-normal"
-              >
-                <span>
-                  平台计费价格 ·{" "}
-                  {latestPrice
-                    ? `已保存 ${detail.prices?.length} 个版本`
-                    : "待配置"}
-                </span>
-                <ChevronDown
-                  data-icon="inline-end"
-                  className="transition-transform group-data-[state=open]/collapsible:rotate-180"
-                />
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent
-              forceMount
-              className="pt-3 data-[state=closed]:hidden"
-            >
+            </TabsContent>
+            <TabsContent value="pricing" forceMount hidden={view !== "pricing"}>
               <form
                 onSubmit={async (e) => {
                   e.preventDefault();
@@ -375,11 +372,12 @@ export function ModelDetail({
                 <FieldGroup className="mt-4 gap-3">
                   <Field>
                     <FieldLabel htmlFor={`${formFieldId}-field-4`}>
-                      <span>计费单位</span>
+                      <span>计费方式</span>
                     </FieldLabel>
                     <Select
                       name="unit"
-                      defaultValue={latestPrice?.unit ?? "per_request"}
+                      value={priceUnit ?? latestPrice?.unit ?? "per_request"}
+                      onValueChange={setPriceUnit}
                     >
                       <SelectTrigger
                         id={`${formFieldId}-field-4`}
@@ -399,7 +397,11 @@ export function ModelDetail({
                       </SelectContent>
                     </Select>
                   </Field>
-                  <PriceSetup rule={latestPrice?.rule} />
+                  <PriceSetup
+                    key={latestPrice?.id ?? "new"}
+                    unit={priceUnit ?? latestPrice?.unit ?? "per_request"}
+                    rule={latestPrice?.rule}
+                  />
                   <PriceEvidenceFields price={latestPrice} />
                   <Field>
                     <FieldLabel htmlFor={`${formFieldId}-field-5`}>
@@ -415,334 +417,359 @@ export function ModelDetail({
                   <p className="text-xs text-muted-foreground">
                     这是平台向用户收取的价格；上游成本单独审核。零价格表示平台不向用户收费。
                   </p>
-                  <Button disabled={mutation.busy || !latest}>
-                    保存价格版本
-                  </Button>
+                  <Button disabled={mutation.busy || !latest}>保存价格</Button>
                 </FieldGroup>
               </form>
-            </CollapsibleContent>
-          </Collapsible>
-          <Collapsible
-            open={sectionOpen.release ?? !!latestPrice}
-            onOpenChange={(open) =>
-              setSectionOpen((previous) => ({ ...previous, release: open }))
-            }
-            className="rounded-lg border p-3"
-          >
-            <CollapsibleTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                className="group/collapsible h-auto w-full justify-between whitespace-normal"
-              >
-                <span>创建待验证发布</span>
-                <ChevronDown
-                  data-icon="inline-end"
-                  className="transition-transform group-data-[state=open]/collapsible:rotate-180"
-                />
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent
+            </TabsContent>
+            <TabsContent
+              value="release"
               forceMount
-              className="pt-3 data-[state=closed]:hidden"
+              hidden={view !== "release"}
+              className="flex flex-col gap-5 data-[state=inactive]:hidden"
             >
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  const f = new FormData(e.currentTarget);
-                  await mutation.run("release.create", id, (request) =>
-                    createModelRelease(
-                      { id },
-                      {
-                        request_id: request,
-                        model_version_id: String(f.get("version")),
-                        price_version_id: String(f.get("price")),
-                        config_version_id: config?.id,
-                        upstream_cost: {
-                          currency: String(f.get("currency")),
-                          max_micros: Number(f.get("cost")),
-                          source: String(f.get("source")),
-                          reviewed_at: new Date(
-                            String(f.get("reviewed")),
-                          ).toISOString(),
-                        },
-                      },
-                    ),
-                  );
-                }}
-              >
-                <FieldGroup className="mt-4 gap-3">
-                  <Field>
-                    <FieldLabel htmlFor={`${formFieldId}-field-6`}>
-                      <span>配置版本</span>
-                    </FieldLabel>
-                    <Select
-                      name="version"
-                      required
-                      defaultValue={detail.versions?.[0]?.id}
-                    >
-                      <SelectTrigger
-                        id={`${formFieldId}-field-6`}
-                        className="h-10 w-full"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          {detail.versions?.map((v) =>
-                            v.id ? (
-                              <SelectItem key={v.id} value={v.id}>
-                                v{v.version_no} · {v.provider_model_id}
-                              </SelectItem>
-                            ) : null,
-                          )}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor={`${formFieldId}-field-7`}>
-                      <span>价格版本</span>
-                    </FieldLabel>
-                    <Select
-                      name="price"
-                      required
-                      defaultValue={detail.prices?.[0]?.id}
-                    >
-                      <SelectTrigger
-                        id={`${formFieldId}-field-7`}
-                        className="h-10 w-full"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          {detail.prices?.map((p) =>
-                            p.id ? (
-                              <SelectItem key={p.id} value={p.id}>
-                                v{p.version_no} · {p.unit} · {p.currency}
-                              </SelectItem>
-                            ) : null,
-                          )}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <p className="text-sm">
-                    绑定连接配置：v{config?.version ?? "—"}
-                  </p>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel htmlFor={`${formFieldId}-field-8`}>
-                        <span>上游币种</span>
-                      </FieldLabel>
-                      <Select name="currency" defaultValue="CNY">
-                        <SelectTrigger
-                          id={`${formFieldId}-field-8`}
-                          className="h-10 w-full"
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            <SelectItem value="CNY">人民币</SelectItem>
-                            <SelectItem value="USD">美元</SelectItem>
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor={`${formFieldId}-field-9`}>
-                        <span>单次成本上限（微元）</span>
-                      </FieldLabel>
-                      <Input
-                        id={`${formFieldId}-field-9`}
-                        name="cost"
-                        type="number"
-                        min={0}
-                        max={1000000000}
-                        required
-                        placeholder="填写已审核上限"
-                      />
-                    </Field>
-                  </div>
-                  <Field>
-                    <FieldLabel htmlFor={`${formFieldId}-field-10`}>
-                      <span>成本来源</span>
-                    </FieldLabel>
-                    <Input
-                      id={`${formFieldId}-field-10`}
-                      name="source"
-                      required
-                      maxLength={500}
-                      placeholder="官方定价页面或合同说明"
+              <Collapsible className="flex flex-col gap-3">
+                <CollapsibleTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="group/collapsible h-auto w-full justify-between whitespace-normal"
+                  >
+                    <span>创建新发布</span>
+                    <ChevronDown
+                      data-icon="inline-end"
+                      className="transition-transform group-data-[state=open]/collapsible:rotate-180"
                     />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor={`${formFieldId}-field-11`}>
-                      <span>成本审核时间</span>
-                    </FieldLabel>
-                    <Input
-                      id={`${formFieldId}-field-11`}
-                      name="reviewed"
-                      type="datetime-local"
-                      required
-                    />
-                  </Field>
-                  <Button disabled={mutation.busy || !config || !latestPrice}>
-                    创建待验证发布
                   </Button>
-                </FieldGroup>
-              </form>
-            </CollapsibleContent>
-          </Collapsible>
-          <section className="space-y-3" aria-label="发布历史">
-            <h3 className="font-medium">发布记录</h3>
-            {!releases.length ? (
-              <p className="text-sm text-muted-foreground">尚无发布记录。</p>
-            ) : null}
-            {releases.map((r, fieldIndex1) => {
-              const onboardingDraft =
-                r.status === "draft" &&
-                !Object.keys(r.upstream_cost ?? {}).length;
-              const missing =
-                r.required_modes?.filter(
-                  (mode) => !r.validated_modes?.includes(mode),
-                ) ?? [];
-              const ready =
-                (r.status === "draft" || r.status === "retired") &&
-                !!r.required_modes?.length &&
-                !missing.length;
-              return (
-                <article
-                  key={r.id}
-                  className="space-y-2 rounded-lg border p-3 text-sm"
+                </CollapsibleTrigger>
+                <CollapsibleContent
+                  forceMount
+                  className="pt-3 data-[state=closed]:hidden"
                 >
-                  <p className="font-medium">
-                    {r.status === "active"
-                      ? "当前发布"
-                      : r.status === "retired"
-                        ? "历史发布"
-                        : "待验证发布"}
-                    {currentDefault?.release_id === r.id ? " · 平台默认" : ""}
-                  </p>
-                  <p className="text-xs break-all text-muted-foreground">
-                    {r.id}
-                  </p>
-                  <p>
-                    {r.onboarding_check_id
-                      ? "本发布已通过连接的单模型接入验证。"
-                      : `已验证：${r.validated_modes?.join("、") || "无"}`}
-                  </p>
-                  {r.onboarding_check_id ? (
-                    <p className="text-muted-foreground">
-                      其他模型及模式未逐项验证，费用由服务商按实际用量计收。
-                    </p>
-                  ) : null}
-                  {missing.length &&
-                  !r.onboarding_check_id &&
-                  !onboardingDraft ? (
-                    <p>尚需真实验证：{missing.join("、")}</p>
-                  ) : null}
-                  {onboardingDraft ? (
-                    <Button variant="outline" asChild>
-                      <a
-                        href={`/providers?connection=${model?.provider_id}&view=test&model=${model?.id}&release=${r.id}`}
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      const f = new FormData(e.currentTarget);
+                      await mutation.run("release.create", id, (request) =>
+                        createModelRelease(
+                          { id },
+                          {
+                            request_id: request,
+                            model_version_id: String(f.get("version")),
+                            price_version_id: String(f.get("price")),
+                            config_version_id: config?.id,
+                            upstream_cost: {
+                              currency: String(f.get("currency")),
+                              max_micros: Number(f.get("cost")),
+                              source: String(f.get("source")),
+                              reviewed_at: new Date(
+                                String(f.get("reviewed")),
+                              ).toISOString(),
+                            },
+                          },
+                        ),
+                      );
+                    }}
+                  >
+                    <FieldGroup className="mt-4 gap-3">
+                      <Field>
+                        <FieldLabel htmlFor={`${formFieldId}-field-6`}>
+                          <span>配置版本</span>
+                        </FieldLabel>
+                        <Select
+                          name="version"
+                          required
+                          defaultValue={detail.versions?.[0]?.id}
+                        >
+                          <SelectTrigger
+                            id={`${formFieldId}-field-6`}
+                            className="h-10 w-full"
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              {detail.versions?.map((v) =>
+                                v.id ? (
+                                  <SelectItem key={v.id} value={v.id}>
+                                    v{v.version_no} · {v.provider_model_id}
+                                  </SelectItem>
+                                ) : null,
+                              )}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor={`${formFieldId}-field-7`}>
+                          <span>价格版本</span>
+                        </FieldLabel>
+                        <Select
+                          name="price"
+                          required
+                          defaultValue={detail.prices?.[0]?.id}
+                        >
+                          <SelectTrigger
+                            id={`${formFieldId}-field-7`}
+                            className="h-10 w-full"
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              {detail.prices?.map((p) =>
+                                p.id ? (
+                                  <SelectItem key={p.id} value={p.id}>
+                                    v{p.version_no} ·{" "}
+                                    {(
+                                      {
+                                        per_request: "每次请求",
+                                        per_image: "每张图片",
+                                        per_second: "每秒",
+                                        per_1k_tokens: "每千 Token",
+                                      } as Record<string, string>
+                                    )[p.unit ?? ""] ?? p.unit}
+                                  </SelectItem>
+                                ) : null,
+                              )}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                      <p className="text-sm">
+                        绑定连接配置：v{config?.version ?? "—"}
+                      </p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <Field>
+                          <FieldLabel htmlFor={`${formFieldId}-field-8`}>
+                            <span>上游币种</span>
+                          </FieldLabel>
+                          <Select name="currency" defaultValue="CNY">
+                            <SelectTrigger
+                              id={`${formFieldId}-field-8`}
+                              className="h-10 w-full"
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectGroup>
+                                <SelectItem value="CNY">人民币</SelectItem>
+                                <SelectItem value="USD">美元</SelectItem>
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor={`${formFieldId}-field-9`}>
+                            <span>单次成本上限（微元）</span>
+                          </FieldLabel>
+                          <Input
+                            id={`${formFieldId}-field-9`}
+                            name="cost"
+                            type="number"
+                            min={0}
+                            max={1000000000}
+                            required
+                            placeholder="填写已审核上限"
+                          />
+                        </Field>
+                      </div>
+                      <Field>
+                        <FieldLabel htmlFor={`${formFieldId}-field-10`}>
+                          <span>成本来源</span>
+                        </FieldLabel>
+                        <Input
+                          id={`${formFieldId}-field-10`}
+                          name="source"
+                          required
+                          maxLength={500}
+                          placeholder="官方定价页面或合同说明"
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor={`${formFieldId}-field-11`}>
+                          <span>成本审核时间</span>
+                        </FieldLabel>
+                        <Input
+                          id={`${formFieldId}-field-11`}
+                          name="reviewed"
+                          type="datetime-local"
+                          required
+                        />
+                      </Field>
+                      <Button
+                        disabled={mutation.busy || !config || !latestPrice}
                       >
-                        前往连接验证并启用所选模型
-                      </a>
-                    </Button>
-                  ) : null}
-                  {r.status === "draft" && !onboardingDraft ? (
-                    <ProviderTrial
-                      release={r}
-                      version={detail.versions?.find(
-                        (v) => v.id === r.model_version_id,
-                      )}
-                      onVerified={onSaved}
-                    />
-                  ) : null}
-                  {(r.status === "draft" || r.status === "retired") &&
-                  !onboardingDraft ? (
-                    <form
-                      onSubmit={async (e) => {
-                        e.preventDefault();
-                        const f = new FormData(e.currentTarget);
-                        await mutation.run(
-                          "release.activate",
-                          r.id!,
-                          (request) =>
-                            activateModelRelease(
-                              { id: r.id! },
-                              {
-                                request_id: request,
-                                expected_revision: r.revision,
-                                expected_model_revision: model?.revision,
-                                expected_active_release_id: active?.id,
-                                enable_provider: f.has("enable"),
-                                set_default: f.has("default"),
-                                expected_default_revision:
-                                  currentDefault?.revision ?? 0,
-                              },
-                            ),
-                        );
-                      }}
+                        创建待验证发布
+                      </Button>
+                    </FieldGroup>
+                  </form>
+                </CollapsibleContent>
+              </Collapsible>
+              <section className="flex flex-col gap-3" aria-label="发布历史">
+                <h3 className="font-medium">发布记录</h3>
+                {!releases.length ? (
+                  <p className="text-sm text-muted-foreground">
+                    尚无发布记录。
+                  </p>
+                ) : null}
+                {releases.map((r, fieldIndex1) => {
+                  const onboardingDraft =
+                    r.status === "draft" &&
+                    !Object.keys(r.upstream_cost ?? {}).length;
+                  const missing =
+                    r.required_modes?.filter(
+                      (mode) => !r.validated_modes?.includes(mode),
+                    ) ?? [];
+                  const ready =
+                    (r.status === "draft" || r.status === "retired") &&
+                    !!r.required_modes?.length &&
+                    !missing.length;
+                  return (
+                    <article
+                      key={r.id}
+                      className="space-y-2 rounded-lg border p-3 text-sm"
                     >
-                      <FieldGroup className="gap-2">
-                        <Field orientation="horizontal">
-                          <Checkbox
-                            id={`${formFieldId}-field-12-${fieldIndex1}`}
-                            name="enable"
-                          />
-                          <FieldLabel
-                            htmlFor={`${formFieldId}-field-12-${fieldIndex1}`}
+                      <p className="font-medium">
+                        {r.status === "active"
+                          ? "当前发布"
+                          : r.status === "retired"
+                            ? "历史发布"
+                            : "待验证发布"}
+                        {currentDefault?.release_id === r.id
+                          ? " · 平台默认"
+                          : ""}
+                      </p>
+                      <Collapsible>
+                        <CollapsibleTrigger asChild>
+                          <Button type="button" variant="ghost" size="sm">
+                            发布详情
+                          </Button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="pt-2">
+                          <p className="text-xs break-all text-muted-foreground">
+                            发布编号：{r.id}
+                          </p>
+                        </CollapsibleContent>
+                      </Collapsible>
+                      <p>
+                        {r.onboarding_check_id
+                          ? "本发布已通过连接的单模型接入验证。"
+                          : `已验证：${r.validated_modes?.join("、") || "无"}`}
+                      </p>
+                      {r.onboarding_check_id ? (
+                        <p className="text-muted-foreground">
+                          其他模型及模式未逐项验证，费用由服务商按实际用量计收。
+                        </p>
+                      ) : null}
+                      {missing.length &&
+                      !r.onboarding_check_id &&
+                      !onboardingDraft ? (
+                        <p>尚需真实验证：{missing.join("、")}</p>
+                      ) : null}
+                      {onboardingDraft ? (
+                        <Button variant="outline" asChild>
+                          <a
+                            href={`/providers?connection=${model?.provider_id}&view=test&model=${model?.id}&release=${r.id}`}
                           >
-                            <span>同时启用平台连接</span>
-                          </FieldLabel>
-                        </Field>
-                        <Field orientation="horizontal">
-                          <Checkbox
-                            id={`${formFieldId}-field-13-${fieldIndex1}`}
-                            name="default"
-                          />
-                          <FieldLabel
-                            htmlFor={`${formFieldId}-field-13-${fieldIndex1}`}
-                          >
-                            <span>同时设为此能力的平台默认</span>
-                          </FieldLabel>
-                        </Field>
-                        <Button disabled={!ready || mutation.busy}>
-                          {r.status === "retired"
-                            ? "恢复此历史发布"
-                            : "激活已验证发布"}
+                            前往连接验证并启用所选模型
+                          </a>
                         </Button>
-                      </FieldGroup>
-                    </form>
-                  ) : null}
-                </article>
-              );
-            })}
-          </section>
-          {model?.status === "active" ? (
-            <Button
-              variant="outline"
-              disabled={mutation.busy}
-              onClick={async () => {
-                try {
-                  await setAdminModelStatus(
-                    { id },
-                    { status: "disabled", expected_revision: model.revision },
-                    { headers: { "Idempotency-Key": crypto.randomUUID() } },
+                      ) : null}
+                      {r.status === "draft" && !onboardingDraft ? (
+                        <ProviderTrial
+                          release={r}
+                          version={detail.versions?.find(
+                            (v) => v.id === r.model_version_id,
+                          )}
+                          onVerified={reloadDetail}
+                        />
+                      ) : null}
+                      {(r.status === "draft" || r.status === "retired") &&
+                      !onboardingDraft ? (
+                        <form
+                          onSubmit={async (e) => {
+                            e.preventDefault();
+                            const f = new FormData(e.currentTarget);
+                            await mutation.run(
+                              "release.activate",
+                              r.id!,
+                              (request) =>
+                                activateModelRelease(
+                                  { id: r.id! },
+                                  {
+                                    request_id: request,
+                                    expected_revision: r.revision,
+                                    expected_model_revision: model?.revision,
+                                    expected_active_release_id: active?.id,
+                                    enable_provider: f.has("enable"),
+                                    set_default: f.has("default"),
+                                    expected_default_revision:
+                                      currentDefault?.revision ?? 0,
+                                  },
+                                ),
+                            );
+                          }}
+                        >
+                          <FieldGroup className="gap-2">
+                            <Field orientation="horizontal">
+                              <Checkbox
+                                id={`${formFieldId}-field-12-${fieldIndex1}`}
+                                name="enable"
+                              />
+                              <FieldLabel
+                                htmlFor={`${formFieldId}-field-12-${fieldIndex1}`}
+                              >
+                                <span>同时启用平台连接</span>
+                              </FieldLabel>
+                            </Field>
+                            <Field orientation="horizontal">
+                              <Checkbox
+                                id={`${formFieldId}-field-13-${fieldIndex1}`}
+                                name="default"
+                              />
+                              <FieldLabel
+                                htmlFor={`${formFieldId}-field-13-${fieldIndex1}`}
+                              >
+                                <span>同时设为此能力的平台默认</span>
+                              </FieldLabel>
+                            </Field>
+                            <Button disabled={!ready || mutation.busy}>
+                              {r.status === "retired"
+                                ? "恢复此历史发布"
+                                : "激活已验证发布"}
+                            </Button>
+                          </FieldGroup>
+                        </form>
+                      ) : null}
+                    </article>
                   );
-                  onSaved();
-                } catch (e) {
-                  setError(catalogMessage(e));
-                }
-              }}
-            >
-              停用模型（不接受新任务）
-            </Button>
-          ) : null}
+                })}
+              </section>
+              {model?.status === "active" ? (
+                <Button
+                  variant="outline"
+                  disabled={mutation.busy}
+                  onClick={async () => {
+                    try {
+                      await setAdminModelStatus(
+                        { id },
+                        {
+                          status: "disabled",
+                          expected_revision: model.revision,
+                        },
+                        { headers: { "Idempotency-Key": crypto.randomUUID() } },
+                      );
+                      onSaved();
+                    } catch (e) {
+                      setError(catalogMessage(e));
+                    }
+                  }}
+                >
+                  停用模型（不接受新任务）
+                </Button>
+              ) : null}
+            </TabsContent>
+          </Tabs>
         </>
       )}
     </section>

@@ -153,9 +153,6 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
           <span className="break-words whitespace-normal">
             {row.original.display_name}
           </span>
-          <span className="text-xs break-all whitespace-normal text-muted-foreground">
-            {row.original.model_key}
-          </span>
         </div>
       ),
     },
@@ -394,20 +391,24 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
               </Link>
             </p>
           ) : null}
-          <SelectionBar
-            count={selectedRows.length}
-            total={visible.length}
-            disabled={locked}
-            onClear={() => setSelectedRows([])}
-          >
-            <Button
-              variant="destructive"
+          {selectedRows.length ? (
+            <SelectionBar
+              count={selectedRows.length}
+              total={visible.length}
               disabled={locked}
-              onClick={() => void batch.prepare(selectedRows, modelBatchAction)}
+              onClear={() => setSelectedRows([])}
             >
-              停用模型
-            </Button>
-          </SelectionBar>
+              <Button
+                variant="destructive"
+                disabled={locked}
+                onClick={() =>
+                  void batch.prepare(selectedRows, modelBatchAction)
+                }
+              >
+                停用模型
+              </Button>
+            </SelectionBar>
+          ) : null}
           {!mobile ? (
             <div className="self-end">
               <ColumnMenu
@@ -480,8 +481,8 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
           if (!open) setSelected("");
         }}
       >
-        <SheetContent className="overflow-y-auto p-6 data-[side=right]:w-full data-[side=right]:sm:max-w-3xl">
-          <SheetHeader>
+        <SheetContent className="overflow-y-auto p-6 data-[side=right]:w-full data-[side=right]:sm:max-w-[40rem]">
+          <SheetHeader className="sr-only">
             <SheetTitle>模型详情</SheetTitle>
             <SheetDescription>管理模型配置、验证与发布。</SheetDescription>
           </SheetHeader>

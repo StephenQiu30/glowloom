@@ -816,18 +816,48 @@ function ScopedTaskDetail({
             </CollapsibleContent>
           </Collapsible>
         )}
-        {task && (
-          <BillingOutcomeView
-            outcome={task.billing_outcome}
-            pending={pending}
-            onRecover={() => void recover()}
-          />
+        {task?.billing_outcome?.reconciliation_required && (
+          <p role="status" className="text-sm text-muted-foreground">
+            费用仍在核对，请保留原任务，避免重复提交。
+          </p>
         )}
-        {task?.quote_detail && (
-          <QuoteCostDetail
-            amount={task.quote_micros}
-            detail={task.quote_detail}
-          />
+        {task?.billing_outcome?.delivery_state === "recoverable" && (
+          <Button
+            variant="outline"
+            disabled={pending}
+            onClick={() => void recover()}
+          >
+            {pending ? "正在请求核查…" : "继续取回原任务"}
+          </Button>
+        )}
+        {task && (
+          <Collapsible>
+            <CollapsibleTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="group/collapsible"
+              >
+                费用记录
+                <ChevronDown
+                  data-icon="inline-end"
+                  className="transition-transform group-data-[state=open]/collapsible:rotate-180"
+                />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="flex flex-col gap-3 pt-3">
+                <BillingOutcomeView outcome={task.billing_outcome} />
+                {task.quote_detail && (
+                  <QuoteCostDetail
+                    amount={task.quote_micros}
+                    detail={task.quote_detail}
+                  />
+                )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         )}
         {task?.failure_code && (
           <p>

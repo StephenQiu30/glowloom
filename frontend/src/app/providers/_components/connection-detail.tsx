@@ -228,29 +228,29 @@ export function ConnectionDetail({
                   </Badge>
                 </ItemActions>
               </Item>
-              <p className="text-sm text-muted-foreground">
-                网络连通、凭据鉴权与具体模型的验证结果分别记录。
-              </p>
-              <Button
-                variant="outline"
-                className="self-start max-md:h-11"
-                onClick={() => changeView("test")}
-              >
-                查看测试
-              </Button>
-              <Button
-                variant="outline"
-                asChild
-                className="self-start max-md:h-11"
-              >
-                <Link href={`/models?provider=${encodeURIComponent(id)}`}>
-                  模型管理
-                </Link>
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button asChild className="max-md:h-11">
+                  <Link href={`/models?provider=${encodeURIComponent(id)}`}>
+                    查看模型
+                  </Link>
+                </Button>
+                <Button
+                  variant="outline"
+                  className="max-md:h-11"
+                  onClick={() => changeView("test")}
+                >
+                  查看测试
+                </Button>
+              </div>
               {provider?.status === "active" ? (
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="outline">停用连接</Button>
+                    <Button
+                      variant="ghost"
+                      className="mt-auto self-start max-md:h-11"
+                    >
+                      停用连接
+                    </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
@@ -293,8 +293,11 @@ export function ConnectionDetail({
             </TabsContent>
             <TabsContent
               value="test"
-              className="min-h-0 flex-1 overflow-y-auto"
+              className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto"
             >
+              <p className="text-sm text-muted-foreground">
+                连接检查不发起生成，模型试运行需单独确认费用。
+              </p>
               <ConnectionTests
                 id={id}
                 adapter={provider?.adapter_key}

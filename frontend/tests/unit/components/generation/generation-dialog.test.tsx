@@ -228,8 +228,8 @@ it("动作模仿显示角色图片和动作视频槽且没有可见正文", asyn
     />,
   );
   await screen.findByLabelText("动作模仿创作编辑器");
-  expect(screen.getByRole("button", { name: "角色图片" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "动作视频" })).toBeTruthy();
+  expect(await screen.findByRole("button", { name: "角色图片" })).toBeTruthy();
+  expect(await screen.findByRole("button", { name: "动作视频" })).toBeTruthy();
   expect(screen.queryByRole("textbox", { name: "创作提示词" })).toBeNull();
   expect(api.quote).not.toHaveBeenCalled();
 });
@@ -431,10 +431,10 @@ it("紧凑参数使用模型schema与候选上限，同一画布来源报价后�
   );
   fireEvent.keyDown(document, { key: "Escape" });
   fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
-  await screen.findByRole("button", { name: "确认费用并生成" });
+  await screen.findByRole("button", { name: "确认生成" });
   expect(api.quote.mock.calls[0][1].input_source).toEqual(pointer);
   expect(api.confirm).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "确认费用并生成" }));
+  fireEvent.click(screen.getByRole("button", { name: "确认生成" }));
   await waitFor(() => expect(api.confirm).toHaveBeenCalledOnce());
 });
 
@@ -854,7 +854,7 @@ it("未确认的报价重试复用保存后的草稿指针和幂等键，确认�
   fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
   await findFeedback();
   fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
-  await screen.findByRole("button", { name: "确认费用并生成" });
+  await screen.findByRole("button", { name: "确认生成" });
   expect(api.models.mock.calls[0][0].capability).toBe("image.generate");
   expect(api.quote.mock.calls[0]).toEqual(api.quote.mock.calls[1]);
   expect(api.quote.mock.calls[0][1]).toEqual({
@@ -863,28 +863,46 @@ it("未确认的报价重试复用保存后的草稿指针和幂等键，确认�
     force_regenerate: false,
   });
   expect(api.confirm).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "确认费用并生成" }));
+  fireEvent.click(screen.getByRole("button", { name: "确认生成" }));
   await screen.findByRole("heading", { name: "已完成" });
   expect(api.confirm).toHaveBeenCalledOnce();
 });
 
-it("过期报价阻止确认，明确放弃后可以重新检查费用", async () => {
+it("过期报价只允许更新费用，先释放旧报价再读取新报价", async () => {
   quote.expires_at = "2000-01-01";
   await open();
   fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
   await screen.findByText("报价已过期，请重新检查费用。");
-  expect(
-    screen
-      .getByRole("button", { name: "确认费用并生成" })
-      .hasAttribute("disabled"),
-  ).toBe(true);
-  fireEvent.click(screen.getByRole("button", { name: "放弃旧报价并重新检查" }));
-  await screen.findByRole("button", { name: "检查费用" });
+  expect(screen.queryByRole("button", { name: "确认生成" })).toBeNull();
+  quote = { ...quote, expires_at: "2099-01-01" };
+  fireEvent.click(screen.getByRole("button", { name: "更新费用" }));
+  await screen.findByRole("button", { name: "确认生成" });
   expect(api.resolve.mock.calls[0][1]).toEqual({
     action: "discard_quote",
     expected_epoch: 1,
   });
+  expect(api.quote).toHaveBeenCalledTimes(2);
+  expect(api.resolve.mock.invocationCallOrder[0]).toBeLessThan(
+    api.quote.mock.invocationCallOrder[1],
+  );
+  expect(api.quote.mock.calls[1][1].expected_submission_epoch).toBe(2);
+  expect(api.quote.mock.calls[0][2].headers["Idempotency-Key"]).not.toBe(
+    api.quote.mock.calls[1][2].headers["Idempotency-Key"],
+  );
   expect(api.confirm).not.toHaveBeenCalled();
+});
+
+it("更新费用时释放旧报价失败，不创建另一报价或执行确认", async () => {
+  quote.expires_at = "2000-01-01";
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
+  await screen.findByRole("button", { name: "更新费用" });
+  api.resolve.mockRejectedValueOnce(new RequestError("request_unconfirmed"));
+  fireEvent.click(screen.getByRole("button", { name: "更新费用" }));
+  await findFeedback();
+  expect(api.quote).toHaveBeenCalledOnce();
+  expect(api.confirm).not.toHaveBeenCalled();
+  expect(screen.queryByRole("button", { name: "确认生成" })).toBeNull();
 });
 
 it("画布参考保留版本与模型角色，选择图生图模式后先保存草稿再报价", async () => {
@@ -943,15 +961,12 @@ it("模型不支持参考时必须明确移除参考和标签，不能静默丢�
 it("报价后编辑输入会阻止确认旧报价", async () => {
   await open();
   fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
-  await screen.findByRole("button", { name: "确认费用并生成" });
+  await screen.findByRole("button", { name: "确认生成" });
   fireEvent.change(screen.getByLabelText("候选数量"), {
     target: { value: "2" },
   });
-  expect(
-    screen
-      .getByRole("button", { name: "确认费用并生成" })
-      .hasAttribute("disabled"),
-  ).toBe(true);
+  expect(screen.queryByRole("button", { name: "确认生成" })).toBeNull();
+  expect(screen.getByRole("button", { name: "更新费用" })).toBeTruthy();
   expect(api.confirm).not.toHaveBeenCalled();
 });
 
@@ -959,10 +974,8 @@ it("确认结果未知时锁定编辑并使用原确认键重试", async () => {
   api.confirm.mockRejectedValueOnce(new RequestError("request_unconfirmed"));
   await open();
   fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
-  fireEvent.click(
-    await screen.findByRole("button", { name: "确认费用并生成" }),
-  );
-  const retry = await screen.findByRole("button", { name: "重试原确认" });
+  fireEvent.click(await screen.findByRole("button", { name: "确认生成" }));
+  const retry = await screen.findByRole("button", { name: "核对状态" });
   await waitFor(() => expect(retry.hasAttribute("disabled")).toBe(false));
   expect(screen.getByLabelText("生成模型").hasAttribute("disabled")).toBe(true);
   fireEvent.click(retry);
@@ -1061,8 +1074,8 @@ it("恢复报价即使正文相同也必须核对独立草稿修订", async () =
       onClose={() => {}}
     />,
   );
-  const confirm = await screen.findByRole("button", { name: "确认费用并生成" });
-  expect(confirm.hasAttribute("disabled")).toBe(true);
+  await screen.findByRole("button", { name: "更新费用" });
+  expect(screen.queryByRole("button", { name: "确认生成" })).toBeNull();
   expect(api.confirm).not.toHaveBeenCalled();
 });
 
@@ -1261,9 +1274,7 @@ it("助手紧凑展示保持提示词草稿归属并经正式报价后确认发�
     draft_id: id,
   });
   expect(api.confirm).not.toHaveBeenCalled();
-  expect(
-    await screen.findByRole("dialog", { name: "报价与生成任务" }),
-  ).toBeTruthy();
+  expect(await screen.findByRole("dialog", { name: "确认生成" })).toBeTruthy();
 });
 
 it("音频目录与标题独立，朗读原文不追加视觉偏好且不显示素材入口", async () => {
@@ -1327,7 +1338,7 @@ it("音频草稿保存后按来源指针报价，正文引用为空且不自动�
   );
   await screen.findByRole("textbox", { name: "创作提示词" });
   fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
-  await screen.findByRole("button", { name: "确认费用并生成" });
+  await screen.findByRole("button", { name: "确认生成" });
   expect(api.quote.mock.calls[0][1]).toMatchObject({
     input_source: { kind: "prompt_draft", draft_id: id },
   });
@@ -1402,6 +1413,8 @@ it("已扣费终态恢复交付后仍展示原正文，执行失败不伪称退�
   });
   render(<TaskDetail projectID={project.id} id={id} />);
   await screen.findByText("取回的原正文");
+  expect(screen.queryByText(/实扣：¥0.000019/)).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "费用记录" }));
   expect(screen.getByText(/实扣：¥0.000019/)).toBeTruthy();
   expect(screen.queryByText(/退款已入账/)).toBeNull();
   expect(api.quote).not.toHaveBeenCalled();
@@ -1491,13 +1504,65 @@ it.each([undefined, -1, Number.MAX_SAFE_INTEGER + 1])(
     });
     await open();
     const button = await screen.findByRole("button", {
-      name: "确认费用并生成",
+      name: "确认生成",
     });
     expect((button as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(button);
     expect(api.confirm).not.toHaveBeenCalled();
   },
 );
+it.each([
+  [0, "项目预算不足，请调整数量或联系管理员。"],
+  [undefined, "当前报价暂不可确认，请检查项目预算或更新费用。"],
+  [200_000, "当前报价暂不可确认，请检查项目预算或更新费用。"],
+])(
+  "不可确认报价的预算提示区分已知和未知余额：%s",
+  async (available, message) => {
+    api.create.mockImplementation(async (_, body) => {
+      const result = saved(body);
+      result.draft = {
+        ...result.draft,
+        modelVersion: version,
+        mode: "text_to_image",
+      };
+      current = {
+        epoch: 1,
+        submission: {
+          id,
+          state: "quoted",
+          operation_id: id,
+          confirm_key: "confirm-key",
+          quote: {
+            ...quote,
+            quote_micros: 120_000,
+            available_micros: available,
+            confirmable: false,
+            quote_detail: { estimated_credits: 2 },
+          },
+          input_source: {
+            kind: "prompt_draft",
+            draft_id: id,
+            revision: result.revision,
+          },
+          draft: {
+            ...result.draft,
+            mode: "text_to_image",
+            modelVersion: version,
+          },
+        },
+      };
+      return result;
+    });
+    await open();
+    const button = await screen.findByRole("button", { name: "确认生成" });
+    expect(button.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText(message)).toBeTruthy();
+    if (available !== 0) expect(screen.queryByText(/^项目预算不足/)).toBeNull();
+    expect(api.confirm).not.toHaveBeenCalled();
+    expect(api.quote).not.toHaveBeenCalled();
+  },
+);
+
 it("无法显示金额仍可沿原幂等键核对已发出的未知确认", async () => {
   api.confirm.mockImplementationOnce(async () => {
     quote.quote_micros = Number.MAX_SAFE_INTEGER + 1;
@@ -1505,10 +1570,8 @@ it("无法显示金额仍可沿原幂等键核对已发出的未知确认", asyn
   });
   await open();
   fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
-  fireEvent.click(
-    await screen.findByRole("button", { name: "确认费用并生成" }),
-  );
-  const retry = await screen.findByRole("button", { name: "重试原确认" });
+  fireEvent.click(await screen.findByRole("button", { name: "确认生成" }));
+  const retry = await screen.findByRole("button", { name: "核对状态" });
   await waitFor(() =>
     expect((retry as HTMLButtonElement).disabled).toBe(false),
   );
@@ -1610,6 +1673,120 @@ it("new explicit retry after acknowledged original query is still pending yields
   );
 });
 
+it("报价确认只展示消耗和授权，技术快照默认折叠", async () => {
+  quote.quote_detail = { estimated_credits: 8 };
+  quote.final_prompt = "冻结的原提示词";
+  quote.compiler_version = "compiler-v3";
+  await compactWorkspace();
+  expect(screen.getByText("费用待确认")).toBeTruthy();
+  expect(api.quote).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
+  await screen.findByRole("button", { name: "确认生成" });
+  expect(screen.getByRole("dialog", { name: "确认生成" })).toBeTruthy();
+  expect(screen.getByText("预计消耗 8 积分")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "核对状态" })).toBeNull();
+  expect(screen.queryByText("冻结的原提示词")).toBeNull();
+  expect(screen.queryByText(/compiler-v3|提交 .*代次/)).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "查看生成详情" }));
+  expect(screen.getByText("冻结的原提示词")).toBeTruthy();
+  expect(screen.getByText(/compiler-v3/)).toBeTruthy();
+  expect(api.confirm).not.toHaveBeenCalled();
+});
+
+it("首页取消报价后继续编辑，第二次检查费用仍打开确认弹窗", async () => {
+  render(
+    <RichGeneration
+      projectID={project.id}
+      presentation="home"
+      seed={{ project, prompt: "清晨的海边", capability: "image" }}
+    />,
+  );
+  const editor = await screen.findByRole("textbox", { name: "创作提示词" });
+  fireEvent.click(screen.getByRole("button", { name: "生成模型" }));
+  fireEvent.click(await screen.findByRole("option", { name: /真实模型/ }));
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "生成模型" }).textContent,
+    ).toContain("真实模型"),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
+  await screen.findByRole("dialog", { name: "确认生成" });
+  fireEvent.click(screen.getByRole("button", { name: "取消" }));
+  await waitFor(() => {
+    expect(screen.queryByRole("dialog", { name: "确认生成" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "检查费用" }).hasAttribute("disabled"),
+    ).toBe(false);
+  });
+  fireEvent.paste(editor, {
+    clipboardData: {
+      files: [],
+      getData: (type: string) => (type === "text/plain" ? "白色陶瓷杯" : ""),
+    },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
+  await screen.findByRole("dialog", { name: "确认生成" });
+  expect(api.quote).toHaveBeenCalledTimes(2);
+  expect(api.quote.mock.calls[1][1].expected_submission_epoch).toBe(2);
+  expect(
+    JSON.stringify(api.save.mock.calls.at(-1)?.[1].draft.document),
+  ).toContain("白色陶瓷杯");
+  expect(api.confirm).not.toHaveBeenCalled();
+});
+
+it("未知确认先核对已接受的原提交，不重复执行确认", async () => {
+  api.confirm.mockRejectedValueOnce(new RequestError("request_unconfirmed"));
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
+  fireEvent.click(await screen.findByRole("button", { name: "确认生成" }));
+  const retry = await screen.findByRole("button", { name: "核对状态" });
+  current = {
+    ...current,
+    submission: { ...current.submission, state: "accepted" },
+  };
+  fireEvent.click(retry);
+  await screen.findByRole("heading", { name: "已完成" });
+  expect(api.confirm).toHaveBeenCalledOnce();
+  expect(api.quote).toHaveBeenCalledOnce();
+});
+
+it("未知确认查询失败时保留原请求，不新建报价或盲目重试确认", async () => {
+  api.confirm.mockRejectedValueOnce(new RequestError("request_unconfirmed"));
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
+  fireEvent.click(await screen.findByRole("button", { name: "确认生成" }));
+  const retry = await screen.findByRole("button", { name: "核对状态" });
+  api.current.mockRejectedValueOnce(new RequestError("request_unconfirmed"));
+  fireEvent.click(retry);
+  await waitFor(() => expect(retry.hasAttribute("disabled")).toBe(false));
+  expect(api.confirm).toHaveBeenCalledOnce();
+  expect(api.quote).toHaveBeenCalledOnce();
+  expect(screen.queryByRole("button", { name: "取消" })).toBeNull();
+  expect(screen.getByLabelText("生成模型").hasAttribute("disabled")).toBe(true);
+  fireEvent.click(retry);
+  await screen.findByRole("heading", { name: "已完成" });
+  expect(api.confirm.mock.calls[0]).toEqual(api.confirm.mock.calls[1]);
+});
+
+it("报价操作冲突后提供状态恢复入口，读回已接受任务时不重新扣费", async () => {
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
+  await screen.findByRole("button", { name: "确认生成" });
+  api.resolve.mockRejectedValueOnce(
+    new RequestError("submission_already_accepted"),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "取消" }));
+  const recover = await screen.findByRole("button", { name: "核对状态" });
+  current = {
+    ...current,
+    submission: { ...current.submission, state: "accepted" },
+  };
+  fireEvent.click(recover);
+  await screen.findByRole("heading", { name: "已完成" });
+  expect(api.quote).toHaveBeenCalledOnce();
+  expect(api.confirm).not.toHaveBeenCalled();
+});
+
 it.each([true, false])("确认面板展示服务端冻结系数：%s", async (provided) => {
   if (provided)
     quote.quote_detail = {
@@ -1617,8 +1794,8 @@ it.each([true, false])("确认面板展示服务端冻结系数：%s", async (pr
     };
   await compactWorkspace();
   fireEvent.click(screen.getByRole("button", { name: "检查费用" }));
-  await screen.findByRole("button", { name: "确认费用并生成" });
-  fireEvent.click(screen.getByRole("button", { name: "费用明细" }));
+  await screen.findByRole("button", { name: "确认生成" });
+  fireEvent.click(screen.getByRole("button", { name: "费用说明" }));
   if (provided) {
     expect(screen.getByText("模式系数（text2img）")).toBeTruthy();
     expect(screen.getByText("分辨率系数（2k）")).toBeTruthy();

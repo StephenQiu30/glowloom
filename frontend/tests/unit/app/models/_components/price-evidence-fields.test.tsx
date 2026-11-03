@@ -1,4 +1,4 @@
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import { PriceEvidenceFields } from "@/app/models/_components/price-evidence-fields";
 afterEach(cleanup);
@@ -17,6 +17,8 @@ it("requires explicit reviewed source without inventing provenance or a review t
   expect(time.required).toBe(true);
   expect(url.value).toBe("");
   expect(time.value).toBe("");
+  expect(screen.queryByText(/https:\/\/example.invalid\/pricing/)).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "上次核验信息" }));
   expect(screen.getByText(/https:\/\/example.invalid\/pricing/)).toBeTruthy();
   expect(screen.getByText(/2026-11-01T01:00:00Z/)).toBeTruthy();
 });

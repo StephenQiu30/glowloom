@@ -19,7 +19,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Field, FieldLabel, FieldGroup, FieldSet } from "@/components/ui/field";
-import { Checkbox } from "@/components/ui/checkbox";
+import { QuoteCostDetail } from "@/components/generation/quote-cost-detail";
+import { formatBillingMicros } from "@/components/billing/billing-outcome";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -338,8 +339,7 @@ export function ProviderTrial({
         className="pt-3 data-[state=closed]:hidden"
       >
         <p className="text-sm text-muted-foreground">
-          先准备报价，再确认收费执行。使用后台已保存的
-          Key；每次试运行生成一个结果，费用记入所选项目。
+          试运行生成一个结果，费用记入所选项目。
         </p>
         {snapshot === "unavailable" && (
           <Alert variant="destructive">
@@ -680,61 +680,74 @@ export function ProviderTrial({
         )}
         {task && (
           <div className="space-y-2 text-sm">
-            <p>
-              任务状态：{task.status} · 报价 ¥
-              {((task.quote_micros ?? 0) / 1_000_000).toFixed(6)}
+            <p className="text-muted-foreground">
+              任务状态：{task.status}
               {task.settled_micros !== undefined &&
-                ` · 已结算 ¥${(task.settled_micros / 1_000_000).toFixed(6)}`}
+                ` · 已结算 ${formatBillingMicros(task.settled_micros)}`}
             </p>
+            {task.status === "quoted" ? (
+              <QuoteCostDetail amount={task.quote_micros} />
+            ) : null}
             {task.failure_code && (
               <Alert variant="destructive">
                 <AlertDescription>{task.failure_code}</AlertDescription>
               </Alert>
             )}
             {task.status === "quoted" ? (
-              <div
-                className="space-y-1 rounded-lg border p-3 text-xs text-muted-foreground"
-                aria-label="本次验证摘要"
-              >
-                <p>
-                  模型：{task.model_name ?? task.model_key ?? "已冻结模型"} ·
-                  模式：{task.mode ?? "见已冻结报价"} · 输出：
-                  {task.output_count ?? 1} 个
-                </p>
-                <p>
-                  参考素材：
-                  {task.inputs?.filter((input) => input.media_asset_id)
-                    .length ?? 0}{" "}
-                  项；提示词：
-                  {task.inputs
-                    ?.filter((input) => input.text)
-                    .map((input) => input.text)
-                    .join(" ")
-                    .slice(0, 120) || "以已冻结输入为准"}
-                </p>
-                {Object.entries(task.params ?? {})
-                  .filter(([name]) => fields.some((f) => f.field === name))
-                  .map(([name, value]) => (
-                    <p key={name}>
-                      {fields.find((f) => f.field === name)?.label ?? name}：
-                      {typeof value === "string" ||
-                      typeof value === "number" ||
-                      typeof value === "boolean"
-                        ? String(value)
-                        : "已冻结"}
-                    </p>
-                  ))}
-                <p>
-                  供应商预算：{frozenBudget?.currency ?? "读取中"}{" "}
-                  {frozenBudget
-                    ? (frozenBudget.supplier / 1e6).toFixed(6)
-                    : "待确认"}
-                  ；平台报价 ¥{((task.quote_micros ?? 0) / 1e6).toFixed(6)}。
-                </p>
-                <p>
-                  以上为已冻结的原请求。修改输入需重新准备报价，确认前不会发起生成。
-                </p>
-              </div>
+              <Collapsible>
+                <CollapsibleTrigger asChild>
+                  <Button type="button" variant="ghost">
+                    费用与输入详情
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent
+                  className="flex flex-col gap-2 pt-3 text-xs text-muted-foreground"
+                  aria-label="本次验证摘要"
+                >
+                  <p>
+                    模型：{task.model_name ?? task.model_key ?? "已冻结模型"} ·
+                    模式：{task.mode ?? "见已冻结报价"} · 输出：
+                    {task.output_count ?? 1} 个
+                  </p>
+                  <p>
+                    参考素材：
+                    {task.inputs?.filter((input) => input.media_asset_id)
+                      .length ?? 0}{" "}
+                    项；提示词：
+                    {task.inputs
+                      ?.filter((input) => input.text)
+                      .map((input) => input.text)
+                      .join(" ")
+                      .slice(0, 120) || "以已冻结输入为准"}
+                  </p>
+                  {Object.entries(task.params ?? {})
+                    .filter(([name]) => fields.some((f) => f.field === name))
+                    .map(([name, value]) => (
+                      <p key={name}>
+                        {fields.find((f) => f.field === name)?.label ?? name}：
+                        {typeof value === "string" ||
+                        typeof value === "number" ||
+                        typeof value === "boolean"
+                          ? String(value)
+                          : "已冻结"}
+                      </p>
+                    ))}
+                  <p>
+                    供应商预算：{frozenBudget?.currency ?? "读取中"}{" "}
+                    {frozenBudget
+                      ? (frozenBudget.supplier / 1e6).toFixed(6)
+                      : "待确认"}
+                    ；平台报价{" "}
+                    {task.quote_micros === undefined
+                      ? "待核验"
+                      : formatBillingMicros(task.quote_micros)}
+                    。
+                  </p>
+                  <p>
+                    以上为已冻结的原请求。修改输入需重新准备报价，确认前不会发起生成。
+                  </p>
+                </CollapsibleContent>
+              </Collapsible>
             ) : null}
             {task.status === "quoted" && pending && (
               <form
@@ -752,16 +765,14 @@ export function ProviderTrial({
                 }}
               >
                 <FieldGroup className="gap-2">
-                  <Field orientation="horizontal">
-                    <Checkbox id={`${formFieldId}-field-8`} required />
-                    <FieldLabel htmlFor={`${formFieldId}-field-8`}>
-                      <span>
-                        我已确认提示词、模式及费用，开始真实供应商试运行。
-                      </span>
-                    </FieldLabel>
-                  </Field>
-                  <Button disabled={disabled || !frozenBudget}>
-                    确认费用并执行
+                  <Button
+                    disabled={
+                      disabled ||
+                      !frozenBudget ||
+                      typeof task.quote_micros !== "number"
+                    }
+                  >
+                    确认并试运行
                   </Button>
                 </FieldGroup>
               </form>

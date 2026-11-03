@@ -130,10 +130,11 @@ it("凭据输入使用安全字段，保存只建立连接与凭据", async () =
     />,
   );
   fireEvent.click(screen.getByLabelText("我的文本服务"));
+  fireEvent.click(screen.getByRole("button", { name: "下一步" }));
   fireEvent.change(screen.getByLabelText("API Key"), {
     target: { value: "fixture-secret-test" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "保存连接" }));
+  fireEvent.click(screen.getByRole("button", { name: "接入服务" }));
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());
   expect(api.test).not.toHaveBeenCalled();
   expect(api.credential).toHaveBeenCalledWith(
@@ -160,10 +161,11 @@ it("离开原连接后，迟到的创建响应不保存 Key 或归属到新连�
     />,
   );
   fireEvent.click(screen.getByLabelText("我的文本服务"));
+  fireEvent.click(screen.getByRole("button", { name: "下一步" }));
   fireEvent.change(screen.getByLabelText("API Key"), {
     target: { value: "old-key-test" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "保存连接" }));
+  fireEvent.click(screen.getByRole("button", { name: "接入服务" }));
   await waitFor(() => expect(api.connect).toHaveBeenCalledOnce());
   old.unmount();
   const nextSaved = vi.fn();

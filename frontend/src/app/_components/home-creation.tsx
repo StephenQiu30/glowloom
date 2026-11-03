@@ -467,7 +467,7 @@ function ScopedHomeCreation() {
                             {projectControl}
                           </div>
                           <span className="creation-credit-hint">
-                            {supported ? "提交前确认积分" : "暂未开放"}
+                            {supported ? "费用待确认" : "暂未开放"}
                           </span>
                           <Button
                             type="submit"

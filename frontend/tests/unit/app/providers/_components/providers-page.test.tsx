@@ -86,7 +86,7 @@ it("空列表只保留接入入口，表单使用可关闭的 Dialog", async () 
   const trigger = screen.getAllByRole("button", { name: "接入服务" })[0];
   trigger.focus();
   fireEvent.click(trigger);
-  expect(screen.getByRole("dialog", { name: "接入 AI 服务" })).toBeTruthy();
+  expect(screen.getByRole("dialog", { name: "接入服务" })).toBeTruthy();
   expect(screen.getByText("接入表单")).toBeTruthy();
   fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
   expect(screen.queryByRole("dialog")).toBeNull();
@@ -155,7 +155,7 @@ it("关闭后仍展示未确认写入，继续接入只打开原流程而不自�
   await screen.findByText("还没有连接");
   expect(screen.getByText("保存待确认")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "继续接入" }));
-  expect(screen.getByRole("dialog", { name: "接入 AI 服务" })).toBeTruthy();
+  expect(screen.getByRole("dialog", { name: "接入服务" })).toBeTruthy();
 });
 
 it("关闭后收到保存成功只刷新列表，不重新弹出详情", async () => {
@@ -223,7 +223,7 @@ it("预设与文件维护按需展开，主页面不展示协议与版本", asyn
   fireEvent.click(screen.getByRole("button", { name: "维护预设" }));
   expect(screen.getByRole("button", { name: "导出" })).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "仅支持维护" }));
-  expect(screen.queryByRole("dialog", { name: "接入 AI 服务" })).toBeNull();
+  expect(screen.queryByRole("dialog", { name: "接入服务" })).toBeNull();
 });
 
 it("权限撤销立即卸载管理详情，再恢复权限重新读取", async () => {
@@ -342,8 +342,17 @@ it("连接列表显示品牌名称和模型数，不将未启用连接称为已�
   expect(screen.queryByText(/••••|1234/)).toBeNull();
   expect(screen.getByRole("columnheader", { name: "供应商" })).toBeTruthy();
   expect(screen.getByRole("columnheader", { name: "接入模型" })).toBeTruthy();
-  expect(screen.getByRole("columnheader", { name: "配置状态" })).toBeTruthy();
+  expect(screen.queryByRole("columnheader", { name: "配置状态" })).toBeNull();
   expect(screen.queryByRole("columnheader", { name: "最近检查" })).toBeNull();
+  fireEvent.pointerDown(screen.getByRole("button", { name: "显示列" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  fireEvent.click(
+    await screen.findByRole("menuitemcheckbox", { name: "配置状态" }),
+  );
+  fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+  expect(screen.getByRole("columnheader", { name: "配置状态" })).toBeTruthy();
   expect(screen.getByText("未启用")).toBeTruthy();
   expect(screen.queryByText("已停用")).toBeNull();
 });

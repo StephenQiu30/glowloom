@@ -38,3 +38,26 @@ it("详情读取失败时结束加载并允许重试同一模型", async () => {
     "model-a",
   ]);
 });
+
+it("模型设置、价格和发布分屏，切换后不丢未保存的配置", async () => {
+  api.model.mockResolvedValue({
+    model: { id: "model-a", display_name: "示例模型", status: "disabled" },
+    versions: [],
+    prices: [],
+  });
+  render(<ModelDetail id="model-a" capabilities={[]} onSaved={vi.fn()} />);
+  await screen.findByRole("heading", { name: "示例模型" });
+  fireEvent.change(screen.getByLabelText("上游模型 ID"), {
+    target: { value: "draft-model-id" },
+  });
+  expect(screen.queryByRole("button", { name: "保存价格" })).toBeNull();
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "价格" }), { button: 0 });
+  expect(await screen.findByRole("button", { name: "保存价格" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "保存配置" })).toBeNull();
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "模型设置" }), {
+    button: 0,
+  });
+  expect((screen.getByLabelText("上游模型 ID") as HTMLInputElement).value).toBe(
+    "draft-model-id",
+  );
+});

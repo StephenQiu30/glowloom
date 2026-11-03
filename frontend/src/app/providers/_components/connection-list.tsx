@@ -131,6 +131,7 @@ export function ConnectionList({
   const mobile = useIsMobile();
   const [visibility, setVisibility] = useState<Record<string, boolean>>({
     check: false,
+    credential: false,
   });
   const columns: DataTableColumn<ConnectionRow>[] = [
     {

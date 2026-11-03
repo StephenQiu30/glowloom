@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import {
   InputGroup,
   InputGroupInput,
@@ -67,6 +68,9 @@ export function PresetConnect({
 }) {
   const fieldID = useId();
   const [presetID, setPresetID] = useState(initialPreset);
+  const [step, setStep] = useState<"provider" | "details">(
+    initialPreset ? "details" : "provider",
+  );
   const [candidateKeys, setCandidateKeys] = useState<string[]>([]);
   const [selectedBrand, setSelectedBrand] = useState<string>("all");
   const [customCandidates, setCustomCandidates] = useState<
@@ -138,6 +142,20 @@ export function PresetConnect({
         (p) => p.provider?.id === targetID && p.credential?.status === "active",
       ));
   const busy = create.busy || credential.busy;
+  const lockedStep =
+    busy || !!targetID || !!create.pending || !!credential.pending || complete;
+  const detailsStep =
+    step === "details" ||
+    !!targetID ||
+    !!create.pending ||
+    !!credential.pending;
+  const stepHeading = useRef<HTMLParagraphElement>(null);
+  const previousStep = useRef(detailsStep);
+  useEffect(() => {
+    if (previousStep.current === detailsStep) return;
+    previousStep.current = detailsStep;
+    stepHeading.current?.focus();
+  }, [detailsStep]);
   const isMultiBrand =
     preset?.document?.config?.adapter_key === "openrouter" ||
     preset?.document?.config?.adapter_key === "vercel";
@@ -160,6 +178,10 @@ export function PresetConnect({
       className="flex min-h-0 min-w-0 flex-1 flex-col gap-4"
       onSubmit={async (event) => {
         event.preventDefault();
+        if (!detailsStep) {
+          if (preset?.id && !lockedStep) setStep("details");
+          return;
+        }
         if (
           busy ||
           complete ||
@@ -220,158 +242,196 @@ export function PresetConnect({
         );
       }}
     >
-      <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
-        <FieldGroup className="gap-4">
-          <FieldSet className="gap-2">
-            <FieldLegend variant="label">平台预设</FieldLegend>
-            <RadioGroup
-              aria-label="平台预设"
-              name={`${fieldID}-preset`}
-              required={!targetID}
-              value={selectedPreset}
-              disabled={busy || !!targetID || !!create.pending}
-              onValueChange={(id) => {
-                setPresetID(id);
-                setCandidateKeys([]);
-                setCustomCandidates([]);
-                setShowAddCustom(false);
-                setCustomName("");
-                setCustomID("");
-                setAccessKeyID("");
-                setAPIKey("");
-                setVisible(false);
-                setSelectedBrand("all");
-                setCategory(
-                  presets.find((p) => p.id === id)?.model_catalog?.models?.[0]
-                    ?.capability ?? "text.generate",
-                );
-              }}
-              className="grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-3"
-            >
-              {presets
-                .filter((p) => !p.archived && !p.emergency_disabled)
-                .map((p) => (
-                  <FieldLabel key={p.id} htmlFor={`${fieldID}-${p.id}`}>
-                    <Field orientation="horizontal" className="min-h-16">
-                      <RadioGroupItem
-                        id={`${fieldID}-${p.id}`}
-                        value={p.id!}
-                        aria-label={p.document?.name}
-                      />
-                      <FieldContent>
-                        <FieldTitle>
-                          <ProviderLogo
-                            adapterKey={p.document?.config?.adapter_key}
-                            metadata={adapters?.find(
-                              (item) =>
-                                item.adapter_key ===
-                                p.document?.config?.adapter_key,
-                            )}
-                          />
-                          {p.document?.name}
-                        </FieldTitle>
-                        <FieldDescription>
-                          {p.document?.config?.region === "domestic"
-                            ? "国内"
-                            : p.document?.config?.region === "overseas"
-                              ? "海外"
-                              : "区域未知"}{" "}
-                        </FieldDescription>
-                      </FieldContent>
-                    </Field>
-                  </FieldLabel>
-                ))}
-            </RadioGroup>
-            {!presets.some((p) => !p.archived && !p.emergency_disabled) ? (
-              <FieldDescription>暂无可用预设，请先新建预设。</FieldDescription>
-            ) : null}
-          </FieldSet>
-          {musicCredential && (
-            <Field>
-              <FieldLabel htmlFor={`${fieldID}-access-key`}>
-                Access Key ID
-              </FieldLabel>
-              <InputGroup>
-                <InputGroupInput
-                  id={`${fieldID}-access-key`}
-                  type="password"
-                  required
-                  autoComplete="off"
-                  value={accessKeyID}
-                  disabled={complete || busy}
-                  onChange={(event) => setAccessKeyID(event.target.value)}
-                />
-              </InputGroup>
+      <p
+        ref={stepHeading}
+        tabIndex={-1}
+        className="text-sm text-muted-foreground outline-none"
+      >
+        {detailsStep ? "2 / 2 · 密钥与模型" : "1 / 2 · 选择服务商"}
+      </p>
+      <div className="flex min-h-0 flex-col gap-5 overflow-y-auto">
+        <FieldGroup className="gap-5">
+          {!detailsStep ? (
+            <FieldSet className="gap-3">
+              <FieldLegend variant="label" className="sr-only">
+                选择服务商
+              </FieldLegend>
+              <RadioGroup
+                aria-label="服务商"
+                name={`${fieldID}-preset`}
+                required={!targetID}
+                value={selectedPreset}
+                disabled={busy || !!targetID || !!create.pending}
+                onValueChange={(id) => {
+                  setPresetID(id);
+                  setCandidateKeys([]);
+                  setCustomCandidates([]);
+                  setShowAddCustom(false);
+                  setCustomName("");
+                  setCustomID("");
+                  setAccessKeyID("");
+                  setAPIKey("");
+                  setVisible(false);
+                  setSelectedBrand("all");
+                  setCategory(
+                    presets.find((p) => p.id === id)?.model_catalog?.models?.[0]
+                      ?.capability ?? "text.generate",
+                  );
+                }}
+                className="grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-3"
+              >
+                {presets
+                  .filter((p) => !p.archived && !p.emergency_disabled)
+                  .map((p) => (
+                    <FieldLabel key={p.id} htmlFor={`${fieldID}-${p.id}`}>
+                      <Field orientation="horizontal" className="min-h-16">
+                        <RadioGroupItem
+                          id={`${fieldID}-${p.id}`}
+                          value={p.id!}
+                          aria-label={p.document?.name}
+                        />
+                        <FieldContent>
+                          <FieldTitle>
+                            <ProviderLogo
+                              adapterKey={p.document?.config?.adapter_key}
+                              metadata={adapters?.find(
+                                (item) =>
+                                  item.adapter_key ===
+                                  p.document?.config?.adapter_key,
+                              )}
+                            />
+                            {p.document?.name}
+                          </FieldTitle>
+                          <FieldDescription>
+                            {p.document?.config?.region === "domestic"
+                              ? "国内"
+                              : p.document?.config?.region === "overseas"
+                                ? "海外"
+                                : "区域未知"}{" "}
+                          </FieldDescription>
+                        </FieldContent>
+                      </Field>
+                    </FieldLabel>
+                  ))}
+              </RadioGroup>
+              {!presets.some((p) => !p.archived && !p.emergency_disabled) ? (
+                <FieldDescription>
+                  暂无可用预设，请先新建预设。
+                </FieldDescription>
+              ) : null}
+            </FieldSet>
+          ) : (
+            <Field orientation="horizontal">
+              <FieldContent>
+                <FieldTitle>
+                  <ProviderLogo
+                    adapterKey={preset?.document?.config?.adapter_key}
+                    metadata={metadata}
+                  />
+                  {preset?.document?.name ?? "原服务连接"}
+                </FieldTitle>
+              </FieldContent>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={lockedStep}
+                onClick={() => setStep("provider")}
+              >
+                更换
+              </Button>
             </Field>
           )}
-          <Field>
-            <FieldLabel variant="title" htmlFor={`${fieldID}-key`}>
-              {musicCredential ? "Secret Access Key" : "API Key"}
-            </FieldLabel>
-            <InputGroup className="h-10 max-md:h-11">
-              <InputGroupInput
-                className="h-full"
-                id={`${fieldID}-key`}
-                type={visible ? "text" : "password"}
-                required
-                value={apiKey}
-                onChange={(event) => setAPIKey(event.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-                disabled={complete || busy || (!preset && !targetID)}
-                placeholder={
-                  musicCredential
-                    ? "输入 Secret Access Key"
-                    : preset?.document?.config?.adapter_key ===
-                        "volcengine_speech"
-                      ? "输入豆包语音 API Key"
-                      : "输入 API Key"
-                }
-              />
-              <InputGroupAddon
-                align="inline-end"
-                className="py-0 has-[>button]:mr-0"
-              >
-                <InputGroupButton
-                  type="button"
-                  size="icon-sm"
-                  className="max-md:size-11"
-                  aria-label={
-                    musicCredential
-                      ? visible
-                        ? "隐藏 Secret Access Key"
-                        : "显示 Secret Access Key"
-                      : visible
-                        ? "隐藏 API Key"
-                        : "显示 API Key"
-                  }
-                  aria-pressed={visible}
-                  disabled={complete || busy || (!preset && !targetID)}
-                  onClick={() => setVisible((v) => !v)}
-                >
-                  {visible ? (
-                    <EyeOff data-icon="inline-start" />
-                  ) : (
-                    <Eye data-icon="inline-start" />
-                  )}
-                </InputGroupButton>
-              </InputGroupAddon>
-            </InputGroup>
-            {preset?.document?.config?.adapter_key === "volcengine_speech" ? (
-              <FieldDescription>使用豆包语音 API Key</FieldDescription>
-            ) : null}
-          </Field>
+          {detailsStep ? (
+            <>
+              {musicCredential && (
+                <Field>
+                  <FieldLabel htmlFor={`${fieldID}-access-key`}>
+                    Access Key ID
+                  </FieldLabel>
+                  <InputGroup>
+                    <InputGroupInput
+                      id={`${fieldID}-access-key`}
+                      type="password"
+                      required
+                      autoComplete="off"
+                      value={accessKeyID}
+                      disabled={complete || busy}
+                      onChange={(event) => setAccessKeyID(event.target.value)}
+                    />
+                  </InputGroup>
+                </Field>
+              )}
+              <Field>
+                <FieldLabel variant="title" htmlFor={`${fieldID}-key`}>
+                  {musicCredential ? "Secret Access Key" : "API Key"}
+                </FieldLabel>
+                <InputGroup className="h-10 max-md:h-11">
+                  <InputGroupInput
+                    className="h-full"
+                    id={`${fieldID}-key`}
+                    type={visible ? "text" : "password"}
+                    required
+                    value={apiKey}
+                    onChange={(event) => setAPIKey(event.target.value)}
+                    autoComplete="off"
+                    spellCheck={false}
+                    disabled={complete || busy || (!preset && !targetID)}
+                    placeholder={
+                      musicCredential
+                        ? "输入 Secret Access Key"
+                        : preset?.document?.config?.adapter_key ===
+                            "volcengine_speech"
+                          ? "输入豆包语音 API Key"
+                          : "输入 API Key"
+                    }
+                  />
+                  <InputGroupAddon
+                    align="inline-end"
+                    className="py-0 has-[>button]:mr-0"
+                  >
+                    <InputGroupButton
+                      type="button"
+                      size="icon-sm"
+                      className="max-md:size-11"
+                      aria-label={
+                        musicCredential
+                          ? visible
+                            ? "隐藏 Secret Access Key"
+                            : "显示 Secret Access Key"
+                          : visible
+                            ? "隐藏 API Key"
+                            : "显示 API Key"
+                      }
+                      aria-pressed={visible}
+                      disabled={complete || busy || (!preset && !targetID)}
+                      onClick={() => setVisible((v) => !v)}
+                    >
+                      {visible ? (
+                        <EyeOff data-icon="inline-start" />
+                      ) : (
+                        <Eye data-icon="inline-start" />
+                      )}
+                    </InputGroupButton>
+                  </InputGroupAddon>
+                </InputGroup>
+                {preset?.document?.config?.adapter_key ===
+                "volcengine_speech" ? (
+                  <FieldDescription>使用豆包语音 API Key</FieldDescription>
+                ) : null}
+              </Field>
+            </>
+          ) : null}
         </FieldGroup>
-        {models.length ? (
+        {detailsStep && models.length ? (
           <FieldSet
             disabled={busy || complete || !!targetID || !!create.pending}
             className="min-w-0 gap-1"
           >
             <FieldLegend variant="label" className="sr-only">
-              接入模型
+              选择模型
             </FieldLegend>
             <div className="flex min-h-8 flex-wrap items-center gap-2">
-              <FieldTitle aria-hidden="true">接入模型</FieldTitle>
+              <FieldTitle aria-hidden="true">选择模型</FieldTitle>
               <span
                 role="status"
                 className="ml-auto text-xs text-muted-foreground"
@@ -408,6 +468,7 @@ export function PresetConnect({
               className="min-w-0 gap-1"
             >
               <TabsList
+                variant="navigation"
                 className="w-full group-data-horizontal/tabs:h-10 max-md:group-data-horizontal/tabs:h-12"
                 aria-label="模型类型"
               >
@@ -466,9 +527,7 @@ export function PresetConnect({
                         <ToggleGroupItem value="all">
                           全部 ({visibleModels.length})
                         </ToggleGroupItem>
-                        {(
-                          ["ChatGPT", "Anthropic", "Gemini", "Grok"] as const
-                        ).map((brand) => (
+                        {availableBrands.map((brand) => (
                           <ToggleGroupItem key={brand} value={brand}>
                             {brand} (
                             {
@@ -560,7 +619,8 @@ export function PresetConnect({
                 );
               })}
             </Tabs>
-            <div className="mt-1 border-t border-dashed pt-2">
+            <div className="flex flex-col gap-3 pt-2">
+              <Separator />
               <Button
                 type="button"
                 variant="link"
@@ -569,24 +629,36 @@ export function PresetConnect({
                 onClick={() => setShowAddCustom((value) => !value)}
               >
                 <Plus data-icon="inline-start" />
-                {showAddCustom ? "收起添加模型" : "添加自定义候选模型"}
+                {showAddCustom ? "收起添加模型" : "添加自定义模型"}
               </Button>
               {showAddCustom ? (
-                <div className="mt-2 flex flex-col gap-2 rounded-md border bg-muted/20 p-2.5">
-                  <div className="grid grid-cols-2 gap-2 max-sm:grid-cols-1">
-                    <Input
-                      placeholder="模型名称（如 Claude Sonnet 5.5）"
-                      value={customName}
-                      onChange={(e) => setCustomName(e.target.value)}
-                      className="h-8 text-xs"
-                    />
-                    <Input
-                      placeholder="上游标识（如 anthropic/claude-sonnet-5.5）"
-                      value={customID}
-                      onChange={(e) => setCustomID(e.target.value)}
-                      className="h-8 text-xs"
-                    />
-                  </div>
+                <div className="flex flex-col gap-3">
+                  <FieldGroup className="grid gap-3 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel htmlFor={`${fieldID}-custom-name`}>
+                        模型名称
+                      </FieldLabel>
+                      <Input
+                        id={`${fieldID}-custom-name`}
+                        placeholder="模型名称（如 Claude Sonnet 5.5）"
+                        value={customName}
+                        onChange={(e) => setCustomName(e.target.value)}
+                        className="max-md:h-11"
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor={`${fieldID}-custom-id`}>
+                        上游模型 ID
+                      </FieldLabel>
+                      <Input
+                        id={`${fieldID}-custom-id`}
+                        placeholder="上游标识（如 anthropic/claude-sonnet-5.5）"
+                        value={customID}
+                        onChange={(e) => setCustomID(e.target.value)}
+                        className="max-md:h-11"
+                      />
+                    </Field>
+                  </FieldGroup>
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">
                       分类：
@@ -602,7 +674,7 @@ export function PresetConnect({
                       type="button"
                       size="sm"
                       variant="secondary"
-                      className="h-7 text-xs"
+                      className="max-md:h-11"
                       disabled={!customName.trim() || !customID.trim()}
                       onClick={() => {
                         const key = `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -627,7 +699,7 @@ export function PresetConnect({
                         setShowAddCustom(false);
                       }}
                     >
-                      确认添加并勾选
+                      添加模型
                     </Button>
                   </div>
                 </div>
@@ -666,7 +738,7 @@ export function PresetConnect({
         ) : null}
       </div>
       <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-        {onCancel ? (
+        {!detailsStep && onCancel ? (
           <Button
             type="button"
             variant="ghost"
@@ -676,7 +748,27 @@ export function PresetConnect({
             取消
           </Button>
         ) : null}
-        {!complete ? (
+        {detailsStep ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className="max-md:h-11"
+            disabled={lockedStep}
+            onClick={() => setStep("provider")}
+          >
+            上一步
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            className="max-md:h-11"
+            disabled={!preset?.id || lockedStep}
+            onClick={() => setStep("details")}
+          >
+            下一步
+          </Button>
+        )}
+        {detailsStep && !complete ? (
           <Button
             className="max-md:h-11"
             disabled={
@@ -694,9 +786,7 @@ export function PresetConnect({
                 ? "连接与 Key 已保存"
                 : targetID
                   ? "继续保存 API Key"
-                  : direct
-                    ? "接入服务"
-                    : "保存连接"}
+                  : "接入服务"}
           </Button>
         ) : null}
       </div>

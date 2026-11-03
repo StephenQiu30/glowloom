@@ -2,6 +2,13 @@
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
+import { ChevronDown } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 import { useState, useId } from "react";
 import { Input } from "@/components/ui/input";
@@ -331,89 +338,183 @@ export function priceRule(form: FormData) {
     if (!Number.isSafeInteger(n)) throw new Error("价格超出范围。");
     return n;
   };
+  const policyRaw = form.get("price_policy");
+  const policy: Record<string, unknown> = policyRaw
+    ? JSON.parse(String(policyRaw))
+    : {};
+  if (
+    !policy ||
+    typeof policy !== "object" ||
+    Array.isArray(policy) ||
+    Object.keys(policy).some(
+      (key) => !["credit_ratio", "markup_multiplier"].includes(key),
+    )
+  ) {
+    throw new Error("价格规则需要重新读取。");
+  }
   return form.get("unit") === "per_1k_tokens"
     ? {
+        ...policy,
         input_micros_per_1k: micros("input_rate"),
         output_micros_per_1k: micros("output_rate"),
       }
-    : { base_micros: micros("base_rate") };
+    : { ...policy, base_micros: micros("base_rate") };
 }
-export function PriceSetup({ rule }: { rule?: Record<string, unknown> }) {
+export function PriceSetup({
+  rule,
+  unit = "per_request",
+}: {
+  rule?: Record<string, unknown>;
+  unit?: string;
+}) {
   const formFieldId = useId();
-
-  const [advanced, setAdvanced] = useState(!!rule);
+  const simple =
+    !rule ||
+    Object.entries(rule).every(
+      ([key, value]) =>
+        ([
+          "base_micros",
+          "input_micros_per_1k",
+          "output_micros_per_1k",
+        ].includes(key) &&
+          typeof value === "number" &&
+          Number.isSafeInteger(value) &&
+          value >= 0) ||
+        (["credit_ratio", "markup_multiplier"].includes(key) &&
+          (typeof value === "number" || typeof value === "string") &&
+          Number.isFinite(Number(value)) &&
+          Number(value) > 0),
+    );
+  const [advanced, setAdvanced] = useState(!simple);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const valueInYuan = (key: string) =>
+    typeof rule?.[key] === "number" ? String(rule[key] / 1_000_000) : "";
+  const [baseRate, setBaseRate] = useState(() => valueInYuan("base_micros"));
+  const [inputRate, setInputRate] = useState(() =>
+    valueInYuan("input_micros_per_1k"),
+  );
+  const [outputRate, setOutputRate] = useState(() =>
+    valueInYuan("output_micros_per_1k"),
+  );
+  const [ruleText, setRuleText] = useState(() =>
+    JSON.stringify(rule ?? { base_micros: 0 }, null, 2),
+  );
   return (
     <FieldGroup className="gap-3">
-      <Field orientation="horizontal">
-        <Checkbox
-          id={`${formFieldId}-field-11`}
-
-          checked={advanced}
-          onCheckedChange={(e) => setAdvanced(e === true)}
-        />
-        <FieldLabel htmlFor={`${formFieldId}-field-11`}>
-          <span>编辑完整计费规则</span>
-        </FieldLabel>
-      </Field>
       <Input
         type="hidden"
         name="price_mode"
         value={advanced ? "advanced" : "basic"}
       />
-      {advanced ? (
-        <Field>
-          <FieldLabel htmlFor={`${formFieldId}-field-12`}>
-            <span>人民币微元计费规则</span>
-          </FieldLabel>
-          <Textarea
-            id={`${formFieldId}-field-12`}
-            name="rule"
-            required
-            className="mt-1 w-full"
-            defaultValue={JSON.stringify(rule ?? { base_micros: 0 }, null, 2)}
-          />
-        </Field>
-      ) : (
-        <>
+      {!advanced ? (
+        <Input
+          type="hidden"
+          name="price_policy"
+          value={JSON.stringify(
+            Object.fromEntries(
+              Object.entries(rule ?? {}).filter(([key]) =>
+                ["credit_ratio", "markup_multiplier"].includes(key),
+              ),
+            ),
+          )}
+        />
+      ) : null}
+      {!advanced ? (
+        unit === "per_1k_tokens" ? (
+          <>
+            <Field>
+              <FieldLabel htmlFor={formFieldId + "-input"}>
+                每千输入 Token（元）
+              </FieldLabel>
+              <Input
+                id={formFieldId + "-input"}
+                name="input_rate"
+                type="number"
+                min={0}
+                step="0.000001"
+                required
+                value={inputRate}
+                onChange={(event) => setInputRate(event.target.value)}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor={formFieldId + "-output"}>
+                每千输出 Token（元）
+              </FieldLabel>
+              <Input
+                id={formFieldId + "-output"}
+                name="output_rate"
+                type="number"
+                min={0}
+                step="0.000001"
+                required
+                value={outputRate}
+                onChange={(event) => setOutputRate(event.target.value)}
+              />
+            </Field>
+          </>
+        ) : (
           <Field>
-            <FieldLabel htmlFor={`${formFieldId}-field-13`}>
-              <span>每单位价格（元；按千 Token 计费时忽略）</span>
-            </FieldLabel>
+            <FieldLabel htmlFor={formFieldId + "-base"}>价格（元）</FieldLabel>
             <Input
-              id={`${formFieldId}-field-13`}
+              id={formFieldId + "-base"}
               name="base_rate"
               type="number"
               min={0}
               step="0.000001"
-              defaultValue={0}
+              required
+              value={baseRate}
+              onChange={(event) => setBaseRate(event.target.value)}
+              placeholder="0.00"
             />
           </Field>
-          <Field>
-            <FieldLabel htmlFor={`${formFieldId}-field-14`}>
-              <span>每千输入 Token（元）</span>
-            </FieldLabel>
-            <Input
-              id={`${formFieldId}-field-14`}
-              name="input_rate"
-              type="number"
-              min={0}
-              step="0.000001"
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`${formFieldId}-field-15`}>
-              <span>每千输出 Token（元）</span>
-            </FieldLabel>
-            <Input
-              id={`${formFieldId}-field-15`}
-              name="output_rate"
-              type="number"
-              min={0}
-              step="0.000001"
-            />
-          </Field>
-        </>
+        )
+      ) : (
+        <p className="text-xs text-muted-foreground">已保留当前高级规则。</p>
       )}
+      <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+        <CollapsibleTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            className="group/collapsible justify-between"
+          >
+            高级计费规则
+            <ChevronDown
+              data-icon="inline-end"
+              className="transition-transform group-data-[state=open]:rotate-180"
+            />
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent forceMount hidden={!advancedOpen} className="pt-3">
+          <FieldGroup className="gap-3">
+            <Field orientation="horizontal">
+              <Checkbox
+                id={formFieldId + "-advanced"}
+                checked={advanced}
+                onCheckedChange={(checked) => setAdvanced(checked === true)}
+              />
+              <FieldLabel htmlFor={formFieldId + "-advanced"}>
+                编辑完整计费规则
+              </FieldLabel>
+            </Field>
+            {advanced ? (
+              <Field>
+                <FieldLabel htmlFor={formFieldId + "-rule"}>
+                  人民币微元计费规则
+                </FieldLabel>
+                <Textarea
+                  id={formFieldId + "-rule"}
+                  name="rule"
+                  required
+                  value={ruleText}
+                  onChange={(event) => setRuleText(event.target.value)}
+                />
+              </Field>
+            ) : null}
+          </FieldGroup>
+        </CollapsibleContent>
+      </Collapsible>
     </FieldGroup>
   );
 }

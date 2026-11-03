@@ -376,41 +376,43 @@ function ProviderAdministration({
       ) : (
         <>
           <section aria-label="已添加的服务" className="flex flex-col gap-4">
-            <SelectionBar
-              count={selectedRows.length}
-              total={visibleProviders.length}
-              disabled={batch.busy || batch.unresolved}
-              onClear={() => setSelection({ scope: search, rows: [] })}
-            >
-              <Button
-                variant="outline"
-                disabled={
-                  batch.busy || batch.unresolved || !!pendingKey.pending
-                }
-                onClick={() =>
-                  void batch.prepare(
-                    selectedRows,
-                    connectionBatchAction("check"),
-                  )
-                }
+            {selectedRows.length ? (
+              <SelectionBar
+                count={selectedRows.length}
+                total={visibleProviders.length}
+                disabled={batch.busy || batch.unresolved}
+                onClear={() => setSelection({ scope: search, rows: [] })}
               >
-                检查凭据（只读）
-              </Button>
-              <Button
-                variant="destructive"
-                disabled={
-                  batch.busy || batch.unresolved || !!pendingKey.pending
-                }
-                onClick={() =>
-                  void batch.prepare(
-                    selectedRows,
-                    connectionBatchAction("disable"),
-                  )
-                }
-              >
-                停用连接
-              </Button>
-            </SelectionBar>
+                <Button
+                  variant="outline"
+                  disabled={
+                    batch.busy || batch.unresolved || !!pendingKey.pending
+                  }
+                  onClick={() =>
+                    void batch.prepare(
+                      selectedRows,
+                      connectionBatchAction("check"),
+                    )
+                  }
+                >
+                  检查凭据（只读）
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={
+                    batch.busy || batch.unresolved || !!pendingKey.pending
+                  }
+                  onClick={() =>
+                    void batch.prepare(
+                      selectedRows,
+                      connectionBatchAction("disable"),
+                    )
+                  }
+                >
+                  停用连接
+                </Button>
+              </SelectionBar>
+            ) : null}
             {visibleProviders.length ? (
               <ConnectionList
                 adapters={adapters}
@@ -446,7 +448,9 @@ function ProviderAdministration({
               <ContentState
                 title={query ? "没有匹配的连接" : "还没有连接"}
                 description={
-                  query ? "试试其他关键词。" : "选择平台预设，添加 API Key。"
+                  query
+                    ? "试试其他关键词。"
+                    : "连接服务商，选择需要使用的模型。"
                 }
                 actions={
                   !query ? (
@@ -666,10 +670,10 @@ function ProviderAdministration({
             event.preventDefault();
             if (!detailOpen) restoreFocus();
           }}
-          className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden p-6 sm:max-w-[520px] max-md:[&_[data-slot=dialog-close]]:size-11"
+          className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden p-6 sm:max-w-[600px] max-md:[&_[data-slot=dialog-close]]:size-11"
         >
           <DialogHeader>
-            <DialogTitle size="lg">接入 AI 服务</DialogTitle>
+            <DialogTitle size="lg">接入服务</DialogTitle>
             <DialogDescription className="sr-only">
               选择平台、填写 API
               Key，并勾选需要接入的模型。模型验证可在管理详情中进行。

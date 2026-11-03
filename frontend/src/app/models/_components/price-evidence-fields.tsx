@@ -1,6 +1,12 @@
 import { useId } from "react";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 /** A new publication requires the administrator to enter its own review evidence. */
 export function PriceEvidenceFields({
@@ -12,10 +18,17 @@ export function PriceEvidenceFields({
   return (
     <>
       {price && (
-        <p className="text-xs break-words text-muted-foreground">
-          上一版本来源：{price.source_url ?? "未记录"}；核验：
-          {price.reviewed_at ?? "未记录"}
-        </p>
+        <Collapsible>
+          <CollapsibleTrigger asChild>
+            <Button type="button" variant="ghost" size="sm">
+              上次核验信息
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-2 text-xs break-words text-muted-foreground">
+            上一版本来源：{price.source_url ?? "未记录"}；核验：
+            {price.reviewed_at ?? "未记录"}
+          </CollapsibleContent>
+        </Collapsible>
       )}
       <Field>
         <FieldLabel htmlFor={`${id}-source`}>价格来源链接</FieldLabel>
@@ -38,7 +51,7 @@ export function PriceEvidenceFields({
         />
       </Field>
       <p className="text-xs text-muted-foreground">
-        填写本次实际核验的一手价格说明和时间。链接不能包含凭据或查询参数。
+        使用本次核验的官方价格说明。
       </p>
     </>
   );

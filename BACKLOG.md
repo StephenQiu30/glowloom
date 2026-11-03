@@ -30,16 +30,16 @@
 
 ## 2. 实施落地完成清单 (T-AH-01 ~ T-AH-08)
 
-| 任务编号 | 模块职责 | 核心交付代码路径 | 验证状态 |
-| :--- | :--- | :--- | :--- |
-| **T-AH-01** | **StateGraph 引擎与检查点** | `backend/internal/agent/domain/graph/{engine,state}.go`<br>`backend/internal/agent/adapter/postgres/checkpointer.go`<br>`backend/db/agent_checkpoint.sql` | **已完成 (Green)**<br>状态图条件边拓扑、步数看门狗、PG 快照持久化与断点接续测试全量通过 |
-| **T-AH-02** | **Supervisor 统筹与提案中断** | `backend/internal/agent/application/workers/supervisor.go`<br>`backend/internal/agent/application/proposal_interrupt.go` | **已完成 (Green)**<br>目标分解、依赖调度、提案中断挂起与用户批准/驳回接续测试全量通过 |
-| **T-AH-03** | **统一网关与流式看门狗** | `backend/internal/agent/application/model_gateway.go`<br>`backend/internal/agent/application/model_stream_watchdog.go`<br>`backend/internal/agent/application/turn_budget.go` | **已完成 (Green)**<br>参数冻结、上下文窗口校验、45s SSE 空闲检测与 40 步硬熔断测试全量通过 |
-| **T-AH-04** | **业务工具、写链与现场自愈** | `backend/internal/agent/application/tools.go`<br>`backend/internal/agent/application/write_chain.go`<br>`backend/internal/agent/application/studio_digest.go` | **已完成 (Green)**<br>连续写链版本自增、CAS 冲突拦截与 `<canvas_changes>` 差异注入测试全量通过 |
-| **T-AH-05** | **Skill 生命周期与动态装载** | `backend/internal/skill/domain/skill.go`<br>`backend/internal/skill/application/skill_registry.go` | **已完成 (Green)**<br>版本固定、SHA-256 哈希、路径穿越拦截、`skill_load` 展开与上下文重置测试全量通过 |
-| **T-AH-06** | **专业 Worker 智能体族** | `backend/internal/agent/application/workers/script_worker.go`<br>`backend/internal/agent/application/workers/storyboard_worker.go`<br>`backend/internal/agent/application/workers/shot_worker.go`<br>`backend/internal/agent/application/workers/audio_worker.go` | **已完成 (Green)**<br>剧本拆解 → 分镜排布 → 镜头提案挂起 → 审批恢复 → 音频后期全流程流水线接力测试全量通过 |
-| **T-AH-07** | **隔离沙箱与安全脚本执行** | `backend/cmd/glowloom/sandbox.go`<br>`backend/internal/skill/domain/sandbox.go`<br>`backend/internal/skill/application/sandbox_runner.go` | **已完成 (Green)**<br>`glowloom sandbox serve` 子命令就绪，超时强制终止与环境变量安全隔离测试全量通过 |
-| **T-AH-08** | **SSE 事件流与前端卡片交互** | `backend/internal/agent/adapter/http/stream_handler.go`<br>`frontend/src/components/agent/ProposalApprovalCard.tsx`<br>`frontend/src/components/agent/index.ts` | **已完成 (Green)**<br>SSE 标准事件推送、Next.js 提案审批卡片与参数确认组件全量通过 TypeScript 类型检查 |
+| 任务编号    | 模块职责                      | 核心交付代码路径                                                                                                                                                                                                                                                  | 验证状态                                                                                                   |
+| :---------- | :---------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------- |
+| **T-AH-01** | **StateGraph 引擎与检查点**   | `backend/internal/agent/domain/graph/{engine,state}.go`<br>`backend/internal/agent/adapter/postgres/checkpointer.go`<br>`backend/db/agent_checkpoint.sql`                                                                                                         | **已完成 (Green)**<br>状态图条件边拓扑、步数看门狗、PG 快照持久化与断点接续测试全量通过                    |
+| **T-AH-02** | **Supervisor 统筹与提案中断** | `backend/internal/agent/application/workers/supervisor.go`<br>`backend/internal/agent/application/proposal_interrupt.go`                                                                                                                                          | **已完成 (Green)**<br>目标分解、依赖调度、提案中断挂起与用户批准/驳回接续测试全量通过                      |
+| **T-AH-03** | **统一网关与流式看门狗**      | `backend/internal/agent/application/model_gateway.go`<br>`backend/internal/agent/application/model_stream_watchdog.go`<br>`backend/internal/agent/application/turn_budget.go`                                                                                     | **已完成 (Green)**<br>参数冻结、上下文窗口校验、45s SSE 空闲检测与 40 步硬熔断测试全量通过                 |
+| **T-AH-04** | **业务工具、写链与现场自愈**  | `backend/internal/agent/application/tools.go`<br>`backend/internal/agent/application/write_chain.go`<br>`backend/internal/agent/application/studio_digest.go`                                                                                                     | **已完成 (Green)**<br>连续写链版本自增、CAS 冲突拦截与 `<canvas_changes>` 差异注入测试全量通过             |
+| **T-AH-05** | **Skill 生命周期与动态装载**  | `backend/internal/skill/domain/skill.go`<br>`backend/internal/skill/application/skill_registry.go`                                                                                                                                                                | **已完成 (Green)**<br>版本固定、SHA-256 哈希、路径穿越拦截、`skill_load` 展开与上下文重置测试全量通过      |
+| **T-AH-06** | **专业 Worker 智能体族**      | `backend/internal/agent/application/workers/script_worker.go`<br>`backend/internal/agent/application/workers/storyboard_worker.go`<br>`backend/internal/agent/application/workers/shot_worker.go`<br>`backend/internal/agent/application/workers/audio_worker.go` | **已完成 (Green)**<br>剧本拆解 → 分镜排布 → 镜头提案挂起 → 审批恢复 → 音频后期全流程流水线接力测试全量通过 |
+| **T-AH-07** | **隔离沙箱与安全脚本执行**    | `backend/cmd/glowloom/sandbox.go`<br>`backend/internal/skill/domain/sandbox.go`<br>`backend/internal/skill/application/sandbox_runner.go`                                                                                                                         | **已完成 (Green)**<br>`glowloom sandbox serve` 子命令就绪，超时强制终止与环境变量安全隔离测试全量通过      |
+| **T-AH-08** | **SSE 事件流与前端卡片交互**  | `backend/internal/agent/adapter/http/stream_handler.go`<br>`frontend/src/components/agent/ProposalApprovalCard.tsx`<br>`frontend/src/components/agent/index.ts`                                                                                                   | **已完成 (Green)**<br>SSE 标准事件推送、Next.js 提案审批卡片与参数确认组件全量通过 TypeScript 类型检查     |
 
 ---
 
@@ -82,7 +82,6 @@
 - **实施计划**：[28-完整创作Agent与Skill多Agent实施计划.md](docs/plan/28-完整创作Agent与Skill多Agent实施计划.md)
 - **调研分析**：[2026-11-01-AgentHarness与Skill能力分析.md](docs/research/2026-11-01-AgentHarness与Skill能力分析.md)
 
-
 ---
 
 <a id="beeftv-adoption"></a>
@@ -95,32 +94,32 @@
 
 来源：[调研](docs/research/2026-11-03-BeefTV模型接入与计费调研.md)与[需求04 SRC-AI-35](docs/requirement/04-AI平台接入与预设管理需求.md#src-ai-35)。
 
-| 父任务 | 唯一设计→PRD→Plan | 当前状态 | 优先级建议/依赖 |
-| --- | --- | --- | --- |
-| T-AI-21 接入声明与协议扩展 | [设计33](docs/design/33-多设计模式驱动的模型与供应商接入扩展体系设计.md) → [PRD20](docs/prd/20-模型与供应商接入扩展.md) → [Plan29](docs/plan/29-模型与供应商接入扩展实施计划.md) | 工程实现/任务复核通过；整体工程审查通过，联合接受未完成 | P2；补原任务恢复联动及产品接受 |
-| T-AI-22 计价与费用说明 | [设计34](docs/design/34-积分消耗系统与模型真实计价体系设计.md) → [PRD21](docs/prd/21-模型计价透明与结算恢复.md) → [Plan30](docs/plan/30-模型计价透明与结算恢复实施计划.md) | 工程实现/任务复核通过；整体工程审查通过，合同门控保留 | P1；D-AI-35-01/02影响对应功能 |
-| T-AI-23 结算证据与恢复 | 设计34→PRD21→Plan30 | 工程实现/任务复核通过；整体工程审查通过 | P1；保留unknown保护，和现有operation/billing对接 |
-| T-AI-24 Agent统一网关 | 设计32→PRD19→Plan28 | 沿前文Agent主链；本节不重置其状态 | 仅依赖费用授权/原operation身份，不重复计算交付 |
-| T-AI-25 错误与原币对账 | 设计34→PRD21→Plan30 | 结构化分类工程复核通过；原币部分仍待合同 | P2；25-01可独立核查，25-02依赖D-AI-35-03 |
+| 父任务                     | 唯一设计→PRD→Plan                                                                                                                                                                | 当前状态                                                | 优先级建议/依赖                                  |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------ |
+| T-AI-21 接入声明与协议扩展 | [设计33](docs/design/33-多设计模式驱动的模型与供应商接入扩展体系设计.md) → [PRD20](docs/prd/20-模型与供应商接入扩展.md) → [Plan29](docs/plan/29-模型与供应商接入扩展实施计划.md) | 工程实现/任务复核通过；整体工程审查通过，联合接受未完成 | P2；补原任务恢复联动及产品接受                   |
+| T-AI-22 计价与费用说明     | [设计34](docs/design/34-积分消耗系统与模型真实计价体系设计.md) → [PRD21](docs/prd/21-模型计价透明与结算恢复.md) → [Plan30](docs/plan/30-模型计价透明与结算恢复实施计划.md)       | 工程实现/任务复核通过；整体工程审查通过，合同门控保留   | P1；D-AI-35-01/02影响对应功能                    |
+| T-AI-23 结算证据与恢复     | 设计34→PRD21→Plan30                                                                                                                                                              | 工程实现/任务复核通过；整体工程审查通过                 | P1；保留unknown保护，和现有operation/billing对接 |
+| T-AI-24 Agent统一网关      | 设计32→PRD19→Plan28                                                                                                                                                              | 沿前文Agent主链；本节不重置其状态                       | 仅依赖费用授权/原operation身份，不重复计算交付   |
+| T-AI-25 错误与原币对账     | 设计34→PRD21→Plan30                                                                                                                                                              | 结构化分类工程复核通过；原币部分仍待合同                | P2；25-01可独立核查，25-02依赖D-AI-35-03         |
 
 ### 6.1 可执行任务
 
 以下记录当前授权范围的实施与接受证据；无固定工期承诺。工程通过、产品接受、真实供应商接受分别判断。
 
-| 任务ID | 最小交付 | 依赖 | 当前状态/下一步 | 验收 |
-| --- | --- | --- | --- | --- |
-| T-AI-21-01 | 公开安全元数据与生成API | 用户已授权按现有设计实施 | 工程复核通过；真实PG+HTTP session/epoch/跨组织矩阵通过 | CASE-AIX-04 |
-| T-AI-21-02 | 受限声明及预设事务版本 | 21-01 | 工程实现/复核通过；直接保存/版本/预览统一严格校验，隔离PG通过 | CASE-AIX-01/02/03/05 |
-| T-AI-21-03 | 协议组合与单次派发 | 21-02 | 整体工程复核通过；POST=1，已发4xx/矛盾迟到回调保持未知费用，不误释放预留 | CASE-AIX-03/06 |
-| T-AI-21-04 | 极简元数据界面与联合接受 | 21-01～03 | 组件/API/类型/构建通过；Flash本地桌面真实两模式/发布/首页报价通过，其他模型及窄屏读屏仍未接受 | CASE-AIX-01～06 |
-| T-AI-22-01 | 价格来源/版本与金额表达 | D-AI-35-01 | 工程复核通过；所有新价入口统一来源门禁，DirectUse无价候选不造零价 | CASE-BIL-01/03/04 |
-| T-AI-22-02 | 参考图计数及收费scope | 22-01、D-AI-35-02 | 严格数学/解析与缺证据拒绝通过；正式发布仍待逐模型一手合同 | CASE-BIL-02 |
-| T-AI-22-03 | 预估/预留摘要和明细 | 22-01 | 整体工程复核通过；冻结模式/分辨率系数、unit_only/unknown及unsafe金额禁新确认 | CASE-BIL-01～04 |
-| T-AI-23-01 | 独立费用/交付读投影 | 22-01 | 工程复核通过；本地账本权威、持久冲突矩阵与完整交付事实 | CASE-BIL-06～11 |
-| T-AI-23-02 | 服务端屏障及原任务恢复 | 23-01、既有workflow control | 整体工程复核通过；锁内屏障、原任务查证、当前请求人终态原交付及SDK/inbox重试 | CASE-BIL-05/06/08/11/12 |
-| T-AI-23-03 | 恢复UI与Agent回放联合接受 | 23-01/02、22-03 | 整体工程复核通过；恢复轮询/新旧查证键、Agent原operation、完整/可读产物及字幕 | CASE-BIL-05～12 |
-| T-AI-25-01 | 配额/权限/速率安全分类 | 23-01 | 工程复核通过；同402/429不同证据分类，不推断退款/零成本 | CASE-BIL-09/11/12 |
-| T-AI-25-02 | 原币账单与迟到退款补偿 | D-AI-35-03及真实验证授权 | 待合同；未关闭不开放，禁止Settle(0)改旧账 | CASE-BIL-03/07/10 |
+| 任务ID     | 最小交付                  | 依赖                        | 当前状态/下一步                                                                               | 验收                    |
+| ---------- | ------------------------- | --------------------------- | --------------------------------------------------------------------------------------------- | ----------------------- |
+| T-AI-21-01 | 公开安全元数据与生成API   | 用户已授权按现有设计实施    | 工程复核通过；真实PG+HTTP session/epoch/跨组织矩阵通过                                        | CASE-AIX-04             |
+| T-AI-21-02 | 受限声明及预设事务版本    | 21-01                       | 工程实现/复核通过；直接保存/版本/预览统一严格校验，隔离PG通过                                 | CASE-AIX-01/02/03/05    |
+| T-AI-21-03 | 协议组合与单次派发        | 21-02                       | 整体工程复核通过；POST=1，已发4xx/矛盾迟到回调保持未知费用，不误释放预留                      | CASE-AIX-03/06          |
+| T-AI-21-04 | 极简元数据界面与联合接受  | 21-01～03                   | 组件/API/类型/构建通过；Flash本地桌面真实两模式/发布/首页报价通过，其他模型及窄屏读屏仍未接受 | CASE-AIX-01～06         |
+| T-AI-22-01 | 价格来源/版本与金额表达   | D-AI-35-01                  | 工程复核通过；所有新价入口统一来源门禁，DirectUse无价候选不造零价                             | CASE-BIL-01/03/04       |
+| T-AI-22-02 | 参考图计数及收费scope     | 22-01、D-AI-35-02           | 严格数学/解析与缺证据拒绝通过；正式发布仍待逐模型一手合同                                     | CASE-BIL-02             |
+| T-AI-22-03 | 预估/预留摘要和明细       | 22-01                       | 整体工程复核通过；冻结模式/分辨率系数、unit_only/unknown及unsafe金额禁新确认                  | CASE-BIL-01～04         |
+| T-AI-23-01 | 独立费用/交付读投影       | 22-01                       | 工程复核通过；本地账本权威、持久冲突矩阵与完整交付事实                                        | CASE-BIL-06～11         |
+| T-AI-23-02 | 服务端屏障及原任务恢复    | 23-01、既有workflow control | 整体工程复核通过；锁内屏障、原任务查证、当前请求人终态原交付及SDK/inbox重试                   | CASE-BIL-05/06/08/11/12 |
+| T-AI-23-03 | 恢复UI与Agent回放联合接受 | 23-01/02、22-03             | 整体工程复核通过；恢复轮询/新旧查证键、Agent原operation、完整/可读产物及字幕                  | CASE-BIL-05～12         |
+| T-AI-25-01 | 配额/权限/速率安全分类    | 23-01                       | 工程复核通过；同402/429不同证据分类，不推断退款/零成本                                        | CASE-BIL-09/11/12       |
+| T-AI-25-02 | 原币账单与迟到退款补偿    | D-AI-35-03及真实验证授权    | 待合同；未关闭不开放，禁止Settle(0)改旧账                                                     | CASE-BIL-03/07/10       |
 
 [工程验证记录](docs/research/evidence/2026-11-03-beeftv-adoption/engineering-validation.md)。Plan29提交前工程证据（以下命令在当时共享工作区执行）：隔离catalog全量及Race通过；协议/operation Race通过；前端279文件/2016测试、API一致性、ESLint、类型及构建通过。独立审阅发现的重复键保存绕过已按Red→Green修复并复核关闭。本次改动golangci增量检查0问题；全scope保留既有静态问题及18个无关前端格式文件，未扩展修复。fixture不替代浏览器/供应商接受。
 
@@ -128,12 +127,12 @@
 
 ### 6.2 待确认与外部条件
 
-| ID | 待决事项 | 当前处理与关闭条件 |
-| --- | --- | --- |
-| D-AI-35-01 | 1:10积分/默认1.0的对外政策出处、分数积分显示、多级倍率覆盖 | SRC-AI-36仅确认Flash本次0.12元/张、ratio10、markup1；分数积分和全平台政策仍待确认 |
-| D-AI-35-02 | 参考图/重复引用/mask/每输出计数、缓存/视频Token单位 | 逐模型取得供应商一手合同；未定义的附加费不发布 |
-| D-AI-35-03 | 原币最终账单、超预留承担、退款补偿及采购/销售分账 | 明确账单身份、冻结汇率、超额政策、迟到退款流水与授权；原币路径保持关闭 |
-| D-AI-35-04 | 真实供应商/浏览器/迁移接受 | Flash本地两模式、COS归档、增量结构补齐、启用与首页免费报价通过；首次0.12元预留仍待核对，其他供应商/生产环境/完整交互接受未完成 |
+| ID         | 待决事项                                                   | 当前处理与关闭条件                                                                                                             |
+| ---------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| D-AI-35-01 | 1:10积分/默认1.0的对外政策出处、分数积分显示、多级倍率覆盖 | SRC-AI-36仅确认Flash本次0.12元/张、ratio10、markup1；分数积分和全平台政策仍待确认                                              |
+| D-AI-35-02 | 参考图/重复引用/mask/每输出计数、缓存/视频Token单位        | 逐模型取得供应商一手合同；未定义的附加费不发布                                                                                 |
+| D-AI-35-03 | 原币最终账单、超预留承担、退款补偿及采购/销售分账          | 明确账单身份、冻结汇率、超额政策、迟到退款流水与授权；原币路径保持关闭                                                         |
+| D-AI-35-04 | 真实供应商/浏览器/迁移接受                                 | Flash本地两模式、COS归档、增量结构补齐、启用与首页免费报价通过；首次0.12元预留仍待核对，其他供应商/生产环境/完整交互接受未完成 |
 
 ### 6.3 下一步与完成判据
 
@@ -151,3 +150,7 @@
 - 未接受：首页真实生成（本次3次供应商调用额度已用完）、其他11个模型、个人积分余额/充值/会员、生产部署、窄屏/读屏及真实在途历史重放。项目账本当前已结算0.24元、预留0.12元、可用0.64元，总预算1元。
 
 - CI既有阻断：父提交b03f9dee与4ab20c15均失败于Agent测试库缺`agent.graph_checkpoint`（TestPostgresCheckpointerSaveAndResume）；4ab20c15前端CI通过。本次不扩范围修改Agent或CI，不将本地定向通过描述为主干全绿。
+
+### 2026-11-03 SRC-AI-37 界面增量
+
+报价、服务接入和模型管理按即梦实页重新分层，公共Select长文本与移动端样式同步修复；Figma先行，代码落盘未提交。执行证据见Plan29/30本轮回执及[研究记录](docs/research/2026-11-03-即梦报价与模型接入交互拆解.md)。本轮未执行收费调用、数据库迁移或新价格发布；T-AI-21/22/23/25既有未接受项与合同依赖保留。
