@@ -57,6 +57,26 @@ func TestVolcengineCatalogCoversCurrentGenerationFamilies(t *testing.T) {
 	require.JSONEq(t, `10`, string(limits.Roles["_total_audios"]))
 }
 
+func TestSeedreamProAndFlashDoNotOfferUnsupportedFourK(t *testing.T) {
+	for _, candidate := range domain.BuiltinModelCatalog("volcengine_ark").Models {
+		if candidate.Key != "ark-image-pro-50" && candidate.Key != "ark-image-flash-50" {
+			continue
+		}
+		version, err := candidate.OnboardingVersion(uuid.New(), uuid.New())
+		require.NoError(t, err)
+		var fields []struct {
+			Field string
+			Enum  []string
+		}
+		require.NoError(t, json.Unmarshal(version.ParamSchema, &fields))
+		for _, field := range fields {
+			if field.Field == "size" {
+				require.Equal(t, []string{"1K", "1.5K", "2K"}, field.Enum)
+			}
+		}
+	}
+}
+
 func TestDoubaoSpeechPresetUsesItsOwnAudioProtocol(t *testing.T) {
 	var config domain.ProviderConfig
 	for _, preset := range domain.BuiltinPresets() {

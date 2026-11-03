@@ -22,7 +22,7 @@ func TestProviderTrialQuoteRequiresAdminAndBudgetAndCanConfirmDraft(t *testing.T
 	require.NoError(t, database.Exec(`UPDATE catalog.provider SET status='disabled' WHERE id=?`, f.provider).Error)
 	require.NoError(t, database.Exec(`UPDATE catalog.model_profile SET status='disabled',active_release_id=NULL,capability='text.generate' WHERE id=(SELECT model_profile_id FROM catalog.model_profile_version WHERE id=?)`, i.ModelProfileVersionID).Error)
 	require.NoError(t, database.Exec(`UPDATE catalog.model_profile_version SET modes=ARRAY['text_to_text'],limits='{"max_outputs":1}',supports_cancel=false,queue='provider',moderation='provider' WHERE id=?`, i.ModelProfileVersionID).Error)
-	require.NoError(t, database.Exec(`UPDATE catalog.price_rule_version SET unit='per_request',rule='{"base_micros":10}' WHERE id=?`, i.PriceRuleVersionID).Error)
+	require.NoError(t, database.Exec(`UPDATE catalog.price_rule_version SET unit='per_request',rule='{"base_micros":10}',source_url='https://provider.example/pricing',reviewed_at='2026-11-03T00:00:00Z' WHERE id=?`, i.PriceRuleVersionID).Error)
 	require.NoError(t, database.Exec(`UPDATE workspace.project SET allow_overseas_models=true WHERE id=?`, i.ProjectID).Error)
 	var actor identityapp.Principal
 	require.NoError(t, database.Raw(`SELECT actor.id,actor.org_id,actor.role FROM identity."user" actor JOIN workspace.project p ON p.org_id=actor.org_id WHERE p.id=?`, i.ProjectID).Scan(&actor).Error)
@@ -40,6 +40,11 @@ func TestProviderTrialQuoteRequiresAdminAndBudgetAndCanConfirmDraft(t *testing.T
 	quote, err := f.store.CreateProviderTrialQuote(t.Context(), actor, f.release, input)
 	require.NoError(t, err)
 	require.Equal(t, int64(10), quote.QuoteMicros)
+	var detail application.QuoteCostDetail
+	require.NoError(t, json.Unmarshal(quote.QuoteDetail, &detail))
+	require.Equal(t, "https://provider.example/pricing", detail.SourceURL)
+	require.NotNil(t, detail.ReviewedAt)
+	require.Equal(t, "2026-11-03T00:00:00Z", detail.ReviewedAt.Format(time.RFC3339))
 	recovery, err := f.store.ReadProviderTrialRecovery(t.Context(), actor, f.release)
 	require.NoError(t, err)
 	require.True(t, recovery.Found)

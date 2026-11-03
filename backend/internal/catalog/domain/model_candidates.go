@@ -152,6 +152,9 @@ func (m ModelCandidatePreset) OnboardingVersion(modelID, actorID uuid.UUID) (Mod
 		}
 		version.Limits = json.RawMessage(`{"max_outputs":1,"roles":{"_total_images":8,"reference_image":{"max_count":8,"types":["image"],"for_modes":["image2image"]},"subject":{"max_count":8,"types":["image"],"for_modes":["image2image"]}}}`)
 		version.ParamSchema = json.RawMessage(`[{"field":"size","label":"图像尺寸","component":"select","type":"string","enum":["2K","4K"],"default":"2K"}]`)
+		if strings.HasPrefix(m.ProviderModelID, "doubao-seedream-5-0-pro-") || strings.HasPrefix(m.ProviderModelID, "doubao-seedream-5-0-flash-") {
+			version.ParamSchema = json.RawMessage(`[{"field":"size","label":"图像尺寸","component":"select","type":"string","enum":["1K","1.5K","2K"],"default":"2K"}]`)
+		}
 	case "audio.generate":
 		if m.AdapterKey != "volcengine_speech" {
 			return ModelVersion{}, ErrInvalidPreset

@@ -74,7 +74,8 @@ func (s *Store) CreateProviderTrialQuote(ctx context.Context, actor identityapp.
 		}
 		r = tx.Raw(`SELECT r.id AS release_id,m.id AS model_id,v.id AS version_id,v.provider_model_id,p.region,to_jsonb(v.modes)::text AS modes,to_jsonb(cap.input_roles)::text AS input_roles,
    v.limits::text AS limits,v.param_schema::text AS param_schema,price.id AS price_id,price.version_no AS price_version_no,
-   price.unit AS price_unit,price.rule::text AS price_rule,price.currency::text AS price_currency,price.fx_rate_to_cny::text AS price_fx_rate_to_cny,price.effective_from AS price_effective_from
+   price.unit AS price_unit,price.rule::text AS price_rule,price.currency::text AS price_currency,price.fx_rate_to_cny::text AS price_fx_rate_to_cny,
+   price.source_url AS price_source_url,price.reviewed_at AS price_reviewed_at,price.effective_from AS price_effective_from
    FROM catalog.model_release r JOIN catalog.model_profile m ON m.id=r.model_id
    JOIN catalog.model_profile_version v ON v.id=r.model_version_id JOIN catalog.price_rule_version price ON price.id=r.price_version_id
    JOIN catalog.provider p ON p.id=m.provider_id JOIN catalog.capability cap ON cap.key=m.capability

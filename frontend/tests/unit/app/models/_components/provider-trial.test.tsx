@@ -188,6 +188,45 @@ it("服务测试中的正式发布必须先选项目，参数使用模型表单�
   expect(confirmOperationQuote).not.toHaveBeenCalled();
 });
 
+it("表单控件的空值同步不能清空已选验证模式和参考素材入口", async () => {
+  const view = render(
+    <ProviderTrial
+      embedded
+      release={{
+        id: "image-release",
+        required_modes: ["text2image", "image2image"],
+      }}
+      version={{
+        limits: {
+          roles: {
+            reference_image: {
+              types: ["image"],
+              min_count: 1,
+              max_count: 1,
+              for_modes: ["image2image"],
+            },
+          },
+        },
+        param_schema: [],
+      }}
+      onVerified={vi.fn()}
+    />,
+  );
+  fireEvent.keyDown(await screen.findByRole("combobox", { name: "验证模式" }), {
+    key: "ArrowDown",
+  });
+  fireEvent.click(await screen.findByRole("option", { name: "image2image" }));
+  await screen.findByText("参考图片（必选）");
+  const nativeMode = view.container.querySelector('select[name="mode"]');
+  expect(nativeMode).toBeTruthy();
+  fireEvent.change(nativeMode!, { target: { value: "" } });
+  expect(
+    screen.getByRole("combobox", { name: "验证模式" }).textContent,
+  ).toContain("image2image");
+  expect(screen.getByText("参考图片（必选）")).toBeTruthy();
+  expect(createProviderTrialQuote).not.toHaveBeenCalled();
+});
+
 it("整页刷新丢失本地标识后从服务端恢复原收费任务", async () => {
   vi.mocked(getProviderTrialRecovery).mockResolvedValue({
     found: true,

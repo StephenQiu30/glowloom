@@ -5,12 +5,16 @@ import (
 	"strings"
 )
 
-// volcengineModelCatalog is the official generation catalog reviewed on 2026-10-28.
+// volcengineModelCatalog retains the review date of each generation model.
 // Historical keys remain stable; saved connection/version snapshots are never rewritten.
 func volcengineModelCatalog() ModelCandidateCatalog {
-	catalog := ModelCandidateCatalog{Version: "2026-10-28.1", Models: []ModelCandidatePreset{}}
+	catalog := ModelCandidateCatalog{Version: "2026-11-03.1", Models: []ModelCandidatePreset{}}
 	add := func(key, name, id, capability, lifecycle string, modes ...string) {
 		model := ModelCandidatePreset{Key: key, AdapterKey: "volcengine_ark", DisplayName: name, ProviderModelID: id, Capability: capability, Modes: modes, SourceURL: "https://docs.volcengine.com/docs/ark/model-list?lang=zh", ReviewedAt: "2026-10-28", Lifecycle: lifecycle}
+		if key == "ark-image-pro-50" || key == "ark-image-flash-50" {
+			model.ReviewedAt = "2026-11-03"
+			model.SourceURL = "https://docs.volcengine.com/docs/ark/image-generation-api"
+		}
 		if capability == "image.generate" {
 			one := 1
 			model.MaxOutputs = &one

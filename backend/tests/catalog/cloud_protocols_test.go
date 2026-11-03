@@ -63,7 +63,7 @@ func TestArkImageRequestsUseSingleImageContractWithoutOpenRouterFields(t *testin
 				var body map[string]any
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 				require.Equal(t, "b64_json", body["response_format"])
-				require.Equal(t, "disabled", body["sequential_image_generation"])
+				require.NotContains(t, body, "sequential_image_generation")
 				require.Equal(t, "reference image", body["prompt"])
 				require.Equal(t, []any{"https://assets.example/allowed.png"}, body["image"])
 				require.NotContains(t, body, "provider")
@@ -118,5 +118,37 @@ func TestCloudDiscoveryDoesNotInventImageOrAccountPermissions(t *testing.T) {
 			require.Equal(t, "unsupported", result.Discovery)
 			require.Empty(t, result.Candidates)
 		}
+	}
+}
+
+func TestSeedreamProAndFlashOmitUnsupportedGroupAndStreamParameters(t *testing.T) {
+	var config domain.ProviderConfig
+	for _, preset := range domain.BuiltinPresets() {
+		if preset.Config.AdapterKey == "volcengine_ark" {
+			config = preset.Config
+			break
+		}
+	}
+	for _, model := range []string{
+		"doubao-seedream-5-0-pro-260628",
+		"doubao-seedream-5-0-flash-260915",
+		"doubao-seedream-5-0-260128",
+		"doubao-seedream-4-5-251128",
+	} {
+		t.Run(model, func(t *testing.T) {
+			calls := 0
+			client := providerhttp.NewClient(&http.Client{Transport: providerTransport(func(r *http.Request) (*http.Response, error) {
+				calls++
+				var body map[string]any
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+				require.Equal(t, model, body["model"])
+				require.NotContains(t, body, "sequential_image_generation")
+				require.NotContains(t, body, "stream")
+				return providerResponse(400, `{}`), nil
+			})})
+			_, err := client.Submit(t.Context(), operationapp.GenerationRequest{Config: config, Capability: "image.generate", Mode: "text2image", ModelID: model, Prompt: "fixture", OutputCount: 1}, "fixture-key")
+			require.NoError(t, err)
+			require.Equal(t, 1, calls)
+		})
 	}
 }

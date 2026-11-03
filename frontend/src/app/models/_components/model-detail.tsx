@@ -2,6 +2,7 @@
 import { PriceEvidenceFields } from "./price-evidence-fields";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { LoadingState } from "@/components/layout/loading-state";
+import { ContentState } from "@/components/layout/content-state";
 import { ChevronDown } from "lucide-react";
 import {
   Collapsible,
@@ -70,6 +71,7 @@ export function ModelDetail({
   const [releases, setReleases] = useState<API.ModelRelease[]>([]);
   const [defaults, setDefaults] = useState<API.CapabilityDefault[]>([]);
   const [error, setError] = useState("");
+  const [readAttempt, setReadAttempt] = useState(0);
   const mutation = useCatalogMutation(onSaved, `model.${id}`);
   useEffect(() => {
     const abort = new AbortController();
@@ -105,7 +107,7 @@ export function ModelDetail({
         if (!abort.signal.aborted) setError(catalogMessage(e));
       });
     return () => abort.abort();
-  }, [id]);
+  }, [id, readAttempt]);
   const model = detail?.model;
   const latest = detail?.versions?.[0];
   const latestPrice = detail?.prices?.[0];
@@ -133,9 +135,27 @@ export function ModelDetail({
       <h2 className="text-lg font-medium">
         {model?.display_name ?? "模型详情"}
       </h2>
-      {error ? <FeedbackToast message={error} /> : null}
+      {error && detail ? <FeedbackToast message={error} /> : null}
       <MutationStatus mutation={mutation} />
-      {!detail ? (
+      {!detail && error ? (
+        <ContentState
+          state="error"
+          title="模型配置加载失败"
+          description={error}
+          actions={
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setError("");
+                setReadAttempt((attempt) => attempt + 1);
+              }}
+            >
+              重试加载
+            </Button>
+          }
+        />
+      ) : !detail ? (
         <LoadingState>正在加载配置…</LoadingState>
       ) : (
         <>

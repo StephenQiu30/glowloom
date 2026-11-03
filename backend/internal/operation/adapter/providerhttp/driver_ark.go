@@ -49,8 +49,8 @@ func (d *VolcengineArkDriver) Submit(ctx context.Context, c *Client, input appli
 		}
 		path = "/images/generations"
 		payload["response_format"] = "b64_json"
-		payload["sequential_image_generation"] = "disabled"
-		payload["stream"] = false
+		// Single-image and non-streaming are the API defaults. Sending these
+		// optional controls is rejected by Seedream 5.0 Pro and Flash.
 		if len(input.References) > 0 {
 			images := make([]string, 0, len(input.References))
 			for _, ref := range input.References {

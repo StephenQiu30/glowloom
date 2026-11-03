@@ -505,6 +505,7 @@ export function ProviderTrial({
                     required
                     value={selectedMode}
                     onValueChange={(value) => {
+                      if (!release.required_modes?.includes(value)) return;
                       setSelectedMode(value);
                       setReferences([]);
                       if (version)
