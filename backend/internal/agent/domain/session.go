@@ -134,6 +134,7 @@ func (t Turn) Terminal() bool {
 
 // Session is an actor-private conversation within a project.
 type Session struct {
+	Engine    string    `json:"engine"`
 	ID        uuid.UUID `json:"id"`
 	ProjectID uuid.UUID `json:"project_id"`
 	ActorID   uuid.UUID `json:"-"`

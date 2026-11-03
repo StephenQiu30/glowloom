@@ -51,7 +51,7 @@ func (s *Store) ListModelsForProject(ctx context.Context, actor identityapp.Prin
 			return ErrModelCatalogProjectNotFound
 		}
 		query := fmt.Sprintf(`
-			SELECT m.id, m.model_key, m.display_name, m.capability, m.status,
+			SELECT m.id, published.id AS release_id, m.model_key, m.display_name, m.capability, m.status,
 			       to_jsonb(cap.input_roles)::text AS input_roles,
 			       p.id AS provider_id, p.name AS provider_name,
 			       p.region AS provider_region, p.status AS provider_status,
@@ -83,10 +83,11 @@ func (s *Store) ListModelsForProject(ctx context.Context, actor identityapp.Prin
 			  LIMIT 1
 			) AS pr ON true
 			WHERE NOT m.is_delete AND (p.adapter_key NOT IN (%[1]s) OR EXISTS (SELECT 1 FROM catalog.provider_config_version pc JOIN catalog.provider_preset_version pv ON pv.id=pc.preset_version_id JOIN catalog.provider_preset preset ON preset.id=pv.preset_id WHERE pc.id=published.config_version_id AND NOT preset.emergency_disabled)) AND (? OR p.region = 'domestic')
+			  AND (? = '' OR m.model_key = ?)
 			  AND (? = '' OR m.capability = ?)
 			  AND (? = '' OR ? = ANY(v.modes))
 		`, domain.ManagedCloudSQLInList())
-		args := []any{project.AllowOverseasModels, input.Capability, input.Capability, input.Mode, input.Mode}
+		args := []any{project.AllowOverseasModels, input.ModelKey, input.ModelKey, input.Capability, input.Capability, input.Mode, input.Mode}
 		if input.After != nil {
 			query += ` AND (m.model_key, m.id) > (?, ?::uuid)`
 			args = append(args, input.After.Key, input.After.ID.String())
@@ -129,6 +130,7 @@ func (s *Store) requireProject(tx *gorm.DB, actor identityapp.Principal, project
 
 type modelCatalogRow struct {
 	ID                   uuid.UUID
+	ReleaseID            *uuid.UUID
 	ModelKey             string
 	DisplayName          string
 	Capability           string
@@ -168,6 +170,9 @@ func (row modelCatalogRow) item() (application.ModelCatalogItem, error) {
 		ProviderStatus:    domain.ProviderStatus(row.ProviderStatus),
 		CredentialPresent: row.CredentialPresent,
 	}
+	if row.ReleaseID != nil {
+		item.ReleaseID = *row.ReleaseID
+	}
 	if row.CredentialTestResult != nil {
 		result := domain.TestResult(*row.CredentialTestResult)
 		item.CredentialTestResult = &result
@@ -180,8 +185,14 @@ func (row modelCatalogRow) item() (application.ModelCatalogItem, error) {
 		if err := json.Unmarshal([]byte(*row.VersionModes), &modes); err != nil {
 			return application.ModelCatalogItem{}, fmt.Errorf("decode current model modes: %w", err)
 		}
+		var limits struct {
+			ContextWindow int `json:"context_window"`
+		}
+		if err := json.Unmarshal([]byte(*row.VersionLimits), &limits); err != nil {
+			return application.ModelCatalogItem{}, fmt.Errorf("decode current model limits: %w", err)
+		}
 		item.CurrentVersion = &application.ModelCatalogVersion{
-			ID: *row.VersionID, VersionNo: *row.VersionNo, Modes: modes,
+			ID: *row.VersionID, VersionNo: *row.VersionNo, ContextWindow: limits.ContextWindow, Modes: modes,
 			Limits:      json.RawMessage(*row.VersionLimits),
 			ParamSchema: json.RawMessage(*row.VersionParamSchema),
 		}

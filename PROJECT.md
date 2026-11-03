@@ -1,6 +1,6 @@
 # 织光工程规则
 
-项目为 Glowloom（织光），仓库 `StephenQiu30/glowloom`；内部为 `frontend/`、`backend/` 和 `docs/`。Go 模块暂保留 `github.com/StephenQiu30/glowloom-server/backend`，不随 GitHub 仓库更名改动现有导入与生成合同。配置统一使用 `GLOWLOOM_*`，旧 `LV_*` 在过渡期兼容读取；运行资源与数据库名称以实际部署为准。
+项目为 Glowloom（织光），仓库 `StephenQiu30/glowloom`；内部为 `frontend/`、`backend/`、`canvas-collab/`、`agent-runtime/` 和 `docs/`。Go 模块暂保留 `github.com/StephenQiu30/glowloom-server/backend`，不随 GitHub 仓库更名改动现有导入与生成合同。配置统一使用 `GLOWLOOM_*`，旧 `LV_*` 在过渡期兼容读取；运行资源与数据库名称以实际部署为准。
 
 ## 1. 当前阶段与文件职责
 
@@ -11,6 +11,8 @@
 ## 2. 可继续使用的工具
 
 前端现有 Next.js App Router、React、TypeScript strict、pnpm、Tailwind、shadcn/Radix、ESLint/Prettier；后端现有Go、Gin、GORM、Wire、swag。安装版本以包清单和lockfile为准。继续使用工具不等于继续使用旧业务合同或要求所有旧依赖进入新运行架构。
+
+`agent-runtime/` 是独立的内部创作 Agent Host，Node 补丁版本以 `.node-version` 为准，SDK 与依赖由其 pnpm 锁文件固定。全部耐久数据使用 PostgreSQL，应用启动不执行 DDL；会话存储与模型出口合同见[创作 Agent 设计](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)。供应商凭据与业务授权、费用仍由 Go 持有。
 
 业务按职责组织，`adapter → application → domain`，依赖显式注入，接口由消费方定义。编码与审查遵循AGENTS的Google Go与Vercel/Next.js规范；不预建未来目录、通用框架或空转发层。
 
@@ -41,13 +43,14 @@
 
 ## 4. 质量门禁
 
-| 范围     | 适用检查                                                                                                                                                                            |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Go 实现  | gofmt、goimports、go vet、golangci-lint、go test -race、govulncheck；相应契约生成一致性                                                                                             |
-| 前端实现 | 在 frontend 执行 pnpm exec eslint .、pnpm exec prettier --check .、pnpm exec next typegen、pnpm exec tsc --noEmit、pnpm exec vitest run、pnpm exec next build；交互变化补浏览器验证 |
-| 文档     | Markdown 格式、相对链接与锚点、来源路径、需求/验收对应关系、陈述与源码一致；第三方许可原文保持不变                                                                                  |
+| 范围       | 适用检查                                                                                                                                                                            |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Go 实现    | gofmt、goimports、go vet、golangci-lint、go test -race、govulncheck；相应契约生成一致性                                                                                             |
+| 前端实现   | 在 frontend 执行 pnpm exec eslint .、pnpm exec prettier --check .、pnpm exec next typegen、pnpm exec tsc --noEmit、pnpm exec vitest run、pnpm exec next build；交互变化补浏览器验证 |
+| Agent Host | 在 agent-runtime 执行 pnpm typecheck、pnpm test；真实隔离 PostgreSQL、SDK Storage 合同、进程故障恢复、打包入口及格式检查                                                            |
+| 文档       | Markdown 格式、相对链接与锚点、来源路径、需求/验收对应关系、陈述与源码一致；第三方许可原文保持不变                                                                                  |
 
-默认 CI 保留 backend、frontend 两个并行任务，以业务测试和可构建性为底线：后端运行私有协作包全量测试及一次 `go test -race -count=1 ./...`，保留 Go 默认 vet、编译和 Race 检查；前端运行全量 `pnpm exec vitest run --maxWorkers=2` 及一次 Next.js 生产构建，由构建执行 TypeScript 检查，不启用跳过类型错误。Vitest 最多两个 worker，控制 jsdom 并发资源开销，不放宽测试超时或业务断言。继续使用锁文件安装，并缓存 Go 依赖/构建和 pnpm store。默认 CI 不再安装或运行 golangci-lint、govulncheck、Wire/goimports 生成检查、ESLint、测试目录布局检查，也不重复执行 next typegen/tsc；这些工具仍按改动风险在本地使用，接口或接线变更仍需相应生成一致性验证。不增加测试矩阵、覆盖率阈值、定时扫描或应用镜像构建。
+默认 CI 保留 backend、frontend 两个并行任务，以业务测试和可构建性为底线：后端运行私有协作包与 Agent Host 全量测试（后者使用隔离 PostgreSQL），及一次 `go test -race -count=1 ./...`，保留 Go 默认 vet、编译和 Race 检查；前端运行全量 `pnpm exec vitest run --maxWorkers=2` 及一次 Next.js 生产构建，由构建执行 TypeScript 检查，不启用跳过类型错误。Vitest 最多两个 worker，控制 jsdom 并发资源开销，不放宽测试超时或业务断言。继续使用锁文件安装，并缓存 Go 依赖/构建和 pnpm store。默认 CI 不再安装或运行 golangci-lint、govulncheck、Wire/goimports 生成检查、ESLint、测试目录布局检查，也不重复执行 next typegen/tsc；这些工具仍按改动风险在本地使用，接口或接线变更仍需相应生成一致性验证。不增加测试矩阵、覆盖率阈值、定时扫描或应用镜像构建。
 
 后端 CI 继续启动隔离 PostgreSQL 18，按空库 schema 初始化并配置画布数据库测试及受限运行角色，保留 FFmpeg 支撑媒体业务测试。画布数据库配置缺失直接失败，不允许以跳过替代通过；不缩减既有业务断言或测试范围。Redis、Kafka、对象存储和 Temporal 的专项集成仍按模块变更在相应环境执行；默认 CI 通过不代表这些专项验收或生产可用性已经通过。
 

@@ -1,0 +1,4 @@
+# Dependency lifecycle scripts are not used by the runtime.
+allowBuilds:
+  "@google/genai": false
+  protobufjs: false

@@ -2,7 +2,7 @@
 
 唯一来源PRD：[PRD19](../prd/19-完整创作Agent与Skill多Agent.md)。**目标：** 按PRD建立采用成熟SDK的创作Harness、完整Skill接入及实际多Agent服务，最终交付可恢复、可编辑的短剧工程与成片。**架构：** 独立Node Agent Host运行Pi Durable；现有Go业务服务持有身份、授权、费用、工具/产物权威；Temporal只推进业务任务。**技术：** Pi `1.3.0`、Go、PostgreSQL、既有Temporal/outbox/inbox/实时通道、Next.js及专用Linux Docker+gVisor执行节点。
 
-Spec由PRD19唯一来源的设计32持有，本文通过PRD追溯，不建立第二来源。实施者需同时阅读PRD及其设计，任务按`superpowers:executing-plans`执行；需要子任务评审时可使用`superpowers:subagent-driven-development`，但不得据此扩大业务范围。本文是评审用执行步骤，不授权开始实现；状态、调度、优先级与阻塞只在 [BACKLOG](../../BACKLOG.md) 维护。
+Spec由PRD19唯一来源的设计32持有，本文通过PRD追溯，不建立第二来源。实施者需同时阅读PRD及其设计，任务按`superpowers:executing-plans`执行；需要子任务评审时可使用`superpowers:subagent-driven-development`，但不得据此扩大业务范围。本文定义执行步骤，实施授权见需求 SRC-AGH-08；业务环境变更和真实费用仍需对应明确授权；状态、调度、优先级与阻塞只在 [BACKLOG](../../BACKLOG.md) 维护。
 
 ## 1. 全局约束与依赖
 
@@ -17,11 +17,11 @@ Spec由PRD19唯一来源的设计32持有，本文通过PRD追溯，不建立第
 - 数据库只有`backend/db/schema.sql`为空库来源；存量使用单独增量，不重放全库。服务启动、业务库迁移、真实计费、Git提交与推送都需要对应明确授权；本计划本身不执行这些动作。
 - 界面先补Figma状态与回读再代码；沿用Next.js/shadcn、生成API、同站BFF与既有主题/组件，不手改`frontend/src/api`。
 
-外部依赖：可用且获授权的模型/音色/媒体服务、Host持久卷、一致备份对象存储、专用Linux执行节点及runsc/mTLS/镜像白名单。缺项应记录对应用例未执行；不能改用mock结果关闭真实接受。
+外部依赖：可用且获授权的模型/音色/媒体服务、Host PostgreSQL 存储、一致备份对象存储、专用Linux执行节点及runsc/mTLS/镜像白名单。缺项应记录对应用例未执行；不能改用mock结果关闭真实接受。
 
 ## 2. 文件责任与构建关系
 
-所有新增路径均为未来实现位置，目前不创建运行文件。文件名可在同一职责内随实际API生成调整，但调整不得改变设计合同，必须更新本计划与证据。
+以下路径按任务实际实现，不预建空目录或无消费者的脚手架。文件名可在同一职责内随实际API生成调整，但调整不得改变设计合同，必须更新本计划与证据。
 
 | 责任           | 主要创建/修改位置                                                                                                                                                                                                      | 所有者/边界                                   |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
@@ -55,9 +55,9 @@ Spec由PRD19唯一来源的设计32持有，本文通过PRD追溯，不建立第
 
 消费：Go签发的`RuntimeCommand`/`RuntimeIdentity`协议样本。产出：`openOwnedSession(identity): Promise<OwnedSession>`、`acceptCommand(envelope): Promise<CommandReceipt>`、`snapshot(sessionId): Promise<RuntimeSnapshot>`；内部调用真实Pi Harness，所有声明以设计32 v1协议为准。
 
-1. 先固定Pi `1.3.0`的实际导出/HookApi.taskId、memo、子会话ownership及存储行为，写受控模型的失败测试：崩溃后原taskId/memo保持、不同task同正文不会合并、压缩不能绕过网关、恢复同一submission。
+1. 按 SRC-AGH-07 使用 PostgreSQL 保存全部 SDK 数据，先运行上游 Storage conformance 及真实数据库并发、ID 分配、提交断连与 kill 恢复测试；固定存储 ABI，应用启动不执行 DDL。先固定Pi `1.3.0`的实际导出/HookApi.taskId、memo、子会话ownership及存储行为，写受控模型的失败测试：崩溃后原taskId/memo保持、不同task同正文不会合并、压缩不能绕过网关、恢复同一submission。
 2. 运行`pnpm --dir agent-runtime exec vitest run tests/session-owner.test.ts tests/model-identity.test.ts tests/compaction-identity.test.ts --maxWorkers=2`，记录失败；不能用自写假Harness代替上游SDK。
-3. 以固定依赖实现Host、per-session文件锁与存储、命令request_id持久准入、快照、错误/版本报告及无业务Key环境。Provider按conversation绑定，未取得持久exchange memo的请求拒绝；beforeCompact使用受控摘要交换。
+3. 以固定依赖实现Host、per-session PostgreSQL advisory lock、epoch fencing 与 SDK Storage 适配器、命令request_id持久准入、快照、错误/版本报告及无业务Key环境。Provider按conversation绑定，未取得持久exchange memo的请求拒绝；beforeCompact使用受控摘要交换。
 4. 复跑上述测试、TypeScript与打包入口加载测试；输出SDK/Node版本和锁文件摘要。发现上游接口与文档不符时修改适配合同并重新评审，不能静默fork上游或接入全局fetch“最近请求”猜归属。
 
 退出：真实SDK进程重启后保持会话、逻辑身份和原请求；无独立Go模型循环、无CodingTools/任意shell、无自动Key发现。
@@ -209,11 +209,11 @@ Spec由PRD19唯一来源的设计32持有，本文通过PRD追溯，不建立第
 
 依赖：T01～11，公开准入前完成；AC-AH-16/17、ST-AH-22/23。文件：现有`docker-compose.yml`/Dockerfile、`agent-runtime/Dockerfile`、Go配置与角色接线、相关增量SQL/schema、PROJECT的已批准运行边界；测试`backend/tests/agent/migration_integration_test.go`、`agent-runtime/tests/{ownership,backup,upgrade}.test.ts`及沙箱健康合同。
 
-消费：固定SDK存储版本、Go映射/命令/回执、专用卷/Engine配置。产出：内部Host与skill-sandbox健康、所有权与受控恢复；新engine准入flag、备份/回退手册。
+消费：固定SDK存储版本、Go映射/命令/回执、PostgreSQL 存储/Engine配置。产出：内部Host与skill-sandbox健康、所有权与受控恢复；新engine准入flag、备份/回退手册。
 
 1. 在隔离PG中测试空库与两次存量增量、旧会话/助手可读、原operation可查；验证无旧批准复用或历史请求重执行。
-2. 写HostA持文件锁/失租与HostB接管失败测试，证明Go旧epoch拒绝、租约过期不双开；SDK版本不兼容拒绝打开；恢复一致备份后先对Go业务账本对账。
-3. 配置唯一Compose内部服务和持久卷、无新增宿主端口、无业务Key进Host、专用Linux沙箱daemon；验证进程/协议/存储/出口/依赖健康分层。不能从开发机环境自动拾取凭据。
+2. 写HostA持 PostgreSQL 会话锁/失租与HostB接管失败测试，证明Go旧epoch拒绝、租约过期不双开；SDK版本不兼容拒绝打开；恢复一致备份后先对Go业务账本对账。
+3. 配置唯一Compose内部服务和 PostgreSQL 存储、无新增宿主端口、无业务Key进Host、专用Linux沙箱daemon；验证进程/协议/存储/出口/依赖健康分层。不能从开发机环境自动拾取凭据。
 4. 演练：关闭新准入→drain→一致备份→升级→恢复原Run；回退仅关闭新准入并保留旧SDK处理原会话，不用旧引擎打开新存储。业务库迁移与服务变更另取得明确授权后才对用户环境执行。
 5. 运行适用隔离测试与`docker compose config --quiet`；真实宿主/存储故障演练记录单主机和跨主机各自边界，不声称磁盘丢失自动恢复。
 
@@ -245,6 +245,6 @@ T01→T02→T03/T04构成控制与执行基础；T05→T06→T07构成Skill能�
 4. 回退时先关闭新准入和新副作用，不清理会话/费用/产物；drain或暂停既有新运行，保留原SDK与回执查询。重新开放前再验证存储版本与根批准。
 5. 任一环节未知，先读取原command/operation/exchange/Job状态；禁止通过删记录、换新ID或重新生成来恢复表面成功。
 
-## 7. 文档阶段实际验证
+## 7. 2026-11-01 文档阶段历史验证
 
 本轮只核对源码、第三方固定版本、四层来源链、需求/故事/场景/任务映射、文件链接及格式；未安装SDK、未创建运行脚手架、未运行上文未来产品测试、未更新Figma/服务/数据库、未发起真实收费或提交推送。具体文档检查回执与当前状态统一记录BACKLOG，真实实施证据在执行任务时产生。

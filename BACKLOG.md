@@ -1,5 +1,15 @@
 # 织光当前工作清单
 
+## 2026-11-03 创作 Agent Harness 运行底座
+
+用户授权开始实现，明确数据不使用 SQLite；已在需求 SRC-AGH-07/08 与设计32/Plan28 同步 PostgreSQL 方案。按 Plan28 开始 T-AH-01，创建实际使用的 `agent-runtime/`，固定 SDK/Node/锁文件，复用公共 SDK 调度，不重写模型循环。
+
+- 底座：PostgreSQL 提交日志、SDK 校验/重建索引、单写者锁与 epoch、原子 ID、故障关闭；独立数据库角色只授予 SDK 表与序列权限。应用启动不执行 DDL。
+- Host：签名命令、持久准入/重放、快照与 owner drain；每 conversation 模型出口通过 Go 网关，generation/compaction 使用持久 taskId/memo，SDK 重试关闭。原命令重投可重新打开已失效会话；尚无启动时自动扫描接管。
+- 验证：真实 PostgreSQL 18.6 与真实 SDK，7 文件 50 项通过，含上游24项 Storage 合同、SIGKILL、提交确认丢失、压缩恢复、两个 owned 子会话/父取消、旧 owner 与关闭竞态。生产/测试类型、构建、空库 schema、增量重复执行及 `tests/db -race` 通过；独立审查问题已修复并复核。详情见[底座验证](docs/research/evidence/2026-11-01-agent-harness/runtime-foundation-validation.md)。CI 已加入对应检查，尚未推送触发。
+- 当前边界：T-AH-01 底座合同已实现；T02～14 未完成，不能标记完整创作 Agent、Skill 或专业多 Agent 产品完成。没有开启产品准入、迁移业务库、重启应用、真实收费或提交推送。
+- 下一步：T-AH-02 Go 控制账本、会话/Run 映射、规划/执行 candidate 与批准、即时控制屏障及耐久投递；随后接 T03 模型费用网关和 T04 工具桥，再按依赖完成 Skill 与专业 Agent。
+
 ## 2026-11-01 完整创作 Agent Harness、Skill 与多 Agent 文档
 
 来源：[需求19](docs/requirement/19-完整创作Agent与Skill多Agent需求.md) → [设计32](docs/design/32-完整创作AgentHarness与Skill多Agent架构设计.md) → [PRD19](docs/prd/19-完整创作Agent与Skill多Agent.md) → [Plan28](docs/plan/28-完整创作Agent与Skill多Agent实施计划.md)。能力分析：[Agent Harness与Skill能力分析](docs/research/2026-11-01-AgentHarness与Skill能力分析.md)。

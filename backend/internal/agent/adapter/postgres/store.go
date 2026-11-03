@@ -39,6 +39,7 @@ func (s *Store) authorize(tx *gorm.DB, actor identity.Principal, pid uuid.UUID, 
 }
 
 type sessionRow struct {
+	Engine                 string
 	ID, ProjectID, ActorID uuid.UUID
 	Title                  string
 	Revision               int64
@@ -47,7 +48,11 @@ type sessionRow struct {
 }
 
 func (r sessionRow) decode() (domain.Session, error) {
-	s := domain.Session{ID: r.ID, ProjectID: r.ProjectID, ActorID: r.ActorID, Title: r.Title, Revision: r.Revision, UpdatedAt: r.UpdatedAt, Turns: []domain.Turn{}}
+	engine := r.Engine
+	if engine == "" {
+		engine = domain.Policy
+	}
+	s := domain.Session{Engine: engine, ID: r.ID, ProjectID: r.ProjectID, ActorID: r.ActorID, Title: r.Title, Revision: r.Revision, UpdatedAt: r.UpdatedAt, Turns: []domain.Turn{}}
 	if json.Unmarshal(r.Turns, &s.Turns) != nil || len(s.Turns) > 20 {
 		return s, domain.ErrInvalid
 	}
@@ -68,7 +73,7 @@ func (s *Store) Create(ctx context.Context, actor identity.Principal, pid, key u
 			return err
 		}
 		var row sessionRow
-		if err := tx.Raw(`SELECT id,project_id,actor_id,title,revision,updated_at,turns FROM agent.session WHERE project_id=? AND actor_id=? AND request_id=?`, pid, actor.ID, key).Scan(&row).Error; err != nil {
+		if err := tx.Raw(`SELECT id,project_id,actor_id,title,COALESCE(to_jsonb(s)->>'engine','image-agent-json-v1') AS engine,revision,updated_at,turns FROM agent.session s WHERE project_id=? AND actor_id=? AND request_id=?`, pid, actor.ID, key).Scan(&row).Error; err != nil {
 			return err
 		}
 		if row.Title != title {
@@ -89,11 +94,11 @@ func (s *Store) List(ctx context.Context, actor identity.Principal, pid uuid.UUI
 			return err
 		}
 		var rows []sessionRow
-		if err := tx.Raw(`SELECT id,project_id,actor_id,title,revision,updated_at FROM agent.session WHERE project_id=? AND actor_id=? ORDER BY updated_at DESC,id LIMIT 50`, pid, actor.ID).Scan(&rows).Error; err != nil {
+		if err := tx.Raw(`SELECT id,project_id,actor_id,title,COALESCE(to_jsonb(s)->>'engine','image-agent-json-v1') AS engine,revision,updated_at FROM agent.session s WHERE project_id=? AND actor_id=? ORDER BY updated_at DESC,id LIMIT 50`, pid, actor.ID).Scan(&rows).Error; err != nil {
 			return err
 		}
 		for _, r := range rows {
-			out = append(out, domain.Session{ID: r.ID, ProjectID: r.ProjectID, ActorID: r.ActorID, Title: r.Title, Revision: r.Revision, UpdatedAt: r.UpdatedAt, Turns: []domain.Turn{}})
+			out = append(out, domain.Session{Engine: r.Engine, ID: r.ID, ProjectID: r.ProjectID, ActorID: r.ActorID, Title: r.Title, Revision: r.Revision, UpdatedAt: r.UpdatedAt, Turns: []domain.Turn{}})
 		}
 		return nil
 	})
@@ -116,7 +121,7 @@ func (s *Store) withSession(ctx context.Context, actor identity.Principal, pid, 
 		if err := s.authorize(tx, actor, pid, write); err != nil {
 			return err
 		}
-		query := `SELECT id,project_id,actor_id,title,revision,updated_at,turns FROM agent.session WHERE id=? AND project_id=? AND actor_id=?`
+		query := `SELECT id,project_id,actor_id,title,COALESCE(to_jsonb(s)->>'engine','image-agent-json-v1') AS engine,revision,updated_at,turns FROM agent.session s WHERE id=? AND project_id=? AND actor_id=?`
 		if write {
 			query += " FOR UPDATE"
 		}
@@ -132,6 +137,9 @@ func (s *Store) withSession(ctx context.Context, actor identity.Principal, pid, 
 		out, err = row.decode()
 		if err != nil {
 			return err
+		}
+		if out.Engine == domain.HarnessEngine {
+			return domain.ErrConflict
 		}
 		if !write {
 			return nil

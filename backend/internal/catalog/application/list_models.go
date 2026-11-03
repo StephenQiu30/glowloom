@@ -30,6 +30,7 @@ type ModelCatalogCursor struct {
 type ModelCatalogVersion struct {
 	ID          uuid.UUID
 	VersionNo   int
+	ContextWindow int
 	Modes       []string
 	Limits      json.RawMessage
 	ParamSchema json.RawMessage
@@ -49,6 +50,7 @@ type ModelCatalogPrice struct {
 // ModelCatalogItem contains internal display data without credential secrets.
 type ModelCatalogItem struct {
 	ID                   uuid.UUID
+	ReleaseID            uuid.UUID
 	Key                  string
 	DisplayName          string
 	Capability           string
@@ -73,6 +75,7 @@ type ModelCatalogPage struct {
 // ListModelsInput scopes the catalog to a live project and optional filters.
 type ListModelsInput struct {
 	ProjectID  uuid.UUID
+	ModelKey   string
 	Capability string
 	Mode       string
 	Limit      int
@@ -100,7 +103,7 @@ func (q *ListModelsQuery) Execute(ctx context.Context, actor identityapp.Princip
 	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil {
 		return ModelCatalogPage{}, identityapp.ErrForbidden
 	}
-	if input.ProjectID == uuid.Nil || input.Limit < 0 || input.Limit > 200 ||
+	if input.ProjectID == uuid.Nil || input.Limit < 0 || input.Limit > 200 || len(input.ModelKey) > 200 ||
 		(input.After != nil && (strings.TrimSpace(input.After.Key) == "" || input.After.ID == uuid.Nil)) {
 		return ModelCatalogPage{}, ErrInvalidModelCatalog
 	}

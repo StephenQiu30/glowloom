@@ -30,6 +30,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      GLOWLOOM_TEST_AGENT_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_agent_runtime?sslmode=disable
       GLOWLOOM_TEST_SCHEMA_DB_DSN: postgres://postgres@127.0.0.1:5432/schema_probe?sslmode=disable
       GLOWLOOM_TEST_CANVAS_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_reference?sslmode=disable
       GLOWLOOM_TEST_GOVERNANCE_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_governance?sslmode=disable
@@ -54,7 +55,7 @@ jobs:
           cache-dependency-path: backend/go.sum
       - uses: actions/setup-node@v7
         with:
-          node-version: "24"
+          node-version: "24.19.0"
           package-manager-cache: false
       - uses: pnpm/action-setup@v6
         with:
@@ -70,11 +71,22 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Initialize isolated test databases
         run: |
-          psql "$GLOWLOOM_TEST_CANVAS_DB_DSN" -X -v ON_ERROR_STOP=1 -c 'CREATE ROLE glowloom_app NOLOGIN NOSUPERUSER' -c 'CREATE ROLE canvas_test_runtime LOGIN INHERIT NOSUPERUSER IN ROLE glowloom_app' -c 'CREATE DATABASE schema_probe' -c 'CREATE DATABASE glowloom_governance' -c 'CREATE DATABASE glowloom_catalog' -c 'CREATE DATABASE glowloom_subject_alignment_ci' -c 'CREATE DATABASE glowloom_subject_source_ci' -c 'CREATE DATABASE glowloom_subject_storage_ci' -c 'CREATE DATABASE glowloom_subject_storage_package_ci' -c 'CREATE DATABASE glowloom_subject_storage_script_ci'
+          psql "$GLOWLOOM_TEST_CANVAS_DB_DSN" -X -v ON_ERROR_STOP=1 -c 'CREATE ROLE glowloom_app NOLOGIN NOSUPERUSER' -c 'CREATE ROLE glowloom_agent_runtime NOLOGIN NOSUPERUSER' -c 'CREATE ROLE canvas_test_runtime LOGIN INHERIT NOSUPERUSER IN ROLE glowloom_app' -c 'CREATE DATABASE schema_probe' -c 'CREATE DATABASE glowloom_governance' -c 'CREATE DATABASE glowloom_catalog' -c 'CREATE DATABASE glowloom_subject_alignment_ci' -c 'CREATE DATABASE glowloom_subject_source_ci' -c 'CREATE DATABASE glowloom_subject_storage_ci' -c 'CREATE DATABASE glowloom_subject_storage_package_ci' -c 'CREATE DATABASE glowloom_subject_storage_script_ci'
           psql "$GLOWLOOM_TEST_CANVAS_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           psql "$GLOWLOOM_TEST_GOVERNANCE_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           psql "postgres://postgres@127.0.0.1:5432/glowloom_catalog?sslmode=disable" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           psql "$GLOWLOOM_TEST_SUBJECT_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
+      - name: Initialize isolated Agent runtime storage
+        run: |
+          psql "$GLOWLOOM_TEST_CANVAS_DB_DSN" -X -v ON_ERROR_STOP=1 -c 'CREATE DATABASE glowloom_agent_runtime'
+          psql "$GLOWLOOM_TEST_AGENT_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/agent_harness_incremental.sql
+          psql "$GLOWLOOM_TEST_AGENT_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/agent_harness_incremental.sql
+      - name: Test the private Agent runtime with PostgreSQL
+        working-directory: agent-runtime
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm typecheck
+          pnpm test
       - name: Run backend Race tests
         run: go test -race -count=1 ./...
 
