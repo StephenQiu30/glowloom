@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"time"
 
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 
@@ -50,18 +51,26 @@ func freezeManagedRelease(tx *gorm.DB, op domain.Operation) error {
 func (s *Store) admitManagedDispatch(tx *gorm.DB, identity application.ProviderDispatchIdentity) error {
 	var row struct {
 		AdapterKey          string
+		TimePricing         string
+		CheckedAt           time.Time
 		ProviderID, ModelID uuid.UUID
 		ReleaseID, ConfigID *uuid.UUID
 	}
-	r := tx.Raw(`SELECT p.adapter_key,p.id AS provider_id,m.id AS model_id,r.id AS release_id,r.config_version_id AS config_id
+	r := tx.Raw(`SELECT p.adapter_key,p.id AS provider_id,m.id AS model_id,r.id AS release_id,r.config_version_id AS config_id,price.rule->>'time_pricing' AS time_pricing,clock_timestamp() AS checked_at
  FROM catalog.model_profile_version v JOIN catalog.model_profile m ON m.id=v.model_profile_id
  JOIN catalog.provider p ON p.id=m.provider_id
  LEFT JOIN operation.provider_binding binding ON binding.operation_id=?
  LEFT JOIN catalog.model_release r ON r.id=binding.release_id AND r.model_id=m.id
  AND r.model_version_id=v.id AND r.price_version_id=?
+ LEFT JOIN catalog.price_rule_version price ON price.id=r.price_version_id
  WHERE v.id=?`, identity.OperationID, identity.PriceRuleVersionID, identity.ModelProfileVersionID).Scan(&row)
 	if r.Error != nil {
 		return fmt.Errorf("read dispatch binding: %w", r.Error)
+	}
+	if row.TimePricing != "" {
+		if _, err := catalogdomain.DeepSeekOffPeak2026(row.CheckedAt); err != nil || row.AdapterKey != "deepseek" || row.TimePricing != catalogdomain.DeepSeekCN2026 {
+			return application.ErrWorkflowModelUnavailable
+		}
 	}
 	if !catalogdomain.IsManagedCloud(row.AdapterKey) {
 		return nil

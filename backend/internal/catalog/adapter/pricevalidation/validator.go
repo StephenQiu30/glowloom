@@ -59,6 +59,11 @@ func (v *Validator) Validate(price domain.PriceRuleVersion) error {
 		for name, raw := range fields {
 			switch name {
 			case "input_micros_per_1k", "output_micros_per_1k":
+			case "time_pricing":
+				var schedule string
+				if json.Unmarshal(raw, &schedule) != nil || schedule != domain.DeepSeekCN2026 || price.Currency != "CNY" || fields["cached_input_micros_per_1k"] == nil || fields["by_resolution"] != nil || input == 0 {
+					return ErrInvalidConfiguration
+				}
 			case "cached_input_micros_per_1k":
 				cached, valid := nonnegativeMicros(raw)
 				if !valid || cached > input {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"path"
+	"time"
 )
 
 // ManagedArtifact identifies private bytes without exposing a signed URL.
@@ -21,6 +22,9 @@ type ManagedArtifact struct {
 // ManagedResult is private durable evidence, never a workflow payload. It is
 // written after every artifact; recovering it cannot issue another paid request.
 type ManagedResult struct {
+	// ReceivedAt is observed immediately after the provider call, before staging.
+	// Missing timing on historical manifests remains unknown for time tariffs.
+	ReceivedAt    *time.Time               `json:"received_at,omitempty"`
 	Subtitle      *AudioSubtitle           `json:"subtitle,omitempty"`
 	Identity      ProviderDispatchIdentity `json:"identity"`
 	State         string                   `json:"state"`
@@ -37,6 +41,9 @@ func (r ManagedResult) Validate() error {
 		return ErrInvalidProviderCall
 	}
 	if !r.Subtitle.Valid(240000) {
+		return ErrInvalidProviderCall
+	}
+	if r.ReceivedAt != nil && (r.ReceivedAt.IsZero() || r.State != "succeeded") {
 		return ErrInvalidProviderCall
 	}
 	if r.State == "accepted" {

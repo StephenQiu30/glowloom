@@ -97,11 +97,21 @@ func appendPriceRuleInTx(tx *gorm.DB, price domain.PriceRuleVersion, expectedRev
 		return ErrPriceVersionConflict
 	}
 	var coefficients struct {
+		TimePricing  string                 `json:"time_pricing"`
 		ByMode       map[string]json.Number `json:"by_mode"`
 		ByResolution map[string]json.Number `json:"by_resolution"`
 	}
 	if err := json.Unmarshal(price.Rule, &coefficients); err != nil {
 		return domain.ErrInvalidPriceRule
+	}
+	if coefficients.TimePricing != "" {
+		var adapter string
+		if err := tx.Raw(`SELECT adapter_key FROM catalog.provider WHERE id=? AND NOT is_delete`, row.ProviderID).Scan(&adapter).Error; err != nil {
+			return fmt.Errorf("check time pricing provider: %w", err)
+		}
+		if adapter != "deepseek" || row.Capability != "text.generate" {
+			return domain.ErrInvalidPriceRule
+		}
 	}
 	modeKeys := make([]string, 0, len(coefficients.ByMode))
 	for mode := range coefficients.ByMode {

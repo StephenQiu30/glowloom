@@ -346,6 +346,7 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 			return application.ErrProviderCallConflict
 		}
 		call := calls[0]
+		var receivedAt time.Time
 		if input.Managed {
 			identity := application.ProviderDispatchIdentity{ProjectID: op.ProjectID, OperationID: input.OperationID, ModelProfileVersionID: *op.ModelProfileVersionID, PriceRuleVersionID: *op.PriceRuleVersionID, Action: "submit", Attempt: 1}
 			if op.ProviderRequestKey == nil {
@@ -364,6 +365,9 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 			}
 			if input.Action == "submit" && (evidence.TaskID != "" || !callHasDispatchIdentity(call, identity) || call.DispatchStartedAt == nil) {
 				return application.ErrProviderCallConflict
+			}
+			if evidence.ReceivedAt != nil {
+				receivedAt = *evidence.ReceivedAt
 			}
 			input.Usage, err = managedBillableUsage(tx, input.OperationID, *op.PriceRuleVersionID, evidence.Usage)
 			if err != nil {
@@ -467,7 +471,7 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 		case input.Managed || input.Action == "query" && (input.State == "succeeded" || input.State == "failed") ||
 			input.Action == "cancel" && input.State == "cancelled":
 			priced, err := priceProviderUsage(tx, op.ModelProfileVersionID, op.PriceRuleVersionID,
-				op.Mode, op.Params, input.Usage)
+				op.Mode, op.Params, input.Usage, call.DispatchStartedAt, receivedAt)
 			if err != nil {
 				return err
 			}
@@ -514,7 +518,7 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 }
 
 func priceProviderUsage(tx *gorm.DB, modelVersionID, priceID *uuid.UUID,
-	mode string, params, rawUsage []byte,
+	mode string, params, rawUsage []byte, startedAt *time.Time, receivedAt time.Time,
 ) (int64, error) {
 	if len(rawUsage) == 0 {
 		return 0, application.ErrProviderCostUnknown
@@ -566,9 +570,13 @@ func priceProviderUsage(tx *gorm.DB, modelVersionID, priceID *uuid.UUID,
 	if frozenParams.Resolution == "" {
 		frozenParams.Resolution = frozenParams.Size
 	}
-	amount, err := application.CalculateActualCost(price, usage, mode, frozenParams.Resolution)
+	var dispatchedAt time.Time
+	if startedAt != nil {
+		dispatchedAt = *startedAt
+	}
+	amount, err := application.CalculateActualCostDuring(price, usage, mode, frozenParams.Resolution, dispatchedAt, receivedAt)
 	if err != nil {
-		return 0, fmt.Errorf("price provider usage: %w", err)
+		return 0, fmt.Errorf("price provider usage: %w: %w", application.ErrProviderCostUnknown, err)
 	}
 	return amount, nil
 }

@@ -303,6 +303,7 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 			return PreparedFreeQuote{}, err
 		}
 	}
+	pricing.QuotedAt = now
 	amount, costs, err := CalculateQuoteDetailed(catalog.Price, pricing)
 	if err != nil {
 		return PreparedFreeQuote{}, fmt.Errorf("price free quote: %w", err)

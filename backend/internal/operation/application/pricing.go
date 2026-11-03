@@ -39,6 +39,7 @@ const (
 // a character count supplied by the input builder, not a UTF-8 byte count.
 // ParameterMultipliers is rejected until its publication shape is specified.
 type PricingInput struct {
+	QuotedAt             time.Time
 	ReferenceImageCount  int64
 	OutputCount          int64
 	TargetDurationMS     int64
@@ -52,6 +53,7 @@ type PricingInput struct {
 }
 
 type parsedPriceRule struct {
+	timePricing       string
 	freeReferences    uint64
 	referenceMicros   uint64
 	referenceScope    string
@@ -68,6 +70,8 @@ type parsedPriceRule struct {
 // QuoteCostDetail explains the exact inputs to a quote before the final CNY
 // ceiling. Unit prices are denominated in Currency, not necessarily CNY.
 type QuoteCostDetail struct {
+	TimePricing           string                  `json:"time_pricing,omitempty"`
+	ReservationPeriod     string                  `json:"reservation_period,omitempty"`
 	SourceURL             string                  `json:"source_url,omitempty"`
 	ReviewedAt            *time.Time              `json:"reviewed_at,omitempty"`
 	ReferenceImageCount   *int64                  `json:"reference_image_count,omitempty"`
@@ -163,6 +167,11 @@ func CalculateQuoteDetailed(price catalogdomain.PriceRuleVersion, input PricingI
 	if err != nil {
 		return 0, QuoteCostDetail{}, err
 	}
+	if rule.timePricing != "" {
+		if _, err := catalogdomain.DeepSeekOffPeak2026(input.QuotedAt); err != nil {
+			return 0, QuoteCostDetail{}, ErrInvalidPricingInput
+		}
+	}
 	amount, detail, err := priceAmount(price.Unit, rule, input)
 	if err != nil {
 		return 0, QuoteCostDetail{}, err
@@ -176,6 +185,9 @@ func CalculateQuoteDetailed(price catalogdomain.PriceRuleVersion, input PricingI
 		refs := input.ReferenceImageCount
 		detail.ReferenceImageCount, detail.FreeReferenceImages, detail.ReferenceImageMicros = &refs, &rule.freeReferences, &rule.referenceMicros
 		detail.ReferenceScope = rule.referenceScope
+	}
+	if rule.timePricing != "" {
+		detail.TimePricing, detail.ReservationPeriod = rule.timePricing, "peak"
 	}
 	detail.SourceURL, detail.ReviewedAt = price.SourceURL, price.ReviewedAt
 	detail.PriceRuleVersionID, detail.PriceVersionNo, detail.AmountKind = price.ID, price.VersionNo, "reservation"
@@ -197,9 +209,33 @@ func CalculateQuoteDetailed(price catalogdomain.PriceRuleVersion, input PricingI
 // CalculateActualCost prices conclusive provider usage against the same
 // published rule and exchange rate frozen when the operation was quoted.
 func CalculateActualCost(price catalogdomain.PriceRuleVersion, usage BillableUsage, mode, resolution string) (int64, error) {
+	return CalculateActualCostDuring(price, usage, mode, resolution, time.Time{}, time.Time{})
+}
+
+// CalculateActualCostDuring uses the original dispatch and response observations,
+// never a recovery clock. A boundary-crossing request needs supplier review:
+// completion creation time is not documented as its billing timestamp.
+func CalculateActualCostDuring(price catalogdomain.PriceRuleVersion, usage BillableUsage, mode, resolution string, startedAt, receivedAt time.Time) (int64, error) {
 	rule, fx, err := parsePrice(price)
 	if err != nil {
 		return 0, err
+	}
+	offPeak := false
+	if rule.timePricing != "" {
+		// HTTP submissions have a five-minute bound. Within this interval no two
+		// tariff transitions can occur, so matching endpoints prove one rate.
+		if startedAt.IsZero() || receivedAt.IsZero() || receivedAt.Before(startedAt) || receivedAt.Sub(startedAt) > 5*time.Minute {
+			return 0, ErrInvalidPricingInput
+		}
+		var err error
+		offPeak, err = catalogdomain.DeepSeekOffPeak2026(startedAt)
+		if err != nil {
+			return 0, ErrInvalidPricingInput
+		}
+		endOffPeak, err := catalogdomain.DeepSeekOffPeak2026(receivedAt)
+		if err != nil || offPeak != endOffPeak {
+			return 0, ErrInvalidPricingInput
+		}
 	}
 	amount, err := actualPriceAmount(price.Unit, rule, usage)
 	if err != nil {
@@ -226,6 +262,9 @@ func CalculateActualCost(price catalogdomain.PriceRuleVersion, usage BillableUsa
 		amount.Add(amount, surcharge)
 	} else if usage.ReferenceImageCount != nil {
 		return 0, ErrInvalidPricingInput
+	}
+	if offPeak {
+		amount.Mul(amount, big.NewRat(1, 2))
 	}
 	amount.Mul(amount, rule.markupMultiplier)
 	return finishPriceAmount(amount, fx)
@@ -350,6 +389,10 @@ func parsePrice(price catalogdomain.PriceRuleVersion) (parsedPriceRule, *big.Rat
 		for name, raw := range fields {
 			switch name {
 			case "input_micros_per_1k", "output_micros_per_1k":
+			case "time_pricing":
+				if json.Unmarshal(raw, &rule.timePricing) != nil || rule.timePricing != catalogdomain.DeepSeekCN2026 || price.Currency != "CNY" || fields["cached_input_micros_per_1k"] == nil || fields["by_resolution"] != nil || rule.inputMicros == 0 {
+					return parsedPriceRule{}, nil, ErrInvalidPricingRule
+				}
 			case "cached_input_micros_per_1k":
 				value, valid := priceMicros(raw)
 				if !valid || value > rule.inputMicros {

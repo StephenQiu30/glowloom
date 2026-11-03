@@ -130,12 +130,17 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 		return unknown, application.ErrWorkflowModelUnavailable
 	}
 	var result application.GenerationResult
+	var receivedAt *time.Time
 	if input.Action == "submit" {
 		request, requestErr := a.request(ctx, loaded, config)
 		if requestErr != nil {
 			return application.ManagedProgress{State: "not_submitted", ErrorCode: "input_unavailable"}, nil
 		}
 		result, err = a.client.Submit(ctx, request, providerKey)
+		if config.AdapterKey == "deepseek" {
+			observed := time.Now().UTC()
+			receivedAt = &observed
+		}
 	} else {
 		result, err = a.client.Query(ctx, config, saved.TaskID, providerKey)
 	}
@@ -162,7 +167,7 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 			return unknown, nil
 		}
 	}
-	evidence := application.ManagedResult{Identity: identity, State: "succeeded", TaskID: result.TaskID, Text: result.Text, SupplierUsage: result.Usage, Subtitle: result.Subtitle}
+	evidence := application.ManagedResult{ReceivedAt: receivedAt, Identity: identity, State: "succeeded", TaskID: result.TaskID, Text: result.Text, SupplierUsage: result.Usage, Subtitle: result.Subtitle}
 	var duration int64
 	for index, item := range result.Images {
 		output, e := a.results.StageArtifact(ctx, identity, index+1, item.Bytes, item.MediaType)

@@ -1,0 +1,31 @@
+First full backend Race run: exit 1. Disposable PG18, shared package DSNs.
+
+--- FAIL: TestCinemaKitPostgresYjsSaveEditReadAndDetach (4.84s)
+    cinema_kit_integration_test.go:26: ERROR: permission denied for table outbox (SQLSTATE 42501)
+
+--- FAIL: TestAgentQuoteAndConfirmShareSessionTransaction (4.17s)
+    agent_session_integration_test.go:144: read running operation in session transaction timeout: context deadline exceeded
+
+--- FAIL: TestEditorDraftPersistenceCASAndReplay (0.00s)
+    draft_integration_test.go:28: preferences tests require the task's isolated receipt database
+
+--- FAIL: TestEditorDraftConcurrentWriters (0.00s)
+    draft_integration_test.go:74: preferences tests require the task's isolated receipt database
+
+--- FAIL: TestEditorUploadRecoveryIsPrivateAndReauthorized (0.00s)
+    draft_integration_test.go:109: preferences tests require the task's isolated receipt database
+
+--- FAIL: TestWorkspaceModelDefaultsPersistAndGuard (0.00s)
+    preferences_integration_test.go:97: preferences tests require the task's isolated receipt database
+
+--- FAIL: TestPromptPreferencesPersistenceConcurrencyAndIsolation (0.00s)
+    preferences_integration_test.go:147: preferences tests require the task's isolated receipt database
+
+--- FAIL: TestPromptPreferenceAuditFailureRollsBack (0.00s)
+    preferences_integration_test.go:229: preferences tests require the task's isolated receipt database
+
+--- FAIL: TestPreferencePublicHTTPProducerAndSecurity (0.00s)
+    preferences_integration_test.go:266: preferences tests require the task's isolated receipt database
+
+--- FAIL: TestPreferenceApplicationRoleAndOutdatedBaseline (0.00s)
+    preferences_integration_test.go:300: preferences tests require the task's isolated receipt database
