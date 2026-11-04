@@ -52,12 +52,20 @@ export function useConnectionFlow(
 /** Inverse SVG transform keeps the shared raster surface in CSS pixels during pan/zoom previews. */
 export function ConnectionFlowLayer({
   containerRef,
+  suspended = false,
 }: {
   containerRef: RefObject<HTMLDivElement | null>;
+  suspended?: boolean;
 }) {
   const registry = useContext(Context);
   const foreignRef = useRef<SVGForeignObjectElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const suspendedRef = useRef(suspended);
+  const wakeRef = useRef<(() => void) | null>(null);
+  useLayoutEffect(() => {
+    suspendedRef.current = suspended;
+    wakeRef.current?.();
+  }, [suspended]);
   useEffect(() => {
     const canvas = canvasRef.current,
       foreign = foreignRef.current,
@@ -80,7 +88,12 @@ export function ConnectionFlowLayer({
     };
     const schedule = () => {
       if (failed) return;
-      if (document.hidden || motion.matches || registry.entries.size === 0) {
+      if (
+        suspendedRef.current ||
+        document.hidden ||
+        motion.matches ||
+        registry.entries.size === 0
+      ) {
         cancel();
         surface.clear();
         canvas.dataset.rendering = "suspended";
@@ -158,6 +171,7 @@ export function ConnectionFlowLayer({
       cancel();
       canvas.dataset.rendering = "context-lost";
     };
+    wakeRef.current = schedule;
     registry.listeners.add(invalidate);
     document.addEventListener("visibilitychange", schedule);
     motion.addEventListener("change", schedule);
@@ -165,6 +179,7 @@ export function ConnectionFlowLayer({
     schedule();
     return () => {
       cancel();
+      wakeRef.current = null;
       registry.listeners.delete(invalidate);
       document.removeEventListener("visibilitychange", schedule);
       motion.removeEventListener("change", schedule);

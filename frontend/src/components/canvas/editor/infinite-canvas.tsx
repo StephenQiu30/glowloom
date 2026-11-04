@@ -21,6 +21,7 @@ type InfiniteCanvasProps = {
   backgroundMode?: CanvasBackgroundMode;
   onViewportChange: (viewport: ViewportTransform) => void;
   onViewportPreview?: (viewport: ViewportTransform) => void;
+  onViewportMotionChange?: (moving: boolean) => void;
   onCanvasMouseDown?: (event: React.PointerEvent<HTMLDivElement>) => void;
   onCanvasDeselect?: () => void;
   onCanvasDoubleClick?: (event: React.MouseEvent<HTMLDivElement>) => void;
@@ -36,6 +37,7 @@ export function InfiniteCanvas({
   backgroundMode = "lines",
   onViewportChange,
   onViewportPreview,
+  onViewportMotionChange,
   onCanvasMouseDown,
   onCanvasDeselect,
   onCanvasDoubleClick,
@@ -61,6 +63,18 @@ export function InfiniteCanvas({
   const nextViewportRef = useRef<ViewportTransform | null>(null);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
+  const [wheelMoving, setWheelMoving] = useState(false);
+  const wheelIdle = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wheelIdleFrame = useRef<number | null>(null);
+  useEffect(() => {
+    onViewportMotionChange?.(isPanning || wheelMoving);
+  }, [isPanning, wheelMoving, onViewportMotionChange]);
+  useEffect(
+    () => () => {
+      if (wheelIdle.current !== null) clearTimeout(wheelIdle.current);
+    },
+    [],
+  );
 
   useLayoutEffect(() => {
     viewportRef.current = viewport;
@@ -285,6 +299,17 @@ export function InfiniteCanvas({
         { x: event.clientX - rect.left, y: event.clientY - rect.top },
         rect.height,
       );
+      setWheelMoving(true);
+      if (wheelIdle.current !== null) clearTimeout(wheelIdle.current);
+      if (wheelIdleFrame.current !== null)
+        cancelAnimationFrame(wheelIdleFrame.current);
+      wheelIdle.current = setTimeout(() => {
+        wheelIdle.current = null;
+        wheelIdleFrame.current = requestAnimationFrame(() => {
+          wheelIdleFrame.current = null;
+          setWheelMoving(false);
+        });
+      }, 150);
       // Accumulate events immediately, but commit the viewport at most once per frame.
       viewportRef.current = next;
       nextViewportRef.current = next;
@@ -316,7 +341,11 @@ export function InfiniteCanvas({
       data-canvas-viewport
       tabIndex={0}
       aria-label="创作画布"
-      style={{ background: theme.canvas.background, cursor }}
+      style={{
+        background: theme.canvas.background,
+        cursor,
+        ...{ "--canvas-connection-stroke-world-width": `${1 / viewport.k}px` },
+      }}
       onPointerDownCapture={(event) => {
         const target = event.target instanceof Element ? event.target : null;
         if (

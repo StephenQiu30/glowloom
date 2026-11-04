@@ -1,0 +1,14 @@
+{
+  "command": "billing.application.ChangeBudgetCommand.Execute",
+  "authority": "existing session and scoped project write access",
+  "project_id": "766d1bcc-b2ef-4ab5-b449-dd02d72057e2",
+  "request_id": "a8925cab-b424-410c-abfd-b773ea12fd4b",
+  "quoted_credits": 2,
+  "quote_micros": 120000,
+  "before": {"limit_micros": 0, "reserved_micros": 0, "settled_micros": 0, "revision": 1},
+  "after": {"limit_micros": 120000, "reserved_micros": 0, "settled_micros": 0, "revision": 2},
+  "readback_equal": true,
+  "budget_change_ledger_count": 1,
+  "audit_count": 1,
+  "temporary_operator_removed": true
+}

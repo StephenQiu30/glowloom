@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import {
   ActiveConnectionPath,
@@ -11,7 +11,10 @@ vi.mock("@/components/canvas/runtime/store/use-theme-store", () => ({
     select({ theme: "dark" }),
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 const from: CanvasNodeData = {
   id: "from",
   type: "text",
@@ -91,7 +94,8 @@ it("keeps a separate zoom-independent hit area and animates selected generating 
   ).not.toBeNull();
 });
 
-it("does not animate idle connections and cleans up their hover meteor", () => {
+it("does not animate idle connections and delays the hover meteor by 200ms", () => {
+  vi.useFakeTimers();
   const view = render(
     <svg>
       <ConnectionPath
@@ -106,6 +110,10 @@ it("does not animate idle connections and cleans up their hover meteor", () => {
   const edge = view.container.querySelector('[data-canvas-edge-id="edge"]')!;
   expect(view.container.querySelector(".canvas-connection-meteor")).toBeNull();
   fireEvent.mouseEnter(edge);
+  expect(view.container.querySelector(".canvas-connection-meteor")).toBeNull();
+  act(() => vi.advanceTimersByTime(199));
+  expect(view.container.querySelector(".canvas-connection-meteor")).toBeNull();
+  act(() => vi.advanceTimersByTime(1));
   expect(
     view.container.querySelector(".canvas-connection-meteor"),
   ).not.toBeNull();
@@ -142,7 +150,7 @@ it("offsets only dragging anchors outside the node and keeps pending anchors cen
   expect(Number(path().split(" ")[1])).toBe(from.position.x + from.width);
 });
 
-it("keeps node-related connections muted until the edge itself is hovered or selected", () => {
+it("matches Jimeng endpoint-active feedback without widening the line", () => {
   const view = render(
     <svg>
       <ConnectionPath
@@ -154,10 +162,12 @@ it("keeps node-related connections muted until the edge itself is hovered or sel
       />
     </svg>,
   );
-  expect(view.container.querySelector(".canvas-connection-meteor")).toBeNull();
+  expect(
+    view.container.querySelector(".canvas-connection-meteor"),
+  ).not.toBeNull();
   expect(
     view.container
       .querySelector(".canvas-connection-line")
       ?.getAttribute("stroke"),
-  ).not.toBe("#008EE5");
+  ).toBe("#008EE5");
 });

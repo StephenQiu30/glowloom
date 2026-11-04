@@ -1,4 +1,9 @@
-import { useState, useRef, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 
 import { useConnectionFlow } from "./connection-flow-layer";
 import { CONNECTION_FLOW_BASE } from "./connection-flow-model";
@@ -18,14 +23,16 @@ function ConnectionStroke({
   highlighted,
   muted = "var(--muted-foreground)",
   fanout = false,
+  animate = highlighted,
 }: {
   path: string;
   highlighted: boolean;
   muted?: string;
   fanout?: boolean;
+  animate?: boolean;
 }) {
   const pathRef = useRef<SVGPathElement>(null);
-  useConnectionFlow(path, highlighted, pathRef, fanout);
+  useConnectionFlow(path, animate, pathRef, fanout);
   return (
     <g aria-hidden="true" style={{ pointerEvents: "none" }}>
       <path
@@ -34,12 +41,14 @@ function ConnectionStroke({
         d={path}
         stroke={highlighted ? CONNECTION_FLOW_BASE : muted}
         strokeWidth={1}
-        strokeOpacity={highlighted ? 1 : 0.45}
-        vectorEffect="non-scaling-stroke"
+        strokeOpacity={highlighted ? 1 : 0.16}
+        style={{
+          strokeWidth: "var(--canvas-connection-stroke-world-width, 1px)",
+        }}
         strokeLinecap="round"
         fill="none"
       />
-      {highlighted && <g className="canvas-connection-meteor" />}
+      {animate && <g className="canvas-connection-meteor" />}
     </g>
   );
 }
@@ -65,7 +74,13 @@ export function ConnectionPath({
 }) {
   const theme = canvasThemes[useThemeStore((state) => state.theme)];
   const [hovered, setHovered] = useState(false);
-  const highlighted = selected || generating || hovered;
+  const [hoverSweep, setHoverSweep] = useState(false);
+  useEffect(() => {
+    if (!hovered) return;
+    const timer = window.setTimeout(() => setHoverSweep(true), 200);
+    return () => window.clearTimeout(timer);
+  }, [hovered]);
+  const highlighted = active || selected || generating || hovered;
   const startX = from.position.x + from.width;
   const startY = from.position.y + from.height / 2;
   const endX = to.position.x;
@@ -79,7 +94,10 @@ export function ConnectionPath({
     <g
       className="canvas-connection"
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseLeave={() => {
+        setHovered(false);
+        setHoverSweep(false);
+      }}
       data-canvas-edge-id={connection.id}
       data-selected={selected || undefined}
       data-related={active || undefined}
@@ -105,7 +123,8 @@ export function ConnectionPath({
       <ConnectionStroke
         path={pathD}
         highlighted={highlighted}
-        muted={theme.node.muted}
+        muted={theme.node.text}
+        animate={active || selected || generating || (hovered && hoverSweep)}
       />
     </g>
   );

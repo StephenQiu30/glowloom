@@ -1,18 +1,18 @@
-/** Measured Jimeng connection contract, canvas-rendering.3800953894 (2026-10-29). */
+/** Measured Jimeng connection contract, canvas-view.aa2f82f8c1 (gradient readback 2026-11-04). */
 export const CONNECTION_FLOW_PERIOD_MS = 2600;
 export const CONNECTION_FLOW_BASE = "#008EE5";
 export const CONNECTION_FLOW_STOPS: ReadonlyArray<readonly [number, string]> = [
   [0, "#008EE5"],
-  [0.13, "#018FE5"],
-  [0.27, "#14A7EC"],
-  [0.41, "#1CB1E5"],
-  [0.52, "#75CCB9"],
-  [0.6, "#D6B20A"],
-  [0.68, "#E29618"],
-  [0.71, "#E48120"],
-  [0.75, "#E29618"],
+  [0.1349, "#018FE5"],
+  [0.2727, "#14A7EC"],
+  [0.4104, "#1CB1E5"],
+  [0.5214, "#75CCB9"],
+  [0.6037, "#D6B20A"],
+  [0.6756, "#E29618"],
+  [0.7144, "#E48120"],
+  [0.7529, "#E29618"],
   [0.8, "#D6B20A"],
-  [0.85, "#75CCB9"],
+  [0.8528, "#75CCB9"],
   [0.95, "#18ACE9"],
   [1, "#008EE5"],
 ];

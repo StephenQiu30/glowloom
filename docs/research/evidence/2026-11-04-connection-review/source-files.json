@@ -1,0 +1,18 @@
+[
+  {
+    "name": "jimeng-canvas-view-20261104.js",
+    "sha256": "f5e8ea42d9a67711ea692cfc436f68d906e2b00d95159e1c61ae59215d25ecec"
+  },
+  {
+    "name": "jimeng-canvas-data-20261104.js",
+    "sha256": "a5cae1308a04c32af644cc0637b018762ef15195c313a27ee503e373c947635a"
+  },
+  {
+    "name": "jimeng-canvas-core-20261104.js",
+    "sha256": "afbb5efa5dd29fc9b93250cd8ea6b4c203b7b0d4da73e1fcf3fe4c5acae3381a"
+  },
+  {
+    "name": "jimeng-canvas-renderer-20261104.js",
+    "sha256": "c6a25b12c081957e1096ead461e1f49ae559806790bddf5b949b5d2b65bc3df1"
+  }
+]

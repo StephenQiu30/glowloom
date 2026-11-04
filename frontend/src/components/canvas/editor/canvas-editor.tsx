@@ -633,6 +633,7 @@ function InfiniteCanvasPage({
     new Set(),
   );
   const [isNodeDragging, setIsNodeDragging] = useState(false);
+  const [viewportMoving, setViewportMoving] = useState(false);
   const [composing, setComposing] = useState(false);
   const composingElement = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
@@ -6271,6 +6272,7 @@ function InfiniteCanvasPage({
           containerRef={containerRef}
           viewport={viewport}
           onViewportPreview={previewViewport}
+          onViewportMotionChange={setViewportMoving}
           tool={canvasTool}
           backgroundMode={backgroundMode}
           onViewportChange={(next) => {
@@ -6341,7 +6343,12 @@ function InfiniteCanvasPage({
                     }}
                   />
                 ))}
-              <ConnectionFlowLayer containerRef={containerRef} />
+              <ConnectionFlowLayer
+                containerRef={containerRef}
+                suspended={
+                  isNodeDragging || viewportMoving || selectionBox !== null
+                }
+              />
               {pendingConnectionCreate
                 ? (
                     pendingConnectionCreate.sourceNodeIds ?? [

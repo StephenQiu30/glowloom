@@ -1,0 +1,53 @@
+{
+  "local": [
+    {
+      "zoom": 0.5,
+      "stroke_world_px": 2.0,
+      "screen_stroke_px": 1,
+      "overlay_offset": [
+        0,
+        0
+      ],
+      "overlay_scale": 1
+    },
+    {
+      "zoom": 1,
+      "stroke_world_px": 1.0,
+      "screen_stroke_px": 1,
+      "overlay_offset": [
+        0,
+        0
+      ],
+      "overlay_scale": 1
+    },
+    {
+      "zoom": 2,
+      "stroke_world_px": 0.5,
+      "screen_stroke_px": 1,
+      "overlay_offset": [
+        0,
+        0
+      ],
+      "overlay_scale": 1
+    }
+  ],
+  "source": [
+    {
+      "target_zoom": 0.5,
+      "matrix_scale": 0.5041486620903015,
+      "stroke_world_px": 1.98354,
+      "screen_stroke_px": 0.9999990372025968
+    },
+    {
+      "target_zoom": 2,
+      "matrix_scale": 1.9923508167266848,
+      "stroke_world_px": 0.50192,
+      "screen_stroke_px": 1.0000007219314575
+    }
+  ],
+  "drag": {
+    "source_flow_host_hidden": true,
+    "local": "suspended",
+    "after_release": "running"
+  }
+}

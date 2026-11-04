@@ -24,9 +24,11 @@ function Entry({ path, fanout = false }: { path: string; fanout?: boolean }) {
 function Fixture({
   count = 2,
   fanout = false,
+  suspended = false,
 }: {
   count?: number;
   fanout?: boolean;
+  suspended?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   return (
@@ -40,7 +42,7 @@ function Fixture({
               path={`M 0 ${i} C 100 ${i}, 200 ${i}, 300 ${i}`}
             />
           ))}
-          <ConnectionFlowLayer containerRef={ref} />
+          <ConnectionFlowLayer containerRef={ref} suspended={suspended} />
         </svg>
       </ConnectionFlowProvider>
     </div>
@@ -135,6 +137,12 @@ it("shares one frame and surface, follows the viewport transform, then suspends 
   pending.delete(nextId);
   nextDraw(1350);
   expect(surface.upload.mock.calls.at(-1)![0].length).toBe(2 * 16 * 54);
+  view.rerender(<Fixture fanout suspended />);
+  expect(pending.size).toBe(0);
+  expect(surface.clear).toHaveBeenCalled();
+  view.rerender(<Fixture fanout />);
+  expect(pending.size).toBe(1);
+  expect(surface.dispose).not.toHaveBeenCalled();
   motion.matches = true;
   onMotion();
   expect(pending.size).toBe(0);

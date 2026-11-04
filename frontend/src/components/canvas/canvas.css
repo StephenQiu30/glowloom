@@ -702,8 +702,8 @@ html:has(.canvas-controls-layout) {
   }
   .canvas-connection-line {
     transition:
-      stroke 150ms ease,
-      stroke-opacity 150ms ease;
+      stroke 200ms ease-out,
+      stroke-opacity 200ms ease-out;
   }
   .canvas-connection:hover .canvas-connection-line {
     stroke: var(--canvas-connection-highlight);
