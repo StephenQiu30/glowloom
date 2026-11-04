@@ -11,6 +11,7 @@ import (
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/testsuite"
+	temporalworkflow "go.temporal.io/sdk/workflow"
 
 	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
@@ -120,6 +121,49 @@ func TestManagedWorkflowRoutesRevocationToFinancialClosure(t *testing.T) {
 			env.ExecuteWorkflow(operationflow.OperationWorkflow, operationflow.OperationInput{OperationID: id.String()})
 			require.NoError(t, env.GetWorkflowError())
 			env.AssertExpectations(t)
+		})
+	}
+}
+
+func TestManagedWorkflowRetainsNotSubmittedClassification(t *testing.T) {
+	for _, legacy := range []bool{false, true} {
+		name := "new"
+		if legacy {
+			name = "legacy"
+		}
+		t.Run(name, func(t *testing.T) {
+			loaded := workflowFixture()
+			loaded.Provider.AdapterKey = "volcengine_ark"
+			loaded.Provider.Queue = "provider"
+			loaded.Provider.SupportsCancel = false
+			loaded.Provider.Moderation = "provider"
+			id := loaded.Operation.ID
+			env := (&testsuite.WorkflowTestSuite{}).NewTestWorkflowEnvironment()
+			registerOperationMockActivities(env)
+			wantError, wantFailure := "invalid_provider_request", "provider_invalid_parameters"
+			if legacy {
+				env.OnGetVersion("managed-not-submitted-reason-v1", temporalworkflow.DefaultVersion, 1).Return(temporalworkflow.DefaultVersion).Once()
+				wantError, wantFailure = "", "provider_not_submitted"
+			}
+			env.RegisterActivityWithOptions(func(context.Context, application.ManagedStep) (application.ManagedProgress, error) {
+				return application.ManagedProgress{}, nil
+			}, activity.RegisterOptions{Name: "provider.managed"})
+			env.OnActivity("flow.LoadOperation", mock.Anything, id.String()).Return(loaded, nil).Once()
+			env.OnActivity("flow.CheckConsent", mock.Anything, id.String()).Return(nil).Once()
+			env.OnActivity("flow.Transition", mock.Anything, mock.Anything).Return(func(_ context.Context, in application.TransitionInput) (domain.Status, error) { return in.To, nil })
+			env.OnActivity("flow.BeginProviderCall", mock.Anything, mock.Anything).Return(nil).Once()
+			env.OnActivity("provider.managed", mock.Anything, application.ManagedStep{OperationID: id, Action: "submit"}).Return(application.ManagedProgress{State: "not_submitted", ErrorCode: "invalid_provider_request"}, nil).Once()
+			env.OnActivity("flow.CompleteProviderCall", mock.Anything, mock.MatchedBy(func(in application.CompleteProviderCallInput) bool {
+				return in.State == "not_submitted" && in.ErrorCode == wantError && in.Outcome == "error"
+			})).Return(nil).Once()
+			env.OnActivity("flow.SettleOperation", mock.Anything, mock.MatchedBy(func(in operationflow.SettlementInput) bool {
+				return in.To == domain.StatusFailed && in.FailureCode == wantFailure && in.ActualCostMicros == 0
+			})).Return(nil).Once()
+			env.SetTestTimeout(10 * time.Second)
+			env.ExecuteWorkflow(operationflow.OperationWorkflow, operationflow.OperationInput{OperationID: id.String()})
+			require.NoError(t, env.GetWorkflowError())
+			env.AssertExpectations(t)
+
 		})
 	}
 }

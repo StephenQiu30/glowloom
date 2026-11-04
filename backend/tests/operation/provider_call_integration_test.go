@@ -174,6 +174,36 @@ func TestMockProviderCallEvidenceSettlesOnce(t *testing.T) {
 	}
 }
 
+func TestNotSubmittedCallRetainsReviewedFailure(t *testing.T) {
+	for _, tc := range []struct{ code, want string }{
+		{"invalid_provider_request", "provider_invalid_parameters"},
+		{"unreviewed_private_detail", "provider_not_submitted"},
+	} {
+		t.Run(tc.code, func(t *testing.T) {
+			database := operationStoreDB(t)
+			identity, store := seedDispatchCall(t, database, true)
+			_, err := store.ClaimProviderDispatch(t.Context(), identity)
+			if err != nil {
+				t.Fatal(err)
+			}
+			input := application.CompleteProviderCallInput{OperationID: identity.OperationID, Action: "submit", Attempt: 1, Outcome: "error", State: "not_submitted", ErrorCode: tc.code}
+			for range 2 {
+				if err := store.CompleteProviderCall(t.Context(), input); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var stored struct {
+				State, FailureCode string
+				Count              int64
+			}
+			err = database.Raw(`SELECT response_summary->>'state' AS state,response_summary->>'failure_code' AS failure_code,count(*) OVER() AS count FROM operation.provider_call WHERE operation_id=?`, identity.OperationID).Scan(&stored).Error
+			if err != nil || stored.State != "not_submitted" || stored.FailureCode != tc.want || stored.Count != 1 {
+				t.Fatalf("stored call = %+v, error=%v; want reviewed failure %s and one row", stored, err, tc.want)
+			}
+		})
+	}
+}
+
 func TestRealProviderUnclassifiedRejectionCannotSettleZero(t *testing.T) {
 	database := operationStoreDB(t)
 	opID, store := seedProviderCallOperation(t, database)

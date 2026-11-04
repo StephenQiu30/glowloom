@@ -2,6 +2,7 @@ package providerhttp
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -54,6 +55,14 @@ func (d *VolcengineArkDriver) Submit(ctx context.Context, c *Client, input appli
 		if len(input.References) > 0 {
 			images := make([]string, 0, len(input.References))
 			for _, ref := range input.References {
+				if len(ref.ImageBytes) != 0 {
+					kind := http.DetectContentType(ref.ImageBytes)
+					if ref.MediaKind != "image" || len(ref.ImageBytes) > 30<<20 || (kind != "image/png" && kind != "image/jpeg" && kind != "image/webp" && kind != "image/gif" && kind != "image/bmp") {
+						return invalidSubmissionResult(), nil
+					}
+					images = append(images, "data:"+kind+";base64,"+base64.StdEncoding.EncodeToString(ref.ImageBytes))
+					continue
+				}
 				parsed, err := url.Parse(ref.URL)
 				if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || len(ref.URL) > 8192 {
 					return invalidSubmissionResult(), nil

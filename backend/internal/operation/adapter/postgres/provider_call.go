@@ -412,7 +412,7 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 		if adapter.AdapterKey == "mock" && input.Action == "submit" && input.State == "rejected" {
 			summary["price_contract"] = "mock_free"
 		}
-		if input.ErrorCode != "" && input.State == "unknown" {
+		if input.ErrorCode != "" && (input.State == "unknown" || input.State == "not_submitted") {
 			summary["failure_code"] = application.SafeProviderFailureCode(input.ErrorCode, input.State)
 		}
 		state, err := json.Marshal(summary)

@@ -7,11 +7,14 @@ import (
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 )
 
-// ProviderReference is an already-authorized temporary input URL.
+// ProviderReference keeps authorized inputs inside the credential-owning worker.
 type ProviderReference struct {
 	Role      string
 	URL       string
 	MediaKind string `json:"media_kind,omitempty"`
+	// ImageBytes is a bounded, digest-verified alternative for local object URLs.
+	// It must never enter workflow history or other serialized task metadata.
+	ImageBytes []byte `json:"-"`
 }
 
 // GenerationRequest carries validated inputs and immutable provider settings.

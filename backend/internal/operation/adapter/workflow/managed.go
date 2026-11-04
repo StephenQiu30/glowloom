@@ -103,7 +103,11 @@ func runManagedProvider(ctx, flowCtx workflow.Context, loaded application.Workfl
 				return err
 			}
 		case "not_submitted":
-			if err := calls.complete(application.CompleteProviderCallInput{OperationID: id, Action: "submit", Attempt: 1, Outcome: "error", State: progress.State}); err != nil {
+			errorCode := ""
+			if workflow.GetVersion(ctx, "managed-not-submitted-reason-v1", workflow.DefaultVersion, 1) != workflow.DefaultVersion {
+				errorCode = progress.ErrorCode
+			}
+			if err := calls.complete(application.CompleteProviderCallInput{OperationID: id, Action: "submit", Attempt: 1, Outcome: "error", State: progress.State, ErrorCode: errorCode}); err != nil {
 				return err
 			}
 			if progress.ErrorCode == "provider_dispatch_cancelled" {
@@ -111,6 +115,11 @@ func runManagedProvider(ctx, flowCtx workflow.Context, loaded application.Workfl
 					return err
 				}
 				return settleOperation(flowCtx, id.String(), domain.StatusCancelling, domain.StatusCancelled, 0, "", false)
+			}
+			// Old histories retain their original failure command as well as the
+			// original call payload. New runs preserve the reviewed local reason.
+			if errorCode == "" && progress.ErrorCode == "invalid_provider_request" {
+				return settleOperation(flowCtx, id.String(), status, domain.StatusFailed, 0, "provider_not_submitted", false)
 			}
 			return settleOperation(flowCtx, id.String(), status, domain.StatusFailed, 0, application.SafeProviderFailureCode(progress.ErrorCode, progress.State), false)
 		case "accepted", "succeeded":

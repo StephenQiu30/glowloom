@@ -189,3 +189,7 @@
 ## 2026-11-04 连线提交与实页复核
 
 上一轮限定15文件已提交ca56fa06并推main。前端CI成功；后端缺agent.graph_checkpoint表，父提交已有同一失败。当前即梦实页与新bundle更正上轮降灰判断：恢复endpoint-active，节点拖动/视图移动/框选暂停流光，hover200ms、滚轮150ms+RAF、缩放基线1/k，13渐变节点精度对齐。6文件24项、全局tsc、范围lint与指定本地origin后的生产构建通过；实页三档缩放及拖动暂停/恢复已验，原Figma动效板3159:54491同步规则与精确渐变。后续增量未再次提交。按用户授权，通过既有领域命令仅补足Seedream报价2积分所需的120000微元预算，账本与审计各1条；仅确认任务0d7fd96a一次，随后provider_not_submitted失败，预留全额释放、实际扣费0、剩余可用120000微元。失败后取消选中，两边恢复默认opacity0.16且流光暂停，无高亮残留；供应商生成中/成功及其拖动缩放组合未通过。下一步先查明供应商未提交原因，再取得单次生成验收条件；本次不再提交新任务，不签全量一致。结束时共享main已由并行billing推进至4b1909f9且远端相同，本任务ca56fa06仍在历史中。见[复核记录](docs/research/evidence/2026-11-04-connection-review/validation.md)。
+
+### 2026-11-04 复核交付与供应商输入修复
+
+限定34文件已提交e7e376b4并推送main，提交前22项定向前端测试通过；CI41751714383前端成功，后端仍为既有agent.graph_checkpoint缺表失败。随后按用户“仅修复，暂不再生成”排查：当前cos-main/COS主路由的真实HeadBucket成功，原引用图片则保存于legacy-main/MinIO，5442字节、回环HTTP签名；Temporal原activity明确invalid_provider_request。已修复该私有图片传输和安全分类保留，公网COS URL不改，未迁移旧资源。8组定向Race、隔离PG调用摘要/幂等、原49事件回放、goimports/vet及后端构建通过，govulncheck无可达漏洞；golangci-lint未安装。Figma原板与设计/PRD/原需求/Plan已同步。只重启本地后端载入修复，readyz正常、运行二进制与已验证构建SHA一致；原失败状态、1条调用和预算预留/结算0保持不变。修复增量未提交，未发起新生成、未加预算。下一步仍需获得真实任务验收条件后核对供应商生成中/完成及其拖动缩放组合；同项目COS图片完整读取、其它本地多模态引用另验，不以本轮图片修复签全量一致。见[根因与证据](docs/research/evidence/2026-11-04-provider-reference/validation.md)。

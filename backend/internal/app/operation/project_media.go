@@ -1,10 +1,14 @@
 package operation
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
+	"net/netip"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
@@ -27,6 +31,29 @@ func (s projectMediaSigner) SignProjectMedia(ctx context.Context, f application.
 	var reader io.ReadCloser
 	var err error
 	ref := objectstorage.Ref{ProfileID: f.ProfileID, Bucket: f.Bucket, Key: f.Key}
+	var signedURL string
+	if f.LocationID != nil {
+		if s.registry == nil {
+			return application.ProviderReference{}, application.ErrWorkflowInputNotReady
+		}
+		grant, err := s.registry.PresignGet(ctx, ref, ttl)
+		if err != nil {
+			return application.ProviderReference{}, err
+		}
+		signedURL = grant.URL
+	} else {
+		if s.legacy == nil {
+			return application.ProviderReference{}, application.ErrWorkflowInputNotReady
+		}
+		signedURL, err = s.legacy.PresignGet(ctx, f.Key, ttl)
+		if err != nil {
+			return application.ProviderReference{}, err
+		}
+	}
+	inline := f.Kind == "image" && privateImageURL(signedURL)
+	if inline && f.ByteSize > 30<<20 {
+		return application.ProviderReference{}, application.ErrWorkflowInputNotReady
+	}
 	if f.LocationID != nil {
 		if s.registry == nil {
 			return application.ProviderReference{}, application.ErrWorkflowInputNotReady
@@ -43,25 +70,31 @@ func (s projectMediaSigner) SignProjectMedia(ctx context.Context, f application.
 	}
 	defer func() { _ = reader.Close() }()
 	sum := sha256.New()
-	n, err := io.Copy(sum, io.LimitReader(reader, f.ByteSize+1))
+	var imageData bytes.Buffer
+	var checked io.Writer = sum
+	if inline {
+		checked = io.MultiWriter(sum, &imageData)
+	}
+	n, err := io.Copy(checked, io.LimitReader(reader, f.ByteSize+1))
 	if err != nil {
 		return application.ProviderReference{}, err
 	}
 	if n != f.ByteSize || hex.EncodeToString(sum.Sum(nil)) != f.SHA256 {
 		return application.ProviderReference{}, application.ErrWorkflowInputNotReady
 	}
-	var url string
-	if f.LocationID != nil {
-		grant, err := s.registry.PresignGet(ctx, ref, ttl)
-		if err != nil {
-			return application.ProviderReference{}, err
-		}
-		url = grant.URL
-	} else {
-		url, err = s.legacy.PresignGet(ctx, f.Key, ttl)
-		if err != nil {
-			return application.ProviderReference{}, err
-		}
+	return application.ProviderReference{Role: f.Role, MediaKind: f.Kind, URL: signedURL, ImageBytes: imageData.Bytes()}, nil
+}
+
+// Private object URLs remain valid for local previews, but not for cloud fetches.
+func privateImageURL(value string) bool {
+	u, err := url.Parse(value)
+	if err != nil || u.Scheme != "https" || u.User != nil {
+		return true
 	}
-	return application.ProviderReference{Role: f.Role, MediaKind: f.Kind, URL: url}, nil
+	host := strings.ToLower(u.Hostname())
+	if !strings.Contains(host, ".") || strings.HasSuffix(host, ".localhost") {
+		return true
+	}
+	ip, err := netip.ParseAddr(host)
+	return err == nil && (!ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback())
 }
