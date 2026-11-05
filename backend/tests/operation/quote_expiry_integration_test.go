@@ -1,9 +1,9 @@
 package operation_test
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -119,17 +119,41 @@ func TestExpireQuotedUnderRuntimeRole(t *testing.T) {
 	}
 }
 
+func TestQuoteExpiryIsolationDiscardsFixturesAfterTestContextCancellation(t *testing.T) {
+	database := operationStoreDB(t)
+	var projectID uuid.UUID
+	t.Run("isolated fixture", func(t *testing.T) {
+		tx := quoteExpiryDB(t)
+		t.Cleanup(func() {
+			var one int
+			if err := tx.Raw(`SELECT 1`).Scan(&one).Error; err != nil {
+				t.Errorf("quote expiry transaction unavailable before rollback: %v", err)
+			}
+		})
+		_, projectID = operationStoreProject(t, tx)
+	})
+	var remaining int64
+	if err := database.Raw(`SELECT count(*) FROM workspace.project WHERE id = ?`, projectID).Scan(&remaining).Error; err != nil {
+		t.Fatal(err)
+	}
+	if remaining != 0 {
+		t.Fatalf("quote expiry fixture survived rollback: %d projects", remaining)
+	}
+}
+
 func quoteExpiryDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	database := operationStoreDB(t)
-	tx := database.Begin(&sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	// The transaction must outlive t.Context, which is cancelled before cleanup.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
+	tx := database.WithContext(ctx).Begin(&sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if tx.Error != nil {
+		cancel()
 		t.Fatalf("begin quote expiry isolation: %v", tx.Error)
 	}
 	t.Cleanup(func() {
-		// t.Context is cancelled before cleanup, so database/sql may have
-		// already rolled the transaction back.
-		if err := tx.Rollback().Error; err != nil && !errors.Is(err, sql.ErrTxDone) {
+		defer cancel()
+		if err := tx.Rollback().Error; err != nil {
 			t.Errorf("roll back quote expiry isolation: %v", err)
 		}
 	})

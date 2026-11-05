@@ -30,10 +30,9 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      # Metadata tests use one explicit physical identity; live object gates have
-      # their own opt-in config and never contact this deliberately closed port.
+      # Metadata and worker-recovery tests share this isolated real MinIO fixture.
       GLOWLOOM_OBJECT_STORAGE_CONFIG: >-
-        {"schema_version":1,"revision":"1","default_write_profile":"test-main","profiles":{"test-main":{"provider":"minio","mode":"read_write","endpoint":"http://127.0.0.1:1","signing_endpoint":"http://127.0.0.1:1","bucket":"glowloom-test","region":"us-east-1","addressing_style":"path","credentials":{"source":"env","access_key_env":"GLOWLOOM_TEST_STORAGE_AK","secret_key_env":"GLOWLOOM_TEST_STORAGE_SK"}}},"upload":{"mode":"relay","signed_url_ttl":600000000000,"session_ttl":86400000000000,"multipart_threshold_bytes":33554432,"part_size_bytes":8388608,"part_concurrency":3,"staging_retention":172800000000000},"access":{"preview_ttl":300000000000,"max_signed_url_ttl":900000000000},"limits":{"max_image_bytes":20971520,"max_video_bytes":524288000,"max_audio_bytes":104857600,"max_model_bytes":67108864,"max_document_bytes":20971520}}
+        {"schema_version":1,"revision":"1","default_write_profile":"test-main","profiles":{"test-main":{"provider":"minio","mode":"read_write","endpoint":"http://127.0.0.1:19000","signing_endpoint":"http://127.0.0.1:19000","bucket":"glowloom-test","region":"us-east-1","addressing_style":"path","credentials":{"source":"env","access_key_env":"GLOWLOOM_TEST_STORAGE_AK","secret_key_env":"GLOWLOOM_TEST_STORAGE_SK"}}},"upload":{"mode":"relay","signed_url_ttl":600000000000,"session_ttl":86400000000000,"multipart_threshold_bytes":33554432,"part_size_bytes":8388608,"part_concurrency":3,"staging_retention":172800000000000},"access":{"preview_ttl":300000000000,"max_signed_url_ttl":900000000000},"limits":{"max_image_bytes":20971520,"max_video_bytes":524288000,"max_audio_bytes":104857600,"max_model_bytes":67108864,"max_document_bytes":20971520}}
       GLOWLOOM_TEST_STORAGE_AK: metadata-fixture
       GLOWLOOM_TEST_STORAGE_SK: metadata-fixture-secret
       GLOWLOOM_TEST_APP_SCOPE_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_app_scope_test?sslmode=disable
@@ -90,6 +89,7 @@ jobs:
           psql "$GLOWLOOM_TEST_GOVERNANCE_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           psql "postgres://postgres@127.0.0.1:5432/glowloom_catalog?sslmode=disable" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           psql "$GLOWLOOM_TEST_SUBJECT_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
+          psql "$GLOWLOOM_TEST_SCRIPT_LOCATION_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
       - name: Provision durable task and cross-language databases
         run: |
           for database in glowloom_app_scope_test glowloom_business_test glowloom_agent_canvas_test glowloom_boundary_test glowloom_tasks_test glowloom_maintenance_test glowloom_receipt glowloom_gateway_test; do
@@ -99,8 +99,25 @@ jobs:
       - name: Install the production Agent used by boundary tests
         working-directory: agent
         run: pnpm install --frozen-lockfile
+      - name: Build pinned MinIO test server
+        run: GOBIN="$RUNNER_TEMP/minio-bin" go install github.com/minio/minio@v0.0.0-20251015172955-9e49d5e7a648
       - name: Run backend Race tests
-        run: go test -race -count=1 ./...
+        run: |
+          MINIO_ROOT_USER="$GLOWLOOM_TEST_STORAGE_AK" MINIO_ROOT_PASSWORD="$GLOWLOOM_TEST_STORAGE_SK" \
+            "$RUNNER_TEMP/minio-bin/minio" server "$RUNNER_TEMP/minio-data" \
+            --address 127.0.0.1:19000 --console-address 127.0.0.1:19001 > "$RUNNER_TEMP/minio.log" 2>&1 &
+          minio_pid=$!
+          stop_minio() {
+            kill "$minio_pid" 2>/dev/null || true
+            wait "$minio_pid" || true
+          }
+          trap stop_minio EXIT
+          curl --fail --silent --show-error --retry 20 --retry-connrefused --retry-delay 1 \
+            http://127.0.0.1:19000/minio/health/ready
+          curl --fail --silent --show-error --aws-sigv4 'aws:amz:us-east-1:s3' \
+            --user "$GLOWLOOM_TEST_STORAGE_AK:$GLOWLOOM_TEST_STORAGE_SK" --request PUT --data '' \
+            http://127.0.0.1:19000/glowloom-test
+          go test -race -count=1 ./...
 
   agent:
     runs-on: ubuntu-24.04
