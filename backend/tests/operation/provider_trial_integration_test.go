@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
@@ -37,10 +38,27 @@ func TestProviderTrialQuoteRequiresAdminAndBudgetAndCanConfirmDraft(t *testing.T
 	low.SupplierMaxMicros = 99
 	_, err = f.store.CreateProviderTrialQuote(t.Context(), actor, f.release, low)
 	require.Error(t, err)
+	quick := input
+	quick.UseQuotedCharge = true
+	quick.MaxChargeMicros = 0
+	quick.RequestID = uuid.New()
+	_, err = f.store.CreateProviderTrialQuote(t.Context(), actor, f.release, quick)
+	require.ErrorIs(t, err, billingdomain.ErrWalletInsufficient)
+	noTrial, err := f.store.ReadProviderTrialRecovery(t.Context(), actor, f.release)
+	require.NoError(t, err)
+	require.False(t, noTrial.Found)
 	var scope, lot uuid.UUID
 	require.NoError(t, database.Raw(`SELECT billing.bind_project_wallet(?)`, i.ProjectID).Row().Scan(&scope))
 	require.NoError(t, database.Raw(`SELECT billing.issue_promotional_credit(?,?,100,now()+interval '1 hour',NULL,?)`,
 		scope, uuid.New(), "isolated trial funding").Row().Scan(&lot))
+	quickQuote, err := f.store.CreateProviderTrialQuote(t.Context(), actor, f.release, quick)
+	require.NoError(t, err)
+	require.True(t, quickQuote.Confirmable)
+	require.EqualValues(t, 10, quickQuote.QuoteMicros)
+	quickRecovery, err := f.store.ReadProviderTrialRecovery(t.Context(), actor, f.release)
+	require.NoError(t, err)
+	require.EqualValues(t, 10, quickRecovery.MaxChargeMicros)
+	require.EqualValues(t, 100, quickRecovery.SupplierMaxMicros)
 	quote, err := f.store.CreateProviderTrialQuote(t.Context(), actor, f.release, input)
 	require.NoError(t, err)
 	require.Equal(t, int64(10), quote.QuoteMicros)

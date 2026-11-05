@@ -8,9 +8,10 @@ import { GenerationParameters } from "@/components/generation/generation-paramet
 import {
   fieldsForMode,
   initialParams,
+  requireQuote,
+  taskLabels,
 } from "@/components/generation/contracts";
 import { TrialReferences, trialRoles } from "./trial-references";
-import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ChevronDown } from "lucide-react";
 import {
@@ -51,6 +52,7 @@ import { RequestError } from "@/lib/request";
 import { catalogMessage } from "@/components/catalog/mutation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 
 const TrialResult = dynamic(() =>
   import("@/components/generation/generation-dialog").then((m) => m.TaskDetail),
@@ -143,10 +145,32 @@ export function ProviderTrial({
           confirmRequested: recovery.status !== "quoted",
         }
       : null);
+  const quickMode =
+    version &&
+    release.upstream_cost?.currency &&
+    Number.isSafeInteger(release.upstream_cost.max_micros)
+      ? (initialMode ? [initialMode] : (release.required_modes ?? [])).find(
+          (mode) => {
+            if (
+              !release.required_modes?.includes(mode) ||
+              trialRoles(version, mode).some((role) => role.min_count)
+            )
+              return false;
+            return fieldsForMode(version.param_schema ?? [], mode).every(
+              (field) =>
+                !field.required ||
+                field.field === "output_count" ||
+                field.default !== undefined,
+            );
+          },
+        )
+      : undefined;
+  const [advanced, setAdvanced] = useState(false);
+  const quick = !!quickMode && !advanced;
   const [selectedMode, setSelectedMode] = useState(
     (initialMode && release.required_modes?.includes(initialMode)
       ? initialMode
-      : release.required_modes?.[0]) ?? "",
+      : (quickMode ?? release.required_modes?.[0])) ?? "",
   );
   const [project, setProject] = useState<Project | null>(null);
   const [params, setParams] = useState<
@@ -209,7 +233,7 @@ export function ProviderTrial({
   const pendingOperation = pending?.operation,
     pendingProject = pending?.project;
   useEffect(() => {
-    if (!pendingOperation || !pendingProject) return;
+    if (busy || !pendingOperation || !pendingProject) return;
     const abort = new AbortController();
     getOperation(
       { id: pendingOperation, project_id: pendingProject },
@@ -227,7 +251,45 @@ export function ProviderTrial({
         if (!abort.signal.aborted) setMessage(catalogMessage(error));
       });
     return () => abort.abort();
-  }, [pendingOperation, pendingProject]);
+  }, [busy, pendingOperation, pendingProject]);
+  const taskStatus = task?.status;
+  const taskID = task?.id;
+  useEffect(() => {
+    if (
+      busy ||
+      !pendingOperation ||
+      !pendingProject ||
+      pendingOperation !== taskID ||
+      !taskStatus ||
+      taskStatus === "quoted" ||
+      terminal.has(taskStatus) ||
+      ["unknown", "manual"].includes(taskStatus)
+    )
+      return;
+    const abort = new AbortController();
+    const query = { id: pendingOperation, project_id: pendingProject };
+    let timer: number;
+    async function poll() {
+      try {
+        const loaded = await getOperation(query, { signal: abort.signal });
+        if (
+          !abort.signal.aborted &&
+          loaded.id === pendingOperation &&
+          loaded.project_id === pendingProject
+        )
+          setTask(loaded);
+      } catch {
+        // Preserve the last known state while retrying the read.
+      }
+      if (!abort.signal.aborted) timer = window.setTimeout(poll, 2500);
+    }
+    timer = window.setTimeout(poll, 2500);
+    return () => {
+      window.clearTimeout(timer);
+      abort.abort();
+    };
+  }, [busy, pendingOperation, pendingProject, taskID, taskStatus]);
+
   function save(value: PendingTrial) {
     pageBusinessMemory.setItem(storageKey, JSON.stringify(value));
     window.dispatchEvent(new Event(event));
@@ -244,12 +306,15 @@ export function ProviderTrial({
       // ambiguous transport/5xx/idempotency outcomes pinned to their request.
       if (
         quoteRequest &&
+        !parse(read(storageKey))?.operation &&
         e instanceof RequestError &&
         ((e.status >= 400 && e.status < 500 && e.status !== 409) ||
           [
             "invalid_request",
             "model_unavailable",
             "budget_insufficient",
+            "credits_insufficient",
+            "commercial_price_unavailable",
             "input_not_ready",
           ].includes(e.code))
       ) {
@@ -277,6 +342,18 @@ export function ProviderTrial({
       )
         throw new Error("试运行回执不匹配。");
       operation = result.operation_id;
+      if (!value.confirm) {
+        const original = await getProviderTrialRecovery({ id: release.id! });
+        if (
+          original.request_id !== value.request ||
+          original.operation_id !== operation ||
+          original.project_id !== value.project ||
+          !original.confirm_request_id
+        )
+          throw new Error("无法匹配原验证报价，请保留请求回执。");
+        value = { ...value, confirm: original.confirm_request_id };
+        void reloadRecovery(original, { revalidate: false });
+      }
       save({ ...value, operation });
     }
     const loaded = await getOperation({
@@ -287,9 +364,88 @@ export function ProviderTrial({
       throw new Error("试运行任务不匹配。");
     setTask(loaded);
     if (loaded.status === "completed") {
-      setMessage("试运行已完成。刷新模型验证记录后即可检查上线条件。");
+      setMessage("");
     }
   }
+  async function verifyDefaults() {
+    const projectID = project?.id;
+    const supplier = release.upstream_cost;
+    if (!projectID || !version || !quickMode || !supplier || pending) return;
+    const state = {
+      request: crypto.randomUUID(),
+      confirm: "",
+      project: projectID,
+    };
+    const defaults = initialParams(
+      fieldsForMode(version.param_schema ?? [], quickMode),
+    );
+    delete defaults.output_count;
+    const prompt = /image|video/.test(quickMode)
+      ? "纯白背景上的一个蓝色圆形。"
+      : quickMode.startsWith("music")
+        ? "一段轻快的纯音乐。"
+        : "请只回复 OK。";
+    save(state);
+    const quote = requireQuote(
+      await createProviderTrialQuote(
+        { id: release.id! },
+        {
+          project_id: projectID,
+          request_id: state.request,
+          mode: quickMode,
+          prompt,
+          params: defaults,
+          media_inputs: [],
+          use_quoted_charge: true,
+          supplier_max_micros: supplier.max_micros,
+          supplier_currency: supplier.currency,
+        },
+      ),
+    );
+    if (!quote.confirm_key) throw new RequestError("invalid_receipt");
+    const prepared = {
+      ...state,
+      operation: quote.operation_id,
+      confirm: quote.confirm_key,
+    };
+    save(prepared);
+    setPreparedBudget({
+      supplier: supplier.max_micros!,
+      currency: supplier.currency!,
+      customer: quote.quote_micros,
+    });
+    void reloadRecovery();
+    if (!quote.confirmable) {
+      await refresh(prepared);
+      setMessage("本次报价不可确认，请检查项目积分和预算。");
+      return;
+    }
+    await confirmTrial(prepared);
+  }
+
+  async function confirmTrial(value: PendingTrial) {
+    if (!value.operation || !value.confirm) return;
+    save({ ...value, confirmRequested: true });
+    try {
+      await confirmOperationQuote(
+        { id: value.operation },
+        { project_id: value.project },
+        { headers: { "Idempotency-Key": value.confirm } },
+      );
+    } catch (error) {
+      if (
+        error instanceof RequestError &&
+        ["credits_insufficient", "budget_insufficient"].includes(error.code)
+      ) {
+        save({ ...value, confirmRequested: false });
+      }
+      // Preserve the original failure and never resubmit as part of a read.
+      await refresh(value).catch(() => {});
+      throw error;
+    }
+    await refresh(value);
+  }
+
   const frozenBudget =
     recovery?.found && recovery.operation_id === task?.id
       ? {
@@ -326,7 +482,7 @@ export function ProviderTrial({
             variant="ghost"
             className="group/collapsible h-auto w-full justify-between whitespace-normal"
           >
-            <span>试运行此发布</span>
+            <span>验证此发布</span>
             <ChevronDown
               data-icon="inline-end"
               className="transition-transform group-data-[state=open]/collapsible:rotate-180"
@@ -339,7 +495,7 @@ export function ProviderTrial({
         className="pt-3 data-[state=closed]:hidden"
       >
         <p className="text-sm text-muted-foreground">
-          试运行生成一个结果，费用记入所选项目。
+          验证生成一个结果。确认时按报价冻结项目积分。
         </p>
         {snapshot === "unavailable" && (
           <Alert variant="destructive">
@@ -364,7 +520,11 @@ export function ProviderTrial({
             正在恢复试运行记录…
           </p>
         ) : null}
-        {message && <FeedbackToast message={message} tone="info" />}
+        {message ? (
+          <Alert>
+            <AlertDescription>{message}</AlertDescription>
+          </Alert>
+        ) : null}
         {!pending?.operation && version ? (
           <Field>
             <FieldLabel>扣费项目（必选）</FieldLabel>
@@ -389,7 +549,42 @@ export function ProviderTrial({
             </p>
           </Field>
         ) : null}
-        {!pending?.operation && (
+        {quick && !pending ? (
+          <div className="flex flex-col items-start gap-2">
+            <p className="text-xs text-muted-foreground">
+              使用发布默认参数。供应商上限 {release.upstream_cost?.currency}{" "}
+              {((release.upstream_cost?.max_micros ?? 0) / 1e6).toFixed(6)}。
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                disabled={disabled || !project || !budget || !!budgetError}
+                onClick={() => void run(verifyDefaults, true)}
+              >
+                {busy ? <Spinner data-icon="inline-start" /> : null}
+                验证
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={disabled}
+                onClick={() => setAdvanced(true)}
+              >
+                高级试运行
+              </Button>
+            </div>
+          </div>
+        ) : null}
+        {!quick && quickMode && !pending ? (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setAdvanced(false)}
+          >
+            使用默认验证
+          </Button>
+        ) : null}
+        {!quick && !pending?.operation && (
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -668,6 +863,11 @@ export function ProviderTrial({
             </FieldSet>
           </form>
         )}
+        {busy && quick ? (
+          <p role="status" className="flex items-center gap-2 text-sm">
+            <Spinner /> 正在提交验证…
+          </p>
+        ) : null}
         {pending && (
           <Button
             type="button"
@@ -680,8 +880,8 @@ export function ProviderTrial({
         )}
         {task && (
           <div className="space-y-2 text-sm">
-            <p className="text-muted-foreground">
-              任务状态：{task.status}
+            <p role="status" className="text-muted-foreground">
+              任务状态：{taskLabels[task.status ?? ""] ?? task.status}
               {typeof task.settled_micros === "number" &&
                 Number.isSafeInteger(task.settled_micros) &&
                 task.settled_micros >= 0 &&
@@ -758,15 +958,7 @@ export function ProviderTrial({
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  void run(async () => {
-                    save({ ...pending, confirmRequested: true });
-                    await confirmOperationQuote(
-                      { id: task.id! },
-                      { project_id: pending.project },
-                      { headers: { "Idempotency-Key": pending.confirm } },
-                    );
-                    await refresh(pending);
-                  });
+                  void run(() => confirmTrial(pending));
                 }}
               >
                 <FieldGroup className="gap-2">
@@ -774,6 +966,7 @@ export function ProviderTrial({
                     disabled={
                       disabled ||
                       !frozenBudget ||
+                      !pending.confirm ||
                       typeof task.quote_micros !== "number"
                     }
                   >

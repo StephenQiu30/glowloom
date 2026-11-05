@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
@@ -107,29 +108,37 @@ func (s *Store) CreateProviderTrialQuote(ctx context.Context, actor identityapp.
 		if err != nil {
 			return err
 		}
-		if *prepared.Operation.QuoteMicros > input.MaxChargeMicros {
+		if input.UseQuotedCharge {
+			input.MaxChargeMicros = *prepared.Operation.QuoteMicros
+		} else if *prepared.Operation.QuoteMicros > input.MaxChargeMicros {
 			return application.ErrInvalidFreeQuote
 		}
 		item := QuoteItem{Operation: prepared.Operation, Inputs: prepared.Inputs, trial: &trialBinding{ReleaseID: releaseID, Input: input}}
-		block, err := walletQuoteBlock(s.billingStore(tx).CheckWalletQuoteInTransaction(tx, input.ProjectID, []billingapp.WalletDemand{{
+		walletErr := s.billingStore(tx).CheckWalletQuoteInTransaction(tx, input.ProjectID, []billingapp.WalletDemand{{
 			ModelKey: model.Key, Micros: *item.Operation.QuoteMicros, CommercialPriceReady: true,
-		}}))
+		}})
+		if input.UseQuotedCharge && walletErr != nil {
+			return walletErr
+		}
+		block, err := walletQuoteBlock(walletErr)
 		if err != nil {
 			return err
 		}
 		if err := annotateWalletQuote(&item, block); err != nil {
 			return err
 		}
-		if err := s.withDB(tx).CreateQuoteSnapshot(ctx, actor, nil, []QuoteItem{item}); err != nil {
-			return err
-		}
-
 		budget, err := s.billingStore(tx).FindBudget(ctx, actor, input.ProjectID)
 		if err != nil {
 			return err
 		}
 		available, err := budget.AvailableMicros()
 		if err != nil {
+			return err
+		}
+		if input.UseQuotedCharge && available < *prepared.Operation.QuoteMicros {
+			return billingdomain.ErrBudgetInsufficient
+		}
+		if err := s.withDB(tx).CreateQuoteSnapshot(ctx, actor, nil, []QuoteItem{item}); err != nil {
 			return err
 		}
 		result = application.CreateFreeQuoteResult{OperationID: prepared.Operation.ID, QuoteMicros: *prepared.Operation.QuoteMicros, QuoteDetail: item.Operation.QuoteDetail, AvailableMicros: available, ExpiresAt: *prepared.Operation.QuoteExpiresAt, Confirmable: available >= *prepared.Operation.QuoteMicros && block == ""}

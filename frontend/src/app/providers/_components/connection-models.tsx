@@ -18,9 +18,9 @@ import {
   SelectTrigger,
   SelectValue,
   SelectContent,
+  SelectGroup,
   SelectItem,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { ConnectionOnboarding } from "./connection-onboarding";
 import { checkRunning } from "./testing-status";
 const ProviderTrial = dynamic(() =>
@@ -88,13 +88,15 @@ export function ConnectionModels({
         <SelectValue placeholder="选择模型" />
       </SelectTrigger>
       <SelectContent>
-        {data?.map((m) =>
-          m.id ? (
-            <SelectItem key={m.id} value={m.id}>
-              {m.display_name}
-            </SelectItem>
-          ) : null,
-        )}
+        <SelectGroup>
+          {data?.map((m) =>
+            m.id ? (
+              <SelectItem key={m.id} value={m.id}>
+                {m.display_name}
+              </SelectItem>
+            ) : null,
+          )}
+        </SelectGroup>
       </SelectContent>
     </Select>
   );
@@ -234,10 +236,7 @@ function FormalModelTest({
   );
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-medium">模型验证</h3>
-        <Badge variant="secondary">逐模式试运行</Badge>
-      </div>
+      <h3 className="text-sm font-medium">模型验证</h3>
       {selector}
       {isLoading ? (
         <p role="status" className="text-xs text-muted-foreground">

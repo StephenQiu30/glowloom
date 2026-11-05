@@ -236,9 +236,9 @@ export function ConnectionList({
             onClick={(event) => onTest(row.original.id, event.currentTarget)}
             className="max-md:h-11"
             data-connection-trigger={`${row.original.id}:test`}
-            aria-label={`测试 ${providerConnectionName(row.original.provider)}`}
+            aria-label={`验证 ${providerConnectionName(row.original.provider)}`}
           >
-            测试
+            验证
           </Button>
           <ConnectionMenu
             disabled={disabled}

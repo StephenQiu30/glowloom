@@ -204,7 +204,7 @@ export function ConnectionDetail({
               aria-label="连接详情视图"
             >
               <TabsTrigger value="overview">概览</TabsTrigger>
-              <TabsTrigger value="test">测试</TabsTrigger>
+              <TabsTrigger value="test">验证</TabsTrigger>
               <TabsTrigger value="key">凭据</TabsTrigger>
               <TabsTrigger value="config">高级配置</TabsTrigger>
             </TabsList>
@@ -239,7 +239,7 @@ export function ConnectionDetail({
                   className="max-md:h-11"
                   onClick={() => changeView("test")}
                 >
-                  查看测试
+                  验证模型
                 </Button>
               </div>
               {provider?.status === "active" ? (
@@ -295,9 +295,6 @@ export function ConnectionDetail({
               value="test"
               className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto"
             >
-              <p className="text-sm text-muted-foreground">
-                连接检查不发起生成，模型试运行需单独确认费用。
-              </p>
               <ConnectionTests
                 id={id}
                 adapter={provider?.adapter_key}

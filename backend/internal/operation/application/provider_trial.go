@@ -9,7 +9,8 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
-// ProviderTrialQuote requires an explicit project and separate customer/supplier ceilings.
+// ProviderTrialQuote requires an explicit project. Quick validation uses the
+// frozen quote as the customer ceiling; custom trials set both ceilings.
 // The quote is free; the existing confirmation endpoint reserves the project budget.
 type ProviderTrialQuote struct {
 	ProjectID         uuid.UUID         `json:"project_id"`
@@ -18,6 +19,7 @@ type ProviderTrialQuote struct {
 	Params            json.RawMessage   `json:"params" swaggertype:"object"`
 	MediaInputs       []TrialMediaInput `json:"media_inputs"`
 	MaxChargeMicros   int64             `json:"max_charge_micros"`
+	UseQuotedCharge   bool              `json:"use_quoted_charge,omitempty"`
 	SupplierMaxMicros int64             `json:"supplier_max_micros"`
 	SupplierCurrency  string            `json:"supplier_currency"`
 	RequestID         uuid.UUID         `json:"request_id"`

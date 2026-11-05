@@ -368,13 +368,13 @@ it("鼠标打开测试后关闭仍返回原行入口", async () => {
     ],
   });
   render(<ProvidersPage />);
-  const trigger = await screen.findByRole("button", { name: "测试 OpenAI" });
+  const trigger = await screen.findByRole("button", { name: "验证 OpenAI" });
   fireEvent.click(trigger);
   await screen.findByText("连接详情内容");
   fireEvent.click(screen.getByRole("button", { name: /^关闭$/ }));
   await waitFor(() =>
     expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "测试 OpenAI" }),
+      screen.getByRole("button", { name: "验证 OpenAI" }),
     ),
   );
 });

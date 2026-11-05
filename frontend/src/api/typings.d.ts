@@ -4816,6 +4816,7 @@ declare namespace API {
     request_id?: string;
     supplier_currency?: string;
     supplier_max_micros?: number;
+    use_quoted_charge?: boolean;
   };
 
   type ProviderTrialRecovery = {

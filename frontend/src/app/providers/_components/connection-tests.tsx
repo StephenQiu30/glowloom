@@ -124,7 +124,7 @@ export function ConnectionTests({
       </Alert>
     );
   return (
-    <div className="flex min-w-0 flex-col gap-4" aria-label="服务测试">
+    <div className="flex min-w-0 flex-col gap-4" aria-label="服务验证">
       {error ? (
         <Alert variant="destructive">
           <AlertDescription>
@@ -135,124 +135,162 @@ export function ConnectionTests({
           </AlertDescription>
         </Alert>
       ) : null}
-      <section
-        className="flex min-w-0 flex-col gap-2 border-b py-4"
-        aria-labelledby={`${fieldID}-network`}
-      >
-        <div className="flex items-center gap-2">
-          <h3
-            id={`${fieldID}-network`}
-            className="min-w-0 flex-1 text-sm font-medium"
-          >
-            网络连通
-          </h3>
-          <Badge variant="secondary" role="status">
-            {checkRunning(network) ? <Spinner /> : null}
-            {network ? resultLabel(network) : "未检测"}
-          </Badge>
-          <Button
-            variant="outline"
-            className="h-11 shrink-0"
-            disabled={
-              mutation.busy || !!mutation.pending || checkRunning(network)
-            }
-            onClick={() =>
-              void mutation.run("credential.test", id, (requestID) =>
-                testProviderReachability(
-                  { id },
-                  { headers: { "Idempotency-Key": requestID } },
-                ),
-              )
-            }
-          >
-            检测连通
+      {!credentialID && onConfigure ? (
+        <Alert>
+          <AlertDescription>
+            保存凭据后即可验证模型。
+            <Button variant="outline" size="sm" onClick={onConfigure}>
+              配置凭据
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {credentialID ? (
+        <div
+          ref={modelRef}
+          tabIndex={-1}
+          className="min-w-0 outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          <ConnectionModels
+            adapter={adapter}
+            id={id}
+            revision={revision}
+            onSaved={() => {
+              onSaved();
+              void mutate();
+            }}
+            checks={current}
+            onChecked={() => void mutate()}
+            initialModel={initialModel}
+            initialRelease={initialRelease}
+            initialMode={initialMode}
+          />
+        </div>
+      ) : null}
+      <Collapsible>
+        <CollapsibleTrigger asChild>
+          <Button variant="ghost" className="group w-full justify-between px-0">
+            网络与凭据诊断
+            <ChevronDown
+              data-icon="inline-end"
+              className="transition-transform group-data-[state=open]:rotate-180"
+            />
           </Button>
-        </div>
-        {network &&
-        network.network_result !== "reachable" &&
-        !checkRunning(network) ? (
-          <p className="text-xs text-destructive">
-            {testErrorMessage(
-              network.error_code ?? network.network_result ?? "",
-            )}
-          </p>
-        ) : null}
-      </section>
-      <section
-        className="flex min-w-0 flex-col gap-2 border-b py-4"
-        aria-labelledby={`${fieldID}-auth`}
-      >
-        <div className="flex items-center gap-2">
-          <h3
-            id={`${fieldID}-auth`}
-            className="min-w-0 flex-1 text-sm font-medium"
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <section
+            className="flex min-w-0 flex-col gap-2 border-b py-4"
+            aria-labelledby={`${fieldID}-network`}
           >
-            凭据检查
-          </h3>
-          <Badge variant="secondary" role="status">
-            {!credentialID
-              ? "未配置"
-              : unsupported
-                ? "需模型验证"
-                : auth
-                  ? resultLabel(auth)
-                  : "未检查"}
-          </Badge>
-          {!credentialID && onConfigure ? (
-            <Button
-              variant="outline"
-              className="h-11 shrink-0"
-              aria-label="配置凭据"
-              onClick={onConfigure}
-            >
-              配置
-            </Button>
-          ) : unsupported ? (
-            <Button
-              variant="outline"
-              className="h-11 shrink-0"
-              onClick={() => {
-                modelRef.current?.scrollIntoView({ block: "nearest" });
-                modelRef.current?.focus();
-              }}
-            >
-              验证模型
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              className="h-11 shrink-0"
-              disabled={
-                !credentialID ||
-                mutation.busy ||
-                !!mutation.pending ||
-                checkRunning(auth)
-              }
-              onClick={() =>
-                void mutation.run("credential.test", id, (requestID) =>
-                  testAdminCredential(
-                    { id, credential_id: credentialID! },
-                    { headers: { "Idempotency-Key": requestID } },
-                  ),
-                )
-              }
-            >
-              检查凭据
-            </Button>
-          )}
-        </div>
-        {auth &&
-        auth.auth_result !== "ok" &&
-        !checkRunning(auth) &&
-        !unsupported ? (
-          <p className="text-xs text-destructive">
-            {testErrorMessage(auth.auth_result ?? "")}
-          </p>
-        ) : null}
-        {adapter === "volcengine_ark" && auth?.auth_result === "ok" ? (
-          <p className="text-xs text-muted-foreground">仅检查视频任务权限</p>
-        ) : null}
-      </section>
+            <div className="flex items-center gap-2">
+              <h3
+                id={`${fieldID}-network`}
+                className="min-w-0 flex-1 text-sm font-medium"
+              >
+                网络连通
+              </h3>
+              <Badge variant="secondary" role="status">
+                {checkRunning(network) ? <Spinner /> : null}
+                {network ? resultLabel(network) : "未检测"}
+              </Badge>
+              <Button
+                variant="outline"
+                className="h-11 shrink-0"
+                disabled={
+                  mutation.busy || !!mutation.pending || checkRunning(network)
+                }
+                onClick={() =>
+                  void mutation.run("credential.test", id, (requestID) =>
+                    testProviderReachability(
+                      { id },
+                      { headers: { "Idempotency-Key": requestID } },
+                    ),
+                  )
+                }
+              >
+                检测连通
+              </Button>
+            </div>
+            {network &&
+            network.network_result !== "reachable" &&
+            !checkRunning(network) ? (
+              <p className="text-xs text-destructive">
+                {testErrorMessage(
+                  network.error_code ?? network.network_result ?? "",
+                )}
+              </p>
+            ) : null}
+          </section>
+          <section
+            className="flex min-w-0 flex-col gap-2 border-b py-4"
+            aria-labelledby={`${fieldID}-auth`}
+          >
+            <div className="flex items-center gap-2">
+              <h3
+                id={`${fieldID}-auth`}
+                className="min-w-0 flex-1 text-sm font-medium"
+              >
+                凭据检查
+              </h3>
+              <Badge variant="secondary" role="status">
+                {!credentialID
+                  ? "未配置"
+                  : unsupported
+                    ? "需模型验证"
+                    : auth
+                      ? resultLabel(auth)
+                      : "未检查"}
+              </Badge>
+              {credentialID && unsupported ? (
+                <Button
+                  variant="outline"
+                  className="h-11 shrink-0"
+                  onClick={() => {
+                    modelRef.current?.scrollIntoView({ block: "nearest" });
+                    modelRef.current?.focus();
+                  }}
+                >
+                  验证模型
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  className="h-11 shrink-0"
+                  disabled={
+                    !credentialID ||
+                    mutation.busy ||
+                    !!mutation.pending ||
+                    checkRunning(auth)
+                  }
+                  onClick={() =>
+                    void mutation.run("credential.test", id, (requestID) =>
+                      testAdminCredential(
+                        { id, credential_id: credentialID! },
+                        { headers: { "Idempotency-Key": requestID } },
+                      ),
+                    )
+                  }
+                >
+                  检查凭据
+                </Button>
+              )}
+            </div>
+            {auth &&
+            auth.auth_result !== "ok" &&
+            !checkRunning(auth) &&
+            !unsupported ? (
+              <p className="text-xs text-destructive">
+                {testErrorMessage(auth.auth_result ?? "")}
+              </p>
+            ) : null}
+            {adapter === "volcengine_ark" && auth?.auth_result === "ok" ? (
+              <p className="text-xs text-muted-foreground">
+                仅检查视频任务权限
+              </p>
+            ) : null}
+          </section>
+        </CollapsibleContent>
+      </Collapsible>
       {mutation.pending ? (
         <Button
           variant="outline"
@@ -268,26 +306,6 @@ export function ConnectionTests({
           {mutation.message}
         </p>
       ) : null}
-      <div
-        ref={modelRef}
-        tabIndex={-1}
-        className="min-w-0 py-4 outline-none focus-visible:ring-1 focus-visible:ring-ring"
-      >
-        <ConnectionModels
-          adapter={adapter}
-          id={id}
-          revision={revision}
-          onSaved={() => {
-            onSaved();
-            void mutate();
-          }}
-          checks={current}
-          onChecked={() => void mutate()}
-          initialModel={initialModel}
-          initialRelease={initialRelease}
-          initialMode={initialMode}
-        />
-      </div>
       {data?.items?.length || network || auth ? (
         <Collapsible className="flex flex-col gap-2">
           <CollapsibleTrigger asChild>
