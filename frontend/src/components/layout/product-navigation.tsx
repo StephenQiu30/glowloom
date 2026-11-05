@@ -2,7 +2,7 @@
 
 import type { ComponentProps, ReactNode } from "react";
 import { SidebarInset } from "@/components/ui/sidebar";
-import type { Screen } from "./routes";
+import { resolveAdminSection, type Screen } from "./routes";
 import { ProductHeader } from "./product-header";
 import { ProductSider } from "./product-sider";
 
@@ -33,7 +33,10 @@ export function ProductNavigation({
           <ProductHeader
             {...header}
             assetLayout={screen === "assets"}
-            showSearch={screen !== "home"}
+            showSearch={
+              screen !== "home" &&
+              (!resolveAdminSection(screen) || Boolean(header.search))
+            }
             showUtilities={screen === "home"}
           />
           {children}

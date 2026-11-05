@@ -2,8 +2,9 @@
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
 import { PlatformTeamInvitations } from "./platform-team-invitations";
-import { FieldLabel } from "@/components/ui/field";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { ChevronDown } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   AdminHeading,
   SelectionBar,
@@ -76,6 +77,9 @@ function TeamAdministration() {
   const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
   const [advanced, setAdvanced] = useState(false);
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterGovernance, setFilterGovernance] = useState("all");
+  const filterId = useId();
   const [reload, setReload] = useState(0);
   const { registerResultTrigger, ...batch } =
     useBatchOperation<API.PlatformTeam>((ids) => {
@@ -109,6 +113,19 @@ function TeamAdministration() {
     setSelection(generation);
     return generation;
   }, [setAction, setTeam, setSelection]);
+  const appliedAdvancedCount =
+    Number(Boolean(filters.administrator_id)) +
+    Number(Boolean(filters.id)) +
+    Number(filters.governance_blocked !== undefined);
+  function applyFilters(next: API.platformTeamsParams) {
+    setPage(null);
+    setError("");
+    clearDetail();
+    setSelected([]);
+    setCursors([""]);
+    setLoading(true);
+    setFilters(next);
+  }
   const read = useReadBoundary(`${JSON.stringify(filters)}:${reload}`);
   useEffect(() => {
     const c = new AbortController();
@@ -251,92 +268,155 @@ function TeamAdministration() {
   return (
     <div className="flex w-full flex-col gap-5">
       <AdminHeading title="团队管理" />
-      <form
-        aria-label="团队筛选"
-        className="flex flex-wrap items-center gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (locked) return;
-          const data = new FormData(e.currentTarget);
-          const f: Record<string, string | number | boolean> = {};
-          for (const [k, v] of data)
-            if (
-              typeof v === "string" &&
-              v.trim() &&
-              !(["status", "governance_blocked"].includes(k) && v === "all")
-            )
-              f[k] = k === "governance_blocked" ? v === "true" : v.trim();
-          setPage(null);
-          setError("");
-          clearDetail();
-          setSelected([]);
-          setCursors([""]);
-          setLoading(true);
-          setFilters(f);
-        }}
-      >
-        <Input
-          name="search"
-          aria-label="搜索团队名称"
-          placeholder="团队名称"
-          className="sm:w-56 xl:w-60"
-          disabled={locked}
-        />
-        <Select name="status" disabled={locked} defaultValue="all">
-          <SelectTrigger aria-label="团队状态" className="max-w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectItem value="all">全部状态</SelectItem>
-              {Object.entries(statusLabels).map(([k, v]) => (
-                <SelectItem key={k} value={k}>
-                  {v}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-        <Collapsible open={advanced} onOpenChange={setAdvanced}>
-          <CollapsibleTrigger asChild>
-            <Button type="button" variant="ghost">
-              更多筛选
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="flex flex-wrap gap-2 pt-3">
+      <Collapsible asChild open={advanced} onOpenChange={setAdvanced}>
+        <form
+          aria-label="团队筛选"
+          className="flex min-w-0 flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (locked) return;
+            const data = new FormData(event.currentTarget);
+            const next: Record<string, string | boolean> = {};
+            for (const [key, value] of data) {
+              if (
+                typeof value === "string" &&
+                value.trim() &&
+                !(
+                  ["status", "governance_blocked"].includes(key) &&
+                  value === "all"
+                )
+              ) {
+                next[key] =
+                  key === "governance_blocked"
+                    ? value === "true"
+                    : value.trim();
+              }
+            }
+            applyFilters(next);
+          }}
+          onReset={() => {
+            setFilterStatus("all");
+            setFilterGovernance("all");
+            applyFilters({});
+          }}
+        >
+          <div className="flex flex-wrap items-center gap-2">
             <Input
-              name="administrator_id"
-              aria-label="团队管理员 ID"
-              placeholder="团队管理员 ID"
+              name="search"
+              aria-label="搜索团队名称"
+              placeholder="团队名称"
+              className="sm:w-56 xl:w-60"
+              disabled={locked}
             />
-            <Input name="id" aria-label="团队 ID" placeholder="团队 ID" />
-            <Select name="governance_blocked" defaultValue="all">
-              <SelectTrigger aria-label="治理状态" className="max-w-full">
+            <Select
+              name="status"
+              disabled={locked}
+              value={filterStatus}
+              onValueChange={setFilterStatus}
+            >
+              <SelectTrigger aria-label="团队状态" className="max-w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectItem value="all">全部治理状态</SelectItem>
-                  <SelectItem value="true">待接管</SelectItem>
-                  <SelectItem value="false">正常</SelectItem>
+                  <SelectItem value="all">全部状态</SelectItem>
+                  {Object.entries(statusLabels).map(([k, v]) => (
+                    <SelectItem key={k} value={k}>
+                      {v}
+                    </SelectItem>
+                  ))}
                 </SelectGroup>
               </SelectContent>
             </Select>
+
+            <div
+              className="flex flex-wrap items-center gap-2"
+              role="group"
+              aria-label="筛选操作"
+            >
+              <Button disabled={locked}>查询</Button>
+              <Button type="reset" variant="outline" disabled={locked}>
+                重置
+              </Button>
+              <CollapsibleTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="group/filter-toggle"
+                >
+                  {advanced ? "收起筛选" : "更多筛选"}
+                  {!advanced && appliedAdvancedCount > 0
+                    ? `（${appliedAdvancedCount}）`
+                    : null}
+                  <ChevronDown
+                    data-icon="inline-end"
+                    className="group-aria-expanded/filter-toggle:rotate-180"
+                    aria-hidden="true"
+                  />
+                </Button>
+              </CollapsibleTrigger>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={locked}
+              onClick={() => {
+                setLoading(true);
+                setReload((n) => n + 1);
+              }}
+            >
+              刷新
+            </Button>
+          </div>
+          <CollapsibleContent
+            forceMount
+            hidden={!advanced}
+            className="border-t pt-3"
+          >
+            <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-3">
+              <Field>
+                <FieldLabel htmlFor={`${filterId}-administrator`}>
+                  团队管理员 ID
+                </FieldLabel>
+                <Input
+                  id={`${filterId}-administrator`}
+                  name="administrator_id"
+                  disabled={locked}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={`${filterId}-team`}>团队 ID</FieldLabel>
+                <Input id={`${filterId}-team`} name="id" disabled={locked} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={`${filterId}-governance`}>
+                  治理状态
+                </FieldLabel>
+                <Select
+                  name="governance_blocked"
+                  disabled={locked}
+                  value={filterGovernance}
+                  onValueChange={setFilterGovernance}
+                >
+                  <SelectTrigger
+                    id={`${filterId}-governance`}
+                    className="w-full"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="all">全部治理状态</SelectItem>
+                      <SelectItem value="true">待接管</SelectItem>
+                      <SelectItem value="false">正常</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
           </CollapsibleContent>
-        </Collapsible>
-        <Button disabled={locked}>查询</Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={locked}
-          onClick={() => {
-            setLoading(true);
-            setReload((n) => n + 1);
-          }}
-        >
-          刷新
-        </Button>
-      </form>
+        </form>
+      </Collapsible>
       {error ? (
         <ContentState
           state="error"

@@ -3362,6 +3362,8 @@ button:not(:disabled),
   display: flex;
   min-width: 0;
   width: 100%;
+  min-height: var(--header-group-height, 36px);
+  align-items: center;
   gap: 8px;
   overflow-x: auto;
   scrollbar-width: none;

@@ -143,6 +143,53 @@ it("Select 角色和状态的选择进入查询，全部值不会发送给服务
   );
 });
 
+it("高级筛选收起后仍可查询，重置清除条件并返回第一页", async () => {
+  vi.mocked(request).mockResolvedValue({ items: [], next_cursor: "next" });
+  render(<UserDirectory />);
+  await screen.findByText("没有匹配的用户");
+
+  fireEvent.click(screen.getByRole("button", { name: "更多筛选" }));
+  const from = "2026-10-01T09:30";
+  fireEvent.change(screen.getByLabelText("注册时间起"), {
+    target: { value: from },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "收起筛选" }));
+  expect(screen.queryByLabelText("注册时间起")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "查询" }));
+  await screen.findByRole("button", { name: "更多筛选（1）" });
+  expect(request).toHaveBeenLastCalledWith(
+    "/api/platform/users",
+    expect.objectContaining({
+      params: expect.objectContaining({ from: new Date(from).toISOString() }),
+    }),
+  );
+
+  await screen.findByText("没有匹配的用户");
+  fireEvent.click(screen.getByRole("button", { name: "下一页" }));
+  await waitFor(() =>
+    expect(request).toHaveBeenLastCalledWith(
+      "/api/platform/users",
+      expect.objectContaining({
+        params: expect.objectContaining({ cursor: "next" }),
+      }),
+    ),
+  );
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "重置" })).toHaveProperty(
+      "disabled",
+      false,
+    ),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "重置" }));
+  await waitFor(() => {
+    const [, options] = vi.mocked(request).mock.lastCall!;
+    expect(options?.params).toMatchObject({ cursor: undefined, search: "" });
+    expect(options?.params).not.toHaveProperty("from");
+  });
+  fireEvent.click(screen.getByRole("button", { name: "更多筛选" }));
+  expect(screen.getByLabelText("注册时间起")).toHaveProperty("value", "");
+});
+
 it("批量全选排除已注销和当前账号，确认前不发送删除", async () => {
   const users = [
     { id: "active", display_name: "Active", status: "active" },
@@ -218,6 +265,11 @@ it("批量全选排除已注销和当前账号，确认前不发送删除", asyn
   await waitFor(() => {
     const directory = within(screen.getByRole("table", { name: "用户目录" }));
     expect(directory.getAllByText("已注销")).toHaveLength(3);
+    expect(
+      screen.getByText(
+        "本页没有可批量操作的账号。已注销账号和当前登录账号不可选。",
+      ),
+    ).toBeTruthy();
     expect(
       directory.getByRole("checkbox", { name: "选择当前页全部用户" }),
     ).toHaveProperty("disabled", true);

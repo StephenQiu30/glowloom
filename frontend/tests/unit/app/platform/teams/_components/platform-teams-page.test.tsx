@@ -154,3 +154,47 @@ it("团队 Select 保留 FormData 语义，全部条件不进入 API", async () 
     expect(params).not.toHaveProperty("governance_blocked");
   });
 });
+
+it("收起团队高级筛选后仍应用条件，重置后清除条件", async () => {
+  vi.mocked(request).mockResolvedValue({ items: [] });
+  render(<PlatformTeamsPage />);
+  await screen.findByText("没有符合条件的团队");
+  fireEvent.click(screen.getByRole("button", { name: "更多筛选" }));
+  const teamId = "61616161-6161-4161-8161-616161616161";
+  fireEvent.change(screen.getByRole("textbox", { name: "团队 ID" }), {
+    target: { value: teamId },
+  });
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "治理状态" }), {
+    key: "ArrowDown",
+  });
+  fireEvent.click(await screen.findByRole("option", { name: "正常" }));
+  fireEvent.click(screen.getByRole("button", { name: "收起筛选" }));
+  expect(screen.queryByRole("textbox", { name: "团队 ID" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "查询" }));
+  await waitFor(() =>
+    expect(request).toHaveBeenLastCalledWith(
+      "/api/platform/teams",
+      expect.objectContaining({
+        params: expect.objectContaining({
+          id: teamId,
+          governance_blocked: false,
+        }),
+      }),
+    ),
+  );
+  await screen.findByText("没有符合条件的团队");
+  fireEvent.click(screen.getByRole("button", { name: "重置" }));
+  await waitFor(() => {
+    const [, options] = vi.mocked(request).mock.lastCall!;
+    expect(options?.params).not.toHaveProperty("id");
+    expect(options?.params).not.toHaveProperty("governance_blocked");
+  });
+  fireEvent.click(screen.getByRole("button", { name: "更多筛选" }));
+  expect(screen.getByRole("textbox", { name: "团队 ID" })).toHaveProperty(
+    "value",
+    "",
+  );
+  expect(
+    screen.getByRole("combobox", { name: "治理状态" }).textContent,
+  ).toContain("全部治理状态");
+});

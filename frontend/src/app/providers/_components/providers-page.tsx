@@ -81,6 +81,8 @@ import { PresetEditor } from "./preset-editor";
 import { ConnectionDetail } from "./connection-detail";
 import { PresetConnect } from "./preset-connect";
 import { ConnectionList, regionLabel } from "./connection-list";
+import { ColumnMenu } from "@/components/governance/column-menu";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { ProviderLogo } from "./provider-logo";
 import {
   canConnectPreset,
@@ -123,6 +125,11 @@ function ProviderAdministration({
   initialRelease,
   initialMode,
 }: ProvidersPageProps) {
+  const mobile = useIsMobile();
+  const [visibility, setVisibility] = useState<Record<string, boolean>>({
+    check: false,
+    credential: false,
+  });
   const overlayTrigger = useRef<HTMLElement | null>(null);
   function rememberTrigger() {
     const active = document.activeElement;
@@ -335,8 +342,19 @@ function ProviderAdministration({
     );
   return (
     <div className="flex w-full flex-col gap-5">
-      <AdminHeading title="AI 服务接入" />
-      <div className="flex flex-wrap justify-end gap-2">
+      <AdminHeading title="AI 服务接入">
+        {!loading && !error && !mobile && visibleProviders.length > 0 ? (
+          <ColumnMenu
+            columns={[
+              { id: "adapter", label: "供应商" },
+              { id: "models", label: "接入模型" },
+              { id: "credential", label: "配置状态" },
+              { id: "check", label: "最近检查" },
+            ]}
+            visibility={visibility}
+            onChange={setVisibility}
+          />
+        ) : null}
         <Button
           className="max-md:h-11"
           onClick={() => openConnect(true)}
@@ -345,7 +363,7 @@ function ProviderAdministration({
           <Plus data-icon="inline-start" />
           接入服务
         </Button>
-      </div>
+      </AdminHeading>
       {mutation.message || mutation.pending ? (
         <MutationStatus mutation={mutation} />
       ) : null}
@@ -376,7 +394,7 @@ function ProviderAdministration({
         />
       ) : (
         <>
-          <section aria-label="已添加的服务" className="flex flex-col gap-4">
+          <section aria-label="已添加的服务" className="flex flex-col gap-3">
             {selectedRows.length ? (
               <SelectionBar
                 count={selectedRows.length}
@@ -418,6 +436,7 @@ function ProviderAdministration({
               <ConnectionList
                 adapters={adapters}
                 items={visibleProviders}
+                visibility={visibility}
                 disabled={
                   batch.busy || batch.unresolved || !!pendingKey.pending
                 }
@@ -480,7 +499,7 @@ function ProviderAdministration({
           <Collapsible
             open={presetsOpen || Boolean(query)}
             onOpenChange={setPresetsOpen}
-            className="border-t pt-5"
+            className="border-t pt-3"
           >
             <div className="flex items-center justify-between gap-3">
               <CollapsibleTrigger asChild>

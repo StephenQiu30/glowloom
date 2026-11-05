@@ -1,8 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { ColumnMenu } from "@/components/governance/column-menu";
 import type { Dispatch, SetStateAction } from "react";
 import {
   DataTable,
@@ -113,11 +111,13 @@ export function ConnectionList({
   onTest,
   onDisable,
   pendingCredential,
+  visibility,
   selection,
   disabled,
 }: {
   adapters?: API.AdapterMetadata[];
   pendingCredential?: string;
+  visibility: Record<string, boolean>;
   items: ConnectionRow[];
   onTest: (id: string, trigger?: HTMLElement) => void;
   onSelect: (id: string, trigger?: HTMLElement) => void;
@@ -129,10 +129,6 @@ export function ConnectionList({
   disabled?: boolean;
 }) {
   const mobile = useIsMobile();
-  const [visibility, setVisibility] = useState<Record<string, boolean>>({
-    check: false,
-    credential: false,
-  });
   const columns: DataTableColumn<ConnectionRow>[] = [
     {
       id: "name",
@@ -251,40 +247,24 @@ export function ConnectionList({
     },
   ];
   return (
-    <div className="flex flex-col gap-2">
-      {!mobile ? (
-        <div className="self-end">
-          <ColumnMenu
-            columns={[
-              { id: "adapter", label: "供应商" },
-              { id: "models", label: "接入模型" },
-              { id: "credential", label: "配置状态" },
-              { id: "check", label: "最近检查" },
-            ]}
-            visibility={visibility}
-            onChange={setVisibility}
-          />
-        </div>
-      ) : null}
-      <DataTable
-        density="comfortable"
-        label="连接列表"
-        columns={columns}
-        data={items}
-        emptyTitle="没有匹配的连接"
-        columnVisibility={{
-          adapter: !mobile && visibility.adapter !== false,
-          models: !mobile && visibility.models !== false,
-          credential: !mobile && visibility.credential !== false,
-          check: !mobile && visibility.check !== false,
-        }}
-        selection={{
-          ...selection,
-          getLabel: (r) => providerConnectionName(r.provider) ?? r.id,
-          pageLabel: "选择当前页全部连接",
-          disabled,
-        }}
-      />
-    </div>
+    <DataTable
+      density="comfortable"
+      label="连接列表"
+      columns={columns}
+      data={items}
+      emptyTitle="没有匹配的连接"
+      columnVisibility={{
+        adapter: !mobile && visibility.adapter !== false,
+        models: !mobile && visibility.models !== false,
+        credential: !mobile && visibility.credential !== false,
+        check: !mobile && visibility.check !== false,
+      }}
+      selection={{
+        ...selection,
+        getLabel: (r) => providerConnectionName(r.provider) ?? r.id,
+        pageLabel: "选择当前页全部连接",
+        disabled,
+      }}
+    />
   );
 }

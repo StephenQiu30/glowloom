@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { AdminSection } from "@/components/layout/routes";
 import type { ReactNode } from "react";
 import { PageToolbar } from "@/components/layout/page-toolbar";
+import { PageHeader } from "@/components/canvas/runtime/components/layout/workspace/page-header";
 import { Button } from "@/components/ui/button";
 export function AdminNavigation({ active }: { active: AdminSection }) {
   const links = [
@@ -49,8 +50,14 @@ export function AdminWorkspace({
     </div>
   );
 }
-export function AdminHeading({ title }: { title: string }) {
-  return <h1 className="sr-only">{title}</h1>;
+export function AdminHeading({
+  title,
+  children,
+}: {
+  title: string;
+  children?: ReactNode;
+}) {
+  return <PageHeader title={title}>{children}</PageHeader>;
 }
 export function SelectionBar({
   count,
