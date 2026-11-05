@@ -8,7 +8,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/paramvalidation"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/pricevalidation"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
@@ -113,6 +116,9 @@ func (s *Store) CreateModelRelease(ctx context.Context, actor identityapp.Princi
 		}
 		if r.RowsAffected != 1 {
 			return application.ModelRelease{}, application.ErrModelSourceUnavailable
+		}
+		if err := validateReleaseContract(tx, id, input); err != nil {
+			return application.ModelRelease{}, err
 		}
 		releaseID := uuid.New()
 		cost, err := json.Marshal(input.UpstreamCost)
@@ -263,4 +269,47 @@ func (s *Store) ListCapabilityDefaults(ctx context.Context, actor identityapp.Pr
 		return nil, fmt.Errorf("read capability defaults: %w", err)
 	}
 	return items, nil
+}
+
+// validateReleaseContract shares portable-template checks with releases assembled
+// from separately published versions. It runs inside the release transaction.
+func validateReleaseContract(tx *gorm.DB, modelID uuid.UUID, input application.CreateReleaseInput) error {
+	var row struct {
+		domain.ModelVersion `gorm:"embedded"`
+		ModesJSON           []byte
+		ConfigJSON          []byte
+		Capability          string
+	}
+	r := tx.Raw(`SELECT v.id,v.model_profile_id AS model_id,v.version_no,v.provider_model_id,to_jsonb(v.modes) AS modes_json,
+ v.limits,v.param_schema,v.supports_query,v.supports_cancel,v.supports_callback,v.expected_max_ms,v.moderation,v.queue,
+ config.config AS config_json,m.capability
+ FROM catalog.model_profile_version v JOIN catalog.model_profile m ON m.id=v.model_profile_id
+ JOIN catalog.provider_config_version config ON config.provider_id=m.provider_id
+ WHERE v.id=? AND m.id=? AND config.id=?`, input.ModelVersionID, modelID, input.ConfigVersionID).Scan(&row)
+	if r.Error != nil {
+		return r.Error
+	}
+	if r.RowsAffected != 1 {
+		return application.ErrModelSourceUnavailable
+	}
+	var config domain.ProviderConfig
+	if json.Unmarshal(row.ModesJSON, &row.Modes) != nil || json.Unmarshal(row.ConfigJSON, &config) != nil {
+		return application.ErrModelSourceUnavailable
+	}
+	var price domain.PriceRuleVersion
+	r = tx.Raw(`SELECT id,model_profile_id AS model_id,version_no,unit,rule,currency,fx_rate_to_cny::text AS fx_rate_to_cny,effective_from FROM catalog.price_rule_version WHERE id=? AND model_profile_id=?`, input.PriceVersionID, modelID).Scan(&price)
+	if r.Error != nil {
+		return r.Error
+	}
+	if r.RowsAffected != 1 {
+		return application.ErrModelSourceUnavailable
+	}
+	params, err := paramvalidation.NewValidator()
+	if err != nil {
+		return err
+	}
+	if params.Validate(row.ModelVersion) != nil || pricevalidation.ValidateModel(config, row.Capability, row.ModelVersion, price) != nil {
+		return application.ErrModelSourceUnavailable
+	}
+	return nil
 }

@@ -2,13 +2,14 @@ package application
 
 import (
 	"encoding/json"
-	"strings"
+
+	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 )
 
 // seedanceQuoteTokens estimates the documented video token quantity. Actual
 // settlement always uses the supplier's completion_tokens, never this estimate.
 func seedanceQuoteTokens(model, mode string, params map[string]any, media []FreeQuoteMediaFact) (int64, error) {
-	if !strings.HasPrefix(model, "doubao-seedance-2-0-") && !strings.HasPrefix(model, "doubao-seedance-2-5-") {
+	if !catalogdomain.IsSeedanceTokenModel(model) {
 		return 0, ErrFreeQuoteInputNotReady
 	}
 	for _, fact := range media {
@@ -24,9 +25,22 @@ func seedanceQuoteTokens(model, mode string, params map[string]any, media []Free
 	if err != nil || ms < 4000 || ms > 30000 || ms%1000 != 0 {
 		return 0, ErrFreeQuoteInputNotReady
 	}
+	contract, _ := catalogdomain.ModelParameterContract(model)
+	if ms > contract["duration_ms"].Maximum {
+		return 0, ErrFreeQuoteInputNotReady
+	}
 	resolution, _ := params["resolution"].(string)
+	allowed := false
+	for _, value := range contract["resolution"].Values {
+		if value == resolution {
+			allowed = true
+		}
+	}
+	if !allowed {
+		return 0, ErrFreeQuoteInputNotReady
+	}
 	ratio, _ := params["aspect_ratio"].(string)
-	if mode == "image2video" && strings.HasPrefix(model, "doubao-seedance-2-5-") {
+	if mode == "image2video" && model == "doubao-seedance-2-5-260628" {
 		// The API requires adaptive ratio here. Reserve the largest documented area.
 		ratio = "adaptive"
 	}
@@ -35,7 +49,7 @@ func seedanceQuoteTokens(model, mode string, params map[string]any, media []Free
 		"720p":  {"16:9": {1280, 720}, "9:16": {720, 1280}, "1:1": {960, 960}, "4:3": {1112, 834}, "3:4": {834, 1112}, "21:9": {1470, 630}},
 		"1080p": {"16:9": {1920, 1080}, "9:16": {1080, 1920}, "1:1": {1440, 1440}, "4:3": {1664, 1248}, "3:4": {1248, 1664}, "21:9": {2206, 946}},
 	}
-	if strings.HasPrefix(model, "doubao-seedance-2-5-") {
+	if model == "doubao-seedance-2-5-260628" {
 		dimensions["480p"]["16:9"] = [2]int64{854, 480}
 		dimensions["480p"]["9:16"] = [2]int64{480, 854}
 	}

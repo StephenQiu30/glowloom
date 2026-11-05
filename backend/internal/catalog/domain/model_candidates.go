@@ -104,14 +104,11 @@ func ModelCatalogForPreset(document PresetDocument) ModelCandidateCatalog {
 	}
 	for _, template := range document.ModelTemplates {
 		if !existingKeys[template.Key] {
-			reviewedAt := "2026-11-02"
+			reviewedAt := ""
 			if !template.UpstreamCost.ReviewedAt.IsZero() {
 				reviewedAt = template.UpstreamCost.ReviewedAt.Format("2006-01-02")
 			}
 			source := template.UpstreamCost.Source
-			if source == "" {
-				source = "preset://admin"
-			}
 			catalog.Models = append(catalog.Models, ModelCandidatePreset{
 				Key:             template.Key,
 				AdapterKey:      document.Config.AdapterKey,
@@ -121,7 +118,7 @@ func ModelCatalogForPreset(document PresetDocument) ModelCandidateCatalog {
 				Modes:           slices.Clone(template.Modes),
 				SourceURL:       source,
 				ReviewedAt:      reviewedAt,
-				Lifecycle:       "active",
+				Lifecycle:       "unknown",
 			})
 			existingKeys[template.Key] = true
 		}
@@ -147,12 +144,12 @@ func (m ModelCandidatePreset) OnboardingVersion(modelID, actorID uuid.UUID) (Mod
 			version.ParamSchema = json.RawMessage(`[{"field":"size","label":"图像尺寸","component":"select","type":"string","enum":["1024x1024","1536x1024","1024x1536"],"default":"1024x1024"},{"field":"quality","label":"画质","component":"select","type":"string","enum":["low","medium","high"],"default":"medium"}]`)
 			return version, version.Validate()
 		}
-		if m.AdapterKey != "volcengine_ark" && m.AdapterKey != "openrouter" {
+		if m.AdapterKey != "volcengine_ark" && m.AdapterKey != "openrouter" && m.AdapterKey != "byteplus" {
 			return ModelVersion{}, ErrInvalidPreset
 		}
 		version.Limits = json.RawMessage(`{"max_outputs":1,"roles":{"_total_images":8,"reference_image":{"max_count":8,"types":["image"],"for_modes":["image2image"]},"subject":{"max_count":8,"types":["image"],"for_modes":["image2image"]}}}`)
 		version.ParamSchema = json.RawMessage(`[{"field":"size","label":"图像尺寸","component":"select","type":"string","enum":["2K","4K"],"default":"2K"}]`)
-		if strings.HasPrefix(m.ProviderModelID, "doubao-seedream-5-0-pro-") || strings.HasPrefix(m.ProviderModelID, "doubao-seedream-5-0-flash-") {
+		if slices.Contains([]string{"doubao-seedream-5-0-pro-260628", "doubao-seedream-5-0-flash-260915", "dola-seedream-5-0-pro-260628", "dola-seedream-5-0-flash-260915"}, m.ProviderModelID) {
 			version.ParamSchema = json.RawMessage(`[{"field":"size","label":"图像尺寸","component":"select","type":"string","enum":["1K","1.5K","2K"],"default":"2K"}]`)
 		}
 	case "audio.generate":

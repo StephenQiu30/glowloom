@@ -2,9 +2,6 @@
 package presetvalidation
 
 import (
-	"encoding/json"
-	"slices"
-
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/paramvalidation"
@@ -24,25 +21,10 @@ func Validate(doc domain.PresetDocument) error {
 	if err != nil {
 		return err
 	}
-	price, err := pricevalidation.NewValidator()
-	if err != nil {
-		return err
-	}
 	for _, template := range doc.ModelTemplates {
 		version := template.Version(uuid.NameSpaceOID, uuid.NameSpaceOID)
-		var fields []struct {
-			Field string `json:"field"`
-		}
-		if json.Unmarshal(template.ParamSchema, &fields) != nil {
-			return domain.ErrInvalidPreset
-		}
-		for _, field := range fields {
-			if !slices.Contains(doc.Config.ParameterFields(template.Capability), field.Field) {
-				return domain.ErrInvalidPreset
-			}
-		}
-
-		if params.Validate(version) != nil || price.Validate(template.PriceVersion(uuid.NameSpaceOID, uuid.NameSpaceOID, template.UpstreamCost.ReviewedAt)) != nil {
+		price := template.PriceVersion(uuid.NameSpaceOID, uuid.NameSpaceOID, template.UpstreamCost.ReviewedAt)
+		if params.Validate(version) != nil || pricevalidation.ValidateModel(doc.Config, template.Capability, version, price) != nil {
 			return domain.ErrInvalidPreset
 		}
 	}

@@ -102,7 +102,10 @@ func (v *Validator) Validate(version domain.ModelVersion) error {
 			}
 		}
 	}
-	return validateFields(root["param_schema"].([]any), version.Modes)
+	if err := validateFields(root["param_schema"].([]any), version.Modes); err != nil {
+		return err
+	}
+	return validateModelContract(version)
 }
 
 func validateFields(fields []any, modes []string) error {

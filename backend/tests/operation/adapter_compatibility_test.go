@@ -124,3 +124,34 @@ func TestAdapterUnknownNeverResubmits(t *testing.T) {
 	require.EqualValues(t, "unknown", unknown.Outcome)
 	require.Equal(t, 1, brokenPosts)
 }
+
+func TestBytePlusAPImagePresetUsesExistingArkProtocol(t *testing.T) {
+	var config catalog.ProviderConfig
+	for _, p := range catalog.BuiltinPresets() {
+		if p.Config.AdapterKey == "byteplus" {
+			config = p.Config
+		}
+	}
+	for _, candidate := range catalog.BuiltinModelCatalog("byteplus").Models {
+		if candidate.RequiresModelSelection {
+			continue
+		}
+		t.Run(candidate.Key, func(t *testing.T) {
+			calls := 0
+			client := providerhttp.NewClient(&http.Client{Transport: adapterTransport(func(r *http.Request) (*http.Response, error) {
+				calls++
+				require.Equal(t, "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations", r.URL.String())
+				require.Equal(t, "Bearer fixture-key", r.Header.Get("Authorization"))
+				var body map[string]any
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+				require.Equal(t, candidate.ProviderModelID, body["model"])
+				require.Equal(t, "1.5K", body["size"])
+				require.NotContains(t, body, "sequential_image_generation")
+				return adapterResponse(400, `{"error":{"code":"fixture_rejection"}}`), nil
+			})})
+			_, err := client.Submit(t.Context(), application.GenerationRequest{Config: config, ModelID: candidate.ProviderModelID, Capability: "image.generate", Mode: "text2image", Prompt: "cloud", OutputCount: 1, Params: map[string]any{"size": "1.5K"}}, "fixture-key")
+			require.NoError(t, err)
+			require.Equal(t, 1, calls, "fixture transport never reaches a supplier")
+		})
+	}
+}

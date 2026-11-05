@@ -53,6 +53,7 @@ type PricingInput struct {
 }
 
 type parsedPriceRule struct {
+	strategy          string
 	timePricing       string
 	freeReferences    uint64
 	referenceMicros   uint64
@@ -70,6 +71,7 @@ type parsedPriceRule struct {
 // QuoteCostDetail explains the exact inputs to a quote before the final CNY
 // ceiling. Unit prices are denominated in Currency, not necessarily CNY.
 type QuoteCostDetail struct {
+	PricingStrategy       string                  `json:"pricing_strategy,omitempty"`
 	TimePricing           string                  `json:"time_pricing,omitempty"`
 	ReservationPeriod     string                  `json:"reservation_period,omitempty"`
 	SourceURL             string                  `json:"source_url,omitempty"`
@@ -189,6 +191,7 @@ func CalculateQuoteDetailed(price catalogdomain.PriceRuleVersion, input PricingI
 	if rule.timePricing != "" {
 		detail.TimePricing, detail.ReservationPeriod = rule.timePricing, "peak"
 	}
+	detail.PricingStrategy = rule.strategy
 	detail.SourceURL, detail.ReviewedAt = price.SourceURL, price.ReviewedAt
 	detail.PriceRuleVersionID, detail.PriceVersionNo, detail.AmountKind = price.ID, price.VersionNo, "reservation"
 	amount.Mul(amount, rule.markupMultiplier)
@@ -294,6 +297,16 @@ func actualPriceAmount(unit catalogdomain.PriceUnit, rule parsedPriceRule, usage
 		}
 	}
 	if unit == catalogdomain.PricePer1KTokens {
+		if rule.strategy == catalogdomain.PricingSeedanceVideoTokensV1 {
+			expectedFields := 1
+			if usage.InputTokens != nil {
+				expectedFields++
+			}
+			if usage.OutputTokens == nil || usage.CachedInputTokens != nil || (usage.InputTokens != nil && *usage.InputTokens != 0) || fields != expectedFields {
+				return nil, ErrInvalidPricingInput
+			}
+			return new(big.Rat).SetFrac(new(big.Int).Mul(big.NewInt(*usage.OutputTokens), new(big.Int).SetUint64(rule.outputMicros)), big.NewInt(1000)), nil
+		}
 		if fields != 2 || usage.InputTokens == nil || usage.OutputTokens == nil {
 			return nil, ErrInvalidPricingInput
 		}
@@ -370,6 +383,15 @@ func parsePrice(price catalogdomain.PriceRuleVersion) (parsedPriceRule, *big.Rat
 	rule := parsedPriceRule{
 		markupMultiplier: big.NewRat(1, 1),
 		creditRatio:      big.NewRat(10, 1),
+	}
+	if raw, present := fields["pricing_strategy"]; present {
+		if string(bytes.TrimSpace(raw)) == "null" || json.Unmarshal(raw, &rule.strategy) != nil || rule.strategy == "" || !catalogdomain.CompatiblePricingStrategy(rule.strategy, price.Unit) {
+			return parsedPriceRule{}, nil, ErrInvalidPricingRule
+		}
+		if rule.strategy == catalogdomain.PricingSeedanceVideoTokensV1 && (string(fields["input_micros_per_1k"]) != "0" || fields["cached_input_micros_per_1k"] != nil || fields["time_pricing"] != nil) {
+			return parsedPriceRule{}, nil, ErrInvalidPricingRule
+		}
+		delete(fields, "pricing_strategy")
 	}
 	if price.Unit == catalogdomain.PricePer1KTokens {
 		inputRaw, hasInput := fields["input_micros_per_1k"]
@@ -484,7 +506,7 @@ func parsePrice(price catalogdomain.PriceRuleVersion) (parsedPriceRule, *big.Rat
 func priceAmount(unit catalogdomain.PriceUnit, rule parsedPriceRule, input PricingInput) (*big.Rat, QuoteCostDetail, error) {
 	detail := QuoteCostDetail{Unit: unit, Outputs: input.OutputCount}
 	if unit == catalogdomain.PricePer1KTokens {
-		if input.EstimatedInputTokens < 0 || input.MaxOutputTokens <= 0 {
+		if input.EstimatedInputTokens < 0 || input.MaxOutputTokens <= 0 || (rule.strategy == catalogdomain.PricingSeedanceVideoTokensV1 && input.EstimatedInputTokens != 0) {
 			return nil, QuoteCostDetail{}, ErrInvalidPricingInput
 		}
 		inputTokens, outputTokens := input.EstimatedInputTokens, input.MaxOutputTokens
@@ -554,6 +576,9 @@ func priceAmount(unit catalogdomain.PriceUnit, rule parsedPriceRule, input Prici
 
 func applyPriceFactors(amount *big.Rat, rule parsedPriceRule, mode, resolution string, detail *QuoteCostDetail) error {
 	if (len(rule.byMode) != 0 && mode == "") || (len(rule.byResolution) != 0 && resolution == "") {
+		return ErrInvalidPricingInput
+	}
+	if rule.strategy != "" && ((len(rule.byMode) != 0 && rule.byMode[mode] == nil) || (len(rule.byResolution) != 0 && rule.byResolution[resolution] == nil)) {
 		return ErrInvalidPricingInput
 	}
 	if factor, ok := rule.byMode[mode]; ok {

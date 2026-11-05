@@ -182,7 +182,7 @@ func init() {
 			"image.generate": {"size", "seed", "watermark", "quality"},
 		},
 		CandidateCatalog: func() ModelCandidateCatalog {
-			catalog := ModelCandidateCatalog{Version: "2026-10-26.1", Models: []ModelCandidatePreset{}}
+			catalog := ModelCandidateCatalog{Version: "2026-11-05.1", Models: []ModelCandidatePreset{}}
 			source := "https://docs.byteplus.com/en/docs/modelark/model-list"
 			catalog.Models = append(catalog.Models,
 				ModelCandidatePreset{Key: "bp-chat", AdapterKey: "byteplus", DisplayName: "BytePlus 文本 · 选择账号型号", Capability: "text.generate", Modes: []string{"text_to_text"}, SourceURL: source, ReviewedAt: "2026-10-20", Lifecycle: "account_selection", RequiresModelSelection: true},
@@ -190,6 +190,12 @@ func init() {
 			)
 			one := 1
 			catalog.Models[1].MaxOutputs = &one
+			for _, model := range []struct{ key, name, id string }{
+				{"bp-image-pro-50", "Seedream 5.0 Pro · AP", "dola-seedream-5-0-pro-260628"},
+				{"bp-image-flash-50", "Seedream 5.0 Flash · AP", "dola-seedream-5-0-flash-260915"},
+			} {
+				catalog.Models = append(catalog.Models, ModelCandidatePreset{Key: model.key, AdapterKey: "byteplus", DisplayName: model.name, ProviderModelID: model.id, Capability: "image.generate", Modes: []string{"text2image", "image2image"}, SourceURL: source, ReviewedAt: "2026-11-05", Lifecycle: "unknown", MaxOutputs: &one})
+			}
 			return catalog
 		},
 	})

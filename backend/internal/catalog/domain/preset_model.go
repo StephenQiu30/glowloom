@@ -67,6 +67,9 @@ func (t PresetModelTemplate) validate(config ProviderConfig) error {
 	}
 	allowedModes := map[string][]string{"text.generate": {"text_to_text"}, "image.generate": {"text2image", "image2image"}, "video.generate": {"text2video", "image2video", "omni_reference", "avatar", "motion"}, "audio.generate": {"omni_audio", "text2audio", "music_song", "music_instrumental"}}[t.Capability]
 	units := map[string][]PriceUnit{"text.generate": {PricePerRequest, PricePer1KTokens}, "image.generate": {PricePerRequest, PricePerImage}, "video.generate": {PricePerRequest, PricePerSecond}, "audio.generate": {PricePerRequest, PricePer1KChars, PricePerSecond}}[t.Capability]
+	if t.Capability == "video.generate" && config.AdapterKey == "volcengine_ark" && IsSeedanceTokenModel(t.ProviderModelID) {
+		units = append(units, PricePer1KTokens)
+	}
 	if !slices.Contains(units, t.Price.Unit) {
 		return ErrInvalidPreset
 	}

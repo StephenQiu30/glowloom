@@ -179,6 +179,9 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 	if err != nil {
 		return PreparedFreeQuote{}, err
 	}
+	if catalogdomain.ValidateModelParameters(catalog.ProviderModelID, params) != nil {
+		return PreparedFreeQuote{}, ErrFreeQuoteInputNotReady
+	}
 	var limits struct {
 		MaxOutputs   int64    `json:"max_outputs"`
 		DurationsMS  []int64  `json:"durations_ms"`

@@ -88,7 +88,7 @@ func TestModelCatalogForPresetDynamicallyIncludesAdminTemplates(t *testing.T) {
 			require.Equal(t, "Admin Managed Claude 5.5", m.DisplayName)
 			require.Equal(t, "anthropic/claude-sonnet-5.5", m.ProviderModelID)
 			require.Equal(t, "text.generate", m.Capability)
-			require.Equal(t, "active", m.Lifecycle)
+			require.Equal(t, "unknown", m.Lifecycle)
 			break
 		}
 	}

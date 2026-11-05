@@ -41,6 +41,16 @@ func (v *Validator) Validate(price domain.PriceRuleVersion) error {
 	if err != nil {
 		return ErrInvalidConfiguration
 	}
+	if raw, present := fields["pricing_strategy"]; present {
+		var strategy string
+		if string(raw) == "null" || json.Unmarshal(raw, &strategy) != nil || strategy == "" || !domain.CompatiblePricingStrategy(strategy, price.Unit) {
+			return ErrInvalidConfiguration
+		}
+		if strategy == domain.PricingSeedanceVideoTokensV1 && (string(fields["input_micros_per_1k"]) != "0" || fields["cached_input_micros_per_1k"] != nil || fields["time_pricing"] != nil) {
+			return ErrInvalidConfiguration
+		}
+		delete(fields, "pricing_strategy")
+	}
 	switch price.Unit {
 	case domain.PricePer1KTokens:
 		inputRaw, hasInput := fields["input_micros_per_1k"]
