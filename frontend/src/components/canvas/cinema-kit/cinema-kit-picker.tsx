@@ -64,7 +64,7 @@ export function CinemaKitPicker({
     [motion, setMotion] = useState(initial?.motion ?? "");
   const [custom, setCustom] = useState(false),
     [editing, setEditing] = useState<CinemaPalette>({
-      name: "未命名配色 1",
+      name: "自定义配色",
       colors: catalog.customDefault,
     }),
     [selected, setSelected] = useState(0),
@@ -517,7 +517,7 @@ export function CinemaKitPicker({
                       palette && !palette.preset
                         ? palette
                         : {
-                            name: "未命名配色 1",
+                            name: "自定义配色",
                             colors: catalog.customDefault,
                           },
                     );

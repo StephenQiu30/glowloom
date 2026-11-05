@@ -289,10 +289,17 @@ export function timelineMoveSnap(
   }
   return { start, snap: null };
 }
-const newTrack = (kind: string, count: number): TimelineTrack => ({
+const trackLabels: Record<string, string> = {
+  video: "视频轨道",
+  image: "图片轨道",
+  audio: "音频轨道",
+  text: "文本轨道",
+  subtitle: "字幕轨道",
+};
+const newTrack = (kind: string): TimelineTrack => ({
   id: crypto.randomUUID(),
   kind,
-  label: `${({ video: "视频", image: "图片", audio: "音频", text: "文本", subtitle: "字幕" } as Record<string, string>)[kind] ?? kind}轨 ${count + 1}`,
+  label: trackLabels[kind] ?? "素材轨道",
   locked: false,
   visible: true,
   muted: false,
@@ -320,10 +327,7 @@ export function editTimeline(value: Timeline, edit: TimelineEdit): Timeline {
   const next = readTimeline(value);
   if (edit.type === "add-track")
     next.tracks.push(
-      newTrack(
-        edit.kind,
-        next.tracks.filter((t) => t.kind === edit.kind).length,
-      ),
+      newTrack(edit.kind),
     );
   else if (edit.type === "track") {
     const track = next.tracks.find((t) => t.id === edit.id);
@@ -349,10 +353,7 @@ export function editTimeline(value: Timeline, edit: TimelineEdit): Timeline {
           );
       if (!track && edit.trackID) throw new Error("目标轨道已不存在");
       if (!track) {
-        track = newTrack(
-          visual(asset.kind!) ? "video" : asset.kind!,
-          next.tracks.filter((t) => t.kind === asset.kind).length,
-        );
+        track = newTrack(visual(asset.kind!) ? "video" : asset.kind!);
         next.tracks.push(track);
       }
       if (track.locked) throw new Error("轨道已锁定");
@@ -408,10 +409,7 @@ export function editTimeline(value: Timeline, edit: TimelineEdit): Timeline {
           !["video", "audio"].includes(next.tracks[anchor].kind)
         )
           throw new Error("目标轨道已不存在");
-        destination = newTrack(
-          "audio",
-          next.tracks.filter((t) => t.kind === "audio").length,
-        );
+        destination = newTrack("audio");
         next.tracks.splice(anchor + 1, 0, destination);
       } else {
         destination = next.tracks.find(

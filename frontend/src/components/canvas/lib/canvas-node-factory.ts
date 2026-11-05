@@ -197,21 +197,30 @@ export function applyNodeConfigPatch(
     : next;
 }
 
-/** Names are display labels; UUIDs remain the only node identity. */
+const semanticNodeTitles: Record<string, string> = {
+  图片: "图片素材",
+  文本: "文本内容",
+  视频: "视频素材",
+  音频: "音频素材",
+  生成配置: "生成配置",
+  组: "节点编组",
+  时间线: "剪辑时间线",
+  主体: "创作主体",
+  导演工具箱: "导演工具箱",
+  导演台: "导演工作台",
+  相机: "摄影相机",
+  配色: "色彩方案",
+  风格: "视觉风格",
+  运镜: "镜头运动",
+};
+
+/** Display names use two semantic words. UUIDs remain the only node identity. */
 export function nextCanvasNodeTitle(
   title: string,
   type: CanvasNodeTypeId,
   nodes: CanvasNodeData[],
 ) {
-  let greatest = 0;
-  const prefix = `${title} `;
-  for (const node of nodes) {
-    if (node.type !== type || !node.title?.startsWith(prefix)) continue;
-    const suffix = node.title.slice(prefix.length);
-    if (/^[1-9]\d*$/.test(suffix)) {
-      const value = Number(suffix);
-      if (Number.isSafeInteger(value)) greatest = Math.max(greatest, value);
-    }
-  }
-  return `${title} ${greatest + 1}`;
+  void type;
+  void nodes;
+  return semanticNodeTitles[title] ?? title;
 }
