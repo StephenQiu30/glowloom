@@ -32,11 +32,11 @@ func TestTrialOfficialSDKRecoversOriginalPhysicalRefDespiteDifferentDefault(t *t
 	reads := 0
 	original := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		reads++
-		require.True(t, strings.HasPrefix(r.Header.Get("Authorization"), "AWS4-HMAC-SHA256 "))
-		require.Equal(t, "/trial-first/"+application.TrialObjectKey(input, 1), r.URL.Path)
+		require.True(t, strings.HasPrefix(r.Header.Get("Authorization"), "q-sign-algorithm=sha1&"))
+		require.Equal(t, "/"+application.TrialObjectKey(input, 1), r.URL.Path)
 		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 		w.Header().Set("Content-Type", "image/png")
-		w.Header().Set("X-Amz-Meta-Sha256", digest)
+		w.Header().Set("X-Cos-Meta-Sha256", digest)
 		w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
 		w.Header().Set("ETag", `"fixture"`)
 		if r.Method == http.MethodGet {
@@ -54,7 +54,7 @@ func TestTrialOfficialSDKRecoversOriginalPhysicalRefDespiteDifferentDefault(t *t
 	t.Setenv("TRIAL_FIXTURE_AK", "fixture-access")
 	t.Setenv("TRIAL_FIXTURE_SK", "fixture-secret")
 	profile := func(endpoint, bucket string) any {
-		return map[string]any{"provider": "minio", "mode": config.StorageProfileReadWrite, "endpoint": endpoint, "signing_endpoint": endpoint, "addressing_style": "path", "bucket": bucket, "region": "us-east-1", "credentials": map[string]any{"source": "env", "access_key_env": "TRIAL_FIXTURE_AK", "secret_key_env": "TRIAL_FIXTURE_SK"}}
+		return map[string]any{"provider": "cos", "mode": config.StorageProfileReadWrite, "endpoint": endpoint, "signing_endpoint": endpoint, "bucket": bucket, "region": "us-east-1", "credentials": map[string]any{"source": "env", "access_key_env": "TRIAL_FIXTURE_AK", "secret_key_env": "TRIAL_FIXTURE_SK"}}
 	}
 	raw, err := json.Marshal(map[string]any{"schema_version": 1, "revision": "2", "default_write_profile": "trial-second", "upload": map[string]any{"mode": "relay", "signed_url_ttl": time.Minute, "session_ttl": time.Hour, "staging_retention": 24 * time.Hour, "multipart_threshold_bytes": 8 << 20, "part_size_bytes": 5 << 20, "part_concurrency": 1}, "access": map[string]any{"preview_ttl": time.Minute, "max_signed_url_ttl": 15 * time.Minute}, "limits": map[string]any{"max_image_bytes": 20 << 20, "max_video_bytes": 500 << 20, "max_audio_bytes": 100 << 20, "max_model_bytes": 64 << 20, "max_document_bytes": 20 << 20}, "profiles": map[string]any{"trial-first": profile(original.URL, "trial-first"), "trial-second": profile(second.URL, "trial-second")}})
 	require.NoError(t, err)

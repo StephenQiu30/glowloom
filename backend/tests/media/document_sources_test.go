@@ -26,7 +26,7 @@ func sourceDocumentAsset(data []byte) domain.MediaAsset {
 	sha, codec := hex.EncodeToString(hash[:]), "txt"
 	return domain.MediaAsset{ID: id, ProjectID: project, Kind: domain.KindDocument, Origin: domain.OriginUpload,
 		Status: domain.StatusReady, ModerationStatus: domain.ModerationPassed, ObjectKey: "projects/" + project.String() + "/document/2026/10/" + id.String() + ".txt",
-		ObjectLocation: readLocation("minio-main", "projects/"+project.String()+"/document/2026/10/"+id.String()+".txt"), FileName: "原始剧本.txt", MimeType: domain.MIMEText, ByteSize: int64(len(data)), SHA256: &sha, Codec: &codec,
+		ObjectLocation: readLocation("cos-first", "projects/"+project.String()+"/document/2026/10/"+id.String()+".txt"), FileName: "原始剧本.txt", MimeType: domain.MIMEText, ByteSize: int64(len(data)), SHA256: &sha, Codec: &codec,
 		Revision: 1, CreateTime: now, UpdateTime: now}
 }
 
@@ -60,7 +60,7 @@ func TestDocumentSourcesFreezeIdentityOrderAndExactOriginalRead(t *testing.T) {
 	b := sourceDocumentAsset([]byte("另一文件"))
 	b.ProjectID = a.ProjectID
 	b.ObjectKey = "projects/" + a.ProjectID.String() + "/document/2026/10/" + b.ID.String() + ".txt"
-	b.ObjectLocation = readLocation("minio-main", b.ObjectKey)
+	b.ObjectLocation = readLocation("cos-first", b.ObjectKey)
 	repo, objects := &documentSourceRepo{assets: []domain.MediaAsset{b, a}}, &documentSourceObjects{data: data}
 	reader := mediaapp.NewRoutedDocumentSources(repo, objects)
 	got, err := reader.Freeze(t.Context(), identityapp.Principal{}, a.ProjectID, []uuid.UUID{a.ID, b.ID})

@@ -192,7 +192,7 @@ func TestAgentCanvasCommandsRealPostgresYjsReplayConflictAndMediaAdoption(t *tes
 	profile := "agent-canvas-" + uuid.NewString()
 	bucket := "agent-canvas-" + asset.String()[:8]
 	key := "projects/" + g.Scope.ProjectID.String() + "/image/2026/11/" + asset.String() + ".png"
-	if err := db.Exec(`INSERT INTO media.storage_profile(id,provider,endpoint,signing_endpoint,region,bucket,addressing_style,resource_identity)VALUES(?,'minio','http://127.0.0.1:1','http://127.0.0.1:1','us-east-1',?,'path',?)`, profile, bucket, domain.ContentHash(profile)).Error; err != nil {
+	if err := db.Exec(`INSERT INTO media.storage_profile(id,provider,endpoint,signing_endpoint,region,bucket,addressing_style,resource_identity)VALUES(?,'cos','http://127.0.0.1:1','http://127.0.0.1:1','us-east-1',?,'',?)`, profile, bucket, domain.ContentHash(profile)).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`INSERT INTO media.object_location(id,profile_id,bucket,object_key,state,byte_size,sha256,mime_type)VALUES(?,?,?,?,'accepted',1,repeat('a',64),'image/png')`, location, profile, bucket, key).Error; err != nil {

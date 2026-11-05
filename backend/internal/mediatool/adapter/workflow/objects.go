@@ -5,8 +5,6 @@ import (
 	"errors"
 	"io"
 
-	"github.com/minio/minio-go/v7"
-
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
@@ -27,8 +25,7 @@ func (o *Objects) Get(ctx context.Context, key string) (io.ReadCloser, error) {
 func (o *Objects) Stat(ctx context.Context, key string) (mediaapp.ObjectInfo, error) {
 	info, err := o.client.Stat(ctx, key)
 	if err != nil {
-		var response minio.ErrorResponse
-		if errors.As(err, &response) && (response.Code == "NoSuchKey" || response.Code == "NotFound" || response.StatusCode == 404) {
+		if errors.Is(err, objectstorage.ErrObjectMissing) {
 			return mediaapp.ObjectInfo{}, application.ErrObjectMissing
 		}
 		return mediaapp.ObjectInfo{}, err

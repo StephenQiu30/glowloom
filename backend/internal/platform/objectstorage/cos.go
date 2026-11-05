@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	cos "github.com/tencentyun/cos-go-sdk-v5"
@@ -18,10 +19,10 @@ type cosBackend struct {
 	sdk *cos.Client
 }
 
-func newCOS(p config.StorageProfile, c config.StorageCredentials, transport http.RoundTripper) (backend, error) {
+func newCOS(p config.StorageProfile, c config.StorageCredentials, transport http.RoundTripper) (cosBackend, error) {
 	u, err := url.Parse(p.Endpoint)
 	if err != nil {
-		return nil, ErrInvalidEndpoint
+		return cosBackend{}, ErrInvalidEndpoint
 	}
 	sdk := cos.NewClient(&cos.BaseURL{BucketURL: u}, &http.Client{Transport: &cos.AuthorizationTransport{SecretID: c.AccessKey, SecretKey: c.SecretKey, SessionToken: c.SessionToken, Transport: transport}, CheckRedirect: rejectStorageRedirect})
 	// An intent owns retries and reconciliation. Do not replay an arbitrary stream
@@ -43,6 +44,13 @@ func (b cosBackend) put(ctx context.Context, key string, reader io.Reader, size 
 		condition := http.Header{"X-Cos-Forbid-Overwrite": []string{"true"}}
 		header.XCosMetaXXX = &meta
 		header.XOptionHeader = &condition
+	}
+	// The caller owns the reader, including temporary files used for recovery.
+	// Expose only Read so the HTTP transport cannot close a caller-owned file.
+	if size == 0 {
+		reader = strings.NewReader("")
+	} else {
+		reader = struct{ io.Reader }{reader}
 	}
 	resp, err := b.sdk.Object.Put(ctx, key, reader, &cos.ObjectPutOptions{ObjectPutHeaderOptions: header})
 	closeCOS(resp)
@@ -124,4 +132,12 @@ func closeCOS(resp *cos.Response) {
 	}
 }
 
-func (b cosBackend) ping(ctx context.Context) error { _, err := b.sdk.Bucket.Head(ctx); return err }
+func (b cosBackend) ping(ctx context.Context) error {
+	resp, err := b.sdk.Bucket.Head(ctx)
+	closeCOS(resp)
+	var response *cos.ErrorResponse
+	if errors.As(err, &response) && response.Response != nil && response.Response.StatusCode == http.StatusNotFound {
+		return ErrBucketMissing
+	}
+	return err
+}

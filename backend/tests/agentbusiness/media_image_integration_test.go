@@ -49,7 +49,7 @@ func imageFixture(t *testing.T, db *gorm.DB, g domain.Grant) (uuid.UUID, mediado
 	id, location := uuid.New(), uuid.New()
 	profile := "agent-image-" + uuid.NewString()[:8]
 	ref := mediadomain.ObjectRef{ProfileID: profile, Bucket: "agent-images", Key: "projects/" + g.Scope.ProjectID.String() + "/image/2026/11/" + id.String() + ".png"}
-	if err := db.Exec(`INSERT INTO media.storage_profile(id,provider,endpoint,signing_endpoint,region,bucket,addressing_style,resource_identity)VALUES(?,'minio','http://127.0.0.1','http://127.0.0.1','us-east-1',?,'path',?)`, profile, ref.Bucket, domain.ContentHash(profile)).Error; err != nil {
+	if err := db.Exec(`INSERT INTO media.storage_profile(id,provider,endpoint,signing_endpoint,region,bucket,addressing_style,resource_identity)VALUES(?,'cos','http://127.0.0.1','http://127.0.0.1','us-east-1',?,'',?)`, profile, ref.Bucket, domain.ContentHash(profile)).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`INSERT INTO media.object_location(id,profile_id,bucket,object_key,state,byte_size,sha256,mime_type)VALUES(?,?,?,?,'accepted',?,?,'image/png')`, location, profile, ref.Bucket, ref.Key, len(body), sha).Error; err != nil {
@@ -133,7 +133,7 @@ func TestMediaImageInspectOfficialSDKReadsSavedLocation(t *testing.T) {
 	requests := 0
 	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
-		if r.Method != http.MethodGet || r.URL.Path != "/"+ref.Bucket+"/"+ref.Key || !strings.HasPrefix(r.Header.Get("Authorization"), "AWS4-HMAC-SHA256 ") {
+		if r.Method != http.MethodGet || r.URL.Path != "/"+ref.Key || !strings.HasPrefix(r.Header.Get("Authorization"), "q-sign-algorithm=sha1&") {
 			t.Error("unexpected unsigned physical request", r.Method, r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "image/png")
@@ -145,7 +145,7 @@ func TestMediaImageInspectOfficialSDKReadsSavedLocation(t *testing.T) {
 	t.Cleanup(endpoint.Close)
 	t.Setenv("AGENT_IMAGE_FIXTURE_AK", "fixture-access")
 	t.Setenv("AGENT_IMAGE_FIXTURE_SK", "fixture-secret")
-	raw, _ := json.Marshal(map[string]any{"schema_version": 1, "revision": "1", "default_write_profile": ref.ProfileID, "upload": map[string]any{"mode": "relay", "signed_url_ttl": time.Minute, "session_ttl": time.Hour, "staging_retention": 24 * time.Hour, "multipart_threshold_bytes": 8 << 20, "part_size_bytes": 5 << 20, "part_concurrency": 1}, "access": map[string]any{"preview_ttl": time.Minute, "max_signed_url_ttl": 15 * time.Minute}, "limits": map[string]any{"max_image_bytes": 20 << 20, "max_video_bytes": 500 << 20, "max_audio_bytes": 100 << 20, "max_model_bytes": 64 << 20, "max_document_bytes": 20 << 20}, "profiles": map[string]any{ref.ProfileID: map[string]any{"provider": "minio", "mode": config.StorageProfileReadWrite, "endpoint": endpoint.URL, "signing_endpoint": endpoint.URL, "addressing_style": "path", "bucket": ref.Bucket, "region": "us-east-1", "credentials": map[string]any{"source": "env", "access_key_env": "AGENT_IMAGE_FIXTURE_AK", "secret_key_env": "AGENT_IMAGE_FIXTURE_SK"}}}})
+	raw, _ := json.Marshal(map[string]any{"schema_version": 1, "revision": "1", "default_write_profile": ref.ProfileID, "upload": map[string]any{"mode": "relay", "signed_url_ttl": time.Minute, "session_ttl": time.Hour, "staging_retention": 24 * time.Hour, "multipart_threshold_bytes": 8 << 20, "part_size_bytes": 5 << 20, "part_concurrency": 1}, "access": map[string]any{"preview_ttl": time.Minute, "max_signed_url_ttl": 15 * time.Minute}, "limits": map[string]any{"max_image_bytes": 20 << 20, "max_video_bytes": 500 << 20, "max_audio_bytes": 100 << 20, "max_model_bytes": 64 << 20, "max_document_bytes": 20 << 20}, "profiles": map[string]any{ref.ProfileID: map[string]any{"provider": "cos", "mode": config.StorageProfileReadWrite, "endpoint": endpoint.URL, "signing_endpoint": endpoint.URL, "bucket": ref.Bucket, "region": "us-east-1", "credentials": map[string]any{"source": "env", "access_key_env": "AGENT_IMAGE_FIXTURE_AK", "secret_key_env": "AGENT_IMAGE_FIXTURE_SK"}}}})
 	cfg, err := config.LoadObjectStorageEnvironment(string(raw), "local", os.Getenv)
 	if err != nil {
 		t.Fatal(err)

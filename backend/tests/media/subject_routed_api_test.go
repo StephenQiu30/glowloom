@@ -26,23 +26,23 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 
-func TestSubjectPublicAPIThroughNativeTOSUploadSaveAndExportWithoutCloudCredentials(t *testing.T) {
+func TestSubjectPublicAPIThroughNativeCOSUploadSaveAndExportWithoutCloudCredentials(t *testing.T) {
 	owner, _ := routedGeneratedDatabase(t)
 	tx := owner.Begin()
 	if tx.Error != nil {
 		t.Fatal(tx.Error)
 	}
 	t.Cleanup(func() { _ = tx.Rollback().Error })
-	registry, _, storageCfg := controlledGeneratedTOS(t)
+	registry, _, storageCfg := controlledGeneratedCOS(t)
 	cfg := identityfixture.Configure(t, config.Config{Env: "local", HTTPAddr: "127.0.0.1:18089", PublicOrigin: "http://localhost:1122", ObjectStorage: &storageCfg})
-	account := identityfixture.Create(t, tx, cfg, "Subject Native TOS Fixture", "SyntheticSubject123")
+	account := identityfixture.Create(t, tx, cfg, "Subject Native COS Fixture", "SyntheticSubject123")
 	scope := identityfixture.Scope(t, tx, account.User.ID)
 	routes := pgmedia.NewStorageRoutes(tx)
-	if err := routes.RegisterProfiles(t.Context(), []media.StorageProfile{{ID: "tos-frozen", Provider: "tos", Endpoint: "https://tos-fixture.example.invalid", SigningEndpoint: "https://tos-fixture.example.invalid", Region: "cn-beijing", Bucket: "controlled-fixture"}}); err != nil {
+	if err := routes.RegisterProfiles(t.Context(), []media.StorageProfile{{ID: "cos-frozen", Provider: "cos", Endpoint: "https://controlled-fixture-1250000000.cos.ap-beijing.myqcloud.com", SigningEndpoint: "https://controlled-fixture-1250000000.cos.ap-beijing.myqcloud.com", Region: "ap-beijing", Bucket: "controlled-fixture-1250000000"}}); err != nil {
 		t.Fatal(err)
 	}
 	// Controlled TLS admission exercises the validated deployment projection.
-	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, tx, "controlled-api-"+uuid.NewString(), "tos-frozen")); err != nil {
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, tx, "controlled-api-"+uuid.NewString(), "cos-frozen")); err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
@@ -104,7 +104,7 @@ func TestSubjectPublicAPIThroughNativeTOSUploadSaveAndExportWithoutCloudCredenti
 	if replay.Code != 201 || !bytes.Equal(replay.Body.Bytes(), response.Body.Bytes()) {
 		t.Fatalf("upload permanent key changed receipt: %d", replay.Code)
 	}
-	body, _ := json.Marshal(subject.SaveInput{Name: "统一环境主体", Description: "真实HTTP、PostgreSQL和TOS原生SDK；受控TLS wire", Primary: subject.MediaSelection{AssetID: uploaded.Asset.ID}})
+	body, _ := json.Marshal(subject.SaveInput{Name: "统一环境主体", Description: "真实HTTP、PostgreSQL和COS 原生 SDK；受控TLS wire", Primary: subject.MediaSelection{AssetID: uploaded.Asset.ID}})
 	saved := call("POST", "/api/subjects", body, "application/json", uuid.NewString())
 	var detail subject.Detail
 	if saved.Code != 200 || json.Unmarshal(saved.Body.Bytes(), &detail) != nil || detail.Primary.AssetID != uploaded.Asset.ID || detail.Primary.BindingID == uuid.Nil {
@@ -118,7 +118,7 @@ func TestSubjectPublicAPIThroughNativeTOSUploadSaveAndExportWithoutCloudCredenti
 	exportedBody, _ := json.Marshal(subject.ExportInput{Items: []subject.ExportItem{{ID: detail.ID, VersionID: detail.VersionID}}})
 	exported := call("POST", "/api/subjects/export", exportedBody, "application/json", uuid.NewString())
 	if exported.Code != 200 {
-		t.Fatalf("native TOS export %d %s", exported.Code, exported.Body.String())
+		t.Fatalf("native COS export %d %s", exported.Code, exported.Body.String())
 	}
 	archive, err := zip.NewReader(bytes.NewReader(exported.Body.Bytes()), int64(exported.Body.Len()))
 	if err != nil || len(archive.File) != 2 {

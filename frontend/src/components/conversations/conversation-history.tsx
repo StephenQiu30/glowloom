@@ -5,11 +5,9 @@ import { usePathname } from "next/navigation";
 import { listAgentSessions } from "@/api/agent";
 import { useOptionalSession } from "@/components/auth/session";
 import { Button } from "@/components/ui/button";
-import {
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-} from "@/components/ui/sidebar";
+import { SidebarMenu } from "@/components/ui/sidebar";
+import { SidebarEmpty } from "@/components/layout/sidebar-empty";
+import { SidebarNavLink } from "@/components/layout/sidebar-nav-link";
 import { readErrorMessage } from "@/lib/read-error";
 import { useConversationContext } from "./conversation-context";
 export function ConversationHistory({
@@ -95,31 +93,23 @@ export function ConversationHistory({
   }
   if (!session || !pid)
     return (
-      <p className="sidebar-history-empty px-2 py-3 text-xs text-muted-foreground">
+      <SidebarEmpty>
         {session ? "选择项目后查看最近对话" : "登录后查看最近对话"}
-      </p>
+      </SidebarEmpty>
     );
   return (
     <>
       <SidebarMenu>
         {current.items.map((item) => (
-          <SidebarMenuItem key={item.id}>
-            <SidebarMenuButton
-              asChild
-              isActive={path === `/conversations/${item.id}`}
-              tooltip={item.title}
-            >
-              <Link
-                href={`/conversations/${item.id}?projectId=${pid}`}
-                onClick={onNavigate}
-                aria-current={
-                  path === `/conversations/${item.id}` ? "page" : undefined
-                }
-              >
-                <span className="truncate">{item.title}</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          <SidebarNavLink
+            key={item.id}
+            href={`/conversations/${item.id}?projectId=${pid}`}
+            label={item.title}
+            active={path === `/conversations/${item.id}`}
+            variant="history"
+            size="history"
+            onNavigate={onNavigate}
+          />
         ))}
       </SidebarMenu>
       {current.loading ? (
@@ -138,7 +128,7 @@ export function ConversationHistory({
           </Button>
         </div>
       ) : !current.items.length ? (
-        <p className="px-2 py-3 text-xs text-muted-foreground">暂无历史对话</p>
+        <SidebarEmpty>暂无历史对话</SidebarEmpty>
       ) : null}
       {current.cursor ? (
         <Button
@@ -164,17 +154,18 @@ export function NewConversationLink({
 }) {
   const memory = useConversationContext();
   return (
-    <Link
-      href={
-        memory?.project
-          ? `/conversations?projectId=${memory.project.id}`
-          : "/conversations"
-      }
-      aria-label="新建对话"
-      className={className}
-      onClick={onNavigate}
-    >
-      {children}
-    </Link>
+    <Button asChild variant="navigation" size="icon-xs" className={className}>
+      <Link
+        href={
+          memory?.project
+            ? `/conversations?projectId=${memory.project.id}`
+            : "/conversations"
+        }
+        aria-label="新建对话"
+        onClick={onNavigate}
+      >
+        {children}
+      </Link>
+    </Button>
   );
 }

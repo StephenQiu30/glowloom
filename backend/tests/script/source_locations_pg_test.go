@@ -46,8 +46,8 @@ func TestScriptLocatedPGAdmissionHistoryAndReplaySurviveDefaultSwitch(t *testing
 	}
 	routes := pgmedia.NewStorageRoutes(owner.DB)
 	profiles := []media.StorageProfile{
-		{ID: "script-fixture-a", Provider: "tos", Endpoint: "https://script-a.example.invalid", SigningEndpoint: "https://script-a.example.invalid", Region: "test-region", Bucket: "script-a"},
-		{ID: "script-fixture-b", Provider: "tos", Endpoint: "https://script-b.example.invalid", SigningEndpoint: "https://script-b.example.invalid", Region: "test-region", Bucket: "script-b"},
+		{ID: "script-fixture-a", Provider: "cos", Endpoint: "http://127.0.0.1:9172", SigningEndpoint: "http://127.0.0.1:9172", Region: "test-region", Bucket: "script-a"},
+		{ID: "script-fixture-b", Provider: "cos", Endpoint: "http://127.0.0.1:9173", SigningEndpoint: "http://127.0.0.1:9173", Region: "test-region", Bucket: "script-b"},
 	}
 	if err := routes.RegisterProfiles(t.Context(), profiles); err != nil {
 		t.Fatal(err)

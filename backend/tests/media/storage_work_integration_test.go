@@ -16,7 +16,7 @@ func TestStorageWorkIntentPersistsAcrossSwitchAndWorkerRestart(t *testing.T) {
 	storageProfiles(t, routes)
 	activeTestStorageRoute(t, db, routes)
 	rev := "work-old-" + uuid.NewString()
-	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, db, rev, "minio-main")); err != nil {
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, db, rev, "cos-first")); err != nil {
 		t.Fatal(err)
 	}
 	owner := mediaapp.StorageWorkOwner{Kind: "operation", OwnerID: uuid.New(), WorkID: uuid.New()}
@@ -37,7 +37,7 @@ func TestStorageWorkIntentPersistsAcrossSwitchAndWorkerRestart(t *testing.T) {
 		t.Fatal("new work ignored activated route", err)
 	}
 	location, err := restarted.ReserveWorkLocation(t.Context(), first.ID, "projects/"+owner.WorkID.String()+"/image/result.png")
-	if err != nil || location.Ref.ProfileID != "minio-main" {
+	if err != nil || location.Ref.ProfileID != "cos-first" {
 		t.Fatal("late object used current profile", err)
 	}
 	info := mediaapp.ObjectInfo{Size: 3, ContentType: "image/png", SHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}

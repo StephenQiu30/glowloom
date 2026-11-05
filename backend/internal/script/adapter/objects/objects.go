@@ -5,8 +5,6 @@ import (
 	"errors"
 	"io"
 
-	"github.com/minio/minio-go/v7"
-
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 )
@@ -19,10 +17,6 @@ func storageError(err error) error {
 		return errors.Join(application.ErrObjectExists, err)
 	}
 	if errors.Is(err, objectstorage.ErrObjectMissing) {
-		return errors.Join(application.ErrObjectMissing, err)
-	}
-	response := minio.ToErrorResponse(err)
-	if response.Code == "NoSuchKey" || response.Code == "NoSuchObject" || response.Code == "NotFound" {
 		return errors.Join(application.ErrObjectMissing, err)
 	}
 	return err

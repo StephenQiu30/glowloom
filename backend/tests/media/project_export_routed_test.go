@@ -22,16 +22,16 @@ import (
 	tooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
-func TestProjectArtifactRoutedPostgresAndNativeTOS(t *testing.T) {
+func TestProjectArtifactRoutedPostgresAndNativeCOS(t *testing.T) {
 	owner, runtime := projectOwnerDB(t), mediaStoreDB(t)
 	actor, project := mediaStoreProject(t, owner)
-	registry, writes, _ := controlledGeneratedTOS(t)
+	registry, writes, _ := controlledGeneratedCOS(t)
 	routes := pgmedia.NewStorageRoutes(owner)
-	if e := routes.RegisterProfiles(t.Context(), []media.StorageProfile{{ID: "tos-frozen", Provider: "tos", Endpoint: "https://tos-fixture.example.invalid", SigningEndpoint: "https://tos-fixture.example.invalid", Region: "cn-beijing", Bucket: "controlled-fixture"}}); e != nil {
+	if e := routes.RegisterProfiles(t.Context(), []media.StorageProfile{{ID: "cos-frozen", Provider: "cos", Endpoint: "https://controlled-fixture-1250000000.cos.ap-beijing.myqcloud.com", SigningEndpoint: "https://controlled-fixture-1250000000.cos.ap-beijing.myqcloud.com", Region: "ap-beijing", Bucket: "controlled-fixture-1250000000"}}); e != nil {
 		t.Fatal(e)
 	}
 	op := seedIngestOperation(t, owner, actor, project, "image")
-	if e := owner.Exec(`INSERT INTO media.storage_work_intent(id,kind,owner_id,work_id,profile_id,bucket,config_revision) VALUES(?,'operation',?,?,'tos-frozen','controlled-fixture','controlled-v1')`, uuid.New(), project, op).Error; e != nil {
+	if e := owner.Exec(`INSERT INTO media.storage_work_intent(id,kind,owner_id,work_id,profile_id,bucket,config_revision) VALUES(?,'operation',?,?,'cos-frozen','controlled-fixture-1250000000','controlled-v1')`, uuid.New(), project, op).Error; e != nil {
 		t.Fatal(e)
 	}
 	rr := pgmedia.NewStorageRoutes(runtime)
@@ -48,7 +48,7 @@ func TestProjectArtifactRoutedPostgresAndNativeTOS(t *testing.T) {
 		t.Fatal(e)
 	}
 	// The controlled TLS fixture uses the same validated environment projection.
-	if _, e = routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, owner, "controlled-tool-"+uuid.NewString(), "tos-frozen")); e != nil {
+	if _, e = routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, owner, "controlled-tool-"+uuid.NewString(), "cos-frozen")); e != nil {
 		t.Fatal(e)
 	}
 	timeline := exportTimeline(t)
@@ -85,11 +85,11 @@ func TestProjectArtifactRoutedPostgresAndNativeTOS(t *testing.T) {
 	reader := objects.NewRoutedReadObjects(registry)
 	query := tool.NewRoutedExportQuery(store, reader, reader, 5*time.Minute)
 	preview, e := query.Preview(t.Context(), actor, project, job.ID)
-	if e != nil || preview.Artifact == nil || !strings.Contains(preview.URL, "controlled-fixture") {
+	if e != nil || preview.Artifact == nil || !strings.Contains(preview.URL, "controlled-fixture-1250000000") {
 		t.Fatal("preview exact location", e)
 	}
 	_, artifact, e := store.PreviewArtifact(t.Context(), actor, project, job.ID)
-	if e != nil || artifact.ObjectLocation == nil || artifact.ObjectLocation.State != "accepted" || artifact.ObjectLocation.Ref.ProfileID != "tos-frozen" {
+	if e != nil || artifact.ObjectLocation == nil || artifact.ObjectLocation.State != "accepted" || artifact.ObjectLocation.Ref.ProfileID != "cos-frozen" {
 		t.Fatalf("artifact physical binding %+v %v", artifact, e)
 	}
 	var accepted int64

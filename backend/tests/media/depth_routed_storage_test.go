@@ -82,7 +82,7 @@ func TestDepthRoutedQueryUsesExactAcceptedLocationAndActualExpiry(t *testing.T) 
 	asset.Kind, asset.MimeType, asset.FileName = mediadomain.KindVideo, "video/mp4", "depth.mp4"
 	asset.ObjectKey = "projects/" + asset.ProjectID.String() + "/video/2026/10/" + asset.ID.String() + ".mp4"
 	asset.SHA256, asset.ByteSize = &sha, 5
-	asset.ObjectLocation = readLocation("tos-frozen", asset.ObjectKey)
+	asset.ObjectLocation = readLocation("cos-frozen", asset.ObjectKey)
 	expiry := time.Now().UTC().Add(43 * time.Second).Truncate(time.Second)
 	objects := &routedReadObjects{grants: map[mediadomain.ObjectRef]mediaapp.AccessGrant{asset.ObjectLocation.Ref: {URL: "https://fixture.invalid/depth", ExpiresAt: expiry}}, data: map[mediadomain.ObjectRef][]byte{asset.ObjectLocation.Ref: []byte("depth")}}
 	store := routedDepthQueryStore{job: tooldomain.DepthJob{ID: uuid.New(), Status: tooldomain.DepthSucceeded, SHA256: &sha}, asset: asset}

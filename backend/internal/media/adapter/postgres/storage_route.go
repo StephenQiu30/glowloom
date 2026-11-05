@@ -102,19 +102,10 @@ func validStorageProfile(p application.StorageProfile) bool {
 	if (domain.ObjectRef{ProfileID: p.ID, Bucket: p.Bucket, Key: "validation"}).Validate() != nil || p.Region == "" {
 		return false
 	}
-	if p.Provider != string(config.StorageProviderMinIO) && p.Provider != string(config.StorageProviderCOS) && p.Provider != string(config.StorageProviderTOS) {
-		return false
-	}
-	for _, raw := range []string{p.Endpoint, p.SigningEndpoint} {
-		u, err := url.Parse(raw)
-		if err != nil || u.Hostname() == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "https" && u.Scheme != "http") {
-			return false
-		}
-	}
-	if p.Provider == string(config.StorageProviderCOS) && config.ValidateCOSOrigin(p.Endpoint, p.Bucket, p.Region, true) != nil {
-		return false
-	}
-	return p.Provider == string(config.StorageProviderMinIO) && (p.AddressingStyle == string(config.StorageAddressingPath) || p.AddressingStyle == string(config.StorageAddressingVirtual)) || p.Provider != string(config.StorageProviderMinIO) && p.AddressingStyle == ""
+	return p.Provider == string(config.StorageProviderCOS) &&
+		p.AddressingStyle == "" &&
+		p.SigningEndpoint == p.Endpoint &&
+		config.ValidateCOSOrigin(p.Endpoint, p.Bucket, p.Region, true) == nil
 }
 
 func normalizeStorageProfile(p application.StorageProfile) application.StorageProfile {

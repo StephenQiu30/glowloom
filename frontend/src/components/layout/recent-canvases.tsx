@@ -2,7 +2,9 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ProductNavigationIcon } from "./product-navigation-icon";
+import { Frame } from "lucide-react";
+import { SidebarEmpty } from "./sidebar-empty";
+import { SidebarNavLink } from "./sidebar-nav-link";
 import { listProjects } from "@/api/projects";
 import {
   canvasHref,
@@ -17,11 +19,7 @@ import {
 } from "@/components/projects/canvas-list-empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import {
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from "@/components/ui/sidebar";
+import { SidebarMenu } from "@/components/ui/sidebar";
 
 /** Mounted with an actor/space key. Never retain another scope's private list. */
 export function RecentCanvases({
@@ -84,7 +82,7 @@ export function RecentCanvases({
               onClick={onNavigate}
               title={project.name}
             >
-              <ProductNavigationIcon name="canvas-card" />
+              <Frame aria-hidden="true" data-icon="inline-start" />
               <span className="home-canvas-card-title">{project.name}</span>
             </Link>
           </Button>
@@ -118,22 +116,17 @@ export function RecentCanvases({
       </div>
     );
   return (
-    <SidebarMenu aria-label="最近画布" className="sidebar-canvas-list">
+    <SidebarMenu aria-label="最近画布" className="gap-0.5">
       {projects?.slice(0, 5).map((project) => (
-        <SidebarMenuItem key={project.id}>
-          <SidebarMenuButton asChild tooltip={project.name}>
-            <Link
-              href={canvasHref(project)}
-              onClick={onNavigate}
-              title={project.name}
-            >
-              <span className="sidebar-canvas-icon" aria-hidden="true">
-                <ProductNavigationIcon name="canvas" />
-              </span>
-              <span>{project.name}</span>
-            </Link>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
+        <SidebarNavLink
+          key={project.id}
+          href={canvasHref(project)}
+          label={project.name}
+          icon={Frame}
+          variant="history"
+          size="history"
+          onNavigate={onNavigate}
+        />
       ))}
       {error ? (
         <li>
@@ -150,8 +143,8 @@ export function RecentCanvases({
           正在读取…
         </li>
       ) : projects.length === 0 ? (
-        <li className="sidebar-history-note">
-          {canvasListEmptyCopy.active.title}
+        <li>
+          <SidebarEmpty>{canvasListEmptyCopy.active.title}</SidebarEmpty>
         </li>
       ) : null}
     </SidebarMenu>

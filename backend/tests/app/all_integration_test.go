@@ -27,7 +27,7 @@ func TestAllRoleRunsAndStopsOnLocalServices(t *testing.T) {
 	brokers := os.Getenv("GLOWLOOM_TEST_ALL_KAFKA_BROKERS")
 	redisURL := os.Getenv("GLOWLOOM_TEST_ALL_REDIS_URL")
 	if dsn == "" || brokers == "" || redisURL == "" || os.Getenv("GLOWLOOM_ENV_FILE") == "" {
-		t.Skip("set absolute GLOWLOOM_ENV_FILE with local MinIO credentials and disposable GLOWLOOM_TEST_ALL_* service configuration")
+		t.Skip("set absolute GLOWLOOM_ENV_FILE with local COS credentials and disposable GLOWLOOM_TEST_ALL_* service configuration")
 	}
 	cfg, err := config.Load()
 	if err != nil {

@@ -32,7 +32,7 @@ func activeTestStorageRoute(t *testing.T, database *gorm.DB, routes *pgmedia.Sto
 	t.Helper()
 	route, err := routes.ReadConfigured(t.Context())
 	if errors.Is(err, mediaapp.ErrStorageNotReady) {
-		route, err = routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, database, "fixture-"+uuid.NewString(), "minio-main"))
+		route, err = routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, database, "fixture-"+uuid.NewString(), "cos-first"))
 	}
 	if err != nil {
 		t.Fatal(err)
@@ -46,7 +46,7 @@ func TestUploadAdmissionPersistsAcrossRouteSwitch(t *testing.T) {
 	storageProfiles(t, routes)
 	activeTestStorageRoute(t, database, routes)
 	revision := "admission-" + uuid.NewString()
-	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, database, revision, "minio-main")); err != nil {
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, database, revision, "cos-first")); err != nil {
 		t.Fatal(err)
 	}
 	actor, project := mediaStoreProject(t, database)
@@ -153,7 +153,7 @@ func TestUploadReplayKeepsOriginalLocation(t *testing.T) {
 	if err != nil || remove {
 		t.Fatal("accepted object admitted to compensation", err)
 	}
-	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, database, "replay-"+uuid.NewString(), "minio-main")); err != nil {
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, database, "replay-"+uuid.NewString(), "cos-first")); err != nil {
 		t.Fatal(err)
 	}
 	replay, err := fixtureProjectUpload(t.Context(), service, input)
@@ -190,7 +190,7 @@ func TestUploadAcceptanceRejectsAnotherActorsAdmission(t *testing.T) {
 }
 
 func TestUploadMissingRoutedDependencyDoesNotReadBody(t *testing.T) {
-	service := mediaapp.NewRoutedUploadService(&uploadRepoFake{}, nil, &routedAdmissionFake{active: "minio-main"}, routingImageProbe{}, mediaflow.FFUploadNormalizer{}, routingImageRenderer{t}, nil, time.Now)
+	service := mediaapp.NewRoutedUploadService(&uploadRepoFake{}, nil, &routedAdmissionFake{active: "cos-first"}, routingImageProbe{}, mediaflow.FFUploadNormalizer{}, routingImageRenderer{t}, nil, time.Now)
 	router := gin.New()
 	router.Use(httpapi.Middleware("http://localhost:3000"))
 	group := router.Group("/api")
@@ -245,7 +245,7 @@ func TestUploadSwitchDuringBodyKeepsPersistentTarget(t *testing.T) {
 	storageProfiles(t, routes)
 	activeTestStorageRoute(t, database, routes)
 	rev := "http-pin-" + uuid.NewString()
-	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, database, rev, "minio-main")); err != nil {
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, database, rev, "cos-first")); err != nil {
 		t.Fatal(err)
 	}
 	actor, project := mediaStoreProject(t, database)
@@ -272,7 +272,7 @@ func TestUploadSwitchDuringBodyKeepsPersistentTarget(t *testing.T) {
 		t.Fatal("multipart read never began")
 	}
 	var count int64
-	err := database.Raw(`SELECT count(*) FROM media.upload_admission WHERE actor_id=? AND request_key=? AND profile_id='minio-main'`, actor.ID, request.Header.Get("Idempotency-Key")).Scan(&count).Error
+	err := database.Raw(`SELECT count(*) FROM media.upload_admission WHERE actor_id=? AND request_key=? AND profile_id='cos-first'`, actor.ID, request.Header.Get("Idempotency-Key")).Scan(&count).Error
 	if err != nil || count != 1 {
 		close(gate.release)
 		<-done
@@ -288,7 +288,7 @@ func TestUploadSwitchDuringBodyKeepsPersistentTarget(t *testing.T) {
 		t.Fatalf("switched in-flight upload failed: %d %s", response.Code, response.Body.String())
 	}
 	var accepted int64
-	if err := database.Raw(`SELECT count(*) FROM media.object_location l JOIN media.upload_admission u ON u.id=l.owner_session_id WHERE u.actor_id=? AND u.request_key=? AND l.profile_id='minio-main' AND l.state='accepted'`, actor.ID, request.Header.Get("Idempotency-Key")).Scan(&accepted).Error; err != nil || accepted != 3 {
+	if err := database.Raw(`SELECT count(*) FROM media.object_location l JOIN media.upload_admission u ON u.id=l.owner_session_id WHERE u.actor_id=? AND u.request_key=? AND l.profile_id='cos-first' AND l.state='accepted'`, actor.ID, request.Header.Get("Idempotency-Key")).Scan(&accepted).Error; err != nil || accepted != 3 {
 		t.Fatal("original or preview moved after activation", accepted, err)
 	}
 }
@@ -309,7 +309,7 @@ func (a *routedAdmissionFake) PinUpload(_ context.Context, _ identityapp.Princip
 	}
 	target, ok := a.targets[key]
 	if !ok {
-		target = mediaapp.UploadTarget{SessionID: uuid.New(), ProfileID: a.active, Bucket: "storage-test", ConfigRevision: a.active + "-v1", ExpiresAt: time.Now().Add(time.Hour), Policy: uploadRoutingPolicy()}
+		target = mediaapp.UploadTarget{SessionID: uuid.New(), ProfileID: a.active, Bucket: "storage-test-1250000000", ConfigRevision: a.active + "-v1", ExpiresAt: time.Now().Add(time.Hour), Policy: uploadRoutingPolicy()}
 		a.targets[key] = target
 	}
 	if a.pinned != nil {
@@ -369,7 +369,7 @@ func (r routingImageRenderer) Render(ctx context.Context, _ *mediaapp.Downloaded
 
 func TestUploadPinsBeforeReadingBody(t *testing.T) {
 	repo := &uploadRepoFake{}
-	admission := &routedAdmissionFake{active: "minio-main", pinned: make(chan struct{})}
+	admission := &routedAdmissionFake{active: "cos-first", pinned: make(chan struct{})}
 	objects := &routedUploadFake{}
 	service := mediaapp.NewRoutedUploadService(repo, nil, admission, routingImageProbe{}, mediaflow.FFUploadNormalizer{}, routingImageRenderer{t}, objects, time.Now)
 	router := gin.New()
@@ -410,7 +410,7 @@ func TestUploadPinsBeforeReadingBody(t *testing.T) {
 		t.Fatalf("expected original and 2 previews, got %d", len(objects.refs))
 	}
 	for _, ref := range objects.refs {
-		if ref.ProfileID != "minio-main" {
+		if ref.ProfileID != "cos-first" {
 			t.Fatal("in-flight object moved", ref.ProfileID)
 		}
 	}
@@ -427,7 +427,7 @@ func TestUploadPinsBeforeReadingBody(t *testing.T) {
 
 func TestRoutedUploadCommitUnknownKeepsObjects(t *testing.T) {
 	repo := &uploadRepoFake{commitErr: errors.New("lost commit reply"), existsErr: errors.New("database unavailable")}
-	admission := &routedAdmissionFake{active: "minio-main"}
+	admission := &routedAdmissionFake{active: "cos-first"}
 	objects := &routedUploadFake{}
 	service := mediaapp.NewRoutedUploadService(repo, nil, admission, routingImageProbe{}, mediaflow.FFUploadNormalizer{}, routingImageRenderer{t}, objects, time.Now)
 	input := uploadInput(t)

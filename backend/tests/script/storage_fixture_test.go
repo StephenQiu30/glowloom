@@ -55,7 +55,7 @@ func scriptObjectSettings(t *testing.T, required bool) scriptStorageSettings {
 
 func scriptFixtureProfile(settings scriptStorageSettings) media.StorageProfile {
 	sum := sha256.Sum256([]byte(settings.Endpoint + "/" + settings.Bucket))
-	return media.StorageProfile{ID: "script-fixture-" + hex.EncodeToString(sum[:6]), Provider: "minio", Endpoint: settings.Endpoint, SigningEndpoint: settings.Endpoint, Bucket: settings.Bucket, Region: settings.Region, AddressingStyle: "path"}
+	return media.StorageProfile{ID: "script-fixture-" + hex.EncodeToString(sum[:6]), Provider: "cos", Endpoint: settings.Endpoint, SigningEndpoint: settings.Endpoint, Bucket: settings.Bucket, Region: settings.Region}
 }
 
 func admitScriptFixtureProfile(t *testing.T, owner *gorm.DB) {
@@ -114,7 +114,7 @@ func scriptFixtureRegistry(t *testing.T) *objectstorage.Registry {
 		Upload:   config.StorageUploadPolicy{Mode: config.StorageUploadRelay, SignedURLTTL: 5 * time.Minute, SessionTTL: time.Hour, MultipartThresholdBytes: 50 << 20, PartSizeBytes: 5 << 20, PartConcurrency: 2, StagingRetention: 24 * time.Hour},
 		Access:   config.StorageAccessPolicy{PreviewTTL: 5 * time.Minute, MaxSignedURLTTL: 15 * time.Minute},
 		Limits:   config.StorageLimits{MaxImageBytes: media.MaxUploadImageBytes, MaxVideoBytes: media.MaxUploadVideoBytes, MaxAudioBytes: media.MaxUploadAudioBytes, MaxModelBytes: media.MaxUploadModelBytes, MaxDocumentBytes: media.MaxUploadDocumentBytes},
-		Profiles: map[string]config.StorageProfile{profile.ID: {Provider: config.StorageProviderMinIO, Mode: config.StorageProfileReadWrite, Endpoint: profile.Endpoint, SigningEndpoint: profile.SigningEndpoint, Bucket: profile.Bucket, Region: profile.Region, AddressingStyle: config.StorageAddressingPath, Credentials: config.StorageCredentialsRef{Source: config.StorageCredentialsEnvironment, AccessKeyEnv: "SCRIPT_TEST_ACCESS", SecretKeyEnv: "SCRIPT_TEST_SECRET"}}}}
+		Profiles: map[string]config.StorageProfile{profile.ID: {Provider: config.StorageProviderCOS, Mode: config.StorageProfileReadWrite, Endpoint: profile.Endpoint, SigningEndpoint: profile.SigningEndpoint, Bucket: profile.Bucket, Region: profile.Region, Credentials: config.StorageCredentialsRef{Source: config.StorageCredentialsEnvironment, AccessKeyEnv: "SCRIPT_TEST_ACCESS", SecretKeyEnv: "SCRIPT_TEST_SECRET"}}}}
 	raw, err := json.Marshal(input)
 	if err != nil {
 		t.Fatal(err)

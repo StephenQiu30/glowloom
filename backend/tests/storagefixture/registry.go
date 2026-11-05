@@ -14,7 +14,7 @@ import (
 // Configuration resolves fixture credentials without mutating process environment.
 func Configuration(t testing.TB, endpoint, bucket string) config.ObjectStorageConfig {
 	t.Helper()
-	input := config.ObjectStorageConfig{SchemaVersion: 1, Revision: "1", DefaultWriteProfile: "test-main", Profiles: map[string]config.StorageProfile{"test-main": {Provider: config.StorageProviderMinIO, Mode: config.StorageProfileReadWrite, Endpoint: endpoint, SigningEndpoint: endpoint, AddressingStyle: config.StorageAddressingPath, Bucket: bucket, Region: "us-east-1", Credentials: config.StorageCredentialsRef{Source: config.StorageCredentialsEnvironment, AccessKeyEnv: "TEST_STORAGE_AK", SecretKeyEnv: "TEST_STORAGE_SK"}}}}
+	input := config.ObjectStorageConfig{SchemaVersion: 1, Revision: "1", DefaultWriteProfile: "test-main", Profiles: map[string]config.StorageProfile{"test-main": {Provider: config.StorageProviderCOS, Mode: config.StorageProfileReadWrite, Endpoint: endpoint, SigningEndpoint: endpoint, Bucket: bucket, Region: "us-east-1", Credentials: config.StorageCredentialsRef{Source: config.StorageCredentialsEnvironment, AccessKeyEnv: "TEST_STORAGE_AK", SecretKeyEnv: "TEST_STORAGE_SK"}}}}
 	input.Upload, input.Access, input.Limits = Policy()
 	raw, err := json.Marshal(input)
 	if err != nil {

@@ -18,7 +18,7 @@ import (
 const storageFixture = `object_storage:
   schema_version: 1
   revision: 1
-  default_write_profile: minio-main
+  default_write_profile: cos-main
   upload:
     mode: relay
     signed_url_ttl: 10m
@@ -37,14 +37,13 @@ const storageFixture = `object_storage:
     max_model_bytes: 67108864
     max_document_bytes: 20971520
   profiles:
-    minio-main:
-      provider: minio
+    cos-main:
+      provider: cos
       mode: read_write
-      addressing_style: path
-      signing_endpoint: https://storage.example.test
-      endpoint: https://storage.example.test
-      bucket: assets-test
-      region: us-east-1
+      signing_endpoint: https://assets-test-1250000000.cos.ap-shanghai.myqcloud.com
+      endpoint: https://assets-test-1250000000.cos.ap-shanghai.myqcloud.com
+      bucket: assets-test-1250000000
+      region: ap-shanghai
       credentials:
         source: env
         access_key_env: GLOWLOOM_TEST_STORAGE_ACCESS
@@ -60,18 +59,18 @@ func storageConfigFile(t *testing.T, body string) string {
 	return path
 }
 
-func TestObjectStorageDefaultsToMinIO(t *testing.T) {
+func TestObjectStorageDefaultsToCOS(t *testing.T) {
 	cfg, err := config.LoadObjectStorage(storageConfigFile(t, storageFixture), "prod")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.DefaultWriteProfile != "minio-main" || cfg.Profiles["minio-main"].Provider != "minio" || cfg.Upload.Mode != "relay" {
-		t.Fatal("a MinIO-only deployment did not choose its declared default")
+	if cfg.DefaultWriteProfile != "cos-main" || cfg.Profiles["cos-main"].Provider != "cos" || cfg.Upload.Mode != "relay" {
+		t.Fatal("a COS-only deployment did not choose its declared default")
 	}
 	if cfg.Access.PreviewTTL != 5*time.Minute || cfg.Access.MaxSignedURLTTL != 15*time.Minute {
 		t.Fatal("bounded private access defaults were lost")
 	}
-	if _, err := config.LoadObjectStorage(storageConfigFile(t, strings.Replace(storageFixture, "default_write_profile: minio-main", "default_write_profile: cos-missing", 1)), "prod"); !errors.Is(err, config.ErrInvalid) {
+	if _, err := config.LoadObjectStorage(storageConfigFile(t, strings.Replace(storageFixture, "default_write_profile: cos-main", "default_write_profile: cos-missing", 1)), "prod"); !errors.Is(err, config.ErrInvalid) {
 		t.Fatalf("missing explicit COS target silently fell back: %v", err)
 	}
 }
@@ -79,13 +78,16 @@ func TestObjectStorageDefaultsToMinIO(t *testing.T) {
 func TestObjectStorageRejectsUnknownFieldsAndMixedSources(t *testing.T) {
 	for _, body := range []string{
 		storageFixture + "  typo_option: true\n",
-		strings.Replace(storageFixture, "provider: minio", "provider: arbitrary", 1),
+		strings.Replace(storageFixture, "provider: cos", "provider: arbitrary", 1),
+		strings.Replace(storageFixture, "provider: cos", "provider: minio", 1),
+		strings.Replace(storageFixture, "provider: cos", "provider: tos", 1),
+		strings.Replace(storageFixture, "mode: read_write", "mode: read_write\n      addressing_style: path", 1),
 		strings.Replace(storageFixture, "schema_version: 1", "schema_version: 7", 1),
 		storageFixture + "---\nobject_storage: {}\n",
 		strings.Replace(storageFixture, "  revision:", "  upload:\n    signed_url_ttl: 0s\n  revision:", 1),
 		strings.Replace(storageFixture, "  revision:", "  upload:\n    mode: direct\n  revision:", 1),
-		strings.Replace(storageFixture, "https://storage.example.test", "http://storage.example.test", 1),
-		strings.Replace(storageFixture, "https://storage.example.test", "https://storage.example.test/private", 1),
+		strings.Replace(storageFixture, "https://assets-test-1250000000.cos.ap-shanghai.myqcloud.com", "http://storage.example.test", 1),
+		strings.Replace(storageFixture, "https://assets-test-1250000000.cos.ap-shanghai.myqcloud.com", "https://assets-test-1250000000.cos.ap-shanghai.myqcloud.com/private", 1),
 		strings.Replace(storageFixture, "source: env", "source: env\n        file: /secrets/storage.json", 1),
 	} {
 		if _, err := config.LoadObjectStorage(storageConfigFile(t, body), "prod"); !errors.Is(err, config.ErrInvalid) {
@@ -100,14 +102,14 @@ func TestObjectStorageRejectsUnknownFieldsAndMixedSources(t *testing.T) {
 }
 
 func TestObjectStorageRejectsDuplicateResourceAlias(t *testing.T) {
-	body := storageFixture + strings.Replace(strings.SplitN(storageFixture, "    minio-main:", 2)[1], "      provider:", "    alias:\n      provider:", 1)
+	body := storageFixture + strings.Replace(strings.SplitN(storageFixture, "    cos-main:", 2)[1], "      provider:", "    alias:\n      provider:", 1)
 	if _, err := config.LoadObjectStorage(storageConfigFile(t, body), "prod"); !errors.Is(err, config.ErrInvalid) {
 		t.Fatalf("same physical resource was registered twice: %v", err)
 	}
 }
 
 func TestObjectStorageBindsCOSOriginToBucketAndRegion(t *testing.T) {
-	valid := strings.NewReplacer("provider: minio", "provider: cos", "https://storage.example.test", "https://assets-a-1250000000.cos.ap-shanghai.myqcloud.com", "bucket: assets-test", "bucket: assets-a-1250000000", "region: us-east-1", "region: ap-shanghai").Replace(strings.Replace(storageFixture, "      addressing_style: path\n", "", 1))
+	valid := strings.ReplaceAll(storageFixture, "assets-test-1250000000", "assets-a-1250000000")
 	if _, err := config.LoadObjectStorage(storageConfigFile(t, valid), "prod"); err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +122,7 @@ func TestObjectStorageBindsCOSOriginToBucketAndRegion(t *testing.T) {
 			t.Fatal("COS declared identity differed from actual BucketURL", err)
 		}
 	}
-	profile := strings.SplitN(valid, "    minio-main:", 2)[1]
+	profile := strings.SplitN(valid, "    cos-main:", 2)[1]
 	for _, host := range []string{"assets-a-1250000000.cos.ap-shanghai.tencentcos.cn", "assets-a-1250000000.cos-internal.ap-shanghai.tencentcos.cn"} {
 		alias := strings.Replace(profile, "assets-a-1250000000.cos.ap-shanghai.myqcloud.com", host, 1)
 		if _, err := config.LoadObjectStorage(storageConfigFile(t, valid+"    cos-alias:"+alias), "prod"); !errors.Is(err, config.ErrInvalid) {
@@ -130,9 +132,9 @@ func TestObjectStorageBindsCOSOriginToBucketAndRegion(t *testing.T) {
 }
 
 func TestObjectStorageRegionCannotAliasSamePhysicalBucket(t *testing.T) {
-	profile := strings.SplitN(storageFixture, "    minio-main:", 2)[1]
-	alias := strings.Replace(profile, "region: us-east-1", "region: us-east-2", 1)
-	if _, err := config.LoadObjectStorage(storageConfigFile(t, storageFixture+"    minio-alias:"+alias), "prod"); !errors.Is(err, config.ErrInvalid) {
+	profile := strings.SplitN(storageFixture, "    cos-main:", 2)[1]
+	alias := strings.Replace(profile, "region: ap-shanghai", "region: ap-beijing", 1)
+	if _, err := config.LoadObjectStorage(storageConfigFile(t, storageFixture+"    cos-alias:"+alias), "prod"); !errors.Is(err, config.ErrInvalid) {
 		t.Fatal("a signing region split the same physical bucket identity", err)
 	}
 }
@@ -150,7 +152,7 @@ func TestObjectStorageRedactsSecretErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	credentials, err := config.ResolveStorageCredentials(cfg.Profiles["minio-main"].Credentials)
+	credentials, err := config.ResolveStorageCredentials(cfg.Profiles["cos-main"].Credentials)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -52,7 +52,7 @@ func TestScriptImportDeliveryRevocationInRollbackTransaction(t *testing.T) {
 	asset := uuid.New()
 	key := "projects/" + project.String() + "/document/2026/10/" + asset.String() + ".txt"
 	profile, location := "script-import-"+uuid.NewString(), uuid.New()
-	if err := tx.Exec(`INSERT INTO media.storage_profile(id,provider,endpoint,signing_endpoint,region,bucket,addressing_style,resource_identity)VALUES(?,'minio','http://127.0.0.1:1','http://127.0.0.1:1','us-east-1',?,'path',?)`, profile, asset.String(), strings.Repeat("a", 64)).Error; err != nil {
+	if err := tx.Exec(`INSERT INTO media.storage_profile(id,provider,endpoint,signing_endpoint,region,bucket,addressing_style,resource_identity)VALUES(?,'cos','http://127.0.0.1:1','http://127.0.0.1:1','us-east-1',?,'',?)`, profile, asset.String(), strings.Repeat("a", 64)).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Exec(`INSERT INTO media.object_location(id,profile_id,bucket,object_key,state,byte_size,sha256,mime_type)VALUES(?,?,?,?,'accepted',3,repeat('a',64),'text/plain')`, location, profile, asset.String(), key).Error; err != nil {

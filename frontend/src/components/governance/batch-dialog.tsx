@@ -64,6 +64,17 @@ export function BatchDialog<T extends { id?: string }>({
   const Cancel = compact ? AlertDialogCancel : Button;
   const success = batch.entries.filter((e) => e.status === "success").length;
   const skipped = batch.entries.filter((e) => e.status === "skipped").length;
+  const blocked = compact && !batch.busy && !batch.submitted && ready === 0;
+  const skipReasons = new Map<string, number>();
+  if (blocked) {
+    for (const entry of batch.entries) {
+      if (entry.status === "skipped")
+        skipReasons.set(
+          entry.message,
+          (skipReasons.get(entry.message) ?? 0) + 1,
+        );
+    }
+  }
   const columns: DataTableColumn<BatchEntry<T>>[] = [
     {
       id: "target",
@@ -114,7 +125,9 @@ export function BatchDialog<T extends { id?: string }>({
                   : `没有可${batch.action?.title.replace("账号", "")}的账号`
               : batch.action?.title}
           </Title>
-          <Description>{batch.action?.effect}</Description>
+          <Description>
+            {blocked ? "本次没有提交操作。" : batch.action?.effect}
+          </Description>
         </Header>
         <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
           {!compact || batch.busy || skipped > 0 ? (
@@ -130,6 +143,15 @@ export function BatchDialog<T extends { id?: string }>({
                   ? `成功 ${success} / 已提交 ${batch.entries.filter((e) => e.status === "submitted").length} / 失败 ${failed} / 结果未知 ${batch.entries.filter((e) => e.status === "unknown").length} / 未执行 ${skipped}`
                   : `已选 ${batch.entries.length} 项 · 可执行 ${ready} 项${skipped ? ` · 跳过 ${skipped} 项` : ""}${failed ? ` · 检查失败 ${failed} 项` : ""}`}
             </p>
+          ) : null}
+          {skipReasons.size > 0 ? (
+            <ul className="grid gap-1 text-sm text-muted-foreground">
+              {Array.from(skipReasons, ([message, count]) => (
+                <li key={message}>
+                  {count} 项 · {message}
+                </li>
+              ))}
+            </ul>
           ) : null}
           {!compact ? (
             <DataTable
@@ -215,7 +237,7 @@ export function BatchDialog<T extends { id?: string }>({
           >
             {batch.busy
               ? "关闭并稍后查看"
-              : batch.unresolved || failed
+              : batch.unresolved || failed || blocked
                 ? "关闭"
                 : batch.submitted
                   ? "完成"
@@ -242,7 +264,8 @@ export function BatchDialog<T extends { id?: string }>({
               重试失败项（{failed}）
             </Button>
           ) : null}
-          {!batch.submitted || (batch.unresolved && batch.action?.recover) ? (
+          {(!batch.submitted && !blocked) ||
+          (batch.unresolved && batch.action?.recover) ? (
             <Button
               form={id}
               type="submit"

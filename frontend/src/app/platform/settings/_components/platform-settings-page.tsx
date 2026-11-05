@@ -49,10 +49,7 @@ function PlatformSettingsAdministration() {
   }, [reload]);
   return (
     <div className="flex w-full flex-col gap-5">
-      <AdminHeading
-        title="平台设置"
-        description="管理平台注册与团队创建规则。"
-      />
+      <AdminHeading title="平台设置" />
       {error ? (
         <ContentState
           state="error"
@@ -73,7 +70,8 @@ function PlatformSettingsAdministration() {
       ) : null}
       {settings && !error ? (
         <form
-          className="grid max-w-2xl gap-6"
+          aria-label="平台规则"
+          className="grid max-w-2xl gap-4"
           onSubmit={(e) => {
             e.preventDefault();
             setAction({

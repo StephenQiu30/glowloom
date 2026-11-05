@@ -20,8 +20,8 @@ func TestMultiProfileStoredReadsRetainOriginalAndRenditionLocations(t *testing.T
 	routes := pgmedia.NewStorageRoutes(db)
 	storageProfiles(t, routes)
 	activeTestStorageRoute(t, db, routes)
-	initial := "read-minio-" + uuid.NewString()
-	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, db, initial, "minio-main")); err != nil {
+	initial := "read-first-" + uuid.NewString()
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, db, initial, "cos-first")); err != nil {
 		t.Fatal(err)
 	}
 	actor, project := mediaStoreProject(t, db)
@@ -43,7 +43,7 @@ func TestMultiProfileStoredReadsRetainOriginalAndRenditionLocations(t *testing.T
 		t.Fatal(err)
 	}
 	asset, err := store.FindAsset(t.Context(), actor, project, uploaded.Asset.ID)
-	if err != nil || asset.ObjectLocation == nil || asset.ObjectLocation.Ref.ProfileID != "minio-main" || asset.ObjectLocation.Ref.Bucket != "storage-test" {
+	if err != nil || asset.ObjectLocation == nil || asset.ObjectLocation.Ref.ProfileID != "cos-first" || asset.ObjectLocation.Ref.Bucket != "storage-test-1250000000" {
 		t.Fatal("asset reader lost historical identity", err)
 	}
 	rends, err := store.FindRenditions(t.Context(), actor, project, uploaded.Asset.ID)
@@ -51,7 +51,7 @@ func TestMultiProfileStoredReadsRetainOriginalAndRenditionLocations(t *testing.T
 		t.Fatal("rendition reader", err)
 	}
 	for _, rend := range rends {
-		if rend.ObjectLocation == nil || rend.ObjectLocation.Ref.ProfileID != "minio-main" || rend.ObjectLocation.Ref.Key != rend.ObjectKey {
+		if rend.ObjectLocation == nil || rend.ObjectLocation.Ref.ProfileID != "cos-first" || rend.ObjectLocation.Ref.Key != rend.ObjectKey {
 			t.Fatal("rendition reader lost historical identity")
 		}
 	}
@@ -72,7 +72,7 @@ func TestMultiProfileStoredReadsRetainOriginalAndRenditionLocations(t *testing.T
 			t.Fatal("library or frozen reader lost historical identity", err)
 		}
 		for _, rend := range file.Renditions {
-			if rend.ObjectLocation == nil || rend.ObjectLocation.Ref.ProfileID != "minio-main" {
+			if rend.ObjectLocation == nil || rend.ObjectLocation.Ref.ProfileID != "cos-first" {
 				t.Fatal("frozen rendition lost location")
 			}
 		}
@@ -116,7 +116,7 @@ func TestRoutedUsageSourceReadsSavedLocationsAfterSwitch(t *testing.T) {
 		t.Fatal(err)
 	}
 	library := pgmedia.NewScopedLibraryStore(db, func(*gorm.DB) mediaapp.LibraryProjectAccess { return routingProjectAccess{} }, time.Now, func(*gorm.DB) mediaapp.ScopeAccess { return routingScopeStub{} })
-	buckets := []mediaapp.StorageUsageBucket{{ProfileID: "minio-main", Bucket: "storage-test"}, {ProfileID: "cos-main", Bucket: "storage-test-123"}}
+	buckets := []mediaapp.StorageUsageBucket{{ProfileID: "cos-first", Bucket: "storage-test-1250000000"}, {ProfileID: "cos-main", Bucket: "storage-test-123"}}
 	source := pgmedia.NewRoutedStorageUsageStore(library, buckets, func(*gorm.DB) mediaapp.StorageUsageLocationSource { return emptyLocationIntents{} })
 	called := false
 	err = source.InspectStorageUsage(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, func(in mediaapp.StorageUsageInventory) error {

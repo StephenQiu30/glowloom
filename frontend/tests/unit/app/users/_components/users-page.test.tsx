@@ -1,5 +1,11 @@
 import { render } from "../../../../feedback";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { UserDirectory } from "@/app/users/_components/users-page";
 import { request, RequestError } from "@/lib/request";
@@ -135,4 +141,118 @@ it("Select 角色和状态的选择进入查询，全部值不会发送给服务
       }),
     ),
   );
+});
+
+it("批量全选排除已注销和当前账号，确认前不发送删除", async () => {
+  const users = [
+    { id: "active", display_name: "Active", status: "active" },
+    { id: "disabled", display_name: "Disabled", status: "disabled" },
+    { id: "deleted", display_name: "Deleted", status: "deleted" },
+    { id: "self", display_name: "Admin", status: "active" },
+  ].map((user) => ({
+    email: `${user.id}@example.invalid`,
+    platform_role: user.id === "self" ? "platform_admin" : "creator",
+    revision: "1",
+    ...user,
+  }));
+  const deleted = new Set<string>();
+  vi.mocked(request).mockImplementation(async (path, options) => {
+    if (path === "/api/platform/users") {
+      return {
+        items: users.map((user) =>
+          deleted.has(user.id) ? { ...user, status: "deleted" } : user,
+        ),
+      };
+    }
+    const user = users.find((user) => path.split("/")[4] === user.id);
+    if (options?.method === "POST" && user) {
+      deleted.add(user.id);
+      return;
+    }
+    return {
+      user,
+      allowed_actions:
+        user && ["active", "disabled"].includes(user.id) ? ["delete"] : [],
+      blocked_actions: { delete: "account_deleted" },
+    };
+  });
+  const writes = () =>
+    vi
+      .mocked(request)
+      .mock.calls.filter(([, options]) => options?.method === "POST");
+
+  render(<UserDirectory />);
+  await screen.findByText("active@example.invalid");
+  expect(screen.getByRole("checkbox", { name: /选择 Deleted/ })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  expect(screen.getByRole("checkbox", { name: /选择 Admin/ })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  fireEvent.click(screen.getByRole("checkbox", { name: "选择当前页全部用户" }));
+  expect(screen.getByText("已选 2 / 4 项")).toBeTruthy();
+
+  const open = () =>
+    fireEvent.click(screen.getByRole("button", { name: "删除账号" }));
+  open();
+  await screen.findByRole("alertdialog", { name: "删除 2 个账号？" });
+  fireEvent.click(screen.getByRole("button", { name: "取消" }));
+  expect(writes()).toHaveLength(0);
+
+  open();
+  await screen.findByRole("alertdialog", { name: "删除 2 个账号？" });
+  expect(writes()).toHaveLength(0);
+  fireEvent.click(screen.getByRole("button", { name: "删除" }));
+  await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+  expect(writes().map(([path]) => path)).toEqual([
+    "/api/platform/users/active/delete",
+    "/api/platform/users/disabled/delete",
+  ]);
+  await waitFor(() =>
+    expect(
+      screen.getByRole("checkbox", { name: /选择 Active/ }),
+    ).toHaveProperty("disabled", true),
+  );
+  await waitFor(() => {
+    const directory = within(screen.getByRole("table", { name: "用户目录" }));
+    expect(directory.getAllByText("已注销")).toHaveLength(3);
+    expect(
+      directory.getByRole("checkbox", { name: "选择当前页全部用户" }),
+    ).toHaveProperty("disabled", true);
+  });
+});
+
+it("确认单项删除成功后关闭详情并刷新目录", async () => {
+  const user = {
+    id: "target",
+    display_name: "Target",
+    email: "target@example.invalid",
+    status: "active",
+    revision: "1",
+  };
+  let deleted = false;
+  vi.mocked(request).mockImplementation(async (path, options) => {
+    if (
+      path === "/api/platform/users/target/delete" &&
+      options?.method === "POST"
+    ) {
+      deleted = true;
+      return;
+    }
+    const current = { ...user, status: deleted ? "deleted" : "active" };
+    return path === "/api/platform/users"
+      ? { items: [current] }
+      : { user: current, allowed_actions: deleted ? [] : ["delete"] };
+  });
+  render(<UserDirectory />);
+  fireEvent.click(await screen.findByRole("button", { name: "查看 Target" }));
+  fireEvent.click(await screen.findByRole("button", { name: "删除账号" }));
+  expect(deleted).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "删除" }));
+  const directory = await screen.findByRole("table", { name: "用户目录" });
+  expect(screen.queryByRole("heading", { name: "账号详情" })).toBeNull();
+  expect(deleted).toBe(true);
+  await within(directory).findByText("已注销");
 });

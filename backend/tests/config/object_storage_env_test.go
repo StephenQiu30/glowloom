@@ -11,32 +11,24 @@ import (
 )
 
 func TestObjectStorageRegistryEnvironmentKeepsNativeProfilesAndCredentialReferences(t *testing.T) {
-	for _, provider := range []string{"tos", "cos", "minio"} {
-		t.Run(provider, func(t *testing.T) {
-			file := filepath.Join(t.TempDir(), "configuration.env")
-			style := ""
-			if provider == "minio" {
-				style = "path"
-			}
-			body := "GLOWLOOM_ENV=local\nGLOWLOOM_STORAGE_MAINTENANCE_DSN=postgres://maintenance-fixture@127.0.0.1/fixture\nTEST_REGISTRY_AK=fixture-access\nTEST_REGISTRY_SK=fixture-secret\nGLOWLOOM_OBJECT_STORAGE_CONFIG={\"schema_version\":1,\"revision\":\"1\",\"upload\":{\"mode\":\"relay\",\"signed_url_ttl\":600000000000,\"session_ttl\":86400000000000,\"multipart_threshold_bytes\":33554432,\"part_size_bytes\":8388608,\"part_concurrency\":3,\"staging_retention\":172800000000000},\"access\":{\"preview_ttl\":300000000000,\"max_signed_url_ttl\":900000000000},\"limits\":{\"max_image_bytes\":20971520,\"max_video_bytes\":524288000,\"max_audio_bytes\":104857600,\"max_model_bytes\":67108864,\"max_document_bytes\":20971520},\"default_write_profile\":\"main\",\"profiles\":{\"main\":{\"provider\":\"" + provider + "\",\"mode\":\"read_write\",\"addressing_style\":\"" + style + "\",\"signing_endpoint\":\"http://127.0.0.1:9000\",\"endpoint\":\"http://127.0.0.1:9000\",\"bucket\":\"fixture-assets\",\"region\":\"us-east-1\",\"credentials\":{\"source\":\"env\",\"access_key_env\":\"TEST_REGISTRY_AK\",\"secret_key_env\":\"TEST_REGISTRY_SK\"}}}}\n"
-			if err := os.WriteFile(file, []byte(body), 0600); err != nil {
-				t.Fatal(err)
-			}
-			t.Setenv("GLOWLOOM_ENV_FILE", file)
-			cfg, err := config.Load()
-			if err != nil {
-				t.Fatal(err)
-			}
-			if cfg.StorageMaintenanceDSN == "" || cfg.ObjectStorage == nil || cfg.ObjectStorage.DefaultWriteProfile != "main" || string(cfg.ObjectStorage.Profiles["main"].Provider) != provider {
-				t.Fatal("registry identity missing")
-			}
-			r, err := objectstorage.OpenProfiles(*cfg.ObjectStorage)
-			if err != nil {
-				t.Fatal("dotenv credentials unavailable", err)
-			}
-			r.Close()
-		})
+	file := filepath.Join(t.TempDir(), "configuration.env")
+	body := "GLOWLOOM_ENV=local\nGLOWLOOM_STORAGE_MAINTENANCE_DSN=postgres://maintenance-fixture@127.0.0.1/fixture\nTEST_REGISTRY_AK=fixture-access\nTEST_REGISTRY_SK=fixture-secret\nGLOWLOOM_OBJECT_STORAGE_CONFIG={\"schema_version\":1,\"revision\":\"1\",\"upload\":{\"mode\":\"relay\",\"signed_url_ttl\":600000000000,\"session_ttl\":86400000000000,\"multipart_threshold_bytes\":33554432,\"part_size_bytes\":8388608,\"part_concurrency\":3,\"staging_retention\":172800000000000},\"access\":{\"preview_ttl\":300000000000,\"max_signed_url_ttl\":900000000000},\"limits\":{\"max_image_bytes\":20971520,\"max_video_bytes\":524288000,\"max_audio_bytes\":104857600,\"max_model_bytes\":67108864,\"max_document_bytes\":20971520},\"default_write_profile\":\"main\",\"profiles\":{\"main\":{\"provider\":\"cos\",\"mode\":\"read_write\",\"signing_endpoint\":\"http://127.0.0.1:9000\",\"endpoint\":\"http://127.0.0.1:9000\",\"bucket\":\"fixture-assets\",\"region\":\"us-east-1\",\"credentials\":{\"source\":\"env\",\"access_key_env\":\"TEST_REGISTRY_AK\",\"secret_key_env\":\"TEST_REGISTRY_SK\"}}}}\n"
+	if err := os.WriteFile(file, []byte(body), 0600); err != nil {
+		t.Fatal(err)
 	}
+	t.Setenv("GLOWLOOM_ENV_FILE", file)
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.StorageMaintenanceDSN == "" || cfg.ObjectStorage == nil || cfg.ObjectStorage.DefaultWriteProfile != "main" || cfg.ObjectStorage.Profiles["main"].Provider != config.StorageProviderCOS {
+		t.Fatal("registry identity missing")
+	}
+	r, err := objectstorage.OpenProfiles(*cfg.ObjectStorage)
+	if err != nil {
+		t.Fatal("dotenv credentials unavailable", err)
+	}
+	r.Close()
 }
 
 func TestObjectStorageEmptyRegistryDoesNotBlockOtherCapabilities(t *testing.T) {

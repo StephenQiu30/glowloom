@@ -14,7 +14,7 @@ import (
 
 func TestStorageOperatorDigestBindsWholeConfigurationWithoutResolvingSecrets(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "storage.yaml")
-	raw := "object_storage:\n  schema_version: 1\n  revision: 1\n  default_write_profile: minio-main\n  profiles:\n    minio-main:\n      provider: minio\n      mode: read_write\n      signing_endpoint: https://storage.example.test\n      addressing_style: path\n      endpoint: https://storage.example.test\n      bucket: original-files\n      region: us-east-1\n      credentials:\n        source: env\n        access_key_env: ABSENT_STORAGE_TEST_AK\n        secret_key_env: ABSENT_STORAGE_TEST_SK\n"
+	raw := "object_storage:\n  schema_version: 1\n  revision: 1\n  default_write_profile: cos-main\n  profiles:\n    cos-main:\n      provider: cos\n      mode: read_write\n      signing_endpoint: https://assets-test-1250000000.cos.ap-shanghai.myqcloud.com\n      endpoint: https://assets-test-1250000000.cos.ap-shanghai.myqcloud.com\n      bucket: assets-test-1250000000\n      region: ap-shanghai\n      credentials:\n        source: env\n        access_key_env: ABSENT_STORAGE_TEST_AK\n        secret_key_env: ABSENT_STORAGE_TEST_SK\n"
 	if err := os.WriteFile(file, []byte(raw+storagefixture.YAMLPolicy), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -23,7 +23,7 @@ func TestStorageOperatorDigestBindsWholeConfigurationWithoutResolvingSecrets(t *
 		t.Fatal(err)
 	}
 	first, err := storageoperator.Configuration(cfg)
-	if err != nil || len(first.ConfigSHA256) != 64 || first.DefaultWriteProfile != "minio-main" || first.Revision != "1" {
+	if err != nil || len(first.ConfigSHA256) != 64 || first.DefaultWriteProfile != "cos-main" || first.Revision != "1" {
 		t.Fatal("invalid public activation", err)
 	}
 	second, err := storageoperator.Configuration(cfg)

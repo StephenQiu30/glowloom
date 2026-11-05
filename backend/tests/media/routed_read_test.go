@@ -50,7 +50,7 @@ func (s *routedReadObjects) Get(_ context.Context, ref domain.ObjectRef) (io.Rea
 	return io.NopCloser(bytes.NewReader(b)), nil
 }
 func readLocation(profile, key string) *domain.ObjectLocation {
-	return &domain.ObjectLocation{ID: uuid.New(), Ref: domain.ObjectRef{ProfileID: profile, Bucket: "storage-test", Key: key}, State: "accepted"}
+	return &domain.ObjectLocation{ID: uuid.New(), Ref: domain.ObjectRef{ProfileID: profile, Bucket: "storage-test-1250000000", Key: key}, State: "accepted"}
 }
 func TestRoutedPreviewUsesSavedProfileAndActualGrantExpiry(t *testing.T) {
 	a := routedReadImage()
@@ -60,7 +60,7 @@ func TestRoutedPreviewUsesSavedProfileAndActualGrantExpiry(t *testing.T) {
 	codec := "png"
 	a.Codec = &codec
 	expiry := time.Now().UTC().Add(47 * time.Second).Truncate(time.Second)
-	for _, profile := range []string{"minio-main", "cos-main", "tos-main"} {
+	for _, profile := range []string{"cos-first", "cos-main", "cos-archive"} {
 		a.ObjectLocation = readLocation(profile, a.ObjectKey)
 		objects := &routedReadObjects{grants: map[domain.ObjectRef]mediaapp.AccessGrant{a.ObjectLocation.Ref: {URL: "https://" + profile + ".invalid/private", ExpiresAt: expiry}}}
 		query := mediaapp.NewRoutedAssetQuery(readStore{asset: a}, objects, time.Minute)
@@ -77,7 +77,7 @@ func TestRoutedPreviewRejectsMissingLocationAndReauthorizesBeforeSigning(t *test
 	if _, err := query.Preview(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID); !errors.Is(err, mediaapp.ErrUnavailable) || objects.calls != 0 {
 		t.Fatal("unproven legacy location guessed", err)
 	}
-	a.ObjectLocation = readLocation("minio-main", a.ObjectKey)
+	a.ObjectLocation = readLocation("cos-first", a.ObjectKey)
 	query = mediaapp.NewRoutedAssetQuery(readStore{asset: a, err: identityapp.ErrForbidden}, objects, time.Minute)
 	if _, err := query.Preview(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID); !errors.Is(err, identityapp.ErrForbidden) || objects.calls != 0 {
 		t.Fatal("revoked actor got new signature", err)
@@ -102,7 +102,7 @@ func (r routedLibraryReader) FindLibraryMedia(context.Context, identityapp.Princ
 func TestRoutedLibraryDownloadNeverFallsBackToSameKeyInAnotherProfile(t *testing.T) {
 	data := []byte("historical original")
 	a := sourceDocumentAsset(data)
-	a.ObjectLocation = readLocation("minio-main", a.ObjectKey)
+	a.ObjectLocation = readLocation("cos-first", a.ObjectKey)
 	other := a.ObjectLocation.Ref
 	other.ProfileID = "cos-main"
 	objects := &routedReadObjects{data: map[domain.ObjectRef][]byte{other: []byte("wrong bytes")}}
@@ -130,15 +130,15 @@ func TestRoutedLibraryDownloadNeverFallsBackToSameKeyInAnotherProfile(t *testing
 
 func TestRoutedLibraryRenditionsKeepIndependentProfilesAndExpiries(t *testing.T) {
 	a := routedReadImage()
-	a.ObjectLocation = readLocation("minio-main", a.ObjectKey)
+	a.ObjectLocation = readLocation("cos-first", a.ObjectKey)
 	rend := domain.Rendition{ID: uuid.New(), MediaAssetID: a.ID, Kind: domain.RenditionThumb256, ObjectKey: strings.TrimSuffix(a.ObjectKey, ".png") + "/thumb_256.png"}
 	rend.ObjectLocation = readLocation("cos-main", rend.ObjectKey)
 	expiry := time.Now().UTC().Add(45 * time.Second)
 	rendExpiry := expiry.Add(-10 * time.Second)
-	objects := &routedReadObjects{grants: map[domain.ObjectRef]mediaapp.AccessGrant{a.ObjectLocation.Ref: {URL: "https://minio.invalid/original", ExpiresAt: expiry}, rend.ObjectLocation.Ref: {URL: "https://cos.invalid/thumb", ExpiresAt: rendExpiry}}}
+	objects := &routedReadObjects{grants: map[domain.ObjectRef]mediaapp.AccessGrant{a.ObjectLocation.Ref: {URL: "https://old-cos.invalid/original", ExpiresAt: expiry}, rend.ObjectLocation.Ref: {URL: "https://cos.invalid/thumb", ExpiresAt: rendExpiry}}}
 	query := mediaapp.NewRoutedLibraryMediaQuery(routedLibraryReader{file: mediaapp.LibraryMediaFile{Asset: a, Renditions: []domain.Rendition{rend}}}, objects, objects, time.Minute)
 	result, err := query.Preview(t.Context(), identityapp.Principal{}, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &a.ProjectID}, a.ID)
-	if err != nil || len(result.Renditions) != 1 || result.URL != "https://minio.invalid/original" || !result.ExpiresAt.Equal(expiry) || result.Renditions[0].URL != "https://cos.invalid/thumb" || !result.Renditions[0].ExpiresAt.Equal(rendExpiry) {
+	if err != nil || len(result.Renditions) != 1 || result.URL != "https://old-cos.invalid/original" || !result.ExpiresAt.Equal(expiry) || result.Renditions[0].URL != "https://cos.invalid/thumb" || !result.Renditions[0].ExpiresAt.Equal(rendExpiry) {
 		t.Fatal("original or rendition routed by default or fabricated expiry", err)
 	}
 }
@@ -146,7 +146,7 @@ func TestRoutedLibraryRenditionsKeepIndependentProfilesAndExpiries(t *testing.T)
 func TestRoutedDocumentSourceUsesSavedLocationAfterFreeze(t *testing.T) {
 	data := []byte("frozen script original")
 	a := sourceDocumentAsset(data)
-	a.ObjectLocation = readLocation("tos-main", a.ObjectKey)
+	a.ObjectLocation = readLocation("cos-archive", a.ObjectKey)
 	repo := &documentSourceRepo{assets: []domain.MediaAsset{a}}
 	objects := &routedReadObjects{data: map[domain.ObjectRef][]byte{a.ObjectLocation.Ref: data}}
 	source := mediaapp.NewRoutedDocumentSources(repo, objects)
@@ -193,9 +193,9 @@ func TestRoutedReferenceVerifiesOriginalAndFrozenRenditionLocations(t *testing.T
 	facts := sourceDocumentAsset(data)
 	a.SHA256 = facts.SHA256
 	a.ByteSize = facts.ByteSize
-	a.ObjectLocation = readLocation("minio-main", a.ObjectKey)
+	a.ObjectLocation = readLocation("cos-first", a.ObjectKey)
 	rend := domain.Rendition{ID: uuid.New(), MediaAssetID: a.ID, Kind: domain.RenditionThumb256, ObjectKey: strings.TrimSuffix(a.ObjectKey, ".png") + "/thumb_256.png", ByteSize: &a.ByteSize, CreateTime: a.CreateTime, UpdateTime: a.UpdateTime}
-	rend.ObjectLocation = readLocation("tos-main", rend.ObjectKey)
+	rend.ObjectLocation = readLocation("cos-archive", rend.ObjectKey)
 	objects := &routedReadObjects{data: map[domain.ObjectRef][]byte{a.ObjectLocation.Ref: data, rend.ObjectLocation.Ref: data}}
 	reader := routedReferenceReader{file: mediaapp.LibraryMediaFile{Asset: a, Renditions: []domain.Rendition{rend}}}
 	query := mediaapp.NewRoutedReferenceFactQuery(reader, objects)
@@ -229,7 +229,7 @@ func (s *mutableReadStore) ListReadyAssets(context.Context, identityapp.Principa
 }
 func TestRoutedPreviewDoesNotPublishGrantWhenRevokedWhileSigning(t *testing.T) {
 	a := routedReadImage()
-	a.ObjectLocation = readLocation("minio-main", a.ObjectKey)
+	a.ObjectLocation = readLocation("cos-first", a.ObjectKey)
 	store := &mutableReadStore{asset: a}
 	objects := &routedReadObjects{grants: map[domain.ObjectRef]mediaapp.AccessGrant{a.ObjectLocation.Ref: {URL: "https://fixture.invalid/private", ExpiresAt: time.Now().Add(40 * time.Second)}}, onSign: func() { store.err = identityapp.ErrForbidden }}
 	result, err := mediaapp.NewRoutedAssetQuery(store, objects, time.Minute).Preview(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID)
@@ -248,7 +248,7 @@ func (r *mutableLibraryReader) FindLibraryMedia(context.Context, identityapp.Pri
 }
 func TestRoutedLibraryDoesNotPublishGrantWhenRevokedWhileSigning(t *testing.T) {
 	a := routedReadImage()
-	a.ObjectLocation = readLocation("minio-main", a.ObjectKey)
+	a.ObjectLocation = readLocation("cos-first", a.ObjectKey)
 	reader := &mutableLibraryReader{file: mediaapp.LibraryMediaFile{Asset: a}}
 	objects := &routedReadObjects{grants: map[domain.ObjectRef]mediaapp.AccessGrant{a.ObjectLocation.Ref: {URL: "https://fixture.invalid/private", ExpiresAt: time.Now().Add(40 * time.Second)}}, onSign: func() { reader.err = identityapp.ErrForbidden }}
 	result, err := mediaapp.NewRoutedLibraryMediaQuery(reader, objects, objects, time.Minute).Preview(t.Context(), identityapp.Principal{}, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &a.ProjectID}, a.ID)
@@ -259,7 +259,7 @@ func TestRoutedLibraryDoesNotPublishGrantWhenRevokedWhileSigning(t *testing.T) {
 
 func TestRoutedPreviewRejectsLeaseExpiringDuringFinalAuthorization(t *testing.T) {
 	a := routedReadImage()
-	a.ObjectLocation = readLocation("minio-main", a.ObjectKey)
+	a.ObjectLocation = readLocation("cos-first", a.ObjectKey)
 	calls := 0
 	store := &mutableReadStore{asset: a, onFind: func() {
 		calls++

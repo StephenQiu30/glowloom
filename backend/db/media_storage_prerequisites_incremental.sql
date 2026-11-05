@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS media.storage_profile (
     resource_identity text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT storage_profile_id_check CHECK ((id ~ '^[a-z][a-z0-9-]{0,62}$'::text)),
-    CONSTRAINT storage_profile_provider_check CHECK ((provider = ANY (ARRAY['minio'::text, 'cos'::text, 'tos'::text]))),
+    CONSTRAINT storage_profile_provider_check CHECK (provider = 'cos'),
     CONSTRAINT storage_profile_resource_identity_check CHECK ((resource_identity ~ '^[a-f0-9]{64}$'::text)),
     CONSTRAINT storage_profile_id_bucket_key UNIQUE (id, bucket),
     CONSTRAINT storage_profile_pkey PRIMARY KEY (id),

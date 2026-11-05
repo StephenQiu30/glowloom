@@ -15,7 +15,7 @@ var cosBucketAPPID = regexp.MustCompile(`-[0-9]+$`)
 // Only explicit local fixtures may replace that origin with a loopback server.
 func ValidateCOSOrigin(endpoint, bucket, region string, allowLoopback bool) error {
 	u, err := url.Parse(endpoint)
-	if err != nil || u.User != nil || u.Hostname() == "" || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.ForceQuery {
+	if err != nil || u.User != nil || u.Hostname() == "" || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" || u.ForceQuery {
 		return fmt.Errorf("%w: invalid COS origin", ErrInvalid)
 	}
 	if allowLoopback && loopbackOrigin(u) && (u.Scheme == "http" || u.Scheme == "https") {
@@ -45,12 +45,9 @@ func loopbackOrigin(u *url.URL) bool {
 // profile. Signing regions do not split one endpoint/bucket into two resources;
 // COS's known native domain aliases all address the same bucket and region.
 func (p StorageProfile) ResourceIdentity() string {
-	if p.Provider == StorageProviderCOS {
-		u, err := url.Parse(p.Endpoint)
-		if err == nil && !loopbackOrigin(u) {
-			return strings.Join([]string{string(p.Provider), p.Region, p.Bucket}, "\x00")
-		}
-		return string(p.Provider) + "\x00" + p.Endpoint
+	u, err := url.Parse(p.Endpoint)
+	if err == nil && !loopbackOrigin(u) {
+		return strings.Join([]string{string(StorageProviderCOS), p.Region, p.Bucket}, "\x00")
 	}
-	return strings.Join([]string{string(p.Provider), p.Endpoint, p.Bucket}, "\x00")
+	return string(StorageProviderCOS) + "\x00" + p.Endpoint
 }

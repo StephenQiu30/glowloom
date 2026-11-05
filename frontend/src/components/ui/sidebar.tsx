@@ -283,7 +283,7 @@ function SidebarTrigger({
       }}
       {...props}
     >
-      <PanelLeftIcon />
+      <PanelLeftIcon aria-hidden="true" />
       <span className="sr-only">Toggle Sidebar</span>
     </Button>
   );
@@ -489,14 +489,17 @@ const sidebarMenuButtonVariants = cva(
     variants: {
       variant: {
         default: "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-        workspace:
-          "font-medium text-workspace-foreground hover:text-workspace-foreground data-active:text-workspace-foreground",
+        workspace: "font-medium text-sidebar-foreground",
+        history: "text-muted-foreground",
         outline:
           "bg-background shadow-[0_0_0_1px_var(--sidebar-border)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_var(--sidebar-accent)]",
       },
       size: {
         default: "h-8 text-sm",
-        workspace: "h-9 text-sm leading-[22px] pointer-coarse:min-h-11",
+        workspace:
+          "h-(--control-height) rounded-(--radius-control) text-sm leading-[22px] pointer-coarse:min-h-11 group-data-[collapsible=icon]:size-9! group-data-[collapsible=icon]:min-h-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:[&>span]:hidden [&_svg]:size-5",
+        history:
+          "h-9 rounded-(--radius-control) py-0 text-[0.8125rem] pointer-coarse:min-h-11 [&>svg]:size-6 [&>svg]:rounded-md [&>svg]:bg-sidebar-accent [&>svg]:p-[5px]",
         sm: "h-7 text-xs",
         lg: "h-12 text-sm group-data-[collapsible=icon]:p-0!",
       },

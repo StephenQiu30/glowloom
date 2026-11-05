@@ -97,11 +97,15 @@ function UserAdministration() {
   const { registerResultTrigger, registerFallbackTrigger, ...batch } =
     useBatchOperation<API.PlatformUserView>((ids) => {
       setSelectedUsers((rows) => rows.filter((r) => !ids.includes(r.id)));
+      setPending(true);
       setRetry((n) => n + 1);
     });
   const locked = pending || forbidden || batch.busy || batch.unresolved;
+  function canSelectUser(user: API.PlatformUserView) {
+    return user.id !== session.actor.id && user.status !== "deleted";
+  }
   const selectedInPage = selectedUsers.filter((r) =>
-    page?.items.some((item) => item.id === r.id),
+    page?.items.some((item) => item.id === r.id && canSelectUser(item)),
   );
   function resetPage() {
     setCursors([""]);
@@ -242,27 +246,7 @@ function UserAdministration() {
     );
   return (
     <div className="flex w-full flex-col gap-5">
-      <AdminHeading
-        title="用户管理"
-        description="查看平台账号，管理访问权限与安全状态。"
-      >
-        <Button
-          variant="outline"
-          disabled={forbidden}
-          aria-expanded={toolsOpen}
-          onClick={() => setToolsOpen((v) => !v)}
-        >
-          统计与导出
-        </Button>
-        <Button
-          disabled={forbidden}
-          aria-expanded={governanceOpen}
-          onClick={() => setGovernanceOpen((v) => !v)}
-        >
-          <Plus data-icon="inline-start" />
-          账号邀请
-        </Button>
-      </AdminHeading>
+      <AdminHeading title="用户管理" />
       <form
         ref={registerFallbackTrigger}
         tabIndex={-1}
@@ -297,7 +281,7 @@ function UserAdministration() {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="邮箱或显示名"
           maxLength={100}
-          className="max-w-sm"
+          className="sm:w-56 xl:w-60"
         />
         <Select
           disabled={locked}
@@ -411,6 +395,30 @@ function UserAdministration() {
             onChange={setVisibility}
           />
         ) : null}
+        <div
+          className="ml-auto flex flex-wrap gap-2"
+          role="group"
+          aria-label="账号目录操作"
+        >
+          <Button
+            type="button"
+            variant="outline"
+            disabled={forbidden}
+            aria-expanded={toolsOpen}
+            onClick={() => setToolsOpen((v) => !v)}
+          >
+            统计与导出
+          </Button>
+          <Button
+            type="button"
+            disabled={forbidden}
+            aria-expanded={governanceOpen}
+            onClick={() => setGovernanceOpen((v) => !v)}
+          >
+            <Plus data-icon="inline-start" />
+            账号邀请
+          </Button>
+        </div>
       </form>
       {error ? (
         <ContentState
@@ -441,14 +449,16 @@ function UserAdministration() {
       ) : null}
       {page && !forbidden ? (
         <>
-          <SelectionBar
-            count={selectedInPage.length}
-            total={page.items.length}
-            disabled={locked || batch.unresolved}
-            onClear={() => setSelectedUsers([])}
-          >
-            {(["enable", "revoke_sessions", "disable", "delete"] as const).map(
-              (kind) => (
+          {selectedInPage.length ? (
+            <SelectionBar
+              count={selectedInPage.length}
+              total={page.items.length}
+              disabled={locked || batch.unresolved}
+              onClear={() => setSelectedUsers([])}
+            >
+              {(
+                ["enable", "revoke_sessions", "disable", "delete"] as const
+              ).map((kind) => (
                 <Button
                   key={kind}
                   variant={kind === "delete" ? "destructive" : "outline"}
@@ -469,9 +479,9 @@ function UserAdministration() {
                     }[kind]
                   }
                 </Button>
-              ),
-            )}
-          </SelectionBar>
+              ))}
+            </SelectionBar>
+          ) : null}
           <DataTable
             density="comfortable"
             columns={columns}
@@ -487,6 +497,7 @@ function UserAdministration() {
               onChange: setSelectedUsers,
               getLabel: (r) => `${r.display_name} ${r.email}`,
               pageLabel: "选择当前页全部用户",
+              canSelect: canSelectUser,
               disabled: locked || batch.unresolved,
             }}
           />
@@ -516,11 +527,6 @@ function UserAdministration() {
             }}
           />
         </>
-      ) : null}
-      {page?.as_of ? (
-        <p className="text-xs text-muted-foreground">
-          目录读取时间：{new Date(page.as_of).toLocaleString()}
-        </p>
       ) : null}
       {batch.showResult ? (
         <Button
@@ -597,9 +603,15 @@ function UserAdministration() {
         onClose={() => setAction(null)}
         onDone={async () => {
           if (detail) {
-            const next = await getPlatformUser({ id: detail.user.id });
-            setDetail(next);
+            try {
+              const next = await getPlatformUser({ id: detail.user.id });
+              setDetail(next.user.status === "deleted" ? null : next);
+            } catch {
+              // The write result is already known. Refresh the directory separately.
+              setDetail(null);
+            }
           }
+          setPending(true);
           setRetry((n) => n + 1);
         }}
       />

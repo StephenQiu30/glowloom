@@ -88,7 +88,7 @@ func (r *routedCopyRepo) ConfirmObjectRemoved(context.Context, identityapp.Princ
 func TestRoutedTransferCopiesSameKeyBetweenProfilesAndCleansOnlyTarget(t *testing.T) {
 	data := []byte("original immutable bytes")
 	facts := sourceDocumentAsset(data)
-	source := readLocation("minio-main", "projects/source/image/same.png")
+	source := readLocation("cos-first", "projects/source/image/same.png")
 	target := readLocation("cos-main", source.Ref.Key)
 	target.State = "reserved"
 	repo := &routedCopyRepo{object: mediaapp.ProjectCopyObject{TargetAssetID: uuid.New(), SourceObjectKey: source.Ref.Key, TargetObjectKey: target.Ref.Key, SourceLocation: source, TargetLocation: target, ByteSize: &facts.ByteSize, SHA256: facts.SHA256, ContentType: "image/png", Status: "pending"}}

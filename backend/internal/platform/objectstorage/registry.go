@@ -17,16 +17,6 @@ type Registry struct {
 	transport *http.Transport
 }
 
-type backend interface {
-	ping(context.Context) error
-	put(context.Context, string, io.Reader, int64, string, string) error
-	stat(context.Context, string) (ObjectInfo, error)
-	get(context.Context, string) (io.ReadCloser, error)
-	remove(context.Context, string) error
-	sign(context.Context, string, time.Duration) (string, error)
-	list(context.Context, string, int) ([]ObjectMetadata, error)
-}
-
 // OpenProfiles checks every declared identity and credential reference without
 // contacting a provider. Credentials are resolved again per operation, so a
 // replaced secret file or refreshed session token does not need a process restart.
@@ -83,27 +73,27 @@ func (r *Registry) PingProfile(ctx context.Context, profileID string) error {
 	return nil
 }
 
-func (r *Registry) resolve(ref Ref, write bool, signing bool) (backend, config.StorageCredentials, error) {
+func (r *Registry) resolve(ref Ref, write bool, signing bool) (cosBackend, config.StorageCredentials, error) {
 	if r == nil || !validKey(ref.Key) || len(ref.Key) > 696 || strings.ContainsAny(ref.Key, "\x00\r\n") {
-		return nil, config.StorageCredentials{}, ErrInvalidObject
+		return cosBackend{}, config.StorageCredentials{}, ErrInvalidObject
 	}
 	p, ok := r.cfg.Profiles[ref.ProfileID]
 	if !ok || p.Bucket != ref.Bucket {
-		return nil, config.StorageCredentials{}, ErrInvalidObject
+		return cosBackend{}, config.StorageCredentials{}, ErrInvalidObject
 	}
 	if p.Mode == config.StorageProfileDisabled || write && p.Mode != config.StorageProfileReadWrite {
-		return nil, config.StorageCredentials{}, ErrAccessDenied
+		return cosBackend{}, config.StorageCredentials{}, ErrAccessDenied
 	}
 	cred, err := r.cfg.ResolveCredentials(p.Credentials)
 	if err != nil {
-		return nil, cred, err
+		return cosBackend{}, cred, err
 	}
 	if signing {
 		p.Endpoint = p.SigningEndpoint
 	}
-	b, err := newBackend(p, cred, r.transport)
+	b, err := newCOS(p, cred, r.transport)
 	if err != nil {
-		return nil, cred, storageError("configure", ref.ProfileID, err)
+		return cosBackend{}, cred, storageError("configure", ref.ProfileID, err)
 	}
 	return b, cred, nil
 }
@@ -237,16 +227,26 @@ func (r *Registry) ListMetadata(ctx context.Context, profileID, bucket, prefix s
 	if err != nil {
 		return nil, storageError("list", profileID, err)
 	}
+	items, err = validateInventory(items, prefix, maxItems)
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		items[i].Ref = Ref{ProfileID: profileID, Bucket: bucket, Key: items[i].Key}
+	}
+	return items, nil
+}
+
+func validateInventory(items []ObjectMetadata, prefix string, maxItems int) ([]ObjectMetadata, error) {
 	if len(items) > maxItems {
 		return nil, ErrInventoryLimit
 	}
 	seen := make(map[string]bool, len(items))
-	for i, item := range items {
+	for _, item := range items {
 		if !validKey(item.Key) || !strings.HasPrefix(item.Key, prefix) || item.Size < 0 || seen[item.Key] {
 			return nil, ErrInvalidObject
 		}
 		seen[item.Key] = true
-		items[i].Ref = Ref{ProfileID: profileID, Bucket: bucket, Key: item.Key}
 	}
 	return items, nil
 }

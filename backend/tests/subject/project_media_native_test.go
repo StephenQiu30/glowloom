@@ -39,7 +39,7 @@ func TestNativeProjectMediaSignerRequiresFrozenProjectLocationAndActualBytes(t *
 		w.Header().Set("Content-Type", "image/png")
 		w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
 		w.Header().Set("Content-Length", fmt.Sprint(len(f.original)))
-		w.Header().Set("X-Amz-Meta-Sha256", hexHash(f.original))
+		w.Header().Set("X-Cos-Meta-Sha256", hexHash(f.original))
 		if r.Method == http.MethodGet {
 			reads.Add(1)
 			if corrupt.Load() {
@@ -61,7 +61,7 @@ func TestNativeProjectMediaSignerRequiresFrozenProjectLocationAndActualBytes(t *
 		t.Fatal(err)
 	}
 	defer registry.Close()
-	if err := pgmedia.NewStorageRoutes(f.owner).RegisterProfiles(t.Context(), []media.StorageProfile{{ID: profile, Provider: "minio", Endpoint: server.URL, SigningEndpoint: server.URL, Region: "us-east-1", Bucket: bucket, AddressingStyle: "path"}}); err != nil {
+	if err := pgmedia.NewStorageRoutes(f.owner).RegisterProfiles(t.Context(), []media.StorageProfile{{ID: profile, Provider: "cos", Endpoint: server.URL, SigningEndpoint: server.URL, Region: "us-east-1", Bucket: bucket}}); err != nil {
 		t.Fatal(err)
 	}
 	location, input := uuid.New(), uuid.New()

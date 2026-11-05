@@ -1,12 +1,10 @@
-// Package staging adapts the private S3 bucket to bounded receipt recovery.
+// Package staging adapts the private COS bucket to bounded receipt recovery.
 package staging
 
 import (
 	"context"
 	"errors"
 	"io"
-
-	"github.com/minio/minio-go/v7"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
@@ -31,8 +29,7 @@ func (o *Objects) PutIfAbsent(ctx context.Context, key string, reader io.Reader,
 func (o *Objects) Stat(ctx context.Context, key string) (application.ProviderStagedObjectInfo, error) {
 	info, err := o.client.Stat(ctx, key)
 	if err != nil {
-		var response minio.ErrorResponse
-		if errors.As(err, &response) && (response.Code == "NoSuchKey" || response.Code == "NotFound" || response.StatusCode == 404) {
+		if errors.Is(err, objectstorage.ErrObjectMissing) {
 			return application.ProviderStagedObjectInfo{}, application.ErrProviderStagedObjectMissing
 		}
 		return application.ProviderStagedObjectInfo{}, err

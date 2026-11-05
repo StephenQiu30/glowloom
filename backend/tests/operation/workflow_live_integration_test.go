@@ -201,7 +201,7 @@ func assertLiveOperationResult(ctx context.Context, t *testing.T, database *gorm
 		t.Fatalf("completed candidate = %+v: %v", output, err)
 	}
 	if _, err := objects.Stat(ctx, objectstorage.Ref{ProfileID: output.ProfileID, Bucket: output.Bucket, Key: output.ObjectKey}); err != nil {
-		t.Fatalf("stat generated MinIO object: %v", err)
+		t.Fatalf("stat generated COS object: %v", err)
 	}
 	t.Cleanup(func() {
 		cleanCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

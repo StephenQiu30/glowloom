@@ -51,7 +51,7 @@ func TestStorageEmptyProofRejectsInvalidConfigAndWorkCreatedAfterMeasurement(t *
 	if _, err := routes.ProveEmptyStorageDeployment(t.Context(), sha); err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.Exec(`INSERT INTO media.storage_profile(id,provider,endpoint,signing_endpoint,region,bucket,addressing_style,resource_identity) VALUES('empty-proof-fixture','tos','https://example.invalid','https://example.invalid','cn-test','fixture-proof','',repeat('c',64))`).Error; err != nil {
+	if err := tx.Exec(`INSERT INTO media.storage_profile(id,provider,endpoint,signing_endpoint,region,bucket,addressing_style,resource_identity) VALUES('empty-proof-fixture','cos','https://example.invalid','https://example.invalid','cn-test','fixture-proof','',repeat('c',64))`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Exec(`INSERT INTO media.storage_work_intent(id,kind,owner_id,work_id,profile_id,bucket,config_revision) VALUES(gen_random_uuid(),'package',gen_random_uuid(),gen_random_uuid(),'empty-proof-fixture','fixture-proof','1')`).Error; err != nil {
@@ -92,7 +92,7 @@ func TestStorageNativeEmptyBootstrapAllowsLaterGuardedRevisionWithRealWork(t *te
 	if err := routes.FinalizeStorageSchema(t.Context(), sha); err != nil {
 		t.Fatal(err)
 	}
-	profiles := []media.StorageProfile{{ID: "native-first", Provider: "tos", Endpoint: "https://tos-cn-beijing.volces.com", Bucket: "fixture-first", Region: "cn-beijing"}, {ID: "native-second", Provider: "tos", Endpoint: "https://tos-cn-shanghai.volces.com", Bucket: "fixture-second", Region: "cn-shanghai"}}
+	profiles := []media.StorageProfile{{ID: "native-first", Provider: "cos", Endpoint: "https://fixture-first-1250000000.cos.ap-beijing.myqcloud.com", Bucket: "fixture-first-1250000000", Region: "ap-beijing"}, {ID: "native-second", Provider: "cos", Endpoint: "https://fixture-second-1250000000.cos.ap-shanghai.myqcloud.com", Bucket: "fixture-second-1250000000", Region: "ap-shanghai"}}
 	for i := range profiles {
 		profiles[i].SigningEndpoint = profiles[i].Endpoint
 	}
@@ -123,7 +123,7 @@ func TestStorageNativeEmptyBootstrapAllowsLaterGuardedRevisionWithRealWork(t *te
 	}
 	var legacy int
 	if err := tx.Raw(`SELECT count(*) FROM information_schema.tables WHERE table_schema='media' AND table_name='storage_legacy_binding'`).Scan(&legacy).Error; err != nil || legacy != 0 {
-		t.Fatal("a fake original MinIO was manufactured", err)
+		t.Fatal("a fake original COS was manufactured", err)
 	}
 }
 

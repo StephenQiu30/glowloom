@@ -83,7 +83,7 @@ it("空列表只保留接入入口，表单使用可关闭的 Dialog", async () 
   render(<ProvidersPage />);
   await screen.findByText("还没有连接");
   expect(screen.queryByText("接入表单")).toBeNull();
-  const trigger = screen.getAllByRole("button", { name: "接入服务" })[0];
+  const trigger = screen.getByRole("button", { name: "接入服务" });
   trigger.focus();
   fireEvent.click(trigger);
   expect(screen.getByRole("dialog", { name: "接入服务" })).toBeTruthy();

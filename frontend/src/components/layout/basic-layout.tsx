@@ -275,8 +275,8 @@ export function BasicLayout({
         onOpenChange={setSidebarPreference}
         style={
           {
-            "--sidebar-width": "240px",
-            "--sidebar-width-icon": "64px",
+            "--sidebar-width": "var(--layout-sidebar)",
+            "--sidebar-width-icon": "var(--layout-sidebar-collapsed)",
           } as CSSProperties
         }
       >

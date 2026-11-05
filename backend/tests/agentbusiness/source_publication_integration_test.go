@@ -66,7 +66,7 @@ func (s *sourceBytes) RemoveObject(_ context.Context, f scriptdomain.ObjectFact)
 func sourceRoute(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	profile := "agent-script-" + uuid.NewString()[:8]
-	if err := db.Exec(`INSERT INTO media.storage_profile(id,provider,endpoint,signing_endpoint,region,bucket,addressing_style,resource_identity)VALUES(?,'minio','http://127.0.0.1','http://127.0.0.1','us-east-1','agent-script','path',?)`, profile, domain.ContentHash(profile)).Error; err != nil {
+	if err := db.Exec(`INSERT INTO media.storage_profile(id,provider,endpoint,signing_endpoint,region,bucket,addressing_style,resource_identity)VALUES(?,'cos','http://127.0.0.1','http://127.0.0.1','us-east-1','agent-script','',?)`, profile, domain.ContentHash(profile)).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`INSERT INTO media.storage_route(singleton,revision,profile_id)VALUES(1,?,?) ON CONFLICT(singleton)DO UPDATE SET revision=EXCLUDED.revision,profile_id=EXCLUDED.profile_id`, "1", profile).Error; err != nil {
@@ -263,7 +263,7 @@ func sourceStoreForFixture(db *gorm.DB) *sourcepostgres.SourceStore {
 	return sourcepostgres.NewSourceStore(db, func(tx *gorm.DB) script.ProjectAccess { return scopewire.ProvideWorkerProjectContentAccess(tx) }).WithPublicationAuthorization(scriptwire.ProvideSourcePublicationAuthorization).WithObjectLocations(scriptwire.ProvideScriptObjectLocations)
 }
 
-func TestSourcePublicationActualMinioBytesAndSavedHistory(t *testing.T) {
+func TestSourcePublicationActualCOSBytesAndSavedHistory(t *testing.T) {
 	file := os.Getenv("GLOWLOOM_TEST_RECEIPT_STORAGE_CONFIG")
 	if file == "" {
 		t.Skip("explicit isolated local object fixture required")
@@ -290,7 +290,7 @@ func TestSourcePublicationActualMinioBytesAndSavedHistory(t *testing.T) {
 		Upload:   config.StorageUploadPolicy{Mode: config.StorageUploadRelay, SignedURLTTL: time.Minute, SessionTTL: time.Hour, StagingRetention: 24 * time.Hour, MultipartThresholdBytes: 8 << 20, PartSizeBytes: 5 << 20, PartConcurrency: 1},
 		Access:   config.StorageAccessPolicy{PreviewTTL: time.Minute, MaxSignedURLTTL: 15 * time.Minute},
 		Limits:   config.StorageLimits{MaxImageBytes: 20 << 20, MaxVideoBytes: 500 << 20, MaxAudioBytes: 100 << 20, MaxModelBytes: 64 << 20, MaxDocumentBytes: 20 << 20},
-		Profiles: map[string]config.StorageProfile{profileID: {Provider: config.StorageProviderMinIO, Mode: config.StorageProfileReadWrite, Endpoint: settings.Endpoint, SigningEndpoint: settings.Endpoint, Bucket: settings.Bucket, Region: settings.Region, AddressingStyle: config.StorageAddressingPath, Credentials: config.StorageCredentialsRef{Source: config.StorageCredentialsEnvironment, AccessKeyEnv: "AGENT_SOURCE_TEST_ACCESS", SecretKeyEnv: "AGENT_SOURCE_TEST_SECRET"}}}}
+		Profiles: map[string]config.StorageProfile{profileID: {Provider: config.StorageProviderCOS, Mode: config.StorageProfileReadWrite, Endpoint: settings.Endpoint, SigningEndpoint: settings.Endpoint, Bucket: settings.Bucket, Region: settings.Region, Credentials: config.StorageCredentialsRef{Source: config.StorageCredentialsEnvironment, AccessKeyEnv: "AGENT_SOURCE_TEST_ACCESS", SecretKeyEnv: "AGENT_SOURCE_TEST_SECRET"}}}}
 	encoded, _ := json.Marshal(input)
 	cfg, err := config.LoadObjectStorageEnvironment(string(encoded), "local", func(key string) string {
 		if key == "AGENT_SOURCE_TEST_ACCESS" {
@@ -309,7 +309,7 @@ func TestSourcePublicationActualMinioBytesAndSavedHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(registry.Close)
-	if err := pgmedia.NewStorageRoutes(db).RegisterProfiles(t.Context(), []media.StorageProfile{{ID: profileID, Provider: "minio", Endpoint: settings.Endpoint, SigningEndpoint: settings.Endpoint, Region: settings.Region, Bucket: settings.Bucket, AddressingStyle: "path"}}); err != nil {
+	if err := pgmedia.NewStorageRoutes(db).RegisterProfiles(t.Context(), []media.StorageProfile{{ID: profileID, Provider: "cos", Endpoint: settings.Endpoint, SigningEndpoint: settings.Endpoint, Region: settings.Region, Bucket: settings.Bucket}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`INSERT INTO media.storage_route(singleton,revision,profile_id)VALUES(1,?,?) ON CONFLICT(singleton)DO UPDATE SET revision=EXCLUDED.revision,profile_id=EXCLUDED.profile_id`, "1", profileID).Error; err != nil {
@@ -332,7 +332,7 @@ func TestSourcePublicationActualMinioBytesAndSavedHistory(t *testing.T) {
 	b.WithSourceObjects(objects)
 	router := gin.New()
 	b.BusinessHandler(businessToken).Register(router)
-	status, first, message := businessToolRequest(t, router, g, "script_source_publish", "minio-source", sourcePublishInput())
+	status, first, message := businessToolRequest(t, router, g, "script_source_publish", "cos-source", sourcePublishInput())
 	if status != 200 || first.Status != "completed" {
 		t.Fatal("official object publication", status, message)
 	}
@@ -347,9 +347,9 @@ func TestSourcePublicationActualMinioBytesAndSavedHistory(t *testing.T) {
 	data, readErr := io.ReadAll(body)
 	closeErr := body.Close()
 	if readErr != nil || closeErr != nil || !bytes.Contains(data, []byte("雨夜，主角走入街道。")) || scriptdomain.ContentSHA(data) != base.Sources[0].Rich.SHA256 {
-		t.Fatal("actual Minio bytes mismatch", readErr, closeErr)
+		t.Fatal("COS fixture bytes mismatch", readErr, closeErr)
 	}
-	status, replay, message := businessToolRequest(t, router, g, "script_source_publish", "minio-source", sourcePublishInput())
+	status, replay, message := businessToolRequest(t, router, g, "script_source_publish", "cos-source", sourcePublishInput())
 	if status != 200 || replay.ReceiptID != first.ReceiptID {
 		t.Fatal("original official source replay", message)
 	}

@@ -20,7 +20,7 @@ func TestStorageEnvironmentRequiresCompleteExplicitWritableDefault(t *testing.T)
 	t.Cleanup(func() { _ = db.Rollback().Error })
 	routes := pgmedia.NewStorageRoutes(db)
 	storageProfiles(t, routes)
-	input := storageEnvironmentFixture(t, db, "gate-"+uuid.NewString(), "minio-main")
+	input := storageEnvironmentFixture(t, db, "gate-"+uuid.NewString(), "cos-first")
 	for _, mutate := range []func(*mediaapp.StorageEnvironment){func(i *mediaapp.StorageEnvironment) { i.ConfigSHA256 = "invalid" }, func(i *mediaapp.StorageEnvironment) { i.DefaultWriteProfile = "unconfigured" }, func(i *mediaapp.StorageEnvironment) { i.UploadSessionTTL = 0 }, func(i *mediaapp.StorageEnvironment) {
 		for n := range i.Profiles {
 			if i.Profiles[n].ID == i.DefaultWriteProfile {
@@ -49,12 +49,12 @@ func TestStorageEnvironmentSerializesConcurrentOldProfileAdmission(t *testing.T)
 	database := storageRouteDB(t)
 	routes := pgmedia.NewStorageRoutes(database)
 	storageProfiles(t, routes)
-	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, database, "race-"+uuid.NewString(), "minio-main")); err != nil {
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, database, "race-"+uuid.NewString(), "cos-first")); err != nil {
 		t.Fatal(err)
 	}
 	input := storageEnvironmentFixture(t, database, "cutover-"+uuid.NewString(), "cos-main")
 	for n := range input.Profiles {
-		if input.Profiles[n].ID == "minio-main" {
+		if input.Profiles[n].ID == "cos-first" {
 			input.Profiles[n].Mode = mediaapp.StorageProfileModeReadOnly
 		}
 	}
@@ -108,7 +108,7 @@ func TestStorageEnvironmentReplayAndSwitchPreserveInflightTargets(t *testing.T) 
 	t.Cleanup(func() { _ = db.Rollback().Error })
 	routes := pgmedia.NewStorageRoutes(db)
 	storageProfiles(t, routes)
-	first := storageEnvironmentFixture(t, db, "first-"+uuid.NewString(), "minio-main")
+	first := storageEnvironmentFixture(t, db, "first-"+uuid.NewString(), "cos-first")
 	route, err := routes.ApplyEnvironment(t.Context(), first)
 	if err != nil {
 		t.Fatal(err)
@@ -132,7 +132,7 @@ func TestStorageEnvironmentReplayAndSwitchPreserveInflightTargets(t *testing.T) 
 	}
 	next := storageEnvironmentFixture(t, db, "next-"+uuid.NewString(), "cos-main")
 	for n := range next.Profiles {
-		if next.Profiles[n].ID == "minio-main" {
+		if next.Profiles[n].ID == "cos-first" {
 			next.Profiles[n].Mode = mediaapp.StorageProfileModeReadOnly
 		}
 	}

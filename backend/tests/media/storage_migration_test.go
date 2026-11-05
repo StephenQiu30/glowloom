@@ -24,7 +24,7 @@ func TestStorageFrozenReferenceChecksActualBytesAndProviderFailure(t *testing.T)
 	facts := sourceDocumentAsset(data)
 	a.SHA256 = facts.SHA256
 	a.ByteSize = facts.ByteSize
-	a.ObjectLocation = readLocation("minio-main", a.ObjectKey)
+	a.ObjectLocation = readLocation("cos-first", a.ObjectKey)
 	objects := &routedReadObjects{data: map[domain.ObjectRef][]byte{a.ObjectLocation.Ref: data}}
 	reader := routedReferenceReader{file: mediaapp.LibraryMediaFile{Asset: a}}
 	query := mediaapp.NewRoutedReferenceFactQuery(reader, objects)

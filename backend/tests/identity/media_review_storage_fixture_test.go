@@ -3,6 +3,7 @@ package identity_test
 import (
 	"bytes"
 	"fmt"
+	"hash/crc64"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -23,7 +24,7 @@ import (
 func reviewStorage(t *testing.T, tx *gorm.DB, objects *reviewObjects) (*objectstorage.Registry, *pgmedia.StorageRoutes) {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		key := strings.TrimPrefix(r.URL.Path, "/identity-fixture/")
+		key := strings.TrimPrefix(r.URL.Path, "/")
 		w.Header().Set("ETag", `"review-fixture"`)
 		w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
 		switch r.Method {
@@ -33,10 +34,10 @@ func reviewStorage(t *testing.T, tx *gorm.DB, objects *reviewObjects) (*objectst
 				http.Error(w, "read fixture body", 400)
 				return
 			}
-			// Native SDK streaming framing surrounds these known controlled bytes.
+			// Check only the expected fixture outputs.
 			var content []byte
 			for _, candidate := range []string{"preview-one", "preview-two", "output", "pcm"} {
-				if bytes.Contains(raw, []byte(candidate)) {
+				if bytes.Equal(raw, []byte(candidate)) {
 					content = []byte(candidate)
 					break
 				}
@@ -45,10 +46,11 @@ func reviewStorage(t *testing.T, tx *gorm.DB, objects *reviewObjects) (*objectst
 				http.Error(w, "unexpected fixture output", 400)
 				return
 			}
-			if err := objects.PutIfAbsent(r.Context(), key, bytes.NewReader(content), int64(len(content)), r.Header.Get("Content-Type"), r.Header.Get("X-Amz-Meta-Sha256")); err != nil {
+			if err := objects.PutIfAbsent(r.Context(), key, bytes.NewReader(content), int64(len(content)), r.Header.Get("Content-Type"), r.Header.Get("X-Cos-Meta-Sha256")); err != nil {
 				w.WriteHeader(http.StatusPreconditionFailed)
 				return
 			}
+			w.Header().Set("X-Cos-Hash-Crc64ecma", fmt.Sprint(crc64.Checksum(content, crc64.MakeTable(crc64.ECMA))))
 		case http.MethodHead, http.MethodGet:
 			info, err := objects.Stat(r.Context(), key)
 			if err != nil {
@@ -57,7 +59,7 @@ func reviewStorage(t *testing.T, tx *gorm.DB, objects *reviewObjects) (*objectst
 			}
 			w.Header().Set("Content-Type", info.ContentType)
 			w.Header().Set("Content-Length", fmt.Sprint(info.Size))
-			w.Header().Set("X-Amz-Meta-Sha256", info.SHA256)
+			w.Header().Set("X-Cos-Meta-Sha256", info.SHA256)
 			if r.Method == http.MethodGet {
 				body, err := objects.Get(r.Context(), key)
 				if err != nil {
@@ -83,7 +85,7 @@ func reviewStorage(t *testing.T, tx *gorm.DB, objects *reviewObjects) (*objectst
 	}
 	t.Cleanup(registry.Close)
 	routes := pgmedia.NewStorageRoutes(tx)
-	if err := routes.RegisterProfiles(t.Context(), []media.StorageProfile{{ID: "identity-fixture", Provider: "minio", Endpoint: server.URL, SigningEndpoint: server.URL, Region: profile.Region, Bucket: profile.Bucket, AddressingStyle: "path"}}); err != nil {
+	if err := routes.RegisterProfiles(t.Context(), []media.StorageProfile{{ID: "identity-fixture", Provider: "cos", Endpoint: server.URL, SigningEndpoint: server.URL, Region: profile.Region, Bucket: profile.Bucket}}); err != nil {
 		t.Fatal("register exact review SDK fixture profile", err)
 	}
 	seedIdentityStorageRoute(t, tx)

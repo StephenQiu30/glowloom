@@ -37,20 +37,20 @@ func TestRoutedStorageUsageCountsSameKeyCopiesAndRetainedObjectsSeparately(t *te
 	scope := domain.LibraryScope{Kind: domain.LibraryPersonal}
 	id, _ := scope.Identity(actor.OrgID, actor.ID)
 	prefix := "personal/" + actor.OrgID.String() + "/" + actor.ID.String() + "/image/"
-	minio := domain.ObjectRef{ProfileID: "minio-main", Bucket: "storage-test", Key: prefix + "same.png"}
-	cos := minio
+	first := domain.ObjectRef{ProfileID: "cos-first", Bucket: "storage-test-1250000000", Key: prefix + "same.png"}
+	cos := first
 	cos.ProfileID = "cos-main"
-	retained := minio
+	retained := first
 	retained.Key = prefix + "retained-trash.png"
-	intent := minio
+	intent := first
 	intent.Key = "library-packages/owned-job/archive.zip"
 	absent := cos
 	absent.Key = prefix + "deleted.png"
-	p1 := mediaapp.StorageUsagePrefix{ProfileID: minio.ProfileID, Bucket: minio.Bucket, Prefix: prefix}
+	p1 := mediaapp.StorageUsagePrefix{ProfileID: first.ProfileID, Bucket: first.Bucket, Prefix: prefix}
 	p2 := p1
 	p2.ProfileID = cos.ProfileID
-	inventory := mediaapp.StorageUsageInventory{LibraryID: id, Locations: []domain.ObjectRef{minio, cos, absent, minio, intent}, PhysicalPrefixes: []mediaapp.StorageUsagePrefix{p1, p2}}
-	objects := &physicalUsageObjects{listed: map[mediaapp.StorageUsagePrefix][]mediaapp.StorageUsageObject{p1: {{Ref: minio, ByteSize: 900}, {Ref: retained, ByteSize: 999}}, p2: {{Ref: cos, ByteSize: 900}}}, sizes: map[domain.ObjectRef]int64{minio: 21, cos: 21, retained: 35, intent: 11}}
+	inventory := mediaapp.StorageUsageInventory{LibraryID: id, Locations: []domain.ObjectRef{first, cos, absent, first, intent}, PhysicalPrefixes: []mediaapp.StorageUsagePrefix{p1, p2}}
+	objects := &physicalUsageObjects{listed: map[mediaapp.StorageUsagePrefix][]mediaapp.StorageUsageObject{p1: {{Ref: first, ByteSize: 900}, {Ref: retained, ByteSize: 999}}, p2: {{Ref: cos, ByteSize: 900}}}, sizes: map[domain.ObjectRef]int64{first: 21, cos: 21, retained: 35, intent: 11}}
 	got, err := mediaapp.NewStorageUsageReader(usageSource{inventory: inventory}, objects, time.Now).StorageUsage(t.Context(), actor, scope)
 	if err != nil || got.UsedBytes != 88 || got.ObjectCount != 4 || got.LimitBytes != nil || objects.statCalls != 5 {
 		t.Fatal("physical copies collapsed or trash omitted", got, err)
@@ -61,7 +61,7 @@ func TestRoutedStorageUsageCountsSameKeyCopiesAndRetainedObjectsSeparately(t *te
 		t.Fatal("partial profile total published", got, err)
 	}
 	objects.failProfile = ""
-	objects.listed[p2] = []mediaapp.StorageUsageObject{{Ref: minio, ByteSize: 21}}
+	objects.listed[p2] = []mediaapp.StorageUsageObject{{Ref: first, ByteSize: 21}}
 	if _, err := mediaapp.NewStorageUsageReader(usageSource{inventory: inventory}, objects, time.Now).StorageUsage(t.Context(), actor, scope); !errors.Is(err, mediaapp.ErrUnavailable) {
 		t.Fatal("provider identity mismatch accepted", err)
 	}
@@ -72,7 +72,7 @@ func TestRoutedStorageUsageBoundsCombinedProfilesBeforePublishingTotals(t *testi
 	scope := domain.LibraryScope{Kind: domain.LibraryPersonal}
 	id, _ := scope.Identity(actor.OrgID, actor.ID)
 	prefix := "personal/" + actor.OrgID.String() + "/" + actor.ID.String() + "/image/"
-	p1 := mediaapp.StorageUsagePrefix{ProfileID: "minio-main", Bucket: "storage-test", Prefix: prefix}
+	p1 := mediaapp.StorageUsagePrefix{ProfileID: "cos-first", Bucket: "storage-test-1250000000", Prefix: prefix}
 	p2 := p1
 	p2.ProfileID = "cos-main"
 	objects := &physicalUsageObjects{listed: map[mediaapp.StorageUsagePrefix][]mediaapp.StorageUsageObject{}}

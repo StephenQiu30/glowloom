@@ -52,7 +52,7 @@ func TestProjectCopyRoutedSourceKeepsSourceLocationAndLeavesTargetUnboundUntilAd
 	source := validAsset()
 	source.Status = domain.StatusReady
 	source.ModerationStatus = domain.ModerationPassed
-	source.ObjectLocation = readLocation("minio-main", source.ObjectKey)
+	source.ObjectLocation = readLocation("cos-first", source.ObjectKey)
 	binding := application.ProjectCopyBinding{JobID: uuid.New(), OrgID: uuid.New(), SourceProjectID: source.ProjectID, TargetProjectID: uuid.New()}
 	copied, err := application.PrepareProjectMediaCopy(binding, []application.ProjectCopySourceAsset{{Asset: source}}, time.Now())
 	if err != nil {

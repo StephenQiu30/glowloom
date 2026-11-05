@@ -56,7 +56,7 @@ func (s *launchStore) PruneLaunches(context.Context, time.Time, int) (int64, err
 func launchFixture(t *testing.T) (*launchStore, *app.ExportQuery) {
 	t.Helper()
 	a := tool.Artifact{ID: uuid.New(), JobID: uuid.New(), ProjectID: uuid.New(), Format: tool.OutputJianying, ObjectKey: "private/native.zip", SHA256: strings.Repeat("a", 64)}
-	a.ObjectLocation = readLocation("minio-main", a.ObjectKey)
+	a.ObjectLocation = readLocation("cos-first", a.ObjectKey)
 	s := &launchStore{artifact: a, job: tool.ExportJob{ID: a.JobID, ProjectID: a.ProjectID, Revision: 3, OutputKind: tool.OutputJianying, Status: tool.Succeeded, ArtifactID: &a.ID, Settings: &tool.ExportSettings{FileName: "命名验收"}}}
 	q := app.NewRoutedExportQuery(s, &routedReadObjects{grants: map[mediadomain.ObjectRef]mediaapp.AccessGrant{a.ObjectLocation.Ref: {URL: "https://fixture.invalid/native.zip", ExpiresAt: time.Now().Add(5 * time.Minute)}}}, nil, 5*time.Minute).WithLaunchOrigin("http://localhost:3000")
 	return s, q

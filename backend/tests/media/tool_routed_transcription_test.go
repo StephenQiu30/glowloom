@@ -25,7 +25,7 @@ import (
 )
 
 // The saved-node boundary and speech recognizer are controlled fixtures; media
-// authorization, original bytes, real FFmpeg, PostgreSQL and native TOS SDK are actual.
+// authorization, original bytes, real FFmpeg, PostgreSQL and native COS SDK are actual.
 type routedSpeechSource struct{ asset uuid.UUID }
 
 func (s routedSpeechSource) FreezeTranscriptionSource(context.Context, identity.Principal, uuid.UUID, uuid.UUID, uuid.UUID, int64) (uuid.UUID, error) {
@@ -42,10 +42,10 @@ func (s *routedSpeechRecognizer) Transcribe(_ context.Context, file *media.Downl
 	return domain.Transcript{Version: 1, Language: "chinese", DurationMS: 1000, Segments: []domain.SubtitleSegment{{StartMS: 0, EndMS: 1000, Text: "受控识别夹具"}}}, nil
 }
 
-func TestRoutedTranscriptionActualPostgresTOSAndFFmpegAcceptsOneFrozenArtifact(t *testing.T) {
+func TestRoutedTranscriptionActualPostgresCOSAndFFmpegAcceptsOneFrozenArtifact(t *testing.T) {
 	owner, runtime := routedGeneratedDatabase(t)
 	actor, project := mediaStoreProject(t, owner)
-	registry, writes, cfg := controlledGeneratedTOS(t)
+	registry, writes, cfg := controlledGeneratedCOS(t)
 	profiles := []media.StorageProfile{}
 	for id, p := range cfg.Profiles {
 		profiles = append(profiles, media.StorageProfile{ID: id, Provider: string(p.Provider), Endpoint: p.Endpoint, SigningEndpoint: p.SigningEndpoint, Bucket: p.Bucket, Region: p.Region})
@@ -54,7 +54,7 @@ func TestRoutedTranscriptionActualPostgresTOSAndFFmpegAcceptsOneFrozenArtifact(t
 	if err := routes.RegisterProfiles(t.Context(), profiles); err != nil {
 		t.Fatal(err)
 	}
-	if err := owner.Exec(`INSERT INTO media.storage_route(singleton,profile_id,revision) VALUES(1,'tos-frozen','1') ON CONFLICT(singleton) DO UPDATE SET profile_id=excluded.profile_id,revision=excluded.revision`).Error; err != nil {
+	if err := owner.Exec(`INSERT INTO media.storage_route(singleton,profile_id,revision) VALUES(1,'cos-frozen','1') ON CONFLICT(singleton) DO UPDATE SET profile_id=excluded.profile_id,revision=excluded.revision`).Error; err != nil {
 		t.Fatal(err)
 	}
 	pcm := transcriptionPCM(t)
@@ -67,11 +67,11 @@ func TestRoutedTranscriptionActualPostgresTOSAndFFmpegAcceptsOneFrozenArtifact(t
 	key := "projects/" + project.String() + "/audio/2026/10/" + asset.String() + ".wav"
 	digest := sha256.Sum256(raw)
 	sha := hex.EncodeToString(digest[:])
-	if err = registry.PutIfAbsent(t.Context(), platform.Ref{ProfileID: "tos-frozen", Bucket: "controlled-fixture", Key: key}, bytes.NewReader(raw), int64(len(raw)), "audio/wav", sha); err != nil {
+	if err = registry.PutIfAbsent(t.Context(), platform.Ref{ProfileID: "cos-frozen", Bucket: "controlled-fixture-1250000000", Key: key}, bytes.NewReader(raw), int64(len(raw)), "audio/wav", sha); err != nil {
 		t.Fatal(err)
 	}
 	location := uuid.New()
-	if err = owner.Exec(`INSERT INTO media.object_location(id,profile_id,bucket,object_key,state,byte_size,sha256,mime_type) VALUES(?,'tos-frozen','controlled-fixture',?,'accepted',?,?,'audio/wav')`, location, key, len(raw), sha).Error; err != nil {
+	if err = owner.Exec(`INSERT INTO media.object_location(id,profile_id,bucket,object_key,state,byte_size,sha256,mime_type) VALUES(?,'cos-frozen','controlled-fixture-1250000000',?,'accepted',?,?,'audio/wav')`, location, key, len(raw), sha).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err = owner.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,object_location_id,file_name,mime_type,byte_size,sha256,duration_ms,moderation_status) VALUES(?,?,'audio','upload','ready',?,?,'synthetic.wav','audio/wav',?,?,1000,'passed')`, asset, project, key, location, len(raw), sha).Error; err != nil {
@@ -93,7 +93,7 @@ func TestRoutedTranscriptionActualPostgresTOSAndFFmpegAcceptsOneFrozenArtifact(t
 	if err != nil {
 		t.Fatal("pin before outbox", err)
 	}
-	if err = owner.Exec(`UPDATE media.storage_route SET profile_id='tos-new',revision='2' WHERE singleton=1`).Error; err != nil {
+	if err = owner.Exec(`UPDATE media.storage_route SET profile_id='cos-next',revision='2' WHERE singleton=1`).Error; err != nil {
 		t.Fatal(err)
 	}
 	prep, err := toolff.NewAudioPreprocessor(flow.FFProber{})
@@ -114,13 +114,13 @@ func TestRoutedTranscriptionActualPostgresTOSAndFFmpegAcceptsOneFrozenArtifact(t
 		State, ProfileID string
 		Total            int
 	}
-	if err = owner.Raw(`SELECT w.state,w.profile_id,(SELECT count(*) FROM media.object_location l WHERE l.owner_intent_id=w.id AND l.state='accepted') total FROM media.storage_work_intent w WHERE w.kind='transcription' AND w.owner_id=? AND w.work_id=?`, project, tool.StorageOwner("transcription", project, job.ID, 1).WorkID).Scan(&fact).Error; err != nil || fact.State != "accepted" || fact.ProfileID != "tos-frozen" || fact.Total != 1 {
+	if err = owner.Raw(`SELECT w.state,w.profile_id,(SELECT count(*) FROM media.object_location l WHERE l.owner_intent_id=w.id AND l.state='accepted') total FROM media.storage_work_intent w WHERE w.kind='transcription' AND w.owner_id=? AND w.work_id=?`, project, tool.StorageOwner("transcription", project, job.ID, 1).WorkID).Scan(&fact).Error; err != nil || fact.State != "accepted" || fact.ProfileID != "cos-frozen" || fact.Total != 1 {
 		t.Fatal("exact receipt/frozen profile", fact, err)
 	}
 	if replay, e := store.Create(t.Context(), actor, project, command, input); e != nil || replay.ID != job.ID {
 		t.Fatal("same command not recovered", e)
 	}
-	if err = owner.Exec(`UPDATE media.storage_route SET profile_id='tos-frozen' WHERE singleton=1`).Error; err != nil {
+	if err = owner.Exec(`UPDATE media.storage_route SET profile_id='cos-frozen' WHERE singleton=1`).Error; err != nil {
 		t.Fatal(err)
 	}
 	next, e := store.Create(t.Context(), actor, project, uuid.New(), input)
