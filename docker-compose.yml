@@ -1,5 +1,5 @@
-# Development application stack; existing host middleware retains its data.
-# Single project entry point: docker compose up -d --build
+# Local application stack; existing host middleware retains its data.
+# Single project entry point: docker compose up -d --build --wait
 # Fixed host ports: frontend 1122, backend 1123. Resolve host conflicts before starting.
 name: glowloom
 
@@ -69,30 +69,19 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
-      target: dev
+      args:
+        GLOWLOOM_BACKEND_ORIGIN: &backend-origin http://backend:18080
     image: glowloom/frontend:latest
+    depends_on:
+      backend:
+        condition: service_healthy
     init: true
     restart: unless-stopped
     environment:
       NEXT_TELEMETRY_DISABLED: "1"
-      GLOWLOOM_BACKEND_ORIGIN: "http://backend:18080"
+      GLOWLOOM_BACKEND_ORIGIN: *backend-origin
       GLOWLOOM_PUBLIC_ORIGIN: "http://localhost:1122"
       NODE_OPTIONS: "--max-old-space-size=2048"
-    volumes:
-      - ./frontend/src:/app/src:ro
-      - ./canvas-collab/src:/canvas-collab/src:ro
-      - ./canvas-collab/package.json:/canvas-collab/package.json:ro
-      - ./frontend/public:/app/public:ro
-      - ./frontend/next.config.ts:/app/next.config.ts:ro
-      - ./frontend/tsconfig.json:/app/tsconfig.json:ro
-      - ./frontend/postcss.config.mjs:/app/postcss.config.mjs:ro
-      - ./frontend/package.json:/app/package.json:ro
-      - ./frontend/pnpm-lock.yaml:/app/pnpm-lock.yaml:ro
-      - ./frontend/pnpm-workspace.yaml:/app/pnpm-workspace.yaml:ro
-      - ./frontend/eslint.config.mjs:/app/eslint.config.mjs:ro
-      - ./frontend/tests:/app/tests:ro
-      - frontend-modules:/app/node_modules
-      - frontend-next:/app/.next
     ports:
       - "127.0.0.1:1122:3000"
     healthcheck:
@@ -195,9 +184,3 @@ services:
 
 volumes:
   backend-go-build:
-  frontend-modules:
-    name: glowloom-dev_frontend-modules
-    external: true
-  frontend-next:
-    name: glowloom-dev_frontend-next
-    external: true

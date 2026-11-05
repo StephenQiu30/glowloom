@@ -42,7 +42,7 @@ Go 业务后端的统一二进制入口仍为 `backend/cmd/glowloom`，承载 AP
 - `backend/db/schema.sql` 是唯一的数据库结构定义。它只用于空业务库；禁止对已有业务库重放、重建或清理数据。邮箱与身份引用保护见[用户系统设计](docs/design/01-用户系统总体设计.md#81-d6-迁移与切换)。
 - 浏览器请求经同站代理；服务端 `GLOWLOOM_BACKEND_ORIGIN` 不进入浏览器。凭据不进入文档、日志、前端包或提交。
 - 默认本地工程验证不发起真实收费生成；fixture、协议握手或页面成功不能代替真实供应商验收。模型可用性以实际配置和适配能力为准。
-- `docker-compose.yml` 是唯一部署入口；完成迁移后的 `docker compose up -d --build` 统一启动 frontend、backend、独立 agent 和 canvas-collaboration。Agent 独立镜像及连接池/资源限制，仅在 Compose 网络监听 `agent:4401`，不发布宿主端口；Go 与 Agent 不设置相互 service_healthy 等待、不管理彼此进程。前端仍为 `http://localhost:1122`，Go 为 `http://127.0.0.1:1123`。复用既有 PostgreSQL、Redis、Kafka、对象存储，不创建依赖栈，不保留 Temporal 服务/namespace 配置。当前源码与 Compose 采用此拓扑；已有部署切换须先清结旧任务并离线审阅增量 SQL，应用启动不自动迁移或删除数据。
+- `docker-compose.yml` 是唯一部署入口；完成迁移后的 `docker compose up -d --build --wait` 统一启动 frontend、backend、独立 agent 和 canvas-collaboration。前端使用 Next.js standalone 镜像，完整启动等待后端健康。Agent 独立镜像及连接池/资源限制，仅在 Compose 网络监听 `agent:4401`，不发布宿主端口；Go 与 Agent 不设置相互 service_healthy 等待、不管理彼此进程。前端仍为 `http://localhost:1122`，Go 为 `http://127.0.0.1:1123`。复用既有 PostgreSQL、Redis、Kafka、对象存储，不创建依赖栈，不保留 Temporal 服务/namespace 配置。当前源码与 Compose 采用此拓扑；已有部署切换须先清结旧任务并离线审阅增量 SQL，应用启动不自动迁移或删除数据。
 - API 生成使用上述 package.json 命令组织标准工具；其他检查使用现有工具直接命令，不新增 shell 脚本或 Makefile。
 
 ## 4. 质量门禁

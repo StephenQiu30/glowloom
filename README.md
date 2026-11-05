@@ -47,13 +47,13 @@ cd glowloom
 
 1. 可用的 PostgreSQL、Redis、Kafka 与对象存储。
 2. `.env` 中的依赖连接、身份与会话密钥、协作令牌、两个方向独立的 Agent 服务令牌与受限 PostgreSQL DSN；模型接入另需凭据加密与请求 MAC 密钥。
-3. 现有开发卷与匹配的业务库结构。空库预先创建受限 `glowloom_agent` 登录角色并加载当前 `schema.sql`；已有库先清结旧在途，离线审阅当前 Agent/业务任务 SQL。应用不执行 DDL，不对存量库重放空库结构。
+3. 与运行版本匹配的业务库结构。空库预先创建受限 `glowloom_agent` 登录角色并加载当前 `schema.sql`；已有库先清结旧在途，离线审阅当前 Agent/业务任务 SQL。应用不执行 DDL，不对存量库重放空库结构。
 
 确认端口可用后，在仓库根目录启动：
 
 ```sh
 lsof -nP -iTCP:1122 -iTCP:1123 -sTCP:LISTEN
-docker compose up -d --build
+docker compose up -d --build --wait
 docker compose ps
 ```
 
@@ -65,19 +65,27 @@ docker compose ps
 
 首次启动成功后，打开工作台；需要私人素材、主体、画布或生成时，使用有效账号登录，并按对象权限访问。容器健康不等于真实生成能力已验收。
 
-`docker-compose.yml` 是应用唯一启动入口，包含 `frontend`、`backend`、`agent` 和 `canvas-collaboration`。后端在同一容器运行 API、worker、relay，并等待协作运行时健康后启动。仅更新后端时执行：
+`docker-compose.yml` 是应用唯一启动入口，包含 `frontend`、`backend`、`agent` 和 `canvas-collaboration`。前端运行镜像内的 Next.js standalone 构建，完整启动时等待后端健康。后端在同一容器运行 API、worker、relay，并等待协作运行时健康后启动。仅更新后端时执行：
 
 ```sh
-docker compose up -d --build backend
+docker compose up -d --build --wait backend
 docker compose logs --tail=100 backend
 ```
+
+后端已健康时，可单独更新前端：
+
+```sh
+docker compose up -d --build --no-deps --wait frontend
+```
+
+已有可用镜像时，单独启动前端可用 `docker compose up -d --no-build --no-deps --wait frontend`。在当前服务上执行 `docker compose ps` 并访问两个端口的 `/healthz` 即可确认启动状态。
 
 <details>
 <summary>配置、存量数据库升级与运行注意事项</summary>
 
 两端的浏览器 Origin 同步固定为 `http://localhost:1122`，忽略 `.env` 中旧的 Origin，避免端口切换后登录或写入被 Origin 校验拒绝。worker/relay 健康检查在容器内执行，不额外开放宿主端口。
 
-现有 PostgreSQL/Redis/Kafka/对象存储服务、身份密钥、前端开发缓存卷及 `.env` 须提前准备；Compose 复用这些资源，不执行数据库迁移。仓库不再提供额外的依赖栈、生产拆分或协作 overlay Compose 文件。
+现有 PostgreSQL、Redis、Kafka、COS、身份密钥及 `.env` 须提前准备。Compose 复用这些资源，数据库升级在部署前独立执行。已有业务库仍绑定旧存储时，先完成 [COS 切换检查](backend/config/COS配置说明.md#存量迁移与部署)，再重建或重启后端。
 
 Agent 启动前须由结构所有者创建专用 LOGIN 角色 `glowloom_agent`，使用独立密码，离线安装当前 SQL 与表级授权；空库只执行一次 `backend/db/schema.sql`，已有库按[一次性离线切换清单](backend/db/agent_cutover.md)盘点、备份、演练与核对权限，应用启动不运行 DDL。配置 `GLOWLOOM_AGENT_DB_DSN` 使用该受限角色，`GLOWLOOM_AGENT_SERVICE_TOKEN` 和 `GLOWLOOM_AGENT_BUSINESS_TOKEN` 为两个不同的至少32字节凭据；Go 不能把自己的业务库账号复用于 Agent。
 
@@ -91,7 +99,7 @@ Agent 启动前须由结构所有者创建专用 LOGIN 角色 `glowloom_agent`�
 
 后端每次启动都编译只读挂载的当前源码，成功后才启动服务；编译失败直接停止，不运行旧程序。独立 Go 构建缓存卷减少重复编译耗时。首次更新开发镜像后，纯 Go 源码更新也可执行 `docker compose restart backend`；修改依赖、Dockerfile、启动入口或 Compose 配置时重新执行上述带 `--build` 的命令。裸 `docker compose up -d` 不会强制更新已运行容器，开发后端运行中也不会自动热重载。
 
-启动会使用工作区当前源码，包括未提交修改；存在并行任务时，先确认这些修改可以一起运行，或在隔离的源码快照中验证。前端继续使用现有 Next.js 开发服务热更新，依赖卷的升级仍按现有依赖管理流程处理；生产镜像仍在构建阶段编译。
+构建前端镜像和启动开发后端都使用工作区当前源码，包括未提交修改。前端源码变更随镜像重建生效。Next.js 构建产物和依赖随镜像交付，启动时直接执行镜像内的服务。
 
 </details>
 
