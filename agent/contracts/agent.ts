@@ -1,7 +1,7 @@
-import { Type, type Static } from "typebox";
+import { Type, type Static } from 'typebox';
 
-const Id = Type.String({ format: "uuid" });
-const Hash = Type.String({ pattern: "^[a-f0-9]{64}$" });
+const Id = Type.String({ format: 'uuid' });
+const Hash = Type.String({ pattern: '^[a-f0-9]{64}$' });
 export const ScopeSchema = Type.Object({
   actor_id: Id,
   org_id: Id,
@@ -25,7 +25,7 @@ export const MessageQuery = Type.Object({
   ...IdentityQuery.properties,
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100, default: 50 })),
   before: Type.Optional(Type.String({ maxLength: 2048 })),
-  through: Type.String({ pattern: "^[0-9]+:[0-9]+$", maxLength: 64 }),
+  through: Type.String({ pattern: '^[0-9]+:[0-9]+$', maxLength: 64 }),
 });
 export type MessageInput = Static<typeof MessageQuery>;
 export const SubmissionParams = Type.Object({ sid: Id, requestId: Id });
@@ -46,9 +46,9 @@ export const AuthorizedInputSchema = Type.Object(
         sourceId: Id,
         sourceVersion: Type.String({ minLength: 1, maxLength: 256 }),
         mediaKind: Type.Union([
-          Type.Literal("image"),
-          Type.Literal("video"),
-          Type.Literal("audio"),
+          Type.Literal('image'),
+          Type.Literal('video'),
+          Type.Literal('audio'),
         ]),
         bindingId: Type.Optional(Type.String()),
       }),
@@ -104,11 +104,11 @@ export const ControlSchema = Type.Object(
       maximum: Number.MAX_SAFE_INTEGER,
     }),
     action: Type.Union([
-      Type.Literal("approve"),
-      Type.Literal("reject"),
-      Type.Literal("pause"),
-      Type.Literal("resume"),
-      Type.Literal("stop"),
+      Type.Literal('approve'),
+      Type.Literal('reject'),
+      Type.Literal('pause'),
+      Type.Literal('resume'),
+      Type.Literal('stop'),
     ]),
     content_hash: Hash,
   },
@@ -116,18 +116,18 @@ export const ControlSchema = Type.Object(
 );
 export type ControlInput = Static<typeof ControlSchema>;
 export const operationIds = {
-  createSession: "createAgentSession",
-  listSessions: "listAgentSessions",
-  readSession: "getAgentSession",
-  createRun: "createAgentRun",
-  readRun: "getAgentRun",
-  command: "applyAgentDecision",
-  events: "subscribeAgentEvents",
-  listRuns: "listAgentRuns",
-  readSubmission: "getAgentSubmission",
-  currentSubmission: "getCurrentAgentSubmission",
-  listMessages: "listAgentMessages",
-  readMessage: "getAgentMessage",
+  createSession: 'createAgentSession',
+  listSessions: 'listAgentSessions',
+  readSession: 'getAgentSession',
+  createRun: 'createAgentRun',
+  readRun: 'getAgentRun',
+  command: 'applyAgentDecision',
+  events: 'subscribeAgentEvents',
+  listRuns: 'listAgentRuns',
+  readSubmission: 'getAgentSubmission',
+  currentSubmission: 'getCurrentAgentSubmission',
+  listMessages: 'listAgentMessages',
+  readMessage: 'getAgentMessage',
 } as const;
 
 const JsonMap = Type.Record(Type.String(), Type.Unknown());
@@ -216,7 +216,7 @@ export const SessionViewSchema = Type.Object({
   id: Id,
   title: Type.String(),
   execution_revision: Type.Integer(),
-  created_at: Type.Optional(Type.String({ format: "date-time" })),
+  created_at: Type.Optional(Type.String({ format: 'date-time' })),
   run: Type.Optional(RunSnapshotSchema),
 });
 export const AcceptedRunSchema = Type.Object({
@@ -242,7 +242,7 @@ export const RunSummarySchema = Type.Object({
   root_run_id: Id,
   session_id: Id,
   accepted_revision: Type.Integer(),
-  created_at: Type.String({ format: "date-time" }),
+  created_at: Type.String({ format: 'date-time' }),
   status: Type.String(),
   input_excerpt: Type.String({ maxLength: 480 }),
   retry_of_run_id: Type.Optional(Id),

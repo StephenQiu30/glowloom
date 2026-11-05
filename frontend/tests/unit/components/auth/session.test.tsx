@@ -201,7 +201,7 @@ it("StrictMode emits only one toast for a current failed session check", async (
     </StrictMode>,
   );
   await screen.findByText("public content");
-  expect(notifications.show).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(notifications.show).toHaveBeenCalledTimes(1));
   const options = notifications.show.mock.lastCall![1];
   view.unmount();
   expect(notifications.dismiss).toHaveBeenCalledWith(options.id);
