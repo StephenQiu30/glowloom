@@ -335,7 +335,8 @@ function ProviderAdministration({
     );
   return (
     <div className="flex w-full flex-col gap-5">
-      <AdminHeading title="AI 服务接入">
+      <AdminHeading title="AI 服务接入" />
+      <div className="flex flex-wrap justify-end gap-2">
         <Button
           className="max-md:h-11"
           onClick={() => openConnect(true)}
@@ -344,7 +345,7 @@ function ProviderAdministration({
           <Plus data-icon="inline-start" />
           接入服务
         </Button>
-      </AdminHeading>
+      </div>
       {mutation.message || mutation.pending ? (
         <MutationStatus mutation={mutation} />
       ) : null}
@@ -445,19 +446,7 @@ function ProviderAdministration({
                 }
               />
             ) : (
-              <ContentState
-                title={query ? "没有匹配的连接" : "还没有连接"}
-                description={
-                  query
-                    ? "试试其他关键词。"
-                    : "连接服务商，选择需要使用的模型。"
-                }
-                actions={
-                  !query ? (
-                    <Button onClick={() => openConnect(true)}>接入服务</Button>
-                  ) : undefined
-                }
-              />
+              <ContentState title={query ? "没有匹配的连接" : "还没有连接"} />
             )}
             <ListPagination
               mode="cursor"

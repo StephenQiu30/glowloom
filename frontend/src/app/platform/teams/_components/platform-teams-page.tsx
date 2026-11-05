@@ -250,11 +250,9 @@ function TeamAdministration() {
     );
   return (
     <div className="flex w-full flex-col gap-5">
-      <AdminHeading
-        title="团队管理"
-        description="管理团队信息、成员与团队状态。"
-      />
+      <AdminHeading title="团队管理" />
       <form
+        aria-label="团队筛选"
         className="flex flex-wrap items-center gap-2"
         onSubmit={(e) => {
           e.preventDefault();
@@ -280,8 +278,8 @@ function TeamAdministration() {
         <Input
           name="search"
           aria-label="搜索团队名称"
-          placeholder="搜索团队名称…"
-          className="max-w-sm"
+          placeholder="团队名称"
+          className="sm:w-56 xl:w-60"
           disabled={locked}
         />
         <Select name="status" disabled={locked} defaultValue="all">

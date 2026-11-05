@@ -3,7 +3,6 @@ import Link from "next/link";
 import type { AdminSection } from "@/components/layout/routes";
 import type { ReactNode } from "react";
 import { PageToolbar } from "@/components/layout/page-toolbar";
-import { PageHeader } from "@/components/canvas/runtime/components/layout/workspace/page-header";
 import { Button } from "@/components/ui/button";
 export function AdminNavigation({ active }: { active: AdminSection }) {
   const links = [
@@ -50,20 +49,8 @@ export function AdminWorkspace({
     </div>
   );
 }
-export function AdminHeading({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children?: ReactNode;
-}) {
-  return (
-    <PageHeader title={title} description={description}>
-      {children}
-    </PageHeader>
-  );
+export function AdminHeading({ title }: { title: string }) {
+  return <h1 className="sr-only">{title}</h1>;
 }
 export function SelectionBar({
   count,
@@ -78,27 +65,20 @@ export function SelectionBar({
   onClear: () => void;
   children: ReactNode;
 }) {
+  if (!count) return null;
   return (
     <div
       className="flex min-h-11 flex-wrap items-center gap-2"
       role="group"
       aria-label="批量操作"
     >
-      {count ? (
-        <>
-          <span className="text-sm" aria-live="polite">
-            已选 {count} / {total} 项
-          </span>
-          <Button variant="ghost" disabled={disabled} onClick={onClear}>
-            清除选择
-          </Button>
-          <div className="flex flex-wrap gap-2 sm:ml-auto">{children}</div>
-        </>
-      ) : (
-        <span className="text-sm text-muted-foreground">
-          勾选记录以批量管理 · 仅当前页
-        </span>
-      )}
+      <span className="text-sm" aria-live="polite">
+        已选 {count} / {total} 项
+      </span>
+      <Button variant="ghost" disabled={disabled} onClick={onClear}>
+        清除选择
+      </Button>
+      <div className="flex flex-wrap gap-2 sm:ml-auto">{children}</div>
     </div>
   );
 }

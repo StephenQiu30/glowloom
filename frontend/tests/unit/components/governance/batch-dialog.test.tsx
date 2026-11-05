@@ -136,3 +136,45 @@ it("精简操作的原入口消失后，自动关闭会恢复到筛选区", asyn
     ),
   );
 });
+
+it("所有目标都受保护时解释跳过原因，只提供关闭", async () => {
+  const execute = vi.fn();
+  function BlockedExample() {
+    const batch = useBatchOperation<{ id: string }>(() => {});
+    return (
+      <>
+        <button
+          onClick={() =>
+            void batch.prepare([{ id: "one" }, { id: "two" }], {
+              ...action,
+              title: "删除账号",
+              effect: "删除后无法登录，作品保留。此操作不可恢复。",
+              compact: true,
+              destructive: true,
+              prepare: async (row) => ({
+                row,
+                skip: "请先完成团队管理员交接，再删除账号",
+              }),
+              execute,
+            })
+          }
+        >
+          批量删除
+        </button>
+        <BatchDialog batch={batch} />
+      </>
+    );
+  }
+  render(<BlockedExample />);
+  fireEvent.click(screen.getByRole("button", { name: "批量删除" }));
+  await screen.findByRole("alertdialog", { name: "没有可删除的账号" });
+  expect(
+    screen.getByText("2 项 · 请先完成团队管理员交接，再删除账号"),
+  ).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "删除" })).toBeNull();
+  expect(
+    screen.queryByText("删除后无法登录，作品保留。此操作不可恢复。"),
+  ).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+  expect(execute).not.toHaveBeenCalled();
+});

@@ -3367,10 +3367,12 @@ button:not(:disabled),
   scrollbar-width: none;
 }
 .admin-navigation-link[data-slot="button"] {
-  height: 36px;
+  height: var(--header-control-size, 28px);
   flex-shrink: 0;
-  padding-inline: 16px;
+  padding-inline: 12px;
   border-radius: 999px;
+  font-size: 12px;
+  line-height: 18px;
   color: var(--muted-foreground);
 }
 .admin-navigation-link[aria-current="page"] {
@@ -3403,10 +3405,4 @@ button:not(:disabled),
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-@media (max-width: 767px) {
-  .admin-navigation-link[data-slot="button"] {
-    min-height: 44px;
-  }
 }

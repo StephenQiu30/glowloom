@@ -217,15 +217,35 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
     );
   return (
     <div className="flex w-full flex-col gap-5">
-      <AdminHeading
-        title="模型管理"
-        description="配置模型与生成能力，验证后逐项发布。"
-      >
-        <Button disabled={locked} onClick={() => setCreateOpen(true)}>
+      <AdminHeading title="模型管理" />
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {!loading && !error && initialProvider ? (
+          <div className="mr-auto flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted-foreground">本页按连接筛选</span>
+            <Button asChild variant="link">
+              <Link href="/models">查看全部模型</Link>
+            </Button>
+          </div>
+        ) : null}
+        {!loading && !error && !mobile ? (
+          <ColumnMenu
+            columns={[
+              { id: "provider", label: "服务连接" },
+              { id: "capability", label: "能力" },
+            ]}
+            visibility={visibility}
+            onChange={setVisibility}
+          />
+        ) : null}
+        <Button
+          className="max-md:h-11"
+          disabled={locked}
+          onClick={() => setCreateOpen(true)}
+        >
           <Plus data-icon="inline-start" />
           添加模型
         </Button>
-      </AdminHeading>
+      </div>
       {error ? (
         <ContentState
           state="error"
@@ -383,14 +403,6 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
       {loading ? <ContentState state="loading" title="正在读取模型" /> : null}
       {!loading && !error ? (
         <>
-          {initialProvider ? (
-            <p className="text-sm text-muted-foreground">
-              筛选当前页此连接的模型。
-              <Link href="/models" className="underline">
-                查看全部模型
-              </Link>
-            </p>
-          ) : null}
           {selectedRows.length ? (
             <SelectionBar
               count={selectedRows.length}
@@ -408,18 +420,6 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
                 停用模型
               </Button>
             </SelectionBar>
-          ) : null}
-          {!mobile ? (
-            <div className="self-end">
-              <ColumnMenu
-                columns={[
-                  { id: "provider", label: "服务连接" },
-                  { id: "capability", label: "能力" },
-                ]}
-                visibility={visibility}
-                onChange={setVisibility}
-              />
-            </div>
           ) : null}
           <DataTable
             density="comfortable"

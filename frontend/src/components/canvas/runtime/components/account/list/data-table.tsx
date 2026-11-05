@@ -45,6 +45,7 @@ type Props<TData extends { id?: string | number }> = {
     onChange: Dispatch<SetStateAction<TData[]>>;
     getLabel: (row: TData) => string;
     pageLabel: string;
+    canSelect?: (row: TData) => boolean;
     disabled?: boolean;
   };
 };
@@ -69,7 +70,10 @@ export function DataTable<TData extends { id?: string | number }>({
             <Label className="flex size-8 items-center justify-center max-md:size-11">
               <Checkbox
                 aria-label={selection.pageLabel}
-                disabled={selectionDisabled || !data.length}
+                disabled={
+                  selectionDisabled ||
+                  !table.getRowModel().rows.some((row) => row.getCanSelect())
+                }
                 checked={
                   table.getIsAllPageRowsSelected() ||
                   (table.getIsSomePageRowsSelected() && "indeterminate")
@@ -85,7 +89,7 @@ export function DataTable<TData extends { id?: string | number }>({
               <Checkbox
                 aria-label={`选择 ${selection.getLabel(row.original)}`}
                 checked={row.getIsSelected()}
-                disabled={selectionDisabled}
+                disabled={!row.getCanSelect()}
                 onCheckedChange={(checked) =>
                   row.toggleSelected(checked === true)
                 }
@@ -101,7 +105,10 @@ export function DataTable<TData extends { id?: string | number }>({
     data,
     columns: tableColumns,
     getRowId: (row) => String(row.id),
-    enableRowSelection: Boolean(selection) && !selectionDisabled,
+    enableRowSelection:
+      Boolean(selection) &&
+      !selectionDisabled &&
+      ((row) => selection?.canSelect?.(row.original) ?? true),
     state: {
       columnVisibility,
       rowSelection: Object.fromEntries(
