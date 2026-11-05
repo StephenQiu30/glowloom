@@ -6,11 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
@@ -66,6 +69,12 @@ func (s *Store) CreateBatchFreeQuote(ctx context.Context, actor identityapp.Prin
 			Items:     make([]application.BatchFreeQuoteItemResult, len(input.Items)),
 		}
 		valid := make([]QuoteItem, 0, len(input.Items))
+		type orderedDemand struct {
+			id string
+			billingapp.WalletDemand
+		}
+		demands := make([]orderedDemand, 0, len(input.Items))
+		resultIndices := make([]int, 0, len(input.Items))
 		for index, requested := range input.Items {
 			result.Items[index] = application.BatchFreeQuoteItemResult{
 				ModelKey: requested.ModelKey, Mode: requested.Mode,
@@ -98,6 +107,14 @@ func (s *Store) CreateBatchFreeQuote(ctx context.Context, actor identityapp.Prin
 			if item.PromptPreparation != nil {
 				result.Items[index].FinalPrompt = *item.Inputs[0].TextValue
 			}
+			ready, err := commercialPriceReady(tx, item.Operation.PriceRuleVersionID)
+			if err != nil {
+				return err
+			}
+			demands = append(demands, orderedDemand{item.Operation.ID.String(), billingapp.WalletDemand{
+				ModelKey: modelKey, Micros: amount, CommercialPriceReady: ready, ReusedResult: item.Operation.ReusedFromID != nil,
+			}})
+			resultIndices = append(resultIndices, index)
 			valid = append(valid, item)
 		}
 		budget, err := s.billingStore(tx).FindBudget(ctx, actor, input.ProjectID)
@@ -109,6 +126,21 @@ func (s *Store) CreateBatchFreeQuote(ctx context.Context, actor identityapp.Prin
 			return err
 		}
 		if len(valid) > 0 {
+			slices.SortFunc(demands, func(a, b orderedDemand) int { return strings.Compare(a.id, b.id) })
+			ordered := make([]billingapp.WalletDemand, len(demands))
+			for i := range demands {
+				ordered[i] = demands[i].WalletDemand
+			}
+			walletBlock, err := walletQuoteBlock(s.billingStore(tx).CheckWalletQuoteInTransaction(tx, input.ProjectID, ordered))
+			if err != nil {
+				return err
+			}
+			for i := range valid {
+				if err := annotateWalletQuote(&valid[i], walletBlock); err != nil {
+					return err
+				}
+				result.Items[resultIndices[i]].QuoteDetail = valid[i].Operation.QuoteDetail
+			}
 			batchID := uuid.New()
 			for index := range valid {
 				valid[index].Operation.BatchID = &batchID
@@ -122,7 +154,7 @@ func (s *Store) CreateBatchFreeQuote(ctx context.Context, actor identityapp.Prin
 				return err
 			}
 			result.BatchID = &batchID
-			result.Confirmable = result.AvailableMicros >= result.TotalMicros
+			result.Confirmable = result.AvailableMicros >= result.TotalMicros && walletBlock == ""
 		}
 		return insertQuoteRequest(tx, actor, requestID, fingerprint, result)
 	})

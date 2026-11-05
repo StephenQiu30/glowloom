@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 )
 
@@ -89,6 +90,9 @@ type QuoteCostDetail struct {
 	Outputs               int64                   `json:"outputs"`
 	Multipliers           map[string]json.Number  `json:"multipliers,omitempty"`
 	MarkupMultiplier      json.Number             `json:"markup_multiplier,omitempty"`
+	ExactQuoteMicros      string                  `json:"exact_quote_micros,omitempty"`
+	MaxChargeCredits      string                  `json:"max_charge_credits,omitempty"`
+	ExactCredits          string                  `json:"exact_credits,omitempty"`
 	EstimatedCredits      *int64                  `json:"estimated_credits,omitempty"`
 	Currency              string                  `json:"currency"`
 	FXRateToCNY           string                  `json:"fx_rate_to_cny,omitempty"`
@@ -206,6 +210,9 @@ func CalculateQuoteDetailed(price catalogdomain.PriceRuleVersion, input PricingI
 	}
 	credits := calculateCredits(result, rule.creditRatio)
 	detail.EstimatedCredits = &credits
+	detail.ExactQuoteMicros = strconv.FormatInt(result, 10)
+	detail.ExactCredits = billingdomain.Credits(result)
+	detail.MaxChargeCredits = detail.ExactCredits
 	return result, detail, nil
 }
 
@@ -384,6 +391,10 @@ func parsePrice(price catalogdomain.PriceRuleVersion) (parsedPriceRule, *big.Rat
 		markupMultiplier: big.NewRat(1, 1),
 		creditRatio:      big.NewRat(10, 1),
 	}
+	if id, err := catalogdomain.ParseProcurementVersion(fields[catalogdomain.ProcurementVersionField]); err != nil || id == price.ID {
+		return parsedPriceRule{}, nil, ErrInvalidPricingRule
+	}
+	delete(fields, catalogdomain.ProcurementVersionField)
 	if raw, present := fields["pricing_strategy"]; present {
 		if string(bytes.TrimSpace(raw)) == "null" || json.Unmarshal(raw, &rule.strategy) != nil || rule.strategy == "" || !catalogdomain.CompatiblePricingStrategy(rule.strategy, price.Unit) {
 			return parsedPriceRule{}, nil, ErrInvalidPricingRule

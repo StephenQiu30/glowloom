@@ -71,7 +71,6 @@ import {
   listProviderPresets,
   listAdminProviderAdapters,
   updateProviderPresetState,
-  updateAdminProvider,
 } from "@/api/settings";
 import {
   MutationStatus,
@@ -90,14 +89,11 @@ import {
   providerLabel,
 } from "./provider-label";
 
-type Confirmation =
-  | { kind: "provider"; provider: API.CreatedProvider }
-  | { kind: "preset"; preset: API.Preset; action: "archive" | "emergency" };
+type Confirmation = { preset: API.Preset; action: "archive" | "emergency" };
 
 type ProvidersPageProps = {
   initialConnection?: string;
   search?: string;
-  initialView?: string;
   initialModel?: string;
   initialRelease?: string;
   initialMode?: string;
@@ -120,7 +116,6 @@ export function ProvidersPage(props: ProvidersPageProps) {
 function ProviderAdministration({
   initialConnection = "",
   search = "",
-  initialView = "overview",
   initialModel,
   initialRelease,
   initialMode,
@@ -179,7 +174,6 @@ function ProviderAdministration({
   );
   const [presets, setPresets] = useState<API.Preset[]>([]);
   const [selected, setSelected] = useState(initialConnection);
-  const [detailView, setDetailView] = useState(initialView);
   const [context, setContext] = useState({
     model: initialModel,
     release: initialRelease,
@@ -252,40 +246,22 @@ function ProviderAdministration({
     rememberTrigger();
     setConfirmation(value);
   }
-  function selectConnection(id: string) {
-    setSelected(id);
-    const url = new URL(window.location.href);
-    url.searchParams.set("connection", id);
-    window.history.replaceState(null, "", url);
-  }
-  function changeDetailView(value: string) {
-    setDetailView(value);
-    const url = new URL(window.location.href);
-    url.searchParams.set("view", value);
-    window.history.replaceState(null, "", url);
-  }
-  function openConnection(
-    id: string,
-    view = "overview",
-    trigger?: HTMLElement,
-  ) {
-    if (trigger) overlayTrigger.current = trigger;
-    else rememberTrigger();
-    setDetailView(view);
+  function openConnection(id: string, trigger: HTMLElement) {
+    overlayTrigger.current = trigger;
     setContext({ model: undefined, release: undefined, mode: undefined });
     const url = new URL(window.location.href);
-    url.searchParams.set("view", view);
     for (const name of ["model", "release", "mode"])
       url.searchParams.delete(name);
+    url.searchParams.set("connection", id);
     window.history.replaceState(null, "", url);
-    selectConnection(id);
+    setSelected(id);
     setDetailOpen(true);
   }
   function closeDetail(open: boolean) {
     setDetailOpen(open);
     if (!open) {
       const url = new URL(window.location.href);
-      for (const name of ["connection", "view", "model", "release", "mode"])
+      for (const name of ["connection", "model", "release", "mode"])
         url.searchParams.delete(name);
       window.history.replaceState(null, "", url);
     }
@@ -456,13 +432,7 @@ function ProviderAdministration({
                     ? pendingKey.pending.target
                     : undefined
                 }
-                onSelect={(id, trigger) =>
-                  openConnection(id, "overview", trigger)
-                }
-                onTest={(id, trigger) => openConnection(id, "test", trigger)}
-                onDisable={(provider) =>
-                  openConfirmation({ kind: "provider", provider })
-                }
+                onSelect={openConnection}
               />
             ) : (
               <ContentState title={query ? "没有匹配的连接" : "还没有连接"} />
@@ -617,7 +587,6 @@ function ProviderAdministration({
                                     disabled={mutation.busy}
                                     onSelect={() =>
                                       openConfirmation({
-                                        kind: "preset",
                                         preset: p,
                                         action: "archive",
                                       })
@@ -629,7 +598,6 @@ function ProviderAdministration({
                                     disabled={mutation.busy}
                                     onSelect={() =>
                                       openConfirmation({
-                                        kind: "preset",
                                         preset: p,
                                         action: "emergency",
                                       })
@@ -678,13 +646,12 @@ function ProviderAdministration({
             event.preventDefault();
             if (!detailOpen) restoreFocus();
           }}
-          className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden p-6 sm:max-w-[600px] max-md:[&_[data-slot=dialog-close]]:size-11"
+          className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden p-6 sm:max-w-lg max-md:[&_[data-slot=dialog-close]]:size-11"
         >
           <DialogHeader>
             <DialogTitle size="lg">接入服务</DialogTitle>
             <DialogDescription className="sr-only">
-              选择平台、填写 API
-              Key，并勾选需要接入的模型。模型验证可在管理详情中进行。
+              选择服务商并填写 API Key，默认使用预设模型。
             </DialogDescription>
           </DialogHeader>
           {connect ? (
@@ -720,19 +687,17 @@ function ProviderAdministration({
                 ?.focus(),
             );
           }}
-          className="gap-0 bg-popover data-[side=right]:w-full data-[side=right]:sm:max-w-[520px] max-md:[&_[data-slot=sheet-close]]:size-11"
+          className="gap-0 data-[side=right]:w-full data-[side=right]:sm:max-w-lg max-md:[&_[data-slot=sheet-close]]:size-11"
         >
           <SheetHeader className="sr-only">
             <SheetTitle>连接详情</SheetTitle>
-            <SheetDescription>查看连接检查、Key 和配置。</SheetDescription>
+            <SheetDescription>管理凭据、模型验证和连接设置。</SheetDescription>
           </SheetHeader>
           <div className="flex min-h-0 flex-1 flex-col p-4 md:p-6">
             {selected ? (
               <ConnectionDetail
                 key={selected}
                 id={selected}
-                initialView={detailView}
-                onViewChange={changeDetailView}
                 initialModel={context.model}
                 initialRelease={context.release}
                 initialMode={context.mode}
@@ -772,22 +737,18 @@ function ProviderAdministration({
         >
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {confirmation?.kind === "provider"
-                ? "停用连接？"
-                : confirmation?.action === "archive"
-                  ? confirmation.preset.archived
-                    ? "恢复预设？"
-                    : "归档预设？"
-                  : confirmation?.preset.emergency_disabled
-                    ? "解除紧急停用？"
-                    : "停止新任务？"}
+              {confirmation?.action === "archive"
+                ? confirmation.preset.archived
+                  ? "恢复预设？"
+                  : "归档预设？"
+                : confirmation?.preset.emergency_disabled
+                  ? "解除紧急停用？"
+                  : "停止新任务？"}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {confirmation?.kind === "provider"
-                ? "停止创建新任务，已有任务继续使用绑定的配置和 Key 恢复。"
-                : confirmation?.action === "archive"
-                  ? "归档仅限制新连接使用此预设，不改写已有连接。"
-                  : "此操作控制相关新任务，不会自动撤销历史 Key。"}
+              {confirmation?.action === "archive"
+                ? "归档仅限制新连接使用此预设，不改写已有连接。"
+                : "此操作控制相关新任务，不会自动撤销历史 Key。"}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -797,35 +758,24 @@ function ProviderAdministration({
               onClick={(event) => {
                 event.preventDefault();
                 if (!confirmation) return;
-                if (confirmation.kind === "provider") {
-                  const p = confirmation.provider;
-                  void mutation.run("provider.update", p.id!, (request) =>
-                    updateAdminProvider(
-                      { id: p.id! },
-                      { expected_revision: p.revision, status: "disabled" },
-                      { headers: { "Idempotency-Key": request } },
-                    ),
-                  );
-                } else {
-                  const p = confirmation.preset;
-                  void mutation.run("preset.state", p.id!, (request) =>
-                    updateProviderPresetState(
-                      { id: p.id! },
-                      {
-                        request_id: request,
-                        expected_revision: p.revision,
-                        archived:
-                          confirmation.action === "archive"
-                            ? !p.archived
-                            : p.archived,
-                        emergency_disabled:
-                          confirmation.action === "emergency"
-                            ? !p.emergency_disabled
-                            : p.emergency_disabled,
-                      },
-                    ),
-                  );
-                }
+                const p = confirmation.preset;
+                void mutation.run("preset.state", p.id!, (request) =>
+                  updateProviderPresetState(
+                    { id: p.id! },
+                    {
+                      request_id: request,
+                      expected_revision: p.revision,
+                      archived:
+                        confirmation.action === "archive"
+                          ? !p.archived
+                          : p.archived,
+                      emergency_disabled:
+                        confirmation.action === "emergency"
+                          ? !p.emergency_disabled
+                          : p.emergency_disabled,
+                    },
+                  ),
+                );
               }}
             >
               {mutation.busy ? "正在保存…" : "确认"}

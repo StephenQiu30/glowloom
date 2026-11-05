@@ -450,7 +450,7 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 			(op.Status == "completed" || op.Status == "failed" || op.Status == "cancelled" || op.Status == "expired") {
 			return application.ErrProviderCallConflict
 		}
-		var cost *int64
+		var cost, procurementCost *int64
 		switch {
 		case input.Action == "submit" && input.State == application.ProviderCallStateCompleted && !input.Managed:
 			// Artifact completion proves execution, but synchronous pricing is a
@@ -462,7 +462,7 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 			cost = &zero
 		case input.Managed || input.Action == "query" && (input.State == application.ProviderCallStateSucceeded || input.State == application.ProviderCallStateFailed) ||
 			input.Action == "cancel" && input.State == application.ProviderCallStateCancelled:
-			priced, err := priceProviderUsage(tx, op.ModelProfileVersionID, op.PriceRuleVersionID,
+			priced, procurement, err := priceProviderUsage(tx, op.ModelProfileVersionID, op.PriceRuleVersionID,
 				op.Mode, op.Params, input.Usage, call.DispatchStartedAt, receivedAt)
 			if err != nil {
 				return err
@@ -485,8 +485,12 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 					}
 				}
 				priced = 0
+				if procurement != nil {
+					zero := int64(0)
+					procurement = &zero
+				}
 			}
-			cost = &priced
+			cost, procurementCost = &priced, procurement
 		default:
 			zero := int64(0)
 			cost = &zero
@@ -494,11 +498,11 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 		result = tx.Exec(`
 			UPDATE operation.provider_call
 			SET outcome = ?, provider_task_id = ?, response_summary = ?::jsonb,
-			    usage = ?::jsonb, cost_micros = ?, receipt = ?::jsonb, update_time = now()
+			    usage = ?::jsonb, cost_micros = ?, procurement_cost_micros = ?, receipt = ?::jsonb, update_time = now()
 			WHERE project_id = ?::uuid AND id = ?::uuid
 			  AND create_time = ?::timestamptz AND NOT is_delete
 		`, string(input.Outcome), input.ProviderTaskID, string(state), nullableJSON(input.Usage),
-			cost, nullableJSON(receipt), op.ProjectID.String(), call.ID.String(), call.CreateTime)
+			cost, procurementCost, nullableJSON(receipt), op.ProjectID.String(), call.ID.String(), call.CreateTime)
 		if result.Error != nil {
 			return fmt.Errorf("complete provider call: %w", result.Error)
 		}
@@ -511,53 +515,24 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 
 func priceProviderUsage(tx *gorm.DB, modelVersionID, priceID *uuid.UUID,
 	mode string, params, rawUsage []byte, startedAt *time.Time, receivedAt time.Time,
-) (int64, error) {
-	if len(rawUsage) == 0 {
-		return 0, application.ErrProviderCostUnknown
+) (int64, *int64, error) {
+	if len(rawUsage) == 0 || modelVersionID == nil || priceID == nil {
+		return 0, nil, application.ErrProviderCostUnknown
 	}
 	usage, err := application.ParseBillableUsage(rawUsage)
 	if err != nil {
-		return 0, fmt.Errorf("parse provider usage: %w", err)
+		return 0, nil, fmt.Errorf("parse provider usage: %w", err)
 	}
-	var row struct {
-		ID            uuid.UUID
-		ModelID       uuid.UUID
-		VersionNo     int
-		Unit          string
-		Rule          []byte
-		Currency      string
-		FXRateToCNY   *string
-		EffectiveFrom time.Time
-	}
-	result := tx.Raw(`
-		SELECT p.id, p.model_profile_id AS model_id, p.version_no, p.unit,
-		       p.rule::text AS rule, p.currency::text AS currency,
-		       p.fx_rate_to_cny::text AS fx_rate_to_cny,
-		       p.effective_from
-		FROM catalog.price_rule_version AS p
-		JOIN catalog.model_profile_version AS v ON v.model_profile_id = p.model_profile_id
-		WHERE p.id = ?::uuid AND v.id = ?::uuid
-	`, priceID.String(), modelVersionID.String()).Scan(&row)
-	if result.Error != nil {
-		return 0, fmt.Errorf("read frozen provider price: %w", result.Error)
-	}
-	if result.RowsAffected != 1 {
-		return 0, application.ErrProviderCostUnknown
+	price, err := readFrozenUsagePrice(tx, *modelVersionID, *priceID)
+	if err != nil {
+		return 0, nil, err
 	}
 	var frozenParams struct {
 		Resolution string `json:"resolution"`
 		Size       string `json:"size"`
 	}
 	if err := json.Unmarshal(params, &frozenParams); err != nil {
-		return 0, fmt.Errorf("decode frozen provider params: %w", err)
-	}
-	price := catalogdomain.PriceRuleVersion{
-		ID: row.ID, ModelID: row.ModelID, VersionNo: row.VersionNo,
-		Unit: catalogdomain.PriceUnit(row.Unit), Rule: row.Rule,
-		Currency: row.Currency, EffectiveFrom: row.EffectiveFrom,
-	}
-	if row.FXRateToCNY != nil {
-		price.FXRateToCNY = *row.FXRateToCNY
+		return 0, nil, fmt.Errorf("decode frozen provider params: %w", err)
 	}
 	if frozenParams.Resolution == "" {
 		frozenParams.Resolution = frozenParams.Size
@@ -568,13 +543,48 @@ func priceProviderUsage(tx *gorm.DB, modelVersionID, priceID *uuid.UUID,
 	}
 	amount, err := application.CalculateActualCostDuring(price, usage, mode, frozenParams.Resolution, dispatchedAt, receivedAt)
 	if err != nil {
-		return 0, fmt.Errorf("price provider usage: %w: %w", application.ErrProviderCostUnknown, err)
+		return 0, nil, fmt.Errorf("price provider usage: %w: %w", application.ErrProviderCostUnknown, err)
 	}
-	return amount, nil
+	procurementID, err := price.ProcurementVersion()
+	if err != nil {
+		return 0, nil, err
+	}
+	if procurementID == uuid.Nil {
+		return amount, nil, nil
+	}
+	procurement, err := readFrozenUsagePrice(tx, *modelVersionID, procurementID)
+	if err != nil {
+		return 0, nil, err
+	}
+	cost, err := application.CalculateActualCostDuring(procurement, usage, mode, frozenParams.Resolution, dispatchedAt, receivedAt)
+	if err != nil {
+		// A missing procurement fact does not invalidate a conclusive sale.
+		return amount, nil, nil
+	}
+	return amount, &cost, nil
 }
 
-// LoadProviderCost returns the trusted charge after all relevant calls have a
-// conclusive result. The finalizer repeats this read under its terminal lock.
+func readFrozenUsagePrice(tx *gorm.DB, modelVersionID, priceID uuid.UUID) (catalogdomain.PriceRuleVersion, error) {
+	var price catalogdomain.PriceRuleVersion
+	result := tx.Raw(`
+		SELECT p.id, p.model_profile_id AS model_id, p.version_no, p.unit,
+		       p.rule, p.currency, p.fx_rate_to_cny::text AS fx_rate_to_cny,
+		       p.effective_from
+		FROM catalog.price_rule_version AS p
+		JOIN catalog.model_profile_version AS v ON v.model_profile_id = p.model_profile_id
+		WHERE p.id = ?::uuid AND v.id = ?::uuid
+	`, priceID, modelVersionID).Scan(&price)
+	if result.Error != nil {
+		return price, fmt.Errorf("read frozen provider price: %w", result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return price, application.ErrProviderCostUnknown
+	}
+	return price, nil
+}
+
+// LoadProviderCost reads the usage-rated sales amount from conclusive calls.
+// The finalizer repeats this read under its terminal lock.
 func (s *Store) LoadProviderCost(ctx context.Context, operationID uuid.UUID) (application.ProviderCost, error) {
 	if s == nil || s.db == nil {
 		return application.ProviderCost{}, ErrUnavailable

@@ -22,6 +22,8 @@ export function catalogMessage(error: unknown) {
       catalog_unavailable: "连接、模型或价格条件未满足，请检查配置。",
       invalid_preset: "预设格式不正确，或包含不允许的字段及端点。",
       invalid_request: "请检查必填项、参数类型和版本号。",
+      credits_insufficient: "项目可用积分不足，验证未执行。",
+      budget_insufficient: "项目可用预算不足，验证未执行。",
       dependency_unavailable: "服务暂不可用，请检查后台配置后重试。",
       credential_sealing_unavailable:
         "服务端尚未配置凭据加密，API Key 未保存。请配置加密密钥后重试。",

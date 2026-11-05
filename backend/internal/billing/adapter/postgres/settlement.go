@@ -42,19 +42,24 @@ func (s *Store) SettleInTransaction(ctx context.Context, tx *gorm.DB, input appl
 	}
 	input.OccurredAt = input.OccurredAt.UTC()
 	tx = tx.WithContext(ctx)
-	var reservation domain.Reservation
+	var stored struct {
+		domain.Reservation `gorm:"embedded"`
+		CapAtQuote         bool
+	}
 	row := tx.Raw(`
-		SELECT id, project_id, operation_id, amount_micros, status, create_time, closed_at
+		SELECT id, project_id, operation_id, amount_micros, status, create_time, closed_at, cap_at_quote
 		FROM billing.reservation
 		WHERE project_id = ?::uuid AND operation_id = ?::uuid AND NOT is_delete
 		FOR UPDATE
-	`, input.ProjectID.String(), input.OperationID.String()).Scan(&reservation)
+	`, input.ProjectID.String(), input.OperationID.String()).Scan(&stored)
 	if row.Error != nil {
 		return application.SettleResult{}, fmt.Errorf("lock operation reservation: %w", row.Error)
 	}
 	if row.RowsAffected != 1 {
 		return application.SettleResult{}, ErrNotFound
 	}
+	reservation := stored.Reservation
+	input.CapAtReservation = input.CapAtReservation || stored.CapAtQuote
 	if err := reservation.Validate(); err != nil {
 		return application.SettleResult{}, fmt.Errorf("validate operation reservation: %w", err)
 	}
@@ -79,6 +84,9 @@ func (s *Store) SettleInTransaction(ctx context.Context, tx *gorm.DB, input appl
 	}
 	if row.RowsAffected != 1 {
 		return application.SettleResult{}, ErrNotFound
+	}
+	if err := settleWallet(tx, before, settlement.ChargeMicros, input.OccurredAt); err != nil {
+		return application.SettleResult{}, fmt.Errorf("settle wallet: %w", err)
 	}
 	wasLow, err := budget.LowBalance()
 	if err != nil {

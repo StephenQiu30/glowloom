@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
 
@@ -94,6 +95,22 @@ func (s *Store) ClaimProviderDispatch(ctx context.Context, identity application.
 		}
 		if err := checkStoredBillingBarrier(tx, identity.ProjectID, identity.OperationID); err != nil {
 			return err
+		}
+		var unfunded bool
+		if err := tx.Raw(`SELECT EXISTS (
+			SELECT 1 FROM operation.operation o
+			LEFT JOIN billing.reservation r ON r.id=o.reservation_id AND NOT r.is_delete
+			WHERE o.id=? AND greatest(coalesce(o.quote_micros,0),coalesce(r.amount_micros,0))>0
+			  AND (r.cap_at_quote OR EXISTS(SELECT 1 FROM billing.project_wallet WHERE project_id=o.project_id))
+			  AND (r.id IS NULL OR r.status<>'held' OR r.amount_micros<coalesce(o.quote_micros,0)
+			    OR coalesce((SELECT sum(a.amount_micros) FROM billing.wallet_allocation a
+			                 WHERE a.reservation_id=r.id),0)<>r.amount_micros
+			    OR NOT EXISTS (SELECT 1 FROM billing.wallet_hold h WHERE h.reservation_id=r.id))
+		)`, identity.OperationID).Row().Scan(&unfunded); err != nil {
+			return fmt.Errorf("verify dispatch funding: %w", err)
+		}
+		if unfunded {
+			return billingdomain.ErrWalletInsufficient
 		}
 		if err := s.admitManagedDispatch(tx, identity); err != nil {
 			return err

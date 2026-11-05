@@ -11,6 +11,13 @@ import {
   DialogDescription,
 } from "../../src/components/ui/dialog";
 
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "../../src/components/ui/sheet";
 import "../../src/app/globals.css";
 
 const options = new URLSearchParams(location.search);
@@ -23,6 +30,7 @@ const state: API.ProviderOnboardingState = {
   models: [
     {
       id: "text",
+      version_id: "text-v1",
       capability: "text.generate",
       display_name: "Doubao Seed 2.1 Pro",
       provider_model_id: "doubao-seed-2-1-pro-260915",
@@ -30,6 +38,7 @@ const state: API.ProviderOnboardingState = {
     },
     {
       id: "image",
+      version_id: "image-v1",
       capability: "image.generate",
       display_name: "Seedream 4.5",
       provider_model_id: "doubao-seedream-4-5-251128",
@@ -37,6 +46,7 @@ const state: API.ProviderOnboardingState = {
     },
     {
       id: "video",
+      version_id: "video-v1",
       capability: "video.generate",
       display_name: "Seedance 2.0",
       provider_model_id: "doubao-seedance-2-0-260128",
@@ -44,6 +54,15 @@ const state: API.ProviderOnboardingState = {
     },
   ],
 };
+const formal = options.has("formal");
+const sheet = options.has("sheet");
+let credential: API.ProviderCredentialSummary | undefined;
+let providerStatus = options.has("active") ? "active" : "disabled";
+if (options.has("active"))
+  credential = { id: "credential-fixture", status: "active" };
+const projectID = "33333333-3333-4333-8333-333333333333";
+const operationID = "44444444-4444-4444-8444-444444444444";
+let trialStatus = "quoted";
 let calls = 0;
 let savedModels: string[] = [];
 const presets: API.Preset[] = [
@@ -77,20 +96,86 @@ axios.defaults.adapter = async (config) => {
     ...structuredClone(state),
     models: state.models!.filter((m) => savedModels.includes(m.id!)),
   };
-  if (path.endsWith("/connections")) {
+  if (path === `/api/admin/providers/${id}`) {
+    if (config.method === "patch")
+      providerStatus = JSON.parse(config.data).status;
+    data = {
+      provider: {
+        id,
+        name: "OpenAI",
+        adapter_key: "openai",
+        status: providerStatus,
+        revision: 1,
+      },
+      credential,
+    };
+  } else if (path.endsWith("/test-models")) {
+    data = state.models?.filter((model) => savedModels.includes(model.id!));
+  } else if (path.endsWith("/checks")) {
+    data = { items: [], current_checks: [] };
+  } else if (path === "/api/projects") {
+    data = {
+      items: [
+        {
+          id: projectID,
+          name: "隔离验证项目",
+          canvas_id: null,
+          aspect_ratio: "16:9",
+          style_key: null,
+          revision: 1,
+          update_time: "2026-11-05T00:00:00Z",
+        },
+      ],
+      next_cursor: null,
+    };
+  } else if (path.endsWith("/budget")) {
+    data = { available_micros: 1000000 };
+  } else if (path.endsWith("/trial-recovery")) {
+    data = { found: false };
+  } else if (path.endsWith("/trial-quotes")) {
+    data = {
+      operation_id: operationID,
+      confirm_key: "stable-fixture-confirm",
+      available_micros: 1000000,
+      quote_micros: 50000,
+      confirmable: !options.has("insufficient"),
+      expires_at: "2099-01-01T00:00:00Z",
+    };
+  } else if (path === `/api/operations/${operationID}/confirm`) {
+    if (options.has("insufficient"))
+      throw new Error("insufficient quote was confirmed");
+    trialStatus = "submitted";
+    setTimeout(() => {
+      trialStatus = "completed";
+    }, 300);
+    data = { operation_id: operationID };
+  } else if (path === `/api/operations/${operationID}`) {
+    data = {
+      id: operationID,
+      project_id: projectID,
+      status: trialStatus,
+      quote_micros: 50000,
+    };
+  } else if (path.endsWith("/connections")) {
     savedModels = JSON.parse(config.data).candidate_keys;
     data = { provider_id: id };
   } else if (path.endsWith("/credentials")) {
-    data = {
+    credential = {
       id: "credential-fixture",
       provider_id: id,
       status: "active",
       last4: "test",
     };
+    data = credential;
   } else if (path.endsWith("/test")) {
     calls++;
     const modelID = path.split("/models/")[1]?.split("/")[0] ?? "text";
-    state.check = { id: "check", model_id: modelID, status: "running" };
+    state.check = {
+      id: "check",
+      model_id: modelID,
+      model_version_id: state.models?.find((m) => m.id === modelID)?.version_id,
+      status: "running",
+    };
     data = {
       accepted: true,
       provider_id: id,
@@ -112,16 +197,25 @@ axios.defaults.adapter = async (config) => {
   }
   return { data, status: 200, statusText: "OK", headers: {}, config };
 };
-const [{ ConnectionOnboarding }, { PresetConnect }, { setCSRFToken }] =
-  await Promise.all([
-    import("../../src/app/providers/_components/connection-onboarding"),
-    import("../../src/app/providers/_components/preset-connect"),
-    import("../../src/lib/request"),
-  ]);
+const [
+  { ConnectionOnboarding },
+  { PresetConnect },
+  { setCSRFToken },
+  { ProviderTrial },
+  { ConnectionDetail },
+] = await Promise.all([
+  import("../../src/app/providers/_components/connection-onboarding"),
+  import("../../src/app/providers/_components/preset-connect"),
+  import("../../src/lib/request"),
+  import("../../src/components/catalog/provider-trial"),
+  import("../../src/app/providers/_components/connection-detail"),
+]);
 setCSRFToken("fixture-only");
+if (sheet || options.has("managed"))
+  savedModels = state.models!.map((model) => model.id!);
 function Fixture() {
   const [done, setDone] = useState(false);
-  const [management, setManagement] = useState(false);
+  const [management, setManagement] = useState(options.has("managed"));
   return (
     <ThemeProvider
       attribute="class"
@@ -130,7 +224,25 @@ function Fixture() {
       <p className="p-4 text-sm">
         受控浏览器验收 · 模拟响应 · 无真实供应商调用
       </p>
-      {done ? (
+      {sheet ? (
+        <Sheet open>
+          <SheetContent className="gap-0 data-[side=right]:w-full data-[side=right]:sm:max-w-lg">
+            <SheetHeader className="sr-only">
+              <SheetTitle>连接详情</SheetTitle>
+              <SheetDescription>
+                管理凭据、模型验证和连接设置。
+              </SheetDescription>
+            </SheetHeader>
+            <div className="flex min-h-0 flex-1 flex-col p-4 md:p-6">
+              <ConnectionDetail
+                id={id}
+                presets={presets}
+                onSaved={() => undefined}
+              />
+            </div>
+          </SheetContent>
+        </Sheet>
+      ) : done ? (
         <p role="status" className="p-6">
           已启用 {savedModels.length} 个模型 · 验证调用 {calls} 次
         </p>
@@ -139,18 +251,33 @@ function Fixture() {
           <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden p-6 sm:max-w-[520px]">
             <DialogHeader>
               <DialogTitle size="lg">
-                {management ? "管理服务" : "接入 AI 服务"}
+                {formal
+                  ? "正式发布验证"
+                  : management
+                    ? "管理服务"
+                    : "接入 AI 服务"}
               </DialogTitle>
               <DialogDescription className="sr-only">
                 接入与模型验证分离的受控验收。
               </DialogDescription>
             </DialogHeader>
-            {management ? (
+            {formal ? (
+              <ProviderTrial
+                embedded
+                release={{
+                  id: "formal-release",
+                  required_modes: ["text_to_text"],
+                  upstream_cost: { currency: "USD", max_micros: 100 },
+                }}
+                version={{ param_schema: [] }}
+                onVerified={() => undefined}
+              />
+            ) : management ? (
               <ConnectionOnboarding id={id} onSaved={() => setDone(true)} />
             ) : (
               <PresetConnect
                 presets={presets}
-                initialPreset="ark"
+                initialPreset={options.has("choose") ? undefined : "ark"}
                 onCreated={() => undefined}
                 onSaved={() => setManagement(true)}
                 onCancel={() => setDone(true)}

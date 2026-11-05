@@ -17,16 +17,18 @@ var ErrInvalidReserveInput = errors.New("invalid operation reserve input")
 // operation confirmation coordinator. The caller owns the transaction and
 // must lock and recheck the quoted operation before reserving its amount.
 type ReserveInput struct {
-	Actor        identityapp.Principal
-	ProjectID    uuid.UUID
-	OperationID  uuid.UUID
-	ActorID      uuid.UUID
-	AmountMicros int64
-	EpisodeID    *uuid.UUID
-	ShotID       *uuid.UUID
-	ModelKey     *string
-	Region       *string
-	OccurredAt   time.Time
+	Actor                identityapp.Principal
+	ProjectID            uuid.UUID
+	OperationID          uuid.UUID
+	ActorID              uuid.UUID
+	AmountMicros         int64
+	CommercialPriceReady bool
+	ReusedResult         bool
+	EpisodeID            *uuid.UUID
+	ShotID               *uuid.UUID
+	ModelKey             *string
+	Region               *string
+	OccurredAt           time.Time
 }
 
 // Validate rejects missing identities, negative amounts, and invalid dimensions.

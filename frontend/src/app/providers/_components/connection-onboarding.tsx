@@ -6,7 +6,7 @@ import copy from "copy-to-clipboard";
 import { toast } from "sonner";
 import { providerConsoleURL } from "./provider-label";
 import { useSession } from "@/components/auth/session";
-import { Check, RefreshCw } from "lucide-react";
+import { Check } from "lucide-react";
 import {
   activateProviderOnboarding,
   getProviderOnboarding,
@@ -89,7 +89,7 @@ export function ConnectionOnboarding({
   const [confirmation, setConfirmation] = useState("");
   const [investigate, setInvestigate] = useState(false);
   const [note, setNote] = useState("");
-  const { data, error, isLoading, isValidating, mutate } = useSWR(
+  const { data, error, isLoading, mutate } = useSWR(
     ["provider-onboarding", session.actor.id, id, revision],
     () => getProviderOnboarding({ id }),
     {
@@ -228,6 +228,16 @@ export function ConnectionOnboarding({
     "请求已有成功回执，已刷新当前配置。",
     "已找到成功回执，列表已刷新。",
   ];
+  function verify() {
+    if (!data?.credential_id || !model || busy || unresolved) return;
+    void test.run("credential.test", id, (requestID) =>
+      testProviderOnboardingModel(
+        { id, credential_id: data.credential_id!, model_id: model },
+        { headers: { "Idempotency-Key": requestID } },
+      ),
+    );
+  }
+
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <Dialog
@@ -277,12 +287,7 @@ export function ConnectionOnboarding({
               disabled={busy || !!test.pending || unresolved}
               onClick={() => {
                 setConfirmation("");
-                void test.run("credential.test", id, (requestID) =>
-                  testProviderOnboardingModel(
-                    { id, credential_id: data.credential_id!, model_id: model },
-                    { headers: { "Idempotency-Key": requestID } },
-                  ),
-                );
+                verify();
               }}
             >
               确认并验证
@@ -466,18 +471,7 @@ export function ConnectionOnboarding({
             >
               查询回执
             </Button>
-          ) : waiting ? (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={isValidating}
-              onClick={() => void mutate()}
-              className="shrink-0 max-md:h-11"
-            >
-              <RefreshCw data-icon="inline-start" />
-              查询结果
-            </Button>
-          ) : selectedCheck?.task_id &&
+          ) : waiting ? null : selectedCheck?.task_id &&
             ["accepted", "unknown"].includes(
               selectedCheck.model_result ?? "",
             ) ? (
@@ -513,13 +507,19 @@ export function ConnectionOnboarding({
               }
               className="shrink-0 max-md:h-11"
               ref={prepareTrigger}
-              onClick={() => setConfirmation(model)}
+              onClick={() => {
+                if (check?.tracking_ended_at) setConfirmation(model);
+                else verify();
+              }}
             >
               {test.busy ? <Spinner data-icon="inline-start" /> : null}
-              准备验证
+              验证
             </Button>
           )}
         </div>
+        <FieldDescription>
+          使用所选模型的最小模板，供应商可能按实际用量收费。
+        </FieldDescription>
         {test.pending && !test.busy ? (
           <FieldDescription>先查询原回执，避免重复调用。</FieldDescription>
         ) : null}

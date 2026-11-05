@@ -44,7 +44,18 @@ func (s *Store) ReadConnectionConfig(ctx context.Context, actor identityapp.Prin
 		}
 		var err error
 		config, _, err = readConnectionConfig(tx, id)
-		return err
+		if err != nil {
+			return err
+		}
+		document, err := connectionPresetDocument(tx, config)
+		if err != nil {
+			return err
+		}
+		catalog := domain.ModelCatalogForPreset(document)
+		config.ModelCatalog = &catalog
+		return tx.Raw(`SELECT m.id,m.capability,v.provider_model_id FROM catalog.model_profile m
+			JOIN catalog.model_profile_version v ON v.id=m.current_version_id AND NOT v.is_delete
+			WHERE m.provider_id=? AND NOT m.is_delete ORDER BY m.create_time,m.id`, id).Scan(&config.ConfiguredModels).Error
 	})
 	return config, err
 }

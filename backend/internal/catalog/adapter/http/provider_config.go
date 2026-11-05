@@ -19,6 +19,8 @@ func NewConfigHandler(service *application.ProviderConfigs) *ConfigHandler {
 // Register installs connection snapshot routes behind the session middleware.
 func (h *ConfigHandler) Register(group *gin.RouterGroup) {
 	group.GET("/admin/providers/:id/config", h.Read)
+	group.POST("/admin/providers/:id/models", h.AddModel)
+	group.GET("/admin/models/:id/configuration-check", h.CheckModel)
 	group.POST("/admin/providers/:id/upgrade-preview", h.Preview)
 	group.POST("/admin/providers/:id/apply-preset", h.Apply)
 }
@@ -93,6 +95,55 @@ func (h *ConfigHandler) Apply(c *gin.Context) {
 	result, err := h.service.Apply(c.Request.Context(), identityhttp.Principal(c), id, input)
 	if err != nil {
 		presetError(c, err)
+		return
+	}
+	c.JSON(200, result)
+}
+
+// AddModel uses the reviewed model preset from the connection snapshot.
+// @Summary 从连接预设添加模型
+// @ID addProviderPresetModel
+// @Tags settings
+// @Accept json
+// @Produce json
+// @Param id path string true "连接ID"
+// @Param body body application.AddPresetModelInput true "模型预设"
+// @Success 201 {object} application.CreatedModel
+// @Router /api/admin/providers/{id}/models [post]
+func (h *ConfigHandler) AddModel(c *gin.Context) {
+	id, ok := httpapi.PathUUID(c, "id")
+	if !ok {
+		return
+	}
+	var input application.AddPresetModelInput
+	if !httpapi.Decode(c, &input) {
+		return
+	}
+	result, err := h.service.AddModel(c.Request.Context(), identityhttp.Principal(c), id, input)
+	if err != nil {
+		presetError(c, err)
+		return
+	}
+	c.JSON(201, result)
+}
+
+// CheckModel validates the stored parameters without pricing or dispatch.
+// @Summary 验证模型草稿配置
+// @ID checkModelConfiguration
+// @Tags settings
+// @Produce json
+// @Param id path string true "模型 ID"
+// @Success 200 {object} application.ModelConfigurationCheck
+// @Router /api/admin/models/{id}/configuration-check [get]
+func (h *ConfigHandler) CheckModel(c *gin.Context) {
+	id, ok := httpapi.PathUUID(c, "id")
+	if !ok {
+		return
+	}
+	c.Header("Cache-Control", "private, no-store")
+	result, err := h.service.CheckModel(c.Request.Context(), identityhttp.Principal(c), id)
+	if err != nil {
+		adminError(c, err)
 		return
 	}
 	c.JSON(200, result)

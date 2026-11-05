@@ -96,3 +96,30 @@ func covers(matrix map[string]json.RawMessage, values []string) bool {
 	}
 	return len(values) > 0
 }
+
+// ValidateProcurement pairs reviewed sales and supplier rates over the same
+// normalized usage. Rates, currencies and FX may differ.
+func ValidateProcurement(sale, supplier domain.PriceRuleVersion) error {
+	if sale.ModelID != supplier.ModelID || sale.Unit != supplier.Unit ||
+		supplier.EffectiveFrom.After(sale.EffectiveFrom) ||
+		sale.ValidateProvenance() != nil || supplier.ValidateProvenance() != nil {
+		return ErrInvalidConfiguration
+	}
+	saleFields, err := parseObject(sale.Rule)
+	if err != nil {
+		return err
+	}
+	supplierFields, err := parseObject(supplier.Rule)
+	if err != nil {
+		return err
+	}
+	if supplierFields[domain.ProcurementVersionField] != nil || supplierFields["markup_multiplier"] != nil {
+		return ErrInvalidConfiguration
+	}
+	for _, key := range []string{"cached_input_micros_per_1k", "reference_scope"} {
+		if (saleFields[key] == nil) != (supplierFields[key] == nil) {
+			return ErrInvalidConfiguration
+		}
+	}
+	return nil
+}

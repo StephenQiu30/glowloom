@@ -14,6 +14,7 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
@@ -685,4 +686,22 @@ func readDispatchBudget(ctx context.Context, database *gorm.DB, operationID uuid
 		WHERE o.id = ?::uuid
 	`, operationID.String()).Scan(&state).Error
 	return state, err
+}
+
+func TestDispatchRejectsCappedReservationWithoutWalletFreeze(t *testing.T) {
+	database := operationStoreDB(t)
+	identity, store := seedDispatchCall(t, database, true)
+	// Reproduce a budget-only confirmation created before the stricter guard.
+	if err := database.Exec(`UPDATE billing.reservation SET cap_at_quote=true WHERE operation_id=?`, identity.OperationID).Error; err != nil {
+		t.Fatal(err)
+	}
+	result, err := store.ClaimProviderDispatch(t.Context(), identity)
+	if !errors.Is(err, billingdomain.ErrWalletInsufficient) || result.Claimed {
+		t.Fatalf("unfunded dispatch = %+v, %v", result, err)
+	}
+	var dispatched bool
+	if err := database.Raw(`SELECT EXISTS(SELECT 1 FROM operation.provider_call WHERE operation_id=? AND dispatch_started_at IS NOT NULL)`,
+		identity.OperationID).Row().Scan(&dispatched); err != nil || dispatched {
+		t.Fatalf("unfunded dispatch marker = %t, %v", dispatched, err)
+	}
 }

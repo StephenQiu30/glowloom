@@ -79,3 +79,21 @@ func TestSeedanceStrategyRejectsConflictingUsageDimensions(t *testing.T) {
 		require.Error(t, err)
 	}
 }
+
+func TestQuotePreservesExactCreditProjection(t *testing.T) {
+	for _, tc := range []struct{ micros, credits string }{
+		{"120000", "1.2"},
+		{"1", "0.00001"},
+		{"9007199254740991", "90071992547.40991"},
+	} {
+		price := pricingRule(catalogdomain.PricePerImage, `{"base_micros":`+tc.micros+`}`, "CNY", "")
+		_, detail, err := application.CalculateQuoteDetailed(price, application.PricingInput{OutputCount: 1})
+		require.NoError(t, err)
+		raw, err := json.Marshal(detail)
+		require.NoError(t, err)
+		var fields map[string]any
+		require.NoError(t, json.Unmarshal(raw, &fields))
+		require.Equal(t, tc.credits, fields["exact_credits"])
+		require.Equal(t, tc.micros, fields["exact_quote_micros"])
+	}
+}

@@ -12,7 +12,7 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
-func instantiateOnboardingModel(tx *gorm.DB, actor identityapp.Principal, id, _ uuid.UUID, candidate domain.ModelCandidatePreset) error {
+func instantiateOnboardingModel(tx *gorm.DB, actor identityapp.Principal, id uuid.UUID, expectedRevision int64, candidate domain.ModelCandidatePreset) error {
 	version, err := candidate.OnboardingVersion(id, actor.ID)
 	if err != nil {
 		return err
@@ -24,7 +24,7 @@ func instantiateOnboardingModel(tx *gorm.DB, actor identityapp.Principal, id, _ 
 	if err := validator.Validate(version); err != nil {
 		return err
 	}
-	if err := appendModelVersionInTx(tx, version, 1); err != nil {
+	if err := appendModelVersionInTx(tx, version, expectedRevision); err != nil {
 		return err
 	}
 	return nil

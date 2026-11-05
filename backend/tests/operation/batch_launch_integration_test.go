@@ -30,6 +30,7 @@ func TestBatchLaunchProviderSlotReleasesWithTerminalSettlement(t *testing.T) {
 	firstItem.Operation = first
 	firstItem.Inputs[0].OperationID = first.ID
 	secondActor, secondProjectID := operationStoreProject(t, database)
+	fundOperationProject(t, database, secondProjectID)
 	secondItem := quotedSnapshotItem(secondProjectID, 1)
 	secondItem.Operation.Capability = first.Capability
 	secondItem.Operation.ModelProfileVersionID = first.ModelProfileVersionID

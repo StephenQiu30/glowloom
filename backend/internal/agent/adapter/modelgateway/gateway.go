@@ -15,6 +15,7 @@ import (
 	agent "github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	billing "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	opstore "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	op "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
@@ -151,7 +152,7 @@ func (g *Gateway) Model(ctx context.Context, scope agent.Scope, id uuid.UUID, ra
 			return err
 		}
 		insert := tx.Exec(`INSERT INTO operation.operation(id,project_id,target_type,capability,mode,model_profile_version_id,price_rule_version_id,params,input_hash,origin,status,region,quote_micros,quote_expires_at,confirmed_at,confirmed_by,provider_request_key)
-   VALUES(?,?,'free','text.generate','text_to_text',?,?,?::jsonb,?,'agent','submitting',?,?,clock_timestamp()+interval '15 minutes',clock_timestamp(),?,?) ON CONFLICT(id) DO NOTHING`, id, scope.ProjectID, r.VersionID, r.PriceID, string(paramsJSON), agent.Hash(raw), r.Region, maxMicros, scope.ActorID, i.RequestKey)
+   VALUES(?,?,'free','text.generate','text_to_text',?,?,?::jsonb,?,'agent','submitting',?,?,clock_timestamp()+interval '15 minutes',clock_timestamp(),?,?) ON CONFLICT(id) DO NOTHING`, id, scope.ProjectID, r.VersionID, r.PriceID, string(paramsJSON), agent.Hash(raw), r.Region, quote, scope.ActorID, i.RequestKey)
 		if insert.Error != nil {
 			return insert.Error
 		}
@@ -161,7 +162,11 @@ func (g *Gateway) Model(ctx context.Context, scope agent.Scope, id uuid.UUID, ra
 		if err := tx.Exec(`INSERT INTO operation.provider_binding(operation_id,release_id) VALUES(?,?)`, id, r.ReleaseID).Error; err != nil {
 			return err
 		}
-		reserve, err := g.billing.ReserveInTransaction(ctx, tx, billing.ReserveInput{Actor: scope.Principal(), ActorID: scope.ActorID, ProjectID: scope.ProjectID, OperationID: id, AmountMicros: maxMicros, ModelKey: &r.ModelKey, Region: &r.Region, OccurredAt: time.Now()})
+		procurement, err := price.ProcurementVersion()
+		if err != nil {
+			return err
+		}
+		reserve, err := g.billing.ReserveInTransaction(ctx, tx, billing.ReserveInput{Actor: scope.Principal(), ActorID: scope.ActorID, ProjectID: scope.ProjectID, OperationID: id, AmountMicros: quote, CommercialPriceReady: procurement != uuid.Nil, ModelKey: &r.ModelKey, Region: &r.Region, OccurredAt: time.Now()})
 		if err != nil {
 			return err
 		}
@@ -194,6 +199,9 @@ func (g *Gateway) Model(ctx context.Context, scope agent.Scope, id uuid.UUID, ra
 		key, err = config.CredentialValue(secret)
 		return err
 	})
+	if errors.Is(err, billingdomain.ErrWalletInsufficient) {
+		return failed("credits_insufficient"), nil
+	}
 	if errors.Is(err, agent.ErrConflict) {
 		return pending(), nil
 	}

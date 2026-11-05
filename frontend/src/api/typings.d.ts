@@ -75,6 +75,20 @@ declare namespace API {
     protocol_ids?: string[];
   };
 
+  type AddPresetModelInput = {
+    candidate_key?: string;
+    capability?: string;
+    catalog_version?: string;
+    config_id?: string;
+    custom_model_id?: string;
+    request_id?: string;
+  };
+
+  type addProviderPresetModelParams = {
+    /** 连接ID */
+    id: string;
+  };
+
   type AdminModelDetail = {
     candidate?: ModelCandidateSelection;
     model?: CreatedModel;
@@ -737,6 +751,11 @@ declare namespace API {
     name?: string;
   };
 
+  type checkModelConfigurationParams = {
+    /** 模型 ID */
+    id: string;
+  };
+
   type CinemaCamera = {
     aperture?: string;
     body?: string;
@@ -818,6 +837,12 @@ declare namespace API {
     revision?: number;
   };
 
+  type ConfiguredModel = {
+    capability?: string;
+    id?: string;
+    provider_model_id?: string;
+  };
+
   type ConfirmationPage = {
     items?: ConfirmationSummary[];
     next_revision?: number;
@@ -888,7 +913,9 @@ declare namespace API {
 
   type ConnectionConfig = {
     config?: ProviderConfig;
+    configured_models?: ConfiguredModel[];
     id?: string;
+    model_catalog?: ModelCandidateCatalog;
     preset_version_id?: string;
     provider_id?: string;
     version?: number;
@@ -1019,6 +1046,8 @@ declare namespace API {
     create_time?: string;
     current_version_id?: string;
     display_name?: string;
+    has_price?: boolean;
+    has_publication?: boolean;
     id?: string;
     model_key?: string;
     provider_id?: string;
@@ -2284,6 +2313,11 @@ declare namespace API {
     target_id: string;
   };
 
+  type getCreditWalletParams = {
+    /** 上一页的游标 */
+    cursor?: string;
+  };
+
   type getCurrentAgentSubmissionParams = {
     /** 项目UUID */
     pid: string;
@@ -3018,6 +3052,8 @@ declare namespace API {
     limit?: number;
     /** 分页游标 */
     cursor?: string;
+    /** 供应商连接 ID */
+    provider_id?: string;
   };
 
   type listAdminProvidersParams = {
@@ -3735,6 +3771,15 @@ declare namespace API {
   type ModelCandidateSelection = {
     catalog_version?: string;
     model?: ModelCandidatePreset;
+  };
+
+  type ModelConfigurationCheck = {
+    config_version_id?: string;
+    credential_id?: string;
+    model_version_id?: string;
+    parameters_valid?: boolean;
+    provider_id?: string;
+    provider_model_id?: string;
   };
 
   type ModelDefaults = {
@@ -4811,6 +4856,7 @@ declare namespace API {
     request_id?: string;
     supplier_currency?: string;
     supplier_max_micros?: number;
+    use_quoted_charge?: boolean;
   };
 
   type ProviderTrialRecovery = {
@@ -7097,6 +7143,29 @@ declare namespace API {
     favorite?: boolean;
     name?: string;
     revision?: number;
+  };
+
+  type WalletEntry = {
+    created_at?: string;
+    credits?: string;
+    expires_at?: string;
+    id?: string;
+    kind?: string;
+    model_key?: string;
+    operation_id?: string;
+    source?: string;
+  };
+
+  type WalletView = {
+    enabled?: boolean;
+    entries?: WalletEntry[];
+    general_credits?: string;
+    held_credits?: string;
+    history_available?: boolean;
+    next_cursor?: string;
+    payer?: string;
+    redeemed_today?: string;
+    restricted_credits?: string;
   };
 
   type WorkflowControlResult = {

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
 
@@ -85,6 +86,9 @@ func (a *Adapter) Submit(ctx context.Context, input application.ProviderImageInp
 	}
 	claim, err := a.dispatch.ClaimProviderDispatch(ctx, input.Identity)
 	if err != nil {
+		if errors.Is(err, billingdomain.ErrWalletInsufficient) {
+			return imageFailure("not_submitted", "credits_insufficient"), nil
+		}
 		if errors.Is(err, application.ErrProviderDispatchCancelled) {
 			return imageFailure("not_submitted", "provider_dispatch_cancelled"), nil
 		}

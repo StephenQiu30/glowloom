@@ -31,7 +31,7 @@ import {
   getProviderTrialRecovery,
 } from "@/api/settings";
 import { confirmOperationQuote, getOperation } from "@/api/operations";
-import { listProjects } from "@/api/projects";
+import { getProjectBudget, listProjects } from "@/api/projects";
 
 vi.mock("@/components/auth/session", () => ({
   useSession: () => ({ actor: { id: "actor" } }),
@@ -45,7 +45,10 @@ vi.mock("@/api/operations", () => ({
   confirmOperationQuote: vi.fn(),
   getOperation: vi.fn(),
 }));
-vi.mock("@/api/projects", () => ({ listProjects: vi.fn() }));
+vi.mock("@/api/projects", () => ({
+  listProjects: vi.fn(),
+  getProjectBudget: vi.fn(),
+}));
 beforeEach(() => {
   vi.clearAllMocks();
   pageBusinessMemory.clear();
@@ -88,7 +91,7 @@ describe("provider trial consent and recovery", () => {
       },
     });
     render(<ProviderTrial release={release} onVerified={vi.fn()} />);
-    fireEvent.click(screen.getByText("试运行此发布"));
+    fireEvent.click(screen.getByText("验证此发布"));
     fireEvent.keyDown(
       await screen.findByRole("combobox", { name: "扣费项目" }),
       { key: "ArrowDown" },
@@ -148,14 +151,14 @@ describe("provider trial consent and recovery", () => {
       quote_micros: 100,
     });
     render(<ProviderTrial release={release} onVerified={vi.fn()} />);
-    fireEvent.click(screen.getByText("试运行此发布"));
+    fireEvent.click(screen.getByText("验证此发布"));
     await act(async () =>
       fireEvent.click(
         screen.getByRole("button", { name: "查询报价回执 / 刷新任务" }),
       ),
     );
     await waitFor(() =>
-      expect(screen.getByText(/任务状态：submitted/)).toBeTruthy(),
+      expect(screen.getByText(/任务状态：正在生成/)).toBeTruthy(),
     );
     expect(createProviderTrialQuote).not.toHaveBeenCalled();
     expect(confirmOperationQuote).not.toHaveBeenCalled();
@@ -188,7 +191,7 @@ it("服务测试中的正式发布必须先选项目，参数使用模型表单�
       onVerified={() => {}}
     />,
   );
-  const prepare = await screen.findByRole("button", { name: "准备验证" });
+  const prepare = await screen.findByRole("button", { name: "验证" });
   expect(prepare).toHaveProperty("disabled", true);
   expect(screen.queryByLabelText("参数 JSON")).toBeNull();
   expect(screen.queryByLabelText(/参考素材列表/)).toBeNull();
@@ -256,7 +259,7 @@ it("整页刷新丢失本地标识后从服务端恢复原收费任务", async (
     output_count: 1,
   });
   render(<ProviderTrial embedded release={release} onVerified={() => {}} />);
-  await screen.findByText(/任务状态：submitted/);
+  await screen.findByText(/任务状态：正在生成/);
   expect(screen.queryByRole("button", { name: "准备验证" })).toBeNull();
   expect(createProviderTrialQuote).not.toHaveBeenCalled();
   expect(confirmOperationQuote).not.toHaveBeenCalled();
@@ -266,7 +269,7 @@ it("报价被明确拒绝后可以修正输入，不锁成未知收费任务", a
     new RequestError("invalid_request", 422),
   );
   render(<ProviderTrial release={release} onVerified={() => {}} />);
-  fireEvent.click(screen.getByText("试运行此发布"));
+  fireEvent.click(screen.getByText("验证此发布"));
   fireEvent.keyDown(await screen.findByRole("combobox", { name: "扣费项目" }), {
     key: "ArrowDown",
   });
@@ -323,3 +326,85 @@ it("恢复收费报价时显示服务端冻结的验证摘要", async () => {
   expect(confirmOperationQuote).not.toHaveBeenCalled();
   expect(createProviderTrialQuote).not.toHaveBeenCalled();
 });
+
+it.each([true, false])(
+  "默认验证只在报价可确认时提交一次（%s）",
+  async (confirmable) => {
+    const project = "00000000-0000-4000-8000-000000000001";
+    const operation = "00000000-0000-4000-8000-000000000002";
+    vi.mocked(listProjects).mockResolvedValue({
+      items: [
+        {
+          id: project,
+          name: "隔离验证项目",
+          canvas_id: null,
+          style_key: null,
+          aspect_ratio: "16:9",
+          revision: 1,
+          update_time: "2026-11-05T00:00:00Z",
+        },
+      ],
+      next_cursor: null,
+    });
+    vi.mocked(getProjectBudget).mockResolvedValue({ available_micros: 1000 });
+    vi.mocked(createProviderTrialQuote).mockResolvedValue({
+      operation_id: operation,
+      confirm_key: "stable-confirm",
+      available_micros: 1000,
+      quote_micros: 10,
+      confirmable,
+      expires_at: "2026-11-06T00:00:00Z",
+    });
+    vi.mocked(confirmOperationQuote).mockResolvedValue({});
+    vi.mocked(getOperation).mockResolvedValue({
+      id: operation,
+      project_id: project,
+      status: confirmable ? "completed" : "quoted",
+      quote_micros: 10,
+    });
+    render(
+      <ProviderTrial
+        embedded
+        release={release}
+        version={{ param_schema: [] }}
+        onVerified={vi.fn()}
+      />,
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "选择所属项目" }),
+    );
+    fireEvent.keyDown(
+      await screen.findByRole("combobox", { name: "所属项目" }),
+      { key: "ArrowDown" },
+    );
+    fireEvent.click(
+      await screen.findByRole("option", { name: "隔离验证项目" }),
+    );
+    const verify = screen.getByRole("button", { name: "验证" });
+    await waitFor(() => expect(verify).toHaveProperty("disabled", false));
+    expect(createProviderTrialQuote).not.toHaveBeenCalled();
+    fireEvent.click(verify);
+    await screen.findByText(
+      confirmable ? /任务状态：已完成/ : /本次报价不可确认/,
+    );
+    expect(createProviderTrialQuote).toHaveBeenCalledExactlyOnceWith(
+      { id: "release" },
+      expect.objectContaining({
+        project_id: project,
+        mode: "text_to_text",
+        use_quoted_charge: true,
+        supplier_max_micros: 100,
+        supplier_currency: "USD",
+      }),
+    );
+    if (confirmable) {
+      expect(confirmOperationQuote).toHaveBeenCalledExactlyOnceWith(
+        { id: operation },
+        { project_id: project },
+        { headers: { "Idempotency-Key": "stable-confirm" } },
+      );
+    } else {
+      expect(confirmOperationQuote).not.toHaveBeenCalled();
+    }
+  },
+);

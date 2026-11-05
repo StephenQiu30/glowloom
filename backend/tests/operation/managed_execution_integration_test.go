@@ -169,7 +169,13 @@ func TestManagedVideoUsesSupplierTokensInsteadOfArtifactDuration(t *testing.T) {
 	require.NoError(t, database.Exec(`UPDATE catalog.provider_config_version SET config=(SELECT payload->'config' FROM catalog.provider_preset_version WHERE id='6da07a12-0000-4000-8000-000000000001') WHERE id=?`, f.config).Error)
 	require.NoError(t, database.Exec(`UPDATE catalog.model_profile SET capability='video.generate' WHERE id=(SELECT model_profile_id FROM catalog.model_profile_version WHERE id=?)`, i.ModelProfileVersionID).Error)
 	require.NoError(t, database.Exec(`UPDATE catalog.model_profile_version SET modes=ARRAY['text2video'],supports_query=true,provider_model_id='doubao-seedance-2-0-mini-260615',queue='provider',moderation='provider' WHERE id=?`, i.ModelProfileVersionID).Error)
-	require.NoError(t, database.Exec(`UPDATE catalog.price_rule_version SET unit='per_1k_tokens',rule='{"input_micros_per_1k":0,"output_micros_per_1k":1000}' WHERE id=?`, i.PriceRuleVersionID).Error)
+	procurement := uuid.New()
+	require.NoError(t, database.Exec(`INSERT INTO catalog.price_rule_version(id,model_profile_id,version_no,unit,rule,currency,effective_from)
+		SELECT ?,model_profile_id,2,'per_1k_tokens','{"input_micros_per_1k":0,"output_micros_per_1k":500}','CNY',effective_from
+		FROM catalog.price_rule_version WHERE id=?`, procurement, i.PriceRuleVersionID).Error)
+	require.NoError(t, database.Exec(`UPDATE catalog.price_rule_version SET unit='per_1k_tokens',
+		rule=jsonb_build_object('input_micros_per_1k',0,'output_micros_per_1k',1000,'procurement_price_version_id',?::text)
+		WHERE id=?`, procurement, i.PriceRuleVersionID).Error)
 	require.NoError(t, database.Exec(`UPDATE operation.operation SET capability='video.generate',mode='text2video',params='{"duration_ms":4000,"resolution":"480p","aspect_ratio":"16:9"}' WHERE id=?`, i.OperationID).Error)
 	require.NoError(t, database.Exec(`INSERT INTO operation.operation_input(id,operation_id,seq_no,role,ref_type,text_value) VALUES(?,?,0,'prompt','text','video prompt') ON CONFLICT(operation_id,seq_no) DO NOTHING`, uuid.New(), i.OperationID).Error)
 	results := application.NewManagedResults(&stageTestObjects{entries: map[string]stageTestObject{}}, f.store)
@@ -190,4 +196,8 @@ func TestManagedVideoUsesSupplierTokensInsteadOfArtifactDuration(t *testing.T) {
 	cost, err := f.store.LoadProviderCost(t.Context(), i.OperationID)
 	require.NoError(t, err)
 	require.Equal(t, int64(37), cost.ActualCostMicros)
+	var supplierMicros int64
+	require.NoError(t, database.Raw(`SELECT procurement_cost_micros FROM operation.provider_call
+		WHERE operation_id=? AND action='query'`, i.OperationID).Row().Scan(&supplierMicros))
+	require.Equal(t, int64(19), supplierMicros)
 }

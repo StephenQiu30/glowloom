@@ -56,18 +56,24 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
-it("接入按服务商和密钥模型分两步，切换步骤不发送请求或丢失草稿", () => {
+it("服务商和密钥在同一表单，默认选择预设模型", async () => {
   render(
     <PresetConnect
       presets={[
         {
           ...presets[0],
           model_catalog: {
+            version: "catalog",
             models: [
               {
-                key: "draft-text-model",
-                display_name: "文本模型",
+                key: "default",
+                display_name: "默认模型",
                 capability: "text.generate",
+              },
+              {
+                key: "account-only",
+                display_name: "账号专用模型",
+                requires_model_selection: true,
               },
             ],
           },
@@ -77,37 +83,24 @@ it("接入按服务商和密钥模型分两步，切换步骤不发送请求或�
       onSaved={saved}
     />,
   );
-  expect(screen.queryByLabelText("API Key")).toBeNull();
-  expect(screen.getByRole("button", { name: "下一步" })).toHaveProperty(
-    "disabled",
-    true,
-  );
-  fireEvent.click(screen.getByRole("radio", { name: "OpenRouter" }));
-  fireEvent.click(screen.getByRole("button", { name: "下一步" }));
-  expect(document.activeElement).toBe(screen.getByText("2 / 2 · 密钥与模型"));
+  const input = screen.getByLabelText("API Key");
+  expect(input).toHaveProperty("disabled", true);
+  chooseProvider("OpenRouter");
+  expect(input).toHaveProperty("disabled", false);
+  expect(screen.queryByRole("checkbox")).toBeNull();
   expect(api.connect).not.toHaveBeenCalled();
-  expect(api.key).not.toHaveBeenCalled();
-  fireEvent.change(screen.getByLabelText("API Key"), {
-    target: { value: "draft-key-test" },
-  });
-  fireEvent.click(screen.getByRole("checkbox", { name: "文本模型" }));
-  fireEvent.click(screen.getByRole("button", { name: "上一步" }));
-  expect(screen.queryByLabelText("API Key")).toBeNull();
-  expect(document.activeElement).toBe(screen.getByText("1 / 2 · 选择服务商"));
-  fireEvent.click(screen.getByRole("button", { name: "下一步" }));
-  expect(screen.getByLabelText("API Key")).toHaveProperty(
-    "value",
-    "draft-key-test",
+  fireEvent.change(input, { target: { value: "fixture-key" } });
+  fireEvent.click(screen.getByRole("button", { name: "接入服务" }));
+  await waitFor(() => expect(saved).toHaveBeenCalledOnce());
+  expect(api.connect).toHaveBeenCalledWith(
+    { id: "preset" },
+    expect.objectContaining({
+      catalog_version: "catalog",
+      candidate_keys: ["default"],
+    }),
   );
-  expect(
-    screen
-      .getByRole("checkbox", { name: "文本模型" })
-      .getAttribute("aria-checked"),
-  ).toBe("true");
-  expect(api.connect).not.toHaveBeenCalled();
 });
-
-it("给定预设直接进入密钥模型步骤，待确认时不能更换服务商", () => {
+it("给定预设可直接填写密钥，待确认时不能更换服务商", () => {
   pageBusinessMemory.setItem(
     "glowloom.catalog.pending.v1.admin-fixture.preset.onboarding.create",
     JSON.stringify({
@@ -125,11 +118,7 @@ it("给定预设直接进入密钥模型步骤，待确认时不能更换服务�
     />,
   );
   expect(screen.getByLabelText("API Key")).toBeDefined();
-  expect(screen.getByRole("button", { name: "更换" })).toHaveProperty(
-    "disabled",
-    true,
-  );
-  expect(screen.getByRole("button", { name: "上一步" })).toHaveProperty(
+  expect(screen.getByRole("combobox", { name: "服务商" })).toHaveProperty(
     "disabled",
     true,
   );
@@ -137,12 +126,15 @@ it("给定预设直接进入密钥模型步骤，待确认时不能更换服务�
 });
 
 function chooseProvider(name: string | RegExp) {
-  const change = screen.queryByRole("button", { name: "更换" });
-  if (change) fireEvent.click(change);
-  fireEvent.click(screen.getByRole("radio", { name }));
-  fireEvent.click(screen.getByRole("button", { name: "下一步" }));
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "服务商" }), {
+    key: "ArrowDown",
+  });
+  fireEvent.click(screen.getByRole("option", { name }));
 }
 
+function openModels() {
+  fireEvent.click(screen.getByRole("button", { name: /^接入模型/ }));
+}
 it("火山音乐分别录入签名密钥且不会写成 Bearer API Key", async () => {
   render(
     <PresetConnect
@@ -227,12 +219,12 @@ it("Key 保存失败后继续写原连接，不重复创建", async () => {
     expect(
       (
         screen.getByRole("button", {
-          name: "继续保存 API Key",
+          name: "保存 API Key",
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(false),
   );
-  fireEvent.click(screen.getByRole("button", { name: "继续保存 API Key" }));
+  fireEvent.click(screen.getByRole("button", { name: "保存 API Key" }));
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());
   expect(api.connect).toHaveBeenCalledOnce();
   expect(api.key).toHaveBeenCalledTimes(2);
@@ -244,8 +236,10 @@ it("创建回执丢失后查询原结果，不自动再次创建或补发 Key", 
   await screen.findByRole("button", { name: "查询回执" });
   fireEvent.click(screen.getByRole("button", { name: "查询回执" }));
   await waitFor(() => expect(created).toHaveBeenCalledWith("connection"));
-  expect(screen.getByText("OpenRouter")).toBeDefined();
-  expect(screen.getByRole("button", { name: "更换" })).toHaveProperty(
+  expect(
+    screen.getByRole("combobox", { name: "服务商" }).textContent,
+  ).toContain("OpenRouter");
+  expect(screen.getByRole("combobox", { name: "服务商" })).toHaveProperty(
     "disabled",
     true,
   );
@@ -255,7 +249,7 @@ it("创建回执丢失后查询原结果，不自动再次创建或补发 Key", 
   fireEvent.change(screen.getByLabelText("API Key"), {
     target: { value: "fixture-api-key-test" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "继续保存 API Key" }));
+  fireEvent.click(screen.getByRole("button", { name: "保存 API Key" }));
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());
   expect(api.connect).toHaveBeenCalledOnce();
 });
@@ -352,12 +346,12 @@ it("同页重开沿用待确认凭据的连接和请求，不要求再次新建"
     expect(
       (
         screen.getByRole("button", {
-          name: "继续保存 API Key",
+          name: "保存 API Key",
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(false),
   );
-  fireEvent.click(screen.getByRole("button", { name: "继续保存 API Key" }));
+  fireEvent.click(screen.getByRole("button", { name: "保存 API Key" }));
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());
   expect(api.connect).not.toHaveBeenCalled();
   expect(api.key.mock.calls[0][0]).toEqual({ id: "connection" });
@@ -370,7 +364,7 @@ it("Key 输入先选预设，支持显隐，提交后清空并恢复隐藏", asy
   render(
     <PresetConnect presets={presets} onCreated={created} onSaved={saved} />,
   );
-  expect(screen.queryByLabelText("API Key")).toBeNull();
+  expect(screen.getByLabelText("API Key")).toHaveProperty("disabled", true);
   chooseProvider(/OpenRouter/);
   fireEvent.change(screen.getByLabelText("API Key"), {
     target: { value: "fixture-api-key-test" },
@@ -399,8 +393,10 @@ it("从其他预设打开时仍恢复原创建请求，不替换其平台", () =
       onSaved={saved}
     />,
   );
-  expect(screen.getByText("OpenRouter")).toBeDefined();
-  expect(screen.getByRole("button", { name: "更换" })).toHaveProperty(
+  expect(
+    screen.getByRole("combobox", { name: "服务商" }).textContent,
+  ).toContain("OpenRouter");
+  expect(screen.getByRole("combobox", { name: "服务商" })).toHaveProperty(
     "disabled",
     true,
   );
@@ -443,10 +439,15 @@ it("按目录版本提交候选模型，切换平台会清空旧选择", async (
     <PresetConnect presets={candidates} onCreated={created} onSaved={saved} />,
   );
   chooseProvider(/OpenRouter/);
+  openModels();
   expect(screen.getByRole("checkbox", { name: "通用聊天" })).toBeDefined();
   fireEvent.click(screen.getByRole("checkbox", { name: "通用聊天" }));
   chooseProvider(/DeepSeek/);
-  fireEvent.click(screen.getByRole("checkbox", { name: "DeepSeek Flash" }));
+  expect(
+    screen
+      .getByRole("checkbox", { name: "DeepSeek Flash" })
+      .getAttribute("aria-checked"),
+  ).toBe("true");
   fireEvent.change(screen.getByLabelText("API Key"), {
     target: { value: "fixture-api-key-test" },
   });
@@ -513,6 +514,8 @@ it("跨分类多选保留选择，全选排除不可用模型，空分类不虚�
     />,
   );
   chooseProvider("火山方舟");
+  openModels();
+  fireEvent.click(screen.getByRole("button", { name: "取消全选" }));
   fireEvent.click(screen.getByRole("checkbox", { name: "文本模型" }));
   fireEvent.mouseDown(screen.getByRole("tab", { name: "图片" }), {
     button: 0,
@@ -565,13 +568,16 @@ it("音频分类包含audio.tts豆包语音，保存接入不触发模型验证"
     />,
   );
   chooseProvider("豆包语音");
+  openModels();
   fireEvent.mouseDown(screen.getByRole("tab", { name: "音频" }), {
     button: 0,
     ctrlKey: false,
   });
-  fireEvent.click(
-    await screen.findByRole("checkbox", { name: "豆包语音合成" }),
-  );
+  expect(
+    (
+      await screen.findByRole("checkbox", { name: "豆包语音合成" })
+    ).getAttribute("aria-checked"),
+  ).toBe("true");
   fireEvent.change(screen.getByLabelText("API Key"), {
     target: { value: "fixture-key" },
   });
@@ -616,6 +622,7 @@ it("豆包语音直接显示音频模型，切换服务清除原Key和选择", a
       onSaved={saved}
     />,
   );
+  openModels();
   expect(
     screen.getByRole("tab", { name: "音频" }).getAttribute("aria-selected"),
   ).toBe("true");
@@ -628,9 +635,10 @@ it("豆包语音直接显示音频模型，切换服务清除原Key和选择", a
   chooseProvider("OpenRouter");
   expect((screen.getByLabelText("API Key") as HTMLInputElement).value).toBe("");
   chooseProvider("豆包语音");
+  openModels();
   expect(
     screen.getByLabelText("豆包语音合成 2.0").getAttribute("aria-checked"),
-  ).toBe("false");
+  ).toBe("true");
   expect(api.key).not.toHaveBeenCalled();
 });
 
@@ -684,6 +692,7 @@ it("多厂商预设支持展示 ChatGPT Anthropic Gemini Grok 品牌标签与筛
       onSaved={saved}
     />,
   );
+  openModels();
   expect(screen.getByText("ChatGPT")).toBeDefined();
   expect(screen.getByText("Anthropic")).toBeDefined();
   expect(screen.getByText("Gemini")).toBeDefined();
@@ -732,6 +741,7 @@ it("多厂商预设支持手动添加自定义候选模型并成功提交", asyn
       onSaved={saved}
     />,
   );
+  openModels();
   expect(screen.getByText("GPT-6.1 Sol")).toBeDefined();
 
   // Expand custom model form
@@ -746,7 +756,7 @@ it("多厂商预设支持手动添加自定义候选模型并成功提交", asyn
 
   // The added custom model should appear in the list and be checked
   expect(await screen.findByText("Claude Sonnet 5.5 Custom")).toBeDefined();
-  expect(screen.getByText("已选 1")).toBeDefined();
+  expect(screen.getByText("已选 2")).toBeDefined();
 
   // Connect and verify custom_candidates payload
   fireEvent.change(screen.getByLabelText("API Key"), {
@@ -758,6 +768,7 @@ it("多厂商预设支持手动添加自定义候选模型并成功提交", asyn
   expect(api.connect).toHaveBeenCalledWith(
     { id: "or-preset" },
     expect.objectContaining({
+      candidate_keys: ["or-gpt-6-1-sol"],
       custom_candidates: [
         expect.objectContaining({
           display_name: "Claude Sonnet 5.5 Custom",

@@ -3,7 +3,6 @@
 import { useId, useState } from "react";
 import useSWR from "swr";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import {
   getAdminModel,
   listModelReleases,
@@ -18,9 +17,9 @@ import {
   SelectTrigger,
   SelectValue,
   SelectContent,
+  SelectGroup,
   SelectItem,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { ConnectionOnboarding } from "./connection-onboarding";
 import { checkRunning } from "./testing-status";
 const ProviderTrial = dynamic(() =>
@@ -88,13 +87,15 @@ export function ConnectionModels({
         <SelectValue placeholder="选择模型" />
       </SelectTrigger>
       <SelectContent>
-        {data?.map((m) =>
-          m.id ? (
-            <SelectItem key={m.id} value={m.id}>
-              {m.display_name}
-            </SelectItem>
-          ) : null,
-        )}
+        <SelectGroup>
+          {data?.map((m) =>
+            m.id ? (
+              <SelectItem key={m.id} value={m.id}>
+                {m.display_name}
+              </SelectItem>
+            ) : null,
+          )}
+        </SelectGroup>
       </SelectContent>
     </Select>
   );
@@ -113,52 +114,30 @@ export function ConnectionModels({
         </Button>
       </div>
     );
-  if (!target)
-    return (
-      <div className="space-y-2 text-sm">
-        <h3 className="font-medium">模型验证</h3>
-        {onboarding?.models?.map((model) => (
-          <p key={model.id} className="text-sm">
-            {model.display_name}
-            <span className="ml-2 text-muted-foreground">
-              价格待审核，尚不可创作。请在模型管理中发布已审核价格并完成验证。
-            </span>
-          </p>
-        ))}
-        <p className="text-xs text-muted-foreground">
-          当前连接没有可测试的发布，请先在模型管理中完成配置。
-        </p>
-        <Button variant="outline" asChild>
-          <Link href={`/models?provider=${encodeURIComponent(id)}`}>
-            模型管理
-          </Link>
-        </Button>
-      </div>
-    );
   const pendingCandidates = onboarding?.models?.filter(
     (model) =>
       !model.release_id ||
       model.release_id === "00000000-0000-0000-0000-000000000000",
   );
   const pendingPrices = pendingCandidates?.length ? (
-    <div className="flex flex-col gap-2 text-sm">
-      {pendingCandidates.map((model) => (
-        <p key={model.id}>{model.display_name}</p>
-      ))}
-      <p className="text-xs text-muted-foreground">
-        价格待审核，尚不可创作。请在模型管理中发布已审核价格并完成验证。
-      </p>
-      <Button variant="outline" asChild>
-        <Link href={`/models?provider=${encodeURIComponent(id)}`}>
-          模型管理
-        </Link>
-      </Button>
-    </div>
+    <p className="text-xs text-muted-foreground">
+      {pendingCandidates.map((model) => model.display_name).join("、")}
+      价格待审核，尚不可创作。
+    </p>
   ) : null;
+  if (!target)
+    return (
+      <div className="flex flex-col gap-2">
+        <h3 className="text-sm font-medium">模型验证</h3>
+        <p className="text-sm text-muted-foreground">
+          请先在模型管理中完成发布配置。
+        </p>
+        {pendingPrices}
+      </div>
+    );
   if (!target.requires_trial)
     return (
       <>
-        {pendingPrices}
         <ConnectionOnboarding
           adapter={adapter}
           id={id}
@@ -169,11 +148,11 @@ export function ConnectionModels({
           checks={checks}
           onChecked={onChecked}
         />
+        {pendingPrices}
       </>
     );
   return (
     <>
-      {pendingPrices}
       <FormalModelTest
         key={target.release_id}
         provider={id}
@@ -183,6 +162,7 @@ export function ConnectionModels({
         mode={target.id === initialModel ? initialMode : undefined}
         onSaved={onSaved}
       />
+      {pendingPrices}
     </>
   );
 }
@@ -234,10 +214,7 @@ function FormalModelTest({
   );
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-medium">模型验证</h3>
-        <Badge variant="secondary">逐模式试运行</Badge>
-      </div>
+      <h3 className="text-sm font-medium">模型验证</h3>
       {selector}
       {isLoading ? (
         <p role="status" className="text-xs text-muted-foreground">

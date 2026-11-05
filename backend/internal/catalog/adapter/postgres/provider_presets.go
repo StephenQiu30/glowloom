@@ -316,20 +316,12 @@ func (s *Store) ConnectPreset(ctx context.Context, actor identityapp.Principal, 
 			if isFromTemplate {
 				continue
 			}
-			id := uuid.New()
-			model := domain.ModelProfile{ID: id, Key: "candidate-" + id.String(), ProviderID: providerID, Capability: candidate.Capability, DisplayName: candidate.DisplayName, Status: domain.ModelDisabled, Revision: 1}
-			if err := createModelInTx(tx, model); err != nil {
-				return application.PresetConnection{}, err
-			}
-			snapshot, err := json.Marshal(domain.ModelCandidateSelection{CatalogVersion: catalog.Version, Model: candidate})
+			id, err := createPresetCandidate(tx, providerID, catalog.Version, candidate)
 			if err != nil {
 				return application.PresetConnection{}, err
 			}
-			if err := tx.Exec(`UPDATE catalog.model_profile SET candidate_snapshot=?::jsonb WHERE id=?`, string(snapshot), id).Error; err != nil {
-				return application.PresetConnection{}, err
-			}
 			if input.DirectUse {
-				if err := instantiateOnboardingModel(tx, actor, id, configID, candidate); err != nil {
+				if err := instantiateOnboardingModel(tx, actor, id, 1, candidate); err != nil {
 					return application.PresetConnection{}, err
 				}
 			}

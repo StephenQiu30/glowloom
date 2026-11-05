@@ -34,11 +34,7 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
-function setup(
-  adapter = "openai",
-  credential = true,
-  onConfigure?: () => void,
-) {
+function setup(adapter = "openai") {
   return render(
     <SWRConfig
       value={{
@@ -50,15 +46,14 @@ function setup(
       <ConnectionTests
         id="provider"
         adapter={adapter}
-        credentialID={credential ? "credential" : undefined}
+        credentialID="credential"
         revision={0}
-        onConfigure={onConfigure}
         onSaved={() => {}}
       />
     </SWRConfig>,
   );
 }
-it("打开不调用上游；无凭据仍可检测网络，401仅显示网络可达", async () => {
+it("打开不调用上游；检测网络收到401仅显示网络可达", async () => {
   api.network.mockImplementation(async () => {
     api.list.mockResolvedValue({
       items: [
@@ -88,14 +83,12 @@ it("打开不调用上游；无凭据仍可检测网络，401仅显示网络可�
     });
     return { accepted: true, provider_id: "provider", check_id: "check" };
   });
-  const configure = vi.fn();
-  setup("openai", false, configure);
+  setup();
+  expect(screen.queryByRole("button", { name: "检测连通" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "网络与凭据诊断" }));
   const network = await screen.findByRole("button", { name: "检测连通" });
   expect(api.network).not.toHaveBeenCalled();
   expect(api.auth).not.toHaveBeenCalled();
-  expect(screen.queryByRole("button", { name: "检查凭据" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "配置凭据" }));
-  expect(configure).toHaveBeenCalledOnce();
   fireEvent.click(network);
   await screen.findByText("网络可达");
   expect(screen.queryByText(/HTTP 401/)).toBeNull();
@@ -118,6 +111,7 @@ it("旧凭据的通过只能作为历史记录，不冒充当前状态", async (
     current_checks: [],
   });
   setup();
+  fireEvent.click(screen.getByRole("button", { name: "网络与凭据诊断" }));
   await screen.findByRole("button", { name: "检查凭据" });
   expect(screen.queryByText("鉴权通过")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "检测详情" }));
@@ -126,6 +120,7 @@ it("旧凭据的通过只能作为历史记录，不冒充当前状态", async (
 });
 it("语音与音乐不把不支持只读鉴权显示为失败或发起假验证", async () => {
   setup("volcengine_music");
+  fireEvent.click(screen.getByRole("button", { name: "网络与凭据诊断" }));
   await screen.findByText("需模型验证");
   expect(screen.queryByRole("button", { name: "检查凭据" })).toBeNull();
   expect(api.auth).not.toHaveBeenCalled();

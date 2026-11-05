@@ -30,7 +30,14 @@ export function QuoteCostDetail({
 }) {
   const known =
     typeof amount === "number" && Number.isSafeInteger(amount) && amount >= 0;
-  if (!known)
+  const exact = detail?.exact_credits;
+  const exactCredits =
+    typeof exact === "string" && /^(0|[1-9]\d*)(\.\d{1,5})?$/.test(exact)
+      ? exact
+      : null;
+  const cap = detail?.max_charge_credits;
+  const capped = exactCredits !== null && cap === exactCredits;
+  if (!known && exactCredits === null)
     return (
       <p role="status" className="text-sm text-muted-foreground">
         费用待确认
@@ -62,9 +69,11 @@ export function QuoteCostDetail({
       aria-label="本次费用"
     >
       <p>
-        {knownCredits
-          ? `预计消耗 ${credits} 积分`
-          : `预计预留 ${formatBillingMicros(amount)}`}
+        {exactCredits !== null
+          ? `预计消耗 ${exactCredits} 积分`
+          : knownCredits
+            ? `预计消耗 ${credits} 积分`
+            : `预计预留 ${formatBillingMicros(amount)}`}
       </p>
       <Collapsible className="min-w-0">
         <CollapsibleTrigger asChild>
@@ -83,10 +92,16 @@ export function QuoteCostDetail({
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="flex flex-col gap-3 pt-3">
-            {knownCredits && <p>预计预留 {formatBillingMicros(amount)}</p>}
+            {known && (knownCredits || exactCredits !== null) && (
+              <p>预计预留 {formatBillingMicros(amount)}</p>
+            )}
             <p className="text-muted-foreground">
-              预留金额不代表最终实扣或费用上限。
-              {knownCredits ? "积分按本次报价规则向上取整。" : ""}
+              {capped
+                ? `本次最多扣 ${exactCredits} 积分，按实际用量结算。费用待核查时保留冻结。`
+                : "预留金额不代表最终实扣或费用上限。"}
+              {exactCredits === null && knownCredits
+                ? "积分按本次报价规则向上取整。"
+                : ""}
             </p>
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 break-words">
               {Object.entries({

@@ -5,6 +5,7 @@
 import * as settings from "./settings";
 import * as identity from "./identity";
 import * as operations from "./operations";
+import * as billing from "./billing";
 import * as canvases from "./canvases";
 import * as canvasAssistant from "./canvasAssistant";
 import * as script from "./script";
@@ -26,6 +27,7 @@ export default {
   settings,
   identity,
   operations,
+  billing,
   canvases,
   canvasAssistant,
   script,

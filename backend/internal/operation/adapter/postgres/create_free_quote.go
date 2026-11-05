@@ -11,6 +11,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
@@ -91,7 +93,7 @@ func (s *Store) CreateFreeQuote(ctx context.Context, actor identityapp.Principal
 			input = prepared
 		}
 		now := time.Now().UTC()
-		item, _, err := s.prepareFreeQuoteItem(ctx, tx, actor, input, project, now)
+		item, modelKey, err := s.prepareFreeQuoteItem(ctx, tx, actor, input, project, now)
 		if err != nil {
 			return err
 		}
@@ -106,6 +108,19 @@ func (s *Store) CreateFreeQuote(ctx context.Context, actor identityapp.Principal
 		if err != nil {
 			return err
 		}
+		ready, err := commercialPriceReady(tx, item.Operation.PriceRuleVersionID)
+		if err != nil {
+			return err
+		}
+		walletBlock, err := walletQuoteBlock(s.billingStore(tx).CheckWalletQuoteInTransaction(tx, input.ProjectID, []billingapp.WalletDemand{{
+			ModelKey: modelKey, Micros: *item.Operation.QuoteMicros, CommercialPriceReady: ready, ReusedResult: item.Operation.ReusedFromID != nil,
+		}}))
+		if err != nil {
+			return err
+		}
+		if err := annotateWalletQuote(&item, walletBlock); err != nil {
+			return err
+		}
 		if err := s.withDB(tx).CreateQuoteSnapshot(ctx, actor, nil, []QuoteItem{item}); err != nil {
 			return err
 		}
@@ -114,7 +129,7 @@ func (s *Store) CreateFreeQuote(ctx context.Context, actor identityapp.Principal
 			QuoteDetail:     item.Operation.QuoteDetail,
 			AvailableMicros: available, ExpiresAt: *item.Operation.QuoteExpiresAt,
 			ReusedFromID:      item.Operation.ReusedFromID,
-			Confirmable:       available >= *item.Operation.QuoteMicros,
+			Confirmable:       available >= *item.Operation.QuoteMicros && walletBlock == "",
 			PromptPreparation: item.PromptPreparation,
 		}
 		if item.PromptPreparation != nil || editorDraft != nil {
@@ -456,4 +471,36 @@ func priceSourceText(value *string) string {
 		return ""
 	}
 	return *value
+}
+
+func walletQuoteBlock(err error) (string, error) {
+	switch {
+	case err == nil:
+		return "", nil
+	case errors.Is(err, billingdomain.ErrWalletInsufficient):
+		return "credits_insufficient", nil
+	case errors.Is(err, billingdomain.ErrWalletPriceUnavailable):
+		return "commercial_price_unavailable", nil
+	case errors.Is(err, billingdomain.ErrWalletPayerChanged):
+		return "payer_changed", nil
+	default:
+		return "", err
+	}
+}
+
+func annotateWalletQuote(item *QuoteItem, block string) error {
+	if block == "" {
+		return nil
+	}
+	var detail map[string]json.RawMessage
+	if err := json.Unmarshal(item.Operation.QuoteDetail, &detail); err != nil {
+		return err
+	}
+	detail["wallet_block"], _ = json.Marshal(block)
+	encoded, err := json.Marshal(detail)
+	if err != nil {
+		return err
+	}
+	item.Operation.QuoteDetail = encoded
+	return nil
 }

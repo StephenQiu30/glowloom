@@ -37,7 +37,11 @@ func seedTemplateQuoteCatalog(t *testing.T, database *gorm.DB, projectID uuid.UU
 	if err := database.Exec(`UPDATE catalog.model_profile_version SET modes=ARRAY['structured'],limits='{"max_outputs":1}' WHERE id=?`, quoted.ModelProfileVersionID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := database.Exec(`UPDATE catalog.price_rule_version SET unit='per_1k_chars',rule='{"base_micros":1}' WHERE id=?`, quoted.PriceRuleVersionID).Error; err != nil {
+	if err := database.Exec(`UPDATE catalog.price_rule_version SET unit='per_1k_chars',rule=jsonb_set(rule,'{base_micros}','1') WHERE id=?`, quoted.PriceRuleVersionID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Exec(`UPDATE catalog.price_rule_version SET unit='per_1k_chars'
+		WHERE id=(SELECT (rule->>'procurement_price_version_id')::uuid FROM catalog.price_rule_version WHERE id=?)`, quoted.PriceRuleVersionID).Error; err != nil {
 		t.Fatal(err)
 	}
 	return "quote-model-" + modelID.String()

@@ -31,6 +31,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
 	biblehttp "github.com/StephenQiu30/glowloom-server/backend/internal/bible/adapter/http"
 	bibleapp "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
+	billinghttp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/http"
 	canvashttp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/http"
 	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
 	canvaslive "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/websocket"
@@ -137,6 +138,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	workspaceStore := workspacewire.ProvideWorkspaceLifecycleStore(database)
 	protected.Use(workspacehttp.RequireCreationScope(scopewire.ProvideRequestScopeAccess(database)))
 	protected.Use(workspacehttp.RequireProjectAccess(workspaceStore))
+	billinghttp.NewWalletHandler(walletReader(database)).Register(protected)
 	workspacehttp.NewHandler(workspaceapp.NewListProjectsQuery(workspaceStore), workspaceapp.NewCreateProjectCommand(workspaceStore, time.Now), workspaceapp.NewListStylePresetsQuery(workspaceStore)).Register(protected)
 	workspacehttp.NewProjectBudgetHandler(workspaceapp.NewProjectBudgetQuery(workspaceStore)).Register(protected)
 	workspacehttp.NewProjectLifecycleHandler(workspaceapp.NewProjectLifecycle(workspaceStore, time.Now)).Register(protected)

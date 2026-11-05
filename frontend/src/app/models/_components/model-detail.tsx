@@ -53,6 +53,8 @@ import {
   useCatalogMutation,
 } from "@/components/catalog/mutation";
 
+import { ModelConfigurationCheck } from "./model-configuration-check";
+
 export function ModelDetail({
   id,
   capabilities,
@@ -162,12 +164,27 @@ export function ModelDetail({
       ) : (
         <>
           <p className="text-sm text-muted-foreground">
-            {model?.status === "active" ? "已启用" : "草稿 / 已停用"} ·
-            当前发布：
+            {model?.status === "active"
+              ? "已启用"
+              : releases.some((release) => release.status === "retired")
+                ? "已停用"
+                : latestPrice
+                  ? "待验证"
+                  : "价格待审核"}{" "}
+            · 当前发布：
             {active
               ? `配置 ${detail.versions?.find((v) => v.id === active.model_version_id)?.version_no ?? "—"} / 价格 ${detail.prices?.find((p) => p.id === active.price_version_id)?.version_no ?? "—"}`
               : "尚未发布"}
           </p>
+          {model?.provider_id && latest?.id && config?.id ? (
+            <ModelConfigurationCheck
+              key={`${latest.id}:${config.id}`}
+              id={id}
+              provider={model.provider_id}
+              version={latest.id}
+              config={config.id}
+            />
+          ) : null}
           {detail.candidate && !latest ? (
             <p className="text-sm text-muted-foreground">
               来自通用模型目录 {detail.candidate.catalog_version}。
@@ -401,6 +418,7 @@ export function ModelDetail({
                     key={latestPrice?.id ?? "new"}
                     unit={priceUnit ?? latestPrice?.unit ?? "per_request"}
                     rule={latestPrice?.rule}
+                    prices={detail?.prices}
                   />
                   <PriceEvidenceFields price={latestPrice} />
                   <Field>
@@ -669,7 +687,7 @@ export function ModelDetail({
                       {onboardingDraft ? (
                         <Button variant="outline" asChild>
                           <a
-                            href={`/providers?connection=${model?.provider_id}&view=test&model=${model?.id}&release=${r.id}`}
+                            href={`/providers?connection=${model?.provider_id}&model=${model?.id}&release=${r.id}`}
                           >
                             前往连接验证并启用所选模型
                           </a>

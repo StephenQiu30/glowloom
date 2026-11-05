@@ -1383,3 +1383,35 @@ it("原任务恢复沿专用POST路由保留幂等键，不开放任意信号", 
     "original-recovery",
   );
 });
+
+it("代理按连接筛选模型及只读草稿配置验证", async () => {
+  const fetcher = vi.fn().mockImplementation(async () => new Response("{}"));
+  vi.stubGlobal("fetch", fetcher);
+  const id = "11111111-1111-4111-8111-111111111111";
+  const list = "admin/models";
+  const check = `${list}/${id}/configuration-check`;
+  expect(
+    (
+      await GET(
+        new Request(`http://localhost/api/${list}?provider_id=${id}`),
+        context(list),
+      )
+    ).status,
+  ).toBe(200);
+  expect(
+    (fetcher.mock.calls[0]?.[0] as URL).searchParams.get("provider_id"),
+  ).toBe(id);
+  expect(
+    (await GET(new Request(`http://localhost/api/${check}`), context(check)))
+      .status,
+  ).toBe(200);
+  expect(
+    (
+      await POST(
+        new Request(`http://localhost/api/${check}`, { method: "POST" }),
+        context(check),
+      )
+    ).status,
+  ).toBe(405);
+  expect(fetcher).toHaveBeenCalledTimes(2);
+});

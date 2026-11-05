@@ -230,6 +230,23 @@ export async function getAdminModel(
   });
 }
 
+/** 验证模型草稿配置 GET /api/admin/models/${param0}/configuration-check */
+export async function checkModelConfiguration(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.checkModelConfigurationParams,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.ModelConfigurationCheck>(
+    `/api/admin/models/${param0}/configuration-check`,
+    {
+      method: "GET",
+      params: { ...queryParams },
+      ...(options || {}),
+    },
+  );
+}
+
 /** 发布模型价格版本 POST /api/admin/models/${param0}/prices */
 export async function publishAdminModelPrice(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -727,6 +744,25 @@ export async function testAdminCredential(
       ...(options || {}),
     },
   );
+}
+
+/** 从连接预设添加模型 POST /api/admin/providers/${param0}/models */
+export async function addProviderPresetModel(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.addProviderPresetModelParams,
+  body: API.AddPresetModelInput,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.CreatedModel>(`/api/admin/providers/${param0}/models`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    params: { ...queryParams },
+    data: body,
+    ...(options || {}),
+  });
 }
 
 /** 读取模型预设接入进度 GET /api/admin/providers/${param0}/onboarding */

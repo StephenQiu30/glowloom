@@ -112,3 +112,14 @@ func (s *Store) ReadCurrentQuoteCatalog(ctx context.Context, actor identityapp.P
 	}
 	return modelID, priceID, nil
 }
+
+// commercialPriceReady checks the frozen version used by the active release.
+// Release creation has already checked the linked procurement tariff.
+func commercialPriceReady(tx *gorm.DB, priceID *uuid.UUID) (bool, error) {
+	var ready bool
+	err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM catalog.model_release r
+		JOIN catalog.price_rule_version p ON p.id=r.price_version_id
+		WHERE r.price_version_id=? AND r.status='active' AND NOT p.is_delete
+		  AND jsonb_exists(p.rule,'procurement_price_version_id'))`, priceID).Row().Scan(&ready)
+	return ready, err
+}

@@ -306,13 +306,9 @@ func validateReleaseContract(tx *gorm.DB, modelID uuid.UUID, input application.C
 	if json.Unmarshal(row.ModesJSON, &version.Modes) != nil || json.Unmarshal(row.ConfigJSON, &config) != nil {
 		return application.ErrModelSourceUnavailable
 	}
-	var price domain.PriceRuleVersion
-	r = tx.Raw(`SELECT id,model_profile_id AS model_id,version_no,unit,rule,currency,fx_rate_to_cny::text AS fx_rate_to_cny,effective_from FROM catalog.price_rule_version WHERE id=? AND model_profile_id=?`, input.PriceVersionID, modelID).Scan(&price)
-	if r.Error != nil {
-		return r.Error
-	}
-	if r.RowsAffected != 1 {
-		return application.ErrModelSourceUnavailable
+	price, err := readReleasePrice(tx, modelID, input.PriceVersionID)
+	if err != nil {
+		return err
 	}
 	params, err := paramvalidation.NewValidator()
 	if err != nil {
@@ -321,5 +317,39 @@ func validateReleaseContract(tx *gorm.DB, modelID uuid.UUID, input application.C
 	if params.Validate(version) != nil || pricevalidation.ValidateModel(config, row.Capability, version, price) != nil {
 		return application.ErrModelSourceUnavailable
 	}
+	procurementID, err := price.ProcurementVersion()
+	if err != nil {
+		return application.ErrModelSourceUnavailable
+	}
+	if procurementID == uuid.Nil {
+		return nil
+	}
+	// GPT Image 2.5 requires a token meter that this image adapter has not
+	// published yet. A flat retail rule cannot stand in for supplier evidence.
+	if version.ProviderModelID == "gpt-image-2.5-sunburst" || version.ProviderModelID == "gpt-image-2.5-flare" {
+		return application.ErrModelSourceUnavailable
+	}
+	procurement, err := readReleasePrice(tx, modelID, procurementID)
+	if err != nil {
+		return err
+	}
+	if pricevalidation.ValidateProcurement(price, procurement) != nil ||
+		pricevalidation.ValidateModel(config, row.Capability, version, procurement) != nil {
+		return application.ErrModelSourceUnavailable
+	}
 	return nil
+}
+
+func readReleasePrice(tx *gorm.DB, modelID, priceID uuid.UUID) (domain.PriceRuleVersion, error) {
+	var price domain.PriceRuleVersion
+	r := tx.Raw(`SELECT id,model_profile_id AS model_id,version_no,unit,rule,currency,
+ fx_rate_to_cny::text AS fx_rate_to_cny,effective_from,source_url,reviewed_at
+ FROM catalog.price_rule_version WHERE id=? AND model_profile_id=? AND NOT is_delete FOR SHARE`, priceID, modelID).Scan(&price)
+	if r.Error != nil {
+		return price, r.Error
+	}
+	if r.RowsAffected != 1 {
+		return price, application.ErrModelSourceUnavailable
+	}
+	return price, nil
 }
