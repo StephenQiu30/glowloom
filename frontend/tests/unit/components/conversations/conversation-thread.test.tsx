@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ConversationThread } from "@/components/conversations/conversation-thread";
 import type { ConversationController } from "@/components/conversations/use-conversation";
@@ -9,7 +15,11 @@ vi.mock(
 vi.mock("@/components/conversations/conversation-result", () => ({
   ConversationResults: () => null,
 }));
-afterEach(cleanup);
+const defaultResizeObserver = globalThis.ResizeObserver;
+afterEach(() => {
+  cleanup();
+  vi.stubGlobal("ResizeObserver", defaultResizeObserver);
+});
 const source = {
   root_run_id: "old",
   session_id: "session",
@@ -71,4 +81,41 @@ it("shows pending Stop separately from execution completion", () => {
   render(<ConversationThread conversation={c} projectID="project" />);
   expect(screen.getByText("正在停止，等待执行回执")).toBeTruthy();
   expect(screen.queryByText("已停止")).toBeNull();
+});
+
+it("follows late result-card resizing only while reading the newest messages", () => {
+  let resized: (() => void) | undefined;
+  const disconnect = vi.fn();
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      constructor(callback: () => void) {
+        resized = callback;
+      }
+      observe() {}
+      disconnect = disconnect;
+    },
+  );
+  const { unmount } = render(
+    <ConversationThread conversation={controller()} projectID="project" />,
+  );
+  const scroller = screen.getByLabelText("对话消息");
+  Object.defineProperties(scroller, {
+    clientHeight: { configurable: true, value: 400 },
+    scrollHeight: { configurable: true, value: 900 },
+  });
+  act(() => resized?.());
+  expect(scroller.scrollTop).toBe(900);
+  Object.defineProperty(scroller, "scrollHeight", { value: 1100 });
+  fireEvent.scroll(scroller);
+  act(() => resized?.());
+  expect(scroller.scrollTop).toBe(1100);
+  scroller.scrollTop = 100;
+  fireEvent.scroll(scroller);
+  Object.defineProperty(scroller, "scrollHeight", { value: 1200 });
+  act(() => resized?.());
+  expect(scroller.scrollTop).toBe(100);
+  expect(screen.getByRole("button", { name: "回到底部" })).toBeTruthy();
+  unmount();
+  expect(disconnect).toHaveBeenCalledOnce();
 });

@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { ConversationWorkspace } from "../../src/components/conversations/conversation-workspace";
 import { emptyPromptDraft } from "../../src/components/generation/prompt-document";
 import { TooltipProvider } from "../../src/components/ui/tooltip";
+import { Toaster } from "../../src/components/ui/sonner";
 import { setCSRFToken, setCreationScope } from "../../src/lib/request";
 import "../../src/app/globals.css";
 setCSRFToken("fixture-only");
@@ -60,6 +61,7 @@ createRoot(document.getElementById("root")!, {
     console.error(String(error), error instanceof Error ? error.stack : ""),
 }).render(
   <TooltipProvider>
+    <Toaster />
     <main className="mx-auto max-w-5xl p-4">
       <p className="mb-4 text-xs text-muted-foreground">
         隔离 fixture · 不调用真实生成服务

@@ -33,6 +33,41 @@ it("asset detail replaces a failed first read with an inline retry and never kee
   expect(await screen.findByText("恢复的真实提示词")).toBeTruthy();
 });
 
+it("conversation results expose a focus-managed preview and original download only for approved outputs", async () => {
+  api.get.mockResolvedValue({
+    id,
+    project_id: projectID,
+    status: "completed",
+    outputs: [
+      { id, kind: "image", media_asset_id: id, moderation_status: "passed" },
+      {
+        id: "33333333-3333-4333-8333-333333333333",
+        kind: "image",
+        media_asset_id: id,
+        moderation_status: "rejected",
+      },
+    ],
+  });
+  render(
+    <TaskDetail
+      projectID={projectID}
+      id={id}
+      presentation="asset"
+      resultActions
+    />,
+  );
+  const preview = await screen.findByRole("button", { name: "预览结果" });
+  expect(screen.getAllByRole("button", { name: "下载原件" })).toHaveLength(1);
+  fireEvent.click(preview);
+  expect(await screen.findByRole("dialog", { name: "结果预览" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "关闭对话框" }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  api.get.mockRejectedValue(new RequestError("forbidden", 403));
+  fireEvent.click(screen.getByRole("button", { name: "刷新任务" }));
+  expect(await screen.findByText("此生成记录已不可访问")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "下载原件" })).toBeNull();
+});
+
 it.each([401, 403, 404])(
   "asset detail clears its private prompt and reuse action when a refresh is denied (%s)",
   async (status) => {

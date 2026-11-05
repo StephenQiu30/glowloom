@@ -40,6 +40,7 @@ export function ConversationResults({
           key={id}
           id={id}
           presentation="asset"
+          resultActions
           projectID={projectID}
           onReuse={
             onReuse

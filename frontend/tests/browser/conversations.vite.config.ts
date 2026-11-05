@@ -275,7 +275,24 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     res.write(": fixture\n\n");
     return;
   }
+  if (run && route.includes("/messages/")) {
+    const messageID = route.split("/").at(-1);
+    const part = (
+      run.messages_page.items as { message_id: string; content: string }[]
+    ).find((p) => p.message_id === messageID);
+    return part ? reply({ content: part.content }) : reply({}, 404);
+  }
   if (run) return reply(run);
+  if (route.endsWith("/original")) {
+    res.setHeader("Content-Type", "image/png");
+    res.end(
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+        "base64",
+      ),
+    );
+    return;
+  }
   if (route.endsWith("/preview")) {
     const asset = route.split("/").at(-2)!;
     return reply({

@@ -32,11 +32,26 @@ export function ConversationThread({
   projectID: string;
 }) {
   const box = useRef<HTMLDivElement>(null),
+    content = useRef<HTMLDivElement>(null),
     bottom = useRef<HTMLDivElement>(null),
     near = useRef(true),
+    observedHeight = useRef(0),
     anchor = useRef<{ height: number; top: number } | null>(null);
   const [reading, setReading] = useState(false),
     [notice, setNotice] = useState("");
+  useLayoutEffect(() => {
+    const el = box.current,
+      body = content.current;
+    if (!el || !body) return;
+    const observer = new ResizeObserver(() => {
+      observedHeight.current = el.scrollHeight;
+      // Images and lazy result cards can grow after the message snapshot commits.
+      if (near.current && !anchor.current) el.scrollTop = el.scrollHeight;
+    });
+    observer.observe(body);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
@@ -62,11 +77,14 @@ export function ConversationThread({
         onScroll={() => {
           const el = box.current;
           if (!el) return;
+          // Layout-induced scroll events can precede the resize notification.
+          if (near.current && el.scrollHeight !== observedHeight.current)
+            return;
           near.current = el.scrollHeight - el.scrollTop - el.clientHeight < 96;
           setReading(!near.current);
         }}
       >
-        <div className="mx-auto max-w-[960px] space-y-8">
+        <div ref={content} className="mx-auto max-w-[960px] space-y-8">
           {c.hasOlderRuns ? (
             <Button variant="ghost" onClick={() => void older(c.loadOlderRuns)}>
               加载更早对话

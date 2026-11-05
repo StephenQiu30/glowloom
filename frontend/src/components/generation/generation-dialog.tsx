@@ -5,6 +5,7 @@ import {
 } from "@/components/billing/billing-outcome";
 import { QuoteCostDetail } from "./quote-cost-detail";
 import { AudioSubtitles } from "./audio-subtitles";
+import { ResultMediaActions } from "./result-media-actions";
 import { ContentState } from "@/components/layout/content-state";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import {
@@ -344,6 +345,7 @@ type TaskDetailProps = {
   onReuse?: (task: Task) => void;
   outputID?: string;
   presentation?: "default" | "asset";
+  resultActions?: boolean;
   onAvailabilityChange?: (available: boolean) => void;
 };
 export function TaskDetail(props: TaskDetailProps) {
@@ -358,6 +360,7 @@ function ScopedTaskDetail({
   onReuse,
   outputID,
   presentation = "default",
+  resultActions = false,
   onAvailabilityChange,
 }: TaskDetailProps) {
   const [loadedTask, setTask] = useState<Task | null>(null),
@@ -636,6 +639,14 @@ function ScopedTaskDetail({
                     />
                   )}
                 </div>
+                {resultActions ? (
+                  <ResultMediaActions
+                    projectID={projectID}
+                    assetID={o.media_asset_id!}
+                    kind={o.kind}
+                    completed={task.status === "completed"}
+                  />
+                ) : null}
                 {onAdopt && (
                   <Button
                     disabled={adopting}
