@@ -1,5 +1,5 @@
-import { BillingView } from "@/components/billing/billing-view";
+import { BillingWallet } from "@/components/billing/billing-wallet";
 export const metadata = { title: "积分总览" };
 export default function Page() {
-  return <BillingView />;
+  return <BillingWallet section="overview" />;
 }

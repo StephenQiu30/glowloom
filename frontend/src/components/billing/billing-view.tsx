@@ -59,9 +59,47 @@ function BillingAvailability({
   );
 }
 
-/** Only the published availability is rendered; prototype totals never become account data. */
-export function BillingView({ section = "overview" }: { section?: Section }) {
+const entryLabels: Record<string, string> = {
+  issue: "入账",
+  hold: "冻结",
+  redeem: "实扣",
+  release: "解冻",
+  expire: "到期",
+  restore: "到期返还",
+  compensate: "消费返还",
+};
+
+const sourceLabels: Record<string, string> = {
+  promotional: "赠送积分",
+  paid: "购买积分",
+  subscription: "会员积分",
+  expiry_return: "返还积分",
+};
+
+export function BillingView({
+  section = "overview",
+  wallet,
+  walletLoading,
+  walletError,
+  onNext,
+  onPrevious,
+}: {
+  section?: Section;
+  wallet?: API.WalletView;
+  walletLoading?: boolean;
+  walletError?: boolean;
+  onNext?: () => void;
+  onPrevious?: () => void;
+}) {
   const current = sections[section];
+  const values = wallet?.enabled
+    ? [wallet.general_credits, wallet.held_credits, wallet.redeemed_today]
+    : [];
+  const balanceState = walletLoading
+    ? "正在读取积分"
+    : walletError
+      ? "积分暂不可读取"
+      : "积分服务暂未开放";
   return (
     <PageLayout screen="billing" fullBleed>
       <section className="billing-page">
@@ -85,23 +123,39 @@ export function BillingView({ section = "overview" }: { section?: Section }) {
             {section === "overview" ? (
               <>
                 <div className="billing-metrics">
-                  {["可用积分", "预占积分", "今日消耗"].map((label) => (
+                  {["可用积分", "预占积分", "今日消耗"].map((label, index) => (
                     <Card key={label}>
                       <CardHeader>
                         <CardTitle>{label}</CardTitle>
-                        <CardDescription>积分服务暂未开放</CardDescription>
+                        <CardDescription>
+                          {wallet?.enabled
+                            ? wallet.payer === "team"
+                              ? "团队付款账户"
+                              : "个人付款账户"
+                            : balanceState}
+                        </CardDescription>
                       </CardHeader>
                       <CardContent>
                         <p
                           className="billing-metric"
-                          aria-label={`${label}暂不可查询`}
+                          aria-label={
+                            values[index] === undefined
+                              ? `${label}暂不可查询`
+                              : undefined
+                          }
                         >
-                          —
+                          {values[index] ?? "—"}
                         </p>
                       </CardContent>
                     </Card>
                   ))}
                 </div>
+                {wallet?.enabled && wallet.restricted_credits !== "0" && (
+                  <p className="text-sm text-muted-foreground">
+                    限模型积分 {wallet.restricted_credits}
+                    ，仅适用于发放时指定的模型。
+                  </p>
+                )}
                 <div className="flex flex-wrap gap-2">
                   <Button asChild>
                     <Link href="/billing/recharge">充值积分</Link>
@@ -139,10 +193,65 @@ export function BillingView({ section = "overview" }: { section?: Section }) {
                 </Card>
               </>
             ) : section === "transactions" ? (
-              <ContentState
-                title="积分明细暂未开放"
-                description="开放后可查询积分预占、结算与返还记录。"
-              />
+              wallet?.enabled && wallet.history_available ? (
+                <div className="flex flex-col gap-4">
+                  {wallet.entries?.length ? (
+                    <ul className="divide-y rounded-lg border">
+                      {wallet.entries.map((entry) => (
+                        <li
+                          key={entry.id}
+                          className="flex flex-wrap justify-between gap-2 p-4"
+                        >
+                          <div className="min-w-0">
+                            <p>{entryLabels[entry.kind ?? ""] ?? entry.kind}</p>
+                            <p className="text-sm break-words text-muted-foreground">
+                              {sourceLabels[entry.source ?? ""] ?? entry.source}
+                              {entry.model_key ? ` · ${entry.model_key}` : ""}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p>{entry.credits} 积分</p>
+                            {entry.created_at && (
+                              <time
+                                dateTime={entry.created_at}
+                                className="text-sm text-muted-foreground"
+                              >
+                                {entry.created_at.slice(0, 10)}
+                              </time>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <ContentState
+                      title="暂无积分流水"
+                      description="入账、冻结和结算后会在这里显示。"
+                    />
+                  )}
+                  <div className="flex gap-2">
+                    {onPrevious && (
+                      <Button variant="outline" onClick={onPrevious}>
+                        上一页
+                      </Button>
+                    )}
+                    {onNext && (
+                      <Button variant="outline" onClick={onNext}>
+                        下一页
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <ContentState
+                  title={
+                    wallet?.enabled
+                      ? "积分明细由团队付款管理员查看"
+                      : balanceState
+                  }
+                  description="明细包含积分预占、结算和返还记录。"
+                />
+              )
             ) : (
               <BillingAvailability section={section} />
             )}

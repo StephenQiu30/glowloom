@@ -56,8 +56,8 @@ func (s *Store) ReserveInTransaction(ctx context.Context, tx *gorm.DB, input app
 	reservationID := uuid.New()
 	row = tx.Exec(`
 		INSERT INTO billing.reservation
-		  (id, project_id, operation_id, amount_micros, status, create_time)
-		VALUES (?::uuid, ?::uuid, ?::uuid, ?, 'held', ?)
+		  (id, project_id, operation_id, amount_micros, status, create_time, cap_at_quote)
+		VALUES (?::uuid, ?::uuid, ?::uuid, ?, 'held', ?, true)
 	`, reservationID.String(), input.ProjectID.String(), input.OperationID.String(),
 		input.AmountMicros, input.OccurredAt.UTC())
 	if row.Error != nil {
@@ -65,6 +65,9 @@ func (s *Store) ReserveInTransaction(ctx context.Context, tx *gorm.DB, input app
 	}
 	if row.RowsAffected != 1 {
 		return application.ReserveResult{}, fmt.Errorf("insert confirmation reservation: wrote %d rows", row.RowsAffected)
+	}
+	if err := holdWallet(tx, input, reservationID); err != nil {
+		return application.ReserveResult{}, fmt.Errorf("reserve wallet: %w", err)
 	}
 	row = tx.Exec(`
 		UPDATE billing.budget

@@ -616,6 +616,12 @@ func writeError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 409, "idempotency_conflict", nil)
 	case errors.Is(err, application.ErrQuoteStale), errors.Is(err, domain.ErrQuoteExpired):
 		httpapi.WriteProblem(c, 409, "quote_stale", nil)
+	case errors.Is(err, billingdomain.ErrWalletInsufficient):
+		httpapi.WriteProblem(c, 409, "credits_insufficient", nil)
+	case errors.Is(err, billingdomain.ErrWalletPriceUnavailable):
+		httpapi.WriteProblem(c, 409, "commercial_price_unavailable", nil)
+	case errors.Is(err, billingdomain.ErrWalletPayerChanged):
+		httpapi.WriteProblem(c, 409, "payer_changed", nil)
 	case errors.Is(err, billingdomain.ErrBudgetInsufficient):
 		httpapi.WriteProblem(c, 409, "budget_insufficient", nil)
 	case errors.Is(err, application.ErrFreeQuoteModelMissing), errors.Is(err, application.ErrWorkflowModelUnavailable):

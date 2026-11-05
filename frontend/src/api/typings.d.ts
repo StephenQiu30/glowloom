@@ -2284,6 +2284,11 @@ declare namespace API {
     target_id: string;
   };
 
+  type getCreditWalletParams = {
+    /** 上一页的游标 */
+    cursor?: string;
+  };
+
   type getCurrentAgentSubmissionParams = {
     /** 项目UUID */
     pid: string;
@@ -7097,6 +7102,29 @@ declare namespace API {
     favorite?: boolean;
     name?: string;
     revision?: number;
+  };
+
+  type WalletEntry = {
+    created_at?: string;
+    credits?: string;
+    expires_at?: string;
+    id?: string;
+    kind?: string;
+    model_key?: string;
+    operation_id?: string;
+    source?: string;
+  };
+
+  type WalletView = {
+    enabled?: boolean;
+    entries?: WalletEntry[];
+    general_credits?: string;
+    held_credits?: string;
+    history_available?: boolean;
+    next_cursor?: string;
+    payer?: string;
+    redeemed_today?: string;
+    restricted_credits?: string;
   };
 
   type WorkflowControlResult = {

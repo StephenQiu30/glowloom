@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Coins } from "lucide-react";
 import { ProductNavigationIcon } from "@/components/layout/product-navigation-icon";
 import { Button } from "@/components/ui/button";
+import { useCreditWallet } from "./use-credit-wallet";
 import {
   Popover,
   PopoverTrigger,
@@ -17,6 +18,7 @@ export function CreditPopover({
   navigation?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const { data: wallet, isLoading, error } = useCreditWallet(undefined, open);
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -45,10 +47,23 @@ export function CreditPopover({
         className="flex w-72 max-w-[calc(100vw-32px)] flex-col gap-3"
         aria-label="积分余额"
       >
-        <p className="font-medium">积分服务暂未开放</p>
-        <p className="text-sm text-muted-foreground">
-          开放后可查看可用积分、预占积分和消耗记录。
-        </p>
+        {wallet?.enabled ? (
+          <>
+            <p className="font-medium">可用积分 {wallet.general_credits}</p>
+            <p className="text-sm text-muted-foreground">
+              冻结 {wallet.held_credits} 积分 ·{" "}
+              {wallet.payer === "team" ? "团队付款账户" : "个人付款账户"}
+            </p>
+          </>
+        ) : (
+          <p className="font-medium" role="status">
+            {isLoading
+              ? "正在读取积分"
+              : error
+                ? "积分暂不可读取"
+                : "积分服务暂未开放"}
+          </p>
+        )}
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline">
             <Link href="/billing" onClick={() => setOpen(false)}>

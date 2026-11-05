@@ -275,10 +275,14 @@ func (s *Store) ListCapabilityDefaults(ctx context.Context, actor identityapp.Pr
 // from separately published versions. It runs inside the release transaction.
 func validateReleaseContract(tx *gorm.DB, modelID uuid.UUID, input application.CreateReleaseInput) error {
 	var row struct {
-		domain.ModelVersion `gorm:"embedded"`
-		ModesJSON           []byte
-		ConfigJSON          []byte
-		Capability          string
+		ID, ModelID                                     uuid.UUID
+		VersionNo                                       int
+		ProviderModelID                                 string
+		ModesJSON, ConfigJSON, Limits, ParamSchema      []byte
+		Capability, Queue                               string
+		Moderation                                      domain.Moderation
+		SupportsQuery, SupportsCancel, SupportsCallback bool
+		ExpectedMaxMS                                   int
 	}
 	r := tx.Raw(`SELECT v.id,v.model_profile_id AS model_id,v.version_no,v.provider_model_id,to_jsonb(v.modes) AS modes_json,
  v.limits,v.param_schema,v.supports_query,v.supports_cancel,v.supports_callback,v.expected_max_ms,v.moderation,v.queue,
@@ -292,24 +296,60 @@ func validateReleaseContract(tx *gorm.DB, modelID uuid.UUID, input application.C
 	if r.RowsAffected != 1 {
 		return application.ErrModelSourceUnavailable
 	}
+	version := domain.ModelVersion{
+		ID: row.ID, ModelID: row.ModelID, VersionNo: row.VersionNo, ProviderModelID: row.ProviderModelID,
+		Limits: row.Limits, ParamSchema: row.ParamSchema, ExpectedMaxMS: row.ExpectedMaxMS,
+		Queue: row.Queue, Moderation: row.Moderation, SupportsQuery: row.SupportsQuery,
+		SupportsCancel: row.SupportsCancel, SupportsCallback: row.SupportsCallback,
+	}
 	var config domain.ProviderConfig
-	if json.Unmarshal(row.ModesJSON, &row.Modes) != nil || json.Unmarshal(row.ConfigJSON, &config) != nil {
+	if json.Unmarshal(row.ModesJSON, &version.Modes) != nil || json.Unmarshal(row.ConfigJSON, &config) != nil {
 		return application.ErrModelSourceUnavailable
 	}
-	var price domain.PriceRuleVersion
-	r = tx.Raw(`SELECT id,model_profile_id AS model_id,version_no,unit,rule,currency,fx_rate_to_cny::text AS fx_rate_to_cny,effective_from FROM catalog.price_rule_version WHERE id=? AND model_profile_id=?`, input.PriceVersionID, modelID).Scan(&price)
-	if r.Error != nil {
-		return r.Error
-	}
-	if r.RowsAffected != 1 {
-		return application.ErrModelSourceUnavailable
+	price, err := readReleasePrice(tx, modelID, input.PriceVersionID)
+	if err != nil {
+		return err
 	}
 	params, err := paramvalidation.NewValidator()
 	if err != nil {
 		return err
 	}
-	if params.Validate(row.ModelVersion) != nil || pricevalidation.ValidateModel(config, row.Capability, row.ModelVersion, price) != nil {
+	if params.Validate(version) != nil || pricevalidation.ValidateModel(config, row.Capability, version, price) != nil {
+		return application.ErrModelSourceUnavailable
+	}
+	procurementID, err := price.ProcurementVersion()
+	if err != nil {
+		return application.ErrModelSourceUnavailable
+	}
+	if procurementID == uuid.Nil {
+		return nil
+	}
+	// GPT Image 2.5 requires a token meter that this image adapter has not
+	// published yet. A flat retail rule cannot stand in for supplier evidence.
+	if version.ProviderModelID == "gpt-image-2.5-sunburst" || version.ProviderModelID == "gpt-image-2.5-flare" {
+		return application.ErrModelSourceUnavailable
+	}
+	procurement, err := readReleasePrice(tx, modelID, procurementID)
+	if err != nil {
+		return err
+	}
+	if pricevalidation.ValidateProcurement(price, procurement) != nil ||
+		pricevalidation.ValidateModel(config, row.Capability, version, procurement) != nil {
 		return application.ErrModelSourceUnavailable
 	}
 	return nil
+}
+
+func readReleasePrice(tx *gorm.DB, modelID, priceID uuid.UUID) (domain.PriceRuleVersion, error) {
+	var price domain.PriceRuleVersion
+	r := tx.Raw(`SELECT id,model_profile_id AS model_id,version_no,unit,rule,currency,
+ fx_rate_to_cny::text AS fx_rate_to_cny,effective_from,source_url,reviewed_at
+ FROM catalog.price_rule_version WHERE id=? AND model_profile_id=? AND NOT is_delete FOR SHARE`, priceID, modelID).Scan(&price)
+	if r.Error != nil {
+		return price, r.Error
+	}
+	if r.RowsAffected != 1 {
+		return price, application.ErrModelSourceUnavailable
+	}
+	return price, nil
 }

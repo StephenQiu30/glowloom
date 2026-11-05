@@ -443,6 +443,7 @@ const editorCatalogRoutes: typeof identityRoutes = [
     query: [],
   },
   { pattern: `projects/${identityUUID}/budget`, methods: ["GET"], query: [] },
+  { pattern: "billing/wallet", methods: ["GET"], query: ["cursor"] },
   {
     pattern: `admin/model-releases/${identityUUID}/trial-recovery`,
     methods: ["GET"],

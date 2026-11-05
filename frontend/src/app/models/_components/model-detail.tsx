@@ -401,6 +401,7 @@ export function ModelDetail({
                     key={latestPrice?.id ?? "new"}
                     unit={priceUnit ?? latestPrice?.unit ?? "per_request"}
                     rule={latestPrice?.rule}
+                    prices={detail?.prices}
                   />
                   <PriceEvidenceFields price={latestPrice} />
                   <Field>

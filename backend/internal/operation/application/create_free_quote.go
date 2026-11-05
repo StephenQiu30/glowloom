@@ -308,6 +308,9 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 	}
 	if candidate != nil {
 		amount = 0
+		costs.ExactQuoteMicros, costs.ExactCredits, costs.MaxChargeCredits = "0", "0", "0"
+		zero := int64(0)
+		costs.EstimatedCredits = &zero
 	}
 	quoteDetail, err := json.Marshal(struct {
 		QuoteCostDetail

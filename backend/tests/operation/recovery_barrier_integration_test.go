@@ -274,11 +274,11 @@ func TestBillingClosedLedgerAllowsNormalPartialReleaseAndExistingOverage(t *test
 			actor, pid, _, items := seedConfirmableBatch(t, db, 10)
 			store := operationStore(db)
 			id := items[0].Operation.ID
-			// Use the existing billing policy and real ledger writer; actual charges may
-			// exceed the reservation. No new cap or overage rule is introduced.
+			// Exercise a pre-migration reservation, including the historical uncapped path.
 			require.NoError(t, db.Exec(`UPDATE operation.operation SET batch_id=NULL WHERE id=?`, id).Error)
 			_, err := store.ConfirmSingleQuote(t.Context(), actor, application.ConfirmSingleQuoteInput{ProjectID: pid, OperationID: id, RequestID: uuid.NewString()})
 			require.NoError(t, err)
+			require.NoError(t, db.Exec(`UPDATE billing.reservation SET cap_at_quote=false WHERE operation_id=?`, id).Error)
 			require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
 				_, err := billingpg.NewStore(tx).SettleInTransaction(t.Context(), tx, billingapp.SettleInput{ProjectID: pid, OperationID: id, ActualCostMicros: actual, Capability: items[0].Operation.Capability, OccurredAt: time.Now()})
 				if err != nil {

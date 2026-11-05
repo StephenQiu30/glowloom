@@ -41,6 +41,10 @@ func (v *Validator) Validate(price domain.PriceRuleVersion) error {
 	if err != nil {
 		return ErrInvalidConfiguration
 	}
+	if id, err := domain.ParseProcurementVersion(fields[domain.ProcurementVersionField]); err != nil || id == price.ID {
+		return ErrInvalidConfiguration
+	}
+	delete(fields, domain.ProcurementVersionField)
 	if raw, present := fields["pricing_strategy"]; present {
 		var strategy string
 		if string(raw) == "null" || json.Unmarshal(raw, &strategy) != nil || strategy == "" || !domain.CompatiblePricingStrategy(strategy, price.Unit) {

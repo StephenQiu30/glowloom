@@ -81,6 +81,18 @@ func TestSeedanceReleaseRejectsIncompletePriceMatrix(t *testing.T) {
 	_, err = catalogapp.NewModelReleases(store).Create(ctx, actor, model.ID, input)
 	require.Error(t, err, "720p is published but has no tariff")
 	require.NoError(t, database.Exec(`UPDATE catalog.price_rule_version SET rule=jsonb_set(rule,'{by_resolution,720p}','37',true) WHERE id=?`, price.ID).Error)
+	procurement := uuid.New()
+	require.NoError(t, database.Exec(`UPDATE catalog.price_rule_version SET
+		rule=jsonb_set(rule,'{procurement_price_version_id}',to_jsonb(?::text)),source_url='https://example.invalid/retail',reviewed_at=now()
+		WHERE id=?`, procurement, price.ID).Error)
+	input.RequestID = uuid.New()
+	_, err = catalogapp.NewModelReleases(store).Create(ctx, actor, model.ID, input)
+	require.Error(t, err, "unpublished procurement reference")
+	require.NoError(t, database.Exec(`INSERT INTO catalog.price_rule_version
+		(id,model_profile_id,version_no,unit,rule,currency,effective_from,source_url,reviewed_at)
+		SELECT ?,model_profile_id,version_no+1,unit,'{"input_micros_per_1k":0,"output_micros_per_1k":1000,"by_resolution":{"480p":30,"720p":30}}',
+		'CNY',effective_from,'https://example.invalid/procurement',now()
+		FROM catalog.price_rule_version WHERE id=?`, procurement, price.ID).Error)
 	input.RequestID = uuid.New()
 	release, err := catalogapp.NewModelReleases(store).Create(ctx, actor, model.ID, input)
 	require.NoError(t, err)

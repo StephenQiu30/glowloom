@@ -1507,7 +1507,15 @@ function EditorWorkspace({
           <p role="status" className="text-sm text-muted-foreground">
             {insufficientProjectBudget
               ? "项目预算不足，请调整数量或联系管理员。"
-              : "当前报价暂不可确认，请检查项目预算或更新费用。"}
+              : activeQuote.quote_detail?.wallet_block ===
+                  "credits_insufficient"
+                ? "适用于所选模型的积分不足，请调整生成量或联系付款管理员。"
+                : activeQuote.quote_detail?.wallet_block ===
+                    "commercial_price_unavailable"
+                  ? "该模型的商业价格尚未发布，请选择其他模型。"
+                  : activeQuote.quote_detail?.wallet_block === "payer_changed"
+                    ? "项目付款账户已变更，请联系管理员。"
+                    : "当前报价暂不可确认，请检查项目预算或更新费用。"}
           </p>
         )}
       {current.submission.state !== "accepted" &&

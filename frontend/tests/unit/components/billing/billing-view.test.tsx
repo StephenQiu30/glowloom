@@ -28,3 +28,21 @@ it.each(["membership", "recharge"] as const)(
     ).toBe("/billing");
   },
 );
+
+it("shows authorized exact balances and keeps restricted credits separate", () => {
+  render(
+    <BillingView
+      wallet={{
+        enabled: true,
+        payer: "team",
+        general_credits: "12.34567",
+        restricted_credits: "2.1",
+        held_credits: "1.2",
+        redeemed_today: "0.7",
+      }}
+    />,
+  );
+  expect(screen.getByText("12.34567")).toBeTruthy();
+  expect(screen.getByText("1.2")).toBeTruthy();
+  expect(screen.getByText(/限模型积分 2.1/)).toBeTruthy();
+});

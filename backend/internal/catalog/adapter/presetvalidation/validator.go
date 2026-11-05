@@ -24,6 +24,9 @@ func Validate(doc domain.PresetDocument) error {
 	for _, template := range doc.ModelTemplates {
 		version := template.Version(uuid.NameSpaceOID, uuid.NameSpaceOID)
 		price := template.PriceVersion(uuid.NameSpaceOID, uuid.NameSpaceOID, template.UpstreamCost.ReviewedAt)
+		if id, err := price.ProcurementVersion(); err != nil || id != uuid.Nil {
+			return domain.ErrInvalidPreset
+		}
 		if params.Validate(version) != nil || pricevalidation.ValidateModel(doc.Config, template.Capability, version, price) != nil {
 			return domain.ErrInvalidPreset
 		}

@@ -12,6 +12,13 @@ import {
 
 import { useState, useId } from "react";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 function values(form: FormData, name: string) {
   return [
@@ -328,15 +335,32 @@ export function ModelSetup({
 }
 
 export function priceRule(form: FormData) {
-  if (form.get("price_mode") === "advanced")
-    return JSON.parse(String(form.get("rule")));
+  const withProcurement = (rule: Record<string, unknown>) => {
+    const selected = form.get("procurement_price");
+    if (selected === null) return rule;
+    const result = { ...rule };
+    delete result.procurement_price_version_id;
+    if (selected !== "none" && selected !== "") {
+      result.procurement_price_version_id = selected;
+    }
+    return result;
+  };
+  if (form.get("price_mode") === "advanced") {
+    const rule: unknown = JSON.parse(String(form.get("rule")));
+    if (typeof rule !== "object" || rule === null || Array.isArray(rule))
+      throw new Error("请填写有效的计费规则。");
+    return withProcurement(rule as Record<string, unknown>);
+  }
   const micros = (name: string) => {
     const raw = String(form.get(name) ?? "");
     if (!/^\d+(\.\d{1,6})?$/.test(raw))
       throw new Error("价格需为非负金额，最多保留六位小数。");
-    const n = Math.round(Number(raw) * 1_000_000);
-    if (!Number.isSafeInteger(n)) throw new Error("价格超出范围。");
-    return n;
+    const [whole, fraction = ""] = raw.split(".");
+    const amount =
+      BigInt(whole) * BigInt(1_000_000) + BigInt(fraction.padEnd(6, "0"));
+    if (amount > BigInt(Number.MAX_SAFE_INTEGER))
+      throw new Error("价格超出范围。");
+    return Number(amount);
   };
   const policyRaw = form.get("price_policy");
   const policy: Record<string, unknown> = policyRaw
@@ -352,26 +376,31 @@ export function priceRule(form: FormData) {
   ) {
     throw new Error("价格规则需要重新读取。");
   }
-  return form.get("unit") === "per_1k_tokens"
-    ? {
-        ...policy,
-        input_micros_per_1k: micros("input_rate"),
-        output_micros_per_1k: micros("output_rate"),
-      }
-    : { ...policy, base_micros: micros("base_rate") };
+  return withProcurement(
+    form.get("unit") === "per_1k_tokens"
+      ? {
+          ...policy,
+          input_micros_per_1k: micros("input_rate"),
+          output_micros_per_1k: micros("output_rate"),
+        }
+      : { ...policy, base_micros: micros("base_rate") },
+  );
 }
 export function PriceSetup({
   rule,
   unit = "per_request",
+  prices = [],
 }: {
   rule?: Record<string, unknown>;
   unit?: string;
+  prices?: API.AdminPrice[];
 }) {
   const formFieldId = useId();
   const simple =
     !rule ||
     Object.entries(rule).every(
       ([key, value]) =>
+        key === "procurement_price_version_id" ||
         ([
           "base_micros",
           "input_micros_per_1k",
@@ -398,6 +427,20 @@ export function PriceSetup({
   );
   const [ruleText, setRuleText] = useState(() =>
     JSON.stringify(rule ?? { base_micros: 0 }, null, 2),
+  );
+  const [procurement, setProcurement] = useState(
+    typeof rule?.procurement_price_version_id === "string"
+      ? rule.procurement_price_version_id
+      : "none",
+  );
+  const supplierRates = prices.filter(
+    (price) =>
+      price.id &&
+      price.unit === unit &&
+      price.source_url &&
+      price.reviewed_at &&
+      !price.rule?.procurement_price_version_id &&
+      price.rule?.markup_multiplier === undefined,
   );
   return (
     <FieldGroup className="gap-3">
@@ -472,6 +515,35 @@ export function PriceSetup({
       ) : (
         <p className="text-xs text-muted-foreground">已保留当前高级规则。</p>
       )}
+      <Field>
+        <FieldLabel htmlFor={formFieldId + "-procurement"}>
+          采购费率版本
+        </FieldLabel>
+        <Select
+          name="procurement_price"
+          value={
+            supplierRates.some((price) => price.id === procurement)
+              ? procurement
+              : "none"
+          }
+          onValueChange={setProcurement}
+        >
+          <SelectTrigger id={formFieldId + "-procurement"} className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">暂不绑定</SelectItem>
+            {supplierRates.map((price) => (
+              <SelectItem key={price.id} value={price.id!}>
+                版本 {price.version_no} · {price.currency}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          先保存有来源和审核时间的采购费率，再发布绑定该版本的用户售价。
+        </p>
+      </Field>
       <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
         <CollapsibleTrigger asChild>
           <Button

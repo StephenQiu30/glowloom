@@ -64,3 +64,19 @@ it("distinguishes an explicit zero quote from an unknown amount", () => {
   expect(screen.getByText("预计消耗 0 积分")).toBeTruthy();
   expect(screen.queryByText("费用待确认")).toBeNull();
 });
+
+it("shows exact fractional credits and the approved cap", () => {
+  render(
+    <QuoteCostDetail
+      amount={120000}
+      detail={{
+        estimated_credits: 2,
+        exact_credits: "1.2",
+        max_charge_credits: "1.2",
+      }}
+    />,
+  );
+  expect(screen.getByText("预计消耗 1.2 积分")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "费用说明" }));
+  expect(screen.getByText(/最多扣 1.2 积分/)).toBeTruthy();
+});
