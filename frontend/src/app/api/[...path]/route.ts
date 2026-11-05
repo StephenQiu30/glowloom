@@ -413,9 +413,14 @@ const editorCatalogRoutes: typeof identityRoutes = [
     query: [],
   },
   {
-    pattern: `admin/(providers|models)`,
+    pattern: "admin/providers",
     methods: ["GET", "POST"],
     query: ["limit", "cursor"],
+  },
+  {
+    pattern: "admin/models",
+    methods: ["GET", "POST"],
+    query: ["limit", "cursor", "provider_id"],
   },
   {
     pattern: `admin/providers/${identityUUID}`,
@@ -490,6 +495,11 @@ const editorCatalogRoutes: typeof identityRoutes = [
     query: [],
   },
   { pattern: `admin/models/${identityUUID}`, methods: ["GET"], query: [] },
+  {
+    pattern: `admin/models/${identityUUID}/configuration-check`,
+    methods: ["GET"],
+    query: [],
+  },
   {
     pattern: `admin/models/${identityUUID}/(versions|prices)`,
     methods: ["POST"],

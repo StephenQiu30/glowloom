@@ -77,8 +77,10 @@ declare namespace API {
 
   type AddPresetModelInput = {
     candidate_key?: string;
+    capability?: string;
     catalog_version?: string;
     config_id?: string;
+    custom_model_id?: string;
     request_id?: string;
   };
 
@@ -749,6 +751,11 @@ declare namespace API {
     name?: string;
   };
 
+  type checkModelConfigurationParams = {
+    /** 模型 ID */
+    id: string;
+  };
+
   type CinemaCamera = {
     aperture?: string;
     body?: string;
@@ -830,6 +837,12 @@ declare namespace API {
     revision?: number;
   };
 
+  type ConfiguredModel = {
+    capability?: string;
+    id?: string;
+    provider_model_id?: string;
+  };
+
   type ConfirmationPage = {
     items?: ConfirmationSummary[];
     next_revision?: number;
@@ -900,6 +913,7 @@ declare namespace API {
 
   type ConnectionConfig = {
     config?: ProviderConfig;
+    configured_models?: ConfiguredModel[];
     id?: string;
     model_catalog?: ModelCandidateCatalog;
     preset_version_id?: string;
@@ -1032,6 +1046,8 @@ declare namespace API {
     create_time?: string;
     current_version_id?: string;
     display_name?: string;
+    has_price?: boolean;
+    has_publication?: boolean;
     id?: string;
     model_key?: string;
     provider_id?: string;
@@ -3036,6 +3052,8 @@ declare namespace API {
     limit?: number;
     /** 分页游标 */
     cursor?: string;
+    /** 供应商连接 ID */
+    provider_id?: string;
   };
 
   type listAdminProvidersParams = {
@@ -3753,6 +3771,15 @@ declare namespace API {
   type ModelCandidateSelection = {
     catalog_version?: string;
     model?: ModelCandidatePreset;
+  };
+
+  type ModelConfigurationCheck = {
+    config_version_id?: string;
+    credential_id?: string;
+    model_version_id?: string;
+    parameters_valid?: boolean;
+    provider_id?: string;
+    provider_model_id?: string;
   };
 
   type ModelDefaults = {

@@ -66,8 +66,9 @@ type CapabilitySummary struct {
 
 // AdminModelListInput selects a bounded stable model page.
 type AdminModelListInput struct {
-	Limit int
-	After *ModelCatalogCursor
+	Limit      int
+	ProviderID uuid.UUID
+	After      *ModelCatalogCursor
 }
 
 // AdminModelPage returns model identities and one internal keyset position.

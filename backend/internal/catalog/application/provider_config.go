@@ -40,13 +40,16 @@ type ApplyConfigInput struct {
 type AddPresetModelInput struct {
 	ConfigID       uuid.UUID `json:"config_id"`
 	CatalogVersion string    `json:"catalog_version"`
-	CandidateKey   string    `json:"candidate_key"`
+	CandidateKey   string    `json:"candidate_key,omitempty"`
+	CustomModelID  string    `json:"custom_model_id,omitempty"`
+	Capability     string    `json:"capability,omitempty"`
 	RequestID      uuid.UUID `json:"request_id"`
 }
 
 // ConfigStore persists connection snapshots without changing active releases.
 type ConfigStore interface {
 	ReadConnectionConfig(context.Context, identityapp.Principal, uuid.UUID) (ConnectionConfig, error)
+	CheckModelConfiguration(context.Context, identityapp.Principal, uuid.UUID) (ModelConfigurationCheck, error)
 	AddPresetModel(context.Context, identityapp.Principal, uuid.UUID, AddPresetModelInput) (CreatedModel, error)
 	PreviewConfigUpgrade(context.Context, identityapp.Principal, uuid.UUID, ConfigUpgradeInput) (ConfigUpgradePreview, error)
 	ApplyConfigUpgrade(context.Context, identityapp.Principal, uuid.UUID, ApplyConfigInput) (ConnectionConfig, error)
@@ -71,10 +74,27 @@ func (s *ProviderConfigs) AddModel(ctx context.Context, actor identityapp.Princi
 	if !IsPlatformAdmin(actor) {
 		return CreatedModel{}, identityapp.ErrForbidden
 	}
-	if id == uuid.Nil || input.ConfigID == uuid.Nil || input.RequestID == uuid.Nil || input.CandidateKey == "" || input.CatalogVersion == "" {
+	if id == uuid.Nil || input.ConfigID == uuid.Nil || input.RequestID == uuid.Nil || input.CatalogVersion == "" || (input.CandidateKey == "") == (input.CustomModelID == "") {
 		return CreatedModel{}, domain.ErrInvalidPreset
 	}
 	return s.store.AddPresetModel(ctx, actor, id, input)
+}
+
+// ModelConfigurationCheck identifies the exact saved snapshot checked locally.
+type ModelConfigurationCheck struct {
+	ProviderID      uuid.UUID  `json:"provider_id"`
+	ConfigVersionID uuid.UUID  `json:"config_version_id"`
+	ModelVersionID  uuid.UUID  `json:"model_version_id"`
+	CredentialID    *uuid.UUID `json:"credential_id,omitempty"`
+	ProviderModelID string     `json:"provider_model_id"`
+	ParametersValid bool       `json:"parameters_valid"`
+}
+
+func (s *ProviderConfigs) CheckModel(ctx context.Context, actor identityapp.Principal, id uuid.UUID) (ModelConfigurationCheck, error) {
+	if !IsPlatformAdmin(actor) {
+		return ModelConfigurationCheck{}, identityapp.ErrForbidden
+	}
+	return s.store.CheckModelConfiguration(ctx, actor, id)
 }
 
 // Preview recomputes a merge from immutable base, target and current snapshots.

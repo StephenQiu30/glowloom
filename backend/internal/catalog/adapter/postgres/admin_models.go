@@ -32,15 +32,26 @@ func (s *Store) ListAdminModels(ctx context.Context, actor identityapp.Principal
 		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
-		query := adminModelSelect + ` WHERE NOT is_delete`
+		query := `SELECT m.id,m.model_key,m.provider_id,m.capability,m.display_name,m.status,m.current_version_id,m.revision,m.create_time,m.update_time,
+			EXISTS(SELECT 1 FROM catalog.model_release r WHERE r.model_id=m.id AND r.status IN ('active','retired')) AS has_publication,
+			EXISTS(SELECT 1 FROM catalog.price_rule_version p WHERE p.model_profile_id=m.id AND NOT p.is_delete) AS has_price
+			FROM catalog.model_profile m WHERE NOT m.is_delete`
 		args := []any{}
+		if input.ProviderID != uuid.Nil {
+			query += ` AND m.provider_id=?`
+			args = append(args, input.ProviderID)
+		}
 		if input.After != nil {
 			query += ` AND (model_key,id)>(?,?::uuid)`
 			args = append(args, input.After.Key, input.After.ID)
 		}
 		query += ` ORDER BY model_key,id LIMIT ?`
 		args = append(args, input.Limit+1)
-		var rows []modelProfileRow
+		var rows []struct {
+			Model          modelProfileRow `gorm:"embedded"`
+			HasPublication bool
+			HasPrice       bool
+		}
 		if err := tx.Raw(query, args...).Scan(&rows).Error; err != nil {
 			return fmt.Errorf("read admin models: %w", err)
 		}
@@ -49,7 +60,10 @@ func (s *Store) ListAdminModels(ctx context.Context, actor identityapp.Principal
 			rows = rows[:input.Limit]
 		}
 		for _, row := range rows {
-			page.Items = append(page.Items, createdModel(row))
+			item := createdModel(row.Model)
+			item.HasPublication = row.HasPublication
+			item.HasPrice = row.HasPrice
+			page.Items = append(page.Items, item)
 		}
 		if more {
 			last := page.Items[len(page.Items)-1]

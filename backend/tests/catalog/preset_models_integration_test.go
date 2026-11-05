@@ -176,4 +176,26 @@ func TestAddModelFromConnectedPreset(t *testing.T) {
 	require.NoError(t, conn.DB.Raw(`SELECT count(*) FROM catalog.model_release WHERE model_id=?`, model.ID).Scan(&releases).Error)
 	require.EqualValues(t, 1, models)
 	require.Zero(t, releases)
+
+	check, err := configs.CheckModel(t.Context(), actor, model.ID)
+	require.NoError(t, err)
+	require.True(t, check.ParametersValid)
+	require.Equal(t, model.CurrentVersionID, check.ModelVersionID)
+	require.Equal(t, config.ID, check.ConfigVersionID)
+	require.NotNil(t, check.CredentialID)
+
+	custom := catalogapp.AddPresetModelInput{ConfigID: config.ID, CatalogVersion: config.ModelCatalog.Version,
+		CustomModelID: "fixture-text", Capability: "text.generate", RequestID: uuid.New()}
+	manual, err := configs.AddModel(t.Context(), actor, connection.ProviderID, custom)
+	require.NoError(t, err)
+	require.NotEqual(t, model.ID, manual.ID)
+	config, err = configs.Read(t.Context(), actor, connection.ProviderID)
+	require.NoError(t, err)
+	require.Len(t, config.ConfiguredModels, 2)
+	page, err := catalogapp.NewAdminModelsQuery(store).List(t.Context(), actor, catalogapp.AdminModelListInput{Limit: 1, ProviderID: connection.ProviderID})
+	require.NoError(t, err)
+	require.Len(t, page.Items, 1)
+	require.Equal(t, connection.ProviderID, page.Items[0].ProviderID)
+	require.False(t, page.Items[0].HasPublication)
+	require.NotNil(t, page.Next)
 }

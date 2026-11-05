@@ -8,6 +8,8 @@ const api = vi.hoisted(() => ({
   config: vi.fn(),
   key: vi.fn(),
   add: vi.fn(),
+  probe: vi.fn(),
+  check: vi.fn(),
 }));
 vi.mock("@/components/auth/session", () => ({
   useSession: () => ({
@@ -22,6 +24,8 @@ vi.mock("@/api/settings", () => ({
   setAdminCredential: api.key,
   addProviderPresetModel: api.add,
   getConfigReceipt: vi.fn(),
+  testAdminCredential: api.probe,
+  getProviderCheck: api.check,
 }));
 vi.mock("@/app/models/_components/model-detail", () => ({
   ModelDetail: () => null,
@@ -31,6 +35,7 @@ beforeEach(() => {
   localStorage.clear();
   api.config.mockResolvedValue({
     id: "config",
+    config: { capabilities: ["text"] },
     model_catalog: {
       version: "catalog",
       models: [
@@ -38,11 +43,13 @@ beforeEach(() => {
           key: "preset",
           display_name: "预设模型",
           capability: "text.generate",
+          provider_model_id: "test-preset",
         },
         {
           key: "placeholder",
           display_name: "账号专属模型",
           requires_model_selection: true,
+          capability: "text.generate",
         },
       ],
     },
@@ -73,18 +80,47 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
-it("连接详情跳转后预选连接，只展示该连接的已加载模型并保留全部入口", async () => {
+it("连接详情跳转后预选连接，由服务端筛选模型并保留全部入口", async () => {
+  api.models.mockResolvedValue({
+    items: [
+      { id: "a", provider_id: "connection", display_name: "当前连接模型" },
+    ],
+  });
+  api.providers.mockResolvedValue({
+    items: [
+      {
+        provider: {
+          id: "connection",
+          name: "OpenAI · 9f26c41a",
+          adapter_key: "openai",
+        },
+      },
+      {
+        provider: {
+          id: "other",
+          name: "OpenAI · 88c8adae",
+          adapter_key: "openai",
+        },
+      },
+    ],
+  });
   render(<ModelsPage initialProvider="connection" />);
   await screen.findByRole("button", { name: /当前连接模型/ });
+  expect(
+    screen.getByRole("cell", { name: "OpenAI" }),
+  ).toBeTruthy();
   expect(screen.queryByRole("button", { name: /其他连接模型/ })).toBeNull();
   expect(
     screen.getByRole("link", { name: "查看全部模型" }).getAttribute("href"),
   ).toBe("/models");
   fireEvent.click(screen.getByRole("button", { name: "添加模型" }));
-  expect(
-    screen.getByRole("combobox", { name: "供应商" }).textContent,
-  ).toContain("目标连接");
-  expect(api.models.mock.calls[0][0]).not.toHaveProperty("provider_id");
+  expect(screen.getByRole("combobox", { name: "供应商" }).textContent).toBe(
+    "OpenAI",
+  );
+  expect(api.models.mock.calls[0][0]).toHaveProperty(
+    "provider_id",
+    "connection",
+  );
 });
 
 it("按真实版本区分未配置草稿与已有版本的停用模型", async () => {
@@ -101,12 +137,13 @@ it("按真实版本区分未配置草稿与已有版本的停用模型", async (
         display_name: "历史版本模型",
         status: "disabled",
         current_version_id: "version",
+        has_publication: true,
       },
     ],
   });
   render(<ModelsPage />);
   await screen.findByText("未配置模型");
-  expect(screen.getByText("草稿")).toBeTruthy();
+  expect(screen.getByText("待配置")).toBeTruthy();
   expect(screen.getByText("已停用")).toBeTruthy();
 });
 
@@ -129,11 +166,13 @@ it.each([true, false])(
     }
     render(<ModelsPage initialProvider="connection" />);
     fireEvent.click(await screen.findByRole("button", { name: "添加模型" }));
-    const preset = screen.getByRole("combobox", { name: "模型预设" });
-    await waitFor(() => expect(preset).toHaveProperty("disabled", false));
-    fireEvent.keyDown(preset, { key: "ArrowDown" });
-    expect(screen.queryByRole("option", { name: "账号专属模型" })).toBeNull();
-    fireEvent.click(screen.getByRole("option", { name: "预设模型" }));
+    expect(
+      screen
+        .getByRole("tab", { name: "推荐预设" })
+        .getAttribute("aria-selected"),
+    ).toBe("true");
+    await screen.findByRole("option", { name: /账号专属模型/ });
+    fireEvent.click(screen.getByRole("option", { name: /预设模型/ }));
     expect(screen.queryByText("稳定标识")).toBeNull();
     expect(screen.queryByText("生成能力")).toBeNull();
     if (hasKey) expect(screen.queryByLabelText("API Key")).toBeNull();
@@ -168,3 +207,70 @@ it.each([true, false])(
     }
   },
 );
+
+it("读取只读目录后能搜索并添加候选模型", async () => {
+  api.providers.mockResolvedValue({
+    items: [
+      {
+        provider: {
+          id: "connection",
+          name: "目标连接",
+          adapter_key: "openrouter",
+        },
+        credential: { id: "directory-key", status: "active" },
+      },
+    ],
+  });
+  let finishDirectory!: (result: API.CredentialTestAccepted) => void;
+  api.probe.mockReturnValue(
+    new Promise<API.CredentialTestAccepted>((resolve) => {
+      finishDirectory = resolve;
+    }),
+  );
+  api.check.mockResolvedValue({
+    current: true,
+    config_version_id: "config",
+    credential_id: "directory-key",
+    status: "succeeded",
+    discovery_result: "ok",
+    candidates: [{ provider_model_id: "fixture/model" }],
+  });
+  render(<ModelsPage initialProvider="connection" />);
+  fireEvent.click(await screen.findByRole("button", { name: "添加模型" }));
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "在线目录" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  const read = await screen.findByRole("button", { name: "读取在线目录" });
+  expect(api.probe).not.toHaveBeenCalled();
+  await waitFor(() => expect(read).toHaveProperty("disabled", false));
+  fireEvent.click(read);
+  expect(await screen.findByText("正在读取模型目录…")).toBeTruthy();
+  expect(screen.queryByText(/待确认请求/)).toBeNull();
+  expect(
+    screen
+      .getByRole("button", { name: "保存模型" })
+      .querySelector("[role=status]"),
+  ).toBeNull();
+  finishDirectory({
+    accepted: true,
+    provider_id: "connection",
+    check_id: "test-check",
+  });
+  await screen.findByText(/目录返回 1 个候选/);
+  fireEvent.change(screen.getByRole("combobox", { name: "搜索在线目录" }), {
+    target: { value: "fixture" },
+  });
+  fireEvent.click(screen.getByRole("option", { name: /fixture\/model/ }));
+  fireEvent.click(screen.getByRole("button", { name: "保存模型" }));
+  await waitFor(() =>
+    expect(api.add).toHaveBeenCalledWith(
+      { id: "connection" },
+      expect.objectContaining({
+        custom_model_id: "fixture/model",
+        capability: "text.generate",
+      }),
+    ),
+  );
+  expect(api.key).not.toHaveBeenCalled();
+});

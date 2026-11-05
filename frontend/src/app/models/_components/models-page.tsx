@@ -27,13 +27,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSession } from "@/components/auth/session";
 import { Button } from "@/components/ui/button";
@@ -89,7 +82,11 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
     const abort = new AbortController();
     Promise.all([
       listAdminModels(
-        { limit: pageSize, cursor: cursors.at(-1) || undefined },
+        {
+          limit: pageSize,
+          cursor: cursors.at(-1) || undefined,
+          provider_id: initialProvider || undefined,
+        },
         { signal: abort.signal },
       ),
       listAdminProviders({ limit: 200 }, { signal: abort.signal }),
@@ -112,10 +109,8 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
         }
       });
     return () => abort.abort();
-  }, [refresh, cursors, pageSize]);
-  const visible = models.filter(
-    (m) => !initialProvider || m.provider_id === initialProvider,
-  );
+  }, [refresh, cursors, pageSize, initialProvider]);
+  const visible = models;
   const locked = loading || !!error || batch.busy || batch.unresolved;
   const columns: DataTableColumn<API.CreatedModel>[] = [
     {
@@ -157,10 +152,14 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
           {row.original.status === "active"
             ? "启用"
             : row.original.status === "disabled"
-              ? !row.original.current_version_id ||
-                row.original.current_version_id === zeroID
-                ? "草稿"
-                : "已停用"
+              ? row.original.has_publication
+                ? "已停用"
+                : !row.original.current_version_id ||
+                    row.original.current_version_id === zeroID
+                  ? "待配置"
+                  : row.original.has_price
+                    ? "待验证"
+                    : "价格待审核"
               : "未知"}
         </Badge>
       ),
@@ -248,6 +247,7 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
               providers={providers}
               initialProvider={initialProvider}
               onAdded={(id) => {
+                setCursors([""]);
                 saved();
                 setCreateOpen(false);
                 setSelected(id);
@@ -332,27 +332,27 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
         </Button>
       ) : null}
       <BatchDialog key={batch.generation} batch={batch} />
-      <Sheet
+      <Dialog
         open={!!selected}
         onOpenChange={(open) => {
           if (!open) setSelected("");
         }}
       >
-        <SheetContent className="overflow-y-auto p-6 data-[side=right]:w-full data-[side=right]:sm:max-w-[40rem]">
-          <SheetHeader className="sr-only">
-            <SheetTitle>模型详情</SheetTitle>
-            <SheetDescription>管理模型配置、验证与发布。</SheetDescription>
-          </SheetHeader>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader className="sr-only">
+            <DialogTitle>模型详情</DialogTitle>
+            <DialogDescription>管理模型配置、验证与发布。</DialogDescription>
+          </DialogHeader>
           {selected ? (
             <ModelDetail
-              key={`${selected}:${refresh}`}
+              key={selected}
               id={selected}
               capabilities={capabilities}
               onSaved={saved}
             />
           ) : null}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

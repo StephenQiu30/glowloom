@@ -3,7 +3,10 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"slices"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -90,11 +93,10 @@ func (s *Store) AddPresetModel(ctx context.Context, actor identityapp.Principal,
 			return empty, err
 		}
 		catalog := domain.ModelCatalogForPreset(document)
-		models, err := catalog.Select(input.CatalogVersion, []string{input.CandidateKey})
+		candidate, err := resolveAddModelCandidate(config.Config, catalog, input)
 		if err != nil {
 			return empty, err
 		}
-		candidate := models[0]
 		if candidate.RequiresModelSelection {
 			return empty, domain.ErrInvalidPreset
 		}
@@ -149,4 +151,47 @@ func createPresetCandidate(tx *gorm.DB, providerID uuid.UUID, catalogVersion str
 		return uuid.Nil, err
 	}
 	return id, tx.Exec(`UPDATE catalog.model_profile SET candidate_snapshot=?::jsonb WHERE id=?`, string(snapshot), id).Error
+}
+
+func resolveAddModelCandidate(config domain.ProviderConfig, catalog domain.ModelCandidateCatalog, input application.AddPresetModelInput) (domain.ModelCandidatePreset, error) {
+	var empty domain.ModelCandidatePreset
+	if input.CatalogVersion != catalog.Version {
+		return empty, application.ErrPresetConflict
+	}
+	if input.CandidateKey != "" {
+		models, err := catalog.Select(input.CatalogVersion, []string{input.CandidateKey})
+		if err != nil {
+			return empty, err
+		}
+		return models[0], nil
+	}
+
+	id := strings.TrimSpace(input.CustomModelID)
+	if id == "" || len(id) > 200 || strings.IndexFunc(id, func(r rune) bool {
+		return unicode.IsControl(r) || unicode.IsSpace(r)
+	}) >= 0 || !slices.Contains(config.Capabilities, strings.TrimSuffix(input.Capability, ".generate")) {
+		return empty, domain.ErrInvalidPreset
+	}
+	for _, model := range catalog.Models {
+		if model.ProviderModelID == id && model.Capability == input.Capability {
+			return model, nil
+		}
+	}
+
+	var mode string
+	switch input.Capability {
+	case "text.generate":
+		mode = "text_to_text"
+	case "image.generate":
+		mode = "text2image"
+	case "video.generate":
+		mode = "text2video"
+	default:
+		return empty, domain.ErrInvalidPreset
+	}
+	return domain.ModelCandidatePreset{
+		Key: "custom-" + uuid.NewString(), AdapterKey: config.AdapterKey,
+		DisplayName: id, ProviderModelID: id, Capability: input.Capability,
+		Modes: []string{mode}, Lifecycle: "unknown",
+	}, nil
 }

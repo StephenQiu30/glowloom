@@ -102,7 +102,7 @@ func adminPage(c *gin.Context, kind string) (int, *adminCursor, string, bool) {
 		limit = value
 	}
 	actor := identityhttp.Principal(c)
-	digest := sha256.Sum256([]byte(actor.ID.String() + "/" + actor.OrgID.String() + "/" + kind + "/" + strconv.Itoa(limit)))
+	digest := sha256.Sum256([]byte(actor.ID.String() + "/" + actor.OrgID.String() + "/" + kind + "/" + c.Query("provider_id") + "/" + strconv.Itoa(limit)))
 	binding := hex.EncodeToString(digest[:])
 	if raw := c.Query("cursor"); raw != "" {
 		body, err := base64.RawURLEncoding.DecodeString(raw)
@@ -409,6 +409,7 @@ func (h *AdminHandler) Capabilities(c *gin.Context) {
 // @Produce json
 // @Param limit query integer false "1..200"
 // @Param cursor query string false "分页游标"
+// @Param provider_id query string false "供应商连接 ID"
 // @Success 200 {object} AdminModelPage
 // @Failure 403 {object} httpapi.Problem
 // @Router /api/admin/models [get]
@@ -418,6 +419,14 @@ func (h *AdminHandler) ListModels(c *gin.Context) {
 		return
 	}
 	input := application.AdminModelListInput{Limit: limit}
+	if raw := c.Query("provider_id"); raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil || id == uuid.Nil {
+			httpapi.WriteProblem(c, 422, "invalid_request", nil)
+			return
+		}
+		input.ProviderID = id
+	}
 	if cursor != nil {
 		input.After = &application.ModelCatalogCursor{ID: cursor.ID, Key: cursor.Key}
 	}

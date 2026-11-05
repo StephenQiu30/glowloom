@@ -20,6 +20,7 @@ func NewConfigHandler(service *application.ProviderConfigs) *ConfigHandler {
 func (h *ConfigHandler) Register(group *gin.RouterGroup) {
 	group.GET("/admin/providers/:id/config", h.Read)
 	group.POST("/admin/providers/:id/models", h.AddModel)
+	group.GET("/admin/models/:id/configuration-check", h.CheckModel)
 	group.POST("/admin/providers/:id/upgrade-preview", h.Preview)
 	group.POST("/admin/providers/:id/apply-preset", h.Apply)
 }
@@ -124,4 +125,26 @@ func (h *ConfigHandler) AddModel(c *gin.Context) {
 		return
 	}
 	c.JSON(201, result)
+}
+
+// CheckModel validates the stored parameters without pricing or dispatch.
+// @Summary 验证模型草稿配置
+// @ID checkModelConfiguration
+// @Tags settings
+// @Produce json
+// @Param id path string true "模型 ID"
+// @Success 200 {object} application.ModelConfigurationCheck
+// @Router /api/admin/models/{id}/configuration-check [get]
+func (h *ConfigHandler) CheckModel(c *gin.Context) {
+	id, ok := httpapi.PathUUID(c, "id")
+	if !ok {
+		return
+	}
+	c.Header("Cache-Control", "private, no-store")
+	result, err := h.service.CheckModel(c.Request.Context(), identityhttp.Principal(c), id)
+	if err != nil {
+		adminError(c, err)
+		return
+	}
+	c.JSON(200, result)
 }
