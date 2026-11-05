@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -284,13 +283,11 @@ export function CanvasNodeSplitDialog({
       }}
     >
       <DialogContent
+        aria-describedby={undefined}
         className={"dialog-image-editor max-h-dialog w-full overflow-y-auto"}
       >
         <DialogHeader>
           <DialogTitle className="sr-only">拆分图片</DialogTitle>
-          <DialogDescription className="sr-only">
-            设置切分行列，预览并确认图片切分结果。
-          </DialogDescription>
         </DialogHeader>
         <div>
           <div className="flex flex-col gap-5" data-canvas-no-zoom>

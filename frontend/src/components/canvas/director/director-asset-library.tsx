@@ -10,12 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { DIRECTOR_ACTORS, DIRECTOR_GEOMETRIES } from "./director-assets";
 import {
   DIRECTOR_MODELS,
@@ -250,11 +245,9 @@ function AssetLibrary(props: DirectorAssetLibraryProps) {
       )}
       {addBackground && (
         <Dialog open onOpenChange={setAddBackground}>
-          <DialogContent>
+          <DialogContent aria-describedby={undefined}>
             <DialogTitle>添加背景</DialogTitle>
-            <DialogDescription>
-              先选择背景类型，再选择图片来源。
-            </DialogDescription>
+
             <Tabs
               value={background}
               onValueChange={(value) =>

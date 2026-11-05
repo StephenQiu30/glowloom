@@ -222,7 +222,7 @@ function RenameBody({
       <DialogContent>
         <DialogTitle>重命名画布</DialogTitle>
         <DialogDescription>
-          项目与主画布共用一个名称。去首尾约定空白后支持1～50个Unicode码点。
+          项目与主画布共用名称，最多 50 字符。
         </DialogDescription>
         <form
           onSubmit={(event) => {

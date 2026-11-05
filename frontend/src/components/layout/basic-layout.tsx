@@ -215,9 +215,7 @@ function Shell({
       >
         <DialogContent>
           <DialogTitle>退出登录？</DialogTitle>
-          <DialogDescription>
-            将结束当前设备的登录会话。已保存的画布仍保留在你的账号中。
-          </DialogDescription>
+          <DialogDescription>只退出当前设备。</DialogDescription>
           {error && <FeedbackToast message={error} />}
           <DialogFooter>
             <Button

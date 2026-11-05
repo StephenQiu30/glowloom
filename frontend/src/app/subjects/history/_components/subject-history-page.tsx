@@ -56,10 +56,7 @@ function ProjectHistory() {
           />
         </section>
       ) : (
-        <ContentState
-          title="选择项目，查看历史主体"
-          description="角色、场景与物品均保留在其原项目中。"
-        />
+        <ContentState title="选择项目，查看历史主体" />
       )}
     </>
   );

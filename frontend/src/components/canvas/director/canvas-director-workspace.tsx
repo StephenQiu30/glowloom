@@ -242,15 +242,14 @@ export function CanvasDirectorWorkspace(props: Props) {
       />
       <Dialog open={expanded} onOpenChange={setExpanded}>
         <DialogContent
+          aria-describedby={undefined}
           data-canvas-no-zoom
           onMouseDown={(e) => e.stopPropagation()}
           className="canvas-director-dialog top-0 left-0 max-h-none translate-x-0 translate-y-0"
           showCloseButton={false}
         >
           <DialogTitle className="sr-only">导演台</DialogTitle>
-          <DialogDescription className="sr-only">
-            三维场景、机位与动态预演
-          </DialogDescription>
+
           <DirectorWorkspace
             key={key}
             {...props}
@@ -1187,7 +1186,7 @@ function DirectorWorkspace({
         <DialogContent>
           <DialogTitle>恢复未提交编辑</DialogTitle>
           <DialogDescription>
-            将替换当前导演台的静态和动态工作区。其他画布节点不受影响，当前协作者的新编辑不会自动合并。
+            替换静态和动态工作区。协作者的新编辑不会合并。
           </DialogDescription>
           <Button
             disabled={readOnly || !retained}
@@ -2714,13 +2713,7 @@ function DirectorWorkspace({
         >
           <DialogContent>
             <DialogTitle>从画布选择背景</DialogTitle>
-            <DialogDescription>
-              选择已保存的图片节点，
-              {canvasBackground.kind === "panorama"
-                ? "设为全景背景"
-                : "作为平面背景放置"}
-              。
-            </DialogDescription>
+            <DialogDescription>选择已保存的图片节点。</DialogDescription>
             {(view.document?.nodes ?? []).filter(
               (node) =>
                 node.type === "image" && node.serviceData?.media_ref?.asset_id,

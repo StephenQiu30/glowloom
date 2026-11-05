@@ -6,7 +6,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -132,6 +131,7 @@ export function CanvasStackGallery({
       }}
     >
       <DialogContent
+        aria-describedby={undefined}
         className="top-0 left-0 h-dvh max-h-none w-screen max-w-none translate-x-0 translate-y-0 overflow-y-auto rounded-none sm:max-w-none"
         data-canvas-no-zoom
         data-canvas-shortcuts-ignore
@@ -142,7 +142,6 @@ export function CanvasStackGallery({
           <DialogTitle>
             {container?.title} · {members.length} 个节点
           </DialogTitle>
-          <DialogDescription>查看堆叠中的原始节点内容</DialogDescription>
         </DialogHeader>
         <div className="flex min-h-full flex-wrap content-center items-center justify-center gap-8 p-10">
           {members.map((node) => (

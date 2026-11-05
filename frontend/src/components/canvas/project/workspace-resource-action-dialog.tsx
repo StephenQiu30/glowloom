@@ -10,7 +10,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -293,6 +292,7 @@ export function WorkspaceResourceActionDialog({
         }}
       >
         <DialogContent
+          aria-describedby={undefined}
           className="workspace-resource-editor"
           showCloseButton={!closeBlocked}
           onCloseAutoFocus={restoreFocus}
@@ -301,9 +301,6 @@ export function WorkspaceResourceActionDialog({
             <DialogTitle>
               编辑{targets[0].kind === "project" ? "项目" : "画布"}
             </DialogTitle>
-            <DialogDescription className="sr-only">
-              设置{targets[0].kind === "project" ? "项目" : "画布"}名称和封面
-            </DialogDescription>
           </DialogHeader>
           <form
             className="flex min-h-0 flex-col gap-4"

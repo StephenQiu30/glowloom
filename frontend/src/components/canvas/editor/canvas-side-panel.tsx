@@ -20,7 +20,6 @@ import {
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -223,6 +222,7 @@ export function CanvasSidePanel({
         }}
       >
         <SheetContent
+          aria-describedby={undefined}
           side="left"
           className="gap-0 p-0"
           onCloseAutoFocus={(event) => {
@@ -236,9 +236,6 @@ export function CanvasSidePanel({
         >
           <SheetHeader>
             <SheetTitle>资产管理</SheetTitle>
-            <SheetDescription>
-              查找画布节点，选择并插入账户素材。
-            </SheetDescription>
           </SheetHeader>
           {panelContent}
         </SheetContent>

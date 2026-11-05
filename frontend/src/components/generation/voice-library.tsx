@@ -339,11 +339,12 @@ export function VoiceLibrary({
             }}
           >
             <DialogContent
+              aria-describedby={undefined}
               className={voiceTouchTargets}
               onCloseAutoFocus={restoreManagementFocus}
             >
               <DialogTitle>重命名音色</DialogTitle>
-              <DialogDescription>更新音色库中的显示名称。</DialogDescription>
+
               <Input
                 aria-label="音色名称"
                 maxLength={60}
@@ -515,6 +516,7 @@ function CreateVoice({
       }}
     >
       <DialogContent
+        aria-describedby={undefined}
         className={`max-h-[85dvh] overflow-y-auto ${voiceTouchTargets}`}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
@@ -522,7 +524,7 @@ function CreateVoice({
         }}
       >
         <DialogTitle>创建音色</DialogTitle>
-        <DialogDescription>保存参考音频，用于全能配音。</DialogDescription>
+
         <Input
           aria-label="音色名称"
           placeholder="例如：故事旁白"

@@ -76,9 +76,7 @@ export function AvatarTextDrive({
             }}
           >
             <DialogTitle>文本驱动 · 制作配音</DialogTitle>
-            <DialogDescription>
-              输入台词、选择音色并生成配音。试听后使用生成结果，再确认数字人视频费用。
-            </DialogDescription>
+            <DialogDescription>试听配音后，再确认视频费用。</DialogDescription>
             {error && <p role="alert">{error}</p>}
             <SpeechComposer
               adoptLabel="使用这段配音"

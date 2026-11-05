@@ -127,8 +127,8 @@ export function connectionBatchAction(
   return {
     title: check ? "检查连接" : "停用连接",
     effect: check
-      ? "仅提交只读连接检查，不生成内容或发布模型。已提交不代表检查通过，实际结果可在连接详情查看。"
-      : "停止通过所选连接创建新任务，已有任务继续使用绑定的配置和 Key。",
+      ? "检查结果在连接详情查看。"
+      : "停用后不能创建新任务，已有任务仍使用原配置。",
     destructive: !check,
     label: (r) => providerConnectionName(r.provider) ?? r.id,
     prepare: async (row, signal, refresh) => {
@@ -160,7 +160,7 @@ export function connectionBatchAction(
         if (!result?.check_id) throw new RequestError("request_unconfirmed");
         return {
           status: "submitted",
-          message: "只读检查已提交，请在连接详情查看实际结果",
+          message: "在连接详情查看结果",
         };
       }
       await updateAdminProvider(
@@ -168,7 +168,7 @@ export function connectionBatchAction(
         { expected_revision: entry.row.provider!.revision, status: "disabled" },
         { signal, headers: { "Idempotency-Key": entry.requestId } },
       );
-      return { message: "已停用，不再接受新任务" };
+      return { message: "已停用" };
     },
     recover: async (entry, signal) => {
       const r = await receipt(
@@ -181,7 +181,7 @@ export function connectionBatchAction(
       return check
         ? {
             status: "submitted",
-            message: "原检查已提交，请在连接详情查看实际结果",
+            message: "在连接详情查看结果",
           }
         : { message: "已恢复原停用回执" };
     },
@@ -189,8 +189,7 @@ export function connectionBatchAction(
 }
 export const modelBatchAction: BatchAction<API.CreatedModel> = {
   title: "停用模型",
-  effect:
-    "停止通过所选模型创建新任务，不取消已提交任务。发布和激活仍需逐项验证。",
+  effect: "停用后不能创建新任务，已提交任务不受影响。",
   destructive: true,
   label: (r) => r.display_name ?? r.id ?? "模型",
   prepare: async (row, signal, refresh) => {

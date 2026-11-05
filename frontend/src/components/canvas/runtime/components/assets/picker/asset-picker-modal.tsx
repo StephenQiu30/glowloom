@@ -4,7 +4,6 @@ import { getScopeGeneration, getSessionGeneration } from "@/lib/request";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -161,12 +160,12 @@ export function AssetPickerModal({
         if (!value) onClose();
       }}
     >
-      <DialogContent className="dialog-canvas flex h-[min(37.5rem,calc(100dvh-2rem))] w-full flex-col overflow-hidden [@media(max-height:600px)]:gap-2">
+      <DialogContent
+        aria-describedby={undefined}
+        className="dialog-canvas flex h-[min(37.5rem,calc(100dvh-2rem))] w-full flex-col overflow-hidden [@media(max-height:600px)]:gap-2"
+      >
         <DialogHeader className="shrink-0 pr-6">
           <DialogTitle>选择素材</DialogTitle>
-          <DialogDescription className="[@media(max-height:600px)]:sr-only">
-            从参考素材选择内容，点击即可引用到画布。
-          </DialogDescription>
         </DialogHeader>
         <LibraryPickerContent
           key={projectId ?? "standalone"}

@@ -181,9 +181,7 @@ export function HistoryPublicationDialog({
         showCloseButton={!frozen}
       >
         <DialogTitle>发布作品</DialogTitle>
-        <DialogDescription>
-          所选作品内容将公开展示。发布完成后，可在下方查看每项结果。
-        </DialogDescription>
+        <DialogDescription>发布后，作品将公开展示。</DialogDescription>
         <form
           className="grid gap-5"
           onSubmit={(event) => {

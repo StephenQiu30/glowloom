@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -43,6 +42,7 @@ function OpenAuthDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        aria-describedby={undefined}
         ref={content}
         className="auth-dialog"
         showCloseButton={false}
@@ -82,9 +82,6 @@ function OpenAuthDialog({
           <DialogTitle>
             {mode === "login" ? "登录织光" : "创建织光账号"}
           </DialogTitle>
-          <DialogDescription>
-            自由探索灵感，登录后保存你的创作。
-          </DialogDescription>
         </DialogHeader>
         <Tabs
           value={mode}

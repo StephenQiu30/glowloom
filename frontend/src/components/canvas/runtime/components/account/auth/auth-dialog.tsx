@@ -138,6 +138,7 @@ export function AuthDialog({
         className="dialog-auth max-h-dialog overflow-y-auto"
         onCloseAutoFocus={onCloseAutoFocus}
         showCloseButton={!pending}
+        {...(!intent ? { "aria-describedby": undefined } : {})}
       >
         <DialogHeader>
           <DialogTitle
@@ -152,13 +153,11 @@ export function AuthDialog({
                 ? "创建织光账号"
                 : "欢迎回到织光"}
           </DialogTitle>
-          <DialogDescription>
-            {intent
-              ? "拖动滑块完成拼图，也可使用方向键移动并按 Enter 确认。"
-              : register
-                ? "开始你的第一部作品。"
-                : "继续你的创作。"}
-          </DialogDescription>
+          {intent ? (
+            <DialogDescription>
+              拖动滑块完成拼图，或使用方向键移动后按 Enter。
+            </DialogDescription>
+          ) : null}
         </DialogHeader>
         {intent && (
           <Button

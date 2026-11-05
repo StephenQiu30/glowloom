@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
@@ -34,11 +33,12 @@ export function ResultMediaActions({
           <DialogTrigger asChild>
             <Button variant="outline">预览结果</Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[calc(100vw-3rem)] lg:max-w-6xl max-md:[&_[data-slot=dialog-close]]:size-11">
+          <DialogContent
+            aria-describedby={undefined}
+            className="sm:max-w-[calc(100vw-3rem)] lg:max-w-6xl max-md:[&_[data-slot=dialog-close]]:size-11"
+          >
             <DialogTitle>结果预览</DialogTitle>
-            <DialogDescription>
-              查看当前有权限访问的生成结果。
-            </DialogDescription>
+
             <div className="relative flex h-[65dvh] min-h-40 min-w-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
               <ProjectMediaPreview
                 projectID={projectID}

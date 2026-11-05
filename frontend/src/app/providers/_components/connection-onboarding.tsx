@@ -300,7 +300,7 @@ export function ConnectionOnboarding({
           <DialogHeader>
             <DialogTitle>核查原验证请求</DialogTitle>
             <DialogDescription>
-              结果尚未确认，不会自动重发。请在服务商控制台核对请求或账单。
+              结果未知。请到服务商控制台核对请求或账单。
             </DialogDescription>
           </DialogHeader>
           <p className="text-xs break-all text-muted-foreground">

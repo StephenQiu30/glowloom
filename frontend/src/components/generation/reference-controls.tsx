@@ -1827,11 +1827,12 @@ export function ReferenceControls({
                 }
               }}
             >
-              <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-3xl">
+              <DialogContent
+                aria-describedby={undefined}
+                className="max-h-[85dvh] overflow-y-auto sm:max-w-3xl"
+              >
                 <DialogTitle>选择项目参考</DialogTitle>
-                <DialogDescription>
-                  选择当前项目的素材或主体。
-                </DialogDescription>
+
                 <ReferenceSearch
                   projectID={projectID}
                   initialQuery={lookup.query}
@@ -1971,7 +1972,7 @@ export function ReferenceControls({
               >
                 <DialogTitle>选择主体</DialogTitle>
                 <DialogDescription>
-                  选择当前空间的主体，固定这份草稿引用的描述、参考素材和音色版本。
+                  草稿将引用所选主体的当前版本。
                 </DialogDescription>
                 {actorID && scopeID ? (
                   <UnifiedSubjectLibrary
@@ -2012,7 +2013,7 @@ export function ReferenceControls({
               <DialogContent>
                 <DialogTitle>移除这份参考？</DialogTitle>
                 <DialogDescription>
-                  正文中的所有对应标签会一起移除，可以一次撤销恢复。
+                  正文中的对应标签也会移除，可撤销。
                 </DialogDescription>
                 <Button
                   onClick={() => {

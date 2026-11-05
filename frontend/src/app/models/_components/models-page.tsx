@@ -25,7 +25,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSession } from "@/components/auth/session";
@@ -237,10 +236,12 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
         />
       ) : null}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
+        <DialogContent
+          aria-describedby={undefined}
+          className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl"
+        >
           <DialogHeader>
             <DialogTitle>添加模型</DialogTitle>
-            <DialogDescription>选择供应商与模型预设。</DialogDescription>
           </DialogHeader>
           {createOpen ? (
             <AddModelForm
@@ -338,10 +339,12 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
           if (!open) setSelected("");
         }}
       >
-        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl">
+        <DialogContent
+          aria-describedby={undefined}
+          className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl"
+        >
           <DialogHeader className="sr-only">
             <DialogTitle>模型详情</DialogTitle>
-            <DialogDescription>管理模型配置、验证与发布。</DialogDescription>
           </DialogHeader>
           {selected ? (
             <ModelDetail

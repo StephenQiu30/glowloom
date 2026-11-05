@@ -457,9 +457,7 @@ function CollaborativeEditor({
           <DialogContent>
             <DialogHeader>
               <DialogTitle>重命名画布</DialogTitle>
-              <DialogDescription>
-                名称更改会自动保存并同步给协作者。
-              </DialogDescription>
+              <DialogDescription>名称会同步给协作者。</DialogDescription>
             </DialogHeader>
             <Label>
               画布名称

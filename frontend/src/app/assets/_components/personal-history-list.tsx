@@ -790,9 +790,8 @@ export function PersonalHistoryList({
             <AlertDialogHeader>
               <AlertDialogTitle>确认删除</AlertDialogTitle>
               <AlertDialogDescription>
-                删除的历史记录将无法找回。将从你的生成历史中移除
-                {deleting.length}
-                项，任务执行、计费和画布引用不受影响。
+                永久移除 {deleting.length}{" "}
+                项历史记录。任务执行、计费与画布引用不受影响。
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

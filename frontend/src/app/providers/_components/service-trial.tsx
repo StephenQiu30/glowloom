@@ -12,7 +12,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -298,12 +297,12 @@ export function ServiceTrial({
     : "";
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden sm:max-w-xl">
+      <DialogContent
+        aria-describedby={undefined}
+        className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden sm:max-w-xl"
+      >
         <DialogHeader>
           <DialogTitle>开发试验</DialogTitle>
-          <DialogDescription className="sr-only">
-            验证本机 Codex、Seedream 和视频生成。
-          </DialogDescription>
         </DialogHeader>
         <div className="flex min-h-0 flex-col gap-5 overflow-y-auto">
           {!job || state?.kind === "probe" ? (

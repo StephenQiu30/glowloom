@@ -11,7 +11,6 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -97,13 +96,11 @@ export function ImageToolSettingsModal({
       }}
     >
       <DialogContent
+        aria-describedby={undefined}
         className={"dialog-settings max-h-dialog w-full overflow-y-auto"}
       >
         <DialogHeader>
           <DialogTitle>{"自定义工具栏"}</DialogTitle>
-          <DialogDescription>
-            选择图片节点的快捷工具，并预览工具栏显示效果。
-          </DialogDescription>
         </DialogHeader>
         <div>
           <Card className="mb-4">

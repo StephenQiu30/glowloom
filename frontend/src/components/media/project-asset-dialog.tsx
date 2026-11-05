@@ -27,7 +27,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -148,6 +147,7 @@ export function ProjectAssetDialog({
         }}
       >
         <DialogContent
+          aria-describedby={undefined}
           showCloseButton={!confirming}
           className="canvas-material-dialog sm:max-w-[800px]"
           data-canvas-picker={canvasPresentation || undefined}
@@ -159,9 +159,6 @@ export function ProjectAssetDialog({
             <DialogTitle>
               {dialogTitle ?? (reference ? "选择参考素材" : "参考素材")}
             </DialogTitle>
-            <DialogDescription>
-              从当前项目添加素材，或选择主体开始创作。
-            </DialogDescription>
           </DialogHeader>
           <Tabs
             value={tab}

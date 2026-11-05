@@ -406,7 +406,6 @@ function Library({
             className="library-login-state"
             icon={Folder}
             title="登录查看你的素材"
-            description="登录后，上传、收藏和整理你的创作素材。"
             actions={
               <Button size="lg" className="min-h-11 px-6" onClick={login}>
                 登录 / 注册
@@ -781,9 +780,9 @@ function Library({
                 if (!saving && !pendingOperation) setFolderOpen(v);
               }}
             >
-              <DialogContent>
+              <DialogContent aria-describedby={undefined}>
                 <DialogTitle>新建文件夹</DialogTitle>
-                <DialogDescription>把相关素材整理到一起。</DialogDescription>
+
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();

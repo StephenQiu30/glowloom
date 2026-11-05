@@ -29,12 +29,7 @@ import {
   PopoverAnchor,
   PopoverContent,
 } from "@/components/ui/popover";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import {
   ChevronRight,
   Contact,
@@ -1001,6 +996,7 @@ export const CanvasNode = React.memo(function CanvasNode({
           }}
         >
           <SheetContent
+            aria-describedby={undefined}
             side="bottom"
             showCloseButton={false}
             className="canvas-node-sheet"
@@ -1017,9 +1013,7 @@ export const CanvasNode = React.memo(function CanvasNode({
             data-canvas-no-zoom
           >
             <SheetTitle className="sr-only">节点参数</SheetTitle>
-            <SheetDescription className="sr-only">
-              编辑选中节点的提示词、引用和生成参数。
-            </SheetDescription>
+
             {renderPanel(data)}
           </SheetContent>
         </Sheet>

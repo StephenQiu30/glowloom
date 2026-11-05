@@ -14,12 +14,7 @@ import {
   type DataTableColumn,
 } from "@/components/canvas/runtime/components/account/list/data-table";
 import { ListPagination } from "@/components/canvas/runtime/components/layout/workspace/list-pagination";
-import {
-  Sheet,
-  SheetContent,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import {
   Collapsible,
   CollapsibleContent,
@@ -522,9 +517,12 @@ function TeamAdministration() {
           if (!open) clearDetail();
         }}
       >
-        <SheetContent className="overflow-y-auto p-6 data-[side=right]:w-full data-[side=right]:sm:max-w-lg">
+        <SheetContent
+          aria-describedby={undefined}
+          className="overflow-y-auto p-6 data-[side=right]:w-full data-[side=right]:sm:max-w-lg"
+        >
           <SheetTitle>团队详情</SheetTitle>
-          <SheetDescription>管理团队资料与成员邀请。</SheetDescription>
+
           {team?.id ? (
             <section className="flex min-w-0 flex-col gap-4">
               <h2 className="text-xl font-medium">{team.name}</h2>

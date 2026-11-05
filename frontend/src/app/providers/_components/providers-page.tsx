@@ -37,14 +37,12 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
-  SheetDescription,
 } from "@/components/ui/sheet";
 import {
   AlertDialog,
@@ -642,6 +640,7 @@ function ProviderAdministration({
         }}
       >
         <DialogContent
+          aria-describedby={undefined}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             if (!detailOpen) restoreFocus();
@@ -650,9 +649,6 @@ function ProviderAdministration({
         >
           <DialogHeader>
             <DialogTitle size="lg">接入服务</DialogTitle>
-            <DialogDescription className="sr-only">
-              选择服务商并填写 API Key，默认使用预设模型。
-            </DialogDescription>
           </DialogHeader>
           {connect ? (
             <PresetConnect
@@ -675,6 +671,7 @@ function ProviderAdministration({
       </Dialog>
       <Sheet open={detailOpen} onOpenChange={closeDetail}>
         <SheetContent
+          aria-describedby={undefined}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             restoreFocus();
@@ -691,7 +688,6 @@ function ProviderAdministration({
         >
           <SheetHeader className="sr-only">
             <SheetTitle>连接详情</SheetTitle>
-            <SheetDescription>管理凭据、模型验证和连接设置。</SheetDescription>
           </SheetHeader>
           <div className="flex min-h-0 flex-1 flex-col p-4 md:p-6">
             {selected ? (

@@ -109,7 +109,7 @@ function RecoveryManager({ actorKey }: { actorKey: string }) {
           <DialogHeader>
             <DialogTitle>页面内存恢复记录</DialogTitle>
             <DialogDescription>
-              仅管理此账户在当前页面的恢复空间。按画布编号显示用量；不展示画布内容。已删除或无法访问的画布也可明确放弃页面内存记录。
+              关闭或刷新页面会清除恢复记录。
             </DialogDescription>
           </DialogHeader>
           {loading ? (
@@ -176,8 +176,7 @@ function RecoveryManager({ actorKey }: { actorKey: string }) {
           <AlertDialogHeader>
             <AlertDialogTitle>放弃此画布的页面内存记录？</AlertDialogTitle>
             <AlertDialogDescription>
-              将删除画布 {selected?.canvasId}{" "}
-              在此账户的未同步草稿、原命令与未应用参数。已提交的服务端操作不会撤销。其他画布继续保留；关闭或刷新页面会释放全部未确认内容。
+              清除此画布在当前页面的未同步修改。已提交的操作不会撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

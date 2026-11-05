@@ -7118,14 +7118,14 @@ function InfiniteCanvasPage({
             if (!open) (() => setPreviewNodeId(null))();
           }}
         >
-          <DialogContent className="max-h-dialog dialog-canvas overflow-y-auto">
+          <DialogContent
+            aria-describedby={undefined}
+            className="max-h-dialog dialog-canvas overflow-y-auto"
+          >
             <DialogHeader>
               <DialogTitle>
                 {previewNode?.type === "video" ? "视频详情" : "图片详情"}
               </DialogTitle>
-              <DialogDescription className="sr-only">
-                查看当前媒体节点的预览内容。
-              </DialogDescription>
             </DialogHeader>
             <div className="max-h-media-sheet flex items-center justify-center">
               {previewContent && previewNode?.type === "video" ? (

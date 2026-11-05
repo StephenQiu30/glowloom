@@ -113,7 +113,7 @@ export function CanvasWorkflowControls({
           <DialogHeader>
             <DialogTitle>确认运行范围</DialogTitle>
             <DialogDescription>
-              使用已保存的画布快照。运行中的编辑不会改变原流程，也不会自动采用结果。
+              按已保存的画布运行，结果需手动采用。
             </DialogDescription>
           </DialogHeader>
           <div className="min-h-0 space-y-3 overflow-y-auto text-sm">
@@ -190,7 +190,7 @@ export function CanvasWorkflowControls({
           <DialogHeader>
             <DialogTitle>画布流程运行</DialogTitle>
             <DialogDescription>
-              关闭页面不影响后台执行。停止只关闭新的执行准入，原在途任务会保留真实回执。
+              关闭页面不影响运行。停止后，在途任务仍会返回结果。
             </DialogDescription>
           </DialogHeader>
           <div className="min-h-0 space-y-4 overflow-y-auto">

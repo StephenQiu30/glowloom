@@ -12,7 +12,6 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -123,6 +122,7 @@ export function CanvasNodeUpscaleDialog({
       }}
     >
       <DialogContent
+        aria-describedby={undefined}
         onEscapeKeyDown={(event) => {
           if (busy) event.preventDefault();
         }}
@@ -141,9 +141,6 @@ export function CanvasNodeUpscaleDialog({
         {busy && <p role="status">正在处理图片…</p>}
         <DialogHeader>
           <DialogTitle className="sr-only">图片放大</DialogTitle>
-          <DialogDescription className="sr-only">
-            选择目标尺寸和插值算法，创建放大后的图片节点。
-          </DialogDescription>
         </DialogHeader>
         <div>
           <div className="flex flex-col gap-5">

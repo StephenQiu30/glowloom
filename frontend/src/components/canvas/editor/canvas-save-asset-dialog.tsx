@@ -129,9 +129,7 @@ export function CanvasSaveAssetDialog({
         >
           <DialogHeader>
             <DialogTitle>加入我的资产</DialogTitle>
-            <DialogDescription>
-              为素材命名，保存后可在个人参考素材中使用。
-            </DialogDescription>
+            <DialogDescription>保存到个人参考素材。</DialogDescription>
           </DialogHeader>
           <FieldGroup className="my-4">
             <Field>

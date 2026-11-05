@@ -19,7 +19,6 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-  SheetDescription,
 } from "@/components/ui/sheet";
 import {
   DropdownMenu,
@@ -122,12 +121,9 @@ export function ProjectBreadcrumbs({
             查看完整项目路径
           </Button>
         </SheetTrigger>
-        <SheetContent className="overflow-hidden">
+        <SheetContent aria-describedby={undefined} className="overflow-hidden">
           <SheetHeader className="shrink-0 pr-12">
             <SheetTitle>所属项目</SheetTitle>
-            <SheetDescription>
-              按顺序显示当前项目及其上级，可选择上级项目返回。
-            </SheetDescription>
           </SheetHeader>
           <Breadcrumb
             aria-label="完整项目路径"

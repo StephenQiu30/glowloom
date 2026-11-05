@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
@@ -49,11 +48,12 @@ export function MediaPreview({
           </Button>
         </DialogTrigger>
       ) : null}
-      <DialogContent className="dialog-media h-dialog flex flex-col items-center justify-center">
+      <DialogContent
+        aria-describedby={undefined}
+        className="dialog-media h-dialog flex flex-col items-center justify-center"
+      >
         <DialogTitle className="sr-only">{alt}</DialogTitle>
-        <DialogDescription className="sr-only">
-          查看媒体预览，按 Escape 关闭。
-        </DialogDescription>
+
         {visible ? (
           <PreviewImage
             src={previewSrc || image.src}

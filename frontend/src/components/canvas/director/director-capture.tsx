@@ -451,15 +451,13 @@ export function DirectorGallery({
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
+          aria-describedby={undefined}
           data-canvas-no-zoom
           onMouseDown={(event) => event.stopPropagation()}
           className="max-w-4xl"
         >
           <DialogHeader>
             <DialogTitle>{shot.name} · 镜头素材</DialogTitle>
-            <DialogDescription>
-              已保存的机位图片与视频，可下载或添加到画布。
-            </DialogDescription>
           </DialogHeader>
           <div className="flex items-center gap-2">
             <Label>

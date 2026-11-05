@@ -7,7 +7,6 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -203,14 +202,13 @@ export function UnifiedSubjectSourcePicker({
       }}
     >
       <DialogContent
+        aria-describedby={undefined}
         showCloseButton={false}
         onInteractOutside={(event) => event.preventDefault()}
         className="unified-subject-source h-[min(680px,calc(100dvh-32px))] w-[calc(100vw-32px)] overflow-hidden! sm:max-w-[848px]"
       >
         <DialogTitle className="sr-only">从资产添加</DialogTitle>
-        <DialogDescription className="sr-only">
-          选择参考资产后确认添加。
-        </DialogDescription>
+
         <div className="flex shrink-0 items-center justify-between gap-2">
           <Tabs value={kind} onValueChange={changeKind}>
             <TabsList variant="line" aria-label="资产类型">

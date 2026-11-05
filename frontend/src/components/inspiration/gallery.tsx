@@ -20,7 +20,6 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
-  DialogDescription,
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -104,11 +103,9 @@ function InspirationPreview({
   return (
     <Dialog>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent aria-describedby={undefined} className="sm:max-w-3xl">
         <DialogTitle>{item.title}</DialogTitle>
-        <DialogDescription>
-          AI 生成的静态参考图，探索构图、材质与光线。
-        </DialogDescription>
+
         <div className="relative aspect-video">
           <Image
             src={`/design/reference/${item.src}`}

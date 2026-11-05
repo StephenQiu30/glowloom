@@ -109,9 +109,7 @@ function CanvasVersionHistorySession({
         <SheetContent className="data-[side=right]:w-full data-[side=right]:sm:max-w-4xl">
           <SheetHeader>
             <SheetTitle>版本历史</SheetTitle>
-            <SheetDescription>
-              修改会自动保留。查看历史不会改变当前画布。
-            </SheetDescription>
+            <SheetDescription>查看历史不会更改画布。</SheetDescription>
           </SheetHeader>
           <div className="grid min-h-0 flex-1 gap-6 overflow-y-auto p-4 pt-0 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
             <div className="space-y-3">
@@ -265,7 +263,7 @@ function CanvasVersionHistorySession({
           <AlertDialogHeader>
             <AlertDialogTitle>恢复这个版本？</AlertDialogTitle>
             <AlertDialogDescription>
-              当前修改会先自动保存并保留在历史中。恢复后可继续编辑，也可以再次恢复。
+              当前修改会保留在历史中。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

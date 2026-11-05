@@ -167,8 +167,7 @@ export function CanvasTransferDialog({
         <DialogHeader>
           <DialogTitle>保存到其他画布</DialogTitle>
           <DialogDescription>
-            选择当前项目中的画布，将打开目标画布以确认保存{" "}
-            {selection.nodes.length} 个节点。原画布保留。
+            将在目标画布中确认保存 {selection.nodes.length} 个节点。原画布保留。
           </DialogDescription>
         </DialogHeader>
         {targets.isLoading && <p role="status">正在读取画布…</p>}

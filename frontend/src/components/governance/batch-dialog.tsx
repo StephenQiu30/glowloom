@@ -64,9 +64,37 @@ export function BatchDialog<T extends { id?: string }>({
   const Cancel = compact ? AlertDialogCancel : Button;
   const success = batch.entries.filter((e) => e.status === "success").length;
   const skipped = batch.entries.filter((e) => e.status === "skipped").length;
-  const blocked = compact && !batch.busy && !batch.submitted && ready === 0;
+  const unknown = batch.entries.filter((e) => e.status === "unknown").length;
+  const submitted = batch.entries.filter(
+    (e) => e.status === "submitted",
+  ).length;
+  const blocked =
+    !batch.busy &&
+    !batch.submitted &&
+    skipped > 0 &&
+    skipped === batch.entries.length;
+  const hasDescription =
+    !blocked && !batch.submitted && Boolean(batch.action?.effect);
+  const hasReason = !blocked && !batch.submitted && batch.action?.reason;
+  const hasPassword =
+    !blocked &&
+    batch.action?.password &&
+    (!batch.submitted || batch.unresolved);
+  const canSubmit =
+    (!batch.submitted && ready > 0) ||
+    (batch.unresolved && Boolean(batch.action?.recover));
+  const accountVerb = batch.action?.title.replace("账号", "");
+  const resultSummary = [
+    success ? `成功 ${success}` : "",
+    submitted ? `已提交 ${submitted}` : "",
+    failed ? `失败 ${failed}` : "",
+    unknown ? `结果未知 ${unknown}` : "",
+    skipped ? `未执行 ${skipped}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const skipReasons = new Map<string, number>();
-  if (blocked) {
+  if (blocked && compact) {
     for (const entry of batch.entries) {
       if (entry.status === "skipped")
         skipReasons.set(
@@ -84,9 +112,13 @@ export function BatchDialog<T extends { id?: string }>({
           <span className="break-all whitespace-normal">
             {row.original.label}
           </span>
-          <span className="text-xs break-words whitespace-normal text-muted-foreground">
-            {row.original.message}
-          </span>
+          {row.original.status !== "ready" &&
+          row.original.status !== "running" &&
+          row.original.message ? (
+            <span className="text-xs break-words whitespace-normal text-muted-foreground">
+              {row.original.message}
+            </span>
+          ) : null}
         </div>
       ),
     },
@@ -109,56 +141,71 @@ export function BatchDialog<T extends { id?: string }>({
       <Content
         className={cn(
           "flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden",
-          compact ? "sm:max-w-md" : "sm:max-w-2xl",
+          compact || blocked ? "sm:max-w-md" : "sm:max-w-2xl",
         )}
+        {...(blocked
+          ? { "aria-describedby": `${id}-skipped` }
+          : !hasDescription
+            ? { "aria-describedby": undefined }
+            : {})}
+        {...(!compact && blocked ? { showCloseButton: false } : {})}
         onCloseAutoFocus={(event) => {
           if (batch.restoreFocus()) event.preventDefault();
         }}
       >
         <Header>
           <Title>
-            {compact
-              ? batch.busy || batch.submitted
-                ? batch.action?.title
-                : ready
-                  ? `${batch.action?.title.replace("账号", "")} ${ready} 个账号？`
-                  : `没有可${batch.action?.title.replace("账号", "")}的账号`
-              : batch.action?.title}
+            {blocked
+              ? compact
+                ? `没有可${accountVerb}的账号`
+                : `${batch.action?.title}：无可执行项`
+              : compact && !batch.busy && !batch.submitted && ready
+                ? `${accountVerb} ${ready} 个账号？`
+                : batch.action?.title}
           </Title>
-          <Description>
-            {blocked ? "本次没有提交操作。" : batch.action?.effect}
-          </Description>
+          {hasDescription ? (
+            <Description>{batch.action?.effect}</Description>
+          ) : null}
         </Header>
-        <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
-          {!compact || batch.busy || skipped > 0 ? (
-            <p aria-live="polite" className="text-sm text-muted-foreground">
-              {batch.busy ? <Spinner className="mr-2 inline" /> : null}
-              {compact
-                ? batch.busy
-                  ? batch.submitted
-                    ? "正在处理…"
-                    : "正在检查…"
-                  : `已跳过 ${skipped} 项`
-                : batch.submitted
-                  ? `成功 ${success} / 已提交 ${batch.entries.filter((e) => e.status === "submitted").length} / 失败 ${failed} / 结果未知 ${batch.entries.filter((e) => e.status === "unknown").length} / 未执行 ${skipped}`
-                  : `已选 ${batch.entries.length} 项 · 可执行 ${ready} 项${skipped ? ` · 跳过 ${skipped} 项` : ""}${failed ? ` · 检查失败 ${failed} 项` : ""}`}
+        <div className="flex min-h-0 flex-col gap-4 overflow-y-auto empty:hidden has-[>form:only-child:empty]:hidden">
+          {batch.busy ? (
+            <p
+              role="status"
+              className="flex items-center gap-2 text-sm text-muted-foreground"
+            >
+              <Spinner />
+              {batch.submitted ? "正在处理…" : "正在检查…"}
             </p>
+          ) : batch.submitted && !compact && resultSummary ? (
+            <p role="status" className="text-sm text-muted-foreground">
+              {resultSummary}
+            </p>
+          ) : compact && skipped > 0 && !blocked ? (
+            <p className="text-sm text-muted-foreground">已跳过 {skipped} 项</p>
           ) : null}
-          {skipReasons.size > 0 ? (
-            <ul className="grid gap-1 text-sm text-muted-foreground">
-              {Array.from(skipReasons, ([message, count]) => (
-                <li key={message}>
-                  {count} 项 · {message}
-                </li>
-              ))}
+          {blocked ? (
+            <ul
+              id={`${id}-skipped`}
+              aria-label="跳过原因"
+              className="grid gap-1 text-sm break-words text-muted-foreground"
+            >
+              {compact
+                ? Array.from(skipReasons, ([message, count]) => (
+                    <li key={message}>
+                      {count} 项 · {message}
+                    </li>
+                  ))
+                : batch.entries.map((entry) => (
+                    <li key={entry.id}>
+                      {entry.label} · {entry.message}
+                    </li>
+                  ))}
             </ul>
-          ) : null}
-          {!compact ? (
+          ) : !compact && batch.entries.length ? (
             <DataTable
-              label="批量操作逐项结果"
+              label={batch.submitted ? "批量操作逐项结果" : "批量操作目标"}
               columns={columns}
               data={batch.entries}
-              loading={batch.busy && !batch.entries.length}
             />
           ) : null}
           {compact && (failed > 0 || batch.unresolved) ? (
@@ -177,53 +224,55 @@ export function BatchDialog<T extends { id?: string }>({
               <AlertDescription>{batch.error}</AlertDescription>
             </Alert>
           ) : null}
-          <form
-            id={id}
-            onSubmit={(event) => {
-              event.preventDefault();
-              void batch.run(reason, password, batch.unresolved);
-              setPassword("");
-            }}
-          >
-            <FieldGroup>
-              {!batch.submitted && batch.action?.reason ? (
-                <Field>
-                  <FieldLabel htmlFor={`${id}-reason`}>操作原因</FieldLabel>
-                  <Textarea
-                    id={`${id}-reason`}
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    required
-                    minLength={5}
-                    maxLength={500}
-                    disabled={batch.busy}
-                  />
-                </Field>
+          {canSubmit ? (
+            <form
+              id={id}
+              className="empty:hidden"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void batch.run(reason, password, batch.unresolved);
+                setPassword("");
+              }}
+            >
+              {hasReason || hasPassword ? (
+                <FieldGroup>
+                  {hasReason ? (
+                    <Field>
+                      <FieldLabel htmlFor={`${id}-reason`}>操作原因</FieldLabel>
+                      <Textarea
+                        id={`${id}-reason`}
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
+                        required
+                        minLength={5}
+                        maxLength={500}
+                        disabled={batch.busy}
+                      />
+                    </Field>
+                  ) : null}
+                  {hasPassword ? (
+                    <Field>
+                      <FieldLabel htmlFor={`${id}-password`}>
+                        当前管理员密码
+                      </FieldLabel>
+                      <Input
+                        id={`${id}-password`}
+                        type="password"
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        disabled={batch.busy}
+                      />
+                    </Field>
+                  ) : null}
+                </FieldGroup>
               ) : null}
-              {batch.action?.password &&
-              (!batch.submitted || batch.unresolved) ? (
-                <Field>
-                  <FieldLabel htmlFor={`${id}-password`}>
-                    当前管理员密码
-                  </FieldLabel>
-                  <Input
-                    id={`${id}-password`}
-                    type="password"
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    disabled={batch.busy}
-                  />
-                </Field>
-              ) : null}
-            </FieldGroup>
-          </form>
-          {batch.submitted && !compact ? (
-            <p className="text-xs text-muted-foreground">
-              {batch.action?.recover
-                ? "成功项已移出选择。结果未知时可查询回执；失败项重新读取后再确认。"
-                : "成功项已移出选择。结果未知时请刷新页面核对状态，避免重复提交。"}
+            </form>
+          ) : null}
+          {batch.submitted && unknown > 0 && !batch.action?.recover ? (
+            <p className="text-sm text-muted-foreground">
+              请刷新页面核对结果，再决定是否重试。
             </p>
           ) : null}
         </div>
@@ -264,15 +313,13 @@ export function BatchDialog<T extends { id?: string }>({
               重试失败项（{failed}）
             </Button>
           ) : null}
-          {(!batch.submitted && !blocked) ||
-          (batch.unresolved && batch.action?.recover) ? (
+          {canSubmit ? (
             <Button
               form={id}
               type="submit"
               variant={batch.action?.destructive ? "destructive" : "default"}
               disabled={
                 batch.busy ||
-                (!ready && !batch.unresolved) ||
                 (batch.action?.password && !password) ||
                 (!batch.submitted &&
                   batch.action?.reason &&
@@ -282,7 +329,7 @@ export function BatchDialog<T extends { id?: string }>({
               {batch.unresolved
                 ? "使用原请求恢复"
                 : compact
-                  ? batch.action?.title.replace("账号", "")
+                  ? accountVerb
                   : `确认${batch.action?.title ?? "操作"}（${ready}）`}
             </Button>
           ) : null}

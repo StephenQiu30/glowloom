@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -647,13 +646,11 @@ export function CanvasNodeInfoModal({
       }}
     >
       <DialogContent
+        aria-describedby={undefined}
         className={cn("max-h-dialog overflow-y-auto", "canvas-node-info-modal")}
       >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription className="sr-only">
-            查看当前节点的属性与媒体信息。
-          </DialogDescription>
         </DialogHeader>
         <div>
           {node ? (

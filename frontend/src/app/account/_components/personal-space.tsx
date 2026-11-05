@@ -11,12 +11,7 @@ import { PageLayout } from "@/components/layout/page-layout";
 import { PageHeading } from "@/components/layout/page-heading";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { SettingsSkeleton } from "./settings-skeleton";
 import { ContentState } from "@/components/layout/content-state";
 
@@ -95,7 +90,6 @@ export function PersonalSpace() {
           <TabsContent value="works">
             <ContentState
               title="作品发布暂未开放"
-              description="已保存的创作可在参考素材和画布中继续编辑。"
               actions={
                 <Button asChild variant="secondary">
                   <Link href="/">开始创作</Link>
@@ -129,6 +123,7 @@ export function PersonalSpace() {
       </div>
       <Dialog open={settings} onOpenChange={setSettings}>
         <DialogContent
+          aria-describedby={undefined}
           className="account-settings-dialog sm:max-w-[480px]"
           onCloseAutoFocus={(event) => {
             event.preventDefault();
@@ -138,9 +133,6 @@ export function PersonalSpace() {
             ).current?.focus();
           }}
         >
-          <DialogDescription className="sr-only">
-            管理个人资料、安全与创作偏好
-          </DialogDescription>
           <Suspense
             fallback={
               <div className="flex flex-col gap-5">

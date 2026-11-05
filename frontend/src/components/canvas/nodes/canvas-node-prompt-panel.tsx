@@ -2,7 +2,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -299,13 +298,11 @@ export function CanvasNodePromptPanel({
         }}
       >
         <DialogContent
+          aria-describedby={undefined}
           className={"dialog-settings max-h-dialog w-full overflow-y-auto"}
         >
           <DialogHeader>
             <DialogTitle>{"编辑提示词"}</DialogTitle>
-            <DialogDescription className="sr-only">
-              查看并编辑当前节点的提示词内容。
-            </DialogDescription>
           </DialogHeader>
           <div>
             <div

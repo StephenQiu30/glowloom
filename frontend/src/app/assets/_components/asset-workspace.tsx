@@ -383,7 +383,6 @@ function WorkspaceScope({
             <ContentState
               icon={PanelsTopLeft}
               title="登录查看你的资产"
-              description="登录后查看生成历史、画布与短剧。"
               actions={<Button onClick={login}>登录 / 注册</Button>}
             />
           ) : view === "history" ? (

@@ -21,7 +21,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Popover,
@@ -119,6 +118,7 @@ export function CinemaKitPicker({
       }}
     >
       <DialogContent
+        aria-describedby={undefined}
         className="cinema-kit-dialog"
         data-canvas-no-zoom
         data-canvas-shortcuts-ignore
@@ -129,9 +129,7 @@ export function CinemaKitPicker({
           <DialogTitle>
             {custom ? editing.name : cinemaLabels[kind]}
           </DialogTitle>
-          <DialogDescription className="sr-only">
-            选择视觉创作设置，确认后保存
-          </DialogDescription>
+
           {!custom && (kind === "camera" || kind === "palette") ? (
             <Button
               variant="ghost"

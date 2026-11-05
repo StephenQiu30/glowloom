@@ -74,9 +74,7 @@ export function CanvasDeleteProjectsDialog({
       <DialogContent className="project-action-dialog project-delete-dialog">
         <DialogHeader>
           <DialogTitle>删除「{base.title}」？</DialogTitle>
-          <DialogDescription>
-            画布将从独立画布列表移除，删除后无法打开。
-          </DialogDescription>
+          <DialogDescription>删除后将无法打开此画布。</DialogDescription>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
           该操作不会自动删除参考素材中独立保存的素材。

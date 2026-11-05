@@ -113,9 +113,7 @@ export function CanvasConnectionDialog({
           <DialogTitle>
             调整 {source.title} 到 {target.title} 的引用
           </DialogTitle>
-          <DialogDescription>
-            引用已自动建立，可在这里调整用途和内容。
-          </DialogDescription>
+          <DialogDescription>引用已建立。</DialogDescription>
         </DialogHeader>
         {validOptions.length ? (
           <>

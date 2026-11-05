@@ -8,7 +8,6 @@ import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -69,6 +68,7 @@ export function CreateProjectDialog({
       }}
     >
       <DialogContent
+        aria-describedby={undefined}
         className="project-action-dialog"
         onCloseAutoFocus={(event) => {
           if (returnFocus?.isConnected) {
@@ -79,9 +79,6 @@ export function CreateProjectDialog({
       >
         <DialogHeader>
           <DialogTitle>新建画布</DialogTitle>
-          <DialogDescription>
-            输入画布名称，开始编辑文本、图片和视频节点。
-          </DialogDescription>
         </DialogHeader>
         <form
           onSubmit={(event) => {

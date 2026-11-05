@@ -342,7 +342,7 @@ export function ConnectionDetail({
                   <AlertDialogHeader>
                     <AlertDialogTitle>停用连接？</AlertDialogTitle>
                     <AlertDialogDescription>
-                      停止创建新任务。已有任务继续使用绑定的配置和 Key 恢复。
+                      停用后不能创建新任务，已有任务仍可恢复。
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -573,9 +573,7 @@ export function ConnectionDetail({
                                 紧急停用此 Key？
                               </AlertDialogTitle>
                               <AlertDialogDescription>
-                                绑定此 Key
-                                的历史任务也将无法继续查询。此操作不能撤销，后续需添加新
-                                Key。
+                                绑定此 Key 的任务将无法查询。停用后不可撤销。
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>

@@ -386,6 +386,7 @@ export function UnifiedSubjectEditor({
         }}
       >
         <DialogContent
+          aria-describedby={undefined}
           className="unified-subject-settings w-[calc(100vw-32px)] sm:max-w-[560px]"
           showCloseButton={!pending}
           onInteractOutside={(e) => e.preventDefault()}
@@ -397,9 +398,7 @@ export function UnifiedSubjectEditor({
           <DialogTitle className="text-base leading-6 font-medium">
             设置主体
           </DialogTitle>
-          <DialogDescription className="sr-only">
-            设置主参考、名称、描述和可选音色，以便在当前空间创作中复用。
-          </DialogDescription>
+
           {(["primary", "reference", "voice"] as const).map((target) => (
             <Input
               key={target}

@@ -11,7 +11,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import type { CanvasNodeData } from "../types/canvas";
@@ -135,6 +134,7 @@ export function CanvasInformationDialog({
       }}
     >
       <DialogContent
+        aria-describedby={undefined}
         className="canvas-information-surface flex min-h-[546px] flex-col gap-4 rounded-2xl sm:max-w-[800px]"
         data-canvas-no-zoom
         data-canvas-shortcuts-ignore
@@ -143,9 +143,6 @@ export function CanvasInformationDialog({
       >
         <DialogHeader>
           <DialogTitle>项目信息</DialogTitle>
-          <DialogDescription className="sr-only">
-            当前画布的基本信息和费用记录
-          </DialogDescription>
         </DialogHeader>
         <Tabs
           className="min-h-0 flex-1 gap-4"

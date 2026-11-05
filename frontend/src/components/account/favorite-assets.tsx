@@ -15,12 +15,7 @@ import {
   type PageSize,
 } from "@/components/media/data-pagination";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ContentState } from "@/components/layout/content-state";
 import { Heart } from "lucide-react";
 
@@ -123,9 +118,9 @@ export function FavoriteAssets() {
           if (!open) setPreview(null);
         }}
       >
-        <DialogContent className="sm:max-w-3xl">
+        <DialogContent aria-describedby={undefined} className="sm:max-w-3xl">
           <DialogTitle>{preview?.title}</DialogTitle>
-          <DialogDescription>收藏素材</DialogDescription>
+
           {preview ? (
             <>
               <div className="relative aspect-video">

@@ -32,12 +32,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -147,6 +142,7 @@ export function CanvasTimelineWorkspace(props: Props) {
       />
       <Dialog open={expanded} onOpenChange={setExpanded}>
         <DialogContent
+          aria-describedby={undefined}
           data-canvas-no-zoom
           data-canvas-shortcuts-ignore
           onEscapeKeyDown={(event) => {
@@ -168,9 +164,7 @@ export function CanvasTimelineWorkspace(props: Props) {
           className="canvas-timeline-dialog top-0 left-0 max-h-none translate-x-0 translate-y-0"
         >
           <DialogTitle className="sr-only">时间线</DialogTitle>
-          <DialogDescription className="sr-only">
-            编辑视觉轨和音频轨
-          </DialogDescription>
+
           <TimelineWorkspace
             key={key}
             {...props}

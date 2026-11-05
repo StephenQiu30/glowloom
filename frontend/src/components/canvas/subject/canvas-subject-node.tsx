@@ -18,7 +18,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { UnifiedSubjectMedia } from "@/components/subjects/unified-media";
@@ -437,6 +436,7 @@ function SubjectImport({
       }}
     >
       <DialogContent
+        aria-describedby={undefined}
         className="canvas-subject-import"
         onMouseDown={(event) => event.stopPropagation()}
         showCloseButton={!busy}
@@ -447,7 +447,6 @@ function SubjectImport({
       >
         <DialogHeader>
           <DialogTitle>主体导入</DialogTitle>
-          <DialogDescription>选择要加入画布的主体</DialogDescription>
         </DialogHeader>
         <div className="canvas-subject-import-tools">
           <Input
