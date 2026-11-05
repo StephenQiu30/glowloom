@@ -104,37 +104,44 @@ func provideReadyCheck(cfg config.Config, dbConn *db.Connection, redisConn *redi
 }
 
 func provideAPIServer(ctx context.Context, cfg config.Config, logger *zap.Logger, ready ReadyCheck, tracerProvider trace.TracerProvider, dbConn *db.Connection, storage *objectstorage.Registry, redisConn *redisconn.Connection) (*http.Server, func(), error) {
+	stopStorageRuntime, err := startStorageRuntime(ctx, cfg, true, dbConn.DB)
+	if err != nil {
+		return nil, nil, err
+	}
 	sessions, err := identityruntime.NewSessionDependencies(cfg, redisConn.Client)
 	if err != nil {
+		stopStorageRuntime()
 		return nil, nil, err
 	}
 	router, err := NewBusinessRouter(logger, ready, tracerProvider, cfg, dbConn.DB, storage, sessions, ctx)
 	if err != nil {
+		stopStorageRuntime()
 		return nil, nil, err
 	}
 	cleanup, err := identityruntime.StartMailLoop(ctx, dbConn.DB, cfg, logger)
 	if err != nil {
+		stopStorageRuntime()
 		return nil, nil, err
 	}
 	stopExports, err := identityruntime.StartDirectoryExportLoop(ctx, dbConn.DB, cfg, storage, logger)
 	if err != nil {
 		cleanup()
+		stopStorageRuntime()
 		return nil, nil, err
 	}
 	stopReceipts, err := identityruntime.StartSessionReceiptCleanupLoop(ctx, identityapp.NewSessionReceiptCleanup(pgidentity.NewStore(dbConn.DB), time.Now), logger, 30*time.Second)
 	if err != nil {
 		stopExports()
 		cleanup()
+		stopStorageRuntime()
 		return nil, nil, err
 	}
-	stopStorageRuntime, err := startStorageRuntime(ctx, cfg, true, dbConn.DB)
-	if err != nil {
+	stopIdentity := func() {
 		stopReceipts()
 		stopExports()
 		cleanup()
-		return nil, nil, err
+		stopStorageRuntime()
 	}
-	stopIdentity := func() { stopStorageRuntime(); stopReceipts(); stopExports(); cleanup() }
 	return &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           router,
