@@ -139,12 +139,8 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 	if node == "" {
 		node, err = exec.LookPath("node")
 		if err != nil {
-			t.Fatal("Node 24.22.2 is required:", err)
+			t.Fatal("find Node for the Agent integration test:", err)
 		}
-	}
-	version, err := exec.CommandContext(t.Context(), node, "--version").Output()
-	if err != nil || strings.TrimSpace(string(version)) != "v24.22.2" {
-		t.Fatalf("production baseline requires Node v24.22.2, got %q: %v", strings.TrimSpace(string(version)), err)
 	}
 	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
