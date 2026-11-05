@@ -127,3 +127,53 @@ func TestPresetCandidatesCreateOnlyDraftProfilesAndReplayExactly(t *testing.T) {
 	require.NoError(t, conn.DB.Raw(`SELECT count(*) FROM catalog.provider WHERE key=?`, "connection-"+input.RequestID.String()).Scan(&count).Error)
 	require.Zero(t, count)
 }
+
+func TestAddModelFromConnectedPreset(t *testing.T) {
+	dsn := os.Getenv("GLOWLOOM_TEST_CATALOG_DB_DSN")
+	if dsn == "" {
+		t.Skip("requires disposable catalog database")
+	}
+	conn, err := db.Open(t.Context(), dsn, noop.NewTracerProvider())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	actor := identityapp.Principal{ID: uuid.New(), OrgID: uuid.New(), PlatformRole: "platform_admin"}
+	require.NoError(t, conn.DB.Exec(`INSERT INTO identity."user"(id,org_id,login_name,display_name,role,password_hash,must_change_password,platform_role)
+		VALUES(?,?,?,'Model Admin','producer','synthetic',false,'platform_admin')`, actor.ID, actor.OrgID, "model-"+actor.ID.String()).Error)
+	actor = identityfixture.Session(t, conn.DB, actor)
+	store := app.NewCatalogStore(conn.DB)
+	presets := catalogapp.NewProviderPresets(store)
+	configs := catalogapp.NewProviderConfigs(store)
+	presetID := uuid.MustParse("6da07a10-0000-4000-8000-000000000004")
+	connection, err := presets.Connect(t.Context(), actor, presetID, catalogapp.ConnectPresetInput{
+		VersionID: uuid.MustParse("6da07a11-0000-4000-8000-000000000004"), RequestID: uuid.New(),
+	})
+	require.NoError(t, err)
+	config, err := configs.Read(t.Context(), actor, connection.ProviderID)
+	require.NoError(t, err)
+	require.NotNil(t, config.ModelCatalog)
+	input := catalogapp.AddPresetModelInput{ConfigID: config.ID, CatalogVersion: config.ModelCatalog.Version, CandidateKey: "ds-flash", RequestID: uuid.New()}
+	_, err = configs.AddModel(t.Context(), actor, connection.ProviderID, input)
+	require.ErrorIs(t, err, catalogapp.ErrCredentialNotFound)
+	require.NoError(t, conn.DB.Exec(`INSERT INTO catalog.provider_credential(id,provider_id,label,ciphertext,key_id,last4)
+		VALUES(?,?,'synthetic test',?,'isolated-only','test')`, uuid.New(), connection.ProviderID, []byte("synthetic")).Error)
+	invalid := input
+	invalid.ConfigID = uuid.New()
+	_, err = configs.AddModel(t.Context(), actor, connection.ProviderID, invalid)
+	require.ErrorIs(t, err, catalogapp.ErrPresetConflict)
+	model, err := configs.AddModel(t.Context(), actor, connection.ProviderID, input)
+	require.NoError(t, err)
+	require.Equal(t, domain.ModelDisabled, model.Status)
+	require.NotEqual(t, uuid.Nil, model.CurrentVersionID)
+	replay, err := configs.AddModel(t.Context(), actor, connection.ProviderID, input)
+	require.NoError(t, err)
+	require.Equal(t, model.ID, replay.ID)
+	input.RequestID = uuid.New()
+	repeated, err := configs.AddModel(t.Context(), actor, connection.ProviderID, input)
+	require.NoError(t, err)
+	require.Equal(t, model.ID, repeated.ID)
+	var models, releases int64
+	require.NoError(t, conn.DB.Raw(`SELECT count(*) FROM catalog.model_profile WHERE provider_id=?`, connection.ProviderID).Scan(&models).Error)
+	require.NoError(t, conn.DB.Raw(`SELECT count(*) FROM catalog.model_release WHERE model_id=?`, model.ID).Scan(&releases).Error)
+	require.EqualValues(t, 1, models)
+	require.Zero(t, releases)
+}

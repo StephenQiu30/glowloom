@@ -3,17 +3,7 @@ import { readErrorMessage } from "@/lib/read-error";
 import { providerConnectionName } from "@/lib/provider-connection-name";
 import { ContentState } from "@/components/layout/content-state";
 
-import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
-import { useEffect, useState, useId } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ColumnMenu } from "@/components/governance/column-menu";
 import { Plus } from "lucide-react";
@@ -47,18 +37,13 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSession } from "@/components/auth/session";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
+  listAdminCapabilities,
   listAdminModels,
   listAdminProviders,
-  listAdminCapabilities,
-  createAdminModel,
 } from "@/api/settings";
-import {
-  MutationStatus,
-  useCatalogMutation,
-  zeroID,
-} from "@/components/catalog/mutation";
+import { zeroID } from "@/components/catalog/mutation";
+import { AddModelForm } from "./add-model-form";
 import { ModelDetail } from "./model-detail";
 
 type ModelsPageProps = { initialProvider?: string };
@@ -80,7 +65,6 @@ export function ModelsPage(props: ModelsPageProps) {
   );
 }
 function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
-  const formFieldId = useId();
   const mobile = useIsMobile();
   const [visibility, setVisibility] = useState<Record<string, boolean>>({});
   const [createOpen, setCreateOpen] = useState(false);
@@ -96,13 +80,11 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
   const [models, setModels] = useState<API.CreatedModel[]>([]);
   const [providers, setProviders] = useState<API.ProviderListItem[]>([]);
   const [capabilities, setCapabilities] = useState<API.CapabilitySummary[]>([]);
-  const [providerID, setProviderID] = useState(initialProvider);
   const [selected, setSelected] = useState("");
   const [next, setNext] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const saved = () => setRefresh((v) => v + 1);
-  const mutation = useCatalogMutation(saved, "models");
   useEffect(() => {
     const abort = new AbortController();
     Promise.all([
@@ -131,15 +113,6 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
       });
     return () => abort.abort();
   }, [refresh, cursors, pageSize]);
-  const provider = providers.find(
-    (p) => p.provider?.id === providerID,
-  )?.provider;
-  const supported = capabilities.filter(
-    (c) =>
-      c.key === "video.generate" ||
-      (provider?.adapter_key === "openrouter" &&
-        ["image.generate", "text.generate"].includes(c.key ?? "")),
-  );
   const visible = models.filter(
     (m) => !initialProvider || m.provider_id === initialProvider,
   );
@@ -268,138 +241,22 @@ function ModelAdministration({ initialProvider = "" }: ModelsPageProps) {
         <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>添加模型</DialogTitle>
-            <DialogDescription>
-              选择服务连接并创建草稿，保存不会改变线上版本。
-            </DialogDescription>
+            <DialogDescription>选择供应商与模型预设。</DialogDescription>
           </DialogHeader>
-          <form
-            onSubmit={async (event) => {
-              event.preventDefault();
-              const form = new FormData(event.currentTarget);
-              const result = await mutation.run("model.create", zeroID, (id) =>
-                createAdminModel(
-                  {
-                    provider_id: providerID,
-                    model_key: String(form.get("key")),
-                    display_name: String(form.get("name")),
-                    capability: String(form.get("capability")),
-                  },
-                  { headers: { "Idempotency-Key": id } },
-                ),
-              );
-              if (result?.id) {
+          {createOpen ? (
+            <AddModelForm
+              providers={providers}
+              initialProvider={initialProvider}
+              onAdded={(id) => {
+                saved();
                 setCreateOpen(false);
-                setSelected(result.id);
-              }
-            }}
-          >
-            <FieldGroup className="grid gap-4 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor={`${formFieldId}-field-1`}>
-                  <span>平台连接</span>
-                </FieldLabel>
-                <Select
-                  required
-                  value={providerID}
-                  onValueChange={(value) => setProviderID(value)}
-                >
-                  <SelectTrigger
-                    id={`${formFieldId}-field-1`}
-                    className="h-10 w-full"
-                  >
-                    <SelectValue placeholder={"选择连接"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {providers
-                        .filter((p) =>
-                          ["volcengine_ark", "openrouter"].includes(
-                            p.provider?.adapter_key ?? "",
-                          ),
-                        )
-                        .map((p) =>
-                          p.provider?.id ? (
-                            <SelectItem
-                              key={p.provider?.id}
-                              value={p.provider?.id}
-                            >
-                              {providerConnectionName(p.provider)}
-                            </SelectItem>
-                          ) : null,
-                        )}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor={`${formFieldId}-field-2`}>
-                  <span>生成能力</span>
-                </FieldLabel>
-                <Select
-                  key={providerID}
-                  name="capability"
-                  required
-                  defaultValue=""
-                >
-                  <SelectTrigger
-                    id={`${formFieldId}-field-2`}
-                    className="h-10 w-full"
-                  >
-                    <SelectValue placeholder={"选择能力"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {supported.map((c) =>
-                        c.key ? (
-                          <SelectItem key={c.key} value={c.key}>
-                            {c.key === "video.generate"
-                              ? "视频生成"
-                              : c.key === "image.generate"
-                                ? "图片生成"
-                                : "文本生成"}
-                          </SelectItem>
-                        ) : null,
-                      )}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor={`${formFieldId}-field-3`}>
-                  <span>显示名称</span>
-                </FieldLabel>
-                <Input
-                  id={`${formFieldId}-field-3`}
-                  name="name"
-                  required
-                  maxLength={100}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor={`${formFieldId}-field-4`}>
-                  <span>稳定标识</span>
-                </FieldLabel>
-                <Input
-                  id={`${formFieldId}-field-4`}
-                  name="key"
-                  required
-                  pattern="[a-z][a-z0-9._-]*"
-                  maxLength={128}
-                  placeholder="例如 creative-video"
-                />
-              </Field>
-              <Button
-                className="w-fit"
-                disabled={mutation.busy || loading || !!error || !providerID}
-              >
-                创建模型草稿
-              </Button>
-            </FieldGroup>
-          </form>
-          <MutationStatus mutation={mutation} />
+                setSelected(id);
+              }}
+              onCredentialSaved={saved}
+            />
+          ) : null}
         </DialogContent>
       </Dialog>
-      <MutationStatus mutation={mutation} />
       {loading ? <ContentState state="loading" title="正在读取模型" /> : null}
       {!loading && !error ? (
         <>

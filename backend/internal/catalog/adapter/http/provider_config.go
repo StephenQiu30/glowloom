@@ -19,6 +19,7 @@ func NewConfigHandler(service *application.ProviderConfigs) *ConfigHandler {
 // Register installs connection snapshot routes behind the session middleware.
 func (h *ConfigHandler) Register(group *gin.RouterGroup) {
 	group.GET("/admin/providers/:id/config", h.Read)
+	group.POST("/admin/providers/:id/models", h.AddModel)
 	group.POST("/admin/providers/:id/upgrade-preview", h.Preview)
 	group.POST("/admin/providers/:id/apply-preset", h.Apply)
 }
@@ -96,4 +97,31 @@ func (h *ConfigHandler) Apply(c *gin.Context) {
 		return
 	}
 	c.JSON(200, result)
+}
+
+// AddModel uses the reviewed model preset from the connection snapshot.
+// @Summary 从连接预设添加模型
+// @ID addProviderPresetModel
+// @Tags settings
+// @Accept json
+// @Produce json
+// @Param id path string true "连接ID"
+// @Param body body application.AddPresetModelInput true "模型预设"
+// @Success 201 {object} application.CreatedModel
+// @Router /api/admin/providers/{id}/models [post]
+func (h *ConfigHandler) AddModel(c *gin.Context) {
+	id, ok := httpapi.PathUUID(c, "id")
+	if !ok {
+		return
+	}
+	var input application.AddPresetModelInput
+	if !httpapi.Decode(c, &input) {
+		return
+	}
+	result, err := h.service.AddModel(c.Request.Context(), identityhttp.Principal(c), id, input)
+	if err != nil {
+		presetError(c, err)
+		return
+	}
+	c.JSON(201, result)
 }

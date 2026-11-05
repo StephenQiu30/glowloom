@@ -36,9 +36,18 @@ type ApplyConfigInput struct {
 	Resolution  domain.ProviderConfig `json:"resolution"`
 }
 
+// AddPresetModelInput pins the selected model to the current connection snapshot.
+type AddPresetModelInput struct {
+	ConfigID       uuid.UUID `json:"config_id"`
+	CatalogVersion string    `json:"catalog_version"`
+	CandidateKey   string    `json:"candidate_key"`
+	RequestID      uuid.UUID `json:"request_id"`
+}
+
 // ConfigStore persists connection snapshots without changing active releases.
 type ConfigStore interface {
 	ReadConnectionConfig(context.Context, identityapp.Principal, uuid.UUID) (ConnectionConfig, error)
+	AddPresetModel(context.Context, identityapp.Principal, uuid.UUID, AddPresetModelInput) (CreatedModel, error)
 	PreviewConfigUpgrade(context.Context, identityapp.Principal, uuid.UUID, ConfigUpgradeInput) (ConfigUpgradePreview, error)
 	ApplyConfigUpgrade(context.Context, identityapp.Principal, uuid.UUID, ApplyConfigInput) (ConnectionConfig, error)
 }
@@ -55,6 +64,17 @@ func (s *ProviderConfigs) Read(ctx context.Context, actor identityapp.Principal,
 		return ConnectionConfig{}, identityapp.ErrForbidden
 	}
 	return s.store.ReadConnectionConfig(ctx, actor, id)
+}
+
+// AddModel creates a draft from the selected preset without dispatching it.
+func (s *ProviderConfigs) AddModel(ctx context.Context, actor identityapp.Principal, id uuid.UUID, input AddPresetModelInput) (CreatedModel, error) {
+	if !IsPlatformAdmin(actor) {
+		return CreatedModel{}, identityapp.ErrForbidden
+	}
+	if id == uuid.Nil || input.ConfigID == uuid.Nil || input.RequestID == uuid.Nil || input.CandidateKey == "" || input.CatalogVersion == "" {
+		return CreatedModel{}, domain.ErrInvalidPreset
+	}
+	return s.store.AddPresetModel(ctx, actor, id, input)
 }
 
 // Preview recomputes a merge from immutable base, target and current snapshots.

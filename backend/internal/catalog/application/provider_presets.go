@@ -58,11 +58,12 @@ type ConnectPresetInput struct {
 
 // ConnectionConfig preserves the nonsecret settings used by a connection.
 type ConnectionConfig struct {
-	ID              uuid.UUID             `json:"id"`
-	ProviderID      uuid.UUID             `json:"provider_id"`
-	PresetVersionID uuid.UUID             `json:"preset_version_id"`
-	Version         int                   `json:"version"`
-	Config          domain.ProviderConfig `json:"config"`
+	ID              uuid.UUID                     `json:"id"`
+	ProviderID      uuid.UUID                     `json:"provider_id"`
+	PresetVersionID uuid.UUID                     `json:"preset_version_id"`
+	Version         int                           `json:"version"`
+	Config          domain.ProviderConfig         `json:"config"`
+	ModelCatalog    *domain.ModelCandidateCatalog `json:"model_catalog,omitempty"`
 }
 
 // PresetConnection is the recoverable receipt for a connection creation.

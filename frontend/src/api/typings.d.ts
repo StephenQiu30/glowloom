@@ -75,6 +75,18 @@ declare namespace API {
     protocol_ids?: string[];
   };
 
+  type AddPresetModelInput = {
+    candidate_key?: string;
+    catalog_version?: string;
+    config_id?: string;
+    request_id?: string;
+  };
+
+  type addProviderPresetModelParams = {
+    /** 连接ID */
+    id: string;
+  };
+
   type AdminModelDetail = {
     candidate?: ModelCandidateSelection;
     model?: CreatedModel;
@@ -889,6 +901,7 @@ declare namespace API {
   type ConnectionConfig = {
     config?: ProviderConfig;
     id?: string;
+    model_catalog?: ModelCandidateCatalog;
     preset_version_id?: string;
     provider_id?: string;
     version?: number;

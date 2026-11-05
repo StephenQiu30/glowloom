@@ -44,7 +44,16 @@ func (s *Store) ReadConnectionConfig(ctx context.Context, actor identityapp.Prin
 		}
 		var err error
 		config, _, err = readConnectionConfig(tx, id)
-		return err
+		if err != nil {
+			return err
+		}
+		document, err := connectionPresetDocument(tx, config)
+		if err != nil {
+			return err
+		}
+		catalog := domain.ModelCatalogForPreset(document)
+		config.ModelCatalog = &catalog
+		return nil
 	})
 	return config, err
 }
