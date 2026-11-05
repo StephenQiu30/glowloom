@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Coins } from "lucide-react";
-import { ProductNavigationIcon } from "@/components/layout/product-navigation-icon";
+import { Coins, Sparkle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -17,6 +16,7 @@ export function CreditPopover({
   navigation?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const Icon = navigation ? Sparkle : Coins;
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -29,11 +29,7 @@ export function CreditPopover({
               : "max-[359px]:hidden max-md:size-11 max-md:p-0"
           }
         >
-          {navigation ? (
-            <ProductNavigationIcon name="credit" />
-          ) : (
-            <Coins data-icon="inline-start" />
-          )}
+          <Icon aria-hidden="true" data-icon="inline-start" />
           <span className="max-md:hidden">积分</span>
         </Button>
       </PopoverTrigger>

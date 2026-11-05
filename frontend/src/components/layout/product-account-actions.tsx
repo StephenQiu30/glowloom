@@ -5,7 +5,8 @@ import { CreditPopover } from "@/components/billing/credit-popover";
 import { ThemeToggle } from "@/components/controls/theme-controls";
 import { AccountMenu } from "@/components/account/account-menu";
 import { Button } from "@/components/ui/button";
-import { ProductNavigationIcon } from "./product-navigation-icon";
+import { Bell } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 import {
   Tooltip,
   TooltipContent,
@@ -36,7 +37,7 @@ export function ProductAccountActions({
           aria-label="消息中心"
           onClick={() => onFeature("消息中心")}
         >
-          <ProductNavigationIcon name="notification" />
+          <Bell aria-hidden="true" />
         </Button>
       </TooltipTrigger>
       <TooltipContent>消息中心</TooltipContent>
@@ -60,7 +61,10 @@ export function ProductAccountActions({
       {notification}
       {actor ? (
         <>
-          <span className="product-account-divider" aria-hidden="true" />
+          <Separator
+            orientation="vertical"
+            className="product-account-divider"
+          />
           <CreditPopover navigation />
           <Button asChild variant="ghost" className="product-membership-action">
             <Link href="/billing/membership">开会员</Link>

@@ -305,10 +305,10 @@ it("四页共用导航和账号节点，分组状态独立并在切页和收起�
   ).toBe("true");
 
   for (const [pathname, label, icon] of [
-    ["/", "创作", "creation"],
-    ["/explore", "探索", "explore"],
-    ["/assets", "资产", "assets"],
-    ["/subjects", "主体", "subjects"],
+    ["/", "创作", "sparkles"],
+    ["/explore", "探索", "compass"],
+    ["/assets", "资产", "folder-closed"],
+    ["/subjects", "主体", "contact-round"],
   ]) {
     mocks.pathname = pathname;
     view.rerender(
@@ -332,8 +332,9 @@ it("四页共用导航和账号节点，分组状态独立并在切页和收起�
     expect(selected.getAttribute("aria-current")).toBe("page");
     expect(sidebar.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
     expect(
-      selected.querySelector("[data-product-icon]")?.getAttribute("style"),
-    ).toContain(`${icon}-active.svg`);
+      selected.querySelector(`svg.lucide-${icon}[aria-hidden="true"]`),
+    ).not.toBeNull();
+    expect(selected.getAttribute("data-active")).toBe("true");
     expect(
       within(header).queryByRole("link", { name: "积分超市" }) !== null,
     ).toBe(pathname === "/");
