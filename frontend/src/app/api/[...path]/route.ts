@@ -292,17 +292,62 @@ const identityRoutes: {
 // Explicit editor and catalog contracts; authorization remains with the backend.
 const editorCatalogRoutes: typeof identityRoutes = [
   {
-    pattern: `projects/${identityUUID}/agent-sessions`,
+    pattern: `projects/${identityUUID}/agent/sessions`,
     methods: ["GET", "POST"],
-    query: [],
+    query: ["limit", "cursor"],
   },
   {
-    pattern: `projects/${identityUUID}/agent-sessions/${identityUUID}`,
+    pattern: `projects/${identityUUID}/agent/sessions/${identityUUID}`,
     methods: ["GET"],
     query: [],
   },
   {
-    pattern: `projects/${identityUUID}/agent-sessions/${identityUUID}/(turns|advance|confirm|stop)`,
+    pattern: `projects/${identityUUID}/agent/sessions/${identityUUID}/runs`,
+    methods: ["GET", "POST"],
+    query: ["limit", "cursor"],
+  },
+  {
+    pattern: `projects/${identityUUID}/agent/sessions/${identityUUID}/runs/${identityUUID}`,
+    methods: ["GET"],
+    query: [],
+  },
+  {
+    pattern: `projects/${identityUUID}/agent/sessions/${identityUUID}/runs/${identityUUID}/commands`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `projects/${identityUUID}/agent/sessions/${identityUUID}/runs/${identityUUID}/commands/current`,
+    methods: ["GET"],
+    query: ["request_id"],
+  },
+  {
+    pattern: `projects/${identityUUID}/agent/sessions/${identityUUID}/runs/${identityUUID}/events`,
+    methods: ["GET"],
+    query: [],
+  },
+  {
+    pattern: `projects/${identityUUID}/agent/sessions/${identityUUID}/runs/${identityUUID}/messages`,
+    methods: ["GET"],
+    query: ["limit", "before", "through"],
+  },
+  {
+    pattern: `projects/${identityUUID}/agent/sessions/${identityUUID}/runs/${identityUUID}/messages/${identityUUID}`,
+    methods: ["GET"],
+    query: [],
+  },
+  {
+    pattern: `projects/${identityUUID}/agent/sessions/${identityUUID}/submissions/(current|${identityUUID})`,
+    methods: ["GET"],
+    query: [],
+  },
+  {
+    pattern: `projects/${identityUUID}/agent/skills`,
+    methods: ["GET", "POST"],
+    query: [],
+  },
+  {
+    pattern: `projects/${identityUUID}/agent/skills/${identityUUID}/versions/[a-zA-Z0-9._+-]{1,128}/enabled`,
     methods: ["POST"],
     query: [],
   },
@@ -876,6 +921,7 @@ async function proxy(
       "X-Request-Id",
       "X-CSRF-Token",
       "X-Creation-Scope",
+      "Last-Event-ID",
     ]) {
       const value = request.headers.get(key);
       if (value) headers.set(key, value);
@@ -948,17 +994,22 @@ async function proxy(
       body,
       cache: "no-store",
       redirect: "manual",
-      signal: AbortSignal.any([
-        request.signal,
-        AbortSignal.timeout(
-          new RegExp(
-            `^projects/${identityUUID}/media/${identityUUID}/original$`,
-            "i",
-          ).test(resource) || matches(`media-exports/${identityUUID}/download`)
-            ? 120000
-            : 10000,
-        ),
-      ]),
+      signal: matches(
+        `projects/${uuid}/agent/sessions/${uuid}/runs/${uuid}/events`,
+      )
+        ? request.signal
+        : AbortSignal.any([
+            request.signal,
+            AbortSignal.timeout(
+              new RegExp(
+                `^projects/${identityUUID}/media/${identityUUID}/original$`,
+                "i",
+              ).test(resource) ||
+                matches(`media-exports/${identityUUID}/download`)
+                ? 120000
+                : 10000,
+            ),
+          ]),
     });
     const outgoing = new Headers(noStore);
     for (const key of [
