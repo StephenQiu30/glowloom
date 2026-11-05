@@ -197,6 +197,9 @@ func TestUpdateProviderCommitsEventsAndRejectsStaleAdminOnLocalPostgres(t *testi
 		t.Fatalf("rename and archive provider: %+v, %v", saved, err)
 	}
 	replayed, err = command.Execute(ctx, actor, archive)
+	// Compare instants consistently across database reads and JSON receipts.
+	replayed.CreateTime, replayed.UpdateTime = replayed.CreateTime.UTC(), replayed.UpdateTime.UTC()
+	saved.CreateTime, saved.UpdateTime = saved.CreateTime.UTC(), saved.UpdateTime.UTC()
 	if err != nil || replayed != saved {
 		t.Fatalf("archive receipt: %+v, %v", replayed, err)
 	}

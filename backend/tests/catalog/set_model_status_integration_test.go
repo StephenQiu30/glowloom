@@ -194,6 +194,9 @@ func TestSetModelStatusCommitsAuditAndGuardsActivationOnLocalPostgres(t *testing
 		t.Fatalf("archive model: %+v, %v", archived, err)
 	}
 	replayed, err = command.Execute(ctx, actor, archive)
+	// Database reads and JSON receipts can represent the same instant in different locations.
+	replayed.UpdateTime = replayed.UpdateTime.UTC()
+	archived.UpdateTime = archived.UpdateTime.UTC()
 	if err != nil || replayed != archived {
 		t.Fatalf("archive receipt: %+v, %v", replayed, err)
 	}
