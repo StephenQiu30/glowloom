@@ -1,1 +1,0 @@
-src/components/generation/agent-workspace.tsx(159,58): error TS18047: 'current' is possibly 'null'.

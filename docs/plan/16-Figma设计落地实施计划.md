@@ -463,4 +463,4 @@ agent-browser固定同一可见会话完成17个新文件的真实上传、目�
 
 ### 共享顶栏架构验证入口（2026-10-28）
 
-沿PRD11的FR-WB-19/AC-WB-19实施：以REA发行脚本和登录态DOM交叉定位公共宿主与页面动作portal；在既有PageToolbar上增加actions与presentation，抽取ProductHeaderActions，保留资产navigation接口。验证顺序为公共弹层/快捷键生命周期、主体批量与取消、嵌入回退、跨断点节点及上下文、浏览器同排和窄屏。证据：[逆向报告](../research/2026-10-28-即梦共享顶栏架构逆向.md)、[验证记录](../research/evidence/2026-10-28-header-architecture/verification.md)。进度仅在BACKLOG维护。
+沿PRD11的FR-WB-19/AC-WB-19实施：以REA发行脚本和登录态DOM交叉定位公共宿主与页面动作portal；在既有PageToolbar上增加actions与presentation，抽取ProductHeaderActions，保留资产navigation接口。验证顺序为公共弹层/快捷键生命周期、主体批量与取消、嵌入回退、跨断点节点及上下文、浏览器同排和窄屏。证据：[逆向报告](../research/2026-10-28-即梦共享顶栏架构逆向.md)、验证记录（Git 5c785a12 的 `docs/research/evidence/2026-10-28-header-architecture/verification.md`）。进度仅在BACKLOG维护。

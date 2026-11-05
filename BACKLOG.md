@@ -66,7 +66,7 @@
 | T-AI-25-01 | 配额/权限/速率安全分类    | 23-01                       | 工程复核通过；同402/429不同证据分类，不推断退款/零成本                                        | CASE-BIL-09/11/12       |
 | T-AI-25-02 | 原币账单与迟到退款补偿    | D-AI-35-03及真实验证授权    | 待合同；未关闭不开放，禁止Settle(0)改旧账                                                     | CASE-BIL-03/07/10       |
 
-[工程验证记录](docs/research/evidence/2026-11-03-beeftv-adoption/engineering-validation.md)。Plan29提交前工程证据（以下命令在当时共享工作区执行）：隔离catalog全量及Race通过；协议/operation Race通过；前端279文件/2016测试、API一致性、ESLint、类型及构建通过。独立审阅发现的重复键保存绕过已按Red→Green修复并复核关闭。本次改动golangci增量检查0问题；全scope保留既有静态问题及18个无关前端格式文件，未扩展修复。fixture不替代浏览器/供应商接受。
+工程验证记录（Git 5c785a12 的 `docs/research/evidence/2026-11-03-beeftv-adoption/engineering-validation.md`）。Plan29提交前工程证据（以下命令在当时共享工作区执行）：隔离catalog全量及Race通过；协议/operation Race通过；前端279文件/2016测试、API一致性、ESLint、类型及构建通过。独立审阅发现的重复键保存绕过已按Red→Green修复并复核关闭。本次改动golangci增量检查0问题；全scope保留既有静态问题及18个无关前端格式文件，未扩展修复。fixture不替代浏览器/供应商接受。
 
 工程补证：Plan30初审4项Important已按Red→Green修复；round1引入的legacy/reuse完整性兼容问题已在round2关闭，原独立PG失败用例转PASS。多产物中断仅在实际manifest全集归档后ready；账务冲突统一约束GET/quote/单批确认/dispatch；足额、部分释放及既有overage均不误封。修复后catalog Race371通过，operation Race663通过/26跳过；前端284文件/2035测试、类型、ESLint、API与生产构建通过。全仓/专库/最新family去重为3345个pass动作、882个skip、0fail；跳过不计接受。总审查初审1项Critical、6项Important及字幕问题全部修复；精确复核剩余迟到矛盾回调、实际SDK固定ID冲突两项亦已独立原样复跑关闭，整体工程规格与代码质量通过，无未关闭Critical/Important。最终operation整包676通过/26跳过，operation/media内部合计733通过；catalog去重371通过；前端284文件/2038测试通过，最终相关组件49通过。最后两项收口Race105通过/0跳过，变更行lint/vet/goimports/diff检查通过。未再次重复未变前端/其他包；真实供应商/浏览器/生产迁移未执行。
 
@@ -81,14 +81,14 @@
 
 ### 6.3 下一步与完成判据
 
-1. 本轮可执行工程范围已完成并通过独立整体审查；按[验证记录](docs/research/evidence/2026-11-03-beeftv-adoption/engineering-validation.md)和[逐项文件清单](docs/research/evidence/2026-11-03-beeftv-adoption/worktree-files.md)审阅本次提交范围；首轮实现已提交main并推送（4ab20c15）；后续Flash运行修复沿同范围交付，本地仅启用已验证Flash。
+1. 本轮可执行工程范围已完成并通过独立整体审查；按验证记录（Git 5c785a12 的 `docs/research/evidence/2026-11-03-beeftv-adoption/engineering-validation.md`）和逐项文件清单（Git 5c785a12 的 `docs/research/evidence/2026-11-03-beeftv-adoption/worktree-files.md`）审阅本次提交范围；首轮实现已提交main并推送（4ab20c15）；后续Flash运行修复沿同范围交付，本地仅启用已验证Flash。
 2. 分别关闭D-AI-35-01～03的商业/供应商合同；未确认前不开放对应参考计费、原币账单和退款补偿，不以工程fixture充当真实费率。
 3. 在获准的运行环境补D-AI-35-04：真实供应商、生产式 PostgreSQL 任务/Kafka/对象存储与原回执恢复，以及桌面/320/390、键盘焦点和读屏接受。除下述Flash本地观测外，未执行项不计通过。
 4. 新问题或后续发布继续沿对应CASE留证，保留原价格/汇率/Key/预留/账本；不得用清零旧账、超时解锁、同键重POST或新Key补买替代核查。
 
 ### 6.4 首个Flash模型实际接受（SRC-AI-36）
 
-[运行验证记录](docs/research/evidence/2026-11-03-beeftv-adoption/runtime-validation.md)：复用现有COS桶及凭据，242项旧对象位置经字节核验绑定；文生图、图生图各成功并结算0.12元，已启用并设为图片能力默认。首页实际选模/免费报价显示0.12元、预估2积分；没有执行第四次供应商请求。
+运行验证记录（Git 5c785a12 的 `docs/research/evidence/2026-11-03-beeftv-adoption/runtime-validation.md`）：复用现有COS桶及凭据，242项旧对象位置经字节核验绑定；文生图、图生图各成功并结算0.12元，已启用并设为图片能力默认。首页实际选模/免费报价显示0.12元、预估2积分；没有执行第四次供应商请求。
 
 - 已完成：模型详情失败重试、试运行价格来源投影、Ark不支持参数移除、Pro/Flash尺寸候选修正、试运行模式空值同步修复及对应回归。
 - 待核对：原请求`827948cf-87fe-48ac-bbdf-486eaf6f84c1`参数拒绝后为manual/费用未知，保留0.12元预留，不重发、不强制零结算；需取得原请求的可信供应商费用证据。
@@ -100,7 +100,7 @@
 
 用户选择先完成配置和代码、暂不收费调用。9个有现存凭据的模型已追加配置v2、11份审核价格；Pro图片、两款豆包文本及四款Seedance共7个待验证发布已保存。DeepSeek分别留存高峰/空闲价，分时结算依据未齐不创建发布；两个OpenAI模型仍缺Key。所有新增模型保持停用，Flash原发布不变。
 
-- 已完成：缓存用量分价、Seedance输出Token报价/结算及发布门禁、Pro参考附加的发布/报价/冻结计数结算、试运行积分明细传递；受影响catalog/operation及managed/providerhttp整包Race通过，前端7项定向、类型和lint通过。完整验证见[本轮记录](docs/research/evidence/2026-11-03-beeftv-adoption/remaining-models-validation.md)及[安全配置快照](docs/research/evidence/2026-11-03-beeftv-adoption/remaining-model-configurations.json)。
+- 已完成：缓存用量分价、Seedance输出Token报价/结算及发布门禁、Pro参考附加的发布/报价/冻结计数结算、试运行积分明细传递；受影响catalog/operation及managed/providerhttp整包Race通过，前端7项定向、类型和lint通过。完整验证见本轮记录（Git 5c785a12 的 `docs/research/evidence/2026-11-03-beeftv-adoption/remaining-models-validation.md`）及安全配置快照（Git 5c785a12 的 `docs/research/evidence/2026-11-03-beeftv-adoption/remaining-model-configurations.json`）。
 - 免费页面验证：Pro 2K报价0.60元、预计6积分；仅quoted，不确认生成。当前视频最低样例高于原项目0.64元可用预算，保留既有页面门禁，不增加预算。
 - 全仓限制：首次后端全仓命令受测试环境条件阻断，后续受影响整包已用完整隔离环境通过；前端全量2069通过/1失败，失败指向并行探索搜索存储策略，保留该改动。
 - 未接受：9个模型的真实生成/归档/结算与启用、DeepSeek自动分时/节假日结算、输入视频阶梯费率/最低用量、OpenAI凭据与价格、个人积分钱包。本轮新增供应商调用0次、派发总数仍3；原manual的0.12元预留不变。
@@ -110,9 +110,9 @@
 2026-11-04：按用户要求复用原计费链路，禁止收费调用；实现及隔离验收通过后定向提交main并推送，其他改动保留。
 
 - 实现：在原Token价格内追加固定年度分时标识；高峰预留、按原调用区间判断空闲半价，缓存/未命中/输出合并后一次取整。原私有结果留存received_at，恢复沿原时间和价格；缺证据/跨费率边界转原待核验，不零结算或释放预留。未核验年度禁止新派发，不新增服务、表或定时任务。
-- 配置：两款DeepSeek均追加价格v4及待验证draft，复用连接配置和模型v2，保持disabled；旧v2高峰/v3空闲价不改写。安全快照见[配置记录](docs/research/evidence/2026-11-04-deepseek-time-pricing/configurations.json)。
+- 配置：两款DeepSeek均追加价格v4及待验证draft，复用连接配置和模型v2，保持disabled；旧v2高峰/v3空闲价不改写。安全快照见配置记录（Git 5c785a12 的 `docs/research/evidence/2026-11-04-deepseek-time-pricing/configurations.json`）。
 - 工程接受：operation/catalog/billing/managed/providerhttp五包最终Race通过，格式、vet、lint及可达漏洞检查通过；全仓首次环境失败及分包复跑证据均保留。
-- 验证证据与限制：[本轮验证](docs/research/evidence/2026-11-04-deepseek-time-pricing/validation.md)。本轮供应商调用0次，历史派发仍3；首轮Flash账本及原0.12元未知预留不变。
+- 验证证据与限制：本轮验证（Git 5c785a12 的 `docs/research/evidence/2026-11-04-deepseek-time-pricing/validation.md`）。本轮供应商调用0次，历史派发仍3；首轮Flash账本及原0.12元未知预留不变。
 - 未接受：DeepSeek真实供应商生成/归档/账单对账与启用、跨费率边界的供应商计费时刻确认、2027及以后节假日规则。未经新的明确收费授权不试运行；新年度须审核规则后追加版本，不自动延用2026规则。
 
 ### 2026-11-03 SRC-AI-37 界面增量
@@ -129,7 +129,7 @@
 
 ### 2026-11-03 探索搜索一致性纠正
 
-EX-REQ-08：确认现有CommandDialog与即梦探索不符。已按设计28/PRD15/Plan24落实行内搜索、历史、显式提交、URL结果类型和窄屏适配；新增Figma搜索展开/历史稿3426:74255。15项定向测试、lint、类型和构建通过，浏览器验证见[搜索差异证据](docs/research/evidence/2026-11-03-explore-search/validation.md)。完整一致性仍未接受：T04公开目录/查询合同、T11真实三类搜索和联想词、T06卡片/详情/复用、T02/03全状态设计仍需补齐。本轮未提交推送；其他任务修改保留。
+EX-REQ-08：确认现有CommandDialog与即梦探索不符。已按设计28/PRD15/Plan24落实行内搜索、历史、显式提交、URL结果类型和窄屏适配；新增Figma搜索展开/历史稿3426:74255。15项定向测试、lint、类型和构建通过，浏览器核验没有单独留在知识库中的快照。完整一致性仍未接受：T04公开目录/查询合同、T11真实三类搜索和联想词、T06卡片/详情/复用、T02/03全状态设计仍需补齐。本轮未提交推送；其他任务修改保留。
 
 ### 2026-11-03 探索shadcn组件收敛
 
@@ -139,21 +139,21 @@ EX-REQ-10核查完成：侧栏已采用官方Sidebar体系并继续复用；共�
 
 ## 2026-11-03 连线显示纠错
 
-已修复命令式拖动更新SVG路径但流光沿旧网格的问题，取消恢复也跟随实际路径；取消仅因关联节点active而触发的持续高亮。5文件20项、全局tsc、4文件ESLint通过，原生Chrome已核对用户原画布选中节点后保持灰线。生成中拖动的GPU逐帧验收尚未执行，不冒称新一轮源端全量标定。设计/原始需求/PRD已同步，增量未提交；证据见[本轮验证](docs/research/evidence/2026-11-03-canvas-line-fix/validation.md)。
+已修复命令式拖动更新SVG路径但流光沿旧网格的问题，取消恢复也跟随实际路径；取消仅因关联节点active而触发的持续高亮。5文件20项、全局tsc、4文件ESLint通过，原生Chrome已核对用户原画布选中节点后保持灰线。生成中拖动的GPU逐帧验收尚未执行，不冒称新一轮源端全量标定。设计/原始需求/PRD已同步，增量未提交；证据见本轮验证（Git 5c785a12 的 `docs/research/evidence/2026-11-03-canvas-line-fix/validation.md`）。
 
 ## 2026-11-04 连线提交与实页复核
 
-上一轮限定15文件已提交ca56fa06并推main。前端CI成功；后端缺agent.graph_checkpoint表，父提交已有同一失败。当前即梦实页与新bundle更正上轮降灰判断：恢复endpoint-active，节点拖动/视图移动/框选暂停流光，hover200ms、滚轮150ms+RAF、缩放基线1/k，13渐变节点精度对齐。6文件24项、全局tsc、范围lint与指定本地origin后的生产构建通过；实页三档缩放及拖动暂停/恢复已验，原Figma动效板3159:54491同步规则与精确渐变。后续增量未再次提交。按用户授权，通过既有领域命令仅补足Seedream报价2积分所需的120000微元预算，账本与审计各1条；仅确认任务0d7fd96a一次，随后provider_not_submitted失败，预留全额释放、实际扣费0、剩余可用120000微元。失败后取消选中，两边恢复默认opacity0.16且流光暂停，无高亮残留；供应商生成中/成功及其拖动缩放组合未通过。下一步先查明供应商未提交原因，再取得单次生成验收条件；本次不再提交新任务，不签全量一致。结束时共享main已由并行billing推进至4b1909f9且远端相同，本任务ca56fa06仍在历史中。见[复核记录](docs/research/evidence/2026-11-04-connection-review/validation.md)。
+上一轮限定15文件已提交ca56fa06并推main。前端CI成功；后端缺agent.graph_checkpoint表，父提交已有同一失败。当前即梦实页与新bundle更正上轮降灰判断：恢复endpoint-active，节点拖动/视图移动/框选暂停流光，hover200ms、滚轮150ms+RAF、缩放基线1/k，13渐变节点精度对齐。6文件24项、全局tsc、范围lint与指定本地origin后的生产构建通过；实页三档缩放及拖动暂停/恢复已验，原Figma动效板3159:54491同步规则与精确渐变。后续增量未再次提交。按用户授权，通过既有领域命令仅补足Seedream报价2积分所需的120000微元预算，账本与审计各1条；仅确认任务0d7fd96a一次，随后provider_not_submitted失败，预留全额释放、实际扣费0、剩余可用120000微元。失败后取消选中，两边恢复默认opacity0.16且流光暂停，无高亮残留；供应商生成中/成功及其拖动缩放组合未通过。下一步先查明供应商未提交原因，再取得单次生成验收条件；本次不再提交新任务，不签全量一致。结束时共享main已由并行billing推进至4b1909f9且远端相同，本任务ca56fa06仍在历史中。见复核记录（Git 5c785a12 的 `docs/research/evidence/2026-11-04-connection-review/validation.md`）。
 
 ### 2026-11-04 复核交付与供应商输入修复
 
-限定34文件已提交e7e376b4并推送main，提交前22项定向前端测试通过；CI41751714383前端成功，后端仍为既有agent.graph_checkpoint缺表失败。随后按用户“仅修复，暂不再生成”排查：当前cos-main/COS主路由的真实HeadBucket成功，原引用图片则保存于legacy-main/MinIO，5442字节、回环HTTP签名；Temporal原activity明确invalid_provider_request。已修复该私有图片传输和安全分类保留，公网COS URL不改，未迁移旧资源。8组定向Race、隔离PG调用摘要/幂等、原49事件回放、goimports/vet及后端构建通过，govulncheck无可达漏洞；golangci-lint未安装。Figma原板与设计/PRD/原需求/Plan已同步。只重启本地后端载入修复，readyz正常、运行二进制与已验证构建SHA一致；原失败状态、1条调用和预算预留/结算0保持不变。修复增量未提交，未发起新生成、未加预算。下一步仍需获得真实任务验收条件后核对供应商生成中/完成及其拖动缩放组合；同项目COS图片完整读取、其它本地多模态引用另验，不以本轮图片修复签全量一致。见[根因与证据](docs/research/evidence/2026-11-04-provider-reference/validation.md)。
+限定34文件已提交e7e376b4并推送main，提交前22项定向前端测试通过；CI41751714383前端成功，后端仍为既有agent.graph_checkpoint缺表失败。随后按用户“仅修复，暂不再生成”排查：当前cos-main/COS主路由的真实HeadBucket成功，原引用图片则保存于legacy-main/MinIO，5442字节、回环HTTP签名；Temporal原activity明确invalid_provider_request。已修复该私有图片传输和安全分类保留，公网COS URL不改，未迁移旧资源。8组定向Race、隔离PG调用摘要/幂等、原49事件回放、goimports/vet及后端构建通过，govulncheck无可达漏洞；golangci-lint未安装。Figma原板与设计/PRD/原需求/Plan已同步。只重启本地后端载入修复，readyz正常、运行二进制与已验证构建SHA一致；原失败状态、1条调用和预算预留/结算0保持不变。修复增量未提交，未发起新生成、未加预算。下一步仍需获得真实任务验收条件后核对供应商生成中/完成及其拖动缩放组合；同项目COS图片完整读取、其它本地多模态引用另验，不以本轮图片修复签全量一致。见根因与证据（Git 5c785a12 的 `docs/research/evidence/2026-11-04-provider-reference/validation.md`）。
 
 <a id="pi-durable-migration"></a>
 
 ## 2026-11-04 独立 agent 与数据库任务迁移
 
-来源：需求19 SRC-AGH-10～15；唯一设计→PRD→Plan：设计32 → PRD19 → Plan28。2026-11-05工程终验完成；产品与现有部署切换分开判定。完整[验证记录](docs/research/evidence/2026-11-04-agent-service/validation.md)、[机器结果](docs/research/evidence/2026-11-04-agent-service/checks.json)、[逐项工作区路径](docs/research/evidence/2026-11-04-agent-service/working-tree-paths.tsv)。
+来源：需求19 SRC-AGH-10～15；唯一设计→PRD→Plan：设计32 → PRD19 → Plan28。2026-11-05工程终验完成；产品与现有部署切换分开判定。完整验证记录（Git 5c785a12 的 `docs/research/evidence/2026-11-04-agent-service/validation.md`）、机器结果（Git 5c785a12 的 `docs/research/evidence/2026-11-04-agent-service/checks.json`）、逐项工作区路径（Git 5c785a12 的 `docs/research/evidence/2026-11-04-agent-service/working-tree-paths.tsv`）。
 
 | 工作                         | 当前状态                                                                                                                                                 | 接受依据                   |
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
