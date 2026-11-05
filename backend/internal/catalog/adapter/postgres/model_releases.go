@@ -275,10 +275,14 @@ func (s *Store) ListCapabilityDefaults(ctx context.Context, actor identityapp.Pr
 // from separately published versions. It runs inside the release transaction.
 func validateReleaseContract(tx *gorm.DB, modelID uuid.UUID, input application.CreateReleaseInput) error {
 	var row struct {
-		domain.ModelVersion `gorm:"embedded"`
-		ModesJSON           []byte
-		ConfigJSON          []byte
-		Capability          string
+		ID, ModelID                                     uuid.UUID
+		VersionNo                                       int
+		ProviderModelID                                 string
+		ModesJSON, ConfigJSON, Limits, ParamSchema      []byte
+		Capability, Queue                               string
+		Moderation                                      domain.Moderation
+		SupportsQuery, SupportsCancel, SupportsCallback bool
+		ExpectedMaxMS                                   int
 	}
 	r := tx.Raw(`SELECT v.id,v.model_profile_id AS model_id,v.version_no,v.provider_model_id,to_jsonb(v.modes) AS modes_json,
  v.limits,v.param_schema,v.supports_query,v.supports_cancel,v.supports_callback,v.expected_max_ms,v.moderation,v.queue,
@@ -292,8 +296,14 @@ func validateReleaseContract(tx *gorm.DB, modelID uuid.UUID, input application.C
 	if r.RowsAffected != 1 {
 		return application.ErrModelSourceUnavailable
 	}
+	version := domain.ModelVersion{
+		ID: row.ID, ModelID: row.ModelID, VersionNo: row.VersionNo, ProviderModelID: row.ProviderModelID,
+		Limits: row.Limits, ParamSchema: row.ParamSchema, ExpectedMaxMS: row.ExpectedMaxMS,
+		Queue: row.Queue, Moderation: row.Moderation, SupportsQuery: row.SupportsQuery,
+		SupportsCancel: row.SupportsCancel, SupportsCallback: row.SupportsCallback,
+	}
 	var config domain.ProviderConfig
-	if json.Unmarshal(row.ModesJSON, &row.Modes) != nil || json.Unmarshal(row.ConfigJSON, &config) != nil {
+	if json.Unmarshal(row.ModesJSON, &version.Modes) != nil || json.Unmarshal(row.ConfigJSON, &config) != nil {
 		return application.ErrModelSourceUnavailable
 	}
 	var price domain.PriceRuleVersion
@@ -308,7 +318,7 @@ func validateReleaseContract(tx *gorm.DB, modelID uuid.UUID, input application.C
 	if err != nil {
 		return err
 	}
-	if params.Validate(row.ModelVersion) != nil || pricevalidation.ValidateModel(config, row.Capability, row.ModelVersion, price) != nil {
+	if params.Validate(version) != nil || pricevalidation.ValidateModel(config, row.Capability, version, price) != nil {
 		return application.ErrModelSourceUnavailable
 	}
 	return nil

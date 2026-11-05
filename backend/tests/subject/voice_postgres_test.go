@@ -307,9 +307,23 @@ func TestSubjectSpeechReleaseDraftUsesExistingPublicationGate(t *testing.T) {
 			t.Fatal("speech release fixture", r.Error)
 		}
 	}
-	release, err := app.NewCatalogStore(runtime).CreateModelRelease(t.Context(), actor, model, catalog.CreateReleaseInput{ModelVersionID: version, PriceVersionID: price, ConfigVersionID: config, RequestID: uuid.New(), UpstreamCost: catalog.UpstreamCost{Currency: "CNY", MaxMicros: 100, Source: "official fixture", ReviewedAt: time.Now().UTC()}})
+	store := app.NewCatalogStore(runtime)
+	release, err := store.CreateModelRelease(t.Context(), actor, model, catalog.CreateReleaseInput{ModelVersionID: version, PriceVersionID: price, ConfigVersionID: config, RequestID: uuid.New(), UpstreamCost: catalog.UpstreamCost{Currency: "CNY", MaxMicros: 100, Source: "official fixture", ReviewedAt: time.Now().UTC()}})
 	if err != nil || release.Status != "draft" {
 		t.Fatal("speech draft release denied", err)
+	}
+	if !reflect.DeepEqual(release.RequiredModes, []string{"text2audio"}) || len(release.ValidatedModes) != 0 {
+		t.Fatalf("speech draft modes: required=%v, validated=%v", release.RequiredModes, release.ValidatedModes)
+	}
+	// A synthetic active credential reaches the evidence check without calling the supplier.
+	if err := owner.Exec(`INSERT INTO catalog.provider_credential(id,provider_id,label,ciphertext,key_id,last4) VALUES(?,?,'speech fixture',?,'synthetic-never-decrypted','test')`, uuid.New(), provider, []byte("synthetic-not-a-real-secret")).Error; err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.ActivateModelRelease(t.Context(), actor, release.ID, catalog.ActivateReleaseInput{
+		ExpectedRevision: release.Revision, ExpectedModelRevision: 1, EnableProvider: true, RequestID: uuid.New(),
+	})
+	if !errors.Is(err, catalog.ErrReleaseUnverified) {
+		t.Fatalf("activate unverified speech release: got %v, want %v", err, catalog.ErrReleaseUnverified)
 	}
 	options, err := pgcatalog.NewSubjectVoiceCatalog(runtime).List(t.Context())
 	if err != nil {
