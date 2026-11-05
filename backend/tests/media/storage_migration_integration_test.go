@@ -21,7 +21,7 @@ func TestStorageNativeBindingCannotBeRepointed(t *testing.T) {
 	a := sourceDocumentAsset([]byte("history"))
 	a.ProjectID = project
 	a.ObjectKey = "projects/" + project.String() + "/document/2026/10/" + a.ID.String() + ".txt"
-	original, err := routes.ReserveLocation(t.Context(), domain.ObjectRef{ProfileID: "minio-main", Bucket: "storage-test", Key: a.ObjectKey})
+	original, err := routes.ReserveLocation(t.Context(), domain.ObjectRef{ProfileID: "cos-first", Bucket: "storage-test-1250000000", Key: a.ObjectKey})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestStorageNativeWorkVerifiesFactsAndFencesConcurrentChanges(t *testing.T) 
 	t.Cleanup(func() { _ = db.Rollback().Error })
 	routes := pgmedia.NewStorageRoutes(db)
 	storageProfiles(t, routes)
-	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, db, "native-"+uuid.NewString(), "minio-main")); err != nil {
+	if _, err := routes.ApplyEnvironment(t.Context(), storageEnvironmentFixture(t, db, "native-"+uuid.NewString(), "cos-first")); err != nil {
 		t.Fatal(err)
 	}
 	owner := mediaapp.StorageWorkOwner{Kind: mediaapp.StorageWorkKindOperation, OwnerID: uuid.New(), WorkID: uuid.New()}

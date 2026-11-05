@@ -13,8 +13,6 @@ import (
 
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/codex"
@@ -31,7 +29,7 @@ func freezeReceiptFixtureModel(t *testing.T, database *gorm.DB, identity applica
 	}
 }
 
-// This crosses actual PostgreSQL and MinIO with simulated model output; no
+// This crosses actual PostgreSQL and COS with simulated model output; no
 // account, inference, image pricing, or production bucket participates.
 func TestM1ReceiptRecoveryPrivateObjectsAndPostgres(t *testing.T) {
 	receiptTestObjects(t)
@@ -144,22 +142,13 @@ func receiptTestObjects(t *testing.T) *objectstorage.Client {
 	if err != nil || endpoint.Scheme != "http" || (endpoint.Hostname() != "127.0.0.1" && endpoint.Hostname() != "localhost") || config.Bucket != "glowloom-receipt-test" {
 		t.Fatal("storage fixture must be a dedicated loopback test bucket")
 	}
-	sdk, err := minio.New(endpoint.Host, &minio.Options{Creds: credentials.NewStaticV4(config.AccessKey, config.SecretKey, ""), Region: config.Region, Secure: false})
-	if err != nil {
-		t.Fatal("configure MinIO fixture")
-	}
-	exists, err := sdk.BucketExists(t.Context(), config.Bucket)
-	if err != nil {
-		t.Fatalf("check isolated MinIO bucket: %v", err)
-	}
-	if !exists {
-		if err := sdk.MakeBucket(t.Context(), config.Bucket, minio.MakeBucketOptions{}); err != nil {
-			t.Fatal("create isolated test bucket")
-		}
-	}
 	client, err := objectstorage.Open(config.Endpoint, config.Bucket, config.AccessKey, config.SecretKey, config.Region)
 	if err != nil {
 		t.Fatal("configure private staging client")
+	}
+	t.Cleanup(client.Close)
+	if err := client.Ping(t.Context()); err != nil {
+		t.Fatalf("check dedicated COS test fixture: %v", err)
 	}
 	return client
 }

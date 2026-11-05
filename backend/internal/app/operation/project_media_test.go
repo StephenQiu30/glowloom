@@ -35,7 +35,7 @@ func TestLocalProjectImageReachesArkAsVerifiedBytes(t *testing.T) {
 	data := imageData.Bytes()
 	reads := 0
 	storage := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/fixture/input.png", r.URL.Path)
+		require.Equal(t, "/input.png", r.URL.Path)
 		reads++
 		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 		w.Header().Set("Content-Type", "image/png")

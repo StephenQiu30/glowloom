@@ -1,34 +1,32 @@
-// Package objectstorage owns the S3-compatible object storage client used by backend roles.
+// Package objectstorage owns the Tencent Cloud COS client used by backend roles.
 package objectstorage
 
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
+	"net"
 	"net/http"
-	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/minio/minio-go/v7/pkg/s3utils"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 )
 
 var (
 	// ErrUnavailable rejects absent object storage dependencies without panicking.
 	ErrUnavailable = errors.New("object storage unavailable")
 	// ErrEndpointRequired means no object storage endpoint is configured.
-	ErrEndpointRequired = errors.New("GLOWLOOM_OBJECT_STORAGE_ENDPOINT is required")
-	// ErrInvalidEndpoint means the endpoint is not a plain HTTP(S) origin.
-	ErrInvalidEndpoint = errors.New("invalid GLOWLOOM_OBJECT_STORAGE_ENDPOINT")
+	ErrEndpointRequired = errors.New("COS bucket origin is required")
+	// ErrInvalidEndpoint means the origin does not match the configured COS bucket.
+	ErrInvalidEndpoint = errors.New("invalid COS bucket origin")
 	// ErrBucketRequired means no target bucket is configured.
-	ErrBucketRequired = errors.New("GLOWLOOM_OBJECT_STORAGE_BUCKET is required")
-	// ErrInvalidBucket means the configured bucket name is not accepted by S3.
-	ErrInvalidBucket = errors.New("invalid GLOWLOOM_OBJECT_STORAGE_BUCKET")
+	ErrBucketRequired = errors.New("COS bucket name is required")
+	// ErrInvalidBucket means the configured bucket name is not accepted by COS.
+	ErrInvalidBucket = errors.New("invalid COS bucket name")
 	// ErrCredentialsRequired means the client has no access or secret key.
-	ErrCredentialsRequired = errors.New("GLOWLOOM_OBJECT_STORAGE_ACCESS_KEY and GLOWLOOM_OBJECT_STORAGE_SECRET_KEY are required")
+	ErrCredentialsRequired = errors.New("COS SecretId and SecretKey are required")
 	// ErrBucketMissing means the configured target bucket does not exist.
 	ErrBucketMissing = errors.New("configured object storage bucket does not exist")
 	// ErrInvalidObject means an object write or stat lacks a safe key or valid metadata.
@@ -39,10 +37,8 @@ var (
 
 // Client provides access to the configured private object storage bucket.
 type Client struct {
-	sdk       *minio.Client
-	native    backend
+	native    cosBackend
 	transport *http.Transport
-	bucket    string
 }
 
 // ObjectInfo contains only the metadata needed to verify a stored result.
@@ -51,6 +47,8 @@ type ObjectInfo struct {
 	ContentType string
 	SHA256      string
 }
+
+var bucketName = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`)
 
 // Open validates configuration and creates a client without making a network request.
 func Open(endpoint, bucket, accessKey, secretKey, region string) (*Client, error) {
@@ -62,180 +60,107 @@ func Open(endpoint, bucket, accessKey, secretKey, region string) (*Client, error
 	if bucket == "" {
 		return nil, ErrBucketRequired
 	}
-	if err := s3utils.CheckValidBucketNameStrict(bucket); err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrInvalidBucket, err)
+	if !bucketName.MatchString(bucket) || strings.Contains(bucket, "..") || net.ParseIP(bucket) != nil {
+		return nil, ErrInvalidBucket
 	}
 	if strings.TrimSpace(accessKey) == "" || strings.TrimSpace(secretKey) == "" {
 		return nil, ErrCredentialsRequired
 	}
-	u, err := url.Parse(endpoint)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" || u.ForceQuery {
+	if err := config.ValidateCOSOrigin(endpoint, bucket, strings.TrimSpace(region), true); err != nil {
 		return nil, ErrInvalidEndpoint
 	}
-	client, err := minio.New(u.Host, &minio.Options{
-		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
-		Secure: u.Scheme == "https",
-		Region: strings.TrimSpace(region),
-	})
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	native, err := newCOS(config.StorageProfile{Endpoint: endpoint}, config.StorageCredentials{AccessKey: accessKey, SecretKey: secretKey}, transport)
 	if err != nil {
-		return nil, fmt.Errorf("create object storage client: %w", err)
+		transport.CloseIdleConnections()
+		return nil, err
 	}
-	return &Client{sdk: client, bucket: bucket}, nil
+	return &Client{native: native, transport: transport}, nil
 }
 
 // Ping checks read-only access to the configured bucket.
 func (c *Client) Ping(ctx context.Context) error {
-	if c == nil {
+	if c == nil || c.native.sdk == nil {
 		return ErrUnavailable
 	}
-	if c.native != nil {
-		return c.native.ping(ctx)
-	}
-	if c.sdk == nil {
-		return ErrUnavailable
-	}
-	exists, err := c.sdk.BucketExists(ctx, c.bucket)
-	if err != nil {
-		return fmt.Errorf("check object storage bucket: %w", err)
-	}
-	if !exists {
-		return ErrBucketMissing
-	}
-	return nil
+	return storageError("health_check", "direct", c.native.ping(ctx))
 }
 
 // Put writes a complete object with its detected content type. Callers own
 // bounded reading and may retry the same key after an interrupted upload.
 func (c *Client) Put(ctx context.Context, key string, reader io.Reader, size int64, contentType string) error {
-	if c == nil || (c.sdk == nil && c.native == nil) {
+	if c == nil || c.native.sdk == nil {
 		return ErrUnavailable
 	}
 	if !validKey(key) || reader == nil || size < 0 || strings.TrimSpace(contentType) == "" {
 		return ErrInvalidObject
 	}
-	if c.native != nil {
-		return storageError("put", "storage", c.native.put(ctx, key, reader, size, contentType, ""))
-	}
-	_, err := c.sdk.PutObject(ctx, c.bucket, key, reader, size, minio.PutObjectOptions{ContentType: contentType})
-	if err != nil {
-		return fmt.Errorf("write media object: %w", err)
-	}
-	return nil
+	return storageError("put", "storage", c.native.put(ctx, key, reader, size, contentType, ""))
 }
 
 // PutIfAbsent creates an immutable result object and records the checked SHA.
 // A retry must inspect the existing object's metadata before reusing it.
 func (c *Client) PutIfAbsent(ctx context.Context, key string, reader io.Reader, size int64, contentType, sha256 string) error {
-	if c == nil || (c.sdk == nil && c.native == nil) {
+	if c == nil || c.native.sdk == nil {
 		return ErrUnavailable
 	}
 	if !validKey(key) || reader == nil || size < 0 ||
 		strings.TrimSpace(contentType) == "" || len(sha256) != 64 {
 		return ErrInvalidObject
 	}
-	if c.native != nil {
-		return storageError("put", "storage", c.native.put(ctx, key, reader, size, contentType, sha256))
-	}
-	opts := minio.PutObjectOptions{
-		ContentType:  contentType,
-		UserMetadata: map[string]string{"sha256": sha256},
-	}
-	opts.SetMatchETagExcept("*")
-	_, err := c.sdk.PutObject(ctx, c.bucket, key, reader, size, opts)
-	if err != nil {
-		if minio.ToErrorResponse(err).StatusCode == http.StatusPreconditionFailed {
-			return ErrObjectExists
-		}
-		return fmt.Errorf("create media object: %w", err)
-	}
-	return nil
+	return storageError("put", "storage", c.native.put(ctx, key, reader, size, contentType, sha256))
 }
 
 // Stat reports the persisted object's size and content type.
 func (c *Client) Stat(ctx context.Context, key string) (ObjectInfo, error) {
-	if c == nil || (c.sdk == nil && c.native == nil) {
+	if c == nil || c.native.sdk == nil {
 		return ObjectInfo{}, ErrUnavailable
 	}
 	if !validKey(key) {
 		return ObjectInfo{}, ErrInvalidObject
 	}
-	if c.native != nil {
-		info, err := c.native.stat(ctx, key)
-		return info, storageError("stat", "direct", err)
-	}
-	info, err := c.sdk.StatObject(ctx, c.bucket, key, minio.StatObjectOptions{})
-	if err != nil {
-		return ObjectInfo{}, fmt.Errorf("stat media object: %w", err)
-	}
-	sha := ""
-	for key, value := range info.UserMetadata {
-		if strings.EqualFold(key, "sha256") || strings.EqualFold(key, "X-Amz-Meta-Sha256") {
-			sha = value
-			break
-		}
-	}
-	return ObjectInfo{Size: info.Size, ContentType: info.ContentType, SHA256: sha}, nil
+	info, err := c.native.stat(ctx, key)
+	return info, storageError("stat", "direct", err)
 }
 
 // Get opens exact private bytes for a server-side owner. Callers must bound
 // reads, verify their expected metadata/digest, and close the returned object.
-// The SDK can defer network errors until the first read.
 func (c *Client) Get(ctx context.Context, key string) (io.ReadCloser, error) {
-	if c == nil || (c.sdk == nil && c.native == nil) {
+	if c == nil || c.native.sdk == nil {
 		return nil, ErrUnavailable
 	}
 	if !validKey(key) {
 		return nil, ErrInvalidObject
 	}
-	if c.native != nil {
-		body, err := c.native.get(ctx, key)
-		if err != nil {
-			return nil, storageError("get", "direct", err)
-		}
-		return &checkedReader{ReadCloser: body, profile: "direct"}, nil
-	}
-	object, err := c.sdk.GetObject(ctx, c.bucket, key, minio.GetObjectOptions{})
+	body, err := c.native.get(ctx, key)
 	if err != nil {
-		return nil, fmt.Errorf("open private media object: %w", err)
+		return nil, storageError("get", "direct", err)
 	}
-	return object, nil
+	return &checkedReader{ReadCloser: body, profile: "direct"}, nil
 }
 
 // Remove deletes one exact object key. Callers must first establish ownership
 // of that key, for example when cleaning up a test-created or purged asset.
 func (c *Client) Remove(ctx context.Context, key string) error {
-	if c == nil || (c.sdk == nil && c.native == nil) {
+	if c == nil || c.native.sdk == nil {
 		return ErrUnavailable
 	}
 	if !validKey(key) {
 		return ErrInvalidObject
 	}
-	if c.native != nil {
-		return storageError("remove", "storage", c.native.remove(ctx, key))
-	}
-	if err := c.sdk.RemoveObject(ctx, c.bucket, key, minio.RemoveObjectOptions{}); err != nil {
-		return fmt.Errorf("remove media object: %w", err)
-	}
-	return nil
+	return storageError("remove", "storage", c.native.remove(ctx, key))
 }
 
 // PresignGet grants bounded access to one safe, server-selected object key.
 func (c *Client) PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error) {
-	if c == nil || (c.sdk == nil && c.native == nil) {
+	if c == nil || c.native.sdk == nil {
 		return "", ErrUnavailable
 	}
 	if !validKey(key) || ttl < time.Second || ttl > 15*time.Minute {
 		return "", ErrInvalidObject
 	}
-	if c.native != nil {
-		grant, err := c.native.sign(ctx, key, ttl)
-		return grant, storageError("sign", "direct", err)
-	}
-	signed, err := c.sdk.PresignedGetObject(ctx, c.bucket, key, ttl, url.Values{})
-	if err != nil {
-		return "", fmt.Errorf("sign media preview: %w", err)
-	}
-	return signed.String(), nil
+	grant, err := c.native.sign(ctx, key, ttl)
+	return grant, storageError("sign", "direct", err)
 }
 
 func validKey(key string) bool {

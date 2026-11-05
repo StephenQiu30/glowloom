@@ -12,7 +12,7 @@ import (
 
 func seedSubjectLocation(t *testing.T, db *gorm.DB, key, profile, bucket string) uuid.UUID {
 	t.Helper()
-	profiles := []media.StorageProfile{{ID: profile, Provider: "minio", Endpoint: "http://127.0.0.1:57924", SigningEndpoint: "http://127.0.0.1:57924", Region: "us-east-1", Bucket: bucket, AddressingStyle: "path"}}
+	profiles := []media.StorageProfile{{ID: profile, Provider: "cos", Endpoint: "http://127.0.0.1:57924", SigningEndpoint: "http://127.0.0.1:57924", Region: "us-east-1", Bucket: bucket}}
 	if err := pgmedia.NewStorageRoutes(db).RegisterProfiles(t.Context(), profiles); err != nil {
 		t.Fatal(err)
 	}

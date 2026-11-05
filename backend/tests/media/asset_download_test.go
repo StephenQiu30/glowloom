@@ -39,7 +39,7 @@ func TestAssetOriginalRequiresCurrentEligibleIdentityAndSavedLocation(t *testing
 	data := []byte("actual original")
 	a := routedReadImage()
 	a.ByteSize = int64(len(data))
-	a.ObjectLocation = readLocation("tos-main", a.ObjectKey)
+	a.ObjectLocation = readLocation("cos-archive", a.ObjectKey)
 	objects := &routedReadObjects{data: map[domain.ObjectRef][]byte{a.ObjectLocation.Ref: data}}
 	repo := &originalReadStore{asset: a}
 	file, err := mediaapp.NewAssetDownloads(repo, objects).Open(t.Context(), identityapp.Principal{}, a.ProjectID, a.ID)
@@ -79,7 +79,7 @@ func TestAssetOriginalSavedLocationAndAttachmentHeaders(t *testing.T) {
 	data := []byte("routed original")
 	a.ByteSize = int64(len(data))
 	a.FileName = "../../不可信\r\n文件.png"
-	a.ObjectLocation = readLocation("tos-main", a.ObjectKey)
+	a.ObjectLocation = readLocation("cos-archive", a.ObjectKey)
 	objects := &routedReadObjects{data: map[domain.ObjectRef][]byte{a.ObjectLocation.Ref: data}}
 	query := mediaapp.NewAssetDownloads(&originalReadStore{asset: a}, objects)
 	router := gin.New()

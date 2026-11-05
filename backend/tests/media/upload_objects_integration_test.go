@@ -17,7 +17,7 @@ import (
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
-func TestUploadRealMinIOOriginalRenditionsAndPreview(t *testing.T) {
+func TestUploadRealCOSOriginalRenditionsAndPreview(t *testing.T) {
 	if os.Getenv("GLOWLOOM_TEST_OBJECT_STORAGE") != "1" || os.Getenv("GLOWLOOM_TEST_MEDIA_STORE_DB_DSN") == "" {
 		t.Skip("set isolated GLOWLOOM_TEST_MEDIA_STORE_DB_DSN, GLOWLOOM_TEST_OBJECT_STORAGE=1 and related GLOWLOOM_ENV_FILE")
 	}

@@ -123,7 +123,7 @@ func TestEditorUploadRecoveryIsPrivateAndReauthorized(t *testing.T) {
 	attempt, asset, location := uuid.New(), uuid.New(), uuid.New()
 	profile := "prompt-upload-" + uuid.NewString()
 	key := "test/" + asset.String() + "/recovery.png"
-	if err := f.db.Exec(`INSERT INTO media.storage_profile(id,provider,endpoint,signing_endpoint,region,bucket,addressing_style,resource_identity) VALUES(?,'minio','http://127.0.0.1','http://127.0.0.1','us-east-1','prompt-fixture','path',?)`, profile, fmt.Sprintf("%x", sha256.Sum256([]byte(profile)))).Error; err != nil {
+	if err := f.db.Exec(`INSERT INTO media.storage_profile(id,provider,endpoint,signing_endpoint,region,bucket,addressing_style,resource_identity) VALUES(?,'cos','http://127.0.0.1','http://127.0.0.1','us-east-1','prompt-fixture','',?)`, profile, fmt.Sprintf("%x", sha256.Sum256([]byte(profile)))).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := f.db.Exec(`INSERT INTO media.object_location(id,profile_id,bucket,object_key,state,byte_size,sha256,mime_type) VALUES(?,?,'prompt-fixture',?,'accepted',50,repeat('a',64),'image/png')`, location, profile, key).Error; err != nil {

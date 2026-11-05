@@ -312,8 +312,7 @@ func (q *AvatarQuery) Read(ctx context.Context, a identityapp.Principal) (Avatar
 	if err := q.reader.AvatarTransaction(ctx, a, q.now, func(current domain.MediaAsset) error { asset = current; return nil }); err != nil {
 		return AvatarPreview{}, err
 	}
-	// MinIO may resolve an uncached bucket region over the network. Sign without
-	// database locks, then recheck the current binding before exposing the URL.
+	// Sign without database locks, then recheck the current binding before exposing the URL.
 	signCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if asset.ObjectLocation == nil || !asset.ObjectLocation.Readable(asset.ObjectKey) {

@@ -48,7 +48,7 @@ func TestPingChecksConfiguredBucketWithoutWriting(t *testing.T) {
 		mu.Lock()
 		methods = append(methods, r.Method)
 		mu.Unlock()
-		if r.Method != http.MethodHead || r.URL.Path != "/glowloom-local/" {
+		if r.Method != http.MethodHead || r.URL.Path != "/" {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -90,7 +90,7 @@ func TestPingFailsWhenBucketIsAbsent(t *testing.T) {
 }
 
 func TestObjectWritesRejectUnsafeKeysAndInvalidMetadata(t *testing.T) {
-	conn, err := objectstorage.Open("https://storage.example.test", "glowloom-local", "access", "secret", "")
+	conn, err := objectstorage.Open("https://glowloom-local-1250000000.cos.ap-shanghai.myqcloud.com", "glowloom-local-1250000000", "access", "secret", "ap-shanghai")
 	if err != nil {
 		t.Fatal(err)
 	}

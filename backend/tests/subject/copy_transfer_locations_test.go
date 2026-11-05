@@ -3,6 +3,7 @@ package subject_test
 import (
 	"bytes"
 	"fmt"
+	"hash/crc64"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -94,48 +95,54 @@ func newLocatedCopy(t *testing.T) *locatedCopyFixture {
 	}
 	legacy := subjectStorage(t)
 	_, _, f.data = subjectStoredPNG(t, owner, f.actor, legacy)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		f.mu.Lock()
-		defer f.mu.Unlock()
-		k := strings.TrimPrefix(r.URL.Path, "/")
-		w.Header().Set("ETag", `"fixture"`)
-		w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
-		w.Header().Set("Content-Type", "image/png")
-		switch r.Method {
-		case http.MethodPut:
-			raw, _ := io.ReadAll(r.Body)
-			if !bytes.Contains(raw, f.data) {
-				http.Error(w, "wrong bytes", 400)
-				return
+	newBucketServer := func(bucket string) *httptest.Server {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			k := bucket + r.URL.Path
+			w.Header().Set("ETag", `"fixture"`)
+			w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
+			w.Header().Set("Content-Type", "image/png")
+			switch r.Method {
+			case http.MethodPut:
+				raw, _ := io.ReadAll(r.Body)
+				if !bytes.Equal(raw, f.data) {
+					http.Error(w, "wrong bytes", 400)
+					return
+				}
+				if _, ok := f.objects[k]; ok {
+					http.Error(w, `<Error><Code>PreconditionFailed</Code></Error>`, http.StatusPreconditionFailed)
+					return
+				}
+				f.objects[k] = bytes.Clone(f.data)
+				f.puts[k]++
+				w.Header().Set("X-Cos-Hash-Crc64ecma", fmt.Sprint(crc64.Checksum(raw, crc64.MakeTable(crc64.ECMA))))
+			case http.MethodGet, http.MethodHead:
+				body, ok := f.objects[k]
+				if !ok {
+					http.Error(w, `<Error><Code>NoSuchKey</Code></Error>`, 404)
+					return
+				}
+				w.Header().Set("Content-Length", fmt.Sprint(len(body)))
+				w.Header().Set("X-Cos-Meta-Sha256", hexHash(body))
+				if r.Method == http.MethodGet {
+					_, _ = w.Write(body)
+				}
+			case http.MethodDelete:
+				delete(f.objects, k)
+				w.WriteHeader(204)
+			default:
+				http.Error(w, "unsupported", 400)
 			}
-			if _, ok := f.objects[k]; ok {
-				http.Error(w, `<Error><Code>PreconditionFailed</Code></Error>`, http.StatusPreconditionFailed)
-				return
-			}
-			f.objects[k] = bytes.Clone(f.data)
-			f.puts[k]++
-		case http.MethodGet, http.MethodHead:
-			body, ok := f.objects[k]
-			if !ok {
-				http.Error(w, `<Error><Code>NoSuchKey</Code></Error>`, 404)
-				return
-			}
-			w.Header().Set("Content-Length", fmt.Sprint(len(body)))
-			w.Header().Set("X-Amz-Meta-Sha256", hexHash(body))
-			if r.Method == http.MethodGet {
-				_, _ = w.Write(body)
-			}
-		case http.MethodDelete:
-			delete(f.objects, k)
-			w.WriteHeader(204)
-		default:
-			http.Error(w, "unsupported", 400)
-		}
-	}))
-	t.Cleanup(server.Close)
+		}))
+		t.Cleanup(server.Close)
+		return server
+	}
+	sourceServer := newBucketServer("source-bucket")
+	targetServer := newBucketServer("target-bucket")
 	f.sourceProfile = "old-" + uuid.NewString()
 	f.targetProfile = "new-" + uuid.NewString()
-	storageConfig := storagefixture.Configuration(t, server.URL, "target-bucket")
+	storageConfig := storagefixture.Configuration(t, targetServer.URL, "target-bucket")
 	targetProfile := storageConfig.Profiles[storageConfig.DefaultWriteProfile]
 	delete(storageConfig.Profiles, storageConfig.DefaultWriteProfile)
 	storageConfig.DefaultWriteProfile = f.targetProfile
@@ -143,6 +150,7 @@ func newLocatedCopy(t *testing.T) *locatedCopyFixture {
 	p := storageConfig.Profiles[f.targetProfile]
 	p.Mode = "read_only"
 	p.Bucket = "source-bucket"
+	p.Endpoint, p.SigningEndpoint = sourceServer.URL, sourceServer.URL
 	storageConfig.Profiles[f.sourceProfile] = p
 	var err error
 	f.registry, err = objectstorage.OpenProfiles(storageConfig)

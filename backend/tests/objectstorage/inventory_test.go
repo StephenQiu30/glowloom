@@ -18,7 +18,7 @@ func inventoryClient(t *testing.T, body string) (*objectstorage.Client, *atomic.
 	calls := new(atomic.Int32)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		if r.Method != http.MethodGet || r.URL.Query().Get("prefix") != "projects/own/image/" || r.URL.Query().Get("list-type") != "2" || r.URL.Query().Get("delimiter") != "" {
+		if r.Method != http.MethodGet || r.URL.Query().Get("prefix") != "projects/own/image/" || r.URL.Path != "/" || r.URL.Query().Get("delimiter") != "" {
 			t.Errorf("unexpected inventory request")
 			w.WriteHeader(400)
 			return

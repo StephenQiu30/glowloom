@@ -102,7 +102,7 @@ func testStorageLedgerExpansion(t *testing.T, shape string) {
 	if facts.TableCount != 9 || facts.BoundColumns != 11 || facts.BoundForeignKeys != 11 || facts.Profiles != 0 || facts.Routes != 0 || facts.LegacyPrimaryKeys != 2 {
 		t.Fatalf("expanded schema changed legacy ownership or invented resource facts: %+v", facts)
 	}
-	profiles := []mediaapp.StorageProfile{{ID: "fixture-tos", Provider: "tos", Endpoint: "https://tos.example.invalid", SigningEndpoint: "https://tos.example.invalid", Region: "test-region", Bucket: "migration-fixture", AddressingStyle: ""}}
+	profiles := []mediaapp.StorageProfile{{ID: "fixture-cos", Provider: "cos", Endpoint: "http://127.0.0.1:9171", SigningEndpoint: "http://127.0.0.1:9171", Region: "test-region", Bucket: "migration-fixture", AddressingStyle: ""}}
 	routes := pgmedia.NewStorageRoutes(tx)
 	if err := routes.RegisterProfiles(t.Context(), profiles); err != nil {
 		t.Fatal(err)
@@ -112,7 +112,7 @@ func testStorageLedgerExpansion(t *testing.T, shape string) {
 	if err := tx.SavePoint("bad_location").Error; err != nil {
 		t.Fatal(err)
 	}
-	err = tx.Exec(`INSERT INTO media.object_location(id,profile_id,bucket,object_key,state) VALUES(?,'fixture-tos','wrong-bucket','fixture.mp3','reserved')`, uuid.New()).Error
+	err = tx.Exec(`INSERT INTO media.object_location(id,profile_id,bucket,object_key,state) VALUES(?,'fixture-cos','wrong-bucket','fixture.mp3','reserved')`, uuid.New()).Error
 	if err == nil {
 		t.Fatal("unproved location was accepted")
 	}
@@ -120,7 +120,7 @@ func testStorageLedgerExpansion(t *testing.T, shape string) {
 		t.Fatal(err)
 	}
 	job, scope := uuid.New(), uuid.New()
-	if err := tx.Exec(`INSERT INTO media.storage_work_intent(id,kind,owner_id,work_id,profile_id,bucket,config_revision) VALUES(?,'subject-voice',?,?,'fixture-tos','migration-fixture','1')`, uuid.New(), scope, job).Error; err != nil {
+	if err := tx.Exec(`INSERT INTO media.storage_work_intent(id,kind,owner_id,work_id,profile_id,bucket,config_revision) VALUES(?,'subject-voice',?,?,'fixture-cos','migration-fixture','1')`, uuid.New(), scope, job).Error; err != nil {
 		t.Fatal("voice work dependency missing", err)
 	}
 	if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
@@ -128,5 +128,48 @@ func testStorageLedgerExpansion(t *testing.T, shape string) {
 	}
 	if _, err := routes.ReadStorageWork(t.Context(), mediaapp.StorageWorkOwner{Kind: "subject-voice", OwnerID: scope, WorkID: job}); err != nil {
 		t.Fatal("runtime grants missing", err)
+	}
+}
+
+func TestCOSCutoverRejectsActiveLegacyLocationsAndPreservesHistory(t *testing.T) {
+	tx := storageLedgerMigrationFixture(t, "canonical")
+	script, err := os.ReadFile(filepath.Join("..", "..", "db", "storage_cos_only_incremental.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const legacyProfile = `INSERT INTO media.storage_profile(id,provider,endpoint,signing_endpoint,region,bucket,addressing_style,resource_identity)
+		VALUES('old-bucket','minio','http://127.0.0.1:9175','http://127.0.0.1:9175','fixture','legacy-bucket','path',repeat('a',64))`
+	if err := tx.Exec(`ALTER TABLE media.storage_profile DROP CONSTRAINT storage_profile_provider_check`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Exec(legacyProfile).Error; err != nil {
+		t.Fatal(err)
+	}
+	const addLocation = `INSERT INTO media.object_location(id,profile_id,bucket,object_key,state)
+		VALUES(gen_random_uuid(),'old-bucket','legacy-bucket','legacy/file.png',?)`
+	activeErr := tx.Transaction(func(active *gorm.DB) error {
+		if err := active.Exec(addLocation, "accepted").Error; err != nil {
+			return err
+		}
+		return active.Exec(string(script)).Error
+	})
+	if activeErr == nil || !strings.Contains(activeErr.Error(), "COS cutover blocked") {
+		t.Fatalf("expected the live legacy object to block cutover: %v", activeErr)
+	}
+	if err := tx.Exec(addLocation, "deleted").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Exec(string(script)).Error; err != nil {
+		t.Fatal(err)
+	}
+	var count int64
+	if err := tx.Table("media.storage_profile").Where("id = ?", "old-bucket").Count(&count).Error; err != nil || count != 1 {
+		t.Fatalf("historical profile disappeared: count=%d err=%v", count, err)
+	}
+	err = tx.Transaction(func(after *gorm.DB) error {
+		return after.Exec(strings.NewReplacer("old-bucket", "another-old-bucket", "repeat('a',64)", "repeat('b',64)").Replace(legacyProfile)).Error
+	})
+	if err == nil || !strings.Contains(err.Error(), "storage_profile_provider_check") {
+		t.Fatalf("non-COS profile insert was not rejected: %v", err)
 	}
 }

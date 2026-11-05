@@ -35,7 +35,7 @@ func storageRouteDB(t *testing.T) *gorm.DB {
 func storageProfiles(t *testing.T, store *pgmedia.StorageRoutes) []application.StorageProfile {
 	t.Helper()
 	profiles := []application.StorageProfile{
-		{ID: "minio-main", Provider: "minio", Endpoint: "https://minio.example.test", SigningEndpoint: "https://minio.example.test", Region: "us-east-1", Bucket: "storage-test", AddressingStyle: "path"},
+		{ID: "cos-first", Provider: "cos", Endpoint: "https://storage-test-1250000000.cos.ap-shanghai.myqcloud.com", SigningEndpoint: "https://storage-test-1250000000.cos.ap-shanghai.myqcloud.com", Region: "ap-shanghai", Bucket: "storage-test-1250000000"},
 		{ID: "cos-main", Provider: "cos", Endpoint: "https://storage-test-123.cos.ap-shanghai.myqcloud.com", SigningEndpoint: "https://storage-test-123.cos.ap-shanghai.myqcloud.com", Region: "ap-shanghai", Bucket: "storage-test-123"},
 	}
 	if err := store.RegisterProfiles(t.Context(), profiles); err != nil {
@@ -71,7 +71,7 @@ func TestStorageEnvironmentRevisionAndLostReply(t *testing.T) {
 	t.Cleanup(func() { _ = database.Rollback().Error })
 	store := pgmedia.NewStorageRoutes(database)
 	storageProfiles(t, store)
-	input := storageEnvironmentFixture(t, database, "environment-"+uuid.NewString(), "minio-main")
+	input := storageEnvironmentFixture(t, database, "environment-"+uuid.NewString(), "cos-first")
 	first, err := store.ApplyEnvironment(t.Context(), input)
 	if err != nil {
 		t.Fatal(err)
@@ -100,11 +100,11 @@ func TestStorageLocationIdentityAndAlias(t *testing.T) {
 	store := pgmedia.NewStorageRoutes(storageRouteDB(t))
 	profiles := storageProfiles(t, store)
 	alias := profiles[0]
-	alias.ID = "minio-alias"
+	alias.ID = "cos-alias"
 	if err := store.RegisterProfiles(t.Context(), []application.StorageProfile{alias}); !errors.Is(err, application.ErrStorageIdentityConflict) {
 		t.Fatal("duplicate physical resource alias", err)
 	}
-	r := domain.ObjectRef{ProfileID: "minio-main", Bucket: "storage-test", Key: "projects/same/image/key.png"}
+	r := domain.ObjectRef{ProfileID: "cos-first", Bucket: "storage-test-1250000000", Key: "projects/same/image/key.png"}
 	a, err := store.ReserveLocation(t.Context(), r)
 	if err != nil {
 		t.Fatal(err)

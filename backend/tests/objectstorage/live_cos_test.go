@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +15,9 @@ import (
 )
 
 func TestLiveCOSConnectivity(t *testing.T) {
+	if os.Getenv("GLOWLOOM_TEST_LIVE_COS") != "1" {
+		t.Skip("requires explicit opt-in and a dedicated Tencent Cloud COS test bucket")
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("config.Load failed: %v", err)

@@ -72,7 +72,7 @@ func preparedVoiceFixture(t *testing.T, runtime, owner *gorm.DB, actor identity.
 		Intent:     media.StorageWorkIntent{ID: uuid.New(), Owner: media.StorageWorkOwner{Kind: "subject-voice", OwnerID: actor.ScopeID, WorkID: jobID}, ProfileID: profileID, Bucket: profileID, ConfigRevision: "frozen-voice-test", State: "open"},
 		Provenance: media.PersonalGeneratedAudioProvenance{SchemaVersion: 1, ReceiptSHA256: strings.Repeat("a", 64), ReleaseID: uuid.New(), ModelVersionID: uuid.New(), ProviderRequestID: jobID, TerminalCode: 20000000}}
 	routes := pgmedia.NewStorageRoutes(runtime)
-	if err := pgmedia.NewStorageRoutes(owner).RegisterProfiles(t.Context(), []media.StorageProfile{{ID: profileID, Provider: "minio", Endpoint: "http://127.0.0.1:1", SigningEndpoint: "http://127.0.0.1:1", Region: "us-east-1", Bucket: r.Intent.Bucket, AddressingStyle: "path"}}); err != nil {
+	if err := pgmedia.NewStorageRoutes(owner).RegisterProfiles(t.Context(), []media.StorageProfile{{ID: profileID, Provider: "cos", Endpoint: "http://127.0.0.1:1", SigningEndpoint: "http://127.0.0.1:1", Region: "us-east-1", Bucket: r.Intent.Bucket}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := owner.Exec(`INSERT INTO media.storage_work_intent(id,kind,owner_id,work_id,profile_id,bucket,config_revision) VALUES(?,'subject-voice',?,?,?,?,?)`, r.Intent.ID, actor.ScopeID, jobID, profileID, r.Intent.Bucket, r.Intent.ConfigRevision).Error; err != nil {

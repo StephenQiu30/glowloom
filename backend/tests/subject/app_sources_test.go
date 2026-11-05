@@ -54,7 +54,7 @@ func subjectStorage(t *testing.T) *subjectObjectServer {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		defer f.mu.Unlock()
-		data, ok := f.data[strings.TrimPrefix(r.URL.Path, "/subject-fixture/")]
+		data, ok := f.data[strings.TrimPrefix(r.URL.Path, "/")]
 		if !ok || r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "<Error><Code>NoSuchKey</Code></Error>", http.StatusNotFound)
 			return

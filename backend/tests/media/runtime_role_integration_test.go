@@ -22,7 +22,7 @@ import (
 
 func TestMediaIngestAndModerationUnderRuntimeRole(t *testing.T) {
 	if os.Getenv("GLOWLOOM_TEST_MEDIA_STORE_DB_DSN") == "" || os.Getenv("GLOWLOOM_TEST_OBJECT_STORAGE") != "1" {
-		t.Skip("set isolated PostgreSQL, native MinIO and root .env")
+		t.Skip("set isolated PostgreSQL, native COS and root .env")
 	}
 	database := mediaStoreDB(t)
 	actor, projectID := mediaStoreProject(t, database)

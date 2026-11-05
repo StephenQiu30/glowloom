@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"io"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -37,7 +39,7 @@ func TestPingWithHostObjectStorage(t *testing.T) {
 
 func TestPutStatAndRemoveWithHostObjectStorage(t *testing.T) {
 	if os.Getenv("GLOWLOOM_TEST_OBJECT_STORAGE") != "1" {
-		t.Skip("set GLOWLOOM_TEST_OBJECT_STORAGE=1 and GLOWLOOM_ENV_FILE for the host MinIO service")
+		t.Skip("set GLOWLOOM_TEST_OBJECT_STORAGE=1 and GLOWLOOM_ENV_FILE for the dedicated COS fixture")
 	}
 	cfg, err := config.Load()
 	if err != nil {
@@ -69,5 +71,23 @@ func TestPutStatAndRemoveWithHostObjectStorage(t *testing.T) {
 	}
 	if err := conn.PutIfAbsent(ctx, key, strings.NewReader("changed"), 7, "image/png", sha); !errors.Is(err, objectstorage.ErrObjectExists) {
 		t.Fatalf("second conditional put error = %v", err)
+	}
+	grant, err := conn.PresignGet(ctx, key, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, grant.URL, nil)
+	if err != nil {
+		t.Fatal("build signed request")
+	}
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal("read signed object")
+	}
+	defer response.Body.Close()
+	data, err := io.ReadAll(response.Body)
+	if err != nil || response.StatusCode != http.StatusOK || string(data) != content {
+		t.Fatalf("signed read did not return the original object: status %d, error %v", response.StatusCode, err)
 	}
 }

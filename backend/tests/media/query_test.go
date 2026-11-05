@@ -41,7 +41,7 @@ func TestMediaPreviewAuthorizesBeforeSigningAndDoesNotExposeStorageFacts(t *test
 	p, id := uuid.New(), uuid.New()
 	signer := &previewSigner{}
 	store := readStore{asset: domain.MediaAsset{ID: id, ProjectID: p, Kind: domain.KindImage, Status: domain.StatusReady, ModerationStatus: domain.ModerationPassed, ObjectKey: "projects/" + p.String() + "/image/safe.png", FileName: "safe.png", MimeType: "image/png", ByteSize: 1, Revision: 1}}
-	store.asset.ObjectLocation = readLocation("minio-main", store.asset.ObjectKey)
+	store.asset.ObjectLocation = readLocation("cos-first", store.asset.ObjectKey)
 	query := application.NewRoutedAssetQuery(store, signer, 5*time.Minute)
 	result, err := query.Preview(t.Context(), identityapp.Principal{}, p, id)
 	if err != nil || result.Asset.ID != id || signer.calls != 1 || signer.ttl > 15*time.Minute || result.ExpiresAt.IsZero() {

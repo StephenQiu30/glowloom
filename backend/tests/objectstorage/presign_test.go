@@ -10,7 +10,7 @@ import (
 )
 
 func TestPresignGetRejectsUnsafeKeysAndUnboundedLifetime(t *testing.T) {
-	client, err := objectstorage.Open("https://objects.example.invalid", "canvas-fixture", "synthetic-access", "synthetic-secret", "us-east-1")
+	client, err := objectstorage.Open("https://canvas-fixture-1250000000.cos.ap-shanghai.myqcloud.com", "canvas-fixture-1250000000", "synthetic-access", "synthetic-secret", "ap-shanghai")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +29,7 @@ func TestPresignGetRejectsUnsafeKeysAndUnboundedLifetime(t *testing.T) {
 		t.Fatal(err)
 	}
 	parsed, err := url.Parse(signed)
-	if err != nil || parsed.Scheme != "https" || parsed.Host != "objects.example.invalid" || parsed.Query().Get("X-Amz-Expires") != "600" {
+	if err != nil || parsed.Scheme != "https" || parsed.Host != "canvas-fixture-1250000000.cos.ap-shanghai.myqcloud.com" || parsed.Query().Get("q-signature") == "" {
 		t.Fatal("invalid bounded signature")
 	}
 }

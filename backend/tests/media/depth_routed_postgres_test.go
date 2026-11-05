@@ -78,7 +78,7 @@ func routedDepthArtifact(t *testing.T, job tooldomain.DepthJob, frozen tooldomai
 	return a, data
 }
 
-func TestDepthRoutedRealPostgresNativeTOSAtomicLocationsAndRecovery(t *testing.T) {
+func TestDepthRoutedRealPostgresNativeCOSAtomicLocationsAndRecovery(t *testing.T) {
 	owner, _ := routedGeneratedDatabase(t)
 	tx := owner.Begin()
 	if tx.Error != nil {
@@ -86,14 +86,14 @@ func TestDepthRoutedRealPostgresNativeTOSAtomicLocationsAndRecovery(t *testing.T
 	}
 	t.Cleanup(func() { _ = tx.Rollback().Error })
 	actor, project := mediaStoreProject(t, tx)
-	registry, writes, _ := controlledGeneratedTOS(t)
+	registry, writes, _ := controlledGeneratedCOS(t)
 	routes := pgmedia.NewStorageRoutes(tx)
-	profile := mediaapp.StorageProfile{ID: "tos-frozen", Provider: "tos", Endpoint: "https://tos-fixture.example.invalid", SigningEndpoint: "https://tos-fixture.example.invalid", Region: "cn-beijing", Bucket: "controlled-fixture"}
+	profile := mediaapp.StorageProfile{ID: "cos-frozen", Provider: "cos", Endpoint: "https://controlled-fixture-1250000000.cos.ap-beijing.myqcloud.com", SigningEndpoint: "https://controlled-fixture-1250000000.cos.ap-beijing.myqcloud.com", Region: "ap-beijing", Bucket: "controlled-fixture-1250000000"}
 	if err := routes.RegisterProfiles(t.Context(), []mediaapp.StorageProfile{profile}); err != nil {
 		t.Fatal(err)
 	}
 	sourceOwner := mediaapp.StorageWorkOwner{Kind: "operation", OwnerID: project, WorkID: uuid.New()}
-	if err := tx.Exec(`INSERT INTO media.storage_work_intent(id,kind,owner_id,work_id,profile_id,bucket,config_revision) VALUES(?,'operation',?,?,'tos-frozen','controlled-fixture','controlled-v1')`, uuid.New(), project, sourceOwner.WorkID).Error; err != nil {
+	if err := tx.Exec(`INSERT INTO media.storage_work_intent(id,kind,owner_id,work_id,profile_id,bucket,config_revision) VALUES(?,'operation',?,?,'cos-frozen','controlled-fixture-1250000000','controlled-v1')`, uuid.New(), project, sourceOwner.WorkID).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
@@ -146,10 +146,10 @@ func TestDepthRoutedRealPostgresNativeTOSAtomicLocationsAndRecovery(t *testing.T
 	if _, err := store.Create(t.Context(), actor, project, uuid.New(), input); !errors.Is(err, mediaapp.ErrStorageNotReady) {
 		t.Fatal("empty configuration admitted depth", err)
 	}
-	if err := tx.Exec(`INSERT INTO media.storage_config_revision(revision,config_sha256,profile_id,upload_policy,session_ttl_seconds) VALUES('1',repeat('c',64),'tos-frozen','{}'::jsonb,86400) ON CONFLICT DO NOTHING`).Error; err != nil {
+	if err := tx.Exec(`INSERT INTO media.storage_config_revision(revision,config_sha256,profile_id,upload_policy,session_ttl_seconds) VALUES('1',repeat('c',64),'cos-frozen','{}'::jsonb,86400) ON CONFLICT DO NOTHING`).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.Exec(`INSERT INTO media.storage_route(singleton,revision,profile_id) VALUES(1,'1','tos-frozen')`).Error; err != nil {
+	if err := tx.Exec(`INSERT INTO media.storage_route(singleton,revision,profile_id) VALUES(1,'1','cos-frozen')`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Exec(`SET LOCAL ROLE glowloom_app`).Error; err != nil {
@@ -320,7 +320,9 @@ func TestDepthRoutedRealPostgresNativeTOSAtomicLocationsAndRecovery(t *testing.T
 	}
 	nextProfile := profile
 	nextProfile.ID = "depth-next-" + uuid.NewString()[:8]
-	nextProfile.Bucket = "controlled-next-" + uuid.NewString()[:8]
+	nextProfile.Bucket = "controlled-next-" + uuid.NewString()[:8] + "-1250000000"
+	nextProfile.Endpoint = "https://" + nextProfile.Bucket + ".cos.ap-beijing.myqcloud.com"
+	nextProfile.SigningEndpoint = nextProfile.Endpoint
 	if err := routes.RegisterProfiles(t.Context(), []mediaapp.StorageProfile{nextProfile}); err != nil {
 		t.Fatal(err)
 	}
@@ -343,7 +345,7 @@ func TestDepthRoutedRealPostgresNativeTOSAtomicLocationsAndRecovery(t *testing.T
 		t.Fatal(err)
 	}
 	nextIntent, err := routes.ReadStorageWork(t.Context(), toolapp.StorageOwner("depth", project, second.ID, 2))
-	if err != nil || priorIntent.ProfileID != "tos-frozen" || nextIntent.ProfileID != nextProfile.ID || priorIntent.ID == nextIntent.ID {
+	if err != nil || priorIntent.ProfileID != "cos-frozen" || nextIntent.ProfileID != nextProfile.ID || priorIntent.ID == nextIntent.ID {
 		t.Fatal("retry moved the old attempt or reused its physical namespace", err)
 	}
 }

@@ -52,6 +52,7 @@ func (f voiceCatalogFixture) Credential(context.Context, subject.VoiceWork) (sub
 type voiceStorageFixture struct {
 	routes  *pgmedia.StorageRoutes
 	profile string
+	bucket  string
 	db      *gorm.DB
 }
 
@@ -60,10 +61,10 @@ func (f voiceStorageFixture) Ready(context.Context) (bool, error) { return true,
 func (f voiceStorageFixture) Pin(ctx context.Context, scope, job uuid.UUID) (subject.VoiceStorageIntent, error) {
 	id := uuid.New()
 	err := f.routesFixtureInsert(ctx, id, scope, job)
-	return subject.VoiceStorageIntent{ID: id, ProfileID: f.profile, Bucket: f.profile, ConfigRevision: "frozen-test", State: "open"}, err
+	return subject.VoiceStorageIntent{ID: id, ProfileID: f.profile, Bucket: f.bucket, ConfigRevision: "frozen-test", State: "open"}, err
 }
 func (f voiceStorageFixture) routesFixtureInsert(ctx context.Context, id, scope, job uuid.UUID) error {
-	return f.db.WithContext(ctx).Exec(`INSERT INTO media.storage_work_intent(id,kind,owner_id,work_id,profile_id,bucket,config_revision) VALUES(?,'subject-voice',?,?,?,?,'frozen-test')`, id, scope, job, f.profile, f.profile).Error
+	return f.db.WithContext(ctx).Exec(`INSERT INTO media.storage_work_intent(id,kind,owner_id,work_id,profile_id,bucket,config_revision) VALUES(?,'subject-voice',?,?,?,?,'frozen-test')`, id, scope, job, f.profile, f.bucket).Error
 }
 func (f voiceStorageFixture) Read(ctx context.Context, scope, job uuid.UUID) (subject.VoiceStorageIntent, error) {
 	r, err := f.routes.ReadStorageWork(ctx, media.StorageWorkOwner{Kind: "subject-voice", OwnerID: scope, WorkID: job})
@@ -93,11 +94,13 @@ func newVoicePG(t *testing.T) *voicePGFixture {
 	}
 	release := subject.VoiceRelease{VoiceModelOption: subject.VoiceModelOption{ReleaseID: releaseID, ModelVersionID: version, ModelKey: "fixture", DisplayName: "Fixture only", Voices: []subject.VoiceOption{{Key: "fixture-speaker", Name: "Fixture"}}, DefaultVoiceKey: "fixture-speaker"}, ProviderID: ids.ProviderID, ConfigVersionID: ids.ConfigVersionID, CredentialID: ids.CredentialID, PriceVersionID: ids.PriceVersionID, ResourceID: "seed-tts-2.0", Moderation: "provider", UpstreamCost: json.RawMessage(`{"currency":"CNY","max_micros":1,"source":"fixture only","reviewed_at":"2026-10-28T00:00:00Z"}`)}
 	profile := "voice-pg-" + uuid.NewString()
-	if err := pgmedia.NewStorageRoutes(owner).RegisterProfiles(t.Context(), []media.StorageProfile{{ID: profile, Provider: "minio", Endpoint: "http://127.0.0.1:1", SigningEndpoint: "http://127.0.0.1:1", Region: "us-east-1", Bucket: profile, AddressingStyle: "path"}}); err != nil {
+	bucket := profile + "-1250000000"
+	endpoint := "https://" + bucket + ".cos.ap-shanghai.myqcloud.com"
+	if err := pgmedia.NewStorageRoutes(owner).RegisterProfiles(t.Context(), []media.StorageProfile{{ID: profile, Provider: "cos", Endpoint: endpoint, SigningEndpoint: endpoint, Region: "ap-shanghai", Bucket: bucket}}); err != nil {
 		t.Fatal(err)
 	}
 	store := pgsubject.NewVoiceStore(runtime, pgsubject.VoiceFactories{Access: subjectwire.NewVoiceAccess, Catalog: func(*gorm.DB) subject.VoiceCatalog { return voiceCatalogFixture{release} }, Storage: func(tx *gorm.DB) subject.VoiceStorage {
-		return voiceStorageFixture{routes: pgmedia.NewStorageRoutes(tx), profile: profile, db: tx}
+		return voiceStorageFixture{routes: pgmedia.NewStorageRoutes(tx), profile: profile, bucket: bucket, db: tx}
 	}})
 	name := filepath.Join(t.TempDir(), "voice.mp3")
 	if out, err := exec.CommandContext(t.Context(), "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=550:duration=0.2", "-c:a", "libmp3lame", name).CombinedOutput(); err != nil {

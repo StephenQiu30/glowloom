@@ -14,18 +14,18 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
-func TestUniformEnvironmentUsesNativeTOSProtocolAndNoImplicitLegacy(t *testing.T) {
+func TestUniformEnvironmentUsesNativeCOSProtocolAndNoImplicitLegacy(t *testing.T) {
 	calls := 0
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
-		if !strings.HasPrefix(r.Header.Get("Authorization"), "TOS4-HMAC-SHA256 ") || r.Header.Get("X-Amz-Date") != "" {
-			t.Error("configured TOS used a non-native S3 protocol")
+		if !strings.HasPrefix(r.Header.Get("Authorization"), "q-sign-algorithm=sha1&") || r.Header.Get("X-Amz-Date") != "" {
+			t.Error("configured SDK did not use the COS protocol")
 		}
 		w.Header().Set("ETag", `"fixture"`)
-		w.Header().Set("X-Tos-Hash-Crc64ecma", fmt.Sprint(crc64.Checksum([]byte("data"), crc64.MakeTable(crc64.ECMA))))
+		w.Header().Set("X-Cos-Hash-Crc64ecma", fmt.Sprint(crc64.Checksum([]byte("data"), crc64.MakeTable(crc64.ECMA))))
 		w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
 		if r.Method == http.MethodPut {
-			if r.Header.Get("X-Tos-Forbid-Overwrite") == "" || r.Header.Get("X-Tos-Meta-Sha256") != providerSHA {
+			if r.Header.Get("X-Cos-Forbid-Overwrite") == "" || r.Header.Get("X-Cos-Meta-Sha256") != providerSHA {
 				t.Error("native immutable output metadata missing")
 			}
 			raw, _ := io.ReadAll(r.Body)
@@ -40,21 +40,21 @@ func TestUniformEnvironmentUsesNativeTOSProtocolAndNoImplicitLegacy(t *testing.T
 		}
 		w.Header().Set("Content-Length", "4")
 		w.Header().Set("Content-Type", "text/plain")
-		w.Header().Set("X-Tos-Meta-Sha256", providerSHA)
+		w.Header().Set("X-Cos-Meta-Sha256", providerSHA)
 	}))
 	defer s.Close()
-	r := profileRegistry(t, "tos", s.URL)
+	r := profileRegistry(t, s.URL)
 	defer r.Close()
 	if calls != 0 {
 		t.Fatal("configuration construction contacted storage")
 	}
-	ref := objectstorage.Ref{ProfileID: "minio-main", Bucket: "fixture-bucket", Key: "personal/org/actor/audio/voice.mp3"}
+	ref := objectstorage.Ref{ProfileID: "cos-main", Bucket: "fixture-bucket", Key: "personal/org/actor/audio/voice.mp3"}
 	if err := r.PutIfAbsent(t.Context(), ref, strings.NewReader("data"), 4, "text/plain", providerSHA); err != nil {
 		t.Fatal(err)
 	}
 	info, err := r.Stat(t.Context(), ref)
 	if err != nil || info.Size != 4 || info.SHA256 != providerSHA {
-		t.Fatal("TOS exact profile metadata", err)
+		t.Fatal("COS exact profile metadata", err)
 	}
 	body, err := r.Get(t.Context(), ref)
 	if err != nil {
@@ -63,17 +63,17 @@ func TestUniformEnvironmentUsesNativeTOSProtocolAndNoImplicitLegacy(t *testing.T
 	raw, err := io.ReadAll(body)
 	_ = body.Close()
 	if err != nil || string(raw) != "data" {
-		t.Fatal("TOS actual bytes", err)
+		t.Fatal("COS fixture bytes", err)
 	}
 }
 
-func TestNativeCOSAndMinIORoutesStayExplicit(t *testing.T) {
-	r := profileRegistry(t, "cos", "http://127.0.0.1:9000")
-	ref := objectstorage.Ref{ProfileID: "minio-main", Bucket: "fixture-bucket", Key: "personal/org/actor/audio/voice.mp3"}
+func TestNativeCOSRoutesStayExplicit(t *testing.T) {
+	r := profileRegistry(t, "http://127.0.0.1:9000")
+	ref := objectstorage.Ref{ProfileID: "cos-main", Bucket: "fixture-bucket", Key: "personal/org/actor/audio/voice.mp3"}
 	if err := r.CheckWrite(t.Context(), ref); err != nil {
 		t.Fatal(err)
 	}
-	ref.ProfileID = "unconfigured-minio"
+	ref.ProfileID = "unconfigured-cos"
 	if err := r.CheckWrite(t.Context(), ref); !errors.Is(err, objectstorage.ErrInvalidObject) {
 		t.Fatal("registry inferred a fallback route", err)
 	}

@@ -1,12 +1,12 @@
 package operation_test
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/crc64"
 	"image"
 	"image/color"
 	"image/png"
@@ -147,34 +147,7 @@ func originalDeliveryObjects(t *testing.T, db *gorm.DB, identity application.Pro
 				w.WriteHeader(400)
 				return
 			}
-			if r.Header.Get("X-Amz-Decoded-Content-Length") != "" {
-				reader := bufio.NewReader(bytes.NewReader(data))
-				var decoded bytes.Buffer
-				for {
-					line, e := reader.ReadString('\n')
-					if e != nil {
-						w.WriteHeader(400)
-						return
-					}
-					size, e := strconv.ParseInt(strings.Split(strings.TrimSpace(line), ";")[0], 16, 64)
-					if e != nil {
-						w.WriteHeader(400)
-						return
-					}
-					if size == 0 {
-						break
-					}
-					if _, e = io.CopyN(&decoded, reader, size); e != nil {
-						w.WriteHeader(400)
-						return
-					}
-					_, _ = reader.ReadString('\n')
-				}
-				data = decoded.Bytes()
-			}
-			// MinIO signs streaming request bodies; the decoded content length is the
-			// authoritative object length, while checksums remain real SDK metadata.
-			entries[key] = stageTestObject{data: data, info: application.ProviderStagedObjectInfo{Size: int64(len(data)), ContentType: r.Header.Get("Content-Type"), SHA256: r.Header.Get("X-Amz-Meta-Sha256")}}
+			entries[key] = stageTestObject{data: data, info: application.ProviderStagedObjectInfo{Size: int64(len(data)), ContentType: r.Header.Get("Content-Type"), SHA256: r.Header.Get("X-Cos-Meta-Sha256")}}
 			if afterWrite != nil && strings.Contains(key, second.String()) {
 				hook := afterWrite
 				afterWrite = nil
@@ -183,6 +156,7 @@ func originalDeliveryObjects(t *testing.T, db *gorm.DB, identity application.Pro
 					return
 				}
 			}
+			w.Header().Set("X-Cos-Hash-Crc64ecma", fmt.Sprint(crc64.Checksum(data, crc64.MakeTable(crc64.ECMA))))
 			w.Header().Set("ETag", `"fixture"`)
 			return
 		}
@@ -193,7 +167,7 @@ func originalDeliveryObjects(t *testing.T, db *gorm.DB, identity application.Pro
 		}
 		w.Header().Set("Content-Length", strconv.FormatInt(value.info.Size, 10))
 		w.Header().Set("Content-Type", value.info.ContentType)
-		w.Header().Set("X-Amz-Meta-Sha256", value.info.SHA256)
+		w.Header().Set("X-Cos-Meta-Sha256", value.info.SHA256)
 		w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
 		w.Header().Set("ETag", `"fixture"`)
 		if r.Method == http.MethodGet {

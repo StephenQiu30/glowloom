@@ -22,13 +22,13 @@ import (
 const maxStorageConfigBytes = 256 << 10
 const maxStorageProfiles = 128
 
-// StorageProvider is a concrete S3-compatible implementation selected by the deployment.
+// StorageProvider is the storage resource provider.
 type StorageProvider string
 
 // StorageProfileMode limits operations allowed on one immutable storage route.
 type StorageProfileMode string
 
-// StorageAddressingStyle selects the endpoint addressing format for MinIO.
+// StorageAddressingStyle is part of the persisted storage identity. COS requires an empty value.
 type StorageAddressingStyle string
 
 // StorageUploadMode selects the server owned upload transport.
@@ -39,16 +39,11 @@ type StorageCredentialSource string
 
 // Storage constants define the accepted providers, modes, addressing and credential sources.
 const (
-	StorageProviderMinIO StorageProvider = "minio"
-	StorageProviderCOS   StorageProvider = "cos"
-	StorageProviderTOS   StorageProvider = "tos"
+	StorageProviderCOS StorageProvider = "cos"
 
 	StorageProfileReadWrite StorageProfileMode = "read_write"
 	StorageProfileReadOnly  StorageProfileMode = "read_only"
 	StorageProfileDisabled  StorageProfileMode = "disabled"
-
-	StorageAddressingPath    StorageAddressingStyle = "path"
-	StorageAddressingVirtual StorageAddressingStyle = "virtual"
 
 	StorageUploadRelay StorageUploadMode = "relay"
 
@@ -253,7 +248,7 @@ func (c *ObjectStorageConfig) validate(env string) error {
 }
 
 func (p *StorageProfile) validate(env string) error {
-	if p.Provider != StorageProviderMinIO && p.Provider != StorageProviderCOS && p.Provider != StorageProviderTOS {
+	if p.Provider != StorageProviderCOS {
 		return fmt.Errorf("%w: unsupported object storage provider", ErrInvalid)
 	}
 	if p.Mode != StorageProfileReadWrite && p.Mode != StorageProfileReadOnly && p.Mode != StorageProfileDisabled {
@@ -273,17 +268,11 @@ func (p *StorageProfile) validate(env string) error {
 	if err != nil {
 		return err
 	}
-	if p.Provider == StorageProviderMinIO {
-		if p.AddressingStyle != StorageAddressingPath && p.AddressingStyle != StorageAddressingVirtual {
-			return fmt.Errorf("%w: invalid MinIO addressing style", ErrInvalid)
-		}
-	} else if p.AddressingStyle != "" || p.SigningEndpoint != p.Endpoint {
-		return fmt.Errorf("%w: native cloud addressing requires the verified origin", ErrInvalid)
+	if p.AddressingStyle != "" || p.SigningEndpoint != p.Endpoint {
+		return fmt.Errorf("%w: COS signing must use the same native bucket origin", ErrInvalid)
 	}
-	if p.Provider == StorageProviderCOS {
-		if err := ValidateCOSOrigin(p.Endpoint, p.Bucket, p.Region, env == "local"); err != nil {
-			return err
-		}
+	if err := ValidateCOSOrigin(p.Endpoint, p.Bucket, p.Region, env == "local"); err != nil {
+		return err
 	}
 	return p.Credentials.validate()
 }

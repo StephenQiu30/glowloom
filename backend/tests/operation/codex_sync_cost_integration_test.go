@@ -20,7 +20,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 
-// The task handlers run actual PostgreSQL/MinIO adapters and a fake
+// The task handlers run actual PostgreSQL/COS adapters and a fake
 // stdio model. This is not a paid provider or real image pricing acceptance.
 func TestM1SyncCostAndManualPostgresRetainsExecutedImageReservation(t *testing.T) {
 	receiptTestObjects(t)

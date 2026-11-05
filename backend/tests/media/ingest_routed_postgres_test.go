@@ -34,33 +34,34 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
-type controlledTOSObject struct {
+type controlledCOSObject struct {
 	body      []byte
 	mime, sha string
 }
 
-// This wire implements only official TOS request/response semantics locally.
+// This wire implements only official COS request/response semantics locally.
 // Every SDK connection is pinned to the TLS fixture; no real cloud is contacted.
-func controlledGeneratedTOS(t *testing.T) (*objectstorage.Registry, *int, config.ObjectStorageConfig) {
+func controlledGeneratedCOS(t *testing.T) (*objectstorage.Registry, *int, config.ObjectStorageConfig) {
 	t.Helper()
 	var mu sync.Mutex
-	entries := map[string]controlledTOSObject{}
+	entries := map[string]controlledCOSObject{}
 	writes := new(int)
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
-		if r.Host != "controlled-fixture.tos-fixture.example.invalid" {
+		if r.Host != "controlled-fixture-1250000000.cos.ap-beijing.myqcloud.com" {
 			http.Error(w, "wrong frozen bucket", http.StatusConflict)
 			return
 		}
 		key := r.URL.Path
 		if r.Method == http.MethodPut {
-			if r.Header.Get("X-Tos-Forbid-Overwrite") != "true" {
+			if r.Header.Get("X-Cos-Forbid-Overwrite") != "true" {
 				http.Error(w, "missing conditional create", 400)
 				return
 			}
 			if _, found := entries[key]; found {
-				http.Error(w, "object exists", http.StatusConflict)
+				w.WriteHeader(http.StatusConflict)
+				_, _ = io.WriteString(w, `<Error><Code>FileAlreadyExists</Code></Error>`)
 				return
 			}
 			b, err := io.ReadAll(r.Body)
@@ -70,30 +71,29 @@ func controlledGeneratedTOS(t *testing.T) (*objectstorage.Registry, *int, config
 			}
 			sum := sha256.Sum256(b)
 			sha := hex.EncodeToString(sum[:])
-			if sha != r.Header.Get("X-Tos-Meta-Sha256") {
+			if sha != r.Header.Get("X-Cos-Meta-Sha256") {
 				http.Error(w, "integrity", 400)
 				return
 			}
-			entries[key] = controlledTOSObject{body: b, mime: r.Header.Get("Content-Type"), sha: sha}
+			entries[key] = controlledCOSObject{body: b, mime: r.Header.Get("Content-Type"), sha: sha}
 			*writes++
 			w.Header().Set("ETag", `"controlled"`)
-			w.Header().Set("X-Tos-Hash-Crc64ecma", strconv.FormatUint(crc64.Checksum(b, crc64.MakeTable(crc64.ECMA)), 10))
+			w.Header().Set("X-Cos-Hash-Crc64ecma", strconv.FormatUint(crc64.Checksum(b, crc64.MakeTable(crc64.ECMA)), 10))
 			w.WriteHeader(200)
 			return
 		}
 		row, found := entries[key]
 		if !found {
-			w.Header().Set("X-Tos-Ec", "0017-00000003")
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Content-Type", "application/xml")
 			w.WriteHeader(http.StatusNotFound)
 			if r.Method != http.MethodHead {
-				_, _ = io.WriteString(w, `{"Code":"NoSuchKey","Message":"fixture object is absent"}`)
+				_, _ = io.WriteString(w, `<Error><Code>NoSuchKey</Code></Error>`)
 			}
 			return
 		}
 		w.Header().Set("Content-Type", row.mime)
 		w.Header().Set("Content-Length", strconv.Itoa(len(row.body)))
-		w.Header().Set("X-Tos-Meta-Sha256", row.sha)
+		w.Header().Set("X-Cos-Meta-Sha256", row.sha)
 		w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
 		w.Header().Set("ETag", `"controlled"`)
 		if r.Method == http.MethodGet {
@@ -109,7 +109,7 @@ func controlledGeneratedTOS(t *testing.T) (*objectstorage.Registry, *int, config
 	transport.TLSClientConfig.ServerName = endpoint.Hostname()
 	transport.TLSClientConfig.MinVersion = tls.VersionTLS12
 	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
-		if !strings.HasSuffix(address, ".example.invalid:443") {
+		if !strings.HasSuffix(address, ".cos.ap-beijing.myqcloud.com:443") {
 			return nil, fmt.Errorf("refused non-fixture SDK destination")
 		}
 		return (&net.Dialer{}).DialContext(ctx, network, endpoint.Host)
@@ -117,12 +117,14 @@ func controlledGeneratedTOS(t *testing.T) (*objectstorage.Registry, *int, config
 	previous := http.DefaultTransport
 	http.DefaultTransport = transport
 	t.Cleanup(func() { http.DefaultTransport = previous; transport.CloseIdleConnections() })
-	t.Setenv("CONTROLLED_TOS_ACCESS", "synthetic-access")
-	t.Setenv("CONTROLLED_TOS_SECRET", "synthetic-secret")
-	profile := config.StorageProfile{Provider: "tos", Mode: "read_write", Endpoint: "https://tos-fixture.example.invalid", SigningEndpoint: "https://tos-fixture.example.invalid", Bucket: "controlled-fixture", Region: "cn-beijing", Credentials: config.StorageCredentialsRef{Source: "env", AccessKeyEnv: "CONTROLLED_TOS_ACCESS", SecretKeyEnv: "CONTROLLED_TOS_SECRET"}}
+	t.Setenv("CONTROLLED_COS_ACCESS", "synthetic-access")
+	t.Setenv("CONTROLLED_COS_SECRET", "synthetic-secret")
+	profile := config.StorageProfile{Provider: "cos", Mode: "read_write", Endpoint: "https://controlled-fixture-1250000000.cos.ap-beijing.myqcloud.com", SigningEndpoint: "https://controlled-fixture-1250000000.cos.ap-beijing.myqcloud.com", Bucket: "controlled-fixture-1250000000", Region: "ap-beijing", Credentials: config.StorageCredentialsRef{Source: "env", AccessKeyEnv: "CONTROLLED_COS_ACCESS", SecretKeyEnv: "CONTROLLED_COS_SECRET"}}
 	newer := profile
-	newer.Bucket = "unused-new-default"
-	cfg := config.ObjectStorageConfig{SchemaVersion: 1, Revision: "1", DefaultWriteProfile: "tos-new", Profiles: map[string]config.StorageProfile{"tos-frozen": profile, "tos-new": newer}, Upload: config.StorageUploadPolicy{Mode: "relay", SignedURLTTL: 10 * time.Minute, SessionTTL: 24 * time.Hour, MultipartThresholdBytes: 32 << 20, PartSizeBytes: 8 << 20, PartConcurrency: 3, StagingRetention: 48 * time.Hour}, Access: config.StorageAccessPolicy{PreviewTTL: 5 * time.Minute, MaxSignedURLTTL: 15 * time.Minute}, Limits: config.StorageLimits{MaxImageBytes: 20 << 20, MaxVideoBytes: 500 << 20, MaxAudioBytes: 100 << 20, MaxModelBytes: 64 << 20, MaxDocumentBytes: 20 << 20}}
+	newer.Bucket = "unused-new-default-1250000000"
+	newer.Endpoint = "https://unused-new-default-1250000000.cos.ap-beijing.myqcloud.com"
+	newer.SigningEndpoint = newer.Endpoint
+	cfg := config.ObjectStorageConfig{SchemaVersion: 1, Revision: "1", DefaultWriteProfile: "cos-next", Profiles: map[string]config.StorageProfile{"cos-frozen": profile, "cos-next": newer}, Upload: config.StorageUploadPolicy{Mode: "relay", SignedURLTTL: 10 * time.Minute, SessionTTL: 24 * time.Hour, MultipartThresholdBytes: 32 << 20, PartSizeBytes: 8 << 20, PartConcurrency: 3, StagingRetention: 48 * time.Hour}, Access: config.StorageAccessPolicy{PreviewTTL: 5 * time.Minute, MaxSignedURLTTL: 15 * time.Minute}, Limits: config.StorageLimits{MaxImageBytes: 20 << 20, MaxVideoBytes: 500 << 20, MaxAudioBytes: 100 << 20, MaxModelBytes: 64 << 20, MaxDocumentBytes: 20 << 20}}
 	registry, err := objectstorage.OpenProfiles(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -157,17 +159,17 @@ func routedGeneratedDatabase(t *testing.T) (*gorm.DB, *gorm.DB) {
 	return owner.DB, runtime.DB
 }
 
-func TestRoutedIngestRealPostgresAndNativeTOSPreserveFrozenWork(t *testing.T) {
+func TestRoutedIngestRealPostgresAndNativeCOSPreserveFrozenWork(t *testing.T) {
 	owner, runtime := routedGeneratedDatabase(t)
 	actor, project := mediaStoreProject(t, owner)
 	op := seedIngestOperation(t, owner, actor, project, "image")
-	registry, writes, _ := controlledGeneratedTOS(t)
+	registry, writes, _ := controlledGeneratedCOS(t)
 	routes := pgmedia.NewStorageRoutes(owner)
-	if err := routes.RegisterProfiles(t.Context(), []media.StorageProfile{{ID: "tos-frozen", Provider: "tos", Endpoint: "https://tos-fixture.example.invalid", SigningEndpoint: "https://tos-fixture.example.invalid", Region: "cn-beijing", Bucket: "controlled-fixture"}}); err != nil {
+	if err := routes.RegisterProfiles(t.Context(), []media.StorageProfile{{ID: "cos-frozen", Provider: "cos", Endpoint: "https://controlled-fixture-1250000000.cos.ap-beijing.myqcloud.com", SigningEndpoint: "https://controlled-fixture-1250000000.cos.ap-beijing.myqcloud.com", Region: "ap-beijing", Bucket: "controlled-fixture-1250000000"}}); err != nil {
 		t.Fatal(err)
 	}
 	intent := uuid.New()
-	if err := owner.Exec(`INSERT INTO media.storage_work_intent(id,kind,owner_id,work_id,profile_id,bucket,config_revision) VALUES(?,'operation',?,?,'tos-frozen','controlled-fixture','controlled-v1')`, intent, project, op).Error; err != nil {
+	if err := owner.Exec(`INSERT INTO media.storage_work_intent(id,kind,owner_id,work_id,profile_id,bucket,config_revision) VALUES(?,'operation',?,?,'cos-frozen','controlled-fixture-1250000000','controlled-v1')`, intent, project, op).Error; err != nil {
 		t.Fatal(err)
 	}
 	runtimeRoutes := pgmedia.NewStorageRoutes(runtime)
@@ -179,7 +181,7 @@ func TestRoutedIngestRealPostgresAndNativeTOSPreserveFrozenWork(t *testing.T) {
 	if err != nil {
 		t.Fatal("routed candidate", err)
 	}
-	if out.ObjectLocation == nil || out.ObjectLocation.Ref.ProfileID != "tos-frozen" || *writes != 3 {
+	if out.ObjectLocation == nil || out.ObjectLocation.Ref.ProfileID != "cos-frozen" || *writes != 3 {
 		t.Fatal("lost frozen original/renditions")
 	}
 	var accepted int64
@@ -203,7 +205,7 @@ func TestRoutedIngestRealPostgresAndNativeTOSPreserveFrozenWork(t *testing.T) {
 	b, err := io.ReadAll(file)
 	closeErr := file.Close()
 	if err != nil || closeErr != nil || int64(len(b)) != out.ByteSize {
-		t.Fatal("native TOS readback", err, closeErr)
+		t.Fatal("native COS readback", err, closeErr)
 	}
 	if err := owner.Exec(`UPDATE workspace.project SET is_delete=true WHERE id=?`, project).Error; err != nil {
 		t.Fatal(err)

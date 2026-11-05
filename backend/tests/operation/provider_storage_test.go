@@ -32,7 +32,7 @@ func TestProviderStagingReusesAdmittedTargetAfterRestart(t *testing.T) {
 	output := application.ProviderReceiptOutput{Sequence: 1, SizeBytes: int64(len(data)), MIMEType: "image/png", SHA256: hex.EncodeToString(sum[:])}
 	original := &stageTestObjects{entries: map[string]stageTestObject{}}
 	next := &stageTestObjects{entries: map[string]stageTestObject{}}
-	factory := pinnedStageFactory{targets: map[uuid.UUID]string{identity.OperationID: "minio-main"}, profiles: map[string]*stageTestObjects{"minio-main": original, "cos-main": next}}
+	factory := pinnedStageFactory{targets: map[uuid.UUID]string{identity.OperationID: "cos-archive"}, profiles: map[string]*stageTestObjects{"cos-archive": original, "cos-main": next}}
 	records := &stageTestRecords{}
 	service := application.NewRoutedProviderStageService(factory, records)
 	receipt, err := service.StageImage(t.Context(), identity, application.ProviderImageEvidence{ThreadID: "thread", TurnID: "turn", ItemID: "item", Model: "fixture"}, output, data)
@@ -40,7 +40,7 @@ func TestProviderStagingReusesAdmittedTargetAfterRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A newly admitted operation may use COS; this existing operation must still
-	// recover its MinIO artifact and manifest through a newly constructed worker.
+	// recover its COS artifact and manifest through a newly constructed worker.
 	factory.targets[uuid.New()] = "cos-main"
 	restarted := application.NewRoutedProviderStageService(factory, records)
 	recovered, err := restarted.RecoverImage(t.Context(), identity)

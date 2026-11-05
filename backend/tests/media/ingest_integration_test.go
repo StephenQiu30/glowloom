@@ -77,7 +77,7 @@ func seedIngestOperation(t *testing.T, database *gorm.DB, actor identityapp.Prin
 
 func TestMediaIngestPersistsOneCandidateAndModeratesExactlyOnce(t *testing.T) {
 	if os.Getenv("GLOWLOOM_TEST_MEDIA_STORE_DB_DSN") == "" || os.Getenv("GLOWLOOM_TEST_OBJECT_STORAGE") != "1" {
-		t.Skip("set GLOWLOOM_TEST_MEDIA_STORE_DB_DSN, GLOWLOOM_TEST_OBJECT_STORAGE=1 and GLOWLOOM_ENV_FILE for PostgreSQL and host MinIO")
+		t.Skip("set GLOWLOOM_TEST_MEDIA_STORE_DB_DSN, GLOWLOOM_TEST_OBJECT_STORAGE=1 and GLOWLOOM_ENV_FILE for PostgreSQL and host COS")
 	}
 	database := mediaStoreDB(t)
 	actor, projectID := mediaStoreProject(t, database)
@@ -187,7 +187,7 @@ func TestMediaIngestPersistsOneCandidateAndModeratesExactlyOnce(t *testing.T) {
 
 func TestVideoIngestCreatesProjectAspectProxyAndPoster(t *testing.T) {
 	if os.Getenv("GLOWLOOM_TEST_MEDIA_STORE_DB_DSN") == "" || os.Getenv("GLOWLOOM_TEST_OBJECT_STORAGE") != "1" {
-		t.Skip("set GLOWLOOM_TEST_MEDIA_STORE_DB_DSN, GLOWLOOM_TEST_OBJECT_STORAGE=1 and GLOWLOOM_ENV_FILE for PostgreSQL and host MinIO")
+		t.Skip("set GLOWLOOM_TEST_MEDIA_STORE_DB_DSN, GLOWLOOM_TEST_OBJECT_STORAGE=1 and GLOWLOOM_ENV_FILE for PostgreSQL and host COS")
 	}
 	database := mediaStoreDB(t)
 	actor, projectID := mediaStoreProject(t, database) // Project fixture uses 16:9.

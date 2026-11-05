@@ -7,9 +7,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/minio/minio-go/v7"
 	cos "github.com/tencentyun/cos-go-sdk-v5"
-	"github.com/volcengine/ve-tos-golang-sdk/v2/tos"
 )
 
 var (
@@ -45,20 +43,12 @@ func storageError(op, profile string, err error) error {
 	}
 	kind := ErrOutcomeUnknown
 	status, code := 0, ""
-	var m minio.ErrorResponse
 	var c *cos.ErrorResponse
-	var t *tos.TosServerError
-	if errors.As(err, &m) {
-		status, code = m.StatusCode, m.Code
-	}
 	if errors.As(err, &c) {
 		code = c.Code
 		if c.Response != nil {
 			status = c.Response.StatusCode
 		}
-	}
-	if errors.As(err, &t) {
-		status, code = t.StatusCode, t.Code
 	}
 	switch {
 	case errors.Is(err, context.Canceled):
@@ -75,11 +65,11 @@ func storageError(op, profile string, err error) error {
 		kind = ErrInvalidObject
 	case status == http.StatusUnauthorized || status == http.StatusForbidden:
 		kind = ErrAccessDenied
-	case status == http.StatusPreconditionFailed || (status == http.StatusConflict && (code == "ObjectAlreadyExists" || code == "FileAlreadyExists" || code == "ObjectAlreadyExist")):
+	case status == http.StatusPreconditionFailed || (status == http.StatusConflict && (code == "FileAlreadyExists" || code == "ObjectAlreadyExists" || code == "ObjectAlreadyExist")):
 		kind = ErrObjectExists
 	case status == http.StatusNotFound && (code == "NoSuchKey" || code == "NoSuchObject" || code == "NotFound"):
 		kind = ErrObjectMissing
-	case status == http.StatusNotFound && code == "NoSuchBucket":
+	case errors.Is(err, ErrBucketMissing) || status == http.StatusNotFound && code == "NoSuchBucket":
 		kind = ErrBucketMissing
 	}
 	return &providerError{op: op, profile: profile, kind: kind, cause: err}

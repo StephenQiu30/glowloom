@@ -478,7 +478,7 @@ func TestScriptSourceRecoveryPGCleanupZeroRowKeepsProofForExplicitReconcile(t *t
 	}
 	reader, absenceErr := privateObjects.GetObject(t.Context(), plan.Objects[0])
 	if absenceErr == nil {
-		// The native MinIO SDK opens lazily; consume the response to observe its
+		// The native COS SDK opens lazily; consume the response to observe its
 		// actual missing-object result before checking the lost receipt.
 		_, absenceErr = io.ReadAll(reader)
 		absenceErr = errors.Join(absenceErr, reader.Close())
