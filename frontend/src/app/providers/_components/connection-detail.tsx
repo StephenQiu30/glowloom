@@ -1,11 +1,17 @@
 "use client";
 import { ConnectionTests } from "./connection-tests";
-import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import useSWR from "swr";
+import { useSession } from "@/components/auth/session";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from "@/components/ui/collapsible";
 import { LoadingState } from "@/components/layout/loading-state";
 import { ContentState } from "@/components/layout/content-state";
-import { Eye, EyeOff } from "lucide-react";
+import { ChevronDown, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   InputGroup,
   InputGroupInput,
@@ -23,12 +29,6 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import {
-  Item,
-  ItemContent,
-  ItemTitle,
-  ItemActions,
-} from "@/components/ui/item";
 import { Badge } from "@/components/ui/badge";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,9 +40,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useEffect, useState, useId } from "react";
+import { useState, useId } from "react";
 import { providerConnectionName } from "@/lib/provider-connection-name";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import { Separator } from "@/components/ui/separator";
 import { isCredentialReceipt } from "@/components/catalog/credential-receipt";
 import { RequestError } from "@/lib/request";
 import {
@@ -66,16 +68,12 @@ export function ConnectionDetail({
   presets,
   onSaved,
   revision = 0,
-  initialView = "overview",
-  onViewChange,
   initialModel,
   initialRelease,
   initialMode,
 }: {
   id: string;
   revision?: number;
-  initialView?: string;
-  onViewChange?: (value: string) => void;
   initialModel?: string;
   initialRelease?: string;
   initialMode?: string;
@@ -83,431 +81,319 @@ export function ConnectionDetail({
   onSaved: () => void;
 }) {
   const formFieldId = useId();
-  const [view, setView] = useState(
-    ["overview", "test", "key", "config"].includes(initialView)
-      ? initialView
-      : "overview",
-  );
-  function changeView(value: string) {
-    setView(value);
-    onViewChange?.(value);
-  }
-
-  const [detail, setDetail] = useState<API.ProviderDetail | null>(null);
-  const [config, setConfig] = useState<API.ConnectionConfig | null>(null);
-  const [credentials, setCredentials] = useState<
-    API.ProviderCredentialSummary[]
-  >([]);
+  const { actor } = useSession();
   const [apiKey, setAPIKey] = useState("");
   const [accessKeyID, setAccessKeyID] = useState("");
   const [visible, setVisible] = useState(false);
-  const [attempt, setAttempt] = useState(0);
+  const [editKey, setEditKey] = useState(false);
+  const [advanced, setAdvanced] = useState(false);
   const [error, setError] = useState("");
   const [target, setTarget] = useState("");
   const [preview, setPreview] = useState<API.ConfigUpgradePreview | null>(null);
   const [resolution, setResolution] = useState("");
-  const mutation = useCatalogMutation(onSaved, `connection.${id}`);
+  const {
+    data: detail,
+    error: detailError,
+    mutate,
+  } = useSWR(["admin-provider", actor.id, id, revision], () =>
+    getAdminProvider({ id }),
+  );
+  const {
+    data: settings,
+    error: settingsError,
+    mutate: reloadSettings,
+  } = useSWR(
+    advanced ? ["admin-provider-settings", actor.id, id, revision] : null,
+    async () => {
+      const [config, credentials] = await Promise.all([
+        getProviderConfig({ id }).catch((error) => {
+          if (error instanceof RequestError && error.status === 404)
+            return null;
+          throw error;
+        }),
+        listProviderCredentials({ id }),
+      ]);
+      return { config, credentials };
+    },
+  );
+  function refresh() {
+    void mutate();
+    if (advanced) void reloadSettings();
+    onSaved();
+  }
+  const mutation = useCatalogMutation(refresh, `connection.${id}`);
   const onboarding = useCatalogMutation(
-    onSaved,
+    refresh,
     "preset.onboarding.credential",
     isCredentialReceipt,
   );
   const onboardingPending =
     onboarding.pending?.action === "credential.set" &&
     onboarding.pending.target === id;
-  useEffect(() => {
-    const abort = new AbortController();
-    Promise.all([
-      getAdminProvider({ id }, { signal: abort.signal }),
-      getProviderConfig({ id }, { signal: abort.signal }).catch((error) => {
-        if (error instanceof RequestError && error.status === 404) return null;
-        throw error;
-      }),
-      listProviderCredentials({ id }, { signal: abort.signal }),
-    ])
-      .then(([d, c, keys]) => {
-        if (!abort.signal.aborted) {
-          setDetail(d);
-          setConfig(c);
-          setCredentials(keys);
-        }
-      })
-      .catch((error) => {
-        if (!abort.signal.aborted) setError(catalogMessage(error));
-      });
-    return () => abort.abort();
-  }, [id, revision, attempt]);
+  const keyBusy = onboardingPending || mutation.busy || !!mutation.pending;
   const provider = detail?.provider;
+  const credentialID =
+    detail?.credential?.status === "active" ? detail.credential.id : undefined;
   const musicCredential = provider?.adapter_key === "volcengine_music";
+  const config = settings?.config;
+  const credentials = settings?.credentials ?? [];
+
   return (
     <section
-      className="flex min-h-0 min-w-0 flex-1 flex-col gap-4"
+      className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto"
       aria-label="连接详情"
     >
-      <h2
-        data-connection-title
-        tabIndex={-1}
-        className="pr-8 text-lg font-medium outline-none"
-      >
-        {providerConnectionName(provider) ?? "连接详情"}
-      </h2>
-      {error ? <FeedbackToast message={error} /> : null}
-      {!detail ? (
-        error ? (
-          <ContentState
-            state="error"
-            title="暂时无法加载连接"
-            actions={
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setError("");
-                  setAttempt((v) => v + 1);
-                }}
-              >
-                重新加载
-              </Button>
-            }
-          />
-        ) : (
-          <LoadingState>正在加载连接…</LoadingState>
-        )
+      <header className="flex flex-col gap-2 pr-8">
+        <h2
+          data-connection-title
+          tabIndex={-1}
+          className="text-lg font-medium outline-none"
+        >
+          {providerConnectionName(provider) ?? "连接详情"}
+        </h2>
+        {provider ? (
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="secondary">
+              {provider.status === "active" ? "已启用" : "未启用"}
+            </Badge>
+            <Badge variant="outline">
+              {credentialID ? "已配置" : "待配置"}
+            </Badge>
+          </div>
+        ) : null}
+      </header>
+      {detailError ? (
+        <ContentState
+          state="error"
+          title="暂时无法加载连接"
+          actions={
+            <Button variant="outline" onClick={() => void mutate()}>
+              重新加载
+            </Button>
+          }
+        />
+      ) : !provider ? (
+        <LoadingState>正在加载连接…</LoadingState>
       ) : (
         <>
-          <p className="text-xs text-muted-foreground">
-            {provider?.status === "active"
-              ? "已启用"
-              : provider?.status === "disabled"
-                ? "未启用"
-                : "状态未知"}{" "}
-            · {detail.credential?.status === "active" ? "已配置" : "未配置"}
-          </p>
           {onboardingPending ? (
-            <>
-              <p className="text-sm">
-                添加连接时的 Key
-                写入尚未确认，请先查询原回执，再进行新的保存或轮换。
-              </p>
-              <MutationStatus mutation={onboarding} />
-            </>
+            <MutationStatus mutation={onboarding} inline />
           ) : null}
           {mutation.message || mutation.pending ? (
-            <MutationStatus mutation={mutation} />
+            <MutationStatus mutation={mutation} inline />
           ) : null}
-          <Tabs
-            value={view}
-            onValueChange={changeView}
-            className="min-h-0 flex-1 gap-4"
-          >
-            <TabsList
-              className="w-full shrink-0 max-md:h-11"
-              aria-label="连接详情视图"
-            >
-              <TabsTrigger value="overview">概览</TabsTrigger>
-              <TabsTrigger value="test">验证</TabsTrigger>
-              <TabsTrigger value="key">凭据</TabsTrigger>
-              <TabsTrigger value="config">高级配置</TabsTrigger>
-            </TabsList>
-            <TabsContent
-              value="overview"
-              className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto"
-            >
-              <Item size="xs" className="px-0">
-                <ItemContent>
-                  <ItemTitle>密钥配置</ItemTitle>
-                </ItemContent>
-                <ItemActions>
-                  <Badge variant="secondary">
-                    {detail.credential?.status === "active"
-                      ? "已配置"
-                      : detail.credential?.status === "draining"
-                        ? "仅供恢复"
-                        : detail.credential?.status === "disabled"
-                          ? "已停用"
-                          : "未配置"}
-                  </Badge>
-                </ItemActions>
-              </Item>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button asChild className="max-md:h-11">
-                  <Link href={`/models?provider=${encodeURIComponent(id)}`}>
-                    查看模型
-                  </Link>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="max-md:h-11"
-                  onClick={() => changeView("test")}
-                >
-                  验证模型
-                </Button>
-              </div>
-              {provider?.status === "active" ? (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      className="mt-auto self-start max-md:h-11"
-                    >
-                      停用连接
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>停用连接？</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        停止创建新任务。已有任务继续使用绑定的配置和 Key 恢复。
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>取消</AlertDialogCancel>
-                      <AlertDialogAction
-                        variant="outline"
-                        disabled={mutation.busy}
-                        onClick={async () => {
-                          try {
-                            await updateAdminProvider(
-                              { id },
-                              {
-                                expected_revision: provider.revision,
-                                status: "disabled",
-                              },
-                              {
-                                headers: {
-                                  "Idempotency-Key": crypto.randomUUID(),
-                                },
-                              },
-                            );
-                            onSaved();
-                          } catch (error) {
-                            setError(catalogMessage(error));
-                          }
-                        }}
-                      >
-                        停用连接（停止新任务）
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              ) : null}
-            </TabsContent>
-            <TabsContent
-              value="test"
-              className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto"
-            >
-              <ConnectionTests
-                id={id}
-                adapter={provider?.adapter_key}
-                credentialID={
-                  detail.credential?.status === "active"
-                    ? detail.credential.id
-                    : undefined
-                }
-                revision={revision + attempt}
-                onSaved={() => {
-                  onSaved();
-                  setAttempt((v) => v + 1);
-                }}
-                onConfigure={() => changeView("key")}
-                initialModel={initialModel}
-                initialRelease={initialRelease}
-                initialMode={initialMode}
-              />
-            </TabsContent>
-            <TabsContent
-              value="key"
-              className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto"
-            >
-              {" "}
-              {detail.credential?.status === "active" ? (
-                <div className="flex items-center justify-between gap-2">
-                  <Badge variant="secondary">已配置</Badge>
-                  <Button
-                    variant="outline"
-                    className="max-md:h-11"
-                    onClick={() => changeView("test")}
-                  >
-                    检查凭据
-                  </Button>
-                </div>
-              ) : null}
-              <form
-                onSubmit={async (event) => {
-                  event.preventDefault();
-                  if (onboardingPending) return;
-                  const secret: Record<string, string> = musicCredential
-                    ? { access_key_id: accessKeyID, secret_access_key: apiKey }
-                    : { api_key: apiKey };
-                  setAccessKeyID("");
-                  setAPIKey("");
-                  setVisible(false);
-                  await mutation.run("credential.set", id, (requestID) =>
+          {error ? (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
+          {!credentialID || editKey ? (
+            <form
+              onSubmit={async (event) => {
+                event.preventDefault();
+                if (keyBusy) return;
+                const secret: Record<string, string> = musicCredential
+                  ? { access_key_id: accessKeyID, secret_access_key: apiKey }
+                  : { api_key: apiKey };
+                setAccessKeyID("");
+                setAPIKey("");
+                setVisible(false);
+                const saved = await mutation.run(
+                  "credential.set",
+                  id,
+                  (requestID) =>
                     setAdminCredential(
                       { id },
                       { label: "平台统一 Key", secret },
                       { headers: { "Idempotency-Key": requestID } },
                     ).then((result) => {
-                      if (
-                        !result.id ||
-                        result.provider_id !== id ||
-                        result.status !== "active" ||
-                        typeof result.last4 !== "string" ||
-                        result.last4.length !== 4
-                      )
+                      if (!isCredentialReceipt(result, id))
                         throw new RequestError("request_unconfirmed");
                       return result;
                     }),
-                  );
-                }}
-              >
-                <FieldGroup className="gap-3">
-                  {musicCredential && (
-                    <Field>
-                      <FieldLabel htmlFor={`${formFieldId}-access-key`}>
-                        Access Key ID
-                      </FieldLabel>
-                      <InputGroup>
-                        <InputGroupInput
-                          id={`${formFieldId}-access-key`}
-                          type="password"
-                          required
-                          autoComplete="off"
-                          value={accessKeyID}
-                          disabled={onboardingPending || mutation.busy}
-                          onChange={(event) =>
-                            setAccessKeyID(event.target.value)
-                          }
-                        />
-                      </InputGroup>
-                    </Field>
-                  )}
+                );
+                if (saved) setEditKey(false);
+              }}
+            >
+              <FieldGroup className="gap-3">
+                {musicCredential && (
                   <Field>
-                    <FieldLabel htmlFor={`${formFieldId}-field-1`}>
-                      <span>
-                        {musicCredential ? "Secret Access Key" : "平台 API Key"}
-                      </span>
+                    <FieldLabel htmlFor={`${formFieldId}-access-key`}>
+                      Access Key ID
                     </FieldLabel>
-                    <InputGroup className="h-10 max-md:h-11">
+                    <InputGroup>
                       <InputGroupInput
-                        className="h-full"
-                        id={`${formFieldId}-field-1`}
-                        type={visible ? "text" : "password"}
-                        disabled={onboardingPending || mutation.busy}
-                        value={apiKey}
-                        onChange={(event) => setAPIKey(event.target.value)}
-                        autoComplete="off"
-                        spellCheck={false}
+                        id={`${formFieldId}-access-key`}
+                        type="password"
                         required
-                        placeholder={
-                          detail.credential?.status === "active"
-                            ? "已配置，输入新密钥以更换"
-                            : "输入 API Key"
-                        }
+                        autoComplete="off"
+                        value={accessKeyID}
+                        disabled={keyBusy}
+                        onChange={(event) => setAccessKeyID(event.target.value)}
                       />
-                      <InputGroupAddon
-                        align="inline-end"
-                        className="py-0 has-[>button]:mr-0"
-                      >
-                        <InputGroupButton
-                          type="button"
-                          size="icon-sm"
-                          className="max-md:size-11"
-                          aria-label={visible ? "隐藏 API Key" : "显示 API Key"}
-                          disabled={onboardingPending || mutation.busy}
-                          onClick={() => setVisible((v) => !v)}
-                        >
-                          {visible ? (
-                            <EyeOff data-icon="inline-start" />
-                          ) : (
-                            <Eye data-icon="inline-start" />
-                          )}
-                        </InputGroupButton>
-                      </InputGroupAddon>
                     </InputGroup>
                   </Field>
-                  <p className="text-xs text-muted-foreground">
-                    Key 仅用于本次保存，不会保存在浏览器。轮换后旧 Key
-                    只用于已有任务恢复。
-                  </p>
-                  <Button
-                    disabled={mutation.busy || onboardingPending || !apiKey}
-                  >
-                    {detail.credential ? "轮换 Key" : "保存 Key"}
-                  </Button>
-                </FieldGroup>
-              </form>
-              <section
-                className="flex flex-col gap-3"
-                aria-label="Key 轮换记录"
-              >
-                <h3 className="font-medium">Key 记录</h3>
-                {credentials.map((key) => (
-                  <div
-                    key={key.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded border p-3 text-sm"
-                  >
+                )}
+                <Field>
+                  <FieldLabel htmlFor={`${formFieldId}-field-1`}>
                     <span>
-                      {key.status === "active"
-                        ? "已配置"
-                        : key.status === "draining"
-                          ? "仅供已有任务恢复"
-                          : "已停用"}
-                      {key.create_time
-                        ? ` · ${new Date(key.create_time).toLocaleString("zh-CN")}`
-                        : ""}
+                      {musicCredential ? "Secret Access Key" : "API Key"}
                     </span>
-                    {key.status !== "disabled" ? (
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button type="button" variant="ghost">
-                            紧急停用
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>
-                              紧急停用此 Key？
-                            </AlertDialogTitle>
-                            <AlertDialogDescription>
-                              绑定此 Key
-                              的历史任务也将无法继续查询。此操作不能撤销，后续需添加新
-                              Key。
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>取消</AlertDialogCancel>
-                            <AlertDialogAction
-                              variant="destructive"
-                              size="sm"
-                              disabled={mutation.busy}
-                              onClick={() =>
-                                mutation.run(
-                                  "credential.disable",
-                                  key.id!,
-                                  (request) =>
-                                    disableAdminCredential(
-                                      { id, credential_id: key.id! },
-                                      {
-                                        headers: {
-                                          "Idempotency-Key": request,
-                                        },
-                                      },
-                                    ),
-                                )
-                              }
-                            >
-                              确认停用此 Key
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                  </FieldLabel>
+                  <InputGroup className="h-10 max-md:h-11">
+                    <InputGroupInput
+                      className="h-full"
+                      id={`${formFieldId}-field-1`}
+                      type={visible ? "text" : "password"}
+                      disabled={keyBusy}
+                      value={apiKey}
+                      onChange={(event) => setAPIKey(event.target.value)}
+                      autoComplete="off"
+                      spellCheck={false}
+                      required
+                      placeholder={
+                        detail.credential?.status === "active"
+                          ? "已配置，输入新密钥以更换"
+                          : "输入 API Key"
+                      }
+                    />
+                    <InputGroupAddon
+                      align="inline-end"
+                      className="py-0 has-[>button]:mr-0"
+                    >
+                      <InputGroupButton
+                        type="button"
+                        size="icon-sm"
+                        className="max-md:size-11"
+                        aria-label={visible ? "隐藏 API Key" : "显示 API Key"}
+                        disabled={keyBusy}
+                        onClick={() => setVisible((v) => !v)}
+                      >
+                        {visible ? (
+                          <EyeOff data-icon="inline-start" />
+                        ) : (
+                          <Eye data-icon="inline-start" />
+                        )}
+                      </InputGroupButton>
+                    </InputGroupAddon>
+                  </InputGroup>
+                </Field>
+                <div className="flex flex-wrap justify-end gap-2">
+                  {credentialID ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setEditKey(false)}
+                    >
+                      取消
+                    </Button>
+                  ) : null}
+                  <Button disabled={keyBusy || !apiKey}>
+                    {mutation.busy ? (
+                      <Spinner data-icon="inline-start" />
                     ) : null}
-                  </div>
-                ))}
-              </section>
-            </TabsContent>
-            <TabsContent value="config">
-              {" "}
+                    {credentialID ? "保存新 Key" : "保存 API Key"}
+                  </Button>
+                </div>
+              </FieldGroup>
+            </form>
+          ) : (
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-medium">API Key</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditKey(true)}
+              >
+                更换 Key
+              </Button>
+            </div>
+          )}
+          {credentialID ? (
+            <>
+              <Separator />
+              <ConnectionTests
+                id={id}
+                adapter={provider.adapter_key}
+                credentialID={credentialID}
+                revision={revision}
+                onSaved={refresh}
+                initialModel={initialModel}
+                initialRelease={initialRelease}
+                initialMode={initialMode}
+              />
+            </>
+          ) : null}
+          <Separator />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" asChild>
+              <Link href={`/models?provider=${encodeURIComponent(id)}`}>
+                模型管理
+              </Link>
+            </Button>
+            {provider?.status === "active" ? (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" className="max-md:h-11">
+                    停用连接
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>停用连接？</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      停止创建新任务。已有任务继续使用绑定的配置和 Key 恢复。
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>取消</AlertDialogCancel>
+                    <AlertDialogAction
+                      variant="outline"
+                      disabled={mutation.busy}
+                      onClick={() =>
+                        void mutation.run("provider.update", id, (requestID) =>
+                          updateAdminProvider(
+                            { id },
+                            {
+                              expected_revision: provider.revision,
+                              status: "disabled",
+                            },
+                            { headers: { "Idempotency-Key": requestID } },
+                          ),
+                        )
+                      }
+                    >
+                      停用连接（停止新任务）
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            ) : null}
+          </div>
+          <Collapsible open={advanced} onOpenChange={setAdvanced}>
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="ghost"
+                className="group w-full justify-between px-0"
+              >
+                连接设置
+                <ChevronDown
+                  data-icon="inline-end"
+                  className="transition-transform group-data-[state=open]:rotate-180"
+                />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="flex flex-col gap-4">
+              {settingsError ? (
+                <Alert variant="destructive">
+                  <AlertDescription>
+                    {catalogMessage(settingsError)}
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+              {!settings && !settingsError ? (
+                <LoadingState>正在加载连接设置…</LoadingState>
+              ) : null}
               {config ? (
                 <div className="flex flex-col gap-4">
                   <FieldGroup>
@@ -652,8 +538,80 @@ export function ConnectionDetail({
                   ) : null}
                 </div>
               ) : null}
-            </TabsContent>
-          </Tabs>
+
+              {credentials.length ? (
+                <section
+                  className="flex flex-col gap-3"
+                  aria-label="Key 轮换记录"
+                >
+                  <h3 className="font-medium">Key 记录</h3>
+                  {credentials.map((key) => (
+                    <div
+                      key={key.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded border p-3 text-sm"
+                    >
+                      <span>
+                        {key.status === "active"
+                          ? "已配置"
+                          : key.status === "draining"
+                            ? "仅供已有任务恢复"
+                            : "已停用"}
+                        {key.create_time
+                          ? ` · ${new Date(key.create_time).toLocaleString("zh-CN")}`
+                          : ""}
+                      </span>
+                      {key.status !== "disabled" ? (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button type="button" variant="ghost">
+                              紧急停用
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                紧急停用此 Key？
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                绑定此 Key
+                                的历史任务也将无法继续查询。此操作不能撤销，后续需添加新
+                                Key。
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>取消</AlertDialogCancel>
+                              <AlertDialogAction
+                                variant="destructive"
+                                size="sm"
+                                disabled={mutation.busy}
+                                onClick={() =>
+                                  mutation.run(
+                                    "credential.disable",
+                                    key.id!,
+                                    (request) =>
+                                      disableAdminCredential(
+                                        { id, credential_id: key.id! },
+                                        {
+                                          headers: {
+                                            "Idempotency-Key": request,
+                                          },
+                                        },
+                                      ),
+                                  )
+                                }
+                              >
+                                确认停用此 Key
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      ) : null}
+                    </div>
+                  ))}
+                </section>
+              ) : null}
+            </CollapsibleContent>
+          </Collapsible>
         </>
       )}
     </section>

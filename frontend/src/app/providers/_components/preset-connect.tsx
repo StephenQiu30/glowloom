@@ -1,13 +1,25 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { Eye, EyeOff, Plus } from "lucide-react";
+import { ChevronDown, Eye, EyeOff, Plus } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Empty, EmptyHeader, EmptyDescription } from "@/components/ui/empty";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -19,7 +31,6 @@ import {
 import { connectProviderPreset, setAdminCredential } from "@/api/settings";
 import { isCredentialReceipt } from "@/components/catalog/credential-receipt";
 import { RequestError } from "@/lib/request";
-import { ProviderLogo } from "./provider-logo";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { getCandidateBrand } from "./provider-label";
@@ -30,7 +41,6 @@ import {
   FieldDescription,
   FieldSet,
   FieldLegend,
-  FieldContent,
   FieldTitle,
 } from "@/components/ui/field";
 import {
@@ -68,10 +78,7 @@ export function PresetConnect({
 }) {
   const fieldID = useId();
   const [presetID, setPresetID] = useState(initialPreset);
-  const [step, setStep] = useState<"provider" | "details">(
-    initialPreset ? "details" : "provider",
-  );
-  const [candidateKeys, setCandidateKeys] = useState<string[]>([]);
+  const [selection, setCandidateKeys] = useState<string[] | null>(null);
   const [selectedBrand, setSelectedBrand] = useState<string>("all");
   const [customCandidates, setCustomCandidates] = useState<
     API.ModelCandidatePreset[]
@@ -144,18 +151,6 @@ export function PresetConnect({
   const busy = create.busy || credential.busy;
   const lockedStep =
     busy || !!targetID || !!create.pending || !!credential.pending || complete;
-  const detailsStep =
-    step === "details" ||
-    !!targetID ||
-    !!create.pending ||
-    !!credential.pending;
-  const stepHeading = useRef<HTMLParagraphElement>(null);
-  const previousStep = useRef(detailsStep);
-  useEffect(() => {
-    if (previousStep.current === detailsStep) return;
-    previousStep.current = detailsStep;
-    stepHeading.current?.focus();
-  }, [detailsStep]);
   const isMultiBrand =
     preset?.document?.config?.adapter_key === "openrouter" ||
     preset?.document?.config?.adapter_key === "vercel";
@@ -166,10 +161,16 @@ export function PresetConnect({
   const models = isMultiBrand
     ? allModels.filter((m) => getCandidateBrand(m) !== undefined)
     : allModels;
-  const direct =
-    (candidateKeys.length > 0 || customCandidates.length > 0) &&
-    !preset?.document?.model_templates?.length;
   const selectable = models.filter((m) => m.key && !m.requires_model_selection);
+  const candidateKeys = selection ?? selectable.map((m) => m.key!);
+  const selectedCustom = customCandidates.filter((model) =>
+    candidateKeys.includes(model.key!),
+  );
+  const catalogKeys = candidateKeys.filter(
+    (key) => !customCandidates.some((model) => model.key === key),
+  );
+  const direct =
+    candidateKeys.length > 0 && !preset?.document?.model_templates?.length;
   const allSelected =
     selectable.length > 0 &&
     selectable.every((m) => candidateKeys.includes(m.key!));
@@ -178,18 +179,11 @@ export function PresetConnect({
       className="flex min-h-0 min-w-0 flex-1 flex-col gap-4"
       onSubmit={async (event) => {
         event.preventDefault();
-        if (!detailsStep) {
-          if (preset?.id && !lockedStep) setStep("details");
-          return;
-        }
         if (
           busy ||
           complete ||
           !apiKey ||
-          (!targetID &&
-            (!preset?.id ||
-              !preset.version_id ||
-              (direct && !candidateKeys.length && !customCandidates.length)))
+          (!targetID && (!preset?.id || !preset.version_id))
         )
           return;
         const connectionName = "";
@@ -214,9 +208,10 @@ export function PresetConnect({
                   version_id: preset.version_id,
                   name: connectionName,
                   catalog_version: preset.model_catalog?.version,
-                  candidate_keys: candidateKeys,
-                  custom_candidates:
-                    customCandidates.length > 0 ? customCandidates : undefined,
+                  candidate_keys: catalogKeys,
+                  custom_candidates: selectedCustom.length
+                    ? selectedCustom
+                    : undefined,
                   direct_use: direct,
                 },
               ),
@@ -242,470 +237,429 @@ export function PresetConnect({
         );
       }}
     >
-      <p
-        ref={stepHeading}
-        tabIndex={-1}
-        className="text-sm text-muted-foreground outline-none"
-      >
-        {detailsStep ? "2 / 2 · 密钥与模型" : "1 / 2 · 选择服务商"}
-      </p>
       <div className="flex min-h-0 flex-col gap-5 overflow-y-auto">
-        <FieldGroup className="gap-5">
-          {!detailsStep ? (
-            <FieldSet className="gap-3">
-              <FieldLegend variant="label" className="sr-only">
-                选择服务商
-              </FieldLegend>
-              <RadioGroup
-                aria-label="服务商"
-                name={`${fieldID}-preset`}
-                required={!targetID}
-                value={selectedPreset}
-                disabled={busy || !!targetID || !!create.pending}
-                onValueChange={(id) => {
-                  setPresetID(id);
-                  setCandidateKeys([]);
-                  setCustomCandidates([]);
-                  setShowAddCustom(false);
-                  setCustomName("");
-                  setCustomID("");
-                  setAccessKeyID("");
-                  setAPIKey("");
-                  setVisible(false);
-                  setSelectedBrand("all");
-                  setCategory(
-                    presets.find((p) => p.id === id)?.model_catalog?.models?.[0]
-                      ?.capability ?? "text.generate",
-                  );
-                }}
-                className="grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-3"
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor={`${fieldID}-provider`}>服务商</FieldLabel>
+            <Select
+              value={selectedPreset}
+              disabled={lockedStep}
+              onValueChange={(id) => {
+                setPresetID(id);
+                setCandidateKeys(null);
+                setCustomCandidates([]);
+                setShowAddCustom(false);
+                setCustomName("");
+                setCustomID("");
+                setAccessKeyID("");
+                setAPIKey("");
+                setVisible(false);
+                setSelectedBrand("all");
+                setCategory(
+                  presets.find((p) => p.id === id)?.model_catalog?.models?.[0]
+                    ?.capability ?? "text.generate",
+                );
+              }}
+            >
+              <SelectTrigger
+                id={`${fieldID}-provider`}
+                className="w-full max-md:min-h-11"
               >
-                {presets
-                  .filter((p) => !p.archived && !p.emergency_disabled)
-                  .map((p) => (
-                    <FieldLabel key={p.id} htmlFor={`${fieldID}-${p.id}`}>
-                      <Field orientation="horizontal" className="min-h-16">
-                        <RadioGroupItem
-                          id={`${fieldID}-${p.id}`}
-                          value={p.id!}
-                          aria-label={p.document?.name}
-                        />
-                        <FieldContent>
-                          <FieldTitle>
-                            <ProviderLogo
-                              adapterKey={p.document?.config?.adapter_key}
-                              metadata={adapters?.find(
-                                (item) =>
-                                  item.adapter_key ===
-                                  p.document?.config?.adapter_key,
-                              )}
-                            />
-                            {p.document?.name}
-                          </FieldTitle>
-                          <FieldDescription>
-                            {p.document?.config?.region === "domestic"
-                              ? "国内"
-                              : p.document?.config?.region === "overseas"
-                                ? "海外"
-                                : "区域未知"}{" "}
-                          </FieldDescription>
-                        </FieldContent>
-                      </Field>
-                    </FieldLabel>
-                  ))}
-              </RadioGroup>
-              {!presets.some((p) => !p.archived && !p.emergency_disabled) ? (
-                <FieldDescription>
-                  暂无可用预设，请先新建预设。
-                </FieldDescription>
-              ) : null}
-            </FieldSet>
-          ) : (
-            <Field orientation="horizontal">
-              <FieldContent>
-                <FieldTitle>
-                  <ProviderLogo
-                    adapterKey={preset?.document?.config?.adapter_key}
-                    metadata={metadata}
-                  />
-                  {preset?.document?.name ?? "原服务连接"}
-                </FieldTitle>
-              </FieldContent>
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={lockedStep}
-                onClick={() => setStep("provider")}
-              >
-                更换
-              </Button>
+                <SelectValue placeholder="选择服务商" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {presets
+                    .filter((p) => !p.archived && !p.emergency_disabled)
+                    .map((p) => (
+                      <SelectItem key={p.id} value={p.id!}>
+                        {p.document?.name}
+                      </SelectItem>
+                    ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
+          {musicCredential && (
+            <Field>
+              <FieldLabel htmlFor={`${fieldID}-access-key`}>
+                Access Key ID
+              </FieldLabel>
+              <InputGroup>
+                <InputGroupInput
+                  id={`${fieldID}-access-key`}
+                  type="password"
+                  required
+                  autoComplete="off"
+                  value={accessKeyID}
+                  disabled={complete || busy}
+                  onChange={(event) => setAccessKeyID(event.target.value)}
+                />
+              </InputGroup>
             </Field>
           )}
-          {detailsStep ? (
-            <>
-              {musicCredential && (
-                <Field>
-                  <FieldLabel htmlFor={`${fieldID}-access-key`}>
-                    Access Key ID
-                  </FieldLabel>
-                  <InputGroup>
-                    <InputGroupInput
-                      id={`${fieldID}-access-key`}
-                      type="password"
-                      required
-                      autoComplete="off"
-                      value={accessKeyID}
-                      disabled={complete || busy}
-                      onChange={(event) => setAccessKeyID(event.target.value)}
-                    />
-                  </InputGroup>
-                </Field>
-              )}
-              <Field>
-                <FieldLabel variant="title" htmlFor={`${fieldID}-key`}>
-                  {musicCredential ? "Secret Access Key" : "API Key"}
-                </FieldLabel>
-                <InputGroup className="h-10 max-md:h-11">
-                  <InputGroupInput
-                    className="h-full"
-                    id={`${fieldID}-key`}
-                    type={visible ? "text" : "password"}
-                    required
-                    value={apiKey}
-                    onChange={(event) => setAPIKey(event.target.value)}
-                    autoComplete="off"
-                    spellCheck={false}
-                    disabled={complete || busy || (!preset && !targetID)}
-                    placeholder={
-                      musicCredential
-                        ? "输入 Secret Access Key"
-                        : preset?.document?.config?.adapter_key ===
-                            "volcengine_speech"
-                          ? "输入豆包语音 API Key"
-                          : "输入 API Key"
-                    }
-                  />
-                  <InputGroupAddon
-                    align="inline-end"
-                    className="py-0 has-[>button]:mr-0"
-                  >
-                    <InputGroupButton
-                      type="button"
-                      size="icon-sm"
-                      className="max-md:size-11"
-                      aria-label={
-                        musicCredential
-                          ? visible
-                            ? "隐藏 Secret Access Key"
-                            : "显示 Secret Access Key"
-                          : visible
-                            ? "隐藏 API Key"
-                            : "显示 API Key"
-                      }
-                      aria-pressed={visible}
-                      disabled={complete || busy || (!preset && !targetID)}
-                      onClick={() => setVisible((v) => !v)}
-                    >
-                      {visible ? (
-                        <EyeOff data-icon="inline-start" />
-                      ) : (
-                        <Eye data-icon="inline-start" />
-                      )}
-                    </InputGroupButton>
-                  </InputGroupAddon>
-                </InputGroup>
-                {preset?.document?.config?.adapter_key ===
-                "volcengine_speech" ? (
-                  <FieldDescription>使用豆包语音 API Key</FieldDescription>
-                ) : null}
-              </Field>
-            </>
-          ) : null}
-        </FieldGroup>
-        {detailsStep && models.length ? (
-          <FieldSet
-            disabled={busy || complete || !!targetID || !!create.pending}
-            className="min-w-0 gap-1"
-          >
-            <FieldLegend variant="label" className="sr-only">
-              选择模型
-            </FieldLegend>
-            <div className="flex min-h-8 flex-wrap items-center gap-2">
-              <FieldTitle aria-hidden="true">选择模型</FieldTitle>
-              <span
-                role="status"
-                className="ml-auto text-xs text-muted-foreground"
+          <Field>
+            <FieldLabel variant="title" htmlFor={`${fieldID}-key`}>
+              {musicCredential ? "Secret Access Key" : "API Key"}
+            </FieldLabel>
+            <InputGroup className="h-10 max-md:h-11">
+              <InputGroupInput
+                className="h-full"
+                id={`${fieldID}-key`}
+                type={visible ? "text" : "password"}
+                required
+                value={apiKey}
+                onChange={(event) => setAPIKey(event.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+                disabled={complete || busy || (!preset && !targetID)}
+                placeholder={
+                  musicCredential
+                    ? "输入 Secret Access Key"
+                    : preset?.document?.config?.adapter_key ===
+                        "volcengine_speech"
+                      ? "输入豆包语音 API Key"
+                      : "输入 API Key"
+                }
+              />
+              <InputGroupAddon
+                align="inline-end"
+                className="py-0 has-[>button]:mr-0"
               >
-                已选 {candidateKeys.length}
-              </span>
+                <InputGroupButton
+                  type="button"
+                  size="icon-sm"
+                  className="max-md:size-11"
+                  aria-label={
+                    musicCredential
+                      ? visible
+                        ? "隐藏 Secret Access Key"
+                        : "显示 Secret Access Key"
+                      : visible
+                        ? "隐藏 API Key"
+                        : "显示 API Key"
+                  }
+                  aria-pressed={visible}
+                  disabled={complete || busy || (!preset && !targetID)}
+                  onClick={() => setVisible((v) => !v)}
+                >
+                  {visible ? (
+                    <EyeOff data-icon="inline-start" />
+                  ) : (
+                    <Eye data-icon="inline-start" />
+                  )}
+                </InputGroupButton>
+              </InputGroupAddon>
+            </InputGroup>
+            {preset?.document?.config?.adapter_key === "volcengine_speech" ? (
+              <FieldDescription>使用豆包语音 API Key</FieldDescription>
+            ) : null}
+          </Field>
+        </FieldGroup>
+        {models.length ? (
+          <Collapsible>
+            <CollapsibleTrigger asChild>
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
-                className="max-md:h-11"
-                disabled={
-                  busy ||
-                  complete ||
-                  !!targetID ||
-                  !!create.pending ||
-                  !selectable.length
-                }
-                onClick={() =>
-                  setCandidateKeys(
-                    allSelected ? [] : selectable.map((m) => m.key!),
-                  )
-                }
+                className="group w-full justify-start px-0"
               >
-                {allSelected ? "取消全选" : "全选"}
+                <span>接入模型</span>
+                <span className="ml-auto text-muted-foreground">
+                  {candidateKeys.length} 个
+                </span>
+                <ChevronDown
+                  data-icon="inline-end"
+                  className="transition-transform group-data-[state=open]:rotate-180"
+                />
               </Button>
-            </div>
-            <Tabs
-              value={category}
-              onValueChange={(val) => {
-                setCategory(val);
-                setSelectedBrand("all");
-              }}
-              className="min-w-0 gap-1"
-            >
-              <TabsList
-                variant="navigation"
-                className="w-full group-data-horizontal/tabs:h-10 max-md:group-data-horizontal/tabs:h-12"
-                aria-label="模型类型"
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <FieldSet
+                disabled={busy || complete || !!targetID || !!create.pending}
+                className="min-w-0 gap-1"
               >
-                {[
-                  ["text.generate", "文本"],
-                  ["video.generate", "视频"],
-                  ["audio.generate", "音频"],
-                  ["image.generate", "图片"],
-                ].map(([value, label]) => (
-                  <TabsTrigger key={value} value={value}>
-                    {label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-              {[
-                ["text.generate", "文本"],
-                ["video.generate", "视频"],
-                ["audio.generate", "音频"],
-                ["image.generate", "图片"],
-              ].map(([value, label]) => {
-                const visibleModels = models.filter((m) =>
-                  value === "audio.generate"
-                    ? m.capability?.startsWith("audio.")
-                    : m.capability === value,
-                );
-                const availableBrands = (
-                  ["ChatGPT", "Anthropic", "Gemini", "Grok"] as const
-                ).filter((b) =>
-                  visibleModels.some((m) => getCandidateBrand(m) === b),
-                );
-                const hasMultipleBrands = availableBrands.length > 1;
-                const displayedModels =
-                  hasMultipleBrands && selectedBrand !== "all"
-                    ? visibleModels.filter(
-                        (m) => getCandidateBrand(m) === selectedBrand,
-                      )
-                    : visibleModels;
-                return (
-                  <TabsContent
-                    key={value}
-                    value={value}
-                    className="max-h-60 overflow-y-auto py-1"
+                <FieldLegend variant="label" className="sr-only">
+                  选择模型
+                </FieldLegend>
+                <div className="flex min-h-8 flex-wrap items-center gap-2">
+                  <FieldTitle aria-hidden="true">选择模型</FieldTitle>
+                  <span
+                    role="status"
+                    className="ml-auto text-xs text-muted-foreground"
                   >
-                    {isMultiBrand || hasMultipleBrands ? (
-                      <ToggleGroup
-                        type="single"
-                        value={selectedBrand}
-                        onValueChange={(value) => {
-                          if (value) setSelectedBrand(value);
-                        }}
-                        variant="pill"
-                        size="sm"
-                        aria-label="按模型品牌筛选"
-                        className="sticky top-0 z-10 mb-1.5 flex-wrap bg-background/95 px-2 py-1.5 backdrop-blur"
-                      >
-                        <ToggleGroupItem value="all">
-                          全部 ({visibleModels.length})
-                        </ToggleGroupItem>
-                        {availableBrands.map((brand) => (
-                          <ToggleGroupItem key={brand} value={brand}>
-                            {brand} (
-                            {
-                              visibleModels.filter(
-                                (model) => getCandidateBrand(model) === brand,
-                              ).length
-                            }
-                            )
-                          </ToggleGroupItem>
-                        ))}
-                      </ToggleGroup>
-                    ) : null}
-                    {displayedModels.length ? (
-                      <FieldGroup className="gap-0">
-                        {displayedModels.map((candidate) => {
-                          const brand = getCandidateBrand(candidate);
-                          return (
-                            <Field
-                              key={candidate.key}
-                              orientation="horizontal"
-                              data-disabled={
-                                candidate.requires_model_selection || undefined
-                              }
-                              className="min-h-10 gap-2 px-2 max-md:min-h-11"
-                            >
-                              <Checkbox
-                                id={fieldID + "-candidate-" + candidate.key}
-                                disabled={
-                                  candidate.requires_model_selection ||
-                                  busy ||
-                                  complete ||
-                                  !!targetID ||
-                                  !!create.pending
-                                }
-                                checked={candidateKeys.includes(candidate.key!)}
-                                onCheckedChange={(checked) =>
-                                  setCandidateKeys((previous) =>
-                                    checked === true
-                                      ? [
-                                          ...new Set([
-                                            ...previous,
-                                            candidate.key!,
-                                          ]),
-                                        ]
-                                      : previous.filter(
-                                          (key) => key !== candidate.key,
-                                        ),
-                                  )
-                                }
-                              />
-                              <FieldLabel
-                                htmlFor={
-                                  fieldID + "-candidate-" + candidate.key
-                                }
-                                className="min-h-10 min-w-0 flex-1 items-center py-2 max-md:min-h-11"
-                              >
-                                <FieldTitle className="flex min-w-0 items-center gap-1.5 break-words">
-                                  <span>{candidate.display_name}</span>
-                                  {brand ? (
-                                    <Badge
-                                      variant="secondary"
-                                      className="px-1.5 py-0 text-[10px] font-normal"
-                                    >
-                                      {brand}
-                                    </Badge>
-                                  ) : null}
-                                </FieldTitle>
-                                {candidate.requires_model_selection ? (
-                                  <span>需配置</span>
-                                ) : null}
-                                {candidate.lifecycle === "sunsetting" ? (
-                                  <Badge variant="outline">即将下线</Badge>
-                                ) : null}
-                              </FieldLabel>
-                            </Field>
-                          );
-                        })}
-                      </FieldGroup>
-                    ) : (
-                      <Empty className="min-h-24 p-4">
-                        <EmptyHeader>
-                          <EmptyDescription>
-                            暂无可接入的{label}模型
-                          </EmptyDescription>
-                        </EmptyHeader>
-                      </Empty>
-                    )}
-                  </TabsContent>
-                );
-              })}
-            </Tabs>
-            <div className="flex flex-col gap-3 pt-2">
-              <Separator />
-              <Button
-                type="button"
-                variant="link"
-                size="sm"
-                aria-expanded={showAddCustom}
-                onClick={() => setShowAddCustom((value) => !value)}
-              >
-                <Plus data-icon="inline-start" />
-                {showAddCustom ? "收起添加模型" : "添加自定义模型"}
-              </Button>
-              {showAddCustom ? (
-                <div className="flex flex-col gap-3">
-                  <FieldGroup className="grid gap-3 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel htmlFor={`${fieldID}-custom-name`}>
-                        模型名称
-                      </FieldLabel>
-                      <Input
-                        id={`${fieldID}-custom-name`}
-                        placeholder="模型名称（如 Claude Sonnet 5.5）"
-                        value={customName}
-                        onChange={(e) => setCustomName(e.target.value)}
-                        className="max-md:h-11"
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor={`${fieldID}-custom-id`}>
-                        上游模型 ID
-                      </FieldLabel>
-                      <Input
-                        id={`${fieldID}-custom-id`}
-                        placeholder="上游标识（如 anthropic/claude-sonnet-5.5）"
-                        value={customID}
-                        onChange={(e) => setCustomID(e.target.value)}
-                        className="max-md:h-11"
-                      />
-                    </Field>
-                  </FieldGroup>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">
-                      分类：
-                      {category === "text.generate"
-                        ? "文本"
-                        : category === "image.generate"
-                          ? "图片"
-                          : category === "video.generate"
-                            ? "视频"
-                            : "音频"}
-                    </span>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      className="max-md:h-11"
-                      disabled={!customName.trim() || !customID.trim()}
-                      onClick={() => {
-                        const key = `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-                        const newModel: API.ModelCandidatePreset = {
-                          key,
-                          adapter_key: preset?.document?.config?.adapter_key,
-                          display_name: customName.trim(),
-                          provider_model_id: customID.trim(),
-                          capability: category,
-                          modes:
-                            category === "image.generate"
-                              ? ["text2image"]
-                              : category === "video.generate"
-                                ? ["text2video"]
-                                : ["text_to_text"],
-                          lifecycle: "active",
-                        };
-                        setCustomCandidates((prev) => [...prev, newModel]);
-                        setCandidateKeys((prev) => [...prev, key]);
-                        setCustomName("");
-                        setCustomID("");
-                        setShowAddCustom(false);
-                      }}
-                    >
-                      添加模型
-                    </Button>
-                  </div>
+                    已选 {candidateKeys.length}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="max-md:h-11"
+                    disabled={
+                      busy ||
+                      complete ||
+                      !!targetID ||
+                      !!create.pending ||
+                      !selectable.length
+                    }
+                    onClick={() =>
+                      setCandidateKeys(
+                        allSelected ? [] : selectable.map((m) => m.key!),
+                      )
+                    }
+                  >
+                    {allSelected ? "取消全选" : "全选"}
+                  </Button>
                 </div>
-              ) : null}
-            </div>
-          </FieldSet>
+                <Tabs
+                  value={category}
+                  onValueChange={(val) => {
+                    setCategory(val);
+                    setSelectedBrand("all");
+                  }}
+                  className="min-w-0 gap-1"
+                >
+                  <TabsList
+                    variant="navigation"
+                    className="w-full group-data-horizontal/tabs:h-10 max-md:group-data-horizontal/tabs:h-12"
+                    aria-label="模型类型"
+                  >
+                    {[
+                      ["text.generate", "文本"],
+                      ["video.generate", "视频"],
+                      ["audio.generate", "音频"],
+                      ["image.generate", "图片"],
+                    ].map(([value, label]) => (
+                      <TabsTrigger key={value} value={value}>
+                        {label}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                  {[
+                    ["text.generate", "文本"],
+                    ["video.generate", "视频"],
+                    ["audio.generate", "音频"],
+                    ["image.generate", "图片"],
+                  ].map(([value, label]) => {
+                    const visibleModels = models.filter((m) =>
+                      value === "audio.generate"
+                        ? m.capability?.startsWith("audio.")
+                        : m.capability === value,
+                    );
+                    const availableBrands = (
+                      ["ChatGPT", "Anthropic", "Gemini", "Grok"] as const
+                    ).filter((b) =>
+                      visibleModels.some((m) => getCandidateBrand(m) === b),
+                    );
+                    const hasMultipleBrands = availableBrands.length > 1;
+                    const displayedModels =
+                      hasMultipleBrands && selectedBrand !== "all"
+                        ? visibleModels.filter(
+                            (m) => getCandidateBrand(m) === selectedBrand,
+                          )
+                        : visibleModels;
+                    return (
+                      <TabsContent
+                        key={value}
+                        value={value}
+                        className="max-h-60 overflow-y-auto py-1"
+                      >
+                        {isMultiBrand || hasMultipleBrands ? (
+                          <ToggleGroup
+                            type="single"
+                            value={selectedBrand}
+                            onValueChange={(value) => {
+                              if (value) setSelectedBrand(value);
+                            }}
+                            variant="pill"
+                            size="sm"
+                            aria-label="按模型品牌筛选"
+                            className="sticky top-0 z-10 mb-1.5 flex-wrap bg-background/95 px-2 py-1.5 backdrop-blur"
+                          >
+                            <ToggleGroupItem value="all">
+                              全部 ({visibleModels.length})
+                            </ToggleGroupItem>
+                            {availableBrands.map((brand) => (
+                              <ToggleGroupItem key={brand} value={brand}>
+                                {brand} (
+                                {
+                                  visibleModels.filter(
+                                    (model) =>
+                                      getCandidateBrand(model) === brand,
+                                  ).length
+                                }
+                                )
+                              </ToggleGroupItem>
+                            ))}
+                          </ToggleGroup>
+                        ) : null}
+                        {displayedModels.length ? (
+                          <FieldGroup className="gap-0">
+                            {displayedModels.map((candidate) => {
+                              const brand = getCandidateBrand(candidate);
+                              return (
+                                <Field
+                                  key={candidate.key}
+                                  orientation="horizontal"
+                                  data-disabled={
+                                    candidate.requires_model_selection ||
+                                    undefined
+                                  }
+                                  className="min-h-10 gap-2 px-2 max-md:min-h-11"
+                                >
+                                  <Checkbox
+                                    id={fieldID + "-candidate-" + candidate.key}
+                                    disabled={
+                                      candidate.requires_model_selection ||
+                                      busy ||
+                                      complete ||
+                                      !!targetID ||
+                                      !!create.pending
+                                    }
+                                    checked={candidateKeys.includes(
+                                      candidate.key!,
+                                    )}
+                                    onCheckedChange={(checked) =>
+                                      setCandidateKeys(
+                                        checked === true
+                                          ? [...candidateKeys, candidate.key!]
+                                          : candidateKeys.filter(
+                                              (key) => key !== candidate.key,
+                                            ),
+                                      )
+                                    }
+                                  />
+                                  <FieldLabel
+                                    htmlFor={
+                                      fieldID + "-candidate-" + candidate.key
+                                    }
+                                    className="min-h-10 min-w-0 flex-1 items-center py-2 max-md:min-h-11"
+                                  >
+                                    <FieldTitle className="flex min-w-0 items-center gap-1.5 break-words">
+                                      <span>{candidate.display_name}</span>
+                                      {brand ? (
+                                        <Badge
+                                          variant="secondary"
+                                          className="px-1.5 py-0 text-[10px] font-normal"
+                                        >
+                                          {brand}
+                                        </Badge>
+                                      ) : null}
+                                    </FieldTitle>
+                                    {candidate.requires_model_selection ? (
+                                      <span>需配置</span>
+                                    ) : null}
+                                    {candidate.lifecycle === "sunsetting" ? (
+                                      <Badge variant="outline">即将下线</Badge>
+                                    ) : null}
+                                  </FieldLabel>
+                                </Field>
+                              );
+                            })}
+                          </FieldGroup>
+                        ) : (
+                          <Empty className="min-h-24 p-4">
+                            <EmptyHeader>
+                              <EmptyDescription>
+                                暂无可接入的{label}模型
+                              </EmptyDescription>
+                            </EmptyHeader>
+                          </Empty>
+                        )}
+                      </TabsContent>
+                    );
+                  })}
+                </Tabs>
+                <div className="flex flex-col gap-3 pt-2">
+                  <Separator />
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    aria-expanded={showAddCustom}
+                    onClick={() => setShowAddCustom((value) => !value)}
+                  >
+                    <Plus data-icon="inline-start" />
+                    {showAddCustom ? "收起添加模型" : "添加自定义模型"}
+                  </Button>
+                  {showAddCustom ? (
+                    <div className="flex flex-col gap-3">
+                      <FieldGroup className="grid gap-3 sm:grid-cols-2">
+                        <Field>
+                          <FieldLabel htmlFor={`${fieldID}-custom-name`}>
+                            模型名称
+                          </FieldLabel>
+                          <Input
+                            id={`${fieldID}-custom-name`}
+                            placeholder="模型名称（如 Claude Sonnet 5.5）"
+                            value={customName}
+                            onChange={(e) => setCustomName(e.target.value)}
+                            className="max-md:h-11"
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor={`${fieldID}-custom-id`}>
+                            上游模型 ID
+                          </FieldLabel>
+                          <Input
+                            id={`${fieldID}-custom-id`}
+                            placeholder="上游标识（如 anthropic/claude-sonnet-5.5）"
+                            value={customID}
+                            onChange={(e) => setCustomID(e.target.value)}
+                            className="max-md:h-11"
+                          />
+                        </Field>
+                      </FieldGroup>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">
+                          分类：
+                          {category === "text.generate"
+                            ? "文本"
+                            : category === "image.generate"
+                              ? "图片"
+                              : category === "video.generate"
+                                ? "视频"
+                                : "音频"}
+                        </span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          className="max-md:h-11"
+                          disabled={!customName.trim() || !customID.trim()}
+                          onClick={() => {
+                            const key = `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+                            const newModel: API.ModelCandidatePreset = {
+                              key,
+                              adapter_key:
+                                preset?.document?.config?.adapter_key,
+                              display_name: customName.trim(),
+                              provider_model_id: customID.trim(),
+                              capability: category,
+                              modes:
+                                category === "image.generate"
+                                  ? ["text2image"]
+                                  : category === "video.generate"
+                                    ? ["text2video"]
+                                    : ["text_to_text"],
+                              lifecycle: "active",
+                            };
+                            setCustomCandidates((prev) => [...prev, newModel]);
+                            setCandidateKeys([...candidateKeys, key]);
+                            setCustomName("");
+                            setCustomID("");
+                            setShowAddCustom(false);
+                          }}
+                        >
+                          添加模型
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </FieldSet>
+            </CollapsibleContent>
+          </Collapsible>
         ) : null}
         {targetID ? (
           <p role="status" className="text-sm">
@@ -738,7 +692,7 @@ export function PresetConnect({
         ) : null}
       </div>
       <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-        {!detailsStep && onCancel ? (
+        {onCancel ? (
           <Button
             type="button"
             variant="ghost"
@@ -748,45 +702,13 @@ export function PresetConnect({
             取消
           </Button>
         ) : null}
-        {detailsStep ? (
-          <Button
-            type="button"
-            variant="ghost"
-            className="max-md:h-11"
-            disabled={lockedStep}
-            onClick={() => setStep("provider")}
-          >
-            上一步
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            className="max-md:h-11"
-            disabled={!preset?.id || lockedStep}
-            onClick={() => setStep("details")}
-          >
-            下一步
-          </Button>
-        )}
-        {detailsStep && !complete ? (
+        {!complete ? (
           <Button
             className="max-md:h-11"
-            disabled={
-              busy ||
-              (!preset && !targetID) ||
-              !apiKey ||
-              complete ||
-              (direct && !targetID && !candidateKeys.length)
-            }
+            disabled={busy || (!preset && !targetID) || !apiKey}
           >
             {busy ? <Spinner data-icon="inline-start" /> : null}
-            {busy
-              ? "接入中…"
-              : complete
-                ? "连接与 Key 已保存"
-                : targetID
-                  ? "继续保存 API Key"
-                  : "接入服务"}
+            {busy ? "接入中…" : targetID ? "保存 API Key" : "接入服务"}
           </Button>
         ) : null}
       </div>

@@ -670,7 +670,7 @@ export function ModelDetail({
                       {onboardingDraft ? (
                         <Button variant="outline" asChild>
                           <a
-                            href={`/providers?connection=${model?.provider_id}&view=test&model=${model?.id}&release=${r.id}`}
+                            href={`/providers?connection=${model?.provider_id}&model=${model?.id}&release=${r.id}`}
                           >
                             前往连接验证并启用所选模型
                           </a>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import useSWR from "swr";
 import { ChevronDown } from "lucide-react";
 import {
@@ -61,23 +61,20 @@ export function ConnectionTests({
   credentialID,
   revision,
   onSaved,
-  onConfigure,
   initialModel,
   initialRelease,
   initialMode,
 }: {
   id: string;
   adapter?: string;
-  credentialID?: string;
+  credentialID: string;
   revision: number;
   onSaved: () => void;
-  onConfigure?: () => void;
   initialModel?: string;
   initialRelease?: string;
   initialMode?: string;
 }) {
   const { actor } = useSession();
-  const modelRef = useRef<HTMLDivElement>(null);
   const fieldID = useId();
   const [offset, setOffset] = useState(0);
   const [expanded, setExpanded] = useState(false);
@@ -135,38 +132,20 @@ export function ConnectionTests({
           </AlertDescription>
         </Alert>
       ) : null}
-      {!credentialID && onConfigure ? (
-        <Alert>
-          <AlertDescription>
-            保存凭据后即可验证模型。
-            <Button variant="outline" size="sm" onClick={onConfigure}>
-              配置凭据
-            </Button>
-          </AlertDescription>
-        </Alert>
-      ) : null}
-      {credentialID ? (
-        <div
-          ref={modelRef}
-          tabIndex={-1}
-          className="min-w-0 outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        >
-          <ConnectionModels
-            adapter={adapter}
-            id={id}
-            revision={revision}
-            onSaved={() => {
-              onSaved();
-              void mutate();
-            }}
-            checks={current}
-            onChecked={() => void mutate()}
-            initialModel={initialModel}
-            initialRelease={initialRelease}
-            initialMode={initialMode}
-          />
-        </div>
-      ) : null}
+      <ConnectionModels
+        adapter={adapter}
+        id={id}
+        revision={revision}
+        onSaved={() => {
+          onSaved();
+          void mutate();
+        }}
+        checks={current}
+        onChecked={() => void mutate()}
+        initialModel={initialModel}
+        initialRelease={initialRelease}
+        initialMode={initialMode}
+      />
       <Collapsible>
         <CollapsibleTrigger asChild>
           <Button variant="ghost" className="group w-full justify-between px-0">
@@ -233,39 +212,23 @@ export function ConnectionTests({
                 凭据检查
               </h3>
               <Badge variant="secondary" role="status">
-                {!credentialID
-                  ? "未配置"
-                  : unsupported
-                    ? "需模型验证"
-                    : auth
-                      ? resultLabel(auth)
-                      : "未检查"}
+                {unsupported
+                  ? "需模型验证"
+                  : auth
+                    ? resultLabel(auth)
+                    : "未检查"}
               </Badge>
-              {credentialID && unsupported ? (
-                <Button
-                  variant="outline"
-                  className="h-11 shrink-0"
-                  onClick={() => {
-                    modelRef.current?.scrollIntoView({ block: "nearest" });
-                    modelRef.current?.focus();
-                  }}
-                >
-                  验证模型
-                </Button>
-              ) : (
+              {!unsupported ? (
                 <Button
                   variant="outline"
                   className="h-11 shrink-0"
                   disabled={
-                    !credentialID ||
-                    mutation.busy ||
-                    !!mutation.pending ||
-                    checkRunning(auth)
+                    mutation.busy || !!mutation.pending || checkRunning(auth)
                   }
                   onClick={() =>
                     void mutation.run("credential.test", id, (requestID) =>
                       testAdminCredential(
-                        { id, credential_id: credentialID! },
+                        { id, credential_id: credentialID },
                         { headers: { "Idempotency-Key": requestID } },
                       ),
                     )
@@ -273,7 +236,7 @@ export function ConnectionTests({
                 >
                   检查凭据
                 </Button>
-              )}
+              ) : null}
             </div>
             {auth &&
             auth.auth_result !== "ok" &&

@@ -11,6 +11,13 @@ import {
   DialogDescription,
 } from "../../src/components/ui/dialog";
 
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "../../src/components/ui/sheet";
 import "../../src/app/globals.css";
 
 const options = new URLSearchParams(location.search);
@@ -48,6 +55,11 @@ const state: API.ProviderOnboardingState = {
   ],
 };
 const formal = options.has("formal");
+const sheet = options.has("sheet");
+let credential: API.ProviderCredentialSummary | undefined;
+let providerStatus = options.has("active") ? "active" : "disabled";
+if (options.has("active"))
+  credential = { id: "credential-fixture", status: "active" };
 const projectID = "33333333-3333-4333-8333-333333333333";
 const operationID = "44444444-4444-4444-8444-444444444444";
 let trialStatus = "quoted";
@@ -84,7 +96,24 @@ axios.defaults.adapter = async (config) => {
     ...structuredClone(state),
     models: state.models!.filter((m) => savedModels.includes(m.id!)),
   };
-  if (path === "/api/projects") {
+  if (path === `/api/admin/providers/${id}`) {
+    if (config.method === "patch")
+      providerStatus = JSON.parse(config.data).status;
+    data = {
+      provider: {
+        id,
+        name: "OpenAI",
+        adapter_key: "openai",
+        status: providerStatus,
+        revision: 1,
+      },
+      credential,
+    };
+  } else if (path.endsWith("/test-models")) {
+    data = state.models?.filter((model) => savedModels.includes(model.id!));
+  } else if (path.endsWith("/checks")) {
+    data = { items: [], current_checks: [] };
+  } else if (path === "/api/projects") {
     data = {
       items: [
         {
@@ -131,12 +160,13 @@ axios.defaults.adapter = async (config) => {
     savedModels = JSON.parse(config.data).candidate_keys;
     data = { provider_id: id };
   } else if (path.endsWith("/credentials")) {
-    data = {
+    credential = {
       id: "credential-fixture",
       provider_id: id,
       status: "active",
       last4: "test",
     };
+    data = credential;
   } else if (path.endsWith("/test")) {
     calls++;
     const modelID = path.split("/models/")[1]?.split("/")[0] ?? "text";
@@ -172,14 +202,16 @@ const [
   { PresetConnect },
   { setCSRFToken },
   { ProviderTrial },
+  { ConnectionDetail },
 ] = await Promise.all([
   import("../../src/app/providers/_components/connection-onboarding"),
   import("../../src/app/providers/_components/preset-connect"),
   import("../../src/lib/request"),
   import("../../src/components/catalog/provider-trial"),
+  import("../../src/app/providers/_components/connection-detail"),
 ]);
 setCSRFToken("fixture-only");
-if (options.has("managed"))
+if (sheet || options.has("managed"))
   savedModels = state.models!.map((model) => model.id!);
 function Fixture() {
   const [done, setDone] = useState(false);
@@ -192,7 +224,25 @@ function Fixture() {
       <p className="p-4 text-sm">
         受控浏览器验收 · 模拟响应 · 无真实供应商调用
       </p>
-      {done ? (
+      {sheet ? (
+        <Sheet open>
+          <SheetContent className="gap-0 data-[side=right]:w-full data-[side=right]:sm:max-w-lg">
+            <SheetHeader className="sr-only">
+              <SheetTitle>连接详情</SheetTitle>
+              <SheetDescription>
+                管理凭据、模型验证和连接设置。
+              </SheetDescription>
+            </SheetHeader>
+            <div className="flex min-h-0 flex-1 flex-col p-4 md:p-6">
+              <ConnectionDetail
+                id={id}
+                presets={presets}
+                onSaved={() => undefined}
+              />
+            </div>
+          </SheetContent>
+        </Sheet>
+      ) : done ? (
         <p role="status" className="p-6">
           已启用 {savedModels.length} 个模型 · 验证调用 {calls} 次
         </p>
@@ -227,7 +277,7 @@ function Fixture() {
             ) : (
               <PresetConnect
                 presets={presets}
-                initialPreset="ark"
+                initialPreset={options.has("choose") ? undefined : "ark"}
                 onCreated={() => undefined}
                 onSaved={() => setManagement(true)}
                 onCancel={() => setDone(true)}

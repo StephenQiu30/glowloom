@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { ColumnMenu } from "@/components/governance/column-menu";
 import type { Dispatch, SetStateAction } from "react";
@@ -10,20 +9,11 @@ import {
 } from "@/components/canvas/runtime/components/account/list/data-table";
 import type { ConnectionRow } from "@/components/governance/batch-actions";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ProviderLogo } from "./provider-logo";
 import { providerLabel } from "./provider-label";
 import { providerConnectionName } from "@/lib/provider-connection-name";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
-
 export function regionLabel(region?: string) {
   return region === "domestic"
     ? "国内"
@@ -60,58 +50,10 @@ function KeySummary({
     </span>
   );
 }
-function ConnectionMenu({
-  item,
-  disabled,
-  onSelect,
-  onDisable,
-}: {
-  item: API.ProviderListItem;
-  disabled?: boolean;
-  onSelect: (id: string, trigger?: HTMLElement) => void;
-  onDisable: (provider: API.CreatedProvider) => void;
-}) {
-  const p = item.provider;
-  const name = providerConnectionName(p);
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          disabled={disabled}
-          variant="ghost"
-          size="icon"
-          className="max-md:size-11"
-          aria-label={`${name ?? "连接"}的操作`}
-        >
-          <MoreHorizontal data-icon="inline-start" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuGroup>
-          <DropdownMenuItem onSelect={() => onSelect(p!.id!)}>
-            查看详情
-          </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link href={`/models?provider=${encodeURIComponent(p!.id!)}`}>
-              模型管理
-            </Link>
-          </DropdownMenuItem>
-          {p?.status === "active" ? (
-            <DropdownMenuItem onSelect={() => onDisable(p)}>
-              停用连接
-            </DropdownMenuItem>
-          ) : null}
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
 export function ConnectionList({
   adapters,
   items,
   onSelect,
-  onTest,
-  onDisable,
   pendingCredential,
   selection,
   disabled,
@@ -119,9 +61,7 @@ export function ConnectionList({
   adapters?: API.AdapterMetadata[];
   pendingCredential?: string;
   items: ConnectionRow[];
-  onTest: (id: string, trigger?: HTMLElement) => void;
-  onSelect: (id: string, trigger?: HTMLElement) => void;
-  onDisable: (provider: API.CreatedProvider) => void;
+  onSelect: (id: string, trigger: HTMLElement) => void;
   selection: {
     selected: ConnectionRow[];
     onChange: Dispatch<SetStateAction<ConnectionRow[]>>;
@@ -229,24 +169,17 @@ export function ConnectionList({
       id: "actions",
       header: "操作",
       cell: ({ row }) => (
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            disabled={disabled}
-            onClick={(event) => onTest(row.original.id, event.currentTarget)}
-            className="max-md:h-11"
-            data-connection-trigger={`${row.original.id}:test`}
-            aria-label={`验证 ${providerConnectionName(row.original.provider)}`}
-          >
-            验证
-          </Button>
-          <ConnectionMenu
-            disabled={disabled}
-            item={row.original}
-            onSelect={onSelect}
-            onDisable={onDisable}
-          />
-        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={disabled}
+          onClick={(event) => onSelect(row.original.id, event.currentTarget)}
+          className="max-md:h-11"
+          data-connection-trigger={`${row.original.id}:manage`}
+          aria-label={`管理 ${providerConnectionName(row.original.provider)}`}
+        >
+          {row.original.credential?.status === "active" ? "管理" : "配置"}
+        </Button>
       ),
     },
   ];

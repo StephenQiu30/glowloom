@@ -5,7 +5,6 @@ export default async function Page({
 }: {
   searchParams: Promise<{
     connection?: string | string[];
-    view?: string | string[];
     model?: string | string[];
     release?: string | string[];
     mode?: string | string[];
@@ -18,7 +17,6 @@ export default async function Page({
   return (
     <ProvidersWorkspace
       initialConnection={connection}
-      initialView={value(query.view)}
       initialModel={value(query.model)}
       initialRelease={value(query.release)}
       initialMode={value(query.mode)}

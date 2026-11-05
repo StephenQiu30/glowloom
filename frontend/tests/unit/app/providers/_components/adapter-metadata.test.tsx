@@ -129,8 +129,10 @@ it("凭据输入使用安全字段，保存只建立连接与凭据", async () =
       onSaved={saved}
     />,
   );
-  fireEvent.click(screen.getByLabelText("我的文本服务"));
-  fireEvent.click(screen.getByRole("button", { name: "下一步" }));
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "服务商" }), {
+    key: "ArrowDown",
+  });
+  fireEvent.click(screen.getByRole("option", { name: "我的文本服务" }));
   fireEvent.change(screen.getByLabelText("API Key"), {
     target: { value: "fixture-secret-test" },
   });
@@ -160,8 +162,10 @@ it("离开原连接后，迟到的创建响应不保存 Key 或归属到新连�
       onSaved={oldSaved}
     />,
   );
-  fireEvent.click(screen.getByLabelText("我的文本服务"));
-  fireEvent.click(screen.getByRole("button", { name: "下一步" }));
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "服务商" }), {
+    key: "ArrowDown",
+  });
+  fireEvent.click(screen.getByRole("option", { name: "我的文本服务" }));
   fireEvent.change(screen.getByLabelText("API Key"), {
     target: { value: "old-key-test" },
   });

@@ -5,13 +5,11 @@ import { PageLayout } from "@/components/layout/page-layout";
 import { ProvidersPage } from "./providers-page";
 export function ProvidersWorkspace({
   initialConnection,
-  initialView,
   initialModel,
   initialRelease,
   initialMode,
 }: {
   initialConnection?: string;
-  initialView?: string;
   initialModel?: string;
   initialRelease?: string;
   initialMode?: string;
@@ -33,7 +31,6 @@ export function ProvidersWorkspace({
     >
       <ProvidersPage
         initialConnection={initialConnection}
-        initialView={initialView}
         initialModel={initialModel}
         initialRelease={initialRelease}
         initialMode={initialMode}
