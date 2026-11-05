@@ -5,6 +5,7 @@ name: glowloom
 
 services:
   agent:
+    container_name: glowloom-agent
     build:
       context: ./agent
     image: glowloom/agent:current
@@ -41,6 +42,7 @@ services:
     mem_limit: 1g
     cpus: 1
   canvas-collaboration:
+    container_name: glowloom-canvas-collaboration
     build:
       context: ./canvas-collab
     init: true
